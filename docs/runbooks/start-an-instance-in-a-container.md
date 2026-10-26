@@ -45,7 +45,8 @@ Reader: the operator of this machine's deployment.
    instance starts once the build worker answers, within 70 seconds of its start.
 
 Everything else in `.env` is optional. A value exported in the shell reaches
-compose itself, but the container is handed nothing but that file and the key.
+compose itself, but the container is handed nothing but that file, compose's
+fixed environment and the two file secrets.
 Overriding `PRESENTATOR_DATABASE`, `PRESENTATOR_MIRRORS` or `PRESENTATOR_BUILDS`
 in `.env` moves that state out of its volume, which is how an instance loses
 what it writes.
