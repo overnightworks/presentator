@@ -19,13 +19,11 @@ import json
 import logging
 import os
 import select
-import shutil
 import signal
 import stat
 import subprocess
 from abc import abstractmethod
 from collections.abc import Callable
-from contextlib import suppress
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -34,6 +32,12 @@ from time import monotonic
 from typing import IO, BinaryIO, Final, Protocol, cast
 
 from gitmirror.model import MirrorError, Revision
+from presentator.adapters.build_runs import (
+    listed_runs,
+    removed_run,
+    run_name_of,
+    taken_away,
+)
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
 from presentator.adapters.decks import SourceMirrors
 from presentator.contracts.decks import (
@@ -52,6 +56,7 @@ from presentator.contracts.decks import (
     failure_text,
     talk_address,
 )
+from presentator.ports.decks import BuildRun
 
 _TOOLCHAIN: Final = "pnpm"
 _SLIDEV: Final = "slidev"
@@ -71,12 +76,6 @@ _UP: Final = ".."
 _INHERITED: Final = ("PATH", "HOME")
 _READ_AT_ONCE: Final = 64 * 1024
 _A_MEGABYTE: Final = 1024 * 1024
-_OWNER_MAY_ENTER: Final = 0o700
-# A descriptor pinned to a directory nobody may read is still that directory;
-# this is the name the running kernel gives it, and the one way its mode can be
-# changed without naming a path a build could have exchanged underneath.
-_THE_DESCRIPTOR_ITSELF: Final = "/proc/self/fd/{descriptor}"
-_HERE: Final = "."
 # Adding up what a build wrote is walking a tree that build filled, so it is
 # bounded like everything else it touches: a talk is hundreds of files, and
 # adding up even a hundred thousand of them is a moment's work. Past either
@@ -89,7 +88,6 @@ _UNREADABLE_DECK: Final = "deck %s cannot be read at %s: %s"
 _TOOLCHAIN_FAILED: Final = "%s of deck %s failed: %s"
 _TOOLCHAIN_UNAVAILABLE: Final = "%s of deck %s could not be run: %s"
 _TOOLCHAIN_TIMED_OUT: Final = "%s of deck %s ran past %s and was given up"
-_RUN_STAYED: Final = "what build %s left could not be taken away"
 _NOT_AS_WRITTEN: Final = (
     "the talk at %s is refused: %s is not a file reached without a link under the root"
 )
@@ -349,26 +347,7 @@ class SlidevBuilds:
             return Artefacts(directory=written / TALK_DIRECTORY, pdf=written / PDF_FILE)
         finally:
             if not delivered:
-                self._taken_away(place)
-
-    def _taken_away(self, place: BuildPlace) -> bool:
-        """Take away everything one run's directory holds, however it got there.
-
-        Called both for a build that did not finish, where nothing points at
-        its directory and nothing ever will, and for one that did and is now
-        removed on purpose with the source that built it (`remove`). A deck's
-        own code wrote in this tree and may have closed a directory behind it,
-        so the modes are given back first. Whether the
-        tree really went is then read off the filesystem, and one that stayed
-        is named in the log and answered here as well, so a caller that must
-        know can act on it rather than believe a removal that did not happen.
-        """
-        _opened_again(place.here)
-        shutil.rmtree(place.here, ignore_errors=True)
-        if place.here.exists():
-            _log.warning(_RUN_STAYED, place.run)
-            return False
-        return True
+                taken_away(place.here)
 
     def holds(self, artefacts: Artefacts) -> bool:
         """Whether the talk's page and the PDF really stand under the root as files.
@@ -400,19 +379,19 @@ class SlidevBuilds:
         found = opened_without_a_link(written, under=self.builds.absolute())
         return None if found is None else os.fdopen(found, "rb")
 
-    def remove(self, directory: Path) -> bool:
-        """Take that run's whole directory off disk, or say it is still there.
+    def runs(self) -> frozenset[BuildRun] | None:
+        """Every run directly under the root, or nothing while it cannot be listed."""
+        names = listed_runs(self.builds.absolute())
+        return None if names is None else frozenset(map(BuildRun, names))
 
-        Reuses the same cleanup a build that did not finish already gets: the
-        modes a deck's own code may have left are given back before the tree
-        goes, and what does not go is named rather than passed over.
-        """
-        return self._taken_away(self._place_of(directory))
+    def run_of(self, path: Path) -> BuildRun | None:
+        """The run a stored talk or PDF path belongs to, by its exact shape."""
+        name = run_name_of(self.builds.absolute(), path)
+        return None if name is None else BuildRun(name)
 
-    def _place_of(self, directory: Path) -> BuildPlace:
-        """The run whose own directory that delivered talk was built into."""
-        here = directory.parents[1]
-        return BuildPlace(root=here.parent, run=Path(here.name))
+    def remove(self, run: BuildRun) -> bool:
+        """Take that run's whole directory off disk, or say it is still there."""
+        return removed_run(self.builds.absolute(), run.name)
 
     def _a_place_of_its_own(self) -> BuildPlace:
         """Where this run works: a directory of its own under the root.
@@ -738,64 +717,6 @@ def _a_directory_of_its_own(directory: Path) -> int | None:
         return os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except OSError:
         return None
-
-
-def _opened_again(tree: Path) -> None:
-    """Give back the modes a build may have taken from its own leftovers.
-
-    Every directory is pinned as a descriptor before anything is done to it,
-    and the mode is changed through that descriptor rather than through the
-    name it had, which a build may since have made into a link to anything of
-    this machine's. A directory a build closed cannot be opened for reading at
-    all, so it is pinned without reading it and opened again through itself.
-    """
-    pinned = _pinned(tree)
-    while pinned:
-        holder = pinned.pop()
-        try:
-            _let_the_owner_back_into(holder, and_pin=pinned)
-        finally:
-            os.close(holder)
-
-
-def _let_the_owner_back_into(holder: int, *, and_pin: list[int]) -> None:
-    """Open that one directory to its owner again, and pin the ones in it."""
-    with suppress(OSError):
-        # A descriptor pinned without reading rights cannot be changed
-        # directly; this is where the running kernel lets its owner name it.
-        Path(_THE_DESCRIPTOR_ITSELF.format(descriptor=holder)).chmod(_OWNER_MAY_ENTER)
-        readable = os.open(_HERE, os.O_RDONLY | os.O_DIRECTORY, dir_fd=holder)
-        try:
-            _pin_the_directories_in(readable, and_pin=and_pin)
-        finally:
-            os.close(readable)
-
-
-def _pin_the_directories_in(readable: int, *, and_pin: list[int]) -> None:
-    """Pin every directory of that one, and no name that is not one.
-
-    Each is pinned as it is found, so a listing that breaks off halfway still
-    leaves the caller holding what it has to let go of again.
-    """
-    with suppress(OSError):
-        for entry in os.scandir(readable):
-            if entry.is_dir(follow_symlinks=False):
-                with suppress(OSError):
-                    and_pin.append(
-                        os.open(
-                            entry.name,
-                            os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW,
-                            dir_fd=readable,
-                        ),
-                    )
-
-
-def _pinned(tree: Path) -> list[int]:
-    """That tree's own directory as a descriptor, where it still is one."""
-    try:
-        return [os.open(tree, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW)]
-    except OSError:
-        return []
 
 
 def _the_environment_of_this_server() -> dict[str, str]:

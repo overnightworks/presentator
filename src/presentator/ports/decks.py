@@ -5,6 +5,7 @@ Named for decks rather than for a catalogue, because the message catalog
 """
 
 from abc import abstractmethod
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO, Protocol
@@ -274,6 +275,19 @@ class DeckStore(Protocol):
         """Delete every deck row this source has ever carried, marked removed or not."""
 
 
+@dataclass(frozen=True, slots=True)
+class BuildRun:
+    """One run of the build on disk: its name, a single segment under the root."""
+
+    name: str
+
+    def __post_init__(self) -> None:
+        """Refuse a name that reaches anywhere but one directory under the root."""
+        if self.name in {"", ".", ".."} or Path(self.name).name != self.name:
+            message = f"{self.name!r} is not one name directly under the builds root"
+            raise ValueError(message)
+
+
 class BuildRunner(Protocol):
     """Builds one deck's folder into the talk that deck delivers.
 
@@ -311,14 +325,33 @@ class BuildRunner(Protocol):
         """
 
     @abstractmethod
-    def remove(self, directory: Path) -> bool:
+    def runs(self) -> frozenset[BuildRun] | None:
+        """Every run on disk, or nothing where the listing did not finish.
+
+        Nothing is a root that is missing or unreadable and a listing that broke
+        off halfway: a caller that deletes the difference to what it keeps must
+        delete nothing then.
+        """
+
+    @abstractmethod
+    def run_of(self, path: Path) -> BuildRun | None:
+        """The run a stored talk or PDF path belongs to, or nothing.
+
+        Only exactly `<root>/<name>/out/talk` and `<root>/<name>/out/deck.pdf`
+        count, compared as absolute paths without following a link; any other
+        path, even one inside the root, is nobody's run.
+        """
+
+    @abstractmethod
+    def remove(self, run: BuildRun) -> bool:
         """Take that run's whole directory off disk, and say whether it is gone.
 
         Not only the two files a deck's page ever pointed at: the run's own
         directory carried what the deck's own code wrote alongside them, too.
-        A directory that survives the attempt answers false, so a caller
-        that must not go on believing a build was cleared can stop rather
-        than take that on faith.
+        Only a directory shaped like a run directly under the root goes. One
+        that survives the attempt answers false, so a caller that must not go
+        on believing a build was cleared can stop rather than take that on
+        faith.
         """
 
 

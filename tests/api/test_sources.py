@@ -48,10 +48,7 @@ from tests.api.lobby import (
     a_lobby,
     a_signed_in_lobby,
 )
-from tests.application.fakes import (
-    LOCAL_MOUNT_EXAMPLE,
-    FakeDeckStore,
-)
+from tests.application.fakes import LOCAL_MOUNT_EXAMPLE, FakeBuildRunner, FakeDeckStore
 
 _ADDRESS = "git@heimserver:decks.git"
 _OTHER_ADDRESS = "https://gitlab.example.invalid/decks.git"
@@ -1689,8 +1686,9 @@ def test_after_removal_the_same_url_and_name_can_be_added_again() -> None:
 
 def test_a_removed_decks_talk_answers_not_found(tmp_path: Path) -> None:
     source = a_configured_source(_ADDRESS)
-    talk = tmp_path / "talk"
-    talk.mkdir()
+    built = tmp_path / "builds" / "run" / "out"
+    talk = built / "talk"
+    talk.mkdir(parents=True)
     (talk / "index.html").write_text("<html></html>", encoding="utf-8")
     store = FakeDeckStore()
     store.put(
@@ -1707,9 +1705,10 @@ def test_a_removed_decks_talk_answers_not_found(tmp_path: Path) -> None:
     )
     store.put_build(
         "kundenfeedback",
-        Build(directory=talk, pdf=talk / "deck.pdf", commit=_COMMIT, built_at=NOW),
+        Build(directory=talk, pdf=built / "deck.pdf", commit=_COMMIT, built_at=NOW),
     )
-    lobby = a_signed_in_lobby(GivenDecks(source=source, store=store))
+    builder = FakeBuildRunner(root=tmp_path / "builds")
+    lobby = a_signed_in_lobby(GivenDecks(source=source, store=store, builder=builder))
 
     before = lobby.get("/deck/kundenfeedback")
     confirm_removal(lobby, source.name)
