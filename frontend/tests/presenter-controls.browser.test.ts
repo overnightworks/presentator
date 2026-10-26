@@ -562,7 +562,7 @@ describe('presenter controls', () => {
     ['an issuer that is down (503)', 'unavailable', 'No answer', [1024]],
     ['an error event with an unknown reason', 'unknown-reason', 'No answer', [1024]],
     ['a 401 whose body is not JSON', 'unreadable-401', 'No answer', [1024]],
-  ] as const)('shows only its own words for %s', async (_situation, mode, line, widths) => {
+  ] as const)('Cells 1-8, 13: shows only its own words for %s', async (_situation, mode, line, widths) => {
     for (const width of widths) {
       answerMode = mode
       const { browser, page } = await openPresenter(width)
@@ -592,7 +592,7 @@ describe('presenter controls', () => {
     }
   })
 
-  it('clears the refusal line when the next ask is answered', async () => {
+  it('Cell 12: clears the refusal line when the next ask is answered', async () => {
     answerMode = 'refused-then-answered'
     const { browser, page } = await openPresenter(1024)
     try {
@@ -611,7 +611,7 @@ describe('presenter controls', () => {
     }
   })
 
-  it('counts only a voiced sentence as spoken when an answer fails midway', async () => {
+  it('Cell 9: counts only a voiced sentence as spoken when an answer fails midway', async () => {
     answerMode = 'mid-answer-error'
     const { browser, page } = await openPresenterAt(origin, '/presenter/1', 1024, async (prepared) => {
       await prepared.addInitScript(() => {
@@ -654,7 +654,7 @@ describe('presenter controls', () => {
     }
   }, 30_000)
 
-  it('loads the overlay of a deck whose folder holds a percent sign and names that folder', async () => {
+  it('Cell 10: loads the overlay of a deck whose folder holds a percent sign and names that folder', async () => {
     const overlayBuildDirectory = await buildCopiedOverlayDeck('/deck/50%25off/')
     const asked: { said: string, deck: string }[] = []
     const { server: overlayServer, origin: overlayOrigin, sockets: overlaySockets }
