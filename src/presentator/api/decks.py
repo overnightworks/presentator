@@ -217,11 +217,7 @@ class _BuiltTalk:
             return
         viewer = gated_person(Request(scope)).id
         directory = self.decks.built_talk(scope["path_params"]["slug"], viewer=viewer)
-        # A row can still name a directory that was since removed from disk
-        # (the build adapter does not yet clean those up); Starlette's own
-        # `StaticFiles` answers a missing root with a raised `RuntimeError`,
-        # not a 404, so that state is caught here rather than left to it.
-        if directory is None or not directory.is_dir():
+        if directory is None:
             await Response(status_code=HTTPStatus.NOT_FOUND)(scope, receive, send)
             return
         # Which directory a deck delivers from is a row, not a setting, so the
@@ -234,9 +230,16 @@ class TalkFiles(StaticFiles):
 
     def __init__(self, directory: Path, decks: Decks) -> None:
         """Root the files at one deck's built `directory`."""
-        super().__init__(directory=directory)
+        # The sweep can remove the directory at any moment after a request read
+        # it from its row; `StaticFiles` raises `RuntimeError` for a missing
+        # root when it is built and when it checks its configuration, so both
+        # checks are left out and a missing file answers 404 through `_opened`.
+        super().__init__(directory=directory, check_dir=False)
         self._root = directory
         self._decks = decks
+
+    async def check_config(self) -> None:
+        """Skip the one-off directory check; see `__init__`."""
 
     async def get_response(self, path: str, scope: Scope) -> Response:
         """Serve a real file, or the application for any path still inside the talk.

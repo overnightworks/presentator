@@ -66,6 +66,7 @@ class Instance:
     database: Path
     mirrors: SourceMirrors
     builds: Path
+    decks: Decks
     people: People
     kept_by: dict[str, tuple[Source, Path, Path]]
 
@@ -138,7 +139,7 @@ def _seed_person(
     mirror = mirror_directory.directory
     mirror.mkdir(parents=True)
     (mirror / "HEAD").write_text("ref: refs/heads/main")
-    build = builds / f"{person.username}-run" / _COMMIT / "talk"
+    build = builds / f"{person.username}-run" / "out" / "talk"
     build.mkdir(parents=True)
     (build / "index.html").write_text("a talk")
     _seed_deck(stores, person, source, build)
@@ -226,12 +227,14 @@ def an_instance_with_both_people(tmp_path: Path) -> Instance:
         person.id: _seed_person(person, stores, mirrors, builds)
         for person in (THE_PERSON, ANOTHER)
     }
+    decks = _decks_application(stores, mirrors, builds, tmp_path)
     return Instance(
         database=database,
         mirrors=mirrors,
         builds=builds,
+        decks=decks,
         people=People(
-            decks=_decks_application(stores, mirrors, builds, tmp_path),
+            decks=decks,
             accounts=stores.accounts,
             sessions=stores.sessions,
             preferences=stores.preferences,

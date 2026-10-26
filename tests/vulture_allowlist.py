@@ -197,6 +197,9 @@ VoiceDownloadOutcome.ALREADY_COMPLETE
 # `StaticFiles.__call__` dispatches to this override for every talk request.
 TalkFiles.get_response
 
+# `StaticFiles.__call__` runs this no-op override instead of the base directory check.
+TalkFiles.check_config
+
 # Pydantic runs this `field_validator` on every `AskRequest.language` value.
 AskRequest.empty_language_is_no_language
 

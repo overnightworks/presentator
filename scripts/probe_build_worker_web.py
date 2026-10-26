@@ -11,6 +11,11 @@ Docker socket and no neighbour but the worker, and sends the program
 `probe_build_worker/web_client.py` into it over stdin: that program builds
 through the very composition the web serves with. Every cell prints one line,
 and a cell that is not driven fails the run.
+
+Precondition: the web's `.env` sets `PRESENTATOR_SOURCE_POLL_SECONDS` above this
+run's duration, as the CI job does. The web sweeps every build run no deck row
+names at the end of a poll, and the program lays runs of its own under the
+builds root that no row names.
 """
 
 import json

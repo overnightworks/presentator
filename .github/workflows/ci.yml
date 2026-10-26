@@ -471,11 +471,15 @@ jobs:
       # secret file, and the issuer is called at sign-in. The override adds
       # two read-only bind mounts to the web and nothing else, because a
       # read-only root cannot take a copy.
+      # A day, far beyond this job's timeout: the web's poll sweeps every build
+      # run no deck row names, and the probe lays runs of its own under the
+      # builds root that no row names.
       - name: Prepare the web's throwaway settings
         run: |
           cat > .env <<'EOF'
           PRESENTATOR_OIDC_ISSUER=https://auth.example.invalid/realms/probe
           PRESENTATOR_OIDC_CLIENT_ID=build-worker-probe
+          PRESENTATOR_SOURCE_POLL_SECONDS=86400
           EOF
           cat > "$RUNNER_TEMP/web-probe.yaml" <<EOF
           services:
