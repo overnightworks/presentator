@@ -188,6 +188,17 @@ def test_the_lobbys_session_cookie_does_not_sign_in_at_the_talk_host() -> None:
     assert private.speech.readiness_calls == 0
 
 
+def test_a_sign_in_at_the_talk_host_sets_no_csrf_cookie(tmp_path: Path) -> None:
+    """#474 cell 25: the session and the pending clear are the only cookies."""
+    hosts = two_hosts(tmp_path)
+
+    returned = hosts.sign_in(hosts.browser(A_TALK_ADDRESS), A_TALK_ADDRESS)
+
+    cookies = returned.headers.get_list("set-cookie")
+    assert any(c.startswith(f"{DEFAULT_SESSION_COOKIE_NAME}=") for c in cookies)
+    assert not any("csrf" in cookie.lower() for cookie in cookies)
+
+
 # C8.
 def test_an_admin_demoted_while_signed_in_loses_the_copresenter_at_once() -> None:
     talk, private, _clock = a_copresenter_talk_host()
