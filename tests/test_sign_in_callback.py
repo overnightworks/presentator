@@ -172,6 +172,18 @@ def _claims_of(token: str | None) -> dict[str, object]:
     return document
 
 
+def test_a_stale_csrf_cookie_of_the_removed_token_layer_does_not_block_a_sign_in(
+    scene: Scene,
+) -> None:
+    """#474 cell 27: the removed second cookie is ignored at sign-in."""
+    scene.lobby.client.cookies.set("__Host-csrf_token", "stale")
+
+    answer = scene.sign_in()
+
+    assert answer.status_code == HTTPStatus.SEE_OTHER
+    assert scene.count("sessions") == 1
+
+
 def test_the_session_row_holds_the_id_token_the_sign_in_returned(
     scene: Scene,
 ) -> None:
