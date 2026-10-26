@@ -166,6 +166,7 @@ def test_a_logout_form_without_a_token_from_this_origin_is_accepted(
 def test_a_stale_csrf_cookie_of_the_removed_token_layer_does_not_block_a_logout(
     scene: Scene,
 ) -> None:
+    """#474 cell 27: the removed second cookie is ignored at logout."""
     scene.sign_in()
     scene.lobby.client.cookies.set("__Host-csrf_token", "stale")
 
