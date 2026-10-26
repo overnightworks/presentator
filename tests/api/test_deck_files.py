@@ -190,7 +190,9 @@ def test_a_nonsense_address_under_a_built_talk_is_the_application(
 def test_a_talk_refuses_a_method_that_is_not_a_read(tmp_path: Path) -> None:
     talk_host = a_talk_host(tmp_path, _a_built_deck())
 
-    assert talk_host.put(_PRESENTER).status_code == HTTPStatus.METHOD_NOT_ALLOWED
+    refused = talk_host.put(_PRESENTER, headers={"sec-fetch-site": "same-origin"})
+
+    assert refused.status_code == HTTPStatus.METHOD_NOT_ALLOWED
 
 
 @pytest.mark.parametrize(
