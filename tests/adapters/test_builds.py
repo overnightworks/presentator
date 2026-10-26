@@ -23,6 +23,7 @@ import pytest
 from presentator.adapters import builds as builds_module
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
 from presentator.adapters.builds import (
+    BuildPlace,
     DeckToolchain,
     HostToolchain,
     PackageJsonThemes,
@@ -1308,7 +1309,11 @@ def test_leavings_of_a_build_that_may_still_run_are_taken_away_as_they_lie(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_FAILS)
-    machine.setattr(HostToolchain, "nothing_of_it_runs", lambda *_: False)
+
+    def nothing_can_be_said(_toolchain: HostToolchain, _place: BuildPlace) -> bool:
+        return False
+
+    machine.setattr(HostToolchain, "nothing_of_it_runs", nothing_can_be_said)
     builds = builds_ready_for(tmp_path, source)
 
     built = builds.build(a_deck(remote), source=source)
