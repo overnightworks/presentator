@@ -32,7 +32,7 @@ from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.decks import SourceWrite
 from presentator.contracts.models import Role, User
 from presentator.host import main
-from presentator.host.config import NO_BOUND_AT_ALL, ConfigurationError, load_settings
+from presentator.host.config import ConfigurationError, WhereBuildsRun, load_settings
 from presentator.host.main import Instance
 from tests.api.lobby import (
     A_BROWSERS_ADDRESS,
@@ -44,7 +44,6 @@ from tests.conftest import (
     EXAMPLE_TITLE,
     INSTANCE_KEY,
     GitRemote,
-    with_the_program,
 )
 from tests.people import copy_of_a_crashed_database, seed_user, write_password_schema
 
@@ -60,41 +59,6 @@ _WHAT_THE_HOST_CARRIES = "the words only this source's host was given"
 _WHAT_THE_GIT_HOST_EXPECTS = "the read-only words only this test made up"
 _CREDENTIAL_VARIABLE = "A_READ_ONLY_TOKEN"
 _ANOTHER_INSTANCE_KEY = "the key another instance carries"
-_A_HALF_NAMED_SANDBOX = "named-here-but-not-beside-it"
-_THE_BUILD_IMAGE = "the-build-image-of-this-deployment"
-_THE_BUILDS_VOLUME = "the-builds-volume-of-this-deployment"
-_THE_VERSION_A_SUBPATH_NEEDS = "1.45"
-_A_DRIVER = "overlay2"
-# A `docker` this test wrote: one daemon that carries the image and bounds a
-# container's own filesystem but builds no deck, one too old to keep a build
-# inside its own directory, and one that will not run a container under a size.
-_A_DAEMON_THAT_BUILDS_NOTHING = f"""#!/bin/sh
-case "$1" in
-    version) echo "1.52";;
-    info) echo "{_A_DRIVER}";;
-    image) echo "sha256:the-image";;
-    create) exit 0;;
-    start) exit 0;;
-    rm) exit 0;;
-    ps) ;;
-    run) echo "there is no such deck" >&2; exit 1;;
-esac
-"""
-_A_DAEMON_TOO_OLD_TO_BUILD_ON = f"""#!/bin/sh
-case "$1" in
-    version) echo "1.44";;
-    info) echo "{_A_DRIVER}";;
-esac
-"""
-_A_DAEMON_THAT_TAKES_NO_SIZE = f"""#!/bin/sh
-case "$1" in
-    version) echo "1.52";;
-    info) echo "{_A_DRIVER}";;
-    image) echo "sha256:the-image";;
-    create) echo "this driver takes no size" >&2; exit 125;;
-    rm) exit 0;;
-esac
-"""
 
 
 def a_real_instance() -> Instance:
@@ -187,102 +151,62 @@ def test_the_public_origin_must_be_one_canonical_https_origin(
         load_settings()
 
 
-@pytest.mark.parametrize(
-    "half",
-    [None, "PRESENTATOR_BUILD_IMAGE", "PRESENTATOR_BUILD_VOLUME"],
-    ids=["neither of them", "an image without a volume", "a volume without an image"],
-)
-def test_an_instance_that_does_not_say_what_builds_a_deck_refuses_to_start(
+def test_an_instance_that_says_nothing_about_where_builds_run_builds_in_the_worker(
     environment: pytest.MonkeyPatch,
-    half: str | None,
 ) -> None:
-    # Nothing said about where a build runs is a build in a container, and a
-    # container this environment does not name is no instance at all.
+    """Cell B26: an unset runner builds in the worker."""
     environment.delenv("PRESENTATOR_BUILD_RUNNER")
-    if half is not None:
-        environment.setenv(half, _A_HALF_NAMED_SANDBOX)
 
-    settings = load_settings()
-    with pytest.raises(ConfigurationError, match="build_image and build_volume"):
-        main.build_instance(settings)
+    assert load_settings().build_runner is WhereBuildsRun.WORKER
 
 
-def test_an_instance_whose_daemon_cannot_hold_a_build_in_its_place_refuses(
+@pytest.mark.parametrize(
+    ("given", "runs"),
+    [("worker", WhereBuildsRun.WORKER), ("host", WhereBuildsRun.HOST)],
+)
+def test_a_runner_an_instance_names_is_the_one_it_builds_with(
     environment: pytest.MonkeyPatch,
-    tmp_path: Path,
+    given: str,
+    runs: WhereBuildsRun,
 ) -> None:
-    a_container_run(environment, tmp_path, _A_DAEMON_TOO_OLD_TO_BUILD_ON)
+    """Cell B26: the worker and the host are the runners an instance may name."""
+    environment.setenv("PRESENTATOR_BUILD_RUNNER", given)
 
-    settings = load_settings()
-    with pytest.raises(ConfigurationError, match=_THE_VERSION_A_SUBPATH_NEEDS):
-        main.build_instance(settings)
-
-
-def test_an_instance_whose_machine_cannot_bound_a_build_refuses_to_start(
-    environment: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    a_container_run(environment, tmp_path, _A_DAEMON_THAT_TAKES_NO_SIZE)
-
-    # Nothing bounding what a build writes beside its talk is not something an
-    # instance may find out about after it has served a deck.
-    settings = load_settings()
-    with pytest.raises(ConfigurationError, match=_A_DRIVER):
-        main.build_instance(settings)
+    assert load_settings().build_runner is runs
 
 
-def test_an_instance_told_in_as_many_words_to_do_without_it_starts_and_says_so(
-    environment: pytest.MonkeyPatch,
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    a_container_run(environment, tmp_path, _A_DAEMON_THAT_TAKES_NO_SIZE)
-    environment.setenv("PRESENTATOR_BUILD_DISK", NO_BOUND_AT_ALL)
-
-    main.build_instance(load_settings())
-
-    assert "build_disk" in caplog.text
-
-
-def test_an_instance_whose_disk_bound_came_out_blank_refuses_to_start(
+def test_a_runner_that_is_no_longer_one_refuses_to_start(
     environment: pytest.MonkeyPatch,
 ) -> None:
-    # A value nobody watched interpolate is not a decision to build without
-    # the one bound on what a deck writes beside its talk.
-    environment.setenv("PRESENTATOR_BUILD_DISK", "  ")
+    """Cell B26: the removed `container` runner is refused at start."""
+    environment.setenv("PRESENTATOR_BUILD_RUNNER", "container")
 
-    with pytest.raises(ConfigurationError, match="build_disk"):
+    with pytest.raises(ConfigurationError, match="build_runner"):
         load_settings()
 
 
-def test_a_deck_an_instance_can_only_build_in_a_container_it_lacks_offers_no_view(
+def test_a_removed_build_key_in_the_process_environment_is_ignored(
     environment: pytest.MonkeyPatch,
-    remote: GitRemote,
-    tmp_path: Path,
 ) -> None:
-    a_container_run(environment, tmp_path, _A_DAEMON_THAT_BUILDS_NOTHING)
-    instance = a_polled_source(remote, tmp_path)
-    lobby = signed_in(instance)
-    remote.commit_example_deck(at=_PUSHED_AT)
+    """Cell B18: a removed build key in the process environment is ignored."""
+    environment.setenv("PRESENTATOR_BUILD_IMAGE", "left-over-from-the-container-runner")
 
-    asyncio.run(instance.poller.tick())
-    page = lobby.get(f"/deck/{EXAMPLE_SLUG}")
-
-    assert page.status_code == HTTPStatus.OK
-    assert EXAMPLE_TITLE in page.text
-    assert f"/deck/{EXAMPLE_SLUG}/presenter/" not in page.text
+    assert load_settings().build_runner is WhereBuildsRun.HOST
 
 
-def a_container_run(
+def test_a_removed_build_key_in_the_env_file_of_a_direct_run_refuses_to_start(
     environment: pytest.MonkeyPatch,
     tmp_path: Path,
-    docker: str,
 ) -> None:
-    """An instance that builds every deck in a container, on that daemon."""
-    environment.setenv("PRESENTATOR_BUILD_RUNNER", "container")
-    environment.setenv("PRESENTATOR_BUILD_IMAGE", _THE_BUILD_IMAGE)
-    environment.setenv("PRESENTATOR_BUILD_VOLUME", _THE_BUILDS_VOLUME)
-    with_the_program(environment, tmp_path, "docker", docker)
+    """Cell B18: a removed build key in the `.env` file refuses to start."""
+    (tmp_path / ".env").write_text(
+        "PRESENTATOR_BUILD_IMAGE=left-over-from-the-container-runner\n",
+        encoding="utf-8",
+    )
+    environment.chdir(tmp_path)
+
+    with pytest.raises(ConfigurationError, match="presentator_build_image"):
+        load_settings()
 
 
 @pytest.mark.usefixtures("environment")

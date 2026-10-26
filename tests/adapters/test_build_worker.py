@@ -609,10 +609,3 @@ def test_a_worker_closing_in_the_middle_of_its_reply_fails_without_a_reason(
 
     assert result == WITHOUT_A_REASON
     assert not staging_of(step).exists()
-
-
-def test_the_worker_runs_nothing_that_could_write_in_the_run_directory(
-    volume: Path, tmp_path: Path
-) -> None:
-    """Trace row: nothing_of_it_runs answers True."""
-    assert toolchain(volume).nothing_of_it_runs(a_step(tmp_path).place)

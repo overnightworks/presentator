@@ -41,12 +41,13 @@ some of them.
 | `PRESENTATOR_TOOLCHAIN` | `frontend` | The project carrying Slidev. |
 | `PRESENTATOR_BUILDS` | `builds` | Where built talks and PDFs are kept. |
 | `PRESENTATOR_BUILD_TIMEOUT_SECONDS` | `300` | Bound of each build step; compose also hands it to the build worker by name. |
-| `PRESENTATOR_BUILD_MEMORY` | `4g` | Memory bound of a build container. |
-| `PRESENTATOR_BUILD_DISK` | `8g` | Filesystem bound of a build container; `none` removes it ([runbook](../runbooks/run-builds-without-a-disk-bound.md)). |
 | `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves; compose also hands it to the build worker by name. |
-| `PRESENTATOR_BUILD_RUNNER` | container | `host` builds on this machine instead ([trust boundaries](../explanation/trust-boundaries.md)). `worker`, which `compose.yaml` sets, builds through the build worker's socket and refuses to start unless the worker answers within 70 seconds. |
-| `PRESENTATOR_BUILD_WORKER_SOCKET` | `/run/presentator-build/worker.sock` | Where the web reaches the build worker when the runner is `worker`; the default is where the worker binds, so set it only where the socket volume is mounted elsewhere. |
-| `PRESENTATOR_BUILD_IMAGE`, `PRESENTATOR_BUILD_VOLUME` | none | The image the toolchain stands in and the volume `PRESENTATOR_BUILDS` is a directory of, for the default container runner. Compose sets neither; an instance on that runner missing either does not start and says which. |
+| `PRESENTATOR_BUILD_RUNNER` | `worker` | Builds through the build worker's socket and refuses to start unless the worker answers within 70 seconds; `compose.yaml` sets it. `host` builds on this machine instead, for a development run ([trust boundaries](../explanation/trust-boundaries.md)). |
+| `PRESENTATOR_BUILD_WORKER_SOCKET` | `/run/presentator-build/worker.sock` | Where the web reaches the build worker; the default is where the worker binds, so set it only where the socket volume is mounted elsewhere. |
+
+The container runner's settings `PRESENTATOR_BUILD_IMAGE`, `_VOLUME`, `_MEMORY`
+and `_DISK` are gone: a compose instance ignores them in its environment, and a
+direct run whose `.env` still names one refuses to start and names the key.
 
 `PRESENTATOR_SOURCE_URL`, `_REF`, `_NAME`, `_CREDENTIAL` and `_HOOK_SECRET` are
 not settings; leaving them in the environment does nothing, and a line naming
@@ -84,9 +85,9 @@ image sets them and the defaults above do not apply; compose sets the rest.
 | `PRESENTATOR_AGENT_SERVICE` | `http://agent-service:8080`, set by `compose.yaml` |
 | `PRESENTATOR_SPEECH_SOCKET` | `/run/presentator-speech/speech.sock`, set by `compose.yaml` |
 
-`Dockerfile` builds two images, the first a layer of the second: the Slidev
-toolchain with the Chromium its PDF export drives (what a deck's own build
-runs in), and the whole instance on top of it. The image carries the CA
+`Dockerfile` builds one image in two layers: the Slidev toolchain with the
+Chromium its PDF export drives (what a deck's own build runs in), and the whole
+instance on top of it. The image holds no Docker client. It carries the CA
 certificates an HTTPS source needs to verify the git host's TLS certificate;
 CI proves it with a live HTTPS fetch on every build.
 

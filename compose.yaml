@@ -2,10 +2,6 @@
 # step of a deck's build for it over a socket, because a deck is code. What has
 # to survive the instance stands in a named volume; what may never be written
 # down here comes from the environment.
-#
-# The image below is named by the sandbox service alone, which stays until the
-# container runner leaves the code.
-x-build-image: &build_image presentator-build
 
 services:
   presentator:
@@ -113,21 +109,6 @@ services:
     environment:
       - PRESENTATOR_BUILD_TIMEOUT_SECONDS
       - PRESENTATOR_BUILD_OUTPUT_MEGABYTES
-
-  # Never started: it is the image a deck's own build runs in, and it is built
-  # from the toolchain layer of the instance image, so the toolchain and its
-  # browser are installed once. `docker compose --profile images build` builds
-  # this one beside the instance.
-  build-sandbox:
-    build:
-      context: .
-      target: toolchain
-      args:
-        PRESENTATOR_RUNTIME_UID: ${PRESENTATOR_RUNTIME_UID:?set it to the positive non-root uid shared by Presentator and the host speech service}
-    image: *build_image
-    user: presentator
-    profiles:
-      - images
 
 # Fixed, so that the address every connection through the published port
 # carries is a value the operator can write down rather than read off a

@@ -16,7 +16,7 @@ Reader: the operator of a containerised instance.
 ## Steps
 
 ```sh
-git pull && docker compose --profile images build && docker compose up -d
+git pull && docker compose build && docker compose up -d
 ```
 
 ## Check

@@ -1,8 +1,7 @@
-# Two images stand here, and the first is a layer of the second. `toolchain` is
-# what a deck's own build runs in: Slidev, the Chromium it exports a PDF with,
-# and nothing else — no Python, no server, no source of this repository (line
-# 14a). `instance` is that image plus the packaged server, so the toolchain and
-# its browser are installed once however many of the two are built.
+# One image stands here, built in layers. `toolchain` is what a deck's own build
+# runs in: Slidev, the Chromium it exports a PDF with, and nothing else (line
+# 14a). `instance` is that layer plus the packaged server; the web and the build
+# worker run from it.
 #
 # Node is the base because the toolchain's version is the narrow one
 # (frontend/.nvmrc); uv brings the Python that .python-version names. Every
@@ -22,7 +21,9 @@ RUN groupadd --gid 10001 presentator-build \
 
 ARG PRESENTATOR_RUNTIME_UID=1001
 RUN case "$PRESENTATOR_RUNTIME_UID" in \
-        ''|*[!0-9]*|0|10001|10002) exit 1 ;; \
+        ''|*[!0-9]*|0*|10001|10002) \
+            echo "PRESENTATOR_RUNTIME_UID must be a positive integer without a leading zero, and neither 10001 nor 10002" >&2; \
+            exit 1 ;; \
     esac \
     && test "$PRESENTATOR_RUNTIME_UID" -gt 0 \
     && useradd --create-home --non-unique --uid "$PRESENTATOR_RUNTIME_UID" presentator
@@ -34,7 +35,7 @@ ENV HOME=/home/presentator \
 
 FROM runtime-user AS toolchain
 
-# The toolchain runs as the named unprivileged runtime user in both images.
+# The toolchain runs as the named unprivileged runtime user.
 RUN corepack enable pnpm
 
 # The project's dependencies are installed as that user, because a build writes
@@ -54,14 +55,11 @@ RUN pnpm exec playwright install-deps chromium \
 # scratch directory.
 RUN slidev="$(realpath node_modules/@slidev/cli)" \
     && mkdir -p "$slidev/node_modules" \
-    && ln -s /work/vite "$slidev/node_modules/.vite" \
-    && mkdir -p /work/vite \
-    && chmod 1777 /work/vite
+    && ln -s /work/vite "$slidev/node_modules/.vite"
 USER presentator
 COPY --chown=presentator frontend ./
-# A build's container is started with the deck's own command line and nothing
-# else, so the project the toolchain resolves from is this image's own place of
-# work.
+# A step is started with the deck's own command line and nothing else, so the
+# project the toolchain resolves from is this image's own place of work.
 WORKDIR /app/frontend
 
 FROM toolchain AS instance
@@ -77,9 +75,6 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:0.10.9@sha256:10902f58a1606787602f303954cea099626a4adb02acbac4c69920fe9d278f82 /uv /usr/local/bin/uv
-# The client alone: the server asks the daemon of its host to run each build in
-# a container of its own, and compose hands it that socket.
-COPY --from=docker:29.1.3-cli@sha256:4fa0ee1f3a7e4354c4ea34558b6d4ee32859baf4973d4c8ccc8e7fe3dd730c04 /usr/local/bin/docker /usr/local/bin/docker
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON_INSTALL_DIR=/opt/python \

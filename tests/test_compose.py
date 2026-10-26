@@ -15,7 +15,7 @@ _COMPOSE = Path(__file__).parents[1] / "compose.yaml"
 def test_copresenter_uses_the_speech_socket_and_one_runtime_uid() -> None:
     written = _COMPOSE.read_text(encoding="utf-8")
 
-    services_using_uid = ("presentator", "build-sandbox")
+    services_using_uid = ("presentator",)
     configured_uid = "PRESENTATOR_RUNTIME_UID: ${PRESENTATOR_RUNTIME_UID:"
     assert written.count(configured_uid) == len(services_using_uid)
     assert "PRESENTATOR_COPRESENTER_SOCKET" not in written
@@ -142,10 +142,13 @@ def test_the_instance_builds_through_the_worker_hardened(hardening_line: str) ->
         "DOCKER_GROUP",
         "PRESENTATOR_BUILD_IMAGE",
         "PRESENTATOR_BUILD_VOLUME",
+        "build-sandbox",
+        "x-build-image",
+        "profiles:",
     ],
 )
 def test_the_instance_holds_no_authority_over_this_machines_docker(
     authority: str,
 ) -> None:
-    """B16: no socket, docker group or container-runner value in the file."""
+    """B16 and B17: no socket, docker group, sandbox service or profile in the file."""
     assert authority not in _COMPOSE.read_text(encoding="utf-8")
