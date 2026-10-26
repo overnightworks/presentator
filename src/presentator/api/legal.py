@@ -127,7 +127,7 @@ DATENSCHUTZ: Final = LegalDocument(
                     "gegebenenfalls nach. Das "
                     "Cookie nach der Anmeldung "
                     f"ist {_SESSION_HOURS} Stunden gültig und "
-                    "werden danach nicht erneuert. Die Vorträge selbst "
+                    "wird danach nicht erneuert. Die Vorträge selbst "
                     "liefert ein eigener Host aus (der Talk-Host): Dort "
                     "meldet Presentator Sie selbst an und setzt dieselben "
                     "Cookies noch einmal, nur für diesen Host; sein "

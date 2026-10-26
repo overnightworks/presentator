@@ -76,15 +76,16 @@ signed `SameSite=Lax` session cookie.
   rather than letting either copy decide whose account it runs in.
 - The public origin is https, so the session cookie is `Secure` and carries the
   host-only name `__Host-session_id`, which only this exact host can set.
-- The origin check is the one CSRF guard: there is no token, no CSRF cookie and
-  no header to send. Every POST, PUT, PATCH or DELETE is refused unless it
+- The origin check is the one guard against forged cross-site requests; a
+  request sends nothing beyond what the browser adds itself. Every POST, PUT, PATCH or DELETE is refused unless it
   carries provenance, whatever its content type: `Sec-Fetch-Site: same-origin`,
   or an `Origin` naming the hostname of the origin the app answers for
   (`PRESENTATOR_PUBLIC_ORIGIN` for the lobby, `PRESENTATOR_TALK_ORIGIN` for the
   talk host), the only host its allowlist names (`allowed_hosts_exact`), over
-  https. A request with neither header, `same-site`, `cross-site` or `none`, or
-  with another host's `Origin`, the other app's included, is refused with 403
-  `Missing Origin header`; `Referer` is not read. Supported browsers are current
+  https. A request with neither header is refused with 403 `Missing Origin
+  header`. `Sec-Fetch-Site: same-site` falls back to the `Origin` check;
+  `cross-site`, `none` and another host's `Origin`, the other app's included,
+  are refused with 403 `Cross-origin request rejected`; `Referer` is not read. Supported browsers are current
   Chrome, Edge, Firefox and Safari. Only the sessionless webhook prefix
   `/sources/` and the exact path `/auth/backchannel-logout` are exempt, and a
   request admitted by a bearer token is not checked.

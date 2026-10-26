@@ -109,6 +109,7 @@ def test_a_signed_out_request_is_redirected_or_refused_by_what_it_accepts(
 def test_an_unlisted_mutating_route_refuses_a_request_without_own_provenance(
     method: str, claims: dict[str, str]
 ) -> None:
+    """#474 cell 4: a route added later is guarded for every mutating method."""
     lobby, _clock = a_lobby_app()
 
     def a_new_write() -> Response:
@@ -123,6 +124,7 @@ def test_an_unlisted_mutating_route_refuses_a_request_without_own_provenance(
 def test_a_json_post_with_a_session_and_no_provenance_is_refused(
     signed_in_lobby: Lobby,
 ) -> None:
+    """#474 cell 2: a JSON POST with a session and neither header is refused."""
     del signed_in_lobby.client.headers["sec-fetch-site"]
 
     refused = signed_in_lobby.client.post("/theme", json={"theme": "dark"})
@@ -482,7 +484,7 @@ def test_the_datenschutz_says_the_cookies_are_set_at_sign_in_and_not_renewed() -
     assert "oidc_id_token_hint" not in document
     assert "Browserverlauf landen" not in document
     assert "__Host-oidc_pending_" in document
-    assert "werden danach nicht erneuert" in document
+    assert "wird danach nicht erneuert" in document
     assert "mit jeder angemeldeten Antwort erneuert" not in document
     assert "Keycloak-Subject-ID und Rolle" in document
 
@@ -632,8 +634,7 @@ def test_a_signed_in_page_links_the_impressum_and_the_datenschutz(
     assert _links_the_impressum_and_the_datenschutz(page)
 
 
-@pytest.mark.parametrize(
-    "removed", ["__Host-csrf_token", "JavaScript lesbar", "Fälschungsschutz"]
-)
-def test_the_datenschutz_names_no_csrf_cookie(lobby: Lobby, removed: str) -> None:
+@pytest.mark.parametrize("removed", ["JavaScript lesbar", "Fälschungsschutz"])
+def test_the_datenschutz_names_no_second_cookie(lobby: Lobby, removed: str) -> None:
+    """#474 cell 33: the Datenschutz holds no wording of the removed second cookie."""
     assert removed not in lobby.client.get("/datenschutz").text

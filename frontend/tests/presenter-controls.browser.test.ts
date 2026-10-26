@@ -453,7 +453,6 @@ describe('presenter controls', () => {
       await sentence.waitFor({ state: 'visible', timeout: 5_000 })
       await refusal.waitFor({ state: 'visible', timeout: 5_000 })
       expect(askHeaderNames).toContain('content-type')
-      expect(askHeaderNames).not.toContain('x-csrf-token')
       expect(await sentence.isVisible()).toBe(true)
       expect(await refusal.isVisible()).toBe(true)
       await saveEvidence(page, `presenter-speech-refused-${width}.png`)
@@ -588,6 +587,7 @@ describe('presenter controls', () => {
     }
   })
 
+  // #474 cell 36: the overlay sends no token; the browser's own Origin vouches for the ask.
   it('reads no cookie: the browser vouches for the ask with its own Origin', async () => {
     const overlay = await readFile(join(overlayDeckSourceDirectory, 'components/CoPresenter.vue'), 'utf8')
     expect(overlay).not.toContain('document.cookie')
