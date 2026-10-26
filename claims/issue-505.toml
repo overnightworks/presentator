@@ -1,0 +1,8 @@
+claim_id = "556b7d855ce04fae962f998d3a7a17c5"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "4152138220a33b7552909053a86ae8f1ce734059"
+branch = "claude/issue-505-s8a-a-build-no-deck-row-names-is-taken-o"
+scope = [".github/workflows/ci.yml", "docs/mockups/m0-lobby.html", "docs/reference/builds.md", "docs/reference/people.md", "quality/baseline.toml", "scripts/probe_build_worker_web.py", "src/presentator/adapters/build_runs.py", "src/presentator/adapters/builds.py", "src/presentator/api/decks.py", "src/presentator/api/legal.py", "src/presentator/application/build_retention.py", "src/presentator/application/decks.py", "src/presentator/ports/decks.py", "tests/adapters/person_instance_support.py", "tests/adapters/test_build_runs.py", "tests/adapters/test_builds.py", "tests/api/test_deck_owner.py", "tests/api/test_deck_page.py", "tests/api/test_sources.py", "tests/application/fakes.py", "tests/application/test_build_retention.py", "tests/application/test_decks.py"]
+opened_commit = "c4899f6b7f2b06d9c2440b64941b39615326f935"
+whole_reason = "The port method, the adapter that lists and removes runs, the use-case sweep and the module that makes room under the file-size ratchet are one change: a port method without its caller is dead code, and the sweep without the anchored removal would delete from stored paths."
