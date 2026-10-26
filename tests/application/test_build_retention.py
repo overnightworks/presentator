@@ -252,7 +252,7 @@ def test_a_row_naming_a_path_no_run_owns_stops_the_pass_without_deleting(
         )
 
     assert left == {"delivered", "other"}
-    assert "nothing is swept" in caplog.text
+    assert "is not a run under the builds root" in caplog.text
 
 
 def test_a_listing_that_did_not_finish_deletes_nothing(
