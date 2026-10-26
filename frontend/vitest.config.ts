@@ -9,12 +9,15 @@ const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
 export default defineConfig({
   root: repositoryRoot,
   test: {
+    // The overlay browser tests each build the example deck from the shared
+    // repository folder, and Slidev writes generated files into it.
+    fileParallelism: false,
     include: ['frontend/tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcovonly'],
       reportsDirectory: 'reports/frontend-coverage',
-      exclude: [...coverageConfigDefaults.exclude, '**/package.json'],
+      exclude: [...coverageConfigDefaults.exclude, '**/package.json', 'frontend/tests/**'],
       thresholds: {
         lines: 100,
         statements: 100,
