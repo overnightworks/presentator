@@ -4,16 +4,14 @@ Slidev's own command line owns the build and the PDF export, so this adapter
 spawns it rather than binding a second renderer. The deck's tree is written out
 of the bare mirror beside it, because a toolchain needs files.
 
-**A deck is code.** Where that code runs is this module's second question. A
-container of the build's own answers it (line 14a): no network, nothing of this
-filesystem but the deck itself and the directory this run produces, and no
-environment of this server's. Running the toolchain on this host instead is the
+**A deck is code.** Where that code runs is this module's second question. The
+deployed answer is the build worker, a sealed process of its own that this module
+reaches through `DeckToolchain`. Running the toolchain on this host instead is the
 development answer, and there a deck's Vue components run with this process's
 rights.
 
-What a build may take is bounded on every side it has: the time it may run, the
-memory and processes its container may use, what it may write into its own
-filesystem and into its talk, and how much of what it prints this server ever
+What a build may take is bounded on every side it has: the time it may run, what
+it may write into its talk, and how much of what it prints this server ever
 holds.
 """
 
@@ -30,13 +28,13 @@ from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import timedelta
-from enum import StrEnum
 from pathlib import Path
 from tempfile import mkdtemp
 from time import monotonic
 from typing import IO, BinaryIO, Final, Protocol, cast
 
 from gitmirror.model import MirrorError, Revision
+from presentator.adapters.build_wire import MAXIMUM_ENTRIES
 from presentator.adapters.decks import SourceMirrors
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
@@ -46,7 +44,6 @@ from presentator.contracts.decks import (
     SLIDES_FILE,
     TALK_DIRECTORY,
     TALK_PAGE,
-    TOOLCHAIN_SCRATCH_DIRECTORY,
     Artefacts,
     BuildFailure,
     Deck,
@@ -58,7 +55,6 @@ from presentator.contracts.decks import (
 
 _TOOLCHAIN: Final = "pnpm"
 _SLIDEV: Final = "slidev"
-_DOCKER: Final = "docker"
 _PACKAGE_JSON: Final = "package.json"
 # A deck names only what the toolchain project carries (ADR 0014): a package
 # under this prefix is a Slidev theme, named on a deck page by what follows
@@ -73,57 +69,6 @@ _UP: Final = ".."
 # neither a source's read-only secret nor this instance's key is in reach of a
 # deck's own build-time code.
 _INHERITED: Final = ("PATH", "HOME")
-# Mounting one directory of a volume is what keeps a build inside its own run.
-# A daemon older than this ignores the subpath it cannot read and mounts the
-# whole volume — every deck's talk — into a deck's own container, so the client
-# is pinned to this version: an older daemon then refuses the call instead of
-# doing something wider than it was asked. A start against one is refused too.
-_MOUNT_SUBPATH_SINCE: Final = (1, 45)
-_PINNED_API: Final = "DOCKER_API_VERSION"
-_AS_A_VERSION: Final = ".".join(str(part) for part in _MOUNT_SUBPATH_SINCE)
-# What a build's container may not do, whatever a deck's own code tries: reach
-# any network, gain a capability, or take a privilege from a setuid program.
-# The image runs the toolchain as its own unprivileged user, so nothing here
-# names one, and the filesystem it writes on is the image's own, thrown away
-# with the container. A missing image is a fault of this machine rather than a
-# reason to fetch one.
-_SEALED: Final = (
-    "--network=none",
-    "--cap-drop=ALL",
-    "--security-opt=no-new-privileges",
-    "--pull=never",
-    "--log-driver=none",
-)
-# Slidev writes its virtual modules into the deck it is reading, so that one
-# directory is a filesystem of its own that nothing keeps: the deck's tree
-# stays as git carried it, and the memory bound covers what a build writes
-# there, because a tmpfs page is charged to the container that wrote it. Docker
-# mounts it as root's, so the toolchain's own user needs it open — and nothing
-# outside this one container can see it.
-_SCRATCH_IS_EVERYONES: Final = "mode=1777"
-# A build that spawns without end is a build that takes the machine down with
-# it; a Slidev export and its browser stay far below this.
-_PROCESSES_AT_MOST: Final = 512
-_CONTAINER_PREFIX: Final = "presentator"
-# What the one container that asks about a size is called and needs: it runs
-# nothing, so it needs nothing, and its name says which start asked.
-_A_SIZE: Final = "a-size"
-# Two starts on one machine, and one start after another, are two containers:
-# the name carries which process asked and which of its calls did.
-_NAME_ENOUGH: Final = 4
-_A_PROBE_NEEDS: Final = "64m"
-# Whether a container's own filesystem can be held to a size is not read off
-# the driver's name: overlay2 takes one over xfs with project quotas and
-# refuses it everywhere else, and a wrong guess either leaves a build unbounded
-# or fails every build. This machine is asked by running one container that
-# does nothing, and the driver's name is only what the log tells the operator.
-_THE_DRIVER: Final = "{{.Driver}}"
-_NOTHING_AT_ALL: Final = "true"
-# Asking the daemon what it is, and taking down a container that outlived its
-# step, are calls to a socket on this machine; neither may hold the walk of
-# builds for longer than this.
-_DAEMON_ANSWERS_WITHIN: Final = timedelta(seconds=20)
-_REMOVAL_WITHIN: Final = timedelta(seconds=30)
 _READ_AT_ONCE: Final = 64 * 1024
 _A_MEGABYTE: Final = 1024 * 1024
 _OWNER_MAY_ENTER: Final = 0o700
@@ -136,7 +81,6 @@ _HERE: Final = "."
 # bounded like everything else it touches: a talk is hundreds of files, and
 # adding up even a hundred thousand of them is a moment's work. Past either
 # bound the build is refused rather than added up in the dark.
-_ENTRIES_AT_MOST: Final = 100_000
 _ADDING_UP_WITHIN: Final = timedelta(seconds=10)
 # How often a step is asked what it has written by now, so a build that fills
 # this machine is stopped while it runs rather than found out afterwards.
@@ -145,17 +89,14 @@ _UNREADABLE_DECK: Final = "deck %s cannot be read at %s: %s"
 _TOOLCHAIN_FAILED: Final = "%s of deck %s failed: %s"
 _TOOLCHAIN_UNAVAILABLE: Final = "%s of deck %s could not be run: %s"
 _TOOLCHAIN_TIMED_OUT: Final = "%s of deck %s ran past %s and was given up"
-_CONTAINER_STAYED: Final = "the container of %s of deck %s could not be removed: %s"
 _RUN_STAYED: Final = "what build %s left could not be taken away"
 _NOT_AS_WRITTEN: Final = (
     "the talk at %s is refused: %s is not a file reached without a link under the root"
 )
-_STILL_RUNNING: Final = "whether a container of build %s still runs is unknown: %s"
 _LEFT_AS_IT_LIES: Final = (
-    "a container of build %s may still be running, so what it left is taken"
+    "a step of build %s may still be running, so what it left is taken"
     " away as it lies rather than opened first"
 )
-_PROBE_STAYED: Final = "the container %s that asked about a size stayed: %s"
 _TOO_MUCH_WRITTEN: Final = "deck %s wrote %s MB, which is more than a build may leave"
 _UNACCOUNTABLE: Final = "what the build of deck %s wrote could not be added up: %s"
 _TOOK_TOO_LONG_TO_ADD_UP: Final = (
@@ -170,48 +111,8 @@ TOO_MANY_FOR_A_PAGE: Final = (
     "The talk this build wrote holds more than {allowed} files;"
     " a build may leave fewer."
 )
-_NO_SIZE_IS_TAKEN: Final = (
-    "this machine does not run a container under a size for its own filesystem: %s"
-)
-_NO_CLIENT: Final = "no container client answers on this machine: {said}"
-_NO_DAEMON: Final = "this machine's container daemon did not answer: {said}"
-_TOO_OLD: Final = (
-    "this machine's container daemon speaks {spoken},"
-    f" and a build needs {_AS_A_VERSION} to be given one directory of a volume"
-)
 
 _log = logging.getLogger(__name__)
-
-
-class _HowItAnswered(StrEnum):
-    """What one call to the container client came back with.
-
-    A refusal is the daemon saying in as many words that it did not do the
-    thing; never having said is a client that timed out or could not be run,
-    and what the daemon did then is not known here.
-    """
-
-    DID = "did"
-    REFUSED = "refused"
-    NEVER_SAID = "never said"
-
-
-class DaemonRefusedError(RuntimeError):
-    """This machine's container daemon is not one a deck may be built on."""
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class Daemon:
-    """What this machine's container daemon is, in its own client's words.
-
-    Whether it holds a container's own filesystem to a size is measured, not
-    read off a name: this machine was asked to run one bounded container that
-    does nothing, and it either did or said why not.
-    """
-
-    api_version: str
-    storage_driver: str
-    bounds_a_container_filesystem: bool
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -233,7 +134,7 @@ class BuildPlace:
     """Where one run of the build works: the root, and its own directory in it.
 
     That directory is named relative to the root, because the root is the one
-    place two filesystems both know: this server's, and that of a container the
+    place two filesystems both know: this server's, and that of the worker the
     build runs in.
     """
 
@@ -322,117 +223,6 @@ class DeckToolchain(Protocol):
         build is still there to change it under this server's hands. An
         answer nobody could get is a no.
         """
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ContainerToolchain:
-    """Runs Slidev in a container of the build's own (line 14a, ADR 0005).
-
-    A deck is code, so its build gets a machine of its own: no network, no
-    capability, and none of this server's environment. What it can reach of
-    this filesystem is the deck's tree, read-only, and the directory this run
-    writes into — both of them directories of the volume the builds root is,
-    mounted at the very paths this server names them by. Everything else it
-    writes is the container's own and goes with it, within the size this
-    machine's storage driver can hold it to.
-    """
-
-    image: str
-    volume: str
-    memory: str
-    disk: str | None
-    bound: timedelta
-
-    def ran(self, step: BuildStep) -> BuildFailure | None:
-        """Run that step in a container of its own, and take it down after."""
-        container = _a_container_for(step)
-        # Slidev writes into the deck it reads, which this container is given
-        # read-only, so that one directory is a mount of its own — and a mount
-        # needs a place to stand that the deck's own tree does not carry.
-        scratch = step.place.here / DECK_DIRECTORY / TOOLCHAIN_SCRATCH_DIRECTORY
-        scratch.mkdir(exist_ok=True)
-        return _what_a_step_said(
-            (
-                _DOCKER,
-                "run",
-                "--rm",
-                f"--name={container}",
-                *_SEALED,
-                *self._bounds(),
-                *self._mounts(step.place, scratch=scratch),
-                self.image,
-                _TOOLCHAIN,
-                "exec",
-                _SLIDEV,
-                step.name,
-                *step.arguments,
-            ),
-            step=step,
-            how=_HowItIsRun(
-                in_directory=None,
-                environment=_a_client_environment(),
-                bound=self.bound,
-                given_up=lambda: self._removed(container, step),
-            ),
-        )
-
-    def _bounds(self) -> tuple[str, ...]:
-        """What one build may take of this machine: memory, processes, disk."""
-        held = (f"--memory={self.memory}", f"--pids-limit={_PROCESSES_AT_MOST}")
-        if self.disk is None:
-            return held
-        return (*held, f"--storage-opt=size={self.disk}")
-
-    def _mounts(self, place: BuildPlace, *, scratch: Path) -> tuple[str, ...]:
-        """The deck read-only in, its toolchain's scratch, and the run's own out."""
-        return (
-            self._mount(place, DECK_DIRECTORY, "readonly"),
-            f"--tmpfs={scratch}:{_SCRATCH_IS_EVERYONES}",
-            self._mount(place, OUTPUT_DIRECTORY),
-        )
-
-    def _mount(self, place: BuildPlace, directory: str, *access: str) -> str:
-        return "--mount=" + ",".join(
-            (
-                "type=volume",
-                f"src={self.volume}",
-                f"dst={place.here / directory}",
-                f"volume-subpath={place.run / directory}",
-                *access,
-            ),
-        )
-
-    def nothing_of_it_runs(self, place: BuildPlace) -> bool:
-        """Whether the daemon still has a container of this run's on its feet."""
-        try:
-            asked = subprocess.run(
-                [_DOCKER, "ps", "--quiet", "--filter", f"name={place.run.name}"],
-                check=False,
-                capture_output=True,
-                env=_a_client_environment(),
-                timeout=min(self.bound, _REMOVAL_WITHIN).total_seconds(),
-            )
-        except (OSError, subprocess.TimeoutExpired) as unanswered:
-            _log.warning(_STILL_RUNNING, place.run, unanswered)
-            return False
-        if asked.returncode != 0:
-            _log.warning(_STILL_RUNNING, place.run, failure_text(asked.stderr))
-            return False
-        return not asked.stdout.strip()
-
-    def _removed(self, container: str, step: BuildStep) -> None:
-        """Take down what a step that was given up on left running.
-
-        Killing the client that started a container leaves the container
-        itself, and a deck's own code is exactly what does not stop when asked.
-        A daemon that will not answer about it is named in the log rather than
-        waited on, because every later build stands behind this one.
-        """
-        # Never longer than the step it belongs to was allowed to take: every
-        # later build waits behind this one call.
-        stayed = _taken_down(container, within=min(self.bound, _REMOVAL_WITHIN))
-        if stayed is not None:
-            _log.error(_CONTAINER_STAYED, step.name, step.slug, stayed)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -653,7 +443,7 @@ class SlidevBuilds:
         """Where this run works: a directory of its own under the root.
 
         Its name is this server's own and carries nothing of the deck, because
-        it becomes a container's name and a mount's subpath — and a folder name
+        it becomes a worker's directory name — and a folder name
         somebody else chose would be somebody else's punctuation in a command
         line of ours.
         """
@@ -715,10 +505,10 @@ class SlidevBuilds:
         if not added.in_time:
             _log.warning(_TOOK_TOO_LONG_TO_ADD_UP, deck.slug, _ADDING_UP_WITHIN)
             return BuildFailure(text=None)
-        if added.entries > _ENTRIES_AT_MOST:
+        if added.entries > MAXIMUM_ENTRIES:
             _log.warning(_TOO_MUCH_WRITTEN, deck.slug, added.entries)
             return BuildFailure(
-                text=TOO_MANY_FOR_A_PAGE.format(allowed=_ENTRIES_AT_MOST),
+                text=TOO_MANY_FOR_A_PAGE.format(allowed=MAXIMUM_ENTRIES),
             )
         if added.megabytes <= self.output_megabytes:
             return None
@@ -751,125 +541,6 @@ class SlidevBuilds:
             _log.warning(_UNREADABLE_DECK, deck.slug, deck.commit, unreadable)
             return False
         return True
-
-
-def the_daemon_of_this_machine(*, image: str, disk: str | None) -> Daemon:
-    """What the container daemon here is, refusing one no build may run on.
-
-    A daemon that cannot be asked, one too old to keep a build inside its own
-    directory of a volume, and one that does not carry the image every build
-    runs in are all refusals: an instance that cannot build a deck says so at
-    its start rather than once a deck is pushed. Whether it takes a size for a
-    container's own filesystem is asked here too, by running one.
-    """
-    spoken = _what_the_client_said("version", "--format", "{{.Server.APIVersion}}")
-    if _as_numbers(spoken) < _MOUNT_SUBPATH_SINCE:
-        raise DaemonRefusedError(_TOO_OLD.format(spoken=spoken))
-    driver = _what_the_client_said("info", "--format", _THE_DRIVER)
-    _what_the_client_said("image", "inspect", "--format", "{{.Id}}", image)
-    return Daemon(
-        api_version=spoken,
-        storage_driver=driver,
-        bounds_a_container_filesystem=disk is not None
-        and _a_size_is_taken(image, disk),
-    )
-
-
-def _a_size_is_taken(image: str, disk: str) -> bool:
-    """Whether this machine really bounds a container's own filesystem.
-
-    One container of this instance's own, bounded like a build's and doing
-    nothing at all: a machine that cannot hold it says so here, once, instead
-    of failing every build of every deck. The making of it is inside the same
-    hands as the taking down, because a daemon that made the container and a
-    client that never heard so is exactly the moment one would be left behind;
-    only a daemon that answered in as many words that it made nothing leaves
-    nothing to take down. The name is this start's and this call's alone.
-    """
-    probe = (
-        f"{_CONTAINER_PREFIX}-{_A_SIZE}-{os.getpid()}-{os.urandom(_NAME_ENOUGH).hex()}"
-    )
-    made = _HowItAnswered.NEVER_SAID
-    try:
-        made = _the_client_did(
-            "create",
-            f"--name={probe}",
-            *_SEALED,
-            f"--entrypoint={_NOTHING_AT_ALL}",
-            f"--memory={_A_PROBE_NEEDS}",
-            f"--pids-limit={_PROCESSES_AT_MOST}",
-            f"--storage-opt=size={disk}",
-            image,
-        )
-        if made is not _HowItAnswered.DID:
-            return False
-        return _the_client_did("start", "--attach", probe) is _HowItAnswered.DID
-    finally:
-        if made is not _HowItAnswered.REFUSED:
-            stayed = _taken_down(probe, within=_REMOVAL_WITHIN)
-            if stayed is not None:
-                _log.error(_PROBE_STAYED, probe, stayed)
-
-
-def _the_client_did(*arguments: str) -> _HowItAnswered:
-    """How that one call to the client came back, or that it never did."""
-    try:
-        asked = subprocess.run(
-            [_DOCKER, *arguments],
-            check=False,
-            capture_output=True,
-            env=_a_client_environment(),
-            timeout=_DAEMON_ANSWERS_WITHIN.total_seconds(),
-        )
-    except (OSError, subprocess.TimeoutExpired) as unavailable:
-        _log.warning(_NO_SIZE_IS_TAKEN, unavailable)
-        return _HowItAnswered.NEVER_SAID
-    if asked.returncode != 0:
-        _log.warning(_NO_SIZE_IS_TAKEN, failure_text(asked.stderr))
-        return _HowItAnswered.REFUSED
-    return _HowItAnswered.DID
-
-
-def _taken_down(container: str, *, within: timedelta) -> str | None:
-    """Take that container down, and say what stood in the way if it stayed."""
-    try:
-        removal = subprocess.run(
-            [_DOCKER, "rm", "--force", container],
-            check=False,
-            capture_output=True,
-            env=_a_client_environment(),
-            timeout=within.total_seconds(),
-        )
-    except (OSError, subprocess.TimeoutExpired) as stayed:
-        return str(stayed)
-    if removal.returncode != 0:
-        return failure_text(removal.stderr)
-    return None
-
-
-def _what_the_client_said(*arguments: str) -> str:
-    """Ask the client one question about this machine, or refuse it."""
-    try:
-        asked = subprocess.run(
-            [_DOCKER, *arguments],
-            check=False,
-            capture_output=True,
-            env=_the_environment_of_this_server(),
-            timeout=_DAEMON_ANSWERS_WITHIN.total_seconds(),
-        )
-    except (OSError, subprocess.TimeoutExpired) as unavailable:
-        raise DaemonRefusedError(_NO_CLIENT.format(said=unavailable)) from None
-    if asked.returncode != 0:
-        raise DaemonRefusedError(_NO_DAEMON.format(said=failure_text(asked.stderr)))
-    return asked.stdout.decode(errors="replace").strip()
-
-
-def _as_numbers(version: str) -> tuple[int, ...]:
-    """A daemon's version as numbers, refusing anything that is not one."""
-    try:
-        return tuple(int(part) for part in version.split("."))
-    except ValueError:
-        raise DaemonRefusedError(_TOO_OLD.format(spoken=version)) from None
 
 
 def _what_a_step_said(
@@ -1019,7 +690,7 @@ def _walked(still_open: list[int], *, ends_by: float) -> _Added:
 
 
 def _stopped_at(entries: int, *, ends_by: float) -> _Added | None:
-    if entries > _ENTRIES_AT_MOST:
+    if entries > MAXIMUM_ENTRIES:
         return _Added(entries=entries)
     if monotonic() > ends_by:
         return _Added(entries=entries, in_time=False)
@@ -1153,11 +824,6 @@ def _pinned(tree: Path) -> list[int]:
         return []
 
 
-def _a_container_for(step: BuildStep) -> str:
-    """One name per run and step, so a step given up on can be taken down."""
-    return f"{_CONTAINER_PREFIX}-{step.name}-{step.place.run.name}"
-
-
 def _nothing_outlives_the_tree() -> None:
     """A step run on this host leaves nothing beyond the process tree killed."""
 
@@ -1165,8 +831,3 @@ def _nothing_outlives_the_tree() -> None:
 def _the_environment_of_this_server() -> dict[str, str]:
     """The whole environment a step's own command line is run with."""
     return {name: os.environ[name] for name in _INHERITED if name in os.environ}
-
-
-def _a_client_environment() -> dict[str, str]:
-    """That, and the one version this server will speak to a daemon in."""
-    return {**_the_environment_of_this_server(), _PINNED_API: _AS_A_VERSION}
