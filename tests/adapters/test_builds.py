@@ -234,7 +234,7 @@ chmod 500 "$(dirname "$(dirname "$(dirname "$out")")")"
 echo "the deck does not build" >&2
 exit 1
 """
-_A_TOOLCHAIN_THAT_BUILDS_MORE_ENTRIES_THAN_ALLOWED = """#!/bin/sh
+_A_TOOLCHAIN_THAT_BUILDS_MORE_FILES_THAN_ALLOWED = """#!/bin/sh
 set -eu
 out=""
 while [ $# -gt 0 ]; do
@@ -246,8 +246,8 @@ done
 case "$out" in
     *.pdf) printf '%%PDF-1.7' > "$out";;
     *)
-        mkdir -p "$out"
-        seq 1 {files} | (cd "$out" && xargs mkdir)
+        mkdir -p "$out/many"
+        seq 1 {files} | (cd "$out/many" && xargs touch)
         ;;
 esac
 """
@@ -1083,7 +1083,7 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
     with_the_toolchain(
         machine,
         tmp_path,
-        _A_TOOLCHAIN_THAT_BUILDS_MORE_ENTRIES_THAN_ALLOWED.format(
+        _A_TOOLCHAIN_THAT_BUILDS_MORE_FILES_THAN_ALLOWED.format(
             files=MAXIMUM_ENTRIES + 1
         ),
     )
@@ -1301,6 +1301,14 @@ def test_a_name_that_is_no_longer_a_directory_when_it_is_opened_is_refused(
     assert list(builds.builds.iterdir()) == []
 
 
+class _ToolchainThatCannotSayWhatRuns(HostToolchain):
+    """A toolchain that cannot tell whether anything of a build still runs."""
+
+    def nothing_of_it_runs(self, place: BuildPlace) -> bool:
+        del place
+        return False
+
+
 def test_leavings_of_a_build_that_may_still_run_are_taken_away_as_they_lie(
     remote: GitRemote,
     source: Source,
@@ -1310,11 +1318,14 @@ def test_leavings_of_a_build_that_may_still_run_are_taken_away_as_they_lie(
 ) -> None:
     with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_FAILS)
 
-    def nothing_can_be_said(_toolchain: HostToolchain, _place: BuildPlace) -> bool:
-        return False
-
-    machine.setattr(HostToolchain, "nothing_of_it_runs", nothing_can_be_said)
-    builds = builds_ready_for(tmp_path, source)
+    inside = on_this_machine(tmp_path)
+    builds = builds_ready_for(
+        tmp_path,
+        source,
+        toolchain=_ToolchainThatCannotSayWhatRuns(
+            project=inside.project, bound=inside.bound
+        ),
+    )
 
     built = builds.build(a_deck(remote), source=source)
 
