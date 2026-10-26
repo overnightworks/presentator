@@ -18,9 +18,9 @@ into sentences and speaks them.
 
 One host process sits beside Presentator. The speech service
 ([`speech/`](../../speech/README.md)) holds a local speaking model and a local
-hearing model, listens on `127.0.0.1:8090`, never exposed, and offers hearing
-and its readiness to Presentator directly through its private same-UID Unix
-socket `speech.sock` (`/health`, `/hear`); against an older speech,
+hearing model, binds no TCP port, and offers hearing and its readiness to
+Presentator directly through its private same-UID Unix socket `speech.sock`
+(`/health`, `/hear`); against an older speech,
 `/copresenter/who` answers 503 and hearing reports its failure. Which speech
 models run and what they cost on the card is owned by the speech README.
 
