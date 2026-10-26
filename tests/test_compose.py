@@ -195,6 +195,7 @@ def test_each_secret_is_a_file_secret_from_home_that_only_the_instance_mounts(
 def test_a_secret_granted_to_the_worker_in_either_form_is_caught(
     grant: str | dict[str, str],
 ) -> None:
+    """#509 acceptance 2: a worker secret is caught in short and long form."""
     compose = _parsed_compose()
     compose["services"]["build-worker"]["secrets"] = [grant]
 
