@@ -441,18 +441,6 @@ def talk_host_with_a_removed_build(tmp_path: Path) -> TestClient:
     return client
 
 
-def test_a_talk_whose_directory_the_sweep_took_after_the_row_was_read_is_not_found(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """#505 Done when: a request holding the previous pointer answers 404, never 500."""
-    given, run = a_swapped_build(tmp_path, slug=_SLUG)
-    client = a_talk_host(tmp_path, given)
-    shutil.rmtree(run)
-    monkeypatch.setattr(Path, "is_dir", lambda _self: True)
-
-    assert client.get(_PROJECTOR).status_code == HTTPStatus.NOT_FOUND
-
-
 @pytest.mark.parametrize(
     "address",
     [_PROJECTOR, _PRESENTER, f"{_PROJECTOR}index.html"],
@@ -462,6 +450,7 @@ def test_a_deck_whose_build_directory_was_removed_answers_nothing(
     talk_host_with_a_removed_build: TestClient,
     address: str,
 ) -> None:
+    """#505 matrix: request during the switch answers 404, never 500."""
     assert (
         talk_host_with_a_removed_build.get(address).status_code == HTTPStatus.NOT_FOUND
     )

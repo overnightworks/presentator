@@ -33,7 +33,7 @@ def root(tmp_path: Path) -> Path:
 def test_the_talk_and_the_pdf_of_a_run_both_belong_to_it(
     root: Path, stored: str
 ) -> None:
-    """#505 matrix: a run owns its talk and its PDF."""
+    """#505 invariant: a run owns its talk and its PDF."""
     assert run_name_of(root, root / "abc" / "out" / stored) == "abc"
 
 
@@ -111,12 +111,12 @@ def test_removing_a_run_takes_its_whole_directory_even_where_a_deck_closed_it(
 
 
 def test_removing_a_run_that_is_already_gone_succeeds(root: Path) -> None:
-    """#505 matrix: remove is idempotent."""
+    """#505 invariant: remove is idempotent."""
     assert removed_run(root, "never-there")
 
 
 def test_removing_leaves_the_other_runs_alone(root: Path) -> None:
-    """#505 matrix: remove touches one run only."""
+    """#505 invariant: remove touches one run only."""
     a_run(root, "one")
     a_run(root, "other")
 
@@ -128,7 +128,7 @@ def test_removing_leaves_the_other_runs_alone(root: Path) -> None:
 def test_removing_refuses_a_directory_that_is_not_shaped_like_a_run(
     root: Path,
 ) -> None:
-    """#505 matrix: remove refuses a foreign directory."""
+    """#505 invariant: remove refuses a foreign directory."""
     (root / "foreign").mkdir()
     (root / "foreign" / "keep").write_text("x", encoding="utf-8")
 
@@ -152,7 +152,7 @@ def test_removing_a_link_to_a_run_leaves_the_directory_it_points_at(
 
 @pytest.mark.parametrize("name", ["", ".", "..", "a/b", "/abs"])
 def test_a_run_names_exactly_one_directory_under_the_root(name: str) -> None:
-    """#505 matrix: remove is anchored to the configured root."""
+    """#505 invariant: remove is anchored to the configured root."""
     with pytest.raises(ValueError, match="one name"):
         BuildRun(name)
 

@@ -240,7 +240,7 @@ def test_a_run_that_would_not_go_is_tried_again_by_the_next_pass() -> None:
         ),
     ],
 )
-def test_a_row_naming_a_path_no_run_owns_stops_the_pass_without_deleting(
+def test_a_row_naming_a_path_no_run_owns_stops_the_sweep_without_deleting(
     stored: Build, caplog: pytest.LogCaptureFixture
 ) -> None:
     """#505 matrix: row outside the root, wrongly shaped path inside it."""

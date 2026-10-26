@@ -48,10 +48,11 @@ pass's sweep has run, and answers 404.
 
 At the end of every refresh pass, under the same lock, every run directory under
 `PRESENTATOR_BUILDS` that no deck row delivers from is taken off disk: the build
-a new one superseded, the leftovers of failed or crashed builds and older runs. A row delivers from the run of its talk and the run of
-its PDF, and a deck marked removed still counts, so none of them is touched. A run is a
-real directory directly under the root that holds a real `out` directory; a
-stored path counts only as exactly `<root>/<name>/out/talk` or
+a new one superseded, the leftovers of failed or crashed builds and older runs.
+A row delivers from the run of its talk and the run of its PDF, and a deck
+marked removed still counts, so none of them is touched. A run is a real
+directory directly under the root that holds a real `out` directory; a stored
+path counts only as exactly `<root>/<name>/out/talk` or
 `<root>/<name>/out/deck.pdf`, read as an absolute path without following links.
 Anything else under the root is left alone and logged.
 
