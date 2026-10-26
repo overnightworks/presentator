@@ -2,7 +2,7 @@
 
 Audience: humans and agents who need a model call or a logged-in user.
 
-- Status: ACCEPTED 2026-09-06 — amended 2026-09-07, 2026-09-08, 2026-10-20, 2026-10-21 and 2026-10-23, see below
+- Status: ACCEPTED 2026-09-06 — amended 2026-09-07, 2026-09-08, 2026-10-04, 2026-10-20, 2026-10-21, 2026-10-23 and 2026-10-26, see below
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06 recorded on
   [#2](https://github.com/overnightworks/presentator/issues/2)
@@ -365,6 +365,29 @@ The library `agent_client` of the 2026-10-21 amendment is renamed
 `overnightworks-agent-runtime-client` (import `agent_runtime_client`), pinned at
 v0.7.0 from agent-runtime. Nothing on the wire changes; the adapters-only rule
 stands under the new name.
+
+### Amendment 2026-10-26 — webauth v0.23.0: one CSRF guard, the ID-token decision in `open_session`
+
+Authority: [#474](https://github.com/overnightworks/presentator/issues/474),
+following the operator's ruling of 2026-10-23 on webauth#429 that every app
+takes the same shape.
+
+`webauth` v0.23.0 is pinned. The token layer is gone: the origin check is the
+only CSRF guard of both hosts, no `__Host-csrf_token` is set, read or sent, and
+the overlay sends no `x-csrf-token`. Every POST, PUT, PATCH or DELETE outside
+`exempt` (the back-channel logout path and the `/sources/` prefix) and outside
+a bearer-admitted request needs `Sec-Fetch-Site: same-origin` or an `Origin`
+on the exact-host allowlist, over https with `cookie_secure`; `Referer` is not
+read. This supersedes the 2026-10-23 sentence about a lobby token policy
+naming `/logout` in its own `token_exempt`: no such policy exists, and the
+logout route stays POST only under the origin check.
+
+`open_session` now states `keeps_id_token`, and `SessionRecordStore.create`
+takes `SecretStr | None`. The decision stands once, in `SignIn`: the lobby
+passes `True`, the talk host `False`, and `SqliteSessionRecordStore` writes
+what it is given. This supersedes the 2026-10-23 store flag; the behaviour (the
+talk host's rows hold no ID token) is unchanged, and both hosts now share the
+one store.
 
 ## Consequences
 

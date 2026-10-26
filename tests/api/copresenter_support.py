@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import anyio
-from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME
 
 from presentator.adapters.sentences import split_sentences
 from presentator.api.copresenter import CoPresenterSurface
@@ -318,11 +317,7 @@ def a_copresenter_talk_host(
 
 
 def ask(client: TestClient, body: Mapping[str, object] = QUESTION) -> Response:
-    return client.post(
-        "/copresenter/ask",
-        json=body,
-        headers={"x-csrf-token": client.cookies[DEFAULT_CSRF_COOKIE_NAME]},
-    )
+    return client.post("/copresenter/ask", json=body)
 
 
 @dataclass

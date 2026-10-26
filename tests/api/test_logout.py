@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 import pytest
 from pydantic import SecretStr
-from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, DEFAULT_SESSION_COOKIE_NAME
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.api.auth import LOGIN_PATH, LOGOUT_PATH
 from presentator.host.oidc import oidc_client_config
@@ -76,7 +76,6 @@ def test_logging_out_answers_the_page_that_posts_the_stored_hint_to_the_issuer(
     assert scene.count("sessions") == 0
     assert _cleared_paths(answer.headers.get_list("set-cookie")) == {
         DEFAULT_SESSION_COOKIE_NAME: "/",
-        DEFAULT_CSRF_COOKIE_NAME: "/",
     }
 
 

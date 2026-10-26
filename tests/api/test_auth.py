@@ -97,19 +97,38 @@ def test_a_signed_out_request_is_redirected_or_refused_by_what_it_accepts(
     assert (answer.headers.get("location") is not None) is (status == HTTPStatus.FOUND)
 
 
-def test_an_unlisted_mutating_route_refuses_a_foreign_form() -> None:
+@pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
+@pytest.mark.parametrize(
+    "claims",
+    [
+        pytest.param({"origin": "https://another.example"}, id="a foreign origin"),
+        pytest.param({}, id="no provenance"),
+        pytest.param({"referer": f"{A_BROWSERS_ADDRESS}/page"}, id="referer only"),
+    ],
+)
+def test_an_unlisted_mutating_route_refuses_a_request_without_own_provenance(
+    method: str, claims: dict[str, str]
+) -> None:
     lobby, _clock = a_lobby_app()
 
     def a_new_write() -> Response:
         return Response(status_code=HTTPStatus.NO_CONTENT)
 
-    lobby.add_api_route("/a-new-write", a_new_write, methods=["POST"])
-    refused = TestClient(lobby).post(
-        "/a-new-write",
-        headers={"origin": "https://another.example"},
-    )
+    lobby.add_api_route("/a-new-write", a_new_write, methods=[method])
+    refused = TestClient(lobby).request(method, "/a-new-write", headers=claims)
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_a_json_post_with_a_session_and_no_provenance_is_refused(
+    signed_in_lobby: Lobby,
+) -> None:
+    del signed_in_lobby.client.headers["sec-fetch-site"]
+
+    refused = signed_in_lobby.client.post("/theme", json={"theme": "dark"})
+
+    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert refused.json() == {"detail": "Missing Origin header"}
 
 
 def submit_the_logout_form(
@@ -521,13 +540,13 @@ def test_the_datenschutz_names_the_hours_the_code_keeps_a_draft_and_a_session(
 
     assert f"rund {draft_hours} Stunden nach Erzeugung" in page
     assert f"{session_hours} Stunden" in page
-    assert f"Cookies nach der Anmeldung sind {session_hours} Stunden gültig" in page
+    assert f"Das Cookie nach der Anmeldung ist {session_hours} Stunden gültig" in page
 
 
 @pytest.mark.parametrize(
     "disclosure",
     [
-        "drei Cookie-Arten",
+        "zwei Cookie-Arten",
         "bleibt es, bis seine {pending_minutes} Minuten ablaufen",
         (
             "Presentator beendet beim Abmelden sofort die Sitzung in "
@@ -578,9 +597,7 @@ def test_the_datenschutz_names_no_ip_address_and_no_user_agent_as_stored(
     assert stored_client_detail not in lobby.client.get("/datenschutz").text
 
 
-@pytest.mark.parametrize(
-    "cookie_name", ["__Host-session_id", "__Host-csrf_token", "slidev-"]
-)
+@pytest.mark.parametrize("cookie_name", ["__Host-session_id", "slidev-"])
 def test_the_datenschutz_names_every_cookie_and_storage_key(
     lobby: Lobby,
     cookie_name: str,
@@ -613,3 +630,10 @@ def test_a_signed_in_page_links_the_impressum_and_the_datenschutz(
 
     assert ENGLISH.log_out in page
     assert _links_the_impressum_and_the_datenschutz(page)
+
+
+@pytest.mark.parametrize(
+    "removed", ["__Host-csrf_token", "JavaScript lesbar", "Fälschungsschutz"]
+)
+def test_the_datenschutz_names_no_csrf_cookie(lobby: Lobby, removed: str) -> None:
+    assert removed not in lobby.client.get("/datenschutz").text

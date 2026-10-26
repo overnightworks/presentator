@@ -8,9 +8,8 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
-from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
-from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, DEFAULT_SESSION_COOKIE_NAME
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import AskLimiter
@@ -39,12 +38,10 @@ from tests.application.fakes import FakeDeckStore, FrozenClock
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from fastapi.testclient import TestClient
+
 _JSON = {"accept": "application/json"}
 _ASK = "/copresenter/ask"
-
-
-def _ask_headers(token: str, **claims: str) -> dict[str, str]:
-    return {"x-csrf-token": token, **claims}
 
 
 def _hear_with_origin(browser: TestClient, origin: str | None) -> int | None:
@@ -83,12 +80,11 @@ def test_who_answers_the_admin_only(
 
 
 # C5.
-def test_ask_streams_for_an_admin_with_the_talk_hosts_own_token() -> None:
+def test_ask_streams_for_an_admin_with_the_browsers_own_provenance() -> None:
     talk, _private, _clock = a_copresenter_talk_host()
     talk.sign_in()
-    token = talk.client.cookies[DEFAULT_CSRF_COOKIE_NAME]
 
-    answer = talk.client.post(_ASK, json=QUESTION, headers=_ask_headers(token))
+    answer = talk.client.post(_ASK, json=QUESTION)
 
     assert answer.status_code == HTTPStatus.OK
 
@@ -104,46 +100,28 @@ def test_ask_streams_for_an_admin_with_the_talk_hosts_own_token() -> None:
         ),
     ],
 )
-def test_a_valid_token_does_not_excuse_a_post_from_another_site(
+def test_a_post_from_another_site_is_refused_whatever_session_it_carries(
     claims: dict[str, str],
 ) -> None:
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in()
-    token = talk.client.cookies[DEFAULT_CSRF_COOKIE_NAME]
 
-    refused = talk.client.post(
-        _ASK, json=QUESTION, headers=_ask_headers(token, **claims)
-    )
+    refused = talk.client.post(_ASK, json=QUESTION, headers=claims)
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
     assert private.answers.messages == []
 
 
 # C5.
-def test_a_same_origin_ask_still_needs_the_token() -> None:
+def test_an_ask_with_neither_provenance_header_is_refused_by_the_origin_check() -> None:
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in()
+    del talk.client.headers["sec-fetch-site"]
 
     refused = talk.client.post(_ASK, json=QUESTION)
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
-    assert private.answers.messages == []
-
-
-# C5.
-def test_the_lobbys_csrf_token_does_not_excuse_an_ask_at_the_talk_host() -> None:
-    talk, private, clock = a_copresenter_talk_host()
-    session_id = talk.people.open_session_for(
-        User(id="id-of-an-admin", username=USERNAME, role=Role.ADMIN)
-    )
-    hand_over_session_cookies(talk.client, session_id, talk.config)
-    at_the_lobby = TestClient(talk.app, base_url=A_BROWSERS_ADDRESS)
-    hand_over_session_cookies(at_the_lobby, session_id, a_web_auth(clock))
-    lobby_token = at_the_lobby.cookies[DEFAULT_CSRF_COOKIE_NAME]
-
-    refused = talk.client.post(_ASK, json=QUESTION, headers=_ask_headers(lobby_token))
-
-    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert refused.json() == {"detail": "Missing Origin header"}
     assert private.answers.messages == []
 
 

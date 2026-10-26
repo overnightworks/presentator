@@ -28,14 +28,14 @@ models run and what they cost on the card is owned by the speech README.
 
 The repository overlay calls relative `/copresenter/who`, `/copresenter/ask`
 and `/copresenter/hear` routes. The talk host serves them under its own session
-and CSRF cookie and its own Origin; the lobby answers 404 on them. Only the
+cookie and its own Origin; the lobby answers 404 on them. Only the
 admin role may use them, through the existing active session: a signed-in
 person without it gets 403 on `/who` and `/ask` and a refused handshake (HTTP 403, before accept) on
 `/hear`; an accepted hearing ends with a 1008 close when the session or the role
 goes. Presentator checks the session and, for the WebSocket, the exact
 Origin before opening the socket.
-`/ask` also carries the session's CSRF cookie (`__Host-csrf_token`) in
-`x-csrf-token`. Logout, expiry, loss of the account row, loss of the admin role
+`/ask` is guarded by the origin check alone, like every mutating request
+([sign-in and session](sign-in-and-session.md)). Logout, expiry, loss of the account row, loss of the admin role
 or a session-store failure closes the hearing lease and an ongoing answer
 within one second, since Presentator rechecks the answer and hearing lease
 every half second; generation, capture and queued or playing audio stop.

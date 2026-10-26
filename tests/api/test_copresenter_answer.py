@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Final
 import httpx2
 import pytest
 from agent_runtime_client.wire import FailureCode, RejectionCode, RunRequest
-from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, DEFAULT_SESSION_COOKIE_NAME
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.adapters.agent_service import ServiceAnswerer
 from presentator.adapters.agent_tokens import PersonAccessTokens, WorkloadToken
@@ -254,11 +254,7 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
 
 
 def ask(talk: TestClient, body: Mapping[str, object] = THE_ASKED_DECK) -> Response:
-    return talk.post(
-        ASK,
-        json=body,
-        headers={"x-csrf-token": talk.cookies[DEFAULT_CSRF_COOKIE_NAME]},
-    )
+    return talk.post(ASK, json=body)
 
 
 A_PUSH: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
@@ -437,29 +433,26 @@ def test_the_limiter_ticket_is_released_after_each_person_token_refusal(
 def test_a_doubled_session_cookie_is_refused_before_any_token_is_fetched(
     tmp_path: Path,
 ) -> None:
-    """Cell 6: webauth reads a doubled cookie as no session, so its CSRF layer refuses.
+    """Cell 6: webauth reads a doubled cookie as no session, so its gate refuses.
 
-    The refusal is the library's 403 before the route runs; the route's own
-    401 "Not authenticated" for a missing admission is pinned in
-    test_copresenter.py.
+    The refusal is the library's 401 before the route runs, as it answers the
+    overlay's `fetch`, which sets no `Accept` (a page visit would be sent to
+    sign in); the route's own 401 "Not authenticated" for a missing admission
+    is pinned in test_copresenter.py.
     """
     run = drive(tmp_path)
     grants = len(run.hosts.issuer.grant_types)
     session = run.talk.cookies[DEFAULT_SESSION_COOKIE_NAME]
-    csrf = run.talk.cookies[DEFAULT_CSRF_COOKIE_NAME]
     named = f"{DEFAULT_SESSION_COOKIE_NAME}={session}"
 
     refused = run.talk.post(
         ASK,
         json=THE_ASKED_DECK,
-        headers={
-            "cookie": f"{named}; {named}; {DEFAULT_CSRF_COOKIE_NAME}={csrf}",
-            "x-csrf-token": csrf,
-        },
+        headers={"cookie": f"{named}; {named}", "accept": "*/*"},
     )
 
-    assert refused.status_code == HTTPStatus.FORBIDDEN
-    assert refused.json() == {"detail": "CSRF token missing or invalid"}
+    assert refused.status_code == HTTPStatus.UNAUTHORIZED
+    assert refused.json() == {"detail": "Invalid session"}
     assert the_browser_saw_no_token(refused)
     assert len(run.wire.requests) == 1
     assert len(run.hosts.issuer.grant_types) == grants

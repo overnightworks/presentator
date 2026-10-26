@@ -320,7 +320,6 @@ async function ask(text) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-csrf-token': csrfToken(),
       },
       body: JSON.stringify({
         said: text,
@@ -339,17 +338,6 @@ async function ask(text) {
     if (err.name === 'AbortError') return
     error.value = 'No answer'
   }
-}
-
-const CSRF_COOKIE_NAMES = ['__Host-csrf_token', 'csrf_token']
-
-function csrfToken() {
-  const cookies = new Map(document.cookie.split(';').map((part) => {
-    const separator = part.indexOf('=')
-    return separator < 0 ? [part.trim(), ''] : [part.slice(0, separator).trim(), part.slice(separator + 1).trim()]
-  }))
-  const name = CSRF_COOKIE_NAMES.find((candidate) => cookies.has(candidate))
-  return name ? decodeURIComponent(cookies.get(name)) : ''
 }
 
 async function readSse(body, signal) {

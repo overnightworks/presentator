@@ -94,7 +94,7 @@ class FakeSessionRecordStore:
         now: datetime,
         expires_at: datetime,
         refresh_token: SecretStr | None,
-        id_token: SecretStr,
+        id_token: SecretStr | None,
     ) -> FakeSession:
         self.minted += 1
         session = FakeSession(

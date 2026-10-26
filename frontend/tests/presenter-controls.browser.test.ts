@@ -37,6 +37,7 @@ let origin = ''
 let hearingOpened = 0
 let hearingClosed = 0
 let pendingAnswerClosed = 0
+let askHeaderNames: string[] = []
 let answerMode: 'audio' | 'speech-refused' = 'audio'
 let hearingMode: 'ready' | 'not-ready' | 'socket-error' | 'unreachable' = 'ready'
 let productionSecurityHeaders: Record<string, string> = {}
@@ -237,6 +238,7 @@ async function startServer() {
       return
     }
     if (url.pathname === '/copresenter/ask') {
+      askHeaderNames = Object.keys(request.headers)
       response.writeHead(200, { 'content-type': 'text/event-stream' })
       if (answerMode === 'speech-refused') {
         const sentence = 'The handoff keeps this sentence.'
@@ -450,6 +452,8 @@ describe('presenter controls', () => {
       const refusal = page.getByText('No answer')
       await sentence.waitFor({ state: 'visible', timeout: 5_000 })
       await refusal.waitFor({ state: 'visible', timeout: 5_000 })
+      expect(askHeaderNames).toContain('content-type')
+      expect(askHeaderNames).not.toContain('x-csrf-token')
       expect(await sentence.isVisible()).toBe(true)
       expect(await refusal.isVisible()).toBe(true)
       await saveEvidence(page, `presenter-speech-refused-${width}.png`)
@@ -582,6 +586,11 @@ describe('presenter controls', () => {
     } finally {
       await browser.close()
     }
+  })
+
+  it('reads no cookie: the browser vouches for the ask with its own Origin', async () => {
+    const overlay = await readFile(join(overlayDeckSourceDirectory, 'components/CoPresenter.vue'), 'utf8')
+    expect(overlay).not.toContain('document.cookie')
   })
 
   it('loads the AudioWorklet from exactly the README\'s copied overlay', async () => {

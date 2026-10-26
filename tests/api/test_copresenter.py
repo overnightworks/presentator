@@ -237,12 +237,14 @@ def test_a_refused_non_admin_question_keeps_the_sessions_ask_capacity() -> None:
     assert len(private.answers.messages) == 1
 
 
-def test_ask_requires_the_session_csrf_token_and_streams_only_public_events() -> None:
+def test_ask_needs_the_browsers_provenance_and_streams_only_public_events() -> None:
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
     lobby.sign_in()
 
-    refused = client.post("/copresenter/ask", json=QUESTION)
+    refused = client.post(
+        "/copresenter/ask", json=QUESTION, headers={"sec-fetch-site": "cross-site"}
+    )
     response = ask(client)
 
     assert refused.status_code == HTTPStatus.FORBIDDEN

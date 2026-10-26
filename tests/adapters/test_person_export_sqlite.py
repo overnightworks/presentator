@@ -90,13 +90,13 @@ def test_the_secret_columns_are_counted_withheld_over_real_rows(
     assert not [secret for secret in seeded_secrets if secret in shown]
 
 
-def _another_session(instance: Instance, *, keeps_id_token: bool) -> None:
-    SqliteSessionRecordStore(instance.database, keeps_id_token=keeps_id_token).create(
+def _another_session(instance: Instance, *, id_token: SecretStr | None) -> None:
+    SqliteSessionRecordStore(instance.database).create(
         THE_PERSON.id,
         now=_NOW,
         expires_at=_NOW + timedelta(hours=1),
         refresh_token=None,
-        id_token=SecretStr("a-second-id-token"),
+        id_token=id_token,
     )
 
 
@@ -105,7 +105,7 @@ def test_two_sessions_holding_id_tokens_are_counted_two_over_real_rows(
 ) -> None:
     """#428 cell 22: two ID-token sessions give `id-token`, `secret`, count 2."""
     instance = an_instance_with_both_people(tmp_path)
-    _another_session(instance, keeps_id_token=True)
+    _another_session(instance, id_token=SecretStr("a-second-id-token"))
 
     export = instance.people.export_person(THE_PERSON.id)
 
@@ -122,7 +122,7 @@ def test_sessions_holding_no_id_token_leave_no_id_token_entry_over_real_rows(
     instance = an_instance_with_both_people(tmp_path)
     with closing(sqlite3.connect(instance.database)) as connection, connection:
         connection.execute("UPDATE sessions SET id_token = NULL")
-    _another_session(instance, keeps_id_token=False)
+    _another_session(instance, id_token=None)
 
     export = instance.people.export_person(THE_PERSON.id)
 

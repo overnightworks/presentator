@@ -9,7 +9,6 @@ from urllib.parse import urlencode
 
 from fastapi.testclient import TestClient
 from starlette.types import ASGIApp, Message
-from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME
 
 from presentator.api.auth import BACKCHANNEL_LOGOUT_PATH
 from presentator.api.copresenter import MAX_SAID_LENGTH
@@ -104,7 +103,6 @@ def a_browsers_headers(
         "origin": origin,
         "sec-fetch-site": "same-origin",
         "accept": "text/html",
-        "x-csrf-token": client.cookies.get(DEFAULT_CSRF_COOKIE_NAME) or "",
     }
 
 

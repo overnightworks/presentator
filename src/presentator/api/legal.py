@@ -72,7 +72,7 @@ _SWEEP_MINUTES: Final = (
     int(SESSION_SWEEP_INTERVAL.total_seconds()) // _SECONDS_PER_MINUTE
 )
 _DRAFT_HOURS: Final = int(DRAFT_MAX_AGE.total_seconds()) // _SECONDS_PER_HOUR
-_STAND: Final = "23. Oktober 2026"
+_STAND: Final = "26. Oktober 2026"
 _BASIS_CONTRACT: Final = "Art. 6 Abs. 1 lit. b DSGVO (hilfsweise lit. f)"
 _BASIS_INTEREST: Final = "Art. 6 Abs. 1 lit. f DSGVO"
 
@@ -110,7 +110,7 @@ DATENSCHUTZ: Final = LegalDocument(
                 ),
                 _point(
                     "Sitzung und Cookies:",
-                    "Wir setzen drei Cookie-Arten. Bei jedem Start der Anmeldung "
+                    "Wir setzen zwei Cookie-Arten. Bei jedem Start der Anmeldung "
                     "setzt Presentator __Host-oidc_pending_… (signiert, "
                     "HttpOnly, nur über HTTPS, "
                     f"{_PENDING_MINUTES} Minuten gültig): Es hält den Zustand "
@@ -118,17 +118,15 @@ DATENSCHUTZ: Final = LegalDocument(
                     "der Rückkehr gelöscht; kommt die Rückkehr ohne "
                     "verwertbaren Zustand, bleibt es, bis seine "
                     f"{_PENDING_MINUTES} Minuten ablaufen. Nach der Anmeldung "
-                    "folgen "
+                    "folgt "
                     "__Host-session_id als Sitzungs-Cookie (HttpOnly, "
-                    "SameSite=Lax, nur über HTTPS) und __Host-csrf_token, das "
-                    "von JavaScript lesbar ist und nur dem Fälschungsschutz "
-                    "(CSRF) dient, nicht dem Tracking. "
+                    "SameSite=Lax, nur über HTTPS). "
                     "Presentator beendet beim Abmelden sofort die Sitzung in "
                     "Presentator und leitet den Browser zu Keycloak weiter, um "
                     "dort auch die Anmeldung zu beenden; Keycloak fragt dabei "
-                    "gegebenenfalls nach. Die beiden "
-                    "Cookies nach der Anmeldung "
-                    f"sind {_SESSION_HOURS} Stunden gültig und "
+                    "gegebenenfalls nach. Das "
+                    "Cookie nach der Anmeldung "
+                    f"ist {_SESSION_HOURS} Stunden gültig und "
                     "werden danach nicht erneuert. Die Vorträge selbst "
                     "liefert ein eigener Host aus (der Talk-Host): Dort "
                     "meldet Presentator Sie selbst an und setzt dieselben "
