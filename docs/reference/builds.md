@@ -41,23 +41,22 @@ it is what the deck's page shows; a run given up on, one whose tree this host
 could not read, and one that printed nothing hand back no words, and the page
 says that in its own sentence. What a build that did not finish left behind is
 taken away again, and a directory a deck row delivers from is never removed. A
-request that read the previous pointer just before the switch finds no
-directory and answers 404.
+request that read the previous pointer may find its directory gone once the
+pass's sweep has run, and answers 404.
 
 ## Retention
 
 At the end of every refresh pass, under the same lock, every run directory under
 `PRESENTATOR_BUILDS` that no deck row delivers from is taken off disk: the build
-a new one superseded, the leftovers of failed or crashed builds and runs from
-before this rule. A row delivers from the run of its talk and the run of its PDF,
-and a deck marked removed still counts, so none of them is touched. A run is a
+a new one superseded, the leftovers of failed or crashed builds and older runs. A row delivers from the run of its talk and the run of
+its PDF, and a deck marked removed still counts, so none of them is touched. A run is a
 real directory directly under the root that holds a real `out` directory; a
 stored path counts only as exactly `<root>/<name>/out/talk` or
 `<root>/<name>/out/deck.pdf`, read as an absolute path without following links.
 Anything else under the root is left alone and logged.
 
 A stored path that fits no run, or a listing of the root that did not finish,
-stops the whole pass with a log line and deletes nothing, because every run
+stops the sweep with a log line and deletes nothing, because every run
 would then look unreferenced. A removal that fails is logged and tried again by
 the next pass. An empty or older database is not guarded against: its pass
 deletes the runs only the right database names, and those decks answer 404

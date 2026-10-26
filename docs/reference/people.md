@@ -63,6 +63,8 @@ the caller nor the person, and the server writes no access log.
 
 ## Known gap
 
-Superseded builds no longer stay on disk ([builds](builds.md)), so an erasure
-reaches every build. The live instance keeps the setting empty until the
+The erasure removes every run its decks deliver from. Superseded builds and
+leftovers go at the end of the next refresh pass ([builds](builds.md)), so a
+leftover can outlive an erasure by one pass, or longer while that pass refuses.
+The live instance keeps the setting empty until the
 operator releases it.

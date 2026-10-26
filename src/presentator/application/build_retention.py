@@ -13,7 +13,7 @@ from typing import Final
 from presentator.contracts.decks import Deck
 from presentator.ports.decks import BuildRun, BuildRunner, DeckStore, SourceStore
 
-_UNPLACED: Final = "build %s is not a run under the builds root, nothing is swept"
+_UNPLACED: Final = "build %s is not a run under the builds root"
 _NOT_LISTED: Final = "the runs on disk could not be listed, nothing is swept"
 
 _log = logging.getLogger(__name__)
