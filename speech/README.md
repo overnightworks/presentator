@@ -117,7 +117,7 @@ and never the speech process, in every run.
 | `load_1min` at the start | 3.36 | 4.03 | 9.73 | 3.05 |
 | Load to ready | 6.1 s | 3.3 s | 5.5 s | 3.4 s |
 | Audio length | 5.677 s | 5.851 s | 5.805 s | 5.677 s |
-| First partial (from start of sending) | 6.753 s / 7.172 s, all 5 while sending | 7.316 s / 7.458 s, all 5 while sending | 6.764 s / 7.191 s, all 5 while sending | 10.906 s / 17.169 s; rep 1 4.643 s while sending, rep 2 17.169 s after sending ended |
+| First partial (from start of sending) | 6.753 s / 7.172 s, all 5 while sending | 7.316 s / 7.458 s, all 5 while sending | 6.764 s / 7.191 s, all 5 while sending | 4.643 s / 4.643 s, 1 completed, while sending; rep 2 (not completed) 17.169 s after sending ended |
 | Start of sending to final | 21.909 s / 22.604 s, 5 of 5 | 21.009 s / 38.991 s, 5 of 5 | 22.265 s / 23.194 s, 5 of 5 | 14.722 s / 14.722 s, 1 of 5; rep 2: no final within 30 s, the other repetitions did not run |
 | End of speech to final | 13.880 s / 14.587 s | 12.708 s / 30.686 s | 13.915 s / 14.865 s | 6.685 s / 6.685 s |
 | Sending ended (speech / after silence) | 8.0 s / 9.3 s | 8.3 s / 9.6 s | 8.3 s / 9.6 s | 8.0 s / 9.3 s |
@@ -206,9 +206,10 @@ large-v3) pass through; on `cpu` the card is hidden from speech with an empty
 uv run python scripts/prove.py
 ```
 
-`--measure` swaps the contract markers for the hearing measurement behind
-"CPU" (five repetitions, two final timings, missed gates kept as values) and
-adds load to ready and the peak RSS of the speech process:
+Every run reports load to ready, the card's compute pids at health ready and
+the peak RSS of the speech process. `--measure` only swaps the contract markers
+for the hearing measurement behind "CPU" (five repetitions, two final timings,
+missed gates kept as values):
 
 ```sh
 SPEECH_DEVICE=cpu SPEECH_SPEAKING_MODEL=de_DE-thorsten-medium \

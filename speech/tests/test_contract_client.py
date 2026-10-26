@@ -26,7 +26,10 @@ def _script(name: str) -> ModuleType:
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(name)
     return module
 
 
@@ -115,6 +118,7 @@ def _repetition(**changes: object) -> object:
 def test_the_two_final_timings_count_from_sending_start_and_from_speech_end(
     final_at_s: float, sending_to_final_s: float, speech_end_to_final_s: float
 ) -> None:
+    """#515 acceptance 4: the two final timings, pure."""
     repetition = _repetition(final_at_s=final_at_s)
 
     assert repetition.sending_to_final_s == pytest.approx(sending_to_final_s)
@@ -125,17 +129,19 @@ def test_the_two_final_timings_count_from_sending_start_and_from_speech_end(
     ("changes", "expected"),
     [
         ({"partial_at_s": 2.0}, "2.000 s while sending"),
-        ({"partial_at_s": 11.5}, "11.500 s after sending ended"),
+        ({"partial_at_s": 11.5}, "11.500 s after speech ended"),
         ({"partial_at_s": None}, "no partial"),
     ],
 )
 def test_the_first_partial_says_whether_it_arrived_while_sending(
     changes: dict[str, object], expected: str
 ) -> None:
+    """#515 Change: the first partial says whether it came while sending."""
     assert _repetition(**changes).first_partial == expected
 
 
 def test_a_missed_final_is_recorded_as_a_value_not_an_abort() -> None:
+    """#515 Change: a missed gate is a value."""
     repetition = _repetition(final_at_s=None, final_text=None)
 
     assert repetition.sending_to_final_s is None
@@ -144,16 +150,22 @@ def test_a_missed_final_is_recorded_as_a_value_not_an_abort() -> None:
 
 
 def test_the_summary_gives_median_worst_and_count_of_completed_repetitions() -> None:
-    repetitions = [_repetition(final_at_s=value) for value in (7.0, 8.0, 12.0, None)]
+    """#515 Change: median and worst of the completed repetitions and their count."""
+    repetitions = [
+        _repetition(final_at_s=value, partial_at_s=partial)
+        for value, partial in ((7.0, 1.0), (8.0, 2.0), (12.0, 4.0), (None, 20.0))
+    ]
 
     summary = CLIENT.summarize(repetitions)
 
     assert summary["completed"] == 3
     assert summary["sending_to_final_s"] == (8.0, 12.0)
     assert summary["speech_end_to_final_s"] == (2.0, 6.0)
+    assert summary["partial_s"] == (2.0, 4.0)
 
 
 def test_a_final_matches_the_spoken_sentence_without_case_and_punctuation() -> None:
+    """#515 Change: a final is judged by its words."""
     assert CLIENT.same_words("die kamera zeigt, den Vortragenden!", SENTENCE_START)
     assert not CLIENT.same_words("Die Kamera zeigt Vortragenden", SENTENCE_START)
 
@@ -161,6 +173,7 @@ def test_a_final_matches_the_spoken_sentence_without_case_and_punctuation() -> N
 def test_prove_defaults_to_the_card_proof_and_never_the_operators_voice_choice(
     tmp_path, monkeypatch
 ) -> None:
+    """#515 Change: own temporary state directory, card proof by default."""
     for name in ("SPEECH_DEVICE", "SPEECH_HEARING_MODEL", "CUDA_VISIBLE_DEVICES"):
         monkeypatch.delenv(name, raising=False)
 
@@ -177,6 +190,7 @@ def test_prove_defaults_to_the_card_proof_and_never_the_operators_voice_choice(
 def test_prove_takes_device_and_hearing_model_and_hides_the_card_on_the_cpu(
     tmp_path, monkeypatch
 ) -> None:
+    """#515 Change: CUDA_VISIBLE_DEVICES empty on cpu."""
     monkeypatch.setenv("SPEECH_DEVICE", "cpu")
     monkeypatch.setenv("SPEECH_HEARING_MODEL", "elsewhere/whisper")
 
@@ -188,6 +202,7 @@ def test_prove_takes_device_and_hearing_model_and_hides_the_card_on_the_cpu(
 
 
 def test_peak_resident_memory_is_read_from_the_process_status_in_mebibytes() -> None:
+    """#515 Change: peak resident memory from the process status."""
     status = "Name:\tpython\nVmPeak:\t 9999 kB\nVmHWM:\t 2048000 kB\nVmRSS:\t 1 kB\n"
 
     assert PROVE.peak_rss_mib(status) == pytest.approx(2000.0)

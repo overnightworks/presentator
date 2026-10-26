@@ -229,7 +229,7 @@ class Repetition:
         if self.partial_at_s is None:
             return "no partial"
         sending = self.partial_at_s <= self.speech_ended_s
-        when = "while sending" if sending else "after sending ended"
+        when = "while sending" if sending else "after speech ended"
         return f"{self.partial_at_s:.3f} s {when}"
 
     @property
@@ -261,7 +261,7 @@ def summarize(repetitions: list[Repetition]) -> dict[str, object]:
     for name in ("sending_to_final_s", "speech_end_to_final_s"):
         values = [getattr(item, name) for item in completed]
         summary[name] = (statistics.median(values), max(values))
-    partials = [item.partial_at_s for item in repetitions if item.partial_at_s]
+    partials = [item.partial_at_s for item in completed if item.partial_at_s]
     if partials:
         summary["partial_s"] = (statistics.median(partials), max(partials))
     return summary

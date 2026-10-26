@@ -572,7 +572,11 @@ def main() -> None:
             with _speech_server(project, env, socket_path) as running:
                 print("health_ready", json.dumps(running.health, sort_keys=True))
                 print("load_to_ready_s", f"{running.ready_seconds:.1f}")
-                print("gpu_compute_pids", _nvidia_compute_pids(), running.process.pid)
+                print(
+                    "gpu_compute_pids",
+                    _nvidia_compute_pids(),
+                    f"speech_pid={running.process.pid}",
+                )
                 _require_speaking(running.health, speaking_model)
                 print("gpu_both_resident", _nvidia_memory())
                 print("whisper_cache", WHISPER_CACHE)
