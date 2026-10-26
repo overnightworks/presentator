@@ -1,0 +1,8 @@
+claim_id = "f14c5698866b4196803c0279bb3f0eb8"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "bfebb92dcc680da6aa8a947de288545edfea0a81"
+branch = "claude/issue-513-s9b-health-on-both-hosts"
+scope = ["docs/reference/sign-in-and-session.md", "src/presentator/api/auth.py", "src/presentator/api/health.py", "src/presentator/api/talk.py", "tests/api/test_health.py"]
+opened_commit = "3c89092ef2e5e21f25237d1771682a442c52352f"
+whole_reason = "One public route mounted in both apps, its test and its reference sentence: the route without both mounts, or without its test and document, leaves one host unhealthy or the reference false."
