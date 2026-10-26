@@ -547,6 +547,7 @@ def test_the_datenschutz_renders_every_section_and_links_the_impressum(
 def test_the_datenschutz_links_the_notice_sections_of_hallucinai(
     lobby: Lobby,
 ) -> None:
+    """#519 sentence 2: the notice links both hallucinai sections by their full href."""
     page = lobby.client.get("/datenschutz").text
 
     assert 'href="https://hallucinai.de/datenschutz#agent-dienst"' in page
