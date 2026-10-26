@@ -264,7 +264,7 @@ def two_hosts(
     decks = a_decks(
         replace(NO_DECKS if given is None else given, store=decks_store), clock
     )
-    sessions = SqliteSessionRecordStore(database, keeps_id_token=True)
+    sessions = SqliteSessionRecordStore(database)
     issuer = FakeIssuer(issuer=AN_ISSUER, client_id=A_CLIENT_ID, now=clock.now())
     lobby_auth, talk_auth = _both_auths(database, issuer, clock, admission)
     talk_config = talk_auth.config

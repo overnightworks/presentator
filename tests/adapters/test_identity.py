@@ -62,7 +62,7 @@ def database(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def sessions(database: Path) -> SqliteSessionRecordStore:
-    return SqliteSessionRecordStore(database, keeps_id_token=True)
+    return SqliteSessionRecordStore(database)
 
 
 def an_id_token(word: str = _ID_MARKER) -> SecretStr:
@@ -710,24 +710,23 @@ def test_the_id_token_is_read_back_and_survives_a_touch_and_a_refresh_token_swap
     assert loaded.id_token.get_secret_value() == "id-kept"
 
 
-def test_a_store_that_does_not_keep_the_id_token_writes_none(
+def test_a_session_created_without_an_id_token_stores_none(
     database: Path,
 ) -> None:
-    """#428 D4 (T1): a store that does not keep the ID token writes NULL."""
+    """#474 cell 28: the caller states the ID token; NULL is stored for none."""
     store = SqliteSessionRecordStore(database)
     created = store.create(
         "user-1",
         now=_NOW,
         expires_at=_NOW,
         refresh_token=None,
-        id_token=an_id_token("id-dropped"),
+        id_token=None,
     )
 
     assert created.id_token is None
     loaded = store.load(created.id)
     assert loaded is not None
     assert loaded.id_token is None
-    assert occurrences_in_the_file(database, "id-dropped") == 0
 
 
 def write_the_first_sessions_table_in_the_log(database: Path) -> None:

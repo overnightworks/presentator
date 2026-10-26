@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 import pytest
 from pydantic import SecretStr
-from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, DEFAULT_SESSION_COOKIE_NAME
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.api.auth import LOGIN_PATH, LOGOUT_PATH
 from presentator.host.oidc import oidc_client_config
@@ -76,7 +76,6 @@ def test_logging_out_answers_the_page_that_posts_the_stored_hint_to_the_issuer(
     assert scene.count("sessions") == 0
     assert _cleared_paths(answer.headers.get_list("set-cookie")) == {
         DEFAULT_SESSION_COOKIE_NAME: "/",
-        DEFAULT_CSRF_COOKIE_NAME: "/",
     }
 
 
@@ -154,6 +153,22 @@ def test_a_logout_form_without_a_token_from_this_origin_is_accepted(
     scene: Scene,
 ) -> None:
     scene.sign_in()
+
+    accepted = scene.lobby.client.post(
+        LOGOUT_PATH,
+        headers={**_A_FORM, "origin": scene.lobby.own_origin()},
+    )
+
+    assert accepted.status_code == HTTPStatus.OK
+    assert scene.count("sessions") == 0
+
+
+def test_a_stale_csrf_cookie_of_the_removed_token_layer_does_not_block_a_logout(
+    scene: Scene,
+) -> None:
+    """#474 cell 27: the removed second cookie is ignored at logout."""
+    scene.sign_in()
+    scene.lobby.client.cookies.set("__Host-csrf_token", "stale")
 
     accepted = scene.lobby.client.post(
         LOGOUT_PATH,

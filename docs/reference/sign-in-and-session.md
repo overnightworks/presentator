@@ -60,7 +60,7 @@ The SQLite stores stay this repository's
 
 ## What protects a request
 
-`webauth` v0.22.0 owns the mechanism. `issue_session_cookies`,
+`webauth` v0.23.0 owns the mechanism. `issue_session_cookies`,
 `clear_session_cookies` and `session_id_from_request` set, clear and read the
 signed `SameSite=Lax` session cookie.
 
@@ -74,19 +74,21 @@ signed `SameSite=Lax` session cookie.
   `PRESENTATOR_ADMIN_TOKEN_CLIENTS` names a client.
 - A request that carries the session cookie twice is treated as signed out
   rather than letting either copy decide whose account it runs in.
-- The public origin is https, so both cookies are `Secure` and carry the
-  host-only names `__Host-session_id` and `__Host-csrf_token`, which only this
-  exact host can set.
-- Every mutating path is cross-origin protected, fail-closed, unless exempted;
-  only the sessionless webhook prefix `/sources/` and the exact path
-  `/auth/backchannel-logout` are exempt. A request with `Sec-Fetch-Site:
-  cross-site` or `none` is refused outright, and so is a form POST carrying
-  neither `Sec-Fetch-Site` nor `Origin`/`Referer`. A request without
-  `Sec-Fetch-Site`, or with `same-site`, is judged by its `Origin` (or
-  `Referer`) against the hostname of the origin the app answers for
+- The public origin is https, so the session cookie is `Secure` and carries the
+  host-only name `__Host-session_id`, which only this exact host can set.
+- The origin check is the one guard against forged cross-site requests; a
+  request sends nothing beyond what the browser adds itself. Every POST, PUT, PATCH or DELETE is refused unless it
+  carries provenance, whatever its content type: `Sec-Fetch-Site: same-origin`,
+  or an `Origin` naming the hostname of the origin the app answers for
   (`PRESENTATOR_PUBLIC_ORIGIN` for the lobby, `PRESENTATOR_TALK_ORIGIN` for the
-  talk host), the only host its allowlist names (`allowed_hosts_exact`): a form
-  naming it is admitted, any other host, the other app's included, is refused.
+  talk host), the only host its allowlist names (`allowed_hosts_exact`), over
+  https. A request with neither header is refused with 403 `Missing Origin
+  header`. `Sec-Fetch-Site: same-site` falls back to the `Origin` check;
+  `cross-site`, `none` and another host's `Origin`, the other app's included,
+  are refused with 403 `Cross-origin request rejected`; `Referer` is not read. Supported browsers are current
+  Chrome, Edge, Firefox and Safari. Only the sessionless webhook prefix
+  `/sources/` and the exact path `/auth/backchannel-logout` are exempt, and a
+  request admitted by a bearer token is not checked.
   The match is by hostname, so no party may be given another port or scheme of
   either hostname ([webauth#401](https://github.com/overnightworks/webauth/issues/401)).
   A direct run must send the public `Host`. The guard does not depend on the

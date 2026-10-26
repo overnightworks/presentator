@@ -46,9 +46,6 @@ from presentator.application.decks import Decks
 
 TALK_PERMISSIONS_POLICY: Final = "camera=(), microphone=(self), geolocation=()"
 _ROOT: Final = "/"
-_COPRESENTER_CSRF_POLICY: Final = CsrfPolicy(
-    protected=PathRules(exact=frozenset({"/copresenter/ask"})),
-)
 _SIGN_IN_ADDRESSES: Final = PathRules(
     exact=frozenset({_ROOT, START_SIGN_IN_PATH, SIGN_IN_CALLBACK_PATH}),
 )
@@ -76,7 +73,7 @@ def create_talk(
     copresenter: CoPresenterSurface | None = None,
 ) -> FastAPI:
     """Build the talk host around the same stores and use cases as the lobby."""
-    sign_in = SignIn(sessions=sessions, auth=auth)
+    sign_in = SignIn(sessions=sessions, auth=auth, keeps_id_token=False)
 
     def refused(refusal: TalkSignInRefusal, kept: Response) -> Response:
         answer = Response(status_code=HTTPStatus.SEE_OTHER)
@@ -107,7 +104,6 @@ def create_talk(
         ),
         body_size=BodySizePolicy(default_max_bytes=DEFAULT_BODY_BYTES),
         csrf_origin=CsrfPolicy(),
-        csrf_token=_COPRESENTER_CSRF_POLICY,
         session_gate=SessionGate(
             session_transaction=lambda: nullcontext(sessions),
             login_redirect=LOGIN_REDIRECT,

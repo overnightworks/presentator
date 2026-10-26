@@ -72,7 +72,7 @@ def test_readiness_is_speechs_hearing_rate_and_state_without_credentials(
         hearing_sample_rate=16_000, local_hearing_ready=True
     )
     assert seen_paths == ["/health"]
-    assert not {"cookie", "authorization", "x-csrf-token"} & seen_headers.keys()
+    assert not {"cookie", "authorization"} & seen_headers.keys()
 
 
 async def _readiness(tmp_path: Path, app: FastAPI) -> CoPresenterReadiness:

@@ -271,11 +271,14 @@ class SignIn:
 
     The lobby and the talk host each own a relying party and a library
     configuration, read from the request, so one step cannot run under the
-    other host's keys; only the answer to a refusal differs between them.
+    other host's keys. The hosts differ in the answer to a refusal and in whether
+    the session's row keeps the ID token, which only a host with a logout route
+    needs.
     """
 
     sessions: SessionRecordStore
     auth: InstalledAuth
+    keeps_id_token: bool
 
     def start(self, request: Request) -> Response:
         """Send the browser to the issuer, remembering where it was headed.
@@ -346,6 +349,7 @@ class SignIn:
             sessions=self.sessions,
             lock=self.auth.lock,
             max_sessions=None,
+            keeps_id_token=self.keeps_id_token,
         )
         issue_session_cookies(answer, session.id, config)
         answer.status_code = HTTPStatus.SEE_OTHER
@@ -562,7 +566,7 @@ def create_lobby(
         decks=decks,
         pages=pages,
         auth=auth,
-        sign_in=SignIn(sessions=sessions, auth=auth),
+        sign_in=SignIn(sessions=sessions, auth=auth, keeps_id_token=True),
     )
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(lobby, auth.config)

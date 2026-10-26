@@ -159,7 +159,7 @@ def a_scene(  # noqa: PLR0913
         lock=lock,
         audit=audit(recording),
     )
-    sessions = SqliteSessionRecordStore(database, keeps_id_token=True)
+    sessions = SqliteSessionRecordStore(database)
     app, _ = a_lobby_app(
         people=people,
         signing_in=SigningIn(

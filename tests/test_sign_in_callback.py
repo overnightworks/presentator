@@ -24,7 +24,7 @@ import uvicorn
 from fastapi import FastAPI, Response
 from httpx2 import Response as BrowserAnswer
 from pydantic import SecretStr
-from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, DEFAULT_SESSION_COOKIE_NAME
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.oidc_login import AdmissionConfig
 from webauth.ports import (
     AccountEvent,
@@ -59,7 +59,7 @@ from tests.sign_in_support import (
 
 _BOUND = 30.0
 _TOO_LONG_FOR_A_COOKIE = 4000
-_COOKIES_OF_A_SIGN_IN = 3
+_COOKIES_OF_A_SIGN_IN = 2
 _HOLDS_OF_A_SIGN_IN = 2
 
 
@@ -150,13 +150,11 @@ def test_a_member_signs_in_and_the_303_carries_every_cookie_the_sign_in_needs(
     assert answer.status_code == HTTPStatus.SEE_OTHER
     assert answer.headers["location"] == "/"
     lifetime = f"Max-Age={int(SESSION_LIFETIME.total_seconds())}"
-    for name in (DEFAULT_SESSION_COOKIE_NAME, DEFAULT_CSRF_COOKIE_NAME):
-        assert lifetime in _cookie(answer, name)
-        assert "Secure" in _cookie(answer, name)
     session = _cookie(answer, DEFAULT_SESSION_COOKIE_NAME)
+    assert lifetime in session
+    assert "Secure" in session
     assert "HttpOnly" in session
     assert "SameSite=lax" in session
-    assert "HttpOnly" not in _cookie(answer, DEFAULT_CSRF_COOKIE_NAME)
     (pending,) = (
         cookie
         for cookie in answer.headers.get_list("set-cookie")
@@ -172,6 +170,18 @@ def _claims_of(token: str | None) -> dict[str, object]:
     payload = token.split(".")[1]
     document: dict[str, object] = json.loads(base64.urlsafe_b64decode(payload + "=="))
     return document
+
+
+def test_a_stale_csrf_cookie_of_the_removed_token_layer_does_not_block_a_sign_in(
+    scene: Scene,
+) -> None:
+    """#474 cell 27: the removed second cookie is ignored at sign-in."""
+    scene.lobby.client.cookies.set("__Host-csrf_token", "stale")
+
+    answer = scene.sign_in()
+
+    assert answer.status_code == HTTPStatus.SEE_OTHER
+    assert scene.count("sessions") == 1
 
 
 def test_the_session_row_holds_the_id_token_the_sign_in_returned(
@@ -253,8 +263,9 @@ def test_an_ordinary_answer_refreshes_no_cookie_and_a_later_sign_in_issues_fresh
     scene.lobby.client.post(LOGOUT_PATH)
     second = scene.sign_in()
 
-    for name in (DEFAULT_SESSION_COOKIE_NAME, DEFAULT_CSRF_COOKIE_NAME):
-        assert _cookie(second, name) != _cookie(first, name)
+    assert _cookie(second, DEFAULT_SESSION_COOKIE_NAME) != _cookie(
+        first, DEFAULT_SESSION_COOKIE_NAME
+    )
 
 
 @pytest.mark.parametrize(
@@ -411,8 +422,7 @@ def test_log_out_on_the_no_access_page_asks_the_issuer_without_a_hint(
     assert 'name="post_logout_redirect_uri"' in answer.text
     assert "id_token_hint" not in answer.text
     assert scene.count("sessions") == 0
-    for name in (DEFAULT_SESSION_COOKIE_NAME, DEFAULT_CSRF_COOKIE_NAME):
-        assert "Max-Age=0" in _cookie(answer, name)
+    assert "Max-Age=0" in _cookie(answer, DEFAULT_SESSION_COOKIE_NAME)
 
 
 def test_a_member_who_left_the_group_is_refused_and_returns_to_the_same_account(

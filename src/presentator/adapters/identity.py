@@ -219,13 +219,9 @@ class SqliteSessionRecordStore:
     Instants are stored as UTC ISO 8601 text, so comparing the text orders the
     instants. Every call commits on its own. The refresh token and the ID token
     sit in plain text in the session's row and leave with it (ADR 0013).
-
-    A store that does not keep the ID token writes NULL, so the host that has no
-    logout route holds no second copy of the person's claims.
     """
 
     database: Path
-    keeps_id_token: bool = False
 
     def create(
         self,
@@ -234,7 +230,7 @@ class SqliteSessionRecordStore:
         now: datetime,
         expires_at: datetime,
         refresh_token: SecretStr | None,
-        id_token: SecretStr,
+        id_token: SecretStr | None,
     ) -> StoredSession:
         """Open a session created at `now` that stands until `expires_at`."""
         session_id = secrets.token_urlsafe(_IDENTIFIER_BYTES)
@@ -253,7 +249,7 @@ class SqliteSessionRecordStore:
                     _stored(now),
                     _stored(expires_at),
                     None if refresh_token is None else refresh_token.get_secret_value(),
-                    id_token.get_secret_value() if self.keeps_id_token else None,
+                    None if id_token is None else id_token.get_secret_value(),
                 ),
             )
         return StoredSession(
@@ -262,7 +258,7 @@ class SqliteSessionRecordStore:
             created_at=now,
             expires_at=expires_at,
             refresh_token=refresh_token,
-            id_token=id_token if self.keeps_id_token else None,
+            id_token=id_token,
         )
 
     def load(self, session_id: str) -> StoredSession | None:

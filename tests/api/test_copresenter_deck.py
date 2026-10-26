@@ -152,7 +152,7 @@ def test_an_owner_who_lost_the_admin_role_is_refused() -> None:
 
 
 def test_a_signed_out_asker_is_refused_and_spends_no_question() -> None:
-    """E11 (#355) matrix, asker: signed out is refused 403, no port, no budget."""
+    """E11 (#355) matrix, asker: signed out is refused 401, no port, no budget."""
     lobby, private, _clock = a_copresenter_talk_host(
         limiter=AskLimiter(clock=FrozenClock(instant=NOW), limits=ONE_QUESTION_ONLY),
     )
@@ -161,9 +161,11 @@ def test_a_signed_out_asker_is_refused_and_spends_no_question() -> None:
     session = lobby.client.cookies[DEFAULT_SESSION_COOKIE_NAME]
     lobby.client.cookies.delete(DEFAULT_SESSION_COOKIE_NAME)
 
-    refused = ask(lobby.client)
+    refused = lobby.client.post(
+        "/copresenter/ask", json=QUESTION, headers={"accept": "*/*"}
+    )
     lobby.client.cookies.set(DEFAULT_SESSION_COOKIE_NAME, session)
 
-    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert refused.status_code == HTTPStatus.UNAUTHORIZED
     assert private.answers.messages == []
     assert ask(lobby.client).status_code == HTTPStatus.OK

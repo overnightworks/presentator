@@ -188,13 +188,13 @@ def build_instance(
         clock=SystemClock(),
         local_mount=local_mount,
     )
-    sessions = SqliteSessionRecordStore(settings.database, keeps_id_token=True)
+    sessions = SqliteSessionRecordStore(settings.database)
     # One use case object serves both callers, so the hook and the poll share
     # the one refresh that runs at a time.
     lobby_auth, talk_auth = installed_auths(settings, relying_party_for)
     return Instance(
         lobby=_lobby(settings, decks, sessions, key_drafts, lobby_auth),
-        talk=_talk(settings, decks, talk_auth, mirrors),
+        talk=_talk(settings, decks, sessions, talk_auth, mirrors),
         poller=Schedule(
             chore=decks.refresh,
             interval=timedelta(seconds=settings.source_poll_seconds),
@@ -223,14 +223,11 @@ def _lobby(
 def _talk(
     settings: Settings,
     decks: Decks,
+    sessions: SqliteSessionRecordStore,
     auth: InstalledAuth,
     mirrors: SourceMirrors,
 ) -> FastAPI:
-    """The talk host, with the co-presenter it speaks to.
-
-    Its own session store keeps no ID token: the talk host has no logout route.
-    """
-    sessions = SqliteSessionRecordStore(settings.database)
+    """The talk host, with the co-presenter it speaks to."""
     return create_talk(
         sessions=sessions,
         decks=decks,
@@ -414,7 +411,6 @@ def web_auth_config_for(
         trusted_proxies=TrustedProxies.parse(trusted_proxies),
         rate_limits=SingleProcessRateLimitBackend(),
         allowed_hosts_exact=frozenset({str(urlsplit(origin).hostname)}),
-        allowed_hosts_patterns=(),
         session_lifetime=SessionLifetime(
             idle_seconds=lifetime_seconds,
             absolute_max_age_seconds=lifetime_seconds,
