@@ -152,3 +152,38 @@ def test_the_instance_holds_no_authority_over_this_machines_docker(
 ) -> None:
     """B16 and B17: no socket, docker group, sandbox service or profile in the file."""
     assert authority not in _COMPOSE.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("name", "host_path", "setting"),
+    [
+        (
+            "presentator_secret_key",
+            "${HOME}/.secrets/presentator/secret-key",
+            "PRESENTATOR_SECRET_KEY_FILE",
+        ),
+        (
+            "oidc_client_secret",
+            "${HOME}/.secrets/keycloak/clients/presentator",
+            "PRESENTATOR_OIDC_CLIENT_SECRET_FILE",
+        ),
+    ],
+    ids=["master key", "client secret"],
+)
+def test_each_secret_is_a_file_secret_from_home_that_only_the_instance_mounts(
+    name: str, host_path: str, setting: str
+) -> None:
+    """edge#280: every app secret reaches the container as a mounted file."""
+    written = _COMPOSE.read_text(encoding="utf-8")
+
+    assert "\nsecrets:\n" in written
+    assert f"  {name}:\n    file: {host_path}\n" in written
+    assert f"      - {name}\n" in "\n".join(_service_lines("presentator")) + "\n"
+    assert f"{setting}: /run/secrets/{name}" in "\n".join(_service_lines("presentator"))
+    assert name not in "\n".join(_service_lines("build-worker"))
+    assert setting not in "\n".join(_service_lines("build-worker"))
+
+
+def test_no_secret_rides_the_environment_of_the_instance() -> None:
+    assert "PRESENTATOR_SECRET_KEY:" not in _COMPOSE.read_text(encoding="utf-8")
+    assert "PRESENTATOR_SECRET_KEY}" not in _COMPOSE.read_text(encoding="utf-8")
