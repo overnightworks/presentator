@@ -48,8 +48,8 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Pinned to the aco v5.1.0 release tag.
-        run: uvx --from git+https://github.com/overnightworks/agent-coordination.git@v5.1.0 aco check ${{ github.event.pull_request.number }}
+        # Pinned to aco v5.1.0 by commit SHA on its canonical URL.
+        run: uvx --from git+https://github.com/overnightworks/aco.git@0eb102b3cd39dafc3c0d184f368bfbd98157cd7a aco check ${{ github.event.pull_request.number }}
 
       - name: Hold the required check name for the merge queue
         if: ${{ github.event_name == 'merge_group' }}
