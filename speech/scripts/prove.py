@@ -7,6 +7,7 @@ Piper caches.
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import fcntl
 import json
@@ -550,8 +551,23 @@ def _speech_environment(private_directory: Path, speaking_model: str) -> dict[st
     return env
 
 
+def parse_arguments(arguments: list[str]) -> argparse.Namespace:
+    """Read the command line before anything starts; `--help` and typos exit here."""
+    parser = argparse.ArgumentParser(
+        description="Stage proof of the speech service under the probe-stack lock.",
+        allow_abbrev=False,
+    )
+    parser.add_argument(
+        "--measure",
+        action="store_true",
+        help="run the CPU hearing measurement instead of the contract proof",
+    )
+    return parser.parse_args(arguments)
+
+
 def main() -> None:
     """Run the stage proof under the probe-stack lock."""
+    options = parse_arguments(sys.argv[1:])
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(line_buffering=True)
     _wait_for_load()
@@ -587,9 +603,7 @@ def main() -> None:
                 GERMAN_WAV_PATH.write_bytes(german)
                 print("german_wav", GERMAN_WAV_PATH)
                 _prove_concurrent_speak(socket_path, speaking_model)
-                _prove_contract(
-                    project, socket_path, env, measure="--measure" in sys.argv[1:]
-                )
+                _prove_contract(project, socket_path, env, measure=options.measure)
                 print("peak_rss_mib", f"{running.peak_rss_mib():.0f}")
             print("gpu_after", _nvidia_memory())
             print("caches_kept")

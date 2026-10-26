@@ -33,7 +33,7 @@ FRAME_SECONDS = 0.1
 SILENCE_SECONDS = 0.9
 MEASURE_REPETITIONS = 5
 FINAL_WAIT_SECONDS = 30
-NO_FINAL = "no final within 30 s"
+NO_FINAL = f"no final within {FINAL_WAIT_SECONDS} s"
 
 
 def _must_not_have_imported_speech() -> None:

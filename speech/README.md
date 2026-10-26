@@ -111,18 +111,20 @@ quiet: other lanes shared the machine (the proof's own ceiling is 18).
 `nvidia-smi --query-compute-apps=pid` at health ready listed two foreign pids
 and never the speech process, in every run.
 
-| What | large-v3, 4 threads | large-v3-turbo, 4 threads | large-v3, 8 threads | medium, 4 threads |
-| --- | --- | --- | --- | --- |
-| Revision | `edaa852ec7e145841d8ffdb056a99866b5f0a478` | `0a363e9161cbc7ed1431c9597a8ceaf0c4f78fcf` (`main`) | same as 4 threads | `08e178d48790749d25932bbc082711ddcfdfbc4f` (`main`) |
-| `load_1min` at the start | 3.36 | 4.03 | 9.73 | 3.05 |
-| Load to ready | 6.1 s | 3.3 s | 5.5 s | 3.4 s |
-| Audio length | 5.677 s | 5.851 s | 5.805 s | 5.677 s |
-| First partial (from start of sending) | 6.753 s / 7.172 s, all 5 while sending | 7.316 s / 7.458 s, all 5 while sending | 6.764 s / 7.191 s, all 5 while sending | 4.643 s / 4.643 s, 1 completed, while sending; rep 2 (not completed) 17.169 s after sending ended |
-| Start of sending to final | 21.909 s / 22.604 s, 5 of 5 | 21.009 s / 38.991 s, 5 of 5 | 22.265 s / 23.194 s, 5 of 5 | 14.722 s / 14.722 s, 1 of 5; rep 2: no final within 30 s, the other repetitions did not run |
-| End of speech to final | 13.880 s / 14.587 s | 12.708 s / 30.686 s | 13.915 s / 14.865 s | 6.685 s / 6.685 s |
-| Sending ended (speech / after silence) | 8.0 s / 9.3 s | 8.3 s / 9.6 s | 8.3 s / 9.6 s | 8.0 s / 9.3 s |
-| Final text against the spoken sentence | same words in 5 of 5 | same words in 5 of 5 | same words in 5 of 5 | same words in 1 of 1 |
-| Peak RSS of the speech process | 3280 MiB | 1885 MiB | 3275 MiB | 1845 MiB |
+| What | large-v3, 4 threads | large-v3-turbo, 4 threads | large-v3-turbo, 4 threads, 26.10.2026 | large-v3, 8 threads | medium, 4 threads |
+| --- | --- | --- | --- | --- | --- |
+| Revision | `edaa852ec7e145841d8ffdb056a99866b5f0a478` | `0a363e9161cbc7ed1431c9597a8ceaf0c4f78fcf` (`main`) | same as the turbo column before | same as 4 threads | `08e178d48790749d25932bbc082711ddcfdfbc4f` (`main`) |
+| `load_1min` at the start | 3.36 | 4.03 | 0.89 | 9.73 | 3.05 |
+| Load to ready | 6.1 s | 3.3 s | 3.3 s | 5.5 s | 3.4 s |
+| Audio length | 5.677 s | 5.851 s | 5.677 s | 5.805 s | 5.677 s |
+| First partial (from start of sending) | 6.753 s / 7.172 s, all 5 while sending | 7.316 s / 7.458 s, all 5 while sending | 6.261 s / 6.330 s, both while sending; rep 3 17.614 s after speech ended | 6.764 s / 7.191 s, all 5 while sending | 4.643 s / 4.643 s, 1 completed, while sending; rep 2 (not completed) 17.169 s after sending ended |
+| Start of sending to final | 21.909 s / 22.604 s, 5 of 5 | 21.009 s / 38.991 s, 5 of 5 | 18.759 s / 18.867 s, 2 of 5; rep 3: no final within 30 s | 22.265 s / 23.194 s, 5 of 5 | 14.722 s / 14.722 s, 1 of 5; rep 2: no final within 30 s, the other repetitions did not run |
+| End of speech to final | 13.880 s / 14.587 s | 12.708 s / 30.686 s | 10.734 s / 10.841 s | 13.915 s / 14.865 s | 6.685 s / 6.685 s |
+| Sending ended (speech / after silence) | 8.0 s / 9.3 s | 8.3 s / 9.6 s | 8.0 s / 9.3 s | 8.3 s / 9.6 s | 8.0 s / 9.3 s |
+| Final text against the spoken sentence | same words in 5 of 5 | same words in 5 of 5 | same words in 2 of 2 | same words in 5 of 5 | same words in 1 of 1 |
+| Peak RSS of the speech process | 3280 MiB | 1885 MiB | 1885 MiB | 3275 MiB | 1845 MiB |
+
+The completed count and the worst value vary between runs on the CPU: the later turbo run completed 2 of 5 where the first completed 5 of 5, so a single 5-of-5 row is not read as stable.
 
 The Card's start of sending to final (GPU, one sample, 08.09.2026, same
 sentence, same Piper voice, same pacing loop and 0.9 s of client silence; the
