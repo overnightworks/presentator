@@ -389,25 +389,23 @@ jobs:
             'presentator-build:x:10001:10001::/work/home:/usr/sbin/nologin'
           test "$(docker run --rm "$image" getent passwd presentator-wire)" = \
             'presentator-wire:x:10002:10002::/nonexistent:/usr/sbin/nologin'
-          for uid in 10001 10002; do
-            if docker build --build-arg PRESENTATOR_RUNTIME_UID=$uid --tag presentator:uid-$uid .; then
+          for uid in 10001 10002 010001; do
+            if docker build --progress=plain --build-arg PRESENTATOR_RUNTIME_UID=$uid --tag presentator:uid-$uid . > "uid-$uid.log" 2>&1; then
               echo "a runtime uid of $uid was accepted" >&2
               exit 1
             fi
+            # Build output lines carry a step number and a time before the
+            # message; the echoed command does not, so a failure of another
+            # kind does not pass for the refusal.
+            grep -Eq '^#[0-9]+ [0-9.]+ PRESENTATOR_RUNTIME_UID must be a positive integer' "uid-$uid.log" || {
+              echo "a runtime uid of $uid failed without the refusal message" >&2
+              cat "uid-$uid.log" >&2
+              exit 1
+            }
           done
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with:
-          enable-cache: true
-          version: "0.10.9"
-
-      - name: Prove the image builds and exports a deck, as its users (cell 2)
-        run: |
-          docker build --target toolchain --tag presentator-build:${{ github.sha }} .
-          uv sync --locked
-          uv run --locked python scripts/prove_container_build.py \
-            presentator-build:${{ github.sha }} presentator:${{ github.sha }}
+      - name: Prove the image holds no Docker client (cell B17)
+        run: docker run --rm presentator:${{ github.sha }} sh -c '! command -v docker'
 
       # An image without CA certificates builds cleanly and only fails once a
       # real HTTPS source is added, so the proof has to be an actual TLS

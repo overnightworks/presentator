@@ -64,26 +64,24 @@ every user. It also carries two users for a build worker, made before the
 runtime user: `presentator-build` (10001, home `/work/home`) and
 `presentator-wire` (10002, home `/nonexistent`), both without a login shell,
 and its build refuses a runtime user of either uid. Slidev's export keeps its
-dependency cache in `/work/vite`, a world-writable directory the image links to
-from beside `@slidev/cli`. Without a toolchain the instance still runs: every
+dependency cache in `/work/vite`: the image links to it from beside
+`@slidev/cli`, and it resolves in the worker's `/work`. Without a toolchain the instance still runs: every
 build fails and the failure is in the server log.
 
 ## The sandbox
 
 The instance of `compose.yaml` builds every deck through the build worker (next
 section): the web sends each step over a socket, and the worker runs it sealed,
-in a container of its own, as an unprivileged user with no network, every
+as an unprivileged user with no network, every
 capability dropped and none of the server's environment. The web holds no
 Docker socket and no docker group. A deck that reads a file it does not carry,
 or opens a connection, fails the build with the toolchain's own words on the
 deck page, and the talk that stood keeps standing.
 
-The container runner is the code default until it leaves: with
-`PRESENTATOR_BUILD_RUNNER` unset, a server asks a daemon for a container per
-step and refuses to start without `PRESENTATOR_BUILD_IMAGE` and
-`PRESENTATOR_BUILD_VOLUME`. `compose.yaml` sets neither. Building on this
-machine instead is `PRESENTATOR_BUILD_RUNNER=host`, for a development run; it
-costs the sandbox altogether.
+The worker is the code default as well: with `PRESENTATOR_BUILD_RUNNER` unset, a
+server builds through it. Building on this machine instead is
+`PRESENTATOR_BUILD_RUNNER=host`, for a development run; it costs the sandbox
+altogether.
 
 ## Bounds
 
