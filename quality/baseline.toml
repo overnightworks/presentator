@@ -27,9 +27,6 @@
 [function_lines."speech/scripts/contract_client.py"]
 "_run" = 75
 
-[function_lines."speech/scripts/prove.py"]
-"main" = 63
-
 [function_lines."speech/src/presentator_speech/speaking.py"]
 "speaking_for_voice" = 77
 
