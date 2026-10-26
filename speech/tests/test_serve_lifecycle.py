@@ -84,6 +84,28 @@ def test_sigterm_stops_the_real_server_and_exits_zero_with_the_socket_removed(
     assert not socket_path.exists()
 
 
+def test_python_dash_m_starts_the_service_on_its_private_socket(tmp_path) -> None:
+    socket_path = tmp_path / "speech.sock"
+    speech_root = Path(__file__).resolve().parents[1]
+    environment = {
+        **os.environ,
+        "SPEECH_PRIVATE_DIRECTORY": str(tmp_path),
+        "PRESENTATOR_RUNTIME_UID": str(os.geteuid()),
+        "PYTHONPATH": str(speech_root),
+    }
+    with subprocess.Popen(
+        [sys.executable, "-m", "presentator_speech"], env=environment
+    ) as server:
+        try:
+            deadline = time.monotonic() + 30
+            while not _accepts_connections(socket_path):
+                assert server.poll() is None
+                assert time.monotonic() < deadline
+                time.sleep(0.05)
+        finally:
+            server.kill()
+
+
 def _accepts_connections(path: Path) -> bool:
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
         try:

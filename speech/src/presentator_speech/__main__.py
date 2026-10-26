@@ -262,3 +262,7 @@ def _install_signal_handlers(
     loop = asyncio.get_running_loop()
     for received in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(received, stop)
+
+
+if __name__ == "__main__":
+    main()
