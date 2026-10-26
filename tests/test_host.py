@@ -42,6 +42,7 @@ from presentator.host.main import Instance
 from tests.api.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
+    configure_secret_key,
     hand_over_session_cookies,
 )
 from tests.conftest import (
@@ -356,11 +357,13 @@ def test_the_instance_key_is_never_shown() -> None:
     assert settings.secret_key.get_secret_value() == INSTANCE_KEY
 
 
-@pytest.mark.usefixtures("environment")
-def test_the_key_file_is_read_once_at_start(tmp_path: Path) -> None:
-    """#509 acceptance 1: the key is read from its file once, at start."""
+def test_the_key_file_is_read_once_at_start(
+    bare_environment: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """#509 Change: the key is read from its file once, at start."""
+    key_file = configure_secret_key(bare_environment, tmp_path, INSTANCE_KEY)
     settings = load_settings()
-    (tmp_path / "secret-key").unlink()
+    key_file.unlink()
 
     assert settings.secret_key.get_secret_value() == INSTANCE_KEY
 
