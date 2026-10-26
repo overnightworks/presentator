@@ -1055,6 +1055,7 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
         ),
     )
     builds = builds_ready_for(tmp_path, source)
+    open_before = set(os.listdir("/proc/self/fd"))
 
     built = builds.build(a_deck(remote), source=source)
 
@@ -1062,6 +1063,7 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
     assert built.text is not None
     assert f"more than {MAXIMUM_ENTRIES} files" in built.text
     assert list(builds.builds.iterdir()) == []
+    assert set(os.listdir("/proc/self/fd")) <= open_before
 
 
 def test_a_talk_that_cannot_be_added_up_in_time_is_refused_without_words(
