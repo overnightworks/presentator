@@ -6,11 +6,10 @@ import pytest
 from pydantic import SecretStr
 
 from presentator.host import main
-from presentator.host.config import ConfigurationError, load_settings
+from presentator.host.config import ConfigurationError, load_settings, read_secret_file
 from presentator.host.oidc import (
     client_configs_of,
     oidc_client_config,
-    read_client_secret,
     relying_party,
 )
 from tests.api.lobby import (
@@ -79,7 +78,12 @@ def test_the_secret_file_is_read_with_one_trailing_newline_stripped(
     secret_file = tmp_path / "secret"
     secret_file.write_text(content, encoding="utf-8")
 
-    assert read_client_secret(secret_file).get_secret_value() == secret
+    assert (
+        read_secret_file(
+            secret_file, setting="oidc_client_secret_file"
+        ).get_secret_value()
+        == secret
+    )
 
 
 def test_the_relying_party_begins_a_login_at_the_issuer_the_settings_name(
@@ -126,7 +130,7 @@ def test_a_secret_file_nobody_can_use_refuses_naming_only_the_setting(
         secret_file.write_bytes(content)
 
     with pytest.raises(ConfigurationError) as refused:
-        read_client_secret(secret_file)
+        read_secret_file(secret_file, setting="oidc_client_secret_file")
 
     assert "oidc_client_secret_file" in str(refused.value)
     assert "fake-secret-bytes" not in str(refused.value)

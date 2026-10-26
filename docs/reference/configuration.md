@@ -11,7 +11,7 @@ output.
 
 | Setting | Meaning |
 | --- | --- |
-| `PRESENTATOR_SECRET_KEY` | At least 32 bytes. `webauth` signs the lobby's session cookie with it, signs the talk host's through a derivation of its own, and, through another, encrypts what a source's row holds ([ADR 0013](../decisions/0013-secrets-at-rest-and-credential-delivery.md)). Without it the process refuses to start. |
+| `PRESENTATOR_SECRET_KEY_FILE` | Absolute path of a file holding the master key, read once at start, minus one trailing newline; at least 32 characters. `webauth` signs the lobby's session cookie with it, signs the talk host's through a derivation of its own, and, through another, encrypts what a source's row holds ([ADR 0013](../decisions/0013-secrets-at-rest-and-credential-delivery.md)). Without a readable key file the process refuses to start. |
 | `PRESENTATOR_PUBLIC_ORIGIN` | The one canonical https origin. An `http://` origin refuses the start, because a browser does not send a `Secure` cookie back over plain http. |
 | `PRESENTATOR_TALK_ORIGIN` | The talk host's canonical https origin, on another hostname than `PRESENTATOR_PUBLIC_ORIGIN`; talks are served and signed in there ([ADR 0016](../decisions/0016-a-talk-host-signs-in-by-itself.md)). |
 | `PRESENTATOR_AGENT_SERVICE` | Where the agent service answers the co-presenter: one canonical `http` or `https` origin, without credentials or a path. Compose sets `http://agent-service:8080`, the name it has on the `hal_agent_presentator` network. |
@@ -96,7 +96,7 @@ Values the compose file needs rather than the process: `PRESENTATOR_RUNTIME_UID`
 `PRESENTATOR_LOCAL_SOURCES` (only with the override of
 [add a folder on this box](../runbooks/add-a-folder-on-this-box.md)), and
 `COMPOSE_PROJECT_NAME`, which names the volumes. Compose refuses to start the
-service without the secret key, the public origin and the first two of these
+service without the public origin and the first two of these
 values.
 
 ## Speech (host process)

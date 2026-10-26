@@ -4,6 +4,8 @@ Every route test arranges the same instance, so the wiring the host does
 stands here once, with the doubles and the accounts a test hands in.
 """
 
+import atexit
+import tempfile
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
@@ -107,11 +109,23 @@ from tests.application.fakes import (
     FrozenClock,
 )
 
+
+def _write_test_key_file() -> Path:
+    """Write the key every test lobby signs with to a file removed at exit."""
+    with tempfile.NamedTemporaryFile(
+        "w", prefix="presentator-test-key-", encoding="utf-8", delete=False
+    ) as key_file:
+        key_file.write("k3Tq9xVb2LmZ7wRc5NdH8sYa4PfJ6uEg\n")
+    atexit.register(Path(key_file.name).unlink, missing_ok=True)
+    return Path(key_file.name)
+
+
 NOW: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
 # What `slidev build` of `examples/hello-deck` writes, `--base /deck/hello-deck/`.
 BUILT_TALK: Final = Path(__file__).parent / "built_talk"
 AN_ASSET: Final = "assets/index-mRcVgIkQ.js"
 _EXPORTED_PDF: Final = Path(__file__).parent / "exported_deck.pdf"
+_KEY_FILE: Final = _write_test_key_file()
 _BUILT_DECK_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 # No route test waits for a build, so the bound only has to be longer than the
 # ages the tests arrange.
@@ -264,6 +278,16 @@ def configure_oidc(monkeypatch: pytest.MonkeyPatch, directory: Path) -> Path:
     return secret_file
 
 
+def configure_secret_key(
+    monkeypatch: pytest.MonkeyPatch, directory: Path, key: str
+) -> Path:
+    """Name a key file of a test's own, holding `key` and the newline an editor adds."""
+    key_file = directory / "secret-key"
+    key_file.write_text(f"{key}\n", encoding="utf-8")
+    monkeypatch.setenv("PRESENTATOR_SECRET_KEY_FILE", str(key_file))
+    return key_file
+
+
 def _no_token_endpoint(request: TokenRequest) -> TokenEndpointAnswer:
     message = f"no issuer answers a test: {request.url}"
     raise TokenEndpointError(message)
@@ -276,7 +300,7 @@ def _no_key_set(url: str) -> bytes:
 def a_settings() -> Settings:
     """The settings of an instance at the test origin, signing in at a fake issuer."""
     return Settings(
-        secret_key=SecretStr("t" * 32),
+        secret_key_file=_KEY_FILE,
         public_origin=A_BROWSERS_ADDRESS,
         talk_origin=A_TALK_ADDRESS,
         agent_service=AN_AGENT_SERVICE,

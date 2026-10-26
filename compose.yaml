@@ -1,7 +1,7 @@
 # One service is the instance, and a second, the build worker, runs every
 # step of a deck's build for it over a socket, because a deck is code. What has
 # to survive the instance stands in a named volume; what may never be written
-# down here comes from the environment.
+# down here is a file secret.
 
 services:
   presentator:
@@ -30,12 +30,18 @@ services:
       - path: .env
         required: false
     environment:
-      PRESENTATOR_SECRET_KEY: ${PRESENTATOR_SECRET_KEY:?set it to at least 32 random characters; an instance without it refuses to start}
       PRESENTATOR_PUBLIC_ORIGIN: ${PRESENTATOR_PUBLIC_ORIGIN:?set it to the one canonical browser origin}
       PRESENTATOR_TALK_ORIGIN: ${PRESENTATOR_TALK_ORIGIN:?set it to the talk host's canonical browser origin, on another hostname}
       PRESENTATOR_AGENT_SERVICE: http://agent-service:8080
       PRESENTATOR_SPEECH_SOCKET: /run/presentator-speech/speech.sock
       PRESENTATOR_BUILD_RUNNER: worker
+      PRESENTATOR_SECRET_KEY_FILE: /run/secrets/presentator_secret_key
+      PRESENTATOR_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
+    # The instance's two secrets, mounted read-only at /run/secrets/<name>;
+    # the build worker gets neither.
+    secrets:
+      - presentator_secret_key
+      - oidc_client_secret
     cap_drop:
       - ALL
     security_opt:
@@ -122,6 +128,13 @@ networks:
   agent:
     external: true
     name: hal_agent_presentator
+
+# Files in the operator's home, never environment variables.
+secrets:
+  presentator_secret_key:
+    file: ${HOME}/.secrets/presentator/secret-key
+  oidc_client_secret:
+    file: ${HOME}/.secrets/keycloak/clients/presentator
 
 volumes:
   database:

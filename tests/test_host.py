@@ -32,11 +32,17 @@ from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.decks import SourceWrite
 from presentator.contracts.models import Role, User
 from presentator.host import main
-from presentator.host.config import ConfigurationError, WhereBuildsRun, load_settings
+from presentator.host.config import (
+    SECRET_LENGTH,
+    ConfigurationError,
+    WhereBuildsRun,
+    load_settings,
+)
 from presentator.host.main import Instance
 from tests.api.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
+    configure_secret_key,
     hand_over_session_cookies,
 )
 from tests.conftest import (
@@ -272,21 +278,75 @@ def test_the_real_stack_offers_no_password_login_and_no_first_start() -> None:
 
 
 @pytest.mark.usefixtures("bare_environment")
-def test_an_instance_without_a_key_refuses_to_start() -> None:
-    with pytest.raises(ConfigurationError, match="secret_key"):
+def test_an_instance_without_a_key_file_refuses_to_start() -> None:
+    with pytest.raises(ConfigurationError, match="secret_key_file"):
         load_settings()
 
 
-def test_an_instance_key_shorter_than_thirty_two_bytes_refuses_to_start(
+def test_the_old_key_variable_alone_no_longer_starts_an_instance(
     bare_environment: pytest.MonkeyPatch,
 ) -> None:
-    too_short = "the words only this test types"
-    bare_environment.setenv("PRESENTATOR_SECRET_KEY", too_short)
+    """#509 matrix: the old environment variable alone no longer starts the web."""
+    bare_environment.setenv("PRESENTATOR_SECRET_KEY", INSTANCE_KEY)
 
-    with pytest.raises(ConfigurationError, match="secret_key") as refused:
+    with pytest.raises(ConfigurationError, match="secret_key_file"):
         load_settings()
 
-    assert too_short not in str(refused.value)
+
+def test_a_relative_key_file_refuses_to_start(
+    bare_environment: pytest.MonkeyPatch,
+) -> None:
+    """#509 acceptance 1: a relative key file path refuses by secret_key_file."""
+    bare_environment.setenv("PRESENTATOR_SECRET_KEY_FILE", "secret-key")
+
+    with pytest.raises(ConfigurationError, match="secret_key_file"):
+        load_settings()
+
+
+@pytest.mark.parametrize(
+    ("content", "is_directory"),
+    [
+        (None, False),
+        (None, True),
+        (b"", False),
+        (b"\n", False),
+        (b"the words only this test types", False),
+        (b"k" * (SECRET_LENGTH - 1), False),
+    ],
+    ids=["missing", "a directory", "empty", "a newline", "too short", "one short"],
+)
+def test_a_key_file_nobody_can_use_refuses_naming_the_setting_and_not_its_content(
+    bare_environment: pytest.MonkeyPatch,
+    tmp_path: Path,
+    content: bytes | None,
+    *,
+    is_directory: bool,
+) -> None:
+    """#509 acceptance 1: an unusable key file refuses and never shows its content."""
+    key_file = tmp_path / "unusable-key"
+    if is_directory:
+        key_file.mkdir()
+    elif content is not None:
+        key_file.write_bytes(content)
+    bare_environment.setenv("PRESENTATOR_SECRET_KEY_FILE", str(key_file))
+
+    with pytest.raises(ConfigurationError, match="secret_key_file") as refused:
+        load_settings()
+
+    assert not content or content.decode() not in str(refused.value)
+    assert str(key_file) not in str(refused.value)
+
+
+@pytest.mark.parametrize("trailing", ["", "\n"], ids=["none", "one newline"])
+def test_a_key_file_of_thirty_two_characters_starts_with_or_without_a_newline(
+    bare_environment: pytest.MonkeyPatch, tmp_path: Path, trailing: str
+) -> None:
+    """#509 acceptance 1: a 32-character key file starts, newline or not."""
+    key = "k" * SECRET_LENGTH
+    (tmp_path / "key").write_text(key + trailing, encoding="utf-8")
+    bare_environment.setenv("PRESENTATOR_SECRET_KEY_FILE", str(tmp_path / "key"))
+
+    assert load_settings().secret_key.get_secret_value() == key
 
 
 @pytest.mark.usefixtures("environment")
@@ -294,6 +354,17 @@ def test_the_instance_key_is_never_shown() -> None:
     settings = load_settings()
 
     assert INSTANCE_KEY not in repr(settings)
+    assert settings.secret_key.get_secret_value() == INSTANCE_KEY
+
+
+def test_the_key_file_is_read_once_at_start(
+    bare_environment: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """#509 Change: the key is read from its file once, at start."""
+    key_file = configure_secret_key(bare_environment, tmp_path, INSTANCE_KEY)
+    settings = load_settings()
+    key_file.unlink()
+
     assert settings.secret_key.get_secret_value() == INSTANCE_KEY
 
 

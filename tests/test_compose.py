@@ -6,8 +6,10 @@ here starts a container; it reads the one file that must agree with itself.
 """
 
 from pathlib import Path
+from typing import Any
 
 import pytest
+from ruamel.yaml import YAML
 
 _COMPOSE = Path(__file__).parents[1] / "compose.yaml"
 
@@ -152,3 +154,89 @@ def test_the_instance_holds_no_authority_over_this_machines_docker(
 ) -> None:
     """B16 and B17: no socket, docker group, sandbox service or profile in the file."""
     assert authority not in _COMPOSE.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("name", "host_path", "setting"),
+    [
+        (
+            "presentator_secret_key",
+            "${HOME}/.secrets/presentator/secret-key",
+            "PRESENTATOR_SECRET_KEY_FILE",
+        ),
+        (
+            "oidc_client_secret",
+            "${HOME}/.secrets/keycloak/clients/presentator",
+            "PRESENTATOR_OIDC_CLIENT_SECRET_FILE",
+        ),
+    ],
+    ids=["master key", "client secret"],
+)
+def test_each_secret_is_a_file_secret_from_home_that_only_the_instance_mounts(
+    name: str, host_path: str, setting: str
+) -> None:
+    """edge#280: every app secret reaches the container as a mounted file."""
+    compose = _parsed_compose()
+
+    assert compose["secrets"][name]["file"] == host_path
+    assert _secret_holders(compose, name) == ["presentator"]
+    assert _environment_of(compose["services"]["presentator"])[setting] == (
+        f"/run/secrets/{name}"
+    )
+    assert setting not in _environment_of(compose["services"]["build-worker"])
+    assert "secrets" not in compose["services"]["build-worker"]
+
+
+@pytest.mark.parametrize(
+    "grant",
+    ["presentator_secret_key", {"source": "presentator_secret_key"}],
+    ids=["short form", "long form"],
+)
+def test_a_secret_granted_to_the_worker_in_either_form_is_caught(
+    grant: str | dict[str, str],
+) -> None:
+    """#509 acceptance 2: a worker secret is caught in short and long form."""
+    compose = _parsed_compose()
+    compose["services"]["build-worker"]["secrets"] = [grant]
+
+    assert _secret_holders(compose, "presentator_secret_key") == [
+        "presentator",
+        "build-worker",
+    ]
+
+
+def test_no_service_carries_the_master_key_in_its_environment() -> None:
+    """#509: no PRESENTATOR_SECRET_KEY environment entry remains, in either form."""
+    for service in _parsed_compose()["services"].values():
+        assert "PRESENTATOR_SECRET_KEY" not in _environment_of(service)
+
+
+def _secret_holders(compose: dict[str, Any], name: str) -> list[str]:
+    """Services granted a secret, whether the grant is short or long form."""
+    return [
+        service
+        for service, body in compose["services"].items()
+        if name
+        in (
+            entry if isinstance(entry, str) else entry["source"]
+            for entry in body.get("secrets", [])
+        )
+    ]
+
+
+def _parsed_compose() -> dict[str, Any]:
+    document: dict[str, Any] = YAML(typ="safe").load(  # pyright: ignore[reportUnknownMemberType]
+        _COMPOSE.read_text(encoding="utf-8")
+    )
+    return document
+
+
+def _environment_of(service: dict[str, Any]) -> dict[str, str | None]:
+    """A service's environment as a map, whether written as a map or a list."""
+    environment: dict[str, str | None] | list[str] = service.get("environment", {})
+    if isinstance(environment, dict):
+        return environment
+    return {
+        name: value or None
+        for name, _, value in (entry.partition("=") for entry in environment)
+    }

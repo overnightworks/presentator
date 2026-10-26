@@ -13,7 +13,12 @@ from pathlib import Path
 
 import pytest
 
-from tests.api.lobby import A_BROWSERS_ADDRESS, AN_AGENT_SERVICE, configure_oidc
+from tests.api.lobby import (
+    A_BROWSERS_ADDRESS,
+    AN_AGENT_SERVICE,
+    configure_oidc,
+    configure_secret_key,
+)
 from tests.worker_support import WAIT_SECONDS, listening_socket
 
 EXAMPLE_DECK = Path(__file__).parents[1] / "examples" / "hello-deck"
@@ -183,7 +188,7 @@ def bare_environment(
     tmp_path: Path,
 ) -> pytest.MonkeyPatch:
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("PRESENTATOR_SECRET_KEY", raising=False)
+    monkeypatch.delenv("PRESENTATOR_SECRET_KEY_FILE", raising=False)
     monkeypatch.setenv("PRESENTATOR_DATABASE", str(tmp_path / "presentator.sqlite3"))
     # `remote`/`another_remote` write their bare
     # repositories straight into `tmp_path`, the one directory every real
@@ -198,8 +203,10 @@ def bare_environment(
 
 
 @pytest.fixture
-def environment(bare_environment: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
-    bare_environment.setenv("PRESENTATOR_SECRET_KEY", INSTANCE_KEY)
+def environment(
+    bare_environment: pytest.MonkeyPatch, tmp_path: Path
+) -> pytest.MonkeyPatch:
+    configure_secret_key(bare_environment, tmp_path, INSTANCE_KEY)
     # These tests are about the lobby this root composes, not about where a
     # deck's code runs; the development run is what asks nothing of the build
     # worker, whose default the tests about the sandbox say so themselves.

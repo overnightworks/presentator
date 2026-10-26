@@ -1,7 +1,6 @@
 """The relying party this instance signs people in through, built from settings."""
 
 import time
-from pathlib import Path
 from typing import Final
 
 from pydantic import SecretStr
@@ -11,7 +10,7 @@ from webauth.oidc_login import AdmissionConfig
 from webauth.oidc_transport import post_token_request_over_https
 
 from presentator.api.auth import LOGIN_PATH, SIGN_IN_CALLBACK_PATH
-from presentator.host.config import Settings, cannot_start
+from presentator.host.config import Settings, cannot_start, read_secret_file
 
 _PROTOCOL_PATH: Final = "protocol/openid-connect"
 _SCOPES: Final = ("openid", "profile", "groups")
@@ -20,26 +19,6 @@ _CLOCK_LEEWAY_SECONDS: Final = 30
 # product's, not a deployment's.
 _LOGIN_GROUP: Final = "/apps/presentator"
 _ADMIN_GROUP: Final = "/apps/presentator/admin"
-# What the refusals say of the secret file; neither quotes the file or the
-# operating system's words, which may carry what the file holds.
-_UNREADABLE: Final = "oidc_client_secret_file: is a file this instance can read"
-_EMPTY: Final = "oidc_client_secret_file: is a file that holds the client secret"
-
-
-def read_client_secret(secret_file: Path) -> SecretStr:
-    """Read the client secret once, minus the one newline an editor leaves.
-
-    The refusals name the setting and never what the file holds or what the
-    operating system says of it, which may quote either.
-    """
-    try:
-        content = secret_file.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        raise cannot_start(_UNREADABLE) from None
-    secret = content.removesuffix("\n")
-    if not secret.strip():
-        raise cannot_start(_EMPTY)
-    return SecretStr(secret)
 
 
 def oidc_client_config(
@@ -84,7 +63,9 @@ def relying_party(config: OidcClientConfig) -> OidcRelyingParty:
 
 def client_configs_of(settings: Settings) -> tuple[OidcClientConfig, OidcClientConfig]:
     """The lobby's client and the talk host's, from the one secret file read once."""
-    secret = read_client_secret(settings.oidc_client_secret_file)
+    secret = read_secret_file(
+        settings.oidc_client_secret_file, setting="oidc_client_secret_file"
+    )
     return (
         oidc_client_config(settings, secret, origin=settings.public_origin),
         oidc_client_config(settings, secret, origin=settings.talk_origin),

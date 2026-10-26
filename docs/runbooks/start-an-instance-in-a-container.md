@@ -18,9 +18,8 @@ Reader: the operator of this machine's deployment.
 
 1. Build the image: `docker compose build`.
 2. Write `.env` beside `compose.yaml` (a file this repository never writes and
-   git never sees). Compose refuses to start the service without these five and
+   git never sees). Compose refuses to start the service without these four and
    names each one missing:
-   - `PRESENTATOR_SECRET_KEY`: a fresh random value of at least 32 bytes.
    - `PRESENTATOR_PUBLIC_ORIGIN`: the canonical https origin.
    - `PRESENTATOR_TALK_ORIGIN`: the talk host's canonical https origin, another
      hostname that reaches the same listener.
@@ -37,11 +36,17 @@ Reader: the operator of this machine's deployment.
      ([ADR 0007](../decisions/0007-browser-client-behind-tunnel.md)) enters
      through the published port, so the container sees it as the gateway of
      its own network, never as `127.0.0.1`.
-3. Start it: `docker compose up -d`. Only `127.0.0.1:8000` is published. The
+3. Write the two secret files compose mounts into the instance alone, read-only,
+   at `/run/secrets`: the master key at `~/.secrets/presentator/secret-key` (a
+   fresh random value of at least 32 characters) and the Keycloak client's
+   secret at `~/.secrets/keycloak/clients/presentator`
+   ([configure Keycloak](configure-keycloak.md)).
+4. Start it: `docker compose up -d`. Only `127.0.0.1:8000` is published. The
    instance starts once the build worker answers, within 70 seconds of its start.
 
 Everything else in `.env` is optional. A value exported in the shell reaches
-compose itself, but the container is handed nothing but that file and the key.
+compose itself, but the container is handed nothing but that file, compose's
+fixed environment and the two file secrets.
 Overriding `PRESENTATOR_DATABASE`, `PRESENTATOR_MIRRORS` or `PRESENTATOR_BUILDS`
 in `.env` moves that state out of its volume, which is how an instance loses
 what it writes.

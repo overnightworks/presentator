@@ -18,6 +18,8 @@ somebody else can push to.
   front.
 - A Keycloak client set up as in
   [configure Keycloak](configure-keycloak.md), and its secret in a file.
+- The master key, a fresh random value of at least 32 characters, in a file
+  only you can read.
 - The build toolchain on this machine
   ([install it](install-the-host-build-toolchain.md)).
 - A gitignored `.env` at the repository root may carry the values instead of
@@ -26,7 +28,7 @@ somebody else can push to.
 ## Steps
 
 ```sh
-export PRESENTATOR_SECRET_KEY="$(openssl rand -base64 48)"
+export PRESENTATOR_SECRET_KEY_FILE=/run/user/"$(id -u)"/presentator/secret-key
 export PRESENTATOR_PUBLIC_ORIGIN=https://presentator.example.test
 export PRESENTATOR_TALK_ORIGIN=https://presentator-talk.example.test
 export PRESENTATOR_OIDC_ISSUER=https://auth.example.test/realms/example
