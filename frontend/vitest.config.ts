@@ -9,6 +9,7 @@ const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
 export default defineConfig({
   root: repositoryRoot,
   test: {
+    globalSetup: ['frontend/tests/overlay-example-build.global-setup.ts'],
     include: ['frontend/tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',

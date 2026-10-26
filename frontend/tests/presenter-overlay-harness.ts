@@ -8,14 +8,12 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 import { chromium, type ElementHandle, type Page } from 'playwright-chromium'
-import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, expect, inject } from 'vitest'
 
 const run = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
 const frontendRoot = join(repositoryRoot, 'frontend')
 export const overlayDeckSourceDirectory = join(repositoryRoot, 'examples/copresenter-deck')
-const exampleDeck = join(overlayDeckSourceDirectory, 'slides.md')
-const providedBuild = process.env.PRESENTER_RETURN_BUILD_DIR
 const evidenceDirectory = process.env.PRESENTER_RETURN_EVIDENCE_DIR
 const wav = 'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Exactly what `examples/copresenter-deck/README.md` tells an operator to
@@ -41,8 +39,7 @@ const COPIED_OVERLAY_FILES = [
 ]
 
 
-let buildDirectory = providedBuild ?? ''
-let ownsBuildDirectory = false
+let buildDirectory = ''
 let server: ReturnType<typeof createServer>
 let productionSecurityHeaders: Record<string, string> = {}
 type CspViolation = { directive: string; blockedUri: string }
@@ -136,15 +133,6 @@ export async function readSameFrameBoxes(page: Page, homeHandle: ElementHandle<E
 export async function saveEvidence(page: Page, name: string) {
   if (!evidenceDirectory) return
   await page.screenshot({ path: join(evidenceDirectory, name), fullPage: true })
-}
-
-async function buildExample() {
-  if (providedBuild) return
-  buildDirectory = await mkdtemp(join(tmpdir(), 'presenter-controls-'))
-  ownsBuildDirectory = true
-  await run('pnpm', ['exec', 'slidev', 'build', exampleDeck, '--out', buildDirectory], {
-    cwd: frontendRoot,
-  })
 }
 
 // Builds a second, independent deck containing only the files
@@ -514,7 +502,7 @@ export async function openPresenter(width: number) {
 // test file that calls it.
 export function registerOverlayHarness() {
   beforeAll(async () => {
-    await buildExample()
+    buildDirectory = inject('overlayExampleBuildDirectory')
     productionSecurityHeaders = await loadProductionSecurityHeaders()
     await startServer()
   }, 60_000)
@@ -523,7 +511,6 @@ export function registerOverlayHarness() {
     for (const socket of hearingSockets) socket.destroy()
     server.closeAllConnections()
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-    if (ownsBuildDirectory) await rm(buildDirectory, { recursive: true, force: true })
   })
 
   beforeEach(() => {
