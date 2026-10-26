@@ -6,7 +6,9 @@ that asks who owns a thing.
 - Status: ACCEPTED 2026-09-06 — first-run setup and login are phase M0 of
   [VISION.md](../VISION.md). Amended 2026-10-14: the login is the only door,
   per [ADR 0015](0015-public-like-songmaker-own-login.md) (see Rejected
-  alternatives)
+  alternatives). Amended 2026-10-27: accounts an admin creates and the first
+  start's admin are replaced by Keycloak's, per
+  [ADR 0018](0018-keycloak-replaces-own-accounts.md)
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06, filed against
   [songmaker #825](https://github.com/overnightworks/songmaker/issues/825#issuecomment-5559001283)
