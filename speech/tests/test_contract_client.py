@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import pytest
 
 from presentator_speech.pcm import pcm_from_wav
 from presentator_speech.service import Runtime
@@ -22,6 +25,7 @@ def _script(name: str) -> ModuleType:
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -29,6 +33,7 @@ def _script(name: str) -> ModuleType:
 CLIENT = _script("contract_client")
 PROVE = _script("prove")
 SAMPLE_RATE = 16_000
+SENTENCE_START = "Die Kamera zeigt den Vortragenden"
 
 
 def _two_pcm_frames() -> tuple[bytes, int]:
@@ -88,3 +93,66 @@ def test_prove_keeps_a_provider_root_the_caller_set(tmp_path, monkeypatch) -> No
     environment = PROVE._speech_environment(tmp_path, "model")  # noqa: SLF001
 
     assert environment["SPEECH_PROVIDER_ROOT"] == "/elsewhere"
+
+
+def _repetition(**changes: object) -> object:
+    arrivals = {
+        "audio_seconds": 6.0,
+        "speech_ended_s": 6.0,
+        "sending_ended_s": 6.9,
+        "partial_at_s": 2.0,
+        "final_at_s": 6.5,
+        "final_text": "Hallo Welt",
+    }
+    return CLIENT.Repetition(**{**arrivals, **changes})
+
+
+@pytest.mark.parametrize(
+    ("final_at_s", "sending_to_final_s", "speech_end_to_final_s"),
+    [(6.5, 6.9, 0.5), (14.0, 14.0, 8.0)],
+    ids=["final before the silence is sent", "final after sending ended"],
+)
+def test_the_two_final_timings_count_from_sending_start_and_from_speech_end(
+    final_at_s: float, sending_to_final_s: float, speech_end_to_final_s: float
+) -> None:
+    repetition = _repetition(final_at_s=final_at_s)
+
+    assert repetition.sending_to_final_s == pytest.approx(sending_to_final_s)
+    assert repetition.speech_end_to_final_s == pytest.approx(speech_end_to_final_s)
+
+
+@pytest.mark.parametrize(
+    ("changes", "expected"),
+    [
+        ({"partial_at_s": 2.0}, "2.000 s while sending"),
+        ({"partial_at_s": 11.5}, "11.500 s after sending ended"),
+        ({"partial_at_s": None}, "no partial"),
+    ],
+)
+def test_the_first_partial_says_whether_it_arrived_while_sending(
+    changes: dict[str, object], expected: str
+) -> None:
+    assert _repetition(**changes).first_partial == expected
+
+
+def test_a_missed_final_is_recorded_as_a_value_not_an_abort() -> None:
+    repetition = _repetition(final_at_s=None, final_text=None)
+
+    assert repetition.sending_to_final_s is None
+    assert repetition.speech_end_to_final_s is None
+    assert repetition.final_description == "no final within 30 s"
+
+
+def test_the_summary_gives_median_worst_and_count_of_completed_repetitions() -> None:
+    repetitions = [_repetition(final_at_s=value) for value in (7.0, 8.0, 12.0, None)]
+
+    summary = CLIENT.summarize(repetitions)
+
+    assert summary["completed"] == 3
+    assert summary["sending_to_final_s"] == (8.0, 12.0)
+    assert summary["speech_end_to_final_s"] == (2.0, 6.0)
+
+
+def test_a_final_matches_the_spoken_sentence_without_case_and_punctuation() -> None:
+    assert CLIENT.same_words("die kamera zeigt, den Vortragenden!", SENTENCE_START)
+    assert not CLIENT.same_words("Die Kamera zeigt Vortragenden", SENTENCE_START)
