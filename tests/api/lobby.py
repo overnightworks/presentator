@@ -4,13 +4,10 @@ Every route test arranges the same instance, so the wiring the host does
 stands here once, with the doubles and the accounts a test hands in.
 """
 
-import atexit
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
-from functools import cache
 from http import HTTPStatus
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Final, Self
 
 import pytest
@@ -115,6 +112,7 @@ NOW: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
 BUILT_TALK: Final = Path(__file__).parent / "built_talk"
 AN_ASSET: Final = "assets/index-mRcVgIkQ.js"
 _EXPORTED_PDF: Final = Path(__file__).parent / "exported_deck.pdf"
+_KEY_FILE: Final = Path(__file__).parent / "test-secret-key"
 _BUILT_DECK_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 # No route test waits for a build, so the bound only has to be longer than the
 # ages the tests arrange.
@@ -286,20 +284,10 @@ def _no_key_set(url: str) -> bytes:
     raise AssertionError(url)
 
 
-@cache
-def _a_key_file() -> Path:
-    # One file for the whole run: a key is a generated value, never a real one.
-    directory = TemporaryDirectory()
-    atexit.register(directory.cleanup)
-    key_file = Path(directory.name) / "secret-key"
-    key_file.write_text("t" * 32, encoding="utf-8")
-    return key_file
-
-
 def a_settings() -> Settings:
     """The settings of an instance at the test origin, signing in at a fake issuer."""
     return Settings(
-        secret_key_file=_a_key_file(),
+        secret_key_file=_KEY_FILE,
         public_origin=A_BROWSERS_ADDRESS,
         talk_origin=A_TALK_ADDRESS,
         agent_service=AN_AGENT_SERVICE,
