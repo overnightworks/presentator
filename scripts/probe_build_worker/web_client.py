@@ -18,7 +18,7 @@ from pathlib import Path
 from shutil import copytree
 from tempfile import mkdtemp
 
-from presentator.adapters.build_wire import MAXIMUM_DEPTH, MEGABYTE
+from presentator.adapters.build_wire import MAXIMUM_DEPTH, MAXIMUM_ENTRIES, MEGABYTE
 from presentator.adapters.builds import BuildPlace, BuildStep, slidev_arguments
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
@@ -91,7 +91,14 @@ def prepared_run(case: Case, builds: Path, megabytes: int) -> BuildPlace:
     deck = run / DECK_DIRECTORY
     copytree(source.deck, deck)
     if source.limit is not None:
-        (deck / LIMIT_FILE).write_text(source.limit, encoding="utf-8")
+        # One more than each bound, so the limits deck reaches exactly the
+        # bounds this client holds and has no copy of either number.
+        case_file = {
+            "mode": source.limit,
+            "output_megabytes": megabytes + 1,
+            "output_entries": MAXIMUM_ENTRIES + 1,
+        }
+        (deck / LIMIT_FILE).write_text(json.dumps(case_file), encoding="utf-8")
     swell(deck, case, megabytes)
     return BuildPlace(root=builds, run=Path(run.name))
 

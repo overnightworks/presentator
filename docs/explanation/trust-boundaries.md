@@ -6,24 +6,21 @@ guards, and what each guard costs.
 ## A deck is code
 
 A deck's Vue components and global layers run in its build, so the author of a
-deck can run code. An instance therefore builds every deck in a container of
-its own: no network, every capability dropped, no log kept by Docker, none of
-the server's environment, only the deck's tree and its own output directory
+deck can run code. An instance therefore builds every deck in the build worker
 ([ADR 0005](../decisions/0005-deck-folder-and-slidev.md); the exact bounds are
-[builds](../reference/builds.md)). No seccomp or AppArmor profile of this
-repository's own stands behind that: with no network, no capability and
-nothing of this host mounted, Docker's default profiles already deny what there
-is to deny.
+[builds](../reference/builds.md)). `compose.yaml` hands every step to the
+worker over a socket in a volume the two services share. The worker is the one
+service that runs a deck, sealed
+([ADR 0017](../decisions/0017-a-build-worker-runs-each-step-sealed.md)): no
+network, every capability dropped, none of the server's environment, only the
+deck's tree and its own output directory. The web holds no Docker socket, no
+docker group and no Docker client, and runs with every capability dropped, no
+new privilege and a read-only root, so a deck's code reaches neither the daemon
+nor this machine's root.
 
-The deployed instance pays no such price. `compose.yaml` hands every step to
-the build worker over a socket in a volume the two services share, and the web
-holds no Docker socket and no docker group: it runs with every capability
-dropped, no new privilege and a read-only root, so a deck's code reaches neither
-the daemon nor this machine's root. The worker is the one service that runs a
-deck, sealed ([ADR 0017](../decisions/0017-a-build-worker-runs-each-step-sealed.md)).
-A machine whose decks are all the operator's own can still trade the sandbox
-away with `PRESENTATOR_BUILD_RUNNER=host`, which runs every deck's code as the
-server, with its rights over every file and the network. An instance serving a
+A machine whose decks are all the operator's own can trade the sandbox away with
+`PRESENTATOR_BUILD_RUNNER=host`, which runs every deck's code as the server,
+with its rights over every file and the network. An instance serving a
 repository somebody else can push to does not.
 
 ## A source on this box is trusted as the operator

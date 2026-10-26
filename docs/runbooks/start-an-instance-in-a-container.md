@@ -16,8 +16,7 @@ Reader: the operator of this machine's deployment.
 
 ## Steps
 
-1. Build both images: `docker compose --profile images build`. Without the
-   profile only the instance is built.
+1. Build the image: `docker compose build`.
 2. Write `.env` beside `compose.yaml` (a file this repository never writes and
    git never sees). Compose refuses to start the service without these five and
    names each one missing:

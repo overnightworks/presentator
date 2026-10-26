@@ -90,9 +90,6 @@ convention = "google"
 # A double honours the signature of the port it stands in for, even where its
 # canned answer has no use for an argument.
 "tests/**" = ["S101", "D102", "D103", "ARG002"]
-# Standalone proof, not a package; it drives docker and git by name through
-# fixed argument vectors, never a shell.
-"scripts/prove_container_build.py" = ["INP001", "S404", "S603", "S607"]
 # Standalone probe, not a package; it drives docker and pdftotext by name
 # through fixed argument vectors, never a shell, and inside the container it is
 # the client of the worker's socket.
@@ -121,9 +118,9 @@ convention = "google"
 # Mirroring a remote is spawning `git`; the executable is resolved on PATH and
 # every argument is built here, never taken from a request.
 "src/gitmirror/mirror.py" = ["S404", "S603"]
-# Building a deck is spawning the Node toolchain, or the Docker client that
-# gives it a container; both programs are constants resolved on PATH, and every
-# argument is built here out of the deck's own row, never out of a request.
+# Building a deck on this machine is spawning the Node toolchain; the program is
+# a constant resolved on PATH, and every argument is built here out of the
+# deck's own row, never out of a request.
 "src/presentator/adapters/builds.py" = ["S404", "S603"]
 # Spawning the build worker's children is the gate shell and the wire entry,
 # both named here and handed only a descriptor list, never a request.
