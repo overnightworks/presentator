@@ -185,5 +185,6 @@ def test_each_secret_is_a_file_secret_from_home_that_only_the_instance_mounts(
 
 
 def test_no_secret_rides_the_environment_of_the_instance() -> None:
+    """#509 acceptance 2: no PRESENTATOR_SECRET_KEY environment line remains."""
     assert "PRESENTATOR_SECRET_KEY:" not in _COMPOSE.read_text(encoding="utf-8")
     assert "PRESENTATOR_SECRET_KEY}" not in _COMPOSE.read_text(encoding="utf-8")

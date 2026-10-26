@@ -285,6 +285,7 @@ def test_an_instance_without_a_key_file_refuses_to_start() -> None:
 def test_the_old_key_variable_alone_no_longer_starts_an_instance(
     bare_environment: pytest.MonkeyPatch,
 ) -> None:
+    """#509 matrix: the old environment variable alone no longer starts the web."""
     bare_environment.setenv("PRESENTATOR_SECRET_KEY", INSTANCE_KEY)
 
     with pytest.raises(ConfigurationError, match="secret_key_file"):
@@ -294,6 +295,7 @@ def test_the_old_key_variable_alone_no_longer_starts_an_instance(
 def test_a_relative_key_file_refuses_to_start(
     bare_environment: pytest.MonkeyPatch,
 ) -> None:
+    """#509 acceptance 1: a relative key file path refuses by secret_key_file."""
     bare_environment.setenv("PRESENTATOR_SECRET_KEY_FILE", "secret-key")
 
     with pytest.raises(ConfigurationError, match="secret_key_file"):
@@ -319,6 +321,7 @@ def test_a_key_file_nobody_can_use_refuses_naming_the_setting_and_not_its_conten
     *,
     is_directory: bool,
 ) -> None:
+    """#509 acceptance 1: an unusable key file refuses and never shows its content."""
     key_file = tmp_path / "unusable-key"
     if is_directory:
         key_file.mkdir()
@@ -337,6 +340,7 @@ def test_a_key_file_nobody_can_use_refuses_naming_the_setting_and_not_its_conten
 def test_a_key_file_of_thirty_two_characters_starts_with_or_without_a_newline(
     bare_environment: pytest.MonkeyPatch, tmp_path: Path, trailing: str
 ) -> None:
+    """#509 acceptance 1: a 32-character key file starts, newline or not."""
     key = "k" * SECRET_LENGTH
     (tmp_path / "key").write_text(key + trailing, encoding="utf-8")
     bare_environment.setenv("PRESENTATOR_SECRET_KEY_FILE", str(tmp_path / "key"))
@@ -354,6 +358,7 @@ def test_the_instance_key_is_never_shown() -> None:
 
 @pytest.mark.usefixtures("environment")
 def test_the_key_file_is_read_once_at_start(tmp_path: Path) -> None:
+    """#509 acceptance 1: the key is read from its file once, at start."""
     settings = load_settings()
     (tmp_path / "secret-key").unlink()
 
