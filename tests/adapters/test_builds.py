@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from presentator.adapters import builds as builds_module
+from presentator.adapters.build_wire import MAXIMUM_ENTRIES
 from presentator.adapters.builds import (
     BuildPlace,
     BuildStep,
@@ -55,7 +56,6 @@ _A_GENEROUS_BOUND = timedelta(seconds=30)
 _A_TALK_THIS_BIG_IS_FINE = 64
 _ONLY_A_MEGABYTE_MAY_BE_LEFT = 1
 _MEGABYTES_A_GREEDY_BUILD_WRITES = 3
-_A_TALK_OF_TWO_FILES = 2
 _WATCHED_OFTEN = timedelta(milliseconds=50)
 _CLOSED_TO_EVERYONE = 0o000
 _OWNER_MAY_ENTER = 0o700
@@ -236,7 +236,7 @@ chmod 500 "$(dirname "$(dirname "$(dirname "$out")")")"
 echo "the deck does not build" >&2
 exit 1
 """
-_A_TOOLCHAIN_THAT_BUILDS_BESIDE_ITSELF = """#!/bin/sh
+_A_TOOLCHAIN_THAT_BUILDS_MORE_FILES_THAN_ALLOWED = """#!/bin/sh
 set -eu
 out=""
 while [ $# -gt 0 ]; do
@@ -248,8 +248,8 @@ done
 case "$out" in
     *.pdf) printf '%%PDF-1.7' > "$out";;
     *)
-        mkdir -p "$out" "$out/../beside-it" "$out/../beside-it-too"
-        printf 'a talk' > "$out/index.html"
+        mkdir -p "$out"
+        seq 1 {files} | (cd "$out" && xargs touch)
         ;;
 esac
 """
@@ -1082,15 +1082,18 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    machine.setattr(builds_module, "MAXIMUM_ENTRIES", _A_TALK_OF_TWO_FILES)
-    with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_BUILDS_BESIDE_ITSELF)
+    with_the_toolchain(
+        machine,
+        tmp_path,
+        _A_TOOLCHAIN_THAT_BUILDS_MORE_FILES_THAN_ALLOWED.format(files=MAXIMUM_ENTRIES + 1),
+    )
     builds = builds_ready_for(tmp_path, source)
 
     built = builds.build(a_deck(remote), source=source)
 
     assert isinstance(built, BuildFailure)
     assert built.text is not None
-    assert f"more than {_A_TALK_OF_TWO_FILES} files" in built.text
+    assert f"more than {MAXIMUM_ENTRIES} files" in built.text
     assert list(builds.builds.iterdir()) == []
 
 
