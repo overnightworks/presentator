@@ -93,10 +93,6 @@ _RUN_STAYED: Final = "what build %s left could not be taken away"
 _NOT_AS_WRITTEN: Final = (
     "the talk at %s is refused: %s is not a file reached without a link under the root"
 )
-_LEFT_AS_IT_LIES: Final = (
-    "a step of build %s may still be running, so what it left is taken"
-    " away as it lies rather than opened first"
-)
 _TOO_MUCH_WRITTEN: Final = "deck %s wrote %s MB, which is more than a build may leave"
 _UNACCOUNTABLE: Final = "what the build of deck %s wrote could not be added up: %s"
 _TOOK_TOO_LONG_TO_ADD_UP: Final = (
@@ -149,12 +145,11 @@ class BuildPlace:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class _HowItIsRun:
-    """How one runner starts a step, bounds it, and clears up after the bound."""
+    """How one runner starts a step and bounds it."""
 
-    in_directory: Path | None
+    in_directory: Path
     environment: dict[str, str]
     bound: timedelta
-    given_up: Callable[[], None]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -215,15 +210,6 @@ class DeckToolchain(Protocol):
         that could not be started at all, hand back no words.
         """
 
-    @abstractmethod
-    def nothing_of_it_runs(self, place: BuildPlace) -> bool:
-        """Whether nothing this build started can still be writing in there.
-
-        What a build left is only safe to take in hand once nothing of that
-        build is still there to change it under this server's hands. An
-        answer nobody could get is a no.
-        """
-
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class HostToolchain:
@@ -238,11 +224,6 @@ class HostToolchain:
     project: Path
     bound: timedelta
 
-    def nothing_of_it_runs(self, place: BuildPlace) -> bool:
-        """Nothing does: a step of this build was waited for where it was killed."""
-        del place
-        return True
-
     def ran(self, step: BuildStep) -> BuildFailure | None:
         """Run that step out of this machine's own toolchain project."""
         return _what_a_step_said(
@@ -252,7 +233,6 @@ class HostToolchain:
                 in_directory=self.project,
                 environment=_the_environment_of_this_server(),
                 bound=self.bound,
-                given_up=_nothing_outlives_the_tree,
             ),
         )
 
@@ -378,17 +358,12 @@ class SlidevBuilds:
         its directory and nothing ever will, and for one that did and is now
         removed on purpose with the source that built it (`remove`). A deck's
         own code wrote in this tree and may have closed a directory behind it,
-        so the modes are given back first — but only once nothing of that
-        build is running any more, because opening a directory for a build
-        that is still writing in it is opening it for the build. Whether the
+        so the modes are given back first. Whether the
         tree really went is then read off the filesystem, and one that stayed
         is named in the log and answered here as well, so a caller that must
         know can act on it rather than believe a removal that did not happen.
         """
-        if self.toolchain.nothing_of_it_runs(place):
-            _opened_again(place.here)
-        else:
-            _log.warning(_LEFT_AS_IT_LIES, place.run)
+        _opened_again(place.here)
         shutil.rmtree(place.here, ignore_errors=True)
         if place.here.exists():
             _log.warning(_RUN_STAYED, place.run)
@@ -580,7 +555,6 @@ def _what_a_step_said(
     if went.refused is not None or not went.in_time:
         os.killpg(os.getpgid(process.pid), signal.SIGKILL)
         process.wait()
-        how.given_up()
         if went.refused is not None:
             # What it wrote is the reason, and the watcher has said it.
             return went.refused
@@ -822,10 +796,6 @@ def _pinned(tree: Path) -> list[int]:
         return [os.open(tree, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW)]
     except OSError:
         return []
-
-
-def _nothing_outlives_the_tree() -> None:
-    """A step run on this host leaves nothing beyond the process tree killed."""
 
 
 def _the_environment_of_this_server() -> dict[str, str]:

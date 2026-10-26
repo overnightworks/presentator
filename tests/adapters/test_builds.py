@@ -23,7 +23,6 @@ import pytest
 from presentator.adapters import builds as builds_module
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
 from presentator.adapters.builds import (
-    BuildPlace,
     DeckToolchain,
     HostToolchain,
     PackageJsonThemes,
@@ -1267,39 +1266,4 @@ def test_a_name_that_is_no_longer_a_directory_when_it_is_opened_is_refused(
     # Refused, and never followed: nothing of this machine was added up.
     assert built == BuildFailure(text=None)
     assert EXAMPLE_SLUG in caplog.text
-    assert list(builds.builds.iterdir()) == []
-
-
-class _ToolchainThatCannotSayWhatRuns(HostToolchain):
-    """A toolchain that cannot tell whether anything of a build still runs."""
-
-    def nothing_of_it_runs(self, place: BuildPlace) -> bool:
-        del place
-        return False
-
-
-def test_leavings_of_a_build_that_may_still_run_are_taken_away_as_they_lie(
-    remote: GitRemote,
-    source: Source,
-    machine: pytest.MonkeyPatch,
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_FAILS)
-
-    inside = on_this_machine(tmp_path)
-    builds = builds_ready_for(
-        tmp_path,
-        source,
-        toolchain=_ToolchainThatCannotSayWhatRuns(
-            project=inside.project, bound=inside.bound
-        ),
-    )
-
-    built = builds.build(a_deck(remote), source=source)
-
-    # Opening a directory for a build that may still be writing in it is
-    # opening it for that build, so nothing is opened and the log says so.
-    assert isinstance(built, BuildFailure)
-    assert "may still be running" in caplog.text
     assert list(builds.builds.iterdir()) == []
