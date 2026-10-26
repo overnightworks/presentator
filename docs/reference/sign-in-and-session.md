@@ -111,6 +111,16 @@ signed `SameSite=Lax` session cookie.
   nothing else; the lobby sends `microphone=()`. `Strict-Transport-Security`
   follows the always-on `Secure` cookie setting, so it is always sent.
 
+## Health
+
+`GET /health` on the lobby and on the talk host answers 200 `{"status": "ok"}`
+to anyone: it is a public exact path, needs no session, reads no store and sets
+no cookie. It is static on purpose. An instance binds its port only after it has
+opened and migrated its database and reached its build worker, so an answer
+means the instance serves; a per-request check would add only a way to flap.
+Only GET is answered, and the request still needs a served `Host`: an unknown
+one gets 404, so a healthcheck sends the lobby's or the talk host's own name.
+
 ## Legal links
 
 Every lobby page, signed in or out, ends with two links: Impressum goes to the
