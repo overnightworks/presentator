@@ -20,5 +20,5 @@ def add_health_route(app: FastAPI) -> None:
     app.add_api_route(HEALTH_PATH, _health, methods=["GET"])
 
 
-async def _health() -> dict[str, str]:
+def _health() -> dict[str, str]:
     return dict(_HEALTHY)
