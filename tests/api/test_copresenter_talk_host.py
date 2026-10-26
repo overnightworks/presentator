@@ -113,6 +113,21 @@ def test_a_post_from_another_site_is_refused_whatever_session_it_carries(
 
 
 # C5.
+def test_an_ask_carrying_only_the_talk_hosts_referer_is_refused() -> None:
+    """#474 cell 8: a Referer alone is no provenance, whichever host it names."""
+    talk, private, _clock = a_copresenter_talk_host()
+    talk.sign_in()
+    del talk.client.headers["sec-fetch-site"]
+
+    refused = talk.client.post(
+        _ASK, json=QUESTION, headers={"referer": f"{TALK_ORIGIN}/deck"}
+    )
+
+    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert private.answers.messages == []
+
+
+# C5.
 def test_an_ask_with_neither_provenance_header_is_refused_by_the_origin_check() -> None:
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in()
@@ -132,6 +147,11 @@ def test_an_ask_with_neither_provenance_header_is_refused_by_the_origin_check() 
         pytest.param(TALK_ORIGIN, None, id="the-talk-origin"),
         pytest.param(A_BROWSERS_ADDRESS, POLICY_VIOLATION, id="the-lobby-origin"),
         pytest.param(None, POLICY_VIOLATION, id="none"),
+        pytest.param(
+            TALK_ORIGIN.replace("https://", "http://"),
+            POLICY_VIOLATION,
+            id="the-talk-host-over-http",
+        ),
         pytest.param("https://elsewhere.example.test", POLICY_VIOLATION, id="foreign"),
     ],
 )

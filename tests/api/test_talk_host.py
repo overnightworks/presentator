@@ -266,6 +266,7 @@ def test_the_talk_hosts_cookies_are_host_only_secure_and_its_session_is_lax(
     assert len(session) == 1
     assert "path=/;" in session[0].lower()
     assert "samesite=lax" in session[0].lower()
+    assert not any("csrf" in cookie.lower() for cookie in cookies)
     for cookie in cookies:
         assert cookie.startswith(("__Host-", "__Secure-"))
         assert "secure" in cookie.lower()
@@ -604,3 +605,33 @@ def test_the_lobby_refuses_a_form_that_the_talk_host_submitted(
     answer = lobby.post(path, headers=claims)
 
     assert answer.status_code == HTTPStatus.FORBIDDEN
+
+
+_STALE_CSRF_COOKIE = "__Host-csrf_token"
+
+
+def test_a_stale_csrf_cookie_does_not_block_a_sign_in(hosts: Hosts) -> None:
+    """#474 cell 27: the removed second cookie is ignored at sign-in."""
+    browser = hosts.browser(A_BROWSERS_ADDRESS)
+    browser.cookies.set(_STALE_CSRF_COOKIE, "stale", domain="testserver")
+
+    returned = hosts.sign_in(browser, A_BROWSERS_ADDRESS)
+
+    assert returned.status_code < HTTPStatus.BAD_REQUEST
+
+
+def test_a_stale_csrf_cookie_does_not_block_a_logout(hosts: Hosts) -> None:
+    """#474 cell 27: the removed second cookie is ignored at logout."""
+    browser = hosts.signed_in_at(A_BROWSERS_ADDRESS)
+    browser.cookies.set(_STALE_CSRF_COOKIE, "stale", domain="testserver")
+
+    logged_out = browser.post(
+        "/logout",
+        headers={
+            "content-type": "application/x-www-form-urlencoded",
+            "origin": A_BROWSERS_ADDRESS,
+            "sec-fetch-site": "same-origin",
+        },
+    )
+
+    assert logged_out.status_code < HTTPStatus.BAD_REQUEST

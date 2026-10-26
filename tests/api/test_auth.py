@@ -104,6 +104,9 @@ def test_a_signed_out_request_is_redirected_or_refused_by_what_it_accepts(
         pytest.param({"origin": "https://another.example"}, id="a foreign origin"),
         pytest.param({}, id="no provenance"),
         pytest.param({"referer": f"{A_BROWSERS_ADDRESS}/page"}, id="referer only"),
+        pytest.param({"origin": "http://testserver"}, id="the host over http"),
+        pytest.param({"origin": "https://evil.testserver"}, id="a subdomain of it"),
+        pytest.param({"origin": "https://testserver.evil"}, id="it as a prefix"),
     ],
 )
 def test_an_unlisted_mutating_route_refuses_a_request_without_own_provenance(
@@ -117,6 +120,17 @@ def test_an_unlisted_mutating_route_refuses_a_request_without_own_provenance(
 
     lobby.add_api_route("/a-new-write", a_new_write, methods=[method])
     refused = TestClient(lobby).request(method, "/a-new-write", headers=claims)
+
+    assert refused.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_a_path_that_only_starts_like_the_hook_prefix_is_not_exempt_from_the_origin_check(
+    signed_in_lobby: Lobby,
+) -> None:
+    """#474 cell 14: only `/sources/` is a server call, never `/sourcesx/`."""
+    del signed_in_lobby.client.headers["sec-fetch-site"]
+
+    refused = signed_in_lobby.client.post("/sourcesx/talks/fetch")
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
 
@@ -634,7 +648,9 @@ def test_a_signed_in_page_links_the_impressum_and_the_datenschutz(
     assert _links_the_impressum_and_the_datenschutz(page)
 
 
-@pytest.mark.parametrize("removed", ["JavaScript lesbar", "Fälschungsschutz"])
+@pytest.mark.parametrize(
+    "removed", ["JavaScript lesbar", "Fälschungsschutz", "__Host-csrf_token"]
+)
 def test_the_datenschutz_names_no_second_cookie(lobby: Lobby, removed: str) -> None:
     """#474 cell 33: the Datenschutz holds no wording of the removed second cookie."""
     assert removed not in lobby.client.get("/datenschutz").text
