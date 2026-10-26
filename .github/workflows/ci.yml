@@ -306,8 +306,8 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       # The overlay browser tests (through presenter-overlay-harness.ts) read
-      # the production security policy through this Python environment, so it needs this instance's
-      # own copy too — never a second, hand-copied value of it.
+      # the production security policy through this Python environment, so they
+      # need this instance's own copy too — never a second, hand-copied value of it.
       - name: Install uv
         uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
