@@ -104,8 +104,14 @@ def test_a_signed_out_request_is_redirected_or_refused_by_what_it_accepts(
         pytest.param({"origin": "https://another.example"}, id="a foreign origin"),
         pytest.param({}, id="no provenance"),
         pytest.param({"referer": f"{A_BROWSERS_ADDRESS}/page"}, id="referer only"),
-        pytest.param({"origin": A_BROWSERS_ADDRESS.replace("https://", "http://")}, id="the host over http"),
-        pytest.param({"origin": A_BROWSERS_ADDRESS.replace("https://", "https://evil.")}, id="a subdomain of it"),
+        pytest.param(
+            {"origin": A_BROWSERS_ADDRESS.replace("https://", "http://")},
+            id="the host over http",
+        ),
+        pytest.param(
+            {"origin": A_BROWSERS_ADDRESS.replace("https://", "https://evil.")},
+            id="a subdomain of it",
+        ),
         pytest.param({"origin": f"{A_BROWSERS_ADDRESS}.evil"}, id="it as a prefix"),
     ],
 )
