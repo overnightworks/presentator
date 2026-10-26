@@ -1,8 +1,9 @@
 """The health address both hosts answer, so edge may publish a name.
 
 A static answer: an instance that serves at all has opened and migrated its
-database and reached its build worker before it bound the port, so the route
-checks nothing per request and a busy database cannot make it flap.
+database before it bound the port (and, under the worker runner, reached its
+build worker; the host runner has none), so the route checks nothing per
+request and a busy database cannot make it flap.
 """
 
 from typing import Final
