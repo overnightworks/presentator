@@ -327,7 +327,9 @@ jobs:
             --global AbortController --global TextDecoder --global atob --global URL \
             --global Blob --global Audio examples/copresenter-deck/custom-nav-controls.vue \
             examples/copresenter-deck/components/CoPresenter.vue \
-            frontend/tests/presenter-controls.browser.test.ts
+            frontend/tests/presenter-controls.browser.test.ts \
+            frontend/tests/copresenter-refusals.browser.test.ts \
+            frontend/tests/presenter-overlay-harness.ts
 
       - name: Check source
         run: pnpm lint
