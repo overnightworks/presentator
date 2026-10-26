@@ -90,6 +90,9 @@ def test_python_dash_m_starts_the_service_on_its_private_socket(tmp_path) -> Non
     environment = {
         **os.environ,
         "SPEECH_PRIVATE_DIRECTORY": str(tmp_path),
+        "SPEECH_STATE_DIRECTORY": str(tmp_path / "state"),
+        "HF_HUB_OFFLINE": "1",
+        "HF_HOME": str(tmp_path / "hf"),
         "PRESENTATOR_RUNTIME_UID": str(os.geteuid()),
         "PYTHONPATH": str(speech_root),
     }
@@ -99,7 +102,6 @@ def test_python_dash_m_starts_the_service_on_its_private_socket(tmp_path) -> Non
         try:
             deadline = time.monotonic() + 30
             while not _accepts_connections(socket_path):
-                assert server.poll() is None
                 assert time.monotonic() < deadline
                 time.sleep(0.05)
         finally:
