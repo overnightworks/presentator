@@ -1,0 +1,8 @@
+claim_id = "935258dd266d4b16902d95a5024e4694"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "a673d9b44239734744618e463e2f8f5149752506"
+branch = "claude/issue-485-adopt-quality-v0-6-0-pin-both-workflow-c"
+scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", "AGENTS.md", "README.md", "pyproject.toml", "quality/config.toml", "scripts/check_root_layout.py", "tests/test_root_layout.py"]
+opened_commit = "ff4d9e3dbae6d7c1cf1b5e94f4ecee39849dbc3b"
+whole_reason = "The pin and the root declarations must land together because a v0.5.1 reader refuses [root] and v0.6.0 without them is red, and the old root check leaves in the same change or two allowlists exist."
