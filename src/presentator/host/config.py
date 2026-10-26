@@ -2,6 +2,7 @@
 
 import threading
 from enum import StrEnum
+from functools import cached_property
 from pathlib import Path
 from typing import Annotated, Final, Self
 from urllib.parse import urlsplit
@@ -146,7 +147,9 @@ def _an_absolute_path(given: Path) -> Path:
 class Settings(BaseSettings, env_prefix=ENVIRONMENT_PREFIX, env_file=".env"):
     """Read from `PRESENTATOR_*` in the environment, or from a local `.env`."""
 
-    secret_key: SecretStr = Field(min_length=SECRET_LENGTH)
+    # Where the master key is read from once at start, so it never rides the
+    # environment.
+    secret_key_file: Annotated[Path, AfterValidator(_an_absolute_path)]
     database: Path = Path("presentator.sqlite3")
     mirrors: Path = Path("mirrors")
     # The one directory a file-kind source's address may resolve under; the
@@ -199,6 +202,15 @@ class Settings(BaseSettings, env_prefix=ENVIRONMENT_PREFIX, env_file=".env"):
     # Empty: no token is admitted and the admin routes do not exist.
     admin_token_clients: Annotated[str, AfterValidator(_client_ids)] = ""
 
+    @cached_property
+    def secret_key(self) -> SecretStr:
+        """The master key, read once from its file."""
+        return read_secret_file(
+            self.secret_key_file,
+            setting="secret_key_file",
+            minimum_length=SECRET_LENGTH,
+        )
+
     def admitted_token_clients(self) -> frozenset[str]:
         """The client ids whose tokens the admin routes take."""
         if not self.admin_token_clients:
@@ -250,6 +262,29 @@ def load_worker_settings() -> WorkerSettings:
         ) from None
 
 
+def read_secret_file(
+    secret_file: Path, *, setting: str, minimum_length: int = 1
+) -> SecretStr:
+    """Read a secret once, minus the one newline an editor leaves.
+
+    The refusals name the setting and never what the file holds or what the
+    operating system says of it, which may quote either.
+    """
+    try:
+        content = secret_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        unreadable = f"{setting}: is a file this instance can read"
+        raise cannot_start(unreadable) from None
+    secret = content.removesuffix("\n")
+    if not secret.strip():
+        empty = f"{setting}: is a file that holds the secret"
+        raise cannot_start(empty)
+    if len(secret) < minimum_length:
+        short = f"{setting}: is a file that holds at least {minimum_length} characters"
+        raise cannot_start(short)
+    return SecretStr(secret)
+
+
 def cannot_start(reason: str) -> ConfigurationError:
     """The refusal an environment no instance can run on is answered with."""
     return ConfigurationError(f"{_REFUSED}: {reason}")
@@ -268,6 +303,9 @@ def load_settings() -> Settings:
         # A refused value is often a real secret, and the library's own message
         # quotes it; only the field and the reason may leave this call.
         raise cannot_start(_what_is_wrong(refused)) from None
+    # Reading the key here refuses a bad key file at start, after the other
+    # settings validated, and binds it for every later use.
+    _ = settings.secret_key
     return settings
 
 

@@ -4,10 +4,13 @@ Every route test arranges the same instance, so the wiring the host does
 stands here once, with the doubles and the accounts a test hands in.
 """
 
+import atexit
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
+from functools import cache
 from http import HTTPStatus
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Final, Self
 
 import pytest
@@ -264,6 +267,16 @@ def configure_oidc(monkeypatch: pytest.MonkeyPatch, directory: Path) -> Path:
     return secret_file
 
 
+def configure_secret_key(
+    monkeypatch: pytest.MonkeyPatch, directory: Path, key: str
+) -> Path:
+    """Name a key file of a test's own, holding `key` and the newline an editor adds."""
+    key_file = directory / "secret-key"
+    key_file.write_text(f"{key}\n", encoding="utf-8")
+    monkeypatch.setenv("PRESENTATOR_SECRET_KEY_FILE", str(key_file))
+    return key_file
+
+
 def _no_token_endpoint(request: TokenRequest) -> TokenEndpointAnswer:
     message = f"no issuer answers a test: {request.url}"
     raise TokenEndpointError(message)
@@ -273,10 +286,20 @@ def _no_key_set(url: str) -> bytes:
     raise AssertionError(url)
 
 
+@cache
+def _a_key_file() -> Path:
+    # One file for the whole run: a key is a generated value, never a real one.
+    directory = TemporaryDirectory()
+    atexit.register(directory.cleanup)
+    key_file = Path(directory.name) / "secret-key"
+    key_file.write_text("t" * 32, encoding="utf-8")
+    return key_file
+
+
 def a_settings() -> Settings:
     """The settings of an instance at the test origin, signing in at a fake issuer."""
     return Settings(
-        secret_key=SecretStr("t" * 32),
+        secret_key_file=_a_key_file(),
         public_origin=A_BROWSERS_ADDRESS,
         talk_origin=A_TALK_ADDRESS,
         agent_service=AN_AGENT_SERVICE,
