@@ -156,3 +156,38 @@ def test_the_summary_gives_median_worst_and_count_of_completed_repetitions() -> 
 def test_a_final_matches_the_spoken_sentence_without_case_and_punctuation() -> None:
     assert CLIENT.same_words("die kamera zeigt, den Vortragenden!", SENTENCE_START)
     assert not CLIENT.same_words("Die Kamera zeigt Vortragenden", SENTENCE_START)
+
+
+def test_prove_defaults_to_the_card_proof_and_never_the_operators_voice_choice(
+    tmp_path, monkeypatch
+) -> None:
+    for name in ("SPEECH_DEVICE", "SPEECH_HEARING_MODEL", "CUDA_VISIBLE_DEVICES"):
+        monkeypatch.delenv(name, raising=False)
+
+    environment = PROVE._speech_environment(tmp_path, "model")  # noqa: SLF001
+
+    assert environment["SPEECH_DEVICE"] == "cuda"
+    assert environment["SPEECH_HEARING_MODEL"] == "Systran/faster-whisper-large-v3"
+    assert "CUDA_VISIBLE_DEVICES" not in environment
+    state_directory = Path(environment["SPEECH_STATE_DIRECTORY"])
+    assert state_directory.is_dir()
+    assert tmp_path in state_directory.parents
+
+
+def test_prove_takes_device_and_hearing_model_and_hides_the_card_on_the_cpu(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("SPEECH_DEVICE", "cpu")
+    monkeypatch.setenv("SPEECH_HEARING_MODEL", "elsewhere/whisper")
+
+    environment = PROVE._speech_environment(tmp_path, "model")  # noqa: SLF001
+
+    assert environment["SPEECH_DEVICE"] == "cpu"
+    assert environment["SPEECH_HEARING_MODEL"] == "elsewhere/whisper"
+    assert environment["CUDA_VISIBLE_DEVICES"] == ""
+
+
+def test_peak_resident_memory_is_read_from_the_process_status_in_mebibytes() -> None:
+    status = "Name:\tpython\nVmPeak:\t 9999 kB\nVmHWM:\t 2048000 kB\nVmRSS:\t 1 kB\n"
+
+    assert PROVE.peak_rss_mib(status) == pytest.approx(2000.0)
