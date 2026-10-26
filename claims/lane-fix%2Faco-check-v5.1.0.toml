@@ -1,0 +1,7 @@
+claim_id = "568fef63893746628890bb61bb8699bc"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "af6a4933963ef24aab7cc469394b102452a37c10"
+branch = "fix/aco-check-v5.1.0"
+scope = [".github/workflows/pr-check.yml"]
+opened_commit = "172e61d771c44ea15932f8632e1ec8a01f29585e"
