@@ -126,6 +126,62 @@ def test_the_two_final_timings_count_from_sending_start_and_from_speech_end(
 
 
 @pytest.mark.parametrize(
+    ("arrived_s", "expected"),
+    [(39.9, True), (40.0, True), (40.1, False)],
+    ids=["inside the wait", "at the wait", "past the wait"],
+)
+def test_a_final_counts_only_within_the_wait_after_sending_ended(
+    arrived_s: float, *, expected: bool
+) -> None:
+    """#515: a final received after the 30 s wait does not count."""
+    assert CLIENT.final_arrived_in_time(arrived_s, sending_ended_s=10.0) is expected
+
+
+class _RecordingWebsocket:
+    """Marks, in order, every send and every receive attempt of the frame loop."""
+
+    def __init__(self, order: list[str]) -> None:
+        self._order = order
+
+    async def send(self, _frame: bytes) -> None:
+        self._order.append("send")
+
+    async def recv(self) -> str:
+        self._order.append("receive")
+        await asyncio.sleep(1)
+        return "{}"
+
+
+class _OrderObserver:
+    def __init__(self, order: list[str]) -> None:
+        self._order = order
+
+    def note_sent(self) -> None:
+        self._order.append("sent")
+
+    def note(self) -> None:
+        self._order.append("noted")
+
+
+def test_the_send_moment_is_taken_before_any_wait_of_the_frame() -> None:
+    """#515: speech ended is the last frame sent, not the end of its waits."""
+    pcm, _ = _two_pcm_frames()
+    order: list[str] = []
+
+    asyncio.run(
+        CLIENT.send_pcm(
+            _RecordingWebsocket(order),
+            pcm,
+            SAMPLE_RATE,
+            [],
+            _OrderObserver(order),
+        )
+    )
+
+    assert order[:2] == ["send", "sent"]
+
+
+@pytest.mark.parametrize(
     ("changes", "expected"),
     [
         ({"partial_at_s": 2.0}, "2.000 s while sending"),

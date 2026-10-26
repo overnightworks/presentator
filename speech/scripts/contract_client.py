@@ -17,12 +17,9 @@ import time
 from array import array
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Protocol
 
 from websockets.asyncio.client import ClientConnection, unix_connect
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 SENTENCE = (
     "Die Kamera zeigt den Vortragenden, während im Hintergrund "
@@ -158,21 +155,32 @@ def frames_remain_unsent(pcm: bytes, next_offset: int) -> bool:
     return next_offset < len(pcm)
 
 
-async def _send_pcm(
+class _FrameObserver(Protocol):
+    def note_sent(self) -> None: ...
+
+    def note(self) -> None: ...
+
+
+async def send_pcm(
     websocket: ClientConnection,
     pcm: bytes,
     sample_rate: int,
     events: list[dict[str, object]],
-    after_frame: Callable[[], None] | None = None,
+    observer: _FrameObserver | None = None,
 ) -> None:
+    """Send paced frames, telling the observer at each send and each receive."""
     frame_bytes = int(FRAME_SECONDS * sample_rate * 2)
     for offset in range(0, len(pcm), frame_bytes):
         await websocket.send(pcm[offset : offset + frame_bytes])
+        if observer is not None:
+            observer.note_sent()
         await _drain(websocket, events, timeout=0.02)
+        if observer is not None:
+            observer.note()
         await asyncio.sleep(FRAME_SECONDS)
         await _drain(websocket, events, timeout=0.02)
-        if after_frame is not None:
-            after_frame()
+        if observer is not None:
+            observer.note()
 
 
 async def _hear_utterance(
@@ -203,7 +211,7 @@ async def _hear_utterance(
                 partial_frame = frames_sent
                 still_sending = frames_remain_unsent(pcm, next_offset)
     silence = bytes(int(SILENCE_SECONDS * sample_rate * 2))
-    await _send_pcm(websocket, silence, sample_rate, events)
+    await send_pcm(websocket, silence, sample_rate, events)
     deadline = time.monotonic() + 8
     while time.monotonic() < deadline:
         if _first_final(events) is not None:
@@ -276,6 +284,11 @@ def _words(text: str) -> list[str]:
     return re.findall(r"\w+", text.casefold())
 
 
+def final_arrived_in_time(arrived_s: float, sending_ended_s: float) -> bool:
+    """True when a final reached the client within the wait after sending ended."""
+    return arrived_s - sending_ended_s <= FINAL_WAIT_SECONDS
+
+
 class _Arrivals:
     """When the first non-empty partial and the first final reached the client."""
 
@@ -284,31 +297,48 @@ class _Arrivals:
         self.started = time.perf_counter()
         self.partial_at_s: float | None = None
         self.final_at_s: float | None = None
+        self.last_sent_s = 0.0
+        self.sending_ended_s: float | None = None
 
     def elapsed(self) -> float:
         return time.perf_counter() - self.started
 
+    def note_sent(self) -> None:
+        self.last_sent_s = self.elapsed()
+
     def note(self) -> None:
+        arrived_s = self.elapsed()
         if self.partial_at_s is None and _first_nonempty_partial(self.events):
-            self.partial_at_s = self.elapsed()
-        if self.final_at_s is None and _first_final(self.events):
-            self.final_at_s = self.elapsed()
+            self.partial_at_s = arrived_s
+        if (
+            self.final_at_s is None
+            and _first_final(self.events)
+            and (
+                self.sending_ended_s is None
+                or final_arrived_in_time(arrived_s, self.sending_ended_s)
+            )
+        ):
+            self.final_at_s = arrived_s
 
 
 async def _measure_utterance(
     websocket: ClientConnection, pcm: bytes, sample_rate: int
 ) -> Repetition:
     arrivals = _Arrivals()
-    await _send_pcm(websocket, pcm, sample_rate, arrivals.events, arrivals.note)
-    speech_ended_s = arrivals.elapsed()
+    await send_pcm(websocket, pcm, sample_rate, arrivals.events, arrivals)
+    speech_ended_s = arrivals.last_sent_s
     silence = bytes(int(SILENCE_SECONDS * sample_rate * 2))
-    await _send_pcm(websocket, silence, sample_rate, arrivals.events, arrivals.note)
+    await send_pcm(websocket, silence, sample_rate, arrivals.events, arrivals)
     sending_ended_s = arrivals.elapsed()
+    arrivals.sending_ended_s = sending_ended_s
     deadline = time.monotonic() + FINAL_WAIT_SECONDS
-    while arrivals.final_at_s is None and time.monotonic() < deadline:
-        await _drain(websocket, arrivals.events, timeout=0.3)
+    while arrivals.final_at_s is None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        await _drain(websocket, arrivals.events, timeout=min(0.3, remaining))
         arrivals.note()
-    final = _first_final(arrivals.events)
+    final = _first_final(arrivals.events) if arrivals.final_at_s is not None else None
     return Repetition(
         audio_seconds=len(pcm) / 2 / sample_rate,
         speech_ended_s=speech_ended_s,

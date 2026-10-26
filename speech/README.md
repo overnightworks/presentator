@@ -125,6 +125,12 @@ and never the speech process, in every run.
 | Final text against the spoken sentence | same words in 5 of 5 | same words in 5 of 5 | same words in 2 of 2 | same words in 5 of 5 | same words in 1 of 1 |
 | Peak RSS of the speech process | 3280 MiB | 1885 MiB | 1885 MiB | 3275 MiB | 1845 MiB |
 
+The recorded rows were taken before the client stamped the last speech frame and
+each event at its real boundary, so their end of speech to final values are
+understated by at most about 0.15 s (one frame's pacing and drains). That does
+not change any model's standing against the bar. No final in these rows arrived
+more than 30 s after sending ended.
+
 The completed count and the worst value vary between runs on the CPU: the
 later turbo run completed 2 of 5 where the first completed 5 of 5, so a single
 5-of-5 row is not read as stable.
