@@ -124,7 +124,7 @@ def test_an_unlisted_mutating_route_refuses_a_request_without_own_provenance(
     assert refused.status_code == HTTPStatus.FORBIDDEN
 
 
-def test_a_path_that_only_starts_like_the_hook_prefix_is_not_exempt_from_the_origin_check(
+def test_a_path_only_resembling_the_hook_prefix_is_not_exempt_from_the_origin_check(
     signed_in_lobby: Lobby,
 ) -> None:
     """#474 cell 14: only `/sources/` is a server call, never `/sourcesx/`."""
