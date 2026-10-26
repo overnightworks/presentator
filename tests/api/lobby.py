@@ -37,7 +37,7 @@ from webauth.ports import (
 from gitmirror.model import CredentialReference
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.builds import (
-    ContainerToolchain,
+    HostToolchain,
     PackageJsonThemes,
     SlidevBuilds,
 )
@@ -613,13 +613,7 @@ def real_builds_under(root: Path) -> SlidevBuilds:
     """The real adapter over a real directory; only what it reads is ever used."""
     return SlidevBuilds(
         builds=root,
-        toolchain=ContainerToolchain(
-            image="unused",
-            volume="unused",
-            memory="1g",
-            disk=None,
-            bound=timedelta(minutes=1),
-        ),
+        toolchain=HostToolchain(project=root, bound=timedelta(minutes=1)),
         mirrors=SourceMirrors(
             directory=root / "mirrors",
             credentials=_NoCredentials(),

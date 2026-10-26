@@ -201,7 +201,7 @@ def bare_environment(
 def environment(bare_environment: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
     bare_environment.setenv("PRESENTATOR_SECRET_KEY", INSTANCE_KEY)
     # These tests are about the lobby this root composes, not about where a
-    # deck's code runs; the development run is what asks nothing of a daemon,
-    # and the tests below that are about the sandbox say so themselves.
+    # deck's code runs; the development run is what asks nothing of the build
+    # worker, whose default the tests about the sandbox say so themselves.
     bare_environment.setenv("PRESENTATOR_BUILD_RUNNER", "host")
     return bare_environment
