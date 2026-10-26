@@ -179,22 +179,48 @@ def test_each_secret_is_a_file_secret_from_home_that_only_the_instance_mounts(
     compose = _parsed_compose()
 
     assert compose["secrets"][name]["file"] == host_path
-    holders = [
-        service
-        for service, body in compose["services"].items()
-        if name in body.get("secrets", [])
-    ]
-    assert holders == ["presentator"]
+    assert _secret_holders(compose, name) == ["presentator"]
     assert _environment_of(compose["services"]["presentator"])[setting] == (
         f"/run/secrets/{name}"
     )
     assert setting not in _environment_of(compose["services"]["build-worker"])
+    assert "secrets" not in compose["services"]["build-worker"]
+
+
+@pytest.mark.parametrize(
+    "grant",
+    ["presentator_secret_key", {"source": "presentator_secret_key"}],
+    ids=["short form", "long form"],
+)
+def test_a_secret_granted_to_the_worker_in_either_form_is_caught(
+    grant: str | dict[str, str],
+) -> None:
+    compose = _parsed_compose()
+    compose["services"]["build-worker"]["secrets"] = [grant]
+
+    assert _secret_holders(compose, "presentator_secret_key") == [
+        "presentator",
+        "build-worker",
+    ]
 
 
 def test_no_service_carries_the_master_key_in_its_environment() -> None:
     """#509: no PRESENTATOR_SECRET_KEY environment entry remains, in either form."""
     for service in _parsed_compose()["services"].values():
         assert "PRESENTATOR_SECRET_KEY" not in _environment_of(service)
+
+
+def _secret_holders(compose: dict[str, Any], name: str) -> list[str]:
+    """Services granted a secret, whether the grant is short or long form."""
+    return [
+        service
+        for service, body in compose["services"].items()
+        if name
+        in (
+            entry if isinstance(entry, str) else entry["source"]
+            for entry in body.get("secrets", [])
+        )
+    ]
 
 
 def _parsed_compose() -> dict[str, Any]:
