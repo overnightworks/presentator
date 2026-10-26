@@ -1,5 +1,6 @@
 """An ordinary file of a built talk, as a browser asks for it and is answered."""
 
+import shutil
 from http import HTTPStatus
 from pathlib import Path
 from typing import Final
@@ -185,6 +186,17 @@ def test_a_nonsense_address_under_a_built_talk_is_the_application(
     assert nonsense.status_code == HTTPStatus.OK
     assert nonsense.content == application
     assert ENGLISH.deck_unknown_title not in nonsense.text
+
+
+def test_a_talk_whose_directory_the_sweep_took_after_the_row_was_read_is_not_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#505 Done when: a request holding the previous pointer answers 404, never 500."""
+    talk_host, run = _talk_host_on_a_built_deck(tmp_path)
+    shutil.rmtree(run)
+    monkeypatch.setattr(Path, "is_dir", lambda _self: True)
+
+    assert talk_host.get(_PROJECTOR).status_code == HTTPStatus.NOT_FOUND
 
 
 def test_a_talk_refuses_a_method_that_is_not_a_read(tmp_path: Path) -> None:
