@@ -104,9 +104,9 @@ def test_a_signed_out_request_is_redirected_or_refused_by_what_it_accepts(
         pytest.param({"origin": "https://another.example"}, id="a foreign origin"),
         pytest.param({}, id="no provenance"),
         pytest.param({"referer": f"{A_BROWSERS_ADDRESS}/page"}, id="referer only"),
-        pytest.param({"origin": "http://testserver"}, id="the host over http"),
-        pytest.param({"origin": "https://evil.testserver"}, id="a subdomain of it"),
-        pytest.param({"origin": "https://testserver.evil"}, id="it as a prefix"),
+        pytest.param({"origin": A_BROWSERS_ADDRESS.replace("https://", "http://")}, id="the host over http"),
+        pytest.param({"origin": A_BROWSERS_ADDRESS.replace("https://", "https://evil.")}, id="a subdomain of it"),
+        pytest.param({"origin": f"{A_BROWSERS_ADDRESS}.evil"}, id="it as a prefix"),
     ],
 )
 def test_an_unlisted_mutating_route_refuses_a_request_without_own_provenance(
