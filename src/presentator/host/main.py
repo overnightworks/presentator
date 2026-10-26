@@ -26,13 +26,10 @@ from presentator.adapters.agent_tokens import PersonAccessTokens, WorkloadToken
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.build_worker import WorkerToolchain
 from presentator.adapters.builds import (
-    ContainerToolchain,
-    DaemonRefusedError,
     DeckToolchain,
     HostToolchain,
     PackageJsonThemes,
     SlidevBuilds,
-    the_daemon_of_this_machine,
 )
 from presentator.adapters.catalog import (
     CATALOG_DIRECTORY,
@@ -89,7 +86,6 @@ from presentator.application.people import People
 from presentator.application.preferences import Preferences
 from presentator.application.voice import VoiceStatusUse
 from presentator.host.config import (
-    NO_BOUND_AT_ALL,
     Settings,
     WhereBuildsRun,
     cannot_start,
@@ -103,12 +99,6 @@ from presentator.host.oidc import (
 from presentator.host.polling import Schedule
 from presentator.host.worker_serving import emergency_end
 
-_WITHOUT_A_SANDBOX = (
-    "build_image and build_volume say what a deck's build runs in and where it"
-    " writes, and a deck is code (line 14a): without both of them there is no"
-    " sandbox. Ask for the development run knowingly with"
-    " build_runner=host, or name them"
-)
 _WORKER_NOT_ANSWERING = (
     "The build worker did not answer within {window:g} seconds. Check that the"
     " build-worker service is running and shares the socket directory with this"
@@ -116,16 +106,6 @@ _WORKER_NOT_ANSWERING = (
 )
 WAITING_FOR_THE_WORKER = (
     "Waiting for the build worker to answer on %s, for up to %g seconds"
-)
-_NOTHING_BOUNDS_A_BUILD = (
-    "this machine's %s storage driver does not take a size for a container's own"
-    " filesystem, so a build could fill this machine with what it writes beside"
-    f" its talk. Set build_disk to {NO_BOUND_AT_ALL} to run without that bound"
-    " knowingly"
-)
-_UNBOUNDED_BY_CHOICE = (
-    f"build_disk is {NO_BOUND_AT_ALL}, so nothing but the time a step may take"
-    " bounds what one build writes into its own container"
 )
 
 _log = logging.getLogger(__name__)
@@ -379,38 +359,14 @@ def _session_sweep(sessions: SqliteSessionRecordStore, clock: SystemClock) -> Sc
 
 
 def _what_builds_a_deck(settings: Settings, *, bound: timedelta) -> DeckToolchain:
-    """A container of the build's own, or this machine's own toolchain project.
+    """The sealed build worker, or this machine's own toolchain project.
 
-    A deck is code (line 14a), so a build runs in a container unless this
-    deployment asked in as many words for the development run. The daemon that
-    would give it that container is asked what it is before anything is served,
-    because a daemon too old to keep a build inside its own directory is not
-    one this instance may run decks on at all.
+    A deck is code (line 14a), so a build runs in the worker unless this
+    deployment asked in as many words for the development run.
     """
     if settings.build_runner is WhereBuildsRun.HOST:
         return HostToolchain(project=settings.toolchain, bound=bound)
-    if settings.build_runner is WhereBuildsRun.WORKER:
-        return the_build_worker(settings, bound=bound)
-    image, volume = settings.build_image, settings.build_volume
-    if image is None or volume is None:
-        raise cannot_start(_WITHOUT_A_SANDBOX)
-    try:
-        daemon = the_daemon_of_this_machine(image=image, disk=settings.build_disk)
-    except DaemonRefusedError as refused:
-        raise cannot_start(str(refused)) from None
-    if settings.build_disk is None:
-        _log.warning(_UNBOUNDED_BY_CHOICE)
-    elif not daemon.bounds_a_container_filesystem:
-        # Never silently: a machine that cannot bound what a build writes
-        # beside its talk is one an operator agrees to in as many words.
-        raise cannot_start(_NOTHING_BOUNDS_A_BUILD % daemon.storage_driver)
-    return ContainerToolchain(
-        image=image,
-        volume=volume,
-        memory=settings.build_memory,
-        disk=settings.build_disk,
-        bound=bound,
-    )
+    return the_build_worker(settings, bound=bound)
 
 
 def build_bound_of(settings: Settings) -> timedelta:
