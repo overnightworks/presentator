@@ -46,8 +46,8 @@ decisions to save nothing.
 
 The master key, a file named by `PRESENTATOR_SECRET_KEY_FILE`, stays the one
 secret an operator sets, for encryption and for signing the session cookies.
-Every use derives its own key material from it rather than using it raw, so no
-two uses share bytes:
+Each encryption use derives its own key material from it; the lobby's session
+cookie is signed with the raw key:
 
 - HKDF-SHA256 over the instance key's bytes, length 32, a public constant salt
   (a fixed byte string in the module, not a secret), and
