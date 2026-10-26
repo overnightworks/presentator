@@ -36,6 +36,7 @@ from presentator.contracts.models import User
 from presentator.contracts.people import SessionSecretsHeld, SessionTimes
 from presentator.contracts.preferences import InstanceSettings, PersonPreferences
 from presentator.contracts.text import LobbyText
+from presentator.ports.decks import BuildRun
 
 # How long one thread waits for another before a test calls the run stuck.
 PATIENCE: Final = timedelta(seconds=5)
@@ -614,16 +615,21 @@ class FakeBuildRunner:
     output path would.
     """
 
+    root: Path = BUILDS_ROOT
     fails: bool = False
     says: str | None = None
     writes_outside_the_root: bool = False
     built: list[str] = field(default_factory=list[str])
     from_source: dict[str, str] = field(default_factory=dict[str, str])
     while_building: Callable[[Deck], None] | None = None
-    removed: list[Path] = field(default_factory=list[Path])
-    # A directory this fake refuses to let go of, the way a real one a
+    removed: list[BuildRun] = field(default_factory=list[BuildRun])
+    # A run this fake refuses to let go of, the way a real one a
     # deck's own code closed behind it would.
-    stuck: frozenset[Path] = frozenset()
+    stuck: frozenset[BuildRun] = frozenset()
+    # The runs on disk: one per build, plus whatever a test lays down.
+    on_disk: set[BuildRun] = field(default_factory=set[BuildRun])
+    # Whether listing the root breaks off, the way an unreadable one does.
+    listing_fails: bool = False
 
     def build(self, deck: Deck, *, source: Source) -> Artefacts | BuildFailure:
         self.built.append(deck.slug)
@@ -632,13 +638,15 @@ class FakeBuildRunner:
             self.while_building(deck)
         if self.fails:
             return BuildFailure(text=self.says)
-        root = _SOMEWHERE_ELSE if self.writes_outside_the_root else BUILDS_ROOT
-        written = root / deck.slug / deck.commit
+        root = _SOMEWHERE_ELSE if self.writes_outside_the_root else self.root
+        run = BuildRun(f"run-{len(self.built)}")
+        self.on_disk.add(run)
+        written = root / run.name / "out"
         return Artefacts(directory=written / "talk", pdf=written / "deck.pdf")
 
     def holds(self, artefacts: Artefacts) -> bool:
         return all(
-            written.is_relative_to(BUILDS_ROOT)
+            written.is_relative_to(self.root)
             for written in (artefacts.directory, artefacts.pdf)
         )
 
@@ -646,9 +654,20 @@ class FakeBuildRunner:
         # Links are the real adapter's concern and are proven against it.
         return written.open("rb") if written.is_file() else None
 
-    def remove(self, directory: Path) -> bool:
-        self.removed.append(directory)
-        return directory not in self.stuck
+    def runs(self) -> frozenset[BuildRun] | None:
+        return None if self.listing_fails else frozenset(self.on_disk)
+
+    def run_of(self, path: Path) -> BuildRun | None:
+        if path.parent.name != "out" or path.parent.parent.parent != self.root:
+            return None
+        return BuildRun(path.parent.parent.name)
+
+    def remove(self, run: BuildRun) -> bool:
+        self.removed.append(run)
+        if run in self.stuck:
+            return False
+        self.on_disk.discard(run)
+        return True
 
 
 # What most tests need from the toolchain set, without naming a real one.

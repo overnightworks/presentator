@@ -1,5 +1,6 @@
 """A deck exists only for the account that owns its source."""
 
+import shutil
 from dataclasses import dataclass, replace
 from http import HTTPStatus
 from pathlib import Path
@@ -29,7 +30,7 @@ from tests.api.lobby import (
 )
 from tests.api.talk_support import cookies_without_values, two_hosts
 from tests.api.test_sources import ask_removal, confirm_removal
-from tests.application.fakes import FakeDeckStore
+from tests.application.fakes import FakeBuildRunner, FakeDeckStore
 
 _PDF: Final = Path(__file__).parent / "exported_deck.pdf"
 _COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
@@ -48,7 +49,7 @@ def _b_source() -> Source:
     )
 
 
-def _store_of_built_decks() -> FakeDeckStore:
+def _store_of_built_decks(talk: Path = BUILT_TALK, pdf: Path = _PDF) -> FakeDeckStore:
     store = FakeDeckStore()
     for slug, owner, source_id in (
         ("a-deck", ADMIN, SOURCE_ID),
@@ -68,7 +69,7 @@ def _store_of_built_decks() -> FakeDeckStore:
         )
         store.put_build(
             slug,
-            Build(directory=BUILT_TALK, pdf=_PDF, commit=_COMMIT, built_at=NOW),
+            Build(directory=talk, pdf=pdf, commit=_COMMIT, built_at=NOW),
         )
     return store
 
@@ -92,10 +93,14 @@ _ADMIN_B: Final = User(id=_B, username=NEIGHBOUR, role=Role.ADMIN)
 
 def _two_admins(tmp_path: Path, *, stuck_mirror: bool = False) -> _TwoAdmins:
     foreign = _b_source()
+    run = tmp_path / "builds" / "run" / "out"
+    shutil.copytree(BUILT_TALK, run / "talk")
+    shutil.copyfile(_PDF, run / "deck.pdf")
     hosts = two_hosts(
         tmp_path,
         given=GivenDecks(
-            store=_store_of_built_decks(),
+            builder=FakeBuildRunner(root=tmp_path / "builds"),
+            store=_store_of_built_decks(run / "talk", run / "deck.pdf"),
             source=foreign if stuck_mirror else None,
             sources=(a_configured_source(_A_SOURCE_URL), foreign),
             stuck_mirror=stuck_mirror,

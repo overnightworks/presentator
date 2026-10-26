@@ -1761,7 +1761,7 @@ def test_removing_a_source_deletes_its_rows_forgets_its_mirror_and_its_builds() 
     assert store.all() == ()
     assert fakes.store.all() == ()
     assert fakes.store.get("kundenfeedback") is None
-    assert fakes.builder.removed == [built.build.directory]
+    assert fakes.builder.removed == [fakes.builder.run_of(built.build.directory)]
     assert mirror.forgotten == [_SOURCE.id]
     assert fakes.source_runs.recent(_SOURCE.id) == ()
 
@@ -1855,7 +1855,7 @@ def test_a_stuck_mirror_or_build_refuses_the_removal_and_deletes_nothing(
         built = fakes.store.get("kundenfeedback")
         assert built is not None
         assert built.build is not None
-        builder.stuck = frozenset({built.build.directory})
+        builder.stuck = frozenset(builder.on_disk)
 
     outcome = _confirmed(decks, _SOURCE.name)
 

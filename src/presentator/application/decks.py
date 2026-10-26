@@ -20,6 +20,7 @@ from pathlib import Path
 from threading import RLock
 from typing import BinaryIO, Final
 
+from presentator.application.build_retention import builds_removed, sweep
 from presentator.contracts.decks import (
     SLIDES_FILE,
     AccessKind,
@@ -304,14 +305,13 @@ class Decks:
     def refresh_named(self, name: str) -> bool:
         """Take that one source in and build what changed, if this instance has it.
 
-        A name nobody stored is not a source to fetch; the caller says so rather
-        than walking every source and doing nothing. A refresh already running
-        is already serving the same lock, so this call returns as if it ran.
+        A name nobody stored is not a source to fetch, and one removed before the
+        lock is taken is not one either. A refresh already running serves the
+        same lock, so this call returns as if it ran.
         """
-        source = self._named(name)
-        if source is None:
+        if self._named(name) is None:
             return False
-        self._run_one_at_a_time(partial(self._take_in_and_build_one, source))
+        self._run_one_at_a_time(partial(self._take_in_and_build_named, name))
         return True
 
     def shown_source(self, name: str, *, viewer: str) -> SourcePage | None:
@@ -398,19 +398,16 @@ class Decks:
     ) -> SourceRemoval | SourceRemovalRefusal | SourceRemovalStale | None:
         """Delete that source, its decks, its runs, and everything they built.
 
-        Waits for a refresh already under way rather than racing it, so
-        nothing of this source's decks is still building when their
-        directories go (R1). The counts a person confirmed are compared
-        against the same count read again here, inside the lock: a refresh
-        that changed them since the confirm was shown is not deleted under a
-        number nobody actually confirmed, and a fresh count is handed back so
-        the confirm can be shown again. Disk goes first: the mirror and every
-        built directory are taken away before a row is touched, and if either
-        survives the attempt nothing is deleted — the source stays exactly as
-        it was, so its URL stays taken rather than a leftover on disk becoming
-        an address a later add silently reopens with a new secret (R3). Only
-        once the disk is confirmed clean does deleting the rows free the URL
-        to be added again (R2).
+        Waits for a refresh already under way, so nothing of this source's decks
+        is still building when their directories go (R1). The counts a person
+        confirmed are compared against a fresh count read inside the lock: a
+        refresh that changed them since is not deleted under a number nobody
+        confirmed, and the fresh count is handed back for a new confirm. Disk
+        goes first: the mirror and every run a deck delivers from are taken
+        away before a row is touched, and if either survives, or a build lies
+        where no run can be placed, nothing is deleted and the source stays
+        taken rather than a leftover becoming an address a later add reopens
+        with a new secret (R3); only a clean disk frees the URL (R2).
         """
         source = self._named(name)
         if source is None:
@@ -424,11 +421,8 @@ class Decks:
             ):
                 return SourceRemovalStale(current=preview)
             mirror_gone = self.folders.forget(source)
-            build_directories = (
-                deck.build.directory for deck in carried if deck.build is not None
-            )
-            builds_gone = list(map(self.builder.remove, build_directories))
-            if not mirror_gone or not all(builds_gone):
+            builds_gone = builds_removed(self.builder, carried)
+            if not mirror_gone or not builds_gone:
                 return SourceRemovalRefusal.DISK_LEFTOVER
             self.store.remove_for_source(source.id)
             self.source_runs.remove_for_source(source.id)
@@ -784,6 +778,7 @@ class Decks:
             return
         try:
             work()
+            sweep(self.builder, self.sources, self.store)
         finally:
             self.one_at_a_time.release()
 
@@ -803,6 +798,11 @@ class Decks:
         """
         self.key_drafts.sweep(older_than=self.clock.now() - DRAFT_MAX_AGE)
         for source in self.sources.all():
+            self._take_in_and_build_one(source)
+
+    def _take_in_and_build_named(self, name: str) -> None:
+        """Take that source in, read again now that nobody can remove it."""
+        if (source := self._named(name)) is not None:
             self._take_in_and_build_one(source)
 
     def _take_in_and_build_one(self, source: Source) -> None:
