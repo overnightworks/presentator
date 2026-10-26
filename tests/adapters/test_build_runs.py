@@ -1,10 +1,16 @@
 """The runs of the build on disk, against a real temporary root."""
 
+import logging
 from pathlib import Path
 
 import pytest
 
-from presentator.adapters.build_runs import listed_runs, removed_run, run_name_of
+from presentator.adapters.build_runs import (
+    listed_runs,
+    removed_run,
+    run_name_of,
+    taken_away,
+)
 from presentator.ports.decks import BuildRun
 from tests.adapters.person_instance_support import (
     ANOTHER,
@@ -108,6 +114,22 @@ def test_removing_a_run_takes_its_whole_directory_even_where_a_deck_closed_it(
     assert removed_run(root, "stuck")
 
     assert not (root / "stuck").exists()
+
+
+def test_a_run_that_cannot_be_looked_at_is_not_reported_gone(
+    root: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """#505 invariant: a removal that could not be confirmed is not believed."""
+    a_run(root, "unseen")
+    root.chmod(0o600)
+    try:
+        with caplog.at_level(logging.WARNING):
+            assert not taken_away(root / "unseen")
+    finally:
+        root.chmod(0o700)
+
+    assert "unseen" in caplog.text
 
 
 def test_removing_a_run_that_is_already_gone_succeeds(root: Path) -> None:

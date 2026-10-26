@@ -66,12 +66,27 @@ def listed_runs(root: Path) -> frozenset[str] | None:
 def removed_run(root: Path, name: str) -> bool:
     """Take that run off disk if it is one, and say whether it is gone."""
     directory = root / name
-    if not directory.exists(follow_symlinks=False):
+    if not _still_stands(directory):
         return True
     if not _is_a_run(directory):
         _log.warning(_REFUSED, name)
         return False
     return taken_away(directory)
+
+
+def _still_stands(directory: Path) -> bool:
+    """Whether the directory is still on disk; only a confirmed absence says no.
+
+    A directory that cannot be looked at (a closed parent, an I/O error) is not
+    known to be gone, so it counts as standing rather than as removed.
+    """
+    try:
+        directory.lstat()
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except OSError:
+        return True
+    return True
 
 
 def _is_a_run(directory: Path) -> bool:
@@ -97,7 +112,7 @@ def taken_away(directory: Path) -> bool:
     """
     _opened_again(directory)
     shutil.rmtree(directory, ignore_errors=True)
-    if os.path.lexists(directory):
+    if _still_stands(directory):
         _log.warning(_RUN_STAYED, directory.name)
         return False
     return True
