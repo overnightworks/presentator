@@ -84,7 +84,7 @@ _TOOLCHAIN_PROGRAM = "pnpm"
 _WHAT_A_TALK_SAYS = "a talk"
 
 
-_A_TOOLCHAIN_THAT_BUILDS = """#!/bin/sh
+_FINDS_ITS_OUTPUT = """#!/bin/sh
 set -eu
 out=""
 while [ $# -gt 0 ]; do
@@ -93,11 +93,17 @@ while [ $# -gt 0 ]; do
         *) shift;;
     esac
 done
-case "$out" in
+"""
+
+
+_A_TOOLCHAIN_THAT_BUILDS = (
+    _FINDS_ITS_OUTPUT
+    + """case "$out" in
     *.pdf) printf '%%PDF-1.7' > "$out";;
     *) mkdir -p "$out"; printf 'a talk' > "$out/index.html";;
 esac
 """
+)
 # Builds as above, then its export step turns one name of what was written
 # into a link, the way a deck's own `vite.config.ts` could.
 _A_TOOLCHAIN_THAT_PLANTS_A_LINK = (
@@ -160,16 +166,9 @@ sleep 60
 """
 # A talk of the size a test asks for, and a step that goes on running after it
 # wrote it: a build is stopped while it writes, not once it is done.
-_A_TOOLCHAIN_THAT_WRITES = """#!/bin/sh
-set -eu
-out=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --out|--output) out="$2"; shift 2;;
-        *) shift;;
-    esac
-done
-a_megabyte=1048576
+_A_TOOLCHAIN_THAT_WRITES = (
+    _FINDS_ITS_OUTPUT
+    + """a_megabyte=1048576
 case "$out" in
     *.pdf)
         dd if=/dev/zero of="$out" bs=$a_megabyte count={pdf} 2>/dev/null
@@ -181,20 +180,14 @@ case "$out" in
         ;;
 esac
 """
+)
 _AND_THEN_IT_KEEPS_GOING = "sleep 60"
 _AND_THEN_IT_IS_DONE = ":"
 # A build that leaves a link where a file would be, pointing at something of
 # this machine's that is neither its to read nor its to have counted.
-_A_TOOLCHAIN_THAT_LEAVES_A_LINK_OUT = """#!/bin/sh
-set -eu
-out=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --out|--output) out="$2"; shift 2;;
-        *) shift;;
-    esac
-done
-case "$out" in
+_A_TOOLCHAIN_THAT_LEAVES_A_LINK_OUT = (
+    _FINDS_ITS_OUTPUT
+    + """case "$out" in
     *.pdf) printf '%%PDF-1.7' > "$out";;
     *)
         mkdir -p "$out"
@@ -203,20 +196,15 @@ case "$out" in
         ;;
 esac
 """
-_A_TOOLCHAIN_THAT_LEAVES_A_LINK_OUT_AND_FAILS = """#!/bin/sh
-set -eu
-out=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --out|--output) out="$2"; shift 2;;
-        *) shift;;
-    esac
-done
-mkdir -p "$out"
+)
+_A_TOOLCHAIN_THAT_LEAVES_A_LINK_OUT_AND_FAILS = (
+    _FINDS_ITS_OUTPUT
+    + """mkdir -p "$out"
 ln -s "{outside}" "$out/a-way-out"
 echo "the deck does not build" >&2
 exit 1
 """
+)
 # A deck's own code writes in the directory of its run, and may close a
 # directory behind it that the run's leftovers then have to be opened out of.
 # A development run gives a deck this server's own rights, so its build can
@@ -234,60 +222,38 @@ chmod 500 "$(dirname "$(dirname "$(dirname "$out")")")"
 echo "the deck does not build" >&2
 exit 1
 """
-_A_TOOLCHAIN_THAT_BUILDS_MORE_FILES_THAN_ALLOWED = """#!/bin/sh
-set -eu
-out=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --out|--output) out="$2"; shift 2;;
-        *) shift;;
-    esac
-done
-case "$out" in
+# One entry over the cap once the folder holding them is counted, two of them
+# directories: whatever order they are read in, the count stops with a
+# directory still waiting to be opened.
+_A_TOOLCHAIN_THAT_BUILDS_MORE_FILES_THAN_ALLOWED = (
+    _FINDS_ITS_OUTPUT
+    + """case "$out" in
     *.pdf) printf '%%PDF-1.7' > "$out";;
     *)
-        mkdir -p "$out/many"
-        seq 1 {files} | (cd "$out/many" && xargs touch)
+        mkdir -p "$out/first" "$out/second"
+        seq 1 {files} | (cd "$out" && xargs touch)
         ;;
 esac
 """
-_A_TOOLCHAIN_THAT_TAKES_ITS_OWN_TALK_AWAY = """#!/bin/sh
-set -eu
-out=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --out|--output) out="$2"; shift 2;;
-        *) shift;;
-    esac
-done
-case "$out" in
+)
+_A_TOOLCHAIN_THAT_TAKES_ITS_OWN_TALK_AWAY = (
+    _FINDS_ITS_OUTPUT
+    + """case "$out" in
     *.pdf) printf '%%PDF-1.7' > "$out"; rm -rf "$(dirname "$out")"; sleep 60;;
     *) mkdir -p "$out"; printf 'a talk' > "$out/index.html";;
 esac
 """
-_A_TOOLCHAIN_THAT_TAKES_THE_WHOLE_RUN_AWAY = """#!/bin/sh
-set -eu
-out=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --out|--output) out="$2"; shift 2;;
-        *) shift;;
-    esac
-done
-rm -rf "$(dirname "$(dirname "$out")")"
+)
+_A_TOOLCHAIN_THAT_TAKES_THE_WHOLE_RUN_AWAY = (
+    _FINDS_ITS_OUTPUT
+    + """rm -rf "$(dirname "$(dirname "$out")")"
 echo "the deck does not build" >&2
 exit 1
 """
-_A_TOOLCHAIN_THAT_CLOSES_WHAT_IT_BUILT = """#!/bin/sh
-set -eu
-out=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --out|--output) out="$2"; shift 2;;
-        *) shift;;
-    esac
-done
-case "$out" in
+)
+_A_TOOLCHAIN_THAT_CLOSES_WHAT_IT_BUILT = (
+    _FINDS_ITS_OUTPUT
+    + """case "$out" in
     *.pdf) printf '%%PDF-1.7' > "$out";;
     *)
         mkdir -p "$out/closed"
@@ -296,6 +262,7 @@ case "$out" in
         ;;
 esac
 """
+)
 _A_TOOLCHAIN_THAT_CLOSES_WHAT_IT_WROTE = """#!/bin/sh
 out=""
 while [ $# -gt 0 ]; do
@@ -1084,7 +1051,7 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
         machine,
         tmp_path,
         _A_TOOLCHAIN_THAT_BUILDS_MORE_FILES_THAN_ALLOWED.format(
-            files=MAXIMUM_ENTRIES + 1
+            files=MAXIMUM_ENTRIES - 2
         ),
     )
     builds = builds_ready_for(tmp_path, source)
