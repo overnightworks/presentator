@@ -163,6 +163,21 @@ def test_a_logout_form_without_a_token_from_this_origin_is_accepted(
     assert scene.count("sessions") == 0
 
 
+def test_a_stale_csrf_cookie_of_the_removed_token_layer_does_not_block_a_logout(
+    scene: Scene,
+) -> None:
+    scene.sign_in()
+    scene.lobby.client.cookies.set("__Host-csrf_token", "stale")
+
+    accepted = scene.lobby.client.post(
+        LOGOUT_PATH,
+        headers={**_A_FORM, "origin": scene.lobby.own_origin()},
+    )
+
+    assert accepted.status_code == HTTPStatus.OK
+    assert scene.count("sessions") == 0
+
+
 @pytest.mark.parametrize(
     ("headers", "sends_fetch_site"),
     [
