@@ -18,6 +18,8 @@ somebody else can push to.
   front.
 - A Keycloak client set up as in
   [configure Keycloak](configure-keycloak.md), and its secret in a file.
+- The master key, a fresh random value of at least 32 characters, in a file
+  only you can read.
 - The build toolchain on this machine
   ([install it](install-the-host-build-toolchain.md)).
 - A gitignored `.env` at the repository root may carry the values instead of
