@@ -14,7 +14,6 @@ import subprocess
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from errno import ELOOP
 from pathlib import Path
@@ -24,8 +23,6 @@ import pytest
 from presentator.adapters import builds as builds_module
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
 from presentator.adapters.builds import (
-    BuildPlace,
-    BuildStep,
     DeckToolchain,
     HostToolchain,
     PackageJsonThemes,
@@ -236,7 +233,7 @@ chmod 500 "$(dirname "$(dirname "$(dirname "$out")")")"
 echo "the deck does not build" >&2
 exit 1
 """
-_A_TOOLCHAIN_THAT_BUILDS_MORE_FILES_THAN_ALLOWED = """#!/bin/sh
+_A_TOOLCHAIN_THAT_BUILDS_MORE_ENTRIES_THAN_ALLOWED = """#!/bin/sh
 set -eu
 out=""
 while [ $# -gt 0 ]; do
@@ -249,7 +246,7 @@ case "$out" in
     *.pdf) printf '%%PDF-1.7' > "$out";;
     *)
         mkdir -p "$out"
-        seq 1 {files} | (cd "$out" && xargs touch)
+        seq 1 {files} | (cd "$out" && xargs mkdir)
         ;;
 esac
 """
@@ -1085,7 +1082,7 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
     with_the_toolchain(
         machine,
         tmp_path,
-        _A_TOOLCHAIN_THAT_BUILDS_MORE_FILES_THAN_ALLOWED.format(
+        _A_TOOLCHAIN_THAT_BUILDS_MORE_ENTRIES_THAN_ALLOWED.format(
             files=MAXIMUM_ENTRIES + 1
         ),
     )
@@ -1303,20 +1300,6 @@ def test_a_name_that_is_no_longer_a_directory_when_it_is_opened_is_refused(
     assert list(builds.builds.iterdir()) == []
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _ToolchainThatCannotSayWhatRuns:
-    """A toolchain whose runs are known to have ended only as far as it can say."""
-
-    inside: HostToolchain
-
-    def ran(self, step: BuildStep) -> BuildFailure | None:
-        return self.inside.ran(step)
-
-    def nothing_of_it_runs(self, place: BuildPlace) -> bool:
-        del place
-        return False
-
-
 def test_leavings_of_a_build_that_may_still_run_are_taken_away_as_they_lie(
     remote: GitRemote,
     source: Source,
@@ -1325,11 +1308,8 @@ def test_leavings_of_a_build_that_may_still_run_are_taken_away_as_they_lie(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_FAILS)
-    builds = builds_ready_for(
-        tmp_path,
-        source,
-        toolchain=_ToolchainThatCannotSayWhatRuns(inside=on_this_machine(tmp_path)),
-    )
+    machine.setattr(HostToolchain, "nothing_of_it_runs", lambda *_: False)
+    builds = builds_ready_for(tmp_path, source)
 
     built = builds.build(a_deck(remote), source=source)
 
