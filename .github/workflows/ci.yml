@@ -435,11 +435,19 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Generate the throwaway secret key
+      # Compose mounts both secrets from the runner's home as file secrets;
+      # the container's user reads them, so the files are world-readable and
+      # the directories above them stay private.
+      - name: Write the throwaway secret files
         run: |
           key=$(openssl rand -hex 32)
+          client_secret=$(openssl rand -hex 32)
           echo "::add-mask::$key"
-          echo "PRESENTATOR_SECRET_KEY=$key" >> "$GITHUB_ENV"
+          echo "::add-mask::$client_secret"
+          mkdir -m 0700 -p "$HOME/.secrets/presentator" "$HOME/.secrets/keycloak/clients"
+          chmod 0700 "$HOME/.secrets" "$HOME/.secrets/keycloak"
+          (umask 0133 && printf '%s\n' "$key" > "$HOME/.secrets/presentator/secret-key")
+          (umask 0133 && printf '%s\n' "$client_secret" > "$HOME/.secrets/keycloak/clients/presentator")
 
       - name: Install uv
         uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -461,26 +469,18 @@ jobs:
 
       # The web needs no issuer at start: the sign-in client reads only the
       # secret file, and the issuer is called at sign-in. The override adds
-      # three read-only bind mounts to the web and nothing else, because a
+      # two read-only bind mounts to the web and nothing else, because a
       # read-only root cannot take a copy.
       - name: Prepare the web's throwaway settings
         run: |
-          secret=$(openssl rand -hex 32)
-          echo "::add-mask::$secret"
-          (umask 0377 && printf '%s\n' "$secret" > "$RUNNER_TEMP/oidc-client-secret")
           cat > .env <<'EOF'
           PRESENTATOR_OIDC_ISSUER=https://auth.example.invalid/realms/probe
           PRESENTATOR_OIDC_CLIENT_ID=build-worker-probe
-          PRESENTATOR_OIDC_CLIENT_SECRET_FILE=/run/probe-oidc-secret
           EOF
           cat > "$RUNNER_TEMP/web-probe.yaml" <<EOF
           services:
             presentator:
               volumes:
-                - type: bind
-                  source: $RUNNER_TEMP/oidc-client-secret
-                  target: /run/probe-oidc-secret
-                  read_only: true
                 - type: bind
                   source: $GITHUB_WORKSPACE/examples/hello-deck
                   target: /decks/hello-deck

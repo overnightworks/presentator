@@ -4,8 +4,9 @@ Usage: probe_build_worker_web.py drive
 
 Runs where Docker is, after the worker's own drive has removed its project, with
 the same compose environment plus `WEB_PROBE_OVERRIDE`, the override file that
-adds the web's three read-only probe mounts (the client secret, hello-deck and
-`probe_build_worker`). It starts the real `presentator` service, which has no
+adds the web's two read-only probe mounts (hello-deck and
+`probe_build_worker`); the master key and the client secret are compose's own
+file secrets. It starts the real `presentator` service, which has no
 Docker socket and no neighbour but the worker, and sends the program
 `probe_build_worker/web_client.py` into it over stdin: that program builds
 through the very composition the web serves with. Every cell prints one line,
@@ -59,12 +60,14 @@ WEB = "presentator"
 CLIENT_PROGRAM = PROBE_SOURCES / "web_client.py"
 ROUTE = "http://127.0.0.1:8000/login"
 BUILDS_ROOT = "/data/builds"
-OVERRIDE_MOUNTS = frozenset(
-    {"/run/probe-oidc-secret", "/decks/hello-deck", "/decks/probe"}
+OVERRIDE_MOUNTS = frozenset({"/decks/hello-deck", "/decks/probe"})
+SECRET_MOUNTS = frozenset(
+    {"/run/secrets/presentator_secret_key", "/run/secrets/oidc_client_secret"}
 )
 COMPOSE_MOUNTS = frozenset(
     {"/data/database", "/data/mirrors", BUILDS_ROOT, "/run/presentator-speech"}
     | {SOCKET_DIRECTORY}
+    | SECRET_MOUNTS
 )
 TEMPORARY = "/tmp"  # noqa: S108
 ROUTE_POLL_SECONDS = 0.5
@@ -270,7 +273,7 @@ def prove_inspected_shape() -> None:
     ):
         refuse(f"the web is not hardened: {host}")
     if frozenset(mounts) != COMPOSE_MOUNTS | OVERRIDE_MOUNTS or any(
-        mounts[destination]["RW"] for destination in OVERRIDE_MOUNTS
+        mounts[destination]["RW"] for destination in OVERRIDE_MOUNTS | SECRET_MOUNTS
     ):
         refuse(f"the web's mounts are {sorted(mounts)}")
 
