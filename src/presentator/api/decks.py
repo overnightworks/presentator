@@ -217,10 +217,10 @@ class _BuiltTalk:
             return
         viewer = gated_person(Request(scope)).id
         directory = self.decks.built_talk(scope["path_params"]["slug"], viewer=viewer)
-        # A row can still name a directory that was since removed from disk
-        # (the build adapter does not yet clean those up); Starlette's own
-        # `StaticFiles` answers a missing root with a raised `RuntimeError`,
-        # not a 404, so that state is caught here rather than left to it.
+        # A request can read a row's directory just before the sweep removes it;
+        # Starlette's own `StaticFiles` answers a missing root with a raised
+        # `RuntimeError`, not a 404, so that state is caught here rather than
+        # left to it.
         if directory is None or not directory.is_dir():
             await Response(status_code=HTTPStatus.NOT_FOUND)(scope, receive, send)
             return

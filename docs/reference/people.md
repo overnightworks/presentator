@@ -63,6 +63,6 @@ the caller nor the person, and the server writes no access log.
 
 ## Known gap
 
-Builds that a newer build superseded stay on disk until the deletion of
-superseded builds exists (#243), so an erasure does not yet reach them. The
-live instance keeps the setting empty until then.
+Superseded builds no longer stay on disk ([builds](builds.md)), so an erasure
+reaches every build. The live instance keeps the setting empty until the
+operator releases it.

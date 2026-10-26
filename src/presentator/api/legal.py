@@ -273,10 +273,11 @@ DATENSCHUTZ: Final = LegalDocument(
                 ),
                 _point(
                     "Decks und Builds:",
-                    "Die Decks eines entfernten Ordners werden nur markiert; "
-                    "ein neuer Build lässt den alten bestehen. Das Entfernen "
-                    "einer Quelle löscht ihren Spiegel, ihre Decks und deren "
-                    "aktive Builds.",
+                    "Die Decks eines entfernten Ordners werden nur markiert. "
+                    "Ein neuer Build ersetzt den alten; der alte wird im "
+                    "selben Abgleich gelöscht, ebenso Reste fehlgeschlagener "
+                    "Builds. Das Entfernen einer Quelle löscht ihren Spiegel, "
+                    "ihre Decks und deren Builds.",
                 ),
                 _point(
                     "CoPresenter-Audio:",

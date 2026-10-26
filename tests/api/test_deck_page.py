@@ -423,9 +423,9 @@ def test_a_view_of_a_deck_nothing_has_been_built_from_answers_nothing(
 def talk_host_with_a_removed_build(tmp_path: Path) -> TestClient:
     """A deck whose row still names a build directory that is gone from disk.
 
-    Switching a deck to a newer build does not yet delete the directory an
-    older one pointed at, so a row can outlive its directory; the talk it
-    would deliver must still answer not-found, never a traceback.
+    A request can read the pointer just before a sweep removes the directory it
+    names, so a row can outlive its directory; the talk it would deliver must
+    still answer not-found, never a traceback.
     """
     talk = tmp_path / "talk"
     talk.mkdir()
