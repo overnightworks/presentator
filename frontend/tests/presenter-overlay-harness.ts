@@ -1,4 +1,3 @@
-/* v8 ignore file -- test arrangement, not product code */
 import { createHash } from 'node:crypto'
 import { createServer, type ServerResponse } from 'node:http'
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
@@ -66,8 +65,8 @@ type MediaObservation = {
   playbackPaused: boolean
 }
 
-// What a test reads or sets while the fake server runs; the server and the
-// tests share it across the two files that import this harness.
+// What a test reads or sets while the fake server runs; each test file that
+// imports this harness gets its own state and its own server.
 export const state = {
   origin: '',
   hearingOpened: 0,
