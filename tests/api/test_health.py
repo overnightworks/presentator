@@ -22,7 +22,7 @@ _HOSTS = [A_BROWSERS_ADDRESS, A_TALK_ADDRESS]
 def test_a_signed_out_reader_gets_the_fixed_ok_body_at_each_host(
     tmp_path: Path, address: str
 ) -> None:
-    """#513 acceptance 1, 2 and 3: signed out, each host answers 200 ok with the fixed JSON body."""
+    """#513 acceptance 1, 2 and 3: signed out, each host answers 200 ok, fixed body."""
     answer = two_hosts(tmp_path).browser(address).get("/health")
 
     assert answer.status_code == HTTPStatus.OK
