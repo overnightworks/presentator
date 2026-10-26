@@ -1,8 +1,0 @@
-claim_id = "604680928f1c4182bf064f4c32f4c13d"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "1b585707983e946ac434aabb719c90c600ded9d6"
-branch = "claude/issue-478-co-presenter-f2-the-overlay-says-not-ena"
-scope = [".github/workflows/ci.yml", "docs/reference/co-presenter-and-voice.md", "examples/copresenter-deck/components/CoPresenter.vue", "frontend/tests/copresenter-refusals.browser.test.ts", "frontend/tests/presenter-controls.browser.test.ts", "frontend/tests/presenter-overlay-harness.ts", "frontend/vitest.config.ts"]
-opened_commit = "c2cde3b1a80782142eda11f58054ddecce41b1bd"
-whole_reason = "One production file (the overlay); the other paths are its browser cells split under the 800-line ratchet, their shared harness, the CI lint line that names them, and the reference paragraph, which change with it."
