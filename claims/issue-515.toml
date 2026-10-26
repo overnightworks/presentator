@@ -1,0 +1,8 @@
+claim_id = "1c9cf4a1ef674735933bd2f7617c0a37"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "af6a4933963ef24aab7cc469394b102452a37c10"
+branch = "claude/issue-515-cpu-hearing"
+scope = ["speech/README.md", "speech/scripts/contract_client.py", "speech/scripts/prove.py", "speech/tests/test_contract_client.py"]
+opened_commit = "ea773706415a9ffbad5ca9c4d9499ff486273072"
+whole_reason = "The proof script, its client, the client's test and the README table it fills are one measurement; a script change without its recorded numbers proves nothing, and numbers without the script cannot be reproduced."
