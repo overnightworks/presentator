@@ -14,7 +14,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcovonly'],
       reportsDirectory: 'reports/frontend-coverage',
-      exclude: [...coverageConfigDefaults.exclude, '**/package.json', 'frontend/tests/**'],
+      exclude: [...coverageConfigDefaults.exclude, '**/package.json'],
       thresholds: {
         lines: 100,
         statements: 100,
