@@ -582,9 +582,9 @@ def main() -> None:
             "SPEECH_SPEAKING_MODEL",
             CHATTERBOX_SPEAKING_MODEL,
         )
-        env = _speech_environment(private_directory, speaking_model)
         project = Path(__file__).resolve().parents[1]
         try:
+            env = _speech_environment(private_directory, speaking_model)
             with _speech_server(project, env, socket_path) as running:
                 print("health_ready", json.dumps(running.health, sort_keys=True))
                 print("load_to_ready_s", f"{running.ready_seconds:.1f}")
