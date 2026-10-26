@@ -1,0 +1,8 @@
+claim_id = "21f553ea11e94409a0ac7d88cf2b2517"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "a673d9b44239734744618e463e2f8f5149752506"
+branch = "claude/issue-501-a3c-4-speech-serves-only-its-private-soc"
+scope = ["docs/reference/co-presenter-and-voice.md", "docs/runbooks/run-the-speech-service-on-the-host.md", "quality/baseline.toml", "speech/README.md", "speech/scripts/contract_client.py", "speech/scripts/prove.py", "speech/src/presentator_speech/__main__.py", "speech/src/presentator_speech/config.py", "speech/src/presentator_speech/service.py", "speech/tests"]
+opened_commit = "46569d59944630b5eaab334d08aa400662c1d787"
+whole_reason = "The listener, its two settings, create_app and the tests of the TCP twin leave together or the speech job goes red, and the two proof scripts and the documents that name port 8090 become false in the same change."
