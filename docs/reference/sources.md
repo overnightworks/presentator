@@ -38,7 +38,7 @@ admin adds one under Settings · Sources.
   anything is stored, and *Create* is refused unless that exact check
   succeeded.
 - The secret is stored encrypted in the source's row, the only place it stands,
-  opened with a key derived from `PRESENTATOR_SECRET_KEY` and read at every
+  opened with a key derived from the master key (`PRESENTATOR_SECRET_KEY_FILE`) and read at every
   pull ([ADR 0013](../decisions/0013-secrets-at-rest-and-credential-delivery.md)).
   Ciphertext this instance's key cannot open is refused rather than handed to
   `git`: that source's fetch fails and its decks stay listed. A source row

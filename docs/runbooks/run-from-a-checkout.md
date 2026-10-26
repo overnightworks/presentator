@@ -26,7 +26,7 @@ somebody else can push to.
 ## Steps
 
 ```sh
-export PRESENTATOR_SECRET_KEY="$(openssl rand -base64 48)"
+export PRESENTATOR_SECRET_KEY_FILE=/run/user/"$(id -u)"/presentator/secret-key
 export PRESENTATOR_PUBLIC_ORIGIN=https://presentator.example.test
 export PRESENTATOR_TALK_ORIGIN=https://presentator-talk.example.test
 export PRESENTATOR_OIDC_ISSUER=https://auth.example.test/realms/example

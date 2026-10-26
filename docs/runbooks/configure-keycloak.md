@@ -17,7 +17,8 @@ only its two configured hostnames.
 
 1. Create a client for the instance. Its id is
    `PRESENTATOR_OIDC_CLIENT_ID`; write its secret to a file whose absolute path
-   is `PRESENTATOR_OIDC_CLIENT_SECRET_FILE`. The file is read once at start,
+   is `PRESENTATOR_OIDC_CLIENT_SECRET_FILE`; in a container that file is
+   `~/.secrets/keycloak/clients/presentator`, which compose mounts. The file is read once at start,
    minus one trailing newline.
 2. Set `PRESENTATOR_OIDC_ISSUER` exactly to the `issuer` of the realm's
    discovery document, without a trailing slash. The token's `iss` is compared

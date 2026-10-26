@@ -2,7 +2,7 @@
 
 Reader: an admin of the instance. Use it when a Git access token or deploy key
 is leaked, expired, or unreadable (for example after a restore without
-`PRESENTATOR_SECRET_KEY`). The webhook secret has its own
+the master key file). The webhook secret has its own
 [runbook](renew-a-webhook-secret.md).
 
 ## Before you start

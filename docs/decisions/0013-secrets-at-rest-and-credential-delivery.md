@@ -44,7 +44,8 @@ decisions to save nothing.
 
 ### One secret, and derived key material per use
 
-`PRESENTATOR_SECRET_KEY` stays the one secret an operator sets. Every use
+The master key, a file named by `PRESENTATOR_SECRET_KEY_FILE`, stays the one
+secret an operator sets for encryption. Every use
 derives its own key material from it rather than using it raw, so no two uses
 share bytes:
 
@@ -109,7 +110,7 @@ field, no template context, no log record and no exception message.
 ## Consequences
 
 - The instance holds secrets at rest, and a stolen database file alone yields
-  nothing: whoever reads it also needs `PRESENTATOR_SECRET_KEY`.
+  nothing: whoever reads it also needs the master key.
 - Losing or changing the instance key makes every stored secret unreadable.
   That is a refusal and a failed fetch, never rubbish handed to `git`, and it
   is repaired by entering the secret again once a surface offers that.
@@ -164,7 +165,7 @@ Residuals:
 - **`ssh-keygen` as a subprocess.** It writes the private key to disk before
   anything can encrypt it, adds a required binary to the image, and adds a
   process boundary for one library call.
-- **Encrypting with `PRESENTATOR_SECRET_KEY` directly.** One secret used raw in
+- **Encrypting with the master key directly.** One secret used raw in
   two places couples the cookie signature to the secrets at rest; deriving
   costs one function call and keeps them apart.
 - **A second key setting for secrets at rest.** Two required values to set,

@@ -36,7 +36,7 @@ fi
 docker compose start
 ```
 
-Keep `PRESENTATOR_SECRET_KEY` with the archives. The sources' stored secrets
+Keep the master key file (`PRESENTATOR_SECRET_KEY_FILE`) with the archives. The sources' stored secrets
 are encrypted with a derivation of it, so a restored instance without that key
 lists its decks and can pull none of them. Environment variables do not
 restore a source's secret; [renew it](renew-a-source-secret.md) if it is
