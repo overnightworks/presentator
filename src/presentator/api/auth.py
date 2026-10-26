@@ -62,6 +62,7 @@ from webauth.ports import (
 )
 
 from presentator.api.decks import add_deck_pages
+from presentator.api.health import HEALTH_IS_PUBLIC, add_health_route
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
 from presentator.api.legal import DATENSCHUTZ, Emphasis
 from presentator.api.pages import (
@@ -149,6 +150,7 @@ _PUBLIC_RULES: Final = (
         )
     ),
     PublicRule(PathRules(prefixes=(_INSIDE_STATIC,))),
+    HEALTH_IS_PUBLIC,
     PublicRule(_SERVER_CALLS, methods=frozenset({HTTPMethod.POST})),
 )
 _OPTIONAL_PATHS: Final = PathRules(exact=frozenset({_DATENSCHUTZ}))
@@ -588,6 +590,7 @@ def create_lobby(
         BACKCHANNEL_LOGOUT_PATH, surfaces.backchannel_logout, methods=["POST"]
     )
     lobby.add_api_route(_DATENSCHUTZ, surfaces.datenschutz_page, methods=["GET"])
+    add_health_route(lobby)
     lobby.include_router(preference_routes(pages=pages, voice=private.voice))
     lobby.include_router(source_routes(pages=pages, decks=decks))
     add_deck_pages(lobby, decks=decks, pages=pages, talk_origin=auth.talk_origin)

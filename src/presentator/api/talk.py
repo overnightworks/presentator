@@ -42,6 +42,7 @@ from presentator.api.auth import (
 )
 from presentator.api.copresenter import CoPresenterSurface, add_copresenter_routes
 from presentator.api.decks import add_talk_mount
+from presentator.api.health import HEALTH_IS_PUBLIC, add_health_route
 from presentator.application.decks import Decks
 
 TALK_PERMISSIONS_POLICY: Final = "camera=(), microphone=(self), geolocation=()"
@@ -107,9 +108,10 @@ def create_talk(
         session_gate=SessionGate(
             session_transaction=lambda: nullcontext(sessions),
             login_redirect=LOGIN_REDIRECT,
-            public=(PublicRule(_SIGN_IN_ADDRESSES),),
+            public=(PublicRule(_SIGN_IN_ADDRESSES), HEALTH_IS_PUBLIC),
         ),
     )
+    add_health_route(talk)
     talk.add_api_route(_ROOT, to_the_lobby, methods=["GET"])
     talk.add_api_route(START_SIGN_IN_PATH, sign_in.start, methods=["GET"])
     talk.add_api_route(SIGN_IN_CALLBACK_PATH, finish_sign_in, methods=["GET"])
