@@ -97,7 +97,7 @@ def taken_away(directory: Path) -> bool:
     """
     _opened_again(directory)
     shutil.rmtree(directory, ignore_errors=True)
-    if directory.exists(follow_symlinks=False):
+    if os.path.lexists(directory):
         _log.warning(_RUN_STAYED, directory.name)
         return False
     return True
