@@ -7,6 +7,18 @@ item = "#477"
 date = 2026-10-24
 reason = "the host co-presenter package is deleted (D1 of #355, operator ruling 21.10.2026); its job checks code that no longer exists"
 
+[[root.allow]]
+entry = "examples/"
+reason = "the example decks the documentation and the probes build"
+
+[[root.allow]]
+entry = "frontend/"
+reason = "the Slidev addon and its pnpm toolchain, built apart from the Python package"
+
+[[root.allow]]
+entry = "speech/"
+reason = "the host speech service and its provider workers, each with its own lock"
+
 # speech/providers/chatterbox/uv.lock: advisories no relock reaches
 [[advisories.allow]]
 id = "PYSEC-2026-2446"
