@@ -48,11 +48,7 @@ from tests.api.lobby import (
     a_lobby,
     a_signed_in_lobby,
 )
-from tests.application.fakes import (
-    LOCAL_MOUNT_EXAMPLE,
-    FakeBuildRunner,
-    FakeDeckStore,
-)
+from tests.application.fakes import LOCAL_MOUNT_EXAMPLE, FakeBuildRunner, FakeDeckStore
 
 _ADDRESS = "git@heimserver:decks.git"
 _OTHER_ADDRESS = "https://gitlab.example.invalid/decks.git"
