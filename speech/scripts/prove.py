@@ -446,6 +446,23 @@ def _prove_contract(project: Path, socket_path: Path, env: dict[str, str]) -> No
             raise SystemExit(message)
 
 
+def _speech_environment(private_directory: Path, speaking_model: str) -> dict[str, str]:
+    env = os.environ.copy()
+    env["SPEECH_PRIVATE_DIRECTORY"] = str(private_directory)
+    env["PRESENTATOR_RUNTIME_UID"] = str(os.geteuid())
+    env["SPEECH_DEVICE"] = "cuda"
+    env["SPEECH_SPEAKING_MODEL"] = speaking_model
+    env["SPEECH_HEARING_MODEL"] = "Systran/faster-whisper-large-v3"
+    env["SPEECH_DEBUG"] = "false"
+    env.setdefault("HF_HUB_OFFLINE", "1")
+    env.setdefault("TRANSFORMERS_OFFLINE", "1")
+    cuda_dirs = ":".join(str(path) for path in cuda_library_dirs())
+    if cuda_dirs:
+        existing = env.get("LD_LIBRARY_PATH", "")
+        env["LD_LIBRARY_PATH"] = f"{cuda_dirs}:{existing}" if existing else cuda_dirs
+    return env
+
+
 def main() -> None:
     """Run the stage proof under the probe-stack lock."""
     if hasattr(sys.stdout, "reconfigure"):
@@ -458,25 +475,11 @@ def main() -> None:
         print("gpu_before", _nvidia_memory())
         private_directory = Path(tempfile.mkdtemp(prefix="speech-"))
         socket_path = private_directory / "speech.sock"
-        env = os.environ.copy()
         speaking_model = os.environ.get(
             "SPEECH_SPEAKING_MODEL",
             CHATTERBOX_SPEAKING_MODEL,
         )
-        env["SPEECH_PRIVATE_DIRECTORY"] = str(private_directory)
-        env["PRESENTATOR_RUNTIME_UID"] = str(os.geteuid())
-        env["SPEECH_DEVICE"] = "cuda"
-        env["SPEECH_SPEAKING_MODEL"] = speaking_model
-        env["SPEECH_HEARING_MODEL"] = "Systran/faster-whisper-large-v3"
-        env["SPEECH_DEBUG"] = "false"
-        env.setdefault("HF_HUB_OFFLINE", "1")
-        env.setdefault("TRANSFORMERS_OFFLINE", "1")
-        cuda_dirs = ":".join(str(path) for path in cuda_library_dirs())
-        if cuda_dirs:
-            existing = env.get("LD_LIBRARY_PATH", "")
-            env["LD_LIBRARY_PATH"] = (
-                f"{cuda_dirs}:{existing}" if existing else cuda_dirs
-            )
+        env = _speech_environment(private_directory, speaking_model)
         project = Path(__file__).resolve().parents[1]
         server = subprocess.Popen(
             [sys.executable, "-m", "presentator_speech"],
