@@ -158,7 +158,10 @@ uv run presentator-speech
 ```
 
 Stage proof (takes `/tmp/probe-stack.lock`, checks load, one heavy step at a
-time). It selects Chatterbox when the durable selection is absent:
+time). It selects Chatterbox when the durable selection is absent and points
+`SPEECH_PROVIDER_ROOT` at `speech/providers` unless the caller set it, so each
+provider needs its virtual environment first (`uv sync --locked` inside
+`speech/providers/<provider>`):
 
 ```sh
 uv run python scripts/prove.py

@@ -45,6 +45,7 @@ READY_TIMEOUT_SECONDS = 300.0
 PIPER_FIRST_BYTE_LIMIT_S = 0.5
 CHATTERBOX_FIRST_BYTE_LIMIT_S = 1.0
 PIPER_CACHE = Path.home() / ".cache" / "piper"
+PROVIDER_ROOT = Path(__file__).resolve().parents[1] / "providers"
 HF_CACHE = Path.home() / ".cache" / "huggingface" / "hub"
 CHATTERBOX_CACHE = HF_CACHE / "models--ResembleAI--chatterbox"
 WHISPER_CACHE = HF_CACHE / "models--Systran--faster-whisper-large-v3"
@@ -450,6 +451,7 @@ def _speech_environment(private_directory: Path, speaking_model: str) -> dict[st
     env = os.environ.copy()
     env["SPEECH_PRIVATE_DIRECTORY"] = str(private_directory)
     env["PRESENTATOR_RUNTIME_UID"] = str(os.geteuid())
+    env.setdefault("SPEECH_PROVIDER_ROOT", str(PROVIDER_ROOT))
     env["SPEECH_DEVICE"] = "cuda"
     env["SPEECH_SPEAKING_MODEL"] = speaking_model
     env["SPEECH_HEARING_MODEL"] = "Systran/faster-whisper-large-v3"

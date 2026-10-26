@@ -68,3 +68,23 @@ def test_both_proof_scripts_reach_a_running_speech_over_its_socket(tmp_path) -> 
     assert contract_health == prove_health
     assert pcm_from_wav(contract_wav)[0] == SPEAK_SAMPLE_RATE
     assert pcm_from_wav(measured[0])[0] == SPEAK_SAMPLE_RATE
+
+
+def test_prove_points_the_service_at_the_repository_provider_environments(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.delenv("SPEECH_PROVIDER_ROOT", raising=False)
+
+    environment = PROVE._speech_environment(tmp_path, "model")  # noqa: SLF001
+
+    provider_root = Path(environment["SPEECH_PROVIDER_ROOT"])
+    assert provider_root.is_absolute()
+    assert (provider_root / "chatterbox" / "pyproject.toml").is_file()
+
+
+def test_prove_keeps_a_provider_root_the_caller_set(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SPEECH_PROVIDER_ROOT", "/elsewhere")
+
+    environment = PROVE._speech_environment(tmp_path, "model")  # noqa: SLF001
+
+    assert environment["SPEECH_PROVIDER_ROOT"] == "/elsewhere"
