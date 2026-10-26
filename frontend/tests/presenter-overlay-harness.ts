@@ -1,3 +1,4 @@
+/* v8 ignore file -- test arrangement, not product code */
 import { createHash } from 'node:crypto'
 import { createServer, type ServerResponse } from 'node:http'
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
