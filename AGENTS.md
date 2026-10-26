@@ -14,5 +14,5 @@ for it, so a new mandatory CI job is added there by its display name. Secret
 scanning and the SonarCloud scan run inside the gate, and
 `sonar-project.properties` may carry only the keys the gate allows.
 
-`scripts/check_root_layout.py` is the root allowlist check; a new root entry is
-added there.
+The gate's root-layout rule holds the root entries: a new root entry is declared
+in `quality/config.toml` with a reason, or lives in its owner's directory.

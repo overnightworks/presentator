@@ -31,8 +31,7 @@ CI on the pull request is the gate; the [workflow](.github/workflows/ci.yml)
 defines every check for the root, `frontend/`, `speech/` and the
 container image. Locally, run the checks the change touches: `pyproject.toml`
 configures the Python ones (`ruff`, `pyright`, `lint-imports`, `vulture`,
-`pytest`, plus `scripts/check_root_layout.py` and
-`scripts/check_catalog_purity.py`), `frontend/package.json` the frontend ones.
+`pytest`, plus `scripts/check_catalog_purity.py`), `frontend/package.json` the frontend ones.
 Which layer's test is the proof, and how to target a local run, is
 [docs/TESTING.md](docs/TESTING.md); what `main` requires is
 [docs/reference/ci-and-branch-protection.md](docs/reference/ci-and-branch-protection.md).

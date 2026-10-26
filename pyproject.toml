@@ -90,10 +90,9 @@ convention = "google"
 # A double honours the signature of the port it stands in for, even where its
 # canned answer has no use for an argument.
 "tests/**" = ["S101", "D102", "D103", "ARG002"]
-# Standalone gate, not a package; it must spawn the git executable PATH names.
-"scripts/check_root_layout.py" = ["INP001", "S404", "S603"]
-# Drives a temporary git repository and the check script as a process.
-"tests/test_root_layout.py" = ["S404", "S603"]
+# Standalone proof, not a package; it drives docker and git by name through
+# fixed argument vectors, never a shell.
+"scripts/prove_container_build.py" = ["INP001", "S404", "S603", "S607"]
 # Standalone probe, not a package; it drives docker and pdftotext by name
 # through fixed argument vectors, never a shell, and inside the container it is
 # the client of the worker's socket.
