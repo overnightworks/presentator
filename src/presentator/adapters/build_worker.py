@@ -330,11 +330,6 @@ class WorkerToolchain:
     reply_margin_seconds: float = REPLY_MARGIN_SECONDS
     remove_staging: Callable[[Path], None] = shutil.rmtree
 
-    def nothing_of_it_runs(self, place: BuildPlace) -> bool:
-        """Nothing does: the worker's steps run in its own container."""
-        del place
-        return True
-
     def is_answering(self) -> bool:
         """Whether the worker answers a HELLO within the connect window."""
         window_ends = time.monotonic() + self.connect_window_seconds

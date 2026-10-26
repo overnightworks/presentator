@@ -21,10 +21,6 @@ from presentator.adapters.build_wire import SOCKET_DIRECTORY, SOCKET_NAME
 # Every secret this instance is handed is at least this many characters, so no
 # guard of it rests on a value somebody could type.
 SECRET_LENGTH: Final = 32
-# The one word an instance builds without a bound on what a container writes
-# beside its talk for; anything blank is refused, because blank is not a word
-# anybody said.
-NO_BOUND_AT_ALL: Final = "none"
 
 _INVALID_PORT: Final = "has an invalid port"
 _REFUSED: Final = "this environment cannot start an instance"
@@ -44,36 +40,17 @@ LONGEST_BUILD_TIMEOUT_SECONDS: Final = threading.TIMEOUT_MAX / 2
 class WhereBuildsRun(StrEnum):
     """Where the toolchain that builds a deck runs (line 14a).
 
-    A container of the build's own is what an instance is; this machine itself
-    is a development run, and a deployment gets it only by saying so. The
-    worker is the sealed build worker service, reached over its socket.
+    The worker is the sealed build worker service, reached over its socket and
+    what an instance is; this machine itself is a development run, and a
+    deployment gets it only by saying so.
     """
 
-    CONTAINER = "container"
     HOST = "host"
     WORKER = "worker"
 
 
 class ConfigurationError(ValueError):
     """What the environment carries is not a configuration to run on."""
-
-
-def _a_size_or_none(given: str | None) -> str | None:
-    """Refuse a size that says nothing; `none` is how it is meant.
-
-    A value that came out blank is an interpolation nobody watched, not a
-    decision, and the decision it would stand for is to build without the one
-    bound on what a deck writes beside its talk.
-    """
-    if given is None or given == NO_BOUND_AT_ALL:
-        return None
-    if not given.strip():
-        message = (
-            "is a size Docker takes, or the word"
-            f" {NO_BOUND_AT_ALL} to build without that bound"
-        )
-        raise ValueError(message)
-    return given
 
 
 def _a_proxy_list(given: str) -> str:
@@ -183,23 +160,15 @@ class Settings(BaseSettings, env_prefix=ENVIRONMENT_PREFIX, env_file=".env"):
     # A build that hangs would hold every later build behind it, so each step
     # of the toolchain is bounded.
     build_timeout_seconds: float = DEFAULT_BUILD_TIMEOUT_SECONDS
-    # A deck is code, so every build runs in a container of its own: the image
-    # the toolchain stands in, and the volume the builds root is a directory
-    # of, are what a deployment names for it. Running the toolchain on this
-    # machine instead is a development run, and it takes saying so.
-    build_runner: WhereBuildsRun = WhereBuildsRun.CONTAINER
+    # A deck is code, so every build runs in the sealed build worker. Running
+    # the toolchain on this machine instead is a development run, and it takes
+    # saying so.
+    build_runner: WhereBuildsRun = WhereBuildsRun.WORKER
     # Where the build worker listens; the default is where it binds.
     build_worker_socket: Annotated[Path, AfterValidator(_an_absolute_path)] = (
         Path(SOCKET_DIRECTORY) / SOCKET_NAME
     )
-    build_image: str | None = None
-    build_volume: str | None = None
-    # What one build may take of this machine, in Docker's own words for a size
-    # and in whole megabytes for the talk it may leave behind. A disk of `none`
-    # is an instance that knowingly does without that bound, on a machine whose
-    # storage driver will not hold a container's own filesystem to one.
-    build_memory: str = "4g"
-    build_disk: Annotated[str | None, AfterValidator(_a_size_or_none)] = "8g"
+    # What one build may leave behind, in whole megabytes for its talk.
     build_output_megabytes: int = DEFAULT_BUILD_OUTPUT_MEGABYTES
     # Polling is what makes a push arrive at all, so it runs whether or not any
     # host ever calls the hook.
