@@ -210,10 +210,14 @@ def test_peak_resident_memory_is_read_from_the_process_status_in_mebibytes() -> 
 
 @pytest.mark.parametrize("arguments", [["--help"], ["--measur"], ["extra"]])
 def test_prove_exits_before_any_start_on_help_or_an_unknown_argument(arguments) -> None:
-    with pytest.raises(SystemExit):
+    """#515 Never: --help and an unknown argument never start a proof."""
+    with pytest.raises(SystemExit) as exit_info:
         PROVE.parse_arguments(arguments)
+
+    assert (exit_info.value.code == 0) == (arguments == ["--help"])
 
 
 def test_prove_reads_measure_as_a_flag() -> None:
+    """#515 Change: the CPU measurement is chosen by the --measure flag."""
     assert PROVE.parse_arguments(["--measure"]).measure is True
     assert PROVE.parse_arguments([]).measure is False

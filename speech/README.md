@@ -106,8 +106,9 @@ Hearing on the CPU with `scripts/prove.py --measure`, 26.10.2026: AMD Ryzen 5
 for speech and the client, Piper `de_DE-thorsten-medium`, the first sentence
 (14 words) five times on one socket, the same pacing loop and 0.9 s of client
 silence as in "Card". Each cell is median / worst of the completed
-repetitions. The 1-minute load was recorded at the start of each run, not
-quiet: other lanes shared the machine (the proof's own ceiling is 18).
+repetitions. The 1-minute load was recorded at the start of each run; other
+lanes shared the machine in all but the later turbo run (the proof's own
+ceiling is 18).
 `nvidia-smi --query-compute-apps=pid` at health ready listed two foreign pids
 and never the speech process, in every run.
 
@@ -124,7 +125,9 @@ and never the speech process, in every run.
 | Final text against the spoken sentence | same words in 5 of 5 | same words in 5 of 5 | same words in 2 of 2 | same words in 5 of 5 | same words in 1 of 1 |
 | Peak RSS of the speech process | 3280 MiB | 1885 MiB | 1885 MiB | 3275 MiB | 1845 MiB |
 
-The completed count and the worst value vary between runs on the CPU: the later turbo run completed 2 of 5 where the first completed 5 of 5, so a single 5-of-5 row is not read as stable.
+The completed count and the worst value vary between runs on the CPU: the
+later turbo run completed 2 of 5 where the first completed 5 of 5, so a single
+5-of-5 row is not read as stable.
 
 The Card's start of sending to final (GPU, one sample, 08.09.2026, same
 sentence, same Piper voice, same pacing loop and 0.9 s of client silence; the
