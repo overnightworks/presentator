@@ -33,6 +33,7 @@ def root(tmp_path: Path) -> Path:
 def test_the_talk_and_the_pdf_of_a_run_both_belong_to_it(
     root: Path, stored: str
 ) -> None:
+    """#505 matrix: a run owns its talk and its PDF."""
     assert run_name_of(root, root / "abc" / "out" / stored) == "abc"
 
 
@@ -60,16 +61,19 @@ def test_the_talk_and_the_pdf_of_a_run_both_belong_to_it(
     ],
 )
 def test_a_path_of_any_other_shape_belongs_to_no_run(root: Path, stored: str) -> None:
+    """#505 matrix: wrongly shaped path inside the root."""
     assert run_name_of(root, root / stored) is None
 
 
 def test_a_path_outside_the_root_belongs_to_no_run(root: Path, tmp_path: Path) -> None:
+    """#505 matrix: row outside the root."""
     assert run_name_of(root, tmp_path / "other" / "abc" / "out" / "talk") is None
 
 
 def test_only_real_runs_are_listed_and_everything_else_is_left_alone(
     root: Path, tmp_path: Path
 ) -> None:
+    """#505 matrix: foreign file and directory in the root, symlinked run."""
     a_run(root, "real")
     (root / "a-file").write_text("x", encoding="utf-8")
     (root / "no-output").mkdir()
@@ -88,12 +92,14 @@ def test_only_real_runs_are_listed_and_everything_else_is_left_alone(
 
 
 def test_a_root_that_cannot_be_listed_lists_nothing_at_all(tmp_path: Path) -> None:
+    """#505 matrix: root unlisted or missing."""
     assert listed_runs(tmp_path / "missing") is None
 
 
 def test_removing_a_run_takes_its_whole_directory_even_where_a_deck_closed_it(
     root: Path,
 ) -> None:
+    """#505 matrix: stuck (mode-closed) run."""
     out = a_run(root, "stuck")
     (out / "talk" / "closed").mkdir()
     (out / "talk" / "closed" / "file").write_text("x", encoding="utf-8")
@@ -105,10 +111,12 @@ def test_removing_a_run_takes_its_whole_directory_even_where_a_deck_closed_it(
 
 
 def test_removing_a_run_that_is_already_gone_succeeds(root: Path) -> None:
+    """#505 matrix: remove is idempotent."""
     assert removed_run(root, "never-there")
 
 
 def test_removing_leaves_the_other_runs_alone(root: Path) -> None:
+    """#505 matrix: remove touches one run only."""
     a_run(root, "one")
     a_run(root, "other")
 
@@ -120,6 +128,7 @@ def test_removing_leaves_the_other_runs_alone(root: Path) -> None:
 def test_removing_refuses_a_directory_that_is_not_shaped_like_a_run(
     root: Path,
 ) -> None:
+    """#505 matrix: remove refuses a foreign directory."""
     (root / "foreign").mkdir()
     (root / "foreign" / "keep").write_text("x", encoding="utf-8")
 
@@ -131,6 +140,7 @@ def test_removing_refuses_a_directory_that_is_not_shaped_like_a_run(
 def test_removing_a_link_to_a_run_leaves_the_directory_it_points_at(
     root: Path, tmp_path: Path
 ) -> None:
+    """#505 matrix: symlinked run and symlinked out."""
     elsewhere = tmp_path / "elsewhere"
     a_run(tmp_path, "elsewhere")
     (root / "linked").symlink_to(elsewhere)
@@ -142,6 +152,7 @@ def test_removing_a_link_to_a_run_leaves_the_directory_it_points_at(
 
 @pytest.mark.parametrize("name", ["", ".", "..", "a/b", "/abs"])
 def test_a_run_names_exactly_one_directory_under_the_root(name: str) -> None:
+    """#505 matrix: remove is anchored to the configured root."""
     with pytest.raises(ValueError, match="one name"):
         BuildRun(name)
 
@@ -149,6 +160,7 @@ def test_a_run_names_exactly_one_directory_under_the_root(name: str) -> None:
 def test_a_refresh_over_a_real_root_keeps_what_rows_deliver_and_takes_the_rest(
     tmp_path: Path,
 ) -> None:
+    """#505 matrix: one end-to-end refresh over a real root."""
     instance = an_instance_with_both_people(tmp_path)
     leftover = a_run(instance.builds, "crashed")
     (instance.builds / "foreign-file").write_text("x", encoding="utf-8")

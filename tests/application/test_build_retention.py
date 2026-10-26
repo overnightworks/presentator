@@ -105,6 +105,7 @@ def swept(
 
 
 def test_a_superseded_build_goes_in_the_pass_that_switched_over() -> None:
+    """#505 matrix: superseded after a good switch."""
     folders = FakeDeckFolders(carried={_SOURCE.id: (a_folder(_A_DECK),)})
     builder = FakeBuildRunner()
     store = FakeDeckStore()
@@ -124,6 +125,7 @@ def test_a_superseded_build_goes_in_the_pass_that_switched_over() -> None:
 
 
 def test_a_failed_build_leaves_the_standing_one_and_loses_its_leftover() -> None:
+    """#505 matrix: failed build, old stays and its leftover goes."""
     folders = FakeDeckFolders(carried={_SOURCE.id: (a_folder(_A_DECK),)})
     builder = FakeBuildRunner()
     decks = decks_over(mirror=folders, fakes=DecksFakes(builder=builder))
@@ -138,6 +140,7 @@ def test_a_failed_build_leaves_the_standing_one_and_loses_its_leftover() -> None
 
 
 def test_a_build_the_holds_refused_is_taken_away_and_the_standing_one_stays() -> None:
+    """#505 matrix: holds refused, old stays and the refused run goes."""
     folders = FakeDeckFolders(carried={_SOURCE.id: (a_folder(_A_DECK),)})
     builder = FakeBuildRunner()
     decks = decks_over(mirror=folders, fakes=DecksFakes(builder=builder))
@@ -151,6 +154,7 @@ def test_a_build_the_holds_refused_is_taken_away_and_the_standing_one_stays() ->
 
 
 def test_a_run_no_row_names_goes_and_the_one_a_row_names_stays() -> None:
+    """#505 matrix: crash leftover (run, no row)."""
     assert swept(
         a_row("kept", build=a_build_in("delivered")),
         on_disk=("delivered", "crashed"),
@@ -158,6 +162,7 @@ def test_a_run_no_row_names_goes_and_the_one_a_row_names_stays() -> None:
 
 
 def test_two_decks_of_different_sources_keep_their_own_runs() -> None:
+    """#505 matrix: two decks on different sources."""
     assert swept(
         a_row("one", build=a_build_in("first")),
         a_row("two", source=_ANOTHER_SOURCE, build=a_build_in("second")),
@@ -167,6 +172,7 @@ def test_two_decks_of_different_sources_keep_their_own_runs() -> None:
 
 
 def test_a_deck_marked_removed_keeps_its_run() -> None:
+    """#505 matrix: marked row keeps its run."""
     folders = FakeDeckFolders(carried={_SOURCE.id: (a_folder(_A_DECK),)})
     builder = FakeBuildRunner()
     store = FakeDeckStore()
@@ -181,6 +187,7 @@ def test_a_deck_marked_removed_keeps_its_run() -> None:
 
 
 def test_a_talk_and_its_pdf_in_different_runs_keep_both() -> None:
+    """#505 matrix: a PDF in a different run from its talk."""
     assert swept(
         a_row("split", build=a_build_in("talk-run", "pdf-run")),
         on_disk=("talk-run", "pdf-run", "leftover"),
@@ -188,10 +195,12 @@ def test_a_talk_and_its_pdf_in_different_runs_keep_both() -> None:
 
 
 def test_without_any_row_every_run_goes() -> None:
+    """#505 matrix: no row naming any run."""
     assert swept(on_disk=("one", "two")) == set()
 
 
 def test_a_run_that_would_not_go_is_tried_again_by_the_next_pass() -> None:
+    """#505 matrix: removal fails once then succeeds next pass."""
     builder, store, mirror, source_store = over_rows(on_disk=("stuck",))
     builder.stuck = frozenset({BuildRun("stuck")})
     decks = decks_over(
@@ -234,6 +243,7 @@ def test_a_run_that_would_not_go_is_tried_again_by_the_next_pass() -> None:
 def test_a_row_naming_a_path_no_run_owns_stops_the_pass_without_deleting(
     stored: Build, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """#505 matrix: row outside the root, wrongly shaped path inside it."""
     with caplog.at_level(logging.WARNING):
         left = swept(
             a_row("odd", build=stored),
@@ -248,6 +258,7 @@ def test_a_row_naming_a_path_no_run_owns_stops_the_pass_without_deleting(
 def test_a_listing_that_did_not_finish_deletes_nothing(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """#505 matrix: root unlisted or missing."""
     builder, store, mirror, source_store = over_rows(on_disk=("one",))
     builder.listing_fails = True
     decks = decks_over(
@@ -274,6 +285,7 @@ class _FoldersThatBreakOnce(FakeDeckFolders):
 
 
 def test_work_that_raises_skips_the_sweep_and_the_next_pass_catches_up() -> None:
+    """#505 matrix: work that raises before the sweep."""
     mirror = _FoldersThatBreakOnce(carried={_SOURCE.id: ()})
     builder = FakeBuildRunner()
     laid_down(builder, "leftover")
@@ -289,6 +301,7 @@ def test_work_that_raises_skips_the_sweep_and_the_next_pass_catches_up() -> None
 
 
 def test_refreshing_one_source_sweeps_too() -> None:
+    """#505 matrix: refresh_named sweeps like refresh."""
     builder, store, mirror, source_store = over_rows(on_disk=("leftover",))
     decks = decks_over(
         sources=source_store,
@@ -311,6 +324,7 @@ class _SourceRemovedAfterTheFirstLook(FakeSourceStore):
 
 
 def test_a_source_removed_before_the_lock_is_taken_gets_no_rows_written() -> None:
+    """#505 matrix: refresh_named with its source removed before the lock."""
     sources = _SourceRemovedAfterTheFirstLook(sources=[_SOURCE])
     store = FakeDeckStore()
     decks = decks_over(
@@ -325,6 +339,7 @@ def test_a_source_removed_before_the_lock_is_taken_gets_no_rows_written() -> Non
 
 
 def test_removing_a_source_takes_the_runs_of_its_talk_and_its_pdf() -> None:
+    """#505 matrix: remove_source takes the runs its rows name."""
     builder, store, mirror, source_store = over_rows(
         a_row("split", build=a_build_in("talk-run", "pdf-run")),
         on_disk=("talk-run", "pdf-run", "foreign"),
@@ -342,6 +357,7 @@ def test_removing_a_source_takes_the_runs_of_its_talk_and_its_pdf() -> None:
 
 
 def test_removing_a_source_over_a_build_no_run_owns_keeps_every_row() -> None:
+    """#505 matrix: remove_source over an unplaced build answers DISK_LEFTOVER."""
     builder, store, mirror, source_store = over_rows(
         a_row(
             "odd",
