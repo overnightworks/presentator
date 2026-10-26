@@ -8,12 +8,13 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 import { chromium, type ElementHandle, type Page } from 'playwright-chromium'
-import { afterAll, afterEach, beforeAll, beforeEach, expect, inject } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest'
 
 const run = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
 const frontendRoot = join(repositoryRoot, 'frontend')
 export const overlayDeckSourceDirectory = join(repositoryRoot, 'examples/copresenter-deck')
+const providedBuild = process.env.PRESENTER_RETURN_BUILD_DIR
 const evidenceDirectory = process.env.PRESENTER_RETURN_EVIDENCE_DIR
 const wav = 'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Exactly what `examples/copresenter-deck/README.md` tells an operator to
@@ -39,7 +40,7 @@ const COPIED_OVERLAY_FILES = [
 ]
 
 
-let buildDirectory = ''
+let buildDirectory = providedBuild ?? ''
 let server: ReturnType<typeof createServer>
 let productionSecurityHeaders: Record<string, string> = {}
 type CspViolation = { directive: string; blockedUri: string }
@@ -502,12 +503,20 @@ export async function openPresenter(width: number) {
 // test file that calls it.
 export function registerOverlayHarness() {
   beforeAll(async () => {
-    buildDirectory = inject('overlayExampleBuildDirectory')
+    if (!providedBuild) {
+      buildDirectory = await mkdtemp(join(tmpdir(), 'presenter-controls-'))
+      await run(
+        'pnpm',
+        ['exec', 'slidev', 'build', join(overlayDeckSourceDirectory, 'slides.md'), '--out', buildDirectory],
+        { cwd: frontendRoot },
+      )
+    }
     productionSecurityHeaders = await loadProductionSecurityHeaders()
     await startServer()
   }, 60_000)
 
   afterAll(async () => {
+    if (!providedBuild) await rm(buildDirectory, { recursive: true, force: true })
     for (const socket of hearingSockets) socket.destroy()
     server.closeAllConnections()
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
