@@ -1085,7 +1085,9 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
     with_the_toolchain(
         machine,
         tmp_path,
-        _A_TOOLCHAIN_THAT_BUILDS_MORE_FILES_THAN_ALLOWED.format(files=MAXIMUM_ENTRIES + 1),
+        _A_TOOLCHAIN_THAT_BUILDS_MORE_FILES_THAN_ALLOWED.format(
+            files=MAXIMUM_ENTRIES + 1
+        ),
     )
     builds = builds_ready_for(tmp_path, source)
 

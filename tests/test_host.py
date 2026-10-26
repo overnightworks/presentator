@@ -155,7 +155,6 @@ def test_an_instance_that_says_nothing_about_where_builds_run_builds_in_the_work
     environment: pytest.MonkeyPatch,
 ) -> None:
     """Cell B26: an unset runner builds in the worker."""
-
     environment.delenv("PRESENTATOR_BUILD_RUNNER")
 
     assert load_settings().build_runner is WhereBuildsRun.WORKER
@@ -171,7 +170,6 @@ def test_a_runner_an_instance_names_is_the_one_it_builds_with(
     runs: WhereBuildsRun,
 ) -> None:
     """Cell B26: the worker and the host are the runners an instance may name."""
-
     environment.setenv("PRESENTATOR_BUILD_RUNNER", given)
 
     assert load_settings().build_runner is runs
@@ -181,7 +179,6 @@ def test_a_runner_that_is_no_longer_one_refuses_to_start(
     environment: pytest.MonkeyPatch,
 ) -> None:
     """Cell B26: the removed `container` runner is refused at start."""
-
     environment.setenv("PRESENTATOR_BUILD_RUNNER", "container")
 
     with pytest.raises(ConfigurationError, match="build_runner"):
@@ -192,7 +189,6 @@ def test_a_removed_build_key_in_the_process_environment_is_ignored(
     environment: pytest.MonkeyPatch,
 ) -> None:
     """Cell B18: a removed build key in the process environment is ignored."""
-
     environment.setenv("PRESENTATOR_BUILD_IMAGE", "left-over-from-the-container-runner")
 
     assert load_settings().build_runner is WhereBuildsRun.HOST
@@ -203,7 +199,6 @@ def test_a_removed_build_key_in_the_env_file_of_a_direct_run_refuses_to_start(
     tmp_path: Path,
 ) -> None:
     """Cell B18: a removed build key in the `.env` file refuses to start."""
-
     (tmp_path / ".env").write_text(
         "PRESENTATOR_BUILD_IMAGE=left-over-from-the-container-runner\n",
         encoding="utf-8",
