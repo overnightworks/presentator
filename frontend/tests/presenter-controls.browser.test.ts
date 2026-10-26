@@ -23,6 +23,16 @@ const wav = 'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // only these files, never the repository's own example directory, where
 // every other file already happens to sit beside them regardless of whether
 // the README's own list is complete.
+// What the server answers before any stream starts: F1's refusals, plus the
+// two shapes it never sends, a 403 and a 401 that is not JSON.
+const REFUSED_REQUESTS = {
+  'signed-out-refresh': { status: 401, contentType: 'application/json', body: '{"detail":"Sign in again"}' },
+  'no-session': { status: 401, contentType: 'application/json', body: '{"detail":"Not authenticated"}' },
+  'forbidden': { status: 403, contentType: 'application/json', body: '{"detail":"Missing Origin header"}' },
+  'unavailable': { status: 503, contentType: 'application/json', body: '{"detail":"Co-presenter unavailable"}' },
+  'unreadable-401': { status: 401, contentType: 'text/plain', body: 'Sign in again' },
+} as const
+
 const COPIED_OVERLAY_FILES = [
   'custom-nav-controls.vue',
   'style.css',
@@ -38,7 +48,16 @@ let hearingOpened = 0
 let hearingClosed = 0
 let pendingAnswerClosed = 0
 let askHeaderNames: string[] = []
-let answerMode: 'audio' | 'speech-refused' = 'audio'
+type AnswerMode =
+  | 'audio'
+  | 'speech-refused'
+  | 'not-enabled'
+  | 'unknown-reason'
+  | 'mid-answer-error'
+  | 'refused-then-answered'
+  | keyof typeof REFUSED_REQUESTS
+let answerMode: AnswerMode = 'audio'
+let askBodies: { said: string, deck: string }[] = []
 let hearingMode: 'ready' | 'not-ready' | 'socket-error' | 'unreachable' = 'ready'
 let productionSecurityHeaders: Record<string, string> = {}
 type CspViolation = { directive: string; blockedUri: string }
@@ -125,7 +144,7 @@ async function buildExample() {
 // Builds a second, independent deck containing only the files
 // `examples/copresenter-deck/README.md` names, plus the minimal `slides.md`
 // every deck needs (the one file that is the operator's own, never copied).
-async function buildCopiedOverlayDeck(): Promise<string> {
+async function buildCopiedOverlayDeck(base = '/'): Promise<string> {
   const deckDirectory = await mkdtemp(join(tmpdir(), 'presenter-copied-overlay-deck-'))
   for (const relativePath of COPIED_OVERLAY_FILES) {
     const destination = join(deckDirectory, relativePath)
@@ -139,7 +158,7 @@ async function buildCopiedOverlayDeck(): Promise<string> {
   const outDirectory = await mkdtemp(join(tmpdir(), 'presenter-copied-overlay-build-'))
   await run(
     'pnpm',
-    ['exec', 'slidev', 'build', join(deckDirectory, 'slides.md'), '--out', outDirectory],
+    ['exec', 'slidev', 'build', join(deckDirectory, 'slides.md'), '--out', outDirectory, '--base', base],
     { cwd: frontendRoot },
   )
   await rm(deckDirectory, { recursive: true, force: true })
@@ -180,10 +199,13 @@ function websocketAcceptKey(key: string) {
 
 // The minimal server the copied-overlay proof needs: the static build plus
 // the two routes `startLocalHear`'s own path calls before it ever reaches the
-// AudioWorklet (`/who`, then the hearing lease). No `/ask` route and no
-// observation beacons: this proof stops at the worklet loading, so it never
-// drives a spoken turn.
-async function createOverlayDeckServer(directory: string) {
+// AudioWorklet (`/who`, then the hearing lease). `/ask` only reports what it
+// was asked, and there are no observation beacons: no proof here drives a
+// spoken turn. `basePath` serves the build below the folder a deck lives in.
+async function createOverlayDeckServer(
+  directory: string,
+  { basePath = '', onAsk = () => undefined }: { basePath?: string, onAsk?: (said: string, deck: string) => void } = {},
+) {
   // `closeAllConnections` does not reach an upgraded (WebSocket) connection
   // (Node's own documented behaviour) — the same reason `startServer` below
   // tracks `hearingSockets` and destroys them itself before closing, which
@@ -200,7 +222,17 @@ async function createOverlayDeckServer(directory: string) {
       )
       return
     }
-    await serveFile(directory, url.pathname, response)
+    if (url.pathname === '/copresenter/ask') {
+      const { said, deck } = await readAskBody(request)
+      onAsk(said, deck)
+      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      sendEvent(response, 'done', { text: 'Answered.' })
+      response.end()
+      return
+    }
+    // Vite writes the base percent-encoded into scripts but raw into the HTML.
+    const prefix = [basePath, basePath.replaceAll('%25', '%')].find((base) => base && url.pathname.startsWith(base))
+    await serveFile(directory, prefix ? url.pathname.slice(prefix.length) || '/' : url.pathname, response)
   })
   server.on('upgrade', (request, socket) => {
     const key = request.headers['sec-websocket-key']
@@ -239,16 +271,50 @@ async function startServer() {
     }
     if (url.pathname === '/copresenter/ask') {
       askHeaderNames = Object.keys(request.headers)
+      askBodies.push(await readAskBody(request))
+      const refusal = REFUSED_REQUESTS[answerMode as keyof typeof REFUSED_REQUESTS]
+      if (refusal) {
+        response.writeHead(refusal.status, { 'content-type': refusal.contentType })
+        response.end(refusal.body)
+        return
+      }
       response.writeHead(200, { 'content-type': 'text/event-stream' })
+      const refusedFirst = answerMode === 'refused-then-answered' && askBodies.length === 1
+      if (refusedFirst) {
+        response.end('event: error\ndata: {}\n\n')
+        return
+      }
+      if (answerMode === 'refused-then-answered') {
+        sendEvent(response, 'done', { text: 'The second ask is answered.' })
+        response.end()
+        return
+      }
+      if (answerMode === 'not-enabled' || answerMode === 'unknown-reason') {
+        sendEvent(response, 'error', {
+          reason: answerMode,
+          message: 'the answer could not be spoken',
+        })
+        response.end()
+        return
+      }
+      if (answerMode === 'mid-answer-error') {
+        sendEvent(response, 'text', { text: 'The first sentence is voiced. Then the second one fails.' })
+        sendEvent(response, 'sentence', { text: 'The first sentence is voiced.' })
+        sendEvent(response, 'audio', { wav_b64: wav })
+        sendEvent(response, 'sentence', { text: 'Then the second one fails.' })
+        sendEvent(response, 'error', {})
+        response.end()
+        return
+      }
       if (answerMode === 'speech-refused') {
         const sentence = 'The handoff keeps this sentence.'
-        response.write(`event: text\ndata: ${JSON.stringify({ text: sentence })}\n\n`)
-        response.write(`event: sentence\ndata: ${JSON.stringify({ text: sentence })}\n\n`)
+        sendEvent(response, 'text', { text: sentence })
+        sendEvent(response, 'sentence', { text: sentence })
         response.end('event: error\ndata: {}\n\n')
         return
       }
       response.write(`event: audio\ndata: {"wav_b64":"${wav}"}\n\n`)
-      request.on('close', () => { pendingAnswerClosed += 1 })
+      response.on('close', () => { pendingAnswerClosed += 1 })
       return
     }
     if (request.method === 'POST' && url.pathname.startsWith('/observations/')) {
@@ -301,6 +367,20 @@ async function startServer() {
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('test server did not bind a TCP port')
   origin = `http://127.0.0.1:${address.port}`
+}
+
+function sendEvent(response: ServerResponse, event: string, data: object) {
+  response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+}
+
+async function readAskBody(request: import('node:http').IncomingMessage) {
+  const chunks: Buffer[] = []
+  for await (const chunk of request) chunks.push(chunk as Buffer)
+  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as { said: string, deck: string }
+}
+
+function sendHeard(text: string) {
+  for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final: true })))
 }
 
 function sendHearingError() {
@@ -403,12 +483,18 @@ async function installCspGuard(page: Page) {
   })
 }
 
-async function openPresenterAt(base: string, path: string, width: number) {
+async function openPresenterAt(
+  base: string,
+  path: string,
+  width: number,
+  prepare: (page: Page) => Promise<void> = async () => undefined,
+) {
   const browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { width, height: 900 } })
   page.setDefaultTimeout(5_000)
   await installCspGuard(page)
   await installMediaFakes(page)
+  await prepare(page)
   await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded', timeout: 10_000 })
   return { browser, page }
 }
@@ -433,6 +519,7 @@ afterAll(async () => {
 beforeEach(() => {
   cspViolations = []
   socketErrors.length = 0
+  askBodies = []
 })
 
 afterEach(() => {
@@ -455,6 +542,7 @@ describe('presenter controls', () => {
       await refusal.waitFor({ state: 'visible', timeout: 5_000 })
       expect(askHeaderNames).toContain('content-type')
       expect(askHeaderNames).not.toContain('x-csrf-token')
+      expect(await page.getByText('Not enabled').count()).toBe(0)
       expect(await sentence.isVisible()).toBe(true)
       expect(await refusal.isVisible()).toBe(true)
       await saveEvidence(page, `presenter-speech-refused-${width}.png`)
@@ -465,6 +553,144 @@ describe('presenter controls', () => {
       await browser.close()
     }
   })
+
+  it.each([
+    ['an error event with the not-enabled reason', 'not-enabled', 'Not enabled', [1024, 390]],
+    ['a refused refresh (401 Sign in again)', 'signed-out-refresh', 'Sign in again', [1024, 390]],
+    ['an ended session (401 Not authenticated)', 'no-session', 'Sign in again', [1024]],
+    ['a request the origin check refuses (403)', 'forbidden', 'No answer', [1024]],
+    ['an issuer that is down (503)', 'unavailable', 'No answer', [1024]],
+    ['an error event with an unknown reason', 'unknown-reason', 'No answer', [1024]],
+    ['a 401 whose body is not JSON', 'unreadable-401', 'No answer', [1024]],
+  ] as const)('shows only its own words for %s', async (_situation, mode, line, widths) => {
+    for (const width of widths) {
+      answerMode = mode
+      const { browser, page } = await openPresenter(width)
+      try {
+        const ai = page.getByRole('switch', { name: 'AI' })
+        await ai.waitFor({ state: 'visible', timeout: 2_000 })
+        await ai.click({ timeout: 2_000 })
+        await page.getByText(line, { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
+        const otherLines = ['Not enabled', 'Sign in again', 'No answer'].filter((other) => other !== line)
+        for (const other of otherLines) expect(await page.getByText(other, { exact: true }).count()).toBe(0)
+        expect(await page.getByText('the answer could not be spoken').count()).toBe(0)
+        expect(page.url()).toBe(`${origin}/presenter/1`)
+        expect(await ai.getAttribute('aria-checked')).toBe('true')
+        const [homeBox, aiBox, panelBox] = await Promise.all([
+          page.getByRole('link', { name: 'Home' }).boundingBox(),
+          ai.boundingBox(),
+          page.locator('.copresenter .panel').boundingBox(),
+        ])
+        expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(width)
+        expect(boxesIntersect(homeBox!, panelBox!)).toBe(false)
+        expect(boxesIntersect(aiBox!, panelBox!)).toBe(false)
+        await saveEvidence(page, `presenter-refusal-${mode}-${width}.png`)
+      } finally {
+        answerMode = 'audio'
+        await browser.close()
+      }
+    }
+  })
+
+  it('clears the refusal line when the next ask is answered', async () => {
+    answerMode = 'refused-then-answered'
+    const { browser, page } = await openPresenter(1024)
+    try {
+      const ai = page.getByRole('switch', { name: 'AI' })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      await page.getByText('No answer', { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
+      await page.evaluate(() => (window as unknown as {
+        __copresenter: { say: (text: string) => void }
+      }).__copresenter.say('And again?'))
+      await page.getByText('The second ask is answered.').waitFor({ state: 'visible', timeout: 5_000 })
+      expect(await page.getByText('No answer', { exact: true }).count()).toBe(0)
+    } finally {
+      answerMode = 'audio'
+      await browser.close()
+    }
+  })
+
+  it('counts only a voiced sentence as spoken when an answer fails midway', async () => {
+    answerMode = 'mid-answer-error'
+    const { browser, page } = await openPresenterAt(origin, '/presenter/1', 1024, async (prepared) => {
+      await prepared.addInitScript(() => {
+        const RealAudio = window.Audio
+        const made: HTMLAudioElement[] = []
+        ;(window as unknown as { __audios: HTMLAudioElement[] }).__audios = made
+        window.Audio = function (url?: string) {
+          const audio = new RealAudio(url)
+          made.push(audio)
+          return audio
+        } as unknown as typeof Audio
+      })
+    })
+    try {
+      const ai = page.getByRole('switch', { name: 'AI' })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      await page.getByText('No answer', { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
+      expect(await page.getByText('Then the second one fails.').count()).toBeGreaterThan(0)
+      // The fake player never ends on its own; ending it lets the next question be heard.
+      type Snapshot = { speaking: boolean }
+      await page.waitForFunction(() => (window as unknown as {
+        __copresenter: { snapshot: () => Snapshot }
+      }).__copresenter.snapshot().speaking)
+      await page.evaluate(() => (window as unknown as { __audios: HTMLAudioElement[] }).__audios
+        .forEach((audio) => audio.dispatchEvent(new Event('ended'))))
+      await page.waitForFunction(() => !(window as unknown as {
+        __copresenter: { snapshot: () => Snapshot }
+      }).__copresenter.snapshot().speaking)
+      sendHeard('The first sentence is voiced.')
+      sendHeard('Then the second one fails.')
+      await expect.poll(() => askBodies.length).toBe(2)
+      expect(askBodies.map((body) => body.said)).toEqual([
+        'Where does the handoff slow down?',
+        'Then the second one fails.',
+      ])
+    } finally {
+      answerMode = 'audio'
+      await browser.close()
+    }
+  }, 30_000)
+
+  it('loads the overlay of a deck whose folder holds a percent sign and names that folder', async () => {
+    const overlayBuildDirectory = await buildCopiedOverlayDeck('/deck/50%25off/')
+    const asked: { said: string, deck: string }[] = []
+    const { server: overlayServer, origin: overlayOrigin, sockets: overlaySockets }
+      = await createOverlayDeckServer(overlayBuildDirectory, {
+        basePath: '/deck/50%25off',
+        onAsk: (said, deck) => asked.push({ said, deck }),
+      })
+    try {
+      const { browser, page } = await openPresenterAt(overlayOrigin, '/deck/50%25off/presenter/1', 1024)
+      try {
+        const ai = page.getByRole('switch', { name: 'AI' })
+        await ai.waitFor({ state: 'visible', timeout: 5_000 })
+        await ai.click({ timeout: 2_000 })
+        await page.waitForFunction(
+          () => (window as unknown as {
+            __copresenter: { snapshot: () => { hearOpen: boolean } }
+          }).__copresenter.snapshot().hearOpen,
+          undefined,
+          { timeout: 5_000 },
+        )
+        await page.evaluate(() => (window as unknown as {
+          __copresenter: { say: (text: string) => void }
+        }).__copresenter.say('Which deck is this?'))
+        await expect.poll(() => asked).toEqual([{ said: 'Which deck is this?', deck: '50%off' }])
+      } finally {
+        await browser.close()
+      }
+    } finally {
+      for (const socket of overlaySockets) socket.destroy()
+      overlayServer.closeAllConnections()
+      await new Promise<void>((resolve, reject) => {
+        overlayServer.close((error) => (error ? reject(error) : resolve()))
+      })
+      await rm(overlayBuildDirectory, { recursive: true, force: true })
+    }
+  }, 60_000)
 
   it.each([1024, 390])('keeps Home and AI separate and reachable at %ipx', async (width) => {
     const { browser, page } = await openPresenter(width)

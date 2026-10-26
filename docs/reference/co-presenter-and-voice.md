@@ -48,8 +48,11 @@ session whose refresh token is missing or refused gets 401
 of these cases, and the question is counted. Once the answer streams, the
 events are `text`, `sentence`, `audio` and `done`. Every failure ends in an
 `error` event, and an answer the service refuses because the person is not
-enabled carries `"reason": "not-enabled"` in it. The overlay shows "No answer"
-for all of them.
+enabled carries `"reason": "not-enabled"` in it. The overlay shows only its
+own words for them: "Not enabled" for the `not-enabled` reason, "Sign in again"
+for either 401, and "No answer" for everything else, without navigating away
+and never with a message the server sent. A refusal line clears when the next
+question is asked.
 
 ## Bounds on `/ask`
 

@@ -7,9 +7,32 @@ const { currentSlideNo } = useNav()
 const LANGUAGE = 'de'
 const COPRESENTER = '/copresenter'
 // The host delivers this deck at `/deck/<slug>/`, so the base names its slug.
+// Vite refuses a base with a raw `%`, so a folder `50%off` arrives as `50%25off`.
 const DECK_SLUG = decodeURIComponent(
   import.meta.env.BASE_URL.split('/').filter(Boolean).pop() ?? '',
 )
+
+// The overlay shows only these lines, never a message the server sent.
+const NO_ANSWER = 'No answer'
+const NOT_ENABLED = 'Not enabled'
+const SIGN_IN_AGAIN = 'Sign in again'
+const NOT_ENABLED_REASON = 'not-enabled'
+const SIGN_IN_AGAIN_DETAILS = new Set(['Sign in again', 'Not authenticated'])
+
+async function refusalLine(response) {
+  if (response.status !== 401) return NO_ANSWER
+  try {
+    const body = await response.json()
+    return SIGN_IN_AGAIN_DETAILS.has(body?.detail) ? SIGN_IN_AGAIN : NO_ANSWER
+  } catch {
+    return NO_ANSWER
+  }
+}
+
+function errorEventLine(data) {
+  return data?.reason === NOT_ENABLED_REASON ? NOT_ENABLED : NO_ANSWER
+}
+
 // Built on Vite's own `BASE_URL` (Slidev uses the same for its PDF link),
 // never on the current address: Slidev's router is history-mode, so once a
 // slide or the presenter view has been opened the browser's own address has
@@ -24,7 +47,6 @@ const hearing = ref('off')
 const error = ref('')
 const audioSeconds = ref(0)
 const speaking = ref(false)
-const whoModel = ref('')
 
 let mediaStream = null
 let audioContext = null
@@ -33,6 +55,7 @@ let hearSocket = null
 let askAbort = null
 let playQueue = Promise.resolve()
 let spokenText = ''
+let unvoicedSentence = ''
 let sampleRate = 16000
 let activationGeneration = 0
 let playGeneration = 0
@@ -55,7 +78,6 @@ function snapshot() {
     hearing: hearing.value,
     audioSeconds: audioSeconds.value,
     error: error.value,
-    model: whoModel.value,
     hearOpen: Boolean(hearSocket && hearSocket.readyState === WebSocket.OPEN),
     speaking: speaking.value,
     micLive: tracks.some((track) => track.readyState === 'live'),
@@ -106,7 +128,6 @@ async function turnOn() {
     if (!response.ok) throw new Error('co-presenter unavailable')
     report = await response.json()
     if (!stillActive(generation)) return
-    whoModel.value = report.answerer?.model || ''
     sampleRate = report.speech?.sample_rate || 16000
   } catch {
     if (!stillActive(generation)) return
@@ -314,7 +335,9 @@ async function ask(text) {
   const controller = new AbortController()
   askAbort = controller
   answer.value = ''
+  error.value = ''
   spokenText = ''
+  unvoicedSentence = ''
   try {
     const response = await fetch(`${COPRESENTER}/ask`, {
       method: 'POST',
@@ -330,13 +353,13 @@ async function ask(text) {
       signal: controller.signal,
     })
     if (!response.ok || !response.body) {
-      error.value = 'No answer'
+      error.value = response.ok ? NO_ANSWER : await refusalLine(response)
       return
     }
     await readSse(response.body, controller.signal)
   } catch (err) {
     if (err.name === 'AbortError') return
-    error.value = 'No answer'
+    error.value = NO_ANSWER
   }
 }
 
@@ -362,10 +385,14 @@ function applySse(block) {
   let data
   try { data = JSON.parse(dataLine) } catch { return }
   if (kind === 'text' && data.text) answer.value += data.text
-  if (kind === 'sentence' && data.text) spokenText = `${spokenText} ${data.text}`.trim()
-  if (kind === 'audio' && data.wav_b64) enqueueWav(data.wav_b64)
+  if (kind === 'sentence' && data.text) unvoicedSentence = data.text
+  if (kind === 'audio' && data.wav_b64) {
+    spokenText = `${spokenText} ${unvoicedSentence}`.trim()
+    unvoicedSentence = ''
+    enqueueWav(data.wav_b64)
+  }
   if (kind === 'done' && data.text) answer.value = data.text
-  if (kind === 'error') error.value = 'No answer'
+  if (kind === 'error') error.value = errorEventLine(data)
 }
 
 function enqueueWav(b64) {
