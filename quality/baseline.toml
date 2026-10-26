@@ -1,14 +1,11 @@
 # Measured by `quality baseline write`. Entries only ever go down.
 
-[ccn."speech/scripts/prove.py"]
-"_speak_measured" = 16
-
 [ccn."speech/src/presentator_speech/service.py"]
 "Runtime._activate_voice" = 18
 
 [file_lines]
 "speech/tests/test_provider_process.py" = 872
-"speech/tests/test_voice_status.py" = 1513
+"speech/tests/test_voice_status.py" = 1511
 "src/presentator/adapters/builds.py" = 803
 "src/presentator/adapters/decks.py" = 876
 "src/presentator/application/decks.py" = 974
@@ -32,15 +29,13 @@
 "_run" = 75
 
 [function_lines."speech/scripts/prove.py"]
-"main" = 76
+"main" = 63
 
 [function_lines."speech/src/presentator_speech/speaking.py"]
 "speaking_for_voice" = 77
 
 [function_lines."speech/tests/test_main.py"]
-"test_orchestrator_serves_health_from_its_loading_runtime" = 62
-"test_owned_speaking_failure_stops_both_servers_and_returns_failure" = 61
-"test_shutdown_closes_a_pending_real_adapter_before_awaiting_tasks" = 100
+"test_shutdown_closes_a_pending_real_adapter_before_awaiting_tasks" = 94
 
 [function_lines."speech/tests/test_provider_process.py"]
 "test_direct_closed_entrypoint_streams_after_transient_loader_exits" = 80
