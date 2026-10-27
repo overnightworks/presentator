@@ -1,0 +1,8 @@
+claim_id = "11c4e9b761664cc2800c9a84ee563161"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "a2e8e105027d9ab2da66a83f81aa43585e6e8420"
+branch = "claude/issue-525-picture-room-knows-ai"
+scope = ["docs/mockups/README.md", "docs/mockups/m0-lobby", "docs/mockups/m0-lobby-sheet.png", "docs/mockups/m0-lobby.html"]
+opened_commit = "6328b54afd705da92b0c688878ea26fac3f30b2c"
+whole_reason = "One picture: the boards, their renders, the overview sheet and the README table that names them are one frozen artefact."
