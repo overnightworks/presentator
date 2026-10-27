@@ -1,0 +1,8 @@
+claim_id = "6decb6b420f04517a13bbdbf9fd25192"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "8a14dba5262e4e47ef7bc8c4488bec2ed90aff08"
+branch = "claude/issue-542-cutover-retire"
+scope = ["pyproject.toml", "quality/config.toml", "scripts/cutover.py", "tests/scripts/test_cutover.py"]
+opened_commit = "c15a4aa2a38bd230684a0cf3286c4492893146f4"
+whole_reason = "The retire's refusals, its target list, its fixed order and its resume are one deletion contract; the script, its tests and its lint entry land together."
