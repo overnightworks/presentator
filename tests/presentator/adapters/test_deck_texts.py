@@ -11,14 +11,14 @@ import pytest
 from presentator.adapters.deck_texts import MirroredDeckTexts
 from presentator.contracts.copresenter import CoPresenterUnavailableError, DeckText
 from presentator.contracts.decks import Build, Deck
-from tests.adapters.test_decks import (
+from tests.conftest import EXAMPLE_SLUG, EXAMPLE_TITLE, GitRemote
+from tests.presentator.adapters.test_decks import (
     a_build,
     a_deck,
     a_source,
     folders_under,
     mirrors_under,
 )
-from tests.conftest import EXAMPLE_SLUG, EXAMPLE_TITLE, GitRemote
 
 if TYPE_CHECKING:
     from presentator.ports.copresenter import DeckTexts

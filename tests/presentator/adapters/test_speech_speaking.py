@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from presentator.adapters.speech import UdsSpeaking
 from presentator.contracts.copresenter import CoPresenterUnavailableError
-from tests.adapters.serving import Serving, unix_listener
+from tests.presentator.adapters.support.serving import Serving, unix_listener
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable

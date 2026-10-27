@@ -10,8 +10,8 @@ from presentator.adapters.identity import create_identity_tables
 from presentator.adapters.sqlite import rows
 from presentator.contracts.decks import DeployKeyDraft
 from presentator.contracts.models import Role, User
-from tests.adapters.key_draft_support import a_key_drafts_store
 from tests.people import seed_user
+from tests.presentator.adapters.support.key_draft_support import a_key_drafts_store
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _NOTICED_GONE_AT = datetime(2026, 1, 20, 9, tzinfo=UTC)

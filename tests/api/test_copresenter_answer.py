@@ -38,23 +38,6 @@ from presentator.application.copresenter import (
     RetryAfter,
 )
 from presentator.contracts.decks import Build, Deck, Source
-from tests.adapters.agent_service_support import (
-    GOOD_ANSWER,
-    SERVICE_MESSAGE,
-    Reply,
-    Wire,
-    assistant_text,
-    cancelled,
-    event_frames,
-    failed,
-    refusal_reply,
-    reply_with,
-    run_started,
-    succeeded,
-    violating_frame,
-    whole,
-)
-from tests.adapters.test_decks import a_source, folders_under, mirrors_under
 from tests.api.copresenter_support import (
     A_SOURCE,
     ASK,
@@ -71,6 +54,23 @@ from tests.api.lobby import (
     NOW,
 )
 from tests.api.talk_support import A_DECK, B_DECK, A, Hosts, two_hosts
+from tests.presentator.adapters.support.agent_service_support import (
+    GOOD_ANSWER,
+    SERVICE_MESSAGE,
+    Reply,
+    Wire,
+    assistant_text,
+    cancelled,
+    event_frames,
+    failed,
+    refusal_reply,
+    reply_with,
+    run_started,
+    succeeded,
+    violating_frame,
+    whole,
+)
+from tests.presentator.adapters.test_decks import a_source, folders_under, mirrors_under
 from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeSourceStore,

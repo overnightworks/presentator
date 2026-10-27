@@ -37,7 +37,6 @@ from presentator.contracts.decks import (
     Source,
     talk_address,
 )
-from tests.adapters.credentials_support import OpenCredentials
 from tests.conftest import (
     EXAMPLE_SLUG,
     MAIN_BRANCH,
@@ -45,6 +44,7 @@ from tests.conftest import (
     a_path_carrying,
     with_the_program,
 )
+from tests.presentator.adapters.support.credentials_support import OpenCredentials
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _A_GENEROUS_BOUND = timedelta(seconds=30)

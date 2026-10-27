@@ -17,7 +17,7 @@ from agent_runtime_client.wire import (
 
 from presentator.adapters.agent_service import ServiceAnswerer
 from presentator.contracts.copresenter import NotEnabledError
-from tests.adapters.agent_service_support import (
+from tests.presentator.adapters.support.agent_service_support import (
     GOOD_ANSWER,
     ORIGIN,
     PERSON,
@@ -49,7 +49,7 @@ from tests.adapters.agent_service_support import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from tests.adapters.agent_service_support import Step
+    from tests.presentator.adapters.support.agent_service_support import Step
 
 
 def test_the_request_is_the_run_request_of_the_contract() -> None:

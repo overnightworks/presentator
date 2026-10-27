@@ -21,7 +21,8 @@ from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     PersonToken,
 )
-from tests.adapters.agent_service_support import (
+from tests.leak_support import everything_shown
+from tests.presentator.adapters.support.agent_service_support import (
     GOOD_ANSWER,
     ReceivedCredentials,
     ask_once,
@@ -30,7 +31,6 @@ from tests.adapters.agent_service_support import (
     reply_with,
     whole,
 )
-from tests.leak_support import everything_shown
 from tests.sign_in_support import Scene, a_scene
 
 if TYPE_CHECKING:

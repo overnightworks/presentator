@@ -30,7 +30,7 @@ from presentator.contracts.decks import (
     StepKind,
 )
 from tests import worker_support as support
-from tests.adapters.build_worker_support import (
+from tests.presentator.adapters.support.build_worker_support import (
     BUILT_PDF,
     BUILT_TALK,
     INDEX,

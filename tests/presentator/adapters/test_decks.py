@@ -43,13 +43,13 @@ from presentator.contracts.decks import (
     SourceWrite,
 )
 from presentator.contracts.models import Role, User
-from tests.adapters.credentials_support import OpenCredentials
-from tests.adapters.key_draft_support import (
-    INSTANCE_KEY as _INSTANCE_KEY,
-)
-from tests.adapters.key_draft_support import a_key_drafts_store
 from tests.conftest import EXAMPLE_SLUG, EXAMPLE_TITLE, MAIN_BRANCH, GitRemote
 from tests.people import seed_user
+from tests.presentator.adapters.support.credentials_support import OpenCredentials
+from tests.presentator.adapters.support.key_draft_support import (
+    INSTANCE_KEY as _INSTANCE_KEY,
+)
+from tests.presentator.adapters.support.key_draft_support import a_key_drafts_store
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _NOTICED_GONE_AT = datetime(2026, 1, 20, 9, tzinfo=UTC)
