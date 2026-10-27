@@ -1,9 +1,11 @@
 """Docker, systemd, git, curl and Traefik as one fake behind the cutover runner."""
 
 import importlib
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 LIVE_HEAD = "1f0422c" + "a" * 33
 ORIGIN = "https://github.com/overnightworks/presentator.git"
@@ -35,6 +37,21 @@ IMAGE = "presentator-adoption-instance:ap112-e04e837a"
 REFUSED = 2
 UNITS = ("presentator-speech.service", "presentator-copresenter.service")
 UNIT_EXIT_CODES = {"stop": 5, "disable": 1, "reset-failed": 1}
+LOBBY_HOST = "lobby.example.test"
+TALK_HOST = "talk.example.test"
+PROXY_ADDRESS = "10.9.8.7"
+NETWORK_NAME = "web-net_default"
+COOKIE_VALUE = "cookie-value-4471"
+DARK_CURL_EXIT = 6
+SIGN_IN_ANSWER = (
+    "HTTP/1.1 302 Found\r\n"
+    f"set-cookie: __Host-session={COOKIE_VALUE}; Path=/; Secure; HttpOnly\r\n\r\n"
+)
+OK_ANSWER = "HTTP/1.1 200 OK\r\ncontent-type: text/html\r\n\r\n"
+HARDENED = (
+    "strict-transport-security: max-age=63072000\r\n"
+    "content-security-policy: default-src 'self'\r\n\r\n"
+)
 
 
 @dataclass
@@ -80,11 +97,34 @@ class Host:
     live_origin: str = ORIGIN
     live_head: str = LIVE_HEAD
     live_status: str = "?? .env.bak-preupgrade\n?? compose.override.yaml"
+    overrides: dict[tuple[str, str, str], str] = field(
+        default_factory=dict[tuple[str, str, str], str]
+    )
+    dark_hosts: set[str] = field(default_factory=set[str])
+    inspected: dict[str, object] = field(default_factory=dict[str, object])
     live_refs: str = (
         f"{LIVE_HEAD} refs/heads/main\n"
         f"{'b' * 40} refs/remotes/origin/HEAD\n"
         f"{'c' * 40} refs/remotes/origin/claude/issue-1-x"
     )
+
+    def __post_init__(self) -> None:
+        """Fill in the inspect answers of a healthy web container and its network."""
+        secret = {"Type": "bind", "RW": False}
+        self.inspected = {
+            ".Mounts": [
+                {
+                    **secret,
+                    "Source": str(self.home / ".secrets" / name),
+                    "Destination": f"/run/secrets/{name}",
+                }
+                for name in ("first", "second")
+            ],
+            ".HostConfig.GroupAdd": None,
+            ".HostConfig.PortBindings": {},
+            ".IPAM.Config": [{"Subnet": "10.9.8.0/24", "Gateway": PROXY_ADDRESS}],
+            **self.inspected,
+        }
 
     def __call__(self, arguments: Sequence[str]) -> object:
         command = tuple(arguments)
@@ -104,7 +144,29 @@ class Host:
         return handlers[program](rest)
 
     def run_curl(self, rest: tuple[str, ...]) -> object:
+        if "--include" in rest:
+            return self.run_probe_curl(rest)
         return outcome(0 if self.traefik_answers else 7, "")
+
+    def run_probe_curl(self, rest: tuple[str, ...]) -> object:
+        url = urlsplit(rest[-1])
+        local = "--header" in rest
+        host = rest[rest.index("--header") + 1].removeprefix("Host: ") if local else ""
+        host = host or url.hostname or ""
+        if not local and host in self.dark_hosts:
+            return outcome(DARK_CURL_EXIT, "")
+        vantage = "local" if local else "public"
+        override = self.overrides.get((vantage, host, url.path))
+        return outcome(0, override or self.healthy_answer(host, url.path))
+
+    def healthy_answer(self, host: str, path: str) -> str:
+        if path in {"/health", "/datenschutz"}:
+            return OK_ANSWER
+        if path == "/login/oidc":
+            return SIGN_IN_ANSWER
+        if host == TALK_HOST:
+            return f"HTTP/1.1 303 See Other\r\nlocation: https://{LOBBY_HOST}/\r\n{HARDENED}"
+        return f"HTTP/1.1 302 Found\r\nlocation: /login/oidc?next=%2F\r\n{HARDENED}"
 
     def run_git(self, rest: tuple[str, ...]) -> object:
         path, words = Path(rest[2]), rest[3:]
@@ -127,8 +189,8 @@ class Host:
         match rest:
             case ("ps", *_):
                 return self.run_ps(rest)
-            case ("stop", _):
-                return outcome(0, "")
+            case ("inspect", *_) | ("network", "inspect", *_):
+                return self.run_inspect(rest[rest.index("--format") + 1])
             case ("rm", container):
                 self.remove_container(container)
             case ("network", "ls", *_):
@@ -146,6 +208,10 @@ class Host:
             case _:
                 pass
         return outcome(0, "")
+
+    def run_inspect(self, template: str) -> object:
+        field_name = template.removeprefix("{{json ").removesuffix("}}")
+        return outcome(0, json.dumps(self.inspected[field_name]))
 
     def run_ps(self, rest: tuple[str, ...]) -> object:
         label = rest[rest.index("--filter") + 1]
@@ -204,3 +270,8 @@ class Host:
 
 def outcome(code: int, text: str) -> object:
     return importlib.import_module("cutover").Outcome(code, text)
+
+
+def import_module_attribute(module: str, name: str) -> object:
+    """An attribute of a module by name, for a value the module keeps private."""
+    return getattr(importlib.import_module(module), name)

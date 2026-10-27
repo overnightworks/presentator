@@ -1,8 +1,10 @@
 """One-time command that retires the old `presentator-live` instance.
 
-Run once as `python3 scripts/cutover.py`, from the checkout on a `v*` tag,
-after `hal setup --apply` and before edge enables presentator's catalog entry
-(#508 S9l). It removes exactly the listed targets in a fixed order (units,
+Run as `python3 scripts/cutover.py`, from the checkout on a `v*` tag, twice
+(#508 S9l): after `hal setup --apply` and before edge enables presentator's
+catalog entry, then again after `hal apply` has published. Each run first
+retires; only a finished retire is followed by the probe run (below). The
+retire removes exactly the listed targets in a fixed order (units,
 containers, volumes and image, folders), refuses before any change when the
 host or the checkout is not what the list assumes, stops at the first failed
 step and resumes on the next run; a second run reports every target as
@@ -10,17 +12,28 @@ step and resumes on the next run; a second run reports every target as
 `presentator-adoption-*` images are only counted, as ruled) and no value that
 Docker, systemd or git produced, and reads no `.env`. The operator's rulings on
 #508 lines 1, 2, 3 and 6 are the contract; #508 S9m deletes this file.
+
+The probe run reads edge's deployed record of presentator (never writing it)
+and, when it names the checkout's HEAD, probes the instance through Traefik,
+the web container's inspected shape and the two public origins. It prints one
+`held:`, `failed:` or `not exercised:` line per probe, names no value any
+program returned, never touches a token, and on a failed probe ends with
+`next: hal stop presentator` and exit 1.
 """
 
 import enum
+import json
 import os
 import pwd
+import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
+from urllib.parse import urlsplit
 
 LIVE_NAME = "presentator-live"
 LIVE_COMMIT = "1f0422c"
@@ -36,6 +49,29 @@ STOPPED_UNIT_STATES = frozenset({"inactive", "failed"})
 DISABLED_UNIT_FILE_STATE = "disabled"
 RETIRED_UNIT_STATE = {"LoadState": "not-found", "ActiveState": "inactive"}
 PROJECT_CONTAINERS = ("docker", "ps", "--all", "--quiet", "--filter", PROJECT_LABEL)
+DEPLOYED_RECORD = ".local/state/edge/deployed/presentator"
+WEB_CONTAINER = (
+    "docker",
+    "ps",
+    "--quiet",
+    "--filter",
+    "label=com.docker.compose.project=presentator",
+    "--filter",
+    "label=com.docker.compose.service=presentator",
+)
+SECRETS_MOUNT = "/run/secrets/"
+SECRETS_FOLDER = ".secrets"
+SIGN_IN_PATH = "/login/oidc"
+DATENSCHUTZ_PATH = "/datenschutz"
+HEALTH_PATH = "/health"
+DARK_CURL_EXITS = frozenset({6, 7})
+HOST_COOKIE_PREFIX = "__Host-"
+HARDENING_HEADERS = ("strict-transport-security", "content-security-policy")
+RECORDS_MISSING = "edge's deployed records are not in ~/.local/state/edge/deployed"
+RECORD_UNREADABLE = "edge's deployed record of presentator is not readable"
+NOT_HEAD = "the deployed version is not the checkout's HEAD"
+UNEXPECTED_ANSWER = "a program answered something else than asked"
+STOP_NEXT_STEP = "next: hal stop presentator"
 
 
 @dataclass(frozen=True)
@@ -398,10 +434,338 @@ def retire(  # noqa: PLR0913, PLR0917 - every collaborator is a test seam
     return retirement.execute()
 
 
+class RefusedError(Exception):
+    """The probe run must not probe; the reason names no value."""
+
+
+@dataclass(frozen=True)
+class Deployment:
+    """What the checkout's compose file says the probes compare with."""
+
+    lobby_origin: str
+    talk_origin: str
+    trusted_proxies: str
+    network: str
+
+
+def _single_value(compose: str, key: str) -> str:
+    found = re.findall(rf"^\s*{re.escape(key)}:\s*(\S+)\s*$", compose, re.MULTILINE)
+    if len(found) != 1:
+        reason = f"compose.yaml has not exactly one {key} line"
+        raise RefusedError(reason)
+    return found[0].strip("\"'")
+
+
+def deployment_of(compose: str) -> Deployment:
+    """Read the four compared values from compose.yaml, one line each."""
+    return Deployment(
+        lobby_origin=_single_value(compose, "PRESENTATOR_PUBLIC_ORIGIN"),
+        talk_origin=_single_value(compose, "PRESENTATOR_TALK_ORIGIN"),
+        trusted_proxies=_single_value(compose, "PRESENTATOR_TRUSTED_PROXIES"),
+        network=_single_value(compose, "traefik.docker.network"),
+    )
+
+
+class Verdict(enum.Enum):
+    """How one probe ended; the value is the word that starts its line."""
+
+    HELD = "held"
+    FAILED = "failed"
+    NOT_EXERCISED = "not exercised"
+
+
+class Side(enum.Enum):
+    """The two hosts one instance answers on."""
+
+    LOBBY = "lobby"
+    TALK = "talk"
+
+
+class Vantage(enum.Enum):
+    """Where a request enters: through Traefik on this machine or from outside."""
+
+    LOCAL = "local"
+    PUBLIC = "public"
+
+
+@dataclass(frozen=True)
+class Answer:
+    """What curl got: its exit code, the status and the lower-cased headers."""
+
+    curl_code: int
+    status: int
+    headers: dict[str, list[str]]
+
+    def first(self, name: str) -> str:
+        """The first value of a header, or an empty string."""
+        return next(iter(self.headers.get(name, [])), "")
+
+
+def _answer_of(outcome: Outcome) -> Answer:
+    head = outcome.text.replace("\r\n", "\n").partition("\n\n")[0]
+    status_line, *header_lines = head.splitlines() or [""]
+    words = status_line.split()
+    headers: dict[str, list[str]] = {}
+    for line in header_lines:
+        name, _, value = line.partition(":")
+        headers.setdefault(name.strip().lower(), []).append(value.strip())
+    status = int(words[1]) if len(words) > 1 and words[1].isdigit() else 0
+    return Answer(outcome.code, status, headers)
+
+
+def _redirects_to_sign_in(answer: Answer, side: Side, deployment: Deployment) -> bool:
+    location = answer.first("location")
+    if side is Side.TALK:
+        return answer.status == 303 and location.startswith(deployment.lobby_origin)  # noqa: PLR2004
+    return 300 <= answer.status < 400 and urlsplit(location).path == SIGN_IN_PATH  # noqa: PLR2004
+
+
+def _root_holds(answer: Answer, side: Side, deployment: Deployment) -> bool:
+    hardened = all(name in answer.headers for name in HARDENING_HEADERS)
+    return hardened and _redirects_to_sign_in(answer, side, deployment)
+
+
+def _sets_only_secure_host_cookies(answer: Answer, *_: object) -> bool:
+    cookies = answer.headers.get("set-cookie", [])
+    return bool(cookies) and all(
+        cookie.startswith(HOST_COOKIE_PREFIX)
+        and "secure" in {part.strip().lower() for part in cookie.split(";")[1:]}
+        for cookie in cookies
+    )
+
+
+def _answers_ok(answer: Answer, *_: object) -> bool:
+    return answer.status == 200  # noqa: PLR2004
+
+
+@dataclass(frozen=True)
+class WebProbe:
+    """One request and the judgement of its answer, on the sides it applies to."""
+
+    label: str
+    path: str
+    sides: tuple[Side, ...]
+    holds: Callable[[Answer, Side, Deployment], bool]
+
+
+WEB_PROBES = (
+    WebProbe("root", "/", (Side.LOBBY, Side.TALK), _root_holds),
+    WebProbe(
+        "sign-in",
+        SIGN_IN_PATH,
+        (Side.LOBBY, Side.TALK),
+        _sets_only_secure_host_cookies,
+    ),
+    WebProbe("datenschutz", DATENSCHUTZ_PATH, (Side.LOBBY,), _answers_ok),
+    WebProbe("health", HEALTH_PATH, (Side.LOBBY, Side.TALK), _answers_ok),
+)
+
+
+class Inspection(Retirement):
+    """The probe run: it only reads, through the retire's git helper and runner."""
+
+    def probe(self) -> int:
+        """Probe the deployed instance; exit code 0 held, 1 failed, 2 refused."""
+        try:
+            record = self._deployed_record()
+            if record is None:
+                self.say("not deployed yet: run hal apply")
+                return 0
+            self._require_head(record)
+            deployment = self._deployment()
+        except RefusedError as reason:
+            self.say(f"refused: {reason}")
+            return 2
+        verdicts = [
+            self._reported(name, verdict) for name, verdict in self._probes(deployment)
+        ]
+        if Verdict.FAILED in verdicts:
+            self.say(STOP_NEXT_STEP)
+            return 1
+        return 0
+
+    def _reported(self, name: str, verdict: Verdict) -> Verdict:
+        self.say(f"{verdict.value}: {name}")
+        return verdict
+
+    def _deployed_record(self) -> tuple[str, str] | None:
+        record = self.home / DEPLOYED_RECORD
+        if not record.parent.is_dir():
+            raise RefusedError(RECORDS_MISSING)
+        return self._read_record(record) if exists(record) else None
+
+    def _read_record(self, record: Path) -> tuple[str, str]:
+        unreadable = RefusedError(
+            "edge's deployed record of presentator is not readable"
+        )
+        try:
+            data = cast("object", json.loads(record.read_text()))
+        except (OSError, ValueError) as failure:
+            raise unreadable from failure
+        if not isinstance(data, dict):
+            raise unreadable
+        fields = cast("dict[str, object]", data)
+        tag, sha = fields.get("tag"), fields.get("sha")
+        if not isinstance(tag, str) or not isinstance(sha, str):
+            raise unreadable
+        return tag, sha
+
+    def _require_head(self, record: tuple[str, str]) -> None:
+        tag, sha = record
+        head = self._git(self.checkout, "rev-parse", "HEAD")
+        tags = self._git(self.checkout, "tag", "--list", "v*", "--points-at", "HEAD")
+        if head != [sha] or tag not in (tags or []):
+            raise RefusedError(NOT_HEAD)
+
+    def _deployment(self) -> Deployment:
+        return deployment_of((self.checkout / "compose.yaml").read_text())
+
+    def _probes(self, deployment: Deployment) -> Iterator[tuple[str, Verdict]]:
+        yield from self._web_probes(Vantage.LOCAL, deployment)
+        yield from self._container_probes(deployment)
+        yield from self._web_probes(Vantage.PUBLIC, deployment)
+
+    def _web_probes(
+        self, vantage: Vantage, deployment: Deployment
+    ) -> Iterator[tuple[str, Verdict]]:
+        for probe in WEB_PROBES:
+            for side in probe.sides:
+                answer = self._fetch(vantage, side, probe.path, deployment)
+                name = f"{vantage.value} {side.value} {probe.label}"
+                yield name, self._web_verdict(vantage, answer, probe, side, deployment)
+
+    @staticmethod
+    def _web_verdict(
+        vantage: Vantage,
+        answer: Answer,
+        probe: WebProbe,
+        side: Side,
+        deployment: Deployment,
+    ) -> Verdict:
+        if vantage is Vantage.PUBLIC and answer.curl_code in DARK_CURL_EXITS:
+            return Verdict.NOT_EXERCISED
+        held = answer.curl_code == 0 and probe.holds(answer, side, deployment)
+        return Verdict.HELD if held else Verdict.FAILED
+
+    def _fetch(
+        self, vantage: Vantage, side: Side, path: str, deployment: Deployment
+    ) -> Answer:
+        origin = (
+            deployment.lobby_origin if side is Side.LOBBY else deployment.talk_origin
+        )
+        command = ["curl", "--silent", "--include", "--max-time", "5"]
+        if vantage is Vantage.LOCAL:
+            command += ["--header", f"Host: {urlsplit(origin).hostname}"]
+            origin = TRAEFIK_URL.removesuffix("/")
+        return _answer_of(self.run((*command, origin + path)))
+
+    def _container_probes(
+        self, deployment: Deployment
+    ) -> Iterator[tuple[str, Verdict]]:
+        found = self._lines(WEB_CONTAINER)
+        one = found is not None and len(found) == 1
+        yield "web container", Verdict.HELD if one else Verdict.FAILED
+        if not found or not one:
+            return
+        container = found[0]
+        checks = (
+            ("mounts", lambda: self._mounts_clean(container)),
+            (
+                "groups",
+                lambda: self._inspected(container, ".HostConfig.GroupAdd") is None,
+            ),
+            (
+                "ports",
+                lambda: (
+                    self._inspected(container, ".HostConfig.PortBindings") in (None, {})
+                ),
+            ),
+            ("secrets", lambda: self._secrets_held(container)),
+            ("gateway", lambda: self._gateway_is_proxy(deployment)),
+        )
+        for name, check in checks:
+            try:
+                held = check()
+            except ValueError:
+                held = False
+            yield f"web container {name}", Verdict.HELD if held else Verdict.FAILED
+
+    def _json(self, arguments: Sequence[str]) -> object:
+        outcome = self.run(arguments)
+        if outcome.code != 0:
+            raise ValueError(UNEXPECTED_ANSWER)
+        return cast("object", json.loads(outcome.text))
+
+    def _inspected(self, container: str, field: str) -> object:
+        template = f"{{{{json {field}}}}}"
+        return self._json(("docker", "inspect", "--format", template, container))
+
+    def _mounts(self, container: str) -> list[dict[str, object]]:
+        mounts = self._inspected(container, ".Mounts")
+        if not isinstance(mounts, list):
+            raise ValueError(UNEXPECTED_ANSWER)  # noqa: TRY004 - one handled kind
+        return cast("list[dict[str, object]]", mounts)
+
+    def _mounts_clean(self, container: str) -> bool:
+        return not any(
+            "docker.sock" in f"{mount.get('Source')}{mount.get('Destination')}"
+            for mount in self._mounts(container)
+        )
+
+    def _secrets_held(self, container: str) -> bool:
+        secrets = [
+            mount
+            for mount in self._mounts(container)
+            if str(mount.get("Destination")).startswith(SECRETS_MOUNT)
+        ]
+        folder = self.home / SECRETS_FOLDER
+        return len(secrets) == 2 and all(  # noqa: PLR2004
+            mount.get("Type") == "bind"
+            and mount.get("RW") is False
+            and Path(str(mount.get("Source"))).is_relative_to(folder)
+            for mount in secrets
+        )
+
+    def _gateway_is_proxy(self, deployment: Deployment) -> bool:
+        pools = self._json(
+            (
+                "docker",
+                "network",
+                "inspect",
+                "--format",
+                "{{json .IPAM.Config}}",
+                deployment.network,
+            )
+        )
+        if not isinstance(pools, list):
+            raise ValueError(UNEXPECTED_ANSWER)  # noqa: TRY004 - one handled kind
+        return any(
+            isinstance(pool, dict)
+            and cast("dict[str, object]", pool).get("Gateway")
+            == deployment.trusted_proxies
+            for pool in cast("list[object]", pools)
+        )
+
+
+def cut_over(  # noqa: PLR0913, PLR0917 - every collaborator is a test seam
+    home: Path,
+    checkout: Path,
+    run: Runner,
+    say: Say,
+    effective_uid: int,
+    passwd_home: Path,
+) -> int:
+    """Retire; only a finished retire is followed by the probe run."""
+    code = retire(home, checkout, run, say, effective_uid, passwd_home)
+    if code != 0:
+        return code
+    return Inspection(home, checkout, run, say).probe()
+
+
 def main() -> int:
-    """Retire against the real home, the script's checkout and the real programs."""
+    """Cut over against the real home, the script's checkout and the real programs."""
     effective_uid = os.geteuid()
-    return retire(
+    return cut_over(
         home=Path.home(),
         checkout=Path(__file__).resolve().parents[1],
         run=real_runner,
