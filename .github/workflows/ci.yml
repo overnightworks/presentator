@@ -201,7 +201,7 @@ jobs:
         run: uv run --locked ruff format --check src tests ../provider-contract/src
 
       - name: Test
-        run: uv run --locked pytest -q tests/test_entrypoint.py tests/test_model.py
+        run: uv run --locked pytest -q tests/test_main.py tests/test_model.py
 
   voxcpm-provider:
     name: "Speech: VoxCPM provider"
@@ -239,7 +239,7 @@ jobs:
         run: uv run --locked ruff format --check src tests ../provider-contract/src
 
       - name: Test
-        run: uv run --locked pytest -q tests/test_entrypoint.py tests/test_model.py
+        run: uv run --locked pytest -q tests/test_main.py tests/test_model.py
 
   magpie-provider:
     name: "Speech: Magpie provider"
@@ -271,7 +271,7 @@ jobs:
       - name: Check formatting
         run: uv run --locked ruff format --check src tests ../provider-contract/src
       - name: Test
-        run: uv run --locked pytest -q tests/test_entrypoint.py tests/test_model.py
+        run: uv run --locked pytest -q tests/test_main.py tests/test_model.py
 
   frontend:
     name: "Frontend: lint, types, tests, deck build"
