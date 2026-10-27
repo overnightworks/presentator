@@ -10,6 +10,13 @@ from presentator.application.people import People
 from presentator.contracts.decks import Source
 from presentator.contracts.models import Role, User
 from presentator.contracts.preferences import PersonPreferences
+from tests.presentator.application.support.decks_support import (
+    DecksFakes,
+    a_folder,
+    a_source,
+    decks_over,
+    having,
+)
 from tests.presentator.application.support.fakes import (
     FakeDeckFolders,
     FakePersonPreferencesStore,
@@ -17,13 +24,6 @@ from tests.presentator.application.support.fakes import (
     FakeSourceStore,
     FakeUserStore,
     FrozenClock,
-)
-from tests.presentator.application.test_decks import (
-    DecksFakes,
-    a_folder,
-    a_source,
-    decks_over,
-    having,
 )
 
 THE_PERSON = User(id="the-person", username="pia", role=Role.ADMIN)

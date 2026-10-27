@@ -9,7 +9,7 @@ import pytest
 
 from presentator.application.decks import Decks
 from presentator.contracts.decks import DeckPage
-from tests.presentator.application.test_decks import (
+from tests.presentator.application.support.decks_support import (
     a_folder,
     a_source,
     carrying,

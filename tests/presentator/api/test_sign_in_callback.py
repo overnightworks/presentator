@@ -10,9 +10,8 @@ import logging
 import re
 import sqlite3
 import threading
-from collections.abc import Callable, Generator
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from http import HTTPStatus
@@ -36,7 +35,6 @@ from webauth.ports import (
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (
-    ProcessWriteLock,
     SqliteSessionRecordStore,
     SqliteSubjectUserStore,
     StoredSession,
@@ -52,56 +50,15 @@ from tests.support.sign_in_support import (
     ADMIN,
     MEMBER,
     Scene,
+    WatchedLock,
     a_scene,
     cookie_names,
-    on_an_event_loop,
 )
 
 _BOUND = 30.0
 _TOO_LONG_FOR_A_COOKIE = 4000
 _COOKIES_OF_A_SIGN_IN = 2
 _HOLDS_OF_A_SIGN_IN = 2
-
-
-@dataclass
-class ContentionSignalingLock:
-    """A real re-entrant lock that says when a taker found it held."""
-
-    contended: threading.Event = field(default_factory=threading.Event)
-    _real: threading.RLock = field(default_factory=threading.RLock)
-
-    def __enter__(self) -> bool:
-        """Take the lock, announcing first when it was already held."""
-        if self._real.acquire(blocking=False):
-            return True
-        self.contended.set()
-        return self._real.acquire()
-
-    def __exit__(self, *_exception: object) -> None:
-        """Let go of the lock."""
-        self._real.release()
-
-
-@dataclass
-class WatchedLock:
-    """The process lock over a contention-signaling primitive, counting its holds."""
-
-    primitive: ContentionSignalingLock = field(default_factory=ContentionSignalingLock)
-    holds: int = 0
-    held_on_the_event_loop: bool = False
-    _mutex: threading.Lock = field(default_factory=threading.Lock)
-
-    @property
-    def contended(self) -> threading.Event:
-        return self.primitive.contended
-
-    @contextmanager
-    def hold(self) -> Generator[None]:
-        with self._mutex:
-            self.holds += 1
-            self.held_on_the_event_loop |= on_an_event_loop()
-        with ProcessWriteLock(primitive=self.primitive).hold():
-            yield
 
 
 @dataclass

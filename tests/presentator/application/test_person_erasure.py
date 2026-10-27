@@ -18,6 +18,9 @@ from presentator.contracts.people import (
     PersonErasure,
     PersonKind,
 )
+from tests.presentator.application.support.decks_support import (
+    DecksFakes,
+)
 from tests.presentator.application.support.fakes import (
     PATIENCE,
     FakeDeckFolders,
@@ -28,9 +31,6 @@ from tests.presentator.application.support.person_instance_support import (
     ANOTHER,
     THE_PERSON,
     an_instance,
-)
-from tests.presentator.application.test_decks import (
-    DecksFakes,
 )
 
 

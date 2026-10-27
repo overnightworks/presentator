@@ -34,6 +34,12 @@ from presentator.host.worker_serving import (
     WireChild,
 )
 from presentator.host.worker_termination import SWEEP_SECONDS
+from tests.presentator.adapters.support.worker_children_support import (
+    PATH,
+    WAIT_SECONDS,
+    end_child,
+    release_and_close,
+)
 from tests.support import worker_support as support
 from tests.support.step_support import OWN_IDENTITY, quick_step
 from tests.support.worker_support import (
@@ -47,12 +53,10 @@ from tests.support.worker_support import (
 OWN_UID = os.getuid()
 OWN_GID = os.getgid()
 REAL_SPAWN = partial(spawn_gated, identity=OWN_IDENTITY)
-WAIT_SECONDS = 10
 WATCHDOG_WINDOW = (6.0, 8.0)
 INHERITED_DESCRIPTORS = {0, 1, 2}
 RELEASED_UMASK = 0o022
 CURRENT_DIRECTORY_KEY = "PWD"
-PATH = "/usr/bin:/bin"
 SECOND_CONNECTION = 2
 SHORT_BUDGET_SECONDS = 0.05
 STALLED_CONTROLLER = """
@@ -310,21 +314,6 @@ def sleeping_child() -> GatedChild:
         environment={"PATH": PATH},
         pass_fds=(),
     )
-
-
-def release_and_close(child: GatedChild) -> None:
-    try:
-        child.release()
-    finally:
-        child.close()
-
-
-def end_child(child: GatedChild) -> int:
-    try:
-        child.kill()
-    finally:
-        reaped_status = child.wait()
-    return reaped_status
 
 
 def test_waiting_within_a_budget_returns_none_and_leaves_the_released_child_alive() -> (
