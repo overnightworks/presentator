@@ -1,8 +1,0 @@
-claim_id = "5daf653c74474759a3654e96aeaa9560"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "efa53a538d7264339208c322d47d141721146dcd"
-branch = "claude/issue-522-ai-mark-wav-and-events"
-scope = ["docs/reference/co-presenter-and-voice.md", "speech/README.md", "speech/src/presentator_speech/pcm.py", "speech/tests/test_sample.py", "speech/tests/test_speak.py", "src/presentator/api/copresenter.py", "tests/api/test_copresenter.py", "tests/api/test_copresenter_answer.py"]
-opened_commit = "6dabf9a55c55b066073691fc972b73bfb3f1c7e3"
-whole_reason = "One ruled sentence (E9 (a), machine-readable half) marks two outputs, the WAV and the answer events; two production files, the rest are their tests and the two documents that describe them."
