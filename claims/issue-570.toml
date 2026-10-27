@@ -1,0 +1,8 @@
+claim_id = "f7f22f3fadbd4bfc9819d7f076db58ae"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "f80beda088a06929f9de26c46d80335ec1ad7b2b"
+branch = "claude/issue-570-api-test-names"
+scope = ["tests/presentator/api/test_auth_backchannel_logout.py", "tests/presentator/api/test_auth_body_size.py", "tests/presentator/api/test_auth_logout.py", "tests/presentator/api/test_auth_session_gate.py", "tests/presentator/api/test_auth_sign_in_callback.py", "tests/presentator/api/test_auth_sign_in_refresh_token.py", "tests/presentator/api/test_auth_sign_in_start.py", "tests/presentator/api/test_backchannel_logout.py", "tests/presentator/api/test_body_size.py", "tests/presentator/api/test_built_talk_hosts.py", "tests/presentator/api/test_deck_files.py", "tests/presentator/api/test_deck_owner.py", "tests/presentator/api/test_deck_page.py", "tests/presentator/api/test_decks_files.py", "tests/presentator/api/test_decks_owner.py", "tests/presentator/api/test_decks_page.py", "tests/presentator/api/test_lobby_talk_addresses.py", "tests/presentator/api/test_logout.py", "tests/presentator/api/test_session_gate.py", "tests/presentator/api/test_sign_in_callback.py", "tests/presentator/api/test_sign_in_refresh_token.py", "tests/presentator/api/test_sign_in_start.py", "tests/presentator/api/test_talk_built_hosts.py", "tests/presentator/api/test_talk_lobby_addresses.py"]
+opened_commit = "d44d949b91bb0553ef65eb5817f57c8c782a1225"
+whole_reason = "The twelve renames share one rule and one done-when (no api test raises test-layout), and the two edits ride on modules that move in the same pull request."
