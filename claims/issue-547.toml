@@ -1,0 +1,7 @@
+claim_id = "7c677d87b2f542d9891d228e71de2b03"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "9ea7be0d562dbdc72389d0a39afff1b7e8945675"
+branch = "claude/issue-547-tmp-retention"
+scope = ["pyproject.toml"]
+opened_commit = "b7b3bfc40ee52e4e8c7f270fc88835ccd78d9eeb"
