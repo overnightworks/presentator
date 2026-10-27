@@ -164,7 +164,7 @@ class Host:
             return outcome(0, f"LoadState={load}\nActiveState={active}\n")
         if verb == "stop":
             self.active_units.discard(unit)
-        if verb in {"stop", "disable"} and known:
+        if verb in {"stop", "disable"}:
             self.stopped_or_disabled.append((verb, unit))
         if verb == "reset-failed" and unit in self.failed_units:
             self.failed_units.discard(unit)
