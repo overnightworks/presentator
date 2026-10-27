@@ -48,7 +48,11 @@ from tests.api.lobby import (
     a_lobby,
     a_signed_in_lobby,
 )
-from tests.application.fakes import LOCAL_MOUNT_EXAMPLE, FakeBuildRunner, FakeDeckStore
+from tests.presentator.application.support.fakes import (
+    LOCAL_MOUNT_EXAMPLE,
+    FakeBuildRunner,
+    FakeDeckStore,
+)
 
 _ADDRESS = "git@heimserver:decks.git"
 _OTHER_ADDRESS = "https://gitlab.example.invalid/decks.git"
@@ -116,10 +120,7 @@ def signed_in_as(lobby: Lobby, username: str) -> None:
 
 
 def fetch(
-    client: TestClient,
-    name: str,
-    *,
-    headers: dict[str, str] | None = None,
+    client: TestClient, name: str, *, headers: dict[str, str] | None = None
 ) -> Response:
     return client.post(_FETCH.format(name=name), headers=headers)
 
@@ -164,14 +165,13 @@ def confirm_removal(
 @pytest.fixture
 def instance() -> Lobby:
     return an_instance_of_two_people(
-        given=GivenDecks(source=a_configured_source(_ADDRESS)),
+        given=GivenDecks(source=a_configured_source(_ADDRESS))
     )
 
 
 @pytest.mark.parametrize("method", ["get", "post"])
 def test_a_person_without_the_admin_role_is_refused_at_sources(
-    instance: Lobby,
-    method: str,
+    instance: Lobby, method: str
 ) -> None:
     signed_in_as(instance, NEIGHBOUR)
 

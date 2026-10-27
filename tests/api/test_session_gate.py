@@ -31,7 +31,11 @@ from tests.api.lobby import (
     a_crowd,
     a_lobby_app,
 )
-from tests.application.fakes import FakeSession, FakeSessionRecordStore, FakeUserStore
+from tests.presentator.application.support.fakes import (
+    FakeSession,
+    FakeSessionRecordStore,
+    FakeUserStore,
+)
 
 _JSON = {"accept": "application/json"}
 _HTML = {"accept": "text/html"}

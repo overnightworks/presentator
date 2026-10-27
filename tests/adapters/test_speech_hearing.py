@@ -19,7 +19,7 @@ from presentator.contracts.copresenter import (
 )
 from tests.adapters.serving import Serving, unix_listener
 from tests.api.copresenter_support import PrivateFakes, a_use
-from tests.application.fakes import FakeDeckStore
+from tests.presentator.application.support.fakes import FakeDeckStore
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

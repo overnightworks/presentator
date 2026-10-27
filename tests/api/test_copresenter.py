@@ -42,7 +42,7 @@ from tests.api.copresenter_support import (
 from tests.api.lobby import (
     NOW,
 )
-from tests.application.fakes import (
+from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeUserStore,
     FrozenClock,

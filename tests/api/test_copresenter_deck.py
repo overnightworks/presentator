@@ -19,7 +19,7 @@ from tests.api.copresenter_support import (
     ask,
     the_admins_decks,
 )
-from tests.application.fakes import FrozenClock
+from tests.presentator.application.support.fakes import FrozenClock
 
 if TYPE_CHECKING:
     from httpx2 import Response

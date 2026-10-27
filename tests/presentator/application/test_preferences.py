@@ -9,7 +9,7 @@ from presentator.contracts.preferences import (
     ThemeChoice,
 )
 from presentator.contracts.text import DEFAULT_LANGUAGE_TAG, Catalogs, Language
-from tests.application.fakes import (
+from tests.presentator.application.support.fakes import (
     FakeInstanceSettingsStore,
     FakePersonPreferencesStore,
     some_words,

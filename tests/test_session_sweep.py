@@ -18,8 +18,8 @@ from presentator.contracts.models import Role, User
 from presentator.host import main
 from presentator.host.config import load_settings
 from tests.api.lobby import AN_AGENT_SERVICE, configure_oidc, configure_secret_key
-from tests.application.fakes import PATIENCE, FrozenClock
 from tests.people import seed_user
+from tests.presentator.application.support.fakes import PATIENCE, FrozenClock
 
 _STARTED = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _ADMIN = User(id="id-of-felix", username="felix", role=Role.ADMIN)

@@ -71,7 +71,11 @@ from tests.api.lobby import (
     NOW,
 )
 from tests.api.talk_support import A_DECK, B_DECK, A, Hosts, two_hosts
-from tests.application.fakes import FakeDeckStore, FakeSourceStore, FrozenClock
+from tests.presentator.application.support.fakes import (
+    FakeDeckStore,
+    FakeSourceStore,
+    FrozenClock,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Mapping

@@ -10,7 +10,7 @@ from presentator.application.people import People
 from presentator.contracts.decks import Source
 from presentator.contracts.models import Role, User
 from presentator.contracts.preferences import PersonPreferences
-from tests.application.fakes import (
+from tests.presentator.application.support.fakes import (
     FakeDeckFolders,
     FakePersonPreferencesStore,
     FakeSessionRecordStore,
@@ -18,7 +18,7 @@ from tests.application.fakes import (
     FakeUserStore,
     FrozenClock,
 )
-from tests.application.test_decks import (
+from tests.presentator.application.test_decks import (
     DecksFakes,
     a_folder,
     a_source,
