@@ -515,22 +515,15 @@ def _answer_of(outcome: Outcome) -> Answer:
     return Answer(outcome.code, status, headers)
 
 
-def _held_if(held: bool) -> Verdict:  # noqa: FBT001 - a plain judgement
-    return Verdict.HELD if held else Verdict.FAILED
-
-
-def _held_if_check(check: Callable[[], bool]) -> Verdict:
-    return _held_if(check())
+def _held_if(check: Callable[[], bool]) -> Verdict:
+    return Verdict.HELD if check() else Verdict.FAILED
 
 
 def _redirects_to_sign_in(answer: Answer, side: Side, deployment: Deployment) -> bool:
     location = answer.first("location")
     if side is Side.TALK:
         return answer.status == 303 and location == deployment.lobby_origin  # noqa: PLR2004
-    try:
-        path = urlsplit(location).path
-    except ValueError:
-        return False
+    path = urlsplit(location).path
     return 300 <= answer.status < 400 and path == SIGN_IN_PATH  # noqa: PLR2004
 
 
@@ -693,7 +686,7 @@ class Inspection(Retirement):
         def one_web_container() -> Verdict:
             found = self._lines(WEB_CONTAINER)
             web[:] = found if found is not None and len(found) == 1 else []
-            return _held_if(bool(web))
+            return Verdict.HELD if web else Verdict.FAILED
 
         yield "web container", one_web_container
         if not web:
@@ -701,23 +694,16 @@ class Inspection(Retirement):
         container = web[0]
         checks = (
             ("mounts", lambda: self._mounts_clean(container)),
-            (
-                "groups",
-                lambda: (
-                    self._inspected(container, ".HostConfig.GroupAdd") in (None, [])
-                ),
-            ),
+            ("groups", lambda: not self._inspected(container, ".HostConfig.GroupAdd")),
             (
                 "ports",
-                lambda: (
-                    self._inspected(container, ".HostConfig.PortBindings") in (None, {})
-                ),
+                lambda: not self._inspected(container, ".HostConfig.PortBindings"),
             ),
             ("secrets", lambda: self._secrets_held(container)),
             ("gateway", lambda: self._gateway_is_proxy(deployment)),
         )
         for name, check in checks:
-            yield f"web container {name}", partial(_held_if_check, check)
+            yield f"web container {name}", partial(_held_if, check)
 
     def _json(self, arguments: Sequence[str]) -> object:
         outcome = self.run(arguments)
