@@ -1,4 +1,4 @@
-"""Fixtures shared by the cutover tests: the module, a tmp home and the host fake."""
+"""Fixtures shared by the script tests: the script loader, and for the cutover tests the module, a tmp home and the host fake."""
 
 import importlib
 import sys
