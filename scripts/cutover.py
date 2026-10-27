@@ -259,10 +259,12 @@ class Retirement:
     def _step_units(self) -> None:
         for unit in UNITS:
             if exists(self.home / UNIT_DIRECTORY / unit):
-                self._systemctl("stop", unit)
+                stopped = self._systemctl("stop", unit)
                 self._systemctl("disable", unit)
                 if self._unit_state(unit).get("ActiveState") not in STOPPED_UNIT_STATES:
-                    raise StepFailedError(unit, "stays active")
+                    raise StepFailedError(
+                        unit, "stays active", f"stop exit {stopped.code}"
+                    )
         for target in self._targets(Step.UNITS, Kind.FILE):
             self._remove_path(target)
         for target in self._targets(Step.UNITS, Kind.DIRECTORY):
@@ -274,10 +276,10 @@ class Retirement:
             if self._unit_state(unit) != RETIRED_UNIT_STATE:
                 raise StepFailedError(unit, REMAINS)
 
-    def _systemctl(self, *arguments: str) -> None:
+    def _systemctl(self, *arguments: str) -> Outcome:
         # The exit code is not the answer: on this host stop, disable and
         # reset-failed of an unknown unit exit non-zero. The unit's state is.
-        self.run(("systemctl", "--user", *arguments))
+        return self.run(("systemctl", "--user", *arguments))
 
     def _unit_state(self, unit: str) -> dict[str, str]:
         shown = self.run(

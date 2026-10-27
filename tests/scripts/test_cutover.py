@@ -465,7 +465,7 @@ def test_a_tree_holding_a_link_to_a_survivor_deletes_the_link_not_the_survivor(
         ("docker volume rm", f"{DOCKER_STEP}: docker volume exit 1"),
         ("docker image rm", f"{DOCKER_STEP}: docker image exit 1"),
         ("docker network ls", f"{DOCKER_STEP}: docker network exit 1"),
-        ("systemctl --user stop", f"{UNIT_STEP}: {UNITS[0]} stays active"),
+        ("systemctl --user stop", f"{UNIT_STEP}: {UNITS[0]} stays active stop exit 1"),
     ],
 )
 def test_a_failed_step_names_the_step_stops_and_the_next_run_resumes(
