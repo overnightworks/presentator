@@ -308,10 +308,11 @@ def prove_the_whole_file_starts(report: Report) -> None:
         docker("network", "inspect", declared["networks"]["default"]["name"])
     )
     (pool,) = network[0]["IPAM"]["Config"]
-    if pool["Gateway"] != trusted:
-        refuse(f"the gateway {pool['Gateway']} is not the trusted proxy {trusted}")
+    gateway = pool["Gateway"]
+    if gateway != trusted:
+        refuse(f"the gateway {gateway} is not the trusted proxy")
     report.cell(
-        "whole file", f"web healthy, worker running, gateway {trusted} is trusted"
+        "whole file", f"web healthy, worker running, gateway {gateway} is trusted"
     )
 
 
