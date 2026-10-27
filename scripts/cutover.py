@@ -261,13 +261,15 @@ class Retirement:
         for unit in UNITS:
             if exists(self.home / UNIT_DIRECTORY / unit):
                 stopped = self._systemctl("stop", unit)
-                self._systemctl("disable", unit)
+                disabled = self._systemctl("disable", unit)
                 if self._unit_state(unit).get("ActiveState") not in STOPPED_UNIT_STATES:
                     raise StepFailedError(
                         unit, "stays active", f"stop exit {stopped.code}"
                     )
                 if self._unit_file_state(unit) != DISABLED_UNIT_FILE_STATE:
-                    raise StepFailedError(unit, "stays enabled")
+                    raise StepFailedError(
+                        unit, "stays enabled", f"disable exit {disabled.code}"
+                    )
         for target in self._targets(Step.UNITS, Kind.FILE):
             self._remove_path(target)
         for target in self._targets(Step.UNITS, Kind.DIRECTORY):

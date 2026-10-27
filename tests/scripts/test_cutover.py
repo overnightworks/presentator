@@ -65,6 +65,7 @@ class Host:
     )
     traefik_answers: bool = True
     failing: set[str] = field(default_factory=set[str])
+    exits_after_acting: set[str] = field(default_factory=set[str])
     failed_units: set[str] = field(default_factory=set[str])
     active_units: set[str] = field(
         default_factory=lambda: {"presentator-speech.service"}
@@ -167,18 +168,27 @@ class Host:
             if unit in self.failed_units:
                 active = "failed"
             return outcome(0, f"LoadState={load}\nActiveState={active}\n")
-        if verb == "stop":
-            self.active_units.discard(unit)
-        if verb == "disable" and unit not in self.stuck_enabled:
-            self.enabled_units.discard(unit)
-        if verb in {"stop", "disable"}:
-            self.stopped_or_disabled.append((verb, unit))
+        self.act(verb, unit)
+        if f"systemctl --user {verb}" in self.exits_after_acting:
+            return outcome(1, "")
         if verb == "reset-failed" and unit in self.failed_units:
             self.failed_units.discard(unit)
             return outcome(0, "")
         if verb in UNIT_EXIT_CODES and not known:
             return outcome(UNIT_EXIT_CODES[verb], "")
         return outcome(0, "")
+
+    def act(self, verb: str, unit: str) -> None:
+        if verb == "stop":
+            self.active_units.discard(unit)
+        if verb == "disable" and unit not in self.stuck_enabled:
+            self.enabled_units.discard(unit)
+            self.wants_link(unit).unlink(missing_ok=True)
+        if verb in {"stop", "disable"}:
+            self.stopped_or_disabled.append((verb, unit))
+
+    def wants_link(self, unit: str) -> Path:
+        return self.home / UNIT_DIRECTORY / "default.target.wants" / unit
 
     def commands(self, program: str) -> list[tuple[str, ...]]:
         return [call for call in self.calls if call[0] == program]
@@ -203,6 +213,10 @@ def home(tmp_path: Path) -> Path:
     for name in LISTED_PATHS[4:]:
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         (root / name).write_text("unit")
+    wants = root / UNIT_DIRECTORY / "default.target.wants"
+    wants.mkdir()
+    for unit in UNITS:
+        (wants / unit).symlink_to(root / UNIT_DIRECTORY / unit)
     live = root / "presentator-live"
     (live / ".git").mkdir(parents=True)
     (live / "speech").mkdir()
@@ -502,28 +516,37 @@ def test_a_failed_step_names_the_step_stops_and_the_next_run_resumes(
 def test_a_unit_that_stays_enabled_fails_the_step_and_a_resume_completes(
     execute: Callable[..., Run], host: Host, home: Path
 ) -> None:
-    """S9h1 (#542) sentence 2: a unit still enabled keeps its file and link."""
+    """S9h1 (#542) sentences 2 and 4: a unit still enabled keeps its file and link."""
     host.stuck_enabled.add(UNITS[0])
 
     failed = execute()
 
     assert failed.code == 1
-    assert failed.lines[-1] == f"{UNIT_STEP}: {UNITS[0]} stays enabled"
+    assert failed.lines[-1] == f"{UNIT_STEP}: {UNITS[0]} stays enabled disable exit 0"
     assert (home / UNIT_DIRECTORY / UNITS[0]).exists()
+    assert host.wants_link(UNITS[0]).is_symlink()
 
     host.stuck_enabled.clear()
     resumed = execute()
 
     assert resumed.code == 0
     assert present(home, LISTED_PATHS) == []
+    assert not host.wants_link(UNITS[0]).is_symlink()
 
 
-@pytest.mark.parametrize("failing", ["systemctl --user daemon-reload"])
+@pytest.mark.parametrize(
+    "failing",
+    [
+        "systemctl --user stop",
+        "systemctl --user disable",
+        "systemctl --user daemon-reload",
+    ],
+)
 def test_a_systemctl_call_that_exits_non_zero_but_reaches_its_state_is_no_failure(
     execute: Callable[..., Run], host: Host, home: Path, failing: str
 ) -> None:
     """S9h1 (#542) sentence 2: systemctl is decided from state, not exit codes."""
-    host.failing.add(failing)
+    host.exits_after_acting.add(failing)
 
     result = execute()
 
