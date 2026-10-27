@@ -1,0 +1,8 @@
+claim_id = "1b97d136560147e7976abecfb8b960e8"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "8a14dba5262e4e47ef7bc8c4488bec2ed90aff08"
+branch = "claude/issue-541-tests-mirror-application"
+scope = ["quality/baseline.toml", "tests/adapters/person_instance_support.py", "tests/adapters/test_speech_hearing.py", "tests/api/copresenter_support.py", "tests/api/lobby.py", "tests/api/talk_support.py", "tests/api/test_copresenter.py", "tests/api/test_copresenter_answer.py", "tests/api/test_copresenter_deck.py", "tests/api/test_copresenter_limits.py", "tests/api/test_copresenter_talk_host.py", "tests/api/test_copresenter_use.py", "tests/api/test_deck_owner.py", "tests/api/test_deck_page.py", "tests/api/test_decks.py", "tests/api/test_people_erasure_route.py", "tests/api/test_people_export_route.py", "tests/api/test_session_gate.py", "tests/api/test_sources.py", "tests/application", "tests/contracts", "tests/presentator/application", "tests/presentator/contracts", "tests/sign_in_support.py", "tests/test_polling.py", "tests/test_session_sweep.py"]
+opened_commit = "c9998ded5c02661b6ccc9713c66ac502b3307350"
+whole_reason = "The folders, their support modules, every importer and the one baseline key move together: a half-moved tree has dangling imports and an orphaned baseline entry, and the gate is red."
