@@ -46,7 +46,8 @@ session whose refresh token is missing or refused gets 401
 `{"detail": "Not authenticated"}`; an unreachable issuer gets 503
 `{"detail": "Co-presenter unavailable"}`. The agent service is not called in any
 of these cases, and the question is counted. Once the answer streams, the
-events are `text`, `sentence`, `audio` and `done`. Every failure ends in an
+events are `text`, `sentence`, `audio` and `done`, each carrying
+`"ai_generated": true` (AI Act Art. 50(2)); the mark has no switch. Every failure ends in an
 `error` event, and an answer the service refuses because the person is not
 enabled carries `"reason": "not-enabled"` in it. The overlay shows only its
 own words for them: "Not enabled" for the `not-enabled` reason, "Sign in again"
@@ -106,3 +107,8 @@ succeeds, while Piper stays resident.
   snapshot.
 - Magpie restores its exact cached model and NanoCodec archives with one
   configured fixed voice and produces completed 22,050 Hz WAV speech.
+
+Every WAV the speech service writes, from `/speak` and from a voice sample,
+carries the machine-readable AI mark: a RIFF `LIST`/`INFO` `ICMT` comment
+between `fmt ` and `data` holding the IPTC term
+`DigitalSourceType=…/trainedAlgorithmicMedia`. It has no switch.

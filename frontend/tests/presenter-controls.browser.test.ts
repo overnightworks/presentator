@@ -196,15 +196,16 @@ describe('presenter controls', () => {
     }
   })
 
-  it.each([
-    ['speech cannot be reached', 'unreachable', 'Unreachable'],
+  it.each([1024, 390].flatMap((width) => ([
+    ['#512 line 2: speech cannot be reached', 'unreachable', 'Voice offline'],
+    ['#512 line 2: the co-presenter fails without being offline', 'who-fails', 'Unreachable'],
     ['local hearing is not ready', 'not-ready', 'Local hearing not ready'],
     ['the hearing socket sends an error', 'socket-error', 'No hearing'],
-  ] as const)('says so and builds no browser speech recognition when %s', async (_situation, mode, message) => {
+  ] as const).map((row) => [width, ...row] as const)))('says so and builds no browser speech recognition at %ipx when %s', async (width, _situation, mode, message) => {
     state.hearingMode = mode
     state.media = createMediaObservation()
     const hearingOpenedBefore = state.hearingOpened
-    const { browser, page } = await openPresenter(1024)
+    const { browser, page } = await openPresenter(width)
     try {
       const ai = page.getByRole('switch', { name: 'AI' })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
@@ -226,7 +227,7 @@ describe('presenter controls', () => {
         () => (window as unknown as { __speechRecognitionsBuilt: number }).__speechRecognitionsBuilt,
       )).toBe(0)
       await expect.poll(() => state.hearingClosed).toBeGreaterThanOrEqual(state.hearingOpened)
-      if (mode === 'unreachable') expect(state.hearingOpened).toBe(hearingOpenedBefore)
+      if (mode === 'unreachable' || mode === 'who-fails') expect(state.hearingOpened).toBe(hearingOpenedBefore)
       if (mode === 'socket-error') await expect.poll(() => state.media.trackStopped).toBe(true)
       else {
         expect(await page.evaluate(

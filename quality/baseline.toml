@@ -5,7 +5,7 @@
 
 [file_lines]
 "speech/tests/test_provider_process.py" = 872
-"speech/tests/test_voice_status.py" = 1511
+"speech/tests/test_voice_status.py" = 1473
 "src/presentator/adapters/decks.py" = 876
 "src/presentator/application/decks.py" = 974
 "tests/adapters/test_builds.py" = 1252

@@ -273,7 +273,7 @@ def test_private_answer_events_preserve_the_public_stream_contract() -> None:
         "done",
     ]
     assert response.text.endswith(
-        'event: done\ndata: {"text": "Der Anfang. Der Satz."}\n\n'
+        'event: done\ndata: {"text": "Der Anfang. Der Satz.", "ai_generated": true}\n\n'
     )
     assert private.answers.exits == 1
 
@@ -292,7 +292,7 @@ def test_private_answer_refusal_and_clean_end_do_not_invent_an_answer() -> None:
     assert refused.text == (
         'event: error\ndata: {"message": "the answer could not be spoken"}\n\n'
     )
-    assert ended.text == 'event: done\ndata: {"text": ""}\n\n'
+    assert ended.text == 'event: done\ndata: {"text": "", "ai_generated": true}\n\n'
     assert private.answers.exits == 1
 
 
