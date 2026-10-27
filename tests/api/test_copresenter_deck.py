@@ -19,8 +19,7 @@ from tests.api.copresenter_support import (
     ask,
     the_admins_decks,
 )
-from tests.api.lobby import ADMIN
-from tests.application.fakes import FakeUserStore, FrozenClock
+from tests.application.fakes import FrozenClock
 
 if TYPE_CHECKING:
     from httpx2 import Response
@@ -42,9 +41,9 @@ def ask_about(lobby: Lobby, slug: str) -> Response:
 
 
 def an_instance(
-    *others: Deck, removed: tuple[str, ...] = ()
+    *others: Deck, removed: tuple[str, ...] = (), role: Role = Role.ADMIN
 ) -> tuple[Lobby, PrivateFakes]:
-    """An admin signed in, a budget of one question, and the admin's own deck."""
+    """A person signed in, a budget of one question, and the admin's own deck."""
     decks = the_admins_decks()
     for deck in others:
         decks.put(deck)
@@ -55,7 +54,7 @@ def an_instance(
         decks=decks,
         limiter=AskLimiter(clock=FrozenClock(instant=NOW), limits=ONE_QUESTION_ONLY),
     )
-    lobby.sign_in(role=Role.ADMIN)
+    lobby.sign_in(role=role)
     return lobby, private
 
 
@@ -132,20 +131,15 @@ def test_a_name_over_the_length_bound_is_rejected_before_any_lookup() -> None:
     assert ask(lobby.client).status_code == HTTPStatus.OK
 
 
-def test_an_owner_who_lost_the_admin_role_is_refused() -> None:
-    """E11 (#355) matrix, asker: #400 [Admin-Rolle verloren], 403, no budget."""
-    users = FakeUserStore()
-    lobby, private, _clock = a_copresenter_talk_host(
-        users=users,
-        limiter=AskLimiter(clock=FrozenClock(instant=NOW), limits=ONE_QUESTION_ONLY),
-    )
-    lobby.sign_in(role=Role.ADMIN)
-    users.users[ADMIN] = replace(users.users[ADMIN], role=Role.USER)
+def test_an_owner_with_the_user_role_is_answered_and_another_users_deck_is_not() -> (
+    None
+):
+    """E11 (#355), amended 27.10.2026: ownership decides, not the role."""
+    lobby, private = an_instance(ANOTHERS, role=Role.USER)
 
-    refused = ask(lobby.client)
-    users.users[ADMIN] = replace(users.users[ADMIN], role=Role.ADMIN)
+    refused = ask_about(lobby, TARGET)
 
-    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert refused.status_code == HTTPStatus.NOT_FOUND
     assert private.answers.messages == []
     assert ask(lobby.client).status_code == HTTPStatus.OK
     assert len(private.answers.messages) == 1

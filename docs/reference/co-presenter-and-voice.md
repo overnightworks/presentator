@@ -29,14 +29,15 @@ models run and what they cost on the card is owned by the speech README.
 
 The repository overlay calls relative `/copresenter/who`, `/copresenter/ask`
 and `/copresenter/hear` routes. The talk host serves them under its own session
-cookie and its own Origin; the lobby answers 404 on them. Only the
-admin role may use them, through the existing active session: a signed-in
-person without it gets 403 on `/who` and `/ask` and a refused handshake (HTTP 403, before accept) on
-`/hear`; an accepted hearing ends with a 1008 close when the session or the role
-goes. Presentator checks the session and, for the WebSocket, the exact
+cookie and its own Origin; the lobby answers 404 on them. Any signed-in person
+may use them, through the existing active session; the agent service's own
+subscription and API groups decide who may ask, and deck ownership limits which
+deck. Without a session `/who` and `/ask` get 401 and `/hear` a refused
+handshake (HTTP 403, before accept); an accepted hearing ends with a 1008 close
+when the session goes. Presentator checks the session and, for the WebSocket, the exact
 Origin before opening the socket.
 `/ask` is guarded by the origin check alone, like every mutating request
-([sign-in and session](sign-in-and-session.md)). Logout, expiry, loss of the account row, loss of the admin role
+([sign-in and session](sign-in-and-session.md)). Logout, expiry, loss of the account row
 or a session-store failure closes the hearing lease and an ongoing answer
 within one second, since Presentator rechecks the answer and hearing lease
 every half second; generation, capture and queued or playing audio stop.
@@ -64,7 +65,7 @@ answer at a time and may ask 20 questions per 10 minutes. An ask beyond either
 limit gets 429 with a `Retry-After` header (seconds until it may be asked
 again) and starts no turn. `deck` names the asker's deck and is at most 255
 characters, else 422; any deck the asker does not own built (malformed, missing,
-nonexistent, unbuilt, source-less or another admin's) gets one identical 404
+nonexistent, unbuilt, source-less or another person's) gets one identical 404
 before the limiter, so it spends no question.
 
 ## Settings · Voice

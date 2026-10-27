@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from contextlib import suppress
 from dataclasses import dataclass
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Final, Protocol, TypeGuard, assert_never
+from typing import TYPE_CHECKING, Final, Protocol, assert_never
 
 from fastapi import APIRouter, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -70,11 +70,6 @@ class SignedIn(Protocol):
         """The account the session belongs to."""
         ...
 
-    @property
-    def is_admin(self) -> bool:
-        """Whether the person holds the one role that may use the co-presenter."""
-        ...
-
 
 Admission = Callable[[HTTPConnection], SignedIn | None]
 Delay = Callable[[float], Awaitable[None]]
@@ -97,7 +92,7 @@ class _SessionGuard:
 
     def same_session(self, connection: HTTPConnection, session_id: str) -> bool:
         admitted = self.admission(connection)
-        return _may_use(admitted) and admitted.session_id == session_id
+        return admitted is not None and admitted.session_id == session_id
 
     async def wait(self) -> None:
         await self.delay(_CHECK_INTERVAL_SECONDS)
@@ -131,8 +126,8 @@ def add_copresenter_routes(
 
     async def _who(request: Request) -> JSONResponse:
         connection = admission(request)
-        if not _may_use(connection):
-            return _refusal(connection)
+        if connection is None:
+            return _not_authenticated()
         try:
             ready = await use.readiness()
         except CoPresenterUnavailableError:
@@ -155,7 +150,7 @@ def add_copresenter_routes(
             await socket.close(code=_POLICY_VIOLATION)
             return
         connection = admission(socket)
-        if not _may_use(connection):
+        if connection is None:
             await socket.close(code=_POLICY_VIOLATION)
             return
         await socket.accept()
@@ -226,8 +221,8 @@ def _admit(
     question: AskRequest,
 ) -> _Ask | Response:
     connection = admission(request)
-    if not _may_use(connection):
-        return _refusal(connection)
+    if connection is None:
+        return _not_authenticated()
     asked = surface.use.asked_deck(question.deck, viewer=connection.user_id)
     if asked is None:
         return JSONResponse({"detail": "Not found"}, HTTPStatus.NOT_FOUND)
@@ -270,23 +265,15 @@ def _access_refusal(refusal: AccessRefusal) -> JSONResponse:
         case AccessRefusal.SIGN_IN_AGAIN:
             return JSONResponse({"detail": "Sign in again"}, HTTPStatus.UNAUTHORIZED)
         case AccessRefusal.SESSION_ENDED:
-            return JSONResponse(
-                {"detail": "Not authenticated"}, HTTPStatus.UNAUTHORIZED
-            )
+            return _not_authenticated()
         case AccessRefusal.ISSUER_UNAVAILABLE:
             return _unavailable()
         case _:
             assert_never(refusal)
 
 
-def _may_use(admitted: SignedIn | None) -> TypeGuard[SignedIn]:
-    return admitted is not None and admitted.is_admin
-
-
-def _refusal(connection: SignedIn | None) -> JSONResponse:
-    if connection is None:
-        return JSONResponse({"detail": "Not authenticated"}, HTTPStatus.UNAUTHORIZED)
-    return JSONResponse({"detail": "Operator only"}, HTTPStatus.FORBIDDEN)
+def _not_authenticated() -> JSONResponse:
+    return JSONResponse({"detail": "Not authenticated"}, HTTPStatus.UNAUTHORIZED)
 
 
 async def _answer_events(

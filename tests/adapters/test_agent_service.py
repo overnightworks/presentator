@@ -62,7 +62,7 @@ def test_the_request_is_the_run_request_of_the_contract() -> None:
     assert str(request.url) == f"{ORIGIN}/runs"
     run = RunRequest.model_validate_json(request.content)
     assert (run.v, run.purpose) == (2, "copresenter")
-    assert run.roles == ["admin"]
+    assert run.roles == ["admin", "user"]
     assert run.tools == {}
     assert run.model is None
     assert run.turn.system

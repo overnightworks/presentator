@@ -1,4 +1,4 @@
-"""The co-presenter is the talk host's: its session, token, Origin and admin."""
+"""The co-presenter is the talk host's: its session, token, Origin and person."""
 
 from __future__ import annotations
 
@@ -58,29 +58,19 @@ def _hear_with_origin(browser: TestClient, origin: str | None) -> int | None:
 
 
 # C4.
-@pytest.mark.parametrize(
-    ("role", "status", "reaches_the_service"),
-    [
-        pytest.param(Role.ADMIN, HTTPStatus.OK, True, id="admin"),
-        pytest.param(Role.USER, HTTPStatus.FORBIDDEN, False, id="role-user"),
-    ],
-)
-def test_who_answers_the_admin_only(
-    role: Role,
-    status: HTTPStatus,
-    reaches_the_service: bool,  # noqa: FBT001
-) -> None:
+@pytest.mark.parametrize("role", [Role.ADMIN, Role.USER])
+def test_who_answers_every_signed_in_person(role: Role) -> None:
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in(role=role)
 
     answer = talk.client.get("/copresenter/who", headers=_JSON)
 
-    assert answer.status_code == status
-    assert (private.speech.readiness_calls == 1) is reaches_the_service
+    assert answer.status_code == HTTPStatus.OK
+    assert private.speech.readiness_calls == 1
 
 
 # C5.
-def test_ask_streams_for_an_admin_with_the_browsers_own_provenance() -> None:
+def test_ask_streams_for_a_signed_in_person_with_the_browsers_own_provenance() -> None:
     talk, _private, _clock = a_copresenter_talk_host()
     talk.sign_in()
 
@@ -164,13 +154,12 @@ def test_hear_is_accepted_only_from_the_talk_origin(
     assert _hear_with_origin(talk.client, origin) == denied_with
 
 
-# C6.
-def test_hear_is_refused_to_a_user_even_from_the_talk_origin() -> None:
-    talk, private, _clock = a_copresenter_talk_host()
+def test_hear_is_accepted_for_a_user_from_the_talk_origin() -> None:
+    """#537 sentence 2: a hearing is accepted for a signed-in user."""
+    talk, _private, _clock = a_copresenter_talk_host()
     talk.sign_in(role=Role.USER)
 
-    assert _hear_with_origin(talk.client, TALK_ORIGIN) == POLICY_VIOLATION
-    assert private.speech.hearing_opens == 0
+    assert _hear_with_origin(talk.client, TALK_ORIGIN) is None
 
 
 # C7.
@@ -201,8 +190,8 @@ def test_a_sign_in_at_the_talk_host_sets_no_csrf_cookie(tmp_path: Path) -> None:
     assert not any("csrf" in cookie.lower() for cookie in cookies)
 
 
-# C8.
-def test_an_admin_demoted_while_signed_in_loses_the_copresenter_at_once() -> None:
+def test_an_admin_demoted_while_signed_in_is_still_answered() -> None:
+    """#537 sentence 3: a role change does not end the answer."""
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in(role=Role.ADMIN)
     (admin,) = talk.people.users.users.values()
@@ -210,8 +199,8 @@ def test_an_admin_demoted_while_signed_in_loses_the_copresenter_at_once() -> Non
 
     answer = talk.client.get("/copresenter/who", headers=_JSON)
 
-    assert answer.status_code == HTTPStatus.FORBIDDEN
-    assert private.speech.readiness_calls == 0
+    assert answer.status_code == HTTPStatus.OK
+    assert private.speech.readiness_calls == 1
 
 
 def _talk_host_with_a_signed_in_admin(
@@ -234,10 +223,10 @@ def _demote_at_the_lobby(hosts: Hosts) -> None:
     hosts.sign_in(lobby, A_BROWSERS_ADDRESS, subject=A.id, groups=MEMBER)
 
 
-# C8.
-def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_deck_and_closes_who(
+def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_deck_and_who(
     tmp_path: Path,
 ) -> None:
+    """#537 sentence 3: a role change does not end the deck or who."""
     hosts, talk, private = _talk_host_with_a_signed_in_admin(tmp_path)
     _demote_at_the_lobby(hosts)
 
@@ -245,29 +234,25 @@ def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_deck_and_closes_who(
     who = talk.get("/copresenter/who", headers=_JSON)
 
     assert deck.status_code == HTTPStatus.OK
-    assert who.status_code == HTTPStatus.FORBIDDEN
-    assert private.speech.readiness_calls == 0
+    assert who.status_code == HTTPStatus.OK
+    assert private.speech.readiness_calls == 1
 
 
-# C8.
-def test_a_lobby_sign_in_that_demotes_the_admin_ends_the_running_hearing(
+def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_running_hearing(
     tmp_path: Path,
 ) -> None:
+    """#537 sentence 3: a role change does not end a running hearing."""
     deadline = ManualDeadline()
     hosts, talk, private = _talk_host_with_a_signed_in_admin(tmp_path, deadline)
 
     with talk.websocket_connect(HEARING, headers={"origin": TALK_ORIGIN}) as socket:
         assert deadline.started.wait(timeout=1)
-        socket.send_bytes(b"before demotion")
-        assert socket.receive_json() == {"text": "gehört", "final": True}
         _demote_at_the_lobby(hosts)
         deadline.release_first()
-        socket.send_text("force an observable close if the hearing stood")
-        with pytest.raises(WebSocketDisconnect) as ended:
-            socket.receive_json()
+        socket.send_bytes(b"after demotion")
+        assert socket.receive_json() == {"text": "gehört", "final": True}
 
-    assert ended.value.code == POLICY_VIOLATION
-    assert private.speech.hearing.closed == 1
+    assert private.speech.hearing.frames == [b"after demotion"]
 
 
 # C9.
