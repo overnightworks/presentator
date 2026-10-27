@@ -617,7 +617,7 @@ class Inspection(Retirement):
         unreadable = RefusedError(RECORD_UNREADABLE)
         try:
             data = cast("object", json.loads(record.read_text()))
-        except (OSError, ValueError) as failure:
+        except (OSError, ValueError, RecursionError) as failure:
             raise unreadable from failure
         if not isinstance(data, dict):
             raise unreadable

@@ -214,6 +214,12 @@ def test_the_second_run_reports_the_retire_as_gone_and_probes_the_same(
             id="not-json",
         ),
         pytest.param(
+            "[" * 200_000,
+            REFUSED,
+            RECORD_UNREADABLE,
+            id="deeply-nested-json",
+        ),
+        pytest.param(
             ["v1.0.0"],
             REFUSED,
             RECORD_UNREADABLE,
