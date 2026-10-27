@@ -169,7 +169,7 @@ def test_a_refused_or_failed_retire_probes_nothing(scene: Scene) -> None:
     failed = scene.drive()
 
     assert (refused.code, failed.code) == (REFUSED, 1)
-    assert scene.probing_calls() == []
+    assert not scene.probing_calls()
 
 
 def test_a_finished_retire_is_followed_by_the_probes(scene: Scene) -> None:
