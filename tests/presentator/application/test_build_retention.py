@@ -9,19 +9,19 @@ import pytest
 from presentator.application.decks import Decks, SourceRemovalRefusal
 from presentator.contracts.decks import Build, Deck, Source, SourcePoll
 from presentator.ports.decks import BuildRun
+from tests.presentator.application.support.decks_support import (
+    DecksFakes,
+    a_folder,
+    a_source,
+    decks_over,
+    having,
+)
 from tests.presentator.application.support.fakes import (
     BUILDS_ROOT,
     FakeBuildRunner,
     FakeDeckFolders,
     FakeDeckStore,
     FakeSourceStore,
-)
-from tests.presentator.application.test_decks import (
-    DecksFakes,
-    a_folder,
-    a_source,
-    decks_over,
-    having,
 )
 
 _SOURCE = a_source("decks", identifier="the-configured-source")
