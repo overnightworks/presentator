@@ -5,14 +5,15 @@ Usage: probe_build_worker_web.py drive
 Runs where Docker is, after the worker's own drive has removed its project, with
 the same compose environment plus `WEB_PROBE_OVERRIDE`, the override file that
 adds the web's two read-only probe mounts (hello-deck and
-`probe_build_worker`); the master key and the client secret are compose's own
-file secrets. It starts the real `presentator` service, which has no
-Docker socket and no neighbour but the worker, and sends the program
-`probe_build_worker/web_client.py` into it over stdin: that program builds
+`probe_build_worker`), publishes the probe's port, which `compose.yaml` never
+does, and carries the job's origins and test issuer; the master key and the
+client secret are compose's own file secrets. It starts the real `presentator`
+service, which has no Docker socket and no neighbour but the worker, and sends
+the program `probe_build_worker/web_client.py` into it over stdin: that program builds
 through the very composition the web serves with. Every cell prints one line,
 and a cell that is not driven fails the run.
 
-Precondition: the web's `.env` sets `PRESENTATOR_SOURCE_POLL_SECONDS` above this
+Precondition: the override sets `PRESENTATOR_SOURCE_POLL_SECONDS` above this
 run's duration, as the CI job does. The web sweeps every build run no deck row
 names at the end of a poll, and the program lays runs of its own under the
 builds root that no row names.
@@ -49,6 +50,7 @@ from probe_build_worker_lives import (
     handshake_line,
     wait_for_uptime,
 )
+from ruamel.yaml import YAML
 
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES, SOCKET_DIRECTORY
 from presentator.adapters.build_worker import (
@@ -70,7 +72,7 @@ SECRET_MOUNTS = frozenset(
     {"/run/secrets/presentator_secret_key", "/run/secrets/oidc_client_secret"}
 )
 COMPOSE_MOUNTS = frozenset(
-    {"/data/database", "/data/mirrors", BUILDS_ROOT, "/run/presentator-speech"}
+    {"/data/database", "/data/mirrors", BUILDS_ROOT}
     | {SOCKET_DIRECTORY}
     | SECRET_MOUNTS
 )
@@ -80,7 +82,7 @@ WAITING_HOLD_SECONDS = 4.0
 STEP_SECONDS = 900
 STAGING_POLLS = 1200
 RESTART_SECONDS = 60
-CELLS = ("B25", "B12 C", "B13", "B15 C")
+CELLS = ("B25", "whole file", "B12 C", "B13", "B15 C")
 UNWRITTEN = "WRITTENNUMBER"
 HELLO_STEPS = ("build", "export")
 
@@ -283,6 +285,36 @@ def prove_inspected_shape() -> None:
         refuse(f"the web's mounts are {sorted(mounts)}")
 
 
+def prove_the_whole_file_starts(report: Report) -> None:
+    """The file starts web healthy and worker running; its proxy is the gateway.
+
+    The stack B25 left running is started again, so this proves the web's health
+    and the worker's state, not a fresh create.
+    """
+    web("up", "--detach", "--wait", "--no-build")
+    health = docker(
+        "inspect", "--format", "{{.State.Health.Status}}", web("ps", "--quiet", WEB)
+    )
+    running = docker("inspect", "--format", "{{.State.Status}}", worker())
+    if (health, running) != ("healthy", "running"):
+        refuse(
+            f"after the whole file started the web is {health}, the worker {running}"
+        )
+    declared = YAML(typ="safe").load(  # pyright: ignore[reportUnknownMemberType]
+        (REPOSITORY / "compose.yaml").read_text(encoding="utf-8")
+    )
+    trusted = declared["services"][WEB]["environment"]["PRESENTATOR_TRUSTED_PROXIES"]
+    network = json.loads(
+        docker("network", "inspect", declared["networks"]["default"]["name"])
+    )
+    (pool,) = network[0]["IPAM"]["Config"]
+    if pool["Gateway"] != trusted:
+        refuse(f"the gateway {pool['Gateway']} is not the trusted proxy {trusted}")
+    report.cell(
+        "whole file", f"web healthy, worker running, gateway {trusted} is trusted"
+    )
+
+
 def prove_start_before_the_worker(report: Report) -> None:
     """B25: a web on a fresh socket volume waits, and answers within W of the worker."""
     volume = f"{os.environ['COMPOSE_PROJECT_NAME']}_build-socket"
@@ -432,6 +464,7 @@ def drive() -> None:
     report = Report(CELLS)
     try:
         prove_start_before_the_worker(report)
+        prove_the_whole_file_starts(report)
         prove_restart_mid_step(report)
         prove_reply_cut_off(report)
         prove_refusal_texts(report)
