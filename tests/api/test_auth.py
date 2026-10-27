@@ -544,6 +544,16 @@ def test_the_datenschutz_renders_every_section_and_links_the_impressum(
     assert f"die im {impressum_link} genannte Kontaktadresse" in page
 
 
+def test_the_datenschutz_links_the_notice_sections_of_hallucinai(
+    lobby: Lobby,
+) -> None:
+    """#519 sentence 2: the notice links both hallucinai sections by their full href."""
+    page = lobby.client.get("/datenschutz").text
+
+    assert 'href="https://hallucinai.de/datenschutz#agent-dienst"' in page
+    assert 'href="https://hallucinai.de/datenschutz#anmeldung"' in page
+
+
 def test_the_datenschutz_leaves_nothing_open_and_names_its_date(
     lobby: Lobby,
 ) -> None:
@@ -601,8 +611,9 @@ def test_the_datenschutz_names_the_agent_service_and_claims_nothing_of_its_keepi
     assert (
         "Stellen Sie im Vortrag eine Frage, sendet Presentator sie mit dem Titel "
         "und dem Text des gefragten Decks an den Agent-Dienst von hallucinai. Was "
-        "der Dienst damit tut, beschreibt sein Abschnitt in der Datenschutzerklärung "
-        "von hallucinai."
+        "der Dienst damit tut, beschreibt "
+        '<a href="https://hallucinai.de/datenschutz#agent-dienst">sein Abschnitt in '
+        "der Datenschutzerklärung von hallucinai</a>."
     ) in page
     assert "Anthropic" not in page
     assert "Anthropic Ireland, Limited:" not in page
