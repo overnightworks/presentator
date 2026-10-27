@@ -17,7 +17,6 @@ from webauth.middleware.security_headers import (
 from webauth.oidc_login import AdmissionConfig
 
 from presentator.api.talk import TALK_PERMISSIONS_POLICY, talk_content_security_policy
-from tests.people import seed_user
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
@@ -26,6 +25,7 @@ from tests.support.lobby import (
     ENGLISH,
     Lobby,
 )
+from tests.support.people import seed_user
 from tests.support.talk_support import (
     A_DECK,
     B_DECK,

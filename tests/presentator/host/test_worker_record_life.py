@@ -16,7 +16,7 @@ from presentator.host.worker_serving import (
     hand_over,
 )
 from presentator.host.worker_wire import WireExit
-from tests.worker_support import ACCEPT_TIME, RecordingCreation, ScriptedLife
+from tests.support.worker_support import ACCEPT_TIME, RecordingCreation, ScriptedLife
 
 ACCEPTED_ARM = "arm 447.0"
 

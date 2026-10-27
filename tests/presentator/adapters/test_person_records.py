@@ -19,8 +19,8 @@ from presentator.adapters.schema import create_tables
 from presentator.contracts.models import Role, User
 from presentator.contracts.people import SessionTimes
 from presentator.contracts.preferences import PersonPreferences
-from tests.people import seed_user
 from tests.presentator.adapters.support.key_draft_support import a_key_drafts_store
+from tests.support.people import seed_user
 
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _THE_PERSON = User(id="the-person", username="pia", role=Role.USER)

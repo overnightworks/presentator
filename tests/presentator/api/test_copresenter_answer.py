@@ -88,7 +88,7 @@ if TYPE_CHECKING:
     from presentator.api.auth import InstalledAuth
     from presentator.ports.copresenter import DeckTexts
     from tests.conftest import GitRemote
-from tests.leak_support import everything_shown
+from tests.support.leak_support import everything_shown
 
 PERSON: Final = "person-access-MARKER"
 REFRESH: Final = "refresh-MARKER"

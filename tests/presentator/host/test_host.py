@@ -45,12 +45,16 @@ from tests.conftest import (
     INSTANCE_KEY,
     GitRemote,
 )
-from tests.people import copy_of_a_crashed_database, seed_user, write_password_schema
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     configure_secret_key,
     hand_over_session_cookies,
+)
+from tests.support.people import (
+    copy_of_a_crashed_database,
+    seed_user,
+    write_password_schema,
 )
 
 _PERSON = "felix"

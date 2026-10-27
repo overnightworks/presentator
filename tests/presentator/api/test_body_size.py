@@ -14,7 +14,6 @@ from presentator.api.auth import BACKCHANNEL_LOGOUT_PATH
 from presentator.api.copresenter import MAX_SAID_LENGTH
 from presentator.contracts.models import Role
 from presentator.contracts.text import DEFAULT_LANGUAGE_TAG
-from tests.sign_in_support import Scene, a_scene
 from tests.support.copresenter_support import QUESTION, a_copresenter_talk_host
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -22,6 +21,7 @@ from tests.support.lobby import (
     a_content_security_policy,
     a_lobby,
 )
+from tests.support.sign_in_support import Scene, a_scene
 
 _FORM = "application/x-www-form-urlencoded"
 _JSON = "application/json"

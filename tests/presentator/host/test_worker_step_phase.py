@@ -15,13 +15,13 @@ from presentator.host.worker_serving import (
     hand_over,
 )
 from presentator.host.worker_wire import ReplyPlan, WireExit
-from tests.step_support import (
+from tests.support.step_support import (
     STEP_ENVIRONMENT,
     STEP_EXIT_DESCRIPTOR,
     STEP_PROJECT,
     ScriptedStep,
 )
-from tests.worker_support import (
+from tests.support.worker_support import (
     ACCEPT_TIME,
     ScriptedLife,
     open_descriptor_count,

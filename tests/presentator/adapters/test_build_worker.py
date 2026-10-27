@@ -41,7 +41,6 @@ from presentator.contracts.decks import (
     StepKind,
 )
 from presentator.host import worker
-from tests import worker_support as support
 from tests.presentator.adapters.support.build_worker_support import (
     BUILT_BY_STEP,
     BUILT_TALK,
@@ -55,7 +54,8 @@ from tests.presentator.adapters.support.build_worker_support import (
     toolchain,
     tree_of,
 )
-from tests.worker_support import OWN_GID, OWN_UID
+from tests.support import worker_support as support
+from tests.support.worker_support import OWN_GID, OWN_UID
 
 PROMPTLY = 10
 WINDOW_TOLERANCE = 0.1

@@ -16,7 +16,7 @@ from presentator.adapters.build_wire import StepHeader, write_record
 from presentator.contracts.decks import StepKind
 from presentator.host import worker, worker_step
 from presentator.host.worker import create_request_record
-from tests.worker_support import open_descriptor_count
+from tests.support.worker_support import open_descriptor_count
 
 CONTROLLER_UMASK = 0o077
 OPEN_DIRECTORY_MODE = 0o1777

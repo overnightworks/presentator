@@ -15,7 +15,6 @@ from agent_runtime_client.wire import (
 )
 
 from presentator.adapters.agent_service import ServiceAnswerer
-from tests.leak_support import everything_shown
 from tests.presentator.adapters.support.agent_service_support import (
     GOOD_ANSWER,
     MARKERS,
@@ -44,6 +43,7 @@ from tests.presentator.adapters.support.agent_service_support import (
     violating_frame,
     whole,
 )
+from tests.support.leak_support import everything_shown
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
