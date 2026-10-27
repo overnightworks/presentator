@@ -56,16 +56,14 @@ not settings; leaving them in the environment does nothing, and a line naming
 ## Trusted proxies and the client address
 
 The client address is the ASGI peer. Empty `PRESENTATOR_TRUSTED_PROXIES` is
-correct for a direct run. Behind the tunnel of
-[ADR 0007](../decisions/0007-browser-client-behind-tunnel.md) the tunnel client
-connects from localhost, so that peer is `127.0.0.1` and every request through
-the tunnel shares one address. Setting the list to that peer (`127.0.0.1` where
-the tunnel client and the server share one loopback) makes the library read `X-Forwarded-For` and `X-Forwarded-Proto`: the per-address
-rate limit counts the real client instead of the tunnel, and the fetch-now hook
-address the Sources page shows names the https the tunnel client saw, not the
-plain http the app itself is served over. A container has a network of its own
-and sees that client as its gateway (`172.31.255.1`, a subnet `compose.yaml`
-fixes). The guard against another site's form does not depend on this list
+correct for a direct run. Behind a proxy every request shares the proxy's address.
+Setting the list to that peer makes the library read `X-Forwarded-For` and
+`X-Forwarded-Proto`: the per-address rate limit counts the real client instead
+of the proxy, and the fetch-now hook address the Sources page shows names the
+https the proxy saw, not the plain http the app itself is served over. A
+deployed container has a network of its own and sees the edge's proxy
+([ADR 0019](../decisions/0019-presentator-is-an-edge-app.md)) as its gateway
+(`172.31.251.1`, a subnet `compose.yaml` fixes). The guard against another site's form does not depend on this list
 ([sign-in and session](sign-in-and-session.md)).
 
 ## In the container image
@@ -80,10 +78,10 @@ image sets them and the defaults above do not apply; compose sets the rest.
 | `PRESENTATOR_BUILDS` | `/data/builds` |
 | `PRESENTATOR_LOCAL_SOURCES_MOUNT` | `/data/local-sources` |
 | `PRESENTATOR_TOOLCHAIN` | `/app/frontend` |
-| `PRESENTATOR_HOST` | `0.0.0.0`, offered by compose at `127.0.0.1:8000` |
+| `PRESENTATOR_HOST` | `0.0.0.0`, reached through the edge's proxy |
 | `PRESENTATOR_BUILD_RUNNER` | `worker`, set by `compose.yaml` |
 | `PRESENTATOR_AGENT_SERVICE` | `http://agent-service:8080`, set by `compose.yaml` |
-| `PRESENTATOR_SPEECH_SOCKET` | `/run/presentator-speech/speech.sock`, set by `compose.yaml` |
+| `PRESENTATOR_SPEECH_SOCKET` | `/run/presentator-speech/speech.sock`, not mounted in a deployed instance |
 
 `Dockerfile` builds one image in two layers: the Slidev toolchain with the
 Chromium its PDF export drives (what a deck's own build runs in), and the whole
@@ -91,13 +89,8 @@ instance on top of it. The image holds no Docker client. It carries the CA
 certificates an HTTPS source needs to verify the git host's TLS certificate;
 CI proves it with a live HTTPS fetch on every build.
 
-Values the compose file needs rather than the process: `PRESENTATOR_RUNTIME_UID`,
-`SPEECH_SOCKET_DIRECTORY`,
-`PRESENTATOR_LOCAL_SOURCES` (only with the override of
-[add a folder on this box](../runbooks/add-a-folder-on-this-box.md)), and
-`COMPOSE_PROJECT_NAME`, which names the volumes. Compose refuses to start the
-service without the public origin and the first two of these
-values.
+The compose file needs no value from the operator: its plain values are
+literals, and `COMPOSE_PROJECT_NAME` is only a probe's.
 
 ## Speech (host process)
 
