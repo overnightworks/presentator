@@ -509,7 +509,7 @@ def _answer_of(outcome: Outcome) -> Answer:
     for line in header_lines:
         name, _, value = line.partition(":")
         headers.setdefault(name.strip().lower(), []).append(value.strip())
-    status = int(words[1]) if len(words) > 1 and words[1].isdigit() else 0
+    status = int(words[1]) if len(words) > 1 and words[1].isdecimal() else 0
     return Answer(outcome.code, status, headers)
 
 

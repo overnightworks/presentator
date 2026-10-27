@@ -470,6 +470,11 @@ def local(host: str, path: str, answer: str) -> dict[tuple[str, str, str], str]:
             "public talk health",
             id="public-health",
         ),
+        pytest.param(
+            local(LOBBY_HOST, "/datenschutz", "HTTP/1.1 \u00b200\r\n\r\n"),
+            "local lobby datenschutz",
+            id="status-of-superscript-digits",
+        ),
     ],
 )
 def test_a_failed_probe_is_named_and_the_others_still_run(
