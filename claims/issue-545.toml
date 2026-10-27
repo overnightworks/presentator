@@ -1,0 +1,8 @@
+claim_id = "788178f3eb7e47afa5d6cf433aeb123d"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "9ea7be0d562dbdc72389d0a39afff1b7e8945675"
+branch = "claude/issue-545-tests-mirror-adapters"
+scope = ["pyproject.toml", "quality/baseline.toml", "scripts/probe_build_worker_uploads.py", "tests/adapters", "tests/api/copresenter_support.py", "tests/api/test_copresenter_answer.py", "tests/api/test_copresenter_limits.py", "tests/presentator/adapters", "tests/presentator/application/support/fakes.py", "tests/presentator/host", "tests/scripts/test_probe_upload_classes.py"]
+opened_commit = "40488adc3eab9bf40e7cb564c9fd26d32400e471"
+whole_reason = "The folder, its support modules, every importer and the pinning keys move together: a half-moved tree has dangling imports and orphaned baseline and ruff entries, and the gate is red."
