@@ -1,8 +1,0 @@
-claim_id = "9fc453c9ebed46c4b554d2d8c4982c88"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "efa53a538d7264339208c322d47d141721146dcd"
-branch = "claude/issue-520-voice-offline-not-yet-available"
-scope = ["examples/copresenter-deck/components/CoPresenter.vue", "frontend/tests/presenter-controls.browser.test.ts", "frontend/tests/presenter-overlay-harness.ts", "quality/baseline.toml", "speech/src/presentator_speech/voices.py", "speech/tests/test_voice_status.py"]
-opened_commit = "d27e0ba72b2b8977d835e7f9b6817f2d17d83c0e"
-whole_reason = "Lines 2 and 4 of #512 are two wording cards on the same voice-down state, ruled together; the overlay literal and the voice status each need their own test, and landing one without the other leaves the go-live showing Unreachable or Not downloaded."
