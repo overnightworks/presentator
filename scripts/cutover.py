@@ -694,18 +694,8 @@ class Inspection(Retirement):
         container = web[0]
         checks = (
             ("mounts", lambda: self._mounts_clean(container)),
-            (
-                "groups",
-                lambda: (
-                    self._inspected(container, ".HostConfig.GroupAdd") in (None, [])
-                ),
-            ),
-            (
-                "ports",
-                lambda: (
-                    self._inspected(container, ".HostConfig.PortBindings") in (None, {})
-                ),
-            ),
+            ("groups", lambda: self._unset(container, "GroupAdd", [])),
+            ("ports", lambda: self._unset(container, "PortBindings", {})),
             ("secrets", lambda: self._secrets_held(container)),
             ("gateway", lambda: self._gateway_is_proxy(deployment)),
         )
@@ -721,6 +711,10 @@ class Inspection(Retirement):
     def _inspected(self, container: str, field: str) -> object:
         template = f"{{{{json {field}}}}}"
         return self._json(("docker", "inspect", "--format", template, container))
+
+    def _unset(self, container: str, field: str, empty: object) -> bool:
+        answer = self._inspected(container, f".HostConfig.{field}")
+        return answer is None or (type(answer) is type(empty) and not answer)
 
     def _mounts(self, container: str) -> list[dict[str, object]]:
         mounts = self._inspected(container, ".Mounts")
