@@ -731,6 +731,20 @@ class _StatusScenario:
         ),
         _StatusScenario(
             VoiceId.CHATTERBOX,
+            _RuntimeFacts().state(),
+            (),
+            (),
+            VoiceState.UNAVAILABLE,
+        ),
+        _StatusScenario(
+            VoiceId.CHATTERBOX,
+            _RuntimeFacts().state(),
+            (),
+            (VoiceId.CHATTERBOX,),
+            VoiceState.NOT_DOWNLOADED,
+        ),
+        _StatusScenario(
+            VoiceId.CHATTERBOX,
             _RuntimeFacts(
                 selected=VoiceId.PIPER,
                 ready=True,
