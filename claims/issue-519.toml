@@ -1,8 +1,0 @@
-claim_id = "4ecf9e9e72d24c45802fe3117dbd8d55"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "efa53a538d7264339208c322d47d141721146dcd"
-branch = "claude/issue-519-datenschutz-links-docs-keycloak"
-scope = ["docs/VISION.md", "docs/decisions/0011-instance-users.md", "docs/decisions/0015-public-like-songmaker-own-login.md", "docs/decisions/0018-keycloak-replaces-own-accounts.md", "docs/decisions/README.md", "docs/mockups/m0-lobby.html", "docs/runbooks/configure-keycloak.md", "scripts/capture_theme_screenshots.mjs", "scripts/theme_screenshot_manifest.txt", "src/presentator/api/legal.py", "src/presentator/api/templates/base.html", "src/presentator/api/templates/datenschutz.html", "tests/api/test_auth.py"]
-opened_commit = "5f492296d61b764e4aa2c913cf36aaecca8edbea"
-whole_reason = "The links, their mockup mirror and test, the ADR with its amendments and the vision and runbook edits are one change of what the repository says about sign-in and accounts, and the deleted script's only reader is its own manifest; split, the page would link while documents still promise own accounts."
