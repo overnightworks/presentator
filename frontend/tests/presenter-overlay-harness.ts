@@ -73,7 +73,7 @@ export const state = {
   askHeaderNames: [] as string[],
   answerMode: 'audio' as AnswerMode,
   askBodies: [] as { said: string, deck: string }[],
-  hearingMode: 'ready' as 'ready' | 'not-ready' | 'socket-error' | 'unreachable',
+  hearingMode: 'ready' as 'ready' | 'not-ready' | 'socket-error' | 'unreachable' | 'who-fails',
   media: createMediaObservation(),
 }
 
@@ -255,6 +255,11 @@ async function startServer() {
   server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://presenter.test')
     if (url.pathname === '/copresenter/who') {
+      if (state.hearingMode === 'who-fails') {
+        response.writeHead(500, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ detail: 'Co-presenter failed' }))
+        return
+      }
       if (state.hearingMode === 'unreachable') {
         response.writeHead(503, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ detail: 'Co-presenter unavailable' }))

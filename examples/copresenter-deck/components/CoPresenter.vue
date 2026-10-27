@@ -15,9 +15,17 @@ const DECK_SLUG = decodeURIComponent(
 // The overlay shows only these lines, never a message the server sent.
 const NO_ANSWER = 'No answer'
 const NOT_ENABLED = 'Not enabled'
+const VOICE_OFFLINE = 'Voice offline'
 const SIGN_IN_AGAIN = 'Sign in again'
 const NOT_ENABLED_REASON = 'not-enabled'
 const SIGN_IN_AGAIN_DETAILS = new Set(['Sign in again', 'Not authenticated'])
+
+class WhoRefused extends Error {
+  constructor(status) {
+    super('co-presenter unavailable')
+    this.status = status
+  }
+}
 
 async function refusalLine(response) {
   if (response.status !== 401) return NO_ANSWER
@@ -125,13 +133,13 @@ async function turnOn() {
   try {
     const response = await fetch(`${COPRESENTER}/who`)
     if (!stillActive(generation)) return
-    if (!response.ok) throw new Error('co-presenter unavailable')
+    if (!response.ok) throw new WhoRefused(response.status)
     report = await response.json()
     if (!stillActive(generation)) return
     sampleRate = report.speech?.sample_rate || 16000
-  } catch {
+  } catch (failure) {
     if (!stillActive(generation)) return
-    error.value = 'Unreachable'
+    error.value = failure instanceof WhoRefused && failure.status === 503 ? VOICE_OFFLINE : 'Unreachable'
     hearing.value = 'off'
     return
   }
