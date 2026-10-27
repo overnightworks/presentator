@@ -124,6 +124,7 @@ def test_the_admin_receives_only_speech_readiness() -> None:
 
 
 def test_a_signed_in_user_is_answered_on_every_copresenter_route() -> None:
+    """#537 sentence 2: a signed-in user is answered by who, ask and hear."""
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
     lobby.sign_in(role=Role.USER)
@@ -142,6 +143,7 @@ def test_a_signed_in_user_is_answered_on_every_copresenter_route() -> None:
 
 
 def test_a_running_hearing_keeps_going_when_its_person_changes_role() -> None:
+    """#537 sentence 3: a role change does not end a running hearing."""
     users = RefusingUserStore()
     deadline = ManualDeadline()
     lobby, private, _clock = a_copresenter_talk_host(users=users, delay=deadline.wait)
@@ -166,6 +168,7 @@ def _demote(users: FakeUserStore) -> None:
 
 
 def test_an_answer_in_flight_finishes_when_its_person_changes_role() -> None:
+    """#537 sentence 3: a role change does not end an answer in flight."""
     users = RefusingUserStore()
     deadline = ManualDeadline()
     event_count = 40

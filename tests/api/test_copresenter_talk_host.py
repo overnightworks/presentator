@@ -154,8 +154,8 @@ def test_hear_is_accepted_only_from_the_talk_origin(
     assert _hear_with_origin(talk.client, origin) == denied_with
 
 
-# C6.
 def test_hear_is_accepted_for_a_user_from_the_talk_origin() -> None:
+    """#537 sentence 2: a hearing is accepted for a signed-in user."""
     talk, _private, _clock = a_copresenter_talk_host()
     talk.sign_in(role=Role.USER)
 
@@ -190,8 +190,8 @@ def test_a_sign_in_at_the_talk_host_sets_no_csrf_cookie(tmp_path: Path) -> None:
     assert not any("csrf" in cookie.lower() for cookie in cookies)
 
 
-# C8.
 def test_an_admin_demoted_while_signed_in_is_still_answered() -> None:
+    """#537 sentence 3: a role change does not end the answer."""
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in(role=Role.ADMIN)
     (admin,) = talk.people.users.users.values()
@@ -223,10 +223,10 @@ def _demote_at_the_lobby(hosts: Hosts) -> None:
     hosts.sign_in(lobby, A_BROWSERS_ADDRESS, subject=A.id, groups=MEMBER)
 
 
-# C8.
 def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_deck_and_who(
     tmp_path: Path,
 ) -> None:
+    """#537 sentence 3: a role change does not end the deck or who."""
     hosts, talk, private = _talk_host_with_a_signed_in_admin(tmp_path)
     _demote_at_the_lobby(hosts)
 
@@ -238,10 +238,10 @@ def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_deck_and_who(
     assert private.speech.readiness_calls == 1
 
 
-# C8.
 def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_running_hearing(
     tmp_path: Path,
 ) -> None:
+    """#537 sentence 3: a role change does not end a running hearing."""
     deadline = ManualDeadline()
     hosts, talk, private = _talk_host_with_a_signed_in_admin(tmp_path, deadline)
 
