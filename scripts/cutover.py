@@ -694,10 +694,17 @@ class Inspection(Retirement):
         container = web[0]
         checks = (
             ("mounts", lambda: self._mounts_clean(container)),
-            ("groups", lambda: not self._inspected(container, ".HostConfig.GroupAdd")),
+            (
+                "groups",
+                lambda: (
+                    self._inspected(container, ".HostConfig.GroupAdd") in (None, [])
+                ),
+            ),
             (
                 "ports",
-                lambda: not self._inspected(container, ".HostConfig.PortBindings"),
+                lambda: (
+                    self._inspected(container, ".HostConfig.PortBindings") in (None, {})
+                ),
             ),
             ("secrets", lambda: self._secrets_held(container)),
             ("gateway", lambda: self._gateway_is_proxy(deployment)),

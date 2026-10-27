@@ -608,6 +608,26 @@ def test_a_web_container_without_added_groups_holds_in_either_empty_form(
     assert run.code == 0
 
 
+@pytest.mark.parametrize("malformed", [False, 0, "", "x"], ids=repr)
+@pytest.mark.parametrize(
+    ("field", "failed"),
+    [
+        (".HostConfig.GroupAdd", "web container groups"),
+        (".HostConfig.PortBindings", "web container ports"),
+    ],
+)
+def test_a_web_container_answering_a_malformed_scalar_fails_its_probe(
+    scene: Scene, field: str, failed: str, malformed: object
+) -> None:
+    """S9h2 (#553) sentence 5: only the exact empty shapes Docker reports hold."""
+    scene.host.inspected |= {field: malformed}
+
+    run = scene.drive()
+
+    assert any(line.startswith(f"failed: {failed}") for line in run.lines)
+    assert run.code == 1
+
+
 @pytest.mark.parametrize(
     "fault",
     [
