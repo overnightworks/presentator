@@ -3,5 +3,6 @@ agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
 role = "builder"
 base = "bbb08810edcf8d7d47c813a653fb1087492ecbd0"
 branch = "claude/issue-529-run-directory-readable"
-scope = ["docs/reference/builds.md", "src/presentator/adapters/builds.py", "tests/adapters/test_builds.py"]
+scope = ["docs/reference/builds.md", "src/presentator/adapters/build_runs.py", "src/presentator/adapters/builds.py", "tests/adapters/test_build_runs.py", "tests/adapters/test_builds.py"]
 opened_commit = "9a300331e557f948ea523e911edf0c2dd1332b2b"
+whole_reason = "One mode contract with edge's backup: the mode a run is created with and the mode its removal gives back, with their tests and the one reference sentence; split, the backup would still fail on runs being removed."
