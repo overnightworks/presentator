@@ -22,7 +22,7 @@ from presentator.contracts.decks import OUTPUT_DIRECTORY, PDF_FILE, TALK_DIRECTO
 
 # Owner rwx, others read and enter: a run is never left closed to the backup
 # that reads the builds volume as another uid, even one that stays half removed.
-_OPEN_TO_OTHERS_TO_READ: Final = 0o755
+RUN_DIRECTORY_MODE: Final = 0o755
 # A descriptor pinned to a directory nobody may read is still that directory;
 # this is the name the running kernel gives it, and the one way its mode can be
 # changed without naming a path a build could have exchanged underneath.
@@ -139,13 +139,11 @@ def _opened_again(tree: Path) -> None:
 
 
 def _let_the_owner_back_into(holder: int, *, and_pin: list[int]) -> None:
-    """Open that one directory to its owner again, and pin the ones in it."""
+    """Open that one directory to its owner and others, and pin the ones in it."""
     with suppress(OSError):
         # A descriptor pinned without reading rights cannot be changed
         # directly; this is where the running kernel lets its owner name it.
-        Path(_THE_DESCRIPTOR_ITSELF.format(descriptor=holder)).chmod(
-            _OPEN_TO_OTHERS_TO_READ
-        )
+        Path(_THE_DESCRIPTOR_ITSELF.format(descriptor=holder)).chmod(RUN_DIRECTORY_MODE)
         readable = os.open(_HERE, os.O_RDONLY | os.O_DIRECTORY, dir_fd=holder)
         try:
             _pin_the_directories_in(readable, and_pin=and_pin)

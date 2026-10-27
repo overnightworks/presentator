@@ -33,6 +33,7 @@ from typing import IO, BinaryIO, Final, Protocol, cast
 
 from gitmirror.model import MirrorError, Revision
 from presentator.adapters.build_runs import (
+    RUN_DIRECTORY_MODE,
     listed_runs,
     removed_run,
     run_name_of,
@@ -75,8 +76,6 @@ _UP: Final = ".."
 # deck's own build-time code.
 _INHERITED: Final = ("PATH", "HOME")
 _READ_AT_ONCE: Final = 64 * 1024
-# mkdtemp makes 0700; the backup of the builds volume reads runs as another uid.
-_RUN_DIRECTORY_MODE: Final = 0o755
 _A_MEGABYTE: Final = 1024 * 1024
 # Adding up what a build wrote is walking a tree that build filled, so it is
 # bounded like everything else it touches: a talk is hundreds of files, and
@@ -406,7 +405,7 @@ class SlidevBuilds:
         root = self.builds.absolute()
         root.mkdir(parents=True, exist_ok=True)
         run = Path(mkdtemp(dir=root))
-        run.chmod(_RUN_DIRECTORY_MODE)
+        run.chmod(RUN_DIRECTORY_MODE)
         (run / OUTPUT_DIRECTORY).mkdir()
         return BuildPlace(root=root, run=Path(run.name))
 
