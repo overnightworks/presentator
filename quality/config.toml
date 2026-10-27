@@ -37,7 +37,7 @@ reason = "Vite loads its configuration by the name vite.config.mjs"
 [[layout.allow]]
 path = "tests/presentator/api/fixtures/built_talk/_redirects"
 rule = "file-suffix"
-reason = "the static host reads redirect rules from a file of exactly this name in a built deck"
+reason = "a redirect rule file the built-talk fixture keeps under its name; the static host serves it as a plain file and does not read its rules"
 
 [[layout.allow]]
 path = "scripts/cutover.py"
