@@ -3,61 +3,48 @@
 import errno
 import json
 import os
-import signal
-import socket
 import sys
-import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
-from contextlib import ExitStack, closing, suppress
-from dataclasses import dataclass, field, replace
+from contextlib import closing
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import pytest
 
 from presentator.adapters.worker_children import (
-    ChildSurroundings,
-    GatedChild,
-    readable_within,
     spawn_gated,
 )
 from presentator.host import worker, worker_serving
 from presentator.host.worker_serving import (
     LifeEnd,
-    Serving,
-    StepEffects,
-    WireChild,
-    hand_over,
 )
-from presentator.host.worker_wire import WireExit
+from tests.presentator.host.support.worker_life import (
+    EXITING_SENT,
+    PATH,
+    LifeScenario,
+    end_controller,
+    logged_process_ids,
+    run_life,
+)
 from tests.support.step_support import OWN_IDENTITY
+from tests.support.worker_chain import (
+    SLEEPER,
+    WAIT_SECONDS,
+    ChainSpawn,
+)
 from tests.support.worker_support import (
     END,
     STATUS,
     STEP_HEADER,
     VALID_STEP,
-    NeverArmed,
     RecordingCreation,
-    assert_gone,
     connect_when_serving,
-    listening_socket,
-    present_among,
-    process_id_of,
-    role_of,
 )
 
-WAIT_SECONDS = 20
-PATH = "/usr/bin:/bin"
 FORGER = """
 import os, sys
 os.pwrite(int(sys.argv[2]), bytes.fromhex(sys.argv[3]), 0)
 sys.exit(5)
 """
-EXITING_SENT = f"import sys; sys.exit({int(WireExit.SENT)})"
-EXITING_SEVEN = "import sys; sys.exit(7)"
-EXITING_ZERO = "import sys; sys.exit(0)"
-SLEEPER = "import time; time.sleep(120)"
 INODES_REPORTER = """
 import json, os, sys
 identities = []
@@ -70,240 +57,6 @@ for name in os.listdir("/proc/self/fd"):
 os.write(int(sys.argv[1]), json.dumps(identities).encode())
 sys.exit(4)
 """
-
-
-@dataclass
-class ChainSpawn:
-    """The real gated spawn, with a program in place of a role where a test asks.
-
-    The step exits 0 at once unless a test gives it a program or asks for the
-    real launcher.
-    """
-
-    programs: Mapping[str, list[str]] = field(default_factory=dict[str, list[str]])
-    real_launcher: bool = False
-    sender_gate: Callable[[GatedChild], WireChild] = lambda child: child
-    roles: list[str] = field(default_factory=list[str])
-    children: list[GatedChild] = field(default_factory=list[GatedChild])
-    process_ids: list[int] = field(default_factory=list[int])
-
-    def __call__(
-        self,
-        command: Sequence[str],
-        *,
-        environment: Mapping[str, str],
-        pass_fds: Sequence[int],
-    ) -> WireChild:
-        role = role_of(command)
-        child = self._started(
-            role,
-            self._substituted(role, command, pass_fds),
-            environment,
-            pass_fds,
-            ChildSurroundings(),
-        )
-        return self.sender_gate(child) if role == "send" else child
-
-    def step(
-        self,
-        command: Sequence[str],
-        *,
-        environment: Mapping[str, str],
-        pass_fds: Sequence[int],
-        surroundings: ChildSurroundings,
-    ) -> GatedChild:
-        return self._started(
-            "step",
-            self._substituted("step", command, pass_fds),
-            environment,
-            pass_fds,
-            surroundings,
-        )
-
-    def _substituted(
-        self, role: str, command: Sequence[str], pass_fds: Sequence[int]
-    ) -> Sequence[str]:
-        program = self.programs.get(role)
-        if program is None and role == "step" and not self.real_launcher:
-            program = [EXITING_ZERO]
-        if program is None:
-            return command
-        source, *extras = program
-        return [sys.executable, "-I", "-c", source, *map(str, pass_fds), *extras]
-
-    def _started(
-        self,
-        role: str,
-        command: Sequence[str],
-        environment: Mapping[str, str],
-        pass_fds: Sequence[int],
-        surroundings: ChildSurroundings,
-    ) -> GatedChild:
-        self.roles.append(role)
-        child = spawn_gated(
-            command,
-            identity=OWN_IDENTITY,
-            environment=environment,
-            pass_fds=pass_fds,
-            surroundings=surroundings,
-        )
-        self.children.append(child)
-        self.process_ids.append(process_id_of(child))
-        return child
-
-    def kill_and_reap(self) -> None:
-        for child in self.children:
-            child.kill()
-        unreaped = [
-            child for child in self.children if child.wait_within(WAIT_SECONDS) is None
-        ]
-        assert not unreaped, "a killed child was not reaped"
-        assert_gone(self.process_ids)
-
-
-@dataclass
-class Life:
-    """What one controller life did, as the client and the controller saw it."""
-
-    life_end: LifeEnd | None
-    reply: bytes
-    spawn: ChainSpawn
-    started_at: float
-    returned_at: float
-    present_at_return: frozenset[int]
-
-
-def read_to_end(client: socket.socket) -> bytes:
-    """Read until a clean EOF; a reset raises."""
-    received = b""
-    while chunk := client.recv(4096):
-        received += chunk
-    return received
-
-
-def read_to_end_or_reset(client: socket.socket) -> bytes:
-    """Read until EOF or a reset, for refusals that leave bytes unread."""
-    received = b""
-    with suppress(ConnectionResetError):
-        while chunk := client.recv(4096):
-            received += chunk
-    return received
-
-
-@dataclass(frozen=True)
-class LifeScenario:
-    """What a life runs on besides the spawn: record effects, places and reader."""
-
-    seal: Callable[[int], None] = worker.seal_record
-    create_record: Callable[[], int] = worker.create_request_record
-    work: Path | None = None
-    project: Path | None = None
-    build_timeout_seconds: float = 300.0
-    reader: Callable[[socket.socket], bytes] = read_to_end
-    listener: socket.socket | None = None
-
-
-def chain_environment(work: Path) -> dict[str, str]:
-    """The six-key step environment, with test values below the work root."""
-    return {
-        "PATH": os.environ["PATH"],
-        "HOME": str(work / worker.HOME_DIRECTORY),
-        "TMPDIR": str(work),
-        "PLAYWRIGHT_BROWSERS_PATH": str(work / "playwright"),
-        "COREPACK_HOME": str(work / "corepack"),
-        "COREPACK_ENABLE_NETWORK": "0",
-    }
-
-
-def run_life(
-    sent: bytes,
-    spawn: ChainSpawn,
-    scenario: LifeScenario | None = None,
-    converse: Callable[[socket.socket], None] = lambda _client: None,
-) -> Life:
-    scenario = scenario or LifeScenario()
-    with ExitStack() as cleanup:
-        work = scenario.work or Path(cleanup.enter_context(TemporaryDirectory()))
-        project = scenario.project or Path(cleanup.enter_context(TemporaryDirectory()))
-        listener = scenario.listener or cleanup.enter_context(listening_socket())
-        return _run_life_at(
-            sent,
-            spawn,
-            replace(scenario, work=work, project=project, listener=listener),
-            converse,
-        )
-
-
-def _end_life(
-    spawn: ChainSpawn, thread: threading.Thread, client: socket.socket
-) -> None:
-    try:
-        client.close()
-    finally:
-        try:
-            spawn.kill_and_reap()
-        finally:
-            thread.join(WAIT_SECONDS)
-            assert not thread.is_alive(), "the controller outlived its life"
-
-
-def _run_life_at(
-    sent: bytes,
-    spawn: ChainSpawn,
-    scenario: LifeScenario,
-    converse: Callable[[socket.socket], None],
-) -> Life:
-    work, project, listener = scenario.work, scenario.project, scenario.listener
-    assert work is not None
-    assert project is not None
-    assert listener is not None
-    controller_end, client = socket.socketpair()
-    client.settimeout(WAIT_SECONDS)
-    serving = Serving(
-        spawn=spawn,
-        gate_admits=lambda _status: True,
-        sweep=lambda _deadline: True,
-        create_record=scenario.create_record,
-        seal=scenario.seal,
-        open_deck=worker.make_open_directory,
-        close_deck=worker.close_deck,
-        work=work,
-        step=StepEffects(
-            spawn=spawn.step,
-            gate_admits=lambda _status: True,
-            prepare=worker.prepare_step_paths,
-            environment=chain_environment(work),
-            project=project,
-        ),
-        watchdog=NeverArmed(),
-        clock=time.monotonic,
-        readable=readable_within,
-        build_timeout_seconds=scenario.build_timeout_seconds,
-        build_output_megabytes=300,
-    )
-    outcome: list[LifeEnd | None] = []
-    returned_at: list[float] = []
-
-    def control() -> None:
-        outcome.append(
-            hand_over(controller_end, serving, time.monotonic(), listener=listener)
-        )
-        returned_at.append(time.monotonic())
-
-    thread = threading.Thread(target=control, daemon=True)
-    with closing(controller_end), closing(client):
-        try:
-            started_at = time.monotonic()
-            thread.start()
-            client.sendall(sent)
-            converse(client)
-            thread.join(WAIT_SECONDS)
-            present = present_among(spawn.process_ids)
-            controller_end.close()
-            reply = scenario.reader(client)
-        finally:
-            _end_life(spawn, thread, client)
-        return Life(outcome[0], reply, spawn, started_at, returned_at[0], present)
 
 
 @pytest.fixture
@@ -498,32 +251,3 @@ def test_a_controller_that_stalls_after_the_upload_spawn_dies_at_the_emergency_e
     assert len(upload_process_ids) == 1
     assert exit_status == 1
     assert abs(exited_at - accepted_at - EMERGENCY_END_SECONDS) <= TOLERANCE_SECONDS
-
-
-def logged_process_ids(lines: list[str]) -> list[int]:
-    return [int(line.split()[-1]) for line in lines if line.startswith("pid ")]
-
-
-def end_controller(controller: GatedChild, log: Path) -> list[str]:
-    """Stop the controller and SIGKILL every wire child it logged, even on a stall."""
-    try:
-        controller.close()
-        controller.kill()
-        assert controller.wait_within(WAIT_SECONDS) is not None, "controller not reaped"
-    finally:
-        lines = log.read_text().splitlines()
-        process_ids = logged_process_ids(lines)
-        for process_id in process_ids:
-            with suppress(ProcessLookupError):
-                os.kill(process_id, signal.SIGKILL)
-        await_absence(process_ids)
-    return lines
-
-
-def await_absence(process_ids: list[int]) -> None:
-    deadline = time.monotonic() + WAIT_SECONDS
-    while time.monotonic() < deadline and any(
-        Path(f"/proc/{process_id}").exists() for process_id in process_ids
-    ):
-        time.sleep(0.05)
-    assert not any(Path(f"/proc/{process_id}").exists() for process_id in process_ids)

@@ -13,18 +13,16 @@ import pytest
 
 from presentator.host import worker_serving
 from presentator.host.worker_serving import LifeEnd
-from tests.presentator.host.test_worker_record_chain import (
+from tests.presentator.host.support.worker_life import (
     EXITING_SENT,
-    EXITING_SEVEN,
     PATH,
-    WAIT_SECONDS,
-    ChainSpawn,
     LifeScenario,
     read_to_end,
     read_to_end_or_reset,
     run_life,
 )
 from tests.support import worker_support as support
+from tests.support.worker_chain import EXITING_SEVEN, WAIT_SECONDS, ChainSpawn
 from tests.support.worker_support import (
     DECK_CLOSED_MODE,
     DECK_OPEN_MODE,

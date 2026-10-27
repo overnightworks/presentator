@@ -9,14 +9,13 @@ import pytest
 
 from presentator.host.worker_serving import LifeEnd
 from presentator.host.worker_wire import WireExit
-from tests.presentator.host.test_worker_record_chain import (
+from tests.presentator.host.support.worker_life import (
     PATH,
-    WAIT_SECONDS,
-    ChainSpawn,
     LifeScenario,
     read_to_end_or_reset,
     run_life,
 )
+from tests.support.worker_chain import WAIT_SECONDS, ChainSpawn
 from tests.support.worker_support import (
     END,
     OUTCOME_FAILED,

@@ -13,24 +13,23 @@ import pytest
 from presentator.adapters.build_wire import MEGABYTE, RecordTag
 from presentator.adapters.worker_children import GatedChild, spawn_gated
 from presentator.host.worker_serving import LifeEnd
-from tests.presentator.host.test_worker_record_chain import (
+from tests.presentator.host.support.controller_life import (
+    CONSUMING_CONTROLLER,
+    controller_life,
+)
+from tests.presentator.host.support.worker_life import (
     EXITING_SENT,
     PATH,
-    WAIT_SECONDS,
-    ChainSpawn,
     LifeScenario,
     end_controller,
     read_to_end,
     read_to_end_or_reset,
     run_life,
 )
-from tests.presentator.host.test_worker_reply_chain import (
-    CONSUMING_CONTROLLER,
-    controller_life,
-)
 from tests.support import step_support
 from tests.support import worker_support as support
 from tests.support.step_support import OWN_IDENTITY
+from tests.support.worker_chain import WAIT_SECONDS, ChainSpawn
 from tests.support.worker_support import (
     OWN_UID,
     directory_entry,
