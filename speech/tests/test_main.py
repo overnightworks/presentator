@@ -153,7 +153,7 @@ class _HealthServer:
         self._app: object | None = None
         self._started = started
         self._release = release
-        self.observed = observed
+        self._observed = observed
         self.should_exit = False
 
     def use(self, app: object) -> None:
@@ -163,7 +163,7 @@ class _HealthServer:
         del sockets
         assert await asyncio.to_thread(self._started.wait, 5)
         assert self._app is not None
-        self.observed.update(TestClient(self._app).get("/health").json())
+        self._observed.update(TestClient(self._app).get("/health").json())
         self._release.set()
 
 
