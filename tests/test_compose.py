@@ -15,7 +15,7 @@ _COMPOSE = Path(__file__).parents[1] / "compose.yaml"
 
 
 def test_the_file_publishes_nothing_and_binds_nothing_outside_the_release() -> None:
-    """The edge's proxy is the only way in; the release owns every mount."""
+    """S9e (#527): no ports, no env_file, no bind outside the release."""
     compose = _parsed_compose()
 
     for service in compose["services"].values():
@@ -29,10 +29,11 @@ def test_the_file_publishes_nothing_and_binds_nothing_outside_the_release() -> N
 
 
 def test_no_environment_value_reads_the_callers_shell() -> None:
-    """The edge runs Compose with the caller's whole environment (ADR 0019)."""
-    instance = _environment_of(_parsed_compose()["services"]["presentator"])
-
-    assert all("$" not in (value or "") for value in instance.values())
+    """S9e (#527): plain values are literals, no `$` in any environment value."""
+    for service in _parsed_compose()["services"].values():
+        assert all(
+            "$" not in (value or "") for value in _environment_of(service).values()
+        )
     assert "${" not in _COMPOSE.read_text(encoding="utf-8").replace("${HOME}", "")
 
 
@@ -52,7 +53,7 @@ def test_the_instance_reaches_the_agent_service_over_the_edges_network() -> None
 
 
 def test_the_instance_joins_the_back_channel_under_its_public_hostname() -> None:
-    """Keycloak reaches the logout route on the network the edge creates."""
+    """S9e (#527): networks, the back-channel joined under its public alias."""
     compose = _parsed_compose()
     instance = compose["services"]["presentator"]
 
@@ -67,7 +68,7 @@ def test_the_instance_joins_the_back_channel_under_its_public_hostname() -> None
 
 
 def test_the_trusted_proxy_is_the_gateway_of_the_instances_own_network() -> None:
-    """The edge's proxy reaches the instance as the network's gateway."""
+    """S9e (#527): networks, the gateway is the trusted proxy."""
     compose = _parsed_compose()
     network = compose["networks"]["default"]
     (pool,) = network["ipam"]["config"]
@@ -83,6 +84,7 @@ def test_the_trusted_proxy_is_the_gateway_of_the_instances_own_network() -> None
 
 
 def test_the_instance_is_routed_under_both_hosts_through_the_edge() -> None:
+    """S9e (#527): labels, enable, edge.name, edge.alias, port 8000, network."""
     labels = _parsed_compose()["services"]["presentator"]["labels"]
 
     assert labels == {
@@ -96,6 +98,7 @@ def test_the_instance_is_routed_under_both_hosts_through_the_edge() -> None:
 
 
 def test_the_instance_asks_its_own_health_route_with_the_public_host() -> None:
+    """S9e (#527): healthcheck, present, /health, Host from the environment."""
     check = _parsed_compose()["services"]["presentator"]["healthcheck"]["test"]
     script = check[-1]
 
@@ -107,6 +110,7 @@ def test_the_instance_asks_its_own_health_route_with_the_public_host() -> None:
 
 @pytest.mark.parametrize("service", ["presentator", "build-worker"])
 def test_each_service_restarts_unless_it_was_stopped(service: str) -> None:
+    """S9e (#527): restart is unless-stopped."""
     assert _parsed_compose()["services"][service]["restart"] == "unless-stopped"
 
 
