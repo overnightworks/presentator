@@ -1,7 +1,0 @@
-claim_id = "0fcd27cd5c2541649d861a5bff7139f8"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "7a89c303719cda408203a81b0a202140d55d6fe4"
-branch = "fix/hydra-core-advisory"
-scope = ["speech/providers/magpie/uv.lock", "speech/providers/voxcpm/uv.lock"]
-opened_commit = "cfc6b085334e5d5f9136b36c55e150dbf19644a3"
