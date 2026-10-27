@@ -3,6 +3,6 @@ agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
 role = "builder"
 base = "1b7d27194f686711682c8331e7439507a9d054cc"
 branch = "claude/issue-565-script-tests-mirror"
-scope = ["pyproject.toml", "tests/scripts/conftest.py", "tests/scripts/test_catalog_purity.py", "tests/scripts/test_check_catalog_purity.py", "tests/scripts/test_probe_build_worker_lives_handshake.py", "tests/scripts/test_probe_build_worker_upload_watcher.py", "tests/scripts/test_probe_build_worker_uploads_classes.py", "tests/scripts/test_probe_build_worker_web.py", "tests/scripts/test_probe_handshake.py", "tests/scripts/test_probe_upload_classes.py", "tests/scripts/test_upload_watcher.py"]
+scope = ["pyproject.toml", "scripts/probe_build_worker_uploads.py", "tests/scripts/conftest.py", "tests/scripts/test_catalog_purity.py", "tests/scripts/test_check_catalog_purity.py", "tests/scripts/test_probe_build_worker_lives_handshake.py", "tests/scripts/test_probe_build_worker_upload_watcher.py", "tests/scripts/test_probe_build_worker_uploads_classes.py", "tests/scripts/test_probe_build_worker_web.py", "tests/scripts/test_probe_handshake.py", "tests/scripts/test_probe_upload_classes.py", "tests/scripts/test_upload_watcher.py"]
 opened_commit = "036206627058d588e2b8e196679996f8ba081969"
 whole_reason = "The four renames, the loader fixture and the pyproject key change together: a renamed test without its pyproject key fails ruff, and a loader call without the fixture fails every script test."
