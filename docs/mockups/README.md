@@ -139,8 +139,9 @@ The notice that the room hears an AI. The projector shows a slim strip at the
 bottom of the slide only while the AI is on and hearing, and nothing otherwise;
 the strip carries the sentence of #293's E8 and is never a control. The presenter
 window shows the same strip in its current-slide preview, and its first
-answer opens with „Hier spricht der KI-Co-Presenter.“ "Lines" are the expectation lines of #293 S12 (1 Vorstellung, 2 Sprache im
-Raum, 3 Ruhe auf der Leinwand, 4 Form des Hinweises); the Datenschutz boards are untouched.
+answer opens with „Hier spricht der KI-Co-Presenter.“ The Lines column names the expectation lines of #293 S12 each board shows,
+not only those its caption cites (1 Vorstellung, 2 Sprache im Raum, 3 Ruhe auf
+der Leinwand, 4 Form des Hinweises); the Datenschutz boards are untouched.
 
 | PNG | Caption | Lines |
 |---|---|---|
