@@ -284,7 +284,7 @@ def test_the_commands_never_use_compose_force_or_a_shell(
     assert {call[0] for call in host.calls} <= {"git", "docker", "systemctl", "curl"}
 
 
-def test_every_git_call_leaves_the_repository_untouched(
+def test_every_git_call_takes_no_optional_lock(
     execute: Callable[..., Run], host: Host
 ) -> None:
     """S9h1 (#542) sentence 5: the refusal phase writes nothing, not even an index."""
