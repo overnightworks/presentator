@@ -517,7 +517,11 @@ def _redirects_to_sign_in(answer: Answer, side: Side, deployment: Deployment) ->
     location = answer.first("location")
     if side is Side.TALK:
         return answer.status == 303 and location == deployment.lobby_origin  # noqa: PLR2004
-    return 300 <= answer.status < 400 and urlsplit(location).path == SIGN_IN_PATH  # noqa: PLR2004
+    try:
+        path = urlsplit(location).path
+    except ValueError:
+        return False
+    return 300 <= answer.status < 400 and path == SIGN_IN_PATH  # noqa: PLR2004
 
 
 def _root_holds(answer: Answer, side: Side, deployment: Deployment) -> bool:
