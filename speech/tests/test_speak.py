@@ -36,8 +36,26 @@ from tests.conftest import (
     FakeSpeaking,
     GatedSpeaking,
     an_app,
-    info_comment_before_data,
 )
+
+
+def info_comment_before_data(wav: bytes) -> str | None:
+    """The RIFF INFO ICMT text, found by walking the chunks up to `data`."""
+    position = 12
+    while position + 8 <= len(wav):
+        chunk_id = wav[position : position + 4]
+        size = int.from_bytes(wav[position + 4 : position + 8], "little")
+        body = wav[position + 8 : position + 8 + size]
+        if chunk_id == b"data":
+            return None
+        if chunk_id == b"LIST" and body[:4] == b"INFO":
+            assert size % 2 == 0
+            assert body[4:8] == b"ICMT"
+            comment_size = int.from_bytes(body[8:12], "little")
+            assert body[12 : 12 + comment_size].endswith(b"\0")
+            return body[12 : 12 + comment_size - 1].decode("ascii")
+        position += 8 + size + size % 2
+    return None
 
 
 def test_speak_streams_wav_that_plays_as_tone() -> None:
