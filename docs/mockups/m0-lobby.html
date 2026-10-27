@@ -1563,6 +1563,44 @@
   .copresenter-panel__answer { padding: 8px 10px; border-radius: 7px; background: #eff6ff; color: #1e3a5f; }
   .projector-slide { display: flex; height: 604px; align-items: center; justify-content: center; background: #173B63; color: #fff; font-family: ui-sans-serif, system-ui, sans-serif; font-size: clamp(28px, 4vw, 52px); font-weight: 700; letter-spacing: -.04em; text-align: center; }
 
+  /* ---------- The room knows it talks to an AI (#293 S12) ---------- */
+
+  .room-slide { position: relative; display: flex; aspect-ratio: 16 / 9; overflow: hidden; align-items: center; justify-content: center; font-family: ui-sans-serif, system-ui, sans-serif; --room-font: 14px; }
+  .room-slide--light { background: #F7F5F0; color: #173B63; }
+  .room-slide--dark { background: #0E1A2B; color: #F2F5F9; }
+  .room-slide--dark-blue { background: #173B63; color: #fff; }
+  .room-slide--busy { align-items: flex-start; padding-top: 5%; }
+  .room-slide__title { font-size: 4.4em; font-weight: 700; letter-spacing: -.04em; text-align: center; }
+  .room-slide--light, .room-slide--dark { font-size: calc(var(--room-font) * .4); }
+  .room-zoom { zoom: .5; width: 1920px; }
+  .room-zoom .room-slide { font-size: 12px; }
+  .room-strip { position: absolute; inset: auto 0 0; display: flex; align-items: center; gap: 1.1em; padding: .7em 1.1em; background: #0B1F33F0; color: #fff; font-size: var(--room-font); font-weight: 400; letter-spacing: 0; line-height: 1.35; text-align: left; }
+  .room-slide--dark .room-strip { background: #EEF3F8F2; color: #0B1F33; }
+  .room-strip__state { display: inline-flex; flex: none; align-items: center; gap: .55em; font-weight: 700; white-space: nowrap; }
+  .room-strip__text { padding-left: 1.1em; border-left: 1px solid currentColor; }
+  .room-strip__dot { width: .75em; height: .75em; flex: none; border-radius: 50%; background: #56C3CD; box-shadow: 0 0 0 .3em #56C3CD59; animation: room-pulse 1.6s ease-in-out infinite; }
+  .room-slide--dark .room-strip__dot { background: #0C6C77; box-shadow: 0 0 0 .3em #0C6C7759; }
+  .room-strip__glyph { width: 1.25em; height: 1.25em; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .room-strip--mini { padding: 3px 6px; gap: 5px; font-size: 5px; }
+  .room-strip--mini .room-strip__text { padding-left: 5px; }
+  .room-strip--mini-narrow { font-size: 5.5px; }
+  .room-strip--banner { inset: 0 0 auto; flex-direction: column; align-items: flex-start; gap: .4em; padding: .9em 1.1em; font-size: calc(var(--room-font) * 1.1); }
+  .room-strip--banner .room-strip__text { padding-left: 0; border-left: 0; }
+  .room-pill { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: .5em; padding: .35em .8em; border-radius: 99px; background: #0B1F33F0; color: #fff; font-size: var(--room-font); font-weight: 700; }
+  .room-chart { position: absolute; inset: 30% 12% 12%; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; }
+  .room-chart__bars { display: flex; flex: 1; align-items: flex-end; gap: 6%; border-bottom: 2px solid currentColor; }
+  .room-chart__bars span { flex: 1; background: #3C7FB8; }
+  .room-chart__axis { display: flex; justify-content: space-around; font-size: 1.4em; }
+  .room-footer { position: absolute; inset: auto 3% 2%; display: flex; justify-content: space-between; font-size: 1.3em; opacity: .75; }
+  .room-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; background: #9ca3af33; }
+  .room-pair--wide { grid-template-columns: 1.7fr 1fr; align-items: start; }
+  .room-aside { display: grid; gap: 8px; }
+  .room-aside .copresenter-panel { width: auto; }
+  .copresenter-panel__state--fail { color: #AC2222; }
+  .copresenter-panel__state .room-strip__glyph { width: 15px; height: 15px; }
+  @keyframes room-pulse { 50% { box-shadow: 0 0 0 .1em #56C3CD33; } }
+  @media (prefers-reduced-motion: reduce) { .room-strip__dot { animation: none; } }
+
   @container (max-width: 520px) {
     .presenter-stage { height: 694px; }
     .presenter-grid { grid-template: "main" 2fr "note" 1fr "next" 1fr "bottom" min-content / 1fr; }
@@ -4196,6 +4234,197 @@ Cannot resolve import "./folien/03-fabric.md" from slides.md
           <div class="projector-slide">From feedback to flow</div>
         </div>
       </figure>
+    </div>
+  </section>
+
+  <!-- ================= THE ROOM KNOWS · #293 S12 ================= -->
+  <section class="group">
+    <div class="group-head">
+      <h2>The room knows (#293 S12)</h2>
+      <span class="lines">proposal · issue #525</span>
+    </div>
+
+    <div class="boards">
+
+      <figure class="board" id="room-off">
+        <figcaption class="board-cap">
+          <div class="board-title">Projector · AI off <span class="w">1024 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">The slide and nothing else. Line 1: with the AI off, the room sees no label at all.</p>
+        </figcaption>
+        <div class="frame" style="--w: 960px">
+          <div class="route">presentator-talk.local/deck/agenten-fabrik/</div>
+          <div class="room-slide room-slide--light" style=""><div class="room-slide__title">From feedback to flow</div></div>
+        </div>
+      </figure>
+
+      <figure class="board" id="room-listening">
+        <figcaption class="board-cap">
+          <div class="board-title">Projector · AI listening <span class="w">1024 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">A slim strip at the bottom of the slide: a pulsing dot (the only thing that moves) and E8's sentence word for word. The strip is a notice, not a control.</p>
+        </figcaption>
+        <div class="frame" style="--w: 960px">
+          <div class="route">presentator-talk.local/deck/agenten-fabrik/</div>
+          <div class="room-slide room-slide--light" style=""><div class="room-slide__title">From feedback to flow</div><div class="room-strip "><span class="room-strip__state"><span class="room-strip__dot"></span>KI hört zu</span><span class="room-strip__text">Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an Anthropic gesendet.</span></div></div>
+        </div>
+      </figure>
+
+      <figure class="board" id="room-answering">
+        <figcaption class="board-cap">
+          <div class="board-title">Projector · AI answering <span class="w">1024 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">The same strip while the AI speaks: the speak glyph replaces the dot, so the state reads by shape, not by colour.</p>
+        </figcaption>
+        <div class="frame" style="--w: 960px">
+          <div class="route">presentator-talk.local/deck/agenten-fabrik/</div>
+          <div class="room-slide room-slide--light" style=""><div class="room-slide__title">From feedback to flow</div><div class="room-strip "><span class="room-strip__state"><svg class="room-strip__glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>KI antwortet</span><span class="room-strip__text">Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an Anthropic gesendet.</span></div></div>
+        </div>
+      </figure>
+
+      <figure class="board" id="room-not-hearing">
+        <figcaption class="board-cap">
+          <div class="board-title">Projector · AI on, not hearing <span class="w">1024 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">AI on, but no voice (the presenter window says Voice offline or No hearing): the room sees no strip, because nothing is being converted or sent. On the right the presenter window shows the failure with a triangle, not by colour alone.</p>
+        </figcaption>
+        <div class="frame" style="--w: 960px">
+          <div class="route">presentator-talk.local/deck/agenten-fabrik/</div>
+          <div class="room-pair room-pair--wide"><div class="room-slide room-slide--light" style=""><div class="room-slide__title">From feedback to flow</div></div><div class="room-aside"><div class="presenter-kicker">Presenter window</div><div class="copresenter-panel"><span class="copresenter-panel__state copresenter-panel__state--fail"><svg class="room-strip__glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Voice offline</span></div></div></div>
+        </div>
+      </figure>
+
+      <figure class="board" id="room-busy">
+        <figcaption class="board-cap">
+          <div class="board-title">Projector · busy bottom edge <span class="w">1024 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">A slide with a footer and a chart axis at the bottom, the strip over them: the strip covers the axis and the footer while the AI is on. The operator judges whether that cost is acceptable.</p>
+        </figcaption>
+        <div class="frame" style="--w: 960px">
+          <div class="route">presentator-talk.local/deck/agenten-fabrik/</div>
+          <div class="room-slide room-slide--light room-slide--busy" style=""><div class="room-slide__title">From feedback to flow</div><div class="room-chart"><div class="room-chart__bars"><span style="height:38%"></span><span style="height:55%"></span><span style="height:72%"></span><span style="height:46%"></span></div><div class="room-chart__axis"><span>Q1</span><span>Q2</span><span>Q3</span><span>Q4</span></div></div><div class="room-footer"><span>Agenten-Fabrik</span><span>4 / 18</span></div><div class="room-strip "><span class="room-strip__state"><span class="room-strip__dot"></span>KI hört zu</span><span class="room-strip__text">Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an Anthropic gesendet.</span></div></div>
+        </div>
+      </figure>
+
+      <figure class="board" id="room-alt-banner-pill">
+        <figcaption class="board-cap">
+          <div class="board-title">Projector · alternative <span class="w">1024 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">For comparison with the strip (line 6): left, a banner with the sentence until the first answer; right, a compact pill in the corner after it. The pill keeps the room's screen freer; the sentence is on screen only once.</p>
+        </figcaption>
+        <div class="frame" style="--w: 960px">
+          <div class="route">presentator-talk.local/deck/agenten-fabrik/</div>
+          <div class="room-pair"><div class="room-slide room-slide--light" style="--room-font: 9.5px"><div class="room-slide__title">From feedback to flow</div><div class="room-strip room-strip--banner"><span class="room-strip__state"><span class="room-strip__dot"></span>KI hört zu</span><span class="room-strip__text">Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an Anthropic gesendet.</span></div></div><div class="room-slide room-slide--light room-slide--busy" style="--room-font: 9.5px"><div class="room-slide__title">From feedback to flow</div><div class="room-chart"><div class="room-chart__bars"><span style="height:38%"></span><span style="height:55%"></span><span style="height:72%"></span><span style="height:46%"></span></div><div class="room-chart__axis"><span>Q1</span><span>Q2</span><span>Q3</span><span>Q4</span></div></div><div class="room-footer"><span>Agenten-Fabrik</span><span>4 / 18</span></div><div class="room-pill"><span class="room-strip__dot"></span>KI hört zu</div></div></div>
+        </div>
+      </figure>
+
+      <figure class="board" id="room-listening-1920">
+        <figcaption class="board-cap">
+          <div class="board-title">Projector · AI listening <span class="w">1920 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">The same strip at 1920 px, shown at half size: the type grows with the room, so the sentence stays readable from the back.</p>
+        </figcaption>
+        <div class="frame" style="--w: 960px">
+          <div class="route">presentator-talk.local/deck/agenten-fabrik/</div>
+          <div class="room-zoom"><div class="room-slide room-slide--light" style="--room-font: 25px"><div class="room-slide__title">From feedback to flow</div><div class="room-strip "><span class="room-strip__state"><span class="room-strip__dot"></span>KI hört zu</span><span class="room-strip__text">Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an Anthropic gesendet.</span></div></div></div>
+        </div>
+      </figure>
+
+      <figure class="board" id="room-answering-1920">
+        <figcaption class="board-cap">
+          <div class="board-title">Projector · AI answering <span class="w">1920 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">Answering at 1920 px, shown at half size.</p>
+        </figcaption>
+        <div class="frame" style="--w: 960px">
+          <div class="route">presentator-talk.local/deck/agenten-fabrik/</div>
+          <div class="room-zoom"><div class="room-slide room-slide--light" style="--room-font: 25px"><div class="room-slide__title">From feedback to flow</div><div class="room-strip "><span class="room-strip__state"><svg class="room-strip__glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>KI antwortet</span><span class="room-strip__text">Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an Anthropic gesendet.</span></div></div></div>
+        </div>
+      </figure>
+
+      <figure class="board" id="room-listening-dark">
+        <figcaption class="board-cap">
+          <div class="board-title">Projector · AI listening, dark <span class="w">1024 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">Slidev's dark mode: the strip inverts against the slide so it stays legible on either theme.</p>
+        </figcaption>
+        <div class="frame" style="--w: 960px">
+          <div class="route">presentator-talk.local/deck/agenten-fabrik/</div>
+          <div class="room-slide room-slide--dark" style=""><div class="room-slide__title">From feedback to flow</div><div class="room-strip "><span class="room-strip__state"><span class="room-strip__dot"></span>KI hört zu</span><span class="room-strip__text">Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an Anthropic gesendet.</span></div></div>
+        </div>
+      </figure>
+
+      <figure class="board" id="room-answering-dark">
+        <figcaption class="board-cap">
+          <div class="board-title">Projector · AI answering, dark <span class="w">1024 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">Answering in dark mode.</p>
+        </figcaption>
+        <div class="frame" style="--w: 960px">
+          <div class="route">presentator-talk.local/deck/agenten-fabrik/</div>
+          <div class="room-slide room-slide--dark" style=""><div class="room-slide__title">From feedback to flow</div><div class="room-strip "><span class="room-strip__state"><svg class="room-strip__glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>KI antwortet</span><span class="room-strip__text">Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an Anthropic gesendet.</span></div></div>
+        </div>
+      </figure>
+
+      <figure class="board" id="room-presenter-listening">
+        <figcaption class="board-cap">
+          <div class="board-title">Presenter · AI listening <span class="w">1024 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">While the AI listens, the current-slide preview carries the room's strip, so the presenter sees what the room sees. The presenter's own controls stay as today (AI).</p>
+        </figcaption>
+        <div class="frame" style="--w: 960px">
+          <div class="route">presentator-talk.local/deck/agenten-fabrik/presenter/</div>
+          <div class="presenter-stage">
+            <div class="presenter-grid">
+              <section class="presenter-panel presenter-main"><div class="presenter-toolbar"><span>Current</span><span class="presenter-toolbar__spacer"></span><select class="presenter-select" aria-label="Presenter view"><option>Slides</option><option>Screen Mirror</option></select></div><div class="presenter-main-body"><div class="presenter-slide room-slide room-slide--dark-blue">From feedback to flow<div class="room-strip room-strip--mini"><span class="room-strip__state"><span class="room-strip__dot"></span>KI hört zu</span><span class="room-strip__text">Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an Anthropic gesendet.</span></div></div></div></section>
+              <section class="presenter-panel presenter-next"><span class="presenter-kicker">Next</span><div class="presenter-preview">Make the handoff visible</div></section>
+              <section class="presenter-panel presenter-note"><span class="presenter-kicker">Notes</span><p>Ask for one example before moving to the next step.</p></section>
+              <div class="presenter-panel presenter-bottom"><span class="presenter-controls"><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></span><span class="presenter-control" aria-hidden="true">&larr;</span><span class="presenter-control" aria-hidden="true">&rarr;</span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-layout-grid"></use></svg></span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-monitor"></use></svg></span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-play"></use></svg></span><span class="presenter-control" aria-hidden="true">&#9998;</span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-settings"></use></svg></span><span class="presenter-control" aria-hidden="true">&#9676;</span><a class="presenter-control presenter-control--home" href="/" aria-label="Home" title="Home"><svg class="icon" width="18" height="18" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"></path></svg><span>Home</span></a><span class="copresenter-toolbar"><span class="copresenter-panel"><span class="copresenter-panel__state"><span class="copresenter-panel__dot"></span>Listening</span><span class="copresenter-panel__heard">Where does the handoff slow down?</span></span><button class="presenter-control presenter-control--ai presenter-control--ai-active" type="button" aria-pressed="true" title="CoPresenter"><svg class="icon" width="18" height="18" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Zm-6 8a6 6 0 0 0 12 0M12 17v4M8 21h8" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"></path></svg><span>AI</span></button></span><span class="presenter-count">4 / 18</span></span></div>
+            </div>
+          </div>
+        </div>
+      </figure>
+      <figure class="board" id="room-presenter-answering">
+        <figcaption class="board-cap">
+          <div class="board-title">Presenter · first answer <span class="w">1024 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">When the AI answers, the strip shows the speak glyph, and the first answer's panel line begins with „Hier spricht der KI-Co-Presenter.“ (line 1). The presenter's own controls stay as today (AI).</p>
+        </figcaption>
+        <div class="frame" style="--w: 960px">
+          <div class="route">presentator-talk.local/deck/agenten-fabrik/presenter/</div>
+          <div class="presenter-stage">
+            <div class="presenter-grid">
+              <section class="presenter-panel presenter-main"><div class="presenter-toolbar"><span>Current</span><span class="presenter-toolbar__spacer"></span><select class="presenter-select" aria-label="Presenter view"><option>Slides</option><option>Screen Mirror</option></select></div><div class="presenter-main-body"><div class="presenter-slide room-slide room-slide--dark-blue">From feedback to flow<div class="room-strip room-strip--mini"><span class="room-strip__state"><svg class="room-strip__glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>KI antwortet</span><span class="room-strip__text">Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an Anthropic gesendet.</span></div></div></div></section>
+              <section class="presenter-panel presenter-next"><span class="presenter-kicker">Next</span><div class="presenter-preview">Make the handoff visible</div></section>
+              <section class="presenter-panel presenter-note"><span class="presenter-kicker">Notes</span><p>Ask for one example before moving to the next step.</p></section>
+              <div class="presenter-panel presenter-bottom"><span class="presenter-controls"><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></span><span class="presenter-control" aria-hidden="true">&larr;</span><span class="presenter-control" aria-hidden="true">&rarr;</span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-layout-grid"></use></svg></span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-monitor"></use></svg></span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-play"></use></svg></span><span class="presenter-control" aria-hidden="true">&#9998;</span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-settings"></use></svg></span><span class="presenter-control" aria-hidden="true">&#9676;</span><a class="presenter-control presenter-control--home" href="/" aria-label="Home" title="Home"><svg class="icon" width="18" height="18" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"></path></svg><span>Home</span></a><span class="copresenter-toolbar"><span class="copresenter-panel"><span class="copresenter-panel__state"><span class="copresenter-panel__dot"></span>Answering</span><span class="copresenter-panel__heard">Where does the handoff slow down?</span><span class="copresenter-panel__answer">Hier spricht der KI-Co-Presenter. Die Übergabe bremst bei der Freigabe.</span></span><button class="presenter-control presenter-control--ai presenter-control--ai-active" type="button" aria-pressed="true" title="CoPresenter"><svg class="icon" width="18" height="18" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Zm-6 8a6 6 0 0 0 12 0M12 17v4M8 21h8" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"></path></svg><span>AI</span></button></span><span class="presenter-count">4 / 18</span></span></div>
+            </div>
+          </div>
+        </div>
+      </figure>
+      <figure class="board" id="room-presenter-listening-narrow">
+        <figcaption class="board-cap">
+          <div class="board-title">Presenter · AI listening <span class="w">390 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">While the AI listens, the current-slide preview carries the room's strip, so the presenter sees what the room sees. The presenter's own controls stay as today (AI).</p>
+        </figcaption>
+        <div class="frame" style="--w: 390px">
+          <div class="route">presentator-talk.local/deck/customer-feedback-across-every-market/presenter/</div>
+          <div class="presenter-stage">
+            <div class="presenter-grid">
+              <section class="presenter-panel presenter-main"><div class="presenter-toolbar"><span>Current</span><span class="presenter-toolbar__spacer"></span><select class="presenter-select" aria-label="Presenter view"><option>Slides</option><option>Screen Mirror</option></select></div><div class="presenter-main-body"><div class="presenter-slide room-slide room-slide--dark-blue">Listen for the pattern<div class="room-strip room-strip--mini room-strip--mini-narrow"><span class="room-strip__state"><span class="room-strip__dot"></span>KI hört zu</span><span class="room-strip__text">Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an Anthropic gesendet.</span></div></div></div></section>
+              <section class="presenter-panel presenter-next"><span class="presenter-kicker">Next</span><div class="presenter-preview">Name the choice</div></section>
+              <section class="presenter-panel presenter-note"><span class="presenter-kicker">Notes</span><p>Pause after the question.</p></section>
+              <div class="presenter-panel presenter-bottom"><span class="presenter-controls"><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></span><span class="presenter-control" aria-hidden="true">&larr;</span><span class="presenter-control" aria-hidden="true">&rarr;</span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-layout-grid"></use></svg></span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-monitor"></use></svg></span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-play"></use></svg></span><span class="presenter-control" aria-hidden="true">&#9998;</span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-settings"></use></svg></span><span class="presenter-control" aria-hidden="true">&#9676;</span><a class="presenter-control presenter-control--home presenter-control--focused" href="/" aria-label="Home" title="Home"><svg class="icon" width="18" height="18" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"></path></svg><span>Home</span></a><span class="copresenter-toolbar"><span class="copresenter-panel"><span class="copresenter-panel__state"><span class="copresenter-panel__dot"></span>Listening</span><span class="copresenter-panel__heard">Where does the handoff slow down?</span></span><button class="presenter-control presenter-control--ai presenter-control--ai-active" type="button" aria-pressed="true" title="CoPresenter"><svg class="icon" width="18" height="18" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Zm-6 8a6 6 0 0 0 12 0M12 17v4M8 21h8" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"></path></svg><span>AI</span></button></span><span class="presenter-count">4 / 18</span></span></div>
+            </div>
+          </div>
+        </div>
+      </figure>
+      <figure class="board" id="room-presenter-answering-narrow">
+        <figcaption class="board-cap">
+          <div class="board-title">Presenter · first answer <span class="w">390 px</span> <span class="open-mark">proposal</span></div>
+          <p class="board-note">When the AI answers, the strip shows the speak glyph, and the first answer's panel line begins with „Hier spricht der KI-Co-Presenter.“ (line 1). The presenter's own controls stay as today (AI).</p>
+        </figcaption>
+        <div class="frame" style="--w: 390px">
+          <div class="route">presentator-talk.local/deck/customer-feedback-across-every-market/presenter/</div>
+          <div class="presenter-stage">
+            <div class="presenter-grid">
+              <section class="presenter-panel presenter-main"><div class="presenter-toolbar"><span>Current</span><span class="presenter-toolbar__spacer"></span><select class="presenter-select" aria-label="Presenter view"><option>Slides</option><option>Screen Mirror</option></select></div><div class="presenter-main-body"><div class="presenter-slide room-slide room-slide--dark-blue">Listen for the pattern<div class="room-strip room-strip--mini room-strip--mini-narrow"><span class="room-strip__state"><svg class="room-strip__glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>KI antwortet</span><span class="room-strip__text">Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an Anthropic gesendet.</span></div></div></div></section>
+              <section class="presenter-panel presenter-next"><span class="presenter-kicker">Next</span><div class="presenter-preview">Name the choice</div></section>
+              <section class="presenter-panel presenter-note"><span class="presenter-kicker">Notes</span><p>Pause after the question.</p></section>
+              <div class="presenter-panel presenter-bottom"><span class="presenter-controls"><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></span><span class="presenter-control" aria-hidden="true">&larr;</span><span class="presenter-control" aria-hidden="true">&rarr;</span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-layout-grid"></use></svg></span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-monitor"></use></svg></span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-play"></use></svg></span><span class="presenter-control" aria-hidden="true">&#9998;</span><span class="presenter-control"><svg class="icon" width="18" height="18" aria-hidden="true"><use href="#icon-settings"></use></svg></span><span class="presenter-control" aria-hidden="true">&#9676;</span><a class="presenter-control presenter-control--home presenter-control--focused" href="/" aria-label="Home" title="Home"><svg class="icon" width="18" height="18" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"></path></svg><span>Home</span></a><span class="copresenter-toolbar"><span class="copresenter-panel"><span class="copresenter-panel__state"><span class="copresenter-panel__dot"></span>Answering</span><span class="copresenter-panel__heard">Where does the handoff slow down?</span><span class="copresenter-panel__answer">Hier spricht der KI-Co-Presenter. Die Übergabe bremst bei der Freigabe.</span></span><button class="presenter-control presenter-control--ai presenter-control--ai-active" type="button" aria-pressed="true" title="CoPresenter"><svg class="icon" width="18" height="18" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Zm-6 8a6 6 0 0 0 12 0M12 17v4M8 21h8" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"></path></svg><span>AI</span></button></span><span class="presenter-count">4 / 18</span></span></div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
     </div>
   </section>
 
