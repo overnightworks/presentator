@@ -24,7 +24,7 @@ COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 
 
 def a_source(url: str) -> Source:
-    """A source whose secret, if it had one, no test of this file resolves."""
+    """A source whose secret, if it had one, no test that uses it resolves."""
     return Source(
         id=SOURCE_ID,
         name=SOURCE_NAME,
