@@ -37,7 +37,9 @@ only its two configured hostnames.
    match; a request under any other Host, an internal hostname or an IP
    included, gets 404 and ends no session. The route is not live until the
    client registers it; a valid Logout Token then ends every session of its
-   subject, on every device.
+   subject, on every device. It is not registered yet: the web joins
+   `hal_backchannel_presentator` only once edge creates the network, so until
+   then a block in Keycloak ends a session only at its 12 h cap.
 5. Register `<PRESENTATOR_PUBLIC_ORIGIN>/login` as the post-logout redirect
    URI, or Keycloak shows an error page at every logout.
 6. Register both `<PRESENTATOR_PUBLIC_ORIGIN>/auth/callback` and

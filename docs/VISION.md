@@ -15,9 +15,12 @@ own, listens to the audience, and answers their questions.
 Everything works without the AI too. A static build plus a PDF export survives
 a dead tunnel.
 
-The tool is an instance with accounts rather than a program for one person: an
-admin creates users, decks and sources have owners, and someone else can host
-their own instance ([ADR 0011](decisions/0011-instance-users.md)). How it looks
+The tool is an instance with accounts rather than a program for one person: the
+Keycloak groups `/apps/presentator` and `/apps/presentator/admin` govern who
+may enter and who is admin
+([ADR 0018](decisions/0018-keycloak-replaces-own-accounts.md)); decks and
+sources have owners, and someone else can host their own instance
+([ADR 0011](decisions/0011-instance-users.md)). How it looks
 and which language it speaks are configuration, not code
 ([ADR 0012](decisions/0012-themes-and-language.md)).
 
