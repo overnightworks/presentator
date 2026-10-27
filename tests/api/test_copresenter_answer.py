@@ -680,7 +680,9 @@ def test_an_answer_without_any_text_is_done_with_no_audio_and_logs_no_first_audi
     run = drive(tmp_path, Scenario(reply=nothing))
 
     assert run.events == ["done"]
-    assert run.response.text == 'event: done\ndata: {"text": ""}\n\n'
+    assert run.response.text == (
+        'event: done\ndata: {"text": "", "ai_generated": true}\n\n'
+    )
     assert not [r for r in caplog.records if r.name == FIRST_AUDIO]
     assert the_ticket_was_released(run)
 

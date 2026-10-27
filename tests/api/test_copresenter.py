@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from dataclasses import replace
 from datetime import timedelta
@@ -273,7 +274,7 @@ def test_private_answer_events_preserve_the_public_stream_contract() -> None:
         "done",
     ]
     assert response.text.endswith(
-        'event: done\ndata: {"text": "Der Anfang. Der Satz."}\n\n'
+        'event: done\ndata: {"text": "Der Anfang. Der Satz.", "ai_generated": true}\n\n'
     )
     assert private.answers.exits == 1
 
@@ -292,8 +293,36 @@ def test_private_answer_refusal_and_clean_end_do_not_invent_an_answer() -> None:
     assert refused.text == (
         'event: error\ndata: {"message": "the answer could not be spoken"}\n\n'
     )
-    assert ended.text == 'event: done\ndata: {"text": ""}\n\n'
+    assert ended.text == 'event: done\ndata: {"text": "", "ai_generated": true}\n\n'
     assert private.answers.exits == 1
+
+
+def test_every_generated_answer_event_says_ai_generated_and_error_does_not() -> None:
+    lobby, private, _clock = a_copresenter_talk_host()
+    private.answers.deltas = ["Der Anfang. ", "Der Satz."]
+    lobby.sign_in()
+    refused_lobby, refused_private, _ = a_copresenter_talk_host()
+    refused_private.answers.unavailable = CoPresenterUnavailableError()
+    refused_lobby.sign_in()
+
+    answered = _payloads_by_event(ask(lobby.client).text)
+    refused = _payloads_by_event(ask(refused_lobby.client).text)
+
+    assert {"text", "sentence", "audio", "done"} <= answered.keys()
+    assert all(
+        payload["ai_generated"] is True
+        for payloads in answered.values()
+        for payload in payloads
+    )
+    assert refused.keys() == {"error"}
+    assert "ai_generated" not in refused["error"][0]
+
+
+def _payloads_by_event(stream: str) -> dict[str, list[dict[str, object]]]:
+    by_event: dict[str, list[dict[str, object]]] = {}
+    for name, data in re.findall(r"^event: (\w+)\ndata: (.*)$", stream, re.MULTILINE):
+        by_event.setdefault(name, []).append(json.loads(data))
+    return by_event
 
 
 def test_foreign_origin_and_text_frames_open_no_private_hearing() -> None:
