@@ -11,21 +11,25 @@ from types import ModuleType
 from typing import Any
 
 import pytest
-from _pytest.mark.structures import ParameterSet
 from ruamel.yaml import YAML
 
-from presentator.api.auth import START_SIGN_IN_PATH
+from presentator.api.auth import (
+    _DATENSCHUTZ,  # pyright: ignore[reportPrivateUsage] - the app keeps its one copy of the path private
+    START_SIGN_IN_PATH,
+)
 from presentator.api.health import HEALTH_PATH
 from tests.scripts.support.cutover_host import (
     COOKIE_VALUE,
+    DARK_CURL_EXITS,
+    HARDENED,
     LOBBY_HOST,
     NETWORK_NAME,
     PROXY_ADDRESS,
     REFUSED,
     SIGN_IN_ANSWER,
     TALK_HOST,
+    WEB_CONTAINER_ID,
     Host,
-    import_module_attribute,
 )
 
 DEPLOYED_FOLDER = ".local/state/edge/deployed"
@@ -152,6 +156,9 @@ def scene(cutover: ModuleType, home: Path, host: Host, tmp_path: Path) -> Scene:
     made = Scene(home, checkout, host, cutover)
     made.deploy({"tag": "v1.0.0", "sha": FIRST_RUN_HEAD, "time": "then"})
     made.compose(COMPOSE)
+    made.host.containers |= {"bw0001": "presentator", "dead01": "presentator"}
+    made.host.services |= {"bw0001": "build-worker"}
+    made.host.stopped |= {"dead01"}
     return made
 
 
@@ -325,8 +332,7 @@ def test_the_scripts_app_paths_are_the_apps_own(cutover: ModuleType) -> None:
     """S9h2 (#553) sentence 4: python3 cannot import the app, a test ties the copies."""
     assert cutover.SIGN_IN_PATH == START_SIGN_IN_PATH
     assert cutover.HEALTH_PATH == HEALTH_PATH
-    private_path = import_module_attribute("presentator.api.auth", "_DATENSCHUTZ")
-    assert private_path == cutover.DATENSCHUTZ_PATH
+    assert cutover.DATENSCHUTZ_PATH == _DATENSCHUTZ
 
 
 def test_every_probe_holds_on_a_healthy_instance(scene: Scene) -> None:
@@ -346,6 +352,13 @@ NOT_HARDENED = "HTTP/1.1 302 Found\r\nlocation: /login/oidc\r\n\r\n"
 PLAIN_COOKIE = SIGN_IN_ANSWER.replace("__Host-", "")
 OPEN_COOKIE = SIGN_IN_ANSWER.replace("; Secure", "")
 BAD_LOBBY = "HTTP/1.1 500 Oops\r\n\r\n"
+SECURITY_HEADERS = HARDENED.removesuffix("\r\n").split("\r\n")
+HSTS_ONLY = SECURITY_HEADERS[0] + "\r\n\r\n"
+CSP_ONLY = SECURITY_HEADERS[1] + "\r\n\r\n"
+
+
+def hardened_answer(status_line: str, location: str) -> str:
+    return f"HTTP/1.1 {status_line}\r\nlocation: {location}\r\n{HARDENED}"
 
 
 def local(host: str, path: str, answer: str) -> dict[tuple[str, str, str], str]:
@@ -362,6 +375,61 @@ def local(host: str, path: str, answer: str) -> dict[tuple[str, str, str], str]:
             local(TALK_HOST, "/", "HTTP/1.1 200 OK\r\n\r\n"),
             "local talk root",
             id="talk-no-redirect",
+        ),
+        pytest.param(
+            local(LOBBY_HOST, "/", hardened_answer("302 Found", "/")),
+            "local lobby root",
+            id="lobby-redirects-to-itself",
+        ),
+        pytest.param(
+            local(LOBBY_HOST, "/", hardened_answer("302 Found", "/other")),
+            "local lobby root",
+            id="lobby-redirects-elsewhere",
+        ),
+        pytest.param(
+            local(
+                TALK_HOST,
+                "/",
+                hardened_answer("303 See Other", "https://elsewhere.example.test"),
+            ),
+            "local talk root",
+            id="talk-redirects-to-another-origin",
+        ),
+        pytest.param(
+            local(
+                TALK_HOST,
+                "/",
+                hardened_answer("303 See Other", f"https://{LOBBY_HOST}.evil"),
+            ),
+            "local talk root",
+            id="talk-redirects-to-a-lookalike-origin",
+        ),
+        pytest.param(
+            local(
+                TALK_HOST,
+                "/",
+                hardened_answer("302 Found", f"https://{LOBBY_HOST}"),
+            ),
+            "local talk root",
+            id="talk-redirects-with-another-status",
+        ),
+        pytest.param(
+            local(
+                LOBBY_HOST,
+                "/",
+                "HTTP/1.1 302 Found\r\nlocation: /login/oidc\r\n" + HSTS_ONLY,
+            ),
+            "local lobby root",
+            id="no-csp-alone",
+        ),
+        pytest.param(
+            local(
+                LOBBY_HOST,
+                "/",
+                "HTTP/1.1 302 Found\r\nlocation: /login/oidc\r\n" + CSP_ONLY,
+            ),
+            "local lobby root",
+            id="no-hsts-alone",
         ),
         pytest.param(
             local(LOBBY_HOST, "/login/oidc", PLAIN_COOKIE),
@@ -405,34 +473,36 @@ def test_a_failed_probe_is_named_and_the_others_still_run(
     assert run.lines.count(NEXT_STEP) == 1
 
 
-def container_fault(
-    inspected: dict[str, object], failed: str, case: str
-) -> ParameterSet:
-    return pytest.param(inspected, failed, id=case)
-
-
+ONE_SECRET: dict[str, object] = {
+    "Type": "bind",
+    "Destination": "/run/secrets/one",
+    "RW": False,
+}
+BOUND_PORT: dict[str, str] = {}
 CONTAINER_FAULTS = [
-    container_fault(
+    pytest.param(
         {".Mounts": [{"Source": "/x", "Destination": "/var/run/docker.sock"}]},
         "web container mounts",
-        "docker-socket",
+        id="docker-socket",
     ),
-    container_fault({".HostConfig.GroupAdd": ["0"]}, "web container groups", "groups"),
-    container_fault(
-        {".HostConfig.PortBindings": {"8000/tcp": [{}]}}, "web container ports", "ports"
+    pytest.param({".HostConfig.GroupAdd": ["0"]}, "web container groups", id="groups"),
+    pytest.param(
+        {".HostConfig.PortBindings": {"8000/tcp": [BOUND_PORT]}},
+        "web container ports",
+        id="ports",
     ),
-    container_fault(
-        {".Mounts": [{"Type": "bind", "Destination": "/run/secrets/one", "RW": False}]},
+    pytest.param(
+        {".Mounts": [ONE_SECRET]},
         "web container secrets",
-        "one-secret",
+        id="one-secret",
     ),
-    container_fault(
+    pytest.param(
         {".IPAM.Config": [{"Gateway": "192.0.2.1"}]},
         "web container gateway",
-        "other-gateway",
+        id="other-gateway",
     ),
-    container_fault(
-        {".IPAM.Config": "garbled"}, "web container gateway", "garbled-answer"
+    pytest.param(
+        {".IPAM.Config": "garbled"}, "web container gateway", id="garbled-answer"
     ),
 ]
 
@@ -448,6 +518,19 @@ def test_a_web_container_that_breaks_the_hardened_shape_fails_its_probe(
 
     assert f"failed: {failed}" in run.lines
     assert (run.code, run.lines[-1]) == (1, NEXT_STEP)
+
+
+@pytest.mark.parametrize("empty", [None, []], ids=["null", "empty-list"])
+def test_a_web_container_without_added_groups_holds_in_either_empty_form(
+    scene: Scene, empty: list[str] | None
+) -> None:
+    """S9h2 (#553) sentence 5: .HostConfig.GroupAdd is empty."""
+    scene.host.inspected |= {".HostConfig.GroupAdd": empty}
+
+    run = scene.drive()
+
+    assert "held: web container groups" in run.lines
+    assert run.code == 0
 
 
 def test_a_secret_mount_that_is_writable_or_outside_the_secrets_folder_fails(
@@ -480,11 +563,12 @@ def test_other_than_one_web_container_fails_the_container_probe(
     assert (run.code, run.lines[-1]) == (1, NEXT_STEP)
 
 
+@pytest.mark.parametrize("exit_code", DARK_CURL_EXITS)
 def test_a_dark_public_host_is_not_exercised_and_does_not_fail_the_run(
-    scene: Scene,
+    scene: Scene, exit_code: int
 ) -> None:
-    """S9h2 (#553) sentences 5 and 6: curl exit 6 is a dark host, exit 0 stays."""
-    scene.host.dark_hosts = {LOBBY_HOST, TALK_HOST}
+    """S9h2 (#553) sentences 5 and 6: curl exit 6 or 7 is a dark host, exit 0 stays."""
+    scene.host.dark = {("public", host): exit_code for host in (LOBBY_HOST, TALK_HOST)}
 
     run = scene.drive()
 
@@ -495,18 +579,30 @@ def test_a_dark_public_host_is_not_exercised_and_does_not_fail_the_run(
     assert (run.code, NEXT_STEP in run.lines) == (0, False)
 
 
+@pytest.mark.parametrize("exit_code", DARK_CURL_EXITS)
 def test_a_local_host_that_does_not_answer_is_a_failure_not_a_dark_host(
-    scene: Scene,
+    scene: Scene, exit_code: int
 ) -> None:
     """S9h2 (#553) sentence 5: only the public probes can be dark."""
-    scene.host.overrides = {}
-    scene.host.failing = {"curl --silent --include"}
+    scene.host.dark = {("local", LOBBY_HOST): exit_code}
 
     run = scene.drive()
 
     assert "failed: local lobby root" in run.lines
-    assert "not exercised: public lobby root" not in run.lines
-    assert run.code == 1
+    assert not [line for line in run.lines if line.startswith("not exercised: local")]
+    assert (run.code, run.lines[-1]) == (1, NEXT_STEP)
+
+
+def test_the_web_container_is_the_running_presentator_service_and_its_compose_network(
+    scene: Scene,
+) -> None:
+    """S9h2 (#553) sentence 5: build-worker and stopped containers are not it."""
+    run = scene.drive()
+
+    assert "held: web container" in run.lines
+    assert run.code == 0
+    inspects = [call for call in scene.host.commands("docker") if "inspect" in call]
+    assert {call[-1] for call in inspects} == {WEB_CONTAINER_ID, NETWORK_NAME}
 
 
 def test_docker_is_asked_for_named_fields_only(scene: Scene) -> None:

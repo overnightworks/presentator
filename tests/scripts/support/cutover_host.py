@@ -2,8 +2,10 @@
 
 import importlib
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -42,7 +44,8 @@ TALK_HOST = "talk.example.test"
 PROXY_ADDRESS = "10.9.8.7"
 NETWORK_NAME = "web-net_default"
 COOKIE_VALUE = "cookie-value-4471"
-DARK_CURL_EXIT = 6
+WEB_CONTAINER_ID = "5afe01"
+DARK_CURL_EXITS = (6, 7)
 SIGN_IN_ANSWER = (
     "HTTP/1.1 302 Found\r\n"
     f"set-cookie: __Host-session={COOKIE_VALUE}; Path=/; Secure; HttpOnly\r\n\r\n"
@@ -63,10 +66,12 @@ class Host:
     containers: dict[str, str] = field(
         default_factory=lambda: {
             "c0ffee": "presentator-live",
-            "5afe01": "presentator",
+            WEB_CONTAINER_ID: "presentator",
             "b10b02": "hopin",
         }
     )
+    services: dict[str, str] = field(default_factory=dict[str, str])
+    stopped: set[str] = field(default_factory=set[str])
     networks: list[str] = field(
         default_factory=lambda: ["presentator-live_default", "presentator_default"]
     )
@@ -100,7 +105,7 @@ class Host:
     overrides: dict[tuple[str, str, str], str] = field(
         default_factory=dict[tuple[str, str, str], str]
     )
-    dark_hosts: set[str] = field(default_factory=set[str])
+    dark: dict[tuple[str, str], int] = field(default_factory=dict[tuple[str, str], int])
     inspected: dict[str, object] = field(default_factory=dict[str, object])
     live_refs: str = (
         f"{LIVE_HEAD} refs/heads/main\n"
@@ -153,9 +158,9 @@ class Host:
         local = "--header" in rest
         host = rest[rest.index("--header") + 1].removeprefix("Host: ") if local else ""
         host = host or url.hostname or ""
-        if not local and host in self.dark_hosts:
-            return outcome(DARK_CURL_EXIT, "")
         vantage = "local" if local else "public"
+        if (vantage, host) in self.dark:
+            return outcome(self.dark[vantage, host], "")
         override = self.overrides.get((vantage, host, url.path))
         return outcome(0, override or self.healthy_answer(host, url.path))
 
@@ -165,7 +170,7 @@ class Host:
         if path == "/login/oidc":
             return SIGN_IN_ANSWER
         if host == TALK_HOST:
-            return f"HTTP/1.1 303 See Other\r\nlocation: https://{LOBBY_HOST}/\r\n{HARDENED}"
+            return f"HTTP/1.1 303 See Other\r\nlocation: https://{LOBBY_HOST}\r\n{HARDENED}"
         return f"HTTP/1.1 302 Found\r\nlocation: /login/oidc?next=%2F\r\n{HARDENED}"
 
     def run_git(self, rest: tuple[str, ...]) -> object:
@@ -190,7 +195,7 @@ class Host:
             case ("ps", *_):
                 return self.run_ps(rest)
             case ("inspect", *_) | ("network", "inspect", *_):
-                return self.run_inspect(rest[rest.index("--format") + 1])
+                return self.run_inspect(rest)
             case ("rm", container):
                 self.remove_container(container)
             case ("network", "ls", *_):
@@ -209,14 +214,33 @@ class Host:
                 pass
         return outcome(0, "")
 
-    def run_inspect(self, template: str) -> object:
+    def run_inspect(self, rest: tuple[str, ...]) -> object:
+        """Answer only for the web container and for the network compose names."""
+        template, target = rest[rest.index("--format") + 1], rest[-1]
+        known = NETWORK_NAME if rest[0] == "network" else WEB_CONTAINER_ID
+        if target != known:
+            return outcome(1, "")
         field_name = template.removeprefix("{{json ").removesuffix("}}")
         return outcome(0, json.dumps(self.inspected[field_name]))
 
     def run_ps(self, rest: tuple[str, ...]) -> object:
-        label = rest[rest.index("--filter") + 1]
-        project = label.removeprefix("label=com.docker.compose.project=")
-        matching = [name for name, owner in self.containers.items() if owner == project]
+        """List the containers that carry every label filter and are running."""
+        labels = dict(
+            re.findall(
+                r"label=com\.docker\.compose\.(\w+)=(.*)",
+                "\n".join(
+                    value for flag, value in pairwise(rest) if flag == "--filter"
+                ),
+            )
+        )
+        matching = [
+            name
+            for name, project in self.containers.items()
+            if labels.get("project") == project
+            and labels.get("service", self.services.get(name, project))
+            == self.services.get(name, project)
+            and ("--all" in rest or name not in self.stopped)
+        ]
         return outcome(0, "\n".join(matching))
 
     def remove_container(self, container: str) -> None:
@@ -270,8 +294,3 @@ class Host:
 
 def outcome(code: int, text: str) -> object:
     return importlib.import_module("cutover").Outcome(code, text)
-
-
-def import_module_attribute(module: str, name: str) -> object:
-    """An attribute of a module by name, for a value the module keeps private."""
-    return getattr(importlib.import_module(module), name)
