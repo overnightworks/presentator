@@ -1,0 +1,8 @@
+claim_id = "5af7e0b2d40446449af7072b540da112"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "e33ab74219394fcab6730368ccbbdfcab904044a"
+branch = "claude/issue-576-speech-test-names"
+scope = [".github/workflows/ci.yml", "quality/baseline.toml", "speech/README.md", "speech/providers/magpie/tests/test_entrypoint.py", "speech/providers/magpie/tests/test_main.py", "speech/providers/qwen/tests/test_entrypoint.py", "speech/providers/qwen/tests/test_main.py", "speech/providers/voxcpm/tests/test_entrypoint.py", "speech/providers/voxcpm/tests/test_main.py", "speech/scripts/prove.py", "speech/scripts/prove_speech.py", "speech/tests/scripts/test_contract_client.py", "speech/tests/test_contract_client.py", "speech/tests/test_control_sample.py", "speech/tests/test_control_voice_status.py", "speech/tests/test_health.py", "speech/tests/test_hear.py", "speech/tests/test_hearing_session.py", "speech/tests/test_main_private_socket.py", "speech/tests/test_main_serve_lifecycle.py", "speech/tests/test_private_socket.py", "speech/tests/test_sample.py", "speech/tests/test_serve_lifecycle.py", "speech/tests/test_service_health.py", "speech/tests/test_service_hear.py", "speech/tests/test_service_speak.py", "speech/tests/test_session.py", "speech/tests/test_speak.py", "speech/tests/test_voice_status.py"]
+opened_commit = "6a4b96bf3b27202aa31e09eaaee97cfaf5d99ebb"
+whole_reason = "Thirteen renames and the four files that name them change together: a renamed test or script that a CI invocation, a README line or a baseline key still names under its old path turns CI red or the gate's baseline stale."
