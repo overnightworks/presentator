@@ -6,8 +6,9 @@ after `hal setup --apply` and before edge enables presentator's catalog entry
 containers, volumes and image, folders), refuses before any change when the
 host or the checkout is not what the list assumes, stops at the first failed
 step and resumes on the next run; a second run reports every target as
-"already gone". It prints one line per target and never a value that Docker,
-systemd or git produced, and reads no `.env`. The operator's rulings on #508
+"already gone". It prints one line per target (a surviving
+`presentator-adoption-*` image is named, as ruled) and no other value that
+Docker, systemd or git produced, and reads no `.env`. The operator's rulings on #508
 lines 1, 2, 3 and 6 are the contract; #508 S9m deletes this file.
 """
 
@@ -30,9 +31,10 @@ ADOPTION_IMAGE_PREFIX = "presentator-adoption-"
 TRAEFIK_URL = "http://127.0.0.1:8081/"
 UNIT_DIRECTORY = ".config/systemd/user"
 UNITS = ("presentator-speech.service", "presentator-copresenter.service")
-FAILED = "failed"
 REMAINS = "remains"
+STOPPED_UNIT_STATES = frozenset({"inactive", "failed"})
 RETIRED_UNIT_STATE = {"LoadState": "not-found", "ActiveState": "inactive"}
+PROJECT_CONTAINERS = ("docker", "ps", "--all", "--quiet", "--filter", PROJECT_LABEL)
 
 
 @dataclass(frozen=True)
@@ -77,18 +79,19 @@ class Target:
     ruled_line: int
 
 
+LIVE_TARGET = Target(Step.FOLDERS, Kind.TREE, LIVE_NAME, 2)
 TARGETS = (
     Target(Step.UNITS, Kind.FILE, f"{UNIT_DIRECTORY}/{UNITS[0]}", 3),
     Target(Step.UNITS, Kind.FILE, f"{UNIT_DIRECTORY}/{UNITS[1]}", 3),
     Target(Step.UNITS, Kind.FILE, f"{UNIT_DIRECTORY}/{UNITS[1]}.d/no-sync.conf", 3),
     Target(Step.UNITS, Kind.DIRECTORY, f"{UNIT_DIRECTORY}/{UNITS[1]}.d", 3),
-    Target(Step.DOCKER, Kind.CONTAINERS, LIVE_NAME, 2),
+    Target(Step.DOCKER, Kind.CONTAINERS, f"{LIVE_NAME} containers", 2),
     Target(Step.DOCKER, Kind.NETWORK, f"{LIVE_NAME}_default", 2),
     Target(Step.DOCKER, Kind.VOLUME, f"{LIVE_NAME}_database", 1),
     Target(Step.DOCKER, Kind.VOLUME, f"{LIVE_NAME}_builds", 1),
     Target(Step.DOCKER, Kind.VOLUME, f"{LIVE_NAME}_mirrors", 1),
     Target(Step.DOCKER, Kind.IMAGE, "presentator-adoption-instance:ap112-e04e837a", 2),
-    Target(Step.FOLDERS, Kind.TREE, LIVE_NAME, 2),
+    LIVE_TARGET,
     Target(Step.FOLDERS, Kind.TREE, "presentator-backups", 2),
     Target(Step.FOLDERS, Kind.TREE, ".local/state/agent-presentator", 2),
     Target(Step.FOLDERS, Kind.TREE, ".local/state/presentator-speech", 2),
@@ -126,7 +129,7 @@ class Retirement:
         self.checkout = checkout
         self.run = run
         self.say = say
-        self.live = home / LIVE_NAME
+        self.live = home / LIVE_TARGET.name
         self.retiring = home / f"{LIVE_NAME}.retiring"
 
     def _lines(self, arguments: Sequence[str]) -> list[str] | None:
@@ -134,13 +137,13 @@ class Retirement:
         return outcome.text.splitlines() if outcome.code == 0 else None
 
     def _lines_or_fail(self, arguments: Sequence[str]) -> list[str]:
-        found = self._lines(arguments)
-        if found is None:
-            raise StepFailedError(*arguments[:2], FAILED)
-        return found
+        outcome = self.run(arguments)
+        if outcome.code != 0:
+            raise StepFailedError(*arguments[:2], f"exit {outcome.code}")
+        return outcome.text.splitlines()
 
     def _git(self, path: Path, *arguments: str) -> list[str] | None:
-        return self._lines(("git", "-C", str(path), *arguments))
+        return self._lines(("git", "--no-optional-locks", "-C", str(path), *arguments))
 
     def refusal(self, effective_uid: int, passwd_home: Path) -> str | None:
         """The first reason this run must change nothing, or None."""
@@ -168,9 +171,7 @@ class Retirement:
         return None
 
     def _host_refusal(self) -> str | None:
-        project = self._lines(
-            ("docker", "ps", "--all", "--quiet", "--filter", PROJECT_LABEL)
-        )
+        project = self._lines(PROJECT_CONTAINERS)
         traefik = self.run(
             ("curl", "--silent", "--output", os.devnull, "--max-time", "5", TRAEFIK_URL)
         )
@@ -191,12 +192,9 @@ class Retirement:
     def _live_checkout_refusal(self) -> str | None:
         if not exists(self.live):
             return None
-        if (
-            not (self.live / ".git").exists()
-            or self._git(self.live, "rev-parse", "HEAD") is None
-        ):
+        head = self._git(self.live, "rev-parse", "HEAD")
+        if head is None or not (self.live / ".git").exists():
             return f"{LIVE_NAME} is not a git checkout"
-        head = self._git(self.live, "rev-parse", "HEAD") or []
         checks = (
             (
                 self._git(self.live, "remote") == ["origin"],
@@ -263,6 +261,8 @@ class Retirement:
             if exists(self.home / UNIT_DIRECTORY / unit):
                 self._systemctl("stop", unit)
                 self._systemctl("disable", unit)
+                if self._unit_state(unit).get("ActiveState") not in STOPPED_UNIT_STATES:
+                    raise StepFailedError(unit, "stays active")
         for target in self._targets(Step.UNITS, Kind.FILE):
             self._remove_path(target)
         for target in self._targets(Step.UNITS, Kind.DIRECTORY):
@@ -270,14 +270,14 @@ class Retirement:
         self._systemctl("daemon-reload")
         for unit in UNITS:
             if self._unit_state(unit).get("ActiveState") == "failed":
-                self.run(("systemctl", "--user", "reset-failed", unit))
+                self._systemctl("reset-failed", unit)
             if self._unit_state(unit) != RETIRED_UNIT_STATE:
                 raise StepFailedError(unit, REMAINS)
 
     def _systemctl(self, *arguments: str) -> None:
-        command = ("systemctl", "--user", *arguments)
-        if self.run(command).code != 0:
-            raise StepFailedError(command[0], arguments[0], FAILED)
+        # The exit code is not the answer: on this host stop, disable and
+        # reset-failed of an unknown unit exit non-zero. The unit's state is.
+        self.run(("systemctl", "--user", *arguments))
 
     def _unit_state(self, unit: str) -> dict[str, str]:
         shown = self.run(
@@ -341,28 +341,27 @@ class Retirement:
                 self.say(f"left: {reference}")
 
     def _project_containers(self) -> list[str]:
-        return self._lines_or_fail(
-            ("docker", "ps", "--all", "--quiet", "--filter", PROJECT_LABEL)
-        )
+        return self._lines_or_fail(PROJECT_CONTAINERS)
 
     def _docker_names(self, noun: str, template: str) -> list[str]:
         return self._lines_or_fail(("docker", noun, "ls", "--format", template))
 
     def _docker(self, *arguments: str) -> None:
         command = ("docker", *arguments)
-        if self.run(command).code != 0:
-            raise StepFailedError(*command[:2], FAILED)
+        outcome = self.run(command)
+        if outcome.code != 0:
+            raise StepFailedError(*command[:2], f"exit {outcome.code}")
 
     def _step_folders(self) -> None:
-        live = self._targets(Step.FOLDERS, Kind.TREE)[0]
         was_present = exists(self.live) or exists(self.retiring)
         if exists(self.live):
             self.live.rename(self.retiring)
         if exists(self.retiring):
             shutil.rmtree(self.retiring)
-        self._report(live, was_present=was_present)
-        for target in self._targets(Step.FOLDERS, Kind.TREE)[1:]:
-            self._remove_path(target)
+        self._report(LIVE_TARGET, was_present=was_present)
+        for target in self._targets(Step.FOLDERS, Kind.TREE):
+            if target is not LIVE_TARGET:
+                self._remove_path(target)
 
 
 def retire(  # noqa: PLR0913, PLR0917 - every collaborator is a test seam
