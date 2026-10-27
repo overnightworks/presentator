@@ -1,6 +1,8 @@
 """The runs of the build on disk, against a real temporary root."""
 
 import logging
+import shutil
+import stat
 from pathlib import Path
 
 import pytest
@@ -114,6 +116,25 @@ def test_removing_a_run_takes_its_whole_directory_even_where_a_deck_closed_it(
     assert removed_run(root, "stuck")
 
     assert not (root / "stuck").exists()
+
+
+def test_a_removal_that_stops_halfway_leaves_no_directory_closed_to_others(
+    root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    out = a_run(root, "halfway")
+    (out / "talk" / "closed").mkdir()
+    (out / "talk" / "closed").chmod(0o000)
+
+    def stop_halfway(_directory: Path, *, ignore_errors: bool) -> None:
+        assert ignore_errors
+
+    monkeypatch.setattr(shutil, "rmtree", stop_halfway)
+
+    assert not removed_run(root, "halfway")
+
+    for directory in (root / "halfway", out, out / "talk", out / "talk" / "closed"):
+        assert directory.stat().st_mode & stat.S_IRWXO == stat.S_IROTH | stat.S_IXOTH
 
 
 def test_a_run_that_cannot_be_looked_at_is_not_reported_gone(
