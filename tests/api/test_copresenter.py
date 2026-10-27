@@ -19,7 +19,7 @@ from presentator.api.copresenter import (
     CoPresenterSurface,
     add_copresenter_routes,
 )
-from presentator.application.copresenter import AskLimiter, AskLimits
+from presentator.application.copresenter import AskLimiter
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
@@ -123,28 +123,25 @@ def test_the_admin_receives_only_speech_readiness() -> None:
     assert private.speech.readiness_calls == 1
 
 
-def test_a_signed_in_non_admin_is_refused_every_copresenter_route() -> None:
+def test_a_signed_in_user_is_answered_on_every_copresenter_route() -> None:
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
     lobby.sign_in(role=Role.USER)
 
     who = client.get("/copresenter/who")
     answer = ask(client)
-    with (
-        pytest.raises(WebSocketDisconnect) as refused,
-        client.websocket_connect(HEARING, headers={"origin": TALK_ORIGIN}),
-    ):
-        pass
+    with client.websocket_connect(HEARING, headers={"origin": TALK_ORIGIN}) as socket:
+        socket.send_bytes(b"a user speaks")
+        assert socket.receive_json() == {"text": "gehört", "final": True}
 
-    assert who.status_code == HTTPStatus.FORBIDDEN
-    assert answer.status_code == HTTPStatus.FORBIDDEN
-    assert refused.value.code == POLICY_VIOLATION
-    assert private.speech.readiness_calls == 0
-    assert private.answers.messages == []
-    assert private.speech.hearing_opens == 0
+    assert who.status_code == HTTPStatus.OK
+    assert answer.status_code == HTTPStatus.OK
+    assert private.speech.readiness_calls == 1
+    assert len(private.answers.messages) == 1
+    assert private.speech.hearing_opens == 1
 
 
-def test_a_running_hearing_ends_when_its_session_loses_the_admin_role() -> None:
+def test_a_running_hearing_keeps_going_when_its_person_changes_role() -> None:
     users = RefusingUserStore()
     deadline = ManualDeadline()
     lobby, private, _clock = a_copresenter_talk_host(users=users, delay=deadline.wait)
@@ -157,12 +154,10 @@ def test_a_running_hearing_ends_when_its_session_loses_the_admin_role() -> None:
         assert deadline.started.wait(timeout=1)
         _demote(users)
         deadline.release_first()
-        socket.send_text("force an observable close if the hearing stood")
-        with pytest.raises(WebSocketDisconnect) as ended:
-            socket.receive_json()
+        socket.send_bytes(b"after the role change")
+        assert socket.receive_json() == {"text": "gehört", "final": True}
 
-    assert ended.value.code == POLICY_VIOLATION
-    assert private.speech.hearing_opens == 0
+    assert private.speech.hearing.frames == [b"after the role change"]
 
 
 def _demote(users: FakeUserStore) -> None:
@@ -170,40 +165,14 @@ def _demote(users: FakeUserStore) -> None:
     users.users[admin.id] = replace(admin, role=Role.USER)
 
 
-def test_a_running_hearing_with_audio_ends_when_its_session_loses_the_admin_role() -> (
-    None
-):
-    users = RefusingUserStore()
-    deadline = ManualDeadline()
-    lobby, private, _clock = a_copresenter_talk_host(users=users, delay=deadline.wait)
-    lobby.sign_in(role=Role.ADMIN)
-
-    with lobby.client.websocket_connect(
-        HEARING,
-        headers={"origin": TALK_ORIGIN},
-    ) as socket:
-        assert deadline.started.wait(timeout=1)
-        socket.send_bytes(b"before demotion")
-        assert socket.receive_json() == {"text": "gehört", "final": True}
-        _demote(users)
-        deadline.release_first()
-        socket.send_text("force an observable close if the hearing stood")
-        with pytest.raises(WebSocketDisconnect) as ended:
-            socket.receive_json()
-
-    assert ended.value.code == POLICY_VIOLATION
-    assert private.speech.hearing.frames == [b"before demotion"]
-    assert private.speech.hearing.closed == 1
-
-
-def test_an_answer_in_flight_stops_when_its_session_loses_the_admin_role() -> None:
+def test_an_answer_in_flight_finishes_when_its_person_changes_role() -> None:
     users = RefusingUserStore()
     deadline = ManualDeadline()
     event_count = 40
-    demote_after = 2
+    change_after = 2
 
     def demote_mid_answer(index: int) -> None:
-        if index == demote_after:
+        if index == change_after:
             _demote(users)
             deadline.release_first()
 
@@ -211,30 +180,12 @@ def test_an_answer_in_flight_stops_when_its_session_loses_the_admin_role() -> No
     private.answers.busy_events = event_count
     private.answers.event_hook = demote_mid_answer
     lobby.sign_in(role=Role.ADMIN)
-    client = lobby.client
 
-    response = ask(client)
+    response = ask(lobby.client)
 
     assert response.status_code == HTTPStatus.OK
-    assert response.text.count("event: text") < event_count
-    assert private.answers.generated_events < event_count
+    assert private.answers.generated_events == event_count
     assert private.answers.exits == 1
-
-
-def test_a_refused_non_admin_question_keeps_the_sessions_ask_capacity() -> None:
-    users = RefusingUserStore()
-    limiter = AskLimiter(clock=FrozenClock(instant=NOW), limits=AskLimits(per_window=1))
-    lobby, private, _clock = a_copresenter_talk_host(users=users, limiter=limiter)
-    lobby.sign_in(role=Role.USER)
-
-    refused = ask(lobby.client)
-    (person,) = users.users.values()
-    users.users[person.id] = replace(person, role=Role.ADMIN)
-    answered = ask(lobby.client)
-
-    assert refused.status_code == HTTPStatus.FORBIDDEN
-    assert answered.status_code == HTTPStatus.OK
-    assert len(private.answers.messages) == 1
 
 
 def test_ask_needs_the_browsers_provenance_and_streams_only_public_events() -> None:

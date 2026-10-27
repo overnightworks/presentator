@@ -63,8 +63,8 @@ than shown empty while that project cannot be read
 - A deck exists only for the account that owns its source: the list, the
   deck page, the projector and presenter views, and the PDF show it to that
   account alone, and to anyone else it answers like a slug no deck carries,
-  the same status, body and headers, never a hint that it exists. Sources and
-  the co-presenter keep their admin gate on top of this. Two named exceptions:
+  the same status, body and headers, never a hint that it exists. Sources
+  keep their admin gate on top of this. Two named exceptions:
   a source page's removal confirm counts every deck of that source, and a
   folder name two sources carry belongs to the source that took it in first.
 

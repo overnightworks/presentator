@@ -147,12 +147,6 @@ def delete_the_sessions(hosts: Hosts) -> None:
         connection.commit()
 
 
-def demote_the_admin(hosts: Hosts) -> None:
-    with closing(sqlite3.connect(hosts.database)) as connection:
-        connection.execute("UPDATE users SET role = 'user' WHERE id = ?", (A.id,))
-        connection.commit()
-
-
 def the_session_ends_during_the_grant(hosts: Hosts) -> None:
     hosts.issuer.during_token_request = lambda: delete_the_sessions(hosts)
 
@@ -610,18 +604,11 @@ class ChangeOnceTheAnswerHangs:
         self.change(hosts)
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
-        pytest.param(delete_the_sessions, id="session-ended"),
-        pytest.param(demote_the_admin, id="admin-role-lost"),
-    ],
-)
-def test_an_answer_ends_within_one_recheck_when_the_session_or_the_role_goes(
-    tmp_path: Path, change: Callable[[Hosts], None]
+def test_an_answer_ends_within_one_recheck_when_the_session_goes(
+    tmp_path: Path,
 ) -> None:
-    """Cells 17 and 19: the service's connection is closed behind it."""
-    recheck = ChangeOnceTheAnswerHangs(change)
+    """Cell 17: the service's connection is closed behind it."""
+    recheck = ChangeOnceTheAnswerHangs(delete_the_sessions)
     scenario = Scenario(reply=HANGING_AFTER_THE_FIRST_WORDS, delay=recheck)
 
     run = drive(tmp_path, scenario)

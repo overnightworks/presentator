@@ -167,7 +167,6 @@ class FixedSession:
 
     session_id: str = "session"
     user_id: str = ADMIN
-    is_admin: bool = True
 
 
 def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> None:

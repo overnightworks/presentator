@@ -210,11 +210,6 @@ class SignedInConnection:
         """The signed-in person's account id."""
         return self.person.id
 
-    @property
-    def is_admin(self) -> bool:
-        """Whether the signed-in person holds the admin role."""
-        return self.person.is_admin
-
 
 def signed_in_connection(
     connection: HTTPConnection,
