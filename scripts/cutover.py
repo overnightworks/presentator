@@ -516,7 +516,7 @@ def _answer_of(outcome: Outcome) -> Answer:
 def _redirects_to_sign_in(answer: Answer, side: Side, deployment: Deployment) -> bool:
     location = answer.first("location")
     if side is Side.TALK:
-        return answer.status == 303 and location.startswith(deployment.lobby_origin)  # noqa: PLR2004
+        return answer.status == 303 and location == deployment.lobby_origin  # noqa: PLR2004
     return 300 <= answer.status < 400 and urlsplit(location).path == SIGN_IN_PATH  # noqa: PLR2004
 
 
@@ -595,9 +595,7 @@ class Inspection(Retirement):
         return self._read_record(record) if exists(record) else None
 
     def _read_record(self, record: Path) -> tuple[str, str]:
-        unreadable = RefusedError(
-            "edge's deployed record of presentator is not readable"
-        )
+        unreadable = RefusedError(RECORD_UNREADABLE)
         try:
             data = cast("object", json.loads(record.read_text()))
         except (OSError, ValueError) as failure:
@@ -672,7 +670,9 @@ class Inspection(Retirement):
             ("mounts", lambda: self._mounts_clean(container)),
             (
                 "groups",
-                lambda: self._inspected(container, ".HostConfig.GroupAdd") is None,
+                lambda: (
+                    self._inspected(container, ".HostConfig.GroupAdd") in (None, [])
+                ),
             ),
             (
                 "ports",
