@@ -492,6 +492,20 @@ def test_a_failed_probe_is_named_and_the_others_still_run(
     assert run.lines.count(NEXT_STEP) == 1
 
 
+def test_a_checkout_without_compose_yaml_is_refused_without_a_path(
+    scene: Scene,
+) -> None:
+    """S9h2 (#553) sentences 4 and 7: a missing compose file is a refusal."""
+    (scene.checkout / "compose.yaml").unlink()
+
+    run = scene.drive()
+
+    assert run.code == REFUSED
+    assert run.lines[-1].startswith("refused:")
+    assert str(scene.checkout) not in "\n".join(run.lines)
+    assert not scene.probing_calls()
+
+
 ONE_SECRET: dict[str, object] = {
     "Type": "bind",
     "Destination": "/run/secrets/one",

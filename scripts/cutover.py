@@ -620,7 +620,12 @@ class Inspection(Retirement):
             raise RefusedError(NOT_HEAD)
 
     def _deployment(self) -> Deployment:
-        return deployment_of((self.checkout / "compose.yaml").read_text())
+        try:
+            compose = (self.checkout / "compose.yaml").read_text()
+        except OSError:
+            reason = "compose.yaml cannot be read"
+            raise RefusedError(reason) from None
+        return deployment_of(compose)
 
     def _probes(self, deployment: Deployment) -> Iterator[tuple[str, Verdict]]:
         yield from self._web_probes(Vantage.LOCAL, deployment)
