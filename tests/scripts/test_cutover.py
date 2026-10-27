@@ -51,7 +51,13 @@ class Host:
 
     home: Path
     calls: list[tuple[str, ...]] = field(default_factory=list[tuple[str, ...]])
-    containers: list[str] = field(default_factory=lambda: ["c0ffee"])
+    containers: dict[str, str] = field(
+        default_factory=lambda: {
+            "c0ffee": "presentator-live",
+            "5afe01": "presentator",
+            "b10b02": "hopin",
+        }
+    )
     networks: list[str] = field(
         default_factory=lambda: ["presentator-live_default", "presentator_default"]
     )
@@ -128,11 +134,17 @@ class Host:
     def run_docker(self, rest: tuple[str, ...]) -> object:
         match rest:
             case ("ps", *_):
-                return outcome(0, "\n".join(self.containers))
+                label = rest[rest.index("--filter") + 1]
+                project = label.removeprefix("label=com.docker.compose.project=")
+                matching = [
+                    id for id, owner in self.containers.items() if owner == project
+                ]
+                return outcome(0, "\n".join(matching))
             case ("stop", _):
                 return outcome(0, "")
             case ("rm", container):
-                self.remove(self.containers, container)
+                if container not in self.lingering:
+                    del self.containers[container]
             case ("network", "ls", *_):
                 return outcome(0, "\n".join(self.networks))
             case ("network", "rm", name):
@@ -143,7 +155,7 @@ class Host:
                 self.volumes.remove(name)
             case ("image", "ls", *_):
                 return outcome(0, "\n".join(self.images))
-            case ("image", "rm", reference):
+            case ("image", "rm", "--no-prune", reference):
                 self.images.remove(reference)
             case _:
                 pass
@@ -281,7 +293,7 @@ def test_a_run_removes_exactly_the_list_and_keeps_every_survivor(
     assert not (home / f"{UNIT_DIRECTORY}/presentator-copresenter.service.d").exists()
     assert present(home, SURVIVORS) == list(SURVIVORS)
     assert (home / "presentator-stage").is_dir()
-    assert host.containers == []
+    assert list(host.containers) == ["5afe01", "b10b02"]
     assert host.networks == ["presentator_default"]
     assert host.volumes == list(KEPT_VOLUMES)
     assert host.images == ["presentator-adoption-other:x", "presentator:v1"]
@@ -299,6 +311,17 @@ def test_the_commands_never_use_compose_force_or_a_shell(
     docker = host.commands("docker")
     assert ("docker", "stop", "c0ffee") in docker
     assert ("docker", "rm", "c0ffee") in docker
+    assert ("docker", "image", "rm", "--no-prune", IMAGE) in docker
+    assert (
+        "docker",
+        "ps",
+        "--all",
+        "--quiet",
+        "--filter",
+        "label=com.docker.compose.project=presentator-live",
+    ) in docker
+    stopped_or_removed = {call[2] for call in docker if call[1] in {"stop", "rm"}}
+    assert stopped_or_removed == {"c0ffee"}
     assert not any(
         "compose" in call or "-f" in call or "--force" in call for call in docker
     )
@@ -404,7 +427,7 @@ def with_refs(*refs: str) -> Arrange:
         (host_has(checkout_status=" M x"), "uncommitted"),
         (as_root, "root"),
         (with_another_home, "password database"),
-        (host_has(containers=[], traefik_answers=False), "not this machine"),
+        (host_has(containers={}, traefik_answers=False), "not this machine"),
         (without_git_folder, "not a git checkout"),
         (host_has(live_origin="https://example.org/x.git"), "another origin"),
         (host_has(live_remotes="origin\nfork"), "remote other than origin"),
@@ -678,7 +701,7 @@ def test_the_output_carries_no_value_from_docker_systemd_or_git(
     execute: Callable[..., Run], host: Host
 ) -> None:
     """S9h1 (#542) sentence 6: no container id and no commit is printed."""
-    host.containers = ["secretid"]
+    host.containers = {"secretid": "presentator-live"}
     result = execute()
 
     assert "secretid" not in "\n".join(result.lines)

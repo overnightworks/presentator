@@ -347,7 +347,7 @@ class Retirement:
         references = self._docker_names("image", "{{.Repository}}:{{.Tag}}")
         present = image.name in references
         if present:
-            self._docker("image", "rm", image.name)
+            self._docker("image", "rm", "--no-prune", image.name)
         self._report(image, was_present=present)
         others = [
             reference
