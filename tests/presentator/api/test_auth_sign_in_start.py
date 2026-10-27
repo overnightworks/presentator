@@ -3,16 +3,9 @@
 from http import HTTPStatus
 from urllib.parse import parse_qs, urlsplit
 
-import pytest
-
-from tests.support.lobby import A_CLIENT_ID, AN_ISSUER, ENGLISH, Lobby, a_lobby
+from tests.support.lobby import A_CLIENT_ID, AN_ISSUER, ENGLISH, Lobby
 
 _AUTHORIZATION_ENDPOINT = f"{AN_ISSUER}/protocol/openid-connect/auth"
-
-
-@pytest.fixture
-def lobby() -> Lobby:
-    return a_lobby()
 
 
 def _started(lobby: Lobby, next_path: str | None) -> tuple[str, str]:
