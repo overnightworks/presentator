@@ -758,3 +758,33 @@ def test_no_token_reaches_a_log_record_or_the_browser(
     assert the_browser_saw_no_token(run.response)
     for marker in TOKENS:
         assert marker not in logged
+
+
+def test_every_generated_answer_event_says_ai_generated_and_error_does_not(
+    tmp_path: Path,
+) -> None:
+    """#293 E9 (a): text, sentence, audio and done say ai_generated; error does not."""
+    (tmp_path / "answered").mkdir()
+    (tmp_path / "refused").mkdir()
+    answered = _payloads_by_event(drive(tmp_path / "answered").response.text)
+    refused = _payloads_by_event(
+        drive(
+            tmp_path / "refused", Scenario(before_ask=the_workload_is_refused)
+        ).response.text
+    )
+
+    assert {"text", "sentence", "audio", "done"} <= answered.keys()
+    assert all(
+        payload["ai_generated"] is True
+        for payloads in answered.values()
+        for payload in payloads
+    )
+    assert refused.keys() == {"error"}
+    assert "ai_generated" not in refused["error"][0]
+
+
+def _payloads_by_event(stream: str) -> dict[str, list[dict[str, object]]]:
+    by_event: dict[str, list[dict[str, object]]] = {}
+    for name, data in re.findall(r"^event: (\w+)\ndata: (.*)$", stream, re.MULTILINE):
+        by_event.setdefault(name, []).append(json.loads(data))
+    return by_event
