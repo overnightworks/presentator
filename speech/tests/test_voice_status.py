@@ -741,6 +741,20 @@ class _StatusScenario:
             (VoiceId.CHATTERBOX,),
             VoiceState.LOADING,
         ),
+        _StatusScenario(
+            VoiceId.CHATTERBOX,
+            _RuntimeFacts().state(),
+            (),
+            (),
+            VoiceState.UNAVAILABLE,
+        ),
+        _StatusScenario(
+            VoiceId.CHATTERBOX,
+            _RuntimeFacts().state(),
+            (),
+            (VoiceId.CHATTERBOX,),
+            VoiceState.NOT_DOWNLOADED,
+        ),
     ],
 )
 def test_catalogue_preserves_runtime_precedence_before_download_evidence(
