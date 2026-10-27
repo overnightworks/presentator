@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from presentator.adapters.worker_children import ChildSurroundings, spawn_gated
-from tests.adapters.test_worker_children import (
+from tests.presentator.adapters.test_worker_children import (
     PATH,
     WAIT_SECONDS,
     end_child,

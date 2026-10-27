@@ -14,7 +14,7 @@ from presentator.adapters.build_runs import (
     taken_away,
 )
 from presentator.ports.decks import BuildRun
-from tests.adapters.person_instance_support import (
+from tests.presentator.adapters.support.person_instance_support import (
     ANOTHER,
     THE_PERSON,
     an_instance_with_both_people,

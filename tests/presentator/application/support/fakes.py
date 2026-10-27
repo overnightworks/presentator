@@ -422,7 +422,7 @@ class FakeLocalMount:
     """Trusts the lexical path, for an application test with no real disk.
 
     The real containment — a symlink, a mount that has since changed — is an
-    adapter's own proof (`tests/adapters/test_decks.py`); this fake only
+    adapter's own proof (`tests/presentator/adapters/test_decks.py`); this fake only
     repeats the same lexical parse the form's own refusal already ran, so an
     application test can still tell an in-mount address from one outside it.
     """

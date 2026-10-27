@@ -17,8 +17,8 @@ from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     HearingTranscript,
 )
-from tests.adapters.serving import Serving, unix_listener
 from tests.api.copresenter_support import PrivateFakes, a_use
+from tests.presentator.adapters.support.serving import Serving, unix_listener
 from tests.presentator.application.support.fakes import FakeDeckStore
 
 if TYPE_CHECKING:

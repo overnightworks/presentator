@@ -31,7 +31,7 @@ from fastapi.responses import Response, StreamingResponse
 
 from presentator.adapters.agent_service import ServiceAnswerer
 from presentator.contracts.copresenter import CoPresenterUnavailableError
-from tests.adapters.serving import Serving, loopback_listener
+from tests.presentator.adapters.support.serving import Serving, loopback_listener
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator

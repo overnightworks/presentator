@@ -5,7 +5,7 @@ from contextlib import closing
 from pathlib import Path
 
 from presentator.contracts.people import PersonErased
-from tests.adapters.person_instance_support import (
+from tests.presentator.adapters.support.person_instance_support import (
     ANOTHER,
     THE_PERSON,
     an_instance_with_both_people,

@@ -10,8 +10,8 @@ from pydantic import SecretStr
 
 from presentator.adapters.identity import SqliteSessionRecordStore
 from presentator.contracts.people import KeyDraftExport, PersonExport, PersonKind
-from tests.adapters.key_draft_support import a_key_drafts_store
-from tests.adapters.person_instance_support import (
+from tests.presentator.adapters.support.key_draft_support import a_key_drafts_store
+from tests.presentator.adapters.support.person_instance_support import (
     THE_PERSON,
     WHAT_THE_GIT_HOST_EXPECTS,
     Instance,

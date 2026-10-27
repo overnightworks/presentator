@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from presentator.adapters.schema import create_tables
-from tests.adapters.person_instance_support import (
+from tests.presentator.adapters.support.person_instance_support import (
     THE_PERSON,
     an_instance_with_both_people,
     owned_row_ids,

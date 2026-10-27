@@ -20,7 +20,7 @@ from presentator.contracts.voice import (
     VoiceSampleBusyError,
     VoiceUnavailableError,
 )
-from tests.adapters.serving import Serving, unix_listener
+from tests.presentator.adapters.support.serving import Serving, unix_listener
 
 
 def test_missing_private_socket_never_falls_back_to_tcp(

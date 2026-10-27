@@ -8,11 +8,11 @@
 "speech/tests/test_voice_status.py" = 1473
 "src/presentator/adapters/decks.py" = 876
 "src/presentator/application/decks.py" = 974
-"tests/adapters/test_builds.py" = 1183
-"tests/adapters/test_decks.py" = 1424
 "tests/api/test_copresenter.py" = 800
 "tests/api/test_sources.py" = 1718
 "tests/gitmirror/test_mirror.py" = 1229
+"tests/presentator/adapters/test_builds.py" = 1183
+"tests/presentator/adapters/test_decks.py" = 1424
 "tests/presentator/application/test_decks.py" = 2057
 
 [function_lines."speech/providers/chatterbox/src/presentator_chatterbox/model.py"]
@@ -51,5 +51,5 @@
 [function_lines."src/presentator/host/main.py"]
 "build_instance" = 78
 
-[function_lines."tests/adapters/test_decks.py"]
+[function_lines."tests/presentator/adapters/test_decks.py"]
 "test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair" = 67

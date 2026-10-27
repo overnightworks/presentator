@@ -20,7 +20,6 @@ from presentator.api.copresenter import (
     add_copresenter_routes,
 )
 from presentator.application.copresenter import AskLimiter, AskTicket
-from tests.adapters.agent_service_support import Wire
 from tests.api.copresenter_support import (
     A_DECK,
     ASK,
@@ -37,6 +36,7 @@ from tests.api.copresenter_support import (
     the_admins_decks,
 )
 from tests.api.lobby import A_TALK_ADDRESS, ADMIN, AN_AGENT_SERVICE
+from tests.presentator.adapters.support.agent_service_support import Wire
 from tests.presentator.application.support.fakes import FrozenClock
 
 if TYPE_CHECKING:

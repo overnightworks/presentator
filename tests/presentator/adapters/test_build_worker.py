@@ -42,7 +42,7 @@ from presentator.contracts.decks import (
 )
 from presentator.host import worker
 from tests import worker_support as support
-from tests.adapters.build_worker_support import (
+from tests.presentator.adapters.support.build_worker_support import (
     BUILT_BY_STEP,
     BUILT_TALK,
     INDEX,
