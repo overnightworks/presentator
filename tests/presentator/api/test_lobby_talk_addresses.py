@@ -11,14 +11,14 @@ from starlette.testclient import WebSocketDenialResponse
 from starlette.websockets import WebSocketDisconnect
 
 from presentator.api.talk import talk_content_security_policy
-from tests.api.lobby import (
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_SOCKET_ADDRESS,
     AN_ASSET,
     BUILT_TALK,
     a_content_security_policy,
 )
-from tests.api.talk_support import (
+from tests.support.talk_support import (
     A_DECK,
     B_DECK,
     NO_DECK,

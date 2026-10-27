@@ -8,7 +8,12 @@ from urllib.parse import quote
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.api.lobby import (
+from tests.presentator.api.test_deck_page import (
+    a_build,
+    a_deck_store,
+    a_talk_host,
+)
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
     BUILT_TALK,
@@ -18,12 +23,7 @@ from tests.api.lobby import (
     a_swapped_build,
     real_builds_under,
 )
-from tests.api.talk_support import ONLY_THIS_TEST_WROTE_IT, two_hosts
-from tests.api.test_deck_page import (
-    a_build,
-    a_deck_store,
-    a_talk_host,
-)
+from tests.support.talk_support import ONLY_THIS_TEST_WROTE_IT, two_hosts
 
 _SLUG: Final = "hello-deck"
 _PROJECTOR: Final = f"/deck/{_SLUG}/"

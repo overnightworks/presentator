@@ -14,7 +14,8 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import AskLimiter
 from presentator.contracts.models import Role, User
-from tests.api.copresenter_support import (
+from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
+from tests.support.copresenter_support import (
     HEARING,
     POLICY_VIOLATION,
     QUESTION,
@@ -24,7 +25,7 @@ from tests.api.copresenter_support import (
     a_copresenter_talk_host,
     a_use,
 )
-from tests.api.lobby import (
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
     NOW,
@@ -32,8 +33,7 @@ from tests.api.lobby import (
     a_web_auth,
     hand_over_session_cookies,
 )
-from tests.api.talk_support import A_DECK, MEMBER, A, Hosts, two_hosts
-from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
+from tests.support.talk_support import A_DECK, MEMBER, A, Hosts, two_hosts
 
 if TYPE_CHECKING:
     from pathlib import Path

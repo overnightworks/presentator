@@ -122,9 +122,13 @@ def _write_test_key_file() -> Path:
 
 NOW: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
 # What `slidev build` of `examples/hello-deck` writes, `--base /deck/hello-deck/`.
-BUILT_TALK: Final = Path(__file__).parent / "fixtures" / "built_talk"
+BUILT_TALK: Final = (
+    Path(__file__).parents[1] / "presentator" / "api" / "fixtures" / "built_talk"
+)
 AN_ASSET: Final = "assets/index-mRcVgIkQ.js"
-_EXPORTED_PDF: Final = Path(__file__).parent / "fixtures" / "exported_deck.pdf"
+_EXPORTED_PDF: Final = (
+    Path(__file__).parents[1] / "presentator" / "api" / "fixtures" / "exported_deck.pdf"
+)
 _KEY_FILE: Final = _write_test_key_file()
 _BUILT_DECK_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 # No route test waits for a build, so the bound only has to be longer than the

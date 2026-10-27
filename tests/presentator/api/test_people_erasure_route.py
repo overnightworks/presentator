@@ -14,8 +14,19 @@ from httpx2 import Response
 from presentator.application.people import People
 from presentator.host import main
 from presentator.host.config import ConfigurationError, load_settings
-from tests.api.fake_issuer import FakeIssuer
-from tests.api.lobby import (
+from tests.presentator.application.support.fakes import (
+    FakeDeckFolders,
+    FakePeople,
+    FrozenClock,
+)
+from tests.presentator.application.support.person_instance_support import (
+    ANOTHER,
+    THE_PERSON,
+    Instance,
+    an_instance,
+)
+from tests.support.fake_issuer import FakeIssuer
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     A_CLIENT_ID,
@@ -30,17 +41,6 @@ from tests.api.lobby import (
     a_talk_app,
     an_admin_people,
     an_installed_auth,
-)
-from tests.presentator.application.support.fakes import (
-    FakeDeckFolders,
-    FakePeople,
-    FrozenClock,
-)
-from tests.presentator.application.support.person_instance_support import (
-    ANOTHER,
-    THE_PERSON,
-    Instance,
-    an_instance,
 )
 
 HAL = "hal-client"

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.api.lobby import (
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     A_TALK_ADDRESS,
@@ -13,7 +13,7 @@ from tests.api.lobby import (
     a_crowd,
     a_lobby_app,
 )
-from tests.api.talk_support import two_hosts
+from tests.support.talk_support import two_hosts
 
 _HOSTS = [A_BROWSERS_ADDRESS, A_TALK_ADDRESS]
 

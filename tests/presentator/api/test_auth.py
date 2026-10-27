@@ -26,7 +26,7 @@ from presentator.application.decks import DRAFT_MAX_AGE
 from presentator.application.identity import (
     SESSION_LIFETIME,
 )
-from tests.api.lobby import (
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     ENGLISH,

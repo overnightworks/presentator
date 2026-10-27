@@ -35,7 +35,12 @@ from presentator.contracts.decks import (
     SourceRunOutcome,
 )
 from presentator.contracts.models import Role
-from tests.api.lobby import (
+from tests.presentator.application.support.fakes import (
+    LOCAL_MOUNT_EXAMPLE,
+    FakeBuildRunner,
+    FakeDeckStore,
+)
+from tests.support.lobby import (
     ADMIN,
     ENGLISH,
     NEIGHBOUR,
@@ -47,11 +52,6 @@ from tests.api.lobby import (
     a_configured_source,
     a_lobby,
     a_signed_in_lobby,
-)
-from tests.presentator.application.support.fakes import (
-    LOCAL_MOUNT_EXAMPLE,
-    FakeBuildRunner,
-    FakeDeckStore,
 )
 
 _ADDRESS = "git@heimserver:decks.git"

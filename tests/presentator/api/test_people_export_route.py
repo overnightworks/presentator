@@ -15,8 +15,19 @@ from httpx2 import Response
 from pydantic import SecretStr
 
 from presentator.application.people import People
-from tests.api.fake_issuer import FakeIssuer
-from tests.api.lobby import (
+from tests.presentator.application.support.fakes import (
+    FakePeople,
+    FakeSourceStore,
+    FrozenClock,
+)
+from tests.presentator.application.support.person_instance_support import (
+    ANOTHER,
+    THE_PERSON,
+    Instance,
+    an_instance,
+)
+from tests.support.fake_issuer import FakeIssuer
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     A_CLIENT_ID,
@@ -28,17 +39,6 @@ from tests.api.lobby import (
     a_relying_party,
     an_admin_people,
     an_installed_auth,
-)
-from tests.presentator.application.support.fakes import (
-    FakePeople,
-    FakeSourceStore,
-    FrozenClock,
-)
-from tests.presentator.application.support.person_instance_support import (
-    ANOTHER,
-    THE_PERSON,
-    Instance,
-    an_instance,
 )
 
 _HAL: Final = "hal-client"

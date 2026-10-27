@@ -20,14 +20,15 @@ from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host import main
 from presentator.host.config import load_settings
-from tests.api.fake_issuer import FakeIssuer
-from tests.api.lobby import (
+from tests.people import seed_user
+from tests.support.fake_issuer import FakeIssuer
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     A_TALK_ADDRESS,
     hand_over_session_cookies,
 )
-from tests.api.talk_support import (
+from tests.support.talk_support import (
     A_DECK,
     B_DECK,
     Hosts,
@@ -35,7 +36,6 @@ from tests.api.talk_support import (
     cookie_header,
     two_hosts,
 )
-from tests.people import seed_user
 
 _LOBBY_HOST = str(urlsplit(A_BROWSERS_ADDRESS).hostname)
 _TALK_HOST = str(urlsplit(A_TALK_ADDRESS).hostname)

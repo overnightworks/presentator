@@ -2,7 +2,7 @@
 
 import pytest
 
-from tests.api.lobby import Lobby, a_lobby
+from tests.support.lobby import Lobby, a_lobby
 
 
 @pytest.fixture

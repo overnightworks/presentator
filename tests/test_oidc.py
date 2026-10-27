@@ -12,7 +12,7 @@ from presentator.host.oidc import (
     oidc_client_config,
     relying_party,
 )
-from tests.api.lobby import (
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_CLIENT_CREDENTIAL,
     A_CLIENT_ID,

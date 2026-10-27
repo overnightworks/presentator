@@ -39,12 +39,6 @@ from presentator.host.config import (
     load_settings,
 )
 from presentator.host.main import Instance
-from tests.api.lobby import (
-    A_BROWSERS_ADDRESS,
-    A_BROWSERS_HEADERS,
-    configure_secret_key,
-    hand_over_session_cookies,
-)
 from tests.conftest import (
     EXAMPLE_SLUG,
     EXAMPLE_TITLE,
@@ -52,6 +46,12 @@ from tests.conftest import (
     GitRemote,
 )
 from tests.people import copy_of_a_crashed_database, seed_user, write_password_schema
+from tests.support.lobby import (
+    A_BROWSERS_ADDRESS,
+    A_BROWSERS_HEADERS,
+    configure_secret_key,
+    hand_over_session_cookies,
+)
 
 _PERSON = "felix"
 _ADMIN = User(id="id-of-felix", username=_PERSON, role=Role.ADMIN)

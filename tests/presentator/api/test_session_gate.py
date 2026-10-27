@@ -20,7 +20,12 @@ from presentator.api.auth import PERMISSIONS_POLICY
 from presentator.api.hooks import hook_address
 from presentator.api.pages import gated_person, gated_session_id
 from presentator.application.identity import SESSION_LIFETIME
-from tests.api.lobby import (
+from tests.presentator.application.support.fakes import (
+    FakeSession,
+    FakeSessionRecordStore,
+    FakeUserStore,
+)
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     ENGLISH,
@@ -30,11 +35,6 @@ from tests.api.lobby import (
     a_content_security_policy,
     a_crowd,
     a_lobby_app,
-)
-from tests.presentator.application.support.fakes import (
-    FakeSession,
-    FakeSessionRecordStore,
-    FakeUserStore,
 )
 
 _JSON = {"accept": "application/json"}

@@ -9,8 +9,8 @@ import pytest
 
 from presentator.api.talk import talk_content_security_policy
 from presentator.contracts.decks import talk_address
-from tests.api.lobby import A_TALK_ADDRESS, a_content_security_policy
-from tests.api.talk_support import A_DECK, two_hosts
+from tests.support.lobby import A_TALK_ADDRESS, a_content_security_policy
+from tests.support.talk_support import A_DECK, two_hosts
 
 # Outside `form-action`, a source names no host when it is 'self', 'none',
 # 'unsafe-inline', a hash or nonce, or the data: or blob: scheme; every other
