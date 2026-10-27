@@ -1,8 +1,0 @@
-claim_id = "8f28572454c248d7b5a67ab169d09143"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "f80beda088a06929f9de26c46d80335ec1ad7b2b"
-branch = "claude/issue-574-speech-test-helpers"
-scope = ["quality/baseline.toml", "speech/pyproject.toml", "speech/tests/__init__.py", "speech/tests/conftest.py", "speech/tests/support/fakes_support.py", "speech/tests/support/private_server_support.py", "speech/tests/support/speak_support.py", "speech/tests/support/worker_support.py", "speech/tests/test_config.py", "speech/tests/test_contract_client.py", "speech/tests/test_health.py", "speech/tests/test_hear.py", "speech/tests/test_main.py", "speech/tests/test_private_socket.py", "speech/tests/test_provider_process.py", "speech/tests/test_qwen_download.py", "speech/tests/test_sample.py", "speech/tests/test_serve_lifecycle.py", "speech/tests/test_session.py", "speech/tests/test_speak.py", "speech/tests/test_voice_status.py"]
-opened_commit = "1cd2661b8d0f365fd93ec63185b78cfb37667f92"
-whole_reason = "The moved helpers, the conftest move and their thirteen importers change together, and the new import mode must arrive with the deleted __init__.py: a half-moved tree imports names a test module no longer holds, and a stale baseline entry turns the gate red."
