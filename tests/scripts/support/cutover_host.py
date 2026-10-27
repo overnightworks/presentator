@@ -37,6 +37,7 @@ VOLUMES = (
 KEPT_VOLUMES = ("presentator_database", "presentator_builds")
 IMAGE = "presentator-adoption-instance:ap112-e04e837a"
 REFUSED = 2
+SERVICE_LABEL = "label=com.docker.compose.service="
 UNITS = ("presentator-speech.service", "presentator-copresenter.service")
 UNIT_EXIT_CODES = {"stop": 5, "disable": 1, "reset-failed": 1}
 LOBBY_HOST = "lobby.example.test"
@@ -192,10 +193,10 @@ class Host:
 
     def run_docker(self, rest: tuple[str, ...]) -> object:
         match rest:
-            case ("ps", *_):
-                return self.run_ps(rest)
-            case ("inspect", *_) | ("network", "inspect", *_):
-                return self.run_inspect(rest)
+            case ("ps", *_) | ("inspect", *_) | ("network", "inspect", *_):
+                return self.answer_query(rest)
+            case ("stop", _):
+                return outcome(0, "")
             case ("rm", container):
                 self.remove_container(container)
             case ("network", "ls", *_):
@@ -223,8 +224,21 @@ class Host:
         field_name = template.removeprefix("{{json ").removesuffix("}}")
         return outcome(0, json.dumps(self.inspected[field_name]))
 
+    def answer_query(self, rest: tuple[str, ...]) -> object:
+        if rest[0] != "ps":
+            return self.run_inspect(rest)
+        if any(SERVICE_LABEL in word for word in rest):
+            return self.run_service_ps(rest)
+        return self.run_ps(rest)
+
     def run_ps(self, rest: tuple[str, ...]) -> object:
-        """List the containers that carry every label filter and are running."""
+        label = rest[rest.index("--filter") + 1]
+        project = label.removeprefix("label=com.docker.compose.project=")
+        matching = [name for name, owner in self.containers.items() if owner == project]
+        return outcome(0, "\n".join(matching))
+
+    def run_service_ps(self, rest: tuple[str, ...]) -> object:
+        """List the running containers with both the project and the service label."""
         labels = dict(
             re.findall(
                 r"label=com\.docker\.compose\.(\w+)=(.*)",
@@ -237,9 +251,8 @@ class Host:
             name
             for name, project in self.containers.items()
             if labels.get("project") == project
-            and labels.get("service", self.services.get(name, project))
-            == self.services.get(name, project)
-            and ("--all" in rest or name not in self.stopped)
+            and labels.get("service") == self.services.get(name, project)
+            and name not in self.stopped
         ]
         return outcome(0, "\n".join(matching))
 
