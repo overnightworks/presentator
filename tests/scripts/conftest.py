@@ -1,7 +1,11 @@
-"""Fixtures shared by the cutover tests: the module, a tmp home and the host fake."""
+"""Fixtures shared by the script tests: the script loader and the cutover fixtures.
+
+The cutover tests also get the module, a tmp home and the host fake.
+"""
 
 import importlib
 import sys
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import ModuleType
 
@@ -19,9 +23,24 @@ SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 
 
 @pytest.fixture
-def cutover(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
-    monkeypatch.setattr(sys, "path", [str(SCRIPTS), *sys.path])
-    return importlib.import_module("cutover")
+def load_script(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[..., ModuleType]]:
+    """Import a script by name; drop the modules it brought in at teardown."""
+    before = set(sys.modules)
+
+    def load(name: str, subdirectory: str = "") -> ModuleType:
+        monkeypatch.setattr(sys, "path", [str(SCRIPTS / subdirectory), *sys.path])
+        return importlib.import_module(name)
+
+    yield load
+    for name in set(sys.modules) - before:
+        file = getattr(sys.modules[name], "__file__", None)
+        if file is not None and Path(file).is_relative_to(SCRIPTS):
+            del sys.modules[name]
+
+
+@pytest.fixture
+def cutover(load_script: Callable[..., ModuleType]) -> ModuleType:
+    return load_script("cutover")
 
 
 @pytest.fixture
