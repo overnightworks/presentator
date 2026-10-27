@@ -47,9 +47,9 @@ class OldDatabaseError(RuntimeError):
 
 _OLD_VERSION_REFUSAL: Final = (
     "%s was written by an older version (login_attempts, or a users or"
-    " sessions table with other columns than this version's). Take the backup,"
+    " sessions table with other columns than this version's). Keep a copy,"
     " then move the database and its -wal and -shm files aside so the instance"
-    " starts a fresh one (docs/runbooks/start-over-from-an-old-database.md)."
+    " starts a fresh one."
 )
 
 

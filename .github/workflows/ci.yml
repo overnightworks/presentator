@@ -418,17 +418,14 @@ jobs:
     name: "Build worker: sealed step"
     runs-on: ubuntu-24.04
     timeout-minutes: 40
-    # Compose interpolates the whole file, so the service the worker shares its
-    # image with needs values too; none of them reaches the worker, which has no
-    # env_file and names only the two build variables. The web is started with
-    # the settings of the throwaway `.env` below and a client secret that only
-    # this job knows.
+    # The file carries its plain values as literals; the probe reads the web's
+    # hostname from this environment, and the override below copies both origins
+    # into the web. The worker has no env_file and names only the two build
+    # variables. The web runs with a client secret that only this job knows.
     env:
       COMPOSE_PROJECT_NAME: build-worker-probe
-      PRESENTATOR_RUNTIME_UID: "1001"
       PRESENTATOR_PUBLIC_ORIGIN: https://presentator.example.invalid
       PRESENTATOR_TALK_ORIGIN: https://talks.example.invalid
-      SPEECH_SOCKET_DIRECTORY: /tmp
     steps:
       - name: Check out the event commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -464,26 +461,39 @@ jobs:
       - name: Build the image the worker runs
         run: docker compose build presentator
 
+      # The edge builds, then pulls what is not buildable, then creates; the
+      # worker's `presentator` image has no build of its own and never pulls.
+      - name: Check that a pull leaves the worker's image alone
+        run: |
+          before=$(docker image inspect --format '{{.Id}}' presentator)
+          docker compose pull --ignore-buildable --quiet > /dev/null 2>&1
+          after=$(docker image inspect --format '{{.Id}}' presentator)
+          test -n "$before" && test "$before" = "$after"
+
       - name: Drive the sealed worker through its socket
         run: uv run --locked python scripts/probe_build_worker.py drive
 
       # The web needs no issuer at start: the sign-in client reads only the
       # secret file, and the issuer is called at sign-in. The override adds
-      # two read-only bind mounts to the web and nothing else, because a
-      # read-only root cannot take a copy.
+      # two read-only bind mounts to the web, publishes the probe's port, which
+      # compose.yaml never does, and sets what the literals of compose.yaml do
+      # not give the probe. A read-only root cannot take a copy.
       # A day, far beyond this job's timeout: the web's poll sweeps every build
       # run no deck row names, and the probe lays runs of its own under the
       # builds root that no row names.
       - name: Prepare the web's throwaway settings
         run: |
-          cat > .env <<'EOF'
-          PRESENTATOR_OIDC_ISSUER=https://auth.example.invalid/realms/probe
-          PRESENTATOR_OIDC_CLIENT_ID=build-worker-probe
-          PRESENTATOR_SOURCE_POLL_SECONDS=86400
-          EOF
           cat > "$RUNNER_TEMP/web-probe.yaml" <<EOF
           services:
             presentator:
+              ports:
+                - "127.0.0.1:8000:8000"
+              environment:
+                PRESENTATOR_PUBLIC_ORIGIN: $PRESENTATOR_PUBLIC_ORIGIN
+                PRESENTATOR_TALK_ORIGIN: $PRESENTATOR_TALK_ORIGIN
+                PRESENTATOR_OIDC_ISSUER: https://auth.example.invalid/realms/probe
+                PRESENTATOR_OIDC_CLIENT_ID: build-worker-probe
+                PRESENTATOR_SOURCE_POLL_SECONDS: "86400"
               volumes:
                 - type: bind
                   source: $GITHUB_WORKSPACE/examples/hello-deck
@@ -495,7 +505,11 @@ jobs:
                   read_only: true
           EOF
           echo "WEB_PROBE_OVERRIDE=$RUNNER_TEMP/web-probe.yaml" >> "$GITHUB_ENV"
-          docker network create hal_agent_presentator
+          # Internal like the edge's, so the web's gateway is its own network's.
+          for network in hal_agent_presentator hal_backchannel_presentator; do
+            docker network create --internal "$network" > /dev/null 2>&1 \
+              || { echo "could not create the network $network"; exit 1; }
+          done
 
       - name: Drive the deployed web through the worker
         run: uv run --locked python scripts/probe_build_worker_web.py drive

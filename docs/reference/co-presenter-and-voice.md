@@ -16,7 +16,8 @@ streams the model's text back. Both the person's fresh access token and
 Presentator's own workload token go with every run. Presentator splits the text
 into sentences and speaks them.
 
-One host process sits beside Presentator. The speech service
+A host process can sit beside a checkout run; it is not part of a deployed
+instance, which reports the voice as not yet available. The speech service
 ([`speech/`](../../speech/README.md)) holds a local speaking model and a local
 hearing model, binds no TCP port, and offers hearing and its readiness to
 Presentator directly through its private same-UID Unix socket `speech.sock`

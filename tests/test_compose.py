@@ -14,35 +14,104 @@ from ruamel.yaml import YAML
 _COMPOSE = Path(__file__).parents[1] / "compose.yaml"
 
 
-def test_copresenter_uses_the_speech_socket_and_one_runtime_uid() -> None:
-    written = _COMPOSE.read_text(encoding="utf-8")
+def test_the_file_publishes_nothing_and_binds_nothing_outside_the_release() -> None:
+    """S9e (#527): no ports, no env_file, no bind outside the release."""
+    compose = _parsed_compose()
 
-    services_using_uid = ("presentator",)
-    configured_uid = "PRESENTATOR_RUNTIME_UID: ${PRESENTATOR_RUNTIME_UID:"
-    assert written.count(configured_uid) == len(services_using_uid)
-    assert "PRESENTATOR_COPRESENTER_SOCKET" not in written
-    assert "presentator-copresenter" not in written
-    assert "COPRESENTER_SOCKET_DIRECTORY" not in written
-    assert "host co-presenter" not in written
-    assert "PRESENTATOR_SPEECH_SOCKET: /run/presentator-speech/speech.sock" in written
-    assert ":/run/presentator-speech" in written
-    assert "extra_hosts:" not in written
-    assert "3040:3040" not in written
-    assert "8090:8090" not in written
-    assert written.count("ports:") == 1
-    assert written.count('"127.0.0.1:8000:8000"') == 1
+    for service in compose["services"].values():
+        assert "ports" not in service
+        assert "env_file" not in service
+        assert service.get("network_mode") != "host"
+        for volume in service.get("volumes", []):
+            source = volume if isinstance(volume, str) else volume["source"]
+            assert source.partition(":")[0] in compose["volumes"]
+    assert "presentator-speech" not in _COMPOSE.read_text(encoding="utf-8")
+
+
+def test_no_environment_value_reads_the_callers_shell() -> None:
+    """S9e (#527): plain values are literals, no `$` in any environment value."""
+    for service in _parsed_compose()["services"].values():
+        assert all(
+            "$" not in (value or "") for value in _environment_of(service).values()
+        )
+    assert "${" not in _COMPOSE.read_text(encoding="utf-8").replace("${HOME}", "")
 
 
 def test_the_instance_reaches_the_agent_service_over_the_edges_network() -> None:
     """Cell 26."""
-    written = _COMPOSE.read_text(encoding="utf-8")
-    instance = "\n".join(_service_lines("presentator"))
+    compose = _parsed_compose()
+    instance = compose["services"]["presentator"]
 
-    assert "PRESENTATOR_AGENT_SERVICE: http://agent-service:8080" in instance
-    assert "    networks:\n      - default\n      - agent" in instance
+    assert instance["environment"]["PRESENTATOR_AGENT_SERVICE"] == (
+        "http://agent-service:8080"
+    )
+    assert "agent" in instance["networks"]
+    assert compose["networks"]["agent"] == {
+        "external": True,
+        "name": "hal_agent_presentator",
+    }
+
+
+def test_the_instance_joins_the_back_channel_under_its_public_hostname() -> None:
+    """S9e (#527): networks, the back-channel joined under its public alias."""
+    compose = _parsed_compose()
+    instance = compose["services"]["presentator"]
+
+    assert instance["networks"]["backchannel"] == {
+        "aliases": ["presentator.hallucinai.de"]
+    }
+    assert compose["networks"]["backchannel"] == {
+        "external": True,
+        "name": "hal_backchannel_presentator",
+    }
+    assert "networks" not in compose["services"]["build-worker"]
+
+
+def test_the_trusted_proxy_is_the_gateway_of_the_instances_own_network() -> None:
+    """S9e (#527): networks, the gateway is the trusted proxy."""
+    compose = _parsed_compose()
+    network = compose["networks"]["default"]
+    (pool,) = network["ipam"]["config"]
+
+    assert network["name"] == "presentator_default"
+    assert pool == {"subnet": "172.31.251.0/24", "gateway": "172.31.251.1"}
     assert (
-        "\n  agent:\n    external: true\n    name: hal_agent_presentator\n"
-    ) in written
+        _environment_of(compose["services"]["presentator"])[
+            "PRESENTATOR_TRUSTED_PROXIES"
+        ]
+        == pool["gateway"]
+    )
+
+
+def test_the_instance_is_routed_under_both_hosts_through_the_edge() -> None:
+    """S9e (#527): labels, enable, edge.name, edge.alias, port 8000, network."""
+    labels = _parsed_compose()["services"]["presentator"]["labels"]
+
+    assert labels == {
+        "traefik.enable": "true",
+        "edge.name": "presentator",
+        "edge.alias": "presentator-talk",
+        "traefik.http.services.presentator.loadbalancer.server.port": "8000",
+        "traefik.docker.network": "presentator_default",
+    }
+    assert "labels" not in _parsed_compose()["services"]["build-worker"]
+
+
+def test_the_instance_asks_its_own_health_route_with_the_public_host() -> None:
+    """S9e (#527): healthcheck, present, /health, Host from the environment."""
+    check = _parsed_compose()["services"]["presentator"]["healthcheck"]["test"]
+    script = check[-1]
+
+    assert check[:3] == ["CMD", "python", "-c"]
+    assert "http://127.0.0.1:8000/health" in script
+    assert "os.environ['PRESENTATOR_PUBLIC_ORIGIN']" in script
+    assert "$" not in script
+
+
+@pytest.mark.parametrize("service", ["presentator", "build-worker"])
+def test_each_service_restarts_unless_it_was_stopped(service: str) -> None:
+    """S9e (#527): restart is unless-stopped."""
+    assert _parsed_compose()["services"][service]["restart"] == "unless-stopped"
 
 
 def _service_lines(name: str) -> list[str]:
@@ -73,7 +142,7 @@ def _service_lines(name: str) -> list[str]:
         "    ipc: private",
         "    shm_size: 256m",
         "    pids_limit: 512",
-        "    restart: always",
+        "    restart: unless-stopped",
         "    stop_signal: SIGKILL",
         "    pull_policy: never",
         "      - /work:size=2g,nr_inodes=200k,mode=755,nosuid,nodev",
@@ -209,6 +278,8 @@ def test_no_service_carries_the_master_key_in_its_environment() -> None:
     """#509: no PRESENTATOR_SECRET_KEY environment entry remains, in either form."""
     for service in _parsed_compose()["services"].values():
         assert "PRESENTATOR_SECRET_KEY" not in _environment_of(service)
+        assert "args" not in service.get("build", {})
+    assert "${PRESENTATOR_SECRET_KEY}" not in _COMPOSE.read_text(encoding="utf-8")
 
 
 def _secret_holders(compose: dict[str, Any], name: str) -> list[str]:

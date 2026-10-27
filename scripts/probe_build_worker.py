@@ -4,11 +4,11 @@ Usage: probe_build_worker.py drive
        probe_build_worker.py client COMMAND [ARGUMENT...]
 
 `drive` runs on the machine that has Docker and the project's compose
-environment (COMPOSE_PROJECT_NAME and the variables compose.yaml requires). It
-starts the worker service from the already built image `presentator`, holds its
-socket volume in a container of the runtime user, and runs `client` in that
-container, over the real socket, through the codec's client half. Every cell it
-drives prints one line, and a cell that is not driven fails the run.
+environment (COMPOSE_PROJECT_NAME). It starts the worker service from the
+already built image `presentator`, holds its socket volume in a container of
+the runtime user, and runs `client` in that container, over the real socket,
+through the codec's client half. Every cell it drives prints one line, and a
+cell that is not driven fails the run.
 
 The life-ending cells (`probe_build_worker_lives.py`) end lives by abandonment,
 by exhaustion with the flood deck (`probe_build_worker/flood`), and by a leftover

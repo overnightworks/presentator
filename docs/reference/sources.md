@@ -3,7 +3,6 @@
 Audience: an engineer or operator looking up what a source is, what is
 accepted, and how it is kept current. Tasks: [add a Git
 source](../runbooks/add-a-source.md), [renew a secret](../runbooks/renew-a-source-secret.md),
-[add a folder on this box](../runbooks/add-a-folder-on-this-box.md),
 [call the fetch-now hook](../runbooks/call-the-fetch-now-hook.md).
 
 ## The row
@@ -40,6 +39,9 @@ admin adds one under Settings · Sources.
 - The secret is stored encrypted in the source's row, the only place it stands,
   opened with a key derived from the master key (`PRESENTATOR_SECRET_KEY_FILE`) and read at every
   pull ([ADR 0013](../decisions/0013-secrets-at-rest-and-credential-delivery.md)).
+  Keep the master key with the data: an instance restored without it lists its
+  decks and can pull none of them, and a source's secret is
+  [renewed](../runbooks/renew-a-source-secret.md) if it is unreadable.
   Ciphertext this instance's key cannot open is refused rather than handed to
   `git`: that source's fetch fails and its decks stay listed. A source row
   always carries its encrypted secret; private halves and HTTPS tokens are
