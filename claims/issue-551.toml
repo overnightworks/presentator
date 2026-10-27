@@ -1,8 +1,0 @@
-claim_id = "d687dbd43779438bac0815930834055e"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "b0acfe74a99ed5b6d2586cc2406b799d65832647"
-branch = "claude/issue-551-tests-mirror-api"
-scope = ["quality/baseline.toml", "tests/api", "tests/conftest.py", "tests/presentator/adapters/test_speech_hearing.py", "tests/presentator/api", "tests/sign_in_support.py", "tests/support", "tests/test_backchannel_logout.py", "tests/test_host.py", "tests/test_oidc.py", "tests/test_session_sweep.py", "tests/test_sign_in_callback.py", "tests/test_sign_in_start.py", "tests/test_talk_routing.py"]
-opened_commit = "cb1137c7dcd98a829b2e9579e22c031846a62e06"
-whole_reason = "The folder, its support modules and fixtures, every importer and the baseline keys move together: a half-moved tree has dangling imports and orphaned baseline entries, and the gate is red."
