@@ -1,251 +1,28 @@
 """The cutover command retires exactly its listed targets, in order, and resumes."""
 
-import importlib
 import os
 import shutil
 import stat
 import sys
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
-LIVE_HEAD = "1f0422c" + "a" * 33
-ORIGIN = "https://github.com/overnightworks/presentator.git"
-UNIT_DIRECTORY = ".config/systemd/user"
-SURVIVORS = (
-    "presentator-stage/keep",
-    ".cache/huggingface/keep",
-    "srv/presentator/keep",
-    ".local/state/edge/deployed/hopin",
-    ".claude/projects/-home-felix-hummert-git-presentator/keep",
-    ".claude/projects/-git-agent-presentator/keep",
+from tests.scripts.support.cutover_host import (
+    IMAGE,
+    KEPT_VOLUMES,
+    LISTED_PATHS,
+    LIVE_HEAD,
+    REFUSED,
+    SURVIVORS,
+    UNIT_DIRECTORY,
+    UNITS,
+    VOLUMES,
+    Host,
 )
-LISTED_PATHS = (
-    "presentator-live",
-    "presentator-backups",
-    ".local/state/agent-presentator",
-    ".local/state/presentator-speech",
-    f"{UNIT_DIRECTORY}/presentator-speech.service",
-    f"{UNIT_DIRECTORY}/presentator-copresenter.service",
-    f"{UNIT_DIRECTORY}/presentator-copresenter.service.d/no-sync.conf",
-)
-VOLUMES = (
-    "presentator-live_database",
-    "presentator-live_builds",
-    "presentator-live_mirrors",
-)
-KEPT_VOLUMES = ("presentator_database", "presentator_builds")
-IMAGE = "presentator-adoption-instance:ap112-e04e837a"
-REFUSED = 2
-UNITS = ("presentator-speech.service", "presentator-copresenter.service")
-UNIT_EXIT_CODES = {"stop": 5, "disable": 1, "reset-failed": 1}
-
-
-@dataclass
-class Host:
-    """Docker, systemd, git and Traefik as one mutable fake behind the runner."""
-
-    home: Path
-    calls: list[tuple[str, ...]] = field(default_factory=list[tuple[str, ...]])
-    containers: dict[str, str] = field(
-        default_factory=lambda: {
-            "c0ffee": "presentator-live",
-            "5afe01": "presentator",
-            "b10b02": "hopin",
-        }
-    )
-    networks: list[str] = field(
-        default_factory=lambda: ["presentator-live_default", "presentator_default"]
-    )
-    volumes: list[str] = field(default_factory=lambda: [*VOLUMES, *KEPT_VOLUMES])
-    images: list[str] = field(
-        default_factory=lambda: [
-            IMAGE,
-            "presentator-adoption-other:x",
-            "presentator:v1",
-        ]
-    )
-    traefik_answers: bool = True
-    failing: set[str] = field(default_factory=set[str])
-    exits_after_acting: set[str] = field(default_factory=set[str])
-    failed_units: set[str] = field(default_factory=set[str])
-    active_units: set[str] = field(
-        default_factory=lambda: {"presentator-speech.service"}
-    )
-    stopped_or_disabled: list[tuple[str, str]] = field(
-        default_factory=list[tuple[str, str]]
-    )
-    lingering: set[str] = field(default_factory=set[str])
-    enabled_units: set[str] = field(default_factory=lambda: set(UNITS))
-    stuck_enabled: set[str] = field(default_factory=set[str])
-    checkout_on_tag: bool = True
-    checkout_status: str = ""
-    live_remotes: str = "origin"
-    live_origin: str = ORIGIN
-    live_head: str = LIVE_HEAD
-    live_status: str = "?? .env.bak-preupgrade\n?? compose.override.yaml"
-    live_refs: str = (
-        f"{LIVE_HEAD} refs/heads/main\n"
-        f"{'b' * 40} refs/remotes/origin/HEAD\n"
-        f"{'c' * 40} refs/remotes/origin/claude/issue-1-x"
-    )
-
-    def __call__(self, arguments: Sequence[str]) -> object:
-        command = tuple(arguments)
-        self.calls.append(command)
-        program, rest = command[0], command[1:]
-        if any(
-            word in self.failing
-            for word in (" ".join(command[:3]), " ".join(command[:2]))
-        ):
-            return outcome(1, "")
-        handlers = {
-            "curl": self.run_curl,
-            "git": self.run_git,
-            "docker": self.run_docker,
-            "systemctl": self.run_systemctl,
-        }
-        return handlers[program](rest)
-
-    def run_curl(self, rest: tuple[str, ...]) -> object:
-        return outcome(0 if self.traefik_answers else 7, "")
-
-    def run_git(self, rest: tuple[str, ...]) -> object:
-        path, words = Path(rest[2]), rest[3:]
-        live = path == self.home / "presentator-live"
-        answers: dict[tuple[str, ...], str] = {
-            ("rev-parse", "HEAD"): self.live_head if live else "d" * 40,
-            ("tag", "--list", "v*", "--points-at", "HEAD"): (
-                "" if live or not self.checkout_on_tag else "v1.0.0"
-            ),
-            ("status", "--porcelain"): self.live_status
-            if live
-            else self.checkout_status,
-            ("remote",): self.live_remotes,
-            ("remote", "get-url", "origin"): self.live_origin,
-            ("for-each-ref", "--format=%(objectname) %(refname)"): self.live_refs,
-        }
-        return outcome(0, answers[words])
-
-    def run_docker(self, rest: tuple[str, ...]) -> object:
-        match rest:
-            case ("ps", *_):
-                return self.run_ps(rest)
-            case ("stop", _):
-                return outcome(0, "")
-            case ("rm", container):
-                self.remove_container(container)
-            case ("network", "ls", *_):
-                return outcome(0, "\n".join(self.networks))
-            case ("network", "rm", name):
-                self.remove(self.networks, name)
-            case ("volume", "ls", *_):
-                return outcome(0, "\n".join(self.volumes))
-            case ("volume", "rm", name):
-                self.volumes.remove(name)
-            case ("image", "ls", *_):
-                return outcome(0, "\n".join(self.images))
-            case ("image", "rm", "--no-prune", reference):
-                self.images.remove(reference)
-            case _:
-                pass
-        return outcome(0, "")
-
-    def run_ps(self, rest: tuple[str, ...]) -> object:
-        label = rest[rest.index("--filter") + 1]
-        project = label.removeprefix("label=com.docker.compose.project=")
-        matching = [name for name, owner in self.containers.items() if owner == project]
-        return outcome(0, "\n".join(matching))
-
-    def remove_container(self, container: str) -> None:
-        if container not in self.lingering:
-            del self.containers[container]
-
-    def remove(self, names: list[str], name: str) -> None:
-        if name not in self.lingering:
-            names.remove(name)
-
-    def run_systemctl(self, rest: tuple[str, ...]) -> object:
-        assert rest[0] == "--user"
-        verb, unit = rest[1], rest[-1]
-        known = (self.home / UNIT_DIRECTORY / unit).exists()
-        if verb == "show" and "UnitFileState" in rest:
-            enabled = unit in self.enabled_units
-            return outcome(0, "enabled\n" if enabled else "disabled\n")
-        if verb == "show":
-            load = "loaded" if known else "not-found"
-            active = "inactive"
-            if unit in self.active_units:
-                active = "active"
-            if unit in self.failed_units:
-                active = "failed"
-            return outcome(0, f"LoadState={load}\nActiveState={active}\n")
-        self.act(verb, unit)
-        if f"systemctl --user {verb}" in self.exits_after_acting:
-            return outcome(1, "")
-        if verb == "reset-failed" and unit in self.failed_units:
-            self.failed_units.discard(unit)
-            return outcome(0, "")
-        if verb in UNIT_EXIT_CODES and not known:
-            return outcome(UNIT_EXIT_CODES[verb], "")
-        return outcome(0, "")
-
-    def act(self, verb: str, unit: str) -> None:
-        if verb == "stop":
-            self.active_units.discard(unit)
-        if verb == "disable" and unit not in self.stuck_enabled:
-            self.enabled_units.discard(unit)
-            self.wants_link(unit).unlink(missing_ok=True)
-        if verb in {"stop", "disable"}:
-            self.stopped_or_disabled.append((verb, unit))
-
-    def wants_link(self, unit: str) -> Path:
-        return self.home / UNIT_DIRECTORY / "default.target.wants" / unit
-
-    def commands(self, program: str) -> list[tuple[str, ...]]:
-        return [call for call in self.calls if call[0] == program]
-
-
-@pytest.fixture
-def cutover(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
-    monkeypatch.setattr(sys, "path", [str(SCRIPTS), *sys.path])
-    return importlib.import_module("cutover")
-
-
-def outcome(code: int, text: str) -> object:
-    return importlib.import_module("cutover").Outcome(code, text)
-
-
-@pytest.fixture
-def home(tmp_path: Path) -> Path:
-    root = tmp_path / "home"
-    for name in (*LISTED_PATHS[1:4], *SURVIVORS):
-        (root / name).mkdir(parents=True, exist_ok=True)
-        (root / name / "data").write_text("x")
-    for name in LISTED_PATHS[4:]:
-        (root / name).parent.mkdir(parents=True, exist_ok=True)
-        (root / name).write_text("unit")
-    wants = root / UNIT_DIRECTORY / "default.target.wants"
-    wants.mkdir()
-    for unit in UNITS:
-        (wants / unit).symlink_to(root / UNIT_DIRECTORY / unit)
-    live = root / "presentator-live"
-    (live / ".git").mkdir(parents=True)
-    (live / "speech").mkdir()
-    (live / "speech" / "inside-link").symlink_to(root / "presentator-stage")
-    (root / "presentator-backups" / "inside-link").symlink_to(
-        root / ".cache" / "huggingface"
-    )
-    return root
-
-
-@pytest.fixture
-def host(home: Path) -> Host:
-    return Host(home)
 
 
 @dataclass
