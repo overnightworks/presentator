@@ -46,6 +46,7 @@ packages = ["src/gitmirror", "src/presentator"]
 addopts = "--strict-config --strict-markers --import-mode=importlib"
 pythonpath = ["."]
 testpaths = ["tests"]
+tmp_path_retention_policy = "failed"
 
 [tool.coverage.run]
 branch = true
