@@ -126,7 +126,7 @@ BUILT_TALK: Final = (
     Path(__file__).parents[1] / "presentator" / "api" / "fixtures" / "built_talk"
 )
 AN_ASSET: Final = "assets/index-mRcVgIkQ.js"
-_EXPORTED_PDF: Final = (
+EXPORTED_PDF: Final = (
     Path(__file__).parents[1] / "presentator" / "api" / "fixtures" / "exported_deck.pdf"
 )
 _KEY_FILE: Final = _write_test_key_file()
@@ -716,7 +716,7 @@ def put_a_built_deck(store: FakeDeckStore, *, slug: str, owner_id: str) -> None:
         slug,
         Build(
             directory=BUILT_TALK,
-            pdf=_EXPORTED_PDF,
+            pdf=EXPORTED_PDF,
             commit=_BUILT_DECK_COMMIT,
             built_at=NOW,
         ),

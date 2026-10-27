@@ -11,7 +11,7 @@ import pytest
 from presentator.adapters.deck_texts import MirroredDeckTexts
 from presentator.contracts.copresenter import CoPresenterUnavailableError, DeckText
 from presentator.contracts.decks import Build, Deck
-from tests.presentator.adapters.test_decks import (
+from tests.support.deck_source_support import (
     a_build,
     a_deck,
     a_source,

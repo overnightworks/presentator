@@ -8,7 +8,7 @@ from urllib.parse import quote
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.presentator.api.test_deck_page import (
+from tests.support.deck_page_support import (
     a_build,
     a_deck_store,
     a_talk_host,
