@@ -44,10 +44,6 @@ from presentator.adapters.identity import (
 from presentator.api.auth import LOGOUT_PATH, carry_set_cookies
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.host import main
-from tests.api.lobby import (
-    AN_ISSUER,
-    a_settings,
-)
 from tests.sign_in_support import (
     ADMIN,
     MEMBER,
@@ -55,6 +51,10 @@ from tests.sign_in_support import (
     a_scene,
     cookie_names,
     on_an_event_loop,
+)
+from tests.support.lobby import (
+    AN_ISSUER,
+    a_settings,
 )
 
 _BOUND = 30.0

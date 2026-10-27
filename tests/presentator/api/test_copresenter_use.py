@@ -16,8 +16,8 @@ from presentator.contracts.copresenter import (
     PersonToken,
     Question,
 )
-from tests.api.copresenter_support import ASKED, PrivateFakes, a_use
 from tests.presentator.application.support.fakes import FakeDeckStore
+from tests.support.copresenter_support import ASKED, PrivateFakes, a_use
 
 A_QUESTION = Question(said="Frage", slide=1, language=None)
 FIRST_AUDIO = "presentator.application.copresenter"

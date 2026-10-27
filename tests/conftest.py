@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.api.lobby import (
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     AN_AGENT_SERVICE,
     configure_oidc,

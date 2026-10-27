@@ -26,7 +26,12 @@ from presentator.contracts.copresenter import (
     HearingTranscript,
 )
 from presentator.contracts.models import Role, User
-from tests.api.copresenter_support import (
+from tests.presentator.application.support.fakes import (
+    FakeDeckStore,
+    FakeUserStore,
+    FrozenClock,
+)
+from tests.support.copresenter_support import (
     HEARING,
     INTERNAL_ERROR,
     POLICY_VIOLATION,
@@ -39,13 +44,8 @@ from tests.api.copresenter_support import (
     a_use,
     ask,
 )
-from tests.api.lobby import (
+from tests.support.lobby import (
     NOW,
-)
-from tests.presentator.application.support.fakes import (
-    FakeDeckStore,
-    FakeUserStore,
-    FrozenClock,
 )
 
 if TYPE_CHECKING:

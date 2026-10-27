@@ -20,7 +20,9 @@ from presentator.api.copresenter import (
     add_copresenter_routes,
 )
 from presentator.application.copresenter import AskLimiter, AskTicket
-from tests.api.copresenter_support import (
+from tests.presentator.adapters.support.agent_service_support import Wire
+from tests.presentator.application.support.fakes import FrozenClock
+from tests.support.copresenter_support import (
     A_DECK,
     ASK,
     HANGING_AFTER_THE_FIRST_WORDS,
@@ -35,9 +37,7 @@ from tests.api.copresenter_support import (
     ask,
     the_admins_decks,
 )
-from tests.api.lobby import A_TALK_ADDRESS, ADMIN, AN_AGENT_SERVICE
-from tests.presentator.adapters.support.agent_service_support import Wire
-from tests.presentator.application.support.fakes import FrozenClock
+from tests.support.lobby import A_TALK_ADDRESS, ADMIN, AN_AGENT_SERVICE
 
 if TYPE_CHECKING:
     from collections.abc import Callable

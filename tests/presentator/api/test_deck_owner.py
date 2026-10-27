@@ -13,7 +13,9 @@ from httpx2 import Response
 from presentator.api.sources import ACCESS, SOURCES
 from presentator.contracts.decks import Build, Deck, Source
 from presentator.contracts.models import Role, User
-from tests.api.lobby import (
+from tests.presentator.api.test_sources import ask_removal, confirm_removal
+from tests.presentator.application.support.fakes import FakeBuildRunner, FakeDeckStore
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     A_TALK_ADDRESS,
@@ -28,9 +30,7 @@ from tests.api.lobby import (
     a_configured_source,
     a_lobby,
 )
-from tests.api.talk_support import cookies_without_values, two_hosts
-from tests.api.test_sources import ask_removal, confirm_removal
-from tests.presentator.application.support.fakes import FakeBuildRunner, FakeDeckStore
+from tests.support.talk_support import cookies_without_values, two_hosts
 
 _PDF: Final = Path(__file__).parent / "fixtures" / "exported_deck.pdf"
 _COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
