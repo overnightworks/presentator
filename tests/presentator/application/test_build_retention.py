@@ -9,14 +9,14 @@ import pytest
 from presentator.application.decks import Decks, SourceRemovalRefusal
 from presentator.contracts.decks import Build, Deck, Source, SourcePoll
 from presentator.ports.decks import BuildRun
-from tests.application.fakes import (
+from tests.presentator.application.support.fakes import (
     BUILDS_ROOT,
     FakeBuildRunner,
     FakeDeckFolders,
     FakeDeckStore,
     FakeSourceStore,
 )
-from tests.application.test_decks import (
+from tests.presentator.application.test_decks import (
     DecksFakes,
     a_folder,
     a_source,

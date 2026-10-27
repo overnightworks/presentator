@@ -9,7 +9,7 @@ from datetime import timedelta
 import pytest
 
 from presentator.host.polling import Schedule
-from tests.application.fakes import PATIENCE
+from tests.presentator.application.support.fakes import PATIENCE
 
 _TIGHT = timedelta(0)
 

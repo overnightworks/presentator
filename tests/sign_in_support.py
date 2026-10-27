@@ -35,7 +35,7 @@ from tests.api.lobby import (
     a_relying_party,
     an_installed_auth,
 )
-from tests.application.fakes import FrozenClock
+from tests.presentator.application.support.fakes import FrozenClock
 
 MEMBER = ["/apps/presentator"]
 ADMIN = ["/apps/presentator", "/apps/presentator/admin"]

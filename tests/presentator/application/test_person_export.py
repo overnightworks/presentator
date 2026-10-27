@@ -13,8 +13,8 @@ from presentator.contracts.people import (
     Withheld,
     WithheldReason,
 )
-from tests.application.fakes import FakeSourceStore
-from tests.application.person_instance_support import an_instance
+from tests.presentator.application.support.fakes import FakeSourceStore
+from tests.presentator.application.support.person_instance_support import an_instance
 
 _THE_PERSON = "the-person"
 _ANOTHER = "another-person"

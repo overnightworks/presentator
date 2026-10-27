@@ -37,7 +37,7 @@ from tests.api.copresenter_support import (
     the_admins_decks,
 )
 from tests.api.lobby import A_TALK_ADDRESS, ADMIN, AN_AGENT_SERVICE
-from tests.application.fakes import FrozenClock
+from tests.presentator.application.support.fakes import FrozenClock
 
 if TYPE_CHECKING:
     from collections.abc import Callable

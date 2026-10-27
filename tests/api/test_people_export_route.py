@@ -29,8 +29,12 @@ from tests.api.lobby import (
     an_admin_people,
     an_installed_auth,
 )
-from tests.application.fakes import FakePeople, FakeSourceStore, FrozenClock
-from tests.application.person_instance_support import (
+from tests.presentator.application.support.fakes import (
+    FakePeople,
+    FakeSourceStore,
+    FrozenClock,
+)
+from tests.presentator.application.support.person_instance_support import (
     ANOTHER,
     THE_PERSON,
     Instance,

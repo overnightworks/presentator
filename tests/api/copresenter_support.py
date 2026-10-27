@@ -44,7 +44,7 @@ from tests.api.lobby import (
     a_talk_app,
 )
 from tests.api.test_deck_page import a_build, a_deck_store
-from tests.application.fakes import (
+from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeSourceStore,
     FakeUserStore,

@@ -42,7 +42,7 @@ from presentator.contracts.decks import (
     SourceWrite,
 )
 from presentator.ports.decks import DeckFolders
-from tests.application.fakes import (
+from tests.presentator.application.support.fakes import (
     BUILDS_ROOT,
     LOCAL_MOUNT_EXAMPLE,
     PATIENCE,

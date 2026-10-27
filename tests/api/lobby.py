@@ -89,7 +89,7 @@ from presentator.host.config import Settings
 from presentator.host.main import web_auth_config_for
 from presentator.host.oidc import admission_of, oidc_client_config
 from presentator.ports.decks import BuildRunner
-from tests.application.fakes import (
+from tests.presentator.application.support.fakes import (
     A_REACHABLE_CHECK,
     DEFAULT_THEME_SET,
     FakeBuildRunner,
