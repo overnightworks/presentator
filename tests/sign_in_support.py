@@ -21,8 +21,9 @@ from presentator.adapters.identity import (
     SqliteSubjectUserStore,
     create_identity_tables,
 )
-from tests.api.fake_issuer import FakeIssuer
-from tests.api.lobby import (
+from tests.presentator.application.support.fakes import FrozenClock
+from tests.support.fake_issuer import FakeIssuer
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     A_CLIENT_ID,
@@ -35,7 +36,6 @@ from tests.api.lobby import (
     a_relying_party,
     an_installed_auth,
 )
-from tests.presentator.application.support.fakes import FrozenClock
 
 MEMBER = ["/apps/presentator"]
 ADMIN = ["/apps/presentator", "/apps/presentator/admin"]

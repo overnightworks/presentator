@@ -13,7 +13,8 @@ from fastapi.testclient import TestClient
 
 from presentator.contracts.decks import Build, BuildAttempt, BuildOutcome, Deck
 from presentator.contracts.text import Catalogs
-from tests.api.lobby import (
+from tests.presentator.application.support.fakes import FakeDeckStore
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
     ADMIN,
@@ -27,8 +28,7 @@ from tests.api.lobby import (
     a_signed_in_lobby,
     a_swapped_build,
 )
-from tests.api.talk_support import ONLY_THIS_TEST_WROTE_IT, two_hosts
-from tests.presentator.application.support.fakes import FakeDeckStore
+from tests.support.talk_support import ONLY_THIS_TEST_WROTE_IT, two_hosts
 
 _SLUG: Final = "hello-deck"
 _TITLE: Final = "Hello Co-Presenter"

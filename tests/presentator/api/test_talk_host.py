@@ -17,7 +17,8 @@ from webauth.middleware.security_headers import (
 from webauth.oidc_login import AdmissionConfig
 
 from presentator.api.talk import TALK_PERMISSIONS_POLICY, talk_content_security_policy
-from tests.api.lobby import (
+from tests.people import seed_user
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
     AN_ASSET,
@@ -25,7 +26,7 @@ from tests.api.lobby import (
     ENGLISH,
     Lobby,
 )
-from tests.api.talk_support import (
+from tests.support.talk_support import (
     A_DECK,
     B_DECK,
     MEMBER,
@@ -34,7 +35,6 @@ from tests.api.talk_support import (
     Hosts,
     two_hosts,
 )
-from tests.people import seed_user
 
 _IMPRESSUM = f'<a href="https://hallucinai.de/impressum">{ENGLISH.footer_impressum}</a>'
 _DATENSCHUTZ = f'<a href="/datenschutz">{ENGLISH.footer_datenschutz}</a>'

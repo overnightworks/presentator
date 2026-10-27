@@ -38,22 +38,6 @@ from presentator.application.copresenter import (
     RetryAfter,
 )
 from presentator.contracts.decks import Build, Deck, Source
-from tests.api.copresenter_support import (
-    A_SOURCE,
-    ASK,
-    HANGING_AFTER_THE_FIRST_WORDS,
-    SPOKEN_QUESTION,
-    WORKLOAD,
-    FakeDeckTexts,
-    PrivateFakes,
-)
-from tests.api.lobby import (
-    A_BROWSERS_HEADERS,
-    A_TALK_ADDRESS,
-    AN_AGENT_SERVICE,
-    NOW,
-)
-from tests.api.talk_support import A_DECK, B_DECK, A, Hosts, two_hosts
 from tests.presentator.adapters.support.agent_service_support import (
     GOOD_ANSWER,
     SERVICE_MESSAGE,
@@ -76,6 +60,22 @@ from tests.presentator.application.support.fakes import (
     FakeSourceStore,
     FrozenClock,
 )
+from tests.support.copresenter_support import (
+    A_SOURCE,
+    ASK,
+    HANGING_AFTER_THE_FIRST_WORDS,
+    SPOKEN_QUESTION,
+    WORKLOAD,
+    FakeDeckTexts,
+    PrivateFakes,
+)
+from tests.support.lobby import (
+    A_BROWSERS_HEADERS,
+    A_TALK_ADDRESS,
+    AN_AGENT_SERVICE,
+    NOW,
+)
+from tests.support.talk_support import A_DECK, B_DECK, A, Hosts, two_hosts
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Mapping

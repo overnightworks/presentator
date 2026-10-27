@@ -11,7 +11,8 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.application.copresenter import AskLimiter, AskLimits
 from presentator.contracts.models import Role
-from tests.api.copresenter_support import (
+from tests.presentator.application.support.fakes import FrozenClock
+from tests.support.copresenter_support import (
     ASKED,
     NOW,
     QUESTION,
@@ -19,14 +20,13 @@ from tests.api.copresenter_support import (
     ask,
     the_admins_decks,
 )
-from tests.presentator.application.support.fakes import FrozenClock
 
 if TYPE_CHECKING:
     from httpx2 import Response
 
     from presentator.contracts.decks import Deck
-    from tests.api.copresenter_support import PrivateFakes
-    from tests.api.lobby import Lobby
+    from tests.support.copresenter_support import PrivateFakes
+    from tests.support.lobby import Lobby
 
 TARGET = "target"
 ONE_QUESTION_ONLY = AskLimits(per_window=1)

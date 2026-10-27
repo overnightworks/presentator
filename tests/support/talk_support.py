@@ -33,8 +33,10 @@ from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host.main import Instance, served_by_host
 from presentator.host.polling import Schedule
-from tests.api.fake_issuer import FakeIssuer
-from tests.api.lobby import (
+from tests.people import seed_user
+from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
+from tests.support.fake_issuer import FakeIssuer
+from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_CLIENT_ID,
     A_TALK_ADDRESS,
@@ -53,8 +55,6 @@ from tests.api.lobby import (
     hand_over_session_cookies,
     put_a_built_deck,
 )
-from tests.people import seed_user
-from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
 
 ONLY_THIS_TEST_WROTE_IT: Final = "the secret beside the build directory"
 A_DECK: Final = "a-deck"

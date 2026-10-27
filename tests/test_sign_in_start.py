@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from tests.api.lobby import A_CLIENT_ID, AN_ISSUER, ENGLISH, Lobby, a_lobby
+from tests.support.lobby import A_CLIENT_ID, AN_ISSUER, ENGLISH, Lobby, a_lobby
 
 _AUTHORIZATION_ENDPOINT = f"{AN_ISSUER}/protocol/openid-connect/auth"
 

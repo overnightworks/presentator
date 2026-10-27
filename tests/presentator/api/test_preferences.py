@@ -24,7 +24,7 @@ from presentator.contracts.voice import (
     VoiceStatus,
     VoiceUnavailableError,
 )
-from tests.api.lobby import (
+from tests.support.lobby import (
     CATALOGS,
     ENGLISH,
     NEIGHBOUR,

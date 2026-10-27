@@ -24,7 +24,21 @@ from presentator.contracts.copresenter import (
     SlideText,
 )
 from presentator.contracts.decks import Deck, Source
-from tests.api.lobby import (
+from tests.presentator.adapters.support.agent_service_support import (
+    Reply,
+    assistant_text,
+    event_frames,
+    run_started,
+    whole,
+)
+from tests.presentator.api.test_deck_page import a_build, a_deck_store
+from tests.presentator.application.support.fakes import (
+    FakeDeckStore,
+    FakeSourceStore,
+    FakeUserStore,
+    FrozenClock,
+)
+from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     A_TALK_ADDRESS,
     A_TALK_SOCKET_ADDRESS,
@@ -35,20 +49,6 @@ from tests.api.lobby import (
     a_browser_at,
     a_crowd,
     a_talk_app,
-)
-from tests.api.test_deck_page import a_build, a_deck_store
-from tests.presentator.adapters.support.agent_service_support import (
-    Reply,
-    assistant_text,
-    event_frames,
-    run_started,
-    whole,
-)
-from tests.presentator.application.support.fakes import (
-    FakeDeckStore,
-    FakeSourceStore,
-    FakeUserStore,
-    FrozenClock,
 )
 
 if TYPE_CHECKING:

@@ -16,7 +16,8 @@ from presentator.contracts.decks import (
     Deck,
     DeckFolder,
 )
-from tests.api.lobby import (
+from tests.presentator.application.support.fakes import BUILDS_ROOT, FakeDeckStore
+from tests.support.lobby import (
     ADMIN,
     ENGLISH,
     NOW,
@@ -25,7 +26,6 @@ from tests.api.lobby import (
     a_configured_source,
     a_signed_in_lobby,
 )
-from tests.presentator.application.support.fakes import BUILDS_ROOT, FakeDeckStore
 
 _ADDRESS: Final = "git@heimserver:decks.git"
 _A_DECK: Final = frozenset({MANIFEST_FILE, SLIDES_FILE})
