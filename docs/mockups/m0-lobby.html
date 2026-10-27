@@ -1565,7 +1565,7 @@
 
   /* ---------- The room knows it talks to an AI (#293 S12) ---------- */
 
-  .room-slide { position: relative; display: flex; aspect-ratio: 16 / 9; overflow: hidden; align-items: center; justify-content: center; font-family: ui-sans-serif, system-ui, sans-serif; --room-font: 14px; }
+  .room-slide { position: relative; display: flex; aspect-ratio: 16 / 9; overflow: hidden; align-items: center; justify-content: center; container-type: inline-size; font-family: ui-sans-serif, system-ui, sans-serif; --room-font: 14px; }
   .room-slide--light { background: #F7F5F0; color: #173B63; }
   .room-slide--dark { background: #0E1A2B; color: #F2F5F9; }
   .room-slide--busy { align-items: flex-start; padding-top: 5%; }
@@ -1573,7 +1573,7 @@
   .room-slide--light:not(.presenter-slide), .room-slide--dark { font-size: calc(var(--room-font) * .4); }
   .room-zoom { zoom: .5; width: 1920px; }
   .room-zoom .room-slide { font-size: 12px; }
-  .room-strip { position: absolute; inset: auto 0 0; display: flex; align-items: center; gap: 1.1em; padding: .7em 1.1em; background: #0B1F33F0; color: #fff; font-size: var(--room-font); font-weight: 400; letter-spacing: 0; line-height: 1.35; text-align: left; }
+  .room-strip { position: absolute; inset: auto 0 0; display: flex; align-items: center; gap: 1.1em; padding: .7em 1.1em; background: #0B1F33F0; color: #fff; font-size: 2.3cqw; font-weight: 400; letter-spacing: 0; line-height: 1.35; text-align: left; }
   .room-slide--dark .room-strip { background: #EEF3F8F2; color: #0B1F33; }
   .room-strip__state { display: inline-flex; flex: none; align-items: center; gap: .55em; font-weight: 700; white-space: nowrap; }
   .room-strip__text { padding-left: 1.1em; border-left: 1px solid currentColor; }
@@ -1583,7 +1583,7 @@
   .room-strip--mini { padding: 3px 6px; gap: 5px; font-size: 5px; }
   .room-strip--mini .room-strip__text { padding-left: 5px; }
   .room-strip--mini-narrow { font-size: 5.5px; }
-  .room-strip--banner { inset: 0 0 auto; flex-direction: column; align-items: flex-start; gap: .4em; padding: .9em 1.1em; font-size: calc(var(--room-font) * 1.1); }
+  .room-strip--banner { inset: 0 0 auto; flex-direction: column; align-items: flex-start; gap: .4em; padding: .9em 1.1em; font-size: 2.5cqw; }
   .room-strip--banner .room-strip__text { padding-left: 0; border-left: 0; }
   .room-pill { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: .5em; padding: .35em .8em; border-radius: 99px; background: #0B1F33F0; color: #fff; font-size: var(--room-font); font-weight: 700; }
   .room-chart { position: absolute; inset: 30% 12% 12%; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; }
