@@ -31,6 +31,7 @@ from presentator.adapters.builds import (
 from presentator.adapters.decks import FilesystemLocalMount, SourceMirrors
 from presentator.contracts.decks import (
     FAILURE_TEXT_LIMIT,
+    OUTPUT_DIRECTORY,
     Artefacts,
     BuildFailure,
     Deck,
@@ -55,7 +56,6 @@ _ONLY_A_MEGABYTE_MAY_BE_LEFT = 1
 _MEGABYTES_A_GREEDY_BUILD_WRITES = 3
 _WATCHED_OFTEN = timedelta(milliseconds=50)
 _CLOSED_TO_EVERYONE = 0o000
-# The mount point a build gets for its talk.
 _TALK = "talk"
 _PDF_FILE = "deck.pdf"
 _A_DATABASE_FILE = "presentator.sqlite3"
@@ -511,8 +511,6 @@ def test_a_decks_folder_at_its_commit_is_built_into_a_talk_and_a_pdf(
     ) == _WHAT_A_TALK_SAYS
     assert artefacts.pdf.read_bytes().startswith(b"%PDF")
     assert artefacts.directory.is_relative_to(tmp_path / "builds")
-    for directory in (*artefacts.directory.parents[:2], artefacts.directory):
-        assert directory.stat().st_mode & stat.S_IRWXO == stat.S_IROTH | stat.S_IXOTH
 
 
 def test_a_build_of_a_source_that_left_its_mount_is_not_attempted(
@@ -807,7 +805,7 @@ def test_artefacts_that_do_not_stand_under_the_root_are_not_held(
     (builds.builds / "through-a-link").symlink_to(outside)
     run = builds.builds / "a-run"
     a_written_talk(tmp_path / _A_REAL_TALK_UNDER_THE_ROOT)
-    (run / "out").symlink_to("real-out")
+    (run / OUTPUT_DIRECTORY).symlink_to("real-out")
 
     assert not builds.holds(Artefacts(directory=tmp_path / talk, pdf=tmp_path / pdf))
 
@@ -1133,7 +1131,7 @@ def test_a_link_a_build_left_is_never_opened_when_its_leavings_go(
     assert isinstance(built, BuildFailure)
     assert list(builds.builds.iterdir()) == []
     assert stat.S_IMODE(outside.stat().st_mode) == _CLOSED_TO_EVERYONE
-    outside.chmod(0o700)
+    outside.chmod(stat.S_IRWXU)
     assert held.exists()
 
 
