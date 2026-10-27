@@ -138,8 +138,7 @@ class Host:
             case ("stop", _):
                 return outcome(0, "")
             case ("rm", container):
-                if container not in self.lingering:
-                    del self.containers[container]
+                self.remove_container(container)
             case ("network", "ls", *_):
                 return outcome(0, "\n".join(self.networks))
             case ("network", "rm", name):
@@ -161,6 +160,10 @@ class Host:
         project = label.removeprefix("label=com.docker.compose.project=")
         matching = [name for name, owner in self.containers.items() if owner == project]
         return outcome(0, "\n".join(matching))
+
+    def remove_container(self, container: str) -> None:
+        if container not in self.lingering:
+            del self.containers[container]
 
     def remove(self, names: list[str], name: str) -> None:
         if name not in self.lingering:
