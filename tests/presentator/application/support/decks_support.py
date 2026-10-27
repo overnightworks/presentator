@@ -73,7 +73,7 @@ def having(*sources: Source) -> FakeSourceStore:
 class DecksFakes:
     """The fakes a `decks_over` scenario runs against, besides source and mirror.
 
-    Grouped into one value so `decks_over` keeps five parameters; a test names
+    Grouped into one value so `decks_over` keeps four parameters; a test names
     only the fake it cares about, and every field it leaves unnamed gets its
     own fresh instance rather than one every other test would share.
     """
