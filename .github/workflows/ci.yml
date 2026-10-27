@@ -506,8 +506,10 @@ jobs:
           EOF
           echo "WEB_PROBE_OVERRIDE=$RUNNER_TEMP/web-probe.yaml" >> "$GITHUB_ENV"
           # Internal like the edge's, so the web's gateway is its own network's.
-          docker network create --internal hal_agent_presentator
-          docker network create --internal hal_backchannel_presentator
+          for network in hal_agent_presentator hal_backchannel_presentator; do
+            docker network create --internal "$network" > /dev/null 2>&1 \
+              || { echo "could not create the network $network"; exit 1; }
+          done
 
       - name: Drive the deployed web through the worker
         run: uv run --locked python scripts/probe_build_worker_web.py drive
