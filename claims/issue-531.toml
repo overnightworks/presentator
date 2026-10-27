@@ -1,0 +1,8 @@
+claim_id = "f3bdb39c56a74d3f82d3e6d5a371c0f7"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "e026ced32f05f9d960287c159db2488057ca5c8c"
+branch = "claude/issue-531-picture-settings-models"
+scope = ["docs/mockups/README.md", "docs/mockups/m0-lobby", "docs/mockups/m0-lobby.html"]
+opened_commit = "0acc2204a4c1cd87a003ffdc9b8109b9b5f6c11c"
+whole_reason = "One picture: the Settings · Models boards, their renders and the README table that names them are one frozen artefact; the overview sheet stays with #525."
