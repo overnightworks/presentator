@@ -13,7 +13,7 @@ from httpx2 import Response
 from presentator.api.sources import ACCESS, SOURCES
 from presentator.contracts.decks import Build, Deck, Source
 from presentator.contracts.models import Role, User
-from tests.presentator.api.test_sources import ask_removal, confirm_removal
+from tests.presentator.api.support.removal_support import ask_removal, confirm_removal
 from tests.presentator.application.support.fakes import FakeBuildRunner, FakeDeckStore
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,

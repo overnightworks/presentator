@@ -2,8 +2,9 @@
 
 import asyncio
 import sqlite3
-from collections.abc import Callable
-from contextlib import closing
+import threading
+from collections.abc import Callable, Generator
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Literal
@@ -185,3 +186,44 @@ def a_scene(  # noqa: PLR0913
 
 def cookie_names(answer: BrowserAnswer) -> list[str]:
     return [cookie.split("=", 1)[0] for cookie in answer.headers.get_list("set-cookie")]
+
+
+@dataclass
+class ContentionSignalingLock:
+    """A real re-entrant lock that says when a taker found it held."""
+
+    contended: threading.Event = field(default_factory=threading.Event)
+    _real: threading.RLock = field(default_factory=threading.RLock)
+
+    def __enter__(self) -> bool:
+        """Take the lock, announcing first when it was already held."""
+        if self._real.acquire(blocking=False):
+            return True
+        self.contended.set()
+        return self._real.acquire()
+
+    def __exit__(self, *_exception: object) -> None:
+        """Let go of the lock."""
+        self._real.release()
+
+
+@dataclass
+class WatchedLock:
+    """The process lock over a contention-signaling primitive, counting its holds."""
+
+    primitive: ContentionSignalingLock = field(default_factory=ContentionSignalingLock)
+    holds: int = 0
+    held_on_the_event_loop: bool = False
+    _mutex: threading.Lock = field(default_factory=threading.Lock)
+
+    @property
+    def contended(self) -> threading.Event:
+        return self.primitive.contended
+
+    @contextmanager
+    def hold(self) -> Generator[None]:
+        with self._mutex:
+            self.holds += 1
+            self.held_on_the_event_loop |= on_an_event_loop()
+        with ProcessWriteLock(primitive=self.primitive).hold():
+            yield

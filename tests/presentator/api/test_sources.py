@@ -35,6 +35,12 @@ from presentator.contracts.decks import (
     SourceRunOutcome,
 )
 from presentator.contracts.models import Role
+from tests.presentator.api.support.removal_support import (
+    DECK_COUNT_FIELD,
+    RUN_COUNT_FIELD,
+    ask_removal,
+    confirm_removal,
+)
 from tests.presentator.application.support.fakes import (
     LOCAL_MOUNT_EXAMPLE,
     FakeBuildRunner,
@@ -123,43 +129,6 @@ def fetch(
     client: TestClient, name: str, *, headers: dict[str, str] | None = None
 ) -> Response:
     return client.post(_FETCH.format(name=name), headers=headers)
-
-
-def ask_removal(
-    client: TestClient,
-    name: str,
-    *,
-    headers: dict[str, str] | None = None,
-) -> Response:
-    return client.post(REMOVE.format(name=name), headers=headers)
-
-
-_DECK_COUNT_FIELD = re.compile(r'name="deck_count" value="(\d+)"')
-_RUN_COUNT_FIELD = re.compile(r'name="run_count" value="(\d+)"')
-
-
-def confirm_removal(
-    client: TestClient,
-    name: str,
-    *,
-    headers: dict[str, str] | None = None,
-) -> Response:
-    """Confirm a removal the way a person who just saw the ask step would.
-
-    The confirm form's hidden counts are read off the ask step's own answer
-    first, exactly as a browser would carry them; an ask that was refused or
-    found nothing leaves none to carry, and the confirmed POST answers that
-    the same way on its own.
-    """
-    asked = ask_removal(client, name, headers=headers)
-    data: dict[str, str] = {}
-    deck_count = _DECK_COUNT_FIELD.search(asked.text)
-    run_count = _RUN_COUNT_FIELD.search(asked.text)
-    if deck_count is not None:
-        data["deck_count"] = deck_count.group(1)
-    if run_count is not None:
-        data["run_count"] = run_count.group(1)
-    return client.post(REMOVE_CONFIRMED.format(name=name), data=data, headers=headers)
 
 
 @pytest.fixture
@@ -1582,8 +1551,8 @@ def test_a_stale_confirm_shows_a_fresh_one_and_deletes_nothing() -> None:
     source = a_configured_source(_ADDRESS)
     lobby = a_signed_in_lobby(GivenDecks(source=source, folders=(a_folder(),)))
     stale = ask_removal(lobby, source.name)
-    stale_decks = _DECK_COUNT_FIELD.search(stale.text)
-    stale_runs = _RUN_COUNT_FIELD.search(stale.text)
+    stale_decks = DECK_COUNT_FIELD.search(stale.text)
+    stale_runs = RUN_COUNT_FIELD.search(stale.text)
     assert stale_decks is not None
     assert stale_runs is not None
     fetch(lobby, source.name)

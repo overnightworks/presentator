@@ -15,13 +15,12 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.api.auth import LOGIN_PATH, LOGOUT_PATH
 from presentator.host.oidc import oidc_client_config
-from tests.presentator.api.test_sign_in_callback import WatchedLock
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_CLIENT_CREDENTIAL,
     a_settings,
 )
-from tests.support.sign_in_support import Scene, a_scene
+from tests.support.sign_in_support import Scene, WatchedLock, a_scene
 
 _A_FORM = {"content-type": "application/x-www-form-urlencoded"}
 _END_SESSION = oidc_client_config(
