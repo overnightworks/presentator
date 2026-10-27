@@ -262,7 +262,8 @@ def test_the_record_and_its_folder_are_left_exactly_as_found(scene: Scene) -> No
 
     scene.drive()
 
-    assert (scene.record.read_bytes(), scene.record.stat().st_mtime_ns) == before
+    after = (scene.record.read_bytes(), scene.record.stat().st_mtime_ns)
+    assert after == before
     assert sorted(path.name for path in folder.iterdir()) == listing
 
 
@@ -282,7 +283,7 @@ def test_a_deployed_tag_or_commit_other_than_head_is_refused_without_naming_it(
     run = scene.drive()
 
     assert (run.code, run.lines[-1]) == (REFUSED, NOT_HEAD)
-    assert scene.probing_calls() == []
+    assert not scene.probing_calls()
     printed = "\n".join(run.lines)
     assert not {"v0.9.0", "v1.0.0", FIRST_RUN_HEAD, "e" * 40} & set(printed.split())
 
@@ -306,7 +307,7 @@ def test_a_compose_key_that_is_not_one_line_is_refused_by_name(
     assert run.code == REFUSED
     assert run.lines[-1].startswith("refused:")
     assert key in run.lines[-1]
-    assert scene.probing_calls() == []
+    assert not scene.probing_calls()
 
 
 def test_the_scan_of_the_real_compose_file_agrees_with_a_yaml_parse(
