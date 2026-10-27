@@ -1,8 +1,0 @@
-claim_id = "08bf5589fe8948ab93ebef47fb138688"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "7a89c303719cda408203a81b0a202140d55d6fe4"
-branch = "claude/issue-558-conftest-git-remote"
-scope = ["pyproject.toml", "tests/conftest.py", "tests/gitmirror/test_mirror.py", "tests/presentator/adapters/test_builds.py", "tests/presentator/adapters/test_deck_texts.py", "tests/presentator/adapters/test_decks.py", "tests/presentator/api/test_copresenter_answer.py", "tests/presentator/host/test_host.py", "tests/support/git_remote.py", "tests/support/lobby.py"]
-opened_commit = "3bbd1a1bad5c8b47fe1fe59939391c16b95f838f"
-whole_reason = "The helpers, the six importers and the ruff key that names the file running git move together: a half-moved tree has imports of names conftest no longer holds, or a per-file ignore on a file that no longer spawns git while the one that does is unexempted, and the gate is red."
