@@ -87,7 +87,7 @@ if TYPE_CHECKING:
     from presentator.adapters.identity import SqliteSessionRecordStore
     from presentator.api.auth import InstalledAuth
     from presentator.ports.copresenter import DeckTexts
-    from tests.conftest import GitRemote
+    from tests.support.git_remote import GitRemote
 from tests.support.leak_support import everything_shown
 
 PERSON: Final = "person-access-MARKER"

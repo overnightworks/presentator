@@ -39,15 +39,15 @@ from presentator.host.config import (
     load_settings,
 )
 from presentator.host.main import Instance
-from tests.conftest import (
+from tests.support.git_remote import (
     EXAMPLE_SLUG,
     EXAMPLE_TITLE,
-    INSTANCE_KEY,
     GitRemote,
 )
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
+    INSTANCE_KEY,
     configure_secret_key,
     hand_over_session_cookies,
 )
