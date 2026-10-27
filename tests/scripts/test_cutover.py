@@ -522,7 +522,7 @@ def test_a_unit_that_stays_enabled_fails_the_step_and_a_resume_completes(
     failed = execute()
 
     assert failed.code == 1
-    assert failed.lines[-1] == f"{UNIT_STEP}: {UNITS[0]} stays enabled disable exit 0"
+    assert failed.lines[-1] == f"{UNIT_STEP}: {UNITS[0]} not disabled disable exit 0"
     assert (home / UNIT_DIRECTORY / UNITS[0]).exists()
     assert host.wants_link(UNITS[0]).is_symlink()
 

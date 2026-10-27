@@ -268,7 +268,7 @@ class Retirement:
                     )
                 if self._unit_file_state(unit) != DISABLED_UNIT_FILE_STATE:
                     raise StepFailedError(
-                        unit, "stays enabled", f"disable exit {disabled.code}"
+                        unit, "not disabled", f"disable exit {disabled.code}"
                     )
         for target in self._targets(Step.UNITS, Kind.FILE):
             self._remove_path(target)
