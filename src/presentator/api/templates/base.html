@@ -1,4 +1,6 @@
-{% set impressum_address = "https://hallucinai.de/impressum" -%}
+{% set hallucinai_address = "https://hallucinai.de" -%}
+{% set impressum_address = hallucinai_address ~ "/impressum" -%}
+{% set datenschutz_address = hallucinai_address ~ "/datenschutz" -%}
 <!DOCTYPE html>
 <html lang="{{ text.language_tag }}"{% if theme %} data-theme="{{ theme }}"{% endif %}>
   <head>

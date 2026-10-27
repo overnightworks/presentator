@@ -25,6 +25,8 @@ class Emphasis(StrEnum):
     PLAIN = "plain"
     LABEL = "label"
     IMPRESSUM = "impressum"
+    AGENT_SERVICE_NOTICE = "agent-service-notice"
+    SIGN_IN_NOTICE = "sign-in-notice"
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +68,13 @@ def _point(label: str, *rest: str | Phrase) -> Paragraph:
 
 
 _IMPRESSUM: Final = Phrase("Impressum", Emphasis.IMPRESSUM)
+_AGENT_SERVICE_NOTICE: Final = Phrase(
+    "sein Abschnitt in der Datenschutzerklärung von hallucinai",
+    Emphasis.AGENT_SERVICE_NOTICE,
+)
+_SIGN_IN_NOTICE: Final = Phrase(
+    "Die Anmeldung läuft über Keycloak", Emphasis.SIGN_IN_NOTICE
+)
 _SESSION_HOURS: Final = int(SESSION_LIFETIME.total_seconds()) // _SECONDS_PER_HOUR
 _PENDING_MINUTES: Final = PENDING_LOGIN_MAX_AGE_SECONDS // _SECONDS_PER_MINUTE
 _SWEEP_MINUTES: Final = (
@@ -186,9 +195,9 @@ DATENSCHUTZ: Final = LegalDocument(
                     "Stellen Sie im Vortrag eine Frage, sendet Presentator sie "
                     "mit dem Titel und dem Text des gefragten Decks an den "
                     "Agent-Dienst von hallucinai. Was der Dienst damit tut, "
-                    "beschreibt sein Abschnitt in der Datenschutzerklärung von "
-                    "hallucinai. "
-                    "Solange der CoPresenter zuhört, wird Sprache im "
+                    "beschreibt ",
+                    _AGENT_SERVICE_NOTICE,
+                    ". Solange der CoPresenter zuhört, wird Sprache im "
                     "Raum fortlaufend erkannt, und jede erkannte Äußerung wird "
                     "als Frage gesendet, außer während der "
                     "CoPresenter spricht oder wenn ein Echo erkannt wird; "
@@ -219,8 +228,8 @@ DATENSCHUTZ: Final = LegalDocument(
             paragraphs=(
                 _point(
                     "Keycloak:",
-                    "Die Anmeldung läuft über Keycloak unter "
-                    "auth.hallucinai.de, das der Betreiber betreibt.",
+                    _SIGN_IN_NOTICE,
+                    " unter auth.hallucinai.de, das der Betreiber betreibt.",
                 ),
                 _point(
                     "Cloudflare:",

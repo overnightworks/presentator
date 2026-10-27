@@ -4,7 +4,9 @@ Audience: humans and agents working on how the instance is reached from
 outside, on the login guard, or on the pages a visitor sees before signing in.
 
 - Status: ACCEPTED 2026-10-14 — supersedes the outer door of
-  [ADR 0007](0007-browser-client-behind-tunnel.md)
+  [ADR 0007](0007-browser-client-behind-tunnel.md). Amended 2026-10-27: its
+  own login is replaced by the Keycloak sign-in, per
+  [ADR 0018](0018-keycloak-replaces-own-accounts.md)
 - Date: 2026-10-14
 - Decision authority: the operator's ruling of 2026-10-14 and the ruled
   expectation lines recorded on

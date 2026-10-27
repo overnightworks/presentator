@@ -28,6 +28,7 @@ number is never reused and never renumbered.
 - [ADR 0015: The instance is public like Songmaker, behind its own login, with no Cloudflare Access](0015-public-like-songmaker-own-login.md)
 - [ADR 0016: A talk host signs in by itself, as a second app of the same process](0016-a-talk-host-signs-in-by-itself.md)
 - [ADR 0017: A build worker runs each step sealed, one life per step](0017-a-build-worker-runs-each-step-sealed.md)
+- [ADR 0018: Keycloak replaces the accounts an admin creates and the instance's own login](0018-keycloak-replaces-own-accounts.md)
 
 ## How to read a record
 

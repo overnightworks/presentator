@@ -7,6 +7,10 @@
       <b>{{ phrase.words }}</b>
     {%- elif phrase.emphasis is sameas emphasis.IMPRESSUM -%}
       <a href="{{ impressum_address }}">{{ phrase.words }}</a>
+    {%- elif phrase.emphasis is sameas emphasis.AGENT_SERVICE_NOTICE -%}
+      <a href="{{ datenschutz_address }}#agent-dienst">{{ phrase.words }}</a>
+    {%- elif phrase.emphasis is sameas emphasis.SIGN_IN_NOTICE -%}
+      <a href="{{ datenschutz_address }}#anmeldung">{{ phrase.words }}</a>
     {%- else -%}
       {{ phrase.words }}
     {%- endif -%}
