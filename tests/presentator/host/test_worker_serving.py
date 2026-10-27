@@ -12,7 +12,7 @@ import pytest
 from presentator.adapters import build_wire
 from presentator.host import worker
 from presentator.host.worker import StartRefusal
-from tests.worker_support import (
+from tests.support.worker_support import (
     FOREIGN_UID,
     OWN_GID,
     OWN_UID,

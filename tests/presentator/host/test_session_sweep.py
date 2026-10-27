@@ -17,9 +17,9 @@ from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host import main
 from presentator.host.config import load_settings
-from tests.people import seed_user
 from tests.presentator.application.support.fakes import PATIENCE, FrozenClock
 from tests.support.lobby import AN_AGENT_SERVICE, configure_oidc, configure_secret_key
+from tests.support.people import seed_user
 
 _STARTED = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _ADMIN = User(id="id-of-felix", username="felix", role=Role.ADMIN)

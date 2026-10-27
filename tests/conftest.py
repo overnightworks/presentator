@@ -19,7 +19,7 @@ from tests.support.lobby import (
     configure_oidc,
     configure_secret_key,
 )
-from tests.worker_support import WAIT_SECONDS, listening_socket
+from tests.support.worker_support import WAIT_SECONDS, listening_socket
 
 EXAMPLE_DECK = Path(__file__).parents[1] / "examples" / "hello-deck"
 EXAMPLE_SLUG = EXAMPLE_DECK.name

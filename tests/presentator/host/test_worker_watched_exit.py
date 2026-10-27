@@ -16,7 +16,7 @@ from presentator.host.worker_serving import (
     hand_over,
 )
 from presentator.host.worker_wire import WireExit, WireRole
-from tests.worker_support import (
+from tests.support.worker_support import (
     ACCEPT_TIME,
     IDLE_LEG,
     WAIT_SECONDS,

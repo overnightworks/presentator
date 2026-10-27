@@ -34,9 +34,9 @@ from presentator.host.worker_serving import (
     WireChild,
 )
 from presentator.host.worker_termination import SWEEP_SECONDS
-from tests import worker_support as support
-from tests.step_support import OWN_IDENTITY, quick_step
-from tests.worker_support import (
+from tests.support import worker_support as support
+from tests.support.step_support import OWN_IDENTITY, quick_step
+from tests.support.worker_support import (
     accept_time,
     open_descriptor_count,
     role_of,

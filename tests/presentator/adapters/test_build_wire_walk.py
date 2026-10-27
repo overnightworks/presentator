@@ -22,7 +22,7 @@ from presentator.adapters.build_wire import (
     send_tree_reply,
 )
 from presentator.contracts.decks import StepKind
-from tests import worker_support as support
+from tests.support import worker_support as support
 
 BUILT = support.OUTCOME_BUILT
 MEGABYTES = 1

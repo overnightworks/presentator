@@ -27,8 +27,8 @@ from presentator.host import worker, worker_wire
 from presentator.host.config import WorkerSettings
 from presentator.host.worker import create_request_record
 from presentator.host.worker_wire import ReplyPlan, WireExit, WireRole
-from tests import worker_support as support
-from tests.worker_support import (
+from tests.support import worker_support as support
+from tests.support.worker_support import (
     UNUSED_WORK,
     end_entry,
     file_entry,

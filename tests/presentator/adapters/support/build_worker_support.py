@@ -18,8 +18,8 @@ from presentator.contracts.decks import (
     BuildFailure,
     StepKind,
 )
-from tests import worker_support as support
-from tests.worker_support import OWN_GID, OWN_UID
+from tests.support import worker_support as support
+from tests.support.worker_support import OWN_GID, OWN_UID
 
 MEGABYTES = 1
 WINDOW = 0.6

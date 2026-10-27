@@ -11,7 +11,7 @@ from tests.presentator.adapters.test_worker_children import (
     end_child,
     release_and_close,
 )
-from tests.step_support import OWN_IDENTITY
+from tests.support.step_support import OWN_IDENTITY
 
 PRINTING_ITS_DIRECTORY = "import os, sys; print(os.getcwd(), file=sys.stderr); print(1)"
 

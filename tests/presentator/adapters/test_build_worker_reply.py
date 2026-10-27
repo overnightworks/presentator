@@ -29,7 +29,6 @@ from presentator.contracts.decks import (
     BuildFailure,
     StepKind,
 )
-from tests import worker_support as support
 from tests.presentator.adapters.support.build_worker_support import (
     BUILT_PDF,
     BUILT_TALK,
@@ -43,6 +42,7 @@ from tests.presentator.adapters.support.build_worker_support import (
     toolchain,
     tree_of,
 )
+from tests.support import worker_support as support
 
 
 def exchanged_with(

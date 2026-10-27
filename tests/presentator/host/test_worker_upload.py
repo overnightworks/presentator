@@ -13,7 +13,7 @@ import pytest
 from presentator.host import worker
 from presentator.host.worker_serving import LifeEnd, hand_over
 from presentator.host.worker_wire import WireExit
-from tests.worker_support import (
+from tests.support.worker_support import (
     ACCEPT_TIME,
     DECK_CLOSED_MODE,
     DECK_OPEN_MODE,

@@ -24,7 +24,7 @@ from presentator.adapters.identity import (
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host.main import web_auth_config_for
-from tests.people import (
+from tests.support.people import (
     copy_of_a_crashed_database,
     seed_user,
     write_password_schema,
