@@ -64,7 +64,7 @@ typeCheckingMode = "strict"
 pythonVersion = "3.12"
 
 [tool.vulture]
-paths = ["src", "tests", "tests/vulture_allowlist.py"]
+paths = ["src", "tests", "tests/support/vulture_allowlist.py"]
 
 [tool.ruff]
 target-version = "py312"
@@ -119,10 +119,10 @@ convention = "google"
 # never renders one, so autoescape has no effect on its behaviour.
 "scripts/check_catalog_purity.py" = ["INP001", "S701"]
 # Drives the check script as a subprocess against temporary and real templates.
-"tests/test_catalog_purity.py" = ["S404", "S603"]
+"tests/scripts/test_catalog_purity.py" = ["S404", "S603"]
 # `vulture` reads a whitelist as bare attribute expressions; naming a field
 # there is the entry, and assigning it would only move the dead name.
-"tests/vulture_allowlist.py" = ["B018"]
+"tests/support/vulture_allowlist.py" = ["B018"]
 # Mirroring a remote is spawning `git`; the executable is resolved on PATH and
 # every argument is built here, never taken from a request.
 "src/gitmirror/mirror.py" = ["S404", "S603"]
@@ -136,7 +136,7 @@ convention = "google"
 # Runs the gate shell and a stalled controller as real processes.
 "tests/presentator/adapters/test_worker_children.py" = ["S404", "S603"]
 # Spawns children of its own to prove which of them the reap collects.
-"tests/test_worker_termination.py" = ["S404", "S603"]
+"tests/presentator/host/test_worker_termination.py" = ["S404", "S603"]
 # Drives that toolchain and that client as the stand-in scripts it puts on PATH.
 "tests/presentator/adapters/test_builds.py" = ["S404", "S603"]
 # Builds the temporary git repositories every layer that reads one is proven on.

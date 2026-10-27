@@ -30,9 +30,14 @@ from presentator.api.auth import (
     BACKCHANNEL_LOGOUT_PATH,
     PERMISSIONS_POLICY,
 )
-from tests.sign_in_support import RecordingAudit, Scene, a_scene, on_an_event_loop
 from tests.support.fake_issuer import FakeIssuer
 from tests.support.lobby import A_BROWSERS_ADDRESS, a_content_security_policy
+from tests.support.sign_in_support import (
+    RecordingAudit,
+    Scene,
+    a_scene,
+    on_an_event_loop,
+)
 
 _FORM = "application/x-www-form-urlencoded"
 _KEYCLOAK_BY_NAME = "http://presentator-lobby:8000"

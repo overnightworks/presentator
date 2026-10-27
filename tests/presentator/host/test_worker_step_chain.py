@@ -15,9 +15,7 @@ from presentator.contracts.decks import FAILURE_TEXT_LIMIT
 from presentator.host import worker_serving
 from presentator.host.worker_serving import LifeEnd
 from presentator.host.worker_wire import WireExit
-from tests import step_support
-from tests import worker_support as support
-from tests.test_worker_record_chain import (
+from tests.presentator.host.test_worker_record_chain import (
     PATH,
     WAIT_SECONDS,
     ChainSpawn,
@@ -28,6 +26,8 @@ from tests.test_worker_record_chain import (
     read_to_end_or_reset,
     run_life,
 )
+from tests.support import step_support
+from tests.support import worker_support as support
 
 BUILD_BOUND_SECONDS = 3.0
 INJECTION_DEADLINE_SECONDS = 2.0

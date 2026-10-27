@@ -8,7 +8,7 @@ from types import ModuleType
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 SILENT_AFTER_PARTIAL_LINE = (
     "import sys, time; sys.stdout.write('upl'); sys.stdout.flush(); time.sleep(60)"
 )

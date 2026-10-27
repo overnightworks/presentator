@@ -9,7 +9,7 @@ from types import ModuleType
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 
 
 @pytest.fixture

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 _CHECK_SCRIPT = (
-    Path(__file__).resolve().parents[1] / "scripts" / "check_catalog_purity.py"
+    Path(__file__).resolve().parents[2] / "scripts" / "check_catalog_purity.py"
 )
 _TEMPLATES_DIRECTORY = Path("src") / "presentator" / "api" / "templates"
 
@@ -253,7 +253,7 @@ def test_catalog_purity_check_reports_an_empty_templates_directory_without_crash
 
 
 def test_catalog_purity_check_passes_on_the_real_templates() -> None:
-    repository_root = Path(__file__).resolve().parents[1]
+    repository_root = Path(__file__).resolve().parents[2]
 
     completed = _run_check(repository_root)
 

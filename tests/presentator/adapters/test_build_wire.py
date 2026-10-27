@@ -26,7 +26,7 @@ from presentator.adapters.build_wire import (
     send_status,
 )
 from presentator.contracts.decks import StepKind
-from tests import worker_support as support
+from tests.support import worker_support as support
 
 
 def test_status_is_the_wire_format_bytes(

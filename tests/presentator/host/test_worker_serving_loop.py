@@ -17,9 +17,9 @@ from presentator.host import worker, worker_serving
 from presentator.host.worker_serving import HEADER_SECONDS, LifeEnd
 from presentator.host.worker_termination import SWEEP_SECONDS, SweepEffects, sweep
 from presentator.host.worker_wire import WireExit
-from tests.step_support import ADMITTING_PATH, STEP_LEG
-from tests.test_worker import sealed_snapshot, with_fields
-from tests.worker_support import (
+from tests.presentator.host.test_worker import sealed_snapshot, with_fields
+from tests.support.step_support import ADMITTING_PATH, STEP_LEG
+from tests.support.worker_support import (
     ACCEPT_TIME,
     CHILD_LEG,
     CONNECTIONS,

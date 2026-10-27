@@ -20,7 +20,7 @@ from presentator.adapters.worker_children import (
 from presentator.host.worker_serving import StepEffects, WireChild
 
 if TYPE_CHECKING:
-    from tests.worker_support import ScriptedLife
+    from tests.support.worker_support import ScriptedLife
 
 STEP_PROJECT = Path("/test/project")
 OWN_IDENTITY = ChildIdentity(os.getuid(), os.getgid(), extra_groups=None)

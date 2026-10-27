@@ -15,15 +15,19 @@ from presentator.adapters import worker_children
 from presentator.adapters.worker_children import GatedChild, readable_within
 from presentator.host.worker_serving import HEADER_SECONDS, LifeEnd, hand_over
 from tests.presentator.adapters.test_worker_children import PATH
-from tests.step_support import OWN_IDENTITY
-from tests.test_worker_record_chain import (
+from tests.presentator.host.test_worker_record_chain import (
     EXITING_SEVEN,
     SLEEPER,
     WAIT_SECONDS,
     ChainSpawn,
     await_absence,
 )
-from tests.worker_support import accept_time, open_descriptor_count, serving_with
+from tests.support.step_support import OWN_IDENTITY
+from tests.support.worker_support import (
+    accept_time,
+    open_descriptor_count,
+    serving_with,
+)
 
 SHORT_SECONDS = 0.05
 POLL_SECONDS = 0.01

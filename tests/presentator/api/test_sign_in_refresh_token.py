@@ -12,8 +12,8 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.oidc import TokenEndpointAnswer, TokenRequest, TokenRequestPost
 
 from presentator.api.auth import LOGOUT_PATH
-from tests.leak_support import everything_shown
-from tests.sign_in_support import Scene, a_scene, cookie_names
+from tests.support.leak_support import everything_shown
+from tests.support.sign_in_support import Scene, a_scene, cookie_names
 
 _MARKER = "rt-MARKER"
 _LOGGERS = ("uvicorn.error", "webauth", "presentator")

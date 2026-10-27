@@ -21,7 +21,7 @@ from presentator.adapters.build_wire import (
     path_components,
     receive_entries,
 )
-from tests.worker_support import (
+from tests.support.worker_support import (
     BULK_SEND_SECONDS,
     WAIT_SECONDS,
     directory_entry,

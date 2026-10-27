@@ -7,7 +7,7 @@ import pytest
 
 from presentator.host.worker_serving import REPLY_SECONDS, LifeEnd, hand_over
 from presentator.host.worker_wire import WireExit
-from tests.worker_support import (
+from tests.support.worker_support import (
     ACCEPT_TIME,
     SENDER_LEG,
     ScriptedLife,

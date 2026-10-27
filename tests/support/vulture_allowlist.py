@@ -25,7 +25,7 @@ from presentator.contracts.voice import (
 )
 from presentator.host.config import Settings, WorkerSettings
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
-from tests.test_worker_settings import no_worker_variables
+from tests.presentator.host.test_worker_settings import no_worker_variables
 
 # `BaseHTTPRequestHandler`'s own request dispatch calls this by name; nothing
 # in the test that stands the server up ever calls it itself.

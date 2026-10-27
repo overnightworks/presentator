@@ -13,10 +13,7 @@ from presentator.adapters.worker_children import spawn_gated
 from presentator.host import worker_serving
 from presentator.host.worker_serving import LifeEnd
 from presentator.host.worker_wire import WireExit
-from tests import step_support
-from tests import worker_support as support
-from tests.step_support import OWN_IDENTITY
-from tests.test_worker_record_chain import (
+from tests.presentator.host.test_worker_record_chain import (
     PATH,
     SLEEPER,
     WAIT_SECONDS,
@@ -27,6 +24,9 @@ from tests.test_worker_record_chain import (
     read_to_end,
     run_life,
 )
+from tests.support import step_support
+from tests.support import worker_support as support
+from tests.support.step_support import OWN_IDENTITY
 
 REPLY_BUDGET_SECONDS = 1.0
 DECK_MODE_REPORTER_EXITING_SENT = f"""
