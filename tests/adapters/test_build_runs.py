@@ -122,12 +122,13 @@ def test_a_removal_that_stops_halfway_leaves_no_directory_closed_to_others(
     root: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """#529 sentence 4: a removal that stops halfway leaves nothing closed to others."""
     out = a_run(root, "halfway")
     (out / "talk" / "closed").mkdir()
     (out / "talk" / "closed").chmod(0o000)
 
-    def stop_halfway(_directory: Path, *, ignore_errors: bool) -> None:
-        assert ignore_errors
+    def stop_halfway(*_arguments: object, **_keywords: object) -> None:
+        """Remove nothing."""
 
     monkeypatch.setattr(shutil, "rmtree", stop_halfway)
 
