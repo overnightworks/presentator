@@ -47,7 +47,7 @@ from gitmirror.model import (
     TreeEntry,
 )
 from presentator.adapters.secrets import generate_deploy_key
-from tests.conftest import MAIN_BRANCH, GitRemote, with_the_program
+from tests.support.git_remote import MAIN_BRANCH, GitRemote, with_the_program
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _PUSHED_LATER = datetime(2026, 1, 16, 9, tzinfo=UTC)

@@ -149,6 +149,7 @@ _A_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 # test proving what an absent or a foreign claim does overrides these
 # explicitly (issue #105).
 A_BROWSERS_HEADERS: Final = {"accept": "text/html", "sec-fetch-site": "same-origin"}
+INSTANCE_KEY: Final = "an instance key of at least thirty-two bytes"
 # The lobby's cookies carry `Secure`, and a browser sends a `Secure` cookie back
 # only over https, so every browser a test drives reaches the lobby over https.
 A_BROWSERS_ADDRESS: Final = "https://testserver"
