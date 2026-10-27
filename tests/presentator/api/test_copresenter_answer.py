@@ -54,7 +54,6 @@ from tests.presentator.adapters.support.agent_service_support import (
     violating_frame,
     whole,
 )
-from tests.presentator.adapters.test_decks import a_source, folders_under, mirrors_under
 from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeSourceStore,
@@ -69,6 +68,7 @@ from tests.support.copresenter_support import (
     FakeDeckTexts,
     PrivateFakes,
 )
+from tests.support.deck_source_support import a_source, folders_under, mirrors_under
 from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     A_TALK_ADDRESS,

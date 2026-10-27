@@ -9,13 +9,12 @@ from pathlib import Path
 import pytest
 
 from gitmirror.mirror import credential_arguments, unattended_environment
-from gitmirror.model import CredentialReference, CredentialResolver
+from gitmirror.model import CredentialReference
 from presentator.adapters.decks import (
     FilesystemLocalMount,
     MirroredConnectionChecker,
     MirroredDeckFolders,
     SourceCredentials,
-    SourceMirrors,
     SqliteDeckStore,
     SqliteSourceRunStore,
     SqliteSourceStore,
@@ -31,10 +30,8 @@ from presentator.contracts.decks import (
     MANIFEST_FILE,
     RECENT_SOURCE_RUNS,
     SLIDES_FILE,
-    Build,
     BuildAttempt,
     BuildOutcome,
-    Deck,
     DeckFolder,
     Source,
     SourceRun,
@@ -42,44 +39,37 @@ from presentator.contracts.decks import (
     SourceRunOutcome,
     SourceWrite,
 )
-from presentator.contracts.models import Role, User
-from tests.presentator.adapters.support.credentials_support import OpenCredentials
 from tests.presentator.adapters.support.key_draft_support import (
     INSTANCE_KEY as _INSTANCE_KEY,
 )
 from tests.presentator.adapters.support.key_draft_support import a_key_drafts_store
+from tests.support.deck_source_support import (
+    A_GENEROUS_BOUND,
+    COMMIT,
+    OWNER,
+    PUSHED_AT,
+    SOURCE_ID,
+    SOURCE_NAME,
+    a_build,
+    a_deck,
+    a_source,
+    folders_under,
+    mirrors_under,
+)
 from tests.support.git_remote import EXAMPLE_SLUG, EXAMPLE_TITLE, MAIN_BRANCH, GitRemote
 from tests.support.people import seed_user
 
-_PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _NOTICED_GONE_AT = datetime(2026, 1, 20, 9, tzinfo=UTC)
-_OWNER = User(id="the-admin", username="felix", role=Role.ADMIN)
-_SOURCE_ID = "the-source-that-carried-it"
 _ANOTHER_SOURCE_ID = "a-second-source"
-_SOURCE_NAME = "decks"
 _ANOTHER_SOURCE_NAME = "talks"
 _ADDRESS = "git@example.invalid:decks.git"
 _ANOTHER_ADDRESS = "git@example.invalid:talks.git"
 _ANOTHER_INSTANCE_KEY = "the key another instance carries"
 _WHAT_THE_GIT_HOST_EXPECTS = "the read-only words only this test made up"
-_A_GENEROUS_BOUND = timedelta(seconds=30)
 _NO_BUDGET_AT_ALL = timedelta(0)
-_BUILT_AT = datetime(2026, 1, 15, 9, 30, tzinfo=UTC)
 _TRIED_AT = datetime(2026, 1, 15, 10, tzinfo=UTC)
 _WHAT_THE_TOOLCHAIN_SAID = "slides.md:41:3 Unexpected token in frontmatter"
-_COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _A_LATER_COMMIT = "b7c1d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80"
-
-
-def a_source(url: str) -> Source:
-    """A source whose secret, if it had one, no test of this file resolves."""
-    return Source(
-        id=_SOURCE_ID,
-        name=_SOURCE_NAME,
-        url=url,
-        ref=MAIN_BRANCH,
-        owner_id=_OWNER.id,
-    )
 
 
 def a_box(*, instance_key: str = _INSTANCE_KEY) -> SecretBox:
@@ -98,73 +88,11 @@ def a_resolver(
     )
 
 
-def folders_under(
-    tmp_path: Path,
-    *,
-    pull_timeout: timedelta = _A_GENEROUS_BOUND,
-    credentials: CredentialResolver | None = None,
-    local_mount: FilesystemLocalMount | None = None,
-) -> MirroredDeckFolders:
-    return MirroredDeckFolders(
-        mirrors=mirrors_under(
-            tmp_path,
-            timeout=pull_timeout,
-            credentials=credentials,
-            local_mount=local_mount,
-        ),
-    )
-
-
-def mirrors_under(
-    tmp_path: Path,
-    *,
-    timeout: timedelta = _A_GENEROUS_BOUND,
-    credentials: CredentialResolver | None = None,
-    local_mount: FilesystemLocalMount | None = None,
-) -> SourceMirrors:
-    return SourceMirrors(
-        directory=tmp_path / "mirrors",
-        credentials=OpenCredentials() if credentials is None else credentials,
-        pull_timeout=timeout,
-        local_mount=(
-            FilesystemLocalMount(mount=tmp_path) if local_mount is None else local_mount
-        ),
-    )
-
-
 def folders_read(tmp_path: Path, source: Source) -> tuple[DeckFolder, ...]:
     """What a source a test has made readable carries."""
     poll = folders_under(tmp_path).folders(source)
     assert poll.folders is not None
     return poll.folders
-
-
-def a_deck(
-    slug: str = "kundenfeedback",
-    *,
-    title: str = "Kundenfeedback",
-    commit: str = _COMMIT,
-    source_id: str = _SOURCE_ID,
-) -> Deck:
-    return Deck(
-        slug=slug,
-        title=title,
-        changed_at=_PUSHED_AT,
-        owner_id=_OWNER.id,
-        source_id=source_id,
-        commit=commit,
-        build=None,
-        attempt=None,
-    )
-
-
-def a_build(tmp_path: Path, *, commit: str = _COMMIT) -> Build:
-    return Build(
-        directory=tmp_path / "builds" / "kundenfeedback" / commit / "talk",
-        pdf=tmp_path / "builds" / "kundenfeedback" / commit / "deck.pdf",
-        commit=commit,
-        built_at=_BUILT_AT,
-    )
 
 
 def an_attempt(
@@ -195,17 +123,17 @@ def a_source_run_store(tmp_path: Path) -> SqliteSourceRunStore:
     return SqliteSourceRunStore(database=database)
 
 
-def a_successful_run(*, source_id: str = _SOURCE_ID, at: datetime) -> SourceRun:
+def a_successful_run(*, source_id: str = SOURCE_ID, at: datetime) -> SourceRun:
     return SourceRun(
         source_id=source_id,
         at=at,
         outcome=SourceRunOutcome.SUCCESS,
-        commit=_COMMIT,
+        commit=COMMIT,
         reason=None,
     )
 
 
-def a_failed_run(*, source_id: str = _SOURCE_ID, at: datetime) -> SourceRun:
+def a_failed_run(*, source_id: str = SOURCE_ID, at: datetime) -> SourceRun:
     return SourceRun(
         source_id=source_id,
         at=at,
@@ -236,7 +164,7 @@ def add_a_source(
 ) -> Source:
     """A stored source row this instance can open."""
     added = a_source_store(database, instance_key=instance_key).add(
-        a_write(name=_SOURCE_NAME, url=_ADDRESS) if write is None else write,
+        a_write(name=SOURCE_NAME, url=_ADDRESS) if write is None else write,
     )
     assert added is not None
     return added
@@ -250,7 +178,7 @@ def an_instance_that_was_set_up(tmp_path: Path) -> Path:
     database = tmp_path / "presentator.sqlite3"
     create_identity_tables(database)
     create_deck_tables(database)
-    seed_user(database, _OWNER)
+    seed_user(database, OWNER)
     return database
 
 
@@ -258,7 +186,7 @@ def test_a_pushed_deck_folder_is_read_with_its_title_and_its_change_time(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit_example_deck(at=_PUSHED_AT)
+    remote.commit_example_deck(at=PUSHED_AT)
 
     folders = folders_read(tmp_path, a_source(remote.url))
 
@@ -267,7 +195,7 @@ def test_a_pushed_deck_folder_is_read_with_its_title_and_its_change_time(
     assert read.name == EXAMPLE_SLUG
     assert read.title == EXAMPLE_TITLE
     assert {MANIFEST_FILE, SLIDES_FILE} <= read.file_names
-    assert read.changed_at == _PUSHED_AT
+    assert read.changed_at == PUSHED_AT
     assert read.commit == remote.head
 
 
@@ -275,10 +203,10 @@ def test_a_push_that_touched_another_folder_leaves_this_decks_commit_alone(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit_example_deck(at=_PUSHED_AT)
+    remote.commit_example_deck(at=PUSHED_AT)
     pushed_first = remote.head
 
-    remote.commit({"another-deck/slides.md": "# Elsewhere\n"}, at=_PUSHED_AT)
+    remote.commit({"another-deck/slides.md": "# Elsewhere\n"}, at=PUSHED_AT)
     read = {
         folder.name: folder for folder in folders_read(tmp_path, a_source(remote.url))
     }
@@ -291,7 +219,7 @@ def test_a_folder_without_a_manifest_is_read_without_a_title(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit({"just-notes/slides.md": "# notes\n"}, at=_PUSHED_AT)
+    remote.commit({"just-notes/slides.md": "# notes\n"}, at=PUSHED_AT)
 
     folders = folders_read(tmp_path, a_source(remote.url))
 
@@ -313,10 +241,10 @@ def test_a_folder_whose_manifest_is_unreadable_is_still_there_without_a_title(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit_example_deck(at=_PUSHED_AT)
+    remote.commit_example_deck(at=PUSHED_AT)
     remote.commit(
         {f"{broken}/deck.toml": manifest, f"{broken}/slides.md": "# x\n"},
-        at=_PUSHED_AT,
+        at=PUSHED_AT,
     )
 
     with caplog.at_level(logging.WARNING):
@@ -333,7 +261,7 @@ def test_a_poll_that_reaches_a_source_carries_its_newest_commit(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit_example_deck(at=_PUSHED_AT)
+    remote.commit_example_deck(at=PUSHED_AT)
 
     poll = folders_under(tmp_path).folders(a_source(remote.url))
 
@@ -345,7 +273,7 @@ def test_a_pull_that_runs_past_its_bound_says_nothing_rather_than_waiting(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit_example_deck(at=_PUSHED_AT)
+    remote.commit_example_deck(at=PUSHED_AT)
 
     poll = folders_under(tmp_path, pull_timeout=_NO_BUDGET_AT_ALL).folders(
         a_source(remote.url),
@@ -380,7 +308,7 @@ def a_checker(
     """A checker for a test that never checks a file-kind address."""
     unused_mount = FilesystemLocalMount(mount=Path("/nowhere-a-test-names"))
     return MirroredConnectionChecker(
-        check_timeout=_A_GENEROUS_BOUND,
+        check_timeout=A_GENEROUS_BOUND,
         local_mount=unused_mount if local_mount is None else local_mount,
         known_hosts=Path("/nowhere-a-test-names-known-hosts"),
     )
@@ -423,7 +351,7 @@ def test_a_reachable_file_check_answers_the_full_commit(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit_example_deck(at=_PUSHED_AT)
+    remote.commit_example_deck(at=PUSHED_AT)
 
     checked = a_checker(local_mount=FilesystemLocalMount(mount=tmp_path)).check(
         url=remote.url,
@@ -514,15 +442,15 @@ def test_a_credential_free_local_source_fetches_through_the_real_store(
     an empty, resolved secret fetches exactly like every other source's
     does, asking git for no credential at all.
     """
-    remote.commit_example_deck(at=_PUSHED_AT)
+    remote.commit_example_deck(at=PUSHED_AT)
     database = an_instance_that_was_set_up(tmp_path)
     stored = add_a_source(
         database,
         write=SourceWrite(
-            name=_SOURCE_NAME,
+            name=SOURCE_NAME,
             url=remote.url,
             ref=MAIN_BRANCH,
-            owner_id=_OWNER.id,
+            owner_id=OWNER.id,
             access_secret="",
             hook_secret_hash=b"\x22" * 32,
         ),
@@ -583,7 +511,7 @@ def test_removing_a_sources_mirror_deletes_it_from_disk(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit_example_deck(at=_PUSHED_AT)
+    remote.commit_example_deck(at=PUSHED_AT)
     mirrors = mirrors_under(tmp_path)
     source = a_source(remote.url)
     mirror = mirrors.of(source)
@@ -619,7 +547,7 @@ def test_a_mirror_whose_parent_refuses_the_delete_is_reported_not_gone(
     empties out normally and only the last step, taking its own name out of
     the parent, is refused.
     """
-    remote.commit_example_deck(at=_PUSHED_AT)
+    remote.commit_example_deck(at=PUSHED_AT)
     mirrors = mirrors_under(tmp_path)
     source = a_source(remote.url)
     mirror = mirrors.of(source)
@@ -644,19 +572,19 @@ def test_a_real_git_source_can_be_added_removed_and_added_again(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit_example_deck(at=_PUSHED_AT)
+    remote.commit_example_deck(at=PUSHED_AT)
     database = an_instance_that_was_set_up(tmp_path)
     sources = a_source_store(database)
     folders = MirroredDeckFolders(mirrors=mirrors_under(tmp_path))
 
-    first = sources.add(a_write(name=_SOURCE_NAME, url=remote.url))
+    first = sources.add(a_write(name=SOURCE_NAME, url=remote.url))
     assert first is not None
     first_poll = folders.folders(first)
     assert first_poll.folders is not None
 
     mirror_gone = folders.forget(first)
     sources.remove(first.id)
-    second = sources.add(a_write(name=_SOURCE_NAME, url=remote.url))
+    second = sources.add(a_write(name=SOURCE_NAME, url=remote.url))
 
     assert mirror_gone is True
     assert second is not None
@@ -742,7 +670,7 @@ def a_write(
         name=name,
         url=url,
         ref=MAIN_BRANCH,
-        owner_id=_OWNER.id,
+        owner_id=OWNER.id,
         access_secret=_WHAT_THE_GIT_HOST_EXPECTS,
         hook_secret_hash=_A_WEBHOOK_HASH,
         public_key=public_key,
@@ -800,7 +728,7 @@ def test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair(
     )
     assert target is not None
     assert neighbour is not None
-    draft = a_key_drafts_store(database).mint(_OWNER.id, at=_PUSHED_AT)
+    draft = a_key_drafts_store(database).mint(OWNER.id, at=PUSHED_AT)
     pair = DeployKeyPair(
         private_key="-----BEGIN OPENSSH PRIVATE KEY-----\nreplacement",
         public_key="ssh-ed25519 AAAAreplacement presentator",
@@ -869,7 +797,7 @@ def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
     )
     assert target is not None
     assert neighbour is not None
-    draft = a_key_drafts_store(database).mint(_OWNER.id, at=_PUSHED_AT)
+    draft = a_key_drafts_store(database).mint(OWNER.id, at=PUSHED_AT)
     with rows(database) as cursor:
         before = (
             cursor.execute(
@@ -917,7 +845,7 @@ def test_a_deploy_key_update_failure_keeps_every_source_and_draft(
     )
     assert target is not None
     assert neighbour is not None
-    draft = a_key_drafts_store(database).mint(_OWNER.id, at=_PUSHED_AT)
+    draft = a_key_drafts_store(database).mint(OWNER.id, at=PUSHED_AT)
     with rows(database) as cursor:
         before = (
             cursor.execute(
@@ -955,7 +883,7 @@ def test_promoting_a_draft_encrypts_its_private_half_and_consumes_it(
 ) -> None:
     database = an_instance_that_was_set_up(tmp_path)
     drafts = a_key_drafts_store(database)
-    minted = drafts.mint(_OWNER.id, at=_PUSHED_AT)
+    minted = drafts.mint(OWNER.id, at=PUSHED_AT)
 
     promoted = a_source_store(database).add_from_draft(
         a_write(public_key=None),
@@ -964,7 +892,7 @@ def test_promoting_a_draft_encrypts_its_private_half_and_consumes_it(
 
     assert promoted is not None
     assert promoted.public_key == minted.public_key
-    assert drafts.bind(minted.id, owner_id=_OWNER.id) is None
+    assert drafts.bind(minted.id, owner_id=OWNER.id) is None
     assert a_resolver(database).resolve(CredentialReference(name=promoted.id)) == (
         minted.private_key
     )
@@ -985,7 +913,7 @@ def test_promoting_a_missing_or_foreign_draft_creates_no_source(
     database = an_instance_that_was_set_up(tmp_path)
     sources = a_source_store(database)
     drafts = a_key_drafts_store(database)
-    minted = None if draft_owner is None else drafts.mint(draft_owner, at=_PUSHED_AT)
+    minted = None if draft_owner is None else drafts.mint(draft_owner, at=PUSHED_AT)
 
     promoted = sources.add_from_draft(
         a_write(),
@@ -1004,7 +932,7 @@ def test_promoting_an_undecryptable_draft_keeps_it_and_creates_no_source(
 ) -> None:
     database = an_instance_that_was_set_up(tmp_path)
     sources = a_source_store(database)
-    minted = a_key_drafts_store(database).mint(_OWNER.id, at=_PUSHED_AT)
+    minted = a_key_drafts_store(database).mint(OWNER.id, at=PUSHED_AT)
     corrupted = b"not fernet ciphertext"
     with rows(database) as cursor:
         cursor.execute(
@@ -1031,12 +959,12 @@ def test_a_failed_draft_promotion_keeps_the_draft_and_creates_no_source(
     sources = a_source_store(database)
     assert sources.add(a_write()) is not None
     drafts = a_key_drafts_store(database)
-    minted = drafts.mint(_OWNER.id, at=_PUSHED_AT)
+    minted = drafts.mint(OWNER.id, at=PUSHED_AT)
 
     promoted = sources.add_from_draft(a_write(), draft_id=minted.id)
 
     assert promoted is None
-    assert drafts.bind(minted.id, owner_id=_OWNER.id) == minted
+    assert drafts.bind(minted.id, owner_id=OWNER.id) == minted
     assert len(sources.all()) == 1
 
 
@@ -1093,14 +1021,14 @@ def test_a_deck_whose_folder_vanished_is_gone_from_the_list_until_it_returns(
 
     store.mark_removed_except(
         present=frozenset({"knowledge-fabric"}),
-        source_id=_SOURCE_ID,
+        source_id=SOURCE_ID,
         at=_NOTICED_GONE_AT,
     )
     while_it_was_gone = store.all()
     store.put(a_deck("kundenfeedback", title="Kundenfeedback Q4"))
     store.mark_removed_except(
         present=frozenset({"knowledge-fabric", "kundenfeedback"}),
-        source_id=_SOURCE_ID,
+        source_id=SOURCE_ID,
         at=_NOTICED_GONE_AT,
     )
 
@@ -1117,7 +1045,7 @@ def test_a_removed_decks_own_page_is_unreachable_by_slug(tmp_path: Path) -> None
 
     store.mark_removed_except(
         present=frozenset(),
-        source_id=_SOURCE_ID,
+        source_id=SOURCE_ID,
         at=_NOTICED_GONE_AT,
     )
 
@@ -1134,7 +1062,7 @@ def test_a_slug_carrying_an_apostrophe_and_a_non_ascii_letter_survives_reconcili
 
     store.mark_removed_except(
         present=frozenset({kept_slug}),
-        source_id=_SOURCE_ID,
+        source_id=SOURCE_ID,
         at=_NOTICED_GONE_AT,
     )
 
@@ -1240,7 +1168,7 @@ def test_a_removed_slug_stays_with_its_source_and_is_the_deck_it_was(
     store.put(a_deck(title="The first"))
     store.mark_removed_except(
         present=frozenset(),
-        source_id=_SOURCE_ID,
+        source_id=SOURCE_ID,
         at=_NOTICED_GONE_AT,
     )
 
@@ -1250,7 +1178,7 @@ def test_a_removed_slug_stays_with_its_source_and_is_the_deck_it_was(
     store.put(a_deck(title="The first"))
     store.mark_removed_except(
         present=frozenset({"kundenfeedback"}),
-        source_id=_SOURCE_ID,
+        source_id=SOURCE_ID,
         at=_NOTICED_GONE_AT,
     )
 
@@ -1268,7 +1196,7 @@ def test_one_sources_reconciliation_leaves_another_sources_decks_alone(
 
     store.mark_removed_except(
         present=frozenset(),
-        source_id=_SOURCE_ID,
+        source_id=SOURCE_ID,
         at=_NOTICED_GONE_AT,
     )
 
@@ -1284,19 +1212,19 @@ def test_removing_a_sources_decks_takes_every_row_marked_removed_or_not(
     store.put(a_deck("agenten-fabrik", source_id=_ANOTHER_SOURCE_ID))
     store.mark_removed_except(
         present=frozenset({"kundenfeedback"}),
-        source_id=_SOURCE_ID,
+        source_id=SOURCE_ID,
         at=_NOTICED_GONE_AT,
     )
 
-    carried = store.for_source(_SOURCE_ID)
-    store.remove_for_source(_SOURCE_ID)
+    carried = store.for_source(SOURCE_ID)
+    store.remove_for_source(SOURCE_ID)
 
     assert {deck.slug for deck in carried} == {"kundenfeedback", "knowledge-fabric"}
     assert store.all() == (a_deck("agenten-fabrik", source_id=_ANOTHER_SOURCE_ID),)
     with rows(tmp_path / "presentator.sqlite3") as cursor:
         left = cursor.execute(
             "SELECT COUNT(*) FROM decks WHERE source_id = ?",
-            (_SOURCE_ID,),
+            (SOURCE_ID,),
         ).fetchone()
     assert left == (0,)
 
@@ -1304,25 +1232,25 @@ def test_removing_a_sources_decks_takes_every_row_marked_removed_or_not(
 def test_a_source_with_no_run_yet_reads_as_nothing(tmp_path: Path) -> None:
     store = a_source_run_store(tmp_path)
 
-    assert store.newest(_SOURCE_ID) is None
+    assert store.newest(SOURCE_ID) is None
 
 
 def test_a_recorded_run_is_read_back_carrying_its_commit(tmp_path: Path) -> None:
     store = a_source_run_store(tmp_path)
-    run = a_successful_run(at=_PUSHED_AT)
+    run = a_successful_run(at=PUSHED_AT)
 
     store.record(run)
 
-    assert store.newest(_SOURCE_ID) == run
+    assert store.newest(SOURCE_ID) == run
 
 
 def test_a_recorded_failure_is_read_back_naming_why(tmp_path: Path) -> None:
     store = a_source_run_store(tmp_path)
-    run = a_failed_run(at=_PUSHED_AT)
+    run = a_failed_run(at=PUSHED_AT)
 
     store.record(run)
 
-    read = store.newest(_SOURCE_ID)
+    read = store.newest(SOURCE_ID)
     assert read == run
     assert read is not None
     assert read.commit is None
@@ -1333,17 +1261,17 @@ def test_the_newest_run_of_a_source_belongs_to_that_source_alone(
     tmp_path: Path,
 ) -> None:
     store = a_source_run_store(tmp_path)
-    store.record(a_successful_run(at=_PUSHED_AT))
+    store.record(a_successful_run(at=PUSHED_AT))
     store.record(a_failed_run(at=_NOTICED_GONE_AT))
-    store.record(a_successful_run(source_id=_ANOTHER_SOURCE_ID, at=_PUSHED_AT))
+    store.record(a_successful_run(source_id=_ANOTHER_SOURCE_ID, at=PUSHED_AT))
 
-    newest_of_first = store.newest(_SOURCE_ID)
+    newest_of_first = store.newest(SOURCE_ID)
     newest_of_second = store.newest(_ANOTHER_SOURCE_ID)
 
     assert newest_of_first == a_failed_run(at=_NOTICED_GONE_AT)
     assert newest_of_second == a_successful_run(
         source_id=_ANOTHER_SOURCE_ID,
-        at=_PUSHED_AT,
+        at=PUSHED_AT,
     )
 
 
@@ -1351,18 +1279,18 @@ def test_recording_a_run_keeps_only_the_newest_bound(tmp_path: Path) -> None:
     store = a_source_run_store(tmp_path)
     for index in range(RECENT_SOURCE_RUNS + 2):
         store.record(
-            a_successful_run(at=_PUSHED_AT + timedelta(minutes=index)),
+            a_successful_run(at=PUSHED_AT + timedelta(minutes=index)),
         )
 
-    recent = store.recent(_SOURCE_ID)
+    recent = store.recent(SOURCE_ID)
     with rows(tmp_path / "presentator.sqlite3") as cursor:
         kept = cursor.execute(
             "SELECT COUNT(*) FROM source_runs WHERE source_id = ?",
-            (_SOURCE_ID,),
+            (SOURCE_ID,),
         ).fetchone()
 
     assert len(recent) == RECENT_SOURCE_RUNS
-    assert recent[0].at == _PUSHED_AT + timedelta(minutes=RECENT_SOURCE_RUNS + 1)
+    assert recent[0].at == PUSHED_AT + timedelta(minutes=RECENT_SOURCE_RUNS + 1)
     assert kept == (RECENT_SOURCE_RUNS,)
 
 
@@ -1370,12 +1298,12 @@ def test_removing_a_sources_runs_deletes_every_one_it_recorded(
     tmp_path: Path,
 ) -> None:
     store = a_source_run_store(tmp_path)
-    store.record(a_successful_run(at=_PUSHED_AT))
-    store.record(a_successful_run(source_id=_ANOTHER_SOURCE_ID, at=_PUSHED_AT))
+    store.record(a_successful_run(at=PUSHED_AT))
+    store.record(a_successful_run(source_id=_ANOTHER_SOURCE_ID, at=PUSHED_AT))
 
-    store.remove_for_source(_SOURCE_ID)
+    store.remove_for_source(SOURCE_ID)
 
-    assert store.recent(_SOURCE_ID) == ()
+    assert store.recent(SOURCE_ID) == ()
     assert store.recent(_ANOTHER_SOURCE_ID) != ()
 
 
@@ -1414,7 +1342,7 @@ def test_replacing_the_webhook_hash_leaves_the_previous_digest_behind(
     tmp_path: Path,
 ) -> None:
     database = an_instance_that_was_set_up(tmp_path)
-    stored = add_a_source(database, a_write(name=_SOURCE_NAME, url=_ADDRESS))
+    stored = add_a_source(database, a_write(name=SOURCE_NAME, url=_ADDRESS))
     sources = a_source_store(database)
     replacement = b"\x22" * 32
 

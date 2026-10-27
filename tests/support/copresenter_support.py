@@ -31,13 +31,13 @@ from tests.presentator.adapters.support.agent_service_support import (
     run_started,
     whole,
 )
-from tests.presentator.api.test_deck_page import a_build, a_deck_store
 from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeSourceStore,
     FakeUserStore,
     FrozenClock,
 )
+from tests.support.deck_page_support import a_build, a_deck_store
 from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     A_TALK_ADDRESS,

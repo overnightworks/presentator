@@ -11,15 +11,22 @@ from urllib.parse import quote
 import pytest
 from fastapi.testclient import TestClient
 
-from presentator.contracts.decks import Build, BuildAttempt, BuildOutcome, Deck
+from presentator.contracts.decks import Build, BuildAttempt, BuildOutcome
 from presentator.contracts.text import Catalogs
-from tests.presentator.application.support.fakes import FakeDeckStore
+from tests.support.deck_page_support import (
+    COMMIT,
+    SLUG,
+    TITLE,
+    a_build,
+    a_deck_store,
+    a_talk_host,
+)
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
-    ADMIN,
     BUILT_TALK,
     ENGLISH,
+    EXPORTED_PDF,
     NOW,
     SOURCE_ID,
     GivenDecks,
@@ -30,20 +37,14 @@ from tests.support.lobby import (
 )
 from tests.support.talk_support import ONLY_THIS_TEST_WROTE_IT, two_hosts
 
-_SLUG: Final = "hello-deck"
-_TITLE: Final = "Hello Co-Presenter"
-_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _SHORT_COMMIT: Final = "a3f19c2"
 _ADDRESS: Final = "git@heimserver:decks.git"
-# What `slidev build` of `examples/hello-deck` writes, `--base /deck/hello-deck/`.
-_EXPORTED_PDF: Final = Path(__file__).parent / "fixtures" / "exported_deck.pdf"
-_PAGE: Final = f"/deck/{_SLUG}"
-_PROJECTOR: Final = f"/deck/{_SLUG}/"
-_PRESENTER: Final = f"/deck/{_SLUG}/presenter/"
-_PDF: Final = f"/deck/{_SLUG}/pdf"
+_PAGE: Final = f"/deck/{SLUG}"
+_PROJECTOR: Final = f"/deck/{SLUG}/"
+_PRESENTER: Final = f"/deck/{SLUG}/presenter/"
+_PDF: Final = f"/deck/{SLUG}/pdf"
 _PDF_TYPE: Final = "application/pdf"
-_SAVED_AS: Final = f'attachment; filename="{_SLUG}.pdf"'
-_BUILT_AGO: Final = timedelta(minutes=12)
+_SAVED_AS: Final = f'attachment; filename="{SLUG}.pdf"'
 _HOW_LONG_AGO: Final = "12 minutes ago"
 _ATTEMPT_COMMIT: Final = "e91c5ad4f3b2a1908877665544332211aabbccdd"
 _SHORT_ATTEMPT_COMMIT: Final = "e91c5ad"
@@ -54,11 +55,6 @@ _HOW_LONG_IT_HAS_RUN: Final = "40 seconds"
 _WHAT_THE_TOOLCHAIN_SAID: Final = "slides.md:41:3 Unexpected token in frontmatter"
 _A_DECK_THAT_WRITES_MARKUP: Final = "<script>alert('slides')</script>"
 _THEMES: Final = ("apple-basic", "bricks", "default", "seriph", "shibainu")
-
-
-def a_build(*, talk: Path = BUILT_TALK, pdf: Path = _EXPORTED_PDF) -> Build:
-    """A build that switched over a while ago, as the picture's board shows it."""
-    return Build(directory=talk, pdf=pdf, commit=_COMMIT, built_at=NOW - _BUILT_AGO)
 
 
 def a_running_attempt() -> BuildAttempt:
@@ -81,33 +77,6 @@ def a_failed_attempt(*, said: str | None = _WHAT_THE_TOOLCHAIN_SAID) -> BuildAtt
     )
 
 
-def a_deck_store(
-    *,
-    slug: str = _SLUG,
-    built: Build | None = None,
-    attempt: BuildAttempt | None = None,
-    owner: str = ADMIN,
-) -> FakeDeckStore:
-    store = FakeDeckStore()
-    store.put(
-        Deck(
-            slug=slug,
-            title=_TITLE,
-            changed_at=NOW,
-            owner_id=owner,
-            source_id=SOURCE_ID,
-            commit=_COMMIT,
-            build=None,
-            attempt=None,
-        ),
-    )
-    if built is not None:
-        store.put_build(slug, built)
-    if attempt is not None:
-        store.put_attempt(slug, attempt)
-    return store
-
-
 def a_page_of_a_deck(
     *,
     built: Build | None = None,
@@ -121,11 +90,6 @@ def a_page_of_a_deck(
         ),
     )
     return signed_in.get(_PAGE).text
-
-
-def a_talk_host(tmp_path: Path, given: GivenDecks) -> TestClient:
-    """A browser signed in at the talk host of an instance with these decks."""
-    return two_hosts(tmp_path, given=given).signed_in_at(A_TALK_ADDRESS)
 
 
 @pytest.fixture
@@ -176,11 +140,11 @@ def test_the_deck_page_names_the_title_the_source_and_the_commit_it_was_taken_fr
     page = lobby.get(_PAGE)
 
     assert page.status_code == HTTPStatus.OK
-    assert _TITLE in page.text
-    assert _SLUG in page.text
+    assert TITLE in page.text
+    assert SLUG in page.text
     assert _ADDRESS in page.text
     assert _SHORT_COMMIT in page.text
-    assert _COMMIT not in page.text
+    assert COMMIT not in page.text
 
 
 # C13.
@@ -242,7 +206,7 @@ def test_the_download_hands_the_file_the_deck_names_over_to_be_saved(
     assert download.status_code == HTTPStatus.OK
     assert download.headers["content-type"] == _PDF_TYPE
     assert download.headers["content-disposition"] == _SAVED_AS
-    assert download.content == _EXPORTED_PDF.read_bytes()
+    assert download.content == EXPORTED_PDF.read_bytes()
 
 
 def test_the_deck_page_names_the_themes_this_instance_builds_with() -> None:
@@ -491,7 +455,7 @@ def test_a_deck_address_answers_the_login_to_anyone_who_is_not_signed_in(
 
     assert refused.status_code == HTTPStatus.FOUND
     assert refused.headers["location"] == login_redirect
-    assert _TITLE not in refused.text
+    assert TITLE not in refused.text
 
 
 def a_secret_a_link_may_point_at(tmp_path: Path) -> Path:
@@ -520,7 +484,7 @@ def test_a_link_laid_after_the_build_was_adopted_delivers_no_byte_of_its_target(
     host: str,
     address: str,
 ) -> None:
-    given, run = a_swapped_build(tmp_path, slug=_SLUG)
+    given, run = a_swapped_build(tmp_path, slug=SLUG)
     signed_in = two_hosts(tmp_path, given=given).signed_in_at(host)
     secret = a_secret_a_link_may_point_at(tmp_path)
     target = run / replaced
@@ -543,7 +507,7 @@ def test_a_link_laid_after_the_build_was_adopted_delivers_no_byte_of_its_target(
 def test_a_pdf_replaced_by_a_link_answers_as_if_it_were_missing(
     tmp_path: Path,
 ) -> None:
-    given, run = a_swapped_build(tmp_path, slug=_SLUG)
+    given, run = a_swapped_build(tmp_path, slug=SLUG)
     signed_in = two_hosts(tmp_path, given=given).signed_in_at(A_BROWSERS_ADDRESS)
     (run / "deck.pdf").unlink()
     (run / "deck.pdf").symlink_to(a_secret_a_link_may_point_at(tmp_path) / "deck.pdf")
@@ -595,7 +559,7 @@ def test_a_deck_removed_by_reconciliation_answers_the_lobbys_not_found(
     removed = signed_in.get(_PAGE)
     removed_talk = talk_host.get(_PRESENTER)
 
-    store.mark_removed_except(present=frozenset({_SLUG}), source_id=SOURCE_ID, at=NOW)
+    store.mark_removed_except(present=frozenset({SLUG}), source_id=SOURCE_ID, at=NOW)
     returned = signed_in.get(_PAGE)
 
     assert removed.status_code == HTTPStatus.NOT_FOUND

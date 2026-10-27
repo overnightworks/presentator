@@ -10,7 +10,7 @@
 "src/presentator/application/decks.py" = 974
 "tests/gitmirror/test_mirror.py" = 1229
 "tests/presentator/adapters/test_builds.py" = 1183
-"tests/presentator/adapters/test_decks.py" = 1424
+"tests/presentator/adapters/test_decks.py" = 1352
 "tests/presentator/api/test_copresenter.py" = 800
 "tests/presentator/api/test_sources.py" = 1687
 "tests/presentator/application/test_decks.py" = 1973
