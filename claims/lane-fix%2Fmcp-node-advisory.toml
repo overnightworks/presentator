@@ -1,7 +1,0 @@
-claim_id = "e027e311a805471ca53d87f4dde68bf1"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "49f790117196a1da5348af4f6d8c69a838e2dfad"
-branch = "fix/mcp-node-advisory"
-scope = ["frontend/package.json", "frontend/pnpm-lock.yaml"]
-opened_commit = "ca4efb111126582a67d748b8e3bd05158ffa5766"
