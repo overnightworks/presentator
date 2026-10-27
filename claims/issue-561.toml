@@ -1,0 +1,8 @@
+claim_id = "b834beca8d1e499ba2bd50e96c460127"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "6e798fd0a74d3db1453db5a3ff9bf90ae26b9e71"
+branch = "claude/issue-561-worker-chain-support"
+scope = ["tests/presentator/adapters/test_worker_exit_descriptor.py", "tests/presentator/host/support/controller_life.py", "tests/presentator/host/support/sealed_snapshot.py", "tests/presentator/host/support/worker_life.py", "tests/presentator/host/test_worker.py", "tests/presentator/host/test_worker_entries_chain.py", "tests/presentator/host/test_worker_record_chain.py", "tests/presentator/host/test_worker_reply_chain.py", "tests/presentator/host/test_worker_serving_loop.py", "tests/presentator/host/test_worker_side_chain.py", "tests/presentator/host/test_worker_step_chain.py", "tests/presentator/host/test_worker_upload_chain.py", "tests/support/worker_chain.py"]
+opened_commit = "f20f204ee0162c97ad7dad261053230579e3927c"
+whole_reason = "The moved helpers and the eight importers change together: a half-moved tree has imports of names a test module no longer holds, and the gate is red."
