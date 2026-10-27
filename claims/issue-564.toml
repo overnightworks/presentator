@@ -1,8 +1,0 @@
-claim_id = "499614f0f3f44a2ea911fa401e79d3fb"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "1b7d27194f686711682c8331e7439507a9d054cc"
-branch = "claude/issue-564-helpers-leave-test-modules"
-scope = ["quality/baseline.toml", "tests/presentator/adapters/support/worker_children_support.py", "tests/presentator/adapters/test_worker_children.py", "tests/presentator/adapters/test_worker_exit_descriptor.py", "tests/presentator/adapters/test_worker_surroundings.py", "tests/presentator/api/support/removal_support.py", "tests/presentator/api/test_deck_owner.py", "tests/presentator/api/test_logout.py", "tests/presentator/api/test_sign_in_callback.py", "tests/presentator/api/test_sources.py", "tests/presentator/application/support/decks_support.py", "tests/presentator/application/support/person_instance_support.py", "tests/presentator/application/test_build_retention.py", "tests/presentator/application/test_deck_owner.py", "tests/presentator/application/test_decks.py", "tests/presentator/application/test_person_erasure.py", "tests/support/sign_in_support.py"]
-opened_commit = "4eea924db3904112d2f7e133592ddda201b54871"
-whole_reason = "The moved helpers and their eight importers change together, and the two lowered baseline numbers must match the files: a half-moved tree has imports of names a test module no longer holds, and a stale baseline entry turns the gate red."
