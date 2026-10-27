@@ -6,10 +6,10 @@ after `hal setup --apply` and before edge enables presentator's catalog entry
 containers, volumes and image, folders), refuses before any change when the
 host or the checkout is not what the list assumes, stops at the first failed
 step and resumes on the next run; a second run reports every target as
-"already gone". It prints one line per target (a surviving
-`presentator-adoption-*` image is named, as ruled) and no other value that
-Docker, systemd or git produced, and reads no `.env`. The operator's rulings on #508
-lines 1, 2, 3 and 6 are the contract; #508 S9m deletes this file.
+"already gone". It prints one line per target (surviving
+`presentator-adoption-*` images are only counted, as ruled) and no value that
+Docker, systemd or git produced, and reads no `.env`. The operator's rulings on
+#508 lines 1, 2, 3 and 6 are the contract; #508 S9m deletes this file.
 """
 
 import enum
@@ -336,9 +336,13 @@ class Retirement:
         if present:
             self._docker("image", "rm", image.name)
         self._report(image, was_present=present)
-        for reference in references:
-            if reference.startswith(ADOPTION_IMAGE_PREFIX) and reference != image.name:
-                self.say(f"left: {reference}")
+        others = [
+            reference
+            for reference in references
+            if reference.startswith(ADOPTION_IMAGE_PREFIX) and reference != image.name
+        ]
+        if others:
+            self.say(f"left: {len(others)} other {ADOPTION_IMAGE_PREFIX[:-1]} image(s)")
 
     def _project_containers(self) -> list[str]:
         return self._lines_or_fail(PROJECT_CONTAINERS)

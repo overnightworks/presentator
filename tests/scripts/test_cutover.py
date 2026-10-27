@@ -264,7 +264,8 @@ def test_a_run_removes_exactly_the_list_and_keeps_every_survivor(
     assert host.networks == ["presentator_default"]
     assert host.volumes == list(KEPT_VOLUMES)
     assert host.images == ["presentator-adoption-other:x", "presentator:v1"]
-    assert "left: presentator-adoption-other:x" in result.lines
+    assert "left: 1 other presentator-adoption image(s)" in result.lines
+    assert "presentator-adoption-other" not in "\n".join(result.lines)
     assert result.lines.count("removed: presentator-live") == 1
 
 
