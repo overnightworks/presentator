@@ -1,0 +1,8 @@
+claim_id = "e9434fc933834bb396515922eb5df51e"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "b0acfe74a99ed5b6d2586cc2406b799d65832647"
+branch = "fix/msgpack-advisory"
+scope = ["speech/providers/chatterbox/uv.lock", "speech/providers/magpie/uv.lock", "speech/providers/qwen/uv.lock", "speech/providers/voxcpm/uv.lock"]
+opened_commit = "be6960cb7fbf2e915af0b351d6eac5d794a8777f"
+whole_reason = "One advisory: the four provider lockfiles pin the same vulnerable msgpack and turn main's hygiene gate red together."
