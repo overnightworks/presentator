@@ -1,10 +1,9 @@
 """A7b3a (#462), #243 cells 12-16: crafted uploads are refused at their defect."""
 
-import importlib
 import os
 import socket
-import sys
 import threading
+from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
 from types import ModuleType
@@ -14,16 +13,14 @@ import pytest
 from presentator.adapters.build_wire import WireRefusedError, receive_entries
 from presentator.host.worker_serving import LifeEnd
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 SENTINEL = b"sentinel"
 MEGABYTES = 1
 WRITER_JOIN_SECONDS = 10
 
 
 @pytest.fixture
-def uploads(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
-    monkeypatch.setattr(sys, "path", [str(SCRIPTS), *sys.path])
-    return importlib.import_module("probe_build_worker_uploads")
+def uploads(load_script: Callable[..., ModuleType]) -> ModuleType:
+    return load_script("probe_build_worker_uploads")
 
 
 def receive(sent: bytes, deck: Path) -> bytes | None:

@@ -119,7 +119,7 @@ convention = "google"
 # never renders one, so autoescape has no effect on its behaviour.
 "scripts/check_catalog_purity.py" = ["INP001", "S701"]
 # Drives the check script as a subprocess against temporary and real templates.
-"tests/scripts/test_catalog_purity.py" = ["S404", "S603"]
+"tests/scripts/test_check_catalog_purity.py" = ["S404", "S603"]
 # `vulture` reads a whitelist as bare attribute expressions; naming a field
 # there is the entry, and assigning it would only move the dead name.
 "tests/support/vulture_allowlist.py" = ["B018"]

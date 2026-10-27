@@ -1,21 +1,17 @@
 """The root watcher measures watch ends at the boundary and at the stdin close."""
 
 import ctypes
-import importlib
 import os
-import sys
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
-
 
 @pytest.fixture
-def watcher(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
-    monkeypatch.setattr(sys, "path", [str(SCRIPTS / "probe_build_worker"), *sys.path])
-    return importlib.import_module("upload_watcher")
+def watcher(load_script: Callable[..., ModuleType]) -> ModuleType:
+    return load_script("upload_watcher", "probe_build_worker")
 
 
 def test_a_watch_that_ends_after_the_boundary_is_read_until_the_stdin_close(
