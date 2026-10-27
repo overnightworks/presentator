@@ -1,0 +1,8 @@
+claim_id = "1ccacaf927ff46bc92e8fad452aa1a74"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "f418da181c7f68d2a7984263a53ff18f96d78227"
+branch = "claude/issue-537-copresenter-group-gate"
+scope = ["docs/reference/co-presenter-and-voice.md", "docs/reference/decks.md", "src/presentator/agents/copresenter.md", "src/presentator/api/auth.py", "src/presentator/api/copresenter.py", "tests/adapters/test_agent_service.py", "tests/api/test_copresenter.py", "tests/api/test_copresenter_answer.py", "tests/api/test_copresenter_deck.py", "tests/api/test_copresenter_limits.py", "tests/api/test_copresenter_talk_host.py"]
+opened_commit = "b534585e19e99c09665c9d539182a617ccb4329e"
+whole_reason = "One access rule: the gate in the routes, the agent file's roles, the tests that pin admin-only and the reference sentences change together, or the service still refuses what the routes admit and the docs describe a gate that is gone."
