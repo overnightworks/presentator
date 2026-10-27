@@ -134,12 +134,7 @@ class Host:
     def run_docker(self, rest: tuple[str, ...]) -> object:
         match rest:
             case ("ps", *_):
-                label = rest[rest.index("--filter") + 1]
-                project = label.removeprefix("label=com.docker.compose.project=")
-                matching = [
-                    id for id, owner in self.containers.items() if owner == project
-                ]
-                return outcome(0, "\n".join(matching))
+                return self.run_ps(rest)
             case ("stop", _):
                 return outcome(0, "")
             case ("rm", container):
@@ -160,6 +155,12 @@ class Host:
             case _:
                 pass
         return outcome(0, "")
+
+    def run_ps(self, rest: tuple[str, ...]) -> object:
+        label = rest[rest.index("--filter") + 1]
+        project = label.removeprefix("label=com.docker.compose.project=")
+        matching = [name for name, owner in self.containers.items() if owner == project]
+        return outcome(0, "\n".join(matching))
 
     def remove(self, names: list[str], name: str) -> None:
         if name not in self.lingering:
