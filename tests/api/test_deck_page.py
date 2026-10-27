@@ -36,7 +36,7 @@ _COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _SHORT_COMMIT: Final = "a3f19c2"
 _ADDRESS: Final = "git@heimserver:decks.git"
 # What `slidev build` of `examples/hello-deck` writes, `--base /deck/hello-deck/`.
-_EXPORTED_PDF: Final = Path(__file__).parent / "exported_deck.pdf"
+_EXPORTED_PDF: Final = Path(__file__).parent / "fixtures" / "exported_deck.pdf"
 _PAGE: Final = f"/deck/{_SLUG}"
 _PROJECTOR: Final = f"/deck/{_SLUG}/"
 _PRESENTER: Final = f"/deck/{_SLUG}/presenter/"
