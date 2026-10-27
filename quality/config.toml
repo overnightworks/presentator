@@ -52,7 +52,7 @@ reason = "its subject is the addon package as Slidev resolves it, which no front
 [[layout.allow]]
 path = "frontend/tests/copresenter-refusals.browser.test.ts"
 rule = "test-layout"
-reason = "it drives the running host in a browser; its subject lies outside the frontend project"
+reason = "it exercises the example deck's overlay in a browser, outside the frontend project"
 
 [[layout.allow]]
 path = "frontend/tests/lobby-static-scripts.test.ts"
@@ -62,7 +62,7 @@ reason = "its subject is the lobby scripts under src/presentator/api/static, out
 [[layout.allow]]
 path = "frontend/tests/presenter-controls.browser.test.ts"
 rule = "test-layout"
-reason = "it drives the running host in a browser; its subject lies outside the frontend project"
+reason = "it exercises the example deck's overlay in a browser, outside the frontend project"
 
 [[layout.allow]]
 path = "tests/test_compose.py"
