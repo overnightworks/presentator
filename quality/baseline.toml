@@ -4,7 +4,6 @@
 "Runtime._activate_voice" = 18
 
 [file_lines]
-"speech/tests/test_provider_process.py" = 872
 "speech/tests/test_voice_status.py" = 1473
 "src/presentator/adapters/decks.py" = 876
 "src/presentator/application/decks.py" = 974

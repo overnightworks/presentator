@@ -26,7 +26,7 @@ from presentator_speech.provider_process import ProviderLaunch, ProviderProcess
 from presentator_speech.selection import VoiceSelectionStore
 from presentator_speech.service import Runtime, RuntimeDependencies
 from presentator_speech.voices import VoiceId
-from tests.conftest import FakeHearing, FakeSpeaking
+from tests.support.fakes_support import FakeHearing, FakeSpeaking
 
 
 class _BlockedSpeaking(FakeSpeaking):
@@ -153,7 +153,7 @@ class _HealthServer:
         self._app: object | None = None
         self._started = started
         self._release = release
-        self._observed = observed
+        self.observed = observed
         self.should_exit = False
 
     def use(self, app: object) -> None:
@@ -163,7 +163,7 @@ class _HealthServer:
         del sockets
         assert await asyncio.to_thread(self._started.wait, 5)
         assert self._app is not None
-        self._observed.update(TestClient(self._app).get("/health").json())
+        self.observed.update(TestClient(self._app).get("/health").json())
         self._release.set()
 
 
