@@ -33,6 +33,7 @@ UNIT_DIRECTORY = ".config/systemd/user"
 UNITS = ("presentator-speech.service", "presentator-copresenter.service")
 REMAINS = "remains"
 STOPPED_UNIT_STATES = frozenset({"inactive", "failed"})
+DISABLED_UNIT_FILE_STATE = "disabled"
 RETIRED_UNIT_STATE = {"LoadState": "not-found", "ActiveState": "inactive"}
 PROJECT_CONTAINERS = ("docker", "ps", "--all", "--quiet", "--filter", PROJECT_LABEL)
 
@@ -265,6 +266,8 @@ class Retirement:
                     raise StepFailedError(
                         unit, "stays active", f"stop exit {stopped.code}"
                     )
+                if self._unit_file_state(unit) != DISABLED_UNIT_FILE_STATE:
+                    raise StepFailedError(unit, "stays enabled")
         for target in self._targets(Step.UNITS, Kind.FILE):
             self._remove_path(target)
         for target in self._targets(Step.UNITS, Kind.DIRECTORY):
@@ -280,6 +283,12 @@ class Retirement:
         # The exit code is not the answer: on this host stop, disable and
         # reset-failed of an unknown unit exit non-zero. The unit's state is.
         return self.run(("systemctl", "--user", *arguments))
+
+    def _unit_file_state(self, unit: str) -> str:
+        shown = self.run(
+            ("systemctl", "--user", "show", "-p", "UnitFileState", "--value", unit)
+        )
+        return shown.text.strip()
 
     def _unit_state(self, unit: str) -> dict[str, str]:
         shown = self.run(

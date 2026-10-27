@@ -73,6 +73,8 @@ class Host:
         default_factory=list[tuple[str, str]]
     )
     lingering: set[str] = field(default_factory=set[str])
+    enabled_units: set[str] = field(default_factory=lambda: set(UNITS))
+    stuck_enabled: set[str] = field(default_factory=set[str])
     checkout_on_tag: bool = True
     checkout_status: str = ""
     live_remotes: str = "origin"
@@ -154,6 +156,9 @@ class Host:
         assert rest[0] == "--user"
         verb, unit = rest[1], rest[-1]
         known = (self.home / UNIT_DIRECTORY / unit).exists()
+        if verb == "show" and "UnitFileState" in rest:
+            enabled = unit in self.enabled_units
+            return outcome(0, "enabled\n" if enabled else "disabled\n")
         if verb == "show":
             load = "loaded" if known else "not-found"
             active = "inactive"
@@ -164,6 +169,8 @@ class Host:
             return outcome(0, f"LoadState={load}\nActiveState={active}\n")
         if verb == "stop":
             self.active_units.discard(unit)
+        if verb == "disable" and unit not in self.stuck_enabled:
+            self.enabled_units.discard(unit)
         if verb in {"stop", "disable"}:
             self.stopped_or_disabled.append((verb, unit))
         if verb == "reset-failed" and unit in self.failed_units:
@@ -492,9 +499,26 @@ def test_a_failed_step_names_the_step_stops_and_the_next_run_resumes(
     assert present(home, LISTED_PATHS) == []
 
 
-@pytest.mark.parametrize(
-    "failing", ["systemctl --user disable", "systemctl --user daemon-reload"]
-)
+def test_a_unit_that_stays_enabled_fails_the_step_and_a_resume_completes(
+    execute: Callable[..., Run], host: Host, home: Path
+) -> None:
+    """S9h1 (#542) sentence 2: a unit still enabled keeps its file and link."""
+    host.stuck_enabled.add(UNITS[0])
+
+    failed = execute()
+
+    assert failed.code == 1
+    assert failed.lines[-1] == f"{UNIT_STEP}: {UNITS[0]} stays enabled"
+    assert (home / UNIT_DIRECTORY / UNITS[0]).exists()
+
+    host.stuck_enabled.clear()
+    resumed = execute()
+
+    assert resumed.code == 0
+    assert present(home, LISTED_PATHS) == []
+
+
+@pytest.mark.parametrize("failing", ["systemctl --user daemon-reload"])
 def test_a_systemctl_call_that_exits_non_zero_but_reaches_its_state_is_no_failure(
     execute: Callable[..., Run], host: Host, home: Path, failing: str
 ) -> None:
