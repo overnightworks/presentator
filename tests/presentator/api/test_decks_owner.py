@@ -23,6 +23,7 @@ from tests.support.lobby import (
     AN_ASSET,
     BUILT_TALK,
     ENGLISH,
+    EXPORTED_PDF,
     NEIGHBOUR,
     NOW,
     SOURCE_ID,
@@ -32,7 +33,6 @@ from tests.support.lobby import (
 )
 from tests.support.talk_support import cookies_without_values, two_hosts
 
-_PDF: Final = Path(__file__).parent / "fixtures" / "exported_deck.pdf"
 _COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _B: Final = f"id-of-{NEIGHBOUR}"
 _A_SOURCE_URL: Final = "git@heimserver:decks.git"
@@ -49,7 +49,9 @@ def _b_source() -> Source:
     )
 
 
-def _store_of_built_decks(talk: Path = BUILT_TALK, pdf: Path = _PDF) -> FakeDeckStore:
+def _store_of_built_decks(
+    talk: Path = BUILT_TALK, pdf: Path = EXPORTED_PDF
+) -> FakeDeckStore:
     store = FakeDeckStore()
     for slug, owner, source_id in (
         ("a-deck", ADMIN, SOURCE_ID),
@@ -95,7 +97,7 @@ def _two_admins(tmp_path: Path, *, stuck_mirror: bool = False) -> _TwoAdmins:
     foreign = _b_source()
     run = tmp_path / "builds" / "run" / "out"
     shutil.copytree(BUILT_TALK, run / "talk")
-    shutil.copyfile(_PDF, run / "deck.pdf")
+    shutil.copyfile(EXPORTED_PDF, run / "deck.pdf")
     hosts = two_hosts(
         tmp_path,
         given=GivenDecks(
