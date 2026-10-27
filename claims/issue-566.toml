@@ -1,8 +1,0 @@
-claim_id = "6af67ef102ec4b08bbce09ea6ea2f655"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "1b7d27194f686711682c8331e7439507a9d054cc"
-branch = "claude/issue-566-deck-builders-support"
-scope = ["quality/baseline.toml", "tests/presentator/adapters/test_deck_texts.py", "tests/presentator/adapters/test_decks.py", "tests/presentator/api/test_copresenter_answer.py", "tests/presentator/api/test_deck_files.py", "tests/presentator/api/test_deck_page.py", "tests/support/copresenter_support.py", "tests/support/deck_page_support.py", "tests/support/deck_source_support.py", "tests/support/lobby.py"]
-opened_commit = "b3457b10e25b1843bf5708dc217d8d32a44fa885"
-whole_reason = "The moved builders and their four importers change together, and the lowered baseline number must match the file: a half-moved tree has imports of names a test module no longer holds, and a stale baseline entry turns the gate red."
