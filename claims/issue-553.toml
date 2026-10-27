@@ -1,0 +1,8 @@
+claim_id = "2dec77ed54184eddb9054103756f5fc8"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "b0acfe74a99ed5b6d2586cc2406b799d65832647"
+branch = "claude/issue-553-cutover-probes"
+scope = ["scripts/cutover.py", "tests/scripts/conftest.py", "tests/scripts/support/cutover_host.py", "tests/scripts/test_cutover.py", "tests/scripts/test_cutover_probes.py"]
+opened_commit = "941b65a1f4c6299b3337454fe742a3c6bc67e90e"
+whole_reason = "The probe run, the fake it shares with the retire's tests, and its tests land together; the fake moves out of test_cutover.py because that file sits at 752 of the 800-line ratchet."
