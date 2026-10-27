@@ -1,4 +1,4 @@
-"""The fixtures every layer shares: a git remote and the instance environment."""
+"""The fixtures every layer shares."""
 
 import os
 import socket
