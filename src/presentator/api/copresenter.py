@@ -497,15 +497,19 @@ async def _finish_tasks(tasks: Iterable[asyncio.Task[object]]) -> None:
 
 def _sse(event: AnswerEvent) -> bytes:
     if isinstance(event, AnswerText):
-        return _encoded_sse("text", {"text": event.text})
+        return _generated_sse("text", {"text": event.text})
     if isinstance(event, Sentence):
-        return _encoded_sse("sentence", {"text": event.text})
+        return _generated_sse("sentence", {"text": event.text})
     if isinstance(event, Audio):
-        return _encoded_sse(
+        return _generated_sse(
             "audio",
             {"text": event.text, "wav_b64": b64encode(event.wav).decode("ascii")},
         )
-    return _encoded_sse("done", {"text": event.text})
+    return _generated_sse("done", {"text": event.text})
+
+
+def _generated_sse(event: str, payload: dict[str, object]) -> bytes:
+    return _encoded_sse(event, {**payload, "ai_generated": True})
 
 
 def _error_sse(reason: str | None = None) -> bytes:
