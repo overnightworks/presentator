@@ -95,6 +95,25 @@ integrated. Their not-downloaded state depicts intended future behaviour, not
 a working download. No benchmark, percentage, size, or cost is shown for any
 candidate — none is measured yet.
 
+### Settings · Models (proposal · #467)
+
+Mirrors songmaker's frozen picture `docs/design/admin-models.html`, states (z)
+and (z′). The tab row of this group (General · Sources · Voice · Models) is the
+target; the other groups' tab rows stay as drawn. The reason words in the
+picker ("not set up in the service") are examples the agent service supplies.
+Proposal until the operator blesses it on #467; the overview sheet is
+re-rendered when #525 lands.
+
+| PNG | Caption | Lines |
+|---|---|---|
+| `m0-lobby/models.png` | Resting, 1024 px | MC3, MC4, MC8 |
+| `m0-lobby/models-picker.png` | Picker open, 1024 px | MC1, MC2 |
+| `m0-lobby/models-saving.png` | Saved and Not saved with Retry, 1024 px | MC1, MC10 |
+| `m0-lobby/models-checking.png` | Checking, 390 px | MC4 |
+| `m0-lobby/models-exceptions.png` | Not reachable, No longer offered, Not available for you, Sign in again, 1024 px | MC5, MC6, MC7 |
+| `m0-lobby/models-narrow.png` | Stacked card, picker open, 390 px | MC1, MC2 |
+| `m0-lobby/models-dark.png` | Resting, dark theme, 1024 px | MC4 |
+
 ### Account (lines 21, 22 · K13)
 
 | PNG | Caption | Lines |

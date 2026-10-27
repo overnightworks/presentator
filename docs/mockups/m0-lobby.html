@@ -49,7 +49,8 @@
     }
   }
 
-  :root[data-theme="dark"] {
+  :root[data-theme="dark"],
+  .frame[data-theme="dark"] {
     --canvas: #101317;
     --canvas-2: #171B21;
     --screen: #1C2128;
@@ -69,6 +70,8 @@
     --fail-soft: #35191A;
     --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -14px rgba(0, 0, 0, .8);
   }
+
+  .frame[data-theme="dark"] { color: var(--ink); }
 
   body {
     background: var(--canvas);
@@ -3833,6 +3836,403 @@
                     <h2>Playback failed</h2>
                     <p>The sample could not be generated. Play sample above tries again.</p>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+    </div>
+  </section>
+
+  <!-- ================= SETTINGS · MODELS ================= -->
+  <section class="group">
+    <div class="group-head">
+      <h2>Settings · Models</h2>
+      <span class="tag">Proposal · #467</span>
+      <span class="lines">MC1–MC10 · this group's tab row is the target</span>
+    </div>
+
+    <div class="boards">
+
+      <figure class="board">
+        <figcaption class="board-cap">
+          <div class="board-title">Models · resting <span class="w">1024 px</span></div>
+          <p class="board-note">One question: which model answers the co-presenter. One row, the co-presenter. Model sonnet is the proposed default while nobody has chosen (MC3). The light comes from the offer entry of the current model (MC4). Only an admin sees this tab (MC8).</p>
+        </figcaption>
+        <div class="frame" style="--w: 1024px">
+          <div class="route">presentator.local/settings/models</div>
+          <div class="app">
+            <div class="app-bar">
+              <div class="brand">
+                <div class="wordmark">Presen<span>tator</span></div>
+                <nav class="nav">
+                  <a class="nav-link" href="#decks"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-layout-grid"></use></svg> Decks</a>
+                  <a class="nav-link nav-link--now" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-settings"></use></svg> Settings</a>
+                </nav>
+              </div>
+            <div class="person">
+              <span class="person-btn" tabindex="0">
+                <span class="avatar">FH</span>
+                <span class="person-name">felix</span>
+                <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg>
+              </span>
+            </div>
+            </div>
+            <div class="body">
+              <div class="list-head">
+                <h1>Models</h1>
+              </div>
+              <nav class="tabs">
+                <a class="tab" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-sliders-horizontal"></use></svg> General</a>
+                <a class="tab" href="#sources"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-git-branch"></use></svg> Sources</a>
+                <a class="tab" href="#voice"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-mic"></use></svg> Voice</a>
+                <a class="tab tab--now" href="#models"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-monitor"></use></svg> Models</a>
+              </nav>
+
+              <div class="rows">
+                <div class="row row--head" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
+                <div class="row" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;">
+                  <span class="row-title">Co-presenter</span>
+                  <span style="font-size: 14.5px;">Claude</span>
+                  <span style="font-size: 14.5px;">Agent service</span>
+                  <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0;"><div class="select"><span>sonnet</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div></div>
+                  <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-start;"><span class="state" style="color: var(--ok); white-space: normal; align-items: flex-start;">✓ Ready</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure class="board">
+        <figcaption class="board-cap">
+          <div class="board-title">Models · picker open <span class="w">1024 px</span></div>
+          <p class="board-note">The list is the agent service's offer. Ready entries can be picked; the saved one carries "· saved". A closed entry is grey and cannot be picked, with the reason the service gives. The reason words here ("not set up in the service") are examples: the service supplies them, they are not blessed text (MC1, MC2).</p>
+        </figcaption>
+        <div class="frame" style="--w: 1024px">
+          <div class="route">presentator.local/settings/models</div>
+          <div class="app">
+            <div class="app-bar">
+              <div class="brand">
+                <div class="wordmark">Presen<span>tator</span></div>
+                <nav class="nav">
+                  <a class="nav-link" href="#decks"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-layout-grid"></use></svg> Decks</a>
+                  <a class="nav-link nav-link--now" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-settings"></use></svg> Settings</a>
+                </nav>
+              </div>
+            <div class="person">
+              <span class="person-btn" tabindex="0">
+                <span class="avatar">FH</span>
+                <span class="person-name">felix</span>
+                <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg>
+              </span>
+            </div>
+            </div>
+            <div class="body">
+              <div class="list-head">
+                <h1>Models</h1>
+              </div>
+              <nav class="tabs">
+                <a class="tab" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-sliders-horizontal"></use></svg> General</a>
+                <a class="tab" href="#sources"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-git-branch"></use></svg> Sources</a>
+                <a class="tab" href="#voice"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-mic"></use></svg> Voice</a>
+                <a class="tab tab--now" href="#models"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-monitor"></use></svg> Models</a>
+              </nav>
+
+              <div class="rows">
+                <div class="row row--head" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
+                <div class="row" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;">
+                  <span class="row-title">Co-presenter</span>
+                  <span style="font-size: 14.5px;">Claude</span>
+                  <span style="font-size: 14.5px;">Agent service</span>
+                  <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0;"><div class="select"><span>sonnet</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div><div style="border: 1px solid var(--line); background: var(--screen); box-shadow: var(--shadow); border-radius: 2px;">
+                    <div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 11px; font-size: 14px; color: var(--ink);"><span style="white-space: nowrap;">Claude haiku</span><span style="font-size: 12.5px; color: var(--ok); text-align: right;">✓ ready</span></div>
+                    <div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 11px; font-size: 14px; color: var(--ink);"><span style="white-space: nowrap;">Claude opus</span><span style="font-size: 12.5px; color: var(--ok); text-align: right;">✓ ready</span></div>
+                    <div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 11px; font-size: 14px; color: var(--ink); background: var(--accent-soft);"><span style="white-space: nowrap;">Claude sonnet <span class="mini">· saved</span></span><span style="font-size: 12.5px; color: var(--ok); text-align: right;">✓ ready</span></div>
+                    <div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 11px; font-size: 14px; color: var(--ink-faint);" aria-disabled="true"><span style="white-space: nowrap;">Codex gpt-5.5</span><span style="font-size: 12.5px; color: var(--ink-faint); text-align: right;">○ not set up in the service</span></div>
+                  </div></div>
+                  <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-start;"><span class="state" style="color: var(--ok); white-space: normal; align-items: flex-start;">✓ Ready</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure class="board">
+        <figcaption class="board-cap">
+          <div class="board-title">Models · saving <span class="w">1024 px</span></div>
+          <p class="board-note">Picking saves at once, in the row, no second Save (MC1). Top: "✓ Saved." Bottom: the save failed, the row says so and offers Retry; undo is picking the previous entry (MC10).</p>
+        </figcaption>
+        <div class="frame" style="--w: 1024px">
+          <div class="route">presentator.local/settings/models</div>
+          <div class="app">
+            <div class="app-bar">
+              <div class="brand">
+                <div class="wordmark">Presen<span>tator</span></div>
+                <nav class="nav">
+                  <a class="nav-link" href="#decks"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-layout-grid"></use></svg> Decks</a>
+                  <a class="nav-link nav-link--now" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-settings"></use></svg> Settings</a>
+                </nav>
+              </div>
+            <div class="person">
+              <span class="person-btn" tabindex="0">
+                <span class="avatar">FH</span>
+                <span class="person-name">felix</span>
+                <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg>
+              </span>
+            </div>
+            </div>
+            <div class="body">
+              <div class="list-head">
+                <h1>Models</h1>
+              </div>
+              <nav class="tabs">
+                <a class="tab" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-sliders-horizontal"></use></svg> General</a>
+                <a class="tab" href="#sources"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-git-branch"></use></svg> Sources</a>
+                <a class="tab" href="#voice"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-mic"></use></svg> Voice</a>
+                <a class="tab tab--now" href="#models"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-monitor"></use></svg> Models</a>
+              </nav>
+
+              <div class="rows">
+                <div class="row row--head" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
+                <div class="row" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;">
+                  <span class="row-title">Co-presenter</span>
+                  <span style="font-size: 14.5px;">Claude</span>
+                  <span style="font-size: 14.5px;">Agent service</span>
+                  <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0;"><div class="select"><span>opus</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div></div>
+                  <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-start;"><span class="state" style="color: var(--ok); white-space: normal; align-items: flex-start;">✓ Saved.</span></div>
+                </div>
+                <div class="row" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;">
+                  <span class="row-title">Co-presenter</span>
+                  <span style="font-size: 14.5px;">Claude</span>
+                  <span style="font-size: 14.5px;">Agent service</span>
+                  <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0;"><div class="select"><span>opus</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div></div>
+                  <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-start;"><span class="state" style="color: var(--fail); white-space: normal; align-items: flex-start;">✕ Not saved</span><span class="btn btn--s">Retry</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure class="board">
+        <figcaption class="board-cap">
+          <div class="board-title">Models · checking <span class="w">390 px</span></div>
+          <p class="board-note">While the offer is fetched the row says "Checking…" with no light; the light comes only after the offer names the model (MC4).</p>
+        </figcaption>
+        <div class="frame" style="--w: 390px">
+          <div class="route">presentator.local/settings/models</div>
+          <div class="app">
+            <div class="app-bar">
+              <div class="brand">
+                <div class="wordmark">Presen<span>tator</span></div>
+                <nav class="nav">
+                  <a class="nav-link" href="#decks"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-layout-grid"></use></svg> Decks</a>
+                  <a class="nav-link nav-link--now" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-settings"></use></svg> Settings</a>
+                </nav>
+              </div>
+            <div class="person">
+              <span class="person-btn" tabindex="0">
+                <span class="avatar">FH</span>
+                <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg>
+              </span>
+            </div>
+            </div>
+            <div class="body">
+              <div class="list-head">
+                <h1>Models</h1>
+              </div>
+              <nav class="tabs">
+                <a class="tab" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-sliders-horizontal"></use></svg> General</a>
+                <a class="tab" href="#sources"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-git-branch"></use></svg> Sources</a>
+                <a class="tab" href="#voice"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-mic"></use></svg> Voice</a>
+                <a class="tab tab--now" href="#models"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-monitor"></use></svg> Models</a>
+              </nav>
+
+              <div class="rows" style="border-top: 0; gap: 12px; padding-top: 14px;">
+              <div style="border: 1px solid var(--line); border-radius: 2px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                <span class="row-title">Co-presenter</span>
+                <div style="display: flex; gap: 12px; align-items: flex-start;"><span class="sub" style="width: 70px; flex: none; padding-top: 3px;">Provider</span><div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 14.5px;">Claude</span></div></div>
+                <div style="display: flex; gap: 12px; align-items: flex-start;"><span class="sub" style="width: 70px; flex: none; padding-top: 3px;">Route</span><div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 14.5px;">Agent service</span></div></div>
+                <div style="display: flex; gap: 12px; align-items: flex-start;"><span class="sub" style="width: 70px; flex: none; padding-top: 3px;">Model</span><div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;"><div class="select"><span>sonnet</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div></div></div>
+                <div style="display: flex; gap: 12px; align-items: flex-start;"><span class="sub" style="width: 70px; flex: none; padding-top: 3px;">Status</span><div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;"><span class="state" style="color: var(--ink-faint); white-space: normal; align-items: flex-start;">Checking…</span></div></div>
+              </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure class="board">
+        <figcaption class="board-cap">
+          <div class="board-title">Models · exceptions <span class="w">1024 px</span></div>
+          <p class="board-note">Four rows, four reasons, none red. Offer not reachable: no light, the app claims nothing it did not ask (MC5). No longer offered: the saved choice stays, in the warning tone, until another is picked; the talk still sends it (MC7). Not available for you: grey (MC5). Sign-in refused: a link back (MC6).</p>
+        </figcaption>
+        <div class="frame" style="--w: 1024px">
+          <div class="route">presentator.local/settings/models</div>
+          <div class="app">
+            <div class="app-bar">
+              <div class="brand">
+                <div class="wordmark">Presen<span>tator</span></div>
+                <nav class="nav">
+                  <a class="nav-link" href="#decks"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-layout-grid"></use></svg> Decks</a>
+                  <a class="nav-link nav-link--now" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-settings"></use></svg> Settings</a>
+                </nav>
+              </div>
+            <div class="person">
+              <span class="person-btn" tabindex="0">
+                <span class="avatar">FH</span>
+                <span class="person-name">felix</span>
+                <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg>
+              </span>
+            </div>
+            </div>
+            <div class="body">
+              <div class="list-head">
+                <h1>Models</h1>
+              </div>
+              <nav class="tabs">
+                <a class="tab" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-sliders-horizontal"></use></svg> General</a>
+                <a class="tab" href="#sources"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-git-branch"></use></svg> Sources</a>
+                <a class="tab" href="#voice"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-mic"></use></svg> Voice</a>
+                <a class="tab tab--now" href="#models"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-monitor"></use></svg> Models</a>
+              </nav>
+
+              <div class="rows">
+                <div class="row row--head" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
+                <div class="row" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;">
+                  <span class="row-title">Co-presenter</span>
+                  <span style="font-size: 14.5px;">Claude</span>
+                  <span style="font-size: 14.5px;">Agent service</span>
+                  <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0;"><span style="font-size: 14.5px;">sonnet</span></div>
+                  <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-start;"><span class="state" style="color: var(--ink-soft); white-space: normal; align-items: flex-start;">The agent service's offer is not reachable</span></div>
+                </div>
+                <div class="row" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start; background: var(--busy-soft);">
+                  <span class="row-title">Co-presenter</span>
+                  <span style="font-size: 14.5px;">Claude</span>
+                  <span style="font-size: 14.5px;">Agent service</span>
+                  <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0;"><div class="select"><span>sonnet</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div><span class="mini" style="color: var(--busy);">No longer offered</span></div>
+                  <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-start;"><span class="state" style="color: var(--busy); white-space: normal; align-items: flex-start;">! Choose another model</span></div>
+                </div>
+                <div class="row" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;">
+                  <span class="row-title">Co-presenter</span>
+                  <span style="font-size: 14.5px;">Claude</span>
+                  <span style="font-size: 14.5px;">Agent service</span>
+                  <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0;"><span style="font-size: 14.5px;">sonnet</span></div>
+                  <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-start;"><span class="state" style="color: var(--ink-faint); white-space: normal; align-items: flex-start;">○ Not available for you</span></div>
+                </div>
+                <div class="row" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;">
+                  <span class="row-title">Co-presenter</span>
+                  <span style="font-size: 14.5px;">Claude</span>
+                  <span style="font-size: 14.5px;">Agent service</span>
+                  <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0;"><span style="font-size: 14.5px;">sonnet</span></div>
+                  <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-start;"><span class="state" style="color: var(--ink-soft); white-space: normal; align-items: flex-start;">Sign in again to check the offer</span><a class="linkish" href="#signin">Sign in</a></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure class="board">
+        <figcaption class="board-cap">
+          <div class="board-title">Models · picker, narrow <span class="w">390 px</span></div>
+          <p class="board-note">The same card as stacked lines; the picker opens under the Model line and keeps every entry's state readable without truncation.</p>
+        </figcaption>
+        <div class="frame" style="--w: 390px">
+          <div class="route">presentator.local/settings/models</div>
+          <div class="app">
+            <div class="app-bar">
+              <div class="brand">
+                <div class="wordmark">Presen<span>tator</span></div>
+                <nav class="nav">
+                  <a class="nav-link" href="#decks"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-layout-grid"></use></svg> Decks</a>
+                  <a class="nav-link nav-link--now" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-settings"></use></svg> Settings</a>
+                </nav>
+              </div>
+            <div class="person">
+              <span class="person-btn" tabindex="0">
+                <span class="avatar">FH</span>
+                <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg>
+              </span>
+            </div>
+            </div>
+            <div class="body">
+              <div class="list-head">
+                <h1>Models</h1>
+              </div>
+              <nav class="tabs">
+                <a class="tab" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-sliders-horizontal"></use></svg> General</a>
+                <a class="tab" href="#sources"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-git-branch"></use></svg> Sources</a>
+                <a class="tab" href="#voice"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-mic"></use></svg> Voice</a>
+                <a class="tab tab--now" href="#models"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-monitor"></use></svg> Models</a>
+              </nav>
+
+              <div class="rows" style="border-top: 0; gap: 12px; padding-top: 14px;">
+              <div style="border: 1px solid var(--line); border-radius: 2px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                <span class="row-title">Co-presenter</span>
+                <div style="display: flex; gap: 12px; align-items: flex-start;"><span class="sub" style="width: 70px; flex: none; padding-top: 3px;">Provider</span><div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 14.5px;">Claude</span></div></div>
+                <div style="display: flex; gap: 12px; align-items: flex-start;"><span class="sub" style="width: 70px; flex: none; padding-top: 3px;">Route</span><div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 14.5px;">Agent service</span></div></div>
+                <div style="display: flex; gap: 12px; align-items: flex-start;"><span class="sub" style="width: 70px; flex: none; padding-top: 3px;">Model</span><div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;"><div class="select"><span>sonnet</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div><div style="border: 1px solid var(--line); background: var(--screen); box-shadow: var(--shadow); border-radius: 2px;">
+                    <div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 11px; font-size: 14px; color: var(--ink);"><span style="white-space: nowrap;">Claude haiku</span><span style="font-size: 12.5px; color: var(--ok); text-align: right;">✓ ready</span></div>
+                    <div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 11px; font-size: 14px; color: var(--ink);"><span style="white-space: nowrap;">Claude opus</span><span style="font-size: 12.5px; color: var(--ok); text-align: right;">✓ ready</span></div>
+                    <div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 11px; font-size: 14px; color: var(--ink); background: var(--accent-soft);"><span style="white-space: nowrap;">Claude sonnet <span class="mini">· saved</span></span><span style="font-size: 12.5px; color: var(--ok); text-align: right;">✓ ready</span></div>
+                    <div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 11px; font-size: 14px; color: var(--ink-faint);" aria-disabled="true"><span style="white-space: nowrap;">Codex gpt-5.5</span><span style="font-size: 12.5px; color: var(--ink-faint); text-align: right;">○ not set up in the service</span></div>
+                  </div></div></div>
+                <div style="display: flex; gap: 12px; align-items: flex-start;"><span class="sub" style="width: 70px; flex: none; padding-top: 3px;">Status</span><div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;"><span class="state" style="color: var(--ok); white-space: normal; align-items: flex-start;">✓ Ready</span></div></div>
+              </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure class="board">
+        <figcaption class="board-cap">
+          <div class="board-title">Models · dark <span class="w">1024 px</span></div>
+          <p class="board-note">The resting board in the dark theme: state stays shape and word, not only colour.</p>
+        </figcaption>
+        <div class="frame" style="--w: 1024px" data-theme="dark">
+          <div class="route">presentator.local/settings/models</div>
+          <div class="app">
+            <div class="app-bar">
+              <div class="brand">
+                <div class="wordmark">Presen<span>tator</span></div>
+                <nav class="nav">
+                  <a class="nav-link" href="#decks"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-layout-grid"></use></svg> Decks</a>
+                  <a class="nav-link nav-link--now" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-settings"></use></svg> Settings</a>
+                </nav>
+              </div>
+            <div class="person">
+              <span class="person-btn" tabindex="0">
+                <span class="avatar">FH</span>
+                <span class="person-name">felix</span>
+                <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg>
+              </span>
+            </div>
+            </div>
+            <div class="body">
+              <div class="list-head">
+                <h1>Models</h1>
+              </div>
+              <nav class="tabs">
+                <a class="tab" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-sliders-horizontal"></use></svg> General</a>
+                <a class="tab" href="#sources"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-git-branch"></use></svg> Sources</a>
+                <a class="tab" href="#voice"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-mic"></use></svg> Voice</a>
+                <a class="tab tab--now" href="#models"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-monitor"></use></svg> Models</a>
+              </nav>
+
+              <div class="rows">
+                <div class="row row--head" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
+                <div class="row" style="grid-template-columns: 104px 76px 118px minmax(0, 1fr) minmax(0, 250px); gap: 14px; align-items: start;">
+                  <span class="row-title">Co-presenter</span>
+                  <span style="font-size: 14.5px;">Claude</span>
+                  <span style="font-size: 14.5px;">Agent service</span>
+                  <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0;"><div class="select"><span>sonnet</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div></div>
+                  <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-start;"><span class="state" style="color: var(--ok); white-space: normal; align-items: flex-start;">✓ Ready</span></div>
                 </div>
               </div>
             </div>
