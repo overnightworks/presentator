@@ -353,6 +353,9 @@ NOT_HARDENED = "HTTP/1.1 302 Found\r\nlocation: /login/oidc\r\n\r\n"
 PLAIN_COOKIE = SIGN_IN_ANSWER.replace("__Host-", "")
 OPEN_COOKIE = SIGN_IN_ANSWER.replace("; Secure", "")
 BAD_LOBBY = "HTTP/1.1 500 Oops\r\n\r\n"
+LATER_COOKIE_OPEN = SIGN_IN_ANSWER.replace(
+    "\r\n\r\n", "\r\nset-cookie: __Host-other=x; Path=/; HttpOnly\r\n\r\n"
+)
 SECURITY_HEADERS = HARDENED.removesuffix("\r\n").split("\r\n")
 HSTS_ONLY = SECURITY_HEADERS[0] + "\r\n\r\n"
 CSP_ONLY = SECURITY_HEADERS[1] + "\r\n\r\n"
@@ -441,6 +444,16 @@ def local(host: str, path: str, answer: str) -> dict[tuple[str, str, str], str]:
             local(TALK_HOST, "/login/oidc", OPEN_COOKIE),
             "local talk sign-in",
             id="cookie-without-secure",
+        ),
+        pytest.param(
+            local(TALK_HOST, "/login/oidc", LATER_COOKIE_OPEN),
+            "local talk sign-in",
+            id="later-cookie-without-secure",
+        ),
+        pytest.param(
+            local(LOBBY_HOST, "/", hardened_answer("302 Found", "https://[")),
+            "local lobby root",
+            id="lobby-redirects-to-an-unparsable-location",
         ),
         pytest.param(
             local(TALK_HOST, "/login/oidc", "HTTP/1.1 302 Found\r\n\r\n"),
@@ -534,21 +547,26 @@ def test_a_web_container_without_added_groups_holds_in_either_empty_form(
     assert run.code == 0
 
 
-def test_a_secret_mount_that_is_writable_or_outside_the_secrets_folder_fails(
-    scene: Scene,
+@pytest.mark.parametrize(
+    "fault",
+    [
+        {"RW": True},
+        {"Source": "/etc/shadow"},
+        {"Type": "volume"},
+    ],
+    ids=["writable", "outside-the-secrets-folder", "not-a-bind-mount"],
+)
+def test_a_secret_mount_that_breaks_the_hardened_shape_fails(
+    scene: Scene, fault: dict[str, object]
 ) -> None:
     """S9h2 (#553) sentence 5: both mounts are read-only binds below ~/.secrets."""
     secrets = scene.host.inspected[".Mounts"]
     assert isinstance(secrets, list)
-    scene.host.inspected |= {".Mounts": [{**secrets[0], "RW": True}, secrets[1]]}
-    writable = scene.drive()
-    scene.host.inspected |= {
-        ".Mounts": [{**secrets[0], "Source": "/etc/shadow"}, secrets[1]]
-    }
-    elsewhere = scene.drive()
+    scene.host.inspected |= {".Mounts": [{**secrets[0], **fault}, secrets[1]]}
 
-    assert "failed: web container secrets" in writable.lines
-    assert "failed: web container secrets" in elsewhere.lines
+    run = scene.drive()
+
+    assert "failed: web container secrets" in run.lines
 
 
 @pytest.mark.parametrize("containers", [{}, {"a1": "presentator", "a2": "presentator"}])
@@ -578,6 +596,20 @@ def test_a_dark_public_host_is_not_exercised_and_does_not_fail_the_run(
     assert "held: local lobby root" in run.lines
     assert not [line for line in run.lines if line.startswith("failed")]
     assert (run.code, NEXT_STEP in run.lines) == (0, False)
+
+
+@pytest.mark.parametrize("exit_code", [28, 35, 60])
+def test_a_public_host_that_fails_for_another_reason_than_dark_is_a_failure(
+    scene: Scene, exit_code: int
+) -> None:
+    """S9h2 (#553) sentence 5: only curl exit 6 and 7 mean not exercised."""
+    scene.host.dark = {("public", LOBBY_HOST): exit_code}
+
+    run = scene.drive()
+
+    assert "failed: public lobby root" in run.lines
+    assert not [line for line in run.lines if line.startswith("not exercised")]
+    assert (run.code, run.lines[-1]) == (1, NEXT_STEP)
 
 
 @pytest.mark.parametrize("exit_code", DARK_CURL_EXITS)
@@ -637,6 +669,20 @@ def test_no_request_follows_a_redirect_or_carries_a_token(scene: Scene) -> None:
         LOBBY_HOST,
         TALK_HOST,
     }
+
+
+def test_the_public_requests_go_over_https(scene: Scene) -> None:
+    """S9h2 (#553) sentence 5: a public probe over plain http would prove nothing."""
+    run = scene.drive()
+
+    public = [
+        call[-1]
+        for call in scene.host.commands("curl")
+        if "--include" in call and "--header" not in call
+    ]
+    assert public
+    assert {url.split(":")[0] for url in public} == {"https"}
+    assert not [line for line in run.lines if line.startswith("not exercised")]
 
 
 def test_the_output_carries_no_value_a_program_or_file_returned(

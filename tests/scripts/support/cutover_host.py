@@ -162,6 +162,8 @@ class Host:
         vantage = "local" if local else "public"
         if (vantage, host) in self.dark:
             return outcome(self.dark[vantage, host], "")
+        if vantage == "public" and url.scheme != "https":
+            return outcome(DARK_CURL_EXITS[1], "")
         override = self.overrides.get((vantage, host, url.path))
         return outcome(0, override or self.healthy_answer(host, url.path))
 
