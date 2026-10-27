@@ -10,7 +10,7 @@ from presentator.application.copresenter import (
     AskTicket,
     RetryAfter,
 )
-from tests.application.fakes import FrozenClock
+from tests.presentator.application.support.fakes import FrozenClock
 
 
 def a_limiter() -> AskLimiter:

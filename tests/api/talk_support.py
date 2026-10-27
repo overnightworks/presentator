@@ -53,8 +53,8 @@ from tests.api.lobby import (
     hand_over_session_cookies,
     put_a_built_deck,
 )
-from tests.application.fakes import FakeDeckStore, FrozenClock
 from tests.people import seed_user
+from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
 
 ONLY_THIS_TEST_WROTE_IT: Final = "the secret beside the build directory"
 A_DECK: Final = "a-deck"

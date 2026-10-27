@@ -33,7 +33,7 @@ from tests.api.lobby import (
     hand_over_session_cookies,
 )
 from tests.api.talk_support import A_DECK, MEMBER, A, Hosts, two_hosts
-from tests.application.fakes import FakeDeckStore, FrozenClock
+from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
 
 if TYPE_CHECKING:
     from pathlib import Path

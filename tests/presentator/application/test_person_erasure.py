@@ -18,14 +18,18 @@ from presentator.contracts.people import (
     PersonErasure,
     PersonKind,
 )
-from tests.application.fakes import (
+from tests.presentator.application.support.fakes import (
     PATIENCE,
     FakeDeckFolders,
     FakeSourceRunStore,
     FakeSourceStore,
 )
-from tests.application.person_instance_support import ANOTHER, THE_PERSON, an_instance
-from tests.application.test_decks import (
+from tests.presentator.application.support.person_instance_support import (
+    ANOTHER,
+    THE_PERSON,
+    an_instance,
+)
+from tests.presentator.application.test_decks import (
     DecksFakes,
 )
 

@@ -30,7 +30,7 @@ from tests.api.lobby import (
 )
 from tests.api.talk_support import cookies_without_values, two_hosts
 from tests.api.test_sources import ask_removal, confirm_removal
-from tests.application.fakes import FakeBuildRunner, FakeDeckStore
+from tests.presentator.application.support.fakes import FakeBuildRunner, FakeDeckStore
 
 _PDF: Final = Path(__file__).parent / "fixtures" / "exported_deck.pdf"
 _COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"

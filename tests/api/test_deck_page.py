@@ -28,7 +28,7 @@ from tests.api.lobby import (
     a_swapped_build,
 )
 from tests.api.talk_support import ONLY_THIS_TEST_WROTE_IT, two_hosts
-from tests.application.fakes import FakeDeckStore
+from tests.presentator.application.support.fakes import FakeDeckStore
 
 _SLUG: Final = "hello-deck"
 _TITLE: Final = "Hello Co-Presenter"

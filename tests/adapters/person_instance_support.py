@@ -43,12 +43,12 @@ from presentator.contracts.models import Role, User
 from presentator.contracts.preferences import PersonPreferences
 from tests.adapters.credentials_support import OpenCredentials
 from tests.adapters.key_draft_support import INSTANCE_KEY, a_key_drafts_store
-from tests.application.fakes import (
+from tests.people import seed_user
+from tests.presentator.application.support.fakes import (
     FakeConnectionChecker,
     FakeToolchainThemes,
     FrozenClock,
 )
-from tests.people import seed_user
 
 _ACCOUNTS = "users"
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
