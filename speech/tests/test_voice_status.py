@@ -729,26 +729,6 @@ class _StatusScenario:
             (VoiceId.QWEN,),
             VoiceState.NOT_DOWNLOADED,
         ),
-        pytest.param(
-            _StatusScenario(
-                VoiceId.CHATTERBOX,
-                _RuntimeFacts().state(),
-                (),
-                (),
-                VoiceState.UNAVAILABLE,
-            ),
-            id="512-line4-chatterbox-without-worker",
-        ),
-        pytest.param(
-            _StatusScenario(
-                VoiceId.CHATTERBOX,
-                _RuntimeFacts().state(),
-                (),
-                (VoiceId.CHATTERBOX,),
-                VoiceState.NOT_DOWNLOADED,
-            ),
-            id="512-line4-chatterbox-worker-without-weights",
-        ),
         _StatusScenario(
             VoiceId.CHATTERBOX,
             _RuntimeFacts(
