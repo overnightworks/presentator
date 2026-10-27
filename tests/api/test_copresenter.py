@@ -298,6 +298,7 @@ def test_private_answer_refusal_and_clean_end_do_not_invent_an_answer() -> None:
 
 
 def test_every_generated_answer_event_says_ai_generated_and_error_does_not() -> None:
+    """#293 E9 (a): text, sentence, audio and done say ai_generated; error does not."""
     lobby, private, _clock = a_copresenter_talk_host()
     private.answers.deltas = ["Der Anfang. ", "Der Satz."]
     lobby.sign_in()

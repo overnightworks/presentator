@@ -20,8 +20,8 @@ from presentator_speech.service import (
     RuntimeDependencies,
 )
 from presentator_speech.voices import VoiceId, VoiceLoadOutcome
-from tests.conftest import FakeHearing, FakeSpeaking
-from tests.test_speak import _ASGI_TIMEOUT_SECONDS, info_comment_before_data
+from tests.conftest import FakeHearing, FakeSpeaking, info_comment_before_data
+from tests.test_speak import _ASGI_TIMEOUT_SECONDS
 
 
 class _ClientSendError(RuntimeError):
