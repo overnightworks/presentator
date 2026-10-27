@@ -43,7 +43,8 @@ allow-direct-references = true
 packages = ["src/gitmirror", "src/presentator"]
 
 [tool.pytest.ini_options]
-addopts = "--strict-config --strict-markers"
+addopts = "--strict-config --strict-markers --import-mode=importlib"
+pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.coverage.run]
@@ -66,7 +67,7 @@ paths = ["src", "tests", "tests/vulture_allowlist.py"]
 
 [tool.ruff]
 target-version = "py312"
-src = ["src", "tests"]
+src = [".", "src", "tests"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -90,7 +91,9 @@ convention = "google"
 # contract the port it stands in for already carries.
 # A double honours the signature of the port it stands in for, even where its
 # canned answer has no use for an argument.
-"tests/**" = ["S101", "D102", "D103", "ARG002"]
+# Test directories are namespace packages on purpose: pytest imports them by path
+# (importlib mode), so duplicate basenames across layers do not collide.
+"tests/**" = ["S101", "D102", "D103", "ARG002", "INP001"]
 # Standalone probe, not a package; it drives docker and pdftotext by name
 # through fixed argument vectors, never a shell, and inside the container it is
 # the client of the worker's socket.
