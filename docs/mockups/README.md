@@ -102,7 +102,8 @@ and (z′). The tab row of this group (General · Sources · Voice · Models) is
 target; the other groups' tab rows stay as drawn. The reason words in the
 picker ("not set up in the service") are examples the agent service supplies.
 Proposal until the operator blesses it on #467; the overview sheet is
-re-rendered when #525 lands.
+re-rendered when #525 lands. MC9 has no visible state: no board shows a token,
+and the browser asks only presentator, never the agent service.
 
 | PNG | Caption | Lines |
 |---|---|---|
