@@ -19,6 +19,11 @@ reason = "the Slidev addon and its pnpm toolchain, built apart from the Python p
 entry = "speech/"
 reason = "the host speech service and its provider workers, each with its own lock"
 
+[[layout.allow]]
+path = "tests/api/fixtures/built_talk/_redirects"
+rule = "file-suffix"
+reason = "_redirects is the hosting tool's mandated name in the Slidev build output"
+
 # speech/providers/chatterbox/uv.lock: advisories no relock reaches
 [[advisories.allow]]
 id = "PYSEC-2026-2446"
