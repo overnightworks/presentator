@@ -31,6 +31,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import cast
 from urllib.parse import urlsplit
@@ -509,8 +510,17 @@ def _answer_of(outcome: Outcome) -> Answer:
     for line in header_lines:
         name, _, value = line.partition(":")
         headers.setdefault(name.strip().lower(), []).append(value.strip())
-    status = int(words[1]) if len(words) > 1 and words[1].isdecimal() else 0
+    code = words[1] if len(words) > 1 else ""
+    status = int(code) if len(code) == 3 and code.isascii() and code.isdecimal() else 0  # noqa: PLR2004
     return Answer(outcome.code, status, headers)
+
+
+def _held_if(held: bool) -> Verdict:  # noqa: FBT001 - a plain judgement
+    return Verdict.HELD if held else Verdict.FAILED
+
+
+def _held_if_check(check: Callable[[], bool]) -> Verdict:
+    return _held_if(check())
 
 
 def _redirects_to_sign_in(answer: Answer, side: Side, deployment: Deployment) -> bool:
@@ -581,14 +591,26 @@ class Inspection(Retirement):
             self.say(f"refused: {reason}")
             return 2
         verdicts = [
-            self._reported(name, verdict) for name, verdict in self._probes(deployment)
+            self._reported(name, self._judged(check))
+            for name, check in self._probes(deployment)
         ]
         if Verdict.FAILED in verdicts:
             self.say(STOP_NEXT_STEP)
             return 1
         return 0
 
-    def _reported(self, name: str, verdict: Verdict) -> Verdict:
+    @staticmethod
+    def _judged(check: Callable[[], Verdict]) -> Verdict | Exception:
+        """Run one probe; whatever it raises is that probe's failure, nothing more."""
+        try:
+            return check()
+        except Exception as failure:  # noqa: BLE001 - one probe never ends the run
+            return failure
+
+    def _reported(self, name: str, verdict: Verdict | Exception) -> Verdict:
+        if isinstance(verdict, Exception):
+            self.say(f"{Verdict.FAILED.value}: {name} ({type(verdict).__name__})")
+            return Verdict.FAILED
         self.say(f"{verdict.value}: {name}")
         return verdict
 
@@ -622,33 +644,30 @@ class Inspection(Retirement):
     def _deployment(self) -> Deployment:
         try:
             compose = (self.checkout / "compose.yaml").read_text()
-        except OSError:
+        except (OSError, ValueError):
             reason = "compose.yaml cannot be read"
             raise RefusedError(reason) from None
         return deployment_of(compose)
 
-    def _probes(self, deployment: Deployment) -> Iterator[tuple[str, Verdict]]:
+    def _probes(
+        self, deployment: Deployment
+    ) -> Iterator[tuple[str, Callable[[], Verdict]]]:
         yield from self._web_probes(Vantage.LOCAL, deployment)
         yield from self._container_probes(deployment)
         yield from self._web_probes(Vantage.PUBLIC, deployment)
 
     def _web_probes(
         self, vantage: Vantage, deployment: Deployment
-    ) -> Iterator[tuple[str, Verdict]]:
+    ) -> Iterator[tuple[str, Callable[[], Verdict]]]:
         for probe in WEB_PROBES:
             for side in probe.sides:
-                answer = self._fetch(vantage, side, probe.path, deployment)
                 name = f"{vantage.value} {side.value} {probe.label}"
-                yield name, self._web_verdict(vantage, answer, probe, side, deployment)
+                yield name, partial(self._web_verdict, vantage, probe, side, deployment)
 
-    @staticmethod
     def _web_verdict(
-        vantage: Vantage,
-        answer: Answer,
-        probe: WebProbe,
-        side: Side,
-        deployment: Deployment,
+        self, vantage: Vantage, probe: WebProbe, side: Side, deployment: Deployment
     ) -> Verdict:
+        answer = self._fetch(vantage, side, probe.path, deployment)
         if vantage is Vantage.PUBLIC and answer.curl_code in DARK_CURL_EXITS:
             return Verdict.NOT_EXERCISED
         held = answer.curl_code == 0 and probe.holds(answer, side, deployment)
@@ -668,13 +687,18 @@ class Inspection(Retirement):
 
     def _container_probes(
         self, deployment: Deployment
-    ) -> Iterator[tuple[str, Verdict]]:
-        found = self._lines(WEB_CONTAINER)
-        one = found is not None and len(found) == 1
-        yield "web container", Verdict.HELD if one else Verdict.FAILED
-        if not found or not one:
+    ) -> Iterator[tuple[str, Callable[[], Verdict]]]:
+        web: list[str] = []
+
+        def one_web_container() -> Verdict:
+            found = self._lines(WEB_CONTAINER)
+            web[:] = found if found is not None and len(found) == 1 else []
+            return _held_if(bool(web))
+
+        yield "web container", one_web_container
+        if not web:
             return
-        container = found[0]
+        container = web[0]
         checks = (
             ("mounts", lambda: self._mounts_clean(container)),
             (
@@ -693,11 +717,7 @@ class Inspection(Retirement):
             ("gateway", lambda: self._gateway_is_proxy(deployment)),
         )
         for name, check in checks:
-            try:
-                held = check()
-            except ValueError:
-                held = False
-            yield f"web container {name}", Verdict.HELD if held else Verdict.FAILED
+            yield f"web container {name}", partial(_held_if_check, check)
 
     def _json(self, arguments: Sequence[str]) -> object:
         outcome = self.run(arguments)

@@ -475,6 +475,11 @@ def local(host: str, path: str, answer: str) -> dict[tuple[str, str, str], str]:
             "local lobby datenschutz",
             id="status-of-superscript-digits",
         ),
+        pytest.param(
+            local(LOBBY_HOST, "/datenschutz", "HTTP/1.1 \u0662\u0660\u0660 OK\r\n\r\n"),
+            "local lobby datenschutz",
+            id="status-of-arabic-indic-digits",
+        ),
     ],
 )
 def test_a_failed_probe_is_named_and_the_others_still_run(
@@ -485,18 +490,22 @@ def test_a_failed_probe_is_named_and_the_others_still_run(
 
     run = scene.drive()
 
-    assert f"failed: {failed}" in run.lines
+    assert any(line.startswith(f"failed: {failed}") for line in run.lines)
     assert "held: public talk health" in run.lines or failed == "public talk health"
     assert run.lines[-1] == NEXT_STEP
     assert run.code == 1
     assert run.lines.count(NEXT_STEP) == 1
 
 
-def test_a_checkout_without_compose_yaml_is_refused_without_a_path(
-    scene: Scene,
+@pytest.mark.parametrize("content", [None, b"\xff\xfe"], ids=["missing", "undecodable"])
+def test_a_checkout_without_a_readable_compose_yaml_is_refused_without_a_path(
+    scene: Scene, content: bytes | None
 ) -> None:
-    """S9h2 (#553) sentences 4 and 7: a missing compose file is a refusal."""
-    (scene.checkout / "compose.yaml").unlink()
+    """S9h2 (#553) sentences 4 and 7: an unreadable compose file is a refusal."""
+    if content is None:
+        (scene.checkout / "compose.yaml").unlink()
+    else:
+        (scene.checkout / "compose.yaml").write_bytes(content)
 
     run = scene.drive()
 
@@ -504,6 +513,33 @@ def test_a_checkout_without_compose_yaml_is_refused_without_a_path(
     assert run.lines[-1].startswith("refused:")
     assert str(scene.checkout) not in "\n".join(run.lines)
     assert not scene.probing_calls()
+
+
+def test_an_undecodable_answer_fails_only_its_probe_naming_the_error_class(
+    scene: Scene,
+) -> None:
+    """S9h2 (#553) sentences 5, 6 and 7: the class is named, the run goes on."""
+    scene.host.undecodable = {("local", LOBBY_HOST, "/datenschutz")}
+
+    run = scene.drive()
+
+    assert "failed: local lobby datenschutz (UnicodeDecodeError)" in run.lines
+    assert "held: public talk health" in run.lines
+    assert (run.code, run.lines[-1]) == (1, NEXT_STEP)
+
+
+def test_an_inspected_mount_that_is_not_an_object_fails_its_probes_and_the_run_goes_on(
+    scene: Scene,
+) -> None:
+    """S9h2 (#553) sentences 5, 6 and 7: a malformed shape is a failed probe."""
+    scene.host.inspected |= {".Mounts": ["not-an-object"]}
+
+    run = scene.drive()
+
+    assert "failed: web container mounts (AttributeError)" in run.lines
+    assert "held: web container gateway" in run.lines
+    assert "held: public talk health" in run.lines
+    assert (run.code, run.lines[-1]) == (1, NEXT_STEP)
 
 
 ONE_SECRET: dict[str, object] = {
@@ -549,7 +585,7 @@ def test_a_web_container_that_breaks_the_hardened_shape_fails_its_probe(
 
     run = scene.drive()
 
-    assert f"failed: {failed}" in run.lines
+    assert any(line.startswith(f"failed: {failed}") for line in run.lines)
     assert (run.code, run.lines[-1]) == (1, NEXT_STEP)
 
 

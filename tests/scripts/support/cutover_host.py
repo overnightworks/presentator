@@ -106,6 +106,9 @@ class Host:
     overrides: dict[tuple[str, str, str], str] = field(
         default_factory=dict[tuple[str, str, str], str]
     )
+    undecodable: set[tuple[str, str, str]] = field(
+        default_factory=set[tuple[str, str, str]]
+    )
     dark: dict[tuple[str, str], int] = field(default_factory=dict[tuple[str, str], int])
     inspected: dict[str, object] = field(default_factory=dict[str, object])
     live_refs: str = (
@@ -164,6 +167,9 @@ class Host:
             return outcome(self.dark[vantage, host], "")
         if vantage == "public" and url.scheme != "https":
             return outcome(DARK_CURL_EXITS[1], "")
+        if (vantage, host, url.path) in self.undecodable:
+            encoding = "utf-8"
+            raise UnicodeDecodeError(encoding, b"\xff", 0, 1, "invalid start byte")
         override = self.overrides.get((vantage, host, url.path))
         return outcome(0, override or self.healthy_answer(host, url.path))
 
