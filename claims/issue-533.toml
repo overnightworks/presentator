@@ -1,8 +1,0 @@
-claim_id = "62e3ab1d9267494eb338d81a1fa08fcd"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "e026ced32f05f9d960287c159db2488057ca5c8c"
-branch = "claude/issue-533-fixture-data-move"
-scope = ["tests/api/built_talk", "tests/api/exported_deck.pdf", "tests/api/fixtures", "tests/api/lobby.py", "tests/api/test_deck_owner.py", "tests/api/test_deck_page.py"]
-opened_commit = "af155cc6c737b9394023b0e3cdaa2baeaf9dc759"
-whole_reason = "One data move: the fixture files and the four lookups that read them change together, or the tests read a path that is gone."
