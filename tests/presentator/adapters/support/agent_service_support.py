@@ -15,12 +15,14 @@ from uuid import UUID, uuid4
 import httpx2
 from agent_runtime_client.sse import encode_event
 from agent_runtime_client.wire import (
+    PROTOCOL_VERSION,
     AssistantText,
     Cancelled,
     Failed,
     FailureCode,
     Heartbeat,
     RejectionCode,
+    RouteKind,
     RunRejection,
     RunRequest,
     RunStarted,
@@ -61,29 +63,40 @@ type Step = Callable[[UUID, int], RunEvent]
 
 
 def run_started() -> Step:
-    return lambda run, _seq: RunStarted(v=2, run_id=run, seq=0, heartbeat_interval_s=15)
+    return lambda run, _seq: RunStarted(
+        v=PROTOCOL_VERSION,
+        run_id=run,
+        seq=0,
+        model="anthropic/sonnet",
+        route=RouteKind.API,
+        heartbeat_interval_s=15,
+    )
 
 
 def assistant_text(text: str) -> Step:
-    return lambda run, seq: AssistantText(v=2, run_id=run, seq=seq, text=text)
+    return lambda run, seq: AssistantText(
+        v=PROTOCOL_VERSION, run_id=run, seq=seq, text=text
+    )
 
 
 def heartbeat() -> Step:
-    return lambda run, seq: Heartbeat(v=2, run_id=run, seq=seq)
+    return lambda run, seq: Heartbeat(v=PROTOCOL_VERSION, run_id=run, seq=seq)
 
 
 def succeeded() -> Step:
-    return lambda run, seq: Succeeded(v=2, run_id=run, seq=seq, text="fertig")
+    return lambda run, seq: Succeeded(
+        v=PROTOCOL_VERSION, run_id=run, seq=seq, text="fertig"
+    )
 
 
 def failed(code: FailureCode) -> Step:
     return lambda run, seq: Failed(
-        v=2, run_id=run, seq=seq, code=code, message=SERVICE_MESSAGE
+        v=PROTOCOL_VERSION, run_id=run, seq=seq, code=code, message=SERVICE_MESSAGE
     )
 
 
 def cancelled() -> Step:
-    return lambda run, seq: Cancelled(v=2, run_id=run, seq=seq)
+    return lambda run, seq: Cancelled(v=PROTOCOL_VERSION, run_id=run, seq=seq)
 
 
 def event_frames(*steps: Step) -> list[bytes]:
@@ -127,7 +140,9 @@ def reply_with(*chunks: bytes) -> Reply:
 
 
 def refusal_reply(code: RejectionCode, status: int, **headers: str) -> Reply:
-    body = RunRejection(v=2, code=code, message=SERVICE_MESSAGE).model_dump_json()
+    body = RunRejection(
+        v=PROTOCOL_VERSION, code=code, message=SERVICE_MESSAGE
+    ).model_dump_json()
     return Reply(
         status=status,
         headers={"content-type": "application/json", **headers},

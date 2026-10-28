@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from agent_runtime_client.wire import (
+    PROTOCOL_VERSION,
     FailureCode,
     RejectionCode,
     RunRejection,
@@ -187,7 +188,9 @@ _LEAK_CASES = {
             headers={"content-type": "application/json"},
             chunks=[
                 RunRejection(
-                    v=2, code=RejectionCode.FORBIDDEN, message=f"{PERSON} {WORKLOAD}"
+                    v=PROTOCOL_VERSION,
+                    code=RejectionCode.FORBIDDEN,
+                    message=f"{PERSON} {WORKLOAD}",
                 )
                 .model_dump_json()
                 .encode()
