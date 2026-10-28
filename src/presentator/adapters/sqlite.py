@@ -2,7 +2,7 @@
 
 import sqlite3
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
 
 
@@ -17,6 +17,13 @@ def rows(database: Path) -> Generator[sqlite3.Cursor]:
         connection.commit()
     finally:
         connection.close()
+
+
+def rows_or_inside(
+    database: Path, inside: sqlite3.Cursor | None
+) -> AbstractContextManager[sqlite3.Cursor]:
+    """The open transaction's cursor, or a fresh one that commits on its way out."""
+    return rows(database) if inside is None else nullcontext(inside)
 
 
 @contextmanager

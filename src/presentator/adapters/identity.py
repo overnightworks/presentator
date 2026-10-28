@@ -8,7 +8,7 @@ import secrets
 import sqlite3
 import threading
 from collections.abc import Generator, Sequence
-from contextlib import AbstractContextManager, contextmanager, nullcontext
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,7 +18,11 @@ from pydantic import SecretStr
 from webauth.ports import AuditSink, SignInStores, UsernameTakenError
 
 from presentator.adapters.audit import BufferedAudit
-from presentator.adapters.sqlite import apply_schema, immediate_transaction, rows
+from presentator.adapters.sqlite import (
+    apply_schema,
+    immediate_transaction,
+    rows_or_inside,
+)
 from presentator.contracts.models import Role, User
 from presentator.contracts.people import SessionSecretsHeld, SessionTimes
 
@@ -154,7 +158,7 @@ class SqliteSubjectUserStore:
 
     def cursor(self) -> AbstractContextManager[sqlite3.Cursor]:
         """The open transaction's cursor, or a fresh one that commits on its way out."""
-        return rows(self.database) if self.inside is None else nullcontext(self.inside)
+        return rows_or_inside(self.database, self.inside)
 
     def get(self, user_id: str) -> User | None:
         """The account whose id is `user_id` character for character."""
@@ -227,7 +231,7 @@ class SqliteSessionRecordStore:
 
     def cursor(self) -> AbstractContextManager[sqlite3.Cursor]:
         """The open transaction's cursor, or a fresh one that commits on its way out."""
-        return rows(self.database) if self.inside is None else nullcontext(self.inside)
+        return rows_or_inside(self.database, self.inside)
 
     def create(
         self,
