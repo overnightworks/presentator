@@ -58,6 +58,32 @@ def talk_content_security_policy() -> str:
     )
 
 
+def _install_talk_middleware(
+    talk: FastAPI, auth: InstalledAuth, sessions: SessionRecordStore
+) -> None:
+    install_web_auth_middleware(
+        talk,
+        security_headers=SecurityHeadersPolicy(
+            content_security_policy=auth.content_security_policy,
+            permissions_policy=TALK_PERMISSIONS_POLICY,
+            cache_control_rules=(
+                CacheControlRule(PathRules(prefixes=(_ROOT,)), "no-store"),
+            ),
+        ),
+        body_size=BodySizePolicy(default_max_bytes=DEFAULT_BODY_BYTES),
+        csrf_origin=CsrfPolicy(),
+        session_gate=SessionGate(
+            session_transaction=lambda: nullcontext(sessions),
+            login_redirect=TALK_SIGN_IN.login_redirect,
+            public=(
+                PublicRule(PathRules(exact=frozenset({_ROOT}))),
+                *TALK_SIGN_IN.public_rules,
+                HEALTH_IS_PUBLIC,
+            ),
+        ),
+    )
+
+
 def create_talk(
     *,
     sessions: SessionRecordStore,
@@ -82,27 +108,7 @@ def create_talk(
 
     talk = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(talk, auth.config)
-    install_web_auth_middleware(
-        talk,
-        security_headers=SecurityHeadersPolicy(
-            content_security_policy=auth.content_security_policy,
-            permissions_policy=TALK_PERMISSIONS_POLICY,
-            cache_control_rules=(
-                CacheControlRule(PathRules(prefixes=(_ROOT,)), "no-store"),
-            ),
-        ),
-        body_size=BodySizePolicy(default_max_bytes=DEFAULT_BODY_BYTES),
-        csrf_origin=CsrfPolicy(),
-        session_gate=SessionGate(
-            session_transaction=lambda: nullcontext(sessions),
-            login_redirect=TALK_SIGN_IN.login_redirect,
-            public=(
-                PublicRule(PathRules(exact=frozenset({_ROOT}))),
-                *TALK_SIGN_IN.public_rules,
-                HEALTH_IS_PUBLIC,
-            ),
-        ),
-    )
+    _install_talk_middleware(talk, auth, sessions)
     add_health_route(talk)
     talk.add_api_route(_ROOT, to_the_lobby, methods=["GET"])
     install_sign_in_routes(
