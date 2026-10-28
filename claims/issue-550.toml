@@ -1,0 +1,8 @@
+claim_id = "e79096824a5c4f02bb3011288ef5fc55"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "dd2b5cbab01f011c0dcd2333e436470ec66c6fcd"
+branch = "claude/issue-550-protocol-3"
+scope = ["docs/decisions/0003-libraries-for-models-and-auth.md", "pyproject.toml", "tests/presentator/adapters/support/agent_service_support.py", "tests/presentator/adapters/test_agent_service.py", "tests/presentator/adapters/test_agent_service_tokens.py", "tests/presentator/api/test_copresenter_answer.py", "uv.lock"]
+opened_commit = "6b8ec69e299e1437d163ba6bba590e8a815ed282"
+whole_reason = "One protocol switch: the client pin, its lock, the tests that build protocol-2 wire values and the ADR sentence that says nothing on the wire changes move together, or CI pins a protocol the service no longer speaks."
