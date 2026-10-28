@@ -3,6 +3,8 @@
 import re
 import sqlite3
 from contextlib import closing
+from dataclasses import dataclass, replace
+from datetime import datetime
 from html import unescape
 from http import HTTPStatus
 from http.cookies import SimpleCookie
@@ -12,8 +14,8 @@ from urllib.parse import urlsplit
 import pytest
 from pydantic import SecretStr
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
+from webauth.ports import SessionRecord, SessionRecordStore
 
-from presentator.adapters.identity import SqliteSessionRecordStore
 from presentator.api.auth import LOGIN_PATH, LOGOUT_PATH
 from presentator.host.oidc import oidc_client_config
 from tests.support.lobby import (
@@ -28,6 +30,61 @@ _END_SESSION = oidc_client_config(
     a_settings(), SecretStr(A_CLIENT_CREDENTIAL), origin=A_BROWSERS_ADDRESS
 )
 _HIDDEN_FIELD = re.compile(r'<input type="hidden" name="([^"]+)" value="([^"]*)">')
+
+
+@dataclass
+class Breakdown:
+    """Whether the disk behind the double has failed yet; the sign-in comes first."""
+
+    now: bool = False
+
+
+@dataclass(frozen=True)
+class SessionsThatBreakOnDelete:
+    """The real session store, whose delete raises once the breakdown has begun."""
+
+    real: SessionRecordStore
+    breakdown: Breakdown
+
+    def create(
+        self,
+        user_id: str,
+        *,
+        now: datetime,
+        expires_at: datetime,
+        refresh_token: SecretStr | None,
+        id_token: SecretStr | None,
+    ) -> SessionRecord:
+        return self.real.create(
+            user_id,
+            now=now,
+            expires_at=expires_at,
+            refresh_token=refresh_token,
+            id_token=id_token,
+        )
+
+    def load(self, session_id: str) -> SessionRecord | None:
+        return self.real.load(session_id)
+
+    def touch(self, session_id: str, *, expires_at: datetime) -> bool:
+        return self.real.touch(session_id, expires_at=expires_at)
+
+    def replace_refresh_token(
+        self, session_id: str, *, refresh_token: SecretStr
+    ) -> bool:
+        return self.real.replace_refresh_token(session_id, refresh_token=refresh_token)
+
+    def delete(self, session_id: str) -> None:
+        if self.breakdown.now:
+            message = "disk I/O error"
+            raise sqlite3.OperationalError(message)
+        self.real.delete(session_id)
+
+    def delete_for_user(self, user_id: str) -> int:
+        return self.real.delete_for_user(user_id)
+
+    def prune_overflow(self, user_id: str, keep_newest: int) -> None:
+        self.real.prune_overflow(user_id, keep_newest)
 
 
 @pytest.fixture
@@ -244,23 +301,25 @@ def test_a_logout_enters_the_transaction_once_on_a_worker_thread(
 
 
 def test_a_store_failure_in_the_logout_answers_500_clears_no_cookie_and_keeps_the_row(
-    scene: Scene, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
+    breakdown = Breakdown()
+    double = TransactionDouble(
+        through=lambda stores: replace(
+            stores, sessions=SessionsThatBreakOnDelete(stores.sessions, breakdown)
+        )
+    )
+    scene = a_scene(tmp_path, transaction=double.around)
     browser = scene.browser(raise_server_exceptions=False)
     scene.sign_in(browser)
-
-    def disk_fails(_store: SqliteSessionRecordStore, _session_id: str) -> None:
-        message = "disk I/O error"
-        raise sqlite3.OperationalError(message)
-
-    monkeypatch.setattr(SqliteSessionRecordStore, "delete", disk_fails)
+    breakdown.now = True
 
     failed = browser.post(LOGOUT_PATH, headers=_A_FORM)
 
     assert failed.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert failed.headers.get_list("set-cookie") == []
     assert scene.count("sessions") == 1
-    monkeypatch.undo()
+    breakdown.now = False
     assert browser.post(LOGOUT_PATH, headers=_A_FORM).status_code == HTTPStatus.OK
     assert scene.count("sessions") == 0
 
