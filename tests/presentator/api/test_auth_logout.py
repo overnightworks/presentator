@@ -13,6 +13,7 @@ import pytest
 from pydantic import SecretStr
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
+from presentator.adapters.identity import SqliteSessionRecordStore
 from presentator.api.auth import LOGIN_PATH, LOGOUT_PATH
 from presentator.host.oidc import oidc_client_config
 from tests.support.lobby import (
@@ -20,7 +21,7 @@ from tests.support.lobby import (
     A_CLIENT_CREDENTIAL,
     a_settings,
 )
-from tests.support.sign_in_support import Scene, WatchedLock, a_scene
+from tests.support.sign_in_support import Scene, TransactionDouble, a_scene
 
 _A_FORM = {"content-type": "application/x-www-form-urlencoded"}
 _END_SESSION = oidc_client_config(
@@ -228,18 +229,40 @@ def test_a_logout_form_with_no_origin_signal_deletes_nothing_and_goes_nowhere(
     assert scene.count("sessions") == (1 if signed_in else 0)
 
 
-def test_a_logout_holds_the_write_lock_once_on_a_worker_thread(
+def test_a_logout_enters_the_transaction_once_on_a_worker_thread(
     tmp_path: Path,
 ) -> None:
-    lock = WatchedLock()
-    scene = a_scene(tmp_path, lock=lock)
+    double = TransactionDouble()
+    scene = a_scene(tmp_path, transaction=double.around)
     scene.sign_in()
-    held_by_the_sign_in = lock.holds
+    double.log.clear()
 
     scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
 
-    assert lock.holds == held_by_the_sign_in + 1
-    assert not lock.held_on_the_event_loop
+    assert [step for step, _ in double.log] == ["entered", "left"]
+    assert double.log[0] == ("entered", False)
+
+
+def test_a_store_failure_in_the_logout_answers_500_clears_no_cookie_and_keeps_the_row(
+    scene: Scene, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    browser = scene.browser(raise_server_exceptions=False)
+    scene.sign_in(browser)
+
+    def disk_fails(_store: SqliteSessionRecordStore, _session_id: str) -> None:
+        message = "disk I/O error"
+        raise sqlite3.OperationalError(message)
+
+    monkeypatch.setattr(SqliteSessionRecordStore, "delete", disk_fails)
+
+    failed = browser.post(LOGOUT_PATH, headers=_A_FORM)
+
+    assert failed.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert failed.headers.get_list("set-cookie") == []
+    assert scene.count("sessions") == 1
+    monkeypatch.undo()
+    assert browser.post(LOGOUT_PATH, headers=_A_FORM).status_code == HTTPStatus.OK
+    assert scene.count("sessions") == 0
 
 
 def test_every_other_answer_of_the_lobby_lets_a_form_go_to_this_origin_only(

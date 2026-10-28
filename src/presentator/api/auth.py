@@ -7,42 +7,27 @@ exceptions, a form another site submitted is refused, and no answer may be
 replayed from the browser cache (issue #8, lines 11 to 15).
 """
 
-import logging
 from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import dataclass
-from enum import StrEnum
 from http import HTTPMethod, HTTPStatus
 from pathlib import Path
-from typing import Final, assert_never, cast
+from typing import Final, cast
 
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
-from starlette.concurrency import run_in_threadpool
 from starlette.requests import HTTPConnection
 from webauth.config import WebAuthConfig, install_web_auth_config, web_auth_config
-from webauth.cookies import issue_session_cookies
 from webauth.dependencies import (
     ConnectionRefusal,
-    LoginRedirect,
     admit_session,
     session_id_from_request,
 )
 from webauth.middleware.bearer_gate import BearerGate
 from webauth.middleware.session_gate import SessionGate
 from webauth.middleware.stack import install_web_auth_middleware
-from webauth.oidc import OidcRefusal, OidcRelyingParty
-from webauth.oidc_login import (
-    AdmissionConfig,
-    AdmissionRefusal,
-    AdmittedLogin,
-    BackchannelLogoutResult,
-    finish_login,
-    log_out,
-    open_session,
-    receive_backchannel_logout,
-    start_login,
-)
+from webauth.oidc import OidcRelyingParty
+from webauth.oidc_login import AdmissionConfig
 from webauth.policies import (
     AuthorizedParties,
     BodySizePolicy,
@@ -54,11 +39,11 @@ from webauth.policies import (
     SecurityHeadersPolicy,
     default_content_security_policy,
 )
-from webauth.ports import (
-    AuditSink,
-    SessionRecordStore,
-    SubjectUserStore,
-    WriteLock,
+from webauth.ports import SessionRecordStore, SignInTransaction
+from webauth.sign_in_routes import (
+    RefusalPage,
+    SignInPaths,
+    install_sign_in_routes,
 )
 
 from presentator.api.decks import add_deck_pages
@@ -80,8 +65,6 @@ from presentator.application.voice import VoiceStatusUse
 from presentator.contracts.models import User
 from presentator.contracts.text import LobbyText
 
-_logger = logging.getLogger(__name__)
-
 _STATIC_DIR: Final = Path(__file__).parent / "static"
 _STATIC_PATH: Final = "/static"
 _INSIDE_STATIC: Final = f"{_STATIC_PATH}/"
@@ -91,60 +74,51 @@ START_SIGN_IN_PATH: Final = "/login/oidc"
 SIGN_IN_CALLBACK_PATH: Final = "/auth/callback"
 BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
 LOGOUT_PATH: Final = "/logout"
+LOBBY_SIGN_IN: Final = SignInPaths(
+    start=START_SIGN_IN_PATH,
+    callback=SIGN_IN_CALLBACK_PATH,
+    logout=LOGOUT_PATH,
+    backchannel_logout=BACKCHANNEL_LOGOUT_PATH,
+)
+TALK_SIGN_IN: Final = SignInPaths(
+    start=START_SIGN_IN_PATH, callback=SIGN_IN_CALLBACK_PATH
+)
 _DATENSCHUTZ: Final = "/datenschutz"
 _SETUP: Final = "/setup"
 
 
-class TalkSignInRefusal(StrEnum):
-    """Why a sign-in at the talk host was refused, and the lobby route's last segment.
-
-    The talk host has no page of its own, so its refused sign-in is answered
-    with a redirect to the lobby, whose footer links Impressum and Datenschutz.
-    """
-
-    NO_ACCESS = "no-access"
-    LOGIN_FAILED = "login-failed"
-
-
 _REFUSAL_PAGES: Final = {
-    TalkSignInRefusal.NO_ACCESS: "no_access.html",
-    TalkSignInRefusal.LOGIN_FAILED: "login_failed.html",
+    RefusalPage.NO_ACCESS: "no_access.html",
+    RefusalPage.LOGIN_FAILED: "login_failed.html",
 }
 
 
-def talk_sign_in_refusal_path(refusal: TalkSignInRefusal) -> str:
+def talk_sign_in_refusal_path(refusal: RefusalPage) -> str:
     """The lobby's address that shows a talk sign-in refusal."""
     return f"/login/talk/{refusal.value}"
 
 
 # Signing in (its start and the issuer's return) and signing out are the
-# addresses the gate leaves alone; logging out ends a session rather than
-# using one. The theme stylesheet has to render the open pages themselves, so
-# it is public too, and so are the two addresses another server posts to: a
-# source host's POST under the hook prefix and Keycloak's back-channel logout.
+# addresses the gate leaves alone, and the library derives them from the
+# sign-in paths; logging out ends a session rather than using one. The theme
+# stylesheet has to render the open pages themselves, so it is public too, and
+# so is the address another server posts to: a source host's POST under the
+# hook prefix. Keycloak's back-channel logout is open and exempt from the
+# origin check through the sign-in paths.
 # `/setup` is a retired address: it answers 404 to everyone, so a signed-out
 # reader is not sent to a login for a page that does not exist.
 # The Datenschutzerklärung has to be readable before anyone signs in (ADR
 # 0015), yet a reader who is signed in keeps the header there like on every
 # other page.
-_SERVER_CALLS: Final = PathRules(
-    exact=frozenset({BACKCHANNEL_LOGOUT_PATH}),
-    prefixes=(HOOK_CALLS,),
-)
+_SERVER_CALLS: Final = PathRules(prefixes=(HOOK_CALLS,))
 _PUBLIC_RULES: Final = (
     PublicRule(
         PathRules(
             exact=frozenset(
                 {
                     LOGIN_PATH,
-                    START_SIGN_IN_PATH,
-                    SIGN_IN_CALLBACK_PATH,
-                    LOGOUT_PATH,
                     _SETUP,
-                    *(
-                        talk_sign_in_refusal_path(refusal)
-                        for refusal in TalkSignInRefusal
-                    ),
+                    *(talk_sign_in_refusal_path(refusal) for refusal in RefusalPage),
                 }
             )
         )
@@ -152,10 +126,15 @@ _PUBLIC_RULES: Final = (
     PublicRule(PathRules(prefixes=(_INSIDE_STATIC,))),
     HEALTH_IS_PUBLIC,
     PublicRule(_SERVER_CALLS, methods=frozenset({HTTPMethod.POST})),
+    *LOBBY_SIGN_IN.public_rules,
 )
 _OPTIONAL_PATHS: Final = PathRules(exact=frozenset({_DATENSCHUTZ}))
 PERMISSIONS_POLICY: Final = "camera=(), microphone=(), geolocation=()"
-_CSRF_POLICY: Final = CsrfPolicy(exempt=_SERVER_CALLS)
+_CSRF_POLICY: Final = CsrfPolicy(
+    exempt=PathRules(
+        exact=LOBBY_SIGN_IN.backchannel.exact, prefixes=_SERVER_CALLS.prefixes
+    )
+)
 DEFAULT_BODY_BYTES: Final = 32 * 1024
 # Every route has this budget, forms and the ask included; the hook keeps a git
 # host's push budget, since GitHub documents payloads of up to 25 MB.
@@ -167,12 +146,10 @@ _BODY_SIZE: Final = BodySizePolicy(
             max_bytes=25 * 1024 * 1024,
             methods=frozenset({HTTPMethod.POST}),
         ),
+        LOBBY_SIGN_IN.backchannel_body_size_rule,
     ),
 )
-LOGIN_REDIRECT: Final = LoginRedirect(
-    path=START_SIGN_IN_PATH,
-    redirect_query_param="next",
-)
+LOGIN_REDIRECT: Final = LOBBY_SIGN_IN.login_redirect
 # Jinja's stubs type the globals as its own defaults only, so the dict is
 # named as the mixed bag it is.
 cast("dict[str, object]", TEMPLATES.env.globals).update(
@@ -190,12 +167,6 @@ def content_security_policy() -> str:
     headers leave in place.
     """
     return default_content_security_policy([])
-
-
-def carry_set_cookies(source: Response, target: Response) -> None:
-    """Copy every `Set-Cookie` of one answer to another, and no other header."""
-    for cookie in source.headers.getlist("set-cookie"):
-        target.headers.append("set-cookie", cookie)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -233,9 +204,7 @@ class InstalledAuth:
     config: WebAuthConfig
     relying_party: OidcRelyingParty
     admission: AdmissionConfig
-    accounts: SubjectUserStore
-    lock: WriteLock
-    audit: AuditSink
+    transaction: SignInTransaction
     content_security_policy: str
     # The talk host signs in through its own installation of the same wiring;
     # the lobby sends a refused talk sign-in's retry there.
@@ -263,106 +232,12 @@ class DeckRow:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SignIn:
-    """The steps of signing in, run under the configuration of the host asked.
-
-    The lobby and the talk host each own a relying party and a library
-    configuration, read from the request, so one step cannot run under the
-    other host's keys. The hosts differ in the answer to a refusal and in whether
-    the session's row keeps the ID token, which only a host with a logout route
-    needs.
-    """
-
-    sessions: SessionRecordStore
-    auth: InstalledAuth
-    keeps_id_token: bool
-
-    def start(self, request: Request) -> Response:
-        """Send the browser to the issuer, remembering where it was headed.
-
-        `next` is only a request to return somewhere: the library keeps it
-        when it is a path of this app and drops anything else.
-        """
-        answer = Response(status_code=HTTPStatus.SEE_OTHER)
-        answer.headers["location"] = start_login(
-            self.auth.relying_party,
-            request,
-            answer,
-            web_auth_config(request),
-            return_to=request.query_params.get(LOGIN_REDIRECT.redirect_query_param),
-        )
-        return answer
-
-    def finish(
-        self,
-        request: Request,
-        *,
-        refused: Callable[[TalkSignInRefusal, Response], Response],
-    ) -> Response:
-        """Complete the sign-in the issuer returns to, or hand the refusal on.
-
-        The `Response` the library writes its cookies to is the one answered
-        with, so the pending login's clear travels with the
-        session cookies; `refused` receives it to carry them on.
-        """
-        config = web_auth_config(request)
-        answer = Response()
-        outcome = finish_login(
-            self.auth.relying_party,
-            request,
-            answer,
-            config,
-            admission=self.auth.admission,
-            accounts=self.auth.accounts,
-            lock=self.auth.lock,
-            audit=self.auth.audit,
-        )
-        match outcome:
-            case AdmittedLogin():
-                return self._signed_in(request, answer, outcome)
-            case AdmissionRefusal.NOT_A_MEMBER:
-                return refused(TalkSignInRefusal.NO_ACCESS, answer)
-            case (
-                OidcRefusal()
-                | AdmissionRefusal.FOREIGN_ISSUER
-                | AdmissionRefusal.USERNAME_TAKEN
-            ):
-                return refused(TalkSignInRefusal.LOGIN_FAILED, answer)
-            case _:
-                assert_never(outcome)
-
-    def _signed_in(
-        self,
-        request: Request,
-        answer: Response,
-        login: AdmittedLogin,
-    ) -> Response:
-        """Open the session and send the browser on, with every cookie on `answer`."""
-        config = web_auth_config(request)
-        session = open_session(
-            request,
-            config,
-            login,
-            sessions=self.sessions,
-            lock=self.auth.lock,
-            max_sessions=None,
-            keeps_id_token=self.keeps_id_token,
-        )
-        issue_session_cookies(answer, session.id, config)
-        answer.status_code = HTTPStatus.SEE_OTHER
-        answer.headers["location"] = login.return_to or _LOBBY
-        return answer
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class _Surfaces:
     """The lobby's HTML answers, each one asking the use cases what is true."""
 
-    sessions: SessionRecordStore
     decks: Decks
     pages: Pages
     auth: InstalledAuth
-    sign_in: SignIn
 
     def home(self, request: Request) -> Response:
         """List the signed-in person's decks, newest first."""
@@ -390,21 +265,8 @@ class _Surfaces:
         """Show the signed-out page, whose one button starts the sign-in."""
         return self.pages.page(request, "login.html", start_sign_in=START_SIGN_IN_PATH)
 
-    def sign_in_callback(self, request: Request) -> Response:
-        """Complete the sign-in the issuer returns to, or show why it failed."""
-        return self.sign_in.finish(
-            request,
-            refused=lambda refusal, kept: self._refused_page(
-                request, refusal, kept=kept, retry=START_SIGN_IN_PATH
-            ),
-        )
-
-    def start_sign_in(self, request: Request) -> Response:
-        """Send the browser to the issuer."""
-        return self.sign_in.start(request)
-
     def talk_sign_in_refusal_page(
-        self, refusal: TalkSignInRefusal
+        self, refusal: RefusalPage
     ) -> Callable[[Request], Response]:
         """The route that shows why the talk host refused a sign-in.
 
@@ -413,82 +275,23 @@ class _Surfaces:
         """
 
         def show(request: Request) -> Response:
-            return self._refused_page(
+            return self.refused_page(
                 request,
                 refusal,
-                kept=Response(),
                 retry=f"{self.auth.talk_origin}{START_SIGN_IN_PATH}",
             )
 
         return show
 
-    def _refused_page(
-        self,
-        request: Request,
-        refusal: TalkSignInRefusal,
-        *,
-        kept: Response,
-        retry: str,
+    def refused_page(
+        self, request: Request, refusal: RefusalPage, *, retry: str
     ) -> Response:
-        """A refusal's page, with the cookies the library kept and where to retry."""
-        page = self.pages.page(
+        """A refusal's page and where to retry; the library adds the cookie deletion."""
+        return self.pages.page(
             request,
             _REFUSAL_PAGES[refusal],
             status=HTTPStatus.FORBIDDEN,
             start_sign_in=retry,
-        )
-        carry_set_cookies(kept, page)
-        return page
-
-    def log_out(self, request: Request) -> Response:
-        """End the session here and answer the page that ends it at the issuer.
-
-        The library's answer is returned as it is: it clears the sign-in's
-        cookies and carries its own policy and `Cache-Control`.
-        """
-        return log_out(
-            self.auth.relying_party,
-            request,
-            web_auth_config(request),
-            sessions=self.sessions,
-            lock=self.auth.lock,
-            button_label=self.pages.appearance(request).text.log_out,
-        )
-
-    async def backchannel_logout(self, request: Request) -> Response:
-        """End every session of the person Keycloak's Logout Token names.
-
-        The body is read outside any catch-all, so a streamed body over the
-        cap reaches the cap's middleware and gets its 413. Everything else
-        that goes wrong answers 400, the profile's refusal.
-        """
-        body = await request.body()
-        content_type = request.headers.get("content-type")
-        try:
-            result = await run_in_threadpool(
-                self._end_the_sessions_of, body, content_type
-            )
-        except Exception:
-            _logger.exception("back-channel logout failed")
-            result = BackchannelLogoutResult.REFUSED
-        status = (
-            HTTPStatus.OK
-            if result is BackchannelLogoutResult.ACCEPTED
-            else HTTPStatus.BAD_REQUEST
-        )
-        return Response(status_code=status)
-
-    def _end_the_sessions_of(
-        self, body: bytes, content_type: str | None
-    ) -> BackchannelLogoutResult:
-        return receive_backchannel_logout(
-            self.auth.relying_party,
-            body,
-            content_type,
-            accounts=self.auth.accounts,
-            sessions=self.sessions,
-            lock=self.auth.lock,
-            audit=self.auth.audit,
         )
 
     def datenschutz_page(self, request: Request) -> Response:
@@ -510,8 +313,8 @@ def _install_middleware(
     """Install the library's stack once, in its own order.
 
     Every answer, including the gate's redirect and a refusal, carries the
-    security headers. Each store call commits on its own and `touch` is one
-    update-only statement (ADR 0003), so the gate's admission takes no lock.
+    security headers. The gate's store calls commit on their own and `touch` is
+    one update-only statement (ADR 0003), so the gate's admission takes no lock.
     The admin prefix, when it is served, takes a bearer token and no cookie.
     """
     install_web_auth_middleware(
@@ -559,31 +362,34 @@ def create_lobby(
     session.
     """
     surfaces = _Surfaces(
-        sessions=sessions,
         decks=decks,
         pages=pages,
         auth=auth,
-        sign_in=SignIn(sessions=sessions, auth=auth, keeps_id_token=True),
     )
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(lobby, auth.config)
     _install_middleware(lobby, auth, sessions, private.admin_people)
     lobby.add_api_route(_LOBBY, surfaces.home, methods=["GET"])
     lobby.add_api_route(LOGIN_PATH, surfaces.login_page, methods=["GET"])
-    lobby.add_api_route(START_SIGN_IN_PATH, surfaces.start_sign_in, methods=["GET"])
-    lobby.add_api_route(
-        SIGN_IN_CALLBACK_PATH, surfaces.sign_in_callback, methods=["GET"]
+    install_sign_in_routes(
+        lobby,
+        paths=LOBBY_SIGN_IN,
+        relying_party=lambda _request: auth.relying_party,
+        admission=auth.admission,
+        transaction=auth.transaction,
+        refused=lambda request, refusal: surfaces.refused_page(
+            request, refusal.page, retry=START_SIGN_IN_PATH
+        ),
+        keeps_id_token=True,
+        max_sessions=None,
+        logout_button_label=lambda request: pages.appearance(request).text.log_out,
     )
-    for refusal in TalkSignInRefusal:
+    for refusal in RefusalPage:
         lobby.add_api_route(
             talk_sign_in_refusal_path(refusal),
             surfaces.talk_sign_in_refusal_page(refusal),
             methods=["GET"],
         )
-    lobby.add_api_route(LOGOUT_PATH, surfaces.log_out, methods=["POST"])
-    lobby.add_api_route(
-        BACKCHANNEL_LOGOUT_PATH, surfaces.backchannel_logout, methods=["POST"]
-    )
     lobby.add_api_route(_DATENSCHUTZ, surfaces.datenschutz_page, methods=["GET"])
     add_health_route(lobby)
     lobby.include_router(preference_routes(pages=pages, voice=private.voice))

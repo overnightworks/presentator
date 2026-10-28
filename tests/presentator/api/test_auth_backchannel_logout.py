@@ -4,11 +4,10 @@ The issuer is the fake one, so every Logout Token is signed by a key the test
 generated; the accounts and the sessions are the real SQLite stores.
 """
 
-import logging
 import sqlite3
-from collections.abc import Callable, Generator
-from contextlib import closing, contextmanager
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from contextlib import closing
+from dataclasses import dataclass, replace
 from http import HTTPMethod, HTTPStatus
 from pathlib import Path
 from urllib.parse import urlencode
@@ -21,11 +20,11 @@ from webauth.ports import (
     AccountEvent,
     AccountEventKind,
     AuditSink,
+    SignInStores,
     SubjectUserStore,
     UserRecord,
 )
 
-from presentator.adapters.identity import ProcessWriteLock, SqliteSubjectUserStore
 from presentator.api.auth import (
     BACKCHANNEL_LOGOUT_PATH,
     PERMISSIONS_POLICY,
@@ -35,8 +34,8 @@ from tests.support.lobby import A_BROWSERS_ADDRESS, a_content_security_policy
 from tests.support.sign_in_support import (
     RecordingAudit,
     Scene,
+    TransactionDouble,
     a_scene,
-    on_an_event_loop,
 )
 
 _FORM = "application/x-www-form-urlencoded"
@@ -44,25 +43,8 @@ _KEYCLOAK_BY_NAME = "http://presentator-lobby:8000"
 _SIGNED_OUT_START = "/login/oidc?next=%2F"
 _OVER_THE_CAP = 33 * 1024
 _THE_CAP = 32 * 1024
-_BACKCHANNEL_ERROR = "presentator.api.auth"
 _ROWS_OF_SUBJECT_1 = 2
 _ALL_ROWS = 3
-
-
-@dataclass
-class RecordingLock:
-    """The process lock, writing into a log when it is taken and when it is left."""
-
-    log: list[object] = field(default_factory=list[object])
-    sessions_seen: Callable[[], int] = lambda: 0
-    real: ProcessWriteLock = field(default_factory=ProcessWriteLock)
-
-    @contextmanager
-    def hold(self) -> Generator[None]:
-        self.log.append(("held", on_an_event_loop()))
-        with self.real.hold():
-            yield
-            self.log.append(("leaving", self.sessions_seen()))
 
 
 @dataclass
@@ -76,7 +58,7 @@ class Breakdown:
 class AccountsThatBreak:
     """The real accounts, whose read raises once the breakdown has begun."""
 
-    real: SqliteSubjectUserStore
+    real: SubjectUserStore
     breakdown: Breakdown
 
     def get(self, user_id: str) -> UserRecord | None:
@@ -93,9 +75,9 @@ class AccountsThatBreak:
 
 @dataclass(frozen=True)
 class AuditThatBreaks:
-    """The recording audit, whose sink raises once the breakdown has begun."""
+    """An audit sink that raises once the breakdown has begun."""
 
-    real: RecordingAudit
+    real: AuditSink
     breakdown: Breakdown
 
     def account_event(self, event: AccountEvent) -> None:
@@ -109,14 +91,23 @@ class World:
     """Subject-1 signed in in two browsers, subject-2 in a third."""
 
     scene: Scene
-    lock: RecordingLock
+    transaction: TransactionDouble
     first: TestClient
     second: TestClient
     other: TestClient
 
-    def keycloak(self, *, base_url: str = A_BROWSERS_ADDRESS) -> TestClient:
+    def keycloak(
+        self,
+        *,
+        base_url: str = A_BROWSERS_ADDRESS,
+        raise_server_exceptions: bool = True,
+    ) -> TestClient:
         """A server that sends no browser headers, no cookie and no Origin."""
-        return TestClient(self.scene.lobby.app, base_url=base_url)
+        return TestClient(
+            self.scene.lobby.app,
+            base_url=base_url,
+            raise_server_exceptions=raise_server_exceptions,
+        )
 
     def sessions_of(self, subject: str) -> int:
         with closing(sqlite3.connect(self.scene.database)) as connection:
@@ -143,19 +134,21 @@ class World:
 def _arranged(
     tmp_path: Path,
     *,
-    accounts: Callable[[SqliteSubjectUserStore], SubjectUserStore] = lambda real: real,
+    through: Callable[[SignInStores], SignInStores] = lambda stores: stores,
     audit: Callable[[RecordingAudit], AuditSink] = lambda recording: recording,
 ) -> World:
-    lock = RecordingLock()
-    scene = a_scene(tmp_path, lock=lock, accounts=accounts, audit=audit)
-    lock.sessions_seen = lambda: scene.count("sessions")
+    transaction = TransactionDouble(through=through)
+    scene = a_scene(tmp_path, transaction=transaction.around, audit=audit)
+    transaction.sessions_seen = lambda: scene.count("sessions")
     first, second, other = (scene.browser() for _ in range(3))
     scene.sign_in(first)
     scene.sign_in(second)
     scene.sign_in(other, subject="subject-2", username="anna")
     scene.audit.events.clear()
-    lock.log.clear()
-    return World(scene=scene, lock=lock, first=first, second=second, other=other)
+    transaction.log.clear()
+    return World(
+        scene=scene, transaction=transaction, first=first, second=second, other=other
+    )
 
 
 @pytest.fixture
@@ -167,7 +160,7 @@ def _untouched(world: World) -> None:
     assert world.sessions_of("subject-1") == _ROWS_OF_SUBJECT_1
     assert world.sessions_of("subject-2") == 1
     assert world.scene.audit.events == []
-    assert world.lock.log == []
+    assert world.transaction.log == []
 
 
 def test_a_valid_token_ends_every_session_of_its_subject_and_no_other(
@@ -312,28 +305,49 @@ def test_a_body_that_is_not_one_logout_token_form_ends_nothing(
     _untouched(world)
 
 
-def test_a_failing_account_store_answers_400_and_logs_the_exception(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+def test_a_failing_account_store_answers_400_and_leaves_the_sessions_as_they_were(
+    tmp_path: Path,
 ) -> None:
     breakdown = Breakdown()
     world = _arranged(
-        tmp_path, accounts=lambda real: AccountsThatBreak(real, breakdown)
+        tmp_path,
+        through=lambda stores: replace(
+            stores, accounts=AccountsThatBreak(stores.accounts, breakdown)
+        ),
     )
     breakdown.now = True
 
-    with caplog.at_level(logging.ERROR, logger=_BACKCHANNEL_ERROR):
-        answer = world.logout_with(world.keycloak(), world.token())
+    answer = world.logout_with(
+        world.keycloak(raise_server_exceptions=False), world.token()
+    )
 
     assert answer.status_code == HTTPStatus.BAD_REQUEST
     assert world.sessions_of("subject-1") == _ROWS_OF_SUBJECT_1
     assert world.scene.audit.events == []
-    (record,) = [r for r in caplog.records if r.name == _BACKCHANNEL_ERROR]
-    assert record.levelno == logging.ERROR
-    assert record.exc_info is not None
-    assert isinstance(record.exc_info[1], sqlite3.OperationalError)
 
 
-def test_a_failing_audit_line_answers_400_after_the_sessions_already_ended(
+def test_a_failing_audit_call_inside_the_block_answers_400_and_ends_no_session(
+    tmp_path: Path,
+) -> None:
+    breakdown = Breakdown()
+    world = _arranged(
+        tmp_path,
+        through=lambda stores: replace(
+            stores, audit=AuditThatBreaks(stores.audit, breakdown)
+        ),
+    )
+    breakdown.now = True
+
+    answer = world.logout_with(
+        world.keycloak(raise_server_exceptions=False), world.token()
+    )
+
+    assert answer.status_code == HTTPStatus.BAD_REQUEST
+    assert world.sessions_of("subject-1") == _ROWS_OF_SUBJECT_1
+    assert world.scene.audit.events == []
+
+
+def test_a_logging_failure_after_the_commit_answers_400_and_keeps_the_deletion(
     tmp_path: Path,
 ) -> None:
     breakdown = Breakdown()
@@ -342,24 +356,39 @@ def test_a_failing_audit_line_answers_400_after_the_sessions_already_ended(
     )
     breakdown.now = True
 
-    answer = world.logout_with(world.keycloak(), world.token())
+    answer = world.logout_with(
+        world.keycloak(raise_server_exceptions=False), world.token()
+    )
 
     assert answer.status_code == HTTPStatus.BAD_REQUEST
     assert world.sessions_of("subject-1") == 0
 
 
-def test_the_sessions_end_in_one_hold_off_the_event_loop_before_the_answer_starts(
+def test_a_logging_failure_after_the_commit_is_raised_to_the_server(
+    tmp_path: Path,
+) -> None:
+    breakdown = Breakdown()
+    world = _arranged(
+        tmp_path, audit=lambda recording: AuditThatBreaks(recording, breakdown)
+    )
+    breakdown.now = True
+
+    with pytest.raises(OSError, match="BACKCHANNEL_LOGOUT"):
+        world.logout_with(world.keycloak(), world.token())
+
+
+def test_the_sessions_end_in_one_transaction_off_the_event_loop_before_the_answer(
     tmp_path: Path,
 ) -> None:
     world = _arranged(tmp_path)
-    log = world.lock.log
+    log = world.transaction.log
 
     async def lobby_that_logs_the_answer(
         scope: Scope, receive: Receive, send: Send
     ) -> None:
         async def logging_send(message: Message) -> None:
             if message["type"] == "http.response.start":
-                log.append("response-start")
+                log.append(("response-start", None))
             await send(message)
 
         await world.scene.lobby.app(scope, receive, logging_send)
@@ -367,10 +396,10 @@ def test_the_sessions_end_in_one_hold_off_the_event_loop_before_the_answer_start
     keycloak = TestClient(lobby_that_logs_the_answer, base_url=A_BROWSERS_ADDRESS)
     world.logout_with(keycloak, world.token())
 
-    assert log == [("held", False), ("leaving", 1), "response-start"]
+    assert log == [("entered", False), ("left", 1), ("response-start", None)]
 
 
-def test_the_lock_is_never_held_for_a_call_that_is_refused_before_the_delete(
+def test_no_transaction_is_entered_for_a_call_that_is_refused_before_the_delete(
     world: World,
 ) -> None:
     world.logout_with(
@@ -381,7 +410,7 @@ def test_the_lock_is_never_held_for_a_call_that_is_refused_before_the_delete(
     )
     world.keycloak().post(BACKCHANNEL_LOGOUT_PATH, content=b"")
 
-    assert world.lock.log == []
+    assert world.transaction.log == []
 
 
 def test_the_call_reaches_the_lobby_under_an_internal_name_over_plain_http(

@@ -51,8 +51,8 @@ from presentator.adapters.decks import (
 from presentator.adapters.identity import (
     OldDatabaseError,
     ProcessWriteLock,
+    SqliteIdentityWrites,
     SqliteSessionRecordStore,
-    SqliteSubjectUserStore,
     SystemClock,
     TokenIdentifierFactory,
 )
@@ -191,9 +191,20 @@ def build_instance(
     sessions = SqliteSessionRecordStore(settings.database)
     # One use case object serves both callers, so the hook and the poll share
     # the one refresh that runs at a time.
-    lobby_auth, talk_auth = installed_auths(settings, relying_party_for)
+    identity_writes = SqliteIdentityWrites(
+        settings.database, ProcessWriteLock(), LoggingAuditSink()
+    )
+    lobby_auth, talk_auth = installed_auths(
+        settings, identity_writes, relying_party_for
+    )
     return Instance(
-        lobby=_lobby(settings, decks, sessions, key_drafts, lobby_auth),
+        lobby=_lobby(
+            settings,
+            decks,
+            sessions,
+            lobby_auth,
+            _lobby_private(settings, decks, sessions, key_drafts, identity_writes),
+        ),
         talk=_talk(settings, decks, sessions, talk_auth, mirrors),
         poller=Schedule(
             chore=decks.refresh,
@@ -207,8 +218,8 @@ def _lobby(
     settings: Settings,
     decks: Decks,
     sessions: SqliteSessionRecordStore,
-    key_drafts: SqliteSourceKeyDrafts,
     auth: InstalledAuth,
+    private: LobbyPrivate,
 ) -> FastAPI:
     """The lobby host, with the pages and the private routes it serves."""
     return create_lobby(
@@ -216,7 +227,7 @@ def _lobby(
         decks=decks,
         pages=_pages(settings),
         auth=auth,
-        private=_lobby_private(settings, decks, sessions, key_drafts, auth),
+        private=private,
     )
 
 
@@ -269,12 +280,12 @@ def _lobby_private(
     decks: Decks,
     sessions: SqliteSessionRecordStore,
     key_drafts: SqliteSourceKeyDrafts,
-    lobby_auth: InstalledAuth,
+    identity_writes: SqliteIdentityWrites,
 ) -> LobbyPrivate:
     """What only an admin of the lobby may reach: the host's socket, the people route.
 
     The people route exists only while a client is named to call it. Its
-    accounts answer over the lock the sign-in holds, which deletes an account.
+    accounts delete over the lock the sign-in holds.
     """
     clients = settings.admitted_token_clients()
     return LobbyPrivate(
@@ -282,7 +293,7 @@ def _lobby_private(
         admin_people=AdminPeople(
             people=People(
                 decks=decks,
-                accounts=SqliteSubjectUserStore(settings.database, lobby_auth.lock),
+                accounts=identity_writes,
                 sessions=sessions,
                 preferences=SqlitePersonPreferencesStore(settings.database),
                 key_drafts=key_drafts,
@@ -297,17 +308,17 @@ def _lobby_private(
 
 def installed_auths(
     settings: Settings,
+    identity_writes: SqliteIdentityWrites,
     relying_party_for: RelyingPartyFor = relying_party,
 ) -> tuple[InstalledAuth, InstalledAuth]:
-    """The lobby's sign-in wiring and the talk host's, over one lock and one store.
+    """The lobby's sign-in wiring and the talk host's, over one identity-writes owner.
 
     Each host has its own relying party and its own signing key, so neither
     accepts the other's cookies or pending logins; both write the one
-    `sessions` table, so they take the one write lock and the one account
-    store, and report to the one audit sink.
+    `sessions` table, so they enter the one transaction under its one write
+    lock, which also reports to the one audit sink.
     """
     lobby_client, talk_client = client_configs_of(settings)
-    write_lock = ProcessWriteLock()
     lobby = InstalledAuth(
         config=web_auth_config_for(
             settings.secret_key,
@@ -316,9 +327,7 @@ def installed_auths(
         ),
         relying_party=relying_party_for(lobby_client),
         admission=admission_of(settings),
-        accounts=SqliteSubjectUserStore(settings.database, write_lock),
-        lock=write_lock,
-        audit=LoggingAuditSink(),
+        transaction=identity_writes,
         content_security_policy=content_security_policy(),
         talk_origin=settings.talk_origin,
     )

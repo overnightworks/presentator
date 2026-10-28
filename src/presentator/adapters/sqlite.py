@@ -19,6 +19,26 @@ def rows(database: Path) -> Generator[sqlite3.Cursor]:
         connection.close()
 
 
+@contextmanager
+def immediate_transaction(database: Path) -> Generator[sqlite3.Cursor]:
+    """A cursor inside one write transaction, rolled back when the block raises.
+
+    The connection is opened here, on the thread that enters, and stays bound to it.
+    """
+    connection = sqlite3.connect(database, isolation_level=None)
+    try:
+        cursor = connection.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        try:
+            yield cursor
+        except BaseException:
+            connection.rollback()
+            raise
+        connection.commit()
+    finally:
+        connection.close()
+
+
 def apply_schema(database: Path, schema: str) -> None:
     """Make the tables exist; WAL is set once and stays in the file."""
     with rows(database) as cursor:

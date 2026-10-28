@@ -8,16 +8,17 @@ import secrets
 import sqlite3
 import threading
 from collections.abc import Generator, Sequence
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
 from pydantic import SecretStr
-from webauth.ports import UsernameTakenError, WriteLock
+from webauth.ports import AuditSink, SignInStores, UsernameTakenError
 
-from presentator.adapters.sqlite import apply_schema, rows
+from presentator.adapters.audit import BufferedAudit
+from presentator.adapters.sqlite import apply_schema, immediate_transaction, rows
 from presentator.contracts.models import Role, User
 from presentator.contracts.people import SessionSecretsHeld, SessionTimes
 
@@ -122,11 +123,12 @@ class SystemClock:
 
 @dataclass(frozen=True, slots=True)
 class ProcessWriteLock:
-    """The one lock the sign-in callback takes for admission and `open_session`.
+    """The one lock that serializes every identity write of this process.
 
-    The host's calls of webauth's `log_out` and `receive_backchannel_logout`
-    take it too. It defaults to a re-entrant `threading.RLock`, and is held only
-    on worker threads, never on the event loop.
+    `SqliteIdentityWrites` holds it from the start of an entry until its audit
+    events are flushed, so two entries never interleave their log lines. It
+    defaults to a re-entrant `threading.RLock`, and is held only on worker
+    threads, never on the event loop.
     """
 
     primitive: AbstractContextManager[object] = field(default_factory=threading.RLock)
@@ -143,22 +145,27 @@ class SqliteSubjectUserStore:
     """The accounts table, keyed by the identity provider's subject.
 
     Ids compare exactly: the column is binary, so a subject that differs only
-    in case is another account. Every call commits on its own.
+    in case is another account. Every call commits on its own, except on a store
+    that `SqliteIdentityWrites` bound to the cursor of its open transaction.
     """
 
     database: Path
-    lock: WriteLock
+    inside: sqlite3.Cursor | None = None
+
+    def cursor(self) -> AbstractContextManager[sqlite3.Cursor]:
+        """The open transaction's cursor, or a fresh one that commits on its way out."""
+        return rows(self.database) if self.inside is None else nullcontext(self.inside)
 
     def get(self, user_id: str) -> User | None:
         """The account whose id is `user_id` character for character."""
-        with rows(self.database) as cursor:
+        with self.cursor() as cursor:
             row = cursor.execute(_SELECT_ACCOUNT, (user_id,)).fetchone()
         return None if row is None else _user(row)
 
     def create_for_subject(self, subject: str, username: str, role: str) -> User:
         """Add the account of `subject`; only a username another holds is 'taken'."""
         try:
-            with rows(self.database) as cursor:
+            with self.cursor() as cursor:
                 cursor.execute(
                     "INSERT INTO users (id, username, role) VALUES (?, ?, ?)",
                     (subject, username, role),
@@ -172,21 +179,13 @@ class SqliteSubjectUserStore:
 
     def set_role(self, user_id: str, role: str) -> User:
         """Change the role of one existing account; no such account raises."""
-        with rows(self.database) as cursor:
+        with self.cursor() as cursor:
             cursor.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
             if cursor.rowcount != 1:
                 message = "no account to change the role of"
                 raise LookupError(message)
             row = cursor.execute(_SELECT_ACCOUNT, (user_id,)).fetchone()
         return _user(row)
-
-    def delete_account(self, user_id: str) -> None:
-        """Delete the account and its sessions together, serialized with sign-in."""
-        with self.lock.hold(), rows(self.database) as cursor:
-            cursor.execute("BEGIN IMMEDIATE")
-            cursor.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
-            cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
-            cursor.execute("COMMIT")
 
 
 def _is_a_taken_username(refused: sqlite3.IntegrityError) -> bool:
@@ -217,11 +216,18 @@ class SqliteSessionRecordStore:
     """The sessions table, joined to the accounts.
 
     Instants are stored as UTC ISO 8601 text, so comparing the text orders the
-    instants. Every call commits on its own. The refresh token and the ID token
-    sit in plain text in the session's row and leave with it (ADR 0013).
+    instants. Every call commits on its own, except on a store that
+    `SqliteIdentityWrites` bound to the cursor of its open transaction. The
+    refresh token and the ID token sit in plain text in the session's row and
+    leave with it (ADR 0013).
     """
 
     database: Path
+    inside: sqlite3.Cursor | None = None
+
+    def cursor(self) -> AbstractContextManager[sqlite3.Cursor]:
+        """The open transaction's cursor, or a fresh one that commits on its way out."""
+        return rows(self.database) if self.inside is None else nullcontext(self.inside)
 
     def create(
         self,
@@ -234,7 +240,7 @@ class SqliteSessionRecordStore:
     ) -> StoredSession:
         """Open a session created at `now` that stands until `expires_at`."""
         session_id = secrets.token_urlsafe(_IDENTIFIER_BYTES)
-        with rows(self.database) as cursor:
+        with self.cursor() as cursor:
             account = cursor.execute(_SELECT_ACCOUNT, (user_id,)).fetchone()
             if account is None:
                 message = f"no account {user_id} to open a session for"
@@ -263,7 +269,7 @@ class SqliteSessionRecordStore:
 
     def load(self, session_id: str) -> StoredSession | None:
         """Read the row a cookie points at with its account; no account, no session."""
-        with rows(self.database) as cursor:
+        with self.cursor() as cursor:
             row = cursor.execute(
                 "SELECT sessions.id, sessions.created_at, sessions.expires_at,"
                 " sessions.refresh_token, sessions.id_token,"
@@ -286,7 +292,7 @@ class SqliteSessionRecordStore:
 
     def touch(self, session_id: str, *, expires_at: datetime) -> bool:
         """Renew the row only while it still stands; a deleted session stays gone."""
-        with rows(self.database) as cursor:
+        with self.cursor() as cursor:
             cursor.execute(
                 "UPDATE sessions SET expires_at = ? WHERE id = ?",
                 (_stored(expires_at), session_id),
@@ -300,7 +306,7 @@ class SqliteSessionRecordStore:
         refresh_token: SecretStr,
     ) -> bool:
         """Replace the token only while the row stands; a deleted session stays gone."""
-        with rows(self.database) as cursor:
+        with self.cursor() as cursor:
             cursor.execute(
                 "UPDATE sessions SET refresh_token = ? WHERE id = ?",
                 (refresh_token.get_secret_value(), session_id),
@@ -309,18 +315,18 @@ class SqliteSessionRecordStore:
 
     def delete(self, session_id: str) -> None:
         """Delete the row, so logging out cannot be undone with the old cookie."""
-        with rows(self.database) as cursor:
+        with self.cursor() as cursor:
             cursor.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
 
     def delete_for_user(self, user_id: str) -> int:
         """End every session of one account."""
-        with rows(self.database) as cursor:
+        with self.cursor() as cursor:
             cursor.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
             return int(cursor.rowcount)
 
     def sessions_of(self, user_id: str) -> tuple[SessionTimes, ...]:
         """When each sign-in of one account began and ends, and nothing else."""
-        with rows(self.database) as cursor:
+        with self.cursor() as cursor:
             found = cursor.execute(
                 "SELECT created_at, expires_at FROM sessions WHERE user_id = ?",
                 (user_id,),
@@ -335,7 +341,7 @@ class SqliteSessionRecordStore:
 
     def secrets_held(self, user_id: str) -> SessionSecretsHeld:
         """How many sessions of one account hold each token, never the token."""
-        with rows(self.database) as cursor:
+        with self.cursor() as cursor:
             refresh_tokens, id_tokens = cursor.execute(
                 "SELECT COUNT(refresh_token), COUNT(id_token)"
                 " FROM sessions WHERE user_id = ?",
@@ -353,19 +359,61 @@ class SqliteSessionRecordStore:
         expiry, and a sweep must not delete what admission still admits.
         """
         cutoff = _stored(at.replace(microsecond=0))
-        with rows(self.database) as cursor:
+        with self.cursor() as cursor:
             cursor.execute("DELETE FROM sessions WHERE expires_at < ?", (cutoff,))
             return int(cursor.rowcount)
 
     def prune_overflow(self, user_id: str, keep_newest: int) -> None:
         """End all but the `keep_newest` newest sessions by creation."""
-        with rows(self.database) as cursor:
+        with self.cursor() as cursor:
             cursor.execute(
                 "DELETE FROM sessions WHERE user_id = ? AND id NOT IN ("
                 "SELECT id FROM sessions WHERE user_id = ?"
                 " ORDER BY created_at DESC, id DESC LIMIT ?)",
                 (user_id, user_id, keep_newest),
             )
+
+
+@dataclass(frozen=True, slots=True)
+class SqliteIdentityWrites:
+    """Every identity write, each one atomic, serialized by the one `ProcessWriteLock`.
+
+    Calling it enters webauth's `SignInTransaction`: one immediate transaction over
+    accounts and sessions, rolled back when the block raises. The audit events of the
+    entry reach the sink only after COMMIT, still under the lock, so the log names
+    nothing that was rolled back. Deleting an account takes the same lock and
+    transaction.
+    """
+
+    database: Path
+    lock: ProcessWriteLock
+    audit: AuditSink
+
+    def __call__(self) -> AbstractContextManager[SignInStores]:
+        """Enter one sign-in transaction; its stores share the entry's cursor."""
+        return self._entry()
+
+    @contextmanager
+    def _entry(self) -> Generator[SignInStores]:
+        buffered = BufferedAudit()
+        with self.lock.hold():
+            with immediate_transaction(self.database) as cursor:
+                yield SignInStores(
+                    accounts=SqliteSubjectUserStore(self.database, cursor),
+                    sessions=SqliteSessionRecordStore(self.database, cursor),
+                    audit=buffered,
+                )
+            buffered.flush_to(self.audit)
+
+    def get(self, user_id: str) -> User | None:
+        """The account of that id; a read needs no entry."""
+        return SqliteSubjectUserStore(self.database).get(user_id)
+
+    def delete_account(self, user_id: str) -> None:
+        """Delete the account and its sessions together."""
+        with self.lock.hold(), immediate_transaction(self.database) as cursor:
+            cursor.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
 
 
 def _stored(instant: datetime) -> str:
