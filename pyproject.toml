@@ -13,7 +13,7 @@ dependencies = [
     "fastapi==0.141.1",
     "httpx2[ws]==2.13.1",
     "jinja2==3.1.6",
-    "overnightworks-agent-runtime-client @ https://github.com/overnightworks/agent-runtime/releases/download/v0.7.0/overnightworks_agent_runtime_client-0.7.0-py3-none-any.whl#sha256=c404bf89e1eb25ad154143e944b48ab9dadf6b7ebd6bbabf1d329df19e513dbe",
+    "overnightworks-agent-runtime-client @ https://github.com/overnightworks/agent-runtime/releases/download/v0.10.0/overnightworks_agent_runtime_client-0.10.0-py3-none-any.whl#sha256=b5d15a343ed74aa1bad50c0327983c5008cda9e11b173e6fd0db8ffa1bee9ea9",
     "overnightworks-webauth @ https://github.com/overnightworks/webauth/releases/download/v0.23.0/overnightworks_webauth-0.23.0-py3-none-any.whl#sha256=aba7278829bbb813d8ac8053bbdc523fba4dac4b8585e32d351e169f80d8379c",
     "pydantic-settings==2.15.0",
     "python-multipart==0.0.32",

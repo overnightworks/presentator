@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from agent_runtime_client.wire import (
+    PROTOCOL_VERSION,
     FailureCode,
     RejectionCode,
     RunRequest,
@@ -61,10 +62,9 @@ def test_the_request_is_the_run_request_of_the_contract() -> None:
     assert request.method == "POST"
     assert str(request.url) == f"{ORIGIN}/runs"
     run = RunRequest.model_validate_json(request.content)
-    assert (run.v, run.purpose) == (2, "copresenter")
+    assert (run.v, run.agent) == (PROTOCOL_VERSION, "copresenter")
     assert run.roles == ["admin", "user"]
     assert run.tools == {}
-    assert run.model is None
     assert run.turn.system
     assert [(m.role, m.text) for m in run.turn.messages] == [(TurnRole.USER, QUESTION)]
     assert request.extensions["timeout"] == {
@@ -225,7 +225,9 @@ def test_every_rejection_is_unavailable_and_logs_its_code(
     assert (retry_after or "None") in warning
 
 
-_UNKNOWN_CODE = b'{"v": 2, "code": "bribe_me", "message": "Dienst sagt nein"}'
+_UNKNOWN_CODE = (
+    b'{"v": %d, "code": "bribe_me", "message": "Dienst sagt nein"}' % PROTOCOL_VERSION
+)
 
 
 @pytest.mark.parametrize(
