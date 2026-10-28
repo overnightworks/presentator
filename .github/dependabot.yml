@@ -21,10 +21,12 @@ updates:
     groups:
       uv-speech:
         update-types: [minor, patch]
+        # GPU/model-coupled pins stay single PRs so each lands with its own speech/GPU proof
         exclude-patterns:
           - "nvidia-*"
           - "numpy"
           - "faster-whisper"
+          - "piper-tts"
   - package-ecosystem: uv
     directory: /speech/providers/chatterbox
     schedule:
