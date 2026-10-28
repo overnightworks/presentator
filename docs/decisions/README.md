@@ -29,6 +29,7 @@ number is never reused and never renumbered.
 - [ADR 0016: A talk host signs in by itself, as a second app of the same process](0016-a-talk-host-signs-in-by-itself.md)
 - [ADR 0017: A build worker runs each step sealed, one life per step](0017-a-build-worker-runs-each-step-sealed.md)
 - [ADR 0018: Keycloak replaces the accounts an admin creates and the instance's own login](0018-keycloak-replaces-own-accounts.md)
+- [ADR 0019: Presentator is an edge app, deployed by `hal apply` from a tag](0019-presentator-is-an-edge-app.md)
 
 ## How to read a record
 

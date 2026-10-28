@@ -2,3 +2,28 @@
 # block instead of prose headings. From now on every hand-created issue must
 # carry the four-line block skeleton (version, now, next, done_when).
 body_contract = "block"
+
+# A `No-Item: deps` pull request may change only these paths: the manifests and
+# lockfiles `.github/dependabot.yml` writes. Review still judges workflow changes.
+dependency_paths = [
+  "pyproject.toml",
+  "uv.lock",
+  "speech/pyproject.toml",
+  "speech/uv.lock",
+  "speech/providers/chatterbox/pyproject.toml",
+  "speech/providers/chatterbox/uv.lock",
+  "speech/providers/magpie/pyproject.toml",
+  "speech/providers/magpie/uv.lock",
+  "speech/providers/qwen/pyproject.toml",
+  "speech/providers/qwen/uv.lock",
+  "speech/providers/voxcpm/pyproject.toml",
+  "speech/providers/voxcpm/uv.lock",
+  "frontend/package.json",
+  "frontend/pnpm-lock.yaml",
+  "Dockerfile",
+  ".github/workflows/",
+]
+
+# Every lane that shrinks or moves a ratchet baseline writes this one file,
+# so any live claim may change it beyond its own scope (aco PIN-37).
+lane_shared = ["quality/baseline.toml"]

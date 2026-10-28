@@ -22,7 +22,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@slidev/cli": "52.19.1",
+    "@slidev/cli": "53.0.0",
     "@slidev/theme-apple-basic": "0.25.1",
     "@slidev/theme-bricks": "0.25.0",
     "@slidev/theme-default": "0.25.0",
@@ -44,7 +44,9 @@
     "overrides": {
       "dompurify": "3.4.17",
       "image-size": "^2.0.3",
-      "katex": "^0.18.2"
+      "@modelcontextprotocol/node": "2.1.0",
+      "katex": "^0.18.2",
+      "@comark/markdown-it>markdown-it": "^14.1.0"
     }
   }
 }

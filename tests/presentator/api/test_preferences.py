@@ -1,0 +1,707 @@
+"""Settings, Account, and the person menu, driven the way a browser drives them."""
+
+import re
+from dataclasses import dataclass, replace
+from http import HTTPStatus
+
+import pytest
+from httpx2 import Response
+
+from presentator.api.preferences import ACCOUNT, SETTINGS, THEME
+from presentator.application.voice import VoiceStatusUse
+from presentator.contracts.preferences import ThemeChoice
+from presentator.contracts.text import Catalogs
+from presentator.contracts.voice import (
+    SampleLanguage,
+    VoiceDownloadOutcome,
+    VoiceId,
+    VoiceLoadOutcome,
+    VoiceRecovery,
+    VoiceRecoveryKind,
+    VoiceSampleBusyError,
+    VoiceSnapshot,
+    VoiceState,
+    VoiceStatus,
+    VoiceUnavailableError,
+)
+from tests.support.lobby import (
+    CATALOGS,
+    ENGLISH,
+    NEIGHBOUR,
+    USERNAME,
+    Lobby,
+    a_lobby,
+)
+
+
+@dataclass
+class RecordingSpeech:
+    """A private reader whose calls prove the route's authorization boundary."""
+
+    calls: int = 0
+    loaded: VoiceId | None = None
+    downloads: int = 0
+    download_error: VoiceUnavailableError | None = None
+    sampled: tuple[VoiceId, SampleLanguage] | None = None
+    sample_calls: int = 0
+    sample_error: VoiceUnavailableError | None = None
+    status: VoiceSnapshot | None = None
+
+    async def snapshot(self) -> VoiceSnapshot:
+        self.calls += 1
+        if self.status is not None:
+            return self.status
+        return VoiceSnapshot(
+            voices=tuple(
+                VoiceStatus(
+                    id=voice_id,
+                    name=voice_id.value,
+                    language="declared",
+                    state=VoiceState.UNAVAILABLE,
+                )
+                for voice_id in VoiceId
+            ),
+            recovery=None,
+        )
+
+    async def load(self, voice: VoiceId) -> VoiceLoadOutcome:
+        self.loaded = voice
+        return VoiceLoadOutcome.ACTIVATED
+
+    async def download_qwen(self) -> VoiceDownloadOutcome:
+        self.downloads += 1
+        if self.download_error is not None:
+            raise self.download_error
+        return VoiceDownloadOutcome.STARTED
+
+    async def sample(self, voice: VoiceId, language: SampleLanguage) -> bytes:
+        self.sample_calls += 1
+        self.sampled = (voice, language)
+        if self.sample_error is not None:
+            raise self.sample_error
+        return b"fake-wav"
+
+
+def test_only_an_admin_reaches_voice_status_before_private_io() -> None:
+    reader = RecordingSpeech()
+    lobby = a_lobby(
+        voice=VoiceStatusUse(private=reader),
+    )
+
+    lobby.sign_in(username=NEIGHBOUR)
+    refused = lobby.client.get("/settings/voice")
+
+    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert reader.calls == 0
+
+    admin = a_lobby(voice=VoiceStatusUse(private=reader))
+    admin.sign_in()
+    answered = admin.client.get("/settings/voice")
+
+    assert answered.status_code == HTTPStatus.OK
+    assert reader.calls == 1
+    assert answered.text.count("<tbody>") == 1
+
+
+def test_only_an_admin_can_load_a_voice_before_private_io() -> None:
+    reader = RecordingSpeech()
+    lobby = a_lobby(
+        voice=VoiceStatusUse(private=reader),
+    )
+
+    lobby.sign_in(username=NEIGHBOUR)
+    refused = lobby.client.post("/settings/voice/piper/load")
+
+    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert reader.loaded is None
+
+    admin = a_lobby(voice=VoiceStatusUse(private=reader))
+    admin.sign_in()
+    loaded = admin.client.post("/settings/voice/chatterbox/load")
+
+    assert loaded.status_code == HTTPStatus.SEE_OTHER
+    assert loaded.headers["location"] == "/settings/voice"
+    assert reader.loaded is VoiceId.CHATTERBOX
+
+
+@pytest.mark.parametrize(
+    ("headers", "expected_status"),
+    [
+        ({}, HTTPStatus.SEE_OTHER),
+        ({"HX-Request": "true"}, HTTPStatus.OK),
+    ],
+)
+def test_only_an_admin_can_start_qwen_download_before_private_io(
+    headers: dict[str, str], expected_status: HTTPStatus
+) -> None:
+    reader = RecordingSpeech()
+    lobby = a_lobby(
+        voice=VoiceStatusUse(private=reader),
+    )
+
+    lobby.sign_in(username=NEIGHBOUR)
+    refused = lobby.client.post("/settings/voice/qwen3-tts-0.6b/download")
+
+    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert reader.downloads == 0
+
+    admin = a_lobby(voice=VoiceStatusUse(private=reader))
+    admin.sign_in()
+    started = admin.client.post(
+        "/settings/voice/qwen3-tts-0.6b/download", headers=headers
+    )
+
+    assert started.status_code == expected_status
+    if expected_status is HTTPStatus.SEE_OTHER:
+        assert started.headers["location"] == "/settings/voice"
+    assert reader.downloads == 1
+
+
+def test_a_foreign_qwen_download_request_reaches_no_private_work() -> None:
+    reader = RecordingSpeech()
+    lobby = a_lobby(voice=VoiceStatusUse(private=reader))
+    lobby.sign_in()
+
+    refused = lobby.client.post(
+        "/settings/voice/qwen3-tts-0.6b/download",
+        headers={"origin": "https://another.example", "sec-fetch-site": "cross-site"},
+    )
+
+    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert reader.downloads == 0
+
+
+def test_qwen_download_failure_exposes_only_the_catalogue_state() -> None:
+    sentinel = "secret-upstream-url-and-token"
+    reader = RecordingSpeech(download_error=VoiceUnavailableError(sentinel))
+    lobby = a_lobby(voice=VoiceStatusUse(private=reader))
+    lobby.sign_in()
+
+    answered = lobby.client.post(
+        "/settings/voice/qwen3-tts-0.6b/download",
+        headers={"HX-Request": "true"},
+    )
+
+    assert answered.status_code == HTTPStatus.OK
+    assert sentinel not in answered.text
+    assert reader.downloads == 1
+
+
+def test_qwen_downloading_catalogue_polls_without_swapping_the_player() -> None:
+    reader = RecordingSpeech(
+        status=VoiceSnapshot(
+            voices=tuple(
+                VoiceStatus(
+                    id=voice_id,
+                    name=voice_id.value,
+                    language="declared",
+                    state=(
+                        VoiceState.DOWNLOADING
+                        if voice_id is VoiceId.QWEN
+                        else VoiceState.UNAVAILABLE
+                    ),
+                )
+                for voice_id in VoiceId
+            ),
+            recovery=None,
+        )
+    )
+    lobby = a_lobby(voice=VoiceStatusUse(private=reader))
+    lobby.sign_in()
+
+    page = lobby.client.get("/settings/voice").text
+
+    assert 'data-voice-catalogue hx-get="/settings/voice"' in page
+    assert 'hx-trigger="every 1s"' in page
+    assert 'hx-select="[data-voice-catalogue]"' in page
+    assert "data-sample-player" not in page
+
+
+def test_only_an_admin_can_sample_the_active_voice_before_private_io() -> None:
+    reader = RecordingSpeech()
+    lobby = a_lobby(
+        voice=VoiceStatusUse(private=reader),
+    )
+
+    lobby.sign_in(username=NEIGHBOUR)
+    refused = lobby.client.post("/settings/voice/piper/sample/de")
+
+    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert reader.sampled is None
+    assert reader.sample_calls == 0
+
+    admin = a_lobby(voice=VoiceStatusUse(private=reader))
+    admin.sign_in()
+    sample = admin.client.post("/settings/voice/piper/sample/en")
+
+    assert sample.status_code == HTTPStatus.OK
+    assert sample.headers["content-type"] == "audio/wav"
+    assert sample.content == b"fake-wav"
+    assert reader.sampled == (VoiceId.PIPER, SampleLanguage.ENGLISH)
+
+
+def test_a_foreign_sample_request_reaches_no_private_work() -> None:
+    reader = RecordingSpeech()
+    lobby = a_lobby(voice=VoiceStatusUse(private=reader))
+    lobby.sign_in()
+
+    refused = lobby.client.post(
+        "/settings/voice/piper/sample/de",
+        headers={"origin": "https://another.example", "sec-fetch-site": "cross-site"},
+    )
+
+    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert reader.sampled is None
+    assert reader.sample_calls == 0
+
+
+def test_a_signed_out_sample_request_reaches_no_private_work() -> None:
+    reader = RecordingSpeech()
+    lobby = a_lobby(voice=VoiceStatusUse(private=reader))
+
+    refused = lobby.client.post("/settings/voice/piper/sample/de")
+
+    assert refused.status_code == HTTPStatus.FOUND
+    assert reader.sample_calls == 0
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected"),
+    [
+        (VoiceSampleBusyError(), HTTPStatus.CONFLICT),
+        (VoiceUnavailableError(), HTTPStatus.SERVICE_UNAVAILABLE),
+    ],
+)
+def test_sample_route_preserves_busy_and_sanitizes_private_refusals(
+    failure: VoiceUnavailableError, expected: HTTPStatus
+) -> None:
+    reader = RecordingSpeech(sample_error=failure)
+    lobby = a_lobby(voice=VoiceStatusUse(private=reader))
+    lobby.sign_in()
+
+    refused = lobby.client.post("/settings/voice/piper/sample/de")
+
+    assert refused.status_code == expected
+    assert refused.content == b""
+    assert reader.sample_calls == 1
+
+
+def test_invalid_sample_path_is_a_generic_non_audio_failure_before_private_work() -> (
+    None
+):
+    reader = RecordingSpeech()
+    lobby = a_lobby(voice=VoiceStatusUse(private=reader))
+    lobby.sign_in()
+
+    refused = lobby.client.post("/settings/voice/not-a-voice/sample/not-a-language")
+
+    assert refused.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert refused.content == b""
+    assert reader.sampled is None
+    assert reader.sample_calls == 0
+
+
+@pytest.mark.parametrize("active_rows", [0, 1, 2])
+def test_voice_page_renders_the_player_for_exactly_one_active_row(
+    active_rows: int,
+) -> None:
+    reader = RecordingSpeech(
+        status=VoiceSnapshot(
+            voices=tuple(
+                VoiceStatus(
+                    id=voice_id,
+                    name=voice_id.value,
+                    language="declared",
+                    state=(
+                        VoiceState.ACTIVE
+                        if index < active_rows
+                        else VoiceState.UNAVAILABLE
+                    ),
+                )
+                for index, voice_id in enumerate(VoiceId)
+            ),
+            recovery=None,
+        )
+    )
+    lobby = a_lobby(voice=VoiceStatusUse(private=reader))
+    lobby.sign_in()
+
+    page = lobby.client.get("/settings/voice").text
+
+    if active_rows == 1:
+        assert 'data-sample-player data-voice="piper"' in page
+        assert 'data-sample-language="de" aria-pressed="true"' in page
+        assert 'data-sample-language="en" aria-pressed="false"' in page
+        assert "Play sample" in page
+        assert "data-sample-action" in page
+        assert f'<script src="{_VOICE_SAMPLE_SCRIPT}" defer></script>' in page
+        served = lobby.client.get(_VOICE_SAMPLE_SCRIPT)
+        assert served.status_code == HTTPStatus.OK
+        assert "[data-sample-player]" in served.text
+    else:
+        assert "data-sample-player" not in page
+        assert _VOICE_SAMPLE_SCRIPT not in page
+
+
+def test_an_admin_htmx_voice_load_refreshes_the_final_voice_page() -> None:
+    reader = RecordingSpeech()
+    lobby = a_lobby(voice=VoiceStatusUse(private=reader))
+    lobby.sign_in()
+
+    loaded = lobby.client.post(
+        "/settings/voice/piper/load",
+        headers={"HX-Request": "true"},
+    )
+
+    assert loaded.status_code == HTTPStatus.OK
+    assert loaded.headers["hx-refresh"] == "true"
+    assert reader.loaded is VoiceId.PIPER
+
+
+def test_an_admin_sees_unknown_voice_tab_when_private_service_fails() -> None:
+    lobby = a_lobby()
+    lobby.sign_in()
+
+    answered = lobby.client.get("/settings/voice")
+
+    assert answered.status_code == HTTPStatus.OK
+    assert "data-voice-unknown" in answered.text
+    assert ENGLISH.voice_unknown_title in answered.text
+    assert ENGLISH.voice_unknown_explanation in answered.text
+    assert 'href="/settings/voice"' in answered.text
+    assert "data-voice-catalogue" not in answered.text
+
+
+@pytest.mark.parametrize(
+    ("recovery", "message"),
+    [
+        (
+            VoiceRecovery(kind=VoiceRecoveryKind.INVALID_SELECTION),
+            "Saved voice selection is invalid",
+        ),
+        (
+            VoiceRecovery(
+                kind=VoiceRecoveryKind.DURABILITY_UNCONFIRMED,
+                voice=VoiceId.PIPER,
+            ),
+            "Voice is active; restart persistence is unconfirmed",
+        ),
+        (
+            VoiceRecovery(kind=VoiceRecoveryKind.LOAD_FAILED, voice=VoiceId.CHATTERBOX),
+            "Voice load failed",
+        ),
+    ],
+)
+def test_voice_page_renders_retry_loading_and_typed_recovery(
+    recovery: VoiceRecovery, message: str
+) -> None:
+    reader = RecordingSpeech(
+        status=VoiceSnapshot(
+            voices=tuple(
+                VoiceStatus(
+                    id=voice_id,
+                    name=voice_id.value,
+                    language="declared",
+                    state=(
+                        VoiceState.DOWNLOADED
+                        if voice_id is VoiceId.PIPER
+                        else (
+                            VoiceState.FAILED
+                            if voice_id is VoiceId.CHATTERBOX
+                            else VoiceState.UNAVAILABLE
+                        )
+                    ),
+                )
+                for voice_id in VoiceId
+            ),
+            recovery=recovery,
+        )
+    )
+    lobby = a_lobby(voice=VoiceStatusUse(private=reader))
+    lobby.sign_in()
+
+    page = lobby.client.get("/settings/voice").text
+
+    assert 'action="/settings/voice/piper/load"' in page
+    assert 'action="/settings/voice/chatterbox/load"' in page
+    assert page.count("data-voice-loading") == len((VoiceId.PIPER, VoiceId.CHATTERBOX))
+    assert "hx-indicator=" not in page
+    assert message in page
+
+
+_GERMAN = replace(
+    ENGLISH,
+    language_tag="de",
+    language_name="Deutsch",
+    account_title="Konto",
+)
+_INSTANCE_NAME = "Heim"
+_VOICE_SAMPLE_SCRIPT = "/static/voice-sample.js"
+_NO_OVERRIDE = ""
+_SELECTED = re.compile(r'value="([^"]+)"\s*selected')
+
+
+def what_the_selects_show(page: str) -> list[str]:
+    """The value every select on the page stands on, in the order they appear."""
+    return _SELECTED.findall(page)
+
+
+def an_instance_of_two_people(*, catalogs: Catalogs = CATALOGS) -> Lobby:
+    """An admin and a person without the role, both able to sign in."""
+    lobby = a_lobby(
+        catalogs=catalogs,
+    )
+    lobby.sign_in()
+    return lobby
+
+
+def signed_in_as(lobby: Lobby, username: str) -> None:
+    lobby.client.post("/logout")
+    lobby.sign_in(username=username)
+
+
+def save_settings(
+    lobby: Lobby,
+    *,
+    name: str = _INSTANCE_NAME,
+    language: str = ENGLISH.language_tag,
+    theme: ThemeChoice = ThemeChoice.FOLLOW_SYSTEM,
+) -> Response:
+    return lobby.client.post(
+        SETTINGS,
+        data={"name": name, "language": language, "theme": theme.value},
+    )
+
+
+def save_account(lobby: Lobby, *, language: str, theme: str) -> Response:
+    return lobby.client.post(ACCOUNT, data={"language": language, "theme": theme})
+
+
+@pytest.fixture
+def instance() -> Lobby:
+    return an_instance_of_two_people()
+
+
+def test_an_admin_sets_the_instance_name_the_language_and_the_default_theme(
+    instance: Lobby,
+) -> None:
+    saved = save_settings(instance, theme=ThemeChoice.DARK)
+
+    assert saved.status_code == HTTPStatus.SEE_OTHER
+    assert saved.headers["location"] == SETTINGS
+    answer = instance.client.get(SETTINGS)
+    assert answer.status_code == HTTPStatus.OK
+    page = answer.text
+    assert _INSTANCE_NAME in page
+    assert what_the_selects_show(page) == [
+        ENGLISH.language_tag,
+        ThemeChoice.DARK.value,
+    ]
+    assert 'data-theme="dark"' in page
+
+
+def test_an_admin_with_a_fresh_unnamed_instance_saves_the_default_theme(
+    instance: Lobby,
+) -> None:
+    saved = save_settings(instance, name="", theme=ThemeChoice.DARK)
+
+    assert saved.status_code == HTTPStatus.SEE_OTHER
+    assert saved.headers["location"] == SETTINGS
+    answer = instance.client.get(SETTINGS)
+    assert answer.status_code == HTTPStatus.OK
+    page = answer.text
+    assert 'id="instance-name" name="name" value=""' in page
+    assert what_the_selects_show(page) == [
+        ENGLISH.language_tag,
+        ThemeChoice.DARK.value,
+    ]
+    assert 'data-theme="dark"' in page
+
+
+def test_the_instance_default_theme_reaches_a_person_who_chose_nothing(
+    instance: Lobby,
+) -> None:
+    save_settings(instance, theme=ThemeChoice.DARK)
+
+    signed_in_as(instance, NEIGHBOUR)
+
+    assert 'data-theme="dark"' in instance.client.get("/").text
+
+
+@pytest.mark.parametrize("method", ["get", "post"])
+def test_a_person_without_the_admin_role_is_refused_at_settings(
+    instance: Lobby,
+    method: str,
+) -> None:
+    signed_in_as(instance, NEIGHBOUR)
+
+    refused = (
+        instance.client.get(SETTINGS)
+        if method == "get"
+        else save_settings(instance, theme=ThemeChoice.DARK)
+    )
+
+    assert refused.status_code == HTTPStatus.FORBIDDEN
+    signed_in_as(instance, USERNAME)
+    assert "data-theme" not in instance.client.get("/").text
+
+
+def test_only_an_admin_is_offered_the_settings_section(instance: Lobby) -> None:
+    assert ENGLISH.section_settings in instance.client.get("/").text
+
+    signed_in_as(instance, NEIGHBOUR)
+
+    assert ENGLISH.section_settings not in instance.client.get("/").text
+
+
+def test_the_person_menu_offers_account_the_theme_rows_and_log_out(
+    instance: Lobby,
+) -> None:
+    page = instance.client.get("/").text
+
+    assert ENGLISH.menu_account in page
+    assert ENGLISH.menu_theme in page
+    assert ENGLISH.theme_follow_system in page
+    assert ENGLISH.theme_light in page
+    assert ENGLISH.theme_dark in page
+    assert ENGLISH.log_out in page
+
+
+def test_choosing_dark_in_the_person_menu_paints_that_persons_pages(
+    instance: Lobby,
+) -> None:
+    chosen = instance.client.post(THEME, data={"theme": ThemeChoice.DARK.value})
+
+    assert chosen.status_code == HTTPStatus.NO_CONTENT
+    assert chosen.headers["HX-Refresh"] == "true"
+    assert 'data-theme="dark"' in instance.client.get("/").text
+    assert 'data-theme="dark"' in instance.client.get(ACCOUNT).text
+
+
+def test_a_theme_chosen_in_the_menu_leaves_the_neighbours_pages_alone(
+    instance: Lobby,
+) -> None:
+    instance.client.post(THEME, data={"theme": ThemeChoice.DARK.value})
+
+    signed_in_as(instance, NEIGHBOUR)
+
+    assert "data-theme" not in instance.client.get("/").text
+
+
+def test_following_the_system_again_writes_no_theme_onto_the_page(
+    instance: Lobby,
+) -> None:
+    instance.client.post(THEME, data={"theme": ThemeChoice.DARK.value})
+
+    instance.client.post(THEME, data={"theme": ThemeChoice.FOLLOW_SYSTEM.value})
+
+    assert "data-theme" not in instance.client.get("/").text
+
+
+def test_account_shows_who_you_are_and_what_you_chose(instance: Lobby) -> None:
+    save_account(instance, language=ENGLISH.language_tag, theme=ThemeChoice.LIGHT.value)
+
+    page = instance.client.get(ACCOUNT).text
+
+    assert USERNAME in page
+    assert ENGLISH.role_admin in page
+    assert what_the_selects_show(page) == [
+        ENGLISH.language_tag,
+        ThemeChoice.LIGHT.value,
+    ]
+
+
+def test_a_person_without_the_admin_role_reads_their_role_on_account(
+    instance: Lobby,
+) -> None:
+    signed_in_as(instance, NEIGHBOUR)
+
+    assert ENGLISH.role_user in instance.client.get(ACCOUNT).text
+
+
+def test_an_account_choice_paints_that_persons_pages_and_nobody_elses(
+    instance: Lobby,
+) -> None:
+    changed = save_account(
+        instance,
+        language=ENGLISH.language_tag,
+        theme=ThemeChoice.DARK.value,
+    )
+
+    assert changed.status_code == HTTPStatus.NO_CONTENT
+    assert changed.headers["HX-Refresh"] == "true"
+    assert 'data-theme="dark"' in instance.client.get("/").text
+    signed_in_as(instance, NEIGHBOUR)
+    assert "data-theme" not in instance.client.get("/").text
+
+
+def test_handing_the_theme_back_to_the_instance_follows_it_again(
+    instance: Lobby,
+) -> None:
+    save_account(instance, language=_NO_OVERRIDE, theme=ThemeChoice.DARK.value)
+
+    save_account(instance, language=_NO_OVERRIDE, theme=_NO_OVERRIDE)
+
+    assert "data-theme" not in instance.client.get("/").text
+
+
+def test_an_account_language_switches_that_persons_words_only() -> None:
+    instance = an_instance_of_two_people(
+        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN}),
+    )
+
+    save_account(instance, language=_GERMAN.language_tag, theme=_NO_OVERRIDE)
+
+    assert _GERMAN.account_title in instance.client.get(ACCOUNT).text
+    signed_in_as(instance, NEIGHBOUR)
+    assert ENGLISH.account_title in instance.client.get(ACCOUNT).text
+
+
+@pytest.mark.parametrize("address", [SETTINGS, ACCOUNT])
+def test_a_catalog_file_this_instance_has_is_offered_as_a_choice(
+    address: str,
+) -> None:
+    instance = an_instance_of_two_people(
+        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN}),
+    )
+
+    page = instance.client.get(address).text
+
+    assert _GERMAN.language_name in page
+    assert ENGLISH.language_name in page
+
+
+def test_a_language_the_instance_does_not_speak_is_refused_on_settings(
+    instance: Lobby,
+) -> None:
+    refused = save_settings(instance, language="fr")
+
+    assert refused.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_a_language_the_instance_does_not_speak_is_refused_on_account(
+    instance: Lobby,
+) -> None:
+    refused = save_account(instance, language="fr", theme=_NO_OVERRIDE)
+
+    assert refused.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_the_instance_default_language_switches_the_words_for_everybody() -> None:
+    instance = an_instance_of_two_people(
+        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN}),
+    )
+
+    save_settings(instance, language=_GERMAN.language_tag)
+
+    signed_in_as(instance, NEIGHBOUR)
+    assert _GERMAN.account_title in instance.client.get(ACCOUNT).text
+
+
+def test_the_menu_that_writes_a_theme_carries_the_script_that_posts_it(
+    instance: Lobby,
+) -> None:
+    page = instance.client.get("/").text
+
+    assert '<script src="/static/htmx.min.js" defer></script>' in page
+    assert instance.client.get("/static/htmx.min.js").status_code == HTTPStatus.OK

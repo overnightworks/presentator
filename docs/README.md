@@ -29,14 +29,10 @@ One task each, in [`runbooks/`](runbooks/).
 - Run: [from a checkout](runbooks/run-from-a-checkout.md),
   [in a container](runbooks/start-an-instance-in-a-container.md),
   [install the host build toolchain](runbooks/install-the-host-build-toolchain.md).
-- Keep: [upgrade](runbooks/upgrade-an-instance.md),
-  [back up](runbooks/back-up-an-instance.md),
-  [start over from an old database](runbooks/start-over-from-an-old-database.md).
 - Sign-in: [configure Keycloak](runbooks/configure-keycloak.md).
 - Sources: [add a Git source](runbooks/add-a-source.md),
   [renew a secret](runbooks/renew-a-source-secret.md),
   [renew a webhook secret](runbooks/renew-a-webhook-secret.md),
-  [add a folder on this box](runbooks/add-a-folder-on-this-box.md),
   [call the fetch-now hook](runbooks/call-the-fetch-now-hook.md).
 - Decks: [prepare a talk for the build](runbooks/prepare-a-deck-for-the-build.md).
 - Speech: [run the speech service on the host](runbooks/run-the-speech-service-on-the-host.md).

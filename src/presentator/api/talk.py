@@ -3,9 +3,9 @@
 A deck is code, so its talk runs on a site of its own where the lobby's cookies
 never reach. The talk host answers no lobby route: it starts the sign-in at the
 same issuer, completes it at its own callback, and serves the signed-in
-owner's built talk and, to an admin, the co-presenter that talk
-speaks to. It has no page of its own, so a refused sign-in is answered
-by a redirect to the lobby's refusal route.
+owner's built talk and, to any signed-in person, the co-presenter that talk
+speaks to. It has no page of its own, so a refused sign-in is answered by a
+redirect to the lobby's refusal route.
 """
 
 from contextlib import nullcontext

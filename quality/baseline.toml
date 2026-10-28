@@ -4,24 +4,23 @@
 "Runtime._activate_voice" = 18
 
 [file_lines]
-"speech/tests/test_provider_process.py" = 872
-"speech/tests/test_voice_status.py" = 1473
+"speech/tests/test_control_voice_status.py" = 1473
 "src/presentator/adapters/decks.py" = 876
 "src/presentator/application/decks.py" = 974
-"tests/adapters/test_builds.py" = 1252
-"tests/adapters/test_decks.py" = 1424
-"tests/api/test_copresenter.py" = 846
-"tests/api/test_sources.py" = 1718
-"tests/application/test_decks.py" = 2057
 "tests/gitmirror/test_mirror.py" = 1229
+"tests/presentator/adapters/test_builds.py" = 1183
+"tests/presentator/adapters/test_decks.py" = 1352
+"tests/presentator/api/test_copresenter.py" = 800
+"tests/presentator/api/test_sources.py" = 1687
+"tests/presentator/application/test_decks.py" = 1973
 
 [function_lines."speech/providers/chatterbox/src/presentator_chatterbox/model.py"]
 "speech_token_chunks" = 84
 
-[function_lines."speech/providers/magpie/tests/test_entrypoint.py"]
+[function_lines."speech/providers/magpie/tests/test_main.py"]
 "test_entrypoint_reserves_stdout_before_importing_the_provider" = 88
 
-[function_lines."speech/providers/voxcpm/tests/test_entrypoint.py"]
+[function_lines."speech/providers/voxcpm/tests/test_main.py"]
 "test_entrypoint_reserves_stdout_before_importing_the_provider" = 89
 
 [function_lines."speech/scripts/contract_client.py"]
@@ -36,11 +35,11 @@
 [function_lines."speech/tests/test_provider_process.py"]
 "test_direct_closed_entrypoint_streams_after_transient_loader_exits" = 80
 
-[function_lines."speech/tests/test_sample.py"]
+[function_lines."speech/tests/test_control_sample.py"]
 "test_sample_keeps_its_engine_and_rate_when_the_selection_changes" = 73
 "test_sample_waits_for_an_actual_public_speak_stream_then_succeeds" = 68
 
-[function_lines."speech/tests/test_voice_status.py"]
+[function_lines."speech/tests/test_control_voice_status.py"]
 "test_magpie_load_restore_samples_public_speech_and_deselect_reap" = 70
 "test_voxcpm_catalogue_and_factory_import_no_provider_packages" = 66
 "test_voxcpm_load_restore_samples_and_public_disconnect_cancel_the_child" = 67
@@ -51,5 +50,5 @@
 [function_lines."src/presentator/host/main.py"]
 "build_instance" = 78
 
-[function_lines."tests/adapters/test_decks.py"]
+[function_lines."tests/presentator/adapters/test_decks.py"]
 "test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair" = 67

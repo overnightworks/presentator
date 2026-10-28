@@ -43,6 +43,15 @@ edge's decision (`edge/docs/agent-service.md`). Speech stays a private Unix
 socket under the shared UID: readiness, PCM, transcript and spoken sentences
 cross it, and browser identity and credentials do not.
 
+## Keycloak reaches the logout route from inside
+
+Keycloak calls the web's port 8000 for back-channel logout over the internal
+network `hal_backchannel_presentator`, under the alias
+`presentator.hallucinai.de`, without passing the edge's proxy
+([ADR 0019](../decisions/0019-presentator-is-an-edge-app.md)). It is not the
+trusted proxy, so the instance takes its address from the connection and
+ignores any `X-Forwarded-For` it sends.
+
 ## The webhook has a secret, not a login
 
 A git host has no browser to sign in with, so the sessionless

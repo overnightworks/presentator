@@ -7,7 +7,9 @@ reached from outside.
   M0 of [VISION.md](../VISION.md). Amended 2026-10-14: the Cloudflare Access
   outer door is superseded by [ADR 0015](0015-public-like-songmaker-own-login.md);
   the tunnel, the browser-only client, and the fallbacks stand (see Decision
-  and Rejected alternatives)
+  and Rejected alternatives). Amended 2026-10-27: the tunnel on this host and
+  the published port are the edge's proxy and catalog, per
+  [ADR 0019](0019-presentator-is-an-edge-app.md)
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06 recorded on
   [#2](https://github.com/overnightworks/presentator/issues/2)

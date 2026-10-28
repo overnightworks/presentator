@@ -7,33 +7,38 @@ services:
   presentator:
     build:
       context: .
-      args:
-        PRESENTATOR_RUNTIME_UID: ${PRESENTATOR_RUNTIME_UID:?set it to the positive non-root uid shared by Presentator and the host speech service}
     image: presentator
     user: presentator
-    # The default network carries the published port; `agent` is the one the
-    # agent service answers on, which the edge owns and creates.
+    restart: unless-stopped
+    # The edge's proxy routes by these labels (ADR 0019); the talk host is the
+    # same service under its own name.
+    labels:
+      traefik.enable: "true"
+      edge.name: presentator
+      edge.alias: presentator-talk
+      traefik.http.services.presentator.loadbalancer.server.port: "8000"
+      traefik.docker.network: presentator_default
+    # `agent` is the one the agent service answers on and `backchannel` the one
+    # the identity provider reaches the logout route on; the edge owns and
+    # creates both.
     networks:
-      - default
-      - agent
+      default: {}
+      agent: {}
+      backchannel:
+        aliases:
+          - presentator.hallucinai.de
     # A pull's git and ssh children need a reaper.
     init: true
-    # The tunnel of ADR 0007 runs on this machine and enters here, so the
-    # address is offered to this machine alone — and the instance sees that
-    # connection as the network's gateway below, which is the address
-    # PRESENTATOR_TRUSTED_PROXIES has to name.
-    ports:
-      - "127.0.0.1:8000:8000"
-    # Whatever the operator's own file carries, including the variable a
-    # source's credential names. This repository never writes that file.
-    env_file:
-      - path: .env
-        required: false
+    # Plain values stand here as literals: the edge runs Compose with the
+    # caller's whole environment, which must not decide them. The trusted proxy
+    # is the gateway of `presentator_default` below.
     environment:
-      PRESENTATOR_PUBLIC_ORIGIN: ${PRESENTATOR_PUBLIC_ORIGIN:?set it to the one canonical browser origin}
-      PRESENTATOR_TALK_ORIGIN: ${PRESENTATOR_TALK_ORIGIN:?set it to the talk host's canonical browser origin, on another hostname}
+      PRESENTATOR_PUBLIC_ORIGIN: https://presentator.hallucinai.de
+      PRESENTATOR_TALK_ORIGIN: https://presentator-talk.hallucinai.de
+      PRESENTATOR_OIDC_ISSUER: https://auth.hallucinai.de/realms/hallucinai
+      PRESENTATOR_OIDC_CLIENT_ID: presentator
+      PRESENTATOR_TRUSTED_PROXIES: 172.31.251.1
       PRESENTATOR_AGENT_SERVICE: http://agent-service:8080
-      PRESENTATOR_SPEECH_SOCKET: /run/presentator-speech/speech.sock
       PRESENTATOR_BUILD_RUNNER: worker
       PRESENTATOR_SECRET_KEY_FILE: /run/secrets/presentator_secret_key
       PRESENTATOR_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
@@ -49,6 +54,18 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=512m,nr_inodes=10k,mode=1777,nosuid,nodev
+    # The proxy asks the instance's own /health with the public host the
+    # instance serves; the origin comes from the container's environment.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os, urllib.parse, urllib.request; host = urllib.parse.urlsplit(os.environ['PRESENTATOR_PUBLIC_ORIGIN']).hostname; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/health', headers={'Host': host}), timeout=3)"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     # The worker answers on a socket in the volume it owns; the web only waits
     # for it to be started and retries until it answers.
     depends_on:
@@ -58,7 +75,6 @@ services:
       - database:/data/database
       - mirrors:/data/mirrors
       - builds:/data/builds
-      - ${SPEECH_SOCKET_DIRECTORY:?set it to the host speech private socket directory}:/run/presentator-speech:rw
       - type: volume
         source: build-socket
         target: /run/presentator-build
@@ -97,7 +113,7 @@ services:
     # Swap would double the bound, so the two are one number.
     mem_limit: 4g
     memswap_limit: 4g
-    restart: always
+    restart: unless-stopped
     # PID 1 receives only the signals it has a handler for, and the controller
     # has none; SIGKILL ends it at once and the kernel then ends the namespace.
     stop_signal: SIGKILL
@@ -116,18 +132,22 @@ services:
       - PRESENTATOR_BUILD_TIMEOUT_SECONDS
       - PRESENTATOR_BUILD_OUTPUT_MEGABYTES
 
-# Fixed, so that the address every connection through the published port
-# carries is a value the operator can write down rather than read off a
-# network Docker numbered by chance.
+# Fixed, so that the address every connection through the edge's proxy
+# carries is a value written down here rather than read off a network Docker
+# numbered by chance.
 networks:
   default:
+    name: presentator_default
     ipam:
       config:
-        - subnet: 172.31.255.0/24
-          gateway: 172.31.255.1
+        - subnet: 172.31.251.0/24
+          gateway: 172.31.251.1
   agent:
     external: true
     name: hal_agent_presentator
+  backchannel:
+    external: true
+    name: hal_backchannel_presentator
 
 # Files in the operator's home, never environment variables.
 secrets:

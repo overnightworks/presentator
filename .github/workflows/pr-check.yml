@@ -39,7 +39,7 @@ jobs:
         # No Python pin here: this job runs aco's own tool environment
         # through uvx, not this repository's interpreter.
         if: ${{ github.event_name == 'pull_request' }}
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           enable-cache: true
           version: "0.10.9"
@@ -48,8 +48,8 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Pinned to aco v5.1.0 by commit SHA on its canonical URL.
-        run: uvx --from git+https://github.com/overnightworks/aco.git@0eb102b3cd39dafc3c0d184f368bfbd98157cd7a aco check ${{ github.event.pull_request.number }}
+        # Pinned to aco v5.2.0 by commit SHA on its canonical URL.
+        run: uvx --from git+https://github.com/overnightworks/aco.git@1d4cdcc7162a8c3498aa04b07ba5cc75b7f0efad aco check ${{ github.event.pull_request.number }}
 
       - name: Hold the required check name for the merge queue
         if: ${{ github.event_name == 'merge_group' }}

@@ -13,7 +13,7 @@ dependencies = [
     "fastapi==0.141.1",
     "httpx2[ws]==2.13.1",
     "jinja2==3.1.6",
-    "overnightworks-agent-runtime-client @ https://github.com/overnightworks/agent-runtime/releases/download/v0.7.0/overnightworks_agent_runtime_client-0.7.0-py3-none-any.whl#sha256=c404bf89e1eb25ad154143e944b48ab9dadf6b7ebd6bbabf1d329df19e513dbe",
+    "overnightworks-agent-runtime-client @ https://github.com/overnightworks/agent-runtime/releases/download/v0.10.0/overnightworks_agent_runtime_client-0.10.0-py3-none-any.whl#sha256=b5d15a343ed74aa1bad50c0327983c5008cda9e11b173e6fd0db8ffa1bee9ea9",
     "overnightworks-webauth @ https://github.com/overnightworks/webauth/releases/download/v0.23.0/overnightworks_webauth-0.23.0-py3-none-any.whl#sha256=aba7278829bbb813d8ac8053bbdc523fba4dac4b8585e32d351e169f80d8379c",
     "pydantic-settings==2.15.0",
     "python-multipart==0.0.32",
@@ -43,8 +43,10 @@ allow-direct-references = true
 packages = ["src/gitmirror", "src/presentator"]
 
 [tool.pytest.ini_options]
-addopts = "--strict-config --strict-markers"
+addopts = "--strict-config --strict-markers --import-mode=importlib"
+pythonpath = ["."]
 testpaths = ["tests"]
+tmp_path_retention_policy = "failed"
 
 [tool.coverage.run]
 branch = true
@@ -62,11 +64,11 @@ typeCheckingMode = "strict"
 pythonVersion = "3.12"
 
 [tool.vulture]
-paths = ["src", "tests", "tests/vulture_allowlist.py"]
+paths = ["src", "tests", "tests/support/vulture_allowlist.py"]
 
 [tool.ruff]
 target-version = "py312"
-src = ["src", "tests"]
+src = [".", "src", "tests"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -90,7 +92,9 @@ convention = "google"
 # contract the port it stands in for already carries.
 # A double honours the signature of the port it stands in for, even where its
 # canned answer has no use for an argument.
-"tests/**" = ["S101", "D102", "D103", "ARG002"]
+# Test directories are namespace packages on purpose: pytest imports them by path
+# (importlib mode), so duplicate basenames across layers do not collide.
+"tests/**" = ["S101", "D102", "D103", "ARG002", "INP001"]
 # Standalone probe, not a package; it drives docker and pdftotext by name
 # through fixed argument vectors, never a shell, and inside the container it is
 # the client of the worker's socket.
@@ -101,6 +105,9 @@ convention = "google"
 "scripts/probe_build_worker_refusals.py" = ["INP001", "S404", "S603", "S607"]
 "scripts/probe_build_worker_uploads.py" = ["INP001"]
 "scripts/probe_build_worker_web.py" = ["INP001", "S404", "S603", "S607"]
+# Standalone one-time command; it drives git, docker, systemctl and curl by name
+# through fixed argument vectors, never a shell.
+"scripts/cutover.py" = ["INP001", "S404", "S603", "S607"]
 # The attack deck's ctypes child and the programs sent to the worker on stdin.
 "scripts/probe_build_worker/attack/kernel_attacks.py" = ["INP001"]
 "scripts/probe_build_worker/next_life.py" = ["INP001"]
@@ -112,10 +119,10 @@ convention = "google"
 # never renders one, so autoescape has no effect on its behaviour.
 "scripts/check_catalog_purity.py" = ["INP001", "S701"]
 # Drives the check script as a subprocess against temporary and real templates.
-"tests/test_catalog_purity.py" = ["S404", "S603"]
+"tests/scripts/test_check_catalog_purity.py" = ["S404", "S603"]
 # `vulture` reads a whitelist as bare attribute expressions; naming a field
 # there is the entry, and assigning it would only move the dead name.
-"tests/vulture_allowlist.py" = ["B018"]
+"tests/support/vulture_allowlist.py" = ["B018"]
 # Mirroring a remote is spawning `git`; the executable is resolved on PATH and
 # every argument is built here, never taken from a request.
 "src/gitmirror/mirror.py" = ["S404", "S603"]
@@ -127,17 +134,17 @@ convention = "google"
 # both named here and handed only a descriptor list, never a request.
 "src/presentator/adapters/worker_children.py" = ["S404", "S603"]
 # Runs the gate shell and a stalled controller as real processes.
-"tests/adapters/test_worker_children.py" = ["S404", "S603"]
+"tests/presentator/adapters/test_worker_children.py" = ["S404", "S603"]
 # Spawns children of its own to prove which of them the reap collects.
-"tests/test_worker_termination.py" = ["S404", "S603"]
+"tests/presentator/host/test_worker_termination.py" = ["S404", "S603"]
 # Drives that toolchain and that client as the stand-in scripts it puts on PATH.
-"tests/adapters/test_builds.py" = ["S404", "S603"]
+"tests/presentator/adapters/test_builds.py" = ["S404", "S603"]
 # Builds the temporary git repositories every layer that reads one is proven on.
-"tests/conftest.py" = ["S404", "S603", "S607"]
+"tests/support/git_remote.py" = ["S404", "S603", "S607"]
 # Asks the real `git` whether it accepts the credential configuration it is given.
 "tests/gitmirror/test_mirror.py" = ["S404", "S603", "S607"]
 # Asks the same of the credential a source's own row carries.
-"tests/adapters/test_decks.py" = ["S404", "S603", "S607"]
+"tests/presentator/adapters/test_decks.py" = ["S404", "S603", "S607"]
 
 [tool.importlinter]
 root_packages = ["presentator", "gitmirror"]

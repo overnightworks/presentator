@@ -33,6 +33,7 @@ from typing import IO, BinaryIO, Final, Protocol, cast
 
 from gitmirror.model import MirrorError, Revision
 from presentator.adapters.build_runs import (
+    RUN_DIRECTORY_MODE,
     listed_runs,
     removed_run,
     run_name_of,
@@ -404,6 +405,7 @@ class SlidevBuilds:
         root = self.builds.absolute()
         root.mkdir(parents=True, exist_ok=True)
         run = Path(mkdtemp(dir=root))
+        run.chmod(RUN_DIRECTORY_MODE)
         (run / OUTPUT_DIRECTORY).mkdir()
         return BuildPlace(root=root, run=Path(run.name))
 

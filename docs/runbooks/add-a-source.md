@@ -9,8 +9,6 @@ accepted is [sources](../reference/sources.md).
 
 - The Git URL, and for HTTPS a read-only token. An `https://` address has no
   user part; the token belongs in the Secret field.
-- For a folder on this machine use
-  [add a folder on this box](add-a-folder-on-this-box.md) instead.
 
 ## Steps
 

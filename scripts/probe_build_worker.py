@@ -4,11 +4,11 @@ Usage: probe_build_worker.py drive
        probe_build_worker.py client COMMAND [ARGUMENT...]
 
 `drive` runs on the machine that has Docker and the project's compose
-environment (COMPOSE_PROJECT_NAME and the variables compose.yaml requires). It
-starts the worker service from the already built image `presentator`, holds its
-socket volume in a container of the runtime user, and runs `client` in that
-container, over the real socket, through the codec's client half. Every cell it
-drives prints one line, and a cell that is not driven fails the run.
+environment (COMPOSE_PROJECT_NAME). It starts the worker service from the
+already built image `presentator`, holds its socket volume in a container of
+the runtime user, and runs `client` in that container, over the real socket,
+through the codec's client half. Every cell it drives prints one line, and a
+cell that is not driven fails the run.
 
 The life-ending cells (`probe_build_worker_lives.py`) end lives by abandonment,
 by exhaustion with the flood deck (`probe_build_worker/flood`), and by a leftover
@@ -637,7 +637,8 @@ def prove_builds(report: Report) -> None:
             ("pdftotext", str(output / "export-render" / "deck.pdf"), "-"),
             check=True, capture_output=True, text=True,
         ).stdout  # fmt: skip
-    if "Probe node alpha" not in words:
+    # The PDF text layer wraps long mermaid labels at the node width.
+    if "Probe node alpha" not in " ".join(words.split()):
         refuse("the exported render PDF carries no mermaid node label")
     report.cell("54", "hello-deck built and exported through the real worker")
     report.cell("D4", "KaTeX markup in the talk; mermaid label in the PDF text")

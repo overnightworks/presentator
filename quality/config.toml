@@ -19,6 +19,81 @@ reason = "the Slidev addon and its pnpm toolchain, built apart from the Python p
 entry = "speech/"
 reason = "the host speech service and its provider workers, each with its own lock"
 
+[[layout.allow]]
+path = "scripts/probe_build_worker/attack/vite.config.mjs"
+rule = "script-name"
+reason = "Vite loads its configuration by the name vite.config.mjs"
+
+[[layout.allow]]
+path = "scripts/probe_build_worker/flood/vite.config.mjs"
+rule = "script-name"
+reason = "Vite loads its configuration by the name vite.config.mjs"
+
+[[layout.allow]]
+path = "scripts/probe_build_worker/limits/vite.config.mjs"
+rule = "script-name"
+reason = "Vite loads its configuration by the name vite.config.mjs"
+
+[[layout.allow]]
+path = "tests/presentator/api/fixtures/built_talk/_redirects"
+rule = "file-suffix"
+reason = "a redirect rule file the built-talk fixture keeps under its name; the static host serves it as a plain file and does not read its rules"
+
+[[layout.allow]]
+path = "scripts/cutover.py"
+rule = "script-name"
+reason = "the operator ruled this name on #508; the script is deleted in S9m"
+
+[[layout.allow]]
+path = "frontend/tests/addon-package.test.ts"
+rule = "test-layout"
+reason = "its subject is the addon package as Slidev resolves it, which no frontend source file mirrors"
+
+[[layout.allow]]
+path = "frontend/tests/copresenter-refusals.browser.test.ts"
+rule = "test-layout"
+reason = "it exercises the example deck's overlay in a browser, outside the frontend project"
+
+[[layout.allow]]
+path = "frontend/tests/lobby-static-scripts.test.ts"
+rule = "test-layout"
+reason = "its subject is the lobby scripts under src/presentator/api/static, outside the frontend project"
+
+[[layout.allow]]
+path = "frontend/tests/presenter-controls.browser.test.ts"
+rule = "test-layout"
+reason = "it exercises the example deck's overlay in a browser, outside the frontend project"
+
+[[layout.allow]]
+path = "tests/test_compose.py"
+rule = "test-layout"
+reason = "its subject is the root compose.yaml, which no package mirrors"
+
+[[layout.allow]]
+path = "tests/support/vulture_allowlist.py"
+rule = "test-import"
+reason = "vulture's whitelist must import every name it vouches for, test helpers included"
+
+[[layout.allow]]
+path = "speech/providers/chatterbox/tests/test_worker.py"
+rule = "test-layout"
+reason = "it tests presentator_speech_provider_contract, a sibling project with no tests of its own"
+
+[[layout.allow]]
+path = "tests/presentator/adapters/test_person_erasure_sqlite.py"
+rule = "test-layout"
+reason = "it checks every SQLite store of a person at once, so no single adapter module is its subject"
+
+[[layout.allow]]
+path = "tests/presentator/adapters/test_person_export_sqlite.py"
+rule = "test-layout"
+reason = "it checks every SQLite store of a person at once, so no single adapter module is its subject"
+
+[[layout.allow]]
+path = "tests/presentator/adapters/test_person_records.py"
+rule = "test-layout"
+reason = "it checks every SQLite store of a person at once, so no single adapter module is its subject"
+
 # speech/providers/chatterbox/uv.lock: advisories no relock reaches
 [[advisories.allow]]
 id = "PYSEC-2026-2446"

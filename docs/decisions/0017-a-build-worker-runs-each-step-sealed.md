@@ -3,7 +3,8 @@
 Audience: humans and agents working on how a deck is built, on the Docker
 socket the instance holds today, or on the worker's container.
 
-- Status: ACCEPTED 2026-10-22
+- Status: ACCEPTED 2026-10-22. Amended 2026-10-27: the restart policy is
+  `unless-stopped`, per [ADR 0019](0019-presentator-is-an-edge-app.md)
 - Date: 2026-10-22
 - Decision authority: the design of
   [#243](https://github.com/overnightworks/presentator/issues/243) (design B)
@@ -25,7 +26,7 @@ instance image with the command `presentator-worker`, and it is sealed: root
 with the runtime user's group as PID 1, `cap_drop: ALL` with only `SETUID`,
 `SETGID` and `KILL` added, `no-new-privileges`, a read-only root, no network,
 a private IPC namespace, a process bound, a memory bound whose swap equals it,
-no `env_file`, no `init`, no healthcheck and `restart: always`. Its writable
+no `env_file`, no `init`, no healthcheck and `restart: unless-stopped`. Its writable
 places are tmpfs mounts. The image is the one the instance service builds; the
 worker never pulls and has no `build:` of its own.
 
@@ -61,6 +62,5 @@ replaces the stale socket.
 ## Consequences
 
 - Nothing calls the worker until the instance is wired to its socket. A
-  `docker compose up -d` on a host starts an idle worker; it opens no port and
-  reaches nothing.
+  started worker is idle; it opens no port and reaches nothing.
 - The instance keeps the Docker socket until it is wired to the worker.

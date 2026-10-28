@@ -1,0 +1,170 @@
+"""The reply phase R: the sender's spawn, deadline and the life it ends."""
+
+import socket
+from dataclasses import replace
+
+import pytest
+
+from presentator.host.worker_serving import REPLY_SECONDS, LifeEnd, hand_over
+from presentator.host.worker_wire import WireExit
+from tests.support.worker_support import (
+    ACCEPT_TIME,
+    SENDER_LEG,
+    ScriptedLife,
+    role_of,
+    sender_leg,
+)
+
+SENDER_WAIT = 3
+
+
+def accepted_life(**changes: object) -> ScriptedLife:
+    return replace(ScriptedLife(exit_status=WireExit.ACCEPTED), **changes)
+
+
+def test_the_sender_runs_after_the_step_and_its_exit_sent_consumes_the_life(
+    connection: socket.socket,
+    listener: socket.socket,
+) -> None:
+    life = accepted_life()
+
+    outcome = hand_over(connection, life.serving(), ACCEPT_TIME, listener=listener)
+
+    assert outcome == LifeEnd.CONSUMED
+    assert sender_leg(life) == SENDER_LEG
+    assert [role_of(spawned.command) for spawned in life.spawned] == [
+        "idle",
+        "upload",
+        "send",
+    ]
+
+
+SENDER_CONSUMERS = {
+    "the sender's spawn": {"send_spawn_takes": 0.35},
+    "the sender's gate check": {"inspection_takes": 0.5},
+    "the sender's release": {"release_takes": 0.25},
+}
+
+
+@pytest.mark.parametrize(
+    "consumed", SENDER_CONSUMERS.values(), ids=SENDER_CONSUMERS.keys()
+)
+def test_the_sender_wait_is_what_remains_of_the_reply_budget(
+    connection: socket.socket, listener: socket.socket, consumed: dict[str, float]
+) -> None:
+    life = accepted_life(**consumed)
+
+    hand_over(connection, life.serving(), ACCEPT_TIME, listener=listener)
+
+    [taken] = consumed.values()
+    assert life.budgets_waited[SENDER_WAIT] == pytest.approx(REPLY_SECONDS - taken)
+
+
+def test_the_reply_budget_starts_after_the_upload_exited_not_at_the_accept(
+    connection: socket.socket,
+    listener: socket.socket,
+) -> None:
+    life = accepted_life(upload_runs_for=50.0)
+
+    hand_over(connection, life.serving(), ACCEPT_TIME, listener=listener)
+
+    assert life.budgets_waited[SENDER_WAIT] == pytest.approx(REPLY_SECONDS)
+
+
+def test_a_stalled_sender_is_killed_and_reaped_and_the_life_ends_reply_expired(
+    connection: socket.socket,
+    listener: socket.socket,
+) -> None:
+    life = accepted_life(send_stalled=True)
+
+    outcome = hand_over(connection, life.serving(), ACCEPT_TIME, listener=listener)
+
+    assert outcome == LifeEnd.REPLY_EXPIRED
+    assert sender_leg(life) == [
+        "spawn",
+        "status",
+        "connection-check",
+        "release",
+        "readable",
+        "kill",
+        "wait",
+        "close",
+    ]
+
+
+def test_a_reply_budget_spent_before_the_release_prevents_the_release(
+    connection: socket.socket,
+    listener: socket.socket,
+) -> None:
+    life = accepted_life(send_spawn_takes=REPLY_SECONDS + 1, send_stalled=True)
+
+    outcome = hand_over(connection, life.serving(), ACCEPT_TIME, listener=listener)
+
+    assert outcome == LifeEnd.REPLY_EXPIRED
+    assert sender_leg(life) == [
+        "spawn",
+        "status",
+        "kill",
+        "wait",
+        "close",
+    ]
+
+
+SENDER_FAILURES: dict[str, tuple[dict[str, object], LifeEnd, list[str]]] = {
+    "a spawn failure": ({"send_spawn_error": OSError("no")}, LifeEnd.SPAWN, ["spawn"]),
+    "a gate mismatch": (
+        {"send_gate_admits": False},
+        LifeEnd.GATE,
+        ["spawn", "status", "kill", "wait", "close"],
+    ),
+    "an unreadable status": (
+        {"send_status": OSError("gone")},
+        LifeEnd.GATE,
+        ["spawn", "status", "kill", "wait", "close"],
+    ),
+    "a broken pipe at the release": (
+        {"send_release_error": BrokenPipeError()},
+        LifeEnd.GATE,
+        [
+            "spawn",
+            "status",
+            "connection-check",
+            "release",
+            "kill",
+            "wait",
+            "close",
+        ],
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    ("changes", "life_end", "leg"), SENDER_FAILURES.values(), ids=SENDER_FAILURES.keys()
+)
+def test_a_sender_that_cannot_run_ends_the_life_and_is_killed_before_it_runs(
+    connection: socket.socket,
+    listener: socket.socket,
+    changes: dict[str, object],
+    life_end: LifeEnd,
+    leg: list[str],
+) -> None:
+    life = accepted_life(**changes)
+
+    assert (
+        hand_over(connection, life.serving(), ACCEPT_TIME, listener=listener)
+        == life_end
+    )
+
+    assert sender_leg(life) == leg
+
+
+@pytest.mark.parametrize("exit_status", [WireExit.CLOSED, 1, -9])
+def test_a_sender_exit_other_than_sent_ends_the_life_wire_exit(
+    connection: socket.socket, listener: socket.socket, exit_status: int
+) -> None:
+    life = accepted_life(send_exit_status=exit_status)
+
+    assert (
+        hand_over(connection, life.serving(), ACCEPT_TIME, listener=listener)
+        == LifeEnd.WIRE_EXIT
+    )

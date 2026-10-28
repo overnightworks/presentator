@@ -160,7 +160,7 @@ def _text_of(item: object) -> str | None:
 
 
 class ServiceAnswerer:
-    """Answer one question with a run of the agent service's co-presenter purpose."""
+    """Answer one question with a run of the agent service's co-presenter agent."""
 
     def __init__(
         self,

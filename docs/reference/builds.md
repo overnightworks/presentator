@@ -56,6 +56,12 @@ path counts only as exactly `<root>/<name>/out/talk` or
 `<root>/<name>/out/deck.pdf`, read as an absolute path without following links.
 Anything else under the root is left alone and logged.
 
+A run and everything in it are readable by others, so that edge's backup of the
+volume, which runs as another user, can read it. The exception is a
+`staged-<step>` directory: the web creates it closed to everyone but itself
+while a step runs, and a failed cleanup can leave it behind until its run is
+taken away. The backup skips `staged-*` by name.
+
 A stored path that fits no run, or a listing of the root that did not finish,
 stops the sweep with a log line and deletes nothing, because every run
 would then look unreferenced. A removal that fails is logged and tried again by

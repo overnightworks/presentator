@@ -2,8 +2,8 @@
 
 Every byte derives from the codec's constants. A row says where the controller
 must refuse it (`unread_tail`) and how the client leaves it (`ending`), so the
-discriminator in tests/adapters/test_probe_upload_classes.py can show that the
-bytes a probe sends are refused at the byte their class names.
+discriminator in tests/scripts/test_probe_build_worker_uploads_classes.py can
+show that the bytes a probe sends are refused at the byte their class names.
 """
 
 from dataclasses import dataclass
