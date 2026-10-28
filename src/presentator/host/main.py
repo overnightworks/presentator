@@ -132,11 +132,11 @@ def build_instance(
         create_tables(settings.database)
     except OldDatabaseError as refused:
         raise cannot_start(str(refused)) from None
-    identifiers = TokenIdentifierFactory()
     clock = SystemClock()
     # One box for both directions: what the store writes down is what the
     # resolver opens at the pull, and neither picks its own key.
     box = secret_box(settings.secret_key.get_secret_value())
+    identifiers = TokenIdentifierFactory()
     sources = SqliteSourceStore(
         database=settings.database,
         identifiers=identifiers,
@@ -147,7 +147,6 @@ def build_instance(
         identifiers=identifiers,
         box=box,
     )
-    source_timeout = timedelta(seconds=settings.source_timeout_seconds)
     # The one mounted directory a file-kind source's address may resolve
     # under, real filesystem and all: shared by every use, since a symlink or
     # a remount between them must be caught the same way each time.
@@ -155,37 +154,14 @@ def build_instance(
     mirrors = SourceMirrors(
         directory=settings.mirrors,
         credentials=SourceCredentials(database=settings.database, box=box),
-        pull_timeout=source_timeout,
+        pull_timeout=_source_timeout(settings),
         local_mount=local_mount,
     )
-    build_bound = build_bound_of(settings)
-    decks = Decks(
+    decks = _decks(
+        settings,
         sources=sources,
         key_drafts=key_drafts,
-        folders=MirroredDeckFolders(mirrors=mirrors),
-        store=SqliteDeckStore(database=settings.database),
-        builder=SlidevBuilds(
-            builds=settings.builds,
-            toolchain=_what_builds_a_deck(settings, bound=build_bound),
-            mirrors=mirrors,
-            output_megabytes=settings.build_output_megabytes,
-        ),
-        source_runs=SqliteSourceRunStore(database=settings.database),
-        # The same bound a scheduled pull takes: Check connection asks the
-        # same remote for the same one thing, just without writing it down.
-        checker=MirroredConnectionChecker(
-            check_timeout=source_timeout,
-            local_mount=local_mount,
-            known_hosts=settings.mirrors / "known_hosts",
-        ),
-        toolchain_themes=PackageJsonThemes(project=settings.toolchain),
-        # One toolchain step's bound, which is what the refresh needs: it never
-        # reads a live build, only what a process that is gone left behind.
-        build_bound=build_bound,
-        fingerprint_key=connection_fingerprint_key(
-            settings.secret_key.get_secret_value(),
-        ),
-        clock=SystemClock(),
+        mirrors=mirrors,
         local_mount=local_mount,
     )
     sessions = SqliteSessionRecordStore(settings.database)
@@ -211,6 +187,52 @@ def build_instance(
             interval=timedelta(seconds=settings.source_poll_seconds),
         ),
         session_sweep=_session_sweep(sessions, clock),
+    )
+
+
+def _source_timeout(settings: Settings) -> timedelta:
+    """The one bound a pull and a connection check both take."""
+    return timedelta(seconds=settings.source_timeout_seconds)
+
+
+def _decks(
+    settings: Settings,
+    *,
+    sources: SqliteSourceStore,
+    key_drafts: SqliteSourceKeyDrafts,
+    mirrors: SourceMirrors,
+    local_mount: FilesystemLocalMount,
+) -> Decks:
+    """The deck use cases over the adapters the instance chose."""
+    build_bound = build_bound_of(settings)
+    return Decks(
+        sources=sources,
+        key_drafts=key_drafts,
+        folders=MirroredDeckFolders(mirrors=mirrors),
+        store=SqliteDeckStore(database=settings.database),
+        builder=SlidevBuilds(
+            builds=settings.builds,
+            toolchain=_what_builds_a_deck(settings, bound=build_bound),
+            mirrors=mirrors,
+            output_megabytes=settings.build_output_megabytes,
+        ),
+        source_runs=SqliteSourceRunStore(database=settings.database),
+        # The same bound a scheduled pull takes: Check connection asks the
+        # same remote for the same one thing, just without writing it down.
+        checker=MirroredConnectionChecker(
+            check_timeout=_source_timeout(settings),
+            local_mount=local_mount,
+            known_hosts=settings.mirrors / "known_hosts",
+        ),
+        toolchain_themes=PackageJsonThemes(project=settings.toolchain),
+        # One toolchain step's bound, which is what the refresh needs: it never
+        # reads a live build, only what a process that is gone left behind.
+        build_bound=build_bound,
+        fingerprint_key=connection_fingerprint_key(
+            settings.secret_key.get_secret_value(),
+        ),
+        clock=SystemClock(),
+        local_mount=local_mount,
     )
 
 
