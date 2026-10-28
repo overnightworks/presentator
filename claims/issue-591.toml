@@ -1,0 +1,8 @@
+claim_id = "b736544bb42748ac820209a5bf8fbd0e"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "9636aeebfa136b66c1dc5e53aab3a7b559c499cf"
+branch = "claude/issue-591-webauth-0-24"
+scope = ["docs/decisions/0003-libraries-for-models-and-auth.md", "docs/decisions/0006-sqlite-and-files.md", "docs/decisions/0016-a-talk-host-signs-in-by-itself.md", "docs/explanation/trust-boundaries.md", "docs/reference/sign-in-and-session.md", "pyproject.toml", "src/presentator/adapters/audit.py", "src/presentator/adapters/identity.py", "src/presentator/adapters/sqlite.py", "src/presentator/api/auth.py", "src/presentator/api/talk.py", "src/presentator/host/main.py", "tests/presentator/adapters/support/person_instance_support.py", "tests/presentator/adapters/test_identity.py", "tests/presentator/adapters/test_identity_subject_users.py", "tests/presentator/adapters/test_person_export_sqlite.py", "tests/presentator/adapters/test_person_records.py", "tests/presentator/api/test_auth_backchannel_logout.py", "tests/presentator/api/test_auth_logout.py", "tests/presentator/api/test_auth_sign_in_callback.py", "tests/presentator/api/test_talk_routing.py", "tests/presentator/host/test_main.py", "tests/presentator/host/test_main_session_sweep.py", "tests/presentator/host/test_oidc.py", "tests/support/lobby.py", "tests/support/sign_in_support.py", "tests/support/talk_support.py", "uv.lock"]
+opened_commit = "4999a2a0444a8bc44d111e816092102caacd31a6"
+whole_reason = "One library upgrade: 0.24.0 makes the old sign-in functions private, so both hosts move to the library's routes through one SignInTransaction with K7 rollback over one transaction owner, with their tests and docs, or neither builds."
