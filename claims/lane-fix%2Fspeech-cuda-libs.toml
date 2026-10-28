@@ -1,8 +1,0 @@
-claim_id = "633faacf3f00475380ba95e094858a9c"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "955e1ca8ca31b2a6832ed56b55a70a0f81fdd46a"
-branch = "fix/speech-cuda-libs"
-scope = ["speech/pyproject.toml", "speech/src/presentator_speech/cuda_libs.py", "speech/tests/test_cuda_libs.py", "speech/uv.lock"]
-opened_commit = "f2e6877da9173725ffb3604f5cce09cc25fc5d91"
-whole_reason = "One upgrade: the CUDA 12.9 / cuDNN 9.27 wheels ship namespace packages, so the pins, the lock and the loader that finds their lib directories must change together or the service crashes at start."
