@@ -1,0 +1,7 @@
+claim_id = "effaafd031a34bdf91dc43653abcc53b"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "d3ff4830b461c068635d47f43e086cce6e7044c3"
+branch = "dependabot/github_actions/astral-sh/setup-uv-10.3.2"
+scope = [".github/workflows/ci.yml", ".github/workflows/pr-check.yml"]
+opened_commit = "bf612057bf20d2b42faaa19d7d1106065d053920"
