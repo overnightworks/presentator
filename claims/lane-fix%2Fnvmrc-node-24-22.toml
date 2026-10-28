@@ -1,0 +1,7 @@
+claim_id = "d5b2c33807c24a79a33a83b7894b8c57"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "e0b351b785d547088836713560c607c2c30b30a2"
+branch = "fix/nvmrc-node-24-22"
+scope = ["frontend/.nvmrc"]
+opened_commit = "ef7d483db0e5dcbeaa3c10dead4066f7ff3dbfa8"
