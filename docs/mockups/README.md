@@ -133,32 +133,36 @@ from projector view.
 | `m0-lobby/presenter-home-active-narrow.png` | Presenter, AI active — 390 px |
 | `m0-lobby/projector-return-absent.png` | Projector — Home absent, 1024 px |
 
-### The room knows (proposal · issue #525, #293 S12)
+### The room knows (issue #525, #293 S12)
 
 The notice that the room hears an AI. The projector shows a slim strip at the
 bottom of the slide only while the AI is on and hearing, and nothing otherwise;
-the strip carries the sentence of #293's E8 and is never a control. The presenter
-window shows the same strip in its current-slide preview, and its first
-answer opens with „Hier spricht der KI-Co-Presenter.“ The Lines column names the expectation lines of #293 S12 each board shows,
-not only those its caption cites (1 Vorstellung, 2 Sprache im Raum, 3 Ruhe auf
-der Leinwand, 4 Form des Hinweises); the Datenschutz boards are untouched.
+the strip carries the sentence of #293's E8 (ending in the pointer to the
+Datenschutzerklärung) in the deck's language and is never a control. The
+presenter window shows the same strip in its current-slide preview; the AI's
+first answer begins at once, with no introduction. The boards show the rulings
+of 28.10.2026 on #293: line 1 C (no introduction), 2 A (the deck's language),
+3 A (only while listening or answering), 4 A (the strip; covering the footer
+and axes is accepted), 5 A (the neutral sentence). The Lines column names the
+#293 S12 lines each board shows, not only those its caption cites; the
+Datenschutz boards are untouched.
 
 | PNG | Caption | Lines |
 |---|---|---|
 | `m0-lobby/room-off.png` | Projector, AI off: no label, 1024 px | 3 |
-| `m0-lobby/room-listening.png` | Projector, AI listening: strip with E8's sentence, 1024 px | 2, 4 |
+| `m0-lobby/room-listening.png` | Projector, AI listening: strip with E8's sentence, 1024 px | 2, 4, 5 |
+| `m0-lobby/room-listening-english.png` | Projector, English deck listening: strip and sentence in English, 1024 px | 2 |
 | `m0-lobby/room-answering.png` | Projector, AI answering: strip with the speak glyph, 1024 px | 2, 4 |
 | `m0-lobby/room-not-hearing.png` | Projector, AI on but not hearing: no strip, presenter window shows the failure, 1024 px | 3 |
 | `m0-lobby/room-busy.png` | Projector, strip over a busy bottom edge, 1024 px | 4 |
-| `m0-lobby/room-alt-banner-pill.png` | Alternative to the strip: banner until the first answer, then a corner pill, 1024 px | alternative to 4 |
 | `m0-lobby/room-listening-1920.png` | Projector, AI listening, 1920 px (shown at half size) | 2, 4 |
 | `m0-lobby/room-answering-1920.png` | Projector, AI answering, 1920 px (shown at half size) | 2, 4 |
 | `m0-lobby/room-listening-dark.png` | Projector, AI listening, dark theme, 1024 px | 2, 4 |
 | `m0-lobby/room-answering-dark.png` | Projector, AI answering, dark theme, 1024 px | 2, 4 |
 | `m0-lobby/room-presenter-listening.png` | Presenter, AI listening: the preview shows the strip, 1024 px | 2, 4 |
-| `m0-lobby/room-presenter-answering.png` | Presenter, first answer opens with the intro sentence, 1024 px | 1, 2 |
+| `m0-lobby/room-presenter-answering.png` | Presenter, AI answering: the answer begins at once, 1024 px | 1, 2 |
 | `m0-lobby/room-presenter-listening-narrow.png` | Presenter, AI listening, 390 px | 2, 4 |
-| `m0-lobby/room-presenter-answering-narrow.png` | Presenter, first answer, 390 px | 1, 2 |
+| `m0-lobby/room-presenter-answering-narrow.png` | Presenter, AI answering, 390 px | 1, 2 |
 
 ### Rechtliches (#196)
 
