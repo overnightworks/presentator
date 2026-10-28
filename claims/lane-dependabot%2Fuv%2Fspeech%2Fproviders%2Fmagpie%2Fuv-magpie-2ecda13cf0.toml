@@ -1,7 +1,0 @@
-claim_id = "444893eecdea4f0dab01232177b79df2"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "a53617346f1fcb864e4f52f9c35b3b195a17f915"
-branch = "dependabot/uv/speech/providers/magpie/uv-magpie-2ecda13cf0"
-scope = ["speech/providers/magpie/pyproject.toml", "speech/providers/magpie/uv.lock"]
-opened_commit = "5a13ea8ecdc1229997dba5b588138ce3bd52e827"
