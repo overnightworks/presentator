@@ -372,9 +372,10 @@ def test_a_logging_failure_after_the_commit_is_raised_to_the_server(
         tmp_path, audit=lambda recording: AuditThatBreaks(recording, breakdown)
     )
     breakdown.now = True
+    client, token = world.keycloak(), world.token()
 
     with pytest.raises(OSError, match="BACKCHANNEL_LOGOUT"):
-        world.logout_with(world.keycloak(), world.token())
+        world.logout_with(client, token)
 
 
 def test_the_sessions_end_in_one_transaction_off_the_event_loop_before_the_answer(
