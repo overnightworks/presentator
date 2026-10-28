@@ -3,19 +3,40 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
+    groups:
+      actions:
+        update-types: [minor, patch]
   - package-ecosystem: uv
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
+    groups:
+      uv-root:
+        update-types: [minor, patch]
   - package-ecosystem: uv
     directory: /speech
     schedule:
-      interval: daily
+      interval: weekly
+    groups:
+      uv-speech:
+        update-types: [minor, patch]
+        # GPU/model-coupled pins stay single PRs so each lands with its own speech/GPU proof
+        exclude-patterns:
+          - "nvidia-*"
+          - "numpy"
+          - "faster-whisper"
+          - "piper-tts"
   - package-ecosystem: uv
     directory: /speech/providers/chatterbox
     schedule:
-      interval: daily
+      interval: weekly
+    groups:
+      uv-chatterbox:
+        update-types: [minor, patch]
+        exclude-patterns:
+          - "numpy"
+          - "chatterbox-tts"
     ignore:
       # resemble-perth 1.0.1 imports pkg_resources, which setuptools removed in 82 (speech/README.md)
       - dependency-name: setuptools
@@ -23,20 +44,49 @@ updates:
   - package-ecosystem: uv
     directory: /speech/providers/magpie
     schedule:
-      interval: daily
+      interval: weekly
+    groups:
+      uv-magpie:
+        update-types: [minor, patch]
+        exclude-patterns:
+          - "numpy"
+          - "torch*"
+          - "nemo-toolkit*"
   - package-ecosystem: uv
     directory: /speech/providers/qwen
     schedule:
-      interval: daily
+      interval: weekly
+    groups:
+      uv-qwen:
+        update-types: [minor, patch]
+        exclude-patterns:
+          - "numpy"
+          - "qwen-tts"
   - package-ecosystem: uv
     directory: /speech/providers/voxcpm
     schedule:
-      interval: daily
+      interval: weekly
+    groups:
+      uv-voxcpm:
+        update-types: [minor, patch]
+        exclude-patterns:
+          - "numpy"
+          - "voxcpm"
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: daily
+      interval: weekly
+    groups:
+      npm-frontend:
+        update-types: [minor, patch]
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
+    groups:
+      docker:
+        update-types: [minor, patch]
+    ignore:
+      # The Node major moves Dockerfile, frontend/.nvmrc, the engines field and CI together, and Node 26 images drop corepack: a deliberate lane, not a bot PR
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
