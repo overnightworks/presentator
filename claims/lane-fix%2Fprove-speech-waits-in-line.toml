@@ -1,0 +1,7 @@
+claim_id = "139df2bc7beb4328950c0fb69201aaa5"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "27e24e9877c71b640043adaaac172798039afc96"
+branch = "fix/prove-speech-waits-in-line"
+scope = ["speech/scripts/prove_speech.py"]
+opened_commit = "96d9d4175c0100cc40217697add27bcdeb40abc9"
