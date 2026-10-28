@@ -420,3 +420,14 @@ one store.
 - **Waiting for the libraries to be published to an index before using them.**
   There is one consumer and one operator; a Git tag pins a version exactly, and
   publishing buys nothing yet.
+
+### Amendment 2026-10-28: the agent service client moves to protocol 3
+
+Authority: [#550](https://github.com/overnightworks/presentator/issues/550),
+following the operator's ruling of 2026-10-27 on agent-runtime#494.
+
+The client is pinned at agent-runtime 0.10.0 instead of v0.7.0, so the
+"nothing on the wire changes" of the 2026-10-23 amendment no longer holds:
+the wire speaks protocol 3. A run request names its `agent` and carries no
+model; the agent service alone decides the model, and `run_started` reports the
+model and route it chose. The adapters-only rule stands.
