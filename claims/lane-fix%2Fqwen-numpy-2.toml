@@ -1,0 +1,7 @@
+claim_id = "f76b5ecd3f604bc29bfb5366991514e2"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "955e1ca8ca31b2a6832ed56b55a70a0f81fdd46a"
+branch = "fix/qwen-numpy-2"
+scope = ["speech/providers/qwen/pyproject.toml", "speech/providers/qwen/uv.lock"]
+opened_commit = "ffb299d3db2cadac0be581a2c77c1346b05c6de8"
