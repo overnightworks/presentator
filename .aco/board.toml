@@ -23,3 +23,7 @@ dependency_paths = [
   "Dockerfile",
   ".github/workflows/",
 ]
+
+# Every lane that shrinks or moves a ratchet baseline writes this one file,
+# so any live claim may change it beyond its own scope (aco PIN-37).
+lane_shared = ["quality/baseline.toml"]
