@@ -637,7 +637,8 @@ def prove_builds(report: Report) -> None:
             ("pdftotext", str(output / "export-render" / "deck.pdf"), "-"),
             check=True, capture_output=True, text=True,
         ).stdout  # fmt: skip
-    if "Probe node alpha" not in words:
+    # The PDF text layer wraps long mermaid labels at the node width.
+    if "Probe node alpha" not in " ".join(words.split()):
         refuse("the exported render PDF carries no mermaid node label")
     report.cell("54", "hello-deck built and exported through the real worker")
     report.cell("D4", "KaTeX markup in the talk; mermaid label in the PDF text")
