@@ -43,6 +43,7 @@ from tests.support.copresenter_support import (
     a_copresenter_talk_host,
     a_use,
     ask,
+    who,
 )
 from tests.support.lobby import (
     NOW,
@@ -109,15 +110,16 @@ def test_copresenter_routes_refuse_unauthenticated_http_before_private_use() -> 
     assert private.answers.messages == []
 
 
-def test_the_admin_receives_only_speech_readiness() -> None:
+def test_the_admin_receives_the_decks_language_and_speech_readiness() -> None:
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
     lobby.sign_in(role=Role.ADMIN)
 
-    response = client.get("/copresenter/who")
+    response = who(client)
 
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {
+        "language": "de",
         "speech": {"sample_rate": 16_000, "hearing": {"ready": True}},
     }
     assert private.speech.readiness_calls == 1
@@ -129,13 +131,13 @@ def test_a_signed_in_user_is_answered_on_every_copresenter_route() -> None:
     client = lobby.client
     lobby.sign_in(role=Role.USER)
 
-    who = client.get("/copresenter/who")
+    whose = who(client)
     answer = ask(client)
     with client.websocket_connect(HEARING, headers={"origin": TALK_ORIGIN}) as socket:
         socket.send_bytes(b"a user speaks")
         assert socket.receive_json() == {"text": "gehört", "final": True}
 
-    assert who.status_code == HTTPStatus.OK
+    assert whose.status_code == HTTPStatus.OK
     assert answer.status_code == HTTPStatus.OK
     assert private.speech.readiness_calls == 1
     assert len(private.answers.messages) == 1
@@ -506,7 +508,7 @@ def test_private_failures_expose_only_public_failure_shapes() -> None:
     lobby.sign_in()
     private.speech.readiness_unavailable = True
 
-    who = client.get("/copresenter/who")
+    whose = who(client)
     private.speech.readiness_unavailable = False
     private.answers.unavailable = CoPresenterUnavailableError()
     answer = ask(client)
@@ -518,8 +520,8 @@ def test_private_failures_expose_only_public_failure_shapes() -> None:
         socket.send_bytes(b"pcm")
         hearing = socket.receive_json()
 
-    assert who.status_code == HTTPStatus.SERVICE_UNAVAILABLE
-    assert who.json() == {"detail": "Co-presenter unavailable"}
+    assert whose.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert whose.json() == {"detail": "Co-presenter unavailable"}
     assert answer.text == (
         'event: error\ndata: {"message": "the answer could not be spoken"}\n\n'
     )
@@ -546,7 +548,7 @@ def test_a_session_in_use_is_refused_a_page_past_the_cap() -> None:
     lobby.sign_in()
     for _ in range(2):
         clock.advance(SESSION_LIFETIME / 2)
-        assert lobby.client.get("/copresenter/who").status_code == HTTPStatus.OK
+        assert who(lobby.client).status_code == HTTPStatus.OK
     clock.advance(timedelta(seconds=1))
     calls_before = private.speech.readiness_calls
 
@@ -559,7 +561,7 @@ def test_a_session_in_use_is_refused_the_hearing_past_the_cap() -> None:
     lobby.sign_in()
     for _ in range(2):
         clock.advance(SESSION_LIFETIME / 2)
-        assert lobby.client.get("/copresenter/who").status_code == HTTPStatus.OK
+        assert who(lobby.client).status_code == HTTPStatus.OK
     clock.advance(timedelta(seconds=1))
     touches_before = lobby.people.sessions.touches
 

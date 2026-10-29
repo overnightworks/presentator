@@ -320,6 +320,16 @@ def ask(client: TestClient, body: Mapping[str, object] = QUESTION) -> Response:
     return client.post("/copresenter/ask", json=body)
 
 
+def who(
+    client: TestClient,
+    deck: str | None = A_DECK,
+    *,
+    headers: Mapping[str, str] | None = None,
+) -> Response:
+    params = {} if deck is None else {"deck": deck}
+    return client.get("/copresenter/who", params=params, headers=headers)
+
+
 @dataclass
 class ManualDeadline:
     """A deadline released from the test without sleeping or resetting it."""

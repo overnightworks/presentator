@@ -1,16 +1,31 @@
 """The application owns each private co-presenter operation it starts."""
 
+import asyncio
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from presentator.application.copresenter import (
     AskLimiter,
     AskTicket,
     RetryAfter,
 )
+from presentator.contracts.copresenter import (
+    CoPresenterUnavailableError,
+    DeckText,
+)
+from presentator.contracts.voice import SampleLanguage
 from tests.presentator.application.support.fakes import FrozenClock
+from tests.support.copresenter_support import (
+    A_DECK_TEXT,
+    ASKED,
+    PrivateFakes,
+    a_use,
+    the_admins_decks,
+)
 
 
 def a_limiter() -> AskLimiter:
@@ -133,3 +148,33 @@ def test_simultaneous_releases_of_one_ticket_free_the_slot_exactly_once() -> Non
     assert isinstance(replacement, AskTicket)
     old.release()
     assert limiter.admit("session") == RetryAfter(1)
+
+
+def test_the_decks_language_is_the_one_its_manifest_names() -> None:
+    fakes = PrivateFakes()
+    fakes.texts.text = DeckText(title="t", language="en", slides=())
+    use = a_use(fakes, the_admins_decks())
+
+    language = asyncio.run(use.deck_language(ASKED))
+
+    assert language is SampleLanguage.ENGLISH
+    assert fakes.texts.asked == [(ASKED.deck, ASKED.source)]
+
+
+def test_a_deck_without_a_language_is_german() -> None:
+    fakes = PrivateFakes()
+    fakes.texts.text = DeckText(title=A_DECK_TEXT.title, language=None, slides=())
+    use = a_use(fakes, the_admins_decks())
+
+    assert asyncio.run(use.deck_language(ASKED)) is SampleLanguage.GERMAN
+
+
+@pytest.mark.parametrize("failure", ["mirror", "no slides"])
+def test_a_deck_whose_words_cannot_be_read_has_no_language(failure: str) -> None:
+    fakes = PrivateFakes()
+    fakes.texts.unreadable = failure == "mirror"
+    fakes.texts.text = None
+    use = a_use(fakes, the_admins_decks())
+
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(use.deck_language(ASKED))

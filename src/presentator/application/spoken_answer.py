@@ -6,6 +6,7 @@ import re
 from typing import TYPE_CHECKING, Final
 
 from presentator.contracts.copresenter import AnswerText, Audio, Done, Sentence
+from presentator.contracts.voice import SampleLanguage
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -68,6 +69,14 @@ class SpokenAnswer:
 def spoken_language(asked: str | None, deck: str | None) -> str:
     """The browser's language, else the deck's, else German."""
     return asked or deck or DEFAULT_LANGUAGE
+
+
+def deck_language_of(written: str | None) -> SampleLanguage:
+    """The language a deck's manifest names when the voice has it, else German."""
+    try:
+        return SampleLanguage(written)
+    except ValueError:
+        return SampleLanguage(DEFAULT_LANGUAGE)
 
 
 async def spoken_events(
