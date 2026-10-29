@@ -124,6 +124,38 @@ def add_copresenter_routes(
     use = surface.use
     guard = _SessionGuard(admission=admission, delay=surface.delay)
 
+    async def _hear(socket: WebSocket, language: str = "de") -> None:
+        if (
+            socket.headers.get("origin") != surface.browser_origin
+            or any(key != "language" for key in socket.query_params)
+            or len(socket.query_params.getlist("language")) > 1
+        ):
+            await socket.close(code=_POLICY_VIOLATION)
+            return
+        connection = admission(socket)
+        if connection is None:
+            await socket.close(code=_POLICY_VIOLATION)
+            return
+        await socket.accept()
+        await _hearing_lease(
+            socket,
+            language=language,
+            session_id=connection.session_id,
+            use=use,
+            guard=guard,
+        )
+
+    router.add_api_route("/who", _who_route(use, admission=admission), methods=["GET"])
+    router.add_api_route(
+        "/ask", _ask_route(surface, admission=admission, guard=guard), methods=["POST"]
+    )
+    router.add_api_websocket_route("/hear", _hear)
+    app.include_router(router)
+
+
+def _who_route(
+    use: CoPresenterUse, *, admission: Admission
+) -> Callable[[Request, str], Awaitable[JSONResponse]]:
     async def _who(request: Request, deck: str = "") -> JSONResponse:
         connection = admission(request)
         if connection is None:
@@ -146,33 +178,7 @@ def add_copresenter_routes(
             },
         )
 
-    async def _hear(socket: WebSocket, language: str = "de") -> None:
-        if (
-            socket.headers.get("origin") != surface.browser_origin
-            or any(key != "language" for key in socket.query_params)
-            or len(socket.query_params.getlist("language")) > 1
-        ):
-            await socket.close(code=_POLICY_VIOLATION)
-            return
-        connection = admission(socket)
-        if connection is None:
-            await socket.close(code=_POLICY_VIOLATION)
-            return
-        await socket.accept()
-        await _hearing_lease(
-            socket,
-            language=language,
-            session_id=connection.session_id,
-            use=use,
-            guard=guard,
-        )
-
-    router.add_api_route("/who", _who, methods=["GET"])
-    router.add_api_route(
-        "/ask", _ask_route(surface, admission=admission, guard=guard), methods=["POST"]
-    )
-    router.add_api_websocket_route("/hear", _hear)
-    app.include_router(router)
+    return _who
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

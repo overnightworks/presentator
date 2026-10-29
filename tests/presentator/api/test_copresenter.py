@@ -112,10 +112,8 @@ def test_copresenter_routes_refuse_unauthenticated_http_before_private_use() -> 
 
 def test_the_admin_receives_the_decks_language_and_speech_readiness() -> None:
     lobby, private, _clock = a_copresenter_talk_host()
-    client = lobby.client
     lobby.sign_in(role=Role.ADMIN)
-
-    response = who(client)
+    response = who(lobby.client)
 
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {
