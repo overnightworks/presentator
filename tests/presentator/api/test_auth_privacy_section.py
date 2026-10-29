@@ -18,21 +18,25 @@ _MINUTE = timedelta(minutes=1)
 @pytest.mark.parametrize(
     ("unit", "kept"),
     [
-        ("Stunden", {SESSION_LIFETIME / _HOUR, DRAFT_MAX_AGE / _HOUR}),
+        (
+            "Stunden",
+            [SESSION_LIFETIME / _HOUR, SESSION_LIFETIME / _HOUR, DRAFT_MAX_AGE / _HOUR],
+        ),
         (
             "Minuten",
-            {
+            [
                 SESSION_SWEEP_INTERVAL / _MINUTE,
                 timedelta(seconds=PENDING_LOGIN_MAX_AGE_SECONDS) / _MINUTE,
-            },
+                timedelta(seconds=PENDING_LOGIN_MAX_AGE_SECONDS) / _MINUTE,
+            ],
         ),
     ],
 )
 def test_every_number_the_section_states_equals_the_code_that_keeps_it(
-    unit: str, kept: set[float]
+    unit: str, kept: list[float]
 ) -> None:
     text = _SECTION.read_text(encoding="utf-8")
 
-    stated = {int(number) for number in re.findall(rf"(\d+) {unit}", text)}
+    stated = [int(number) for number in re.findall(rf"(\d+) {unit}", text)]
 
-    assert stated == kept
+    assert sorted(stated) == sorted(kept)
