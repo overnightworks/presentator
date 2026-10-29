@@ -42,7 +42,7 @@ presentator's colour in the app slot; `appkit.css` itself stays as shipped.
 
 The room and presenter groups (class `deck-surfaces`) keep the look their frozen pictures
 (#139, #293 S12) were drawn in: their tokens, board chrome and IBM Plex from Google
-Fonts are scoped to `.deck`, so their renders do not change with the lobby's look.
+Fonts are scoped to `.deck-surfaces`, so their renders do not change with the lobby's look.
 
 ### Rendering
 
