@@ -126,15 +126,15 @@ def page_of(decks: Decks, slug: str) -> DeckPage:
     return page
 
 
-def test_the_most_recently_changed_deck_is_listed_first() -> None:
+def test_the_most_recently_changed_deck_is_listed_first_and_equals_by_slug() -> None:
     decks = decks_over(
         a_folder("older", changed_ago=timedelta(days=6)),
-        a_folder("newer", changed_ago=timedelta(minutes=2)),
+        a_folder("b-newer"),
+        a_folder("a-newer"),
     )
-
     listed = refreshed(decks)
 
-    assert [deck.slug for deck in listed] == ["newer", "older"]
+    assert [deck.slug for deck in listed] == ["a-newer", "b-newer", "older"]
     assert listed[0].age == timedelta(minutes=2)
 
 

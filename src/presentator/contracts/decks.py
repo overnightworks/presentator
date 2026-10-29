@@ -426,6 +426,7 @@ class ListedDeck:
     slug: str
     title: str
     state: DeckState
+    changed_at: datetime
     age: timedelta
 
 
