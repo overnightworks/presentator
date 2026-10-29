@@ -6,8 +6,8 @@ Run inside the `presentator` service as its own user. It reads the settings
 with `load_settings()`, takes the worker from `the_build_worker` and runs the
 named steps of a deck in a fresh run directory under the builds root. It prints
 the run's name as the first JSON line, so a driver can watch the run directory,
-and the outcome as the last one: each step's `BuildFailure` text, and what the
-run directory holds when the steps are over.
+and the outcome as the last one: each step's `BuildFailure` reason, text and
+counts, and what the run directory holds when the steps are over.
 """
 
 import hashlib
@@ -154,7 +154,13 @@ def main(case: Case, kinds: list[StepKind]) -> None:
         )
         step: dict[str, object] = {"step": kind.value, "failed": failure is not None}
         if failure is not None:
-            step["text"] = failure.text
+            step["failure"] = {
+                "reason": failure.reason.value,
+                "text": failure.text,
+                "written_megabytes": failure.written_megabytes,
+                "allowed_megabytes": failure.allowed_megabytes,
+                "allowed_entries": failure.allowed_entries,
+            }
         steps.append(step)
         if failure is not None:
             break

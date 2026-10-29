@@ -11,15 +11,8 @@ from pathlib import Path
 import pytest
 
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES, RefusalLimit
-from presentator.adapters.build_worker import (
-    OUTPUT_SHAPE_FOR_A_PAGE,
-    exchange_with_worker,
-)
-from presentator.adapters.builds import (
-    TOO_MANY_FOR_A_PAGE,
-    TOO_MUCH_FOR_A_PAGE,
-    BuildStep,
-)
+from presentator.adapters.build_worker import exchange_with_worker
+from presentator.adapters.builds import BuildStep
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
     FAILURE_TEXT_LIMIT,
@@ -27,6 +20,7 @@ from presentator.contracts.decks import (
     PDF_FILE,
     TALK_DIRECTORY,
     BuildFailure,
+    BuildFailureReason,
     StepKind,
 )
 from tests.presentator.adapters.support.build_worker_support import (
@@ -208,35 +202,50 @@ def test_a_staging_left_over_from_before_is_a_fault_and_is_not_removed(
 
 
 @pytest.mark.parametrize(
-    ("reply", "text"),
+    ("reply", "failure"),
     [
         pytest.param(
             refused_reply(RefusalLimit.MEGABYTES, 2),
-            TOO_MUCH_FOR_A_PAGE.format(written=2, allowed=MEGABYTES),
+            BuildFailure(
+                reason=BuildFailureReason.OUTPUT_MEGABYTES,
+                written_megabytes=2,
+                allowed_megabytes=MEGABYTES,
+            ),
             id="megabytes",
         ),
         pytest.param(
             refused_reply(RefusalLimit.ENTRIES),
-            TOO_MANY_FOR_A_PAGE.format(allowed=MAXIMUM_ENTRIES),
+            BuildFailure(
+                reason=BuildFailureReason.OUTPUT_ENTRIES,
+                allowed_entries=MAXIMUM_ENTRIES,
+            ),
             id="entries",
         ),
         pytest.param(
-            refused_reply(RefusalLimit.SHAPE), OUTPUT_SHAPE_FOR_A_PAGE, id="shape"
+            refused_reply(RefusalLimit.SHAPE),
+            BuildFailure(reason=BuildFailureReason.OUTPUT_SHAPE),
+            id="shape",
         ),
-        pytest.param(failed_reply("it broke"), "it broke", id="failed with text"),
+        pytest.param(
+            failed_reply("it broke"),
+            BuildFailure.said("it broke"),
+            id="failed with text",
+        ),
         pytest.param(
             failed_reply("e" * FAILURE_TEXT_LIMIT),
-            "e" * FAILURE_TEXT_LIMIT,
+            BuildFailure.said("e" * FAILURE_TEXT_LIMIT),
             id="failed with the longest text",
         ),
-        pytest.param(failed_reply(None), None, id="failed without text"),
+        pytest.param(
+            failed_reply(None), BuildFailure.without_words(), id="failed without text"
+        ),
     ],
 )
-def test_a_refused_or_failed_reply_is_the_text_the_deck_page_shows(
-    tmp_path: Path, reply: bytes, text: str | None
+def test_a_refused_or_failed_reply_is_the_reason_the_deck_page_words(
+    tmp_path: Path, reply: bytes, failure: BuildFailure
 ) -> None:
     """Cell B9."""
     step = a_step(tmp_path)
 
-    assert exchanged_with(step, reply) == BuildFailure(text=text)
+    assert exchanged_with(step, reply) == failure
     assert not staging_of(step).exists()

@@ -637,7 +637,7 @@ class FakeBuildRunner:
         if self.while_building is not None:
             self.while_building(deck)
         if self.fails:
-            return BuildFailure(text=self.says)
+            return BuildFailure.said(self.says)
         root = _SOMEWHERE_ELSE if self.writes_outside_the_root else self.root
         run = BuildRun(f"run-{len(self.built)}")
         self.on_disk.add(run)

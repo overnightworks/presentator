@@ -27,8 +27,6 @@ from presentator.adapters.build_wire import (
     send_status,
 )
 from presentator.adapters.build_worker import (
-    DECK_PATHS_FOR_A_PAGE,
-    DECK_SIZE_FOR_A_PAGE,
     SocketFault,
     what_is_wrong,
 )
@@ -38,6 +36,7 @@ from presentator.contracts.decks import (
     PDF_FILE,
     TALK_DIRECTORY,
     BuildFailure,
+    BuildFailureReason,
     StepKind,
 )
 from presentator.host import worker
@@ -506,18 +505,26 @@ def a_deck_with_a_deep_path(deck: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("make", "text"),
+    ("make", "failure"),
     [
         pytest.param(
             a_deck_over_the_megabytes,
-            DECK_SIZE_FOR_A_PAGE.format(megabytes=MEGABYTES, entries=MAXIMUM_ENTRIES),
+            BuildFailure(
+                reason=BuildFailureReason.DECK_MEGABYTES,
+                allowed_megabytes=MEGABYTES,
+                allowed_entries=MAXIMUM_ENTRIES,
+            ),
             id="megabytes",
         ),
-        pytest.param(a_deck_with_a_deep_path, DECK_PATHS_FOR_A_PAGE, id="path rule"),
+        pytest.param(
+            a_deck_with_a_deep_path,
+            BuildFailure(reason=BuildFailureReason.DECK_PATHS),
+            id="path rule",
+        ),
     ],
 )
 def test_a_deck_over_a_limit_or_breaking_a_rule_says_so_and_connects_to_nothing(
-    volume: Path, tmp_path: Path, make: Callable[[Path], None], text: str
+    volume: Path, tmp_path: Path, make: Callable[[Path], None], failure: BuildFailure
 ) -> None:
     """Cell B10: no socket exists, so a connect would have retried until W."""
     step = a_step(tmp_path)
@@ -526,7 +533,7 @@ def test_a_deck_over_a_limit_or_breaking_a_rule_says_so_and_connects_to_nothing(
 
     result = toolchain(volume / "absent", connect_window_seconds=30.0).ran(step)
 
-    assert result == BuildFailure(text=text)
+    assert result == failure
     assert time.monotonic() - started < PROMPTLY
 
 

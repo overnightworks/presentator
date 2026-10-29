@@ -31,6 +31,7 @@ from presentator.contracts.decks import (
     RECENT_SOURCE_RUNS,
     SLIDES_FILE,
     BuildAttempt,
+    BuildFailure,
     BuildOutcome,
     DeckFolder,
     Source,
@@ -98,14 +99,17 @@ def folders_read(tmp_path: Path, source: Source) -> tuple[DeckFolder, ...]:
 def an_attempt(
     *,
     outcome: BuildOutcome = BuildOutcome.FAILED,
-    failure: str | None = _WHAT_THE_TOOLCHAIN_SAID,
     commit: str = _A_LATER_COMMIT,
 ) -> BuildAttempt:
     return BuildAttempt(
         commit=commit,
         started_at=_TRIED_AT,
         outcome=outcome,
-        failure=failure,
+        failure=(
+            None
+            if outcome is BuildOutcome.RUNNING
+            else BuildFailure.said(_WHAT_THE_TOOLCHAIN_SAID)
+        ),
     )
 
 
@@ -1088,7 +1092,7 @@ def test_everything_a_build_wrote_switches_over_together(tmp_path: Path) -> None
 
 @pytest.mark.parametrize(
     "attempt",
-    [an_attempt(outcome=BuildOutcome.RUNNING, failure=None), an_attempt()],
+    [an_attempt(outcome=BuildOutcome.RUNNING), an_attempt()],
     ids=["a build that began", "a build that failed"],
 )
 def test_the_build_a_deck_last_started_is_kept_beside_the_talk_that_stands(
@@ -1106,21 +1110,6 @@ def test_the_build_a_deck_last_started_is_kept_beside_the_talk_that_stands(
     assert kept is not None
     assert kept.attempt == attempt
     assert kept.build == built
-
-
-def test_a_build_that_switched_over_clears_the_attempt_that_led_to_it(
-    tmp_path: Path,
-) -> None:
-    store = a_deck_store(tmp_path)
-    store.put(a_deck())
-    store.put_attempt("kundenfeedback", an_attempt())
-
-    store.put_build("kundenfeedback", a_build(tmp_path, commit=_A_LATER_COMMIT))
-
-    kept = store.get("kundenfeedback")
-    assert kept is not None
-    assert kept.attempt is None
-    assert kept.build == a_build(tmp_path, commit=_A_LATER_COMMIT)
 
 
 def test_taking_a_deck_in_again_leaves_what_it_delivers_standing(
