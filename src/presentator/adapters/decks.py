@@ -1,7 +1,9 @@
-"""Where decks come from and where they are kept: git, TOML, and SQLite.
+"""Where decks come from and where their sources are kept: git, TOML, and SQLite.
 
 `gitmirror` (ADR 0010) owns talking to the remote; this module translates
-between its vocabulary and the product's, and holds the deck table (ADR 0006).
+between its vocabulary and the product's. It holds the source tables and their
+stores, and creates the deck table's schema (ADR 0006); the deck table's store
+is in `deck_store.py`.
 """
 
 import logging
