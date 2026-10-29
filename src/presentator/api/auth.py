@@ -47,6 +47,7 @@ from presentator.api.health import HEALTH_IS_PUBLIC, add_health_route
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
 from presentator.api.pages import TEMPLATES, Pages, state_word
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
+from presentator.api.preference_api import preference_api_routes
 from presentator.api.preferences import preference_routes
 from presentator.api.problems import install_problem_handler
 from presentator.api.session_api import SESSION_PATH, SessionAddresses, session_routes
@@ -361,6 +362,7 @@ def create_lobby(
     add_health_route(lobby)
     lobby.include_router(_session_routes(pages, auth))
     lobby.include_router(deck_list_routes(decks=decks))
+    lobby.include_router(preference_api_routes(preferences=pages.preferences))
     lobby.include_router(preference_routes(pages=pages, voice=private.voice))
     lobby.include_router(voice_api_routes(voice=private.voice))
     lobby.include_router(source_routes(pages=pages, decks=decks))
