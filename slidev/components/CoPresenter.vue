@@ -1,6 +1,9 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useNav } from '@slidev/client'
+// `no-inline`: the file is under Vite's inline limit, and a `data:` URL would
+// break the production CSP.
+import WORKLET_URL from '../worklets/pcm-capture-processor.js?url&no-inline'
 
 const { currentSlideNo } = useNav()
 
@@ -40,13 +43,6 @@ async function refusalLine(response) {
 function errorEventLine(data) {
   return data?.reason === NOT_ENABLED_REASON ? NOT_ENABLED : NO_ANSWER
 }
-
-// Built on Vite's own `BASE_URL` (Slidev uses the same for its PDF link),
-// never on the current address: Slidev's router is history-mode, so once a
-// slide or the presenter view has been opened the browser's own address has
-// moved past the talk's root, and a plain relative URL would resolve beside
-// it instead of beside the file this deck's `public/` directory puts there.
-const WORKLET_URL = `${import.meta.env.BASE_URL}theme/pcm-capture-processor.js`
 
 const on = ref(false)
 const heard = ref('')

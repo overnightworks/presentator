@@ -39,7 +39,7 @@ LIMITS_DECK = DECKS / "probe" / "limits"
 LIMIT_FILE = "limit.txt"
 STAGED_PREFIX = "staged-"
 EXTRA_PART = "a"
-WORKLET_PATH = Path("theme") / "pcm-capture-processor.js"
+WORKLET_GLOB = "assets/pcm-capture-processor-*.js"
 
 
 class Case(StrEnum):
@@ -121,14 +121,14 @@ def delivered(place: BuildPlace) -> dict[str, bool | str | None]:
     """What reached out/: the talk's page, the PDF and the addon's worklet."""
     out = place.here / OUTPUT_DIRECTORY
     pdf = out / PDF_FILE
-    worklet = out / TALK_DIRECTORY / WORKLET_PATH
+    worklets = list((out / TALK_DIRECTORY).glob(WORKLET_GLOB))
     return {
         "talk_page": (out / TALK_DIRECTORY / "index.html").is_file(),
         "pdf": pdf.is_file() and pdf.read_bytes().startswith(b"%PDF-"),
-        "worklet": worklet.is_file(),
+        "worklet": len(worklets) == 1,
         "worklet_sha256": (
-            hashlib.sha256(worklet.read_bytes()).hexdigest()
-            if worklet.is_file()
+            hashlib.sha256(worklets[0].read_bytes()).hexdigest()
+            if len(worklets) == 1
             else None
         ),
     }

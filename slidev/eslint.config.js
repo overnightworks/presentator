@@ -24,7 +24,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['public/**/*.js'],
+    files: ['worklets/**/*.js'],
     languageOptions: {
       globals: { AudioWorkletProcessor: 'readonly', registerProcessor: 'readonly' },
     },

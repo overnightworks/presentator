@@ -280,7 +280,7 @@ describe('presenter controls', () => {
         // still loading or a CSP block is still in flight. `workletLive`
         // (snapshot()) is true only once the worklet node actually exists,
         // which happens after `addModule` resolved against the addon's
-        // own `public/pcm-capture-processor.js` at `<base>theme/` under the
+        // own worklet, emitted under `<base>assets/`, under the
         // production CSP; a blocked or missing module throws there instead
         // and the component says it has no hearing.
         await page.waitForFunction(

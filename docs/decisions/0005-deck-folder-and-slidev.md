@@ -99,8 +99,9 @@ The addon paragraph above is the plan of this record. What is built:
   toolchain's `node_modules` like a theme, because the project links itself
   there. `addons: [./]` (a deck-local addon) is not how a deck gets the overlay.
 - The overlay is the addon's `custom-nav-controls.vue`, mounted only in the
-  presenter view, with `components/CoPresenter.vue`. The worklet is in `public/`
-  and is served at `<base>theme/`. `global-bottom.vue` carries nothing.
+  presenter view, with `components/CoPresenter.vue`. The worklet is in `worklets/`;
+  `CoPresenter.vue` imports it as a Vite asset, so it is served under
+  `<base>assets/`. The addon has no `public/`. `global-bottom.vue` carries nothing.
 - `setup/main.ts` and the run WebSocket are unbuilt; they remain the plan of
   [ADR 0002](0002-server-owned-run.md)'s run.
 - A deck that names the addon builds only on a toolchain that carries it, so a

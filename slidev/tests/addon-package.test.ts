@@ -20,12 +20,15 @@ describe('the presentator addon package', () => {
 
       await buildStagedDeck(deckDirectory, outDirectory)
 
-      const emittedWorklet = await readFile(join(outDirectory, 'theme/pcm-capture-processor.js'))
-      const addonWorklet = await readFile(join(addonRootDirectory, 'public/pcm-capture-processor.js'))
+      const emittedWorklets = (await readdir(join(outDirectory, 'assets')))
+        .filter((name) => /^pcm-capture-processor-.*\.js$/.test(name))
+      expect(emittedWorklets).toHaveLength(1)
+      const emittedWorklet = await readFile(join(outDirectory, 'assets', ...emittedWorklets))
+      const addonWorklet = await readFile(join(addonRootDirectory, 'worklets/pcm-capture-processor.js'))
       expect(sha256(emittedWorklet)).toBe(sha256(addonWorklet))
 
       const stagedEntries = await readdir(deckDirectory)
-      for (const copiedSource of ['custom-nav-controls.vue', 'style.css', 'components', 'public']) {
+      for (const copiedSource of ['custom-nav-controls.vue', 'style.css', 'components', 'worklets']) {
         expect(stagedEntries).not.toContain(copiedSource)
       }
     } finally {

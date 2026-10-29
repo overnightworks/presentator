@@ -68,7 +68,9 @@ WEB = "presentator"
 CLIENT_PROGRAM = PROBE_SOURCES / "web_client.py"
 ROUTE = "http://127.0.0.1:8000/login"
 BUILDS_ROOT = "/data/builds"
-OVERRIDE_MOUNTS = frozenset({"/decks/hello-deck", "/decks/copresenter-deck", "/decks/probe"})
+OVERRIDE_MOUNTS = frozenset(
+    {"/decks/hello-deck", "/decks/copresenter-deck", "/decks/probe"}
+)
 SECRET_MOUNTS = frozenset(
     {"/run/secrets/presentator_secret_key", "/run/secrets/oidc_client_secret"}
 )
@@ -86,7 +88,7 @@ RESTART_SECONDS = 60
 CELLS = ("B25", "whole file", "B12 C", "B13", "B15 C", "addon deck")
 UNWRITTEN = "WRITTENNUMBER"
 HELLO_STEPS = ("build", "export")
-ADDON_WORKLET = REPOSITORY / "slidev/public/pcm-capture-processor.js"
+ADDON_WORKLET = REPOSITORY / "slidev/worklets/pcm-capture-processor.js"
 
 
 def web_command(*arguments: str) -> tuple[str, ...]:
@@ -478,7 +480,9 @@ def prove_addon_deck(report: Report) -> None:
         or done.worklet_sha256 != expected
     ):
         refuse(f"the addon deck was not delivered with its worklet: {done}")
-    report.cell("addon deck", "built and exported; the talk carries the addon's worklet")
+    report.cell(
+        "addon deck", "built and exported; the talk carries the addon's worklet"
+    )
 
 
 def drive() -> None:
