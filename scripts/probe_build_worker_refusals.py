@@ -49,7 +49,7 @@ from presentator.host.worker_wire import STEP_ERROR_FILE
 
 WATCHER = PROBE_SOURCES / "upload_watcher.py"
 CANARY = "cell-50-canary"
-RULED_ROOTS = frozenset({WORK_MOUNT, "/tmp", "/dev/shm", SOCKET_DIRECTORY})  # noqa: S108
+RULED_ROOTS = frozenset({WORK_MOUNT, "/tmp", "/dev/shm", SOCKET_DIRECTORY})  # noqa: S108 - the roots are paths inside the build life and not on this host
 CONTROL_SLUG = "hello-deck"
 CONTROL_CREATIONS = {
     DECK_DIRECTORY,
@@ -99,8 +99,8 @@ class Window:
 
 def worker_exec(*command: str) -> None:
     """Run a command in the worker; a status other than 0 is a cell not driven."""
-    done = subprocess.run(
-        ("docker", "exec", worker(), *command),
+    done = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+        ("docker", "exec", worker(), *command),  # noqa: S607 - docker is looked up on the host PATH
         check=False, capture_output=True, text=True,
     )  # fmt: skip
     if done.returncode:
@@ -109,8 +109,8 @@ def worker_exec(*command: str) -> None:
 
 def host_pid() -> str:
     """The worker's pid as the host sees it."""
-    done = subprocess.run(
-        ("docker", "inspect", "--format", "{{.State.Pid}}", worker()),
+    done = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+        ("docker", "inspect", "--format", "{{.State.Pid}}", worker()),  # noqa: S607 - docker is looked up on the host PATH
         check=True, capture_output=True, text=True,
     )  # fmt: skip
     return done.stdout.strip()
@@ -121,8 +121,8 @@ class RootWatcher:
 
     def __init__(self) -> None:
         """Start the watcher with `sudo -n` and read the line it prints when armed."""
-        self.process = subprocess.Popen(
-            (
+        self.process = subprocess.Popen(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+            (  # noqa: S607 - sudo is looked up on the host PATH
                 "sudo", "-n", sys.executable, "-I", str(WATCHER), host_pid(),
                 SOCKET_DIRECTORY, SOCKET_NAME,
             ),
@@ -178,8 +178,8 @@ def make_canaries(roots: list[str]) -> None:
 
 def build_user_rows() -> int | None:
     """How many processes of the build user `docker top` lists; None when it fails."""
-    done = subprocess.run(
-        ("docker", "top", worker(), "-eo", "pid,uid"),
+    done = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+        ("docker", "top", worker(), "-eo", "pid,uid"),  # noqa: S607 - docker is looked up on the host PATH
         check=False, capture_output=True, text=True,
     )  # fmt: skip
     if done.returncode:

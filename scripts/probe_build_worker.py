@@ -447,8 +447,8 @@ def prove_glibc_floor(report: Report) -> None:
 
 def prove_unsealed_refusal_and_sealed_check(report: Report) -> None:
     """Cell 52: refused in an unsealed container, exit 0 in the sealed service."""
-    unsealed = subprocess.run(
-        (
+    unsealed = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+        (  # noqa: S607 - docker is looked up on the host PATH
             "docker",
             "run",
             "--rm",
@@ -467,8 +467,8 @@ def prove_unsealed_refusal_and_sealed_check(report: Report) -> None:
         or "start refused: capabilities" not in unsealed.stderr
     ):
         refuse(f"unsealed --check: {unsealed.returncode} {unsealed.stderr}")
-    sealed = subprocess.run(
-        (
+    sealed = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+        (  # noqa: S607 - docker is looked up on the host PATH
             "docker",
             "compose",
             "--file",
@@ -542,8 +542,8 @@ def prove_socket_identity(report: Report, name: str) -> None:
 
 def prove_wire_user(report: Report) -> None:
     """A8: the wire user is 10002:10002 with no groups and no capabilities."""
-    done = subprocess.run(
-        ("docker", "exec", "--user", "10002:10002", worker(), "sh", "-c",
+    done = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+        ("docker", "exec", "--user", "10002:10002", worker(), "sh", "-c",  # noqa: S607 - docker is looked up on the host PATH
          "echo $(id -u):$(id -g):$(id -G); grep -E '^Cap(Eff|Prm)' /proc/self/status"),
         check=False, capture_output=True, text=True,
     )  # fmt: skip
@@ -633,8 +633,8 @@ def prove_builds(report: Report) -> None:
             "katex-mathml" in text for text in text_files(output / "build-render")
         ):
             refuse("the built render talk carries no KaTeX markup")
-        words = subprocess.run(
-            ("pdftotext", str(output / "export-render" / "deck.pdf"), "-"),
+        words = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+            ("pdftotext", str(output / "export-render" / "deck.pdf"), "-"),  # noqa: S607 - pdftotext is looked up on the host PATH
             check=True, capture_output=True, text=True,
         ).stdout  # fmt: skip
     # The PDF text layer wraps long mermaid labels at the node width.
@@ -663,8 +663,8 @@ def prove_stop(report: Report) -> None:
     for during_a_step in (False, True):
         held = None
         if during_a_step:
-            held = subprocess.Popen(
-                ("docker", "exec", HOLDER, "python",
+            held = subprocess.Popen(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+                ("docker", "exec", HOLDER, "python",  # noqa: S607 - docker is looked up on the host PATH
                  f"{PROBE_DIRECTORY}/{ENTRY_FILE}", "client", "hold"),
                 stdout=subprocess.PIPE, text=True,
             )  # fmt: skip
@@ -709,14 +709,14 @@ def drive() -> None:
         prove_fast_lives(report)
         prove_stop(report)
     finally:
-        subprocess.run(
-            ("docker", "compose", "--file", str(REPOSITORY / "compose.yaml"),
+        subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+            ("docker", "compose", "--file", str(REPOSITORY / "compose.yaml"),  # noqa: S607 - docker is looked up on the host PATH
              "logs", "--no-color", SERVICE),
             check=False,
         )  # fmt: skip
-        subprocess.run(("docker", "rm", "--force", HOLDER), check=False)
-        subprocess.run(
-            ("docker", "compose", "--file", str(REPOSITORY / "compose.yaml"),
+        subprocess.run(("docker", "rm", "--force", HOLDER), check=False)  # noqa: S603, S607 - argv is a tuple of literal words and probe values and run without a shell; docker is looked up on the host PATH
+        subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+            ("docker", "compose", "--file", str(REPOSITORY / "compose.yaml"),  # noqa: S607 - docker is looked up on the host PATH
              "down", "--volumes"),
             check=False,
         )  # fmt: skip

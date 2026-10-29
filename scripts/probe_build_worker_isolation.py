@@ -33,7 +33,7 @@ from probe_build_worker_harness import (
 ATTACK_SLUG = "attack"
 ATTACKS_FILE = "attacks.txt"
 # The life's shared 1777 tmpfs, by design: the attackers' rendezvous.
-TEMPORARY = PurePosixPath("/tmp")  # noqa: S108
+TEMPORARY = PurePosixPath("/tmp")  # noqa: S108 - the path is inside the build life and its shared tmpfs is the attackers' rendezvous
 PYTHON = "/opt/venv/bin/python"
 BUILD_IDENTITY = "10001"
 WIRE_IDENTITY = "10002"
@@ -47,7 +47,7 @@ NO_CAPABILITIES = "0000000000000000"
 CAPABILITY_FIELDS = ("CapInh", "CapPrm", "CapEff", "CapAmb")
 LIFE_ENDED = "life ended:"
 SYSV_TABLES = ("shm", "msg", "sem")
-MARKER_ROOTS = (str(TEMPORARY), "/dev/shm", "/work")  # noqa: S108
+MARKER_ROOTS = (str(TEMPORARY), "/dev/shm", "/work")  # noqa: S108 - the roots are paths inside the build life and not on this host
 CONFINEMENT_PROFILE = "docker-default (enforce)"
 SHARED_CGROUP = "same-as-pid-1"
 
@@ -250,8 +250,8 @@ def exec_in_worker(*command: str, user: str | None = None) -> list[str]:
 
 def start_attack_step() -> "subprocess.Popen[str]":
     """Start the attack deck's build through the holder; the client stays silent."""
-    return subprocess.Popen(
-        ("docker", "exec", HOLDER, "python", f"{PROBE_DIRECTORY}/{ENTRY_FILE}",
+    return subprocess.Popen(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+        ("docker", "exec", HOLDER, "python", f"{PROBE_DIRECTORY}/{ENTRY_FILE}",  # noqa: S607 - docker is looked up on the host PATH
          "client", "step", ATTACK_SLUG, "build"),
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )  # fmt: skip
@@ -261,7 +261,7 @@ def wait_for_deck(step: "subprocess.Popen[str]") -> None:
     """Wait until the build code published its pid, so the STEP is accepted."""
     deadline = time.monotonic() + DECK_WAIT_SECONDS
     published = str(TEMPORARY / "deck.pid")
-    while subprocess.run(
+    while subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
         exec_in_worker("test", "-s", published), check=False
     ).returncode:
         if step.poll() is not None:
@@ -276,7 +276,7 @@ def run_probe() -> tuple[str, str]:
     """Run the 10002 probe with its program on stdin; its stdout and stderr."""
     program = (PROBE_SOURCES / "attack" / "kernel_attacks.py").read_text()
     try:
-        done = subprocess.run(
+        done = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
             exec_in_worker(PYTHON, "-I", "-", "probe", user=WIRE_USER),
             input=program, capture_output=True, text=True, check=False,
             timeout=PROBE_SECONDS,
@@ -327,7 +327,7 @@ class NextLife:
 
 def left_in_next_life(markers: tuple[str, ...]) -> NextLife:
     """Read the next life's processes, SysV tables and the markers' paths."""
-    done = subprocess.run(
+    done = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
         exec_in_worker(PYTHON, "-I", "-", *markers),
         input=(PROBE_SOURCES / "next_life.py").read_text(),
         capture_output=True, text=True, check=False, timeout=NEXT_LIFE_SECONDS,

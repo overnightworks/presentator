@@ -37,8 +37,11 @@ def say(line: str) -> None:
 
 def docker(*arguments: str) -> str:
     """Run the docker CLI, failing loudly, and return what it printed."""
-    return subprocess.run(
-        ("docker", *arguments), check=True, capture_output=True, text=True
+    return subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+        ("docker", *arguments),  # noqa: S607 - docker is looked up on the host PATH
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
 
 
@@ -52,8 +55,8 @@ def in_holder(
 ) -> subprocess.CompletedProcess[str]:
     """Run a command in the holder container; the caller judges the status."""
     who = ("--user", user) if user else ()
-    return subprocess.run(
-        ("docker", "exec", *who, HOLDER, *command),
+    return subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+        ("docker", "exec", *who, HOLDER, *command),  # noqa: S607 - docker is looked up on the host PATH
         check=False,
         capture_output=True,
         text=True,
@@ -109,8 +112,8 @@ class Report:
 
 def extract(source: str, destination: Path) -> None:
     """Copy a directory of the holder out through tar, since tmpfs defeats docker cp."""
-    packed = subprocess.run(
-        ("docker", "exec", HOLDER, "tar", "--create", "--directory", source, "."),
+    packed = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+        ("docker", "exec", HOLDER, "tar", "--create", "--directory", source, "."),  # noqa: S607 - docker is looked up on the host PATH
         check=True,
         capture_output=True,
     ).stdout

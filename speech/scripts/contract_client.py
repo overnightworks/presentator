@@ -4,6 +4,8 @@ This process must not import the `presentator_speech` package. It is the paralle
 proof: a caller that only knows the HTTP contract.
 """
 
+# ruff: noqa: T201 - this client reports its results on standard output
+
 from __future__ import annotations
 
 import asyncio

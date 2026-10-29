@@ -30,7 +30,7 @@ EVENT_HEADER = struct.Struct("iIII")
 BOUNDARY_SECONDS = 10
 READ_BYTES = 65536
 
-WATCHED = frozenset({"/work", "/tmp", "/dev/shm", "/dev", "/dev/mqueue"})  # noqa: S108
+WATCHED = frozenset({"/work", "/tmp", "/dev/shm", "/dev", "/dev/mqueue"})  # noqa: S108 - the paths are the build life's writable mounts and not places on this host
 EXCLUDED_FILESYSTEMS = {
     "proc": "a kernel interface with no path create",
     "sysfs": "a kernel interface with no path create",
