@@ -34,6 +34,24 @@ def test_no_environment_value_reads_the_callers_shell() -> None:
             "$" not in (value or "") for value in _environment_of(service).values()
         )
     assert "${" not in _COMPOSE.read_text(encoding="utf-8").replace("${HOME}", "")
+    for service in _parsed_compose()["services"].values():
+        assert all(
+            "$" not in part for part in service.get("healthcheck", {}).get("test", [])
+        )
+
+
+def test_every_tmpfs_mount_is_nosuid_and_nodev() -> None:
+    """Hardening: no tmpfs of any service honours setuid files or device nodes."""
+    mounts = [
+        mount
+        for service in _parsed_compose()["services"].values()
+        for mount in service.get("tmpfs", [])
+    ]
+
+    assert mounts
+    for mount in mounts:
+        options = mount.partition(":")[2].split(",")
+        assert {"nosuid", "nodev"} <= set(options)
 
 
 def test_the_worker_joins_no_network_of_the_file() -> None:
@@ -154,6 +172,7 @@ def test_each_secret_is_a_file_secret_that_only_the_instance_mounts(
     """edge#280: every app secret reaches the container as a mounted file."""
     compose = _parsed_compose()
 
+    assert set(compose["secrets"][name]) == {"file"}
     assert _secret_holders(compose, name) == ["presentator"]
     assert _environment_of(compose["services"]["presentator"])[setting] == (
         f"/run/secrets/{name}"
