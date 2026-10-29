@@ -124,23 +124,6 @@ def add_copresenter_routes(
     use = surface.use
     guard = _SessionGuard(admission=admission, delay=surface.delay)
 
-    async def _who(request: Request) -> JSONResponse:
-        connection = admission(request)
-        if connection is None:
-            return _not_authenticated()
-        try:
-            ready = await use.readiness()
-        except CoPresenterUnavailableError:
-            return _unavailable()
-        return JSONResponse(
-            {
-                "speech": {
-                    "sample_rate": ready.hearing_sample_rate,
-                    "hearing": {"ready": ready.local_hearing_ready},
-                },
-            },
-        )
-
     async def _hear(socket: WebSocket, language: str = "de") -> None:
         if (
             socket.headers.get("origin") != surface.browser_origin
@@ -162,12 +145,40 @@ def add_copresenter_routes(
             guard=guard,
         )
 
-    router.add_api_route("/who", _who, methods=["GET"])
+    router.add_api_route("/who", _who_route(use, admission=admission), methods=["GET"])
     router.add_api_route(
         "/ask", _ask_route(surface, admission=admission, guard=guard), methods=["POST"]
     )
     router.add_api_websocket_route("/hear", _hear)
     app.include_router(router)
+
+
+def _who_route(
+    use: CoPresenterUse, *, admission: Admission
+) -> Callable[[Request, str], Awaitable[JSONResponse]]:
+    async def _who(request: Request, deck: str = "") -> JSONResponse:
+        connection = admission(request)
+        if connection is None:
+            return _not_authenticated()
+        asked = await run_in_threadpool(use.asked_deck, deck, viewer=connection.user_id)
+        if asked is None:
+            return _deck_not_found()
+        try:
+            language = await use.deck_language(asked)
+            ready = await use.readiness()
+        except CoPresenterUnavailableError:
+            return _unavailable()
+        return JSONResponse(
+            {
+                "language": language.value,
+                "speech": {
+                    "sample_rate": ready.hearing_sample_rate,
+                    "hearing": {"ready": ready.local_hearing_ready},
+                },
+            },
+        )
+
+    return _who
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -225,7 +236,7 @@ def _admit(
         return _not_authenticated()
     asked = surface.use.asked_deck(question.deck, viewer=connection.user_id)
     if asked is None:
-        return JSONResponse({"detail": "Not found"}, HTTPStatus.NOT_FOUND)
+        return _deck_not_found()
     ticket = surface.limiter.admit(connection.session_id)
     if isinstance(ticket, RetryAfter):
         return JSONResponse(
@@ -252,6 +263,10 @@ async def _prepare(use: CoPresenterUse, ask: _Ask) -> PreparedAsk | Response:
     if isinstance(prepared, AccessRefusal):
         return _access_refusal(prepared)
     return prepared
+
+
+def _deck_not_found() -> JSONResponse:
+    return JSONResponse({"detail": "Not found"}, HTTPStatus.NOT_FOUND)
 
 
 def _unavailable() -> JSONResponse:
