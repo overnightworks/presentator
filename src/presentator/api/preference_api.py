@@ -5,6 +5,8 @@ is the admin's instance defaults. Both answer with the languages an instance
 has a catalog for, so a select needs no third address.
 """
 
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from http import HTTPStatus
 from typing import Final
 
@@ -12,8 +14,13 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict
 
 from presentator.api.admission import gated_person
-from presentator.api.problems import ProblemError, problem_response
-from presentator.application.preferences import Preferences
+from presentator.api.problems import (
+    PROBLEM_MEDIA_TYPE,
+    ProblemDetails,
+    ProblemError,
+    problem_response,
+)
+from presentator.application.preferences import Preferences, UnspokenLanguageError
 from presentator.contracts.preferences import (
     InstanceSettings,
     PersonPreferences,
@@ -22,6 +29,28 @@ from presentator.contracts.preferences import (
 
 ACCOUNT_PATH: Final = "/api/account"
 SETTINGS_PATH: Final = "/api/settings"
+
+# FastAPI answers a malformed body in this shape; an explicit 422 hides its own entry.
+_FRAMEWORK_VALIDATION_SCHEMA: Final[dict[str, object]] = {
+    "type": "object",
+    "properties": {
+        "detail": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "loc": {
+                        "type": "array",
+                        "items": {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+                    },
+                    "msg": {"type": "string"},
+                    "type": {"type": "string"},
+                },
+                "required": ["loc", "msg", "type"],
+            },
+        }
+    },
+}
 
 
 class LanguageView(BaseModel):
@@ -64,15 +93,68 @@ class SettingsView(SettingsWrite):
     languages: list[LanguageView]
 
 
+def _unspoken_or_invalid() -> dict[int | str, dict[str, object]]:
+    """The PUT's 422: our problem for an unspoken language, else the framework's."""
+    return {
+        HTTPStatus.UNPROCESSABLE_ENTITY.value: {
+            "content": {
+                PROBLEM_MEDIA_TYPE: {"schema": ProblemDetails.model_json_schema()},
+                "application/json": {"schema": _FRAMEWORK_VALIDATION_SCHEMA},
+            }
+        }
+    }
+
+
+@contextmanager
+def _unspoken_as_problem() -> Generator[None]:
+    """Answer the application's refusal of an unspoken language as the 422 problem."""
+    try:
+        yield
+    except UnspokenLanguageError:
+        raise ProblemError(HTTPStatus.UNPROCESSABLE_ENTITY) from None
+
+
 def _only_an_admin(request: Request) -> None:
     """Refuse a person without the role before any body, read or write."""
     if not gated_person(request).is_admin:
         raise ProblemError(HTTPStatus.FORBIDDEN)
 
 
+def _mounted(
+    *,
+    read_account: Callable[..., AccountView],
+    write_account: Callable[..., AccountView],
+    read_settings: Callable[..., SettingsView],
+    write_settings: Callable[..., SettingsView],
+) -> APIRouter:
+    """The four addresses, with the admin gate and the documented refusals."""
+    router = APIRouter()
+    unspoken = _unspoken_or_invalid()
+    admin_only = problem_response(HTTPStatus.FORBIDDEN)
+    router.add_api_route(ACCOUNT_PATH, read_account, methods=["GET"])
+    router.add_api_route(
+        ACCOUNT_PATH, write_account, methods=["PUT"], responses=unspoken
+    )
+    admin = [Depends(_only_an_admin)]
+    router.add_api_route(
+        SETTINGS_PATH,
+        read_settings,
+        methods=["GET"],
+        dependencies=admin,
+        responses=admin_only,
+    )
+    router.add_api_route(
+        SETTINGS_PATH,
+        write_settings,
+        methods=["PUT"],
+        dependencies=admin,
+        responses={**admin_only, **unspoken},
+    )
+    return router
+
+
 def preference_api_routes(*, preferences: Preferences) -> APIRouter:
     """The router that reads and writes overrides and instance defaults."""
-    router = APIRouter()
 
     def languages() -> list[LanguageView]:
         return [
@@ -101,47 +183,29 @@ def preference_api_routes(*, preferences: Preferences) -> APIRouter:
         return account_of(gated_person(request).id)
 
     def write_account(request: Request, body: AccountWrite) -> AccountView:
-        if body.language_tag is not None and not preferences.speaks(body.language_tag):
-            raise ProblemError(HTTPStatus.UNPROCESSABLE_ENTITY)
         person_id = gated_person(request).id
-        preferences.save_preferences_of(
-            person_id,
-            PersonPreferences(language_tag=body.language_tag, theme=body.theme),
-        )
+        with _unspoken_as_problem():
+            preferences.save_preferences_of(
+                person_id,
+                PersonPreferences(language_tag=body.language_tag, theme=body.theme),
+            )
         return account_of(person_id)
 
     def read_settings() -> SettingsView:
         return settings()
 
     def write_settings(body: SettingsWrite) -> SettingsView:
-        if not preferences.speaks(body.language_tag):
-            raise ProblemError(HTTPStatus.UNPROCESSABLE_ENTITY)
-        preferences.save_instance_settings(
-            InstanceSettings(
-                name=body.name, language_tag=body.language_tag, theme=body.theme
+        with _unspoken_as_problem():
+            preferences.save_instance_settings(
+                InstanceSettings(
+                    name=body.name, language_tag=body.language_tag, theme=body.theme
+                )
             )
-        )
         return settings()
 
-    unspoken = problem_response(HTTPStatus.UNPROCESSABLE_ENTITY)
-    admin_only = problem_response(HTTPStatus.FORBIDDEN)
-    router.add_api_route(ACCOUNT_PATH, read_account, methods=["GET"])
-    router.add_api_route(
-        ACCOUNT_PATH, write_account, methods=["PUT"], responses=unspoken
+    return _mounted(
+        read_account=read_account,
+        write_account=write_account,
+        read_settings=read_settings,
+        write_settings=write_settings,
     )
-    admin = [Depends(_only_an_admin)]
-    router.add_api_route(
-        SETTINGS_PATH,
-        read_settings,
-        methods=["GET"],
-        dependencies=admin,
-        responses=admin_only,
-    )
-    router.add_api_route(
-        SETTINGS_PATH,
-        write_settings,
-        methods=["PUT"],
-        dependencies=admin,
-        responses={**admin_only, **unspoken},
-    )
-    return router
