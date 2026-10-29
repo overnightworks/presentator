@@ -138,7 +138,7 @@ def after_the_next_status(restarts_before: int) -> datetime:
     return docker_time(finished)
 
 
-def start_client(*arguments: str, stdin: int | None = None) -> "subprocess.Popen[str]":
+def start_client(*arguments: str, stdin: int | None = None) -> subprocess.Popen[str]:
     """Start a client command in the holder, its output piped back."""
     interactive = ("-i",) if stdin is not None else ()
     return subprocess.Popen(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
@@ -148,7 +148,7 @@ def start_client(*arguments: str, stdin: int | None = None) -> "subprocess.Popen
     )  # fmt: skip
 
 
-def client_result(client: "subprocess.Popen[str]", seconds: int) -> list[str]:
+def client_result(client: subprocess.Popen[str], seconds: int) -> list[str]:
     """The lines a finished client printed; a failed or stalled client is a refusal."""
     try:
         stdout, stderr = client.communicate(timeout=seconds)
@@ -160,7 +160,7 @@ def client_result(client: "subprocess.Popen[str]", seconds: int) -> list[str]:
     return stdout.splitlines()
 
 
-def await_record(client: "subprocess.Popen[str]") -> dict[str, str]:
+def await_record(client: subprocess.Popen[str]) -> dict[str, str]:
     """Read the deck's record from the life's /tmp; a refused exec counts as not yet."""
     deadline = time.monotonic() + RECORD_SECONDS
     while docker_exec_status("test", "-s", str(RECORD_FILE)):
@@ -188,7 +188,7 @@ def acknowledge() -> None:
     docker("exec", worker(), "sh", "-c", f"echo ack > {ACK_FILE}")
 
 
-def outcome_line(client: "subprocess.Popen[str]") -> StepEnd:
+def outcome_line(client: subprocess.Popen[str]) -> StepEnd:
     """The one line the flood client printed: how its step ended."""
     lines = client_result(client, FLOOD_SECONDS)
     if len(lines) != 1 or lines[0] not in StepEnd:
@@ -266,7 +266,7 @@ def build_user_process(pid: str) -> bool:
 
 
 def handshake_line(
-    client: "subprocess.Popen[str]",
+    client: subprocess.Popen[str],
     pipe: IO[str],
     deadline_seconds: float = HANDSHAKE_SECONDS,
 ) -> str:

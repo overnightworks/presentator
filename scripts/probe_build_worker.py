@@ -169,7 +169,7 @@ def attempt(opening: Callable[[socket.socket], None]) -> socket.socket | None:
     try:
         opening(connection)
         read_status(connection)
-    except (OSError, WireRefusedError):
+    except OSError, WireRefusedError:
         connection.close()
         return None
     connection.settimeout(EXCHANGE_SECONDS)
@@ -237,7 +237,7 @@ def send_until_closed(connection: socket.socket, data: bytes) -> None:
     """Send the bytes; a close by the worker while sending ends the sending."""
     try:
         connection.sendall(data)
-    except (BrokenPipeError, ConnectionResetError):
+    except BrokenPipeError, ConnectionResetError:
         return
 
 
@@ -246,7 +246,7 @@ def drip_until_closed(connection: socket.socket, record: bytes) -> None:
     for position in range(len(record)):
         try:
             connection.send(record[position : position + 1])
-        except (BrokenPipeError, ConnectionResetError):
+        except BrokenPipeError, ConnectionResetError:
             return
         time.sleep(1)
     refuse("the worker took a record dripped past its upload time")

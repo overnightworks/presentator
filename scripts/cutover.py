@@ -635,7 +635,7 @@ class Inspection(Retirement):
     def _deployment(self) -> Deployment:
         try:
             compose = (self.checkout / "compose.yaml").read_text()
-        except (OSError, ValueError):
+        except OSError, ValueError:
             reason = "compose.yaml cannot be read"
             raise RefusedError(reason) from None
         return deployment_of(compose)

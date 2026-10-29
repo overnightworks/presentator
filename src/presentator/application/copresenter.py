@@ -158,7 +158,7 @@ class AskTicket:
     """The one answer a session is allowed to stream right now."""
 
     session_id: str
-    _answering: dict[str, "AskTicket"]
+    _answering: dict[str, AskTicket]
     _guard: AbstractContextManager[bool]
 
     def release(self) -> None:

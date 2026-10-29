@@ -307,7 +307,7 @@ class PackageJsonThemes:
         try:
             manifest_text = (self.project / _PACKAGE_JSON).read_text()
             return theme_names_of_manifest(manifest_text)
-        except (OSError, ValueError, TypeError):
+        except OSError, ValueError, TypeError:
             # A missing project, an unreadable file, malformed JSON, and a
             # manifest or dependency section whose shape package.json's own
             # convention does not carry are all "cannot read" here: none of
@@ -703,7 +703,7 @@ def opened_without_a_link(
             os.close(holder)
             holder = inner
         found = os.open(name, how | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=holder)
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
     finally:
         os.close(holder)

@@ -225,7 +225,7 @@ class TransactionDouble:
     through: Callable[[SignInStores], SignInStores] = lambda stores: stores
     sessions_seen: Callable[[], int] = lambda: 0
 
-    def around(self, real: SignInTransaction) -> "TransactionDouble":
+    def around(self, real: SignInTransaction) -> TransactionDouble:
         self.real = real
         return self
 

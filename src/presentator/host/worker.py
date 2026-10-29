@@ -336,7 +336,7 @@ def _holds(
         return False
     try:
         return judge(snapshot)
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         return False
 
 
@@ -463,7 +463,7 @@ def read_snapshot(root: Path) -> Snapshot:
     ) -> Fact:
         try:
             return reading()
-        except (OSError, KeyError, UnicodeDecodeError):
+        except OSError, KeyError, UnicodeDecodeError:
             unreadable.add(predicate)
             return placeholder
 
