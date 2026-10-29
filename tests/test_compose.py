@@ -44,8 +44,8 @@ def test_no_healthcheck_reads_the_callers_shell() -> None:
         )
 
 
-def test_every_tmpfs_mount_is_nosuid_and_nodev() -> None:
-    """Hardening: no tmpfs of any service honours setuid files or device nodes."""
+def test_every_service_tmpfs_entry_is_nosuid_and_nodev() -> None:
+    """Hardening: every `tmpfs:` entry of a service sets nosuid and nodev."""
     mounts = [
         mount
         for service in _parsed_compose()["services"].values()
