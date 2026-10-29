@@ -10,6 +10,8 @@ Audience: humans and agents writing any user-facing string or any colour.
   ([#8](https://github.com/overnightworks/presentator/issues/8) line 22).
   Amended 2026-09-07: the lobby's one token file is the vendored
   `overnightworks/ui-tokens` pin; leftover Pico chrome is not a second theme.
+  Amended 2026-10-29: the catalog is also served as data, see
+  [ADR 0020](0020-the-lobby-is-a-json-api.md).
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06, including
   [#8](https://github.com/overnightworks/presentator/issues/8) line 22
@@ -79,6 +81,10 @@ already uses a token set, and it is the first theme's source.
 Every user-facing string in the lobby and in the overlay goes through one
 message catalog, from the first line of code. English is the only catalog at
 start. Adding a language is adding a catalog file — never a code change.
+
+Amendment 2026-10-29: the reader's resolved catalog is also served as data by
+`GET /api/session`, so a page holds no strings of its own
+([ADR 0020](0020-the-lobby-is-a-json-api.md)).
 
 ### Preference levels (amendment 2026-09-06)
 
