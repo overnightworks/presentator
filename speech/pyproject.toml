@@ -47,6 +47,7 @@ target-version = "py312"
 src = [".", "src", "tests"]
 
 [tool.ruff.lint]
+external = ["S", "T20"]
 select = ["ALL"]
 ignore = [
     "COM812",

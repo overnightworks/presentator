@@ -133,6 +133,52 @@ from projector view.
 | `m0-lobby/presenter-home-active-narrow.png` | Presenter, AI active — 390 px |
 | `m0-lobby/projector-return-absent.png` | Projector — Home absent, 1024 px |
 
+### The room knows (issue #525, #293 S12)
+
+The notice that the room hears an AI, in the form the operator ruled on #293
+line 6 (28.10.2026): at switch-on, until the AI's first answer, the whole
+sentence of #293's E8 (ending in the pointer to the Datenschutzerklärung) stands
+large at the bottom of the slide; afterwards, while the AI is on, only a small
+pill in the top-right corner with a pulsing dot and „KI hört zu“ / „KI
+antwortet“. Top-right covers the least of a typical slide: footers, page
+numbers, chart axes and source lines sit at the bottom edge. Both follow the
+deck's language, never shrink the slide, take no clicks (`pointer-events: none`)
+and are never a control. The presenter's current-slide preview is the projector
+board scaled down whole, with the same proportions, and shows what the
+room sees; the AI's first answer begins at once, with no introduction. The
+boards show the rulings of 28.10.2026 on #293: line 1 C (no introduction), 2 A
+(the deck's language), 3 A (only while listening or answering), 5 A (the neutral
+sentence) and line 6 (banner, then pill). The Lines column names the #293 S12
+lines each board shows, not only those its caption cites; the Datenschutz boards
+are untouched.
+
+| PNG | Caption | Lines |
+|---|---|---|
+| `m0-lobby/room-off.png` | Projector, AI off: no label, 1024 px | 3 |
+| `m0-lobby/room-not-hearing.png` | Projector, AI on but not hearing: no banner, no pill, presenter window shows the failure, 1024 px | 3 |
+| `m0-lobby/room-banner.png` | Projector, switch-on banner with the whole sentence, before the first answer, 1024 px | 2, 6 |
+| `m0-lobby/room-banner-dark.png` | Projector, switch-on banner, dark theme, 1024 px | 2, 6 |
+| `m0-lobby/room-banner-1920.png` | Projector, switch-on banner, 1920 px (shown at half size) | 2, 6 |
+| `m0-lobby/room-banner-1920-dark.png` | Projector, switch-on banner, dark theme, 1920 px (shown at half size) | 2, 6 |
+| `m0-lobby/room-banner-english.png` | Projector, English deck: switch-on banner with the English sentence, 1024 px | 2, 6 |
+| `m0-lobby/room-listening.png` | Projector, AI listening after the first answer: corner pill, 1024 px | 2, 6 |
+| `m0-lobby/room-listening-dark.png` | Projector, AI listening, dark theme, 1024 px | 2, 6 |
+| `m0-lobby/room-listening-1920.png` | Projector, AI listening, 1920 px (shown at half size) | 2, 6 |
+| `m0-lobby/room-listening-1920-dark.png` | Projector, AI listening, dark theme, 1920 px (shown at half size) | 2, 6 |
+| `m0-lobby/room-listening-english.png` | Projector, English deck listening: pill „AI is listening“, 1024 px | 2, 6 |
+| `m0-lobby/room-answering.png` | Projector, AI answering: pill with the speak glyph, 1024 px | 2, 6 |
+| `m0-lobby/room-answering-dark.png` | Projector, AI answering, dark theme, 1024 px | 2, 6 |
+| `m0-lobby/room-answering-1920.png` | Projector, AI answering, 1920 px (shown at half size) | 2, 6 |
+| `m0-lobby/room-answering-1920-dark.png` | Projector, AI answering, dark theme, 1920 px (shown at half size) | 2, 6 |
+| `m0-lobby/room-busy.png` | Projector, pill leaves the footer and the chart axis free, 1024 px | 6 |
+| `m0-lobby/room-busy-dark.png` | Projector, busy slide, dark theme, 1024 px | 6 |
+| `m0-lobby/room-busy-1920.png` | Projector, busy slide, 1920 px (shown at half size) | 6 |
+| `m0-lobby/room-busy-1920-dark.png` | Projector, busy slide, dark theme, 1920 px (shown at half size) | 6 |
+| `m0-lobby/room-presenter-listening.png` | Presenter, before the first answer: the preview is the projector board scaled down whole, banner included, 1024 px | 2, 6 |
+| `m0-lobby/room-presenter-answering.png` | Presenter, AI answering: the preview is the projector board scaled down whole, pill included, the answer begins at once, 1024 px | 1, 6 |
+| `m0-lobby/room-presenter-listening-narrow.png` | Presenter, before the first answer: the scaled projector board with the banner, 390 px | 2, 6 |
+| `m0-lobby/room-presenter-answering-narrow.png` | Presenter, AI answering: the scaled projector board with the pill, 390 px | 1, 6 |
+
 ### Rechtliches (#196)
 
 Impressum and Datenschutz, reachable without a session (the signed-out boards

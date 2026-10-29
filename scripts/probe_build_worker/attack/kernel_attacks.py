@@ -20,8 +20,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 # The life's shared 1777 tmpfs and shared memory, by design: the attackers' rendezvous.
-RENDEZVOUS = Path("/tmp")  # noqa: S108
-SHARED_MEMORY = Path("/dev/shm")  # noqa: S108
+RENDEZVOUS = Path("/tmp")  # noqa: S108 - the path is inside the build life and its shared tmpfs is the attackers' rendezvous
+SHARED_MEMORY = Path("/dev/shm")  # noqa: S108 - the path is inside the build life and its shared memory is the attackers' rendezvous
 WORK_HOME = Path("/work/home")
 WAIT_SECONDS = 60
 POLL_SECONDS = 0.1

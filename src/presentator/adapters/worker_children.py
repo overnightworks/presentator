@@ -130,7 +130,7 @@ def spawn_gated(
     """Spawn the command as the identity behind the gate; the caller releases it."""
     gate_read, gate_write = os.pipe()
     try:
-        process = subprocess.Popen(
+        process = subprocess.Popen(  # noqa: S603 - argv is the fixed gate shell script plus the worker command never a shell string
             ["/bin/sh", "-c", GATE_SCRIPT, *command],
             stdin=gate_read,
             stdout=subprocess.DEVNULL if surroundings.discard_stdout else None,
