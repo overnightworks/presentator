@@ -1,0 +1,8 @@
+claim_id = "d0d984c5cf2841a6a8937da25ae9a5d0"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "91f2b0ec313e400679aef8d0a153ab77a6c61635"
+branch = "claude/issue-623-get-api-session-who-reads-in-which-words"
+scope = ["docs/decisions/0020-the-lobby-is-a-json-api.md", "docs/decisions/README.md", "docs/reference/sign-in-and-session.md", "src/presentator/api/auth.py", "src/presentator/api/session_api.py", "tests/presentator/api/test_auth_session_gate.py", "tests/presentator/api/test_session_api.py"]
+opened_commit = "6e5a3e4ee54a033f004f2681d757d76f8459fa17"
+whole_reason = "One route with its gate exception, its tests and the decision record that names the JSON API; the record and the exception are one decision."
