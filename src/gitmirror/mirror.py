@@ -184,7 +184,11 @@ class GitMirror:
         """
         stamped = self._text("log", "-1", _LAST_CHANGE, revision.commit, "--", path)
         commit, _, at = stamped.partition(_BETWEEN_THEM)
-        return Change(commit=commit, at=datetime.fromisoformat(at))
+        try:
+            return Change(commit=commit, at=datetime.fromisoformat(at))
+        except ValueError as unreadable:
+            message = f"commit {commit} carries a date no calendar can hold: {at}"
+            raise MirrorError(message) from unreadable
 
     def _pull(self, *, secret: str | None) -> Connection:
         url = self.source.url
@@ -252,7 +256,8 @@ class GitMirror:
             env=unattended_environment(secret=None),
         )
         if completed.returncode != 0:
-            message = f"git {' '.join(arguments)}: {completed.stderr.decode().strip()}"
+            reason = completed.stderr.decode(errors="replace").strip()
+            message = f"git {' '.join(arguments)}: {reason}"
             raise MirrorError(message)
         return completed.stdout
 

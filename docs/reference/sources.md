@@ -75,7 +75,8 @@ bound ends a slow one. A pull is bounded by
 `PRESENTATOR_SOURCE_TIMEOUT_SECONDS`, so an unreachable source costs one poll
 that bound and no more. Opening the deck list reads the database and pulls
 nothing. A refresh walks the sources one after another, taking each one in and
-building its decks before it reads the next.
+building its decks before it reads the next. A source that cannot be read ends
+its run and the walk goes on with the next one.
 
 `POST /sources/<name>/fetch` with the source's own secret does the same at
 once. It reads no payload, so every git host and a `post-receive` hook are the
@@ -88,12 +89,13 @@ flood of calls collapses into the one refresh that runs at a time.
 
 ## Runs and state
 
-Every poll of a source, reachable or not, records one run: the moment, whether
+Every poll of a source, reachable or not, and every read of it that fails,
+records one run: the moment, whether
 it reached the source, and either the commit it found or a typed reason it did
 not, never the raw error a git command left behind. The table keeps the newest
 three runs per source. The Sources list shows the newest run's state: never
 fetched; reachable; refused when the host turns the login down; failed when
-the host answered with anything else; unreachable only when the host never
+the host answered with anything else or its mirror could not be read; unreachable only when the host never
 answers; or Error when a credential could not be resolved, never the internal
 reason why.
 

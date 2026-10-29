@@ -21,6 +21,8 @@ from gitmirror.model import (
     CredentialReference,
     CredentialResolver,
     GitSource,
+    InvalidCredentialError,
+    MirrorError,
     Revision,
 )
 from presentator.adapters.deck_manifest import MalformedManifestError, titled_by
@@ -515,6 +517,17 @@ class MirroredDeckFolders:
                 commit=None,
                 failure=SourceRunFailure.FAILED,
             )
+        try:
+            return self._poll(source, mirror)
+        except InvalidCredentialError as unsendable:
+            _log.warning(_UNREADABLE_SOURCE, source.name, unsendable)
+            failure = SourceRunFailure.CREDENTIAL_UNRESOLVABLE
+        except MirrorError as unreadable:
+            _log.warning(_UNREADABLE_SOURCE, source.name, unreadable)
+            failure = SourceRunFailure.FAILED
+        return SourcePoll(folders=None, commit=None, failure=failure)
+
+    def _poll(self, source: Source, mirror: GitMirror) -> SourcePoll:
         connection = mirror.connect()
         revision = connection.revision
         if revision is None:
@@ -577,7 +590,7 @@ class MirroredDeckFolders:
                 mirror.read(revision, f"{name}/{MANIFEST_FILE}"),
                 folder=name,
             )
-        except MalformedManifestError as unreadable:
+        except (MalformedManifestError, MirrorError) as unreadable:
             _log.warning(_UNREADABLE_MANIFEST, name, unreadable)
             return None
 
