@@ -304,7 +304,7 @@ def _install_middleware(
     one update-only statement (ADR 0003), so the gate's admission takes no lock.
     The admin prefix, when it is served, takes a bearer token and no cookie.
     `/api/` takes a person's token as that person; a request without a token is
-    decided by the session cookie as before.
+    decided by the session cookie.
     """
     install_web_auth_middleware(
         lobby,
