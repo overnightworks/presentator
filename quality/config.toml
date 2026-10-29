@@ -59,6 +59,11 @@ rule = "test-layout"
 reason = "it exercises the addon's overlay in a browser through a built deck, which no single addon source file mirrors"
 
 [[layout.allow]]
+path = "slidev/tests/pcm-capture-processor.test.ts"
+rule = "test-layout"
+reason = "its subject is slidev/worklets/pcm-capture-processor.js, which Sonar and the addon package keep apart from the test folder"
+
+[[layout.allow]]
 path = "slidev/tests/lobby-static-scripts.test.ts"
 rule = "test-layout"
 reason = "its subject is the lobby scripts under src/presentator/api/static, outside the Slidev project"
