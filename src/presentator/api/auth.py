@@ -14,7 +14,7 @@ from http import HTTPMethod, HTTPStatus
 from pathlib import Path
 from typing import Final, cast
 
-from fastapi import FastAPI, Request, Response
+from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from webauth.config import WebAuthConfig, install_web_auth_config
 from webauth.middleware.bearer_gate import BearerGate, PersonPaths
@@ -298,6 +298,17 @@ def _bearer_gate(auth: InstalledAuth, admin: AdminPeople) -> BearerGate:
     )
 
 
+def _session_routes(pages: Pages, auth: InstalledAuth) -> APIRouter:
+    return session_routes(
+        preferences=pages.preferences,
+        addresses=SessionAddresses(
+            start=START_SIGN_IN_PATH,
+            logout=LOGOUT_PATH,
+            talk_start=f"{auth.talk_origin}{START_SIGN_IN_PATH}",
+        ),
+    )
+
+
 def create_lobby(
     *,
     sessions: SessionRecordStore,
@@ -342,16 +353,7 @@ def create_lobby(
             methods=["GET"],
         )
     add_health_route(lobby)
-    lobby.include_router(
-        session_routes(
-            preferences=pages.preferences,
-            addresses=SessionAddresses(
-                start=START_SIGN_IN_PATH,
-                logout=LOGOUT_PATH,
-                talk_start=f"{auth.talk_origin}{START_SIGN_IN_PATH}",
-            ),
-        )
-    )
+    lobby.include_router(_session_routes(pages, auth))
     lobby.include_router(preference_routes(pages=pages, voice=private.voice))
     lobby.include_router(source_routes(pages=pages, decks=decks))
     add_deck_pages(lobby, decks=decks, pages=pages, talk_origin=auth.talk_origin)
