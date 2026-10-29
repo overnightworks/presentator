@@ -127,11 +127,14 @@ def test_a_lobby_page_is_not_found_on_the_talk_host(hosts: Hosts, path: str) -> 
     assert _is_the_talk_host(answer)
 
 
+@pytest.mark.parametrize("signed_in", [False, True])
 @pytest.mark.parametrize("address", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])
 def test_the_privacy_text_is_not_served_by_either_host(
-    hosts: Hosts, address: str
+    hosts: Hosts, address: str, *, signed_in: bool
 ) -> None:
-    answer = hosts.signed_in_at(address).get("/datenschutz")
+    browser = hosts.signed_in_at(address) if signed_in else hosts.browser(address)
+
+    answer = browser.get("/datenschutz")
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
 

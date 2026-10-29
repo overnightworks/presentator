@@ -83,6 +83,7 @@ TALK_SIGN_IN: Final = SignInPaths(
     start=START_SIGN_IN_PATH, callback=SIGN_IN_CALLBACK_PATH
 )
 _SETUP: Final = "/setup"
+RETIRED_PRIVACY_PATH: Final = "/datenschutz"
 
 
 _REFUSAL_PAGES: Final = {
@@ -103,8 +104,9 @@ def talk_sign_in_refusal_path(refusal: RefusalPage) -> str:
 # so is the address another server posts to: a source host's POST under the
 # hook prefix. Keycloak's back-channel logout is open and exempt from the
 # origin check through the sign-in paths.
-# `/setup` is a retired address: it answers 404 to everyone, so a signed-out
-# reader is not sent to a login for a page that does not exist.
+# `/setup` and `/datenschutz` (the privacy text is edge's central page) are
+# retired addresses: they answer 404 to everyone, so a signed-out reader is not
+# sent to a login for a page that does not exist.
 _SERVER_CALLS: Final = PathRules(prefixes=(HOOK_CALLS,))
 _PUBLIC_RULES: Final = (
     PublicRule(
@@ -113,6 +115,7 @@ _PUBLIC_RULES: Final = (
                 {
                     LOGIN_PATH,
                     _SETUP,
+                    RETIRED_PRIVACY_PATH,
                     *(talk_sign_in_refusal_path(refusal) for refusal in RefusalPage),
                 }
             )

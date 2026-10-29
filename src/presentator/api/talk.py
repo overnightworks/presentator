@@ -31,6 +31,7 @@ from webauth.sign_in_routes import SignInRefusal, install_sign_in_routes
 
 from presentator.api.auth import (
     DEFAULT_BODY_BYTES,
+    RETIRED_PRIVACY_PATH,
     TALK_SIGN_IN,
     InstalledAuth,
     signed_in_connection,
@@ -76,7 +77,7 @@ def _install_talk_middleware(
             session_transaction=lambda: nullcontext(sessions),
             login_redirect=TALK_SIGN_IN.login_redirect,
             public=(
-                PublicRule(PathRules(exact=frozenset({_ROOT}))),
+                PublicRule(PathRules(exact=frozenset({_ROOT, RETIRED_PRIVACY_PATH}))),
                 *TALK_SIGN_IN.public_rules,
                 HEALTH_IS_PUBLIC,
             ),
