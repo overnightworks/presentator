@@ -391,16 +391,30 @@ _ROUTES = [
 ]
 
 
-@pytest.mark.parametrize(("method", "path"), _ROUTES)
-def test_an_admins_bearer_alone_is_admitted_as_the_cookie_is(
-    scene: Scene, method: str, path: str
+@pytest.mark.parametrize(
+    ("method", "path", "status"),
+    [
+        pytest.param("get", _LIST, HTTPStatus.OK, id="list"),
+        pytest.param(
+            "get", _PAGE.format(name="decks"), HTTPStatus.NOT_FOUND, id="page"
+        ),
+        pytest.param(
+            "post", _FETCH.format(name="decks"), HTTPStatus.NOT_FOUND, id="fetch"
+        ),
+    ],
+)
+def test_an_admins_bearer_alone_is_answered_as_the_cookie_is_in_an_empty_instance(
+    scene: Scene, method: str, path: str, status: HTTPStatus
 ) -> None:
     answer = getattr(scene.browser(), method)(
         path, headers={**a_bearer(scene, ADMIN_GROUPS), **_SAME_ORIGIN}
     )
 
-    assert answer.status_code != HTTPStatus.FORBIDDEN
-    assert answer.status_code != HTTPStatus.UNAUTHORIZED
+    assert answer.status_code == status
+    if status is HTTPStatus.OK:
+        assert SourceListView.model_validate(answer.json()).sources == []
+    else:
+        assert answer.headers["content-type"] == _PROBLEM
 
 
 @pytest.mark.parametrize(("method", "path"), _ROUTES)
