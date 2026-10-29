@@ -1,8 +1,0 @@
-claim_id = "de7b991891dc46fc8389883646e3bebf"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "8d6698a82d98690013f0b855540b8186483770de"
-branch = "claude/issue-626-get-api-decks-slug-and-the-problem-contr"
-scope = ["docs/decisions/0020-the-lobby-is-a-json-api.md", "docs/reference/decks.md", "src/presentator/api/auth.py", "src/presentator/api/deck_api.py", "src/presentator/api/decks.py", "src/presentator/api/problems.py", "src/presentator/application/decks.py", "src/presentator/contracts/decks.py", "tests/presentator/api/test_deck_api.py", "tests/presentator/application/test_decks.py"]
-opened_commit = "c4b1bd50feaec26bceea5c4c452b0d39bf29416d"
-whole_reason = "One route and the error contract it is the first raiser of; the contract without its first consumer would be dead code, and the instants are what the route reads."
