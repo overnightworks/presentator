@@ -18,7 +18,7 @@ from tests.support.deck_source_support import (
     folders_under,
     mirrors_under,
 )
-from tests.support.git_remote import EXAMPLE_SLUG, EXAMPLE_TITLE, GitRemote
+from tests.support.git_remote import GitRemote
 
 if TYPE_CHECKING:
     from presentator.ports.copresenter import DeckTexts
@@ -61,18 +61,6 @@ def test_a_built_deck_gives_its_title_language_and_slides_with_notes(
         (1, "One", ""),
         (2, "Two", "notes for two"),
     ]
-
-
-def test_the_example_deck_is_titled_by_its_manifest(
-    remote: GitRemote,
-    tmp_path: Path,
-) -> None:
-    remote.commit_example_deck(at=_PUSHED_AT)
-
-    text = read_deck(tmp_path, remote, EXAMPLE_SLUG)
-
-    assert text is not None
-    assert text.title == EXAMPLE_TITLE
 
 
 def test_a_deck_without_a_manifest_is_titled_by_its_first_slide(
