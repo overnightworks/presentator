@@ -48,12 +48,17 @@ from gitmirror.model import (
 )
 from presentator.adapters.secrets import generate_deploy_key
 from tests.support.git_remote import MAIN_BRANCH, GitRemote, with_the_program
+from tests.support.mirror_support import (
+    A_GENEROUS_BOUND,
+    WHAT_THE_RESOLVER_ANSWERS,
+    FixedSecret,
+    OneKnownSecret,
+    a_mirror,
+)
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _PUSHED_LATER = datetime(2026, 1, 16, 9, tzinfo=UTC)
-_A_GENEROUS_BOUND = timedelta(seconds=30)
 _NO_BUDGET_AT_ALL = timedelta(0)
-_WHAT_THE_RESOLVER_ANSWERS = "what only this test made up"
 _TOKEN_REFERENCE = CredentialReference(name="A_READ_ONLY_TOKEN")
 _AN_ASSET = "<svg></svg>\n"
 _A_DECK = {
@@ -64,30 +69,6 @@ _A_DECK = {
 _LOOPBACK = "127.0.0.1"
 _LEAKED_USERINFO = "leaked-user:leaked-password"
 _AN_UNRESOLVABLE_HOST = "http://host.example.invalid/repo.git"
-
-
-class NoSecretAnywhere:
-    """A resolver for a reference that leads nowhere."""
-
-    def resolve(self, reference: CredentialReference) -> str | None:
-        return None
-
-
-class OneKnownSecret:
-    """A resolver that answers whatever reference the source names."""
-
-    def resolve(self, reference: CredentialReference) -> str | None:
-        return f"{_WHAT_THE_RESOLVER_ANSWERS} for {reference.name}"
-
-
-@dataclass(slots=True)
-class _FixedSecret:
-    """A resolver that answers one exact value, whatever the reference names."""
-
-    value: str
-
-    def resolve(self, reference: CredentialReference) -> str | None:
-        return self.value
 
 
 @pytest.mark.parametrize(
@@ -164,22 +145,6 @@ def test_connection_next_action_package_root_provides_the_interim_contract() -> 
         Revision,
         TreeEntry,
         check_connection,
-    )
-
-
-def a_mirror(
-    url: str,
-    *,
-    directory: Path,
-    credential: CredentialReference | None = None,
-    resolver: NoSecretAnywhere | OneKnownSecret | _FixedSecret | None = None,
-    pull_timeout: timedelta = _A_GENEROUS_BOUND,
-) -> GitMirror:
-    return GitMirror(
-        source=GitSource(url=url, ref=MAIN_BRANCH, credential=credential),
-        directory=directory / "mirror.git",
-        credentials=NoSecretAnywhere() if resolver is None else resolver,
-        pull_timeout=pull_timeout,
     )
 
 
@@ -463,7 +428,7 @@ def test_a_credential_reference_that_resolves_to_nothing_stops_the_pull(
     assert connection.revision is None
 
 
-def _fill(request: str, *, secret: str = _WHAT_THE_RESOLVER_ANSWERS) -> str:
+def _fill(request: str, *, secret: str = WHAT_THE_RESOLVER_ANSWERS) -> str:
     """What git's own credential protocol answers for that request on stdin.
 
     Driving `git credential fill` against the helper's actual `-c` options is
@@ -483,12 +448,12 @@ def _fill(request: str, *, secret: str = _WHAT_THE_RESOLVER_ANSWERS) -> str:
 
 
 def test_a_resolved_credential_reaches_git_without_riding_on_its_command_line() -> None:
-    arguments = credential_arguments(_WHAT_THE_RESOLVER_ANSWERS)
+    arguments = credential_arguments(WHAT_THE_RESOLVER_ANSWERS)
 
     answered = _fill("protocol=https\nhost=git.example\nusername=token-user\n\n")
 
-    assert f"password={_WHAT_THE_RESOLVER_ANSWERS}" in answered
-    assert _WHAT_THE_RESOLVER_ANSWERS not in " ".join(arguments)
+    assert f"password={WHAT_THE_RESOLVER_ANSWERS}" in answered
+    assert WHAT_THE_RESOLVER_ANSWERS not in " ".join(arguments)
 
 
 def test_the_helper_answers_a_user_name_when_the_url_carries_none() -> None:
@@ -528,7 +493,7 @@ def test_a_secret_carrying_a_control_character_is_rejected_before_it_reaches_git
         "https://git.example.invalid/repo.git",
         directory=tmp_path,
         credential=_TOKEN_REFERENCE,
-        resolver=_FixedSecret(unsafe_secret),
+        resolver=FixedSecret(unsafe_secret),
     )
 
     with pytest.raises(InvalidCredentialError):
@@ -626,7 +591,7 @@ def test_an_ssh_fetch_uses_a_0600_key_file_removed_after(
         url,
         directory=tmp_path / "ssh-mirror",
         credential=_TOKEN_REFERENCE,
-        resolver=_FixedSecret(private_key),
+        resolver=FixedSecret(private_key),
     )
 
     connection = mirror.connect()
@@ -655,7 +620,7 @@ def test_an_ssh_check_uses_a_real_key_and_configured_transport(
         url=url,
         ref=MAIN_BRANCH,
         secret=private_key,
-        timeout=_A_GENEROUS_BOUND,
+        timeout=A_GENEROUS_BOUND,
         known_hosts=known_hosts,
     )
 
@@ -696,7 +661,7 @@ def test_an_ssh_key_file_is_removed_after_every_fetch_failure(
         "git@ssh-stub-host:talks.git",
         directory=tmp_path,
         credential=_TOKEN_REFERENCE,
-        resolver=_FixedSecret(generate_deploy_key().private_key),
+        resolver=FixedSecret(generate_deploy_key().private_key),
     )
 
     if outcome == "exception":
@@ -732,7 +697,7 @@ def test_an_ssh_key_directory_is_removed_when_setting_its_mode_fails(
         "git@ssh-stub-host:talks.git",
         directory=tmp_path / "mirror",
         credential=_TOKEN_REFERENCE,
-        resolver=_FixedSecret(generate_deploy_key().private_key),
+        resolver=FixedSecret(generate_deploy_key().private_key),
     )
 
     with pytest.raises(OSError, match="mode denied"):
@@ -759,7 +724,7 @@ def test_an_ssh_key_directory_setup_failure_surfaces_without_cleanup_masking_it(
         "git@ssh-stub-host:talks.git",
         directory=tmp_path / "mirror",
         credential=_TOKEN_REFERENCE,
-        resolver=_FixedSecret(generate_deploy_key().private_key),
+        resolver=FixedSecret(generate_deploy_key().private_key),
     )
 
     with pytest.raises(OSError, match="directory unavailable"):
@@ -783,7 +748,7 @@ def test_an_ssh_key_cleanup_failure_is_surfaced(
         "git@ssh-stub-host:talks.git",
         directory=tmp_path / "mirror",
         credential=_TOKEN_REFERENCE,
-        resolver=_FixedSecret(generate_deploy_key().private_key),
+        resolver=FixedSecret(generate_deploy_key().private_key),
     )
 
     with pytest.raises(OSError, match="cleanup denied"):
@@ -895,7 +860,7 @@ def test_a_url_without_a_user_name_authenticates_as_the_constant_user(
     tmp_path: Path,
 ) -> None:
     bare = _prepared_bare_repo(remote)
-    resolved = f"{_WHAT_THE_RESOLVER_ANSWERS} for {_TOKEN_REFERENCE.name}"
+    resolved = f"{WHAT_THE_RESOLVER_ANSWERS} for {_TOKEN_REFERENCE.name}"
     expected = _basic_auth(CREDENTIAL_USER_NAME, resolved)
     with _dumb_http_remote(bare, expected_authorization=expected) as (url, served):
         mirror = a_mirror(
@@ -1010,7 +975,7 @@ def test_a_failed_pull_logs_gits_words_with_the_urls_userinfo_hidden(
     assert "***" in record.message
     assert leaked_name not in record.message
     assert leaked_password not in record.message
-    assert _WHAT_THE_RESOLVER_ANSWERS not in record.message
+    assert WHAT_THE_RESOLVER_ANSWERS not in record.message
     assert "authentication" in record.message.lower()
 
 
@@ -1039,7 +1004,7 @@ def test_a_failed_pull_hides_the_secret_the_remote_reflects_back(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     caplog.set_level(logging.WARNING, logger="gitmirror.mirror")
-    resolved = f"{_WHAT_THE_RESOLVER_ANSWERS} for {_TOKEN_REFERENCE.name}"
+    resolved = f"{WHAT_THE_RESOLVER_ANSWERS} for {_TOKEN_REFERENCE.name}"
     with _responding_remote(
         status=HTTPStatus.FORBIDDEN,
         body=f"token rejected: {resolved}".encode(),
@@ -1082,13 +1047,13 @@ def test_a_reachable_check_answers_with_the_heads_full_commit(
     remote: GitRemote,
 ) -> None:
     bare = _prepared_bare_repo(remote)
-    expected = _basic_auth(CREDENTIAL_USER_NAME, _WHAT_THE_RESOLVER_ANSWERS)
+    expected = _basic_auth(CREDENTIAL_USER_NAME, WHAT_THE_RESOLVER_ANSWERS)
     with _dumb_http_remote(bare, expected_authorization=expected) as (url, served):
         checked = check_connection(
             url=url,
             ref=MAIN_BRANCH,
-            secret=_WHAT_THE_RESOLVER_ANSWERS,
-            timeout=_A_GENEROUS_BOUND,
+            secret=WHAT_THE_RESOLVER_ANSWERS,
+            timeout=A_GENEROUS_BOUND,
         )
 
     assert checked.state is ConnectionState.READY
@@ -1104,8 +1069,8 @@ def test_a_checks_wrong_secret_is_refused(remote: GitRemote) -> None:
         checked = check_connection(
             url=url,
             ref=MAIN_BRANCH,
-            secret=_WHAT_THE_RESOLVER_ANSWERS,
-            timeout=_A_GENEROUS_BOUND,
+            secret=WHAT_THE_RESOLVER_ANSWERS,
+            timeout=A_GENEROUS_BOUND,
         )
 
     assert checked.state is ConnectionState.REFUSED
@@ -1121,7 +1086,7 @@ def test_a_check_of_a_host_that_answers_something_else_is_named_failed() -> None
             url=url,
             ref=MAIN_BRANCH,
             secret=None,
-            timeout=_A_GENEROUS_BOUND,
+            timeout=A_GENEROUS_BOUND,
         )
 
     assert checked.state is ConnectionState.FAILED
@@ -1142,7 +1107,7 @@ def test_a_failed_checks_detail_hides_userinfo_the_remote_reflects_back() -> Non
             url=url,
             ref=MAIN_BRANCH,
             secret=None,
-            timeout=_A_GENEROUS_BOUND,
+            timeout=A_GENEROUS_BOUND,
         )
 
     assert checked.detail is not None
@@ -1153,17 +1118,17 @@ def test_a_failed_checks_detail_hides_userinfo_the_remote_reflects_back() -> Non
 def test_a_failed_checks_detail_hides_the_secret_the_remote_reflects_back() -> None:
     with _responding_remote(
         status=HTTPStatus.FORBIDDEN,
-        body=f"token rejected: {_WHAT_THE_RESOLVER_ANSWERS}".encode(),
+        body=f"token rejected: {WHAT_THE_RESOLVER_ANSWERS}".encode(),
     ) as url:
         checked = check_connection(
             url=url,
             ref=MAIN_BRANCH,
-            secret=_WHAT_THE_RESOLVER_ANSWERS,
-            timeout=_A_GENEROUS_BOUND,
+            secret=WHAT_THE_RESOLVER_ANSWERS,
+            timeout=A_GENEROUS_BOUND,
         )
 
     assert checked.detail is not None
-    assert _WHAT_THE_RESOLVER_ANSWERS not in checked.detail
+    assert WHAT_THE_RESOLVER_ANSWERS not in checked.detail
     assert "***" in checked.detail
 
 
@@ -1172,7 +1137,7 @@ def test_a_check_of_an_unresolvable_host_is_named_unreachable() -> None:
         url=_AN_UNRESOLVABLE_HOST,
         ref=MAIN_BRANCH,
         secret=None,
-        timeout=_A_GENEROUS_BOUND,
+        timeout=A_GENEROUS_BOUND,
     )
 
     assert checked.state is ConnectionState.UNREACHABLE
@@ -1204,7 +1169,7 @@ def test_a_check_of_a_branch_nobody_pushed_is_failed_without_a_detail_line(
             url=url,
             ref="a-branch-nobody-pushed",
             secret=None,
-            timeout=_A_GENEROUS_BOUND,
+            timeout=A_GENEROUS_BOUND,
         )
 
     assert checked.state is ConnectionState.FAILED
@@ -1220,7 +1185,7 @@ def test_a_checks_control_character_secret_is_refused_before_it_reaches_git() ->
         url=_AN_UNRESOLVABLE_HOST,
         ref=MAIN_BRANCH,
         secret=_A_SECRET_WITH_A_NEWLINE,
-        timeout=_A_GENEROUS_BOUND,
+        timeout=A_GENEROUS_BOUND,
     )
 
     assert checked.state is ConnectionState.REFUSED
