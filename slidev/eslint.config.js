@@ -13,7 +13,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['custom-nav-controls.vue', 'components/**/*.vue', 'tests/**/*.ts'],
+    files: ['custom-nav-controls.vue', 'components/**/*.vue'],
     languageOptions: {
       globals: Object.fromEntries(
         [

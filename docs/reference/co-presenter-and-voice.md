@@ -27,8 +27,9 @@ models run and what they cost on the card is owned by the speech README.
 
 ## Routes and access
 
-The overlay, which a deck enables as the addon `slidev-addon-presentator`, calls relative `/copresenter/who`, `/copresenter/ask`
-and `/copresenter/hear` routes. The talk host serves them under its own session
+The overlay, which a deck enables as the addon `slidev-addon-presentator`,
+calls relative `/copresenter/who`, `/copresenter/ask` and `/copresenter/hear`
+routes. The talk host serves them under its own session
 cookie and its own Origin; the lobby answers 404 on them. Any signed-in person
 may use them, through the existing active session; the agent service's own
 subscription and API groups decide who may ask, and deck ownership limits which

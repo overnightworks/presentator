@@ -93,44 +93,6 @@ describe('presenter controls', () => {
     }
   }, 30_000)
 
-  it('Cell 10: loads the overlay of a deck whose folder holds a percent sign and names that folder', async () => {
-    const overlayBuildDirectory = await buildAddonDeck('/deck/50%25off/')
-    const asked: { said: string, deck: string }[] = []
-    const { server: overlayServer, origin: overlayOrigin, sockets: overlaySockets }
-      = await createOverlayDeckServer(overlayBuildDirectory, {
-        basePath: '/deck/50%25off',
-        onAsk: (said, deck) => asked.push({ said, deck }),
-      })
-    try {
-      const { browser, page } = await openPresenterAt(overlayOrigin, '/deck/50%25off/presenter/1', 1024)
-      try {
-        const ai = page.getByRole('switch', { name: 'AI' })
-        await ai.waitFor({ state: 'visible', timeout: 5_000 })
-        await ai.click({ timeout: 2_000 })
-        await page.waitForFunction(
-          () => (window as unknown as {
-            __copresenter: { snapshot: () => { hearOpen: boolean } }
-          }).__copresenter.snapshot().hearOpen,
-          undefined,
-          { timeout: 5_000 },
-        )
-        await page.evaluate(() => (window as unknown as {
-          __copresenter: { say: (text: string) => void }
-        }).__copresenter.say('Which deck is this?'))
-        await expect.poll(() => asked).toEqual([{ said: 'Which deck is this?', deck: '50%off' }])
-      } finally {
-        await browser.close()
-      }
-    } finally {
-      for (const socket of overlaySockets) socket.destroy()
-      overlayServer.closeAllConnections()
-      await new Promise<void>((resolve, reject) => {
-        overlayServer.close((error) => (error ? reject(error) : resolve()))
-      })
-      await rm(overlayBuildDirectory, { recursive: true, force: true })
-    }
-  }, 60_000)
-
   it.each([1024, 390])('keeps Home and AI separate and reachable at %ipx', async (width) => {
     const { browser, page } = await openPresenter(width)
     try {
@@ -261,12 +223,17 @@ describe('presenter controls', () => {
     expect(overlay).not.toContain('document.cookie')
   })
 
-  it('loads the AudioWorklet of a deck that enables the addon by name', async () => {
-    const overlayBuildDirectory = await buildAddonDeck()
+  it.each(['/', '/deck/50%25off/'])('mounts one overlay and loads its AudioWorklet from <base>assets/ at %s', async (base) => {
+    const nested = base !== '/'
+    const overlayBuildDirectory = await buildAddonDeck(base)
+    const asked: { said: string, deck: string }[] = []
     const { server: overlayServer, origin: overlayOrigin, sockets: overlaySockets }
-      = await createOverlayDeckServer(overlayBuildDirectory)
+      = await createOverlayDeckServer(overlayBuildDirectory, {
+        basePath: nested ? base.slice(0, -1) : '',
+        onAsk: (said, deck) => asked.push({ said, deck }),
+      })
     try {
-      const { browser, page } = await openPresenterAt(overlayOrigin, '/presenter/1', 1024)
+      const { browser, page } = await openPresenterAt(overlayOrigin, `${base}presenter/1`, 1024)
       try {
         const ai = page.getByRole('switch', { name: 'AI' })
         await ai.waitFor({ state: 'visible', timeout: 2_000 })
@@ -297,6 +264,12 @@ describe('presenter controls', () => {
         )
         expect(snapshot.hearing).toBe('local')
         expect(await page.getByText('No hearing').count()).toBe(0)
+        if (nested) {
+          await page.evaluate(() => (window as unknown as {
+            __copresenter: { say: (text: string) => void }
+          }).__copresenter.say('Which deck is this?'))
+          await expect.poll(() => asked).toEqual([{ said: 'Which deck is this?', deck: '50%off' }])
+        }
       } finally {
         await browser.close()
       }

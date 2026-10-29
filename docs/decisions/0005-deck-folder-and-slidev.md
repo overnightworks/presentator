@@ -90,7 +90,7 @@ not an invention of ours:
   This holds for every deck, including the operator's own — the isolation is
   what makes "any git remote" a safe sentence.
 
-### Amendment 2026-10-29: what the addon built is
+### Amendment 2026-10-29 — the overlay is the addon slidev-addon-presentator
 
 The addon paragraph above is the plan of this record. What is built:
 
