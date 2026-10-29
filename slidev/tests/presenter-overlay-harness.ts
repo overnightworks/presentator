@@ -61,8 +61,11 @@ export const state = {
   pendingAnswerClosed: 0,
   askHeaderNames: [] as string[],
   answerMode: 'audio' as AnswerMode,
-  askBodies: [] as { said: string, deck: string }[],
-  hearingMode: 'ready' as 'ready' | 'not-ready' | 'socket-error' | 'unreachable' | 'who-fails',
+  askBodies: [] as { said: string, deck: string, language: string }[],
+  whoLanguage: 'de' as 'de' | 'en',
+  whoDecks: [] as (string | null)[],
+  hearLanguages: [] as (string | null)[],
+  hearingMode: 'ready' as 'ready' | 'not-ready' | 'socket-error' | 'unreachable' | 'who-fails' | 'who-not-found',
   media: createMediaObservation(),
 }
 
@@ -194,7 +197,11 @@ function websocketAcceptKey(key: string) {
 // spoken turn. `basePath` serves the build below the folder a deck lives in.
 export async function createOverlayDeckServer(
   directory: string,
-  { basePath = '', onAsk = () => undefined }: { basePath?: string, onAsk?: (said: string, deck: string) => void } = {},
+  { basePath = '', onAsk = () => undefined, onWho = () => undefined }: {
+    basePath?: string
+    onAsk?: (said: string, deck: string) => void
+    onWho?: (deck: string | null) => void
+  } = {},
 ) {
   // `closeAllConnections` does not reach an upgraded (WebSocket) connection
   // (Node's own documented behaviour) — the same reason `startServer` below
@@ -204,9 +211,11 @@ export async function createOverlayDeckServer(
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://presenter.test')
     if (url.pathname === '/copresenter/who') {
+      onWho(url.searchParams.get('deck'))
       response.writeHead(200, { 'content-type': 'application/json' })
       response.end(
         JSON.stringify({
+          language: 'de',
           speech: { sample_rate: 16000, hearing: { ready: true } },
         }),
       )
@@ -250,6 +259,12 @@ async function startServer() {
   server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://presenter.test')
     if (url.pathname === '/copresenter/who') {
+      state.whoDecks.push(url.searchParams.get('deck'))
+      if (state.hearingMode === 'who-not-found') {
+        response.writeHead(404, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ detail: 'Not found' }))
+        return
+      }
       if (state.hearingMode === 'who-fails') {
         response.writeHead(500, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ detail: 'Co-presenter failed' }))
@@ -261,7 +276,10 @@ async function startServer() {
         return
       }
       response.writeHead(200, { 'content-type': 'application/json' })
-      response.end(JSON.stringify({ speech: { sample_rate: 16000, hearing: { ready: state.hearingMode !== 'not-ready' } } }))
+      response.end(JSON.stringify({
+        language: state.whoLanguage,
+        speech: { sample_rate: 16000, hearing: { ready: state.hearingMode !== 'not-ready' } },
+      }))
       return
     }
     if (url.pathname === '/copresenter/ask') {
@@ -334,6 +352,7 @@ async function startServer() {
       return
     }
     state.hearingOpened += 1
+    state.hearLanguages.push(new URL(request.url, 'http://presenter.test').searchParams.get('language'))
     socket.write(
       'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
       + `Sec-WebSocket-Accept: ${websocketAcceptKey(key)}\r\n\r\n`,
@@ -371,7 +390,7 @@ function sendEvent(response: ServerResponse, event: string, data: object) {
 async function readAskBody(request: import('node:http').IncomingMessage) {
   const chunks: Buffer[] = []
   for await (const chunk of request) chunks.push(chunk as Buffer)
-  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as { said: string, deck: string }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as { said: string, deck: string, language: string }
 }
 
 export function sendHeard(text: string) {
@@ -526,6 +545,8 @@ export function registerOverlayHarness() {
     cspViolations = []
     socketErrors.length = 0
     state.askBodies = []
+    state.whoDecks = []
+    state.hearLanguages = []
   })
 
   afterEach(() => {

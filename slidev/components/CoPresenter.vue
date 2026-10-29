@@ -7,7 +7,6 @@ import WORKLET_URL from '../worklets/pcm-capture-processor.js?url&no-inline'
 
 const { currentSlideNo } = useNav()
 
-const LANGUAGE = 'de'
 const COPRESENTER = '/copresenter'
 // The host delivers this deck at `/deck/<slug>/`, so the base names its slug.
 // Vite refuses a base with a raw `%`, so a folder `50%off` arrives as `50%25off`.
@@ -61,6 +60,8 @@ let playQueue = Promise.resolve()
 let spokenText = ''
 let unvoicedSentence = ''
 let sampleRate = 16000
+// The deck's language, which the server reports before the hearing lease opens.
+let language = ''
 let activationGeneration = 0
 let playGeneration = 0
 let activeAudio = null
@@ -127,12 +128,13 @@ async function turnOn() {
   spokenText = ''
   let report
   try {
-    const response = await fetch(`${COPRESENTER}/who`)
+    const response = await fetch(`${COPRESENTER}/who?deck=${encodeURIComponent(DECK_SLUG)}`)
     if (!stillActive(generation)) return
     if (!response.ok) throw new WhoRefused(response.status)
     report = await response.json()
     if (!stillActive(generation)) return
     sampleRate = report.speech?.sample_rate || 16000
+    language = report.language
   } catch (error_) {
     if (!stillActive(generation)) return
     error.value = error_ instanceof WhoRefused && error_.status === 503 ? VOICE_OFFLINE : 'Unreachable'
@@ -175,7 +177,7 @@ function stopWork() {
 
 async function openHearingLease(generation) {
   const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const url = `${scheme}//${window.location.host}${COPRESENTER}/hear?language=${LANGUAGE}`
+  const url = `${scheme}//${window.location.host}${COPRESENTER}/hear?language=${language}`
   const socket = new WebSocket(url)
   socket.binaryType = 'arraybuffer'
   bindHearSocket(socket, generation)
@@ -359,7 +361,7 @@ async function ask(text) {
       body: JSON.stringify({
         said: text,
         slide: currentSlideNo.value,
-        language: LANGUAGE,
+        language,
         deck: DECK_SLUG,
       }),
       signal: controller.signal,
