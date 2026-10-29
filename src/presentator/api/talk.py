@@ -29,11 +29,11 @@ from webauth.policies import (
 from webauth.ports import SessionRecordStore
 from webauth.sign_in_routes import SignInRefusal, install_sign_in_routes
 
+from presentator.api.admission import signed_in_connection
 from presentator.api.auth import (
     DEFAULT_BODY_BYTES,
     TALK_SIGN_IN,
     InstalledAuth,
-    signed_in_connection,
     talk_sign_in_refusal_path,
 )
 from presentator.api.copresenter import CoPresenterSurface, add_copresenter_routes
