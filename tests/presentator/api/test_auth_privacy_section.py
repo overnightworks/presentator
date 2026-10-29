@@ -16,27 +16,35 @@ _MINUTE = timedelta(minutes=1)
 
 
 @pytest.mark.parametrize(
-    ("unit", "kept"),
+    ("sentence", "kept"),
     [
         (
-            "Stunden",
-            [SESSION_LIFETIME / _HOUR, SESSION_LIFETIME / _HOUR, DRAFT_MAX_AGE / _HOUR],
+            r"Cookie nach der Anmeldung ist (\d+) Stunden gültig",
+            SESSION_LIFETIME / _HOUR,
         ),
         (
-            "Minuten",
-            [
-                SESSION_SWEEP_INTERVAL / _MINUTE,
-                timedelta(seconds=PENDING_LOGIN_MAX_AGE_SECONDS) / _MINUTE,
-                timedelta(seconds=PENDING_LOGIN_MAX_AGE_SECONDS) / _MINUTE,
-            ],
+            r"Eine Sitzung endet (\d+) Stunden nach der Anmeldung",
+            SESSION_LIFETIME / _HOUR,
+        ),
+        (
+            r"abgelaufene Sitzungen löscht der Dienst alle (\d+) Minuten",
+            SESSION_SWEEP_INTERVAL / _MINUTE,
+        ),
+        (r"rund (\d+) Stunden nach Erzeugung", DRAFT_MAX_AGE / _HOUR),
+        (
+            r"nur über HTTPS, (\d+) Minuten gültig",
+            timedelta(seconds=PENDING_LOGIN_MAX_AGE_SECONDS) / _MINUTE,
+        ),
+        (
+            r"bleibt es, bis seine (\d+) Minuten ablaufen",
+            timedelta(seconds=PENDING_LOGIN_MAX_AGE_SECONDS) / _MINUTE,
         ),
     ],
 )
-def test_every_number_the_section_states_equals_the_code_that_keeps_it(
-    unit: str, kept: list[float]
+def test_a_number_the_section_states_equals_the_code_that_keeps_it(
+    sentence: str, kept: float
 ) -> None:
-    text = _SECTION.read_text(encoding="utf-8")
+    stated = re.search(sentence, _SECTION.read_text(encoding="utf-8"))
 
-    stated = [int(number) for number in re.findall(rf"(\d+) {unit}", text)]
-
-    assert sorted(stated) == sorted(kept)
+    assert stated is not None
+    assert int(stated.group(1)) == kept
