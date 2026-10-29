@@ -90,6 +90,17 @@ def deck_routes(*, decks: Decks, talk_origin: str) -> APIRouter:
         if page is None:
             raise ProblemError(HTTPStatus.NOT_FOUND)
         attempt = page.attempt
+        attempt_view = None
+        if attempt is not None:
+            failure_view = None
+            if attempt.failure is not None:
+                failure_view = FailureView.of(attempt.failure)
+            attempt_view = AttemptView(
+                commit=attempt.commit,
+                started_at=attempt.started_at,
+                outcome=attempt.outcome,
+                failure=failure_view,
+            )
         return DeckView(
             slug=page.slug,
             title=page.title,
@@ -97,16 +108,7 @@ def deck_routes(*, decks: Decks, talk_origin: str) -> APIRouter:
             source=page.source,
             commit=page.commit,
             built_at=page.built_at,
-            attempt=None
-            if attempt is None
-            else AttemptView(
-                commit=attempt.commit,
-                started_at=attempt.started_at,
-                outcome=attempt.outcome,
-                failure=None
-                if attempt.failure is None
-                else FailureView.of(attempt.failure),
-            ),
+            attempt=attempt_view,
             themes=page.themes,
             talk=f"{talk_origin}{talk_address(page.slug)}",
             views_open=page.views_open,
