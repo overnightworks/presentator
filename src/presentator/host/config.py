@@ -159,7 +159,7 @@ class Settings(BaseSettings, env_prefix=ENVIRONMENT_PREFIX, env_file=".env"):
     # Where built talks are kept, and the Node project whose Slidev builds
     # them; both are places on the machine the instance runs on.
     builds: Path = Path("builds")
-    toolchain: Path = Path("frontend")
+    toolchain: Path = Path("slidev")
     # A build that hangs would hold every later build behind it, so each step
     # of the toolchain is bounded.
     build_timeout_seconds: float = DEFAULT_BUILD_TIMEOUT_SECONDS

@@ -7,13 +7,13 @@ its own toolchain; skip this there.
 
 ## Before you start
 
-- `pnpm` on `PATH`, and the Node version `frontend/.nvmrc` names.
+- `pnpm` on `PATH`, and the Node version `slidev/.nvmrc` names.
 - `PRESENTATOR_TOOLCHAIN` points at the project carrying Slidev (default
-  `frontend`).
+  `slidev`).
 
 ## Steps
 
-1. In `frontend/`, run `pnpm install --frozen-lockfile`.
+1. In `slidev/`, run `pnpm install --frozen-lockfile`.
 2. Fetch the PDF export's browser once, as the user the server runs as:
    `pnpm exec playwright install chromium`. It stays under that user's home
    directory.

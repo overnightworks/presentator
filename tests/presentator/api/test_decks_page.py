@@ -266,7 +266,7 @@ def test_the_builds_with_row_stays_one_paragraph_at_twelve_themes() -> None:
 def test_a_toolchain_manifest_package_json_does_not_carry_omits_the_row(
     tmp_path: Path,
 ) -> None:
-    project = tmp_path / "frontend"
+    project = tmp_path / "slidev"
     project.mkdir()
     (project / "package.json").write_text('{"dependencies": ["@slidev/theme-seriph"]}')
     signed_in = a_signed_in_lobby(

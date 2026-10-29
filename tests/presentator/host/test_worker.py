@@ -420,8 +420,8 @@ def sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (tmp_path / "work").chmod(0o755)
     (tmp_path / "opt/corepack").mkdir(parents=True)
     (tmp_path / "opt/corepack").chmod(0o755)
-    modules = tmp_path / "app/frontend/node_modules"
-    file_at("app/frontend/node_modules/.bin/slidev", mode=0o755)
+    modules = tmp_path / "app/slidev/node_modules"
+    file_at("app/slidev/node_modules/.bin/slidev", mode=0o755)
     package = modules / ".pnpm/@slidev+cli@1/node_modules/@slidev/cli"
     (package / "node_modules").mkdir(parents=True)
     (package / "node_modules/.vite").symlink_to(WORK_MOUNT + "/vite")
@@ -453,7 +453,7 @@ def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
 
 
 def test_reads_a_missing_toolchain_as_absent(sealed_root: Path) -> None:
-    (sealed_root / "app/frontend/node_modules/.bin/slidev").unlink()
+    (sealed_root / "app/slidev/node_modules/.bin/slidev").unlink()
 
     toolchain = worker.read_snapshot(sealed_root).toolchain
 
@@ -482,13 +482,13 @@ def break_mountinfo_encoding(root: Path, _monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def loop_slidev_package(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
-    link = root / "app/frontend/node_modules/@slidev/cli"
+    link = root / "app/slidev/node_modules/@slidev/cli"
     link.unlink()
     link.symlink_to(link)
 
 
 def deepen_slidev_package_chain(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
-    link = root / "app/frontend/node_modules/@slidev/cli"
+    link = root / "app/slidev/node_modules/@slidev/cli"
     chain_length = sys.getrecursionlimit() + 100
     package = link.resolve()
     link.unlink()
@@ -501,7 +501,7 @@ def deepen_slidev_package_chain(root: Path, _monkeypatch: pytest.MonkeyPatch) ->
 
 
 def break_slidev_package_link(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
-    link = root / "app/frontend/node_modules/@slidev/cli"
+    link = root / "app/slidev/node_modules/@slidev/cli"
     package = link.resolve()
     link.unlink()
     link.symlink_to(root / "missing" / ".." / package.relative_to(root))

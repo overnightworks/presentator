@@ -4,7 +4,7 @@
 # worker run from it.
 #
 # Node is the base because the toolchain's version is the narrow one
-# (frontend/.nvmrc); uv brings the Python that .python-version names. Every
+# (slidev/.nvmrc); uv brings the Python that .python-version names. Every
 # image named here is held by digest, because a tag is a name its owner may
 # move.
 FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS runtime-user
@@ -41,8 +41,8 @@ RUN corepack enable pnpm
 # The project's dependencies are installed as that user, because a build writes
 # its caches beside the project; pnpm and the browser are installed as root.
 WORKDIR /app
-COPY --chown=presentator frontend/package.json frontend/pnpm-lock.yaml ./frontend/
-WORKDIR /app/frontend
+COPY --chown=presentator slidev/package.json slidev/pnpm-lock.yaml ./slidev/
+WORKDIR /app/slidev
 RUN corepack install
 USER presentator
 RUN pnpm install --frozen-lockfile
@@ -57,10 +57,10 @@ RUN slidev="$(realpath node_modules/@slidev/cli)" \
     && mkdir -p "$slidev/node_modules" \
     && ln -s /work/vite "$slidev/node_modules/.vite"
 USER presentator
-COPY --chown=presentator frontend ./
+COPY --chown=presentator slidev ./
 # A step is started with the deck's own command line and nothing else, so the
 # project the toolchain resolves from is this image's own place of work.
-WORKDIR /app/frontend
+WORKDIR /app/slidev
 
 FROM toolchain AS instance
 USER root
@@ -99,7 +99,7 @@ RUN mkdir -p /data/database /data/mirrors /data/builds \
 ENV PRESENTATOR_DATABASE=/data/database/presentator.sqlite3 \
     PRESENTATOR_MIRRORS=/data/mirrors \
     PRESENTATOR_BUILDS=/data/builds \
-    PRESENTATOR_TOOLCHAIN=/app/frontend \
+    PRESENTATOR_TOOLCHAIN=/app/slidev \
     PRESENTATOR_HOST=0.0.0.0 \
     PRESENTATOR_LOCAL_SOURCES_MOUNT=/data/local-sources
 USER presentator

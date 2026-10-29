@@ -38,7 +38,7 @@ some of them.
 | `PRESENTATOR_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/` as the person and `/api/admin/` as an admin; empty serves no token route. See [people](people.md). |
 | `PRESENTATOR_SOURCE_POLL_SECONDS` | `300` | Interval of the source poll. |
 | `PRESENTATOR_SOURCE_TIMEOUT_SECONDS` | `20` | Bound of one pull. |
-| `PRESENTATOR_TOOLCHAIN` | `frontend` | The project carrying Slidev. |
+| `PRESENTATOR_TOOLCHAIN` | `slidev` | The project carrying Slidev. |
 | `PRESENTATOR_BUILDS` | `builds` | Where built talks and PDFs are kept. |
 | `PRESENTATOR_BUILD_TIMEOUT_SECONDS` | `300` | Bound of each build step; compose also hands it to the build worker by name. |
 | `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves; compose also hands it to the build worker by name. |
@@ -87,11 +87,13 @@ image sets them and the defaults above do not apply; compose sets the rest.
 | `PRESENTATOR_MIRRORS` | `/data/mirrors` |
 | `PRESENTATOR_BUILDS` | `/data/builds` |
 | `PRESENTATOR_LOCAL_SOURCES_MOUNT` | `/data/local-sources` |
-| `PRESENTATOR_TOOLCHAIN` | `/app/frontend` |
+| `PRESENTATOR_TOOLCHAIN` | `/app/slidev` |
 | `PRESENTATOR_HOST` | `0.0.0.0`, reached through the edge's proxy |
 | `PRESENTATOR_BUILD_RUNNER` | `worker`, set by `compose.yaml` |
 | `PRESENTATOR_AGENT_SERVICE` | `http://agent-service:8080`, set by `compose.yaml` |
 | `PRESENTATOR_SPEECH_SOCKET` | `/run/presentator-speech/speech.sock`, not mounted in a deployed instance |
+
+An instance configuration that sets `PRESENTATOR_TOOLCHAIN` to `/app/frontend` by hand must drop it: the image sets it to `/app/slidev`.
 
 `Dockerfile` builds one image in two layers: the Slidev toolchain with the
 Chromium its PDF export drives (what a deck's own build runs in), and the whole

@@ -10,8 +10,8 @@ deck's own page names the theme set this instance builds with.
 
 ## Steps
 
-1. A theme, addon or plugin builds only if `frontend/` carries it too; widen
-   that set through a change to `frontend/package.json`, not a push of the
+1. A theme, addon or plugin builds only if `slidev/` carries it too; widen
+   that set through a change to `slidev/package.json`, not a push of the
    deck.
 2. Strip a Vue component wired to a service the deck does not bring with it:
    the build has nowhere to call, and a deck's own Vue components and global

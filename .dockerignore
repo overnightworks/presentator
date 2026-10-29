@@ -6,7 +6,7 @@
 !pyproject.toml
 !uv.lock
 !src
-!frontend
+!slidev
 
 # What the build makes for itself, so this machine's copy never travels.
 **/node_modules
