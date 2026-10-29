@@ -4,6 +4,7 @@ import os
 import shutil
 import stat
 import subprocess
+import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,7 +14,9 @@ import pytest
 
 EXAMPLE_DECK = Path(__file__).parents[2] / "examples" / "hello-deck"
 EXAMPLE_SLUG = EXAMPLE_DECK.name
-EXAMPLE_TITLE = "Hello Co-Presenter"
+EXAMPLE_TITLE: str = tomllib.loads(
+    (EXAMPLE_DECK / "deck.toml").read_text(encoding="utf-8")
+)["title"]
 MAIN_BRANCH = "main"
 
 _AUTHORSHIP = {
