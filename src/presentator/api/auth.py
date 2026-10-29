@@ -23,7 +23,7 @@ from webauth.dependencies import (
     admit_session,
     session_id_from_request,
 )
-from webauth.middleware.bearer_gate import BearerGate
+from webauth.middleware.bearer_gate import BearerGate, PersonPaths
 from webauth.middleware.session_gate import SessionGate
 from webauth.middleware.stack import install_web_auth_middleware
 from webauth.oidc import OidcRelyingParty
@@ -95,6 +95,8 @@ def talk_sign_in_refusal_path(refusal: RefusalPage) -> str:
     """The lobby's address that shows a talk sign-in refusal."""
     return f"/login/talk/{refusal.value}"
 
+
+_PERSON_API: Final = "/api/"
 
 # Signing in (its start and the issuer's return) and signing out are the
 # addresses the gate leaves alone, and the library derives them from the
@@ -301,6 +303,8 @@ def _install_middleware(
     security headers. The gate's store calls commit on their own and `touch` is
     one update-only statement (ADR 0003), so the gate's admission takes no lock.
     The admin prefix, when it is served, takes a bearer token and no cookie.
+    While the admin prefix is served, `/api/` takes a person's token as that
+    person; a request without a token is decided by the session cookie.
     """
     install_web_auth_middleware(
         lobby,
@@ -328,6 +332,7 @@ def _bearer_gate(auth: InstalledAuth, admin: AdminPeople) -> BearerGate:
         relying_party=auth.relying_party,
         admission=auth.admission,
         authorized_parties=AuthorizedParties(admin.admitted_clients),
+        person_paths=PersonPaths(PathRules(prefixes=(_PERSON_API,)), auth.transaction),
     )
 
 

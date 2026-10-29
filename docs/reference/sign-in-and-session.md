@@ -62,7 +62,7 @@ The SQLite stores stay this repository's
 
 ## What protects a request
 
-`webauth` 0.24.0 owns the mechanism, the sign-in routes included. `issue_session_cookies`,
+`webauth` 0.25.0 owns the mechanism, the sign-in routes included. `issue_session_cookies`,
 `clear_session_cookies` and `session_id_from_request` set, clear and read the
 signed `SameSite=Lax` session cookie.
 
@@ -71,9 +71,15 @@ signed `SameSite=Lax` session cookie.
   `admit_session` is the one authority, for HTTP and WebSocket alike (the
   co-presenter's WebSocket admits through it in its own route), that decides
   whether the cookie's session id names a person.
-- `BearerGate` takes the prefix `/api/admin/` by an access token alone and
-  never by the cookie (see [people](people.md)); it exists only while
-  `PRESENTATOR_ADMIN_TOKEN_CLIENTS` names a client.
+- `BearerGate` takes `/api/admin/` by an access token alone and never by the
+  cookie (see [people](people.md)). On the rest of `/api/` a person's hal
+  access token is the account behind it: admitted as a sign-in admits, in one
+  `SignInTransaction` entry (an unknown member gets an account, a known one
+  the role of the token's groups), with no session. A token beside a cookie
+  decides, and an invalid one is refused without falling back to the cookie.
+  Sign-out, back-channel logout and a Keycloak block do not end a token: it
+  stays valid until `exp` plus leeway. The gate exists only while
+  `PRESENTATOR_TOKEN_CLIENTS` names a client.
 - A request that carries the session cookie twice is treated as signed out
   rather than letting either copy decide whose account it runs in.
 - The public origin is https, so the session cookie is `Secure` and carries the

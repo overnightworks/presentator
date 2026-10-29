@@ -66,3 +66,7 @@ forged browser session cannot erase a person. Which clients may call it is
 configuration, and an instance that names none serves no admin route at all.
 The server keeps no access log, because the path of such a call carries the
 person's Keycloak subject. See [people](../reference/people.md).
+
+A person's own token on the rest of `/api/` is that person, with exactly their
+rights: the account behind the token is admitted as a sign-in would admit it,
+and no session exists to steal. The admin prefix stays a machine path.

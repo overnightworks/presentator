@@ -1,10 +1,12 @@
 """S9 (#293): `DELETE /api/admin/people/{subject}` takes hal's access token alone."""
 
 import logging
+from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import timedelta
 from http import HTTPStatus
+from pathlib import Path
 
 import pytest
 import uvicorn
@@ -435,7 +437,7 @@ def test_the_admitted_token_clients_are_the_comma_separated_ids(
     environment: pytest.MonkeyPatch, given: str, admitted: frozenset[str]
 ) -> None:
     """D6: the setting keeps the environment's comma format."""
-    environment.setenv("PRESENTATOR_ADMIN_TOKEN_CLIENTS", given)
+    environment.setenv("PRESENTATOR_TOKEN_CLIENTS", given)
 
     assert load_settings().admitted_token_clients() == admitted
 
@@ -445,10 +447,45 @@ def test_an_empty_entry_among_the_admitted_token_clients_refuses_to_start(
     environment: pytest.MonkeyPatch, given: str
 ) -> None:
     """D6: a list with an empty entry is a typo, not a decision."""
-    environment.setenv("PRESENTATOR_ADMIN_TOKEN_CLIENTS", given)
+    environment.setenv("PRESENTATOR_TOKEN_CLIENTS", given)
+
+    with pytest.raises(ConfigurationError, match="token_clients"):
+        load_settings()
+
+
+@pytest.mark.usefixtures("environment")
+def test_the_retired_setting_in_an_env_file_refuses_to_start_and_is_named(
+    tmp_path: Path,
+) -> None:
+    """P14: a missed rename in the application's `.env` is loud."""
+    (tmp_path / ".env").write_text("PRESENTATOR_ADMIN_TOKEN_CLIENTS=hal\n")
 
     with pytest.raises(ConfigurationError, match="admin_token_clients"):
         load_settings()
+
+
+def _set_in_process_environment(environment: pytest.MonkeyPatch, _: Path) -> None:
+    environment.setenv("PRESENTATOR_ADMIN_TOKEN_CLIENTS", "hal")
+
+
+def _set_empty_in_env_file(_: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    (tmp_path / ".env").write_text("PRESENTATOR_ADMIN_TOKEN_CLIENTS=\n")
+
+
+@pytest.mark.parametrize(
+    "arrange",
+    [_set_empty_in_env_file, _set_in_process_environment],
+    ids=["an empty env file entry", "the process environment"],
+)
+def test_the_retired_setting_elsewhere_is_ignored_and_the_new_one_stays_empty(
+    environment: pytest.MonkeyPatch,
+    tmp_path: Path,
+    arrange: Callable[[pytest.MonkeyPatch, Path], None],
+) -> None:
+    """P14: the silent cases the release's migration step exists for."""
+    arrange(environment, tmp_path)
+
+    assert load_settings().admitted_token_clients() == frozenset()
 
 
 def test_without_a_named_client_the_admin_prefix_falls_to_the_session_gate(
@@ -463,7 +500,7 @@ def test_without_a_named_client_the_admin_prefix_falls_to_the_session_gate(
     )
     without = browser.delete(path)
     elsewhere = browser.delete("/api/other/people/someone")
-    environment.setenv("PRESENTATOR_ADMIN_TOKEN_CLIENTS", "hal")
+    environment.setenv("PRESENTATOR_TOKEN_CLIENTS", "hal")
     gated = TestClient(
         main.build_instance(load_settings()).lobby,
         base_url=A_BROWSERS_ADDRESS,
