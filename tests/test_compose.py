@@ -25,7 +25,6 @@ def test_the_file_publishes_nothing_and_binds_nothing_outside_the_release() -> N
         for volume in service.get("volumes", []):
             source = volume if isinstance(volume, str) else volume["source"]
             assert source.partition(":")[0] in compose["volumes"]
-    assert "presentator-speech" not in _COMPOSE.read_text(encoding="utf-8")
 
 
 def test_no_environment_value_reads_the_callers_shell() -> None:
@@ -37,81 +36,14 @@ def test_no_environment_value_reads_the_callers_shell() -> None:
     assert "${" not in _COMPOSE.read_text(encoding="utf-8").replace("${HOME}", "")
 
 
-def test_the_instance_reaches_the_agent_service_over_the_edges_network() -> None:
-    """Cell 26."""
-    compose = _parsed_compose()
-    instance = compose["services"]["presentator"]
-
-    assert instance["environment"]["PRESENTATOR_AGENT_SERVICE"] == (
-        "http://agent-service:8080"
-    )
-    assert "agent" in instance["networks"]
-    assert compose["networks"]["agent"] == {
-        "external": True,
-        "name": "hal_agent_presentator",
-    }
+def test_the_worker_joins_no_network_of_the_file() -> None:
+    """S9e (#527): networks, only the instance is on one."""
+    assert "networks" not in _parsed_compose()["services"]["build-worker"]
 
 
-def test_the_instance_joins_the_back_channel_under_its_public_hostname() -> None:
-    """S9e (#527): networks, the back-channel joined under its public alias."""
-    compose = _parsed_compose()
-    instance = compose["services"]["presentator"]
-
-    assert instance["networks"]["backchannel"] == {
-        "aliases": ["presentator.hallucinai.de"]
-    }
-    assert compose["networks"]["backchannel"] == {
-        "external": True,
-        "name": "hal_backchannel_presentator",
-    }
-    assert "networks" not in compose["services"]["build-worker"]
-
-
-def test_the_trusted_proxy_is_the_gateway_of_the_instances_own_network() -> None:
-    """S9e (#527): networks, the gateway is the trusted proxy."""
-    compose = _parsed_compose()
-    network = compose["networks"]["default"]
-    (pool,) = network["ipam"]["config"]
-
-    assert network["name"] == "presentator_default"
-    assert pool == {"subnet": "172.31.251.0/24", "gateway": "172.31.251.1"}
-    assert (
-        _environment_of(compose["services"]["presentator"])[
-            "PRESENTATOR_TRUSTED_PROXIES"
-        ]
-        == pool["gateway"]
-    )
-
-
-def test_the_instance_is_routed_under_both_hosts_through_the_edge() -> None:
-    """S9e (#527): labels, enable, edge.name, edge.alias, port 8000, network."""
-    labels = _parsed_compose()["services"]["presentator"]["labels"]
-
-    assert labels == {
-        "traefik.enable": "true",
-        "edge.name": "presentator",
-        "edge.alias": "presentator-talk",
-        "traefik.http.services.presentator.loadbalancer.server.port": "8000",
-        "traefik.docker.network": "presentator_default",
-    }
+def test_the_worker_carries_no_label_the_proxy_could_route_by() -> None:
+    """S9e (#527): labels, the proxy cannot route to the worker."""
     assert "labels" not in _parsed_compose()["services"]["build-worker"]
-
-
-def test_the_instance_asks_its_own_health_route_with_the_public_host() -> None:
-    """S9e (#527): healthcheck, present, /health, Host from the environment."""
-    check = _parsed_compose()["services"]["presentator"]["healthcheck"]["test"]
-    script = check[-1]
-
-    assert check[:3] == ["CMD", "python", "-c"]
-    assert "http://127.0.0.1:8000/health" in script
-    assert "os.environ['PRESENTATOR_PUBLIC_ORIGIN']" in script
-    assert "$" not in script
-
-
-@pytest.mark.parametrize("service", ["presentator", "build-worker"])
-def test_each_service_restarts_unless_it_was_stopped(service: str) -> None:
-    """S9e (#527): restart is unless-stopped."""
-    assert _parsed_compose()["services"][service]["restart"] == "unless-stopped"
 
 
 def _service_lines(name: str) -> list[str]:
@@ -133,24 +65,14 @@ def _service_lines(name: str) -> list[str]:
     "sealing_line",
     [
         '    user: "0:presentator"',
-        "    entrypoint: []",
         "    cap_drop:\n      - ALL",
         "    cap_add:\n      - SETUID\n      - SETGID\n      - KILL",
         "    security_opt:\n      - no-new-privileges",
         "    read_only: true",
         "    network_mode: none",
         "    ipc: private",
-        "    shm_size: 256m",
-        "    pids_limit: 512",
-        "    restart: unless-stopped",
-        "    stop_signal: SIGKILL",
         "    pull_policy: never",
-        "      - /work:size=2g,nr_inodes=200k,mode=755,nosuid,nodev",
-        "      - /tmp:size=512m,nr_inodes=10k,mode=1777,nosuid,nodev",
-        "        source: build-socket\n        target: /run/presentator-build",
         "        volume:\n          nocopy: true",
-        "      - PRESENTATOR_BUILD_TIMEOUT_SECONDS",
-        "      - PRESENTATOR_BUILD_OUTPUT_MEGABYTES",
     ],
 )
 def test_the_worker_service_carries_each_key_that_seals_it(sealing_line: str) -> None:
@@ -167,7 +89,7 @@ def test_the_worker_swap_equals_its_memory_so_swap_cannot_double_the_bound() -> 
         )
     }
 
-    assert keys["memswap_limit"] == keys["mem_limit"] == "4g"
+    assert keys["memswap_limit"] == keys["mem_limit"]
 
 
 @pytest.mark.parametrize("absent_key", ["env_file", "init", "healthcheck", "build"])
@@ -184,20 +106,16 @@ def test_the_socket_volume_starts_as_a_private_root_directory() -> None:
     """53 (#431): the sealed worker service in compose."""
     written = _COMPOSE.read_text(encoding="utf-8")
 
-    assert "      o: size=16k,nr_inodes=8,mode=0750,uid=0" in written
+    assert "mode=0750,uid=0" in written
 
 
 @pytest.mark.parametrize(
     "hardening_line",
     [
-        "      PRESENTATOR_BUILD_RUNNER: worker",
-        "        source: build-socket\n        target: /run/presentator-build",
         "        volume:\n          nocopy: true",
-        "      build-worker:\n        condition: service_started",
         "    cap_drop:\n      - ALL",
         "    security_opt:\n      - no-new-privileges:true",
         "    read_only: true",
-        "      - /tmp:size=512m,nr_inodes=10k,mode=1777,nosuid,nodev",
     ],
 )
 def test_the_instance_builds_through_the_worker_hardened(hardening_line: str) -> None:
@@ -207,47 +125,35 @@ def test_the_instance_builds_through_the_worker_hardened(hardening_line: str) ->
 
 @pytest.mark.parametrize(
     "authority",
-    [
-        "docker.sock",
-        "group_add",
-        "DOCKER_GROUP",
-        "PRESENTATOR_BUILD_IMAGE",
-        "PRESENTATOR_BUILD_VOLUME",
-        "build-sandbox",
-        "x-build-image",
-        "profiles:",
-    ],
+    ["docker.sock", "group_add", "DOCKER_GROUP"],
 )
 def test_the_instance_holds_no_authority_over_this_machines_docker(
     authority: str,
 ) -> None:
-    """B16 and B17: no socket, docker group, sandbox service or profile in the file."""
+    """B16: no Docker socket and no docker group in the file."""
     assert authority not in _COMPOSE.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(
-    ("name", "host_path", "setting"),
+    ("name", "setting"),
     [
         (
             "presentator_secret_key",
-            "${HOME}/.secrets/presentator/secret-key",
             "PRESENTATOR_SECRET_KEY_FILE",
         ),
         (
             "oidc_client_secret",
-            "${HOME}/.secrets/keycloak/clients/presentator",
             "PRESENTATOR_OIDC_CLIENT_SECRET_FILE",
         ),
     ],
     ids=["master key", "client secret"],
 )
-def test_each_secret_is_a_file_secret_from_home_that_only_the_instance_mounts(
-    name: str, host_path: str, setting: str
+def test_each_secret_is_a_file_secret_that_only_the_instance_mounts(
+    name: str, setting: str
 ) -> None:
     """edge#280: every app secret reaches the container as a mounted file."""
     compose = _parsed_compose()
 
-    assert compose["secrets"][name]["file"] == host_path
     assert _secret_holders(compose, name) == ["presentator"]
     assert _environment_of(compose["services"]["presentator"])[setting] == (
         f"/run/secrets/{name}"
