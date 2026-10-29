@@ -27,9 +27,12 @@ sign-in and sign-out are. Until now these existed only inside Jinja rendering.
   and no catch-all. `GET /api/session` is the first.
 - A person's hal access token opens `/api/` as that person, as webauth's person
   paths define it; a bearer beside a cookie wins, and an invalid bearer is
-  refused, never answered from the cookie. This holds while `token_clients`
-  names a client; with it empty no bearer gate is installed and a bearer on
+  refused, never answered from the cookie. This holds while
+  `PRESENTATOR_TOKEN_CLIENTS` names a client; with it empty no bearer gate is installed and a bearer on
   `/api/` is ignored, as the sign-in reference states.
+- JSON writes rely on webauth's origin check (`Sec-Fetch-Site` first, then
+  `Origin`) and carry no CSRF token; a write admitted by a bearer skips that
+  check.
 - The wire is typed: every answer of a route is a model with named fields, not
   a dict. The library's refusals are not routes.
 - The catalog is served as data: `words` is the resolved `LobbyText` of the
