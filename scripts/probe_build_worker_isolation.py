@@ -251,7 +251,7 @@ def exec_in_worker(*command: str, user: str | None = None) -> list[str]:
 def start_attack_step() -> "subprocess.Popen[str]":
     """Start the attack deck's build through the holder; the client stays silent."""
     return subprocess.Popen(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        ("docker", "exec", HOLDER, "python", f"{PROBE_DIRECTORY}/{ENTRY_FILE}",  # noqa: S607 - docker is looked up on the host PATH
+        ("docker", "exec", HOLDER, "python", f"{PROBE_DIRECTORY}/{ENTRY_FILE}",  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
          "client", "step", ATTACK_SLUG, "build"),
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )  # fmt: skip
@@ -261,7 +261,7 @@ def wait_for_deck(step: "subprocess.Popen[str]") -> None:
     """Wait until the build code published its pid, so the STEP is accepted."""
     deadline = time.monotonic() + DECK_WAIT_SECONDS
     published = str(TEMPORARY / "deck.pid")
-    while subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+    while subprocess.run(  # noqa: S603 - argv is the list exec_in_worker builds from the literal docker exec words and probe values and runs without a shell
         exec_in_worker("test", "-s", published), check=False
     ).returncode:
         if step.poll() is not None:
@@ -276,7 +276,7 @@ def run_probe() -> tuple[str, str]:
     """Run the 10002 probe with its program on stdin; its stdout and stderr."""
     program = (PROBE_SOURCES / "attack" / "kernel_attacks.py").read_text()
     try:
-        done = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+        done = subprocess.run(  # noqa: S603 - argv is the list exec_in_worker builds from the literal docker exec words and probe values and runs without a shell
             exec_in_worker(PYTHON, "-I", "-", "probe", user=WIRE_USER),
             input=program, capture_output=True, text=True, check=False,
             timeout=PROBE_SECONDS,
@@ -327,7 +327,7 @@ class NextLife:
 
 def left_in_next_life(markers: tuple[str, ...]) -> NextLife:
     """Read the next life's processes, SysV tables and the markers' paths."""
-    done = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+    done = subprocess.run(  # noqa: S603 - argv is the list exec_in_worker builds from the literal docker exec words and probe values and runs without a shell
         exec_in_worker(PYTHON, "-I", "-", *markers),
         input=(PROBE_SOURCES / "next_life.py").read_text(),
         capture_output=True, text=True, check=False, timeout=NEXT_LIFE_SECONDS,

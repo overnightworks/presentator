@@ -38,7 +38,7 @@ def say(line: str) -> None:
 def docker(*arguments: str) -> str:
     """Run the docker CLI, failing loudly, and return what it printed."""
     return subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        ("docker", *arguments),  # noqa: S607 - docker is looked up on the host PATH
+        ("docker", *arguments),  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
         check=True,
         capture_output=True,
         text=True,
@@ -56,7 +56,7 @@ def in_holder(
     """Run a command in the holder container; the caller judges the status."""
     who = ("--user", user) if user else ()
     return subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        ("docker", "exec", *who, HOLDER, *command),  # noqa: S607 - docker is looked up on the host PATH
+        ("docker", "exec", *who, HOLDER, *command),  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
         check=False,
         capture_output=True,
         text=True,
@@ -113,7 +113,7 @@ class Report:
 def extract(source: str, destination: Path) -> None:
     """Copy a directory of the holder out through tar, since tmpfs defeats docker cp."""
     packed = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        ("docker", "exec", HOLDER, "tar", "--create", "--directory", source, "."),  # noqa: S607 - docker is looked up on the host PATH
+        ("docker", "exec", HOLDER, "tar", "--create", "--directory", source, "."),  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
         check=True,
         capture_output=True,
     ).stdout

@@ -147,7 +147,7 @@ class StepFailedError(Exception):
 
 def real_runner(arguments: Sequence[str]) -> Outcome:
     """Run a program by argument vector, the process boundary of the command."""
-    finished = subprocess.run(  # noqa: S603 - argv is a vector passed without a shell
+    finished = subprocess.run(  # noqa: S603 - the script builds every command itself from literal words and the operator's configured paths and origin and runs it without a shell
         arguments, capture_output=True, text=True, check=False
     )
     return Outcome(finished.returncode, finished.stdout)

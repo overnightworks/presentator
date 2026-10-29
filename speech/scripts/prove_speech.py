@@ -46,7 +46,7 @@ ENGLISH = (
 )
 SECOND = "Die nächste Folie bitte."
 LOCK_PATH = Path("/tmp/probe-stack.lock")  # noqa: S108 - the lock path is the machine-wide probe lock shared across repositories
-GERMAN_WAV_PATH = Path("/tmp/issue-83-voice/german.wav")  # noqa: S108 - the path is the operator's fixed voice sample and not a scratch file
+GERMAN_WAV_PATH = Path("/tmp/issue-83-voice/german.wav")  # noqa: S108 - the path is the proof's fixed listening output that the README names and it runs on the operator's single-user machine
 MEASURE_REPETITIONS = 5
 MEASURE_FLAG = {False: [], True: ["--measure"]}
 CONTRACT_MARKERS = {
@@ -247,7 +247,7 @@ def _speak_measured(
 def _nvidia_memory() -> str:
     try:
         completed = subprocess.run(
-            [  # noqa: S607 - nvidia-smi is looked up on the host PATH
+            [  # noqa: S607 - nvidia-smi is picked from the operator's trusted PATH on the operator's own machine as when run by hand
                 "nvidia-smi",
                 "--query-gpu=memory.used,memory.total",
                 "--format=csv,noheader",
@@ -264,7 +264,7 @@ def _nvidia_memory() -> str:
 def _nvidia_compute_pids() -> str:
     try:
         completed = subprocess.run(
-            ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"],  # noqa: S607 - nvidia-smi is looked up on the host PATH
+            ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"],  # noqa: S607 - nvidia-smi is picked from the operator's trusted PATH on the operator's own machine as when run by hand
             check=True,
             capture_output=True,
             text=True,
@@ -502,7 +502,7 @@ def _prove_contract(
     completed = subprocess.run(  # noqa: S603 - argv is the interpreter and fixed script paths and run without a shell
         [sys.executable, str(client), *MEASURE_FLAG[measure], str(socket_path)],
         check=False,
-        cwd="/tmp",  # noqa: S108 - the client runs in the shared temporary directory by design
+        cwd="/tmp",  # noqa: S108 - the path only sets the client's working directory and creates no predictable file there
         env=env,
         capture_output=True,
         text=True,

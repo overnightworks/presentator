@@ -360,7 +360,7 @@ def prove_restart_mid_step(report: Report) -> None:
     held = start_client("hold", "build")
     run_name_of(held)
     while subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        ("docker", "exec", worker(), "test", "-s", f"{TEMPORARY}/deck.pid"),  # noqa: S607 - docker is looked up on the host PATH
+        ("docker", "exec", worker(), "test", "-s", f"{TEMPORARY}/deck.pid"),  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
         check=False,
     ).returncode:
         if held.poll() is not None:
@@ -395,7 +395,7 @@ def prove_reply_cut_off(report: Report) -> None:
     if waited.returncode or client.poll() is not None:
         refuse(f"the reply ended before the worker was killed: {waited}")
     pid = docker("inspect", "--format", "{{.State.Pid}}", worker())
-    subprocess.run(("sudo", "-n", "kill", "-KILL", pid), check=True)  # noqa: S603, S607 - argv is a tuple of literal words and probe values and run without a shell; sudo is looked up on the host PATH
+    subprocess.run(("sudo", "-n", "kill", "-KILL", pid), check=True)  # noqa: S603, S607 - argv is a tuple of literal words and probe values and run without a shell; sudo is picked from the operator's trusted PATH on the operator's own machine as when run by hand
     done = outcome_of(client)
     if (
         [(step.failed, step.text) for step in done.steps] != [(True, None)]

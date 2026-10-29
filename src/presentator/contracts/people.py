@@ -26,12 +26,9 @@ class PersonKind(StrEnum):
     BUILDS = "builds"
     RUNNING_WORK = "running-work"
     SOURCE_CREDENTIAL = "source-credential"
-    # These are kind words, not passwords.
     HOOK_SECRET_HASH = "hook-secret-hash"  # noqa: S105 - the value names a kind of secret and is not one
     KEY_DRAFT_PRIVATE_KEY = "key-draft-private-key"
-    # These are kind words, not passwords.
     REFRESH_TOKEN = "refresh-token"  # noqa: S105 - the value names a kind of secret and is not one
-    # This is a kind word, not a password.
     ID_TOKEN = "id-token"  # noqa: S105 - the value names a kind of secret and is not one
 
 
@@ -89,7 +86,6 @@ PersonErasure = PersonErased | PersonBusy | PersonDiskLeftover
 class WithheldReason(StrEnum):
     """Why an export leaves a kind out."""
 
-    # These are kind words, not passwords.
     SECRET = "secret"  # noqa: S105 - the value names a kind of secret and is not one
 
 

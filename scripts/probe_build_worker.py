@@ -448,7 +448,7 @@ def prove_glibc_floor(report: Report) -> None:
 def prove_unsealed_refusal_and_sealed_check(report: Report) -> None:
     """Cell 52: refused in an unsealed container, exit 0 in the sealed service."""
     unsealed = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        (  # noqa: S607 - docker is looked up on the host PATH
+        (  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
             "docker",
             "run",
             "--rm",
@@ -468,7 +468,7 @@ def prove_unsealed_refusal_and_sealed_check(report: Report) -> None:
     ):
         refuse(f"unsealed --check: {unsealed.returncode} {unsealed.stderr}")
     sealed = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        (  # noqa: S607 - docker is looked up on the host PATH
+        (  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
             "docker",
             "compose",
             "--file",
@@ -543,7 +543,7 @@ def prove_socket_identity(report: Report, name: str) -> None:
 def prove_wire_user(report: Report) -> None:
     """A8: the wire user is 10002:10002 with no groups and no capabilities."""
     done = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        ("docker", "exec", "--user", "10002:10002", worker(), "sh", "-c",  # noqa: S607 - docker is looked up on the host PATH
+        ("docker", "exec", "--user", "10002:10002", worker(), "sh", "-c",  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
          "echo $(id -u):$(id -g):$(id -G); grep -E '^Cap(Eff|Prm)' /proc/self/status"),
         check=False, capture_output=True, text=True,
     )  # fmt: skip
@@ -634,7 +634,7 @@ def prove_builds(report: Report) -> None:
         ):
             refuse("the built render talk carries no KaTeX markup")
         words = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-            ("pdftotext", str(output / "export-render" / "deck.pdf"), "-"),  # noqa: S607 - pdftotext is looked up on the host PATH
+            ("pdftotext", str(output / "export-render" / "deck.pdf"), "-"),  # noqa: S607 - pdftotext is picked from the operator's trusted PATH on the operator's own machine as when run by hand
             check=True, capture_output=True, text=True,
         ).stdout  # fmt: skip
     # The PDF text layer wraps long mermaid labels at the node width.
@@ -664,7 +664,7 @@ def prove_stop(report: Report) -> None:
         held = None
         if during_a_step:
             held = subprocess.Popen(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-                ("docker", "exec", HOLDER, "python",  # noqa: S607 - docker is looked up on the host PATH
+                ("docker", "exec", HOLDER, "python",  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
                  f"{PROBE_DIRECTORY}/{ENTRY_FILE}", "client", "hold"),
                 stdout=subprocess.PIPE, text=True,
             )  # fmt: skip
@@ -710,13 +710,13 @@ def drive() -> None:
         prove_stop(report)
     finally:
         subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-            ("docker", "compose", "--file", str(REPOSITORY / "compose.yaml"),  # noqa: S607 - docker is looked up on the host PATH
+            ("docker", "compose", "--file", str(REPOSITORY / "compose.yaml"),  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
              "logs", "--no-color", SERVICE),
             check=False,
         )  # fmt: skip
-        subprocess.run(("docker", "rm", "--force", HOLDER), check=False)  # noqa: S603, S607 - argv is a tuple of literal words and probe values and run without a shell; docker is looked up on the host PATH
+        subprocess.run(("docker", "rm", "--force", HOLDER), check=False)  # noqa: S603, S607 - argv is a tuple of literal words and probe values and run without a shell; docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
         subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-            ("docker", "compose", "--file", str(REPOSITORY / "compose.yaml"),  # noqa: S607 - docker is looked up on the host PATH
+            ("docker", "compose", "--file", str(REPOSITORY / "compose.yaml"),  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
              "down", "--volumes"),
             check=False,
         )  # fmt: skip

@@ -142,7 +142,7 @@ def start_client(*arguments: str, stdin: int | None = None) -> "subprocess.Popen
     """Start a client command in the holder, its output piped back."""
     interactive = ("-i",) if stdin is not None else ()
     return subprocess.Popen(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        ("docker", "exec", *interactive, HOLDER, "python",  # noqa: S607 - docker is looked up on the host PATH
+        ("docker", "exec", *interactive, HOLDER, "python",  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
          f"{PROBE_DIRECTORY}/{ENTRY_FILE}", "client", *arguments),
         stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )  # fmt: skip
@@ -177,7 +177,7 @@ def await_record(client: "subprocess.Popen[str]") -> dict[str, str]:
 def docker_exec_status(*command: str) -> int:
     """The status of a command in the worker; a refused exec counts as not yet."""
     return subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        ("docker", "exec", worker(), *command),  # noqa: S607 - docker is looked up on the host PATH
+        ("docker", "exec", worker(), *command),  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
         check=False,
         capture_output=True,
     ).returncode
@@ -254,7 +254,7 @@ def prove_memory_exhaustion(report: Report, mode: FloodMode, cell: str) -> None:
 def build_user_process(pid: str) -> bool:
     """Whether the process in the worker is alive and runs as the build user."""
     status = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        ("docker", "exec", worker(), "cat", f"/proc/{pid}/status"),  # noqa: S607 - docker is looked up on the host PATH
+        ("docker", "exec", worker(), "cat", f"/proc/{pid}/status"),  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
         check=False, capture_output=True, text=True,
     )  # fmt: skip
     uid = [
@@ -327,7 +327,7 @@ def prove_abandoned_build(report: Report, how: Abandonment) -> None:
 
 def leave_leftover() -> int:
     """Leave a `setsid` 10002 process in the worker; its host pid, from `docker top`."""
-    done = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+    done = subprocess.run(  # noqa: S603 - argv is the list exec_in_worker builds from the literal docker exec words and probe values and runs without a shell
         exec_in_worker(PYTHON, "-I", "-", "fork", user=WIRE_USER),
         input=(PROBE_SOURCES / "attack" / "kernel_attacks.py").read_text(),
         capture_output=True, text=True, check=False, timeout=ABANDON_SECONDS,
