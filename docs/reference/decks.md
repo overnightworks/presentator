@@ -41,8 +41,8 @@ at Sources. The list holds only the decks of the viewer's own sources.
 
 The same list is served as JSON at `GET /api/decks` to a session or a person's
 bearer: each deck's `slug`, `title`, `state` (`ready`, `building`, `failed`,
-`never-built`) and `changed_at` instant, in that order, plus `source_address`
-(the Git address while the reader has exactly one source, else `null`). It
+`never-built`) and `changed_at` instant, newest change first and equal instants by slug, plus
+`source_address` (the Git address while the reader has exactly one source, else `null`). It
 carries no worded text; the page words the age itself.
 
 ## A deck's page

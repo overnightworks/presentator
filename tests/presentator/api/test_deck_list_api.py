@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from presentator.api.deck_list_api import DeckListView
+from presentator.api.deck_list_api import DECK_LIST_PATH, DeckListView
 from presentator.contracts.decks import (
     Build,
     BuildAttempt,
@@ -31,13 +31,17 @@ from tests.support.lobby import (
 )
 from tests.support.sign_in_support import MEMBER, a_scene
 
-_DECKS = "/api/decks"
-_JSON = {"accept": "application/json"}
-_COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
-_NEIGHBOURS_ID = f"id-of-{NEIGHBOUR}"
-_A_SOURCE_URL = "git@heimserver:decks.git"
-_HAL = "hal-client"
-_SUBJECT = "keycloak-subject-of-a-member"
+
+def a_commit() -> str:
+    return "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
+
+
+def asking_for_json() -> dict[str, str]:
+    return {"accept": "application/json"}
+
+
+def a_source_address() -> str:
+    return "git@heimserver:decks.git"
 
 
 def a_deck(
@@ -54,9 +58,9 @@ def a_deck(
         changed_at=changed_at,
         owner_id=owner,
         source_id=SOURCE_ID,
-        commit=_COMMIT,
+        commit=a_commit(),
         build=Build(
-            directory=BUILT_TALK, pdf=EXPORTED_PDF, commit=_COMMIT, built_at=NOW
+            directory=BUILT_TALK, pdf=EXPORTED_PDF, commit=a_commit(), built_at=NOW
         )
         if built
         else None,
@@ -65,7 +69,9 @@ def a_deck(
 
 
 def an_attempt(outcome: BuildOutcome) -> BuildAttempt:
-    return BuildAttempt(commit=_COMMIT, started_at=NOW, outcome=outcome, failure=None)
+    return BuildAttempt(
+        commit=a_commit(), started_at=NOW, outcome=outcome, failure=None
+    )
 
 
 def signed_in_lobby(*decks: Deck, sources: tuple[str, ...] = ()) -> Lobby:
@@ -89,7 +95,7 @@ def signed_in_lobby(*decks: Deck, sources: tuple[str, ...] = ()) -> Lobby:
 
 
 def read(lobby: Lobby) -> DeckListView:
-    answer = lobby.client.get(_DECKS, headers=_JSON)
+    answer = lobby.client.get(DECK_LIST_PATH, headers=asking_for_json())
     assert answer.status_code == HTTPStatus.OK
     assert answer.headers["cache-control"] == "no-store"
     return DeckListView.model_validate(answer.json())
@@ -98,7 +104,7 @@ def read(lobby: Lobby) -> DeckListView:
 def test_a_signed_out_caller_gets_the_gates_401_and_no_deck_data() -> None:
     lobby = a_lobby()
 
-    answer = lobby.client.get(_DECKS, headers=_JSON)
+    answer = lobby.client.get(DECK_LIST_PATH, headers=asking_for_json())
 
     assert answer.status_code == HTTPStatus.UNAUTHORIZED
 
@@ -106,7 +112,7 @@ def test_a_signed_out_caller_gets_the_gates_401_and_no_deck_data() -> None:
 def test_a_signed_out_browser_is_sent_to_sign_in() -> None:
     lobby = a_lobby()
 
-    answer = lobby.client.get(_DECKS, headers={"accept": "text/html"})
+    answer = lobby.client.get(DECK_LIST_PATH, headers={"accept": "text/html"})
 
     assert answer.status_code == HTTPStatus.FOUND
     assert answer.headers["location"].startswith("/login")
@@ -120,21 +126,21 @@ def test_a_reader_without_decks_or_source_gets_an_empty_list_and_no_address() ->
 
 
 def test_a_reader_with_one_source_and_no_decks_is_told_its_address() -> None:
-    view = read(signed_in_lobby(sources=(_A_SOURCE_URL,)))
+    view = read(signed_in_lobby(sources=(a_source_address(),)))
 
     assert view.decks == []
-    assert view.source_address == _A_SOURCE_URL
+    assert view.source_address == a_source_address()
 
 
 def test_the_address_is_sent_beside_a_list_that_is_not_empty() -> None:
-    view = read(signed_in_lobby(a_deck("one"), sources=(_A_SOURCE_URL,)))
+    view = read(signed_in_lobby(a_deck("one"), sources=(a_source_address(),)))
 
     assert len(view.decks) == 1
-    assert view.source_address == _A_SOURCE_URL
+    assert view.source_address == a_source_address()
 
 
 def test_two_own_sources_name_no_address() -> None:
-    view = read(signed_in_lobby(sources=(_A_SOURCE_URL, "git@other:decks.git")))
+    view = read(signed_in_lobby(sources=(a_source_address(), "git@other:decks.git")))
 
     assert view.source_address is None
 
@@ -153,10 +159,10 @@ def test_a_deck_is_listed_with_its_slug_title_state_and_stored_instant() -> None
 
 def test_only_the_readers_own_decks_are_listed_even_for_an_admin() -> None:
     lobby = signed_in_lobby(
-        a_deck("mine"), a_deck("hers", owner=_NEIGHBOURS_ID), a_deck("mine-too")
+        a_deck("mine"), a_deck("hers", owner=f"id-of-{NEIGHBOUR}"), a_deck("mine-too")
     )
 
-    answer = lobby.client.get(_DECKS, headers=_JSON)
+    answer = lobby.client.get(DECK_LIST_PATH, headers=asking_for_json())
 
     assert sorted(deck["slug"] for deck in answer.json()["decks"]) == [
         "mine",
@@ -197,7 +203,9 @@ def test_newest_change_comes_first_and_equal_instants_order_by_slug() -> None:
 
 
 def test_the_wire_carries_no_worded_age_or_state() -> None:
-    answer = signed_in_lobby(a_deck("one")).client.get(_DECKS, headers=_JSON)
+    answer = signed_in_lobby(a_deck("one")).client.get(
+        DECK_LIST_PATH, headers=asking_for_json()
+    )
 
     [deck] = answer.json()["decks"]
     assert set(deck) == {"slug", "title", "state", "changed_at"}
@@ -206,7 +214,7 @@ def test_the_wire_carries_no_worded_age_or_state() -> None:
 def test_a_write_to_the_list_is_refused_with_no_store() -> None:
     lobby = signed_in_lobby()
 
-    answer = lobby.client.post(_DECKS, headers=_JSON)
+    answer = lobby.client.post(DECK_LIST_PATH, headers=asking_for_json())
 
     assert answer.status_code == HTTPStatus.METHOD_NOT_ALLOWED
     assert answer.headers["cache-control"] == "no-store"
@@ -229,20 +237,25 @@ def test_a_failing_store_answers_500_without_deck_data() -> None:
         raise_server_exceptions=False,
     )
 
-    answer = client.get(_DECKS, headers=_JSON)
+    answer = client.get(DECK_LIST_PATH, headers=asking_for_json())
 
     assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert "deck store" not in answer.text
 
 
 def test_a_persons_bearer_reads_that_persons_decks(tmp_path: Path) -> None:
-    scene = a_scene(tmp_path, token_clients=frozenset({_HAL}))
+    client_id = "hal-client"
+    scene = a_scene(tmp_path, token_clients=frozenset({client_id}))
     minted = scene.issuer.mint_access_token(
-        subject=_SUBJECT, groups=MEMBER, authorized_party=_HAL, audience=None
+        subject="keycloak-subject-of-a-member",
+        groups=MEMBER,
+        authorized_party=client_id,
+        audience=None,
     )
 
     answer = scene.browser().get(
-        _DECKS, headers={"authorization": f"Bearer {minted}", **_JSON}
+        DECK_LIST_PATH,
+        headers={"authorization": f"Bearer {minted}", **asking_for_json()},
     )
 
     assert answer.status_code == HTTPStatus.OK
