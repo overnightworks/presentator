@@ -39,31 +39,37 @@ the home server is reached without an inbound port.
 
 Every lobby page, signed in or out, ends with two links. "Impressum" points straight
 at the operator's one Impressum on `hallucinai.de`, so the same operator's
-details have one text and no copy here. "Datenschutz" opens the instance's own
-Datenschutzerklärung at `/datenschutz`, which names what this instance stores
-and which AI provider receives data, because that differs from Songmaker's.
-`/datenschutz` answers without a session; a signed-in reader still sees the
-header there.
+details have one text and no copy here. "Datenschutz" opens the central
+Datenschutzerklärung at its `#presentator` section (amended below).
 
-The declaration's words have one owner in the code,
-`presentator.api.legal`, as typed sections the page renders. It is German
-whatever language a reader chose: it is the operator's legal text, not
-interface wording a catalog translates.
+The declaration's words are German whatever language a reader chose: they are
+the operator's legal text, not interface wording a catalog translates.
 
 The instance goes online only after the operator has approved the
 declaration's wording, every point it marks open is settled, and the pages
 have been driven in a real browser at phone and desktop width.
+
+## Amendment 2026-10-29: the privacy text lives in edge
+
+Per [overnightworks/edge#110](https://github.com/overnightworks/edge/issues/110)
+and [#593](https://github.com/overnightworks/presentator/issues/593), the
+instance serves no Datenschutzerklärung of its own. What it stores and which AI
+provider receives data is the section `legal/datenschutz.html` of this
+repository, which edge assembles into `https://hallucinai.de/datenschutz`
+beside its general part, the sign-in and the agent service. `GET /datenschutz`
+is no route here, and the footer links the central `#presentator`. A test holds
+the numbers of the section equal to the code that keeps them. The words above
+about a page "reachable without a session" now hold for the central page.
 
 ## Consequences
 
 - One account list, not two: adding a person is creating their account
   (ADR 0011); no allow-list has to be kept in step with it.
 - Signing in and out, first start, the static assets, the source hook's
-  `POST`, and the Datenschutzerklärung are reachable from the internet without
-  a session.
+  `POST` are reachable from the internet without a session.
   The login's throttle and the guard are the whole defence of everything else.
 - A change to what the instance stores or sends to a provider is a change to
-  the declaration in the same pull request.
+  the section `legal/datenschutz.html` in the same pull request.
 
 ## Rejected alternatives
 

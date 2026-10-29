@@ -37,7 +37,7 @@ from tests.support.talk_support import (
 )
 
 _IMPRESSUM = f'<a href="https://hallucinai.de/impressum">{ENGLISH.footer_impressum}</a>'
-_DATENSCHUTZ = f'<a href="/datenschutz">{ENGLISH.footer_datenschutz}</a>'
+_DATENSCHUTZ = f'<a href="https://hallucinai.de/datenschutz#presentator">{ENGLISH.footer_datenschutz}</a>'
 
 
 @pytest.fixture(params=["signed out", "signed in"])
@@ -94,7 +94,6 @@ _SIGNED_OUT = "signed out"
 _LOBBY_ONLY_PAGES = [
     "/settings",
     "/settings/sources",
-    "/datenschutz",
     "/login",
     "/static/lobby.css",
     "/login/talk/no-access",
@@ -126,6 +125,15 @@ def test_a_lobby_page_is_not_found_on_the_talk_host(hosts: Hosts, path: str) -> 
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
     assert _is_the_talk_host(answer)
+
+
+@pytest.mark.parametrize("address", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])
+def test_the_privacy_text_is_not_served_by_either_host(
+    hosts: Hosts, address: str
+) -> None:
+    answer = hosts.signed_in_at(address).get("/datenschutz")
+
+    assert answer.status_code == HTTPStatus.NOT_FOUND
 
 
 # T5a.

@@ -63,7 +63,6 @@ WEB_CONTAINER = (
 SECRETS_MOUNT = "/run/secrets/"
 SECRETS_FOLDER = ".secrets"
 SIGN_IN_PATH = "/login/oidc"
-DATENSCHUTZ_PATH = "/datenschutz"
 HEALTH_PATH = "/health"
 DARK_CURL_EXITS = frozenset({6, 7})
 HOST_COOKIE_PREFIX = "__Host-"
@@ -563,7 +562,6 @@ WEB_PROBES = (
         (Side.LOBBY, Side.TALK),
         _sets_only_secure_host_cookies,
     ),
-    WebProbe("datenschutz", DATENSCHUTZ_PATH, (Side.LOBBY,), _answers_ok),
     WebProbe("health", HEALTH_PATH, (Side.LOBBY, Side.TALK), _answers_ok),
 )
 

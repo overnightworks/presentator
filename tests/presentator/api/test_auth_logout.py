@@ -344,12 +344,10 @@ def test_a_logout_by_get_is_no_logout(scene: Scene) -> None:
     assert scene.count("sessions") == 1
 
 
-def test_the_header_form_and_the_datenschutz_link_name_the_paths_of_the_routes(
+def test_the_header_form_names_the_path_of_the_logout_route(
     scene: Scene,
 ) -> None:
     scene.sign_in()
     signed_in_page = scene.lobby.client.get("/").text
-    signed_out_page = scene.browser().get("/datenschutz").text
 
     assert f'action="{LOGOUT_PATH}"' in signed_in_page
-    assert f'href="{LOGIN_PATH}"' in signed_out_page

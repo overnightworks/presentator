@@ -128,6 +128,8 @@ one gets 404, so a healthcheck sends the lobby's or the talk host's own name.
 
 Every lobby page, signed in or out, ends with two links: Impressum goes to the
 operator's one Impressum at `https://hallucinai.de/impressum`, Datenschutz to
-`/datenschutz`. That page answers without a session and shows the German
-Datenschutzerklärung that `presentator.api.legal` owns
+`https://hallucinai.de/datenschutz#presentator`. Presentator serves no privacy
+page: `GET /datenschutz` is 404. The German text is the section
+`legal/datenschutz.html`, which edge assembles into the central page; a test
+holds its numbers equal to the code constants
 ([ADR 0015](../decisions/0015-public-like-songmaker-own-login.md)).

@@ -72,9 +72,6 @@ msgstr "Impressum"
 msgid "footer_datenschutz"
 msgstr "Datenschutz"
 
-msgid "legal_back_to_login"
-msgstr "← Log in"
-
 msgid "decks_title"
 msgstr "Decks"
 

@@ -274,7 +274,10 @@ _NO_ACCESS = [
     pytest.param(_in_groups_named_without_a_path, id="bare group names"),
 ]
 _ALL_REFUSALS = [*_REFUSALS, *_NO_ACCESS]
-_LEGAL_LINKS = ('href="https://hallucinai.de/impressum"', 'href="/datenschutz"')
+_LEGAL_LINKS = (
+    'href="https://hallucinai.de/impressum"',
+    'href="https://hallucinai.de/datenschutz#presentator"',
+)
 
 
 @pytest.mark.parametrize("drive", _REFUSALS)
