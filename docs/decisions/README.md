@@ -30,6 +30,7 @@ number is never reused and never renumbered.
 - [ADR 0017: A build worker runs each step sealed, one life per step](0017-a-build-worker-runs-each-step-sealed.md)
 - [ADR 0018: Keycloak replaces the accounts an admin creates and the instance's own login](0018-keycloak-replaces-own-accounts.md)
 - [ADR 0019: Presentator is an edge app, deployed by `hal apply` from a tag](0019-presentator-is-an-edge-app.md)
+- [ADR 0020: The lobby is a JSON API under `/api/`, and the pages read it](0020-the-lobby-is-a-json-api.md)
 
 ## How to read a record
 

@@ -89,6 +89,7 @@ from presentator.host.config import Settings
 from presentator.host.main import web_auth_config_for
 from presentator.host.oidc import admission_of, oidc_client_config
 from presentator.ports.decks import BuildRunner
+from presentator.ports.preferences import PersonPreferencesStore
 from tests.presentator.application.support.fakes import (
     A_REACHABLE_CHECK,
     DEFAULT_THEME_SET,
@@ -531,10 +532,23 @@ def a_decks(given: GivenDecks, clock: FrozenClock) -> Decks:
     return decks
 
 
+def a_preferences(
+    *,
+    catalogs: Catalogs = CATALOGS,
+    people: PersonPreferencesStore | None = None,
+) -> Preferences:
+    """The language and theme rules over in-memory stores, or the given person store."""
+    return Preferences(
+        instance=FakeInstanceSettingsStore(),
+        people=FakePersonPreferencesStore() if people is None else people,
+        catalogs=catalogs,
+    )
+
+
 def a_lobby_app(
     *,
     people: FakePeople | None = None,
-    catalogs: Catalogs = CATALOGS,
+    preferences: Preferences | None = None,
     given: GivenDecks = NO_DECKS,
     signing_in: SigningIn | None = None,
     admin_people: AdminPeople | None = None,
@@ -551,11 +565,7 @@ def a_lobby_app(
         sessions=crowd.sessions if signing_in is None else signing_in.sessions,
         decks=decks,
         pages=Pages(
-            preferences=Preferences(
-                instance=FakeInstanceSettingsStore(),
-                people=FakePersonPreferencesStore(),
-                catalogs=catalogs,
-            ),
+            preferences=a_preferences() if preferences is None else preferences,
             age_in_words=age_in_words,
             duration_in_words=duration_in_words,
         ),
@@ -624,12 +634,13 @@ def a_lobby(
     catalogs: Catalogs = CATALOGS,
     given: GivenDecks = NO_DECKS,
     voice: VoiceStatusUse | None = None,
+    person_preferences: PersonPreferencesStore | None = None,
 ) -> Lobby:
     """The whole lobby, with in-memory stores behind every port."""
     people = a_crowd(users)
     app, _ = a_lobby_app(
         people=people,
-        catalogs=catalogs,
+        preferences=a_preferences(catalogs=catalogs, people=person_preferences),
         given=replace(given, voice=voice),
     )
     return a_browser_at(

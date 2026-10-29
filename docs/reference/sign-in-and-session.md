@@ -71,6 +71,9 @@ signed `SameSite=Lax` session cookie.
   `admit_session` is the one authority, for HTTP and WebSocket alike (the
   co-presenter's WebSocket admits through it in its own route), that decides
   whether the cookie's session id names a person.
+  `GET /api/session` is the one exact optional path: it admits a live session
+  and answers a signed-out caller with the instance's defaults and no person
+  ([ADR 0020](../decisions/0020-the-lobby-is-a-json-api.md)).
 - `BearerGate` takes `/api/admin/` by an access token alone and never by the
   cookie (see [people](people.md)). On the rest of `/api/` a person's hal
   access token is the account behind it: admitted as a sign-in admits, in one
