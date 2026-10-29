@@ -24,6 +24,7 @@ from presentator.adapters.identity import (
     create_identity_tables,
 )
 from tests.presentator.application.support.fakes import FrozenClock
+from tests.presentator.application.support.person_instance_support import an_instance
 from tests.support.fake_issuer import FakeIssuer
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -37,6 +38,7 @@ from tests.support.lobby import (
     a_crowd,
     a_lobby_app,
     a_relying_party,
+    an_admin_people,
     an_installed_auth,
 )
 
@@ -146,6 +148,7 @@ def a_scene(  # noqa: PLR0913
     audit: Callable[[RecordingAudit], AuditSink] = lambda recording: recording,
     admission: AdmissionConfig | None = None,
     token_requests: Callable[[TokenRequestPost], TokenRequestPost] = lambda real: real,
+    token_clients: frozenset[str] = frozenset(),
 ) -> Scene:
     database = tmp_path / "identity.sqlite3"
     create_identity_tables(database)
@@ -172,6 +175,9 @@ def a_scene(  # noqa: PLR0913
             sessions=sessions,
             auth=auth if admission is None else replace(auth, admission=admission),
         ),
+        admin_people=an_admin_people(an_instance().people, clients=token_clients)
+        if token_clients
+        else None,
     )
     lobby = a_browser_at(
         app, people=people, base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS

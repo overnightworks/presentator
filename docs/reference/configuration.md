@@ -35,7 +35,7 @@ some of them.
 | `PRESENTATOR_HOST` | `127.0.0.1` | Listen address. |
 | `PRESENTATOR_PORT` | `8000` | Listen port. |
 | `PRESENTATOR_TRUSTED_PROXIES` | empty | Comma-separated addresses or networks; see below. |
-| `PRESENTATOR_ADMIN_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/admin/`; empty serves no admin route. See [people](people.md). |
+| `PRESENTATOR_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/` as the person and `/api/admin/` as an admin; empty serves no token route. See [people](people.md). |
 | `PRESENTATOR_SOURCE_POLL_SECONDS` | `300` | Interval of the source poll. |
 | `PRESENTATOR_SOURCE_TIMEOUT_SECONDS` | `20` | Bound of one pull. |
 | `PRESENTATOR_TOOLCHAIN` | `slidev` | The project carrying Slidev. |
@@ -48,6 +48,16 @@ some of them.
 The container runner's settings `PRESENTATOR_BUILD_IMAGE`, `_VOLUME`, `_MEMORY`
 and `_DISK` are gone: a compose instance ignores them in its environment, and a
 direct run whose `.env` still names one refuses to start and names the key.
+
+`PRESENTATOR_TOKEN_CLIENTS` replaces `PRESENTATOR_ADMIN_TOKEN_CLIENTS`, with no
+alias. To upgrade, set the new key to the old key's value in whichever source
+sets it (the process environment, compose or `.env`), remove the old key, and
+restart. A `.env` that names the old key with a value refuses to start and
+names it; an empty entry is skipped, and in the process environment the old key
+is ignored, so a missed rename leaves token access closed. To roll back,
+restore the old key and remove the new one, together with the old code: the old
+code ignores the new key in the process environment but refuses to start on it
+in `.env`.
 
 `PRESENTATOR_SOURCE_URL`, `_REF`, `_NAME`, `_CREDENTIAL` and `_HOOK_SECRET` are
 not settings; leaving them in the environment does nothing, and a line naming

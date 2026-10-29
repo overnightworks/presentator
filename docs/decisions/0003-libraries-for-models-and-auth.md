@@ -425,6 +425,21 @@ uncertain outcome and keeps the deletion. `delete_account` takes the same lock
 and transaction. The gate's per-call stores and the session sweep still commit
 on their own.
 
+### Amendment 2026-10-29 — webauth 0.25.0: a person's hal token on `/api/`
+
+Authority: [#609](https://github.com/overnightworks/presentator/issues/609),
+webauth#405.
+
+`webauth` 0.25.0 lets a verified hal access token on named paths be the account
+behind it. The lobby names `/api/` (`PersonPaths`) over the same
+`SignInTransaction` that sign-in enters, so an unknown member gets an account
+and a known one the role of the token's groups, and no session is made. A path
+both rules select is a machine path, so `/api/admin/` stays token-only. The
+one setting that names hal's clients is now `PRESENTATOR_TOKEN_CLIENTS`
+(formerly `PRESENTATOR_ADMIN_TOKEN_CLIENTS`, no alias): it opens both
+prefixes. `session_id_from_request` answers `None` on a bearer-admitted
+request; no caller meets one today.
+
 ## Consequences
 
 - Which model presents becomes configuration, not code, and the phase M1 work is
