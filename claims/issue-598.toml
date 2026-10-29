@@ -3,6 +3,6 @@ agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
 role = "builder"
 base = "9636aeebfa136b66c1dc5e53aab3a7b559c499cf"
 branch = "claude/issue-598-f1-of-597-presentator-s-root-runs-on-pyt"
-scope = [".python-version", "pyproject.toml", "sonar-project.properties", "src/presentator/adapters/build_worker.py", "uv.lock"]
+scope = [".python-version", "pyproject.toml", "sonar-project.properties", "src/gitmirror/mirror.py", "src/presentator/adapters/build_worker.py", "uv.lock"]
 opened_commit = "7d208a68abc102deda40b0b8a28fb256ae06a558"
 whole_reason = "One interpreter floor: the version pins, the lock they regenerate and the one typing fix 3.14's typeshed demands move together, or the root runs on two Pythons."
