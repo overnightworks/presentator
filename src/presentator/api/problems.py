@@ -7,7 +7,7 @@ own answers keep their shape.
 """
 
 from http import HTTPStatus
-from typing import Any, Final
+from typing import Final, cast
 
 from fastapi import FastAPI, Request
 from pydantic import BaseModel, ConfigDict
@@ -37,11 +37,10 @@ class ProblemError(Exception):
         self.status = status
 
 
-def problem_response(status: HTTPStatus) -> dict[int | str, dict[str, Any]]:
+def problem_response(status: HTTPStatus) -> dict[int | str, dict[str, object]]:
     """The route's OpenAPI `responses` entry, so a generated client types it."""
     return {
         status.value: {
-            "model": ProblemDetails,
             "content": {
                 PROBLEM_MEDIA_TYPE: {"schema": ProblemDetails.model_json_schema()}
             },
@@ -50,12 +49,12 @@ def problem_response(status: HTTPStatus) -> dict[int | str, dict[str, Any]]:
 
 
 def _answer(_request: Request, error: Exception) -> Response:
-    if not isinstance(error, ProblemError):
-        raise error
-    problem = ProblemDetails(title=error.status.phrase, status=error.status.value)
+    problem_error = cast("ProblemError", error)
+    status = problem_error.status
+    problem = ProblemDetails(title=status.phrase, status=status.value)
     return Response(
         problem.model_dump_json(exclude_none=True),
-        status_code=error.status.value,
+        status_code=status.value,
         media_type=PROBLEM_MEDIA_TYPE,
     )
 
