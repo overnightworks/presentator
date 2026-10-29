@@ -1,5 +1,7 @@
 ---
 title: Co-presenter
+addons:
+  - slidev-addon-presentator
 fonts:
   provider: none
 favicon: false

@@ -13,7 +13,8 @@ def test_finished_web_client_preserves_its_run_and_refusal_outcome(
     program = """
 print('{"run": "refused-build"}')
 print('{"steps": [{"step": "build", "failed": true, "text": "Build refused"}], '
-      '"staged": [], "out": [], "talk_page": false, "pdf": false}')
+      '"staged": [], "out": [], "talk_page": false, "pdf": false, '
+      '"worklet": false, "worklet_sha256": null}')
 """
     with subprocess.Popen(  # noqa: S603
         (sys.executable, "-c", program),
@@ -32,6 +33,8 @@ print('{"steps": [{"step": "build", "failed": true, "text": "Build refused"}], '
                 out=(),
                 talk_page=False,
                 pdf=False,
+                worklet=False,
+                worklet_sha256=None,
             )
         finally:
             if client.poll() is None:
