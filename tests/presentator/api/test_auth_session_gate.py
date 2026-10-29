@@ -10,6 +10,7 @@ import httpx2
 import pytest
 from fastapi import Request, Response
 from fastapi.testclient import TestClient
+from starlette.types import Message, Scope
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.middleware.security_headers import (
     REFERRER_POLICY,
@@ -318,16 +319,22 @@ def test_an_address_beside_the_session_route_is_gated(
     assert answer.status_code == status
 
 
-def test_a_dot_segment_reaching_the_route_unnormalised_is_gated(lobby: Lobby) -> None:
-    sent: list[dict[str, object]] = []
+@pytest.mark.parametrize(
+    ("accept", "status"),
+    [(b"text/html", HTTPStatus.FOUND), (b"application/json", HTTPStatus.UNAUTHORIZED)],
+)
+def test_a_dot_segment_reaching_the_route_unnormalised_is_gated(
+    lobby: Lobby, accept: bytes, status: HTTPStatus
+) -> None:
+    sent: list[Message] = []
 
-    async def receive() -> dict[str, object]:
+    async def receive() -> Message:
         return {"type": "http.request", "body": b"", "more_body": False}
 
-    async def send(message: dict[str, object]) -> None:
+    async def send(message: Message) -> None:
         sent.append(message)
 
-    scope = {
+    scope: Scope = {
         "type": "http",
         "asgi": {"version": "3.0"},
         "http_version": "1.1",
@@ -339,13 +346,13 @@ def test_a_dot_segment_reaching_the_route_unnormalised_is_gated(lobby: Lobby) ->
         "root_path": "",
         "headers": [
             (b"host", lobby.client.base_url.host.encode()),
-            (b"accept", b"application/json"),
+            (b"accept", accept),
         ],
     }
 
-    asyncio.run(lobby.app(scope, receive, send))  # type: ignore[arg-type]
+    asyncio.run(lobby.app(scope, receive, send))
 
-    assert sent[0]["status"] == HTTPStatus.UNAUTHORIZED
+    assert sent[0]["status"] == status
 
 
 def test_a_signed_in_person_finds_nothing_beside_the_session_route(

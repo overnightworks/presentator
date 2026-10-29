@@ -4,6 +4,8 @@ The session gate lets this one path through without a session, so a signed-out
 caller gets the instance's defaults; the person comes from what the gate admitted.
 """
 
+from typing import Final
+
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
@@ -13,7 +15,7 @@ from presentator.contracts.models import Role
 from presentator.contracts.preferences import ThemeChoice
 from presentator.contracts.text import LobbyText
 
-SESSION_PATH = "/api/session"
+SESSION_PATH: Final = "/api/session"
 
 
 class SessionAddresses(BaseModel):
@@ -28,6 +30,8 @@ class SessionAddresses(BaseModel):
 
 class SessionPerson(BaseModel):
     """The signed-in person as the page shows them."""
+
+    model_config = ConfigDict(frozen=True)
 
     username: str
     role: Role

@@ -167,6 +167,11 @@ class InstalledAuth:
     # the lobby sends a refused talk sign-in's retry there.
     talk_origin: str
 
+    @property
+    def talk_sign_in_address(self) -> str:
+        """Where a sign-in starts at the talk host."""
+        return f"{self.talk_origin}{START_SIGN_IN_PATH}"
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class LobbyPrivate:
@@ -235,7 +240,7 @@ class _Surfaces:
             return self.refused_page(
                 request,
                 refusal,
-                retry=f"{self.auth.talk_origin}{START_SIGN_IN_PATH}",
+                retry=self.auth.talk_sign_in_address,
             )
 
         return show
@@ -304,7 +309,7 @@ def _session_routes(pages: Pages, auth: InstalledAuth) -> APIRouter:
         addresses=SessionAddresses(
             start=START_SIGN_IN_PATH,
             logout=LOGOUT_PATH,
-            talk_start=f"{auth.talk_origin}{START_SIGN_IN_PATH}",
+            talk_start=auth.talk_sign_in_address,
         ),
     )
 
