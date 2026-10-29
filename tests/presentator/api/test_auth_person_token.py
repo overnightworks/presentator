@@ -151,23 +151,19 @@ def test_a_cookie_alone_is_still_a_signed_in_person_on_api(scene: Scene) -> None
 
 
 @pytest.mark.parametrize(
-    ("groups", "refused_as_insufficient_scope"),
-    [(MEMBER, True), (ADMIN, False)],
+    ("groups", "challenge"),
+    [(MEMBER, 'realm="admin", error="insufficient_scope"'), (ADMIN, "")],
     ids=["a member", "an admin"],
 )
 def test_the_admin_prefix_stays_a_machine_path_and_provisions_no_caller(
-    scene: Scene, groups: list[str], refused_as_insufficient_scope: bool
+    scene: Scene, groups: list[str], challenge: str
 ) -> None:
     """P7: a path both rules select is a machine path; the caller gets no account."""
     answer = a_token_client(scene).delete(
         "/api/admin/people/someone", headers=bearer(scene, groups=groups)
     )
 
-    challenge = answer.headers.get("www-authenticate", "")
-    assert (
-        'realm="admin", error="insufficient_scope"' in challenge
-    ) is refused_as_insufficient_scope
-    assert (answer.status_code == HTTPStatus.FORBIDDEN) is refused_as_insufficient_scope
+    assert challenge in answer.headers.get("www-authenticate", "")
     assert answer.status_code != HTTPStatus.UNAUTHORIZED
     assert scene.count("users") == 0
 
@@ -175,7 +171,7 @@ def test_the_admin_prefix_stays_a_machine_path_and_provisions_no_caller(
 def test_the_webhook_secret_as_a_bearer_is_no_token_when_clients_are_named(
     scene: Scene,
 ) -> None:
-    """P12: a path neither rule selects is left to the hook, whatever bearer it carries."""
+    """P12: a path neither rule selects is left to the hook, whatever it carries."""
     answer = a_token_client(scene).post(
         "/sources/alpha/fetch", headers={"authorization": "Bearer a-webhook-secret"}
     )

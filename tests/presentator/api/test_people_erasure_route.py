@@ -453,8 +453,9 @@ def test_an_empty_entry_among_the_admitted_token_clients_refuses_to_start(
         load_settings()
 
 
+@pytest.mark.usefixtures("environment")
 def test_the_retired_setting_in_an_env_file_refuses_to_start_and_is_named(
-    environment: pytest.MonkeyPatch, tmp_path: Path
+    tmp_path: Path,
 ) -> None:
     """P14: a missed rename in the application's `.env` is loud."""
     (tmp_path / ".env").write_text("PRESENTATOR_ADMIN_TOKEN_CLIENTS=hal\n")
@@ -463,13 +464,11 @@ def test_the_retired_setting_in_an_env_file_refuses_to_start_and_is_named(
         load_settings()
 
 
-def _set_in_process_environment(
-    environment: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def _set_in_process_environment(environment: pytest.MonkeyPatch, _: Path) -> None:
     environment.setenv("PRESENTATOR_ADMIN_TOKEN_CLIENTS", "hal")
 
 
-def _set_empty_in_env_file(environment: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def _set_empty_in_env_file(_: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / ".env").write_text("PRESENTATOR_ADMIN_TOKEN_CLIENTS=\n")
 
 
