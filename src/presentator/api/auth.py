@@ -96,6 +96,8 @@ def talk_sign_in_refusal_path(refusal: RefusalPage) -> str:
     return f"/login/talk/{refusal.value}"
 
 
+_PERSON_API: Final = "/api/"
+
 # Signing in (its start and the issuer's return) and signing out are the
 # addresses the gate leaves alone, and the library derives them from the
 # sign-in paths; logging out ends a session rather than using one. The theme
@@ -105,7 +107,6 @@ def talk_sign_in_refusal_path(refusal: RefusalPage) -> str:
 # origin check through the sign-in paths.
 # `/setup` is a retired address: it answers 404 to everyone, so a signed-out
 # reader is not sent to a login for a page that does not exist.
-_PERSON_API: Final = "/api/"
 _SERVER_CALLS: Final = PathRules(prefixes=(HOOK_CALLS,))
 _PUBLIC_RULES: Final = (
     PublicRule(
@@ -301,8 +302,9 @@ def _install_middleware(
     Every answer, including the gate's redirect and a refusal, carries the
     security headers. The gate's store calls commit on their own and `touch` is
     one update-only statement (ADR 0003), so the gate's admission takes no lock.
-    The admin prefix, when it is served, takes a bearer token and no cookie; so
-    does `/api/`, where the token is the person behind it.
+    The admin prefix, when it is served, takes a bearer token and no cookie.
+    `/api/` takes a person's token as that person; a request without a token is
+    decided by the session cookie as before.
     """
     install_web_auth_middleware(
         lobby,

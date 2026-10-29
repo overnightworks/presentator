@@ -1,6 +1,7 @@
 """S9 (#293): `DELETE /api/admin/people/{subject}` takes hal's access token alone."""
 
 import logging
+from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import timedelta
@@ -457,24 +458,33 @@ def test_the_retired_setting_in_an_env_file_refuses_to_start_and_is_named(
 ) -> None:
     """P14: a missed rename in the application's `.env` is loud."""
     (tmp_path / ".env").write_text("PRESENTATOR_ADMIN_TOKEN_CLIENTS=hal\n")
-    environment.chdir(tmp_path)
 
     with pytest.raises(ConfigurationError, match="admin_token_clients"):
         load_settings()
 
 
+def _set_in_process_environment(
+    environment: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    environment.setenv("PRESENTATOR_ADMIN_TOKEN_CLIENTS", "hal")
+
+
+def _set_empty_in_env_file(environment: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    (tmp_path / ".env").write_text("PRESENTATOR_ADMIN_TOKEN_CLIENTS=\n")
+
+
 @pytest.mark.parametrize(
-    "where", ["an empty env file entry", "the process environment"]
+    "arrange",
+    [_set_empty_in_env_file, _set_in_process_environment],
+    ids=["an empty env file entry", "the process environment"],
 )
 def test_the_retired_setting_elsewhere_is_ignored_and_the_new_one_stays_empty(
-    environment: pytest.MonkeyPatch, tmp_path: Path, where: str
+    environment: pytest.MonkeyPatch,
+    tmp_path: Path,
+    arrange: Callable[[pytest.MonkeyPatch, Path], None],
 ) -> None:
     """P14: the silent cases the release's migration step exists for."""
-    if where == "the process environment":
-        environment.setenv("PRESENTATOR_ADMIN_TOKEN_CLIENTS", "hal")
-    else:
-        (tmp_path / ".env").write_text("PRESENTATOR_ADMIN_TOKEN_CLIENTS=\n")
-    environment.chdir(tmp_path)
+    arrange(environment, tmp_path)
 
     assert load_settings().admitted_token_clients() == frozenset()
 

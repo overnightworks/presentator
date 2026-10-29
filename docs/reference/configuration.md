@@ -49,6 +49,14 @@ The container runner's settings `PRESENTATOR_BUILD_IMAGE`, `_VOLUME`, `_MEMORY`
 and `_DISK` are gone: a compose instance ignores them in its environment, and a
 direct run whose `.env` still names one refuses to start and names the key.
 
+`PRESENTATOR_TOKEN_CLIENTS` replaces `PRESENTATOR_ADMIN_TOKEN_CLIENTS`, with no
+alias. To upgrade, set the new key to the old key's value in whichever source
+sets it (the process environment, compose or `.env`), remove the old key, and
+restart. A `.env` that still names the old key refuses to start and names it;
+in the process environment the old key is ignored, so a missed rename leaves
+token access closed. To roll back, restore the old key together with the old
+code: the old code ignores the new key.
+
 `PRESENTATOR_SOURCE_URL`, `_REF`, `_NAME`, `_CREDENTIAL` and `_HOOK_SECRET` are
 not settings; leaving them in the environment does nothing, and a line naming
 `PRESENTATOR_SOURCE_CREDENTIAL` does nothing in `.env` or in the shell.
