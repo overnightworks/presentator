@@ -189,7 +189,7 @@ class _DeadlineSocket(socket.socket):
             raise TimeoutError
         self.settimeout(remaining)
 
-    def connect(self, address: str | Buffer | tuple[object, ...]) -> None:
+    def connect(self, address: str | Buffer | tuple[object, ...] | int) -> None:
         """Connect within the deadline."""
         self._armed()
         super().connect(address)
