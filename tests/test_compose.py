@@ -5,8 +5,10 @@ this machine's Docker, and the worker keeps every key that seals it. Nothing
 here starts a container; it reads the one file that must agree with itself.
 """
 
+import stat
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 from ruamel.yaml import YAML
@@ -126,9 +128,24 @@ def test_the_worker_service_has_no_key_that_would_unseal_or_rebuild_it(
 
 def test_the_socket_volume_starts_as_a_private_root_directory() -> None:
     """53 (#431): the sealed worker service in compose."""
-    written = _COMPOSE.read_text(encoding="utf-8")
+    options = _socket_volume_options()
 
-    assert "mode=0750,uid=0" in written
+    assert options["uid"] == "0"
+    assert not int(options["mode"], 8) & (stat.S_IWGRP | stat.S_IRWXO)
+
+
+def test_the_instance_answers_the_backchannel_under_the_host_of_its_public_origin() -> (
+    None
+):
+    """Logout (#630): the identity provider reaches the lobby by Host."""
+    compose = _parsed_compose()
+    instance = compose["services"]["presentator"]
+    public_origin = _environment_of(instance)["PRESENTATOR_PUBLIC_ORIGIN"]
+
+    assert instance["networks"]["backchannel"]["aliases"] == [
+        urlsplit(public_origin).hostname
+    ]
+    assert compose["networks"]["backchannel"]["external"] is True
 
 
 @pytest.mark.parametrize(
@@ -141,7 +158,7 @@ def test_the_socket_volume_starts_as_a_private_root_directory() -> None:
     ],
 )
 def test_the_instance_runs_hardened(hardening_line: str) -> None:
-    """B16: the web's flipped and hardened service in compose."""
+    """B16: the web's hardened service in compose."""
     assert hardening_line in "\n".join(_service_lines("presentator"))
 
 
@@ -229,6 +246,15 @@ def _parsed_compose() -> dict[str, Any]:
         _COMPOSE.read_text(encoding="utf-8")
     )
     return document
+
+
+def _socket_volume_options() -> dict[str, str]:
+    """The tmpfs options of the socket volume; a repeated option fails."""
+    written = _parsed_compose()["volumes"]["build-socket"]["driver_opts"]["o"]
+    pairs = [option.partition("=")[::2] for option in written.split(",")]
+    options = dict(pairs)
+    assert len(options) == len(pairs), written
+    return options
 
 
 def _environment_of(service: dict[str, Any]) -> dict[str, str | None]:
