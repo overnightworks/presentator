@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
 from typing import Annotated, Final
 
-from fastapi import APIRouter, Header, Response
+from fastapi import APIRouter, Header, Request, Response
+from webauth.proxies import request_is_https
 
 from presentator.application.decks import Decks
 
@@ -52,6 +53,12 @@ class _FetchHook:
 def hook_address(name: str) -> str:
     """The path a host posts to for that source, as the created screen prints it."""
     return f"{HOOK_CALLS}{name}/{_FETCH}"
+
+
+def hook_url(request: Request, name: str) -> str:
+    """The absolute address a host posts to, in the scheme the proxy terminated."""
+    scheme = "https" if request_is_https(request) else request.url.scheme
+    return f"{scheme}://{request.url.netloc}{hook_address(name)}"
 
 
 def _named_source(rest: str) -> str:

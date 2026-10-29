@@ -457,14 +457,17 @@ class ListedSource:
     access: AccessKind | None
     state: SourceState
     age: timedelta | None
+    fetched_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ShownSourceRun:
-    """One recent poll as the source page shows it: age, commit, or why not."""
+    """One recent poll as the source page shows it: when, commit, or why not."""
 
     outcome: SourceRunOutcome
+    state: SourceState
     age: timedelta
+    at: datetime
     commit: str | None
     reason: SourceRunFailure | None
 
@@ -486,6 +489,7 @@ class SourcePage:
     access: AccessKind | None
     state: SourceState
     age: timedelta | None
+    fetched_at: datetime | None
     public_key: str | None
     runs: tuple[ShownSourceRun, ...]
     decks: tuple[SourceDeck, ...]

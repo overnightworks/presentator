@@ -327,11 +327,14 @@ class Decks:
             access=listed.access,
             state=listed.state,
             age=listed.age,
+            fetched_at=listed.fetched_at,
             public_key=source.public_key,
             runs=tuple(
                 ShownSourceRun(
                     outcome=run.outcome,
+                    state=_source_state_of(run),
                     age=now - run.at,
+                    at=run.at,
                     commit=None if run.commit is None else run.commit[:_SHORT_COMMIT],
                     reason=run.reason,
                 )
@@ -755,20 +758,13 @@ class Decks:
     def _listed_source(self, source: Source, now: datetime) -> ListedSource:
         """The row for that source, derived from its newest run and nothing else."""
         run = self.source_runs.newest(source.id)
-        if run is None:
-            return ListedSource(
-                name=source.name,
-                url=source.url,
-                access=access_kind_of(source.url),
-                state=SourceState.NEVER_FETCHED,
-                age=None,
-            )
         return ListedSource(
             name=source.name,
             url=source.url,
             access=access_kind_of(source.url),
-            state=_source_state_of(run),
-            age=now - run.at,
+            state=SourceState.NEVER_FETCHED if run is None else _source_state_of(run),
+            age=None if run is None else now - run.at,
+            fetched_at=None if run is None else run.at,
         )
 
     def _run_one_at_a_time(self, work: Callable[[], None]) -> None:
