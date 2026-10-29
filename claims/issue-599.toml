@@ -1,8 +1,0 @@
-claim_id = "dd7b773df399444096edf535cf963bb4"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "9636aeebfa136b66c1dc5e53aab3a7b559c499cf"
-branch = "claude/issue-599-s-of-597-every-s-and-t20-finding-quality"
-scope = ["pyproject.toml", "scripts", "speech/pyproject.toml", "speech/scripts/contract_client.py", "speech/scripts/prove_speech.py", "speech/src/presentator_speech/card.py", "speech/src/presentator_speech/provider_process.py", "src/gitmirror/mirror.py", "src/presentator/adapters/builds.py", "src/presentator/adapters/worker_children.py", "src/presentator/contracts/people.py"]
-opened_commit = "df38e03482baa46bcb72dfa1075cd927ab8f6b2c"
-whole_reason = "One gate rule pair: the declarations and the local ignores they replace must change together, or the root's ruff either hides what the gate judges or calls the new noqa unused."
