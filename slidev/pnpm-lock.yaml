@@ -52,6 +52,9 @@ importers:
       playwright-chromium:
         specifier: 1.63.0
         version: 1.63.0
+      slidev-addon-presentator:
+        specifier: link:.
+        version: 'link:'
       typescript:
         specifier: 6.0.3
         version: 6.0.3

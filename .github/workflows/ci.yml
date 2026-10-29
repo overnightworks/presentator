@@ -318,19 +318,6 @@ jobs:
         working-directory: .
         run: uv sync --locked --all-groups
 
-      - name: Check presenter controls
-        working-directory: .
-        run: |
-          slidev/node_modules/.bin/eslint --config slidev/eslint.config.js \
-            --global window --global document --global navigator --global fetch \
-            --global WebSocket --global AudioContext --global AudioWorkletNode \
-            --global AbortController --global TextDecoder --global atob --global URL \
-            --global Blob --global Audio examples/copresenter-deck/custom-nav-controls.vue \
-            examples/copresenter-deck/components/CoPresenter.vue \
-            slidev/tests/presenter-controls.browser.test.ts \
-            slidev/tests/copresenter-refusals.browser.test.ts \
-            slidev/tests/presenter-overlay-harness.ts
-
       - name: Check source
         run: pnpm lint
 
@@ -498,6 +485,10 @@ jobs:
                 - type: bind
                   source: $GITHUB_WORKSPACE/examples/hello-deck
                   target: /decks/hello-deck
+                  read_only: true
+                - type: bind
+                  source: $GITHUB_WORKSPACE/examples/copresenter-deck
+                  target: /decks/copresenter-deck
                   read_only: true
                 - type: bind
                   source: $GITHUB_WORKSPACE/scripts/probe_build_worker

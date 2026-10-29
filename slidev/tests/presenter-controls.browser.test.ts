@@ -5,14 +5,14 @@ import { chromium } from 'playwright-chromium'
 import { describe, expect, it } from 'vitest'
 
 import {
+  addonRootDirectory,
   boxesIntersect,
-  buildCopiedOverlayDeck,
+  buildAddonDeck,
   createMediaObservation,
   createOverlayDeckServer,
   installCspGuard,
   openPresenter,
   openPresenterAt,
-  overlayDeckSourceDirectory,
   readSameFrameBoxes,
   registerOverlayHarness,
   saveEvidence,
@@ -94,7 +94,7 @@ describe('presenter controls', () => {
   }, 30_000)
 
   it('Cell 10: loads the overlay of a deck whose folder holds a percent sign and names that folder', async () => {
-    const overlayBuildDirectory = await buildCopiedOverlayDeck('/deck/50%25off/')
+    const overlayBuildDirectory = await buildAddonDeck('/deck/50%25off/')
     const asked: { said: string, deck: string }[] = []
     const { server: overlayServer, origin: overlayOrigin, sockets: overlaySockets }
       = await createOverlayDeckServer(overlayBuildDirectory, {
@@ -257,12 +257,12 @@ describe('presenter controls', () => {
 
   // #474 cell 35: the overlay sends no token; the browser's own Origin vouches for the ask.
   it('reads no cookie: the browser vouches for the ask with its own Origin', async () => {
-    const overlay = await readFile(join(overlayDeckSourceDirectory, 'components/CoPresenter.vue'), 'utf8')
+    const overlay = await readFile(join(addonRootDirectory, 'components/CoPresenter.vue'), 'utf8')
     expect(overlay).not.toContain('document.cookie')
   })
 
-  it('loads the AudioWorklet from exactly the README\'s copied overlay', async () => {
-    const overlayBuildDirectory = await buildCopiedOverlayDeck()
+  it('loads the AudioWorklet of a deck that enables the addon by name', async () => {
+    const overlayBuildDirectory = await buildAddonDeck()
     const { server: overlayServer, origin: overlayOrigin, sockets: overlaySockets }
       = await createOverlayDeckServer(overlayBuildDirectory)
     try {
@@ -270,6 +270,8 @@ describe('presenter controls', () => {
       try {
         const ai = page.getByRole('switch', { name: 'AI' })
         await ai.waitFor({ state: 'visible', timeout: 2_000 })
+        expect(await page.getByRole('switch', { name: 'AI' }).count()).toBe(1)
+        expect(await page.getByRole('link', { name: 'Home' }).count()).toBe(1)
         await ai.click({ timeout: 2_000 })
         // `hearing` reaches 'local' optimistically, before
         // `AudioContext.audioWorklet.addModule` - real, not faked
@@ -277,8 +279,8 @@ describe('presenter controls', () => {
         // that only waits for that attribute can pass while the worklet is
         // still loading or a CSP block is still in flight. `workletLive`
         // (snapshot()) is true only once the worklet node actually exists,
-        // which happens after `addModule` resolved against the copied
-        // overlay's own `public/pcm-capture-processor.js` under the
+        // which happens after `addModule` resolved against the addon's
+        // own `public/pcm-capture-processor.js` at `<base>theme/` under the
         // production CSP; a blocked or missing module throws there instead
         // and the component says it has no hearing.
         await page.waitForFunction(

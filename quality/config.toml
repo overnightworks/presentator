@@ -51,12 +51,12 @@ reason = "the operator ruled this name on #508; the script is deleted in S9m"
 [[layout.allow]]
 path = "slidev/tests/addon-package.test.ts"
 rule = "test-layout"
-reason = "its subject is the addon package as Slidev resolves it, which no addon source file mirrors"
+reason = "its subject is a deck built by the addon's name, which no addon source file mirrors"
 
 [[layout.allow]]
 path = "slidev/tests/copresenter-refusals.browser.test.ts"
 rule = "test-layout"
-reason = "it exercises the example deck's overlay in a browser, outside the Slidev project"
+reason = "it exercises the addon's overlay in a browser through a built deck, which no single addon source file mirrors"
 
 [[layout.allow]]
 path = "slidev/tests/lobby-static-scripts.test.ts"
@@ -66,7 +66,7 @@ reason = "its subject is the lobby scripts under src/presentator/api/static, out
 [[layout.allow]]
 path = "slidev/tests/presenter-controls.browser.test.ts"
 rule = "test-layout"
-reason = "it exercises the example deck's overlay in a browser, outside the Slidev project"
+reason = "it exercises the addon's overlay in a browser through a built deck, which no single addon source file mirrors"
 
 [[layout.allow]]
 path = "tests/test_compose.py"

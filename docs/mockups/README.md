@@ -117,7 +117,7 @@ in the bar lives in the person menu (lines 21, 22, 23).
 ### Presenter Home (proposal · issue #139)
 
 The proposed pictures extend Slidev’s public navigation-controls hook, whose
-proposed source owner is `examples/copresenter-deck/custom-nav-controls.vue`.
+proposed source owner is `slidev/custom-nav-controls.vue`.
 They do not change the existing Voice picture or claim implementation. A
 home-outline Home pill returns to the homepage with all talks; Home is its
 accessible name and tooltip. Home and the one CoPresenter instance share the

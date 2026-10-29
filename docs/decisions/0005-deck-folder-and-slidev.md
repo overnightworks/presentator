@@ -90,6 +90,23 @@ not an invention of ours:
   This holds for every deck, including the operator's own — the isolation is
   what makes "any git remote" a safe sentence.
 
+### Amendment 2026-10-29: what the addon built is
+
+The addon paragraph above is the plan of this record. What is built:
+
+- The addon is `slidev-addon-presentator`, the toolchain project in `slidev/`. A
+  deck enables it with `addons: [slidev-addon-presentator]`, resolved from the
+  toolchain's `node_modules` like a theme, because the project links itself
+  there. `addons: [./]` (a deck-local addon) is not how a deck gets the overlay.
+- The overlay is the addon's `custom-nav-controls.vue`, mounted only in the
+  presenter view, with `components/CoPresenter.vue`. The worklet is in `public/`
+  and is served at `<base>theme/`. `global-bottom.vue` carries nothing.
+- `setup/main.ts` and the run WebSocket are unbuilt; they remain the plan of
+  [ADR 0002](0002-server-owned-run.md)'s run.
+- A deck that names the addon builds only on a toolchain that carries it, so a
+  deck author's local `slidev` needs the addon installed beside it. A deck that
+  also keeps a copied overlay shows it twice.
+
 ## Rejected alternatives
 
 - **A hand-typed slide list**, as in the previous version. It is a copy of the

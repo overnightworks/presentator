@@ -1,27 +1,36 @@
-import { dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { createHash } from 'node:crypto'
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-import { resolveOptions } from '@slidev/cli'
 import { describe, expect, it } from 'vitest'
 
-import addonManifest from '../package.json' with { type: 'json' }
+import { addonRootDirectory, buildStagedDeck, stageAddonDeck } from './presenter-overlay-harness'
 
-const addonRoot = dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
-const fixtureDeck = fileURLToPath(new URL('./fixtures/addon-fixture.md', import.meta.url))
-
-const loadFixtureDeck = () => resolveOptions({ entry: fixtureDeck }, 'build')
+const sha256 = (content: Buffer) => createHash('sha256').update(content).digest('hex')
 
 describe('the presentator addon package', () => {
-  it('names an addon root that Slidev resolves to this package', async () => {
-    const { addonRoots } = await loadFixtureDeck()
-
-    expect(addonRoots).toEqual([addonRoot])
-  })
-
-  it('declares a Slidev engine range the installed CLI satisfies', async () => {
+  it('serves the overlay to a deck staged outside the toolchain that names the addon', async () => {
     // Slidev refuses an addon whose `engines.slidev` the running CLI is outside
-    // of, so a deck that loads is the check that the range still holds.
-    await expect(loadFixtureDeck()).resolves.toBeDefined()
-    expect(addonManifest.engines.slidev).toBeTruthy()
-  })
+    // of, so a successful build also proves the declared range still holds.
+    const deckDirectory = await stageAddonDeck()
+    const outDirectory = await mkdtemp(join(tmpdir(), 'presenter-addon-package-build-'))
+    try {
+      expect(await readdir(deckDirectory)).toEqual(['slides.md'])
+
+      await buildStagedDeck(deckDirectory, outDirectory)
+
+      const emittedWorklet = await readFile(join(outDirectory, 'theme/pcm-capture-processor.js'))
+      const addonWorklet = await readFile(join(addonRootDirectory, 'public/pcm-capture-processor.js'))
+      expect(sha256(emittedWorklet)).toBe(sha256(addonWorklet))
+
+      const stagedEntries = await readdir(deckDirectory)
+      for (const copiedSource of ['custom-nav-controls.vue', 'style.css', 'components', 'public']) {
+        expect(stagedEntries).not.toContain(copiedSource)
+      }
+    } finally {
+      await rm(deckDirectory, { recursive: true, force: true })
+      await rm(outDirectory, { recursive: true, force: true })
+    }
+  }, 120_000)
 })

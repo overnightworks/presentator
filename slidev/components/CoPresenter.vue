@@ -46,7 +46,7 @@ function errorEventLine(data) {
 // slide or the presenter view has been opened the browser's own address has
 // moved past the talk's root, and a plain relative URL would resolve beside
 // it instead of beside the file this deck's `public/` directory puts there.
-const WORKLET_URL = `${import.meta.env.BASE_URL}pcm-capture-processor.js`
+const WORKLET_URL = `${import.meta.env.BASE_URL}theme/pcm-capture-processor.js`
 
 const on = ref(false)
 const heard = ref('')

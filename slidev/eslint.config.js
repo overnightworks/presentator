@@ -12,4 +12,21 @@ export default tseslint.config(
       parserOptions: { parser: tseslint.parser },
     },
   },
+  {
+    files: ['custom-nav-controls.vue', 'components/**/*.vue', 'tests/**/*.ts'],
+    languageOptions: {
+      globals: Object.fromEntries(
+        [
+          'window', 'document', 'navigator', 'fetch', 'WebSocket', 'AudioContext',
+          'AudioWorkletNode', 'AbortController', 'TextDecoder', 'atob', 'URL', 'Blob', 'Audio',
+        ].map((name) => [name, 'readonly']),
+      ),
+    },
+  },
+  {
+    files: ['public/**/*.js'],
+    languageOptions: {
+      globals: { AudioWorkletProcessor: 'readonly', registerProcessor: 'readonly' },
+    },
+  },
 )
