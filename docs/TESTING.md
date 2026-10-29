@@ -59,6 +59,29 @@ private fields, no mock call counts, no pinned log strings, unless the
 interaction itself is the contract. No sleeps, no timing races, no order
 dependence, no process-global state another test can observe.
 
+## Shipped values
+
+A value chosen in a shipped file is proven through its consumer, not copied
+into a test.
+
+- `compose.yaml`: `tests/test_compose.py` parses the file and checks a
+  relation read from both owners, for example the back-channel alias against
+  `PRESENTATOR_PUBLIC_ORIGIN`. It parses options instead of matching
+  substrings. The live properties (limits, hardening, socket volume, gateway)
+  are proven by the sealed probe of the mandatory CI job "Build worker: sealed
+  step".
+- The Dockerfile's users: the CI image job proves that each user exists, has a
+  non-zero UID and a shell ending in `nologin`. It names no UID.
+- The catalog and the deck manifests: tests read the owner (`en.po`,
+  `deck.toml`) or use scenario data. They do not copy shipped words.
+
+Two traps are real. A port above 1023 does not prove a non-root user. A
+substring match stays green on an apex host, a path prefix or a repeated
+option.
+
+A slice that removes copied assertions also gets a separate check of every
+removed assertion: two reviews approved the loss of the back-channel proof once.
+
 ## Per-behaviour cost
 
 Watch the cost per behaviour, not a ratio of test lines to source lines.
