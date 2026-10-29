@@ -1,8 +1,0 @@
-claim_id = "d54de4d9a703465b8c8fe25daf4e65c7"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "6b48bb8aa0cafbbc686ad934f8a13c7a3b90e26d"
-branch = "claude/issue-593-s9p-of-508-presentator-s-privacy-text-be"
-scope = ["docs/decisions/0015-public-like-songmaker-own-login.md", "docs/mockups/README.md", "docs/mockups/m0-lobby", "docs/mockups/m0-lobby.html", "docs/reference/sign-in-and-session.md", "legal/datenschutz.html", "quality/config.toml", "scripts/cutover.py", "src/presentator/adapters/catalogs/en.po", "src/presentator/api/auth.py", "src/presentator/api/legal.py", "src/presentator/api/static/lobby.css", "src/presentator/api/templates/base.html", "src/presentator/api/templates/datenschutz.html", "src/presentator/contracts/text.py", "tests/presentator/api/test_auth.py", "tests/presentator/api/test_auth_logout.py", "tests/presentator/api/test_auth_privacy_section.py", "tests/presentator/api/test_auth_session_gate.py", "tests/presentator/api/test_auth_sign_in_callback.py", "tests/presentator/api/test_talk_host.py", "tests/presentator/host/test_main_session_sweep.py", "tests/scripts/support/cutover_host.py", "tests/scripts/test_cutover_probes.py", "tests/support/vulture_allowlist.py"]
-opened_commit = "646c7b2ea197559ba8eda07eae75d5b5ee6bb9f1"
-whole_reason = "One move of one text: the section, the removed route, the tests that pin the old page, the probe and the docs change together, or presentator keeps two privacy texts or none."
