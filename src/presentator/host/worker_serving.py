@@ -58,7 +58,7 @@ def emergency_end(accepted_at: float, build_timeout_seconds: float) -> float:
     )
 
 
-def _phase_end(serving: "Serving", budget: float, life_ends_at: float) -> float:
+def _phase_end(serving: Serving, budget: float, life_ends_at: float) -> float:
     """A phase starting now ends after its budget, never past the life's deadline."""
     return min(serving.clock() + budget, life_ends_at)
 

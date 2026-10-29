@@ -158,7 +158,7 @@ def main(argv: Sequence[str]) -> int:
                     arguments.plan,
                 ),
             )
-        except (WireRefusedError, OSError):
+        except WireRefusedError, OSError:
             return WireExit.CLOSED
 
 

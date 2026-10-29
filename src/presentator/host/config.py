@@ -272,7 +272,7 @@ def read_secret_file(
     """
     try:
         content = secret_file.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         unreadable = f"{setting}: is a file this instance can read"
         raise cannot_start(unreadable) from None
     secret = content.removesuffix("\n")

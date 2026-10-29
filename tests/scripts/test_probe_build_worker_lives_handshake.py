@@ -18,7 +18,7 @@ def lives(load_script: Callable[..., ModuleType]) -> ModuleType:
     return load_script("probe_build_worker_lives")
 
 
-def start(code: str) -> "subprocess.Popen[str]":
+def start(code: str) -> subprocess.Popen[str]:
     return subprocess.Popen(  # noqa: S603
         (sys.executable, "-c", code), stdout=subprocess.PIPE, text=True
     )

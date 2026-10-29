@@ -188,7 +188,7 @@ def build_user_rows() -> int | None:
     return sum(1 for row in rows if row[1:] == [BUILD_IDENTITY])
 
 
-def watch_client(client: "subprocess.Popen[str]", seconds: float) -> Window:
+def watch_client(client: subprocess.Popen[str], seconds: float) -> Window:
     """Sample `docker top` from the client's start to its end, then take its lines."""
     deadline = time.monotonic() + seconds
     samples = build_rows = 0

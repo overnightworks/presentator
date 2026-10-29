@@ -282,7 +282,7 @@ class ScriptedLife:
         *,
         environment: Mapping[str, str],
         pass_fds: Sequence[int],
-    ) -> "ScriptedLife":
+    ) -> ScriptedLife:
         self.spawned.append(Spawned(command, environment, pass_fds))
         self.events.append("spawn")
         if self.spawn_error is not None:
@@ -566,7 +566,7 @@ def connect_when_bound(
     while still_serving() and time.monotonic() < deadline:
         try:
             return connect(volume, timeout)
-        except (FileNotFoundError, ConnectionRefusedError):
+        except FileNotFoundError, ConnectionRefusedError:
             continue
     pytest.fail("the worker did not start serving")
 

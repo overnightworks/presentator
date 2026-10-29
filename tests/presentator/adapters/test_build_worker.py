@@ -137,7 +137,7 @@ def fake_worker(volume: Path, script: Script, accepts: int = 4) -> Generator[See
         while not stopped.is_set():
             try:
                 connection, _ = listener.accept()
-            except (support.StopServingError, OSError):
+            except support.StopServingError, OSError:
                 return
             with connection, suppress(OSError, WireRefusedError):
                 if not stopped.is_set():

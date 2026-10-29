@@ -84,7 +84,7 @@ def _still_stands(directory: Path) -> bool:
     """
     try:
         directory.lstat()
-    except (FileNotFoundError, NotADirectoryError):
+    except FileNotFoundError, NotADirectoryError:
         return False
     except OSError:
         return True

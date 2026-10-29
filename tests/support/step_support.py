@@ -113,10 +113,10 @@ class ScriptedStep:
     killed: bool = False
     watched: list[frozenset[int]] = field(default_factory=list[frozenset[int]])
     spawned: list[StepSpawned] = field(default_factory=list[StepSpawned])
-    life: "ScriptedLife | None" = None
+    life: ScriptedLife | None = None
 
     @property
-    def scripted(self) -> "ScriptedLife":
+    def scripted(self) -> ScriptedLife:
         assert self.life is not None
         return self.life
 
@@ -127,7 +127,7 @@ class ScriptedStep:
         environment: Mapping[str, str],
         pass_fds: Sequence[int],
         surroundings: ChildSurroundings,
-    ) -> "ScriptedStep":
+    ) -> ScriptedStep:
         self.scripted.events.append("step spawn")
         self.spawned.append(StepSpawned(command, environment, pass_fds, surroundings))
         self.scripted.clock_now += self.spawn_takes

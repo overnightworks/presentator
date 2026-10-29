@@ -43,7 +43,7 @@ class GatedChild:
 
     def __init__(
         self,
-        process: "subprocess.Popen[bytes]",
+        process: subprocess.Popen[bytes],
         gate_write: int,
         exit_descriptor: int,
     ) -> None:
@@ -106,7 +106,7 @@ def open_pidfd(process_id: int) -> int:
     return descriptor
 
 
-def _gated_child(process: "subprocess.Popen[bytes]", gate_write: int) -> GatedChild:
+def _gated_child(process: subprocess.Popen[bytes], gate_write: int) -> GatedChild:
     try:
         exit_descriptor = open_pidfd(process.pid)
     except BaseException:

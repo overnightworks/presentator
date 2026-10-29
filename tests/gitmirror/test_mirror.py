@@ -274,7 +274,7 @@ def _dumb_http_remote(
     *,
     expected_authorization: str | None = None,
     status: HTTPStatus = HTTPStatus.OK,
-) -> Generator[tuple[str, _Served], None, None]:
+) -> Generator[tuple[str, _Served]]:
     """A real HTTP server answering one bare repository, port picked free."""
     handler = functools.partial(DumbHttpHandler, directory=str(directory))
     server = _FakeGitHost(
@@ -323,9 +323,7 @@ class RespondingHandler(BaseHTTPRequestHandler):
 
 
 @contextmanager
-def _responding_remote(
-    *, status: HTTPStatus, body: bytes = b""
-) -> Generator[str, None, None]:
+def _responding_remote(*, status: HTTPStatus, body: bytes = b"") -> Generator[str]:
     """A local HTTP server that answers one status and body to every request."""
     handler = functools.partial(RespondingHandler, status=status, body=body)
     server = HTTPServer((_LOOPBACK, 0), handler)

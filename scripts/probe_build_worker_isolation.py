@@ -248,7 +248,7 @@ def exec_in_worker(*command: str, user: str | None = None) -> list[str]:
     return ["docker", "exec", "-i", *who, worker(), *command]
 
 
-def start_attack_step() -> "subprocess.Popen[str]":
+def start_attack_step() -> subprocess.Popen[str]:
     """Start the attack deck's build through the holder; the client stays silent."""
     return subprocess.Popen(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
         ("docker", "exec", HOLDER, "python", f"{PROBE_DIRECTORY}/{ENTRY_FILE}",  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
@@ -257,7 +257,7 @@ def start_attack_step() -> "subprocess.Popen[str]":
     )  # fmt: skip
 
 
-def wait_for_deck(step: "subprocess.Popen[str]") -> None:
+def wait_for_deck(step: subprocess.Popen[str]) -> None:
     """Wait until the build code published its pid, so the STEP is accepted."""
     deadline = time.monotonic() + DECK_WAIT_SECONDS
     published = str(TEMPORARY / "deck.pid")
@@ -286,7 +286,7 @@ def run_probe() -> tuple[str, str]:
     return done.stdout, done.stderr
 
 
-def finish_step(step: "subprocess.Popen[str]") -> None:
+def finish_step(step: subprocess.Popen[str]) -> None:
     """The held step answered OUTCOME built and END, having stayed silent."""
     try:
         stdout, stderr = step.communicate(timeout=STEP_SECONDS)

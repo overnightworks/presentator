@@ -114,7 +114,7 @@ def in_web(*command: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def start_client(case: str, *steps: str) -> "subprocess.Popen[str]":
+def start_client(case: str, *steps: str) -> subprocess.Popen[str]:
     """Send the client program into the web; it prints its run's name first."""
     client = subprocess.Popen(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
         web_command("exec", "-T", WEB, "/opt/venv/bin/python", "-I", "-", case, *steps),
@@ -129,7 +129,7 @@ def start_client(case: str, *steps: str) -> "subprocess.Popen[str]":
     return client
 
 
-def run_name_of(client: "subprocess.Popen[str]") -> str:
+def run_name_of(client: subprocess.Popen[str]) -> str:
     """The run directory the client builds in, from its first line."""
     if client.stdout is None:
         refuse("the web client has no stdout")
@@ -157,7 +157,7 @@ class Outcome:
     pdf: bool
 
 
-def outcome_of(client: "subprocess.Popen[str]") -> Outcome:
+def outcome_of(client: subprocess.Popen[str]) -> Outcome:
     """The client's last line, after it has ended."""
     try:
         stdout, stderr = client.communicate(timeout=STEP_SECONDS)
