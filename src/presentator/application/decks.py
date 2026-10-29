@@ -27,6 +27,7 @@ from presentator.contracts.decks import (
     Artefacts,
     Build,
     BuildAttempt,
+    BuildFailure,
     BuildOutcome,
     ConnectionCheckResult,
     Deck,
@@ -926,10 +927,7 @@ class Decks:
             return
         if self.clock.now() - attempt.started_at <= self.build_bound:
             return
-        self.store.put_attempt(
-            deck.slug,
-            replace(attempt, outcome=BuildOutcome.FAILED),
-        )
+        self._failed(deck, attempt, BuildFailure.without_words())
 
     def _switch_over(self, deck: Deck, source: Source) -> None:
         """Deliver this deck from its new build, once there really is one.
@@ -950,10 +948,10 @@ class Decks:
         self.store.put_attempt(deck.slug, attempt)
         built = self.builder.build(deck, source=source)
         if not isinstance(built, Artefacts):
-            self._failed(deck, attempt, said=built.text)
+            self._failed(deck, attempt, built)
             return
         if not self.builder.holds(built):
-            self._failed(deck, attempt, said=None)
+            self._failed(deck, attempt, BuildFailure.without_words())
             return
         self.store.put_build(
             deck.slug,
@@ -965,9 +963,9 @@ class Decks:
             ),
         )
 
-    def _failed(self, deck: Deck, attempt: BuildAttempt, *, said: str | None) -> None:
+    def _failed(self, deck: Deck, attempt: BuildAttempt, failure: BuildFailure) -> None:
         """Close this attempt as failed, keeping the moment it started."""
         self.store.put_attempt(
             deck.slug,
-            replace(attempt, outcome=BuildOutcome.FAILED, failure=said),
+            replace(attempt, outcome=BuildOutcome.FAILED, failure=failure),
         )

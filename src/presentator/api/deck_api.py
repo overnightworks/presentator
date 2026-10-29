@@ -15,12 +15,41 @@ from presentator.api.admission import gated_person
 from presentator.api.problems import ProblemError, problem_response
 from presentator.application.decks import Decks
 from presentator.contracts.decks import (
+    BuildFailure,
+    BuildFailureReason,
     BuildOutcome,
     DeckState,
     talk_address,
 )
 
 _DECK: Final = "/api/decks/{slug}"
+
+
+class FailureView(BaseModel):
+    """Why a build failed: a code and its counts, and the toolchain's own words.
+
+    The text is set only for the `toolchain` reason; no sentence of this
+    server's is on the wire, the page words each reason itself.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    reason: BuildFailureReason
+    text: str | None
+    written_megabytes: int | None
+    allowed_megabytes: int | None
+    allowed_entries: int | None
+
+    @classmethod
+    def of(cls, failure: BuildFailure) -> FailureView:
+        """The view of one failure."""
+        return cls(
+            reason=failure.reason,
+            text=failure.text,
+            written_megabytes=failure.written_megabytes,
+            allowed_megabytes=failure.allowed_megabytes,
+            allowed_entries=failure.allowed_entries,
+        )
 
 
 class AttemptView(BaseModel):
@@ -31,7 +60,7 @@ class AttemptView(BaseModel):
     commit: str
     started_at: datetime
     outcome: BuildOutcome
-    failure: str | None
+    failure: FailureView | None
 
 
 class DeckView(BaseModel):
@@ -74,7 +103,9 @@ def deck_routes(*, decks: Decks, talk_origin: str) -> APIRouter:
                 commit=attempt.commit,
                 started_at=attempt.started_at,
                 outcome=attempt.outcome,
-                failure=attempt.failure,
+                failure=None
+                if attempt.failure is None
+                else FailureView.of(attempt.failure),
             ),
             themes=page.themes,
             talk=f"{talk_origin}{talk_address(page.slug)}",

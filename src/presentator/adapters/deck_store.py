@@ -7,7 +7,14 @@ from pathlib import Path
 from typing import Final
 
 from presentator.adapters.sqlite import rows
-from presentator.contracts.decks import Build, BuildAttempt, BuildOutcome, Deck
+from presentator.contracts.decks import (
+    Build,
+    BuildAttempt,
+    BuildFailure,
+    BuildFailureReason,
+    BuildOutcome,
+    Deck,
+)
 
 _ONE_ROW: Final = 1
 
@@ -35,7 +42,9 @@ _PUT_BUILD: Final = """
 UPDATE decks
 SET active_build = ?, pdf_export = ?, built_commit = ?, built_at = ?,
     attempt_commit = NULL, attempt_started_at = NULL,
-    attempt_outcome = NULL, attempt_failure = NULL
+    attempt_outcome = NULL, attempt_failure = NULL, attempt_reason = NULL,
+    attempt_written_megabytes = NULL, attempt_allowed_megabytes = NULL,
+    attempt_allowed_entries = NULL
 WHERE slug = ?
 """
 # Nothing the build wrote is touched here: a run that begins, and a run that
@@ -43,13 +52,18 @@ WHERE slug = ?
 _PUT_ATTEMPT: Final = """
 UPDATE decks
 SET attempt_commit = ?, attempt_started_at = ?,
-    attempt_outcome = ?, attempt_failure = ?
+    attempt_outcome = ?, attempt_failure = ?, attempt_reason = ?,
+    attempt_written_megabytes = ?, attempt_allowed_megabytes = ?,
+    attempt_allowed_entries = ?
 WHERE slug = ?
 """
 _ALL_DECKS: Final = """
 SELECT slug, title, changed_at, owner_id, source_id, commit_sha,
        active_build, pdf_export, built_commit, built_at,
-       attempt_commit, attempt_started_at, attempt_outcome, attempt_failure
+       attempt_commit, attempt_started_at, attempt_outcome, attempt_failure,
+       attempt_reason,
+       attempt_written_megabytes, attempt_allowed_megabytes,
+       attempt_allowed_entries
 FROM decks
 WHERE removed_at IS NULL
 """
@@ -60,7 +74,10 @@ _ONE_DECK: Final = f"{_ALL_DECKS} AND slug = ?"
 _DECKS_OF_SOURCE: Final = """
 SELECT slug, title, changed_at, owner_id, source_id, commit_sha,
        active_build, pdf_export, built_commit, built_at,
-       attempt_commit, attempt_started_at, attempt_outcome, attempt_failure
+       attempt_commit, attempt_started_at, attempt_outcome, attempt_failure,
+       attempt_reason,
+       attempt_written_megabytes, attempt_allowed_megabytes,
+       attempt_allowed_entries
 FROM decks
 WHERE source_id = ?
 """
@@ -75,8 +92,18 @@ UPDATE decks SET removed_at = NULL
 WHERE removed_at IS NOT NULL AND source_id = ?
   AND slug IN (SELECT value FROM json_each(?))
 """
+_AttemptColumns = tuple[
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    int | None,
+    int | None,
+    int | None,
+]
 # The deck row as SQLite hands it back: what the source carries, then what the
-# build wrote, then the attempt beside it — each group four values or none.
+# build wrote, then the attempt beside it.
 _DeckRow = tuple[
     str,
     str,
@@ -92,6 +119,10 @@ _DeckRow = tuple[
     str | None,
     str | None,
     str | None,
+    str | None,
+    int | None,
+    int | None,
+    int | None,
 ]
 
 
@@ -144,7 +175,7 @@ class SqliteDeckStore:
                     attempt.commit,
                     attempt.started_at.isoformat(),
                     attempt.outcome.value,
-                    attempt.failure,
+                    *_failure_columns(attempt.failure),
                     slug,
                 ),
             )
@@ -198,7 +229,7 @@ def _deck(row: _DeckRow) -> Deck:
         source_id=source_id,
         commit=commit,
         build=_build(*row[6:10]),
-        attempt=_attempt(*row[10:]),
+        attempt=_attempt(row[10:]),
     )
 
 
@@ -219,18 +250,46 @@ def _build(
     )
 
 
-def _attempt(
-    commit: str | None,
-    started_at: str | None,
-    outcome: str | None,
-    failure: str | None,
-) -> BuildAttempt | None:
+def _failure_columns(
+    failure: BuildFailure | None,
+) -> tuple[str | None, str | None, int | None, int | None, int | None]:
+    """The columns a failure is written as: text, reason, then the counts."""
+    if failure is None:
+        return (None, None, None, None, None)
+    return (
+        failure.text,
+        failure.reason.value,
+        failure.written_megabytes,
+        failure.allowed_megabytes,
+        failure.allowed_entries,
+    )
+
+
+def _attempt(columns: _AttemptColumns) -> BuildAttempt | None:
     """The build the row says ran last, or nothing while none is worth telling."""
+    commit, started_at, outcome, text, reason = columns[:5]
+    written_megabytes, allowed_megabytes, allowed_entries = columns[5:]
     if commit is None or started_at is None or outcome is None:
         return None
-    return BuildAttempt(
+    if reason is None:
+        # A failed attempt always carries a reason; a row without one is not
+        # a state any writer or the upgrade leaves.
+        failure = None
+    else:
+        failure = BuildFailure(
+            reason=BuildFailureReason(reason),
+            text=text,
+            written_megabytes=written_megabytes,
+            allowed_megabytes=allowed_megabytes,
+            allowed_entries=allowed_entries,
+        )
+    attempt = BuildAttempt(
         commit=commit,
         started_at=datetime.fromisoformat(started_at),
         outcome=BuildOutcome(outcome),
         failure=failure,
     )
+    if attempt.outcome is BuildOutcome.FAILED and failure is None:
+        message = f"the failed attempt of commit {commit} carries no reason"
+        raise ValueError(message)
+    return attempt

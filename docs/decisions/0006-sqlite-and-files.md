@@ -40,6 +40,9 @@ replaceable if this decision's assumption ever stops holding.
 
 - Backup is a file copy, and inspection is one `sqlite3` command.
 - There is no separate service to start, upgrade, or monitor beside the app.
+- A column an operated file lacks is added in place by `create_tables`
+  (`adapters/schema.py`), additive and in one transaction, losing no row; every
+  statement names its columns, so the release before still reads the file.
 - SQLite's single writer is enough for one operator and one run; concurrent
   talks by different users would not be, and that is the trigger to revisit.
 - One process writes the database, and the identity stores' write lock depends on

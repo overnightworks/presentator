@@ -117,7 +117,7 @@ altogether.
 | Memory | `mem_limit` of the worker, `4g`, swap included | The kernel ends the worker's life, and the next step runs in a fresh one |
 | Processes | `pids_limit` of the worker, 512 | The container may spawn no more |
 | Its own filesystem | the worker's 2 GiB `/work` | Writing past it fails inside the build |
-| The talk it leaves | `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` (`300`) | Both ends check it: the worker refuses the reply, and the web shows the page text below |
+| The talk it leaves | `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` (`300`) | Both ends check it: the worker refuses the reply, and the web stores the reason below |
 | The files that talk holds | 100 000, a constant | The same, in the same words |
 | A deck sent to be built | the same megabytes and 100 000 entries, not counting its top-level `node_modules` | The web refuses it before it connects to the worker |
 
@@ -125,18 +125,22 @@ A connection to the worker is not bounded by the build's bound alone: before the
 worker answers the web waits at most the connect window (70 seconds, retrying
 with a growing pause), and afterwards at most the step's bound plus a margin.
 
-### Page texts
+### Reason codes
 
-Each text stands once, in the constant named beside it, and the deck page shows
-it whole:
+A failed attempt stores a reason code beside the toolchain's own text, and
+`GET /api/decks/<folder>` carries the code, the counts it names and that text
+as data; no sentence of the server's is on the wire. The deck page words each
+code from the catalog (`contracts/text.py`, `adapters/catalogs/en.po`):
 
-| Constant | Text |
-| --- | --- |
-| `TOO_MUCH_FOR_A_PAGE` (`adapters/builds.py`) | The talk this build wrote is {written} MB; a build may leave at most {allowed} MB. |
-| `TOO_MANY_FOR_A_PAGE` (`adapters/builds.py`) | The talk this build wrote holds more than {allowed} files; a build may leave fewer. |
-| `OUTPUT_SHAPE_FOR_A_PAGE` (`adapters/build_worker.py`) | The talk this build wrote cannot be taken: it holds a link, a special or unreadable file, a path of more than 32 parts (folders and the file) or 1024 bytes, or a file this step may not write. |
-| `DECK_SIZE_FOR_A_PAGE` (`adapters/build_worker.py`) | This deck is too large to build: a deck may hold at most {megabytes} MB and at most {entries} files and folders together, not counting its top-level node_modules. |
-| `DECK_PATHS_FOR_A_PAGE` (`adapters/build_worker.py`) | This deck cannot be built: it holds a path of more than 32 parts (folders and the file) or 1024 bytes, or a link, a special or an unreadable file. |
+| Reason | Meaning | Counts | Catalog key |
+| --- | --- | --- | --- |
+| `toolchain` | The toolchain's own words are the text | none | none: the text is shown as it is |
+| `no-words` | Nothing reached the server: a step given up on or killed, a worker fault, a toolchain that printed nothing, a talk that could not be added up or held, a build that never returned | none | `deck_failed_without_a_message` |
+| `output-megabytes` | The talk the build wrote is over the megabyte bound | `written_megabytes`, `allowed_megabytes` | `deck_failed_output_megabytes` |
+| `output-entries` | The talk holds more files than a build may leave | `allowed_entries` | `deck_failed_output_entries` |
+| `output-shape` | The talk holds what the worker cannot take: a link, a special or unreadable file, a path over the limits, a file the step may not write | none | `deck_failed_output_shape` |
+| `deck-megabytes` | The deck is too large to send to the worker | `allowed_megabytes`, `allowed_entries` | `deck_failed_deck_megabytes` |
+| `deck-paths` | The deck holds a path over the limits, a link, or a special or unreadable file | none | `deck_failed_deck_paths` |
 
 ## The build worker
 

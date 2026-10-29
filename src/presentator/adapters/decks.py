@@ -84,6 +84,10 @@ CREATE TABLE IF NOT EXISTS decks (
     attempt_started_at TEXT,
     attempt_outcome TEXT,
     attempt_failure TEXT,
+    attempt_reason TEXT,
+    attempt_written_megabytes INTEGER,
+    attempt_allowed_megabytes INTEGER,
+    attempt_allowed_entries INTEGER,
     removed_at TEXT
 );
 CREATE TABLE IF NOT EXISTS source_runs (
