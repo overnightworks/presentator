@@ -657,14 +657,14 @@ class Decks:
         now = self.clock.now()
         newest_first = sorted(
             (deck for deck in self.store.all() if deck.is_owned_by(viewer)),
-            key=lambda deck: deck.changed_at,
-            reverse=True,
+            key=lambda deck: (-deck.changed_at.timestamp(), deck.slug),
         )
         return tuple(
             ListedDeck(
                 slug=deck.slug,
                 title=deck.title,
                 state=_state_of(deck),
+                changed_at=deck.changed_at,
                 age=now - deck.changed_at,
             )
             for deck in newest_first

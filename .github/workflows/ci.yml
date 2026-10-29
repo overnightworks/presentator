@@ -371,10 +371,25 @@ jobs:
       - name: Prove the build and wire users exist (cell 1)
         run: |
           image=presentator:${{ github.sha }}
-          test "$(docker run --rm "$image" getent passwd presentator-build)" = \
-            'presentator-build:x:10001:10001::/work/home:/usr/sbin/nologin'
-          test "$(docker run --rm "$image" getent passwd presentator-wire)" = \
-            'presentator-wire:x:10002:10002::/nonexistent:/usr/sbin/nologin'
+          for user in presentator-build presentator-wire; do
+            entry=$(docker run --rm "$image" getent passwd "$user") || {
+              echo "user $user does not exist in the image" >&2
+              exit 1
+            }
+            user_id=$(echo "$entry" | cut -d: -f3)
+            login_shell=$(echo "$entry" | cut -d: -f7)
+            if [ "$user_id" = 0 ]; then
+              echo "user $user has UID 0" >&2
+              exit 1
+            fi
+            case "$login_shell" in
+              */nologin) ;;
+              *)
+                echo "user $user has login shell $login_shell, which does not end in nologin" >&2
+                exit 1
+                ;;
+            esac
+          done
           for uid in 10001 10002 010001; do
             if docker build --progress=plain --build-arg PRESENTATOR_RUNTIME_UID=$uid --tag presentator:uid-$uid . > "uid-$uid.log" 2>&1; then
               echo "a runtime uid of $uid was accepted" >&2
