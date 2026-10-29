@@ -1,7 +1,0 @@
-claim_id = "86ab2c120aef4ff4bfff8d77c722de55"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "9636aeebfa136b66c1dc5e53aab3a7b559c499cf"
-branch = "claude/issue-596-upgrade-to-aco-v6-0-0-move-the-pr-check"
-scope = [".github/workflows/pr-check.yml"]
-opened_commit = "ec0c45703f4b504d7005158972de07217fee3c20"
