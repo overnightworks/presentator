@@ -138,6 +138,22 @@ def test_the_most_recently_changed_deck_is_listed_first() -> None:
     assert listed[0].age == timedelta(minutes=2)
 
 
+def test_a_listed_deck_carries_the_instant_its_owner_holds() -> None:
+    decks = decks_over(a_folder("one", changed_ago=timedelta(days=6)))
+
+    [listed] = refreshed(decks)
+
+    assert listed.changed_at == NOW - timedelta(days=6)
+
+
+def test_decks_changed_at_the_same_instant_are_listed_by_slug() -> None:
+    decks = decks_over(
+        a_folder("zeta"), a_folder("alpha"), a_folder("mid"), a_folder("beta")
+    )
+
+    assert [deck.slug for deck in refreshed(decks)] == ["alpha", "beta", "mid", "zeta"]
+
+
 @pytest.mark.parametrize(
     "folder",
     [

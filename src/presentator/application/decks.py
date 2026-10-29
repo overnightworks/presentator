@@ -655,16 +655,18 @@ class Decks:
         refresh's business.
         """
         now = self.clock.now()
-        newest_first = sorted(
+        by_slug = sorted(
             (deck for deck in self.store.all() if deck.is_owned_by(viewer)),
-            key=lambda deck: deck.changed_at,
-            reverse=True,
+            key=lambda deck: deck.slug,
         )
+        # A stable sort keeps the slug order among equal instants.
+        newest_first = sorted(by_slug, key=lambda deck: deck.changed_at, reverse=True)
         return tuple(
             ListedDeck(
                 slug=deck.slug,
                 title=deck.title,
                 state=_state_of(deck),
+                changed_at=deck.changed_at,
                 age=now - deck.changed_at,
             )
             for deck in newest_first

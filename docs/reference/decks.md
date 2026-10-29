@@ -30,13 +30,20 @@ Only a refresh reconciles; a page view never does.
 
 ## The list
 
-The most recently changed deck stands first. Every row carries the state of
+The most recently changed deck stands first, and decks changed at the same instant
+stand by slug. Every row carries the state of
 its deck's build in one word (ready, building, failed, or never built), with a
 shape and a colour of its own, read off the talk that stands and the build last
 attempted beside it, never stored. While the viewer has no deck, the list says so and
 names the Git address instead of showing an empty table, as long as one source
 of the viewer's own is all there is to name; with no source it points an admin
 at Sources. The list holds only the decks of the viewer's own sources.
+
+The same list is served as JSON at `GET /api/decks` to a session or a person's
+bearer: each deck's `slug`, `title`, `state` (`ready`, `building`, `failed`,
+`never-built`) and `changed_at` instant, in that order, plus `source_address`
+(the Git address while the reader has exactly one source, else `null`). It
+carries no worded text; the page words the age itself.
 
 ## A deck's page
 
