@@ -255,7 +255,7 @@ def probe_attacks() -> None:
     for key, directory in (
         ("create.root", "/"),
         ("create.opt", "/opt"),
-        ("create.frontend", "/app/frontend"),
+        ("create.slidev", "/app/slidev"),
         ("create.work", "/work"),
     ):
         create_check(key, directory)

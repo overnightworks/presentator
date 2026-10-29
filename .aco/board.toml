@@ -18,8 +18,8 @@ dependency_paths = [
   "speech/providers/qwen/uv.lock",
   "speech/providers/voxcpm/pyproject.toml",
   "speech/providers/voxcpm/uv.lock",
-  "frontend/package.json",
-  "frontend/pnpm-lock.yaml",
+  "slidev/package.json",
+  "slidev/pnpm-lock.yaml",
   "Dockerfile",
   ".github/workflows/",
 ]

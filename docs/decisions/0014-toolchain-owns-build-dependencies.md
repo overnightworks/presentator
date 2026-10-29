@@ -35,7 +35,7 @@ carries. `deck.toml` gains no dependency key: a declared allowlist there
 cannot widen a sealed image, and it would duplicate Slidev's own
 frontmatter for saying the same thing a second way; letting a build install
 on demand needs registry network, which line 14a already refuses. The set has
-one owner, this repository's `frontend/package.json`, and every reader
+one owner, this repository's `slidev/package.json`, and every reader
 derives it rather than typing it a second time.
 
 The deck page names the themes this instance builds with, read from the
@@ -55,7 +55,7 @@ shows no row at all rather than an empty one that would read as "no themes".
 
 ## Consequences
 
-- Widening the set is one change to `frontend/package.json` and its
+- Widening the set is one change to `slidev/package.json` and its
   lockfile, reviewed and rebuilt like any dependency change — an image
   rebuild and a redeploy, never a push to a deck's own source.
 - Two instances can carry different sets, so the page names which set this

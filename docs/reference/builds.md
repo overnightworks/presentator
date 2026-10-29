@@ -77,7 +77,7 @@ rule's threat model.
 `PRESENTATOR_TOOLCHAIN` names a Node project that carries Slidev, installed
 with `pnpm install --frozen-lockfile` under the Node version its `.nvmrc`
 names. A deck may name a theme or an addon only from what that project already
-carries; widening the set is a change to `frontend/package.json`, not a
+carries; widening the set is a change to `slidev/package.json`, not a
 decision a deck's push gets to make
 ([ADR 0014](../decisions/0014-toolchain-owns-build-dependencies.md)). That
 `package.json` is the set's one owner, and a deck's page names it. The PDF
