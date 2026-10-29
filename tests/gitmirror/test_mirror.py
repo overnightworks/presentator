@@ -359,6 +359,60 @@ def test_pulling_a_source_brings_its_tree_and_names_the_commit(
     )
 
 
+@pytest.mark.parametrize(
+    "folder",
+    [
+        "ü",
+        "Übersicht",
+        "two words",
+        'say "hi"',
+        "back\\slash",
+        "tab\there",
+        "line\nbreak",
+    ],
+    ids=["umlaut", "capital-umlaut", "space", "quote", "backslash", "tab", "newline"],
+)
+def test_a_folder_is_listed_changed_and_read_under_its_real_name(
+    folder: str,
+    remote: GitRemote,
+    tmp_path: Path,
+) -> None:
+    remote.commit(
+        {f"{folder}/deck.toml": 'title = "T"\n', f"{folder}/slides.md": "# T\n"},
+        at=_PUSHED_AT,
+    )
+    mirror = a_mirror(remote.url, directory=tmp_path)
+    revision = mirror.connect().revision
+    assert revision is not None
+
+    assert {entry.name for entry in mirror.entries(revision)} == {folder}
+    assert {entry.name for entry in mirror.entries(revision, inside=folder)} == {
+        "deck.toml",
+        "slides.md",
+    }
+    assert mirror.last_change(revision, folder) == Change(
+        commit=revision.commit,
+        at=_PUSHED_AT,
+    )
+    assert mirror.read(revision, f"{folder}/slides.md") == b"# T\n"
+
+
+def test_a_folder_name_with_a_glob_character_is_not_read_as_a_pattern(
+    remote: GitRemote,
+    tmp_path: Path,
+) -> None:
+    remote.commit({"a*/slides.md": "# Star\n"}, at=_PUSHED_AT)
+    remote.commit({"ab/slides.md": "# Plain\n"}, at=_PUSHED_LATER)
+    mirror = a_mirror(remote.url, directory=tmp_path)
+    revision = mirror.connect().revision
+    assert revision is not None
+
+    assert mirror.last_change(revision, "a*").at == _PUSHED_AT
+    assert {entry.name for entry in mirror.entries(revision, inside="a*")} == {
+        "slides.md",
+    }
+
+
 def test_a_folders_tree_is_written_out_as_the_files_it_holds(
     remote: GitRemote,
     tmp_path: Path,

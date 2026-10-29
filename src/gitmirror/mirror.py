@@ -146,8 +146,10 @@ class GitMirror:
     def entries(self, revision: Revision, *, inside: str = "") -> tuple[TreeEntry, ...]:
         """The names one level below `inside` in the tree at this commit."""
         within = (f"{inside}/",) if inside else ()
-        listing = self._text("ls-tree", revision.commit, *within)
-        return tuple(_tree_entry(line) for line in listing.splitlines())
+        listing = self._run("ls-tree", "-z", revision.commit, *within)
+        return tuple(
+            _tree_entry(record) for record in listing.decode().split("\0") if record
+        )
 
     def read(self, revision: Revision, path: str) -> bytes:
         """The file's bytes at this commit; nothing is ever checked out."""
@@ -238,7 +240,13 @@ class GitMirror:
 
     def _run(self, *arguments: str) -> bytes:
         completed = subprocess.run(  # noqa: S603 - argv is a list led by the resolved git executable with no shell
-            [_git_executable(), "--git-dir", str(self.directory), *arguments],
+            [
+                _git_executable(),
+                "--literal-pathspecs",
+                "--git-dir",
+                str(self.directory),
+                *arguments,
+            ],
             capture_output=True,
             check=False,
             env=unattended_environment(secret=None),
@@ -443,7 +451,7 @@ def _sanitized(stderr: str, *, secret: str | None) -> str:
     return redacted
 
 
-def _tree_entry(line: str) -> TreeEntry:
-    attributes, _, path = line.partition("\t")
+def _tree_entry(record: str) -> TreeEntry:
+    attributes, _, path = record.partition("\t")
     _mode, kind, _object = attributes.split()
     return TreeEntry(name=PurePosixPath(path).name, is_directory=kind == "tree")
