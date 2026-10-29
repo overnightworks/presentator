@@ -1,8 +1,0 @@
-claim_id = "be897b3208964b8daf64e53a71b86f13"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "ed9ae9ab61d4978d288a44a30deff3d4a9cdb6db"
-branch = "claude/issue-640-a-person-s-language-and-theme-and-the-in"
-scope = ["docs/decisions/0020-the-lobby-is-a-json-api.md", "docs/reference/lobby-settings-and-appearance.md", "src/presentator/api/auth.py", "src/presentator/api/preference_api.py", "src/presentator/application/preferences.py", "tests/presentator/api/test_preference_api.py", "tests/presentator/application/test_preferences.py"]
-opened_commit = "3406921ae17a50b410ed83376178b093bd35b0a1"
-whole_reason = "Two routes over one owner and their one wiring line; the reference and ADR sentences are what the routes make true, and the test module is their proof."
