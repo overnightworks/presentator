@@ -140,7 +140,7 @@ def test_the_socket_volume_starts_as_a_private_root_directory() -> None:
         "    read_only: true",
     ],
 )
-def test_the_instance_builds_through_the_worker_hardened(hardening_line: str) -> None:
+def test_the_instance_runs_hardened(hardening_line: str) -> None:
     """B16: the web's flipped and hardened service in compose."""
     assert hardening_line in "\n".join(_service_lines("presentator"))
 
