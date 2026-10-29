@@ -45,9 +45,10 @@ replaceable if this decision's assumption ever stops holding.
   statement names its columns, so the release before still reads the file. On
   every start, in the same transaction, `create_tables` also makes the failure
   reason agree again with what that release wrote beside it, so going forward
-  after a rollback reads every row. One gap stays: a rolled-back release that
+  after a rollback reads every row. Two gaps stay: a rolled-back release that
   fails without words over a row still carrying a server reason leaves that
-  reason, and the page shows its sentence until the deck's next build.
+  reason, and an upgraded failed row whose text was one of the server's sentences
+  reads as `toolchain`; the page shows the sentence of either until the deck's next build.
 - SQLite's single writer is enough for one operator and one run; concurrent
   talks by different users would not be, and that is the trigger to revisit.
 - One process writes the database, and the identity stores' write lock depends on

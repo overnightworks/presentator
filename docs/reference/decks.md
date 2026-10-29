@@ -66,8 +66,10 @@ runs.
 A file from before the reason is upgraded in place on start: each missing
 column is added and no row is lost. On every start the reason is also made to
 agree with the stored text, so a file an earlier release wrote to after the
-upgrade is read again; the one case it leaves is that release failing without
-words over a stored server reason, which the page words until the next build.
+upgrade is read again; two cases stay: a rolled-back release failing without
+words over a stored server reason, and an upgraded failed row whose text was one of
+the server's sentences, which reads as `toolchain` and shows that sentence; the page
+words both until the deck's next build.
 
 - While a build runs, the page says so with the commit being built and how long
   it has been running, and the two views are shown locked rather than offered:

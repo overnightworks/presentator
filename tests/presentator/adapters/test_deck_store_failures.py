@@ -463,3 +463,19 @@ def test_a_table_missing_only_some_of_the_columns_gets_each_missing_one(
     create_tables(database)
 
     assert sorted(columns_of(database)) == sorted(columns_of(fresh))
+
+
+@pytest.mark.parametrize("text", [None, ""])
+def test_a_failure_the_release_before_rewrote_without_words_is_read_as_none(
+    tmp_path: Path, text: str | None
+) -> None:
+    store = a_store(tmp_path)
+    store.put(a_deck())
+    store.put_attempt(_SLUG, an_attempt(BuildFailure.said("words")))
+    database = tmp_path / "presentator.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("UPDATE decks SET attempt_failure = ?", (text,))
+
+    create_tables(database)
+
+    assert read_failure(database, _SLUG) == BuildFailure.said(None)
