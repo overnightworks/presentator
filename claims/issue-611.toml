@@ -1,0 +1,8 @@
+claim_id = "50bb3b01ef2f41a4bd670dda1179eb6b"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "a9c6bc19d8ded48b31593850ff08ff8a1575c98c"
+branch = "claude/issue-611-the-slidev-addon-and-deck-toolchain-move"
+scope = [".aco/board.toml", ".dockerignore", ".github/dependabot.yml", ".github/workflows/ci.yml", "Dockerfile", "README.md", "docs/TESTING.md", "docs/decisions/0014-toolchain-owns-build-dependencies.md", "docs/reference/builds.md", "docs/reference/configuration.md", "docs/runbooks/install-the-host-build-toolchain.md", "docs/runbooks/prepare-a-deck-for-the-build.md", "frontend", "quality/config.toml", "scripts/probe_build_worker", "scripts/probe_build_worker_isolation.py", "slidev", "sonar-project.properties", "src/presentator/host/config.py", "src/presentator/host/worker.py", "tests/presentator/adapters/test_builds.py", "tests/presentator/adapters/test_builds_themes.py", "tests/presentator/api/test_decks_page.py", "tests/presentator/host/test_worker.py", "tests/presentator/host/test_worker_wire.py"]
+opened_commit = "7a11e16bd12a2b38da723628b801fd615d6bb2f7"
+whole_reason = "One folder rename; every file that names the folder must follow it in the same commit or the build breaks."
