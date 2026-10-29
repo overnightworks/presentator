@@ -37,6 +37,7 @@ from presentator.adapters.catalog import (
     duration_in_words,
     load_catalogs,
 )
+from presentator.adapters.deck_store import SqliteDeckStore
 from presentator.adapters.deck_texts import MirroredDeckTexts
 from presentator.adapters.decks import (
     FilesystemLocalMount,
@@ -44,7 +45,6 @@ from presentator.adapters.decks import (
     MirroredDeckFolders,
     SourceCredentials,
     SourceMirrors,
-    SqliteDeckStore,
     SqliteSourceRunStore,
     SqliteSourceStore,
 )
