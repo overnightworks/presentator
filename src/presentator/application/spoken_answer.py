@@ -67,7 +67,7 @@ class SpokenAnswer:
 
 
 def spoken_language(asked: str | None, deck: str | None) -> str:
-    """The browser's language, else the deck's, else German."""
+    """The browser's language, else the deck's as `deck_language_of` reads it."""
     return asked or deck_language_of(deck).value
 
 
