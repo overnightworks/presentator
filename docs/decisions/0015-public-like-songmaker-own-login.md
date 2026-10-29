@@ -7,7 +7,8 @@ outside, on the login guard, or on the pages a visitor sees before signing in.
   [ADR 0007](0007-browser-client-behind-tunnel.md). Amended 2026-10-27: its
   own login is replaced by the Keycloak sign-in, per
   [ADR 0018](0018-keycloak-replaces-own-accounts.md). Amended 2026-10-29: the
-  privacy text lives in edge's central page
+  privacy text lives in edge's central page, and `/datenschutz` is no route on
+  either host
 - Date: 2026-10-14
 - Decision authority: the operator's ruling of 2026-10-14 and the ruled
   expectation lines recorded on
@@ -63,8 +64,9 @@ instance serves no Datenschutzerklärung of its own. What it stores and which AI
 provider receives data is the section `legal/datenschutz.html` of this
 repository, which edge assembles into `https://hallucinai.de/datenschutz`
 beside its general part, the sign-in and the agent service. `GET /datenschutz`
-is no route here, and the footer links the central `#presentator`. A test holds
-the numbers of the section equal to the code that keeps them. The words above
+is no route here (signed in it is 404, signed out it is sent to sign-in like
+any other non-public path), and the footer links the central `#presentator`.
+A test holds the numbers of the section equal to the code that keeps them. The words above
 about a page "reachable without a session" now hold for the central page, and
 `presentator.api.legal` no longer exists.
 
