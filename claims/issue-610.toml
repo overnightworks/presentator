@@ -1,0 +1,8 @@
+claim_id = "87d1c1b33df8491da6552a419dcec785"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "a9c6bc19d8ded48b31593850ff08ff8a1575c98c"
+branch = "claude/issue-610-the-lobby-s-picture-in-the-family-look-1"
+scope = ["docs/mockups"]
+opened_commit = "fe512aaa9a6d79cd10d3a93dc19c5c900f89f56d"
+whole_reason = "One picture sheet and its derived renders; the boards share one stylesheet and cannot be redrawn apart."
