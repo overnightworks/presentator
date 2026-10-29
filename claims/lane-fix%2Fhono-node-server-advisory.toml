@@ -1,0 +1,7 @@
+claim_id = "90adeb250cbe4a12ba4cdc51da05e3a5"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "9636aeebfa136b66c1dc5e53aab3a7b559c499cf"
+branch = "fix/hono-node-server-advisory"
+scope = ["frontend/package.json", "frontend/pnpm-lock.yaml"]
+opened_commit = "7181c8849ca16741837a4f56a3970333815fffe9"
