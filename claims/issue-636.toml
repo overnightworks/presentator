@@ -3,5 +3,6 @@ agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
 role = "builder"
 base = "449ef8b0f1656b0c31a2afe6eb358490700bc9a2"
 branch = "claude/issue-636-a-deck-folder-with-a-non-ascii-name-is-r"
-scope = ["src/gitmirror/mirror.py", "tests/gitmirror/test_mirror.py", "tests/gitmirror/test_mirror_names.py"]
+scope = ["src/gitmirror/mirror.py", "tests/gitmirror/test_mirror.py", "tests/gitmirror/test_mirror_names.py", "tests/support/mirror_support.py"]
 opened_commit = "b893073e78390c1ce64d6944095ed7572c7dbba2"
+whole_reason = "One reading of tree names and its proof: the mirror test builder moves to one support module so both mirror test modules build the mirror the same way."
