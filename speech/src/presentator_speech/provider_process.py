@@ -235,7 +235,7 @@ class ProviderProcess:
         if not _is_executable_file(entrypoint):
             raise RuntimeError("speech provider unavailable")
         provider_directory = entrypoint.parents[2]
-        return subprocess.Popen(
+        return subprocess.Popen(  # noqa: S603 - argv is the provider entrypoint with shell=False
             [
                 str(entrypoint),
                 "--expected-parent-pid",

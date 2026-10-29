@@ -27,16 +27,12 @@ from webauth.policies import (
     default_content_security_policy,
 )
 from webauth.ports import SessionRecordStore
+from webauth.sign_in_routes import SignInRefusal, install_sign_in_routes
 
 from presentator.api.auth import (
     DEFAULT_BODY_BYTES,
-    LOGIN_REDIRECT,
-    SIGN_IN_CALLBACK_PATH,
-    START_SIGN_IN_PATH,
+    TALK_SIGN_IN,
     InstalledAuth,
-    SignIn,
-    TalkSignInRefusal,
-    carry_set_cookies,
     signed_in_connection,
     talk_sign_in_refusal_path,
 )
@@ -47,9 +43,6 @@ from presentator.application.decks import Decks
 
 TALK_PERMISSIONS_POLICY: Final = "camera=(), microphone=(self), geolocation=()"
 _ROOT: Final = "/"
-_SIGN_IN_ADDRESSES: Final = PathRules(
-    exact=frozenset({_ROOT, START_SIGN_IN_PATH, SIGN_IN_CALLBACK_PATH}),
-)
 
 
 def talk_content_security_policy() -> str:
@@ -65,35 +58,9 @@ def talk_content_security_policy() -> str:
     )
 
 
-def create_talk(
-    *,
-    sessions: SessionRecordStore,
-    decks: Decks,
-    auth: InstalledAuth,
-    lobby_origin: str,
-    copresenter: CoPresenterSurface | None = None,
-) -> FastAPI:
-    """Build the talk host around the same stores and use cases as the lobby."""
-    sign_in = SignIn(sessions=sessions, auth=auth, keeps_id_token=False)
-
-    def refused(refusal: TalkSignInRefusal, kept: Response) -> Response:
-        answer = Response(status_code=HTTPStatus.SEE_OTHER)
-        answer.headers["location"] = (
-            f"{lobby_origin}{talk_sign_in_refusal_path(refusal)}"
-        )
-        carry_set_cookies(kept, answer)
-        return answer
-
-    def finish_sign_in(request: Request) -> Response:
-        return sign_in.finish(request, refused=refused)
-
-    def to_the_lobby() -> Response:
-        answer = Response(status_code=HTTPStatus.SEE_OTHER)
-        answer.headers["location"] = lobby_origin
-        return answer
-
-    talk = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-    install_web_auth_config(talk, auth.config)
+def _install_talk_middleware(
+    talk: FastAPI, auth: InstalledAuth, sessions: SessionRecordStore
+) -> None:
     install_web_auth_middleware(
         talk,
         security_headers=SecurityHeadersPolicy(
@@ -107,14 +74,54 @@ def create_talk(
         csrf_origin=CsrfPolicy(),
         session_gate=SessionGate(
             session_transaction=lambda: nullcontext(sessions),
-            login_redirect=LOGIN_REDIRECT,
-            public=(PublicRule(_SIGN_IN_ADDRESSES), HEALTH_IS_PUBLIC),
+            login_redirect=TALK_SIGN_IN.login_redirect,
+            public=(
+                PublicRule(PathRules(exact=frozenset({_ROOT}))),
+                *TALK_SIGN_IN.public_rules,
+                HEALTH_IS_PUBLIC,
+            ),
         ),
     )
+
+
+def create_talk(
+    *,
+    sessions: SessionRecordStore,
+    decks: Decks,
+    auth: InstalledAuth,
+    lobby_origin: str,
+    copresenter: CoPresenterSurface | None = None,
+) -> FastAPI:
+    """Build the talk host around the same stores and use cases as the lobby."""
+
+    def refused(_request: Request, refusal: SignInRefusal) -> Response:
+        answer = Response(status_code=HTTPStatus.SEE_OTHER)
+        answer.headers["location"] = (
+            f"{lobby_origin}{talk_sign_in_refusal_path(refusal.page)}"
+        )
+        return answer
+
+    def to_the_lobby() -> Response:
+        answer = Response(status_code=HTTPStatus.SEE_OTHER)
+        answer.headers["location"] = lobby_origin
+        return answer
+
+    talk = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    install_web_auth_config(talk, auth.config)
+    _install_talk_middleware(talk, auth, sessions)
     add_health_route(talk)
     talk.add_api_route(_ROOT, to_the_lobby, methods=["GET"])
-    talk.add_api_route(START_SIGN_IN_PATH, sign_in.start, methods=["GET"])
-    talk.add_api_route(SIGN_IN_CALLBACK_PATH, finish_sign_in, methods=["GET"])
+    install_sign_in_routes(
+        talk,
+        paths=TALK_SIGN_IN,
+        relying_party=lambda _request: auth.relying_party,
+        admission=auth.admission,
+        transaction=auth.transaction,
+        refused=refused,
+        keeps_id_token=False,
+        max_sessions=None,
+        logout_button_label=None,
+    )
     add_talk_mount(talk, decks=decks)
     if copresenter is not None:
         add_copresenter_routes(

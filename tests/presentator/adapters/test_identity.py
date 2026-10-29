@@ -12,11 +12,12 @@ from pydantic import SecretStr
 from webauth.config import WebAuthConfig
 from webauth.dependencies import ConnectionRefusal, admit_session
 
+from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (
     OldDatabaseError,
     ProcessWriteLock,
+    SqliteIdentityWrites,
     SqliteSessionRecordStore,
-    SqliteSubjectUserStore,
     StoredSession,
     SystemClock,
     create_identity_tables,
@@ -638,7 +639,9 @@ def end_by_prune_overflow(store: SqliteSessionRecordStore, session_id: str) -> N
 
 def end_by_delete_account(store: SqliteSessionRecordStore, session_id: str) -> None:
     del session_id
-    SqliteSubjectUserStore(store.database, ProcessWriteLock()).delete_account("user-1")
+    SqliteIdentityWrites(
+        store.database, ProcessWriteLock(), LoggingAuditSink()
+    ).delete_account("user-1")
 
 
 @pytest.mark.parametrize(

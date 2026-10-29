@@ -48,8 +48,8 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Pinned to aco v5.2.0 by commit SHA on its canonical URL.
-        run: uvx --from git+https://github.com/overnightworks/aco.git@1d4cdcc7162a8c3498aa04b07ba5cc75b7f0efad aco check ${{ github.event.pull_request.number }}
+        # Pinned to aco v6.0.0 by commit SHA on its canonical URL.
+        run: uvx --from git+https://github.com/overnightworks/aco.git@7e0e073453ef1f3277629ce89a8523da8c98732c aco check ${{ github.event.pull_request.number }}
 
       - name: Hold the required check name for the merge queue
         if: ${{ github.event_name == 'merge_group' }}

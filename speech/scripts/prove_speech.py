@@ -5,6 +5,8 @@ time, and leaves no process behind. Model weights stay in the Hugging Face and
 Piper caches.
 """
 
+# ruff: noqa: T201 - this stage proof reports its progress on standard output
+
 from __future__ import annotations
 
 import argparse
@@ -43,8 +45,8 @@ ENGLISH = (
     "automatically prepared in the background."
 )
 SECOND = "Die nächste Folie bitte."
-LOCK_PATH = Path("/tmp/probe-stack.lock")
-GERMAN_WAV_PATH = Path("/tmp/issue-83-voice/german.wav")
+LOCK_PATH = Path("/tmp/probe-stack.lock")  # noqa: S108 - the lock path is the machine-wide probe lock shared across repositories
+GERMAN_WAV_PATH = Path("/tmp/issue-83-voice/german.wav")  # noqa: S108 - the path is the proof's fixed listening output that the README names and it runs on the operator's single-user machine
 MEASURE_REPETITIONS = 5
 MEASURE_FLAG = {False: [], True: ["--measure"]}
 CONTRACT_MARKERS = {
@@ -245,7 +247,7 @@ def _speak_measured(
 def _nvidia_memory() -> str:
     try:
         completed = subprocess.run(
-            [
+            [  # noqa: S607 - nvidia-smi is picked from the operator's trusted PATH on the operator's own machine as when run by hand
                 "nvidia-smi",
                 "--query-gpu=memory.used,memory.total",
                 "--format=csv,noheader",
@@ -262,7 +264,7 @@ def _nvidia_memory() -> str:
 def _nvidia_compute_pids() -> str:
     try:
         completed = subprocess.run(
-            ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"],
+            ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"],  # noqa: S607 - nvidia-smi is picked from the operator's trusted PATH on the operator's own machine as when run by hand
             check=True,
             capture_output=True,
             text=True,
@@ -497,10 +499,10 @@ def _prove_contract(
 ) -> None:
     client = project / "scripts" / "contract_client.py"
     print("contract_client_start")
-    completed = subprocess.run(
+    completed = subprocess.run(  # noqa: S603 - argv is the interpreter and fixed script paths and run without a shell
         [sys.executable, str(client), *MEASURE_FLAG[measure], str(socket_path)],
         check=False,
-        cwd="/tmp",
+        cwd="/tmp",  # noqa: S108 - the path only sets the client's working directory and creates no predictable file there
         env=env,
         capture_output=True,
         text=True,

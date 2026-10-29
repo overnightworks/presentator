@@ -193,7 +193,7 @@ class GitMirror:
         # turns its command line into an error message.
         try:
             with _credentials(url, secret) as (credential, ssh_key):
-                pulled = subprocess.run(
+                pulled = subprocess.run(  # noqa: S603 - argv is a list led by the resolved git executable with no shell
                     [
                         _git_executable(),
                         *credential_arguments(credential),
@@ -237,7 +237,7 @@ class GitMirror:
         return self._run(*arguments).decode().strip()
 
     def _run(self, *arguments: str) -> bytes:
-        completed = subprocess.run(
+        completed = subprocess.run(  # noqa: S603 - argv is a list led by the resolved git executable with no shell
             [_git_executable(), "--git-dir", str(self.directory), *arguments],
             capture_output=True,
             check=False,
@@ -270,7 +270,7 @@ def check_connection(
         return _REFUSED_CHECK
     try:
         with _credentials(url, secret) as (credential, ssh_key):
-            probed = subprocess.run(
+            probed = subprocess.run(  # noqa: S603 - argv is a list led by the resolved git executable with no shell
                 [
                     _git_executable(),
                     *credential_arguments(credential),

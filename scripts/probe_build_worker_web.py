@@ -76,7 +76,7 @@ COMPOSE_MOUNTS = frozenset(
     | {SOCKET_DIRECTORY}
     | SECRET_MOUNTS
 )
-TEMPORARY = "/tmp"  # noqa: S108
+TEMPORARY = "/tmp"  # noqa: S108 - the path is inside the worker container and not on this host
 ROUTE_POLL_SECONDS = 0.5
 WAITING_HOLD_SECONDS = 4.0
 STEP_SECONDS = 900
@@ -99,14 +99,14 @@ def web_command(*arguments: str) -> tuple[str, ...]:
 
 def web(*arguments: str) -> str:
     """Run docker compose with the override, failing loudly."""
-    return subprocess.run(
+    return subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
         web_command(*arguments), check=True, capture_output=True, text=True
     ).stdout.strip()
 
 
 def in_web(*command: str) -> subprocess.CompletedProcess[str]:
     """Run a command in the web; the caller judges the status."""
-    return subprocess.run(
+    return subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
         web_command("exec", "-T", WEB, *command),
         check=False,
         capture_output=True,
@@ -116,7 +116,7 @@ def in_web(*command: str) -> subprocess.CompletedProcess[str]:
 
 def start_client(case: str, *steps: str) -> "subprocess.Popen[str]":
     """Send the client program into the web; it prints its run's name first."""
-    client = subprocess.Popen(
+    client = subprocess.Popen(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
         web_command("exec", "-T", WEB, "/opt/venv/bin/python", "-I", "-", case, *steps),
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True,
@@ -192,7 +192,7 @@ def web_answers() -> bool:
     host = urlsplit(os.environ["PRESENTATOR_PUBLIC_ORIGIN"]).hostname or ""
     request = urllib.request.Request(ROUTE, headers={"Host": host})
     try:
-        with urllib.request.urlopen(request, timeout=5) as answer:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=5) as answer:  # noqa: S310 - the URL is the probe stack's own published route over http
             return bool(answer.status == HTTPStatus.OK)
     except OSError:
         return False
@@ -359,8 +359,8 @@ def prove_restart_mid_step(report: Report) -> None:
     _, restarts = state()
     held = start_client("hold", "build")
     run_name_of(held)
-    while subprocess.run(
-        ("docker", "exec", worker(), "test", "-s", f"{TEMPORARY}/deck.pid"),
+    while subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
+        ("docker", "exec", worker(), "test", "-s", f"{TEMPORARY}/deck.pid"),  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
         check=False,
     ).returncode:
         if held.poll() is not None:
@@ -395,7 +395,7 @@ def prove_reply_cut_off(report: Report) -> None:
     if waited.returncode or client.poll() is not None:
         refuse(f"the reply ended before the worker was killed: {waited}")
     pid = docker("inspect", "--format", "{{.State.Pid}}", worker())
-    subprocess.run(("sudo", "-n", "kill", "-KILL", pid), check=True)
+    subprocess.run(("sudo", "-n", "kill", "-KILL", pid), check=True)  # noqa: S603, S607 - argv is a tuple of literal words and probe values and run without a shell; sudo is picked from the operator's trusted PATH on the operator's own machine as when run by hand
     done = outcome_of(client)
     if (
         [(step.failed, step.text) for step in done.steps] != [(True, None)]
@@ -472,7 +472,7 @@ def drive() -> None:
     finally:
         for service in (WEB, SERVICE):
             say(f"--- {service} log")
-            subprocess.run(web_command("logs", "--no-color", service), check=False)
+            subprocess.run(web_command("logs", "--no-color", service), check=False)  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
     report.finish()
 
 

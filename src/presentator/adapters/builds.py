@@ -509,7 +509,7 @@ def _what_a_step_said(
     reading, writing = os.pipe()
     with os.fdopen(reading, "rb", buffering=0) as printed:
         try:
-            process = subprocess.Popen(
+            process = subprocess.Popen(  # noqa: S603 - argv is the build step command line with no shell and run in its own session under a bound
                 command,
                 stdout=subprocess.DEVNULL,
                 stderr=writing,

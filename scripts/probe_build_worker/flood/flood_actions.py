@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 # The life's shared 1777 tmpfs, by design: the rendezvous with the driver.
-RENDEZVOUS = Path("/tmp")  # noqa: S108
+RENDEZVOUS = Path("/tmp")  # noqa: S108 - the path is inside the build life and its shared tmpfs is the rendezvous with the driver
 PIDS_EVENTS = Path("/sys/fs/cgroup/pids.events")
 OOM_SCORE = Path("/proc/self/oom_score_adj")
 WAIT_SECONDS = 150

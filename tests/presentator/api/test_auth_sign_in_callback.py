@@ -12,7 +12,6 @@ import sqlite3
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from pathlib import Path
@@ -20,26 +19,20 @@ from types import SimpleNamespace
 
 import pytest
 import uvicorn
-from fastapi import FastAPI, Response
+from fastapi import FastAPI
 from httpx2 import Response as BrowserAnswer
 from pydantic import SecretStr
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.oidc_login import AdmissionConfig
-from webauth.ports import (
-    AccountEvent,
-    AccountEventKind,
-    AuditSink,
-    SubjectUserStore,
-    UserRecord,
-)
+from webauth.ports import AccountEvent, AccountEventKind, AuditSink
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (
+    ProcessWriteLock,
     SqliteSessionRecordStore,
-    SqliteSubjectUserStore,
     StoredSession,
 )
-from presentator.api.auth import LOGOUT_PATH, carry_set_cookies
+from presentator.api.auth import LOGOUT_PATH
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.host import main
 from tests.support.lobby import (
@@ -49,8 +42,9 @@ from tests.support.lobby import (
 from tests.support.sign_in_support import (
     ADMIN,
     MEMBER,
+    ContentionSignalingLock,
     Scene,
-    WatchedLock,
+    TransactionDouble,
     a_scene,
     cookie_names,
 )
@@ -58,31 +52,6 @@ from tests.support.sign_in_support import (
 _BOUND = 30.0
 _TOO_LONG_FOR_A_COOKIE = 4000
 _COOKIES_OF_A_SIGN_IN = 2
-_HOLDS_OF_A_SIGN_IN = 2
-
-
-@dataclass
-class GatedAccounts:
-    """Accounts whose first read waits for the test, after reading."""
-
-    accounts: SqliteSubjectUserStore
-    reads: int = 0
-    first_read: threading.Event = field(default_factory=threading.Event)
-    release_first: threading.Event = field(default_factory=threading.Event)
-
-    def get(self, user_id: str) -> UserRecord | None:
-        found = self.accounts.get(user_id)
-        self.reads += 1
-        if self.reads == 1:
-            self.first_read.set()
-            assert self.release_first.wait(_BOUND)
-        return found
-
-    def create_for_subject(self, subject: str, username: str, role: str) -> UserRecord:
-        return self.accounts.create_for_subject(subject, username, role)
-
-    def set_role(self, user_id: str, role: str) -> UserRecord:
-        return self.accounts.set_role(user_id, role)
 
 
 @pytest.fixture
@@ -442,18 +411,6 @@ def test_an_issuer_that_differs_in_case_from_the_bound_one_is_a_foreign_issuer(
     assert (scene.count("users"), scene.count("sessions")) == (0, 0)
 
 
-def test_the_cookies_of_the_library_are_copied_whole_and_nothing_else() -> None:
-    kept = Response()
-    kept.set_cookie("first", "1")
-    kept.set_cookie("second", "2")
-    page = Response(content="a page", status_code=HTTPStatus.FORBIDDEN)
-
-    carry_set_cookies(kept, page)
-
-    assert page.headers.getlist("set-cookie") == kept.headers.getlist("set-cookie")
-    assert page.headers["content-length"] == str(len("a page"))
-
-
 def test_a_signed_in_person_stays_signed_in_while_the_issuer_is_down(
     scene: Scene,
 ) -> None:
@@ -467,22 +424,30 @@ def test_a_signed_in_person_stays_signed_in_while_the_issuer_is_down(
 def test_two_first_sign_ins_of_one_subject_make_one_account_and_two_sessions(
     tmp_path: Path,
 ) -> None:
-    gate: list[GatedAccounts] = []
+    contention = ContentionSignalingLock()
+    first_inside = threading.Event()
+    release_first = threading.Event()
+    entries: list[object] = []
 
-    def gated(real: SqliteSubjectUserStore) -> SubjectUserStore:
-        gate.append(GatedAccounts(real))
-        return gate[0]
+    def hold_the_first_entry() -> None:
+        entries.append(None)
+        if len(entries) == 1:
+            first_inside.set()
+            assert release_first.wait(_BOUND)
 
-    lock = WatchedLock()
-    scene = a_scene(tmp_path, accounts=gated, lock=lock)
-    (accounts,) = gate
+    double = TransactionDouble(inside=hold_the_first_entry)
+    scene = a_scene(
+        tmp_path,
+        transaction=double.around,
+        lock=ProcessWriteLock(primitive=contention),
+    )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(scene.sign_in, scene.browser())
-        assert accounts.first_read.wait(_BOUND)
+        assert first_inside.wait(_BOUND)
         second = pool.submit(scene.sign_in, scene.browser())
-        assert lock.contended.wait(_BOUND)
-        accounts.release_first.set()
+        assert contention.contended.wait(_BOUND)
+        release_first.set()
         answers = [first.result(timeout=_BOUND), second.result(timeout=_BOUND)]
 
     assert [answer.status_code for answer in answers] == [HTTPStatus.SEE_OTHER] * 2
@@ -492,30 +457,19 @@ def test_two_first_sign_ins_of_one_subject_make_one_account_and_two_sessions(
     ]
 
 
-def test_one_callback_holds_the_write_lock_once_to_admit_and_once_to_open_the_session(
+def test_one_callback_enters_the_transaction_once_on_a_worker_thread(
     tmp_path: Path,
 ) -> None:
-    lock = WatchedLock()
-    scene = a_scene(tmp_path, lock=lock)
+    double = TransactionDouble()
+    scene = a_scene(tmp_path, transaction=double.around)
 
     scene.sign_in()
 
-    assert lock.holds == _HOLDS_OF_A_SIGN_IN
+    assert [step for step, _ in double.log] == ["entered", "left"]
+    assert double.log[0] == ("entered", False)
 
 
-def test_the_write_lock_is_held_on_worker_threads_and_never_on_the_event_loop(
-    tmp_path: Path,
-) -> None:
-    lock = WatchedLock()
-    scene = a_scene(tmp_path, lock=lock)
-
-    scene.sign_in()
-
-    assert lock.holds == _HOLDS_OF_A_SIGN_IN
-    assert not lock.held_on_the_event_loop
-
-
-def test_a_store_failure_after_the_admission_keeps_the_account_and_sets_no_cookie(
+def test_a_store_failure_inside_the_callback_leaves_no_account_no_session_and_no_audit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     scene = a_scene(tmp_path)
@@ -550,14 +504,27 @@ def test_a_store_failure_after_the_admission_keeps_the_account_and_sets_no_cooki
     failed = scene.sign_in(browser)
 
     assert failed.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-    assert failed.headers.get_list("set-cookie") == []
-    assert (scene.count("users"), scene.count("sessions")) == (1, 0)
+    assert DEFAULT_SESSION_COOKIE_NAME not in cookie_names(failed)
+    assert (scene.count("users"), scene.count("sessions")) == (0, 0)
+    assert scene.audit.events == []
     retried = scene.sign_in(browser)
     assert retried.status_code == HTTPStatus.SEE_OTHER
     assert (scene.count("users"), scene.count("sessions")) == (1, 1)
     assert [event.kind for event in scene.audit.events] == [
         AccountEventKind.USER_CREATED
     ]
+
+
+def test_a_username_another_account_holds_writes_nothing_and_closes_the_transaction(
+    scene: Scene,
+) -> None:
+    refused = _a_username_another_subject_holds(scene)
+
+    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert (scene.count("users"), scene.count("sessions")) == (1, 0)
+    assert scene.audit.events == []
+    scene.users.create_for_subject("subject-2", "anna", "user")
+    assert scene.users.get("subject-2") is not None
 
 
 def test_the_audit_sink_logs_the_event_the_subject_and_the_roles_at_info(

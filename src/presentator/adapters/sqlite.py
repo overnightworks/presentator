@@ -2,7 +2,7 @@
 
 import sqlite3
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
 
 
@@ -14,6 +14,33 @@ def rows(database: Path) -> Generator[sqlite3.Cursor]:
     connection = sqlite3.connect(database, isolation_level=None)
     try:
         yield connection.cursor()
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def rows_or_inside(
+    database: Path, inside: sqlite3.Cursor | None
+) -> AbstractContextManager[sqlite3.Cursor]:
+    """The open transaction's cursor, or a fresh one that commits on its way out."""
+    return rows(database) if inside is None else nullcontext(inside)
+
+
+@contextmanager
+def immediate_transaction(database: Path) -> Generator[sqlite3.Cursor]:
+    """A cursor inside one write transaction, rolled back when the block raises.
+
+    The connection is opened here, on the thread that enters, and stays bound to it.
+    """
+    connection = sqlite3.connect(database, isolation_level=None)
+    try:
+        cursor = connection.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        try:
+            yield cursor
+        except BaseException:
+            connection.rollback()
+            raise
         connection.commit()
     finally:
         connection.close()
