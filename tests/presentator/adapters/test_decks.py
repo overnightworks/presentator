@@ -10,12 +10,12 @@ import pytest
 
 from gitmirror.mirror import credential_arguments, unattended_environment
 from gitmirror.model import CredentialReference
+from presentator.adapters.deck_store import SqliteDeckStore
 from presentator.adapters.decks import (
     FilesystemLocalMount,
     MirroredConnectionChecker,
     MirroredDeckFolders,
     SourceCredentials,
-    SqliteDeckStore,
     SqliteSourceRunStore,
     SqliteSourceStore,
     create_deck_tables,
