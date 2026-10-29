@@ -67,13 +67,14 @@ repository each kind of shipped value is proven here:
 - `compose.yaml`: `tests/test_compose.py` parses the file and checks a
   relation read from both owners, for example the back-channel alias against
   `PRESENTATOR_PUBLIC_ORIGIN`, and the socket volume options. The kept sealing
-  and hardening keys are still line matches, and the Docker-authority check
-  matches over the whole file. The live properties (limits, hardening, socket
-  volume, gateway) are proven by the sealed probe of the mandatory CI job
-  "Build worker: sealed step".
-- The Dockerfile's users: the existence check in the CI image job reads each
-  user's passwd entry for a non-zero UID and a shell ending in `nologin`; it
-  names no shipped UID.
+  and hardening keys are still substring matches within the service block, and
+  the Docker-authority check matches over the whole file. The live properties
+  (limits, hardening, socket volume, gateway) are proven by the sealed probe of
+  the mandatory CI job "Build worker: sealed step".
+- The Dockerfile's build and wire users: the existence check in the CI image
+  job reads the passwd entry of `presentator-build` and `presentator-wire` for
+  a non-zero UID and a shell ending in `nologin`, without naming a shipped UID;
+  the same step's refusal loop names the reserved UIDs, a protective limit.
 - The catalog and the deck manifests: tests read the owner (`en.po`,
   `deck.toml`) or use scenario data. The page tests that still repeat catalog
   sentences are frozen and go with their pages. New tests name a word through
