@@ -41,7 +41,6 @@ from webauth.sign_in_routes import (
 )
 
 from presentator.api.admission import gated_person
-from presentator.api.deck_api import deck_api_routes
 from presentator.api.decks import add_deck_pages
 from presentator.api.health import HEALTH_IS_PUBLIC, add_health_route
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
@@ -274,6 +273,7 @@ def _install_middleware(
     While the admin prefix is served, `/api/` takes a person's token as that
     person; a request without a token is decided by the session cookie.
     """
+    install_problem_handler(lobby)
     install_web_auth_middleware(
         lobby,
         security_headers=SecurityHeadersPolicy(
@@ -337,7 +337,6 @@ def create_lobby(
     )
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(lobby, auth.config)
-    install_problem_handler(lobby)
     _install_middleware(lobby, auth, sessions, private.admin_people)
     lobby.add_api_route(_LOBBY, surfaces.home, methods=["GET"])
     lobby.add_api_route(LOGIN_PATH, surfaces.login_page, methods=["GET"])
@@ -364,7 +363,6 @@ def create_lobby(
     lobby.include_router(_session_routes(pages, auth))
     lobby.include_router(preference_routes(pages=pages, voice=private.voice))
     lobby.include_router(source_routes(pages=pages, decks=decks))
-    lobby.include_router(deck_api_routes(decks=decks, talk_origin=auth.talk_origin))
     add_deck_pages(lobby, decks=decks, pages=pages, talk_origin=auth.talk_origin)
     lobby.mount(_STATIC_PATH, StaticFiles(directory=_STATIC_DIR), name="static")
     lobby.include_router(fetch_hook(decks=decks))

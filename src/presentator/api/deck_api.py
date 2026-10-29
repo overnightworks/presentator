@@ -51,7 +51,7 @@ class DeckView(BaseModel):
     views_open: bool
 
 
-def deck_api_routes(*, decks: Decks, talk_origin: str) -> APIRouter:
+def deck_routes(*, decks: Decks, talk_origin: str) -> APIRouter:
     """The router that answers one deck's view."""
     router = APIRouter()
 
