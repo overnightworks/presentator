@@ -1,7 +1,0 @@
-claim_id = "407a001bf40f40d0b25a4ba7bff85a28"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "4984218464e75b19bb46c02978469515084c4f88"
-branch = "claude/issue-630-the-back-channel-alias-is-proven-again-a"
-scope = ["tests/test_compose.py"]
-opened_commit = "2b5c5acb9cc48ca4bc8fa13b844a81fb07529c8c"
