@@ -1,0 +1,8 @@
+claim_id = "50c2a572ab574c37832977985d5e5072"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "0ff98e8ed681f82e75aab51c39945cdf59804bb3"
+branch = "claude/issue-643-a-failed-build-carries-a-reason-code-not"
+scope = ["docs/decisions/0006-sqlite-and-files.md", "docs/reference/builds.md", "docs/reference/decks.md", "scripts/probe_build_worker/web_client.py", "scripts/probe_build_worker_web.py", "src/presentator/adapters/build_worker.py", "src/presentator/adapters/builds.py", "src/presentator/adapters/catalogs/en.po", "src/presentator/adapters/deck_store.py", "src/presentator/adapters/decks.py", "src/presentator/adapters/schema.py", "src/presentator/api/deck_api.py", "src/presentator/api/decks.py", "src/presentator/application/decks.py", "src/presentator/contracts/decks.py", "src/presentator/contracts/text.py", "tests/presentator/adapters/support/build_worker_support.py", "tests/presentator/adapters/test_build_worker.py", "tests/presentator/adapters/test_build_worker_reply.py", "tests/presentator/adapters/test_builds.py", "tests/presentator/adapters/test_deck_failures.py", "tests/presentator/adapters/test_decks.py", "tests/presentator/api/test_deck_api.py", "tests/presentator/api/test_decks_page.py", "tests/presentator/application/test_decks.py", "tests/scripts/test_probe_build_worker_web.py"]
+opened_commit = "3a7666d4f712a343ee3d5523777052d0898a3176"
+whole_reason = "One persisted value replaces another: both runners write the reason, the store and its in-place upgrade keep it, and the Jinja page and the wire read it; any half leaves server words on the wire, columns no runner writes, or a deck page that loses a sentence."
