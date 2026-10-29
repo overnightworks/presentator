@@ -142,6 +142,7 @@ class RecordingSpeech:
     readiness_unavailable: bool = False
     hearing_unavailable: bool = False
     grouped_hearing_context: bool = False
+    local_hearing_ready: bool = True
 
     async def readiness(self) -> CoPresenterReadiness:
         self.readiness_calls += 1
@@ -149,7 +150,7 @@ class RecordingSpeech:
             raise CoPresenterUnavailableError
         return CoPresenterReadiness(
             hearing_sample_rate=16_000,
-            local_hearing_ready=True,
+            local_hearing_ready=self.local_hearing_ready,
         )
 
     def hear(self, language: str) -> AbstractAsyncContextManager[PrivateHearing]:

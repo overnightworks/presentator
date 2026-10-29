@@ -220,6 +220,21 @@ def test_who_answers_the_decks_language_to_its_owner(language: str, role: Role) 
     assert answer.json()["language"] == language
 
 
+def test_who_reports_hearing_not_ready_together_with_the_decks_language() -> None:
+    """#615 cell 13: an owned English deck while the speech service cannot hear."""
+    lobby, private = an_instance()
+    private.texts.text = a_text_in("en")
+    private.speech.local_hearing_ready = False
+
+    answer = who(lobby.client)
+
+    assert answer.status_code == HTTPStatus.OK
+    assert answer.json() == {
+        "language": "en",
+        "speech": {"sample_rate": 16_000, "hearing": {"ready": False}},
+    }
+
+
 @pytest.mark.parametrize("written", [None, "fr", "EN", "de-DE"])
 def test_who_answers_german_for_a_language_it_does_not_know(
     written: str | None,
