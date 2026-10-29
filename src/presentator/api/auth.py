@@ -16,13 +16,7 @@ from typing import Final, cast
 
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
-from starlette.requests import HTTPConnection
-from webauth.config import WebAuthConfig, install_web_auth_config, web_auth_config
-from webauth.dependencies import (
-    ConnectionRefusal,
-    admit_session,
-    session_id_from_request,
-)
+from webauth.config import WebAuthConfig, install_web_auth_config
 from webauth.middleware.bearer_gate import BearerGate, PersonPaths
 from webauth.middleware.session_gate import SessionGate
 from webauth.middleware.stack import install_web_auth_middleware
@@ -46,22 +40,16 @@ from webauth.sign_in_routes import (
     install_sign_in_routes,
 )
 
+from presentator.api.admission import gated_person
 from presentator.api.decks import add_deck_pages
 from presentator.api.health import HEALTH_IS_PUBLIC, add_health_route
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
-from presentator.api.pages import (
-    TEMPLATES,
-    Pages,
-    gated_person,
-    state_word,
-    user_of_admitted,
-)
+from presentator.api.pages import TEMPLATES, Pages, state_word
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
 from presentator.api.preferences import preference_routes
 from presentator.api.sources import source_routes
 from presentator.application.decks import Decks
 from presentator.application.voice import VoiceStatusUse
-from presentator.contracts.models import User
 from presentator.contracts.text import LobbyText
 
 _STATIC_DIR: Final = Path(__file__).parent / "static"
@@ -163,34 +151,6 @@ def content_security_policy() -> str:
     headers leave in place.
     """
     return default_content_security_policy([])
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SignedInConnection:
-    """The hash-free person and authoritative session behind one connection."""
-
-    person: User
-    session_id: str
-
-    @property
-    def user_id(self) -> str:
-        """The signed-in person's account id."""
-        return self.person.id
-
-
-def signed_in_connection(
-    connection: HTTPConnection,
-    sessions: SessionRecordStore,
-) -> SignedInConnection | None:
-    """Resolve one HTTP or WebSocket connection through the library's one decider."""
-    config = web_auth_config(connection)
-    session_id = session_id_from_request(connection, config)
-    if session_id is None:
-        return None
-    admitted = admit_session(session_id, sessions=sessions, config=config)
-    if isinstance(admitted, ConnectionRefusal):
-        return None
-    return SignedInConnection(person=user_of_admitted(admitted), session_id=session_id)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

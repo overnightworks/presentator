@@ -14,8 +14,9 @@ from fastapi import APIRouter, Depends, Form, Request, Response
 from starlette.responses import RedirectResponse
 from webauth.proxies import request_is_https
 
+from presentator.api.admission import gated_person, gated_session_id
 from presentator.api.hooks import hook_address
-from presentator.api.pages import Pages, gated_person, gated_session_id
+from presentator.api.pages import Pages
 from presentator.api.preferences import SETTINGS
 from presentator.application.decks import (
     AddedSource,
