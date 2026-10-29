@@ -13,7 +13,7 @@ from presentator.api.auth import LOGOUT_PATH, START_SIGN_IN_PATH
 from presentator.api.preferences import ACCOUNT
 from presentator.api.session_api import SessionView
 from presentator.application.identity import SESSION_LIFETIME
-from presentator.contracts.preferences import ThemeChoice
+from presentator.contracts.preferences import PersonPreferences, ThemeChoice
 from presentator.contracts.text import Catalogs
 from tests.presentator.application.support.fakes import FakePersonPreferencesStore
 from tests.support.lobby import (
@@ -102,17 +102,15 @@ def test_an_unknown_ended_or_expired_session_is_nobody_not_an_error(
     assert answer.json()["person"] is None
 
 
-def test_a_preference_store_that_fails_is_an_error_never_a_default(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    lobby = a_lobby()
-    lobby.sign_in()
-
-    def unreadable(_store: object, _user_id: str) -> None:
-        message = "preference store unavailable"
+class _UnreadablePersonPreferences(FakePersonPreferencesStore):
+    def read(self, user_id: str) -> PersonPreferences | None:
+        message = f"preference store unavailable for {user_id}"
         raise RuntimeError(message)
 
-    monkeypatch.setattr(FakePersonPreferencesStore, "read", unreadable)
+
+def test_a_preference_store_that_fails_is_an_error_never_a_default() -> None:
+    lobby = a_lobby(person_preferences=_UnreadablePersonPreferences())
+    lobby.sign_in()
     quiet = TestClient(
         lobby.app,
         base_url=str(lobby.client.base_url),
