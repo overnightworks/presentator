@@ -3,6 +3,6 @@ agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
 role = "builder"
 base = "ed9ae9ab61d4978d288a44a30deff3d4a9cdb6db"
 branch = "claude/issue-642-the-voice-catalogue-and-its-load-downloa"
-scope = ["docs/reference/co-presenter-and-voice.md", "src/presentator/api/auth.py", "src/presentator/api/voice_api.py", "tests/presentator/api/test_voice_api.py"]
+scope = ["docs/reference/co-presenter-and-voice.md", "src/presentator/api/admission.py", "src/presentator/api/auth.py", "src/presentator/api/voice_api.py", "tests/presentator/api/test_voice_api.py"]
 opened_commit = "65aaaced16e9c55c6505249f901118123a43e3a1"
 whole_reason = "Four routes over one use case and their one wiring line; the reference sentence is what they make true and the test module their proof."
