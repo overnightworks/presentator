@@ -1,0 +1,8 @@
+claim_id = "4ca128c9ddaa4bed9f6ddffdda7523ac"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "ed9ae9ab61d4978d288a44a30deff3d4a9cdb6db"
+branch = "claude/issue-639-the-deck-table-s-store-moves-to-its-own"
+scope = ["quality/baseline.toml", "src/presentator/adapters/deck_store.py", "src/presentator/adapters/decks.py", "src/presentator/host/main.py", "tests/presentator/adapters/support/person_instance_support.py", "tests/presentator/adapters/test_decks.py", "tests/presentator/host/test_main.py"]
+opened_commit = "7e5ff895d127857f1cb119cee2431acc7713e6f4"
+whole_reason = "One move: the deck store, its statements and its row readers leave together, and every import site of the moved class follows in the same commit or the tree does not import."
