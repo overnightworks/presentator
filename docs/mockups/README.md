@@ -36,15 +36,20 @@ words" marks a string that is a proposal because the catalog has none.
 
 `m0-lobby.html` links `appkit/appkit.css`, the unmodified `appkit.css` and fonts of
 appkit v0.6.0 (the wheel's `appkit/static/`), so the sheet draws with appkit's own
-tokens and fonts, never a copy of its values. The sheet adds only its own markup
-and the app slot. When the lobby pins appkit's npm tarball (F1a of #185), the
-sheet loads `appkit.css` from that tarball and `appkit/` goes.
+tokens and fonts, never a copy of its values. On top of it the sheet carries
+its own component styles for the boards (bar, tabs, rows, fields, cards, menu) and
+presentator's colour in the app slot; `appkit.css` itself stays as shipped.
+
+The room and presenter groups (class `deck`) keep the look their frozen pictures
+(#139, #293 S12) were drawn in: their tokens, board chrome and IBM Plex from Google
+Fonts are scoped to `.deck`, so their renders do not change with the lobby's look.
 
 ### Rendering
 
 `node docs/mockups/render.mjs` writes every lobby PNG and the overview;
-`node docs/mockups/render.mjs <id> ...` writes only those boards. It needs
-Playwright's `chromium` to resolve (`playwright` on the module path).
+`node docs/mockups/render.mjs <id> ...` writes only those boards. It resolves
+Playwright through the declared `playwright-chromium` of `frontend/`, so run
+`pnpm --dir frontend install --frozen-lockfile` first.
 
 ### Sign-in
 
@@ -118,11 +123,14 @@ Playwright's `chromium` to resolve (`playwright` on the module path).
 
 | PNG | Caption | Rulings |
 |---|---|---|
-| `m0-lobby/not-found.png`, `not-found-dark.png` | Unknown address, inside the lobby | E6, sentence 5, new words |
+| `m0-lobby/not-found.png`, `not-found-dark.png` | Unknown deck, inside the lobby (catalog words) | E6, sentence 5 |
+| `m0-lobby/not-found-address.png`, `not-found-address-dark.png` | Unknown address, inside the lobby | E6, sentence 5, new words |
 | `m0-lobby/for-admins.png`, `for-admins-dark.png` | Admin address opened by a non-admin | E6, sentence 5, new words |
 
-The person menu carries the legal row (Impressum, Datenschutz) after sign-in, as
-family §4 has it; the sign-in boards carry it below the card. Both link to the
+Every signed-in board keeps the footer with Impressum and Datenschutz as #196
+ruled; the sign-in boards carry the same two links below the card. The person menu
+additionally carries the legal row, as family §4 has it: that row is an addition,
+and whether the footer stays beside it is the operator's choice. Both link to the
 central pages on `hallucinai.de` (Datenschutz at its `#presentator` section); the
 Datenschutz page itself is edge's, with presentator's words in
 `legal/datenschutz.html`, so no board draws it (issue #593).

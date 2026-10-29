@@ -1,10 +1,12 @@
 // Renders the lobby boards of m0-lobby.html: one PNG per board and theme, cropped to the board.
-// Run with Playwright resolvable (NODE_PATH), from anywhere:
+// Playwright comes from the declared playwright-chromium in frontend/package.json:
+//   pnpm --dir frontend install --frozen-lockfile
 //   node docs/mockups/render.mjs [board-id ...]   without ids: every lobby board and the overview
-import { chromium } from 'playwright';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+const { chromium } = createRequire(new URL('../../frontend/package.json', import.meta.url))('playwright-chromium');
 const mockups = path.dirname(fileURLToPath(import.meta.url));
 const only = new Set(process.argv.slice(2));
 const browser = await chromium.launch();
