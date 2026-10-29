@@ -162,10 +162,13 @@ def test_a_speech_failure_propagates_after_earlier_sentences_without_done() -> N
     [
         ("en", "fr", "en"),
         ("en", None, "en"),
-        (None, "fr", "fr"),
+        (None, "fr", "de"),
+        (None, "EN", "de"),
+        (None, "de-DE", "de"),
         (None, None, "de"),
         ("en", "en", "en"),
         (None, "de", "de"),
+        (None, "en", "en"),
     ],
 )
 def test_the_asked_language_wins_over_the_decks_then_german(
