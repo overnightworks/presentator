@@ -61,19 +61,23 @@ dependence, no process-global state another test can observe.
 
 ## Shipped values
 
-A value chosen in a shipped file is proven through its consumer, not copied
-into a test.
+The code policy's Value Ownership rule decides which assertion stays; in this
+repository each kind of shipped value is proven here:
 
 - `compose.yaml`: `tests/test_compose.py` parses the file and checks a
   relation read from both owners, for example the back-channel alias against
-  `PRESENTATOR_PUBLIC_ORIGIN`. It parses options instead of matching
-  substrings. The live properties (limits, hardening, socket volume, gateway)
-  are proven by the sealed probe of the mandatory CI job "Build worker: sealed
-  step".
-- The Dockerfile's users: the CI image job proves that each user exists, has a
-  non-zero UID and a shell ending in `nologin`. It names no UID.
+  `PRESENTATOR_PUBLIC_ORIGIN`, and the socket volume options. The kept sealing
+  and hardening keys are still line matches, and the Docker-authority check
+  matches over the whole file. The live properties (limits, hardening, socket
+  volume, gateway) are proven by the sealed probe of the mandatory CI job
+  "Build worker: sealed step".
+- The Dockerfile's users: the existence check in the CI image job reads each
+  user's passwd entry for a non-zero UID and a shell ending in `nologin`; it
+  names no shipped UID.
 - The catalog and the deck manifests: tests read the owner (`en.po`,
-  `deck.toml`) or use scenario data. They do not copy shipped words.
+  `deck.toml`) or use scenario data. The page tests that still repeat catalog
+  sentences are frozen and go with their pages. New tests name a word through
+  the catalog rather than copying it.
 
 Two traps are real. A port above 1023 does not prove a non-root user. A
 substring match stays green on an apex host, a path prefix or a repeated
