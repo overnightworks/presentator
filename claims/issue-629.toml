@@ -1,7 +1,0 @@
-claim_id = "8361be9fd59c4ab6a0ffa0954be89b31"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "4984218464e75b19bb46c02978469515084c4f88"
-branch = "claude/issue-629-the-ci-users-step-checks-properties-not"
-scope = [".github/workflows/ci.yml"]
-opened_commit = "4ff1cab5ee769bd56783c0cafaee395b04a6c540"
