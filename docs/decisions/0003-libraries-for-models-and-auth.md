@@ -400,6 +400,31 @@ the wire speaks protocol 3. A run request names its `agent` and carries no
 model; the agent service alone decides the model, and `run_started` reports the
 model and route it chose. The adapters-only rule stands.
 
+### Amendment 2026-10-28 — webauth 0.24.0: the library serves the sign-in routes
+
+Authority: [#591](https://github.com/overnightworks/presentator/issues/591),
+webauth#499.
+
+`webauth` 0.24.0 serves the start, callback, logout and back-channel logout
+routes (`install_sign_in_routes`) and derives the gate, origin-check,
+body-size and login-redirect rules for them from `SignInPaths`. The lobby
+installs all four routes, the talk host start and callback; neither defines a
+sign-in route of its own, and `start_login`, `finish_login`, `open_session`,
+`log_out`, `receive_backchannel_logout` and `WriteLock` are no longer used. This
+supersedes the sentences above that name them: the check-then-write steps now
+run inside one `SignInTransaction`.
+
+`SqliteIdentityWrites` is that transaction and the account store's write path.
+Entering it takes the one `ProcessWriteLock` and opens one `BEGIN IMMEDIATE`
+transaction over accounts and sessions; it commits on a clean exit and rolls
+back when the block raises, so a failed callback leaves no account, a failed
+logout leaves the row, and a failed back-channel deletion leaves the sessions.
+Audit events are buffered and reach `LoggingAuditSink` only after COMMIT, still
+under the lock; a logging failure after COMMIT is the library's documented
+uncertain outcome and keeps the deletion. `delete_account` takes the same lock
+and transaction. The gate's per-call stores and the session sweep still commit
+on their own.
+
 ## Consequences
 
 - Which model presents becomes configuration, not code, and the phase M1 work is

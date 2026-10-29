@@ -9,10 +9,11 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
+from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (
     ProcessWriteLock,
+    SqliteIdentityWrites,
     SqliteSessionRecordStore,
-    SqliteSubjectUserStore,
 )
 from presentator.adapters.preferences import SqlitePersonPreferencesStore
 from presentator.adapters.schema import create_tables
@@ -42,7 +43,7 @@ def test_deleting_an_account_takes_its_sessions_and_leaves_another_account(
 ) -> None:
     """S9 (#293): the account goes with its sessions; no other account is touched."""
     sessions = SqliteSessionRecordStore(database)
-    accounts = SqliteSubjectUserStore(database, ProcessWriteLock())
+    accounts = SqliteIdentityWrites(database, ProcessWriteLock(), LoggingAuditSink())
     for person in (_THE_PERSON, _ANOTHER):
         sessions.create(
             person.id,
@@ -62,7 +63,7 @@ def test_deleting_an_account_takes_its_sessions_and_leaves_another_account(
 
 def test_asking_for_an_unknown_account_creates_none(database: Path) -> None:
     """S9 (#293): an unknown subject creates no `users` row."""
-    accounts = SqliteSubjectUserStore(database, ProcessWriteLock())
+    accounts = SqliteIdentityWrites(database, ProcessWriteLock(), LoggingAuditSink())
 
     assert accounts.get("nobody-at-all") is None
     with closing(sqlite3.connect(database)) as connection:
@@ -163,7 +164,7 @@ def test_deleting_an_account_cannot_split_a_sign_in_that_has_read_the_account(
     """#418 matrix: an in-flight code exchange leaves no session of a gone account."""
     watched = _LockThatSaysWhenAnotherThreadHasToWait()
     lock = ProcessWriteLock(primitive=watched)
-    accounts = SqliteSubjectUserStore(database, lock)
+    accounts = SqliteIdentityWrites(database, lock, LoggingAuditSink())
     sessions = SqliteSessionRecordStore(database)
     deletion = threading.Thread(target=accounts.delete_account, args=(_THE_PERSON.id,))
 

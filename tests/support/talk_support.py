@@ -19,10 +19,11 @@ from webauth.config import WebAuthConfig
 from webauth.oidc import OidcRelyingParty
 from webauth.oidc_login import AdmissionConfig
 
+from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (
     ProcessWriteLock,
+    SqliteIdentityWrites,
     SqliteSessionRecordStore,
-    SqliteSubjectUserStore,
     create_identity_tables,
 )
 from presentator.api.auth import InstalledAuth
@@ -203,7 +204,9 @@ def _both_auths(
     lobby_auth = an_installed_auth(
         clock,
         relying_party=_relying_party_at(issuer, clock, A_BROWSERS_ADDRESS),
-        accounts=SqliteSubjectUserStore(database, ProcessWriteLock()),
+        transaction=SqliteIdentityWrites(
+            database, ProcessWriteLock(), LoggingAuditSink()
+        ),
     )
     if admission is not None:
         lobby_auth = replace(lobby_auth, admission=admission)

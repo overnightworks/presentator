@@ -14,10 +14,11 @@ from httpx2 import Response as BrowserAnswer
 from webauth.config import WebAuthConfig
 from webauth.oidc import OidcRelyingParty, TokenRequestPost
 from webauth.oidc_login import AdmissionConfig
-from webauth.ports import AccountEvent, AuditSink, SubjectUserStore, WriteLock
+from webauth.ports import AccountEvent, AuditSink, SignInStores, SignInTransaction
 
 from presentator.adapters.identity import (
     ProcessWriteLock,
+    SqliteIdentityWrites,
     SqliteSessionRecordStore,
     SqliteSubjectUserStore,
     create_identity_tables,
@@ -30,6 +31,7 @@ from tests.support.lobby import (
     A_CLIENT_ID,
     AN_ISSUER,
     Lobby,
+    NoSignInTransaction,
     SigningIn,
     a_browser_at,
     a_crowd,
@@ -137,8 +139,10 @@ class Scene:
 def a_scene(  # noqa: PLR0913
     tmp_path: Path,
     *,
-    accounts: Callable[[SqliteSubjectUserStore], SubjectUserStore] = lambda real: real,
-    lock: WriteLock | None = None,
+    transaction: Callable[[SqliteIdentityWrites], SignInTransaction] = lambda real: (
+        real
+    ),
+    lock: ProcessWriteLock | None = None,
     audit: Callable[[RecordingAudit], AuditSink] = lambda recording: recording,
     admission: AdmissionConfig | None = None,
     token_requests: Callable[[TokenRequestPost], TokenRequestPost] = lambda real: real,
@@ -147,8 +151,11 @@ def a_scene(  # noqa: PLR0913
     create_identity_tables(database)
     people = a_crowd()
     issuer = FakeIssuer(issuer=AN_ISSUER, client_id=A_CLIENT_ID, now=people.clock.now())
-    users = SqliteSubjectUserStore(database, ProcessWriteLock())
+    users = SqliteSubjectUserStore(database)
     recording = RecordingAudit()
+    writes = SqliteIdentityWrites(
+        database, ProcessWriteLock() if lock is None else lock, audit(recording)
+    )
     auth = an_installed_auth(
         people.clock,
         relying_party=a_relying_party(
@@ -156,9 +163,7 @@ def a_scene(  # noqa: PLR0913
             post_token_request=token_requests(issuer.post_token_request),
             fetch_key_set=issuer.fetch_key_set,
         ),
-        accounts=accounts(users),
-        lock=lock,
-        audit=audit(recording),
+        transaction=transaction(writes),
     )
     sessions = SqliteSessionRecordStore(database)
     app, _ = a_lobby_app(
@@ -208,22 +213,26 @@ class ContentionSignalingLock:
 
 
 @dataclass
-class WatchedLock:
-    """The process lock over a contention-signaling primitive, counting its holds."""
+class TransactionDouble:
+    """The real transaction, watched: when it is entered and left, what it hands out.
 
-    primitive: ContentionSignalingLock = field(default_factory=ContentionSignalingLock)
-    holds: int = 0
-    held_on_the_event_loop: bool = False
-    _mutex: threading.Lock = field(default_factory=threading.Lock)
+    `around` is what `a_scene` takes, so the test keeps the double it reads.
+    """
 
-    @property
-    def contended(self) -> threading.Event:
-        return self.primitive.contended
+    real: SignInTransaction = field(default_factory=NoSignInTransaction)
+    log: list[tuple[str, object]] = field(default_factory=list[tuple[str, object]])
+    inside: Callable[[], None] = lambda: None
+    through: Callable[[SignInStores], SignInStores] = lambda stores: stores
+    sessions_seen: Callable[[], int] = lambda: 0
+
+    def around(self, real: SignInTransaction) -> "TransactionDouble":
+        self.real = real
+        return self
 
     @contextmanager
-    def hold(self) -> Generator[None]:
-        with self._mutex:
-            self.holds += 1
-            self.held_on_the_event_loop |= on_an_event_loop()
-        with ProcessWriteLock(primitive=self.primitive).hold():
-            yield
+    def __call__(self) -> Generator[SignInStores]:
+        self.log.append(("entered", on_an_event_loop()))
+        with self.real() as stores:
+            self.inside()
+            yield self.through(stores)
+        self.log.append(("left", self.sessions_seen()))

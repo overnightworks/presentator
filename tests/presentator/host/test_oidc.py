@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
+from presentator.adapters.audit import LoggingAuditSink
+from presentator.adapters.identity import ProcessWriteLock, SqliteIdentityWrites
 from presentator.host import main
 from presentator.host.config import ConfigurationError, load_settings, read_secret_file
 from presentator.host.oidc import (
@@ -263,16 +265,19 @@ def test_the_talk_origin_must_be_another_canonical_https_hostname(
 
 
 # T15.
-def test_both_hosts_share_one_lock_one_account_store_and_one_audit_sink(
+def test_both_hosts_share_the_one_identity_writes_owner(
     environment: pytest.MonkeyPatch,
 ) -> None:
     del environment
 
-    lobby, talk = main.installed_auths(load_settings())
+    settings = load_settings()
+    writes = SqliteIdentityWrites(
+        settings.database, ProcessWriteLock(), LoggingAuditSink()
+    )
 
-    assert talk.lock is lobby.lock
-    assert talk.accounts is lobby.accounts
-    assert talk.audit is lobby.audit
+    lobby, talk = main.installed_auths(settings, writes)
+
+    assert talk.transaction is lobby.transaction is writes
     assert talk.config.session_secret != lobby.config.session_secret
     assert talk.relying_party is not lobby.relying_party
 

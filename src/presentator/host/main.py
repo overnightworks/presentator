@@ -51,8 +51,8 @@ from presentator.adapters.decks import (
 from presentator.adapters.identity import (
     OldDatabaseError,
     ProcessWriteLock,
+    SqliteIdentityWrites,
     SqliteSessionRecordStore,
-    SqliteSubjectUserStore,
     SystemClock,
     TokenIdentifierFactory,
 )
@@ -132,11 +132,11 @@ def build_instance(
         create_tables(settings.database)
     except OldDatabaseError as refused:
         raise cannot_start(str(refused)) from None
-    identifiers = TokenIdentifierFactory()
     clock = SystemClock()
     # One box for both directions: what the store writes down is what the
     # resolver opens at the pull, and neither picks its own key.
     box = secret_box(settings.secret_key.get_secret_value())
+    identifiers = TokenIdentifierFactory()
     sources = SqliteSourceStore(
         database=settings.database,
         identifiers=identifiers,
@@ -147,7 +147,6 @@ def build_instance(
         identifiers=identifiers,
         box=box,
     )
-    source_timeout = timedelta(seconds=settings.source_timeout_seconds)
     # The one mounted directory a file-kind source's address may resolve
     # under, real filesystem and all: shared by every use, since a symlink or
     # a remount between them must be caught the same way each time.
@@ -155,11 +154,58 @@ def build_instance(
     mirrors = SourceMirrors(
         directory=settings.mirrors,
         credentials=SourceCredentials(database=settings.database, box=box),
-        pull_timeout=source_timeout,
+        pull_timeout=_source_timeout(settings),
         local_mount=local_mount,
     )
+    decks = _decks(
+        settings,
+        sources=sources,
+        key_drafts=key_drafts,
+        mirrors=mirrors,
+        local_mount=local_mount,
+    )
+    sessions = SqliteSessionRecordStore(settings.database)
+    # One use case object serves both callers, so the hook and the poll share
+    # the one refresh that runs at a time.
+    identity_writes = SqliteIdentityWrites(
+        settings.database, ProcessWriteLock(), LoggingAuditSink()
+    )
+    lobby_auth, talk_auth = installed_auths(
+        settings, identity_writes, relying_party_for
+    )
+    return Instance(
+        lobby=_lobby(
+            settings,
+            decks,
+            sessions,
+            lobby_auth,
+            _lobby_private(settings, decks, sessions, key_drafts, identity_writes),
+        ),
+        talk=_talk(settings, decks, sessions, talk_auth, mirrors),
+        poller=Schedule(
+            chore=decks.refresh,
+            interval=timedelta(seconds=settings.source_poll_seconds),
+        ),
+        session_sweep=_session_sweep(sessions, clock),
+    )
+
+
+def _source_timeout(settings: Settings) -> timedelta:
+    """The one bound a pull and a connection check both take."""
+    return timedelta(seconds=settings.source_timeout_seconds)
+
+
+def _decks(
+    settings: Settings,
+    *,
+    sources: SqliteSourceStore,
+    key_drafts: SqliteSourceKeyDrafts,
+    mirrors: SourceMirrors,
+    local_mount: FilesystemLocalMount,
+) -> Decks:
+    """The deck use cases over the adapters the instance chose."""
     build_bound = build_bound_of(settings)
-    decks = Decks(
+    return Decks(
         sources=sources,
         key_drafts=key_drafts,
         folders=MirroredDeckFolders(mirrors=mirrors),
@@ -174,7 +220,7 @@ def build_instance(
         # The same bound a scheduled pull takes: Check connection asks the
         # same remote for the same one thing, just without writing it down.
         checker=MirroredConnectionChecker(
-            check_timeout=source_timeout,
+            check_timeout=_source_timeout(settings),
             local_mount=local_mount,
             known_hosts=settings.mirrors / "known_hosts",
         ),
@@ -188,27 +234,14 @@ def build_instance(
         clock=SystemClock(),
         local_mount=local_mount,
     )
-    sessions = SqliteSessionRecordStore(settings.database)
-    # One use case object serves both callers, so the hook and the poll share
-    # the one refresh that runs at a time.
-    lobby_auth, talk_auth = installed_auths(settings, relying_party_for)
-    return Instance(
-        lobby=_lobby(settings, decks, sessions, key_drafts, lobby_auth),
-        talk=_talk(settings, decks, sessions, talk_auth, mirrors),
-        poller=Schedule(
-            chore=decks.refresh,
-            interval=timedelta(seconds=settings.source_poll_seconds),
-        ),
-        session_sweep=_session_sweep(sessions, clock),
-    )
 
 
 def _lobby(
     settings: Settings,
     decks: Decks,
     sessions: SqliteSessionRecordStore,
-    key_drafts: SqliteSourceKeyDrafts,
     auth: InstalledAuth,
+    private: LobbyPrivate,
 ) -> FastAPI:
     """The lobby host, with the pages and the private routes it serves."""
     return create_lobby(
@@ -216,7 +249,7 @@ def _lobby(
         decks=decks,
         pages=_pages(settings),
         auth=auth,
-        private=_lobby_private(settings, decks, sessions, key_drafts, auth),
+        private=private,
     )
 
 
@@ -269,12 +302,12 @@ def _lobby_private(
     decks: Decks,
     sessions: SqliteSessionRecordStore,
     key_drafts: SqliteSourceKeyDrafts,
-    lobby_auth: InstalledAuth,
+    identity_writes: SqliteIdentityWrites,
 ) -> LobbyPrivate:
     """What only an admin of the lobby may reach: the host's socket, the people route.
 
     The people route exists only while a client is named to call it. Its
-    accounts answer over the lock the sign-in holds, which deletes an account.
+    accounts delete over the lock the sign-in holds.
     """
     clients = settings.admitted_token_clients()
     return LobbyPrivate(
@@ -282,7 +315,7 @@ def _lobby_private(
         admin_people=AdminPeople(
             people=People(
                 decks=decks,
-                accounts=SqliteSubjectUserStore(settings.database, lobby_auth.lock),
+                accounts=identity_writes,
                 sessions=sessions,
                 preferences=SqlitePersonPreferencesStore(settings.database),
                 key_drafts=key_drafts,
@@ -297,17 +330,17 @@ def _lobby_private(
 
 def installed_auths(
     settings: Settings,
+    identity_writes: SqliteIdentityWrites,
     relying_party_for: RelyingPartyFor = relying_party,
 ) -> tuple[InstalledAuth, InstalledAuth]:
-    """The lobby's sign-in wiring and the talk host's, over one lock and one store.
+    """The lobby's sign-in wiring and the talk host's, over one identity-writes owner.
 
     Each host has its own relying party and its own signing key, so neither
     accepts the other's cookies or pending logins; both write the one
-    `sessions` table, so they take the one write lock and the one account
-    store, and report to the one audit sink.
+    `sessions` table, so they enter the one transaction under its one write
+    lock, which also reports to the one audit sink.
     """
     lobby_client, talk_client = client_configs_of(settings)
-    write_lock = ProcessWriteLock()
     lobby = InstalledAuth(
         config=web_auth_config_for(
             settings.secret_key,
@@ -316,9 +349,7 @@ def installed_auths(
         ),
         relying_party=relying_party_for(lobby_client),
         admission=admission_of(settings),
-        accounts=SqliteSubjectUserStore(settings.database, write_lock),
-        lock=write_lock,
-        audit=LoggingAuditSink(),
+        transaction=identity_writes,
         content_security_policy=content_security_policy(),
         talk_origin=settings.talk_origin,
     )

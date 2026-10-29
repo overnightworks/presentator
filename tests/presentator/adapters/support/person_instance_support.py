@@ -10,6 +10,7 @@ from typing import NamedTuple
 
 from pydantic import SecretStr
 
+from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.builds import HostToolchain, SlidevBuilds
 from presentator.adapters.decks import (
     FilesystemLocalMount,
@@ -21,8 +22,8 @@ from presentator.adapters.decks import (
 )
 from presentator.adapters.identity import (
     ProcessWriteLock,
+    SqliteIdentityWrites,
     SqliteSessionRecordStore,
-    SqliteSubjectUserStore,
     TokenIdentifierFactory,
 )
 from presentator.adapters.key_drafts import SqliteSourceKeyDrafts
@@ -87,7 +88,7 @@ class _Stores:
     decks: SqliteDeckStore
     runs: SqliteSourceRunStore
     key_drafts: SqliteSourceKeyDrafts
-    accounts: SqliteSubjectUserStore
+    accounts: SqliteIdentityWrites
     sessions: SqliteSessionRecordStore
     preferences: SqlitePersonPreferencesStore
 
@@ -103,7 +104,7 @@ def _stores_over(database: Path) -> _Stores:
         decks=SqliteDeckStore(database=database),
         runs=SqliteSourceRunStore(database=database),
         key_drafts=a_key_drafts_store(database),
-        accounts=SqliteSubjectUserStore(database, ProcessWriteLock()),
+        accounts=SqliteIdentityWrites(database, ProcessWriteLock(), LoggingAuditSink()),
         sessions=SqliteSessionRecordStore(database),
         preferences=SqlitePersonPreferencesStore(database),
     )

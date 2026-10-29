@@ -6,6 +6,8 @@ stands here once, with the doubles and the accounts a test hands in.
 
 import atexit
 import tempfile
+from collections.abc import Generator
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
@@ -29,11 +31,10 @@ from webauth.oidc import (
     TokenRequestPost,
 )
 from webauth.ports import (
-    AuditSink,
     SessionRecordStore,
-    SubjectUserStore,
+    SignInStores,
+    SignInTransaction,
     UserRecord,
-    WriteLock,
 )
 
 from gitmirror.model import CredentialReference
@@ -50,7 +51,6 @@ from presentator.adapters.catalog import (
     load_catalogs,
 )
 from presentator.adapters.decks import SourceMirrors
-from presentator.adapters.identity import ProcessWriteLock
 from presentator.adapters.secrets import talk_session_secret
 from presentator.api.auth import (
     InstalledAuth,
@@ -350,13 +350,35 @@ class NobodySignsIn:
         raise AssertionError((user_id, role))
 
 
+class NoSignInTransaction:
+    """The transaction of a lobby whose test enters none: entering it is a mistake."""
+
+    def __call__(self) -> AbstractContextManager[SignInStores]:
+        message = "a sign-in transaction was entered"
+        raise AssertionError(message)
+
+
+@dataclass(frozen=True, slots=True)
+class SessionsOnly:
+    """A transaction over the sessions a test arranged, for a lobby nobody signs in to.
+
+    A logout reads and deletes the session it names, and nothing else.
+    """
+
+    sessions: SessionRecordStore
+
+    @contextmanager
+    def __call__(self) -> Generator[SignInStores]:
+        yield SignInStores(
+            accounts=NobodySignsIn(), sessions=self.sessions, audit=LoggingAuditSink()
+        )
+
+
 def an_installed_auth(
     clock: FrozenClock,
     *,
     relying_party: OidcRelyingParty | None = None,
-    accounts: SubjectUserStore | None = None,
-    lock: WriteLock | None = None,
-    audit: AuditSink | None = None,
+    transaction: SignInTransaction | None = None,
 ) -> InstalledAuth:
     """The host's sign-in wiring, each part replaceable by the test that proves it."""
     return InstalledAuth(
@@ -365,9 +387,7 @@ def an_installed_auth(
         if relying_party is None
         else relying_party,
         admission=admission_of(a_settings()),
-        accounts=NobodySignsIn() if accounts is None else accounts,
-        lock=ProcessWriteLock() if lock is None else lock,
-        audit=LoggingAuditSink() if audit is None else audit,
+        transaction=NoSignInTransaction() if transaction is None else transaction,
         content_security_policy=a_content_security_policy(),
         talk_origin=A_TALK_ADDRESS,
     )
@@ -539,7 +559,11 @@ def a_lobby_app(
             age_in_words=age_in_words,
             duration_in_words=duration_in_words,
         ),
-        auth=an_installed_auth(clock) if signing_in is None else signing_in.auth,
+        auth=(
+            an_installed_auth(clock, transaction=SessionsOnly(crowd.sessions))
+            if signing_in is None
+            else signing_in.auth
+        ),
         private=LobbyPrivate(
             voice=(
                 given.voice
@@ -563,7 +587,7 @@ def a_talk_app(
         sessions=people.sessions,
         decks=a_decks(NO_DECKS, clock),
         auth=replace(
-            an_installed_auth(clock),
+            an_installed_auth(clock, transaction=SessionsOnly(people.sessions)),
             config=a_talk_web_auth(clock),
             content_security_policy=talk_content_security_policy(),
         ),

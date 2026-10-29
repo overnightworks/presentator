@@ -19,7 +19,9 @@ sign-in, and no password is stored.
   mapper must send full paths (`full.path` on).
 - A person who signs in at Keycloak but is not in that group sees "No access"
   (Log out and Back, nothing written). Every other refused sign-in shows one
-  "Login failed" page with a Try again link. A failing store answers 500.
+  "Login failed" page with a Try again link. A failing store answers 500 and
+  leaves no account, no session and no log line behind: the sign-in is one
+  transaction.
 - A sign-in writes an INFO log line when it creates an account or changes its
   role (event kind, Keycloak subject id, role).
 - A signed-out browser navigation is redirected to
@@ -30,7 +32,7 @@ sign-in, and no password is stored.
   returns the browser to `<PRESENTATOR_PUBLIC_ORIGIN>/login`; without a hint it
   asks once. The page is `webauth`'s, with its own policy and `no-store`.
 - A valid Logout Token at `POST /auth/backchannel-logout` ends every session
-  of its subject, on every device.
+  of its subject, on every device. A store failure answers 400 and ends none.
 
 The talk host signs in by itself ([ADR 0016](../decisions/0016-a-talk-host-signs-in-by-itself.md)):
 the same client, the redirect URI `<PRESENTATOR_TALK_ORIGIN>/auth/callback`, and
@@ -60,7 +62,7 @@ The SQLite stores stay this repository's
 
 ## What protects a request
 
-`webauth` v0.23.0 owns the mechanism. `issue_session_cookies`,
+`webauth` 0.24.0 owns the mechanism, the sign-in routes included. `issue_session_cookies`,
 `clear_session_cookies` and `session_id_from_request` set, clear and read the
 signed `SameSite=Lax` session cookie.
 
@@ -87,7 +89,8 @@ signed `SameSite=Lax` session cookie.
   `cross-site`, `none` and another host's `Origin`, the other app's included,
   are refused with 403 `Cross-origin request rejected`; `Referer` is not read. Supported browsers are current
   Chrome, Edge, Firefox and Safari. Only the sessionless webhook prefix
-  `/sources/` and the exact path `/auth/backchannel-logout` are exempt, and a
+  `/sources/` and the exact path `/auth/backchannel-logout` (derived from
+  `SignInPaths`) are exempt, and a
   request admitted by a bearer token is not checked.
   The match is by hostname, so no party may be given another port or scheme of
   either hostname ([webauth#401](https://github.com/overnightworks/webauth/issues/401)).
