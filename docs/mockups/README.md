@@ -7,8 +7,8 @@ rendered from it for review. `m0-lobby.html` is the source of truth — a single
 HTML sheet of artboards, one `<figure class="board">` per screen state; the
 PNGs in `m0-lobby/` and the overview `m0-lobby-sheet.png` are derived renders
 committed alongside it so a reader never has to open the HTML or an external
-artifact link to see the picture. Blessed by the operator on 06.09.2026
-(issue #8); this sheet is the picture owner for the M0 lobby. A change to a
+artifact link to see the picture. This sheet is the picture owner for the M0 lobby; its content was blessed on
+06.09.2026 (issue #8) and its look is the family look (issue #610). A change to a
 surface starts here: extend this sheet, get the blessing on the owning item,
 re-render, then rule.
 
@@ -16,103 +16,129 @@ The Keycloak sign-in picture (signed out, No access, Login failed, person menu,
 Account; no first-start page, local login form, Users, password change, or
 session list) was blessed by the operator on 19.10.2026 (K13, issue #242).
 
-The Settings · Voice picture was blessed by the operator on 10.09.2026 (issue
-#123, parent #108). Its adopted V1–V9 behavior contract is owned by
-[`docs/requirements/0001-voice-models.md`](../requirements/0001-voice-models.md);
-the mockup remains future surface evidence, not an implementation claim.
-
 ## M0 lobby sheet
 
-Source: `m0-lobby.html`. Overview: `m0-lobby-sheet.png` (full sheet, 1180 px
-wide). Per-artboard renders in `m0-lobby/`, device scale factor 2, cropped to
-each `.board` element, in document order. "Lines" gives the issue #8
-expectation lines the artboard's own caption cites; where the caption cites
-none, the group's line range from the sheet's section header is given instead
-(marked "group"). "K13" refers to the #242 picture. The Voice table's "Ruling" column links the adopted V1–V9
-requirements that its caption or rendered state demonstrates.
+Source: `m0-lobby.html`. Overview: `m0-lobby-sheet.png` (the whole sheet, light, at
+half size). The lobby boards are in the family look of appkit's
+[`docs/family.html`](https://github.com/overnightworks/appkit/blob/a161c7c/docs/family.html)
+with presentator's teal in the app slot (`#0c6c77` on `#ffffff` in light,
+`#56c3cd` on `#06181b` in dark). Each lobby board is drawn once and shown at 1280 px
+and at 390 px side by side; the page theme follows the device until the control at
+the top of the sheet chooses. Per-board renders are in `m0-lobby/`, device scale
+factor 2, cropped to each lobby `.board`: `<id>.png` in light and `<id>-dark.png` in
+dark, where `<id>` is the figure's `id`. The room and presenter boards are deck
+surfaces and keep their own renders. "Rulings" names the
+[#185](https://github.com/overnightworks/presentator/issues/185) sentences and
+rulings, the Voice requirements or the K13 sign-in picture each board shows; "new
+words" marks a string that is a proposal because the catalog has none.
 
-### Sign-in · Keycloak (K13, #242)
+### How the sheet loads the look
 
-| PNG | Caption | Lines |
+`m0-lobby.html` links `appkit/appkit.css`, the unmodified `appkit.css` and fonts of
+appkit v0.6.0 (the wheel's `appkit/static/`), so the sheet draws with appkit's own
+tokens and fonts, never a copy of its values. The sheet adds only its own markup
+and the app slot. When the lobby pins appkit's npm tarball (F1a of #185), the
+sheet loads `appkit.css` from that tarball and `appkit/` goes.
+
+### Rendering
+
+`node docs/mockups/render.mjs` writes every lobby PNG and the overview;
+`node docs/mockups/render.mjs <id> ...` writes only those boards. It needs
+Playwright's `chromium` to resolve (`playwright` on the module path).
+
+### Sign-in
+
+| PNG | Caption | Rulings |
 |---|---|---|
-| `m0-lobby/login-redirect.png` | Not signed in: straight to the central sign-in | K13 |
-| `m0-lobby/login.png` | Signed out, 1024 px | K13 |
-| `m0-lobby/login-narrow.png` | Signed out, 390 px | K13 |
-| `m0-lobby/no-access.png` | No access, 1024 px | K13 |
-| `m0-lobby/no-access-narrow.png` | No access, 390 px | K13 |
-| `m0-lobby/login-failed.png` | Login failed, 1024 px | K13 |
-| `m0-lobby/login-failed-narrow.png` | Login failed, 390 px | K13 |
+| `m0-lobby/login-redirect.png`, `login-redirect-dark.png` | Not signed in: straight to the central sign-in | sentence 2 |
+| `m0-lobby/login.png`, `login-dark.png` | Signed out | Picture · family §3, sentence 2 |
+| `m0-lobby/no-access.png`, `no-access-dark.png` | No access | E7, sentence 7 |
+| `m0-lobby/login-failed.png`, `login-failed-dark.png` | Login failed | E7, sentence 7 |
 
-### Deck list (lines 1, 3, 4, 8, 9, 18)
+### Decks
 
-| PNG | Caption | Lines |
+| PNG | Caption | Rulings |
 |---|---|---|
-| `m0-lobby/deck-list-empty.png` | First day, empty | group 1, 3, 4, 8, 9, 18 |
-| `m0-lobby/deck-list.png` | Five decks | group 1, 3, 4, 8, 9, 18 |
-| `m0-lobby/person-menu.png` | Person menu open | 15, 22, K13 |
-| `m0-lobby/deck-list-narrow.png` | Split screen, 390 px | group 1, 3, 4, 8, 9, 18 |
+| `m0-lobby/deck-list-empty.png`, `deck-list-empty-dark.png` | Home · first day, empty | Picture · states |
+| `m0-lobby/deck-list.png`, `deck-list-dark.png` | Home · the deck list | Picture · states, sentence 9 |
+| `m0-lobby/person-menu.png`, `person-menu-dark.png` | Person menu open | Picture · family §4 |
 
-### Settings · General (lines 21, 22, 23)
+### Settings · General
 
-| PNG | Caption | Lines |
+| PNG | Caption | Rulings |
 |---|---|---|
-| `m0-lobby/settings-general.png` | General | 21, 22, 23 |
+| `m0-lobby/settings-general.png`, `settings-general-dark.png` | General | Picture · controls, sentence 3 (E5), sentence 9 |
 
-### Settings · Sources (lines 1, 4, 4a, 7, 14a)
+### Settings · Sources
 
-| PNG | Caption | Lines |
+| PNG | Caption | Rulings |
 |---|---|---|
-| `m0-lobby/sources.png` | Three sources, three hosts | 1 |
-| `m0-lobby/sources-empty.png` | First day, empty | group 1, 4, 4a, 7, 14a |
-| `m0-lobby/sources-narrow.png` | Split screen, 390 px | group 1, 4, 4a, 7, 14a |
-| `m0-lobby/sources-add.png` | Add source | 1 |
-| `m0-lobby/sources-check-reachable.png` | Check: reachable | group 1, 4, 4a, 7, 14a |
-| `m0-lobby/sources-check-auth-failed.png` | Check: auth failed | group 1, 4, 4a, 7, 14a |
-| `m0-lobby/sources-check-unreachable.png` | Check: unreachable | 4a |
-| `m0-lobby/sources-created.png` | Created — shown once | 1 |
-| `m0-lobby/sources-detail.png` | Source | 7, 14a, 4a |
-| `m0-lobby/sources-detail-ssh.png` | Source — SSH deploy key, 1024 px | 1, 7, 14a, 4a |
-| `m0-lobby/sources-detail-ssh-narrow.png` | Source — SSH deploy key, 390 px | 1, 7, 14a, 4a |
+| `m0-lobby/sources.png`, `sources-dark.png` | Sources · three sources | Picture · states, sentence 9 (#349) |
+| `m0-lobby/sources-empty.png`, `sources-empty-dark.png` | Sources · first day, empty | Picture · states |
+| `m0-lobby/sources-add.png`, `sources-add-dark.png` | Add source | Picture · controls, sentence 9 |
+| `m0-lobby/sources-check-reachable.png`, `sources-check-reachable-dark.png` | Add source · check: reachable | Picture · states |
+| `m0-lobby/sources-check-auth-failed.png`, `sources-check-auth-failed-dark.png` | Add source · check: refused | Picture · states |
+| `m0-lobby/sources-check-unreachable.png`, `sources-check-unreachable-dark.png` | Add source · check: unreachable | Picture · states |
+| `m0-lobby/sources-created.png`, `sources-created-dark.png` | Source created · secret shown once | E1, Picture · states |
+| `m0-lobby/sources-detail.png`, `sources-detail-dark.png` | Source · HTTPS token | sentence 9, E1 |
+| `m0-lobby/sources-detail-ssh.png`, `sources-detail-ssh-dark.png` | Source · SSH deploy key | sentence 9, E1 |
+| `m0-lobby/sources-renew-access.png`, `sources-renew-access-dark.png` | Source · renew access | sentence 9, E1 |
+| `m0-lobby/sources-renew-webhook.png`, `sources-renew-webhook-dark.png` | Source · renew webhook | E1 |
+| `m0-lobby/sources-remove.png`, `sources-remove-dark.png` | Source · remove, confirm | Picture · new board |
 
-### Settings · Voice (picture blessed 10.09.2026, V1–V9 adopted)
+### Settings · Voice
 
-| PNG | Caption | Ruling |
+| PNG | Caption | Rulings |
 |---|---|---|
-| `m0-lobby/voice.png` | Voice · resting | [V1–V9](../requirements/0001-voice-models.md) |
-| `m0-lobby/voice-narrow.png` | Split screen, 390 px | [V1–V9](../requirements/0001-voice-models.md) |
-| `m0-lobby/voice-downloading.png` | Downloading | [V1, V9](../requirements/0001-voice-models.md) |
-| `m0-lobby/voice-loading.png` | Loading | [V2, V3, V9](../requirements/0001-voice-models.md) |
-| `m0-lobby/voice-failed-active.png` | Load failed — previous voice stays active | [V4, V9](../requirements/0001-voice-models.md) |
-| `m0-lobby/voice-failed-no-active.png` | Load failed — no active voice | [V4, V5, V9](../requirements/0001-voice-models.md) |
-| `m0-lobby/voice-service-unknown.png` | Service status unknown | [V9](../requirements/0001-voice-models.md) |
-| `m0-lobby/voice-sample-loading.png` | Sample: loading | [V8, V9](../requirements/0001-voice-models.md) |
-| `m0-lobby/voice-sample-playing.png` | Sample: playing | [V8, V9](../requirements/0001-voice-models.md) |
-| `m0-lobby/voice-sample-error.png` | Sample: playback failed | [V8, V9](../requirements/0001-voice-models.md) |
+| `m0-lobby/voice.png`, `voice-dark.png` | Voice · resting | V1–V9, Picture · states |
+| `m0-lobby/voice-downloading.png`, `voice-downloading-dark.png` | Voice · downloading | V1, V9 |
+| `m0-lobby/voice-loading.png`, `voice-loading-dark.png` | Voice · loading | V2, V3, V9 |
+| `m0-lobby/voice-failed-active.png`, `voice-failed-active-dark.png` | Voice · load failed, previous voice stays active | V4, V9 |
+| `m0-lobby/voice-failed-no-active.png`, `voice-failed-no-active-dark.png` | Voice · load failed, no active voice | V4, V5, V9 |
+| `m0-lobby/voice-service-unknown.png`, `voice-service-unknown-dark.png` | Voice · service status unknown | V9 |
+| `m0-lobby/voice-sample-loading.png`, `voice-sample-loading-dark.png` | Voice · sample loading | V8, V9 |
+| `m0-lobby/voice-sample-playing.png`, `voice-sample-playing-dark.png` | Voice · sample playing | V8, V9 |
+| `m0-lobby/voice-sample-error.png`, `voice-sample-error-dark.png` | Voice · playback failed | V8, V9 |
 
-Piper and Chatterbox are installed on the live instance (921c53f2); Qwen3-TTS
-0.6B, VoxCPM2, and NVIDIA Magpie are proposed candidates only, not yet
-integrated. Their not-downloaded state depicts intended future behaviour, not
-a working download. No benchmark, percentage, size, or cost is shown for any
-candidate — none is measured yet.
+### Account
 
-### Account (lines 21, 22 · K13)
-
-| PNG | Caption | Lines |
+| PNG | Caption | Rulings |
 |---|---|---|
-| `m0-lobby/account.png` | Account | 21, 22, K13 |
+| `m0-lobby/account.png`, `account-dark.png` | Account | Picture · family §4 |
 
-### Deck page (lines 7, 9, 10, 16)
+### Deck page
 
-| PNG | Caption | Lines |
+| PNG | Caption | Rulings |
 |---|---|---|
-| `m0-lobby/deck-page-ready.png` | Ready | 7 |
-| `m0-lobby/deck-page-building.png` | Building | 10 |
-| `m0-lobby/deck-page-failed.png` | Failed | 9, 16 |
+| `m0-lobby/deck-page-ready.png`, `deck-page-ready-dark.png` | Deck page · ready | Picture · states |
+| `m0-lobby/deck-page-building.png`, `deck-page-building-dark.png` | Deck page · building | Picture · states |
+| `m0-lobby/deck-page-failed.png`, `deck-page-failed-dark.png` | Deck page · failed | Picture · states |
 
-M0 has no Start: the deck page offers presenter view, projector view, and the
-PDF. Start belongs to the co-presenter run in M1. Instance language and theme
-live under Settings (admin); a personal override lives on Account, and theme
-in the bar lives in the person menu (lines 21, 22, 23).
+### Not found and for admins
+
+| PNG | Caption | Rulings |
+|---|---|---|
+| `m0-lobby/not-found.png`, `not-found-dark.png` | Unknown address, inside the lobby | E6, sentence 5, new words |
+| `m0-lobby/for-admins.png`, `for-admins-dark.png` | Admin address opened by a non-admin | E6, sentence 5, new words |
+
+The person menu carries the legal row (Impressum, Datenschutz) after sign-in, as
+family §4 has it; the sign-in boards carry it below the card. Both link to the
+central pages on `hallucinai.de` (Datenschutz at its `#presentator` section); the
+Datenschutz page itself is edge's, with presentator's words in
+`legal/datenschutz.html`, so no board draws it (issue #593).
+
+M0 has no Start: the deck page offers presenter view, projector view, and the PDF.
+Start belongs to the co-presenter run in M1. Instance language and theme live under
+Settings (admin); a personal override lives on Account, and theme in the bar lives
+in the person menu.
+
+The Settings · Voice picture was blessed by the operator on 10.09.2026 (issue
+#123, parent #108). Its V1–V9 behavior contract is owned by
+[`docs/requirements/0001-voice-models.md`](../requirements/0001-voice-models.md);
+the Voice boards remain surface evidence, not an implementation claim. Piper and
+Chatterbox are installed on the live instance; Qwen3-TTS 0.6B, VoxCPM2, and NVIDIA
+Magpie are proposed candidates only, and their not-downloaded state depicts intended
+future behaviour. No benchmark, percentage, size, or cost is shown for any candidate.
 
 ### Presenter Home (proposal · issue #139)
 
@@ -177,15 +203,3 @@ lines each board shows, not only those its caption cites.
 | `m0-lobby/room-presenter-answering.png` | Presenter, AI answering: the preview is the projector board scaled down whole, pill included, the answer begins at once, 1024 px | 1, 6 |
 | `m0-lobby/room-presenter-listening-narrow.png` | Presenter, before the first answer: the scaled projector board with the banner, 390 px | 2, 6 |
 | `m0-lobby/room-presenter-answering-narrow.png` | Presenter, AI answering: the scaled projector board with the pill, 390 px | 1, 6 |
-
-### Rechtliches (#196)
-
-The Impressum and Datenschutz footer links, on the signed-out boards and carried
-onto a page after login. Both point at the central pages on `hallucinai.de`
-(Datenschutz at its `#presentator` section); the Datenschutz page itself is
-edge's, with presentator's words in `legal/datenschutz.html`, so no board draws
-it (issue #593).
-
-| PNG | Caption | Lines |
-|---|---|---|
-| `m0-lobby/legal-deck-list.png` | Deck list with legal links, 1024 px | 4 |
