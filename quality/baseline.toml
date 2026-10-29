@@ -11,7 +11,7 @@
 "tests/presentator/adapters/test_decks.py" = 1352
 "tests/presentator/api/test_copresenter.py" = 800
 "tests/presentator/api/test_sources.py" = 1687
-"tests/presentator/application/test_decks.py" = 1973
+"tests/presentator/application/test_decks.py" = 1970
 
 [function_lines."speech/providers/chatterbox/src/presentator_chatterbox/model.py"]
 "speech_token_chunks" = 84

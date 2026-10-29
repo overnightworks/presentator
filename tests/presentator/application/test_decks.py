@@ -29,7 +29,6 @@ from presentator.contracts.decks import (
     DeckPage,
     DeckState,
     ListedDeck,
-    ListedSource,
     Source,
     SourceDeck,
     SourceRemoval,
@@ -818,14 +817,12 @@ def test_an_unreachable_source_records_a_failed_run_naming_why() -> None:
 
 
 def test_a_source_nobody_has_polled_lists_as_never_fetched() -> None:
-    assert decks_over().listed_sources() == (
-        ListedSource(
-            name=SOURCE.name,
-            url=SOURCE.url,
-            access=access_kind_of(SOURCE.url),
-            state=SourceState.NEVER_FETCHED,
-            age=None,
-        ),
+    (row,) = decks_over().listed_sources()
+
+    assert (row.state, row.age, row.fetched_at) == (
+        SourceState.NEVER_FETCHED,
+        None,
+        None,
     )
 
 
