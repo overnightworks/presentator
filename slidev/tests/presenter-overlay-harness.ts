@@ -63,7 +63,6 @@ export const state = {
   answerMode: 'audio' as AnswerMode,
   askBodies: [] as { said: string, deck: string, language: string }[],
   whoLanguage: 'de' as 'de' | 'en',
-  whoDecks: [] as (string | null)[],
   hearLanguages: [] as (string | null)[],
   hearingMode: 'ready' as 'ready' | 'not-ready' | 'socket-error' | 'unreachable' | 'who-fails' | 'who-not-found',
   media: createMediaObservation(),
@@ -259,7 +258,6 @@ async function startServer() {
   server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://presenter.test')
     if (url.pathname === '/copresenter/who') {
-      state.whoDecks.push(url.searchParams.get('deck'))
       if (state.hearingMode === 'who-not-found') {
         response.writeHead(404, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ detail: 'Not found' }))
@@ -545,7 +543,6 @@ export function registerOverlayHarness() {
     cspViolations = []
     socketErrors.length = 0
     state.askBodies = []
-    state.whoDecks = []
     state.hearLanguages = []
   })
 
