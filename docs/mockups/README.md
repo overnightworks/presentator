@@ -48,8 +48,8 @@ Fonts are scoped to `.deck`, so their renders do not change with the lobby's loo
 
 `node docs/mockups/render.mjs` writes every lobby PNG and the overview;
 `node docs/mockups/render.mjs <id> ...` writes only those boards. It resolves
-Playwright through the declared `playwright-chromium` of `frontend/`, so run
-`pnpm --dir frontend install --frozen-lockfile` first.
+Playwright through the declared `playwright-chromium` of `slidev/`, so run
+`pnpm --dir slidev install --frozen-lockfile` first.
 
 ### Sign-in
 
