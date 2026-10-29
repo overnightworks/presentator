@@ -6,6 +6,7 @@ renderer or the sign-in wiring to know the person.
 """
 
 from dataclasses import dataclass
+from http import HTTPStatus
 
 from fastapi import Request
 from starlette.requests import HTTPConnection
@@ -18,6 +19,7 @@ from webauth.dependencies import (
 from webauth.middleware.session_gate import admitted_user
 from webauth.ports import AuthenticatedUser, SessionRecordStore
 
+from presentator.api.problems import ProblemError
 from presentator.contracts.models import Role, User
 
 
@@ -38,6 +40,14 @@ def gated_person(request: Request) -> User:
     if person is None:
         message = "The gate admitted nobody on a route that needs a person."
         raise RuntimeError(message)
+    return person
+
+
+def gated_admin(request: Request) -> User:
+    """The admitted admin; anyone else gets the 403 problem."""
+    person = gated_person(request)
+    if not person.is_admin:
+        raise ProblemError(HTTPStatus.FORBIDDEN)
     return person
 
 

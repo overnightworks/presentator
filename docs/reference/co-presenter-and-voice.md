@@ -37,6 +37,12 @@ deck. Without a session `/who` and `/ask` get 401 and `/hear` a refused
 handshake (HTTP 403, before accept); an accepted hearing ends with a 1008 close
 when the session goes. Presentator checks the session and, for the WebSocket, the exact
 Origin before opening the socket.
+`/who` takes the deck's slug as `deck` and checks it after the session, as
+`/ask` does: a deck its asker does not own built, or a missing or malformed
+slug, gets the same 404 `/ask` gives. It answers the deck's `language`, `de` or
+`en` as the deck's `deck.toml` names it and `de` for anything else, beside the
+speech readiness, so the overlay speaks and hears in the deck's language. A
+mirror that cannot be read, or a built commit without slides, answers 503.
 `/ask` is guarded by the origin check alone, like every mutating request
 ([sign-in and session](sign-in-and-session.md)). Logout, expiry, loss of the account row
 or a session-store failure closes the hearing lease and an ongoing answer
@@ -92,6 +98,9 @@ running instance.
 - One verified active row also names a local player: its DE or EN fixed sample
   waits while current speech owns synthesis, then plays through that exact
   active voice.
+
+The catalogue and the load, download and sample actions are also reachable as
+JSON at `/api/voice`, admin only and `no-store`; the sample answers `audio/wav`.
 
 ## Voices
 

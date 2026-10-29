@@ -12,7 +12,11 @@ from datetime import datetime, timedelta
 from threading import Lock
 
 from presentator.application.copresenter_prompt import user_message
-from presentator.application.spoken_answer import spoken_events, spoken_language
+from presentator.application.spoken_answer import (
+    deck_language_of,
+    spoken_events,
+    spoken_language,
+)
 from presentator.contracts.copresenter import (
     AccessRefusal,
     AnswerEvent,
@@ -24,6 +28,7 @@ from presentator.contracts.copresenter import (
     Question,
 )
 from presentator.contracts.decks import is_a_plain_folder_name
+from presentator.contracts.voice import SampleLanguage
 from presentator.ports.clock import Clock
 from presentator.ports.copresenter import (
     AgentAnswers,
@@ -76,6 +81,18 @@ class CoPresenterUse:
             (item for item in self.sources.all() if item.id == deck.source_id), None
         )
         return None if source is None else AskedDeck(deck=deck, source=source)
+
+    async def deck_language(self, asked: AskedDeck) -> SampleLanguage:
+        """The language the deck's manifest names, German when it names none.
+
+        Raises CoPresenterUnavailableError when its words cannot be read.
+        """
+        deck_text = await asyncio.to_thread(
+            self.texts.text_of, asked.deck, asked.source
+        )
+        if deck_text is None:
+            raise CoPresenterUnavailableError
+        return deck_language_of(deck_text.language)
 
     async def readiness(self) -> CoPresenterReadiness:
         """Return speech's narrow readiness report."""

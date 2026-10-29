@@ -18,7 +18,8 @@ from starlette.routing import Router
 from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
-from presentator.adapters.decks import SqliteDeckStore, SqliteSourceStore
+from presentator.adapters.deck_store import SqliteDeckStore
+from presentator.adapters.decks import SqliteSourceStore
 from presentator.adapters.identity import (
     SqliteSessionRecordStore,
     TokenIdentifierFactory,

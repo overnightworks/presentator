@@ -52,6 +52,7 @@ from presentator.api.problems import install_problem_handler
 from presentator.api.session_api import SESSION_PATH, SessionAddresses, session_routes
 from presentator.api.source_api import source_api_routes
 from presentator.api.sources import source_routes
+from presentator.api.voice_api import voice_api_routes
 from presentator.application.decks import Decks
 from presentator.application.voice import VoiceStatusUse
 from presentator.contracts.text import LobbyText
@@ -361,6 +362,7 @@ def create_lobby(
     lobby.include_router(_session_routes(pages, auth))
     lobby.include_router(deck_list_routes(decks=decks))
     lobby.include_router(preference_routes(pages=pages, voice=private.voice))
+    lobby.include_router(voice_api_routes(voice=private.voice))
     lobby.include_router(source_routes(pages=pages, decks=decks))
     lobby.include_router(source_api_routes(decks=decks))
     add_deck_pages(lobby, decks=decks, pages=pages, talk_origin=auth.talk_origin)

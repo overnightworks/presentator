@@ -12,11 +12,11 @@ from pydantic import SecretStr
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.builds import HostToolchain, SlidevBuilds
+from presentator.adapters.deck_store import SqliteDeckStore
 from presentator.adapters.decks import (
     FilesystemLocalMount,
     MirroredDeckFolders,
     SourceMirrors,
-    SqliteDeckStore,
     SqliteSourceRunStore,
     SqliteSourceStore,
 )
