@@ -382,9 +382,8 @@ def _ssh_key_file(secret: str) -> Generator[Path]:
     A 0700 directory holding one 0600 file, both gone in the `finally`
     whatever the fetch did with them.
     """
-    directory: Path | None = None
+    directory = Path(tempfile.mkdtemp(prefix="gitmirror-deploy-key-"))
     try:
-        directory = Path(tempfile.mkdtemp(prefix="gitmirror-deploy-key-"))
         directory.chmod(_SSH_KEY_DIRECTORY_MODE)
         key = directory / _SSH_KEY_FILE_NAME
         descriptor = os.open(
@@ -396,8 +395,7 @@ def _ssh_key_file(secret: str) -> Generator[Path]:
             key_file.write(secret)
         yield key
     finally:
-        if directory is not None:
-            shutil.rmtree(directory)
+        shutil.rmtree(directory)
 
 
 def _reject_unsafe_credential(secret: str) -> None:
