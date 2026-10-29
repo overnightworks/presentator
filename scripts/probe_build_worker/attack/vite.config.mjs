@@ -124,12 +124,12 @@ function markers() {
 function filesystemAttacks() {
   check('fs.write.deck', () => fs.writeFileSync(`${DECK}/attack-marker`, 'x'))
   check('fs.create.root', () => fs.writeFileSync('/attack-marker', 'x'))
-  check('fs.create.frontend', () => fs.writeFileSync('/app/frontend/attack-marker', 'x'))
-  check('fs.write.package-json', () => fs.closeSync(fs.openSync('/app/frontend/package.json', 'r+')))
+  check('fs.create.slidev', () => fs.writeFileSync('/app/slidev/attack-marker', 'x'))
+  check('fs.write.package-json', () => fs.closeSync(fs.openSync('/app/slidev/package.json', 'r+')))
   // Writing the manifest answers EACCES: the image's runtime user owns it and
   // its mode 0644 refuses others; owner and mode are printed beside it as an
   // observation, not a refusal.
-  const manifest = fs.statSync('/app/frontend/package.json')
+  const manifest = fs.statSync('/app/slidev/package.json')
   const mode = (manifest.mode & 0o7777).toString(8).padStart(4, '0')
   record(`observe package-json owner=${manifest.uid} mode=${mode}`)
 }

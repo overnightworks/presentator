@@ -71,7 +71,7 @@ DECK_REFUSALS = {
     "42": {
         "fs.write.deck": "EACCES",
         "fs.create.root": "EROFS",
-        "fs.create.frontend": "EROFS",
+        "fs.create.slidev": "EROFS",
         "fs.write.package-json": "EACCES",
     },
     "43": {"net.connect.ip": "ENETUNREACH", "net.dns": "EAI_AGAIN"},
@@ -103,7 +103,7 @@ PROBE_REFUSALS = {
     "60": {
         "create.root": "EROFS",
         "create.opt": "EROFS",
-        "create.frontend": "EROFS",
+        "create.slidev": "EROFS",
         "create.work": "EACCES",
         "open.step-err": "EACCES",
     },

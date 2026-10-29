@@ -73,11 +73,11 @@ updates:
           - "numpy"
           - "voxcpm"
   - package-ecosystem: npm
-    directory: /frontend
+    directory: /slidev
     schedule:
       interval: weekly
     groups:
-      npm-frontend:
+      npm-slidev:
         update-types: [minor, patch]
   - package-ecosystem: docker
     directory: /
@@ -87,6 +87,6 @@ updates:
       docker:
         update-types: [minor, patch]
     ignore:
-      # The Node major moves Dockerfile, frontend/.nvmrc, the engines field and CI together, and Node 26 images drop corepack: a deliberate lane, not a bot PR
+      # The Node major moves Dockerfile, slidev/.nvmrc, the engines field and CI together, and Node 26 images drop corepack: a deliberate lane, not a bot PR
       - dependency-name: node
         update-types: ["version-update:semver-major"]

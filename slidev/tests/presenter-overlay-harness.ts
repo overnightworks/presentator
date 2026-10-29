@@ -12,7 +12,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest'
 
 const run = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
-const frontendRoot = join(repositoryRoot, 'frontend')
+const slidevRoot = join(repositoryRoot, 'slidev')
 export const overlayDeckSourceDirectory = join(repositoryRoot, 'examples/copresenter-deck')
 const providedBuild = process.env.PRESENTER_RETURN_BUILD_DIR
 const evidenceDirectory = process.env.PRESENTER_RETURN_EVIDENCE_DIR
@@ -154,7 +154,7 @@ export async function buildCopiedOverlayDeck(base = '/'): Promise<string> {
   await run(
     'pnpm',
     ['exec', 'slidev', 'build', join(deckDirectory, 'slides.md'), '--out', outDirectory, '--base', base],
-    { cwd: frontendRoot },
+    { cwd: slidevRoot },
   )
   await rm(deckDirectory, { recursive: true, force: true })
   return outDirectory
@@ -513,7 +513,7 @@ export function registerOverlayHarness() {
       await run(
         'pnpm',
         ['exec', 'slidev', 'build', join(overlayDeckSourceDirectory, 'slides.md'), '--out', buildDirectory],
-        { cwd: frontendRoot },
+        { cwd: slidevRoot },
       )
     }
     productionSecurityHeaders = await loadProductionSecurityHeaders()

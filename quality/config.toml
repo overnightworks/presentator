@@ -12,7 +12,7 @@ entry = "examples/"
 reason = "the example decks the documentation and the probes build"
 
 [[root.allow]]
-entry = "frontend/"
+entry = "slidev/"
 reason = "the Slidev addon and its pnpm toolchain, built apart from the Python package"
 
 [[root.allow]]
@@ -49,24 +49,24 @@ rule = "script-name"
 reason = "the operator ruled this name on #508; the script is deleted in S9m"
 
 [[layout.allow]]
-path = "frontend/tests/addon-package.test.ts"
+path = "slidev/tests/addon-package.test.ts"
 rule = "test-layout"
-reason = "its subject is the addon package as Slidev resolves it, which no frontend source file mirrors"
+reason = "its subject is the addon package as Slidev resolves it, which no addon source file mirrors"
 
 [[layout.allow]]
-path = "frontend/tests/copresenter-refusals.browser.test.ts"
+path = "slidev/tests/copresenter-refusals.browser.test.ts"
 rule = "test-layout"
-reason = "it exercises the example deck's overlay in a browser, outside the frontend project"
+reason = "it exercises the example deck's overlay in a browser, outside the Slidev project"
 
 [[layout.allow]]
-path = "frontend/tests/lobby-static-scripts.test.ts"
+path = "slidev/tests/lobby-static-scripts.test.ts"
 rule = "test-layout"
-reason = "its subject is the lobby scripts under src/presentator/api/static, outside the frontend project"
+reason = "its subject is the lobby scripts under src/presentator/api/static, outside the Slidev project"
 
 [[layout.allow]]
-path = "frontend/tests/presenter-controls.browser.test.ts"
+path = "slidev/tests/presenter-controls.browser.test.ts"
 rule = "test-layout"
-reason = "it exercises the example deck's overlay in a browser, outside the frontend project"
+reason = "it exercises the example deck's overlay in a browser, outside the Slidev project"
 
 [[layout.allow]]
 path = "tests/test_compose.py"
