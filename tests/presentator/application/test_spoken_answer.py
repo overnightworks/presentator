@@ -8,6 +8,7 @@ import pytest
 
 from presentator.application.spoken_answer import (
     SpokenAnswer,
+    deck_language_of,
     spoken_events,
     spoken_language,
 )
@@ -19,6 +20,7 @@ from presentator.contracts.copresenter import (
     Done,
     Sentence,
 )
+from presentator.contracts.voice import SampleLanguage
 
 
 def split_after_terminators(text: str) -> tuple[str, ...]:
@@ -160,13 +162,34 @@ def test_a_speech_failure_propagates_after_earlier_sentences_without_done() -> N
     [
         ("en", "fr", "en"),
         ("en", None, "en"),
-        (None, "fr", "fr"),
+        (None, "fr", "de"),
+        (None, "EN", "de"),
+        (None, "de-DE", "de"),
         (None, None, "de"),
         ("en", "en", "en"),
         (None, "de", "de"),
+        (None, "en", "en"),
     ],
 )
 def test_the_asked_language_wins_over_the_decks_then_german(
     asked: str | None, deck: str | None, language: str
 ) -> None:
     assert spoken_language(asked, deck) == language
+
+
+@pytest.mark.parametrize(
+    ("written", "language"),
+    [
+        ("de", SampleLanguage.GERMAN),
+        ("en", SampleLanguage.ENGLISH),
+        (None, SampleLanguage.GERMAN),
+        ("", SampleLanguage.GERMAN),
+        ("fr", SampleLanguage.GERMAN),
+        ("EN", SampleLanguage.GERMAN),
+        ("de-DE", SampleLanguage.GERMAN),
+    ],
+)
+def test_a_decks_written_language_is_german_or_english_and_else_german(
+    written: str | None, language: SampleLanguage
+) -> None:
+    assert deck_language_of(written) is language
