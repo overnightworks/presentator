@@ -13,7 +13,8 @@ from fastapi import APIRouter, Form, Request, Response
 from pydantic import BeforeValidator
 from starlette.responses import RedirectResponse
 
-from presentator.api.pages import Pages, gated_person, options, theme_choices
+from presentator.api.admission import gated_person
+from presentator.api.pages import Pages, options, theme_choices
 from presentator.application.preferences import Preferences
 from presentator.application.voice import VoiceStatusUse
 from presentator.contracts.preferences import (

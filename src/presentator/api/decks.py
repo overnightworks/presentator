@@ -27,7 +27,8 @@ from starlette.responses import FileResponse
 from starlette.staticfiles import NotModifiedResponse
 from starlette.types import Receive, Scope, Send
 
-from presentator.api.pages import Pages, gated_person, state_word
+from presentator.api.admission import gated_person
+from presentator.api.pages import Pages, state_word
 from presentator.application.decks import Decks
 from presentator.contracts.decks import (
     DECK_PATH,

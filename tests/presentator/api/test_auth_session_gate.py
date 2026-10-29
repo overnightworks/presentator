@@ -16,9 +16,9 @@ from webauth.middleware.security_headers import (
     STRICT_TRANSPORT_SECURITY,
 )
 
+from presentator.api.admission import gated_person, gated_session_id
 from presentator.api.auth import PERMISSIONS_POLICY
 from presentator.api.hooks import hook_address
-from presentator.api.pages import gated_person, gated_session_id
 from tests.presentator.application.support.fakes import (
     FakeSession,
     FakeSessionRecordStore,
