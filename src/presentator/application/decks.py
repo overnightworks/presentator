@@ -693,22 +693,21 @@ class Decks:
             source=self._address_of(deck),
             commit=(deck.commit if built is None else built.commit)[:_SHORT_COMMIT],
             built_ago=None if built is None else self.clock.now() - built.built_at,
+            built_at=None if built is None else built.built_at,
             state=_state_of(deck),
             attempt=self._shown(deck.attempt),
             themes=self.toolchain_themes.names(),
         )
 
     def _shown(self, attempt: BuildAttempt | None) -> ShownAttempt | None:
-        """What the page says about the build that ran last, while one has run.
-
-        The commit is shortened the way the delivered one is: a person reads
-        both off the same screen to see which push is which.
-        """
+        """What the page says about the build that ran last, while one has run."""
         if attempt is None:
             return None
         return ShownAttempt(
             commit=attempt.commit[:_SHORT_COMMIT],
             ago=self.clock.now() - attempt.started_at,
+            started_at=attempt.started_at,
+            outcome=attempt.outcome,
             failure=attempt.failure,
         )
 
