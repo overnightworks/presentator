@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "overnightworks-presentator"
 version = "0.0.0"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 license = "MIT"
 dependencies = [
     "babel==2.18.0",
@@ -61,7 +61,7 @@ exclude_also = ["case _:\\n\\s+assert_never\\("]
 [tool.pyright]
 include = ["src", "tests", "scripts"]
 typeCheckingMode = "strict"
-pythonVersion = "3.12"
+pythonVersion = "3.14"
 
 [tool.vulture]
 paths = ["src", "tests", "tests/support/vulture_allowlist.py"]
