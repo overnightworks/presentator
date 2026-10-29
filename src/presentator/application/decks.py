@@ -693,6 +693,7 @@ class Decks:
             source=self._address_of(deck),
             commit=(deck.commit if built is None else built.commit)[:_SHORT_COMMIT],
             built_ago=None if built is None else self.clock.now() - built.built_at,
+            built_at=None if built is None else built.built_at,
             state=_state_of(deck),
             attempt=self._shown(deck.attempt),
             themes=self.toolchain_themes.names(),
@@ -709,6 +710,8 @@ class Decks:
         return ShownAttempt(
             commit=attempt.commit[:_SHORT_COMMIT],
             ago=self.clock.now() - attempt.started_at,
+            started_at=attempt.started_at,
+            outcome=attempt.outcome,
             failure=attempt.failure,
         )
 

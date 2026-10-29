@@ -253,6 +253,7 @@ def test_a_deck_whose_commit_was_never_built_is_built_and_then_delivered() -> No
     clock.advance(by=timedelta(minutes=12))
 
     assert page_of(decks, "kundenfeedback").built_ago == timedelta(minutes=12)
+    assert page_of(decks, "kundenfeedback").built_at == NOW
     talk = decks.built_talk("kundenfeedback", viewer=OWNER)
     export = decks.exported_pdf("kundenfeedback", viewer=OWNER)
     assert talk is not None
@@ -352,6 +353,7 @@ def test_a_deck_being_built_says_so_with_the_commit_and_how_long_it_has_run() ->
     assert building.attempt is not None
     assert building.attempt.commit == _SHORT_COMMIT
     assert building.attempt.ago == timedelta(seconds=40)
+    assert building.attempt.started_at == NOW
     assert building.attempt.failure is None
 
 
@@ -401,6 +403,7 @@ def test_a_build_that_failed_names_its_commit_and_what_the_toolchain_said() -> N
     assert page.attempt is not None
     assert page.attempt.commit == _SHORT_COMMIT
     assert page.attempt.ago == timedelta(minutes=26)
+    assert page.attempt.started_at == NOW
     assert page.attempt.failure == _WHAT_THE_TOOLCHAIN_SAID
     assert _listed_states(decks) == [DeckState.FAILED]
 

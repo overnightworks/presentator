@@ -34,10 +34,15 @@ sign-in and sign-out are. Until now these existed only inside Jinja rendering.
   a dict. The library's refusals are not routes.
 - The catalog is served as data: `words` is the resolved `LobbyText` of the
   reader's language, so a page holds no strings of its own.
-- Presentator's own errors follow RFC 9457 problem details, from the slice that
-  adds them ([#185](https://github.com/overnightworks/presentator/issues/185),
-  A3). The library's refusals keep their shape: webauth answers the gate's 401
-  and a CSRF refusal in its own format, and a store failure is its plain 500.
+- Presentator's own errors on the JSON routes under `/api/` follow RFC 9457
+  problem details (`application/problem+json`; `api/problems.py`), from
+  [#185](https://github.com/overnightworks/presentator/issues/185) A3 on. The
+  type is `about:blank` and the title the HTTP reason phrase, so presentator
+  words nothing and a client words the status from its own catalog. The
+  library's refusals keep their shape: webauth answers the gate's 401 and a CSRF
+  refusal in its own format, `/api/admin/`, the co-presenter, the fetch hook and
+  the talk host keep theirs, the framework's own 404 and 405 stay as they are,
+  and a store failure is its plain 500.
 - OpenAPI is generated from the models and not served: `openapi_url` stays
   `None`.
 

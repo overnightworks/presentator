@@ -92,10 +92,7 @@ class _DeckPage:
             commit=page.commit,
             state=page.state.value,
             state_word=state_word(page.state, text),
-            # A build that is running may deliver a half-written talk at any
-            # moment, so the two views are not offered while one runs; the PDF
-            # beside them is the last good build's file and stays offered.
-            views_open=page.state is not DeckState.BUILDING,
+            views_open=page.views_open,
             banner=self._banner(page, text),
             builds_with=self._builds_with(page.themes, text),
         )

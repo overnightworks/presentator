@@ -48,6 +48,9 @@ folder. Beside the state, the page names the theme set this instance builds
 with, read from the toolchain project's own `package.json` and omitted rather
 than shown empty while that project cannot be read
 ([ADR 0014](../decisions/0014-toolchain-owns-build-dependencies.md)).
+The same facts, with the instants of the build and of the attempt in place of
+their ages, are readable as JSON at `/api/decks/<folder>`; another person's deck
+and an unknown one answer the same bare 404 problem.
 
 - While a build runs, the page says so with the commit being built and how long
   it has been running, and the two views are shown locked rather than offered:
