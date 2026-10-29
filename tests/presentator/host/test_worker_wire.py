@@ -160,7 +160,7 @@ def test_production_gives_the_step_exactly_six_environment_keys_and_the_project(
         "COREPACK_HOME": "/opt/corepack",
         "COREPACK_ENABLE_NETWORK": "0",
     }
-    assert serving.step.project == Path("/app/frontend")
+    assert serving.step.project == Path("/app/slidev")
 
 
 def test_production_carries_the_build_bound_of_the_settings() -> None:

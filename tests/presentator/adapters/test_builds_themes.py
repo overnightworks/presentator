@@ -62,7 +62,7 @@ def test_a_manifest_shape_package_json_does_not_carry_is_not_a_set_to_guess_from
 def test_the_themes_are_read_off_the_toolchain_projects_own_manifest(
     tmp_path: Path,
 ) -> None:
-    project = tmp_path / "frontend"
+    project = tmp_path / "slidev"
     project.mkdir()
     (project / "package.json").write_text(
         '{"devDependencies": {"@slidev/theme-seriph": "0.25.0"}}',
@@ -82,7 +82,7 @@ def test_a_toolchain_project_this_server_cannot_read_names_no_themes(
 def test_a_dependency_section_that_is_not_a_mapping_names_no_themes(
     tmp_path: Path,
 ) -> None:
-    project = tmp_path / "frontend"
+    project = tmp_path / "slidev"
     project.mkdir()
     (project / "package.json").write_text(
         '{"dependencies": ["@slidev/theme-seriph"]}',

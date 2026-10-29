@@ -21,7 +21,7 @@ in for a higher one.
 | `api` | Routes and wire schemas | FastAPI `TestClient` driving the real routes with the real application and fake or tmp adapters. |
 | Template | Lobby HTML as the surface of a route | A ruled person-sentence is proven by a delegated agent driving the real interface. A route or fragment is FastAPI `TestClient` on the real route. A direct Jinja unit test is not the proof. |
 | `host` | Composition | Once: start the app with a test configuration. |
-| Slidev addon | That Slidev resolves this package | Vitest driving Slidev's own resolver, as `frontend/tests/addon-package.test.ts` does. |
+| Slidev addon | That Slidev resolves this package | Vitest driving Slidev's own resolver, as `slidev/tests/addon-package.test.ts` does. |
 | Surface | A person does X at the lobby | A delegated agent driving the real interface at the widths the dispatch brief names, taken from the picture at [mockups/README.md](mockups/README.md). One flow per ruled sentence. A unit test is not this proof. |
 
 `gitmirror` is proven the same way as an adapter: against a tmp bare repository,
@@ -71,7 +71,7 @@ Parametrize and fixture rather than copy. A review rejects:
 ## Local runs and the CI gate
 
 Local runs are targeted — a named module or `-k` on the behaviour, from the
-repository root with `uv run --locked pytest`, or a named file from `frontend/`
+repository root with `uv run --locked pytest`, or a named file from `slidev/`
 with `pnpm exec vitest run`; never the whole suite or a Playwright suite unless
 the operator asked. CI on the pull request is the full run and the gate. What
 `main` requires is [ci-and-branch-protection.md](reference/ci-and-branch-protection.md). What the workflow runs is

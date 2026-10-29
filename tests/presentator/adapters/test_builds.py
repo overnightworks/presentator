@@ -323,7 +323,7 @@ def on_this_machine(
     bound: timedelta = _A_GENEROUS_BOUND,
 ) -> HostToolchain:
     """The toolchain a development run builds with: a project on this machine."""
-    project = tmp_path / "frontend"
+    project = tmp_path / "slidev"
     project.mkdir(exist_ok=True)
     return HostToolchain(project=project, bound=bound)
 
