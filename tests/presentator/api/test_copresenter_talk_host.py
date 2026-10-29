@@ -14,7 +14,7 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import AskLimiter
 from presentator.contracts.models import Role, User
-from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
+from tests.presentator.application.support.fakes import FrozenClock
 from tests.support.copresenter_support import (
     HEARING,
     POLICY_VIOLATION,
@@ -24,6 +24,8 @@ from tests.support.copresenter_support import (
     PrivateFakes,
     a_copresenter_talk_host,
     a_use,
+    the_admins_decks,
+    who,
 )
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -63,7 +65,7 @@ def test_who_answers_every_signed_in_person(role: Role) -> None:
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in(role=role)
 
-    answer = talk.client.get("/copresenter/who", headers=_JSON)
+    answer = who(talk.client, headers=_JSON)
 
     assert answer.status_code == HTTPStatus.OK
     assert private.speech.readiness_calls == 1
@@ -171,7 +173,7 @@ def test_the_lobbys_session_cookie_does_not_sign_in_at_the_talk_host() -> None:
     hand_over_session_cookies(talk.client, session_id, a_web_auth(clock))
     assert DEFAULT_SESSION_COOKIE_NAME in talk.client.cookies
 
-    answer = talk.client.get("/copresenter/who", headers=_JSON)
+    answer = who(talk.client, headers=_JSON)
 
     assert answer.status_code == HTTPStatus.UNAUTHORIZED
     assert private.speech.readiness_calls == 0
@@ -197,7 +199,7 @@ def test_an_admin_demoted_while_signed_in_is_still_answered() -> None:
     (admin,) = talk.people.users.users.values()
     talk.people.users.users[admin.id] = replace(admin, role=Role.USER)
 
-    answer = talk.client.get("/copresenter/who", headers=_JSON)
+    answer = who(talk.client, headers=_JSON)
 
     assert answer.status_code == HTTPStatus.OK
     assert private.speech.readiness_calls == 1
@@ -208,7 +210,7 @@ def _talk_host_with_a_signed_in_admin(
 ) -> tuple[Hosts, TestClient, PrivateFakes]:
     private = PrivateFakes()
     surface = CoPresenterSurface(
-        use=a_use(private, FakeDeckStore()),
+        use=a_use(private, the_admins_decks()),
         limiter=AskLimiter(clock=FrozenClock(instant=NOW)),
         browser_origin=TALK_ORIGIN,
         delay=asyncio.sleep if deadline is None else deadline.wait,
@@ -231,10 +233,10 @@ def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_deck_and_who(
     _demote_at_the_lobby(hosts)
 
     deck = talk.get(f"/deck/{A_DECK}/")
-    who = talk.get("/copresenter/who", headers=_JSON)
+    answer = who(talk, headers=_JSON)
 
     assert deck.status_code == HTTPStatus.OK
-    assert who.status_code == HTTPStatus.OK
+    assert answer.status_code == HTTPStatus.OK
     assert private.speech.readiness_calls == 1
 
 

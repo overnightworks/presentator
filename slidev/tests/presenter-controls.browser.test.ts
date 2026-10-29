@@ -161,6 +161,7 @@ describe('presenter controls', () => {
   it.each([1024, 390].flatMap((width) => ([
     ['#512 line 2: speech cannot be reached', 'unreachable', 'Voice offline'],
     ['#512 line 2: the co-presenter fails without being offline', 'who-fails', 'Unreachable'],
+    ['#615 cell 21: the deck is not the asker\'s', 'who-not-found', 'Unreachable'],
     ['local hearing is not ready', 'not-ready', 'Local hearing not ready'],
     ['the hearing socket sends an error', 'socket-error', 'No hearing'],
   ] as const).map((row) => [width, ...row] as const)))('says so and builds no browser speech recognition at %ipx when %s', async (width, _situation, mode, message) => {
@@ -189,7 +190,7 @@ describe('presenter controls', () => {
         () => (window as unknown as { __speechRecognitionsBuilt: number }).__speechRecognitionsBuilt,
       )).toBe(0)
       await expect.poll(() => state.hearingClosed).toBeGreaterThanOrEqual(state.hearingOpened)
-      if (mode === 'unreachable' || mode === 'who-fails') expect(state.hearingOpened).toBe(hearingOpenedBefore)
+      if (['unreachable', 'who-fails', 'who-not-found'].includes(mode)) expect(state.hearingOpened).toBe(hearingOpenedBefore)
       if (mode === 'socket-error') await expect.poll(() => state.media.trackStopped).toBe(true)
       else {
         expect(await page.evaluate(
@@ -198,6 +199,23 @@ describe('presenter controls', () => {
       }
     } finally {
       state.hearingMode = 'ready'
+      await browser.close()
+    }
+  })
+
+  it.each(['de', 'en'] as const)('#615 cells 18, 19: the answered language %s reaches /hear and /ask', async (language) => {
+    state.whoLanguage = language
+    const { browser, page } = await openPresenter(1024)
+    try {
+      const ai = page.getByRole('switch', { name: 'AI' })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      await expect.poll(() => state.askBodies.length).toBeGreaterThan(0)
+      expect(state.hearLanguages).toEqual([language])
+      expect(state.askBodies[0]?.language).toBe(language)
+      expect(await ai.textContent()).toContain('AI')
+    } finally {
+      state.whoLanguage = 'de'
       await browser.close()
     }
   })
@@ -223,14 +241,20 @@ describe('presenter controls', () => {
     expect(overlay).not.toContain('document.cookie')
   })
 
-  it.each(['/', '/deck/50%25off/'])('mounts one overlay and loads its AudioWorklet from <base>assets/ at %s', async (base) => {
-    const nested = base !== '/'
+  it.each([
+    ['/', null],
+    ['/deck/50%25off/', '50%off'],
+    ['/deck/%C3%BC%20b%2541/', 'ü b%41'],
+  ])('mounts one overlay and loads its AudioWorklet from <base>assets/ at %s', async (base, slug) => {
+    const nested = slug !== null
     const overlayBuildDirectory = await buildAddonDeck(base)
     const asked: { said: string, deck: string }[] = []
+    const whoDecks: (string | null)[] = []
     const { server: overlayServer, origin: overlayOrigin, sockets: overlaySockets }
       = await createOverlayDeckServer(overlayBuildDirectory, {
         basePath: nested ? base.slice(0, -1) : '',
         onAsk: (said, deck) => asked.push({ said, deck }),
+        onWho: (deck) => whoDecks.push(deck),
       })
     try {
       const { browser, page } = await openPresenterAt(overlayOrigin, `${base}presenter/1`, 1024)
@@ -268,7 +292,8 @@ describe('presenter controls', () => {
           await page.evaluate(() => (window as unknown as {
             __copresenter: { say: (text: string) => void }
           }).__copresenter.say('Which deck is this?'))
-          await expect.poll(() => asked).toEqual([{ said: 'Which deck is this?', deck: '50%off' }])
+          await expect.poll(() => asked).toEqual([{ said: 'Which deck is this?', deck: slug }])
+          expect(whoDecks).toEqual([slug])
         }
       } finally {
         await browser.close()
