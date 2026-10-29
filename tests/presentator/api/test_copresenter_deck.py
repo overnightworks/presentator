@@ -278,7 +278,7 @@ def test_who_names_the_owned_deck_whose_slug_needs_percent_encoding(slug: str) -
     answer = who(lobby.client, slug)
 
     assert answer.status_code == HTTPStatus.OK
-    assert [deck.slug for deck, _source in private.texts.asked] == [slug]
+    assert private.texts.asked == [(replace(ASKED.deck, slug=slug), ASKED.source)]
 
 
 def test_who_counts_no_question() -> None:

@@ -241,8 +241,12 @@ describe('presenter controls', () => {
     expect(overlay).not.toContain('document.cookie')
   })
 
-  it.each(['/', '/deck/50%25off/'])('mounts one overlay and loads its AudioWorklet from <base>assets/ at %s', async (base) => {
-    const nested = base !== '/'
+  it.each([
+    ['/', null],
+    ['/deck/50%25off/', '50%off'],
+    ['/deck/%C3%BC%20b%2541/', 'ü b%41'],
+  ])('mounts one overlay and loads its AudioWorklet from <base>assets/ at %s', async (base, slug) => {
+    const nested = slug !== null
     const overlayBuildDirectory = await buildAddonDeck(base)
     const asked: { said: string, deck: string }[] = []
     const whoDecks: (string | null)[] = []
@@ -288,8 +292,8 @@ describe('presenter controls', () => {
           await page.evaluate(() => (window as unknown as {
             __copresenter: { say: (text: string) => void }
           }).__copresenter.say('Which deck is this?'))
-          await expect.poll(() => asked).toEqual([{ said: 'Which deck is this?', deck: '50%off' }])
-          expect(whoDecks).toEqual(['50%off'])
+          await expect.poll(() => asked).toEqual([{ said: 'Which deck is this?', deck: slug }])
+          expect(whoDecks).toEqual([slug])
         }
       } finally {
         await browser.close()

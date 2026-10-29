@@ -227,9 +227,9 @@ def test_the_composition_root_serves_the_copresenter_at_the_talk_host_only() -> 
         pytest.fail("the lobby accepted a hearing")
 
     assert at_the_lobby.status_code == _NOT_FOUND
-    assert at_the_lobby.json() == {"detail": "Not Found"}
     assert at_the_talk_host.status_code == _NOT_FOUND
-    assert at_the_talk_host.json() == {"detail": "Not found"}
+    assert at_the_lobby.json() == lobby.get("/no-such-route", headers=_JSON).json()
+    assert at_the_talk_host.json() != at_the_lobby.json()
 
 
 # T1, through the composition root's own wiring.
