@@ -12,7 +12,7 @@ const COPRESENTER = '/copresenter'
 // The host delivers this deck at `/deck/<slug>/`, so the base names its slug.
 // Vite refuses a base with a raw `%`, so a folder `50%off` arrives as `50%25off`.
 const DECK_SLUG = decodeURIComponent(
-  import.meta.env.BASE_URL.split('/').filter(Boolean).pop() ?? '',
+  import.meta.env.BASE_URL.split('/').findLast(Boolean) ?? '',
 )
 
 // The overlay shows only these lines, never a message the server sent.
@@ -133,9 +133,9 @@ async function turnOn() {
     report = await response.json()
     if (!stillActive(generation)) return
     sampleRate = report.speech?.sample_rate || 16000
-  } catch (failure) {
+  } catch (error_) {
     if (!stillActive(generation)) return
-    error.value = failure instanceof WhoRefused && failure.status === 503 ? VOICE_OFFLINE : 'Unreachable'
+    error.value = error_ instanceof WhoRefused && error_.status === 503 ? VOICE_OFFLINE : 'Unreachable'
     hearing.value = 'off'
     return
   }
@@ -278,26 +278,34 @@ function bindHearSocket(socket, generation) {
 }
 
 function abandon({ socket, stream, context, node } = {}) {
-  if (socket) {
-    if (hearSocket === socket) hearSocket = null
-    socket.onmessage = null
-    socket.onerror = null
-    socket.onclose = null
-    try { socket.close() } catch { /* already closed */ }
-  }
-  if (node) {
-    if (workletNode === node) workletNode = null
-    node.port.onmessage = null
-    try { node.disconnect() } catch { /* already disconnected */ }
-  }
-  if (context) {
-    if (audioContext === context) audioContext = null
-    try { context.close() } catch { /* already closed */ }
-  }
-  if (stream) {
-    if (mediaStream === stream) mediaStream = null
-    for (const track of stream.getTracks()) track.stop()
-  }
+  if (socket) closeSocket(socket)
+  if (node) disconnectNode(node)
+  if (context) closeContext(context)
+  if (stream) stopStream(stream)
+}
+
+function closeSocket(socket) {
+  if (hearSocket === socket) hearSocket = null
+  socket.onmessage = null
+  socket.onerror = null
+  socket.onclose = null
+  try { socket.close() } catch { /* already closed */ }
+}
+
+function disconnectNode(node) {
+  if (workletNode === node) workletNode = null
+  node.port.onmessage = null
+  try { node.disconnect() } catch { /* already disconnected */ }
+}
+
+function closeContext(context) {
+  if (audioContext === context) audioContext = null
+  try { context.close() } catch { /* already closed */ }
+}
+
+function stopStream(stream) {
+  if (mediaStream === stream) mediaStream = null
+  for (const track of stream.getTracks()) track.stop()
 }
 
 function releaseCapture() {
@@ -384,7 +392,7 @@ async function readSse(body, signal) {
 function applySse(block) {
   if (!on.value) return
   const kind = (block.match(/^event:\s*(\S+)/m) || [])[1]
-  const dataLine = (block.match(/^data:\s*(.*)$/m) || [])[1]
+  const dataLine = (block.match(/^data: ?(.*)$/m) || [])[1]
   if (!kind || dataLine == null) return
   let data
   try { data = JSON.parse(dataLine) } catch { return }
@@ -402,7 +410,7 @@ function applySse(block) {
 function enqueueWav(b64) {
   if (!on.value) return
   const generation = playGeneration
-  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+  const bytes = Uint8Array.from(atob(b64), (c) => c.codePointAt(0))
   const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }))
   playQueue = playQueue.then(() => {
     if (generation !== playGeneration) return undefined
