@@ -1,8 +1,0 @@
-claim_id = "98ed0d75488c4f0293c5c4d2e07408ae"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "a9c6bc19d8ded48b31593850ff08ff8a1575c98c"
-branch = "claude/issue-609-presentator-on-webauth-0-25-0"
-scope = ["docs/decisions/0003-libraries-for-models-and-auth.md", "docs/explanation/trust-boundaries.md", "docs/reference/configuration.md", "docs/reference/people.md", "docs/reference/sign-in-and-session.md", "pyproject.toml", "src/presentator/api/auth.py", "src/presentator/host/config.py", "tests/presentator/api/test_auth_person_token.py", "tests/presentator/api/test_people_erasure_route.py", "tests/support/sign_in_support.py", "uv.lock"]
-opened_commit = "d04020ade77d2ce18d2373161b0147937ca48b50"
-whole_reason = "One release adoption: the pin, the person-path switch-on, the rename of the one setting it widens, and their documents and proofs belong together."
