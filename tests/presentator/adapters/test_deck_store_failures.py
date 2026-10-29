@@ -82,7 +82,7 @@ INSERT INTO decks (slug, title, changed_at, owner_id, source_id, commit_sha,
     attempt_started_at, attempt_outcome, attempt_failure)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
-_ROWS_BEFORE = 7
+_ROWS_BEFORE = 8
 _PUT_ATTEMPT_BEFORE = """
 UPDATE decks
 SET attempt_commit = ?, attempt_started_at = ?,
@@ -207,6 +207,7 @@ def an_old_file_with_every_kind_of_row(tmp_path: Path) -> Path:
         old_rows = [
             ("failed-with-text", "failed", _TOOLCHAIN_TEXT),
             ("failed-without-text", "failed", None),
+            ("failed-empty-text", "failed", ""),
             ("running", "running", None),
             ("built", None, None),
         ] + [
@@ -247,8 +248,13 @@ def test_the_upgrade_keeps_every_row_and_every_old_value(tmp_path: Path) -> None
 
     create_tables(database)
 
-    assert everything_in(database, _READ_BEFORE) == before
+    after = everything_in(database, _READ_BEFORE)
     assert len(before) == _ROWS_BEFORE
+    assert [row[:13] for row in after] == [row[:13] for row in before]
+    assert [row[14] for row in after] == [row[14] for row in before]
+    assert {row[0]: row[13] for row in after} == {
+        row[0]: row[13] or None for row in before
+    }
 
 
 def test_the_upgrade_fills_the_reason_of_failed_attempts_only(tmp_path: Path) -> None:
@@ -259,6 +265,7 @@ def test_the_upgrade_fills_the_reason_of_failed_attempts_only(tmp_path: Path) ->
     assert dict(everything_in(database, "SELECT slug, attempt_reason FROM decks")) == {
         "failed-with-text": "toolchain",
         "failed-without-text": "no-words",
+        "failed-empty-text": "no-words",
         "running": None,
         "built": None,
         "sentence-0": "toolchain",
@@ -331,3 +338,128 @@ def test_the_release_before_reads_and_writes_an_upgraded_file_as_before(
         database,
         "SELECT attempt_outcome, attempt_failure FROM decks WHERE slug='running'",
     ) == [("failed", "x")]
+
+
+def run_the_release_before(database: Path, slug: str, failure: str | None) -> None:
+    """The release before this one ends a run: its statement knows no reason."""
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            _PUT_ATTEMPT_BEFORE,
+            (
+                COMMIT,
+                _TRIED_AT.isoformat(),
+                "running" if failure is None else "failed",
+                failure,
+                slug,
+            ),
+        )
+
+
+def read_failure(database: Path, slug: str) -> BuildFailure | None:
+    deck = SqliteDeckStore(database=database).get(slug)
+    assert deck is not None
+    assert deck.attempt is not None
+    return deck.attempt.failure
+
+
+def test_a_failure_the_release_before_wrote_is_read_after_a_start(
+    tmp_path: Path,
+) -> None:
+    database = an_old_file_with_every_kind_of_row(tmp_path)
+    create_tables(database)
+    run_the_release_before(database, "running", "old release words")
+
+    create_tables(database)
+
+    assert read_failure(database, "running") == BuildFailure.said("old release words")
+
+
+def test_a_failure_the_release_before_wrote_replaces_a_stale_server_reason(
+    tmp_path: Path,
+) -> None:
+    database = an_old_file_with_every_kind_of_row(tmp_path)
+    create_tables(database)
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE decks SET attempt_reason = 'output-megabytes',"
+            " attempt_written_megabytes = 9, attempt_allowed_megabytes = 5"
+            " WHERE slug = 'running'"
+        )
+    run_the_release_before(database, "running", "old release words")
+
+    create_tables(database)
+
+    assert read_failure(database, "running") == BuildFailure.said("old release words")
+
+
+def test_a_run_the_release_before_started_carries_no_stale_reason(
+    tmp_path: Path,
+) -> None:
+    database = an_old_file_with_every_kind_of_row(tmp_path)
+    create_tables(database)
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE decks SET attempt_reason = 'output-megabytes',"
+            " attempt_written_megabytes = 9, attempt_allowed_megabytes = 5"
+            " WHERE slug IN ('running', 'built')"
+        )
+    run_the_release_before(database, "running", None)
+
+    create_tables(database)
+
+    assert read_failure(database, "running") is None
+    built = SqliteDeckStore(database=database).get("built")
+    assert built is not None
+    assert built.attempt is None
+    assert everything_in(
+        database,
+        "SELECT count(*) FROM decks WHERE attempt_outcome IS NOT 'failed'"
+        " AND (attempt_reason IS NOT NULL OR attempt_written_megabytes IS NOT NULL)",
+    ) == [(0,)]
+
+
+@pytest.mark.parametrize("stored", [None, "", "slides.md:41:3 broke"])
+def test_a_stored_text_is_read_as_the_failure_that_said_would_make(
+    tmp_path: Path, stored: str | None
+) -> None:
+    database = an_old_file_with_every_kind_of_row(tmp_path)
+    create_tables(database)
+    run_the_release_before(database, "running", "x")
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE decks SET attempt_failure = ? WHERE slug = 'running'", (stored,)
+        )
+
+    create_tables(database)
+
+    assert read_failure(database, "running") == BuildFailure.said(stored)
+
+
+def test_a_second_start_changes_what_the_release_before_left_nothing_more(
+    tmp_path: Path,
+) -> None:
+    database = an_old_file_with_every_kind_of_row(tmp_path)
+    create_tables(database)
+    run_the_release_before(database, "running", "old release words")
+    create_tables(database)
+    after_the_first = everything_in(database, "SELECT * FROM decks ORDER BY slug")
+
+    create_tables(database)
+
+    assert (
+        everything_in(database, "SELECT * FROM decks ORDER BY slug") == after_the_first
+    )
+
+
+def test_a_table_missing_only_some_of_the_columns_gets_each_missing_one(
+    tmp_path: Path,
+) -> None:
+    database = an_old_file_with_every_kind_of_row(tmp_path)
+    with sqlite3.connect(database) as connection:
+        connection.execute("ALTER TABLE decks ADD COLUMN attempt_reason TEXT")
+    fresh = tmp_path / "fresh.sqlite3"
+    create_tables(fresh)
+
+    create_tables(database)
+
+    assert sorted(columns_of(database)) == sorted(columns_of(fresh))

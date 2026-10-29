@@ -190,6 +190,7 @@ def test_a_failed_build_carries_its_reason_counts_and_only_a_toolchains_text(
     unnamed = dict.fromkeys(
         ("text", "written_megabytes", "allowed_megabytes", "allowed_entries")
     )
+    assert body["attempt"]["outcome"] == BuildOutcome.FAILED
     assert body["attempt"]["failure"] == unnamed | carried
     assert body["state"] == DeckState.FAILED
     assert body["attempt"]["commit"] == attempt.commit[:7]

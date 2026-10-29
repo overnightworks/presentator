@@ -63,6 +63,12 @@ refusals, see [builds](builds.md#reason-codes)), the counts that reason names an
 for `toolchain` only, the toolchain's own text; it is `null` while the attempt
 runs.
 
+A file from before the reason is upgraded in place on start: each missing
+column is added and no row is lost. On every start the reason is also made to
+agree with the stored text, so a file an earlier release wrote to after the
+upgrade is read again; the one case it leaves is that release failing without
+words over a stored server reason, which the page words until the next build.
+
 - While a build runs, the page says so with the commit being built and how long
   it has been running, and the two views are shown locked rather than offered:
   the talk that stands may be replaced at any moment, and only a page load says

@@ -118,7 +118,7 @@ altogether.
 | Processes | `pids_limit` of the worker, 512 | The container may spawn no more |
 | Its own filesystem | the worker's 2 GiB `/work` | Writing past it fails inside the build |
 | The talk it leaves | `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` (`300`) | Both ends check it: the worker refuses the reply, and the web stores the reason below |
-| The files that talk holds | 100 000, a constant | The same, in the same words |
+| The files that talk holds | 100 000, a constant | The same, as its reason |
 | A deck sent to be built | the same megabytes and 100 000 entries, not counting its top-level `node_modules` | The web refuses it before it connects to the worker |
 
 A connection to the worker is not bounded by the build's bound alone: before the
