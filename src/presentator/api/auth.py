@@ -303,8 +303,8 @@ def _install_middleware(
     security headers. The gate's store calls commit on their own and `touch` is
     one update-only statement (ADR 0003), so the gate's admission takes no lock.
     The admin prefix, when it is served, takes a bearer token and no cookie.
-    `/api/` takes a person's token as that person; a request without a token is
-    decided by the session cookie.
+    While the admin prefix is served, `/api/` takes a person's token as that
+    person; a request without a token is decided by the session cookie.
     """
     install_web_auth_middleware(
         lobby,

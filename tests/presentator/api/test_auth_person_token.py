@@ -122,6 +122,7 @@ def test_a_subject_outside_the_app_has_no_access_and_no_account(scene: Scene) ->
 
     assert answer.status_code == HTTPStatus.FORBIDDEN
     assert 'error="insufficient_scope"' in answer.headers["www-authenticate"]
+    assert answer.json() == {"detail": "No access"}
     assert scene.count("users") == 0
 
 
@@ -137,7 +138,7 @@ def test_without_a_credential_a_program_gets_a_challenge_and_a_browser_the_login
     assert program.status_code == HTTPStatus.UNAUTHORIZED
     assert program.headers["www-authenticate"].startswith('Bearer realm="api"')
     assert browser.status_code == HTTPStatus.FOUND
-    assert browser.headers["location"].startswith("/login/oidc")
+    assert browser.headers["location"] == "/login/oidc?next=%2Fapi%2Fnothing"
 
 
 def test_a_cookie_alone_is_still_a_signed_in_person_on_api(scene: Scene) -> None:
