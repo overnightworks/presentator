@@ -6,7 +6,8 @@ outside, on the login guard, or on the pages a visitor sees before signing in.
 - Status: ACCEPTED 2026-10-14 — supersedes the outer door of
   [ADR 0007](0007-browser-client-behind-tunnel.md). Amended 2026-10-27: its
   own login is replaced by the Keycloak sign-in, per
-  [ADR 0018](0018-keycloak-replaces-own-accounts.md)
+  [ADR 0018](0018-keycloak-replaces-own-accounts.md). Amended 2026-10-29: the
+  privacy text lives in edge's central page
 - Date: 2026-10-14
 - Decision authority: the operator's ruling of 2026-10-14 and the ruled
   expectation lines recorded on
@@ -39,11 +40,16 @@ the home server is reached without an inbound port.
 
 Every lobby page, signed in or out, ends with two links. "Impressum" points straight
 at the operator's one Impressum on `hallucinai.de`, so the same operator's
-details have one text and no copy here. "Datenschutz" opens the central
-Datenschutzerklärung at its `#presentator` section (amended below).
+details have one text and no copy here. "Datenschutz" opens the instance's own
+Datenschutzerklärung at `/datenschutz`, which names what this instance stores
+and which AI provider receives data, because that differs from Songmaker's.
+`/datenschutz` answers without a session; a signed-in reader still sees the
+header there.
 
-The declaration's words are German whatever language a reader chose: they are
-the operator's legal text, not interface wording a catalog translates.
+The declaration's words have one owner in the code,
+`presentator.api.legal`, as typed sections the page renders. It is German
+whatever language a reader chose: it is the operator's legal text, not
+interface wording a catalog translates.
 
 The instance goes online only after the operator has approved the
 declaration's wording, every point it marks open is settled, and the pages
@@ -59,13 +65,14 @@ repository, which edge assembles into `https://hallucinai.de/datenschutz`
 beside its general part, the sign-in and the agent service. `GET /datenschutz`
 is no route here, and the footer links the central `#presentator`. A test holds
 the numbers of the section equal to the code that keeps them. The words above
-about a page "reachable without a session" now hold for the central page.
+about a page "reachable without a session" now hold for the central page, and
+`presentator.api.legal` no longer exists.
 
 ## Consequences
 
 - One account list, not two: adding a person is creating their account
   (ADR 0011); no allow-list has to be kept in step with it.
-- Signing in and out, first start, the static assets, the source hook's
+- Signing in and out, first start, the static assets, and the source hook's
   `POST` are reachable from the internet without a session.
   The login's throttle and the guard are the whole defence of everything else.
 - A change to what the instance stores or sends to a provider is a change to

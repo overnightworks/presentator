@@ -1,4 +1,4 @@
-"""The privacy section states the numbers the code keeps (#593)."""
+"""The privacy section states the numbers the code keeps."""
 
 import re
 from datetime import timedelta
