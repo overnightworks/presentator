@@ -13,7 +13,7 @@ from typing import Final
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict
 
-from presentator.api.admission import gated_person
+from presentator.api.admission import gated_admin, gated_person
 from presentator.api.problems import (
     PROBLEM_MEDIA_TYPE,
     ProblemDetails,
@@ -114,12 +114,6 @@ def _unspoken_as_problem() -> Generator[None]:
         raise ProblemError(HTTPStatus.UNPROCESSABLE_ENTITY) from None
 
 
-def _only_an_admin(request: Request) -> None:
-    """Refuse a person without the role before any body, read or write."""
-    if not gated_person(request).is_admin:
-        raise ProblemError(HTTPStatus.FORBIDDEN)
-
-
 def _mounted(
     *,
     read_account: Callable[..., AccountView],
@@ -135,7 +129,7 @@ def _mounted(
     router.add_api_route(
         ACCOUNT_PATH, write_account, methods=["PUT"], responses=unspoken
     )
-    admin = [Depends(_only_an_admin)]
+    admin = [Depends(gated_admin)]
     router.add_api_route(
         SETTINGS_PATH,
         read_settings,
