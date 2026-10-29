@@ -1,8 +1,0 @@
-claim_id = "ff2ae507faaa43669ed63d1324ddc429"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "47971d9a79723b8375ac300ffe4b5112c7d83c88"
-branch = "claude/issue-620-the-admission-helpers-get-a-lasting-owne"
-scope = ["src/presentator/api/admission.py", "src/presentator/api/auth.py", "src/presentator/api/decks.py", "src/presentator/api/pages.py", "src/presentator/api/preferences.py", "src/presentator/api/sources.py", "src/presentator/api/talk.py", "tests/presentator/api/test_auth_session_gate.py"]
-opened_commit = "40b410038df3731aba79934801638a4f23faebbc"
-whole_reason = "A move of six names to one new owner touches each importer's import line; splitting it leaves the helpers with two owners in between."
