@@ -9,10 +9,10 @@ from contextlib import contextmanager
 from http import HTTPStatus
 from typing import Final
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict
 
-from presentator.api.admission import gated_person
+from presentator.api.admission import gated_admin
 from presentator.api.problems import ProblemError, problem_response
 from presentator.application.voice import VoiceStatusUse
 from presentator.contracts.voice import (
@@ -76,11 +76,6 @@ class DownloadView(BaseModel):
     outcome: VoiceDownloadOutcome
 
 
-def _admin_only(request: Request) -> None:
-    if not gated_person(request).is_admin:
-        raise ProblemError(HTTPStatus.FORBIDDEN)
-
-
 @contextmanager
 def _private_service() -> Generator[None]:
     """A busy private service is a 409 problem; one that cannot answer, a 503."""
@@ -95,7 +90,7 @@ def _private_service() -> Generator[None]:
 def voice_api_routes(*, voice: VoiceStatusUse) -> APIRouter:
     """The router that answers the admin's voice catalogue and actions."""
     router = APIRouter(
-        dependencies=[Depends(_admin_only)],
+        dependencies=[Depends(gated_admin)],
         responses=problem_response(HTTPStatus.FORBIDDEN) | _UNAVAILABLE,
     )
 

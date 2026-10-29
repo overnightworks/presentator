@@ -83,9 +83,6 @@ status snapshot and shows Piper, Chatterbox, Qwen3-TTS 0.6B, VoxCPM2 and NVIDIA
 Magpie in that order. This describes source capability, not an inventory of any
 running instance.
 
-The catalogue and the load, download and sample actions are also reachable as
-JSON at `/api/voice`, admin only and `no-store`; the sample answers `audio/wav`.
-
 - Downloaded Piper or Chatterbox, and Qwen, VoxCPM2 or Magpie with their exact
   local snapshots and executables, and a voice whose previous Load failed have
   one Load action. A usable Qwen worker with an incomplete pinned snapshot has
@@ -101,6 +98,9 @@ JSON at `/api/voice`, admin only and `no-store`; the sample answers `audio/wav`.
 - One verified active row also names a local player: its DE or EN fixed sample
   waits while current speech owns synthesis, then plays through that exact
   active voice.
+
+The catalogue and the load, download and sample actions are also reachable as
+JSON at `/api/voice`, admin only and `no-store`; the sample answers `audio/wav`.
 
 ## Voices
 

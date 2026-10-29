@@ -31,7 +31,9 @@ _HAL = "hal-client"
 _PROBLEM = "application/problem+json"
 _CROSS_SITE = {"sec-fetch-site": "cross-site"}
 _WAV = b"RIFF....WAVEfmt "
-_QWEN_DOWNLOAD = "/api/voice/qwen3-tts-0.6b/download"
+_PIPER_LOAD = f"/api/voice/{VoiceId.PIPER}/load"
+_PIPER_SAMPLE = f"/api/voice/{VoiceId.PIPER}/sample"
+_QWEN_DOWNLOAD = f"/api/voice/{VoiceId.QWEN}/download"
 
 
 def a_snapshot(
@@ -111,7 +113,7 @@ def _get(lobby: Lobby) -> Response:
 
 
 def _load(lobby: Lobby) -> Response:
-    return lobby.client.post("/api/voice/piper/load", headers=_JSON)
+    return lobby.client.post(_PIPER_LOAD, headers=_JSON)
 
 
 def _download(lobby: Lobby) -> Response:
@@ -119,7 +121,7 @@ def _download(lobby: Lobby) -> Response:
 
 
 def _sample(lobby: Lobby) -> Response:
-    return lobby.client.post("/api/voice/piper/sample/de", headers=_JSON)
+    return lobby.client.post(f"{_PIPER_SAMPLE}/{SampleLanguage.GERMAN}", headers=_JSON)
 
 
 EVERY_ROUTE = pytest.mark.parametrize(
@@ -195,7 +197,10 @@ def test_the_admin_reads_the_recovery_that_names_a_voice() -> None:
 
     answer = _get(an_admins_lobby(speech))
 
-    assert answer.json()["recovery"] == {"kind": "load_failed", "voice": "voxcpm2"}
+    assert answer.json()["recovery"] == {
+        "kind": VoiceRecoveryKind.LOAD_FAILED.value,
+        "voice": VoiceId.VOXCPM.value,
+    }
 
 
 @pytest.mark.parametrize(
@@ -316,7 +321,7 @@ def test_a_value_outside_the_closed_sets_keeps_the_frameworks_validation_answer(
 
 @pytest.mark.parametrize(
     "address",
-    ["/api/voice/piper/load", _QWEN_DOWNLOAD, "/api/voice/piper/sample/en"],
+    [_PIPER_LOAD, _QWEN_DOWNLOAD, f"{_PIPER_SAMPLE}/{SampleLanguage.ENGLISH}"],
 )
 def test_a_cross_site_post_is_refused_by_the_origin_check_before_any_call(
     address: str,
@@ -334,9 +339,9 @@ def test_a_cross_site_post_is_refused_by_the_origin_check_before_any_call(
 @pytest.mark.parametrize(
     ("method", "address"),
     [
-        ("GET", "/api/voice/piper/load"),
+        ("GET", _PIPER_LOAD),
         ("GET", _QWEN_DOWNLOAD),
-        ("GET", "/api/voice/piper/sample/de"),
+        ("GET", f"{_PIPER_SAMPLE}/{SampleLanguage.GERMAN}"),
         ("POST", "/api/voice"),
         ("PUT", "/api/voice"),
     ],
@@ -366,9 +371,9 @@ _BEARER_ROUTES = pytest.mark.parametrize(
     ("method", "address"),
     [
         ("GET", "/api/voice"),
-        ("POST", "/api/voice/piper/load"),
+        ("POST", _PIPER_LOAD),
         ("POST", _QWEN_DOWNLOAD),
-        ("POST", "/api/voice/piper/sample/de"),
+        ("POST", f"{_PIPER_SAMPLE}/{SampleLanguage.GERMAN}"),
     ],
     ids=["status", "load", "download", "sample"],
 )
