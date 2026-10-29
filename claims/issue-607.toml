@@ -1,8 +1,0 @@
-claim_id = "dedef8e6798d4dc99076c3c82cba6401"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "cf31929d328b000be8db5da0d8765d48109c4376"
-branch = "claude/issue-607-f2-ruff-s-target-version-follows-the-roo"
-scope = ["pyproject.toml", "scripts", "src", "tests"]
-opened_commit = "998760af908ff661dcf06ef0064458fe041bef99"
-whole_reason = "One config switch whose mechanical fallout (24 UP fixes, the formatter's except rewrite in 10 files) ruff produces deterministically."
