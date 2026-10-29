@@ -12,10 +12,9 @@ from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, Form, Request, Response
 from starlette.responses import RedirectResponse
-from webauth.proxies import request_is_https
 
 from presentator.api.admission import gated_person, gated_session_id
-from presentator.api.hooks import hook_address
+from presentator.api.hooks import hook_url
 from presentator.api.pages import Pages
 from presentator.api.preferences import SETTINGS
 from presentator.application.decks import (
@@ -320,7 +319,7 @@ class _Surfaces:
                 request,
                 "source_created.html",
                 source_name=name,
-                address=self._hook_url(request, name),
+                address=hook_url(request, name),
                 webhook_secret=secret,
             )
         renewed = _ShownOnceKey(
@@ -506,7 +505,7 @@ class _Surfaces:
                 if shown.age is None
                 else self.pages.age_in_words(shown.age, text.language_tag)
             ),
-            address=self._hook_url(request, shown.name),
+            address=hook_url(request, shown.name),
             webhook_secret=webhook_secret,
             webhook_secret_held_elsewhere=webhook_secret_held_elsewhere,
             carries_no_secret=shown.access is AccessKind.FILE,
@@ -519,7 +518,7 @@ class _Surfaces:
         )
 
     def _run_row(self, run: ShownSourceRun, text: LobbyText) -> SourceRunRow:
-        state = _run_state_of(run)
+        state = run.state
         return SourceRunRow(
             state=state.value,
             state_word=(
@@ -531,10 +530,6 @@ class _Surfaces:
             commit=run.commit,
             reason=None if run.reason is None else _run_reason(run.reason, text),
         )
-
-    def _hook_url(self, request: Request, name: str) -> str:
-        scheme = "https" if request_is_https(request) else request.url.scheme
-        return f"{scheme}://{request.url.netloc}{hook_address(name)}"
 
 
 def source_routes(*, pages: Pages, decks: Decks) -> APIRouter:
@@ -637,22 +632,6 @@ def _run_reason(reason: SourceRunFailure, text: LobbyText) -> str:
         SourceRunFailure.REFUSED: text.source_run_refused,
         SourceRunFailure.FAILED: text.source_run_failed,
     }[reason]
-
-
-def _run_state_of(run: ShownSourceRun) -> SourceState:
-    """The one word a run row shows, read off its outcome and reason.
-
-    A refused login and a host that answered with something else are each
-    worth their own word here too, the same exception the sources list makes
-    (`SourceState`'s own docstring).
-    """
-    if run.outcome is SourceRunOutcome.SUCCESS:
-        return SourceState.REACHABLE
-    if run.reason is SourceRunFailure.REFUSED:
-        return SourceState.REFUSED
-    if run.reason is SourceRunFailure.FAILED:
-        return SourceState.FAILED
-    return SourceState.ERROR
 
 
 def _refusal_sentence(reason: SourceRefusal, text: LobbyText) -> str:
