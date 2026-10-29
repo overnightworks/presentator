@@ -48,6 +48,7 @@ from presentator.api.hooks import HOOK_CALLS, fetch_hook
 from presentator.api.pages import TEMPLATES, Pages, state_word
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
 from presentator.api.preferences import preference_routes
+from presentator.api.problems import install_problem_handler
 from presentator.api.session_api import SESSION_PATH, SessionAddresses, session_routes
 from presentator.api.sources import source_routes
 from presentator.application.decks import Decks
@@ -273,6 +274,7 @@ def _install_middleware(
     While the admin prefix is served, `/api/` takes a person's token as that
     person; a request without a token is decided by the session cookie.
     """
+    install_problem_handler(lobby)
     install_web_auth_middleware(
         lobby,
         security_headers=SecurityHeadersPolicy(

@@ -511,6 +511,8 @@ class ShownAttempt:
 
     commit: str
     ago: timedelta
+    started_at: datetime
+    outcome: BuildOutcome
     failure: str | None
 
 
@@ -523,9 +525,19 @@ class DeckPage:
     source: str | None
     commit: str
     built_ago: timedelta | None
+    built_at: datetime | None
     state: DeckState
     attempt: ShownAttempt | None
     # The themes this instance's toolchain carries (ADR 0014), or nothing
     # while its project cannot be read: an empty set is never shown as if it
     # were the real one (R3).
     themes: tuple[str, ...] | None
+
+    @property
+    def views_open(self) -> bool:
+        """Whether a view can be opened: a talk is delivered and no build runs.
+
+        A build that is running may deliver a half-written talk at any moment,
+        so the two views are not offered while one runs.
+        """
+        return self.built_at is not None and self.state is not DeckState.BUILDING

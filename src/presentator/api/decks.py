@@ -28,6 +28,7 @@ from starlette.staticfiles import NotModifiedResponse
 from starlette.types import Receive, Scope, Send
 
 from presentator.api.admission import gated_person
+from presentator.api.deck_api import deck_routes
 from presentator.api.pages import Pages, state_word
 from presentator.application.decks import Decks
 from presentator.contracts.decks import (
@@ -92,10 +93,7 @@ class _DeckPage:
             commit=page.commit,
             state=page.state.value,
             state_word=state_word(page.state, text),
-            # A build that is running may deliver a half-written talk at any
-            # moment, so the two views are not offered while one runs; the PDF
-            # beside them is the last good build's file and stays offered.
-            views_open=page.state is not DeckState.BUILDING,
+            views_open=page.views_open,
             banner=self._banner(page, text),
             builds_with=self._builds_with(page.themes, text),
         )
@@ -312,10 +310,14 @@ def _leaves_the_talk(directory: Path, path: str) -> bool:
 def add_deck_pages(
     lobby: FastAPI, *, decks: Decks, pages: Pages, talk_origin: str
 ) -> None:
-    """Give the lobby the deck page and its download; its views are at `talk_origin`."""
+    """Give the lobby the deck page, its download and its JSON facts.
+
+    The views are at `talk_origin`.
+    """
     page = _DeckPage(decks=decks, pages=pages, talk_origin=talk_origin)
     lobby.add_api_route(_DECK_PAGE, page.deck, methods=["GET"])
     lobby.add_api_route(_DECK_PDF, page.pdf, methods=["GET"])
+    lobby.include_router(deck_routes(decks=decks, talk_origin=talk_origin))
 
 
 def add_talk_mount(app: FastAPI, *, decks: Decks) -> None:
