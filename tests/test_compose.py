@@ -137,7 +137,10 @@ def test_the_socket_volume_starts_as_a_private_root_directory() -> None:
 def test_the_instance_answers_the_backchannel_under_the_host_of_its_public_origin() -> (
     None
 ):
-    """Logout (#630): the identity provider reaches the lobby by Host."""
+    """Logout: the identity provider reaches the lobby by Host.
+
+    Owner: docs/explanation/trust-boundaries.md
+    """
     compose = _parsed_compose()
     instance = compose["services"]["presentator"]
     public_origin = _environment_of(instance)["PRESENTATOR_PUBLIC_ORIGIN"]
