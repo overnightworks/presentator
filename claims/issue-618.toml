@@ -1,8 +1,0 @@
-claim_id = "6adb8095cfc448c5b344d9f02342564d"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "debcb1429ee592117f47c4c28c17c78181075db1"
-branch = "claude/issue-618-compose-catalog-and-example-title-tests"
-scope = ["tests/presentator/adapters/test_agent_service.py", "tests/presentator/adapters/test_catalog.py", "tests/presentator/adapters/test_deck_texts.py", "tests/presentator/api/test_auth_privacy_section.py", "tests/support/git_remote.py", "tests/test_compose.py"]
-opened_commit = "c7a17aacfca6442bd9bc0c0f8461056f63264a73"
-whole_reason = "One ruling applied to six test files that share no production change; each is a few lines and a lane per file would cost more than it splits."
