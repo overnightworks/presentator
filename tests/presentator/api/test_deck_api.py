@@ -133,6 +133,7 @@ def test_a_failed_build_carries_the_toolchains_words_unchanged_or_none(
 
     assert view.state is DeckState.FAILED
     assert view.attempt is not None
+    assert view.attempt.outcome is BuildOutcome.FAILED
     assert view.attempt.failure == said
     assert view.attempt.commit == attempt.commit[:7]
     assert view.built_at == a_build().built_at
@@ -166,6 +167,14 @@ def an_unknown_slug_answer(lobby: Lobby, slug: str = "no-such-deck") -> bytes:
     assert answer.headers["content-type"] == _PROBLEM
     assert answer.headers["cache-control"] == "no-store"
     return answer.content
+
+
+def test_the_generated_spec_declares_the_not_found_only_as_a_problem() -> None:
+    lobby = a_built_deck_lobby()
+
+    responses = lobby.app.openapi()["paths"]["/api/decks/{slug}"]["get"]["responses"]
+
+    assert list(responses["404"]["content"]) == [_PROBLEM]
 
 
 def test_an_unknown_slug_is_a_bare_not_found_problem() -> None:
