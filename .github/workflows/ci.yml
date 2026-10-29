@@ -274,7 +274,7 @@ jobs:
         run: uv run --locked pytest -q tests/test_main.py tests/test_model.py
 
   slidev:
-    name: "Slidev addon: lint, types, tests, deck build"
+    name: "Frontend: lint, types, tests, deck build"
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
