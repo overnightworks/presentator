@@ -16,6 +16,10 @@ entry = "frontend/"
 reason = "the Slidev addon and its pnpm toolchain, built apart from the Python package"
 
 [[root.allow]]
+entry = "legal/"
+reason = "the privacy section edge assembles into its central Datenschutz page (edge section contract v1); hal legal reads it from this path"
+
+[[root.allow]]
 entry = "speech/"
 reason = "the host speech service and its provider workers, each with its own lock"
 

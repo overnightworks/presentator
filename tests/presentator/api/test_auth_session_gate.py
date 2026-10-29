@@ -19,7 +19,6 @@ from webauth.middleware.security_headers import (
 from presentator.api.auth import PERMISSIONS_POLICY
 from presentator.api.hooks import hook_address
 from presentator.api.pages import gated_person, gated_session_id
-from presentator.application.identity import SESSION_LIFETIME
 from tests.presentator.application.support.fakes import (
     FakeSession,
     FakeSessionRecordStore,
@@ -29,7 +28,6 @@ from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     ENGLISH,
-    USERNAME,
     Lobby,
     a_browser_at,
     a_content_security_policy,
@@ -221,34 +219,6 @@ def test_a_dot_segment_under_the_hook_prefix_is_refused_before_the_route(
     answer = lobby.client.post("/sources/%2e%2e/logout", headers=accept)
 
     assert answer.status_code == status
-
-
-def test_the_datenschutz_opens_signed_out_without_a_store_read(lobby: Lobby) -> None:
-    answer = lobby.client.get("/datenschutz")
-
-    assert answer.status_code == HTTPStatus.OK
-    assert _counts(lobby) == (0, 0)
-
-
-def test_the_datenschutz_shows_the_person_signed_in_with_one_admission(
-    signed_in_lobby: Lobby,
-) -> None:
-    answer = signed_in_lobby.client.get("/datenschutz")
-
-    assert answer.status_code == HTTPStatus.OK
-    assert USERNAME in answer.text
-    assert _counts(signed_in_lobby) == (1, 1)
-
-
-def test_the_datenschutz_reads_as_signed_out_for_a_session_past_the_cap(
-    signed_in_lobby: Lobby,
-) -> None:
-    signed_in_lobby.clock.advance(SESSION_LIFETIME * 2)
-
-    answer = signed_in_lobby.client.get("/datenschutz")
-
-    assert answer.status_code == HTTPStatus.OK
-    assert USERNAME not in answer.text
 
 
 def test_a_signed_in_page_costs_one_load_and_one_touch(signed_in_lobby: Lobby) -> None:

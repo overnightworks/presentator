@@ -34,7 +34,6 @@ class LobbyText:
     no_access_back: str
     footer_impressum: str
     footer_datenschutz: str
-    legal_back_to_login: str
     decks_title: str
     decks_column_state: str
     decks_column_deck: str

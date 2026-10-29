@@ -149,8 +149,7 @@ room sees; the AI's first answer begins at once, with no introduction. The
 boards show the rulings of 28.10.2026 on #293: line 1 C (no introduction), 2 A
 (the deck's language), 3 A (only while listening or answering), 5 A (the neutral
 sentence) and line 6 (banner, then pill). The Lines column names the #293 S12
-lines each board shows, not only those its caption cites; the Datenschutz boards
-are untouched.
+lines each board shows, not only those its caption cites.
 
 | PNG | Caption | Lines |
 |---|---|---|
@@ -181,14 +180,12 @@ are untouched.
 
 ### Rechtliches (#196)
 
-Impressum and Datenschutz, reachable without a session (the signed-out boards
-carry the same links), and the same footer links carried onto a page after
-login. The Datenschutz artboards show the
-page's layout with the words of `src/presentator/api/legal.py`, which owns
-them; the operator approves them before they go online (issue #196, line 3).
+The Impressum and Datenschutz footer links, on the signed-out boards and carried
+onto a page after login. Both point at the central pages on `hallucinai.de`
+(Datenschutz at its `#presentator` section); the Datenschutz page itself is
+edge's, with presentator's words in `legal/datenschutz.html`, so no board draws
+it (issue #593).
 
 | PNG | Caption | Lines |
 |---|---|---|
 | `m0-lobby/legal-deck-list.png` | Deck list with legal links, 1024 px | 4 |
-| `m0-lobby/legal-datenschutz.png` | Datenschutz, reachable without login, 1024 px | 3 |
-| `m0-lobby/legal-datenschutz-narrow.png` | Datenschutz, reachable without login, 390 px | 3 |

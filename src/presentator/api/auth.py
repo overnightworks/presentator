@@ -49,7 +49,6 @@ from webauth.sign_in_routes import (
 from presentator.api.decks import add_deck_pages
 from presentator.api.health import HEALTH_IS_PUBLIC, add_health_route
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
-from presentator.api.legal import DATENSCHUTZ, Emphasis
 from presentator.api.pages import (
     TEMPLATES,
     Pages,
@@ -83,7 +82,6 @@ LOBBY_SIGN_IN: Final = SignInPaths(
 TALK_SIGN_IN: Final = SignInPaths(
     start=START_SIGN_IN_PATH, callback=SIGN_IN_CALLBACK_PATH
 )
-_DATENSCHUTZ: Final = "/datenschutz"
 _SETUP: Final = "/setup"
 
 
@@ -107,9 +105,6 @@ def talk_sign_in_refusal_path(refusal: RefusalPage) -> str:
 # origin check through the sign-in paths.
 # `/setup` is a retired address: it answers 404 to everyone, so a signed-out
 # reader is not sent to a login for a page that does not exist.
-# The Datenschutzerklärung has to be readable before anyone signs in (ADR
-# 0015), yet a reader who is signed in keeps the header there like on every
-# other page.
 _SERVER_CALLS: Final = PathRules(prefixes=(HOOK_CALLS,))
 _PUBLIC_RULES: Final = (
     PublicRule(
@@ -128,7 +123,6 @@ _PUBLIC_RULES: Final = (
     PublicRule(_SERVER_CALLS, methods=frozenset({HTTPMethod.POST})),
     *LOBBY_SIGN_IN.public_rules,
 )
-_OPTIONAL_PATHS: Final = PathRules(exact=frozenset({_DATENSCHUTZ}))
 PERMISSIONS_POLICY: Final = "camera=(), microphone=(), geolocation=()"
 _CSRF_POLICY: Final = CsrfPolicy(
     exempt=PathRules(
@@ -294,15 +288,6 @@ class _Surfaces:
             start_sign_in=retry,
         )
 
-    def datenschutz_page(self, request: Request) -> Response:
-        """Show the Datenschutzerklärung to anyone, signed in or not."""
-        return self.pages.page(
-            request,
-            "datenschutz.html",
-            document=DATENSCHUTZ,
-            emphasis=Emphasis,
-        )
-
 
 def _install_middleware(
     lobby: FastAPI,
@@ -333,7 +318,6 @@ def _install_middleware(
             session_transaction=lambda: nullcontext(sessions),
             login_redirect=LOGIN_REDIRECT,
             public=_PUBLIC_RULES,
-            optional=_OPTIONAL_PATHS,
         ),
     )
 
@@ -390,7 +374,6 @@ def create_lobby(
             surfaces.talk_sign_in_refusal_page(refusal),
             methods=["GET"],
         )
-    lobby.add_api_route(_DATENSCHUTZ, surfaces.datenschutz_page, methods=["GET"])
     add_health_route(lobby)
     lobby.include_router(preference_routes(pages=pages, voice=private.voice))
     lobby.include_router(source_routes(pages=pages, decks=decks))

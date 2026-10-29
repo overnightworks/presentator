@@ -12,7 +12,6 @@ import uvicorn
 from pydantic import SecretStr
 
 from presentator.adapters.identity import SqliteSessionRecordStore
-from presentator.api.legal import DATENSCHUTZ
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host import main
@@ -113,16 +112,3 @@ def test_the_sweep_runs_while_the_server_serves(
     main.main()
 
     assert swept == [True]
-
-
-def test_the_datenschutz_names_the_sweep_period_of_five_minutes() -> None:
-    sentences = [
-        "".join(phrase.words for phrase in paragraph)
-        for section in DATENSCHUTZ.sections
-        for paragraph in section.paragraphs
-    ]
-
-    assert any(
-        "abgelaufene Sitzungen löscht der Dienst alle 5 Minuten." in sentence
-        for sentence in sentences
-    )

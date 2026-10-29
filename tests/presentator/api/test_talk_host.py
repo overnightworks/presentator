@@ -37,7 +37,7 @@ from tests.support.talk_support import (
 )
 
 _IMPRESSUM = f'<a href="https://hallucinai.de/impressum">{ENGLISH.footer_impressum}</a>'
-_DATENSCHUTZ = f'<a href="/datenschutz">{ENGLISH.footer_datenschutz}</a>'
+_DATENSCHUTZ = f'<a href="https://hallucinai.de/datenschutz#presentator">{ENGLISH.footer_datenschutz}</a>'
 
 
 @pytest.fixture(params=["signed out", "signed in"])
@@ -94,7 +94,6 @@ _SIGNED_OUT = "signed out"
 _LOBBY_ONLY_PAGES = [
     "/settings",
     "/settings/sources",
-    "/datenschutz",
     "/login",
     "/static/lobby.css",
     "/login/talk/no-access",
@@ -126,6 +125,31 @@ def test_a_lobby_page_is_not_found_on_the_talk_host(hosts: Hosts, path: str) -> 
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
     assert _is_the_talk_host(answer)
+
+
+@pytest.mark.parametrize("address", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])
+def test_signed_in_the_privacy_text_is_no_route_on_either_host(
+    hosts: Hosts, address: str
+) -> None:
+    answer = hosts.signed_in_at(address).get("/datenschutz")
+
+    assert answer.status_code == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.parametrize("address", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])
+def test_signed_out_the_privacy_text_is_sent_to_sign_in_like_any_other_path(
+    hosts: Hosts, address: str
+) -> None:
+    browser = hosts.browser(address)
+
+    privacy = browser.get("/datenschutz")
+    other = browser.get("/nothing-here")
+
+    assert privacy.status_code == other.status_code == HTTPStatus.FOUND
+    assert (
+        privacy.headers["location"].split("?")[0]
+        == other.headers["location"].split("?")[0]
+    )
 
 
 # T5a.

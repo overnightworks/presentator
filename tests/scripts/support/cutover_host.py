@@ -174,7 +174,7 @@ class Host:
         return outcome(0, override or self.healthy_answer(host, url.path))
 
     def healthy_answer(self, host: str, path: str) -> str:
-        if path in {"/health", "/datenschutz"}:
+        if path == "/health":
             return OK_ANSWER
         if path == "/login/oidc":
             return SIGN_IN_ANSWER

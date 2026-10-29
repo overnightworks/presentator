@@ -18,11 +18,8 @@ from webauth.middleware.security_headers import (
     REFERRER_POLICY,
     STRICT_TRANSPORT_SECURITY,
 )
-from webauth.oidc import PENDING_LOGIN_MAX_AGE_SECONDS
 
 from presentator.api.hooks import hook_address
-from presentator.api.legal import DATENSCHUTZ
-from presentator.application.decks import DRAFT_MAX_AGE
 from presentator.application.identity import (
     SESSION_LIFETIME,
 )
@@ -453,7 +450,7 @@ def test_an_address_that_only_starts_like_a_stylesheet_still_asks_for_the_login(
 def test_no_signed_in_page_carries_a_hex_colour_or_an_inline_style(
     signed_in_lobby: Lobby,
 ) -> None:
-    for path in ("/", "/login", "/datenschutz"):
+    for path in ("/", "/login"):
         page = signed_in_lobby.client.get(path).text
 
         assert not _HEX_COLOUR.search(page)
@@ -482,171 +479,12 @@ def _links_the_impressum_and_the_datenschutz(page: str) -> bool:
     return (
         f'<a href="https://hallucinai.de/impressum">{ENGLISH.footer_impressum}</a>'
         in page
-        and f'<a href="/datenschutz">{ENGLISH.footer_datenschutz}</a>' in page
-    )
-
-
-def test_the_datenschutz_opens_without_a_session(lobby: Lobby) -> None:
-    answer = lobby.client.get("/datenschutz")
-
-    assert answer.status_code == HTTPStatus.OK
-    assert DATENSCHUTZ.title in answer.text
-    assert '<a href="/login">' in answer.text
-
-
-def test_the_datenschutz_says_the_cookies_are_set_at_sign_in_and_not_renewed() -> None:
-    document = " ".join(
-        "".join(phrase.words for phrase in paragraph)
-        for section in DATENSCHUTZ.sections
-        for paragraph in section.paragraphs
-    )
-
-    assert "oidc_id_token_hint" not in document
-    assert "Browserverlauf landen" not in document
-    assert "__Host-oidc_pending_" in document
-    assert "wird danach nicht erneuert" in document
-    assert "mit jeder angemeldeten Antwort erneuert" not in document
-    assert "Keycloak-Subject-ID und Rolle" in document
-
-
-def test_the_datenschutz_page_carries_the_approved_session_storage_sentence(
-    lobby: Lobby,
-) -> None:
-    """Card G, G3: the renewed refresh token and the per-question access token."""
-    page = lobby.client.get("/datenschutz").text
-
-    assert (
-        "Gespeichert werden Sitzungs-ID, Benutzer-ID, der Zeitpunkt der Anmeldung "
-        "und des Ablaufs, das ID-Token der Anmeldung sowie das Erneuerungs-Token "
-        "(Refresh-Token), das Keycloak bei der Anmeldung und bei jeder Erneuerung "
-        "ausstellt. Es liegt unverschlüsselt in der Sitzungszeile, ist ohne das "
-        "Client-Geheimnis von Presentator bei Keycloak nicht verwendbar und wird "
-        "mit der Sitzung gelöscht. Auch das ID-Token von Keycloak liegt "
-        "unverschlüsselt in der Sitzungszeile und wird mit ihr gelöscht. "
-        "Presentator braucht es nur, um Sie beim Abmelden auch bei Keycloak "
-        "abzumelden. Was es enthält, beschreibt der Abschnitt zur Anmeldung über "
-        "Keycloak. Für jede CoPresenter-Frage holt Presentator ein frisches "
-        "Zugriffstoken bei Keycloak und gibt es an den Agent-Dienst weiter; "
-        "gespeichert wird es nicht."
-    ) in page
-
-
-def test_the_datenschutz_renders_every_section_and_links_the_impressum(
-    lobby: Lobby,
-) -> None:
-    page = lobby.client.get("/datenschutz").text
-    impressum_link = '<a href="https://hallucinai.de/impressum">Impressum</a>'
-
-    assert all(
-        f"<h2>{section.heading}</h2>" in page for section in DATENSCHUTZ.sections
-    )
-    assert f"siehe {impressum_link}." in page
-    assert f"die im {impressum_link} genannte Kontaktadresse" in page
-
-
-def test_the_datenschutz_links_the_notice_sections_of_hallucinai(
-    lobby: Lobby,
-) -> None:
-    """#519 sentence 2: the notice links both hallucinai sections by their full href."""
-    page = lobby.client.get("/datenschutz").text
-
-    assert 'href="https://hallucinai.de/datenschutz#agent-dienst"' in page
-    assert 'href="https://hallucinai.de/datenschutz#anmeldung"' in page
-
-
-def test_the_datenschutz_leaves_nothing_open_and_names_its_date(
-    lobby: Lobby,
-) -> None:
-    page = lobby.client.get("/datenschutz").text
-
-    assert "[offen" not in page
-    assert re.search(r"Stand: \d{1,2}\. \w+ \d{4}", page)
-
-
-def test_the_datenschutz_names_the_hours_the_code_keeps_a_draft_and_a_session(
-    lobby: Lobby,
-) -> None:
-    page = lobby.client.get("/datenschutz").text
-    draft_hours = int(DRAFT_MAX_AGE.total_seconds()) // 3600
-    session_hours = int(SESSION_LIFETIME.total_seconds()) // 3600
-
-    assert f"rund {draft_hours} Stunden nach Erzeugung" in page
-    assert f"{session_hours} Stunden" in page
-    assert f"Das Cookie nach der Anmeldung ist {session_hours} Stunden gültig" in page
-
-
-@pytest.mark.parametrize(
-    "disclosure",
-    [
-        "zwei Cookie-Arten",
-        "bleibt es, bis seine {pending_minutes} Minuten ablaufen",
-        (
-            "Presentator beendet beim Abmelden sofort die Sitzung in "
-            "Presentator und leitet den Browser zu Keycloak weiter, um dort "
-            "auch die Anmeldung zu beenden; Keycloak fragt dabei "
-            "gegebenenfalls nach."
-        ),
-    ],
-)
-def test_the_datenschutz_discloses_the_cookie_kinds_the_id_token_and_the_logout_page(
-    lobby: Lobby,
-    disclosure: str,
-) -> None:
-    page = lobby.client.get("/datenschutz").text
-    session_hours = int(SESSION_LIFETIME.total_seconds()) // 3600
-    pending_minutes = PENDING_LOGIN_MAX_AGE_SECONDS // 60
-
-    assert (
-        disclosure.format(pending_minutes=pending_minutes, session_hours=session_hours)
+        and f'<a href="https://hallucinai.de/datenschutz#presentator">{ENGLISH.footer_datenschutz}</a>'
         in page
     )
 
 
-def test_the_datenschutz_names_the_agent_service_and_claims_nothing_of_its_keeping(
-    lobby: Lobby,
-) -> None:
-    """Card G, G1: the short paragraph; the service's own facts are not claimed here."""
-    page = lobby.client.get("/datenschutz").text
-
-    assert (
-        "Stellen Sie im Vortrag eine Frage, sendet Presentator sie mit dem Titel "
-        "und dem Text des gefragten Decks an den Agent-Dienst von hallucinai. Was "
-        "der Dienst damit tut, beschreibt "
-        '<a href="https://hallucinai.de/datenschutz#agent-dienst">sein Abschnitt in '
-        "der Datenschutzerklärung von hallucinai</a>."
-    ) in page
-    assert "Anthropic" not in page
-    assert "Anthropic Ireland, Limited:" not in page
-    assert "Kopien der Claude-Software:" not in page
-    assert "Claude-Kommandozeile" not in page
-    assert "Arbeitsspeicher" not in page
-
-
-@pytest.mark.parametrize("stored_client_detail", ["IP-Adresse", "User-Agent"])
-def test_the_datenschutz_names_no_ip_address_and_no_user_agent_as_stored(
-    lobby: Lobby,
-    stored_client_detail: str,
-) -> None:
-    assert stored_client_detail not in lobby.client.get("/datenschutz").text
-
-
-@pytest.mark.parametrize("cookie_name", ["__Host-session_id", "slidev-"])
-def test_the_datenschutz_names_every_cookie_and_storage_key(
-    lobby: Lobby,
-    cookie_name: str,
-) -> None:
-    assert cookie_name in lobby.client.get("/datenschutz").text
-
-
-# #414 Done when, the Datenschutz names the talk host cookie.
-def test_the_datenschutz_names_the_talk_hosts_own_session_cookie(lobby: Lobby) -> None:
-    page = lobby.client.get("/datenschutz").text
-
-    assert "Talk-Host" in page
-    assert page.index("Talk-Host") < page.index("__Host-session_id ist ein eigenes")
-
-
-@pytest.mark.parametrize("path", ["/login", "/datenschutz"])
+@pytest.mark.parametrize("path", ["/login", "/login/talk/no-access"])
 def test_a_signed_out_page_links_the_impressum_and_the_datenschutz(
     lobby: Lobby,
     path: str,
@@ -654,7 +492,7 @@ def test_a_signed_out_page_links_the_impressum_and_the_datenschutz(
     assert _links_the_impressum_and_the_datenschutz(lobby.client.get(path).text)
 
 
-@pytest.mark.parametrize("path", ["/", "/account", "/datenschutz"])
+@pytest.mark.parametrize("path", ["/", "/account"])
 def test_a_signed_in_page_links_the_impressum_and_the_datenschutz(
     signed_in_lobby: Lobby,
     path: str,
@@ -663,11 +501,3 @@ def test_a_signed_in_page_links_the_impressum_and_the_datenschutz(
 
     assert ENGLISH.log_out in page
     assert _links_the_impressum_and_the_datenschutz(page)
-
-
-@pytest.mark.parametrize(
-    "removed", ["JavaScript lesbar", "Fälschungsschutz", "__Host-csrf_token"]
-)
-def test_the_datenschutz_names_no_second_cookie(lobby: Lobby, removed: str) -> None:
-    """#474 cell 33: the Datenschutz holds no wording of the removed second cookie."""
-    assert removed not in lobby.client.get("/datenschutz").text

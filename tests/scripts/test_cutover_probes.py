@@ -14,7 +14,6 @@ import pytest
 from ruamel.yaml import YAML
 
 from presentator.api.auth import (
-    _DATENSCHUTZ,  # pyright: ignore[reportPrivateUsage] - the app keeps its one copy of the path private
     START_SIGN_IN_PATH,
 )
 from presentator.api.health import HEALTH_PATH
@@ -58,7 +57,6 @@ WEB_PROBES_IN_ORDER = (
     ("talk", "root"),
     ("lobby", "sign-in"),
     ("talk", "sign-in"),
-    ("lobby", "datenschutz"),
     ("lobby", "health"),
     ("talk", "health"),
 )
@@ -339,7 +337,6 @@ def test_the_scripts_app_paths_are_the_apps_own(cutover: ModuleType) -> None:
     """S9h2 (#553) sentence 4: python3 cannot import the app, a test ties the copies."""
     assert cutover.SIGN_IN_PATH == START_SIGN_IN_PATH
     assert cutover.HEALTH_PATH == HEALTH_PATH
-    assert cutover.DATENSCHUTZ_PATH == _DATENSCHUTZ
 
 
 def test_every_probe_holds_on_a_healthy_instance(scene: Scene) -> None:
@@ -467,23 +464,18 @@ def local(host: str, path: str, answer: str) -> dict[tuple[str, str, str], str]:
             id="no-cookie",
         ),
         pytest.param(
-            local(LOBBY_HOST, "/datenschutz", BAD_LOBBY),
-            "local lobby datenschutz",
-            id="datenschutz",
-        ),
-        pytest.param(
             {("public", TALK_HOST, "/health"): BAD_LOBBY},
             "public talk health",
             id="public-health",
         ),
         pytest.param(
-            local(LOBBY_HOST, "/datenschutz", "HTTP/1.1 \u00b200\r\n\r\n"),
-            "local lobby datenschutz",
+            local(LOBBY_HOST, "/health", "HTTP/1.1 \u00b200\r\n\r\n"),
+            "local lobby health",
             id="status-of-superscript-digits",
         ),
         pytest.param(
-            local(LOBBY_HOST, "/datenschutz", "HTTP/1.1 \u0662\u0660\u0660 OK\r\n\r\n"),
-            "local lobby datenschutz",
+            local(LOBBY_HOST, "/health", "HTTP/1.1 \u0662\u0660\u0660 OK\r\n\r\n"),
+            "local lobby health",
             id="status-of-arabic-indic-digits",
         ),
     ],
@@ -525,11 +517,11 @@ def test_an_undecodable_answer_fails_only_its_probe_naming_the_error_class(
     scene: Scene,
 ) -> None:
     """S9h2 (#553) sentences 5, 6 and 7: the class is named, the run goes on."""
-    scene.host.undecodable = {("local", LOBBY_HOST, "/datenschutz")}
+    scene.host.undecodable = {("local", LOBBY_HOST, "/health")}
 
     run = scene.drive()
 
-    assert "failed: local lobby datenschutz (UnicodeDecodeError)" in run.lines
+    assert "failed: local lobby health (UnicodeDecodeError)" in run.lines
     assert "held: public talk health" in run.lines
     assert (run.code, run.lines[-1]) == (1, NEXT_STEP)
 

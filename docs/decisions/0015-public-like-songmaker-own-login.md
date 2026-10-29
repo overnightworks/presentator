@@ -6,7 +6,9 @@ outside, on the login guard, or on the pages a visitor sees before signing in.
 - Status: ACCEPTED 2026-10-14 — supersedes the outer door of
   [ADR 0007](0007-browser-client-behind-tunnel.md). Amended 2026-10-27: its
   own login is replaced by the Keycloak sign-in, per
-  [ADR 0018](0018-keycloak-replaces-own-accounts.md)
+  [ADR 0018](0018-keycloak-replaces-own-accounts.md). Amended 2026-10-29: the
+  privacy text lives in edge's central page, and `/datenschutz` is no route on
+  either host
 - Date: 2026-10-14
 - Decision authority: the operator's ruling of 2026-10-14 and the ruled
   expectation lines recorded on
@@ -54,16 +56,29 @@ The instance goes online only after the operator has approved the
 declaration's wording, every point it marks open is settled, and the pages
 have been driven in a real browser at phone and desktop width.
 
+## Amendment 2026-10-29: the privacy text lives in edge
+
+Per [overnightworks/edge#110](https://github.com/overnightworks/edge/issues/110)
+and [#593](https://github.com/overnightworks/presentator/issues/593), the
+instance serves no Datenschutzerklärung of its own. What it stores and which AI
+provider receives data is the section `legal/datenschutz.html` of this
+repository, which edge assembles into `https://hallucinai.de/datenschutz`
+beside its general part, the sign-in and the agent service. `GET /datenschutz`
+is no route here (signed in it is 404, signed out it is sent to sign-in like
+any other non-public path), and the footer links the central `#presentator`.
+A test holds the numbers of the section equal to the code that keeps them. The words above
+about a page "reachable without a session" now hold for the central page, and
+`presentator.api.legal` no longer exists.
+
 ## Consequences
 
 - One account list, not two: adding a person is creating their account
   (ADR 0011); no allow-list has to be kept in step with it.
-- Signing in and out, first start, the static assets, the source hook's
-  `POST`, and the Datenschutzerklärung are reachable from the internet without
-  a session.
+- Signing in and out, first start, the static assets, and the source hook's
+  `POST` are reachable from the internet without a session.
   The login's throttle and the guard are the whole defence of everything else.
 - A change to what the instance stores or sends to a provider is a change to
-  the declaration in the same pull request.
+  the section `legal/datenschutz.html` in the same pull request.
 
 ## Rejected alternatives
 

@@ -9,7 +9,6 @@ excuse.
 from presentator.api.auth import DeckRow
 from presentator.api.copresenter import AskRequest
 from presentator.api.decks import Banner, TalkFiles
-from presentator.api.legal import LegalDocument, LegalSection, Phrase
 from presentator.api.sources import (
     SourceDeckRow,
     SourceRemovalView,
@@ -75,15 +74,6 @@ SourceRemovalView.body
 Banner.lead
 Banner.when
 Banner.sentences
-
-# `presentator/api/templates/datenschutz.html` renders the Datenschutz page out
-# of these, and the signed-out reader's way back to the login.
-Phrase.emphasis
-LegalSection.heading
-LegalSection.paragraphs
-LegalDocument.introduction
-LegalDocument.sections
-LobbyText.legal_back_to_login
 
 # The words below reach a person through a Jinja template alone. That a catalog
 # carries each of them is proven by `load_lobby_text`, which refuses a catalog
