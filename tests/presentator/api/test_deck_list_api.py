@@ -65,9 +65,7 @@ def a_deck(
 
 
 def an_attempt(outcome: BuildOutcome) -> BuildAttempt:
-    return BuildAttempt(
-        commit=_COMMIT, started_at=NOW, outcome=outcome, failure=None
-    )
+    return BuildAttempt(commit=_COMMIT, started_at=NOW, outcome=outcome, failure=None)
 
 
 def signed_in_lobby(*decks: Deck, sources: tuple[str, ...] = ()) -> Lobby:
@@ -82,8 +80,7 @@ def signed_in_lobby(*decks: Deck, sources: tuple[str, ...] = ()) -> Lobby:
         given=GivenDecks(
             store=store,
             sources=tuple(
-                replace(a_configured_source(url), id=f"source-{url}")
-                for url in sources
+                replace(a_configured_source(url), id=f"source-{url}") for url in sources
             ),
         )
     )

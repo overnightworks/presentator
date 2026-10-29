@@ -35,7 +35,6 @@ def deck_list_routes(*, decks: Decks) -> APIRouter:
     """The router that answers the reader's deck list."""
     router = APIRouter()
 
-    @router.get(DECK_LIST_PATH)
     def deck_list(request: Request) -> DeckListView:
         viewer = gated_person(request).id
         return DeckListView(
@@ -51,4 +50,5 @@ def deck_list_routes(*, decks: Decks) -> APIRouter:
             source_address=decks.source_address(viewer=viewer),
         )
 
+    router.add_api_route(DECK_LIST_PATH, deck_list, methods=["GET"])
     return router

@@ -41,13 +41,13 @@ from webauth.sign_in_routes import (
 )
 
 from presentator.api.admission import gated_person
+from presentator.api.deck_list_api import deck_list_routes
 from presentator.api.decks import add_deck_pages
 from presentator.api.health import HEALTH_IS_PUBLIC, add_health_route
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
 from presentator.api.pages import TEMPLATES, Pages, state_word
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
 from presentator.api.preferences import preference_routes
-from presentator.api.deck_list_api import deck_list_routes
 from presentator.api.session_api import SESSION_PATH, SessionAddresses, session_routes
 from presentator.api.sources import source_routes
 from presentator.application.decks import Decks
@@ -329,11 +329,7 @@ def create_lobby(
     stored source and its secret is answered alike, and GET stays behind the
     session.
     """
-    surfaces = _Surfaces(
-        decks=decks,
-        pages=pages,
-        auth=auth,
-    )
+    surfaces = _Surfaces(decks=decks, pages=pages, auth=auth)
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(lobby, auth.config)
     _install_middleware(lobby, auth, sessions, private.admin_people)
