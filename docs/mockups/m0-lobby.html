@@ -227,7 +227,7 @@ a.r.hover { background: var(--surface-hover); }
 .icon { width: 16px; height: 16px; flex: none; display: block; }
 
 /* The deck groups keep the look their frozen pictures (#139, #293 S12) were drawn in: their own tokens and board chrome, scoped here. */
-.deck {
+.deck-surfaces {
 	--canvas: #E9ECEE; --canvas-2: #DFE3E6; --screen: #FFFFFF; --ink: #14181D; --ink-soft: #5C6774; --ink-faint: #8A94A0; --line: #D2D8DD;
 	--busy: #9A6200; --shadow: 0 1px 2px rgba(20, 24, 29, .06), 0 8px 24px -12px rgba(20, 24, 29, .28);
 	--sans: "IBM Plex Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
@@ -235,31 +235,31 @@ a.r.hover { background: var(--surface-hover); }
 	--mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Consolas", monospace;
 	width: 1120px; max-width: 100%; background: var(--canvas); -webkit-font-smoothing: antialiased; color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5;
 }
-:root[data-theme='dark'] .deck {
+:root[data-theme='dark'] .deck-surfaces {
 	--canvas: #101317; --canvas-2: #171B21; --screen: #1C2128; --ink: #E8ECF0; --ink-soft: #9BA5B1; --ink-faint: #737E8B; --line: #2C333C;
 	--busy: #E0A63F; --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -14px rgba(0, 0, 0, .8);
 }
 @media (prefers-color-scheme: dark) {
-	:root:not([data-theme='light']) .deck {
+	:root:not([data-theme='light']) .deck-surfaces {
 		--canvas: #101317; --canvas-2: #171B21; --screen: #1C2128; --ink: #E8ECF0; --ink-soft: #9BA5B1; --ink-faint: #737E8B; --line: #2C333C;
 		--busy: #E0A63F; --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -14px rgba(0, 0, 0, .8);
 	}
 }
-.deck *, .deck *::before, .deck *::after { box-sizing: revert; }
-.deck .group-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
-.deck .group-head h2 { margin: 0; font-family: inherit; font-size: 22px; font-weight: 600; letter-spacing: -.01em; text-transform: none; }
-.deck .lines { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); }
-.deck .boards { gap: 32px; }
-.deck .board-cap { max-width: 48ch; }
-.deck .board-title { font-family: var(--cond); font-size: 13px; letter-spacing: .08em; gap: 10px; flex-wrap: wrap; }
-.deck .board-title .w { font-family: var(--mono); font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--ink-faint); }
-.deck .board-note { color: var(--ink-soft); }
-.deck .open-mark { font-family: var(--cond); }
-.deck .frame { background: var(--screen); border: 1px solid var(--line); box-shadow: var(--shadow); }
-.deck .route { background: var(--canvas-2); border-bottom: 1px solid var(--line); font-family: var(--mono); color: var(--ink-faint); }
-.deck .route::before { background: var(--ink-faint); }
+.deck-surfaces *, .deck-surfaces *::before, .deck-surfaces *::after { box-sizing: revert; }
+.deck-surfaces .group-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.deck-surfaces .group-head h2 { margin: 0; font-family: inherit; font-size: 22px; font-weight: 600; letter-spacing: -.01em; text-transform: none; }
+.deck-surfaces .lines { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); }
+.deck-surfaces .boards { gap: 32px; }
+.deck-surfaces .board-cap { max-width: 48ch; }
+.deck-surfaces .board-title { font-family: var(--cond); font-size: 13px; letter-spacing: .08em; gap: 10px; flex-wrap: wrap; }
+.deck-surfaces .board-title .w { font-family: var(--mono); font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--ink-faint); }
+.deck-surfaces .board-note { color: var(--ink-soft); }
+.deck-surfaces .open-mark { font-family: var(--cond); }
+.deck-surfaces .frame { background: var(--screen); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.deck-surfaces .route { background: var(--canvas-2); border-bottom: 1px solid var(--line); font-family: var(--mono); color: var(--ink-faint); }
+.deck-surfaces .route::before { background: var(--ink-faint); }
 /* The frozen pictures were drawn in quirks mode, where this inline kicker's line box has no strut; a block box gives the same height. */
-.deck .presenter-note > .presenter-kicker { display: block; }
+.deck-surfaces .presenter-note > .presenter-kicker { display: block; }
 @keyframes room-pulse { 50% { box-shadow: 0 0 0 .1em #56C3CD33; } }
 
 /* ---------- ages: long on the desktop, Intl's short style at 390 px ---------- */
@@ -692,7 +692,7 @@ a.r.hover { background: var(--surface-hover); }
 
 
   <!-- ================= DECK SURFACES THAT STAY AS THEY ARE ================= -->
-<section class="group deck">
+<section class="group deck-surfaces">
     <div class="group-head">
       <h2>Presenter Home</h2>
       <span class="lines">proposal · issue #139</span>
@@ -785,7 +785,7 @@ a.r.hover { background: var(--surface-hover); }
   </section>
 
   <!-- ================= THE ROOM KNOWS · #293 S12 ================= -->
-  <section class="group deck">
+  <section class="group deck-surfaces">
     <div class="group-head">
       <h2>The room knows (#293 S12)</h2>
       <span class="lines">issue #525 · #293 line 6</span>

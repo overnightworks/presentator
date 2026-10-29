@@ -40,7 +40,7 @@ tokens and fonts, never a copy of its values. On top of it the sheet carries
 its own component styles for the boards (bar, tabs, rows, fields, cards, menu) and
 presentator's colour in the app slot; `appkit.css` itself stays as shipped.
 
-The room and presenter groups (class `deck`) keep the look their frozen pictures
+The room and presenter groups (class `deck-surfaces`) keep the look their frozen pictures
 (#139, #293 S12) were drawn in: their tokens, board chrome and IBM Plex from Google
 Fonts are scoped to `.deck`, so their renders do not change with the lobby's look.
 
