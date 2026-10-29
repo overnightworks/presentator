@@ -3,6 +3,6 @@ agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
 role = "builder"
 base = "ed9ae9ab61d4978d288a44a30deff3d4a9cdb6db"
 branch = "claude/issue-641-sources-a-source-s-runs-and-fetch-now-as"
-scope = ["docs/reference/sources.md", "quality/baseline.toml", "src/presentator/api/auth.py", "src/presentator/api/hooks.py", "src/presentator/api/source_api.py", "src/presentator/api/sources.py", "src/presentator/application/decks.py", "src/presentator/contracts/decks.py", "tests/presentator/api/test_source_api.py"]
+scope = ["docs/reference/sources.md", "quality/baseline.toml", "src/presentator/api/auth.py", "src/presentator/api/hooks.py", "src/presentator/api/source_api.py", "src/presentator/api/sources.py", "src/presentator/application/decks.py", "src/presentator/contracts/decks.py", "tests/presentator/api/test_source_api.py", "tests/presentator/application/test_decks.py"]
 opened_commit = "85240873562c5b9566fb1c3de7b66bc99d2af94d"
 whole_reason = "Three routes and what they read: the owner's instants and the one state decider the routes need, and the hook address the page and the route share; without them the route would recompute or decide in the adapter."
