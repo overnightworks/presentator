@@ -1,0 +1,7 @@
+claim_id = "f0e2e03c5b9a4ad28edb7f03a71620d0"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "85b846b3c37b21107ba57e70d7bbfad2ae20ef49"
+branch = "claude/issue-605-b-of-597-the-gate-and-codeql-move-to-qua"
+scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", "quality/config.toml"]
+opened_commit = "640c3d000870b1ce3e0d72f18e128c5aa796031a"
