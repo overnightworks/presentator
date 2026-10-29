@@ -173,6 +173,16 @@ def test_a_person_with_a_vanished_catalog_can_still_change_the_theme() -> None:
     assert lobby.preferences_of(_PERSON).theme is ThemeChoice.DARK
 
 
+def test_an_instance_with_a_vanished_catalog_can_still_change_the_theme() -> None:
+    lobby = a_lobby(instance=InstanceSettings(language_tag="xx"))
+
+    lobby.save_instance_settings(
+        InstanceSettings(language_tag="xx", theme=ThemeChoice.DARK)
+    )
+
+    assert lobby.instance_settings().theme is ThemeChoice.DARK
+
+
 def test_saving_an_unspoken_instance_language_is_refused_and_writes_nothing() -> None:
     lobby = a_lobby()
 

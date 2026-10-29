@@ -15,8 +15,6 @@ from pydantic import BaseModel, ConfigDict
 
 from presentator.api.admission import gated_admin, gated_person
 from presentator.api.problems import (
-    PROBLEM_MEDIA_TYPE,
-    ProblemDetails,
     ProblemError,
     problem_response,
 )
@@ -29,28 +27,6 @@ from presentator.contracts.preferences import (
 
 ACCOUNT_PATH: Final = "/api/account"
 SETTINGS_PATH: Final = "/api/settings"
-
-# FastAPI answers a malformed body in this shape; an explicit 422 hides its own entry.
-_FRAMEWORK_VALIDATION_SCHEMA: Final[dict[str, object]] = {
-    "type": "object",
-    "properties": {
-        "detail": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "loc": {
-                        "type": "array",
-                        "items": {"anyOf": [{"type": "string"}, {"type": "integer"}]},
-                    },
-                    "msg": {"type": "string"},
-                    "type": {"type": "string"},
-                },
-                "required": ["loc", "msg", "type"],
-            },
-        }
-    },
-}
 
 
 class LanguageView(BaseModel):
@@ -93,16 +69,14 @@ class SettingsView(SettingsWrite):
     languages: list[LanguageView]
 
 
-def _unspoken_or_invalid() -> dict[int | str, dict[str, object]]:
-    """The PUT's 422: our problem for an unspoken language, else the framework's."""
-    return {
-        HTTPStatus.UNPROCESSABLE_ENTITY.value: {
-            "content": {
-                PROBLEM_MEDIA_TYPE: {"schema": ProblemDetails.model_json_schema()},
-                "application/json": {"schema": _FRAMEWORK_VALIDATION_SCHEMA},
-            }
-        }
-    }
+def _unspoken_beside_validation() -> dict[str, object]:
+    """The PUT's 422 spec: FastAPI's own validation answer plus our problem.
+
+    FastAPI generates the validation entry (and its components) only while the
+    route declares no 422 itself, so the problem's media type joins it afterwards.
+    """
+    status = HTTPStatus.UNPROCESSABLE_ENTITY
+    return {"responses": {str(status.value): problem_response(status)[status.value]}}
 
 
 @contextmanager
@@ -123,11 +97,11 @@ def _mounted(
 ) -> APIRouter:
     """The four addresses, with the admin gate and the documented refusals."""
     router = APIRouter()
-    unspoken = _unspoken_or_invalid()
+    unspoken = _unspoken_beside_validation()
     admin_only = problem_response(HTTPStatus.FORBIDDEN)
     router.add_api_route(ACCOUNT_PATH, read_account, methods=["GET"])
     router.add_api_route(
-        ACCOUNT_PATH, write_account, methods=["PUT"], responses=unspoken
+        ACCOUNT_PATH, write_account, methods=["PUT"], openapi_extra=unspoken
     )
     admin = [Depends(gated_admin)]
     router.add_api_route(
@@ -142,7 +116,8 @@ def _mounted(
         write_settings,
         methods=["PUT"],
         dependencies=admin,
-        responses={**admin_only, **unspoken},
+        responses=admin_only,
+        openapi_extra=unspoken,
     )
     return router
 

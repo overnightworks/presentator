@@ -5,6 +5,10 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
+from fastapi.openapi.utils import (
+    validation_error_definition,
+    validation_error_response_definition,
+)
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
@@ -456,3 +460,20 @@ def test_the_generated_spec_declares_the_put_422_as_a_problem_and_as_validation(
         PROBLEM_MEDIA_TYPE,
         "application/json",
     }
+
+
+@pytest.mark.parametrize("path", [_ACCOUNT, _SETTINGS])
+def test_the_generated_spec_resolves_the_put_422_to_the_frameworks_validation_schema(
+    path: str,
+) -> None:
+    spec = an_admin_lobby().app.openapi()
+    answer = spec["paths"][path]["put"]["responses"]["422"]["content"][
+        "application/json"
+    ]["schema"]
+    components = spec["components"]["schemas"]
+
+    resolved = components[answer["$ref"].rsplit("/", 1)[-1]]
+
+    assert resolved == validation_error_response_definition
+    item = resolved["properties"]["detail"]["items"]["$ref"].rsplit("/", 1)[-1]
+    assert components[item] == validation_error_definition

@@ -42,9 +42,13 @@ class Preferences:
     def save_instance_settings(self, settings: InstanceSettings) -> None:
         """Keep the defaults every person without an override reads.
 
-        Raises `UnspokenLanguageError` when no catalog speaks the language.
+        Raises `UnspokenLanguageError` for a language newly chosen that no catalog
+        speaks; the one already stored stays, so a theme change survives a
+        removed catalog.
         """
-        self._require_spoken(settings.language_tag)
+        self._require_newly_chosen_spoken(
+            settings.language_tag, stored=self.instance_settings().language_tag
+        )
         self.instance.write(settings)
 
     def preferences_of(self, user_id: str) -> PersonPreferences:
@@ -58,8 +62,9 @@ class Preferences:
         speaks; the one already stored stays, so a theme change survives a
         removed catalog.
         """
-        if chosen.language_tag != self.preferences_of(user_id).language_tag:
-            self._require_spoken(chosen.language_tag)
+        self._require_newly_chosen_spoken(
+            chosen.language_tag, stored=self.preferences_of(user_id).language_tag
+        )
         self.people.write(user_id, chosen)
 
     def appearance_for(self, user_id: str | None) -> Appearance:
@@ -77,7 +82,11 @@ class Preferences:
         """Every language a select may offer."""
         return self.catalogs.languages()
 
-    def _require_spoken(self, language_tag: str | None) -> None:
+    def _require_newly_chosen_spoken(
+        self, language_tag: str | None, *, stored: str | None
+    ) -> None:
+        if language_tag == stored:
+            return
         if language_tag is not None and not self.speaks(language_tag):
             raise UnspokenLanguageError(language_tag)
 
