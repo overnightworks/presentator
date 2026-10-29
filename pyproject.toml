@@ -95,19 +95,17 @@ convention = "google"
 # Test directories are namespace packages on purpose: pytest imports them by path
 # (importlib mode), so duplicate basenames across layers do not collide.
 "tests/**" = ["S101", "D102", "D103", "ARG002", "INP001"]
-# Standalone probe, not a package; it drives docker and pdftotext by name
-# through fixed argument vectors, never a shell, and inside the container it is
-# the client of the worker's socket.
-"scripts/probe_build_worker.py" = ["INP001", "S404", "S603", "S607"]
-"scripts/probe_build_worker_harness.py" = ["INP001", "S404", "S603", "S607"]
-"scripts/probe_build_worker_isolation.py" = ["INP001", "S404", "S603", "S607"]
-"scripts/probe_build_worker_lives.py" = ["INP001", "S404", "S603", "S607"]
-"scripts/probe_build_worker_refusals.py" = ["INP001", "S404", "S603", "S607"]
+# Standalone probes, not packages; inside the container they are run by path
+# as the client of the worker's socket.
+"scripts/probe_build_worker.py" = ["INP001"]
+"scripts/probe_build_worker_harness.py" = ["INP001"]
+"scripts/probe_build_worker_isolation.py" = ["INP001"]
+"scripts/probe_build_worker_lives.py" = ["INP001"]
+"scripts/probe_build_worker_refusals.py" = ["INP001"]
 "scripts/probe_build_worker_uploads.py" = ["INP001"]
-"scripts/probe_build_worker_web.py" = ["INP001", "S404", "S603", "S607"]
-# Standalone one-time command; it drives git, docker, systemctl and curl by name
-# through fixed argument vectors, never a shell.
-"scripts/cutover.py" = ["INP001", "S404", "S603", "S607"]
+"scripts/probe_build_worker_web.py" = ["INP001"]
+# Standalone one-time command, not a package.
+"scripts/cutover.py" = ["INP001"]
 # The attack deck's ctypes child and the programs sent to the worker on stdin.
 "scripts/probe_build_worker/attack/kernel_attacks.py" = ["INP001"]
 "scripts/probe_build_worker/next_life.py" = ["INP001"]
@@ -115,36 +113,25 @@ convention = "google"
 "scripts/probe_build_worker/flood/flood_actions.py" = ["INP001"]
 # The root watcher run on the host beside the worker's container.
 "scripts/probe_build_worker/upload_watcher.py" = ["INP001"]
-# Standalone gate, not a package; it only parses templates to an AST, it
-# never renders one, so autoescape has no effect on its behaviour.
-"scripts/check_catalog_purity.py" = ["INP001", "S701"]
+# Standalone gate, not a package.
+"scripts/check_catalog_purity.py" = ["INP001"]
 # Drives the check script as a subprocess against temporary and real templates.
-"tests/scripts/test_check_catalog_purity.py" = ["S404", "S603"]
+"tests/scripts/test_check_catalog_purity.py" = ["S603"]
 # `vulture` reads a whitelist as bare attribute expressions; naming a field
 # there is the entry, and assigning it would only move the dead name.
 "tests/support/vulture_allowlist.py" = ["B018"]
-# Mirroring a remote is spawning `git`; the executable is resolved on PATH and
-# every argument is built here, never taken from a request.
-"src/gitmirror/mirror.py" = ["S404", "S603"]
-# Building a deck on this machine is spawning the Node toolchain; the program is
-# a constant resolved on PATH, and every argument is built here out of the
-# deck's own row, never out of a request.
-"src/presentator/adapters/builds.py" = ["S404", "S603"]
-# Spawning the build worker's children is the gate shell and the wire entry,
-# both named here and handed only a descriptor list, never a request.
-"src/presentator/adapters/worker_children.py" = ["S404", "S603"]
 # Runs the gate shell and a stalled controller as real processes.
-"tests/presentator/adapters/test_worker_children.py" = ["S404", "S603"]
+"tests/presentator/adapters/test_worker_children.py" = ["S603"]
 # Spawns children of its own to prove which of them the reap collects.
-"tests/presentator/host/test_worker_termination.py" = ["S404", "S603"]
+"tests/presentator/host/test_worker_termination.py" = ["S603"]
 # Drives that toolchain and that client as the stand-in scripts it puts on PATH.
-"tests/presentator/adapters/test_builds.py" = ["S404", "S603"]
+"tests/presentator/adapters/test_builds.py" = ["S603"]
 # Builds the temporary git repositories every layer that reads one is proven on.
-"tests/support/git_remote.py" = ["S404", "S603", "S607"]
+"tests/support/git_remote.py" = ["S603", "S607"]
 # Asks the real `git` whether it accepts the credential configuration it is given.
-"tests/gitmirror/test_mirror.py" = ["S404", "S603", "S607"]
+"tests/gitmirror/test_mirror.py" = ["S603", "S607"]
 # Asks the same of the credential a source's own row carries.
-"tests/presentator/adapters/test_decks.py" = ["S404", "S603", "S607"]
+"tests/presentator/adapters/test_decks.py" = ["S603", "S607"]
 
 [tool.importlinter]
 root_packages = ["presentator", "gitmirror"]

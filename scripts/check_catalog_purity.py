@@ -289,7 +289,7 @@ def find_catalog_purity_findings(repository: Path) -> tuple[CatalogPurityFinding
 
     Names the templates directory itself when there is nothing to scan.
     """
-    environment = jinja2.Environment()
+    environment = jinja2.Environment(autoescape=True)
     templates_directory = repository / _TEMPLATES_DIRECTORY
     try:
         template_paths = _require_template_paths(templates_directory)
