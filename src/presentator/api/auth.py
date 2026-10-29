@@ -47,6 +47,7 @@ from presentator.api.hooks import HOOK_CALLS, fetch_hook
 from presentator.api.pages import TEMPLATES, Pages, state_word
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
 from presentator.api.preferences import preference_routes
+from presentator.api.session_api import SESSION_PATH, SessionAddresses, session_routes
 from presentator.api.sources import source_routes
 from presentator.application.decks import Decks
 from presentator.application.voice import VoiceStatusUse
@@ -282,6 +283,7 @@ def _install_middleware(
             session_transaction=lambda: nullcontext(sessions),
             login_redirect=LOGIN_REDIRECT,
             public=_PUBLIC_RULES,
+            optional=PathRules(exact=frozenset({SESSION_PATH})),
         ),
     )
 
@@ -340,6 +342,16 @@ def create_lobby(
             methods=["GET"],
         )
     add_health_route(lobby)
+    lobby.include_router(
+        session_routes(
+            preferences=pages.preferences,
+            addresses=SessionAddresses(
+                start=START_SIGN_IN_PATH,
+                logout=LOGOUT_PATH,
+                talk_start=f"{auth.talk_origin}{START_SIGN_IN_PATH}",
+            ),
+        )
+    )
     lobby.include_router(preference_routes(pages=pages, voice=private.voice))
     lobby.include_router(source_routes(pages=pages, decks=decks))
     add_deck_pages(lobby, decks=decks, pages=pages, talk_origin=auth.talk_origin)

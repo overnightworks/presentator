@@ -39,6 +39,7 @@ _JSON = {"accept": "application/json"}
 _HTML = {"accept": "text/html"}
 _START_SIGN_IN = "/login/oidc"
 _PUBLIC_PROBE = "/setup"
+_SESSION_ROUTE = "/api/session"
 
 
 @dataclass
@@ -289,3 +290,67 @@ def test_the_gates_refusals_carry_the_security_headers(
 
     assert refused.status_code == status
     _assert_carries_the_security_headers(refused)
+
+
+def test_an_unreadable_session_store_answers_the_session_route_with_an_error() -> None:
+    lobby = a_lobby_over(
+        lambda users: UnreadableSessionStore(users=users),
+        raise_server_exceptions=False,
+    )
+    lobby.sign_in()
+
+    answer = lobby.client.get(_SESSION_ROUTE)
+
+    assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert "person" not in answer.text
+
+
+@pytest.mark.parametrize(
+    ("accept", "status"),
+    [(_HTML, HTTPStatus.FOUND), (_JSON, HTTPStatus.UNAUTHORIZED)],
+)
+@pytest.mark.parametrize("path", ["/api/session/x", "/api/sessions", "/api/session/"])
+def test_an_address_beside_the_session_route_is_gated(
+    lobby: Lobby, path: str, accept: dict[str, str], status: HTTPStatus
+) -> None:
+    answer = lobby.client.get(path, headers=accept)
+
+    assert answer.status_code == status
+
+
+def test_a_dot_segment_reaching_the_route_unnormalised_is_gated(lobby: Lobby) -> None:
+    sent: list[dict[str, object]] = []
+
+    async def receive() -> dict[str, object]:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict[str, object]) -> None:
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "https",
+        "path": "/api/./session",
+        "raw_path": b"/api/./session",
+        "query_string": b"",
+        "root_path": "",
+        "headers": [
+            (b"host", lobby.client.base_url.host.encode()),
+            (b"accept", b"application/json"),
+        ],
+    }
+
+    asyncio.run(lobby.app(scope, receive, send))  # type: ignore[arg-type]
+
+    assert sent[0]["status"] == HTTPStatus.UNAUTHORIZED
+
+
+def test_a_signed_in_person_finds_nothing_beside_the_session_route(
+    signed_in_lobby: Lobby,
+) -> None:
+    answer = signed_in_lobby.client.get("/api/session/x")
+
+    assert answer.status_code == HTTPStatus.NOT_FOUND
