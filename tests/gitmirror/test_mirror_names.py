@@ -1,30 +1,17 @@
 """Folder names the mirror reads back exactly as they were committed."""
 
-from datetime import UTC, datetime, timedelta
+import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from gitmirror.mirror import GitMirror
-from gitmirror.model import Change, CredentialReference, GitSource
-from tests.support.git_remote import MAIN_BRANCH, GitRemote
+from gitmirror.model import Change
+from tests.support.git_remote import GitRemote
+from tests.support.mirror_support import a_mirror
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _PUSHED_LATER = datetime(2026, 1, 16, 9, tzinfo=UTC)
-
-
-class _NoSecret:
-    def resolve(self, reference: CredentialReference) -> str | None:
-        return None
-
-
-def a_mirror(url: str, *, directory: Path) -> GitMirror:
-    return GitMirror(
-        source=GitSource(url=url, ref=MAIN_BRANCH, credential=None),
-        directory=directory / "mirror.git",
-        credentials=_NoSecret(),
-        pull_timeout=timedelta(seconds=30),
-    )
 
 
 @pytest.mark.parametrize(
@@ -63,6 +50,7 @@ def test_a_folder_is_listed_changed_and_read_under_its_real_name(
         at=_PUSHED_AT,
     )
     assert mirror.read(revision, f"{folder}/slides.md") == b"# T\n"
+    assert mirror.read(revision, f"{folder}/deck.toml") == b'title = "T"\n'
 
 
 def test_a_folder_name_with_a_glob_character_is_not_read_as_a_pattern(
@@ -79,3 +67,36 @@ def test_a_folder_name_with_a_glob_character_is_not_read_as_a_pattern(
     assert {entry.name for entry in mirror.entries(revision, inside="a*")} == {
         "slides.md",
     }
+
+
+def test_a_file_name_that_is_not_utf8_is_listed_and_read_back_byte_for_byte(
+    remote: GitRemote,
+    tmp_path: Path,
+) -> None:
+    name = os.fsdecode(b"bild\xe4.png")
+    remote.commit({f"deck/{name}": "pixels\n", "deck/deck.toml": "t\n"}, at=_PUSHED_AT)
+    mirror = a_mirror(remote.url, directory=tmp_path)
+    revision = mirror.connect().revision
+    assert revision is not None
+
+    assert {entry.name for entry in mirror.entries(revision, inside="deck")} == {
+        name,
+        "deck.toml",
+    }
+    assert mirror.read(revision, f"deck/{name}") == b"pixels\n"
+    assert mirror.last_change(revision, f"deck/{name}").at == _PUSHED_AT
+
+
+def test_a_folder_name_starting_with_a_dash_is_not_read_as_an_option(
+    remote: GitRemote,
+    tmp_path: Path,
+) -> None:
+    remote.commit({"-deck/slides.md": "# Dash\n"}, at=_PUSHED_AT)
+    mirror = a_mirror(remote.url, directory=tmp_path)
+    revision = mirror.connect().revision
+    assert revision is not None
+
+    assert {entry.name for entry in mirror.entries(revision, inside="-deck")} == {
+        "slides.md",
+    }
+    assert mirror.last_change(revision, "-deck").at == _PUSHED_AT

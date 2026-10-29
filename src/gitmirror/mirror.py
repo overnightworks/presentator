@@ -146,9 +146,9 @@ class GitMirror:
     def entries(self, revision: Revision, *, inside: str = "") -> tuple[TreeEntry, ...]:
         """The names one level below `inside` in the tree at this commit."""
         within = (f"{inside}/",) if inside else ()
-        listing = self._run("ls-tree", "-z", revision.commit, *within)
+        listing = self._run("ls-tree", "-z", revision.commit, "--", *within)
         return tuple(
-            _tree_entry(record) for record in listing.decode().split("\0") if record
+            _tree_entry(record) for record in os.fsdecode(listing).split("\0") if record
         )
 
     def read(self, revision: Revision, path: str) -> bytes:
