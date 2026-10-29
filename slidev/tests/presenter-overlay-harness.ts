@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { createServer, type ServerResponse } from 'node:http'
-import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, extname, join, normalize, resolve } from 'node:path'
+import { extname, join, normalize, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -13,15 +13,12 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest'
 const run = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
 const slidevRoot = join(repositoryRoot, 'slidev')
-export const overlayDeckSourceDirectory = join(repositoryRoot, 'examples/copresenter-deck')
+export const addonRootDirectory = slidevRoot
+const exampleDeckDirectory = join(repositoryRoot, 'examples/copresenter-deck')
+const addonFixtureDeck = fileURLToPath(new URL('./fixtures/addon-fixture.md', import.meta.url))
 const providedBuild = process.env.PRESENTER_RETURN_BUILD_DIR
 const evidenceDirectory = process.env.PRESENTER_RETURN_EVIDENCE_DIR
 const wav = 'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
-// Exactly what `examples/copresenter-deck/README.md` tells an operator to
-// copy next to their own `slides.md` — proven by assembling a fresh deck from
-// only these files, never the repository's own example directory, where
-// every other file already happens to sit beside them regardless of whether
-// the README's own list is complete.
 // What the server answers before any stream starts: F1's refusals, plus the
 // two shapes it never sends, a 403 and a 401 that is not JSON.
 const REFUSED_REQUESTS = {
@@ -31,14 +28,6 @@ const REFUSED_REQUESTS = {
   'unavailable': { status: 503, contentType: 'application/json', body: '{"detail":"Co-presenter unavailable"}' },
   'unreadable-401': { status: 401, contentType: 'text/plain', body: 'Sign in again' },
 } as const
-
-const COPIED_OVERLAY_FILES = [
-  'custom-nav-controls.vue',
-  'style.css',
-  'components/CoPresenter.vue',
-  'public/pcm-capture-processor.js',
-]
-
 
 let buildDirectory = providedBuild ?? ''
 let server: ReturnType<typeof createServer>
@@ -136,27 +125,33 @@ export async function saveEvidence(page: Page, name: string) {
   await page.screenshot({ path: join(evidenceDirectory, name), fullPage: true })
 }
 
-// Builds a second, independent deck containing only the files
-// `examples/copresenter-deck/README.md` names, plus the minimal `slides.md`
-// every deck needs (the one file that is the operator's own, never copied).
-export async function buildCopiedOverlayDeck(base = '/'): Promise<string> {
-  const deckDirectory = await mkdtemp(join(tmpdir(), 'presenter-copied-overlay-deck-'))
-  for (const relativePath of COPIED_OVERLAY_FILES) {
-    const destination = join(deckDirectory, relativePath)
-    await mkdir(dirname(destination), { recursive: true })
-    await copyFile(join(overlayDeckSourceDirectory, relativePath), destination)
-  }
-  await writeFile(
-    join(deckDirectory, 'slides.md'),
-    '---\ntitle: Copied overlay\nfonts:\n  provider: none\nfavicon: false\n---\n\n# Copied overlay\n',
-  )
-  const outDirectory = await mkdtemp(join(tmpdir(), 'presenter-copied-overlay-build-'))
+// A deck folder outside the repository and the toolchain that holds only the
+// fixture's `slides.md`: the overlay reaches it by the addon's name, never by
+// a copy.
+export async function stageAddonDeck(): Promise<string> {
+  const deckDirectory = await mkdtemp(join(tmpdir(), 'presenter-addon-deck-'))
+  await copyFile(addonFixtureDeck, join(deckDirectory, 'slides.md'))
+  return deckDirectory
+}
+
+// Builds the staged deck the way the build worker does: `slidev build` run
+// from the toolchain project, the deck folder staged outside it.
+export async function buildStagedDeck(deckDirectory: string, outDirectory: string, base = '/') {
   await run(
     'pnpm',
     ['exec', 'slidev', 'build', join(deckDirectory, 'slides.md'), '--out', outDirectory, '--base', base],
     { cwd: slidevRoot },
   )
-  await rm(deckDirectory, { recursive: true, force: true })
+}
+
+export async function buildAddonDeck(base = '/'): Promise<string> {
+  const deckDirectory = await stageAddonDeck()
+  const outDirectory = await mkdtemp(join(tmpdir(), 'presenter-addon-build-'))
+  try {
+    await buildStagedDeck(deckDirectory, outDirectory, base)
+  } finally {
+    await rm(deckDirectory, { recursive: true, force: true })
+  }
   return outDirectory
 }
 
@@ -192,7 +187,7 @@ function websocketAcceptKey(key: string) {
   return createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64')
 }
 
-// The minimal server the copied-overlay proof needs: the static build plus
+// The minimal server the addon-deck proof needs: the static build plus
 // the two routes `startLocalHear`'s own path calls before it ever reaches the
 // AudioWorklet (`/who`, then the hearing lease). `/ask` only reports what it
 // was asked, and there are no observation beacons: no proof here drives a
@@ -512,7 +507,7 @@ export function registerOverlayHarness() {
       buildDirectory = await mkdtemp(join(tmpdir(), 'presenter-controls-'))
       await run(
         'pnpm',
-        ['exec', 'slidev', 'build', join(overlayDeckSourceDirectory, 'slides.md'), '--out', buildDirectory],
+        ['exec', 'slidev', 'build', join(exampleDeckDirectory, 'slides.md'), '--out', buildDirectory],
         { cwd: slidevRoot },
       )
     }

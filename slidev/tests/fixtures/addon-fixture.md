@@ -1,11 +1,13 @@
 ---
 addons:
-  - '..'
+  - slidev-addon-presentator
 title: Addon fixture
+fonts:
+  provider: none
+favicon: false
 ---
 
 # Addon fixture
 
-Loaded only by `addon-package.test.ts`, to prove this package resolves as a
-Slidev addon from its own `package.json`, without depending on the example
-deck.
+Staged outside the toolchain by `presenter-overlay-harness.ts`, to prove a deck
+gets the overlay from the addon's name alone.

@@ -4,7 +4,7 @@ Usage: probe_build_worker_web.py drive
 
 Runs where Docker is, after the worker's own drive has removed its project, with
 the same compose environment plus `WEB_PROBE_OVERRIDE`, the override file that
-adds the web's two read-only probe mounts (hello-deck and
+adds the web's three read-only probe mounts (hello-deck, copresenter-deck and
 `probe_build_worker`), publishes the probe's port, which `compose.yaml` never
 does, and carries the job's origins and test issuer; the master key and the
 client secret are compose's own file secrets. It starts the real `presentator`
@@ -19,6 +19,7 @@ names at the end of a poll, and the program lays runs of its own under the
 builds root that no row names.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -67,7 +68,9 @@ WEB = "presentator"
 CLIENT_PROGRAM = PROBE_SOURCES / "web_client.py"
 ROUTE = "http://127.0.0.1:8000/login"
 BUILDS_ROOT = "/data/builds"
-OVERRIDE_MOUNTS = frozenset({"/decks/hello-deck", "/decks/probe"})
+OVERRIDE_MOUNTS = frozenset(
+    {"/decks/hello-deck", "/decks/copresenter-deck", "/decks/probe"}
+)
 SECRET_MOUNTS = frozenset(
     {"/run/secrets/presentator_secret_key", "/run/secrets/oidc_client_secret"}
 )
@@ -82,9 +85,10 @@ WAITING_HOLD_SECONDS = 4.0
 STEP_SECONDS = 900
 STAGING_POLLS = 1200
 RESTART_SECONDS = 60
-CELLS = ("B25", "whole file", "B12 C", "B13", "B15 C")
+CELLS = ("B25", "whole file", "B12 C", "B13", "B15 C", "addon deck")
 UNWRITTEN = "WRITTENNUMBER"
 HELLO_STEPS = ("build", "export")
+ADDON_WORKLET = REPOSITORY / "slidev/worklets/pcm-capture-processor.js"
 
 
 def web_command(*arguments: str) -> tuple[str, ...]:
@@ -155,6 +159,8 @@ class Outcome:
     out: tuple[str, ...]
     talk_page: bool
     pdf: bool
+    worklet: bool
+    worklet_sha256: str | None
 
 
 def outcome_of(client: subprocess.Popen[str]) -> Outcome:
@@ -177,6 +183,8 @@ def outcome_of(client: subprocess.Popen[str]) -> Outcome:
         out=tuple(said["out"]),
         talk_page=said["talk_page"],
         pdf=said["pdf"],
+        worklet=said["worklet"],
+        worklet_sha256=said["worklet_sha256"],
     )
 
 
@@ -460,6 +468,23 @@ def prove_refusal_texts(report: Report) -> None:
     )
 
 
+def prove_addon_deck(report: Report) -> None:
+    """The example deck, which enables the addon by name, builds with its worklet."""
+    done = build("addon", *HELLO_STEPS)
+    expected = hashlib.sha256(ADDON_WORKLET.read_bytes()).hexdigest()
+    if (
+        tuple(step.step for step in done.steps) != HELLO_STEPS
+        or any(step.failed for step in done.steps)
+        or not (done.talk_page and done.pdf)
+        or not done.worklet
+        or done.worklet_sha256 != expected
+    ):
+        refuse(f"the addon deck was not delivered with its worklet: {done}")
+    report.cell(
+        "addon deck", "built and exported; the talk carries the addon's worklet"
+    )
+
+
 def drive() -> None:
     """Start the web beside the worker and drive every cell."""
     report = Report(CELLS)
@@ -469,6 +494,7 @@ def drive() -> None:
         prove_restart_mid_step(report)
         prove_reply_cut_off(report)
         prove_refusal_texts(report)
+        prove_addon_deck(report)
     finally:
         for service in (WEB, SERVICE):
             say(f"--- {service} log")
