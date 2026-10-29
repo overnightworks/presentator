@@ -74,6 +74,11 @@ rule = "test-layout"
 reason = "it exercises the addon's overlay in a browser through a built deck, which no single addon source file mirrors"
 
 [[layout.allow]]
+path = "slidev/tests/room-notice.browser.test.ts"
+rule = "test-layout"
+reason = "it exercises the room notice across a presenter and a projector window in a browser through built decks, which no single addon source file mirrors"
+
+[[layout.allow]]
 path = "tests/test_compose.py"
 rule = "test-layout"
 reason = "its subject is the root compose.yaml, which no package mirrors"

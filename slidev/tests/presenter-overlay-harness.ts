@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-import { chromium, type ElementHandle, type Page } from 'playwright-chromium'
+import { chromium, type BrowserContext, type ElementHandle, type Page } from 'playwright-chromium'
 import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest'
 
 const run = promisify(execFile)
@@ -64,7 +64,9 @@ export const state = {
   askBodies: [] as { said: string, deck: string, language: string }[],
   whoLanguage: 'de' as 'de' | 'en',
   hearLanguages: [] as (string | null)[],
-  hearingMode: 'ready' as 'ready' | 'not-ready' | 'socket-error' | 'unreachable' | 'who-fails' | 'who-not-found',
+  hearingMode: 'ready' as 'ready' | 'not-ready' | 'socket-error' | 'error-on-open' | 'unreachable' | 'who-fails' | 'who-not-found',
+  // Whether the fake hearing sends a final question as soon as the lease opens.
+  heardOnConnect: true,
   media: createMediaObservation(),
 }
 
@@ -196,8 +198,9 @@ function websocketAcceptKey(key: string) {
 // spoken turn. `basePath` serves the build below the folder a deck lives in.
 export async function createOverlayDeckServer(
   directory: string,
-  { basePath = '', onAsk = () => undefined, onWho = () => undefined }: {
+  { basePath = '', alsoServing = [], onAsk = () => undefined, onWho = () => undefined }: {
     basePath?: string
+    alsoServing?: { directory: string, basePath: string }[]
     onAsk?: (said: string, deck: string) => void
     onWho?: (deck: string | null) => void
   } = {},
@@ -229,8 +232,15 @@ export async function createOverlayDeckServer(
       return
     }
     // Vite writes the base percent-encoded into scripts but raw into the HTML.
-    const prefix = [basePath, basePath.replaceAll('%25', '%')].find((base) => base && url.pathname.startsWith(base))
-    await serveFile(directory, prefix ? url.pathname.slice(prefix.length) || '/' : url.pathname, response)
+    for (const deck of [{ directory, basePath }, ...alsoServing]) {
+      const prefix = [deck.basePath, deck.basePath.replaceAll('%25', '%')]
+        .find((base) => base && url.pathname.startsWith(base))
+      if (prefix) {
+        await serveFile(deck.directory, url.pathname.slice(prefix.length) || '/', response)
+        return
+      }
+    }
+    await serveFile(directory, url.pathname, response)
   })
   server.on('upgrade', (request, socket) => {
     const key = request.headers['sec-websocket-key']
@@ -355,9 +365,10 @@ async function startServer() {
       'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
       + `Sec-WebSocket-Accept: ${websocketAcceptKey(key)}\r\n\r\n`,
     )
-    if (state.hearingMode === 'ready') {
+    if (state.hearingMode === 'ready' && state.heardOnConnect) {
       socket.write(frame(JSON.stringify({ text: 'Where does the handoff slow down?', final: true })))
     }
+    if (state.hearingMode === 'error-on-open') socket.write(frame(JSON.stringify({ error: 'hearing failed' })))
     recordUnexpectedSocketErrors(socket)
     hearingSockets.add(socket)
     let closed = false
@@ -399,6 +410,11 @@ export function sendHearingError() {
   for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ error: 'hearing failed' })))
 }
 
+// The server ends every open hearing lease, as it does when a session ends.
+export function closeHearingLeases() {
+  for (const socket of hearingSockets) socket.write(Buffer.from([0x88, 0x00]))
+}
+
 export function createMediaObservation(): MediaObservation {
   return {
     microphoneOpened: false,
@@ -413,6 +429,16 @@ async function installMediaFakes(page: Page) {
     const report = (event: string) => {
       navigator.sendBeacon(`/observations/${event}`)
     }
+    // What a test sets on the page before it switches the AI on.
+    const fakes = {
+      microphone: 'ready' as 'ready' | 'pending' | 'denied',
+      worklet: 'ready' as 'ready' | 'failing',
+      playback: 'resolve' as 'resolve' | 'pending' | 'rejected',
+      played: [] as HTMLMediaElement[],
+      releaseMicrophone: () => {},
+      endPlayback: () => fakes.played.forEach((audio) => audio.dispatchEvent(new Event('ended'))),
+    }
+    Object.assign(window, { __fakes: fakes })
     const track = {
       readyState: 'live',
       stop() {
@@ -426,6 +452,10 @@ async function installMediaFakes(page: Page) {
       value: {
         getUserMedia: async () => {
           microphones.__microphonesRequested += 1
+          if (fakes.microphone === 'denied') throw new DOMException('denied', 'NotAllowedError')
+          if (fakes.microphone === 'pending') {
+            await new Promise<void>((release) => { fakes.releaseMicrophone = release })
+          }
           report('microphone-opened')
           return { getTracks: () => [track] }
         },
@@ -442,7 +472,9 @@ async function installMediaFakes(page: Page) {
         // component names actually loads under that policy. Everything past
         // this point stays fake, because the component's own media graph
         // never has to be real for these tests to drive it.
-        addModule: (moduleUrl: string) => new RealAudioContext().audioWorklet.addModule(moduleUrl),
+        addModule: (moduleUrl: string) => (fakes.worklet === 'failing'
+          ? Promise.reject(new Error('worklet failed to load'))
+          : new RealAudioContext().audioWorklet.addModule(moduleUrl)),
       }
       createMediaStreamSource() { return { connect: () => undefined } }
       close() { return Promise.resolve() }
@@ -464,7 +496,10 @@ async function installMediaFakes(page: Page) {
       webkitSpeechRecognition: CountedSpeechRecognition,
     })
     HTMLMediaElement.prototype.play = async function () {
+      if (fakes.playback === 'pending') return new Promise<void>(() => undefined)
+      if (fakes.playback === 'rejected') throw new DOMException('blocked', 'NotAllowedError')
       Object.defineProperty(this, 'paused', { value: false, configurable: true })
+      fakes.played.push(this)
       report('playback-started')
     }
     HTMLMediaElement.prototype.pause = function () {
@@ -509,6 +544,45 @@ export async function openPresenterAt(
   await prepare(page)
   await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded', timeout: 10_000 })
   return { browser, page }
+}
+
+// One browser context, so its pages share an origin's BroadcastChannel the way
+// a presenter window and a projector window of one browser do.
+export async function openRoomBrowser(colorScheme: 'light' | 'dark' = 'light') {
+  const browser = await chromium.launch({ headless: true })
+  const context = await browser.newContext({ colorScheme })
+  return { browser, context }
+}
+
+export async function openPageIn(
+  context: BrowserContext,
+  url: string,
+  width: number,
+  prepare: (page: Page) => Promise<void> = async () => undefined,
+) {
+  const page = await context.newPage()
+  await page.setViewportSize({ width, height: 900 })
+  page.setDefaultTimeout(5_000)
+  await installCspGuard(page)
+  await installMediaFakes(page)
+  await prepare(page)
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 })
+  return page
+}
+
+// Halts a page's script the way a crashed or frozen window stops: its timers
+// stop and it fires no `pagehide`. (`Page.setWebLifecycleState` frozen does not
+// stop a visible headless page.)
+export async function freezePage(page: Page) {
+  const session = await page.context().newCDPSession(page)
+  await session.send('Debugger.enable')
+  const paused = new Promise((resolve) => session.once('Debugger.paused', resolve))
+  await session.send('Debugger.pause')
+  await paused
+  return async () => {
+    await session.send('Debugger.resume')
+    await session.send('Debugger.disable')
+  }
 }
 
 export async function openPresenter(width: number) {

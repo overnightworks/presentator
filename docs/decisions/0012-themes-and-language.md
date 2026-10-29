@@ -12,6 +12,9 @@ Audience: humans and agents writing any user-facing string or any colour.
   `overnightworks/ui-tokens` pin; leftover Pico chrome is not a second theme.
   Amended 2026-10-29: the catalog is also served as data, see
   [ADR 0020](0020-the-lobby-is-a-json-api.md).
+  Amended again 2026-10-29: the addon overlay keeps no catalog, see
+  The catalog format
+  ([#616](https://github.com/overnightworks/presentator/issues/616)).
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06, including
   [#8](https://github.com/overnightworks/presentator/issues/8) line 22
@@ -78,9 +81,10 @@ already uses a token set, and it is the first theme's source.
 
 ### Language is an adapter
 
-Every user-facing string in the lobby and in the overlay goes through one
-message catalog, from the first line of code. English is the only catalog at
-start. Adding a language is adding a catalog file — never a code change.
+Every user-facing string in the lobby goes through one message catalog, from
+the first line of code. English is the only catalog at start. Adding a language
+is adding a catalog file — never a code change. The addon overlay is the
+exception named under The catalog format.
 
 Amendment 2026-10-29: the reader's resolved catalog is also served as data by
 `GET /api/session`, so a page holds no strings of its own
@@ -118,16 +122,29 @@ language around it.
 
 Vetted with the first strings and taken: Babel owns the gettext `.po` catalogs
 of the Jinja2 lobby, read once at startup into a typed record, so that adding a
-language stays adding a file and no template holds a sentence. For the addon
-overlay `vue-i18n` is still a candidate, to be vetted when the overlay gets its
-first string.
+language stays adding a file and no template holds a sentence. The lobby's
+catalog policy is unchanged: its `.po` catalogs stay the only home of lobby
+strings.
+
+Amendment 2026-10-29: the addon overlay is the stated exception.
+
+- The presenter controls' words are English literals in the component.
+- The room notice's words follow the deck's language, the way the AI's speech
+  does ("Deck content is never translated"). They are two word sets, `de` and
+  `en`, in the addon's room module, closed to those two by the speech contract.
+- `vue-i18n` was vetted and not taken: two fixed sets of three strings do not
+  earn a dependency.
+- The lobby catalog that `/api/session` serves is rejected for the room: it
+  follows the reader's language, not the deck's, it is English only, and a new
+  request from the talk host would break "nothing new leaves the machine".
 
 ## Consequences
 
-- A review rejects any literal user-facing string outside the catalog, and any
-  colour outside the token set. That is the whole enforcement, and it is a
-  review rule rather than a gate because no cheap check reads intent from a
-  string.
+- A review rejects any literal user-facing string outside the lobby's catalog
+  and, in the addon, outside the component's English control words and the room
+  module's two word sets, and any colour outside the token set. That is the
+  whole enforcement, and it is a review rule rather than a gate because no
+  cheap check reads intent from a string.
 - The first slice pays for a catalog and a token file that serve one language
   and one theme. That is the deliberate cost of the two retrofits it avoids.
 - The overlay looks like the instance, not like the deck. That is the accepted

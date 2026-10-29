@@ -64,6 +64,34 @@ for either 401, and "No answer" for everything else, without navigating away
 and never with a message the server sent. A refusal line clears when the next
 question is asked.
 
+## What the room sees
+
+While the AI listens or answers, the projector and the presenter's current-slide
+preview carry a notice that the room hears an AI. Nothing shows while the AI is
+off, or while it is on but capture does not run (a pending or denied
+microphone, a worklet that fails, "Voice offline", "Unreachable", "Local
+hearing not ready", "No hearing"). Capture runs once the worklet is connected to
+the microphone.
+
+From the moment capture runs after a switch-on until the first answer's audio
+starts to play, a banner stands at the bottom of the slide with the whole
+sentence: speech is converted to text locally and sent with the slides to an AI
+service, and the Datenschutzerklärung says which one. Afterwards a pill stands
+top-right: "KI hört zu" / "AI is listening", and "KI antwortet" / "AI is
+answering" while answer audio plays. The words follow the deck's language; the
+presenter's own controls stay English. The notice has no switch, takes no clicks
+and never shrinks the slide. It shows only on the play and presenter routes,
+never in print, export or overview. A refused question or a failed playback does
+not end it, because speech is still heard; it ends when capture stops.
+
+The presenter window decides this and writes it as a Slidev sync state that is
+never stored or sent to the server; it reaches the windows of one browser on one
+origin, the reach of the slide position. The writer stamps the state every
+second while it is on, and a reader treats a stamp older than three seconds as
+off, so a presenter window that stops without closing clears the projector
+within about three seconds. A projector opened later shows the notice within
+about a second. Across machines nothing carries it.
+
 ## Bounds on `/ask`
 
 `said` is at most 2000 characters and `language` is empty or `de`/`en`;
