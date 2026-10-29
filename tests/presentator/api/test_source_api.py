@@ -234,7 +234,7 @@ def test_the_hook_url_is_absolute_and_names_the_fetch_address() -> None:
     assert view.hook_url.startswith("http")
 
 
-def test_the_hook_url_names_the_scheme_the_request_arrived_in() -> None:
+def test_the_hook_url_takes_the_scheme_of_the_requests_own_url() -> None:
     lobby = a_lobby(given=GivenDecks(source=a_configured_source(_ADDRESS)))
     lobby.sign_in()
     host = lobby.client.base_url.host
@@ -384,32 +384,47 @@ def a_bearer(scene: Scene, groups: list[str]) -> dict[str, str]:
     return {"authorization": f"Bearer {minted}", **_JSON}
 
 
-def test_an_admins_bearer_alone_reads_as_the_cookie_does(scene: Scene) -> None:
-    answer = scene.browser().get(_LIST, headers=a_bearer(scene, ADMIN_GROUPS))
+_ROUTES = [
+    pytest.param("get", _LIST, id="list"),
+    pytest.param("get", _PAGE.format(name="decks"), id="page"),
+    pytest.param("post", _FETCH.format(name="decks"), id="fetch"),
+]
 
-    assert answer.status_code == HTTPStatus.OK
-    assert SourceListView.model_validate(answer.json()).sources == []
 
-
-def test_a_members_bearer_is_refused_with_a_problem(scene: Scene) -> None:
-    browser = scene.browser()
-    headers = a_bearer(scene, MEMBER)
-
-    reading = browser.get(_LIST, headers=headers)
-    fetching = browser.post(
-        _FETCH.format(name="decks"), headers={**headers, **_SAME_ORIGIN}
+@pytest.mark.parametrize(("method", "path"), _ROUTES)
+def test_an_admins_bearer_alone_is_admitted_as_the_cookie_is(
+    scene: Scene, method: str, path: str
+) -> None:
+    answer = getattr(scene.browser(), method)(
+        path, headers={**a_bearer(scene, ADMIN_GROUPS), **_SAME_ORIGIN}
     )
 
-    for answer in (reading, fetching):
-        assert answer.status_code == HTTPStatus.FORBIDDEN
-        assert answer.headers["content-type"] == _PROBLEM
+    assert answer.status_code != HTTPStatus.FORBIDDEN
+    assert answer.status_code != HTTPStatus.UNAUTHORIZED
 
 
-def test_an_invalid_bearer_beside_an_admin_cookie_is_refused(scene: Scene) -> None:
+@pytest.mark.parametrize(("method", "path"), _ROUTES)
+def test_a_members_bearer_is_refused_with_a_problem(
+    scene: Scene, method: str, path: str
+) -> None:
+    answer = getattr(scene.browser(), method)(
+        path, headers={**a_bearer(scene, MEMBER), **_SAME_ORIGIN}
+    )
+
+    assert answer.status_code == HTTPStatus.FORBIDDEN
+    assert answer.headers["content-type"] == _PROBLEM
+
+
+@pytest.mark.parametrize(("method", "path"), _ROUTES)
+def test_an_invalid_bearer_beside_an_admin_cookie_is_refused(
+    scene: Scene, method: str, path: str
+) -> None:
     browser = scene.browser()
     scene.sign_in(browser, groups=ADMIN_GROUPS)
 
-    answer = browser.get(_LIST, headers={"authorization": "Bearer nonsense", **_JSON})
+    answer = getattr(browser, method)(
+        path, headers={"authorization": "Bearer nonsense", **_JSON, **_SAME_ORIGIN}
+    )
 
     assert answer.status_code == HTTPStatus.UNAUTHORIZED
     assert 'error="invalid_token"' in answer.headers["www-authenticate"]

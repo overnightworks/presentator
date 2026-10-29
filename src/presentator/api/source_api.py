@@ -8,12 +8,12 @@ words how long ago they were.
 from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
-from typing import Final
+from typing import Annotated, Final
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict
 
-from presentator.api.admission import gated_person
+from presentator.api.admission import gated_admin
 from presentator.api.hooks import hook_url
 from presentator.api.problems import ProblemError, problem_response
 from presentator.application.decks import Decks
@@ -23,6 +23,7 @@ from presentator.contracts.decks import (
     SourceRunOutcome,
     SourceState,
 )
+from presentator.contracts.models import User
 
 _SOURCES: Final = "/api/sources"
 _SOURCE: Final = f"{_SOURCES}/{{name}}"
@@ -83,8 +84,7 @@ class _SourceData:
 
     decks: Decks
 
-    def source_list(self, request: Request) -> SourceListView:
-        _admin_id(request)
+    def source_list(self) -> SourceListView:
         return SourceListView(
             sources=[
                 SourceSummary(
@@ -98,8 +98,10 @@ class _SourceData:
             ]
         )
 
-    def source(self, request: Request, name: str) -> SourceView:
-        page = self.decks.shown_source(name, viewer=_admin_id(request))
+    def source(
+        self, request: Request, name: str, admin: Annotated[User, Depends(gated_admin)]
+    ) -> SourceView:
+        page = self.decks.shown_source(name, viewer=admin.id)
         if page is None:
             raise ProblemError(HTTPStatus.NOT_FOUND)
         return SourceView(
@@ -125,18 +127,10 @@ class _SourceData:
             ],
         )
 
-    def fetch_now(self, request: Request, name: str) -> Response:
-        _admin_id(request)
+    def fetch_now(self, name: str) -> Response:
         if not self.decks.refresh_named(name):
             raise ProblemError(HTTPStatus.NOT_FOUND)
         return Response(status_code=HTTPStatus.NO_CONTENT)
-
-
-def _admin_id(request: Request) -> str:
-    person = gated_person(request)
-    if not person.is_admin:
-        raise ProblemError(HTTPStatus.FORBIDDEN)
-    return person.id
 
 
 def source_api_routes(*, decks: Decks) -> APIRouter:
@@ -144,7 +138,7 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
     data = _SourceData(decks=decks)
     forbidden = problem_response(HTTPStatus.FORBIDDEN)
     not_found = forbidden | problem_response(HTTPStatus.NOT_FOUND)
-    router = APIRouter()
+    router = APIRouter(dependencies=[Depends(gated_admin)])
     router.add_api_route(
         _SOURCES, data.source_list, methods=["GET"], responses=forbidden
     )

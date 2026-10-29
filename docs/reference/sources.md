@@ -113,7 +113,9 @@ On the Sources list, each row's *Fetch now* refreshes only that source and
 returns to the list; on the source's page it returns to that page.
 
 The list, a source's page and *Fetch now* are also served as JSON for an admin
-(a session or a person's bearer; anyone else gets a 403 problem):
+(a session or a person's bearer). A signed-in non-admin gets a 403 problem;
+a signed-out caller or an invalid bearer meets the sign-in gate's own 401 or
+redirect instead:
 `GET /api/sources`, `GET /api/sources/<name>` and `POST /api/sources/<name>/fetch`
 (204 once that source is taken in and built; an unknown name is a 404 problem).
 They carry the state, the stored `fetched_at` instant of the newest run and, on

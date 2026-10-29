@@ -703,7 +703,11 @@ class Decks:
         )
 
     def _shown(self, attempt: BuildAttempt | None) -> ShownAttempt | None:
-        """What the page says about the build that ran last, while one has run."""
+        """What the page says about the build that ran last, while one has run.
+
+        The commit is shortened the way the delivered one is: a person reads
+        both off the same screen to see which push is which.
+        """
         if attempt is None:
             return None
         return ShownAttempt(
