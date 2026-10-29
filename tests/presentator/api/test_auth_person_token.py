@@ -151,12 +151,22 @@ def test_a_cookie_alone_is_still_a_signed_in_person_on_api(scene: Scene) -> None
 
 
 @pytest.mark.parametrize(
-    ("groups", "expected_status"),
-    [(MEMBER, HTTPStatus.FORBIDDEN), (ADMIN, HTTPStatus.OK)],
+    ("groups", "expected_status", "expected_challenge"),
+    [
+        (
+            MEMBER,
+            HTTPStatus.FORBIDDEN,
+            'Bearer realm="admin", error="insufficient_scope"',
+        ),
+        (ADMIN, HTTPStatus.OK, None),
+    ],
     ids=["a member", "an admin"],
 )
 def test_the_admin_prefix_stays_a_machine_path_and_provisions_no_caller(
-    scene: Scene, groups: list[str], expected_status: HTTPStatus
+    scene: Scene,
+    groups: list[str],
+    expected_status: HTTPStatus,
+    expected_challenge: str | None,
 ) -> None:
     """P7: a path both rules select is a machine path; the caller gets no account."""
     answer = a_token_client(scene).delete(
@@ -164,6 +174,7 @@ def test_the_admin_prefix_stays_a_machine_path_and_provisions_no_caller(
     )
 
     assert answer.status_code == expected_status
+    assert answer.headers.get("www-authenticate") == expected_challenge
     assert scene.count("users") == 0
 
 
