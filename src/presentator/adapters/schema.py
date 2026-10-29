@@ -66,7 +66,8 @@ def _keep_the_failure_reason(database: Path) -> None:
     One immediate transaction. Nothing is lost and no old column changes, bar an
     empty failure text becoming none; every deck statement names its columns, so
     a release from before this still reads the file. What such a release writes
-    into it afterwards is made to agree again here, so going forward after a rollback reads every row.
+    into it afterwards is made to agree again here, so going forward after a
+    rollback reads every row.
     """
     toolchain = BuildFailureReason.TOOLCHAIN.value
     with immediate_transaction(database) as cursor:
