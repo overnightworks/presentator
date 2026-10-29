@@ -1,8 +1,0 @@
-claim_id = "ad189c7b838f4d4d9093421130bd4eb3"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "4984218464e75b19bb46c02978469515084c4f88"
-branch = "claude/issue-615-the-co-presenter-learns-its-deck-s-langu"
-scope = ["docs/reference/co-presenter-and-voice.md", "slidev/components/CoPresenter.vue", "slidev/tests/presenter-controls.browser.test.ts", "slidev/tests/presenter-overlay-harness.ts", "src/presentator/api/copresenter.py", "src/presentator/application/copresenter.py", "src/presentator/application/spoken_answer.py", "tests/presentator/api/test_copresenter.py", "tests/presentator/api/test_copresenter_deck.py", "tests/presentator/api/test_copresenter_talk_host.py", "tests/presentator/api/test_talk_routing.py", "tests/presentator/application/test_copresenter.py", "tests/presentator/application/test_spoken_answer.py", "tests/support/copresenter_support.py"]
-opened_commit = "00af83cd521b8ede2d7f931f57086195d5671c44"
-whole_reason = "One field and its one consumer: /who's deck check and language, the addon that sends the deck and uses the language, and every test that pins /who prove line 2 A only together."
