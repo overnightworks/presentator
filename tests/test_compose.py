@@ -34,6 +34,10 @@ def test_no_environment_value_reads_the_callers_shell() -> None:
             "$" not in (value or "") for value in _environment_of(service).values()
         )
     assert "${" not in _COMPOSE.read_text(encoding="utf-8").replace("${HOME}", "")
+
+
+def test_no_healthcheck_reads_the_callers_shell() -> None:
+    """S9e (#527): no `$` in any part of a service's healthcheck command."""
     for service in _parsed_compose()["services"].values():
         assert all(
             "$" not in part for part in service.get("healthcheck", {}).get("test", [])
