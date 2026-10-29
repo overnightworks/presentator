@@ -1,6 +1,6 @@
 """`GET /api/decks/{slug}` tells a page one deck's facts, and errors as a problem."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from http import HTTPStatus
 from pathlib import Path
 
@@ -154,11 +154,18 @@ def test_a_deck_never_built_has_the_sources_commit_and_nothing_delivered() -> No
 
 
 def test_the_instants_carry_their_offset_as_stored() -> None:
-    lobby = a_built_deck_lobby()
+    attempt = a_failed_attempt(said="broke")
+    lobby = a_lobby_with(a_deck_store(built=a_build(), attempt=attempt))
+    lobby.sign_in()
 
     body = lobby.client.get(f"/api/decks/{SLUG}", headers=_JSON).json()
 
-    assert body["built_at"] == a_build().built_at.isoformat().replace("+00:00", "Z")
+    built_at = datetime.fromisoformat(body["built_at"])
+    started_at = datetime.fromisoformat(body["attempt"]["started_at"])
+    assert built_at == a_build().built_at
+    assert built_at.utcoffset() is not None
+    assert started_at == attempt.started_at
+    assert started_at.utcoffset() is not None
 
 
 def an_unknown_slug_answer(lobby: Lobby, slug: str = "no-such-deck") -> bytes:
