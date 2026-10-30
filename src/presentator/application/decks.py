@@ -355,11 +355,9 @@ class Decks:
         )
 
     def renew_access(self, name: str, secret: str) -> bool:
-        """Replace a source's token or generated deploy key.
+        """Replace a source's HTTPS token (one printable line) or SSH deploy key.
 
-        An SSH source needs no input because it gets a new pair immediately.
-        HTTPS still needs a nonblank replacement token. A local or unknown
-        source has no access value this operation can renew.
+        SSH needs no input; a local or unknown source has nothing to renew.
         """
         source = self._named(name)
         if source is None:
@@ -367,7 +365,9 @@ class Decks:
         kind = access_kind_of(source.url)
         if kind is AccessKind.SSH:
             return self.sources.renew_deploy_key(source.id)
-        if kind is not AccessKind.HTTPS or not secret.strip():
+        if kind is not AccessKind.HTTPS or not (
+            secret.strip() and secret.isprintable()
+        ):
             return False
         self.sources.put_credential(source.id, secret)
         return True

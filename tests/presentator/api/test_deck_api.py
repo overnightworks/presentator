@@ -16,7 +16,7 @@ from presentator.contracts.decks import (
     DeckState,
 )
 from presentator.contracts.models import Role
-from tests.presentator.application.support.fakes import FakeDeckStore
+from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
 from tests.support.deck_page_support import SLUG, a_build, a_deck_store
 from tests.support.lobby import (
     A_TALK_ADDRESS,
@@ -26,6 +26,7 @@ from tests.support.lobby import (
     GivenDecks,
     Lobby,
     a_configured_source,
+    a_decks,
     a_lobby,
 )
 from tests.support.sign_in_support import MEMBER, Scene, a_scene
@@ -333,6 +334,33 @@ def test_a_persons_bearer_reaches_the_route_and_gets_the_problem(scene: Scene) -
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
     assert answer.content == _NOT_FOUND
+
+
+def test_a_persons_bearer_reads_that_persons_own_deck(tmp_path: Path) -> None:
+    subject = "a-member"
+    scene = a_scene(
+        tmp_path,
+        token_clients=frozenset({_HAL}),
+        decks=a_decks(
+            GivenDecks(
+                store=a_deck_store(built=a_build(), owner=subject),
+                source=a_configured_source(_ADDRESS),
+                themes=("seriph",),
+            ),
+            FrozenClock(instant=NOW),
+        ),
+    )
+    scene.users.create_for_subject(subject, "anna", Role.USER)
+    minted = scene.issuer.mint_access_token(
+        subject=subject, groups=MEMBER, authorized_party=_HAL, audience=None
+    )
+
+    answer = scene.browser().get(
+        f"/api/decks/{SLUG}", headers={"authorization": f"Bearer {minted}", **_JSON}
+    )
+
+    assert answer.status_code == HTTPStatus.OK
+    assert DeckView.model_validate(answer.json()).state is DeckState.READY
 
 
 def test_an_invalid_bearer_beside_the_cookie_is_refused(scene: Scene) -> None:

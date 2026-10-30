@@ -1,5 +1,6 @@
 """A source whose repository cannot be read ends its run; the others go on."""
 
+import logging
 import os
 import shutil
 from collections.abc import Callable
@@ -283,3 +284,25 @@ def test_a_new_folder_whose_manifest_is_a_submodule_takes_no_deck_and_stops_noth
         "later",
     }
     assert_the_siblings_and_the_other_source_were_taken_in(instance)
+
+
+def test_a_stored_address_with_userinfo_that_resolves_to_no_mirror_logs_the_name_only(
+    caplog: pytest.LogCaptureFixture, tmp_path: Path
+) -> None:
+    address = "https://a-user:its-password@git.example.invalid/talks.git"
+    name = "the-talks-source"
+    source = replace(a_source(address), name=name)
+
+    with caplog.at_level(logging.DEBUG):
+        poll = folders_under(tmp_path).folders(source)
+
+    assert poll.folders is None
+    warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+    ]
+    assert any(name in message for message in warnings)
+    assert "its-password" not in caplog.text
+    assert "a-user" not in caplog.text
+    assert "git.example.invalid" not in caplog.text

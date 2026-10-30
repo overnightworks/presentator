@@ -23,6 +23,7 @@ from presentator.adapters.identity import (
     SqliteSubjectUserStore,
     create_identity_tables,
 )
+from presentator.application.decks import Decks
 from tests.presentator.application.support.fakes import FrozenClock
 from tests.presentator.application.support.person_instance_support import an_instance
 from tests.support.fake_issuer import FakeIssuer
@@ -149,6 +150,7 @@ def a_scene(  # noqa: PLR0913
     admission: AdmissionConfig | None = None,
     token_requests: Callable[[TokenRequestPost], TokenRequestPost] = lambda real: real,
     token_clients: frozenset[str] = frozenset(),
+    decks: Decks | None = None,
 ) -> Scene:
     database = tmp_path / "identity.sqlite3"
     create_identity_tables(database)
@@ -174,6 +176,7 @@ def a_scene(  # noqa: PLR0913
         signing_in=SigningIn(
             sessions=sessions,
             auth=auth if admission is None else replace(auth, admission=admission),
+            decks=decks,
         ),
         admin_people=an_admin_people(an_instance().people, clients=token_clients)
         if token_clients

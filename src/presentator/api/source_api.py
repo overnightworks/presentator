@@ -1,8 +1,8 @@
 """The Sources list, a source's page and Fetch now as data, for an admin.
 
 A source's webhook secret comes back only in the answer to create or renew,
-so no answer here carries one. Instants come from the stored runs; a client
-words how long ago they were.
+and an access token or private key never comes back, so no answer here carries
+one. Instants come from the stored runs; a client words how long ago they were.
 """
 
 from dataclasses import dataclass
@@ -11,11 +11,15 @@ from http import HTTPStatus
 from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, SecretStr
 
 from presentator.api.admission import gated_admin
 from presentator.api.hooks import hook_url
-from presentator.api.problems import ProblemError, problem_response
+from presentator.api.problems import (
+    ProblemError,
+    problem_beside_validation,
+    problem_response,
+)
 from presentator.application.decks import Decks
 from presentator.contracts.decks import (
     AccessKind,
@@ -28,6 +32,7 @@ from presentator.contracts.models import User
 _SOURCES: Final = "/api/sources"
 _SOURCE: Final = f"{_SOURCES}/{{name}}"
 _FETCH: Final = f"{_SOURCE}/fetch"
+_ACCESS: Final = f"{_SOURCE}/access"
 
 
 class SourceSummary(BaseModel):
@@ -76,6 +81,14 @@ class SourceView(SourceSummary):
     public_key: str | None
     runs: list[SourceRunView]
     decks: list[SourceDeckView]
+
+
+class AccessRenewal(BaseModel):
+    """The new HTTPS token, or null for an SSH source, which renews its own pair."""
+
+    model_config = ConfigDict(frozen=True)
+
+    secret: SecretStr | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -132,6 +145,19 @@ class _SourceData:
             raise ProblemError(HTTPStatus.NOT_FOUND)
         return Response(status_code=HTTPStatus.NO_CONTENT)
 
+    def renew_access(
+        self,
+        name: str,
+        renewal: AccessRenewal,
+        admin: Annotated[User, Depends(gated_admin)],
+    ) -> Response:
+        secret = "" if renewal.secret is None else renewal.secret.get_secret_value()
+        if not self.decks.renew_access(name, secret):
+            if self.decks.shown_source(name, viewer=admin.id) is None:
+                raise ProblemError(HTTPStatus.NOT_FOUND)
+            raise ProblemError(HTTPStatus.UNPROCESSABLE_ENTITY)
+        return Response(status_code=HTTPStatus.NO_CONTENT)
+
 
 def source_api_routes(*, decks: Decks) -> APIRouter:
     """The router that answers the Sources data to an admin."""
@@ -149,5 +175,13 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         methods=["POST"],
         status_code=HTTPStatus.NO_CONTENT,
         responses=not_found,
+    )
+    router.add_api_route(
+        _ACCESS,
+        data.renew_access,
+        methods=["POST"],
+        status_code=HTTPStatus.NO_CONTENT,
+        responses=not_found,
+        openapi_extra=problem_beside_validation(),
     )
     return router

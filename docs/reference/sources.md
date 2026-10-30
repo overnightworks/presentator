@@ -126,6 +126,14 @@ the page, the absolute `hook_url`, the SSH `public_key`, the newest three runs
 viewer's own decks. They carry instants where the Jinja pages word ages, and no
 secret: the webhook secret comes back only in the answer to create or renew.
 
+Renewing access is also a JSON write for an admin, with the same refusals:
+`POST /api/sources/<name>/access` takes `{"secret": <token or null>}` and answers
+204 with no content, never the value. An SSH source renews its own pair
+and ignores the secret (the new public half is on the page); an unknown name is
+a 404 problem; a blank or null HTTPS token, a token that is not one printable
+line (git cannot be handed it) and a local folder are a 422 problem, which says
+no reason.
+
 Remove, at the bottom, asks once for a confirm naming the source's decks and
 runs, then deletes the source row, its runs, its decks, its mirror, and every
 built talk those decks left on disk, so the same URL can be added again
