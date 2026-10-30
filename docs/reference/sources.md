@@ -58,6 +58,20 @@ admin adds one under Settings · Sources.
   answers the probe's `failure`, `commit`, `detail` and `fingerprint`. A
   mismatch between the access and the URL is refused before any probe, as the
   problem `source-refused`.
+- *Create* is also served as JSON to an admin: `POST /api/sources` takes the
+  check's values (the URL, the access, the token or null, the draft id) with the
+  source's `name` and the `fingerprint` of the check that succeeded for exactly
+  those values. It answers 201 with the source's `name`, its absolute `hook_url`
+  and its `webhook_secret`, and a `Location` naming only the source
+  (`/api/sources/<name>`). The webhook secret is in that one answer: nothing
+  keeps it, no GET and no log carries it, and a lost answer is recovered by
+  renewing it. A refusal is a `source-refused` problem (422) and creates no
+  source and delivers or keeps no webhook secret. It does not promise that
+  nothing changes: a draft that is not this admin's makes the admin a fresh
+  draft before it is refused, and a store that rejects the row at the write (a
+  concurrent duplicate) answers `duplicate-name`. A failure after the row is
+  written (the first fetch) is a plain 500 with the source created and the
+  secret lost, so the person renews it.
 - The problem type `source-refused` is the URI
   `tag:hallucinai.de,2026-09-08:presentator/problems/source-refused`, with the
   title `Unprocessable Content`, status 422 and the member `reason`, one of:
@@ -69,7 +83,7 @@ admin adds one under Settings · Sources.
   token for SSH or a folder), `outside-local-mount` (a folder outside the
   mount) and `deploy-key-unavailable` (the draft key is gone or not this
   admin's).
-  Check answers only `access-mismatch`. The date is the one RFC 4151 asks for:
+  Check answers only `access-mismatch`; Create answers all nine. The date is the one RFC 4151 asks for:
   presentator's commit `37beebc` of 2026-09-08 is the first that names
   `hallucinai.de`, as the operator's hosts `presentator.hallucinai.de` and
   `copresenter.hallucinai.de`; the domain's registration date is not in the

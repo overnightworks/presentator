@@ -1,4 +1,4 @@
-"""The Sources list, a source's page, Fetch now, the key draft and the check, as data.
+"""The Sources list and page, Fetch now, the key draft, check and create, as data.
 
 A source's webhook secret comes back only in the answer to create or renew,
 and an access token or private key never comes back, so no answer here carries
@@ -22,7 +22,12 @@ from presentator.api.problems import (
     problem_beside_validation,
     problem_response,
 )
-from presentator.application.decks import RESERVED_SOURCE_NAME, Decks, SourceRefusal
+from presentator.application.decks import (
+    RESERVED_SOURCE_NAME,
+    Decks,
+    NewSourceDraft,
+    SourceRefusal,
+)
 from presentator.contracts.decks import (
     AccessKind,
     ConnectionCheckResult,
@@ -118,6 +123,23 @@ class SourceProbe(BaseModel):
     access: AccessKind
     secret: SecretStr | None
     key_draft_id: str | None
+
+
+class NewSource(SourceProbe):
+    """A checked source to store: the probe, its name and the check's fingerprint."""
+
+    name: str
+    fingerprint: str
+
+
+class CreatedSourceView(BaseModel):
+    """The new source and the webhook secret, which no other answer carries."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    hook_url: str
+    webhook_secret: str
 
 
 class ConnectionCheckView(BaseModel):
@@ -242,6 +264,33 @@ class _SourceData:
             raise ProblemError(_REFUSED, SourceRefusedProblem(reason=checked))
         return ConnectionCheckView.of(checked)
 
+    def create(
+        self,
+        request: Request,
+        new: NewSource,
+        response: Response,
+        admin: Annotated[User, Depends(gated_admin)],
+    ) -> CreatedSourceView:
+        added = self.decks.add_source(
+            NewSourceDraft(
+                name=new.name,
+                url=new.url,
+                access=new.access,
+                secret="" if new.secret is None else new.secret.get_secret_value(),
+                fingerprint=new.fingerprint,
+                key_draft_id=new.key_draft_id or "",
+            ),
+            owner_id=admin.id,
+        )
+        if isinstance(added, SourceRefusal):
+            raise ProblemError(_REFUSED, SourceRefusedProblem(reason=added))
+        response.headers["Location"] = _SOURCE.format(name=added.source.name)
+        return CreatedSourceView(
+            name=added.source.name,
+            hook_url=hook_url(request, added.source.name),
+            webhook_secret=added.webhook_secret,
+        )
+
 
 def source_api_routes(*, decks: Decks) -> APIRouter:
     """The router that answers the Sources data to an admin."""
@@ -251,6 +300,14 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
     router = APIRouter(dependencies=[Depends(gated_admin)])
     router.add_api_route(
         _SOURCES, data.source_list, methods=["GET"], responses=forbidden
+    )
+    router.add_api_route(
+        _SOURCES,
+        data.create,
+        methods=["POST"],
+        status_code=HTTPStatus.CREATED,
+        responses=forbidden,
+        openapi_extra=problem_beside_validation(SourceRefusedProblem),
     )
     router.add_api_route(_SOURCE, data.source, methods=["GET"], responses=not_found)
     router.add_api_route(
