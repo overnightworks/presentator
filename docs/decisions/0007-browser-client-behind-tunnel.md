@@ -82,8 +82,25 @@ Slidev exposes `addSyncMethod` as public API, so our addon registers the run
 socket as a sync transport; no fork, no patch, and the static build syncs where
 `BroadcastChannel` cannot.
 
-Audio plays only in the projector window. A second open window stays silent, so
-no view can start a competing voice.
+> **Amendment 2026-10-29** — the window that speaks, as built
+> ([#616](https://github.com/overnightworks/presentator/issues/616)). The
+> sentence this replaces said audio plays only in the projector window; that was
+> never built.
+>
+> - Slidev's presenter route mounts the overlay, and that window holds the
+>   microphone, the hearing lease and the answer's audio.
+> - The projector (Slidev's play route) mounts no overlay. In the
+>   presenter/projector pair it plays nothing and shows the room state it reads.
+> - Nothing enforces one speaker across several presenter windows: each open
+>   presenter window mounts its own overlay.
+> - The room state, what the room is told while the AI listens or answers, is a
+>   Slidev sync state created with `createSyncState`, not a transport of this
+>   record. In a build it reaches the windows of one browser on one origin, the
+>   reach of the slide position, because the notice annotates the slides that
+>   ride the same channel. The rejected alternative "Slidev's built-in sync"
+>   stays rejected as the cross-machine transport: the cross-machine route stays
+>   this record's unbuilt `addSyncMethod`, for slides and room state together,
+>   and the reader of the room state does not change when it arrives.
 
 ## Consequences
 
@@ -95,8 +112,8 @@ no view can start a competing voice.
   to survive.
 - The microphone requires a secure context and an explicit permission grant in
   that browser, which is a step the operator takes before the room fills.
-- Which window is the projector window becomes explicit state the client must
-  hold, rather than a property of whichever tab spoke last.
+- Which window speaks is Slidev's route, not state the client holds: the
+  presenter route speaks and the play route shows. (Amended 2026-10-29.)
 - PCM costs bandwidth an encoder would save — mono 16-bit at 16–24 kHz is
   roughly 32–48 KB/s — and buys a client with no decoder state machine in it.
 - The client owns a small amount of real audio machinery: an AudioWorklet

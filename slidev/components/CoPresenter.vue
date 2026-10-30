@@ -1,9 +1,10 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useNav } from '@slidev/client'
 // `no-inline`: the file is under Vite's inline limit, and a `data:` URL would
 // break the production CSP.
 import WORKLET_URL from '../worklets/pcm-capture-processor.js?url&no-inline'
+import { publish } from '../room-notice.js'
 
 const { currentSlideNo } = useNav()
 
@@ -50,6 +51,12 @@ const hearing = ref('off')
 const error = ref('')
 const audioSeconds = ref(0)
 const speaking = ref(false)
+// What the room can observe, which room-notice.js turns into banner and pill:
+// the worklet is connected to the microphone, an answer's audio is playing, and
+// an answer's audio has played since the switch-on.
+const capturing = ref(false)
+const playing = ref(false)
+const answeredSinceOn = ref(false)
 
 let mediaStream = null
 let audioContext = null
@@ -66,6 +73,17 @@ let activationGeneration = 0
 let playGeneration = 0
 let activeAudio = null
 let finishActivePlay = null
+
+function publishRoomFacts() {
+  publish({
+    capturing: capturing.value,
+    playing: playing.value,
+    answeredSinceOn: answeredSinceOn.value,
+    language,
+  })
+}
+// Synchronous, so a window that turns off has said so when its handler returns.
+watch([capturing, playing, answeredSinceOn], publishRoomFacts, { flush: 'sync' })
 
 const state = computed(() => {
   if (!on.value) return 'off'
@@ -86,7 +104,9 @@ function snapshot() {
     hearOpen: Boolean(hearSocket && hearSocket.readyState === WebSocket.OPEN),
     speaking: speaking.value,
     micLive: tracks.some((track) => track.readyState === 'live'),
-    workletLive: Boolean(workletNode),
+    capturing: capturing.value,
+    playing: playing.value,
+    workletLive: capturing.value,
     audioPlaying: Boolean(activeAudio && !activeAudio.paused && !activeAudio.ended),
   }
 }
@@ -125,6 +145,7 @@ async function turnOn() {
   heard.value = ''
   answer.value = ''
   audioSeconds.value = 0
+  answeredSinceOn.value = false
   spokenText = ''
   let report
   try {
@@ -243,6 +264,7 @@ async function startLocalHear(generation) {
       }
     }
     source.connect(node)
+    capturing.value = true
   } catch {
     abandon({ stream, context, node })
     if (!stillActive(generation)) return
@@ -295,7 +317,10 @@ function closeSocket(socket) {
 }
 
 function disconnectNode(node) {
-  if (workletNode === node) workletNode = null
+  if (workletNode === node) {
+    workletNode = null
+    capturing.value = false
+  }
   node.port.onmessage = null
   try { node.disconnect() } catch { /* already disconnected */ }
 }
@@ -426,6 +451,7 @@ function playUrl(url, generation) {
       resolve()
       return
     }
+    const activation = activationGeneration
     const audio = new Audio(url)
     activeAudio = audio
     speaking.value = true
@@ -434,7 +460,10 @@ function playUrl(url, generation) {
       if (settled) return
       settled = true
       if (finishActivePlay === abortPlay) finishActivePlay = null
-      if (activeAudio === audio) activeAudio = null
+      if (activeAudio === audio) {
+        activeAudio = null
+        playing.value = false
+      }
       if (generation !== playGeneration) {
         resolve()
         return
@@ -454,7 +483,12 @@ function playUrl(url, generation) {
     audio.onended = () => settle(false)
     audio.onerror = () => settle(true)
     audio.play().then(() => {
-      if (generation !== playGeneration) abortPlay()
+      if (generation !== playGeneration || !stillActive(activation)) {
+        abortPlay()
+        return
+      }
+      playing.value = true
+      answeredSinceOn.value = true
     }).catch(() => settle(true))
   })
 }
@@ -475,6 +509,7 @@ function invalidatePlayback() {
   playGeneration += 1
   stopActiveAudio()
   speaking.value = false
+  playing.value = false
   if (finishActivePlay) {
     const finish = finishActivePlay
     finishActivePlay = null
@@ -509,6 +544,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('pagehide', turnOff)
   turnOff()
+  // Vue stops this component's watchers before onUnmounted runs.
+  publishRoomFacts()
   delete window.__copresenter
 })
 </script>
