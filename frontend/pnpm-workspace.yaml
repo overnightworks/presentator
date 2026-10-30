@@ -1,0 +1,5 @@
+packages:
+  - .
+
+# Registry packages resolve only to releases at least two weeks old (minutes).
+minimumReleaseAge: 20160
