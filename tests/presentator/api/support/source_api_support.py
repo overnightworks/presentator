@@ -1,19 +1,23 @@
 """A lobby over a chosen `Decks`, for the Sources writes and their denials."""
 
-from dataclasses import dataclass, replace
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 from http import HTTPStatus
 from pathlib import Path
 from typing import Final, cast
 
+import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
-from presentator.application.decks import Decks
-from presentator.contracts.decks import Source
+from presentator.application.decks import RESERVED_SOURCE_NAME, Decks
+from presentator.contracts.decks import ConnectionCheckResult, Source
 from presentator.ports.decks import DeckStore, DeployKeyDrafts, SourceRuns, SourceStore
 from tests.presentator.application.support.fakes import (
     ConnectionCheckerThatMustNotRun,
     DeckFoldersThatMustNotRun,
+    FakeConnectionChecker,
+    FakeDeployKeyDrafts,
     FakeSourceStore,
     FrozenClock,
 )
@@ -45,6 +49,11 @@ PROBLEM = "application/problem+json"
 ASKING_FOR_JSON = {"accept": "application/json"}
 SAME_ORIGIN = {"sec-fetch-site": "same-origin"}
 HAL = "hal-client"
+NEW = f"/api/sources/{RESERVED_SOURCE_NAME}"
+KEY_DRAFT = f"{NEW}/key-draft"
+CHECK = f"{NEW}/check"
+SENT = "the-token-this-scenario-sends"
+HTTPS = "https://git.example.invalid/talks.git"
 
 
 class PortThatMustNotRun:
@@ -232,3 +241,69 @@ class Instance:
 
     def renew(self, name: str, body: object) -> Response:
         return renew(self.client, name, body, headers=self.headers)
+
+
+@dataclass
+class RecordingChecker(FakeConnectionChecker):
+    """A connection checker that remembers each address and secret it was asked."""
+
+    asked: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
+
+    def check(self, *, url: str, ref: str, secret: str) -> ConnectionCheckResult:
+        self.asked.append((url, secret))
+        return self.answer
+
+
+@dataclass(frozen=True, slots=True)
+class World:
+    """The deck use cases an admin's requests reach, and what they can be read from."""
+
+    decks: Decks
+    clock: FrozenClock
+    checker: RecordingChecker
+    store: FakeSourceStore
+    drafts: FakeDeployKeyDrafts
+
+
+def a_world(checker: RecordingChecker | None = None) -> World:
+    drafts = FakeDeployKeyDrafts()
+    store = FakeSourceStore(key_drafts=drafts)
+    clock = FrozenClock(instant=decks_over(store).clock.now())
+    recording = RecordingChecker() if checker is None else checker
+    decks = replace(
+        decks_over(store), checker=recording, clock=clock, key_drafts=drafts
+    )
+    return World(decks, clock, recording, store, drafts)
+
+
+def _cookie(world: World, _tmp_path: Path) -> Instance:
+    return an_admin_cookie_instance(world.decks, world.store)
+
+
+def _bearer(world: World, tmp_path: Path) -> Instance:
+    return an_admin_bearer_instance(world.decks, world.store, tmp_path)
+
+
+type AdminReach = Callable[[World, Path], Instance]
+
+AN_ADMIN_BY_COOKIE_AND_BEARER: Final = pytest.mark.parametrize(
+    "reach", [_cookie, _bearer], ids=["cookie", "bearer"]
+)
+
+
+def checked_body(**changes: object) -> dict[str, object]:
+    """A check or create request for an HTTPS source, with these fields changed."""
+    return {
+        "url": HTTPS,
+        "access": "https-token",
+        "secret": SENT,
+        "key_draft_id": None,
+    } | changes
+
+
+def draft(client: TestClient, headers: dict[str, str] | None = None) -> Response:
+    return client.post(KEY_DRAFT, headers=headers)
+
+
+def check(client: TestClient, headers: dict[str, str] | None = None) -> Response:
+    return client.post(CHECK, json=checked_body(), headers=headers)
