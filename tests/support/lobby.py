@@ -162,6 +162,7 @@ A_BROWSERS_SOCKET_ADDRESS: Final = "wss://testserver"
 A_TALK_ADDRESS: Final = "https://talk.testserver"
 A_TALK_SOCKET_ADDRESS: Final = "wss://talk.testserver"
 AN_AGENT_SERVICE: Final = "http://agent-service.test:8080"
+AN_AGENT_SERVICE_SCOPE: Final = "an-agent-service-audience"
 AN_ISSUER: Final = "https://auth.example.test/realms/test"
 A_CLIENT_ID: Final = "presentator-test"
 A_CLIENT_CREDENTIAL: Final = "the-secret-only-this-test-has"
@@ -311,6 +312,7 @@ def a_settings() -> Settings:
         public_origin=A_BROWSERS_ADDRESS,
         talk_origin=A_TALK_ADDRESS,
         agent_service=AN_AGENT_SERVICE,
+        agent_service_scope=AN_AGENT_SERVICE_SCOPE,
         oidc_issuer=AN_ISSUER,
         oidc_client_id=A_CLIENT_ID,
         oidc_client_secret_file=Path("/run/oidc-client-secret"),

@@ -12,6 +12,7 @@ from tests.support.git_remote import GitRemote, a_remote
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     AN_AGENT_SERVICE,
+    AN_AGENT_SERVICE_SCOPE,
     INSTANCE_KEY,
     configure_oidc,
     configure_secret_key,
@@ -97,6 +98,7 @@ def bare_environment(
     monkeypatch.setenv("PRESENTATOR_PUBLIC_ORIGIN", A_BROWSERS_ADDRESS)
     configure_oidc(monkeypatch, tmp_path)
     monkeypatch.setenv("PRESENTATOR_AGENT_SERVICE", AN_AGENT_SERVICE)
+    monkeypatch.setenv("PRESENTATOR_AGENT_SERVICE_SCOPE", AN_AGENT_SERVICE_SCOPE)
     return monkeypatch
 
 

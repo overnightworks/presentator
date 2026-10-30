@@ -87,14 +87,19 @@ def _refusal_of(refusal: AccessTokenRefusal) -> AccessRefusal:
 class WorkloadToken:
     """Presentator's own access token, fetched anew on every call."""
 
-    def __init__(self, relying_party: OidcRelyingParty) -> None:
-        """Fetch through this client."""
+    def __init__(
+        self, relying_party: OidcRelyingParty, scopes: tuple[str, ...]
+    ) -> None:
+        """Fetch through this client, asking for these scopes."""
         self._relying_party = relying_party
+        self._scopes = scopes
 
     async def __call__(self) -> str:
         """A workload access token; any refusal or failure is one unavailable error."""
         try:
-            token = await asyncio.to_thread(self._relying_party.workload_access_token)
+            token = await asyncio.to_thread(
+                self._relying_party.workload_access_token, scopes=self._scopes
+            )
         # Every thread failure is one unavailable error.
         except Exception as error:  # noqa: BLE001
             _thread_failed(error)

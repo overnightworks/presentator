@@ -35,6 +35,7 @@ export PRESENTATOR_OIDC_ISSUER=https://auth.example.test/realms/example
 export PRESENTATOR_OIDC_CLIENT_ID=presentator
 export PRESENTATOR_OIDC_CLIENT_SECRET_FILE=/run/user/"$(id -u)"/presentator/oidc-client-secret
 export PRESENTATOR_AGENT_SERVICE=http://agent-service:8080
+export PRESENTATOR_AGENT_SERVICE_SCOPE=agent-service-audience
 export PRESENTATOR_BUILD_RUNNER=host
 uv run presentator
 ```

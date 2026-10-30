@@ -13,7 +13,9 @@ The agent service is the operator's own, reached at `PRESENTATOR_AGENT_SERVICE`
 over the `hal_agent_presentator` network. Presentator reads the asked deck's words at its
 built commit, sends them with the question as one message, with no tools, and
 streams the model's text back. Both the person's fresh access token and
-Presentator's own workload token go with every run. Presentator splits the text
+Presentator's own workload token go with every run; the workload grant asks for
+the scope in `PRESENTATOR_AGENT_SERVICE_SCOPE`, so that token names the agent
+service and no other as its audience. Presentator splits the text
 into sentences and speaks them.
 
 A host process can sit beside a checkout run; it is not part of a deployed
