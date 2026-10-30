@@ -78,7 +78,7 @@ as it is; this record governs the lobby and the overlay, not slide design.
 
 **Named gap: the overlay does not adapt to a deck's palette.** The room notice
 follows the deck's light or dark mode, though not its palette. A deck whose
-palette fights the instance theme will look wrong under the overlay. Nothing
+palette fights the overlay's fixed colours will look wrong under it. Nothing
 here promises otherwise, and the fix — whatever it turns out to be — is owned by
 [#8](https://github.com/overnightworks/presentator/issues/8) as a later M1
 item, once a real deck has shown what the clash actually looks like.

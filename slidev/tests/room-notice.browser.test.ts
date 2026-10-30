@@ -520,7 +520,7 @@ describe('the room notice', () => {
       const second = await openPageIn(context, `${state.origin}/presenter/1`, 1024)
       await second.waitForTimeout(1_000)
       await second.getByTitle('Play Mode', { exact: true }).click()
-      await second.waitForTimeout(1_000)
+      await second.waitForURL(`${state.origin}/1`)
       await second.close()
       await projector.waitForTimeout(2_000)
       const entries = await timelineOf(projector)
