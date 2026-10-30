@@ -260,7 +260,7 @@ def test_a_lost_answer_is_recovered_by_renewing_again() -> None:
 
 
 def _a_created_source_of(client: TestClient, kind: AccessKind) -> str:
-    changes = dict(_SOURCES_BY_KIND[kind])
+    changes: dict[str, object] = dict(_SOURCES_BY_KIND[kind])
     if kind is AccessKind.SSH:
         changes["key_draft_id"] = draft(client).json()["id"]
     return a_created_source(client, changes)
