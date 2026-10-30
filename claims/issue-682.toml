@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "fe657cca62167d86da9a983312d0e8bc484dd241"
 branch = "claude/issue-682-descriptor-leak-tests-count-the-whole-pr"
-scope = ["tests/presentator/adapters/test_worker_children.py", "tests/presentator/adapters/test_worker_children_exit_descriptor.py", "tests/presentator/host/test_worker_step.py", "tests/support/worker_support.py"]
+scope = ["tests/presentator/adapters/test_worker_children.py", "tests/presentator/adapters/test_worker_children_exit_descriptor.py", "tests/presentator/host/test_worker_step.py", "tests/presentator/host/test_worker_step_phase.py", "tests/support/worker_support.py"]
 opened_commit = "79c949112e9c4fb4448cd355dee75fcb42d3dd40"
 whole_reason = "One shared descriptor helper and the five cells that read it change together; a cell left on the old count stays flaky."
