@@ -1,0 +1,8 @@
+claim_id = "6ab26d96daf0402dac4ad8e3d1d83eb8"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "2fd42e4963a226d831168969af5e47db6b2e5d05"
+branch = "claude/issue-653-an-admin-creates-a-source-through-the-js"
+scope = ["docs/reference/sources.md", "src/presentator/api/source_api.py", "tests/presentator/api/support/source_api_support.py", "tests/presentator/api/test_source_api_check.py", "tests/presentator/api/test_source_api_create.py"]
+opened_commit = "8f7360c0c2ebb44e09f595694d530dabd55ece9a"
+whole_reason = "POST /api/sources: the create route, its matrix and its reference, plus the check world its test shares moved into the support module."
