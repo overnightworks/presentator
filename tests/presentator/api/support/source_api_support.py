@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, replace
 from http import HTTPStatus
+from pathlib import Path
 from typing import cast
 
 from fastapi.testclient import TestClient
@@ -31,7 +32,8 @@ from tests.support.lobby import (
     a_lobby_app,
     an_installed_auth,
 )
-from tests.support.sign_in_support import Scene
+from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
+from tests.support.sign_in_support import Scene, a_scene
 
 ACCESS = "/api/sources/{name}/access"
 PAGE = "/api/sources/{name}"
@@ -107,6 +109,41 @@ def a_member_over(decks: Decks) -> Lobby:
     lobby = a_lobby_over(decks)
     lobby.sign_in(username=NEIGHBOUR)
     return lobby
+
+
+def an_admin_cookie_instance(decks: Decks, store: FakeSourceStore) -> Instance:
+    """The signed-in admin browser, reaching the lobby by its session cookie."""
+    return Instance(an_admin_over(decks).client, store, {})
+
+
+def an_admin_bearer_instance(
+    decks: Decks, store: FakeSourceStore, tmp_path: Path
+) -> Instance:
+    """An admin reaching the lobby by a bearer alone, with no cookie."""
+    scene = a_scene(tmp_path, token_clients=frozenset({HAL}), decks=decks)
+    return Instance(
+        a_client_with_no_header_of_its_own(scene), store, a_bearer(scene, ADMIN_GROUPS)
+    )
+
+
+def a_scene_that_must_not_run(tmp_path: Path) -> Scene:
+    """A lobby with a bearer client whose every deck port fails the test."""
+    return a_scene(
+        tmp_path, token_clients=frozenset({HAL}), decks=decks_that_must_not_run()
+    )
+
+
+def whole_answers_of(instance: Instance, name: str) -> str:
+    """Everything the Sources data says about the instance's sources."""
+    headers = {**instance.headers, **ASKING_FOR_JSON}
+    answers = (
+        instance.client.get(LIST, headers=headers),
+        instance.client.get(PAGE.format(name=name), headers=headers),
+    )
+    for answer in answers:
+        assert answer.status_code == HTTPStatus.OK
+        assert_no_store(answer)
+    return "".join(answer.text for answer in answers)
 
 
 def without_raising(lobby: Lobby) -> TestClient:

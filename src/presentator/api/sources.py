@@ -50,6 +50,11 @@ _SOURCE_PAGE: Final = "source.html"
 _HTTPS_ACCESS: Final = "https"
 _SSH_ACCESS: Final = "ssh"
 _FILE_ACCESS: Final = "file"
+_ACCESS_OF_RADIO: Final = {
+    _HTTPS_ACCESS: AccessKind.HTTPS,
+    _SSH_ACCESS: AccessKind.SSH,
+    _FILE_ACCESS: AccessKind.FILE,
+}
 _STAY_ON_PAGE: Final = "page"
 
 
@@ -237,7 +242,7 @@ class _Surfaces:
             NewSourceDraft(
                 name=posted.name,
                 url=posted.url,
-                access=posted.access,
+                access=_ACCESS_OF_RADIO.get(posted.access),
                 secret=posted.secret,
                 fingerprint=posted.fingerprint,
                 key_draft_id=posted.key_draft_id,
@@ -284,7 +289,7 @@ class _Surfaces:
             return _refused()
         checked = self.decks.check_connection(
             url=posted.url,
-            access=posted.access,
+            access=_ACCESS_OF_RADIO.get(posted.access),
             secret=posted.secret,
             owner_id=gated_person(request).id,
             key_draft_id=posted.key_draft_id,

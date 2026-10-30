@@ -18,7 +18,6 @@ from presentator.contracts.decks import Source
 from tests.presentator.api.support.source_api_support import (
     ACCESS,
     ASKING_FOR_JSON,
-    HAL,
     LIST,
     PAGE,
     SAME_ORIGIN,
@@ -27,7 +26,10 @@ from tests.presentator.api.support.source_api_support import (
     a_client_with_no_header_of_its_own,
     a_lobby_over,
     a_member_over,
+    a_scene_that_must_not_run,
     a_source_store,
+    an_admin_bearer_instance,
+    an_admin_cookie_instance,
     an_admin_over,
     assert_no_store,
     assert_nothing_returned,
@@ -36,6 +38,7 @@ from tests.presentator.api.support.source_api_support import (
     decks_over,
     decks_that_must_not_run,
     renew,
+    whole_answers_of,
     without_raising,
 )
 from tests.presentator.application.support.fakes import (
@@ -44,7 +47,7 @@ from tests.presentator.application.support.fakes import (
 )
 from tests.support.lobby import ADMIN
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
-from tests.support.sign_in_support import MEMBER, Scene, a_scene
+from tests.support.sign_in_support import MEMBER, Scene
 
 _OLD = "the-token-this-scenario-replaces"
 _NEW = "the-token-this-scenario-sends"
@@ -66,14 +69,11 @@ def an_https_store() -> FakeSourceStore:
 
 
 def _admin_cookie(store: FakeSourceStore, _tmp_path: Path) -> Instance:
-    return Instance(an_admin_over(decks_over(store)).client, store, {})
+    return an_admin_cookie_instance(decks_over(store), store)
 
 
 def _admin_bearer(store: FakeSourceStore, tmp_path: Path) -> Instance:
-    scene = a_scene(tmp_path, token_clients=frozenset({HAL}), decks=decks_over(store))
-    return Instance(
-        a_client_with_no_header_of_its_own(scene), store, a_bearer(scene, ADMIN_GROUPS)
-    )
+    return an_admin_bearer_instance(decks_over(store), store, tmp_path)
 
 
 @pytest.fixture(params=[_admin_cookie, _admin_bearer], ids=["cookie", "bearer"])
@@ -85,22 +85,7 @@ def an_admin(
 
 @pytest.fixture
 def scene(tmp_path: Path) -> Scene:
-    return a_scene(
-        tmp_path, token_clients=frozenset({HAL}), decks=decks_that_must_not_run()
-    )
-
-
-def whole_answers_of(instance: Instance) -> str:
-    """Everything the Sources data says about the instance's sources."""
-    headers = {**instance.headers, **ASKING_FOR_JSON}
-    answers = (
-        instance.client.get(LIST, headers=headers),
-        instance.client.get(PAGE.format(name=_NAME), headers=headers),
-    )
-    for answer in answers:
-        assert answer.status_code == HTTPStatus.OK
-        assert_no_store(answer)
-    return "".join(answer.text for answer in answers)
+    return a_scene_that_must_not_run(tmp_path)
 
 
 # 1
@@ -201,7 +186,7 @@ def test_an_admin_renews_a_token_and_the_store_holds_exactly_the_new_one(
     assert_no_store(answer)
     assert_nothing_returned(answer, _OLD, _NEW)
     assert instance.store.secrets == {"the-source": _NEW}
-    shown = whole_answers_of(instance)
+    shown = whole_answers_of(instance, _NAME)
     assert _NEW not in shown
     assert _OLD not in shown
 
@@ -244,7 +229,7 @@ def test_an_ssh_renewal_without_a_secret_shows_a_new_public_half_and_no_private_
     ).json()["public_key"]
     assert after is not None
     assert after != before
-    assert "PRIVATE" not in whole_answers_of(instance)
+    assert "PRIVATE" not in whole_answers_of(instance, _NAME)
 
 
 # 13
@@ -261,7 +246,7 @@ def test_an_ssh_renewal_that_carries_a_token_renews_the_pair_and_stores_no_token
     assert_nothing_returned(answer, _OLD, _NEW)
     assert instance.store.sources[0].public_key is not None
     assert instance.store.secrets == {}
-    assert _NEW not in whole_answers_of(instance)
+    assert _NEW not in whole_answers_of(instance, _NAME)
 
 
 # 14

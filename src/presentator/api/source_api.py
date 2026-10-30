@@ -1,4 +1,4 @@
-"""The Sources list, a source's page and Fetch now as data, for an admin.
+"""The Sources list, a source's page, Fetch now, the key draft and the check, as data.
 
 A source's webhook secret comes back only in the answer to create or renew,
 and an access token or private key never comes back, so no answer here carries
@@ -11,18 +11,20 @@ from http import HTTPStatus
 from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel, ConfigDict, SecretStr
+from pydantic import BaseModel, ConfigDict, SecretStr, WithJsonSchema
 
 from presentator.api.admission import gated_admin
 from presentator.api.hooks import hook_url
 from presentator.api.problems import (
+    ProblemDetails,
     ProblemError,
     problem_beside_validation,
     problem_response,
 )
-from presentator.application.decks import Decks
+from presentator.application.decks import RESERVED_SOURCE_NAME, Decks, SourceRefusal
 from presentator.contracts.decks import (
     AccessKind,
+    ConnectionCheckResult,
     SourceRunFailure,
     SourceRunOutcome,
     SourceState,
@@ -33,6 +35,12 @@ _SOURCES: Final = "/api/sources"
 _SOURCE: Final = f"{_SOURCES}/{{name}}"
 _FETCH: Final = f"{_SOURCE}/fetch"
 _ACCESS: Final = f"{_SOURCE}/access"
+_KEY_DRAFT: Final = f"{_SOURCES}/{RESERVED_SOURCE_NAME}/key-draft"
+_CHECK: Final = f"{_SOURCES}/{RESERVED_SOURCE_NAME}/check"
+_REFUSED: Final = HTTPStatus.UNPROCESSABLE_ENTITY
+_REFUSED_TYPE: Final = (
+    "tag:hallucinai.de,2026-09-08:presentator/problems/source-refused"
+)
 
 
 class SourceSummary(BaseModel):
@@ -89,6 +97,61 @@ class AccessRenewal(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     secret: SecretStr | None
+
+
+class KeyDraftView(BaseModel):
+    """An admin's draft deploy key: the id to bind and the half to install."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    public_key: str
+
+
+class SourceProbe(BaseModel):
+    """The address, access and credential of a source that is not stored yet."""
+
+    model_config = ConfigDict(frozen=True)
+
+    url: str
+    access: AccessKind
+    secret: SecretStr | None
+    key_draft_id: str | None
+
+
+class ConnectionCheckView(BaseModel):
+    """What a probe found; `detail` is git's own first line, not presentator's."""
+
+    model_config = ConfigDict(frozen=True)
+
+    failure: SourceRunFailure | None
+    commit: str | None
+    detail: str | None
+    fingerprint: str | None
+
+    @classmethod
+    def of(cls, checked: ConnectionCheckResult) -> ConnectionCheckView:
+        """The wire form of the owner's result."""
+        return cls(
+            failure=checked.failure,
+            commit=checked.commit,
+            detail=checked.detail,
+            fingerprint=checked.fingerprint,
+        )
+
+
+class SourceRefusedProblem(ProblemDetails):
+    """A source the application would not take, and the reason code why."""
+
+    type: str = _REFUSED_TYPE
+    title: str = _REFUSED.phrase
+    status: int = _REFUSED.value
+    reason: Annotated[
+        SourceRefusal,
+        WithJsonSchema(
+            {"type": "string", "enum": [each.value for each in SourceRefusal]}
+        ),
+    ]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -158,6 +221,24 @@ class _SourceData:
             raise ProblemError(HTTPStatus.UNPROCESSABLE_ENTITY)
         return Response(status_code=HTTPStatus.NO_CONTENT)
 
+    def key_draft(self, admin: Annotated[User, Depends(gated_admin)]) -> KeyDraftView:
+        draft = self.decks.source_key_draft(owner_id=admin.id)
+        return KeyDraftView(id=draft.id, public_key=draft.public_key)
+
+    def check_connection(
+        self, probe: SourceProbe, admin: Annotated[User, Depends(gated_admin)]
+    ) -> ConnectionCheckView:
+        checked = self.decks.check_connection(
+            url=probe.url,
+            access=probe.access,
+            secret="" if probe.secret is None else probe.secret.get_secret_value(),
+            owner_id=admin.id,
+            key_draft_id=probe.key_draft_id or "",
+        )
+        if isinstance(checked, SourceRefusal):
+            raise ProblemError(_REFUSED, SourceRefusedProblem(reason=checked))
+        return ConnectionCheckView.of(checked)
+
 
 def source_api_routes(*, decks: Decks) -> APIRouter:
     """The router that answers the Sources data to an admin."""
@@ -183,5 +264,15 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         status_code=HTTPStatus.NO_CONTENT,
         responses=not_found,
         openapi_extra=problem_beside_validation(),
+    )
+    router.add_api_route(
+        _KEY_DRAFT, data.key_draft, methods=["POST"], responses=forbidden
+    )
+    router.add_api_route(
+        _CHECK,
+        data.check_connection,
+        methods=["POST"],
+        responses=forbidden,
+        openapi_extra=problem_beside_validation(SourceRefusedProblem),
     )
     return router
