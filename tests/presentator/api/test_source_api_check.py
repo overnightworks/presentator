@@ -452,7 +452,6 @@ def test_the_reserved_name_is_no_source_page() -> None:
 
 # 19
 _SECRET_NUMBER = 7391825
-_FOREIGN_DRAFT = "somebody-elses-draft"
 
 
 @dataclass(frozen=True, slots=True)
@@ -558,11 +557,12 @@ def test_no_log_record_carries_the_token_or_a_private_half(
         answer = logged.send(world, lobby)
 
     assert answer.status_code == logged.status
+    assert_no_store(answer)
     assert caplog.records
     for value in (_SENT, _USER_PART, "user:pw", str(_SECRET_NUMBER)):
         assert value not in caplog.text
-    for stored in world.drafts.drafts.values():
-        assert stored.private_key not in caplog.text
+    for private_key in world.drafts.private_keys:
+        assert private_key not in caplog.text
 
 
 # 20

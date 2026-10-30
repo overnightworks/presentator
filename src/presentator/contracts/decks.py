@@ -295,9 +295,9 @@ class SourcePoll:
 class ConnectionCheckResult:
     """What a bounded probe of an unsaved source found, without writing anything.
 
-    No failure and a commit is reachable; a failure and no commit is not, and
-    carries git's own sanitised first line only for `SourceRunFailure.FAILED`
-    — the one reason with no fixed sentence of its own. The fingerprint is
+    No failure and a commit is reachable; a failure and no commit is not. A
+    probe may carry git's sanitised first line for any failure, and
+    `as_answered` keeps it only for `SourceRunFailure.FAILED`. The fingerprint is
     the proof the form later needs to create what this probe found, and
     travels only when the state is reachable.
     """

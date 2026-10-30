@@ -14,11 +14,12 @@ not use those.
 """
 
 from http import HTTPStatus
-from typing import Any, Final, cast
+from typing import Final, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.config import JsonDict
 from starlette.responses import Response
 
 PROBLEM_MEDIA_TYPE: Final = "application/problem+json"
@@ -26,42 +27,56 @@ _ABOUT_BLANK: Final = "about:blank"
 _IDENTITY: Final = ("type", "title", "status")
 
 
-def _require_identity(schema: dict[str, Any]) -> None:
-    """Every problem answers its `type`, `title` and `status`, so the spec says so."""
-    required: list[str] = schema.setdefault("required", [])
-    required.extend(each for each in _IDENTITY if each not in required)
+def _describe_wire(schema: JsonDict) -> None:
+    """Every problem answers its `type`, `title` and `status`, so the spec says so.
+
+    `title` and `status` carry placeholders until `ProblemError` sets them, and
+    the members stay open on the wire, so neither shows in the schema.
+    """
+    required = schema.setdefault("required", [])
+    if isinstance(required, list):
+        required.extend(each for each in _IDENTITY if each not in required)
+    properties = schema.get("properties")
+    if isinstance(properties, dict):
+        for each in ("title", "status"):
+            member = properties.get(each)
+            if isinstance(member, dict):
+                member.pop("default", None)
+    schema.pop("additionalProperties", None)
 
 
 class ProblemDetails(BaseModel):
-    """The body of a problem; fields that are `None` stay out of the wire."""
+    """The body of a problem; fields that are `None` stay out of the wire.
 
-    model_config = ConfigDict(frozen=True, json_schema_extra=_require_identity)
+    A route builds one beside the status it raises and never words `title` or
+    `status`: `ProblemError` sets both from the status.
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", json_schema_extra=_describe_wire
+    )
 
     type: str = _ABOUT_BLANK
-    title: str
-    status: int
+    title: str = Field(default="", init=False)
+    status: int = Field(default=0, init=False)
     detail: str | None = None
 
 
 class ProblemError(Exception):
     """Raised by a route to answer a status as a problem, `about:blank` by default.
 
-    The handler is the one owner of the body's `title` and `status`: a typed
-    problem declares its `type` and its own members, and is built here beside
-    the status it answers.
+    The handler is the one owner of the body's `title` and `status`: whatever
+    the problem carried, they are the raised status's phrase and value.
     """
 
     def __init__(
-        self,
-        status: HTTPStatus,
-        problem_type: type[ProblemDetails] = ProblemDetails,
-        **members: object,
+        self, status: HTTPStatus, problem: ProblemDetails | None = None
     ) -> None:
-        """Remember the status, and the problem built to answer it."""
+        """Remember the status, and the problem that answers it."""
         super().__init__(status.phrase)
         self.status = status
-        self.problem = problem_type.model_validate(
-            {"title": status.phrase, "status": status.value, **members}
+        self.problem = (problem or ProblemDetails()).model_copy(
+            update={"title": status.phrase, "status": status.value}
         )
 
 

@@ -239,7 +239,7 @@ class _SourceData:
             key_draft_id=probe.key_draft_id or "",
         )
         if isinstance(checked, SourceRefusal):
-            raise ProblemError(_REFUSED, SourceRefusedProblem, reason=checked)
+            raise ProblemError(_REFUSED, SourceRefusedProblem(reason=checked))
         return ConnectionCheckView.of(checked)
 
 
