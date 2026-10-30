@@ -3,7 +3,7 @@
 import posixpath
 import re
 import unicodedata
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 from ipaddress import IPv6Address
@@ -311,7 +311,12 @@ class ConnectionCheckResult:
         """This result with git's line dropped unless the failure is `failed`."""
         if self.failure is SourceRunFailure.FAILED:
             return self
-        return replace(self, detail=None)
+        return ConnectionCheckResult(
+            failure=self.failure,
+            commit=self.commit,
+            detail=None,
+            fingerprint=self.fingerprint,
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
