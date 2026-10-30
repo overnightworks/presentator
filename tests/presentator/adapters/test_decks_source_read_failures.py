@@ -10,7 +10,12 @@ import pytest
 
 from gitmirror.model import CredentialReference
 from presentator.application.decks import Decks
-from presentator.contracts.decks import Source, SourceRunFailure, SourceRunOutcome
+from presentator.contracts.decks import (
+    Source,
+    SourceRunFailure,
+    SourceRunOutcome,
+    SourceState,
+)
 from presentator.ports.decks import BuildRun
 from tests.presentator.application.support.decks_support import DecksFakes, decks_over
 from tests.presentator.application.support.fakes import FakeSourceStore
@@ -24,6 +29,11 @@ _ANOTHER_SOURCES_NEW_TALK = {
     "later/deck.toml": 'title = "Later"\n',
     "later/slides.md": "# Later\n",
 }
+_A_SIBLING_FOLDER = {
+    "sibling/deck.toml": 'title = "Sibling"\n',
+    "sibling/slides.md": "# Sibling\n",
+}
+_AN_ADDRESS_NOBODY_ANSWERS = "https://decks.invalid/talk.git"
 _NOT_TEXT = "\udcffolder"
 
 
@@ -45,13 +55,19 @@ class _Instance:
     fakes: DecksFakes
     spoiled: Source
     healthy: Source
+    sources: FakeSourceStore
     spoiled_remote: GitRemote
     healthy_remote: GitRemote
     credentials: _Credentials
     tmp_path: Path
 
+    def spoiled_now(self) -> Source:
+        return next(
+            source for source in self.sources.sources if source.id == self.spoiled.id
+        )
+
     def mirror_directory_of_the_spoiled(self) -> Path:
-        mirror = mirrors_under(self.tmp_path).of(self.spoiled)
+        mirror = mirrors_under(self.tmp_path).of(self.spoiled_now())
         assert mirror is not None
         return mirror.directory
 
@@ -59,6 +75,13 @@ class _Instance:
         newest = self.fakes.source_runs.newest(source.id)
         assert newest is not None
         return newest.outcome, newest.commit, newest.reason
+
+    def board_state_of_the_spoiled(self) -> SourceState:
+        return next(
+            listed.state
+            for listed in self.decks.listed_sources()
+            if listed.name == self.spoiled.name
+        )
 
     def refresh_after_the_healthy_source_pushed(self) -> None:
         self.healthy_remote.commit(_ANOTHER_SOURCES_NEW_TALK, at=_NEXT_PUSH)
@@ -76,8 +99,9 @@ def instance(
     healthy = replace(a_source(another_remote.url), id="healthy", name="healthy")
     fakes = DecksFakes()
     credentials = _Credentials()
+    sources = FakeSourceStore(sources=[spoiled, healthy])
     decks = decks_over(
-        sources=FakeSourceStore(sources=[spoiled, healthy]),
+        sources=sources,
         mirror=folders_under(tmp_path, credentials=credentials),
         fakes=fakes,
     )
@@ -93,6 +117,7 @@ def instance(
         fakes=fakes,
         spoiled=spoiled,
         healthy=healthy,
+        sources=sources,
         spoiled_remote=remote,
         healthy_remote=another_remote,
         credentials=credentials,
@@ -113,22 +138,35 @@ def _a_commit_date_no_calendar_can_hold(instance: _Instance) -> None:
     )
 
 
-def _a_credential_git_cannot_be_sent(instance: _Instance) -> None:
+def _a_https_credential_git_cannot_be_sent(instance: _Instance) -> None:
+    instance.sources.sources[0] = replace(
+        instance.spoiled,
+        url=_AN_ADDRESS_NOBODY_ANSWERS,
+    )
     instance.credentials.broken.add(instance.spoiled.id)
 
 
 @pytest.mark.parametrize(
-    ("spoil", "reason"),
+    ("spoil", "reason", "board_state"),
     [
-        (_a_file_where_the_mirror_stood, SourceRunFailure.FAILED),
-        (_a_commit_date_no_calendar_can_hold, SourceRunFailure.FAILED),
-        (_a_credential_git_cannot_be_sent, SourceRunFailure.CREDENTIAL_UNRESOLVABLE),
+        (_a_file_where_the_mirror_stood, SourceRunFailure.FAILED, SourceState.FAILED),
+        (
+            _a_commit_date_no_calendar_can_hold,
+            SourceRunFailure.FAILED,
+            SourceState.FAILED,
+        ),
+        (
+            _a_https_credential_git_cannot_be_sent,
+            SourceRunFailure.CREDENTIAL_UNRESOLVABLE,
+            SourceState.ERROR,
+        ),
     ],
     ids=["mirror-cannot-be-opened", "commit-date-unreadable", "credential-unsendable"],
 )
 def test_a_source_that_cannot_be_read_ends_its_run_failed_and_the_next_is_taken_in(
     spoil: Callable[[_Instance], None],
     reason: SourceRunFailure,
+    board_state: SourceState,
     instance: _Instance,
 ) -> None:
     spoil(instance)
@@ -140,6 +178,7 @@ def test_a_source_that_cannot_be_read_ends_its_run_failed_and_the_next_is_taken_
         None,
         reason,
     )
+    assert instance.board_state_of_the_spoiled() is board_state
     assert instance.fakes.store.get("talk") is not None
     assert "talk" not in instance.fakes.store.removed
     assert instance.fakes.store.get("later") is not None
@@ -147,19 +186,46 @@ def test_a_source_that_cannot_be_read_ends_its_run_failed_and_the_next_is_taken_
     assert BuildRun("nobody-names-me") in instance.fakes.builder.removed
 
 
-def test_a_folder_whose_manifest_became_a_submodule_stays_present_and_unmarked(
+def test_a_https_credential_git_cannot_be_sent_starts_no_git_for_its_source(
     instance: _Instance,
 ) -> None:
-    instance.spoiled_remote.commit_gitlink({}, gitlink="talk/deck.toml", at=_NEXT_PUSH)
+    _a_https_credential_git_cannot_be_sent(instance)
 
     instance.refresh_after_the_healthy_source_pushed()
 
-    outcome, commit, reason = instance.run_of(instance.spoiled)
-    assert (outcome, reason) == (SourceRunOutcome.SUCCESS, None)
-    assert commit == instance.spoiled_remote.head
-    assert instance.fakes.store.get("talk") is not None
+    assert not instance.mirror_directory_of_the_spoiled().exists()
+
+
+def assert_the_siblings_and_the_other_source_were_taken_in(
+    instance: _Instance,
+) -> None:
+    assert instance.fakes.store.get("sibling") is not None
+    assert "sibling" in instance.fakes.builder.built
+    assert "later" in instance.fakes.builder.built
+    assert BuildRun("nobody-names-me") in instance.fakes.builder.removed
+
+
+def test_a_folder_whose_manifest_became_a_submodule_stays_present_and_unmarked(
+    instance: _Instance,
+) -> None:
+    kept = instance.fakes.store.get("talk")
+    instance.spoiled_remote.commit_gitlink(
+        _A_SIBLING_FOLDER,
+        gitlink="talk/deck.toml",
+        at=_NEXT_PUSH,
+    )
+
+    instance.refresh_after_the_healthy_source_pushed()
+
+    assert instance.run_of(instance.spoiled) == (
+        SourceRunOutcome.SUCCESS,
+        instance.spoiled_remote.head,
+        None,
+    )
+    assert kept is not None
+    assert instance.fakes.store.get("talk") == kept
     assert "talk" not in instance.fakes.store.removed
-    assert instance.fakes.store.get("later") is not None
+    assert_the_siblings_and_the_other_source_were_taken_in(instance)
 
 
 @pytest.mark.parametrize(
@@ -172,16 +238,22 @@ def test_a_new_folder_whose_manifest_is_a_submodule_takes_no_deck_and_stops_noth
     instance: _Instance,
 ) -> None:
     instance.spoiled_remote.commit_gitlink(
-        {f"{folder}/slides.md": "# Fresh\n"},
+        {f"{folder}/slides.md": "# Fresh\n", **_A_SIBLING_FOLDER},
         gitlink=f"{folder}/deck.toml",
         at=_NEXT_PUSH,
     )
 
     instance.refresh_after_the_healthy_source_pushed()
 
-    assert instance.run_of(instance.spoiled)[0] is SourceRunOutcome.SUCCESS
+    assert instance.run_of(instance.spoiled) == (
+        SourceRunOutcome.SUCCESS,
+        instance.spoiled_remote.head,
+        None,
+    )
     assert {deck.slug for deck in instance.fakes.store.all()} == {
         "talk",
+        "sibling",
         "first",
         "later",
     }
+    assert_the_siblings_and_the_other_source_were_taken_in(instance)

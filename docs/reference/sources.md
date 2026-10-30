@@ -90,14 +90,14 @@ flood of calls collapses into the one refresh that runs at a time.
 ## Runs and state
 
 Every poll of a source, reachable or not, and every read of it that fails,
-records one run: the moment, whether
-it reached the source, and either the commit it found or a typed reason it did
-not, never the raw error a git command left behind. The table keeps the newest
-three runs per source. The Sources list shows the newest run's state: never
-fetched; reachable; refused when the host turns the login down; failed when
-the host answered with anything else or its mirror could not be read; unreachable only when the host never
-answers; or Error when a credential could not be resolved, never the internal
-reason why.
+records one run: the moment, whether it reached the source, and either the
+commit it found or a typed reason it did not, never the raw error a git
+command left behind. The table keeps the newest three runs per source. The
+Sources list shows the newest run's state: never fetched; reachable; refused
+when the host turns the login down; failed when the host answered with
+anything else or its mirror could not be read; unreachable only when the host
+never answers; or Error when a credential could not be resolved or sent, never
+the internal reason why.
 
 ## The source's page
 

@@ -531,7 +531,7 @@ class MirroredDeckFolders:
         connection = mirror.connect()
         revision = connection.revision
         if revision is None:
-            _log.warning(_UNREADABLE_SOURCE, source.url, connection.state)
+            _log.warning(_UNREADABLE_SOURCE, source.name, connection.state)
             return SourcePoll(
                 folders=None,
                 commit=None,
