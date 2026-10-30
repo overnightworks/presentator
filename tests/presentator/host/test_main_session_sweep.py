@@ -17,7 +17,12 @@ from presentator.contracts.models import Role, User
 from presentator.host import main
 from presentator.host.config import load_settings
 from tests.presentator.application.support.fakes import PATIENCE, FrozenClock
-from tests.support.lobby import AN_AGENT_SERVICE, configure_oidc, configure_secret_key
+from tests.support.lobby import (
+    AN_AGENT_SERVICE,
+    AN_AGENT_SERVICE_SCOPE,
+    configure_oidc,
+    configure_secret_key,
+)
 from tests.support.people import seed_user
 
 _STARTED = datetime(2026, 1, 15, 9, tzinfo=UTC)
@@ -32,6 +37,7 @@ def clock(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FrozenClock:
     monkeypatch.setenv("PRESENTATOR_PUBLIC_ORIGIN", "https://presentator.test")
     configure_oidc(monkeypatch, tmp_path)
     monkeypatch.setenv("PRESENTATOR_AGENT_SERVICE", AN_AGENT_SERVICE)
+    monkeypatch.setenv("PRESENTATOR_AGENT_SERVICE_SCOPE", AN_AGENT_SERVICE_SCOPE)
     configure_secret_key(monkeypatch, tmp_path, "an instance key of at least 32 bytes")
     monkeypatch.setenv("PRESENTATOR_BUILD_RUNNER", "host")
     clock = FrozenClock(_STARTED)

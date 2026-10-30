@@ -1,5 +1,6 @@
 """What varies by deployment; everything else is a constant beside its owner."""
 
+import re
 import threading
 from enum import StrEnum
 from functools import cached_property
@@ -26,6 +27,10 @@ SECRET_LENGTH: Final = 32
 _INVALID_PORT: Final = "has an invalid port"
 _REFUSED: Final = "this environment cannot start an instance"
 _EMPTY_CLIENT_ID: Final = "token_clients: names an empty client id"
+_ONE_SCOPE_TOKEN: Final = (
+    "is one scope token of printable characters without a space, quote or backslash"
+)
+_SCOPE_TOKEN: Final = re.compile(r"[\x21\x23-\x5B\x5D-\x7E]+")
 _ONE_HOSTNAME: Final = "talk_origin: is another hostname than public_origin"
 
 ENVIRONMENT_PREFIX: Final = "PRESENTATOR_"
@@ -103,6 +108,13 @@ def _one_origin(given: str, *, schemes: tuple[str, ...]) -> str:
     except ValueError as refused:
         message = _INVALID_PORT
         raise ValueError(message) from refused
+    return given
+
+
+def _one_scope_token(given: str) -> str:
+    """Require one RFC 6749 scope-token: 1*( %x21 / %x23-5B / %x5D-7E )."""
+    if not _SCOPE_TOKEN.fullmatch(given):
+        raise ValueError(_ONE_SCOPE_TOKEN)
     return given
 
 
@@ -192,6 +204,9 @@ class Settings(BaseSettings, env_prefix=ENVIRONMENT_PREFIX, env_file=".env"):
     # Where the agent service answers: its origin on the network it shares with
     # this instance. It is a deployment fact: no default.
     agent_service: Annotated[str, AfterValidator(_one_service_origin)]
+    # The scope the workload grant asks for, so the token it gets names the agent
+    # service as its audience. It is a deployment fact: no default.
+    agent_service_scope: Annotated[str, AfterValidator(_one_scope_token)]
     speech_socket: Annotated[Path, AfterValidator(_an_absolute_path)] = Path(
         "/run/presentator-speech/speech.sock"
     )
