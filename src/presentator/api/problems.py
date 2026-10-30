@@ -54,6 +54,17 @@ def problem_response(status: HTTPStatus) -> dict[int | str, dict[str, object]]:
     }
 
 
+def unspoken_beside_validation() -> dict[str, object]:
+    """A write's 422 spec: FastAPI's own validation answer plus our problem.
+
+    FastAPI generates the validation entry (and its components) only while the
+    route declares no 422 itself, so the problem's media type joins it afterwards
+    through the route's `openapi_extra`.
+    """
+    status = HTTPStatus.UNPROCESSABLE_ENTITY
+    return {"responses": {str(status.value): problem_response(status)[status.value]}}
+
+
 def _answer(_request: Request, error: Exception) -> Response:
     problem_error = cast("ProblemError", error)
     status = problem_error.status

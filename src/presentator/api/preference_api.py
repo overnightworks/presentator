@@ -17,6 +17,7 @@ from presentator.api.admission import gated_admin, gated_person
 from presentator.api.problems import (
     ProblemError,
     problem_response,
+    unspoken_beside_validation,
 )
 from presentator.application.preferences import Preferences, UnspokenLanguageError
 from presentator.contracts.preferences import (
@@ -69,16 +70,6 @@ class SettingsView(SettingsWrite):
     languages: list[LanguageView]
 
 
-def _unspoken_beside_validation() -> dict[str, object]:
-    """The PUT's 422 spec: FastAPI's own validation answer plus our problem.
-
-    FastAPI generates the validation entry (and its components) only while the
-    route declares no 422 itself, so the problem's media type joins it afterwards.
-    """
-    status = HTTPStatus.UNPROCESSABLE_ENTITY
-    return {"responses": {str(status.value): problem_response(status)[status.value]}}
-
-
 @contextmanager
 def _unspoken_as_problem() -> Generator[None]:
     """Answer the application's refusal of an unspoken language as the 422 problem."""
@@ -97,7 +88,7 @@ def _mounted(
 ) -> APIRouter:
     """The four addresses, with the admin gate and the documented refusals."""
     router = APIRouter()
-    unspoken = _unspoken_beside_validation()
+    unspoken = unspoken_beside_validation()
     admin_only = problem_response(HTTPStatus.FORBIDDEN)
     router.add_api_route(ACCOUNT_PATH, read_account, methods=["GET"])
     router.add_api_route(

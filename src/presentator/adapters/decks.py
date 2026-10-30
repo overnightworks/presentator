@@ -515,7 +515,7 @@ class MirroredDeckFolders:
         """Poll for every top-level folder at the newest commit, or why not."""
         mirror = self.mirrors.of(source)
         if mirror is None:
-            _log.warning(_OUTSIDE_MOUNT, source.url)
+            _log.warning(_OUTSIDE_MOUNT, source.name)
             return SourcePoll(
                 folders=None,
                 commit=None,

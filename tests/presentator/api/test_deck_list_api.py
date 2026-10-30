@@ -16,7 +16,8 @@ from presentator.contracts.decks import (
     Deck,
     DeckState,
 )
-from tests.presentator.application.support.fakes import FakeDeckStore
+from presentator.contracts.models import Role
+from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
 from tests.support.lobby import (
     ADMIN,
     BUILT_TALK,
@@ -27,7 +28,9 @@ from tests.support.lobby import (
     GivenDecks,
     Lobby,
     a_configured_source,
+    a_decks,
     a_lobby,
+    put_a_built_deck,
 )
 from tests.support.sign_in_support import MEMBER, a_scene
 
@@ -260,3 +263,30 @@ def test_a_persons_bearer_reads_that_persons_decks(tmp_path: Path) -> None:
 
     assert answer.status_code == HTTPStatus.OK
     assert DeckListView.model_validate(answer.json()).decks == []
+
+
+def test_a_persons_bearer_reads_only_that_persons_own_decks(tmp_path: Path) -> None:
+    client_id = "hal-client"
+    subject = "keycloak-subject-of-a-member"
+    store = FakeDeckStore()
+    scene = a_scene(
+        tmp_path,
+        token_clients=frozenset({client_id}),
+        decks=a_decks(GivenDecks(store=store), FrozenClock(instant=NOW)),
+    )
+    scene.users.create_for_subject(subject, "anna", Role.USER)
+    put_a_built_deck(store, slug="mine", owner_id=subject)
+    put_a_built_deck(store, slug="theirs", owner_id=ADMIN)
+    minted = scene.issuer.mint_access_token(
+        subject=subject, groups=MEMBER, authorized_party=client_id, audience=None
+    )
+
+    answer = scene.browser().get(
+        DECK_LIST_PATH,
+        headers={"authorization": f"Bearer {minted}", **asking_for_json()},
+    )
+
+    assert answer.status_code == HTTPStatus.OK
+    assert [deck.slug for deck in DeckListView.model_validate(answer.json()).decks] == [
+        "mine"
+    ]
