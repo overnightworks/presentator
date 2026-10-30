@@ -391,6 +391,23 @@ class _SourceData:
         )
 
 
+def _add_removal_routes(router: APIRouter, data: _SourceData) -> None:
+    forbidden = problem_response(HTTPStatus.FORBIDDEN)
+    not_found = forbidden | problem_response(HTTPStatus.NOT_FOUND)
+    router.add_api_route(_REMOVAL, data.removal, methods=["GET"], responses=not_found)
+    router.add_api_route(
+        _SOURCE,
+        data.remove,
+        methods=["DELETE"],
+        status_code=HTTPStatus.NO_CONTENT,
+        responses=not_found
+        | problem_response(HTTPStatus.CONFLICT, SourceRemovalStaleProblem)
+        | problem_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR, SourceRemovalRefusedProblem
+        ),
+    )
+
+
 def source_api_routes(*, decks: Decks) -> APIRouter:
     """The router that answers the Sources data to an admin."""
     data = _SourceData(decks=decks)
@@ -409,18 +426,7 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         openapi_extra=problem_beside_validation(SourceRefusedProblem),
     )
     router.add_api_route(_SOURCE, data.source, methods=["GET"], responses=not_found)
-    router.add_api_route(_REMOVAL, data.removal, methods=["GET"], responses=not_found)
-    router.add_api_route(
-        _SOURCE,
-        data.remove,
-        methods=["DELETE"],
-        status_code=HTTPStatus.NO_CONTENT,
-        responses=not_found
-        | problem_response(HTTPStatus.CONFLICT, SourceRemovalStaleProblem)
-        | problem_response(
-            HTTPStatus.INTERNAL_SERVER_ERROR, SourceRemovalRefusedProblem
-        ),
-    )
+    _add_removal_routes(router, data)
     router.add_api_route(
         _FETCH,
         data.fetch_now,
