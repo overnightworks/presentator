@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import signal
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -277,3 +278,10 @@ def test_prove_reads_measure_as_a_flag() -> None:
     """#515 Change: the CPU measurement is chosen by the --measure flag."""
     assert PROVE.parse_arguments(["--measure"]).measure is True
     assert PROVE.parse_arguments([]).measure is False
+
+
+def test_a_sigterm_ends_the_proof_through_the_normal_exit() -> None:
+    with pytest.raises(SystemExit) as ended:
+        PROVE._exit_on_sigterm(signal.SIGTERM, None)  # noqa: SLF001
+
+    assert ended.value.code == 128 + signal.SIGTERM
