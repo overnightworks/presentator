@@ -1,22 +1,22 @@
-"""The Sources list and page, Fetch now, the key draft, check and create, as data.
+"""The Sources list and page, Fetch now, the key draft, check, create and removal.
 
 A source's webhook secret comes back only in the answer to create or renew,
 and an access token or private key never comes back, so no answer here carries
 one. Instants come from the stored runs; a client words how long ago they were.
 """
 
-import re
 from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated, Final, NamedTuple
 
-from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, WithJsonSchema
+from fastapi import APIRouter, Depends, Query, Request, Response
+from pydantic import BaseModel, ConfigDict, SecretStr, WithJsonSchema
 
 from presentator.api.admission import gated_admin
 from presentator.api.hooks import hook_url
 from presentator.api.problems import (
+    FixedType,
     ProblemDetails,
     ProblemError,
     problem_beside_validation,
@@ -27,6 +27,8 @@ from presentator.application.decks import (
     Decks,
     NewSourceDraft,
     SourceRefusal,
+    SourceRemovalRefusal,
+    SourceRemovalStale,
 )
 from presentator.contracts.decks import (
     AccessKind,
@@ -42,11 +44,18 @@ _SOURCE: Final = f"{_SOURCES}/{{name}}"
 _FETCH: Final = f"{_SOURCE}/fetch"
 _ACCESS: Final = f"{_SOURCE}/access"
 _WEBHOOK_SECRET: Final = f"{_SOURCE}/webhook-secret"
+_REMOVAL: Final = f"{_SOURCE}/removal"
 _KEY_DRAFT: Final = f"{_SOURCES}/{RESERVED_SOURCE_NAME}/key-draft"
 _CHECK: Final = f"{_SOURCES}/{RESERVED_SOURCE_NAME}/check"
 _REFUSED: Final = HTTPStatus.UNPROCESSABLE_ENTITY
 _REFUSED_TYPE: Final = (
     "tag:hallucinai.de,2026-09-08:presentator/problems/source-refused"
+)
+_STALE_TYPE: Final = (
+    "tag:hallucinai.de,2026-09-08:presentator/problems/source-removal-stale"
+)
+_REMOVAL_REFUSED_TYPE: Final = (
+    "tag:hallucinai.de,2026-09-08:presentator/problems/source-removal-refused"
 )
 
 
@@ -190,17 +199,42 @@ class ConnectionCheckView(BaseModel):
 class SourceRefusedProblem(ProblemDetails):
     """A source the application would not take, and the reason code why."""
 
-    type: Annotated[
-        str,
-        Field(pattern=f"^{re.escape(_REFUSED_TYPE)}$"),
-        WithJsonSchema({"type": "string", "const": _REFUSED_TYPE}),
-    ] = _REFUSED_TYPE
+    type: Annotated[str, FixedType(_REFUSED_TYPE)] = _REFUSED_TYPE
     reason: Annotated[
         SourceRefusal,
         WithJsonSchema(
             {"type": "string", "enum": [each.value for each in SourceRefusal]}
         ),
     ]
+
+
+class SourceRemovalStaleProblem(ProblemDetails):
+    """The counts a removal was confirmed with no longer stand: the current ones."""
+
+    type: Annotated[str, FixedType(_STALE_TYPE)] = _STALE_TYPE
+    deck_count: int
+    run_count: int
+
+
+class SourceRemovalRefusedProblem(ProblemDetails):
+    """A removal that deleted no row, and the reason code why."""
+
+    type: Annotated[str, FixedType(_REMOVAL_REFUSED_TYPE)] = _REMOVAL_REFUSED_TYPE
+    reason: Annotated[
+        SourceRemovalRefusal,
+        WithJsonSchema(
+            {"type": "string", "enum": [each.value for each in SourceRemovalRefusal]}
+        ),
+    ]
+
+
+class SourceRemovalPreview(BaseModel):
+    """What removing a source takes with it: its decks and the runs it keeps."""
+
+    model_config = ConfigDict(frozen=True)
+
+    deck_count: int
+    run_count: int
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -251,6 +285,40 @@ class _SourceData:
                 SourceDeckView(slug=deck.slug, title=deck.title) for deck in page.decks
             ],
         )
+
+    def removal(self, name: str) -> SourceRemovalPreview:
+        preview = self.decks.removal(name)
+        if preview is None:
+            raise ProblemError(HTTPStatus.NOT_FOUND)
+        return SourceRemovalPreview(
+            deck_count=preview.deck_count, run_count=preview.run_count
+        )
+
+    def remove(
+        self,
+        name: str,
+        deck_count: Annotated[int, Query(ge=0)],
+        run_count: Annotated[int, Query(ge=0)],
+    ) -> Response:
+        removed = self.decks.remove_source(
+            name, expected_deck_count=deck_count, expected_run_count=run_count
+        )
+        if removed is None:
+            raise ProblemError(HTTPStatus.NOT_FOUND)
+        if isinstance(removed, SourceRemovalRefusal):
+            raise ProblemError(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                SourceRemovalRefusedProblem(reason=removed),
+            )
+        if isinstance(removed, SourceRemovalStale):
+            raise ProblemError(
+                HTTPStatus.CONFLICT,
+                SourceRemovalStaleProblem(
+                    deck_count=removed.current.deck_count,
+                    run_count=removed.current.run_count,
+                ),
+            )
+        return Response(status_code=HTTPStatus.NO_CONTENT)
 
     def fetch_now(self, name: str) -> Response:
         if not self.decks.refresh_named(name):
@@ -341,6 +409,18 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         openapi_extra=problem_beside_validation(SourceRefusedProblem),
     )
     router.add_api_route(_SOURCE, data.source, methods=["GET"], responses=not_found)
+    router.add_api_route(_REMOVAL, data.removal, methods=["GET"], responses=not_found)
+    router.add_api_route(
+        _SOURCE,
+        data.remove,
+        methods=["DELETE"],
+        status_code=HTTPStatus.NO_CONTENT,
+        responses=not_found
+        | problem_response(HTTPStatus.CONFLICT, SourceRemovalStaleProblem)
+        | problem_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR, SourceRemovalRefusedProblem
+        ),
+    )
     router.add_api_route(
         _FETCH,
         data.fetch_now,

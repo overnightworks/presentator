@@ -391,20 +391,20 @@ class Decks:
         """Delete that source, its decks, its runs, and everything they built.
 
         Waits for a refresh already under way, so nothing of this source's decks
-        is still building when their directories go (R1). The counts a person
-        confirmed are compared against a fresh count read inside the lock: a
-        refresh that changed them since is not deleted under a number nobody
-        confirmed, and the fresh count is handed back for a new confirm. Disk
+        is still building when their directories go (R1). The name and the
+        counts are read inside the lock, so a source removed meanwhile is
+        unknown and a refresh that changed the counts since is not deleted under
+        a number nobody confirmed: the fresh count is handed back. Disk
         goes first: the mirror and every run a deck delivers from are taken
         away before a row is touched, and if either survives, or a build lies
         where no run can be placed, nothing is deleted and the source stays
         taken rather than a leftover becoming an address a later add reopens
         with a new secret (R3); only a clean disk frees the URL (R2).
         """
-        source = self._named(name)
-        if source is None:
-            return None
         with self.one_at_a_time:
+            source = self._named(name)
+            if source is None:
+                return None
             carried = self.store.for_source(source.id)
             preview = self._preview_of(source, carried)
             if (
