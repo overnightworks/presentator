@@ -1,0 +1,7 @@
+claim_id = "0c2377ae71674654989d282c63e0946a"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "a166f9063649125e6f4c09703609873b2f0952db"
+branch = "claude/issue-661-the-speech-stage-proof-takes-the-probe-l"
+scope = ["speech/README.md", "speech/scripts/prove_speech.py", "speech/tests/scripts/test_contract_client.py"]
+opened_commit = "2ac828b13eaf740141fdcf31f3d4a505ba9a9a74"
