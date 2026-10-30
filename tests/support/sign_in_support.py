@@ -204,19 +204,35 @@ def cookie_names(answer: BrowserAnswer) -> list[str]:
 
 @dataclass
 class ContentionSignalingLock:
-    """A real re-entrant lock that says when a taker found it held."""
+    """A real re-entrant lock that says each time a taker found it held.
+
+    `contended` is set at the first such taker, `held_up` gains one permit for
+    every taker, so a test waits for as many takers as it started.
+    """
 
     contended: threading.Event = field(default_factory=threading.Event)
+    held_up: threading.Semaphore = field(default_factory=lambda: threading.Semaphore(0))
     _real: threading.RLock = field(default_factory=threading.RLock)
 
     def __enter__(self) -> bool:
         """Take the lock, announcing first when it was already held."""
-        if self._real.acquire(blocking=False):
-            return True
-        self.contended.set()
-        return self._real.acquire()
+        return self.acquire()
 
     def __exit__(self, *_exception: object) -> None:
+        """Let go of the lock."""
+        self._real.release()
+
+    def acquire(self, *, blocking: bool = True) -> bool:
+        """Take the lock; a taker that finds it held announces itself, then waits."""
+        if self._real.acquire(blocking=False):
+            return True
+        if not blocking:
+            return False
+        self.contended.set()
+        self.held_up.release()
+        return self._real.acquire()
+
+    def release(self) -> None:
         """Let go of the lock."""
         self._real.release()
 

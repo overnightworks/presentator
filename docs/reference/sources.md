@@ -183,3 +183,29 @@ runs, then deletes the source row, its runs, its decks, its mirror, and every
 built talk those decks left on disk, so the same URL can be added again
 straight after as a new source with a fresh secret. Once a talk was pointed
 at, only this takes it off disk.
+
+Removal is also JSON for an admin, in two steps. `GET /api/sources/<name>/removal`
+reads only and answers 200 with `{"deck_count", "run_count"}`: every deck row the
+source ever carried (each is one deck and its built talk, whoever owns it and
+marked removed or not) and the runs it keeps. `DELETE /api/sources/<name>` takes
+those two counts as required non-negative query parameters and no body; missing
+or malformed counts are the framework's 422 and remove nothing. It removes what
+the paragraph above names and answers 204 with no content, after which the name
+and the URL can be added again. An unknown name, `new`, a source removed
+meanwhile, or a second removal that found it gone is a 404 problem. Every
+other answer removes no row:
+
+- counts that no longer match what removal would take (a refresh added a deck
+  or a run since) are a `source-removal-stale` problem, 409, with `deck_count`
+  and `run_count` as they stand now; confirming again sends those;
+- a mirror or a built talk that would not leave the disk is a
+  `source-removal-refused` problem, 500, with the member `reason` `disk-leftover`
+  and no path. The source, its decks and its runs stay listed and its URL stays
+  taken; some talks may already be gone from disk. Repeating the call with the
+  same counts finishes it.
+
+The two problem types are the URIs
+`tag:hallucinai.de,2026-09-08:presentator/problems/source-removal-stale` (members
+`deck_count`, `run_count`) and
+`tag:hallucinai.de,2026-09-08:presentator/problems/source-removal-refused`
+(member `reason`).

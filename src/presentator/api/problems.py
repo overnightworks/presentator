@@ -13,13 +13,17 @@ tag, a `dict` key and UUID parsing, so a request model that takes a secret must
 not use those.
 """
 
+import re
+from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Final, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.annotated_handlers import GetJsonSchemaHandler
 from pydantic.config import JsonDict
+from pydantic_core import CoreSchema, core_schema
 from starlette.responses import Response
 
 PROBLEM_MEDIA_TYPE: Final = "application/problem+json"
@@ -38,6 +42,26 @@ def _describe_wire(schema: JsonDict) -> None:
     properties = cast("dict[str, JsonDict]", schema["properties"])
     for each in ("title", "status"):
         properties[each].pop("default", None)
+
+
+@dataclass(frozen=True, slots=True)
+class FixedType:
+    """`Annotated[str, FixedType(uri)]`: a problem's `type`, one `tag:` URI only.
+
+    The spec says it as a `const`, so a generated client tells the problems apart.
+    """
+
+    uri: str
+
+    def __get_pydantic_core_schema__(self, *_: object) -> CoreSchema:
+        """Accept the one URI."""
+        return core_schema.str_schema(pattern=f"^{re.escape(self.uri)}$")
+
+    def __get_pydantic_json_schema__(
+        self, _schema: CoreSchema, _handler: GetJsonSchemaHandler
+    ) -> JsonDict:
+        """Say the URI as a `const`."""
+        return {"type": "string", "const": self.uri}
 
 
 class ProblemDetails(BaseModel):

@@ -89,7 +89,7 @@ words both until the deck's next build.
   account alone, and to anyone else it answers like a slug no deck carries,
   the same status, body and headers, never a hint that it exists. Sources
   keep their admin gate on top of this. Two named exceptions:
-  a source page's removal confirm counts every deck of that source, and a
+  a source's removal preview and confirm count every deck of that source, and a
   folder name two sources carry belongs to the source that took it in first.
 
 ## Delivery
