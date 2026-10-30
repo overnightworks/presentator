@@ -297,6 +297,7 @@ def test_a_lost_answer_is_recovered_by_renewing_again(world: World) -> None:
     second = renew_webhook(client, _NAME)
 
     _, lost, kept = world.webhook_secrets.handed_out
+    assert second.status_code == HTTPStatus.OK
     assert second.json() == {"webhook_secret": kept}
     assert calling_hook(client, _NAME, offered=lost).status_code == HTTPStatus.NOT_FOUND
     assert (
@@ -440,6 +441,7 @@ def test_a_failed_hash_write_keeps_the_old_secret_and_renewing_again_recovers(
     assert_no_store(failed)
     assert_nothing_returned(failed, lost)
     assert still_the_old.status_code == HTTPStatus.NO_CONTENT
+    assert renewed.status_code == HTTPStatus.OK
     assert renewed.json() == {"webhook_secret": kept}
     assert (
         calling_hook(lobby.client, _NAME, offered=created).status_code
