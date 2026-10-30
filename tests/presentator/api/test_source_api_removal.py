@@ -5,7 +5,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from http import HTTPStatus
 from pathlib import Path
-from threading import Thread
+from threading import RLock, Thread
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,7 +22,7 @@ from presentator.application.decks import (
     Decks,
     SourceRemovalRefusal,
 )
-from presentator.contracts.decks import Build, Deck, Source
+from presentator.contracts.decks import Build, Deck, DeckFolder, Source
 from tests.presentator.api.support.source_api_support import (
     ASKING_FOR_JSON,
     LIST,
@@ -57,16 +58,9 @@ from tests.presentator.application.support.fakes import (
 )
 from tests.support.lobby import ADMIN, NOW, GivenDecks, a_decks
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
-from tests.support.sign_in_support import MEMBER
+from tests.support.sign_in_support import MEMBER, ContentionSignalingLock
 
-_OWN_ORIGIN = {"sec-fetch-site": "same-site", "origin": "https://testserver"}
-_ANOTHER_OWNER = "another-owner"
-_STORED_CREDENTIAL = "the-access-secret-this-scenario-stores"
-_A_RUN_ON_ANOTHER_DISK = Path("/nowhere/a-run/out/talk")
-
-_ALL_THREE = tuple(a_folder(name) for name in ("first", "second", "third"))
-_FIRST_TWO = _ALL_THREE[:2]
-_ROUNDS = (_ALL_THREE, _FIRST_TWO)
+_BOUND = 30.0
 
 _NOT_SENT_BY_THE_SAME_ORIGIN = pytest.mark.parametrize(
     "headers",
@@ -95,18 +89,25 @@ class Stocked:
     builder: FakeBuildRunner
     going: Source
     staying: Source
+    credential: str
+    rounds: tuple[tuple[DeckFolder, ...], ...]
 
     @property
     def name(self) -> str:
         return self.going.name
 
     @property
+    def first_round(self) -> tuple[DeckFolder, ...]:
+        """The folders of the first run, which every later run still carries."""
+        return self.rounds[0]
+
+    @property
     def deck_count(self) -> int:
-        return len(_ALL_THREE)
+        return len(self.first_round)
 
     @property
     def run_count(self) -> int:
-        return len(_ROUNDS)
+        return len(self.rounds)
 
     def runs_of(self, source: Source) -> frozenset[str]:
         """The run directories the source's decks deliver from."""
@@ -130,10 +131,13 @@ def stocked() -> Stocked:
     """A source of three decks (one marked removed, two owners) and two runs."""
     going = a_source("talks", identifier="going")
     staying = a_source("others", identifier="staying")
+    credential = "the-access-secret-this-scenario-stores"
+    first_round = tuple(a_folder(name) for name in ("first", "second", "third"))
+    rounds = (first_round, first_round[:2])
     sources = FakeSourceStore(
         sources=[going, staying],
         hashes={going.name: b"a-hash", staying.name: b"another-hash"},
-        secrets={going.id: _STORED_CREDENTIAL, staying.id: "the-other-access-secret"},
+        secrets={going.id: credential, staying.id: "the-other-access-secret"},
     )
     folders = FakeDeckFolders(carried={staying.id: (a_folder("kept"),)})
     store = FakeDeckStore()
@@ -146,11 +150,13 @@ def stocked() -> Stocked:
         sources=sources,
         folders=folders,
     )
-    for carried in _ROUNDS:
+    for carried in rounds:
         folders.carried[going.id] = carried
         decks.refresh()
-    store.kept["second"] = replace(store.kept["second"], owner_id=_ANOTHER_OWNER)
-    return Stocked(decks, sources, folders, store, builder, going, staying)
+    store.kept["second"] = replace(store.kept["second"], owner_id="another-owner")
+    return Stocked(
+        decks, sources, folders, store, builder, going, staying, credential, rounds
+    )
 
 
 def assert_rows_stand(shelf: Stocked) -> None:
@@ -159,7 +165,10 @@ def assert_rows_stand(shelf: Stocked) -> None:
         shelf.going.name,
         shelf.staying.name,
     }
+    assert shelf.store.for_source(shelf.going.id)
+    assert shelf.decks.source_runs.recent(shelf.going.id)
     assert shelf.store.for_source(shelf.staying.id)
+    assert shelf.decks.source_runs.recent(shelf.staying.id)
 
 
 def assert_nothing_removed(shelf: Stocked) -> None:
@@ -296,7 +305,7 @@ def test_a_same_site_removal_with_the_own_origin_is_taken() -> None:
         shelf.name,
         deck_count=deck_count,
         run_count=run_count,
-        headers=_OWN_ORIGIN,
+        headers={"sec-fetch-site": "same-site", "origin": "https://testserver"},
     )
 
     assert answer.status_code == HTTPStatus.NO_CONTENT
@@ -441,7 +450,7 @@ def test_a_deck_added_after_the_preview_makes_it_stale_until_confirmed_again() -
     shelf = stocked()
     client = an_admin_over(shelf.decks).client
     seen = shelf.preview()
-    shelf.folders.carried[shelf.going.id] = (*_ALL_THREE, a_folder("fresh"))
+    shelf.folders.carried[shelf.going.id] = (*shelf.first_round, a_folder("fresh"))
     shelf.refresh()
     runs_before = shelf.runs_of(shelf.going)
     now = shelf.preview()
@@ -549,19 +558,23 @@ def test_two_removals_waiting_on_the_lock_remove_once_and_the_other_finds_nothin
     None
 ):
     shelf = stocked()
+    lock = ContentionSignalingLock()
+    decks = replace(shelf.decks, one_at_a_time=cast("RLock", lock))
     seen = shelf.preview()
     answers: list[Response] = []
+    clients = [an_admin_over(decks).client for _ in range(2)]
 
-    def removing() -> None:
-        client = an_admin_over(shelf.decks).client
+    def removing(client: TestClient) -> None:
         answers.append(
             remove(client, shelf.name, deck_count=seen[0], run_count=seen[1])
         )
 
-    callers = [Thread(target=removing) for _ in range(2)]
-    with shelf.decks.one_at_a_time:
+    callers = [Thread(target=removing, args=(client,)) for client in clients]
+    with lock:
         for caller in callers:
             caller.start()
+        for _ in callers:
+            assert lock.held_up.acquire(timeout=_BOUND)
     for caller in callers:
         caller.join()
 
@@ -577,22 +590,24 @@ def test_two_removals_waiting_on_the_lock_remove_once_and_the_other_finds_nothin
 # 21
 def test_a_removal_waits_for_a_refresh_then_answers_the_fresh_counts() -> None:
     shelf = stocked()
-    held = HeldDeckFolders(found=(*_ALL_THREE, a_folder("fresh")))
-    decks = replace(shelf.decks, folders=held)
+    held = HeldDeckFolders(found=(*shelf.first_round, a_folder("fresh")))
+    lock = ContentionSignalingLock()
+    decks = replace(shelf.decks, folders=held, one_at_a_time=cast("RLock", lock))
     seen = shelf.preview()
     answers: list[Response] = []
+    client = an_admin_over(decks).client
     refreshing = Thread(target=lambda: decks.refresh_named(shelf.name))
     refreshing.start()
-    assert held.entered.wait(5)
+    assert held.entered.wait(_BOUND)
 
     def removing() -> None:
-        client = an_admin_over(decks).client
         answers.append(
             remove(client, shelf.name, deck_count=seen[0], run_count=seen[1])
         )
 
     removal = Thread(target=removing)
     removal.start()
+    assert lock.held_up.acquire(timeout=_BOUND)
     held.release.set()
     refreshing.join()
     removal.join()
@@ -617,7 +632,7 @@ def _a_build_fits_no_run(shelf: Stocked) -> None:
     deck = shelf.store.kept["first"]
     assert deck.build is not None
     shelf.store.kept["first"] = replace(
-        deck, build=replace(deck.build, directory=_A_RUN_ON_ANOTHER_DISK)
+        deck, build=replace(deck.build, directory=Path("/nowhere/a-run/out/talk"))
     )
 
 
@@ -633,20 +648,26 @@ def test_a_disk_leftover_is_a_problem_that_keeps_every_row_and_a_repeat_finishes
     shelf = stocked()
     client = an_admin_over(shelf.decks).client
     runs_before = shelf.runs_of(shelf.going)
+    confirmed = shelf.preview()
     stick(shelf)
 
-    refused = _removing_with_the_previews_counts(shelf, client)
+    refused = remove(
+        client, shelf.name, deck_count=confirmed[0], run_count=confirmed[1]
+    )
 
     assert_problem(refused, HTTPStatus.INTERNAL_SERVER_ERROR)
     assert refused.json()["reason"] == SourceRemovalRefusal.DISK_LEFTOVER
     assert_nothing_returned(refused, str(shelf.builder.root))
     assert_rows_stand(shelf)
+    assert shelf.preview() == confirmed
     assert client.get(PAGE.format(name=shelf.name)).status_code == HTTPStatus.OK
     assert shelf.builder.removed
 
     shelf.folders.stuck = frozenset()
     shelf.builder.stuck = frozenset()
-    repeated = _removing_with_the_previews_counts(shelf, client)
+    repeated = remove(
+        client, shelf.name, deck_count=confirmed[0], run_count=confirmed[1]
+    )
 
     assert repeated.status_code == HTTPStatus.NO_CONTENT
     assert_removed_exactly(shelf, runs_before)
@@ -713,9 +734,9 @@ def test_no_log_record_and_no_answer_carries_the_stored_access_secret(
     ]
     assert caplog.records
     logged = "\n".join(logging.Formatter().format(each) for each in caplog.records)
-    assert _STORED_CREDENTIAL not in logged
+    assert shelf.credential not in logged
     for answer in answers:
-        assert_nothing_returned(answer, _STORED_CREDENTIAL)
+        assert_nothing_returned(answer, shelf.credential)
 
 
 # 30
