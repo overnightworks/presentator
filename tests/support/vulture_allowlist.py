@@ -9,6 +9,7 @@ excuse.
 from presentator.api.auth import DeckRow
 from presentator.api.copresenter import AskRequest
 from presentator.api.decks import Banner, TalkFiles
+from presentator.api.problems import ValidationFault
 from presentator.api.sources import (
     SourceDeckRow,
     SourceRemovalView,
@@ -201,3 +202,7 @@ Settings._two_hostnames  # noqa: SLF001 - pydantic, not Python code, is the call
 
 # pytest applies this autouse fixture to every worker-settings test by itself.
 no_worker_variables  # pyright: ignore[reportUnusedExpression]
+
+# Pydantic reads these fields when it writes a validation answer.
+ValidationFault.loc
+ValidationFault.msg
