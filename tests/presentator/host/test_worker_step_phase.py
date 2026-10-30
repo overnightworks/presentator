@@ -24,7 +24,8 @@ from tests.support.step_support import (
 from tests.support.worker_support import (
     ACCEPT_TIME,
     ScriptedLife,
-    open_descriptor_count,
+    descriptors_left_open_since,
+    open_descriptor_targets,
     sender_leg,
     step_leg,
 )
@@ -156,7 +157,7 @@ def test_the_step_is_spawned_as_the_launcher_with_the_record_and_its_own_streams
     connection: socket.socket, listener: socket.socket
 ) -> None:
     life = accepted_life()
-    descriptors_before = open_descriptor_count()
+    descriptors_before = open_descriptor_targets()
 
     run(life, connection, listener)
 
@@ -178,19 +179,19 @@ def test_the_step_is_spawned_as_the_launcher_with_the_record_and_its_own_streams
     assert spawned.surroundings.cwd == STEP_PROJECT
     assert spawned.surroundings.discard_stdout is True
     assert spawned.surroundings.stderr == stderr
-    assert open_descriptor_count() == descriptors_before
+    assert descriptors_left_open_since(descriptors_before) == {}
 
 
 def test_the_controller_closes_the_prepared_stderr_when_the_spawn_fails(
     connection: socket.socket, listener: socket.socket
 ) -> None:
     life = accepted_life(step=ScriptedStep(spawn_error=OSError("no")))
-    descriptors_before = open_descriptor_count()
+    descriptors_before = open_descriptor_targets()
 
     run(life, connection, listener)
 
     assert len(life.prepared_descriptors) == 1
-    assert open_descriptor_count() == descriptors_before
+    assert descriptors_left_open_since(descriptors_before) == {}
 
 
 def test_the_step_wait_is_what_remains_of_the_build_bound_and_watches_three_things(

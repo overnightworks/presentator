@@ -19,6 +19,10 @@ from presentator.host.worker_termination import (
     reap_children,
     sweep,
 )
+from tests.support.worker_support import (
+    descriptors_left_open_since,
+    open_descriptor_targets,
+)
 
 DEADLINE = 4.0
 LEFTOVER = "4711"
@@ -253,18 +257,14 @@ def fake_faulthandler(monkeypatch: pytest.MonkeyPatch) -> Iterator[FaultHandlerC
         file.close()
 
 
-def open_descriptors() -> int:
-    return len(list(Path("/proc/self/fd").iterdir()))
-
-
 def test_the_watchdog_opens_and_arms_nothing_until_it_is_armed(
     fake_faulthandler: FaultHandlerCalls,
 ) -> None:
-    before = open_descriptors()
+    before = open_descriptor_targets()
 
     FaultHandlerWatchdog()
 
-    assert (open_descriptors(), fake_faulthandler.armed) == (before, [])
+    assert (descriptors_left_open_since(before), fake_faulthandler.armed) == ({}, [])
 
 
 def test_arming_exits_on_expiry_through_a_non_blocking_copy_of_stderr(
