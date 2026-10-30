@@ -1,9 +1,8 @@
 """An admin renews a source's webhook secret through the JSON API, once."""
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import replace
-from functools import partial
 from http import HTTPStatus
 from pathlib import Path
 
@@ -46,7 +45,7 @@ from tests.presentator.application.support.fakes import (
     LOCAL_MOUNT_EXAMPLE,
     FakeSourceStore,
 )
-from tests.support.lobby import ENGLISH, Lobby
+from tests.support.lobby import ENGLISH
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import MEMBER, Scene
 
@@ -62,6 +61,7 @@ _SOURCES_BY_KIND = {
     AccessKind.FILE: {"url": _FOLDER, "access": AccessKind.FILE, "secret": None},
 }
 _CHOSEN = "a-value-the-caller-chose-for-the-secret"
+_ANSWERS_THAT_HAND_A_SECRET_OUT = (HTTPStatus.OK, HTTPStatus.CREATED)
 
 
 class _RemovedWhileRenewing(FakeSourceStore):
@@ -88,6 +88,50 @@ class _FailsOnTheFirstHashWrite(FakeSourceStore):
 def scene(tmp_path: Path) -> Scene:
     return a_scene_that_must_not_run(tmp_path)
 
+
+def _recording[**Call](
+    answers: list[Response], send: Callable[Call, Response]
+) -> Callable[Call, Response]:
+    def recording(*args: Call.args, **kwargs: Call.kwargs) -> Response:
+        answer = send(*args, **kwargs)
+        answers.append(answer)
+        return answer
+
+    return recording
+
+
+@pytest.fixture
+def world() -> World:
+    return a_world()
+
+
+@pytest.fixture
+def watched(
+    world: World, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
+    """Cell 19: a test's whole drive, logged at DEBUG, leaks no minted value.
+
+    Neither the log nor any answer but the two that hand a secret out may carry one.
+    """
+    answers: list[Response] = []
+    monkeypatch.setattr(TestClient, "send", _recording(answers, TestClient.send))
+    caplog.set_level(logging.DEBUG)
+
+    yield
+
+    minted = world.webhook_secrets.handed_out
+    assert answers
+    records = caplog.get_records("call")
+    assert records
+    logged = "\n".join(logging.Formatter().format(record) for record in records)
+    for value in (_CHOSEN, *minted):
+        assert value not in logged
+    for answer in answers:
+        if answer.status_code not in _ANSWERS_THAT_HAND_A_SECRET_OUT:
+            assert_nothing_returned(answer, _CHOSEN, *minted)
+
+
+_WATCHED = pytest.mark.usefixtures("watched")
 
 _NOT_SENT_BY_THE_SAME_ORIGIN = pytest.mark.parametrize(
     "headers",
@@ -177,8 +221,9 @@ def test_the_origin_check_refuses_the_renewal_before_any_port_is_touched(
 
 
 # 7
-def test_a_same_site_renewal_with_the_own_origin_is_taken() -> None:
-    lobby = an_admin_over(a_world().decks, headers={"accept": "text/html"})
+@_WATCHED
+def test_a_same_site_renewal_with_the_own_origin_is_taken(world: World) -> None:
+    lobby = an_admin_over(world.decks, headers={"accept": "text/html"})
     a_created_source(lobby.client, headers=_OWN_ORIGIN)
 
     answer = renew_webhook(lobby.client, _NAME, _OWN_ORIGIN)
@@ -188,6 +233,7 @@ def test_a_same_site_renewal_with_the_own_origin_is_taken() -> None:
 
 
 # 8, 9
+@_WATCHED
 @AN_ADMIN_BY_COOKIE_AND_BEARER
 @pytest.mark.parametrize(
     ("body", "content"),
@@ -199,9 +245,8 @@ def test_a_same_site_renewal_with_the_own_origin_is_taken() -> None:
     ids=["no-body", "a-chosen-secret", "malformed-json"],
 )
 def test_an_admin_renews_and_the_answer_is_the_minted_value_alone(
-    reach: AdminReach, tmp_path: Path, body: object, content: str | None
+    reach: AdminReach, world: World, tmp_path: Path, body: object, content: str | None
 ) -> None:
-    world = a_world()
     instance = reach(world, tmp_path)
     a_created_source(instance.client, headers=instance.headers)
     headers = instance.headers | (
@@ -220,10 +265,10 @@ def test_an_admin_renews_and_the_answer_is_the_minted_value_alone(
 
 
 # 10
-def test_the_hook_takes_the_renewed_secret_and_refuses_the_old_and_an_altered_one() -> (
-    None
-):
-    world = a_world()
+@_WATCHED
+def test_the_hook_takes_the_renewed_secret_and_refuses_the_old_and_an_altered_one(
+    world: World,
+) -> None:
     client = an_admin_over(world.decks).client
     created = a_created_source(client)
 
@@ -243,8 +288,8 @@ def test_the_hook_takes_the_renewed_secret_and_refuses_the_old_and_an_altered_on
 
 
 # 11
-def test_a_lost_answer_is_recovered_by_renewing_again() -> None:
-    world = a_world()
+@_WATCHED
+def test_a_lost_answer_is_recovered_by_renewing_again(world: World) -> None:
     client = an_admin_over(world.decks).client
     a_created_source(client)
     renew_webhook(client, _NAME)
@@ -267,24 +312,29 @@ def _a_created_source_of(client: TestClient, kind: AccessKind) -> str:
 
 
 # 12
+@_WATCHED
 @pytest.mark.parametrize("kind", list(_SOURCES_BY_KIND))
-def test_every_kind_of_source_has_a_webhook_to_renew(kind: AccessKind) -> None:
-    world = a_world()
+def test_every_kind_of_source_has_a_webhook_to_renew(
+    kind: AccessKind, world: World
+) -> None:
     client = an_admin_over(world.decks).client
     _a_created_source_of(client, kind)
 
     answer = renew_webhook(client, _NAME)
 
     assert answer.status_code == HTTPStatus.OK
-    assert calling_hook(
-        client, _NAME, offered=answer.json()["webhook_secret"]
-    ).status_code == (HTTPStatus.NO_CONTENT)
+    assert (
+        calling_hook(client, _NAME, offered=answer.json()["webhook_secret"]).status_code
+        == HTTPStatus.NO_CONTENT
+    )
 
 
 # 13
+@_WATCHED
 @pytest.mark.parametrize("name", _NOT_FOUND_NAMES)
-def test_an_unknown_name_is_a_problem_and_changes_nothing(name: str) -> None:
-    world = a_world()
+def test_an_unknown_name_is_a_problem_and_changes_nothing(
+    name: str, world: World
+) -> None:
     client = an_admin_over(world.decks).client
     a_created_source(client)
     hashes = dict(world.store.hashes)
@@ -296,8 +346,9 @@ def test_an_unknown_name_is_a_problem_and_changes_nothing(name: str) -> None:
 
 
 # 14
-def test_a_name_that_is_not_one_segment_is_the_frameworks_404() -> None:
-    client = an_admin_over(a_world().decks).client
+@_WATCHED
+def test_a_name_that_is_not_one_segment_is_the_frameworks_404(world: World) -> None:
+    client = an_admin_over(world.decks).client
 
     answer = client.post(WEBHOOK_RENEWAL.format(name="a/b"))
 
@@ -306,8 +357,10 @@ def test_a_name_that_is_not_one_segment_is_the_frameworks_404() -> None:
 
 
 # 15
-def test_a_source_gone_when_the_owner_writes_is_a_problem_with_no_secret() -> None:
-    world = a_world()
+@_WATCHED
+def test_a_source_gone_when_the_owner_writes_is_a_problem_with_no_secret(
+    world: World,
+) -> None:
     store = _RemovedWhileRenewing(key_drafts=world.drafts)
     client = an_admin_over(replace(world.decks, sources=store)).client
     a_created_source(client)
@@ -367,141 +420,11 @@ def test_the_jinja_page_after_a_renewal_has_no_one_time_secret() -> None:
     assert_nothing_returned(answer, *world.webhook_secrets.handed_out)
 
 
-# 19
-def _renewed_in_the_log(_world: World, lobby: Lobby) -> Response:
-    a_created_source(lobby.client)
-    return renew_webhook(lobby.client, _NAME)
-
-
-def _same_site_in_the_log(_world: World, lobby: Lobby) -> Response:
-    a_created_source(lobby.client, headers=_OWN_ORIGIN)
-    return renew_webhook(lobby.client, _NAME, _OWN_ORIGIN)
-
-
-def _chosen_secret_in_the_log(_world: World, lobby: Lobby) -> Response:
-    a_created_source(lobby.client)
-    return renew_webhook(lobby.client, _NAME, body={"webhook_secret": _CHOSEN})
-
-
-def _malformed_json_in_the_log(_world: World, lobby: Lobby) -> Response:
-    a_created_source(lobby.client)
-    return renew_webhook(
-        lobby.client,
-        _NAME,
-        {"content-type": "application/json"},
-        content=_MALFORMED_JSON,
-    )
-
-
-def _hook_after_renewing_in_the_log(_world: World, lobby: Lobby) -> Response:
-    created = a_created_source(lobby.client)
-    renewed = renew_webhook(lobby.client, _NAME).json()["webhook_secret"]
-    calling_hook(lobby.client, _NAME, offered=renewed)
-    calling_hook(lobby.client, _NAME, offered=created)
-    return calling_hook(lobby.client, _NAME, offered=renewed + "x")
-
-
-def _renewed_twice_in_the_log(_world: World, lobby: Lobby) -> Response:
-    a_created_source(lobby.client)
-    renew_webhook(lobby.client, _NAME)
-    return renew_webhook(lobby.client, _NAME)
-
-
-def _kind_in_the_log(kind: AccessKind, _world: World, lobby: Lobby) -> Response:
-    _a_created_source_of(lobby.client, kind)
-    return renew_webhook(lobby.client, _NAME)
-
-
-def _not_found_in_the_log(name: str, _world: World, lobby: Lobby) -> Response:
-    a_created_source(lobby.client)
-    return renew_webhook(lobby.client, name)
-
-
-def _not_one_segment_in_the_log(_world: World, lobby: Lobby) -> Response:
-    return lobby.client.post(WEBHOOK_RENEWAL.format(name="a/b"))
-
-
-def _vanished_in_the_log(world: World, _lobby: Lobby) -> Response:
-    store = _RemovedWhileRenewing(key_drafts=world.drafts)
-    lobby = an_admin_over(replace(world.decks, sources=store))
-    a_created_source(lobby.client)
-    return renew_webhook(lobby.client, _NAME)
-
-
-def _failed_write_in_the_log(world: World, _lobby: Lobby) -> Response:
-    lobby = an_admin_over(replace(world.decks, sources=_FailsOnTheFirstHashWrite()))
-    a_created_source(lobby.client)
-    return renew_webhook(without_raising(lobby), _NAME)
-
-
-def _retry_after_a_failed_write_in_the_log(world: World, _lobby: Lobby) -> Response:
-    lobby = an_admin_over(replace(world.decks, sources=_FailsOnTheFirstHashWrite()))
-    a_created_source(lobby.client)
-    renew_webhook(without_raising(lobby), _NAME)
-    return renew_webhook(without_raising(lobby), _NAME)
-
-
-@pytest.mark.parametrize(
-    ("send", "status"),
-    [
-        (_renewed_in_the_log, HTTPStatus.OK),
-        (_same_site_in_the_log, HTTPStatus.OK),
-        (_chosen_secret_in_the_log, HTTPStatus.OK),
-        (_malformed_json_in_the_log, HTTPStatus.OK),
-        (_hook_after_renewing_in_the_log, HTTPStatus.NOT_FOUND),
-        (_renewed_twice_in_the_log, HTTPStatus.OK),
-        *(
-            (partial(_kind_in_the_log, kind), HTTPStatus.OK)
-            for kind in _SOURCES_BY_KIND
-        ),
-        *(
-            (partial(_not_found_in_the_log, name), HTTPStatus.NOT_FOUND)
-            for name in _NOT_FOUND_NAMES
-        ),
-        (_not_one_segment_in_the_log, HTTPStatus.NOT_FOUND),
-        (_vanished_in_the_log, HTTPStatus.NOT_FOUND),
-        (_failed_write_in_the_log, HTTPStatus.INTERNAL_SERVER_ERROR),
-        (_retry_after_a_failed_write_in_the_log, HTTPStatus.OK),
-    ],
-    ids=[
-        "renewed",
-        "same-site",
-        "chosen-secret",
-        "malformed-json",
-        "hook",
-        "renewed-twice",
-        *_SOURCES_BY_KIND,
-        *_NOT_FOUND_NAMES,
-        "not-one-segment",
-        "vanished",
-        "failed-write",
-        "retry-after-failed-write",
-    ],
-)
-def test_no_log_record_and_no_error_answer_carries_a_minted_secret(
-    send: Callable[[World, Lobby], Response],
-    status: HTTPStatus,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    world = a_world()
-    lobby = an_admin_over(world.decks)
-
-    with caplog.at_level(logging.DEBUG):
-        answer = send(world, lobby)
-
-    assert answer.status_code == status
-    assert caplog.records
-    assert_no_store(answer)
-    assert _CHOSEN not in caplog.text
-    for minted in world.webhook_secrets.handed_out:
-        assert minted not in caplog.text
-        if status != HTTPStatus.OK:
-            assert_nothing_returned(answer, minted)
-
-
 # 20
-def test_a_failed_hash_write_keeps_the_old_secret_and_renewing_again_recovers() -> None:
-    world = a_world()
+@_WATCHED
+def test_a_failed_hash_write_keeps_the_old_secret_and_renewing_again_recovers(
+    world: World,
+) -> None:
     store = _FailsOnTheFirstHashWrite()
     lobby = an_admin_over(replace(world.decks, sources=store))
     created = a_created_source(lobby.client)

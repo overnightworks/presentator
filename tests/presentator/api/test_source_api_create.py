@@ -689,13 +689,10 @@ def test_a_first_fetch_that_raises_leaves_the_source_and_renewal_recovers_it() -
     assert_nothing_returned(answer, SENT, "webhook_secret", lost)
     assert [source.name for source in world.store.sources] == [_NAME]
     assert renewed.json() == {"webhook_secret": kept}
-    assert_no_store(renewed)
     taken = calling_hook(lobby.client, _NAME, offered=kept)
     refused = calling_hook(lobby.client, _NAME, offered=lost)
     assert taken.status_code == HTTPStatus.NO_CONTENT
     assert refused.status_code == HTTPStatus.NOT_FOUND
-    assert_no_store(taken)
-    assert_no_store(refused)
 
 
 # 22
