@@ -461,7 +461,10 @@ webauth#516.
 `client_credentials` grant, so a token carries one service's audience and not
 every service's. Presentator asks for one scope, the agent service's, and takes
 it from `PRESENTATOR_AGENT_SERVICE_SCOPE`: a deployment fact with no default,
-checked at start as one RFC 6749 scope token. An issuer's `invalid_scope` is the
+checked at start as one RFC 6749 scope token. The person sign-in, for the lobby
+and the talk host, asks for the same scope beside `openid`, `profile` and
+`groups`, because a person's token without the agent service's audience is
+rejected by it. An issuer's `invalid_scope` is the
 typed refusal the co-presenter already answers as "unavailable".
 
 ## Consequences

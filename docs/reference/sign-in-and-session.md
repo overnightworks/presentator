@@ -12,7 +12,9 @@ sign-in, and no password is stored.
 
 - `/login` says "You are logged out." with one Log in button and the legal
   links. The button starts the sign-in at `/login/oidc`, which answers 303 to
-  the issuer with PKCE, `state` and `nonce`.
+  the issuer with PKCE, `state` and `nonce`. The scopes are `openid`,
+  `profile`, `groups` and `PRESENTATOR_AGENT_SERVICE_SCOPE`, so the person's
+  token names the agent service as an audience.
 - The return at `/auth/callback` admits only members of the Keycloak group
   `/apps/presentator` (admins: `/apps/presentator/admin`), opens one session,
   sets the cookies once and lands on the requested path or `/`. The groups
