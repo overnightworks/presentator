@@ -1,8 +1,0 @@
-claim_id = "29a80c7bd22c4dbe974903651000e206"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "ce1c45633591720b74d34e0eb9002283c7fb5e7b"
-branch = "claude/issue-638-one-source-whose-folders-cannot-be-read"
-scope = ["docs/reference/decks.md", "docs/reference/sources.md", "src/gitmirror/mirror.py", "src/presentator/adapters/catalogs/en.po", "src/presentator/adapters/decks.py", "src/presentator/ports/decks.py", "tests/gitmirror/test_mirror_failures.py", "tests/presentator/adapters/test_decks_source_read_failures.py", "tests/support/git_remote.py"]
-opened_commit = "737daac0b6c0329b2765188c235b2cd2cb42ba05"
-whole_reason = "One failure class at its two owners: gitmirror raises only MirrorError for what git or its output cannot give, and the adapter translates that into a failed poll or a folder without a title; the port states the invariant the retention reads, and the two reference pages say what is now true."
