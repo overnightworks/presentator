@@ -320,10 +320,9 @@ def test_the_preview_counts_every_deck_of_every_owner_and_changes_nothing() -> N
 
     assert answer.status_code == HTTPStatus.OK
     counts = answer.json()
-    assert (counts["deck_count"], counts["run_count"]) == (
-        shelf.deck_count,
-        shelf.run_count,
-    )
+    assert counts.keys() == {"deck_count", "run_count"}
+    assert counts["deck_count"] == shelf.deck_count
+    assert counts["run_count"] == shelf.run_count
     assert_nothing_removed(shelf)
 
 
@@ -466,7 +465,8 @@ def test_a_deck_added_after_the_preview_makes_it_stale_until_confirmed_again() -
     )
 
     assert_problem(stale, HTTPStatus.CONFLICT)
-    assert (current["deck_count"], current["run_count"]) == now
+    assert current["deck_count"] == now[0]
+    assert current["run_count"] == now[1]
     assert current["deck_count"] == seen[0] + 1
     assert again.status_code == HTTPStatus.NO_CONTENT
     assert_removed_exactly(shelf, runs_before)
