@@ -33,15 +33,11 @@ def _describe_wire(schema: JsonDict) -> None:
     `title` and `status` carry placeholders until `ProblemError` sets them, so
     neither shows a default in the schema.
     """
-    required = schema.setdefault("required", [])
-    if isinstance(required, list):
-        required.extend(each for each in _IDENTITY if each not in required)
-    properties = schema.get("properties")
-    if isinstance(properties, dict):
-        for each in ("title", "status"):
-            member = properties.get(each)
-            if isinstance(member, dict):
-                member.pop("default", None)
+    required = cast("list[str]", schema.setdefault("required", []))
+    required.extend(each for each in _IDENTITY if each not in required)
+    properties = cast("dict[str, JsonDict]", schema["properties"])
+    for each in ("title", "status"):
+        properties[each].pop("default", None)
 
 
 class ProblemDetails(BaseModel):
