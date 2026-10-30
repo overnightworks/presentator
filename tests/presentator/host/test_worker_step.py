@@ -16,7 +16,10 @@ from presentator.adapters.build_wire import StepHeader, write_record
 from presentator.contracts.decks import StepKind
 from presentator.host import worker, worker_step
 from presentator.host.worker import create_request_record
-from tests.support.worker_support import open_descriptor_count
+from tests.support.worker_support import (
+    descriptors_left_open_since,
+    open_descriptor_targets,
+)
 
 CONTROLLER_UMASK = 0o077
 OPEN_DIRECTORY_MODE = 0o1777
@@ -191,12 +194,12 @@ def test_a_step_err_that_cannot_be_given_its_mode_is_closed_and_fails_the_paths(
         raise OSError(errno.EPERM, "mode refused")
 
     monkeypatch.setattr(os, "fchmod", refuse)
-    before = open_descriptor_count()
+    before = open_descriptor_targets()
 
     with pytest.raises(OSError, match="mode refused"):
         worker.prepare_step_paths(work)
 
-    assert open_descriptor_count() == before
+    assert descriptors_left_open_since(before) == {}
 
 
 def an_existing_node_modules(work: Path, _outside: Path) -> None:
