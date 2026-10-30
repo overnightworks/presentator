@@ -53,6 +53,7 @@ from tests.support.sign_in_support import Scene, a_scene
 ACCESS = "/api/sources/{name}/access"
 WEBHOOK_RENEWAL = "/api/sources/{name}/webhook-secret"
 PAGE = "/api/sources/{name}"
+REMOVAL = "/api/sources/{name}/removal"
 LIST = "/api/sources"
 PROBLEM = "application/problem+json"
 ASKING_FOR_JSON = {"accept": "application/json"}
@@ -220,6 +221,33 @@ def renew_webhook(
     """
     answer = client.post(
         WEBHOOK_RENEWAL.format(name=name), headers=headers, content=content, json=body
+    )
+    assert_no_store(answer)
+    return answer
+
+
+def preview_removal(
+    client: TestClient, name: str, headers: dict[str, str] | None = None
+) -> Response:
+    """Ask what removing the source would take; every answer is `no-store`."""
+    answer = client.get(REMOVAL.format(name=name), headers=headers)
+    assert_no_store(answer)
+    return answer
+
+
+def remove(
+    client: TestClient,
+    name: str,
+    *,
+    deck_count: int,
+    run_count: int,
+    headers: dict[str, str] | None = None,
+) -> Response:
+    """Remove the source with the counts the caller confirmed."""
+    answer = client.delete(
+        PAGE.format(name=name),
+        params={"deck_count": deck_count, "run_count": run_count},
+        headers=headers,
     )
     assert_no_store(answer)
     return answer
