@@ -1,0 +1,8 @@
+claim_id = "bc4aaebb6ee346cc96aec688397d6a4f"
+agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
+role = "builder"
+base = "5dd00b754d99631baa6ecb9093994b9ea2b77a1d"
+branch = "claude/issue-671-an-admin-renews-a-source-s-webhook-secre"
+scope = ["docs/reference/sources.md", "pyproject.toml", "src/presentator/adapters/secrets.py", "src/presentator/api/source_api.py", "src/presentator/application/decks.py", "src/presentator/host/main.py", "src/presentator/ports/decks.py", "tests/presentator/adapters/support/person_instance_support.py", "tests/presentator/adapters/test_secrets.py", "tests/presentator/api/support/source_api_support.py", "tests/presentator/api/test_source_api_create.py", "tests/presentator/api/test_source_api_webhook.py", "tests/presentator/application/support/decks_support.py", "tests/presentator/application/support/fakes.py", "tests/support/lobby.py"]
+opened_commit = "adbf6c96ca62f235ce9c937fc6ef909e197ff021"
+whole_reason = "Renew the webhook secret as data, delivered as E1 rules: the route, the owner's randomness behind a port wired at the composition root (with the check that holds it and the test constructions of Decks it reaches), the owner's honest answer for a vanished source, and A6b's create cells that the seam lets see the minted value."
