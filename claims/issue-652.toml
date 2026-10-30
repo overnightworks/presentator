@@ -1,8 +1,0 @@
-claim_id = "30e4d9179df141bba2818887d88d8174"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "a819a20f22323948abec0bcfd797f19bb12119d6"
-branch = "claude/issue-652-an-admin-drafts-a-deploy-key-and-checks"
-scope = ["docs/decisions/0020-the-lobby-is-a-json-api.md", "docs/reference/sources.md", "quality/baseline.toml", "src/presentator/api/problems.py", "src/presentator/api/source_api.py", "src/presentator/api/sources.py", "src/presentator/application/decks.py", "src/presentator/contracts/decks.py", "tests/presentator/api/support/source_api_support.py", "tests/presentator/api/test_problems.py", "tests/presentator/api/test_source_api_access.py", "tests/presentator/api/test_source_api_check.py", "tests/presentator/api/test_sources.py", "tests/presentator/application/support/fakes.py", "tests/presentator/application/test_decks.py", "tests/support/vulture_allowlist.py"]
-opened_commit = "a1c3d0a98e747e52d77d3438384ac01aafd2abdb"
-whole_reason = "Key draft and check as data: the check's refusal is the typed problem's first caller, so the typed problem and its type definition land with it, and the first request that names AccessKind needs the application and the Jinja form on one access vocabulary."
