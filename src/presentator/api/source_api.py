@@ -41,6 +41,7 @@ _SOURCES: Final = "/api/sources"
 _SOURCE: Final = f"{_SOURCES}/{{name}}"
 _FETCH: Final = f"{_SOURCE}/fetch"
 _ACCESS: Final = f"{_SOURCE}/access"
+_WEBHOOK_SECRET: Final = f"{_SOURCE}/webhook-secret"
 _KEY_DRAFT: Final = f"{_SOURCES}/{RESERVED_SOURCE_NAME}/key-draft"
 _CHECK: Final = f"{_SOURCES}/{RESERVED_SOURCE_NAME}/check"
 _REFUSED: Final = HTTPStatus.UNPROCESSABLE_ENTITY
@@ -157,6 +158,14 @@ class CreatedSourceView(BaseModel):
     webhook_secret: str
 
 
+class WebhookSecretView(BaseModel):
+    """The renewed webhook secret, which no other answer carries."""
+
+    model_config = ConfigDict(frozen=True)
+
+    webhook_secret: str
+
+
 class ConnectionCheckView(BaseModel):
     """What a probe found; `detail` is git's own first line, not presentator's."""
 
@@ -260,6 +269,12 @@ class _SourceData:
             raise ProblemError(HTTPStatus.UNPROCESSABLE_ENTITY)
         return Response(status_code=HTTPStatus.NO_CONTENT)
 
+    def renew_webhook_secret(self, name: str) -> WebhookSecretView:
+        secret = self.decks.renew_webhook(name)
+        if secret is None:
+            raise ProblemError(HTTPStatus.NOT_FOUND)
+        return WebhookSecretView(webhook_secret=secret)
+
     def key_draft(self, admin: Annotated[User, Depends(gated_admin)]) -> KeyDraftView:
         draft = self.decks.source_key_draft(owner_id=admin.id)
         return KeyDraftView(id=draft.id, public_key=draft.public_key)
@@ -340,6 +355,12 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         status_code=HTTPStatus.NO_CONTENT,
         responses=not_found,
         openapi_extra=problem_beside_validation(),
+    )
+    router.add_api_route(
+        _WEBHOOK_SECRET,
+        data.renew_webhook_secret,
+        methods=["POST"],
+        responses=not_found,
     )
     router.add_api_route(
         _KEY_DRAFT, data.key_draft, methods=["POST"], responses=forbidden

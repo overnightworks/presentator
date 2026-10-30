@@ -15,7 +15,7 @@ from pydantic import JsonValue
 
 from presentator.api.hooks import hook_address
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
-from presentator.api.sources import SOURCES, WEBHOOK
+from presentator.api.sources import SOURCES
 from presentator.application.decks import (
     DRAFT_MAX_AGE,
     RESERVED_SOURCE_NAME,
@@ -48,6 +48,7 @@ from tests.presentator.api.support.source_api_support import (
     checked_body,
     decks_that_must_not_run,
     draft,
+    renew_webhook,
     whole_answers_of,
     without_raising,
 )
@@ -83,9 +84,28 @@ class _BreakingStore(FakeSourceStore):
         raise RuntimeError(write.access_secret)
 
 
+class _FailingStore(FakeSourceStore):
+    """A store that fails the write without naming anything it was handed."""
+
+    def add(self, write: SourceWrite) -> Source | None:
+        raise RuntimeError(write.name)
+
+
 class _BreakingFolders(FakeDeckFolders):
     def folders(self, source: Source) -> SourcePoll:
         raise RuntimeError(source.url)
+
+
+class _BreakingFoldersOnce(FakeDeckFolders):
+    """Folders whose first fetch raises, as a mirror that was down for a moment."""
+
+    broken = False
+
+    def folders(self, source: Source) -> SourcePoll:
+        if not self.broken:
+            self.broken = True
+            raise RuntimeError(source.url)
+        return super().folders(source)
 
 
 @pytest.fixture
@@ -477,7 +497,14 @@ def test_a_store_that_rejects_the_row_makes_no_source_and_keeps_no_secret() -> N
 
     answer = create(client)
 
-    assert_problem(answer, HTTPStatus.UNPROCESSABLE_ENTITY, SENT, "webhook_secret")
+    assert world.webhook_secrets.handed_out
+    assert_problem(
+        answer,
+        HTTPStatus.UNPROCESSABLE_ENTITY,
+        SENT,
+        "webhook_secret",
+        *world.webhook_secrets.handed_out,
+    )
     assert answer.json()["reason"] == SourceRefusal.DUPLICATE_NAME
     assert store.sources == []
     assert store.hashes == {}
@@ -557,10 +584,28 @@ def _ssh_in_the_log(_world: World, lobby: Lobby) -> Response:
     )
 
 
+def _rejected_row_in_the_log(world: World, _lobby: Lobby) -> Response:
+    lobby = an_admin_over(replace(world.decks, sources=_RejectingStore()))
+    return create(lobby.client)
+
+
+def _store_raising_in_the_log(world: World, _lobby: Lobby) -> Response:
+    lobby = an_admin_over(replace(world.decks, sources=_FailingStore()))
+    return create(without_raising(lobby))
+
+
+def _first_fetch_raising_in_the_log(world: World, _lobby: Lobby) -> Response:
+    lobby = an_admin_over(replace(world.decks, folders=_BreakingFolders()))
+    return create(without_raising(lobby))
+
+
 @pytest.mark.parametrize(
     ("send", "status"),
     [
         (_https_in_the_log, HTTPStatus.CREATED),
+        (_rejected_row_in_the_log, HTTPStatus.UNPROCESSABLE_ENTITY),
+        (_store_raising_in_the_log, HTTPStatus.INTERNAL_SERVER_ERROR),
+        (_first_fetch_raising_in_the_log, HTTPStatus.INTERNAL_SERVER_ERROR),
         (_ssh_in_the_log, HTTPStatus.CREATED),
         (_refusal_in_the_log, HTTPStatus.UNPROCESSABLE_ENTITY),
         (_other_urls_fingerprint_in_the_log, HTTPStatus.UNPROCESSABLE_ENTITY),
@@ -582,6 +627,9 @@ def _ssh_in_the_log(_world: World, lobby: Lobby) -> Response:
     ],
     ids=[
         "https",
+        "rejected row",
+        "store raises",
+        "first fetch raises",
         "ssh",
         "user-part",
         "other-url fingerprint",
@@ -606,8 +654,10 @@ def test_no_log_record_carries_the_token_the_webhook_secret_or_a_private_half(
     assert_no_store(answer)
     assert SENT not in caplog.text
     assert "user:pw" not in caplog.text
-    if answer.status_code == HTTPStatus.CREATED:
-        assert answer.json()["webhook_secret"] not in caplog.text
+    for minted in world.webhook_secrets.handed_out:
+        assert minted not in caplog.text
+        if answer.status_code != HTTPStatus.CREATED:
+            assert_nothing_returned(answer, minted)
     for private_key in world.drafts.private_keys:
         assert private_key not in caplog.text
 
@@ -625,7 +675,10 @@ def test_a_store_that_raises_is_the_plain_server_error_with_no_source() -> None:
     assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert answer.headers["content-type"] != PROBLEM_MEDIA_TYPE
     assert_no_store(answer)
-    assert_nothing_returned(answer, SENT, "webhook_secret")
+    assert world.webhook_secrets.handed_out
+    assert_nothing_returned(
+        answer, SENT, "webhook_secret", *world.webhook_secrets.handed_out
+    )
     assert store.sources == []
 
 
@@ -636,21 +689,25 @@ def _proof_of(lobby: Lobby) -> str:
 
 def test_a_first_fetch_that_raises_leaves_the_source_and_renewal_recovers_it() -> None:
     world = a_world()
-    decks = replace(world.decks, folders=_BreakingFolders())
+    decks = replace(world.decks, folders=_BreakingFoldersOnce())
     lobby = an_admin_over(decks)
 
     answer = without_raising(lobby).post(
         LIST, json=checked_body(name=_NAME, fingerprint=_proof_of(lobby))
     )
+    renewed = renew_webhook(lobby.client, _NAME)
 
+    (lost, kept) = world.webhook_secrets.handed_out
     assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert answer.headers["content-type"] != PROBLEM_MEDIA_TYPE
     assert_no_store(answer)
-    assert_nothing_returned(answer, SENT, "webhook_secret")
+    assert_nothing_returned(answer, SENT, "webhook_secret", lost)
     assert [source.name for source in world.store.sources] == [_NAME]
-    assert lobby.client.post(WEBHOOK.format(name=_NAME)).status_code == (
-        HTTPStatus.SEE_OTHER
+    assert renewed.json() == {"webhook_secret": kept}
+    assert calling_hook(lobby.client, _NAME, kept).status_code == (
+        HTTPStatus.NO_CONTENT
     )
+    assert calling_hook(lobby.client, _NAME, lost).status_code == HTTPStatus.NOT_FOUND
 
 
 # 22

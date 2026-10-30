@@ -171,6 +171,13 @@ a 404 problem; a blank or null HTTPS token, a token that is not one printable
 line (git cannot be handed it) and a local folder are a 422 problem, which says
 no reason.
 
+Renewing the webhook secret is a JSON write for an admin too, with the same
+refusals: `POST /api/sources/<name>/webhook-secret` takes no body (anything sent
+is ignored) and answers 200 with `{"webhook_secret": <the new value>}`, the one
+answer that ever carries it. The old secret stops working at once. An unknown
+name is a 404 problem. Nothing keeps the value, so an answer that was lost is
+recovered by renewing again.
+
 Remove, at the bottom, asks once for a confirm naming the source's decks and
 runs, then deletes the source row, its runs, its decks, its mirror, and every
 built talk those decks left on disk, so the same URL can be added again

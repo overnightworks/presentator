@@ -16,6 +16,7 @@ from tests.presentator.application.support.fakes import (
     FakeSourceRunStore,
     FakeSourceStore,
     FakeToolchainThemes,
+    FakeWebhookSecrets,
     FrozenClock,
 )
 
@@ -86,6 +87,7 @@ class DecksFakes:
     clock: FrozenClock = field(default_factory=lambda: FrozenClock(instant=NOW))
     local_mount: FakeLocalMount = field(default_factory=FakeLocalMount)
     key_drafts: FakeDeployKeyDrafts = field(default_factory=FakeDeployKeyDrafts)
+    webhook_secrets: FakeWebhookSecrets = field(default_factory=FakeWebhookSecrets)
 
 
 def decks_over(
@@ -110,4 +112,5 @@ def decks_over(
         fingerprint_key=FINGERPRINT_KEY,
         clock=resolved.clock,
         local_mount=resolved.local_mount,
+        webhook_secrets=resolved.webhook_secrets,
     )

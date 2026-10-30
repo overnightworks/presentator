@@ -367,3 +367,11 @@ class ToolchainThemes(Protocol):
         A deck page reads nothing as no row to show, never as an empty set
         (R3).
         """
+
+
+class WebhookSecrets(Protocol):
+    """Where a source's webhook secret comes from, so the application draws none."""
+
+    @abstractmethod
+    def new_secret(self) -> str:
+        """A fresh unguessable webhook secret, URL-safe, never drawn twice."""

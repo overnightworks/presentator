@@ -107,6 +107,7 @@ from tests.presentator.application.support.fakes import (
     FakeSourceStore,
     FakeToolchainThemes,
     FakeUserStore,
+    FakeWebhookSecrets,
     FrozenClock,
 )
 
@@ -521,6 +522,7 @@ def a_decks(given: GivenDecks, clock: FrozenClock) -> Decks:
         fingerprint_key=_FINGERPRINT_KEY,
         clock=clock,
         local_mount=FakeLocalMount(),
+        webhook_secrets=FakeWebhookSecrets(),
     )
     # The list and the deck page read the store only; a test arranges what a
     # poll or the hook would already have taken in before anyone opened a page.

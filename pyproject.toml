@@ -217,6 +217,24 @@ as_packages = true
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
+id = "randomness-belongs-to-an-adapter"
+name = "Only adapters draw randomness"
+type = "forbidden"
+# ADR 0001, `ports/identity.py`: a layer above asks a port for a secret and
+# draws none. The host composes the adapters that draw, so the legal chain
+# runs through them; only a direct import above them is the violation.
+source_modules = [
+    "presentator.host",
+    "presentator.api",
+    "presentator.application",
+    "presentator.ports",
+    "presentator.contracts",
+]
+forbidden_modules = ["secrets"]
+as_packages = true
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
 id = "manifest-and-wording-libraries"
 name = "Only adapters read the manifest format and word a language"
 type = "forbidden"

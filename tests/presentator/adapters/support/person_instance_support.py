@@ -29,7 +29,7 @@ from presentator.adapters.identity import (
 from presentator.adapters.key_drafts import SqliteSourceKeyDrafts
 from presentator.adapters.preferences import SqlitePersonPreferencesStore
 from presentator.adapters.schema import create_tables
-from presentator.adapters.secrets import secret_box
+from presentator.adapters.secrets import TokenWebhookSecrets, secret_box
 from presentator.application.decks import Decks
 from presentator.application.people import People
 from presentator.contracts.decks import (
@@ -208,6 +208,7 @@ def _decks_application(
         local_mount=FilesystemLocalMount(mount=tmp_path),
         build_bound=_A_BOUND,
         fingerprint_key=b"a fingerprint key of some length",
+        webhook_secrets=TokenWebhookSecrets(),
     )
 
 

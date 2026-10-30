@@ -8,7 +8,6 @@ git, TOML, SQL, and the build toolchain stay outside (ADR 0001, ADR 0005).
 import hmac
 import logging
 import re
-import secrets
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
@@ -61,6 +60,7 @@ from presentator.ports.decks import (
     SourceRuns,
     SourceStore,
     ToolchainThemes,
+    WebhookSecrets,
 )
 
 _log = logging.getLogger(__name__)
@@ -79,7 +79,6 @@ _SOURCE_NAME: Final = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 RESERVED_SOURCE_NAME: Final = "new"
 # Added sources follow main; a later slice is what offers another ref.
 _ADDED_REF: Final = "main"
-_WEBHOOK_SECRET_BYTES: Final = 32
 _HASH_LENGTH: Final = 32
 _NO_HASH: Final = bytes(_HASH_LENGTH)
 # A draft nobody creates a source from is discarded after this long (operator
@@ -272,6 +271,7 @@ class Decks:
     toolchain_themes: ToolchainThemes
     clock: Clock
     local_mount: LocalMount
+    webhook_secrets: WebhookSecrets
     # How long a build may take before the refresh stops believing it is still
     # running: a process that died with the server leaves its attempt behind,
     # and nobody may read that as building for ever.
@@ -363,14 +363,14 @@ class Decks:
     def renew_webhook(self, name: str) -> str | None:
         """Mint a new webhook secret, store only its hash, and return the value once.
 
-        A name nobody stored is not a source to renew.
+        A name nobody stored, or one removed before the write, has nothing to renew.
         """
-        source = self._named(name)
-        if source is None:
+        if self._named(name) is None:
             return None
-        webhook_secret = secrets.token_urlsafe(_WEBHOOK_SECRET_BYTES)
-        self.sources.put_hook_secret_hash(name, hash_webhook_secret(webhook_secret))
-        return webhook_secret
+        secret = self.webhook_secrets.new_secret()
+        if not self.sources.put_hook_secret_hash(name, hash_webhook_secret(secret)):
+            return None
+        return secret
 
     def removal(self, name: str) -> SourceRemoval | None:
         """What removing that source would take with it, or nothing if unknown.
@@ -566,7 +566,7 @@ class Decks:
         if isinstance(canonical, SourceRefusal):
             return canonical
         address = canonical
-        webhook_secret = secrets.token_urlsafe(_WEBHOOK_SECRET_BYTES)
+        webhook_secret = self.webhook_secrets.new_secret()
         write = SourceWrite(
             name=named,
             url=address,
