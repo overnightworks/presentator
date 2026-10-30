@@ -4,6 +4,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import timedelta
+from functools import partial
 from http import HTTPStatus
 from pathlib import Path
 
@@ -15,7 +16,11 @@ from pydantic import JsonValue
 from presentator.api.hooks import hook_address
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
 from presentator.api.sources import SOURCES, WEBHOOK
-from presentator.application.decks import DRAFT_MAX_AGE, SourceRefusal
+from presentator.application.decks import (
+    DRAFT_MAX_AGE,
+    RESERVED_SOURCE_NAME,
+    SourceRefusal,
+)
 from presentator.contracts.decks import Source, SourcePoll, SourceState, SourceWrite
 from presentator.contracts.models import Role
 from tests.presentator.api.support.source_api_support import (
@@ -267,6 +272,8 @@ def test_the_hook_takes_the_returned_secret_and_refuses_a_wrong_one() -> None:
 
     assert taken.status_code == HTTPStatus.NO_CONTENT
     assert wrong.status_code == HTTPStatus.NOT_FOUND
+    assert_no_store(taken)
+    assert_no_store(wrong)
 
 
 # 11, 19
@@ -293,8 +300,10 @@ def test_the_jinja_page_of_an_api_created_source_has_no_one_time_secret() -> Non
     lobby = an_admin_over(a_world().decks)
     _, webhook_secret = a_created_source(lobby.client)
 
-    page = lobby.client.get(f"{SOURCES}/{_NAME}").text
+    answer = lobby.client.get(f"{SOURCES}/{_NAME}")
+    page = answer.text
 
+    assert_no_store(answer)
     assert webhook_secret not in page
     assert "data-hook-secret" not in page
     assert ENGLISH.source_webhook_once not in page
@@ -309,6 +318,9 @@ class _Refused:
 
 _REFUSALS = {
     "malformed name": _Refused(SourceRefusal.MALFORMED_NAME, {"name": _NOT_A_NAME}),
+    "reserved name": _Refused(
+        SourceRefusal.MALFORMED_NAME, {"name": RESERVED_SOURCE_NAME}
+    ),
     "access mismatch": _Refused(
         SourceRefusal.ACCESS_MISMATCH, {"access": "ssh-deploy-key", "secret": None}
     ),
@@ -348,6 +360,18 @@ def test_a_refused_create_names_its_reason_and_makes_nothing(refused: _Refused) 
     )
 
 
+def test_the_fingerprint_of_another_address_is_not_a_check_of_this_one() -> None:
+    world = a_world()
+    client = an_admin_over(world.decks).client
+    other_proof = client.post(CHECK, json=checked_body(url=_OTHER_URL)).json()
+
+    answer = create(client, fingerprint=other_proof["fingerprint"])
+
+    assert_problem(answer, HTTPStatus.UNPROCESSABLE_ENTITY, SENT, "webhook_secret")
+    assert answer.json()["reason"] == SourceRefusal.NOT_CHECKED
+    assert world.store.sources == []
+
+
 @pytest.mark.parametrize(
     ("reason", "second"),
     [
@@ -373,6 +397,10 @@ def test_a_duplicate_is_refused_and_leaves_the_existing_source_as_it_was(
         HTTPStatus.NO_CONTENT
     )
     assert calling_hook(client, name, SENT).status_code == HTTPStatus.NOT_FOUND
+    assert (
+        calling_hook(client, str(second.get("name", name)), SENT).status_code
+        == HTTPStatus.NOT_FOUND
+    )
 
 
 # 14
@@ -422,6 +450,7 @@ def test_an_ssh_create_binds_the_own_draft_and_the_next_draft_is_new() -> None:
     assert answer.status_code == HTTPStatus.CREATED
     assert stored.public_key == drafted["public_key"]
     assert draft(client).json()["id"] != drafted["id"]
+    assert_no_store(answer)
     assert_nothing_returned(answer, *world.drafts.private_keys)
 
 
@@ -435,6 +464,7 @@ def test_a_local_folder_under_the_mount_is_stored_by_its_canonical_address() -> 
     (stored,) = world.store.sources
     assert answer.status_code == HTTPStatus.CREATED
     assert stored.url == str(FakeLocalMount().canonical_repository(_FOLDER))
+    assert_no_store(answer)
 
 
 # 17
@@ -492,12 +522,14 @@ def _https_in_the_log(_world: World, lobby: Lobby) -> Response:
     return create(lobby.client)
 
 
-def _malformed_name_in_the_log(_world: World, lobby: Lobby) -> Response:
-    return create(lobby.client, name=_NOT_A_NAME)
-
-
 def _refusal_in_the_log(_world: World, lobby: Lobby) -> Response:
     return create(lobby.client, url=_USER_PART)
+
+
+def _refused_in_the_log(
+    changes: dict[str, object], _world: World, lobby: Lobby
+) -> Response:
+    return create(lobby.client, **changes)
 
 
 def _ssh_in_the_log(_world: World, lobby: Lobby) -> Response:
@@ -517,9 +549,15 @@ def _ssh_in_the_log(_world: World, lobby: Lobby) -> Response:
         (_https_in_the_log, HTTPStatus.CREATED),
         (_ssh_in_the_log, HTTPStatus.CREATED),
         (_refusal_in_the_log, HTTPStatus.UNPROCESSABLE_ENTITY),
-        (_malformed_name_in_the_log, HTTPStatus.UNPROCESSABLE_ENTITY),
+        *(
+            (
+                partial(_refused_in_the_log, refused.changes),
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+            for refused in _REFUSALS.values()
+        ),
     ],
-    ids=["https", "ssh", "user-part", "refusal"],
+    ids=["https", "ssh", "user-part", *_REFUSALS],
 )
 def test_no_log_record_carries_the_token_the_webhook_secret_or_a_private_half(
     send: Callable[[World, Lobby], Response],
@@ -556,7 +594,7 @@ def test_a_store_that_raises_is_the_plain_server_error_with_no_source() -> None:
     assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert answer.headers["content-type"] != PROBLEM_MEDIA_TYPE
     assert_no_store(answer)
-    assert "webhook_secret" not in answer.text
+    assert_nothing_returned(answer, SENT, "webhook_secret")
     assert store.sources == []
 
 
@@ -577,7 +615,7 @@ def test_a_first_fetch_that_raises_leaves_the_source_and_renewal_recovers_it() -
     assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert answer.headers["content-type"] != PROBLEM_MEDIA_TYPE
     assert_no_store(answer)
-    assert "webhook_secret" not in answer.text
+    assert_nothing_returned(answer, SENT, "webhook_secret")
     assert [source.name for source in world.store.sources] == [_NAME]
     assert lobby.client.post(WEBHOOK.format(name=_NAME)).status_code == (
         HTTPStatus.SEE_OTHER
@@ -598,7 +636,17 @@ def test_the_generated_spec_types_the_created_answer_and_its_refusals() -> None:
     assert set(route["422"]["content"]) == {PROBLEM_MEDIA_TYPE, "application/json"}
     assert refused["properties"]["reason"]["enum"] == [r.value for r in SourceRefusal]
     assert set(route["403"]["content"]) == {PROBLEM_MEDIA_TYPE}
-    assert all(ref.removeprefix("#/").split("/")[0] in spec for ref in _refs(spec))
+    for ref in _refs(spec):
+        _target_of(spec, ref)
+
+
+def _target_of(spec: JsonValue, ref: str) -> JsonValue:
+    """The part of the spec a local reference names; a missing one raises."""
+    target = spec
+    for segment in ref.removeprefix("#/").split("/"):
+        assert isinstance(target, dict)
+        target = target[segment]
+    return target
 
 
 def _refs(document: JsonValue) -> list[str]:

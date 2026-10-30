@@ -124,6 +124,11 @@ class SourceProbe(BaseModel):
     secret: SecretStr | None
     key_draft_id: str | None
 
+    def in_the_owners_form(self) -> tuple[str, str]:
+        """The secret and the draft id, null as "", as the fingerprint binds them."""
+        secret = "" if self.secret is None else self.secret.get_secret_value()
+        return secret, self.key_draft_id or ""
+
 
 class NewSource(SourceProbe):
     """A checked source to store: the probe, its name and the check's fingerprint."""
@@ -253,12 +258,13 @@ class _SourceData:
     def check_connection(
         self, probe: SourceProbe, admin: Annotated[User, Depends(gated_admin)]
     ) -> ConnectionCheckView:
+        secret, key_draft_id = probe.in_the_owners_form()
         checked = self.decks.check_connection(
             url=probe.url,
             access=probe.access,
-            secret="" if probe.secret is None else probe.secret.get_secret_value(),
+            secret=secret,
             owner_id=admin.id,
-            key_draft_id=probe.key_draft_id or "",
+            key_draft_id=key_draft_id,
         )
         if isinstance(checked, SourceRefusal):
             raise ProblemError(_REFUSED, SourceRefusedProblem(reason=checked))
@@ -271,14 +277,15 @@ class _SourceData:
         response: Response,
         admin: Annotated[User, Depends(gated_admin)],
     ) -> CreatedSourceView:
+        secret, key_draft_id = new.in_the_owners_form()
         added = self.decks.add_source(
             NewSourceDraft(
                 name=new.name,
                 url=new.url,
                 access=new.access,
-                secret="" if new.secret is None else new.secret.get_secret_value(),
+                secret=secret,
                 fingerprint=new.fingerprint,
-                key_draft_id=new.key_draft_id or "",
+                key_draft_id=key_draft_id,
             ),
             owner_id=admin.id,
         )

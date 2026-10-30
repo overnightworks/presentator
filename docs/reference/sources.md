@@ -67,8 +67,8 @@ admin adds one under Settings · Sources.
   keeps it, no GET and no log carries it, and a lost answer is recovered by
   renewing it. A refusal is a `source-refused` problem (422) and creates no
   source and delivers or keeps no webhook secret. It does not promise that
-  nothing changes: a draft that is not this admin's makes the admin a fresh
-  draft before it is refused, and a store that rejects the row at the write (a
+  nothing changes: a draft that is not this admin's, or is stale, makes the admin a
+  fresh draft before it is refused, and a store that rejects the row at the write (a
   concurrent duplicate) answers `duplicate-name`. A failure after the row is
   written (the first fetch) is a plain 500 with the source created and the
   secret lost, so the person renews it.
