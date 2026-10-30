@@ -1,8 +1,0 @@
-claim_id = "e1b22b56f3aa4e6b9e47bb731b0284ef"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "d47f611fed543b0474ae9e1de4757a04649032c5"
-branch = "claude/issue-650-the-lobby-s-validation-answer-never-repe"
-scope = ["docs/decisions/0020-the-lobby-is-a-json-api.md", "src/presentator/api/auth.py", "src/presentator/api/problems.py", "tests/presentator/api/test_problems_validation.py", "tests/support/vulture_allowlist.py"]
-opened_commit = "4b9b62abbc8dbc07e2489343dc0199c33b51e98b"
-whole_reason = "The lobby's validation answer without request input: the handler, its install, its proof on existing routes and the ADR sentence that records it are one contract and cannot land apart."
