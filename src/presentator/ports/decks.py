@@ -155,7 +155,9 @@ class DeckFolders(Protocol):
 
         No folder is not emptiness: a source nobody could read carries no
         folders and names why, while a read that found no folder carries an
-        empty tuple and says every deck is gone.
+        empty tuple and says every deck is gone. A read that could not finish
+        carries no folders, never fewer: the folders it returns are every
+        directory the commit holds.
         """
 
     @abstractmethod
