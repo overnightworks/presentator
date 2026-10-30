@@ -84,6 +84,9 @@ def _wait_for_load() -> None:
 
 
 def _exit_on_sigterm(signal_number: int, _frame: object) -> None:
+    # `timeout` signals the whole process group and `uv run` forwards the signal
+    # again, so a second SIGTERM must not interrupt the teardown this one starts.
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
     raise SystemExit(128 + signal_number)
 
 
@@ -567,14 +570,14 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _exit_on_sigterm)
     _wait_for_load()
     print("gpu_before", _nvidia_memory())
-    private_directory = Path(tempfile.mkdtemp(prefix="speech-"))
-    socket_path = private_directory / "speech.sock"
     speaking_model = os.environ.get(
         "SPEECH_SPEAKING_MODEL",
         CHATTERBOX_SPEAKING_MODEL,
     )
     project = Path(__file__).resolve().parents[1]
+    private_directory = Path(tempfile.mkdtemp(prefix="speech-"))
     try:
+        socket_path = private_directory / "speech.sock"
         env = _speech_environment(private_directory, speaking_model)
         with _speech_server(project, env, socket_path) as running:
             print("health_ready", json.dumps(running.health, sort_keys=True))
