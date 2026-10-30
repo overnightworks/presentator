@@ -663,10 +663,6 @@ def accept_time() -> float:
     return time.monotonic()
 
 
-def open_descriptor_count() -> int:
-    return len(list(Path("/proc/self/fd").iterdir()))
-
-
 def open_descriptor_targets() -> dict[int, str]:
     """Every descriptor of this process with what it points at."""
     targets: dict[int, str] = {}
