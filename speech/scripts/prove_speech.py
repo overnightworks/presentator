@@ -1,9 +1,9 @@
 """Stage proof: start the service, drive health/speak/hear, then the contract client.
 
 Runs under the caller's probe lock in the fleet form (flock -o -w 1200
-/tmp/probe-stack.lock timeout -k 30 1800 ...), checks the 1-minute load, runs
-one heavy step at a time, and leaves no process behind. Model weights stay in
-the Hugging Face and Piper caches.
+/tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 30 1800 ...),
+checks the 1-minute load, runs one heavy step at a time, and leaves no
+process behind. Model weights stay in the Hugging Face and Piper caches.
 """
 
 # ruff: noqa: T201 - this stage proof reports its progress on standard output

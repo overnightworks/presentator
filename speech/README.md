@@ -215,7 +215,7 @@ large-v3) pass through; on `cpu` the card is hidden from speech with an empty
 `HF_HUB_OFFLINE=1` is the default and resolves `refs/main`:
 
 ```sh
-flock -o -w 1200 /tmp/probe-stack.lock timeout -k 30 1800 \
+flock -o -w 1200 /tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 30 1800 \
   uv run python scripts/prove_speech.py
 ```
 
@@ -226,7 +226,7 @@ missed gates kept as values):
 
 ```sh
 SPEECH_DEVICE=cpu SPEECH_SPEAKING_MODEL=de_DE-thorsten-medium OMP_NUM_THREADS=4 \
-  flock -o -w 1200 /tmp/probe-stack.lock timeout -k 30 1800 \
+  flock -o -w 1200 /tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 30 1800 \
   uv run python scripts/prove_speech.py --measure
 ```
 
