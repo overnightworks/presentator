@@ -1,8 +1,0 @@
-claim_id = "36419df7e69541e7917e5042c22c340b"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "5123e490cdd252850a2b4766dadcdc48c3b9c883"
-branch = "claude/issue-656-presentator-moves-to-agent-runtime-0-11"
-scope = ["docs/decisions/0003-libraries-for-models-and-auth.md", "pyproject.toml", "tests/presentator/adapters/support/agent_service_support.py", "uv.lock"]
-opened_commit = "f398b826d055a38d4bcd9cfa64700c61be1350b6"
-whole_reason = "One client bump: the pin, its lock, the one fake that builds a Succeeded, and the ADR that keeps the client history only prove protocol 4 together."
