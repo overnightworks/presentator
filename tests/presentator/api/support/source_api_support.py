@@ -40,8 +40,6 @@ PROBLEM = "application/problem+json"
 ASKING_FOR_JSON = {"accept": "application/json"}
 SAME_ORIGIN = {"sec-fetch-site": "same-origin"}
 HAL = "hal-client"
-STORED_BEFORE = "the-token-this-scenario-replaces"
-SENT_NOW = "the-token-this-scenario-sends"
 
 
 class PortThatMustNotRun:
@@ -153,11 +151,11 @@ def assert_no_store(answer: Response) -> None:
     assert answer.headers["cache-control"] == "no-store"
 
 
-def assert_nothing_returned(answer: Response) -> None:
-    """No answer, in its body or its headers, carries either scenario token."""
+def assert_nothing_returned(answer: Response, *secrets: str) -> None:
+    """No answer, in its body or its headers, carries any of these values."""
     shown = answer.text + str(answer.headers)
-    assert SENT_NOW not in shown
-    assert STORED_BEFORE not in shown
+    for each in secrets:
+        assert each not in shown
 
 
 def assert_validation_answer(answer: Response, *sent: str) -> None:
@@ -167,16 +165,14 @@ def assert_validation_answer(answer: Response, *sent: str) -> None:
     assert all(
         set(fault) == {"loc", "msg", "type"} for fault in answer.json()["detail"]
     )
-    assert_nothing_returned(answer)
-    for each in sent:
-        assert each not in answer.text
+    assert_nothing_returned(answer, *sent)
 
 
-def assert_problem(answer: Response, status: HTTPStatus) -> None:
+def assert_problem(answer: Response, status: HTTPStatus, *secrets: str) -> None:
     assert answer.status_code == status
     assert answer.headers["content-type"] == PROBLEM
     assert_no_store(answer)
-    assert_nothing_returned(answer)
+    assert_nothing_returned(answer, *secrets)
 
 
 @dataclass(frozen=True, slots=True)
