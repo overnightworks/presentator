@@ -27,10 +27,10 @@ SECRET_LENGTH: Final = 32
 _INVALID_PORT: Final = "has an invalid port"
 _REFUSED: Final = "this environment cannot start an instance"
 _EMPTY_CLIENT_ID: Final = "token_clients: names an empty client id"
-_ONE_SCOPE_TOKEN: Final = (
+_SCOPE_RULE: Final = (
     "is one scope token of printable characters without a space, quote or backslash"
 )
-_SCOPE_TOKEN: Final = re.compile(r"[\x21\x23-\x5B\x5D-\x7E]+")
+_SCOPE_SHAPE: Final = re.compile(r"[\x21\x23-\x5B\x5D-\x7E]+")
 _ONE_HOSTNAME: Final = "talk_origin: is another hostname than public_origin"
 
 ENVIRONMENT_PREFIX: Final = "PRESENTATOR_"
@@ -113,8 +113,8 @@ def _one_origin(given: str, *, schemes: tuple[str, ...]) -> str:
 
 def _one_scope_token(given: str) -> str:
     """Require one RFC 6749 scope-token: 1*( %x21 / %x23-5B / %x5D-7E )."""
-    if not _SCOPE_TOKEN.fullmatch(given):
-        raise ValueError(_ONE_SCOPE_TOKEN)
+    if not _SCOPE_SHAPE.fullmatch(given):
+        raise ValueError(_SCOPE_RULE)
     return given
 
 
