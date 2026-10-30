@@ -18,6 +18,8 @@ EXAMPLE_TITLE: str = tomllib.loads(
     (EXAMPLE_DECK / "deck.toml").read_text(encoding="utf-8")
 )["title"]
 MAIN_BRANCH = "main"
+# A submodule entry names a commit of another repository; nothing here holds it.
+_A_COMMIT_NOBODY_HOLDS = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 
 _AUTHORSHIP = {
     "GIT_AUTHOR_NAME": "a test",
@@ -81,11 +83,60 @@ class GitRemote:
 
     def commit(self, files: Mapping[str, str], *, at: datetime) -> None:
         """Write the files, commit them at that moment, and push."""
+        self._write(files)
+        self._push(at=at)
+
+    def commit_gitlink(
+        self,
+        files: Mapping[str, str],
+        *,
+        gitlink: str,
+        at: datetime,
+    ) -> None:
+        """Commit a submodule entry at that path beside the files, and push."""
+        self._write(files)
+        _git(self.work, "add", "--all")
+        _git(
+            self.work,
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            f"160000,{_A_COMMIT_NOBODY_HOLDS},{gitlink}",
+        )
+        _git(self.work, "commit", "--quiet", "--message", "a push", at=at)
+        _git(self.work, "push", "--quiet", "origin", MAIN_BRANCH)
+
+    def commit_stamped(self, files: Mapping[str, str], *, stamp: str) -> None:
+        """Push a commit whose author and committer stamp is exactly that.
+
+        `git commit` normalises a date it dislikes, so the commit object is
+        written by hand: that is how a stamp git cannot print as a date reaches
+        a mirror from a source that took the commit in unchecked.
+        """
+        self._write(files)
+        _git(self.work, "add", "--all")
+        raw = (
+            f"tree {_git(self.work, 'write-tree')}\n"
+            f"parent {self.head}\n"
+            f"author a test <test@example.invalid> {stamp}\n"
+            f"committer a test <test@example.invalid> {stamp}\n\n"
+            "a push\n"
+        )
+        written = subprocess.run(
+            ["git", "hash-object", "-t", "commit", "-w", "--stdin"],
+            capture_output=True,
+            check=True,
+            cwd=self.work,
+            input=raw.encode(),
+        )
+        _git(self.work, "update-ref", "HEAD", written.stdout.decode().strip())
+        _git(self.work, "push", "--quiet", "origin", MAIN_BRANCH)
+
+    def _write(self, files: Mapping[str, str]) -> None:
         for path, content in files.items():
             written = self.work / path
             written.parent.mkdir(parents=True, exist_ok=True)
             written.write_text(content, encoding="utf-8")
-        self._push(at=at)
 
     def remove(self, folder: str, *, at: datetime) -> None:
         """Delete the folder from the tree, commit that deletion, and push."""

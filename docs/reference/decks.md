@@ -24,9 +24,11 @@ Only a refresh reconciles; a page view never does.
   another source already carries is skipped with a line in the log, and the
   source that carried it first keeps it.
 - A source that cannot be read is logged and says nothing about what it
-  carries, so every deck stays listed. A folder whose manifest cannot be read
-  is logged too and counts as a folder without a title, so the deck row stands
-  as it was.
+  carries, so every deck stays listed. That includes a listing the mirror could
+  not finish, so a listing is either complete or absent, never shorter. A
+  folder whose manifest cannot be read, whether it is malformed or not a file
+  git can hand back, is logged too and counts as a folder without a title, so
+  the deck row stands as it was.
 
 ## The list
 
