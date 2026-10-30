@@ -62,7 +62,7 @@ The SQLite stores stay this repository's
 
 ## What protects a request
 
-`webauth` 0.25.0 owns the mechanism, the sign-in routes included. `issue_session_cookies`,
+`webauth` 0.26.0 owns the mechanism, the sign-in routes included. `issue_session_cookies`,
 `clear_session_cookies` and `session_id_from_request` set, clear and read the
 signed `SameSite=Lax` session cookie.
 

@@ -452,6 +452,18 @@ deployed on or after the day the service runs 0.11.0 or later. `Succeeded`
 gains a required `files`; presentator never reads `Succeeded` or its files, so
 nothing beyond the pin changes in the adapter. The adapters-only rule stands.
 
+### Amendment 2026-10-30 — webauth 0.26.0: the workload grant names the agent service's scope
+
+Authority: [#673](https://github.com/overnightworks/presentator/issues/673),
+webauth#516.
+
+`OidcRelyingParty.workload_access_token` now requires the scopes of the
+`client_credentials` grant, so a token carries one service's audience and not
+every service's. Presentator asks for one scope, the agent service's, and takes
+it from `PRESENTATOR_AGENT_SERVICE_SCOPE`: a deployment fact with no default,
+checked at start as one RFC 6749 scope token. An issuer's `invalid_scope` is the
+typed refusal the co-presenter already answers as "unavailable".
+
 ## Consequences
 
 - Which model presents becomes configuration, not code, and the phase M1 work is

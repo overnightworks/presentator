@@ -15,6 +15,7 @@ output.
 | `PRESENTATOR_PUBLIC_ORIGIN` | The one canonical https origin. An `http://` origin refuses the start, because a browser does not send a `Secure` cookie back over plain http. |
 | `PRESENTATOR_TALK_ORIGIN` | The talk host's canonical https origin, on another hostname than `PRESENTATOR_PUBLIC_ORIGIN`; talks are served and signed in there ([ADR 0016](../decisions/0016-a-talk-host-signs-in-by-itself.md)). |
 | `PRESENTATOR_AGENT_SERVICE` | Where the agent service answers the co-presenter: one canonical `http` or `https` origin, without credentials or a path. Compose sets `http://agent-service:8080`, the name it has on the `hal_agent_presentator` network. |
+| `PRESENTATOR_AGENT_SERVICE_SCOPE` | The scope the workload grant asks hal for, so the token names the agent service as its audience: one RFC 6749 scope token (printable characters, no space, quote or backslash). A bad value refuses the start and the message does not repeat it. Compose sets `agent-service-audience`. |
 | `PRESENTATOR_SPEECH_SOCKET` | Absolute private Unix socket path of the speech service. |
 | `PRESENTATOR_OIDC_ISSUER` | The https URL of the Keycloak realm, without a trailing slash; exactly the `issuer` of its discovery document. |
 | `PRESENTATOR_OIDC_CLIENT_ID` | The Keycloak client id. |
@@ -91,6 +92,7 @@ image sets them and the defaults above do not apply; compose sets the rest.
 | `PRESENTATOR_HOST` | `0.0.0.0`, reached through the edge's proxy |
 | `PRESENTATOR_BUILD_RUNNER` | `worker`, set by `compose.yaml` |
 | `PRESENTATOR_AGENT_SERVICE` | `http://agent-service:8080`, set by `compose.yaml` |
+| `PRESENTATOR_AGENT_SERVICE_SCOPE` | `agent-service-audience`, set by `compose.yaml` |
 | `PRESENTATOR_SPEECH_SOCKET` | `/run/presentator-speech/speech.sock`, not mounted in a deployed instance |
 
 An instance configuration that sets `PRESENTATOR_TOOLCHAIN` to `/app/frontend` by hand must drop it: the image sets it to `/app/slidev`.
