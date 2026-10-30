@@ -85,7 +85,7 @@ def heartbeat() -> Step:
 
 def succeeded() -> Step:
     return lambda run, seq: Succeeded(
-        v=PROTOCOL_VERSION, run_id=run, seq=seq, text="fertig"
+        v=PROTOCOL_VERSION, run_id=run, seq=seq, text="fertig", files=()
     )
 
 
