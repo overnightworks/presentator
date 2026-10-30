@@ -158,4 +158,5 @@ def test_two_webhook_secrets_differ_and_carry_at_least_thirty_two_bytes() -> Non
     assert first != second
     for secret in (first, second):
         padded = secret + "=" * (-len(secret) % 4)
+        assert urlsafe_b64encode(urlsafe_b64decode(padded)).decode() == padded
         assert len(urlsafe_b64decode(padded)) >= _FEWEST_WEBHOOK_SECRET_BYTES

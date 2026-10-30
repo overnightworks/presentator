@@ -24,6 +24,7 @@ from presentator.application.decks import (
 from presentator.contracts.decks import Source, SourcePoll, SourceState, SourceWrite
 from presentator.contracts.models import Role
 from tests.presentator.api.support.source_api_support import (
+    A_SOURCE_NAME,
     AN_ADMIN_BY_COOKIE_AND_BEARER,
     ASKING_FOR_JSON,
     CHECK,
@@ -36,6 +37,7 @@ from tests.presentator.api.support.source_api_support import (
     World,
     a_bearer,
     a_client_with_no_header_of_its_own,
+    a_created_source,
     a_lobby_over,
     a_member_over,
     a_scene_that_must_not_run,
@@ -45,6 +47,7 @@ from tests.presentator.api.support.source_api_support import (
     assert_nothing_returned,
     assert_problem,
     assert_validation_answer,
+    calling_hook,
     checked_body,
     decks_that_must_not_run,
     draft,
@@ -62,7 +65,7 @@ from tests.support.lobby import ENGLISH, Lobby
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import MEMBER, Scene
 
-_NAME = "talks"
+_NAME = A_SOURCE_NAME
 _OTHER_URL = "https://git.example.invalid/other.git"
 _SSH = "git@git.example.invalid:talks.git"
 _FOLDER = f"{LOCAL_MOUNT_EXAMPLE}/talks.git"
@@ -82,13 +85,6 @@ class _RejectingStore(FakeSourceStore):
 class _BreakingStore(FakeSourceStore):
     def add(self, write: SourceWrite) -> Source | None:
         raise RuntimeError(write.access_secret)
-
-
-class _FailingStore(FakeSourceStore):
-    """A store that fails the write without naming anything it was handed."""
-
-    def add(self, write: SourceWrite) -> Source | None:
-        raise RuntimeError(write.name)
 
 
 class _BreakingFolders(FakeDeckFolders):
@@ -125,19 +121,6 @@ def create(
         checked = client.post(CHECK, json=body, headers=headers).json()
         body["fingerprint"] = checked.get("fingerprint") or _NO_PROOF
     return client.post(LIST, json=body, headers=headers)
-
-
-def a_created_source(client: TestClient) -> tuple[str, str]:
-    """The name and webhook secret of a source the admin created."""
-    answer = create(client)
-    assert answer.status_code == HTTPStatus.CREATED
-    return answer.json()["name"], answer.json()["webhook_secret"]
-
-
-def calling_hook(client: TestClient, name: str, offered: str) -> Response:
-    return client.post(
-        hook_address(name), headers={"authorization": f"Bearer {offered}"}
-    )
 
 
 _NOT_SENT_BY_THE_SAME_ORIGIN = pytest.mark.parametrize(
@@ -285,10 +268,10 @@ def test_an_admin_creates_a_source_and_is_its_owner(
 # 10
 def test_the_hook_takes_the_returned_secret_and_refuses_a_wrong_one() -> None:
     client = an_admin_over(a_world().decks).client
-    name, webhook_secret = a_created_source(client)
+    webhook_secret = a_created_source(client)
 
-    taken = calling_hook(client, name, webhook_secret)
-    wrong = calling_hook(client, name, webhook_secret + "x")
+    taken = calling_hook(client, _NAME, offered=webhook_secret)
+    wrong = calling_hook(client, _NAME, offered=webhook_secret + "x")
 
     assert taken.status_code == HTTPStatus.NO_CONTENT
     assert wrong.status_code == HTTPStatus.NOT_FOUND
@@ -318,7 +301,7 @@ def test_no_get_carries_the_webhook_secret_or_the_token(
 # 12
 def test_the_jinja_page_of_an_api_created_source_has_no_one_time_secret() -> None:
     lobby = an_admin_over(a_world().decks)
-    _, webhook_secret = a_created_source(lobby.client)
+    webhook_secret = a_created_source(lobby.client)
 
     answer = lobby.client.get(f"{SOURCES}/{_NAME}")
     page = answer.text
@@ -375,7 +358,9 @@ def test_a_refused_create_names_its_reason_and_makes_nothing(refused: _Refused) 
     assert world.store.sources == []
     assert world.store.hashes == {}
     assert (
-        calling_hook(client, str(refused.changes.get("name", _NAME)), SENT).status_code
+        calling_hook(
+            client, str(refused.changes.get("name", _NAME)), offered=SENT
+        ).status_code
         == HTTPStatus.NOT_FOUND
     )
 
@@ -391,7 +376,7 @@ def test_the_fingerprint_of_another_address_is_not_a_check_of_this_one() -> None
     assert answer.json()["reason"] == SourceRefusal.NOT_CHECKED
     assert world.store.sources == []
     assert world.store.hashes == {}
-    assert calling_hook(client, _NAME, SENT).status_code == HTTPStatus.NOT_FOUND
+    assert calling_hook(client, _NAME, offered=SENT).status_code == HTTPStatus.NOT_FOUND
 
 
 @pytest.mark.parametrize(
@@ -407,7 +392,7 @@ def test_a_duplicate_is_refused_and_leaves_the_existing_source_as_it_was(
 ) -> None:
     world = a_world()
     client = an_admin_over(world.decks).client
-    name, webhook_secret = a_created_source(client)
+    webhook_secret = a_created_source(client)
     (before,) = world.store.sources
 
     answer = create(client, **second)
@@ -415,12 +400,12 @@ def test_a_duplicate_is_refused_and_leaves_the_existing_source_as_it_was(
     assert_problem(answer, HTTPStatus.UNPROCESSABLE_ENTITY, SENT, "webhook_secret")
     assert answer.json()["reason"] == reason
     assert world.store.sources == [before]
-    assert calling_hook(client, name, webhook_secret).status_code == (
+    assert calling_hook(client, _NAME, offered=webhook_secret).status_code == (
         HTTPStatus.NO_CONTENT
     )
-    assert calling_hook(client, name, SENT).status_code == HTTPStatus.NOT_FOUND
+    assert calling_hook(client, _NAME, offered=SENT).status_code == HTTPStatus.NOT_FOUND
     assert (
-        calling_hook(client, str(second.get("name", name)), SENT).status_code
+        calling_hook(client, str(second.get("name", _NAME)), offered=SENT).status_code
         == HTTPStatus.NOT_FOUND
     )
 
@@ -590,7 +575,7 @@ def _rejected_row_in_the_log(world: World, _lobby: Lobby) -> Response:
 
 
 def _store_raising_in_the_log(world: World, _lobby: Lobby) -> Response:
-    lobby = an_admin_over(replace(world.decks, sources=_FailingStore()))
+    lobby = an_admin_over(replace(world.decks, sources=_BreakingStore()))
     return create(without_raising(lobby))
 
 
@@ -704,10 +689,13 @@ def test_a_first_fetch_that_raises_leaves_the_source_and_renewal_recovers_it() -
     assert_nothing_returned(answer, SENT, "webhook_secret", lost)
     assert [source.name for source in world.store.sources] == [_NAME]
     assert renewed.json() == {"webhook_secret": kept}
-    assert calling_hook(lobby.client, _NAME, kept).status_code == (
-        HTTPStatus.NO_CONTENT
-    )
-    assert calling_hook(lobby.client, _NAME, lost).status_code == HTTPStatus.NOT_FOUND
+    assert_no_store(renewed)
+    taken = calling_hook(lobby.client, _NAME, offered=kept)
+    refused = calling_hook(lobby.client, _NAME, offered=lost)
+    assert taken.status_code == HTTPStatus.NO_CONTENT
+    assert refused.status_code == HTTPStatus.NOT_FOUND
+    assert_no_store(taken)
+    assert_no_store(refused)
 
 
 # 22
