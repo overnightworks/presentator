@@ -48,8 +48,10 @@ sign-in and sign-out are. Until now these existed only inside Jinja rendering.
   and a store failure is its plain 500. The framework's validation 422 keeps
   its status, media type and `detail` shape on every lobby route, `/api/admin/`
   and the form posts included, but each error is reduced to `loc`, `msg` and
-  `type`, so no answer repeats what the request carried; the talk host keeps
-  the framework's default.
+  `type`, so no answer repeats what the request carried. Pydantic's own `msg` and
+  `loc` can still carry a value for a discriminated-union tag, a `dict` key and
+  UUID parsing, so a request model that takes a secret must not use those; the
+  talk host keeps the framework's default.
 - OpenAPI is generated from the models and not served: `openapi_url` stays
   `None`.
 

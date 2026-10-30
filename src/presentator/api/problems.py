@@ -6,6 +6,9 @@ words the status from its own catalog. webauth's refusals and the framework's
 own answers keep their shape. The framework's validation answer keeps its
 status, media type and shape too, but each error is reduced to `loc`, `msg`
 and `type`: pydantic's `input` and `ctx` would repeat what the request sent.
+Pydantic's own `msg` and `loc` can still carry a value for a discriminated-union
+tag, a `dict` key and UUID parsing, so a request model that takes a secret must
+not use those.
 """
 
 from http import HTTPStatus

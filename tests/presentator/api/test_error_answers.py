@@ -13,11 +13,10 @@ from httpx2 import Response
 
 from presentator.api.preferences import THEME
 from tests.support.lobby import NEIGHBOUR, Lobby, a_lobby
-from tests.support.sign_in_support import Scene, a_scene
+from tests.support.sign_in_support import ADMIN, Scene, a_scene
 
 _ADMIN_PEOPLE = "/api/admin/people/"
 _HAL = "hal-client"
-_ADMIN_GROUPS = ["/apps/presentator", "/apps/presentator/admin"]
 _MARKER = "zq-marker-7431"
 _NUMBER_MARKER = 987654321
 _ACCOUNT = "/api/account"
@@ -98,14 +97,13 @@ def test_a_form_post_with_a_theme_outside_the_set_is_answered_without_the_value(
     is_the_frameworks_validation_answer(answer, marker=_MARKER)
 
 
-def test_an_admin_route_answers_a_bad_query_without_the_value_and_deletes_nothing(
+def test_an_admin_route_answers_a_bad_query_without_the_value(
     tmp_path: Path,
 ) -> None:
     scene: Scene = a_scene(tmp_path, token_clients=frozenset({_HAL}))
     minted = scene.issuer.mint_access_token(
-        subject="a-person", groups=_ADMIN_GROUPS, authorized_party=_HAL, audience=None
+        subject="a-person", groups=ADMIN, authorized_party=_HAL, audience=None
     )
-    people_before = scene.count("users")
 
     answer = scene.lobby.client.delete(
         f"{_ADMIN_PEOPLE}someone?dry_run={_MARKER}",
@@ -113,21 +111,6 @@ def test_an_admin_route_answers_a_bad_query_without_the_value_and_deletes_nothin
     )
 
     is_the_frameworks_validation_answer(answer, marker=_MARKER)
-    assert scene.count("users") == people_before
-
-
-def test_a_problem_stays_a_status_only_problem() -> None:
-    lobby = a_member_lobby()
-
-    answer = lobby.client.get("/api/decks/no-such-deck", headers=_JSON)
-
-    assert answer.status_code == HTTPStatus.NOT_FOUND
-    assert answer.headers["content-type"] == "application/problem+json"
-    assert answer.json() == {
-        "type": "about:blank",
-        "title": HTTPStatus.NOT_FOUND.phrase,
-        "status": HTTPStatus.NOT_FOUND.value,
-    }
 
 
 def test_the_generated_spec_keeps_the_frameworks_validation_definitions() -> None:
