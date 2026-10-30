@@ -74,13 +74,16 @@ let playGeneration = 0
 let activeAudio = null
 let finishActivePlay = null
 
+function publishRoomFacts() {
+  publish({
+    capturing: capturing.value,
+    playing: playing.value,
+    answeredSinceOn: answeredSinceOn.value,
+    language,
+  })
+}
 // Synchronous, so a window that turns off has said so when its handler returns.
-watch([capturing, playing, answeredSinceOn], () => publish({
-  capturing: capturing.value,
-  playing: playing.value,
-  answeredSinceOn: answeredSinceOn.value,
-  language,
-}), { flush: 'sync' })
+watch([capturing, playing, answeredSinceOn], publishRoomFacts, { flush: 'sync' })
 
 const state = computed(() => {
   if (!on.value) return 'off'
@@ -541,6 +544,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('pagehide', turnOff)
   turnOff()
+  // Vue stops this component's watchers before onUnmounted runs.
+  publishRoomFacts()
   delete window.__copresenter
 })
 </script>

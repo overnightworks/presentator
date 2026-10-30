@@ -57,11 +57,18 @@ caller here yet; Settings Users
 ([#61](https://github.com/overnightworks/presentator/issues/61))
 adopts `.list-head` / `nav.tabs` / `.rows` on Settings and Account.
 
-The co-presenter overlay in the Slidev addon reads the same token file. Lobby
-and overlay share the same active theme — one token file on both surfaces —
-which is what
+The co-presenter overlay in the Slidev addon is meant to read the same token
+file, so that lobby and overlay share the same active theme — one token file on
+both surfaces — which is what
 [#8](https://github.com/overnightworks/presentator/issues/8) line 22
 rules. Which theme is active follows the preference levels below.
+
+**Named gap: the overlay does not read the token file today.** The presenter
+controls in `CoPresenter.vue` use literal colours. The room notice is the
+stated exception: it takes its colours from the frozen `room-*` boards in
+`docs/mockups/m0-lobby.html`, the newer blessed picture, and follows the
+slide's brightness (Slidev's dark mode), not the instance theme. Its palette
+stands once, in `slidev/global-top.vue`.
 
 Decks themselves are untouched. Slidev's per-deck theme mechanism stays exactly
 as it is; this record governs the lobby and the overlay, not slide design.
@@ -142,7 +149,9 @@ Amendment 2026-10-29: the addon overlay is the stated exception.
 
 - A review rejects any literal user-facing string outside the lobby's catalog
   and, in the addon, outside the component's English control words and the room
-  module's two word sets, and any colour outside the token set. That is the
+  module's two word sets, and any colour outside the token set. Two places are
+  named exceptions to the colour rule: the presenter controls' literal colours
+  (the named gap above) and the room notice's palette in `global-top.vue`. That is the
   whole enforcement, and it is a review rule rather than a gate because no
   cheap check reads intent from a string.
 - The first slice pays for a catalog and a token file that serve one language

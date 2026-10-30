@@ -142,7 +142,7 @@ describe('the room notice', () => {
         await showsPhase(projector, 'listening', PILL[language].listening)
         await showsPhase(presenter, 'listening', PILL[language].listening)
         await saveEvidence(projector, `room-listening-${language}-1024.png`)
-        expect(await presenter.getByRole('switch', { name: 'AI' }).textContent()).toContain('AI')
+        expect(await presenter.getByRole('switch', { name: 'AI' }).textContent()).toBe('AI')
       })
     },
   )
@@ -401,6 +401,19 @@ describe('the room notice', () => {
       const entries = await timelineOf(presenter)
       const firstShown = entries.findIndex((entry) => entry.phase !== null)
       expect(entries.slice(firstShown).map((entry) => entry.phase)).not.toContain(null)
+    })
+  })
+
+  it('Cell 26: clears the projector by the teardown OFF when the presenter switches to Play Mode', async () => {
+    state.heardOnConnect = false
+    await inRoom(async ({ presenter, projector }) => {
+      await switchOn(presenter)
+      await showsPhase(projector, 'banner', BANNER.de)
+      await presenter.getByTitle('Play Mode', { exact: true }).click()
+      await presenter.waitForURL(`${state.origin}/1`)
+      await isEmpty(projector, 1_000)
+      await projector.waitForTimeout(4_000)
+      expect(await readNotice(projector)).toBeNull()
     })
   })
 
