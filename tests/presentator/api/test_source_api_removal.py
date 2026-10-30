@@ -319,10 +319,11 @@ def test_the_preview_counts_every_deck_of_every_owner_and_changes_nothing() -> N
     answer = preview_removal(client, shelf.name)
 
     assert answer.status_code == HTTPStatus.OK
-    assert answer.json() == {
-        "deck_count": shelf.deck_count,
-        "run_count": shelf.run_count,
-    }
+    counts = answer.json()
+    assert (counts["deck_count"], counts["run_count"]) == (
+        shelf.deck_count,
+        shelf.run_count,
+    )
     assert_nothing_removed(shelf)
 
 

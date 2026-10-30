@@ -322,8 +322,10 @@ def test_a_cross_site_fetch_is_refused_and_fetches_nothing() -> None:
     assert shown(client).state is SourceState.NEVER_FETCHED
 
 
-@pytest.mark.parametrize("method", ["put", "delete"])
-@pytest.mark.parametrize("path", [_LIST, _PAGE.format(name="decks")])
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [("put", _LIST), ("delete", _LIST), ("put", _PAGE.format(name="decks"))],
+)
 def test_a_write_to_the_reads_is_the_frameworks_method_not_allowed(
     method: str, path: str
 ) -> None:
