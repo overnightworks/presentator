@@ -3,6 +3,6 @@ agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
 role = "builder"
 base = "0ff98e8ed681f82e75aab51c39945cdf59804bb3"
 branch = "claude/issue-616-the-projector-shows-the-ai-notice-and-th"
-scope = ["docs/decisions/0007-browser-client-behind-tunnel.md", "docs/decisions/0012-themes-and-language.md", "docs/reference/co-presenter-and-voice.md", "quality/config.toml", "slidev/components/CoPresenter.vue", "slidev/eslint.config.js", "slidev/global-top.vue", "slidev/room-notice.js", "slidev/tests/presenter-overlay-harness.ts", "slidev/tests/room-notice.browser.test.ts"]
+scope = ["docs/decisions/0007-browser-client-behind-tunnel.md", "docs/decisions/0012-themes-and-language.md", "docs/reference/co-presenter-and-voice.md", "quality/config.toml", "slidev/components/CoPresenter.vue", "slidev/eslint.config.js", "slidev/global-top.vue", "slidev/room-notice.js", "slidev/tests/presenter-overlay-harness.ts", "slidev/tests/room-notice.browser.test.ts", "sonar-project.properties"]
 opened_commit = "30a073a81eaadb9168f4be422a0d0eb2374ff930"
 whole_reason = "One notice: the writer's observable facts in the overlay, the room module that carries and words them, the reader on the projector, their proofs and the two ADRs that say where the state lives and where its words live only prove the ruled lines together."
