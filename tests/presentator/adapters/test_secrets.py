@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.serialization import (
 )
 
 from presentator.adapters.secrets import (
+    TokenWebhookSecrets,
     connection_fingerprint_key,
     generate_deploy_key,
     secret_box,
@@ -144,3 +145,18 @@ def test_the_talk_session_secret_is_long_and_shares_no_bytes_with_another_purpos
     fernet = Fernet(secret)
     with pytest.raises(InvalidToken):
         fernet.decrypt(sealed_by_the_box)
+
+
+# ADR 0013: a webhook secret carries at least 32 random bytes.
+_FEWEST_WEBHOOK_SECRET_BYTES = 32
+
+
+def test_two_webhook_secrets_differ_and_carry_at_least_thirty_two_bytes() -> None:
+    drawn = TokenWebhookSecrets()
+    first, second = drawn.new_secret(), drawn.new_secret()
+
+    assert first != second
+    for secret in (first, second):
+        padded = secret + "=" * (-len(secret) % 4)
+        assert urlsafe_b64encode(urlsafe_b64decode(padded)).decode() == padded
+        assert len(urlsafe_b64decode(padded)) >= _FEWEST_WEBHOOK_SECRET_BYTES

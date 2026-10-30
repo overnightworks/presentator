@@ -331,6 +331,22 @@ class FakeSourceStore:
 
 
 @dataclass
+class FakeWebhookSecrets:
+    """Hands out scenario secrets in a fixed order and remembers each one.
+
+    Fixed-width counters keep every value distinct and none a substring of
+    another, so a test can search an answer or a log for each of them.
+    """
+
+    handed_out: list[str] = field(default_factory=list[str])
+
+    def new_secret(self) -> str:
+        secret = f"scenario-webhook-secret-handed-out-number-{len(self.handed_out):04d}"
+        self.handed_out.append(secret)
+        return secret
+
+
+@dataclass
 class FakeDeployKeyDrafts:
     """One admin's own unbound draft keypair at a time, the way the table is."""
 

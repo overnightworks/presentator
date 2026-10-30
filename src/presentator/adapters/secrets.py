@@ -8,6 +8,7 @@ fingerprint's, still derives its key the same way: one instance secret, one
 purpose label apiece, so two purposes never share bytes.
 """
 
+import secrets
 from base64 import urlsafe_b64encode
 from dataclasses import dataclass
 from typing import Final
@@ -36,6 +37,8 @@ _KEY_LENGTH: Final = 32
 # The one comment every deploy key this instance mints carries, so the far
 # end's list of registered keys names which server it came from.
 _DEPLOY_KEY_COMMENT: Final = "presentator"
+# ADR 0013: a webhook secret is 32 random bytes, stored as its SHA-256 only.
+_WEBHOOK_SECRET_BYTES: Final = 32
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -130,3 +133,12 @@ def talk_session_secret(instance_key: str) -> str:
         info=_TALK_SESSION_PURPOSE,
     ).derive(instance_key.encode())
     return urlsafe_b64encode(derived).decode()
+
+
+@dataclass(frozen=True, slots=True)
+class TokenWebhookSecrets:
+    """Draws each webhook secret from the operating system's randomness."""
+
+    def new_secret(self) -> str:
+        """A new URL-safe secret of 32 random bytes (ADR 0013)."""
+        return secrets.token_urlsafe(_WEBHOOK_SECRET_BYTES)

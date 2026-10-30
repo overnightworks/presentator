@@ -63,6 +63,7 @@ from presentator.adapters.preferences import (
 )
 from presentator.adapters.schema import create_tables
 from presentator.adapters.secrets import (
+    TokenWebhookSecrets,
     connection_fingerprint_key,
     secret_box,
     talk_session_secret,
@@ -233,6 +234,7 @@ def _decks(
         ),
         clock=SystemClock(),
         local_mount=local_mount,
+        webhook_secrets=TokenWebhookSecrets(),
     )
 
 

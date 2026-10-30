@@ -10,15 +10,23 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
+from presentator.api.hooks import hook_address
 from presentator.application.decks import RESERVED_SOURCE_NAME, Decks
 from presentator.contracts.decks import ConnectionCheckResult, Source
-from presentator.ports.decks import DeckStore, DeployKeyDrafts, SourceRuns, SourceStore
+from presentator.ports.decks import (
+    DeckStore,
+    DeployKeyDrafts,
+    SourceRuns,
+    SourceStore,
+    WebhookSecrets,
+)
 from tests.presentator.application.support.fakes import (
     ConnectionCheckerThatMustNotRun,
     DeckFoldersThatMustNotRun,
     FakeConnectionChecker,
     FakeDeployKeyDrafts,
     FakeSourceStore,
+    FakeWebhookSecrets,
     FrozenClock,
 )
 from tests.support.lobby import (
@@ -43,6 +51,7 @@ from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import Scene, a_scene
 
 ACCESS = "/api/sources/{name}/access"
+WEBHOOK_RENEWAL = "/api/sources/{name}/webhook-secret"
 PAGE = "/api/sources/{name}"
 LIST = "/api/sources"
 PROBLEM = "application/problem+json"
@@ -52,6 +61,7 @@ HAL = "hal-client"
 NEW = f"/api/sources/{RESERVED_SOURCE_NAME}"
 KEY_DRAFT = f"{NEW}/key-draft"
 CHECK = f"{NEW}/check"
+A_SOURCE_NAME = "talks"
 SENT = "the-token-this-scenario-sends"
 HTTPS = "https://git.example.invalid/talks.git"
 
@@ -79,6 +89,7 @@ def decks_that_must_not_run() -> Decks:
         store=cast("DeckStore", PortThatMustNotRun()),
         source_runs=cast("SourceRuns", PortThatMustNotRun()),
         checker=ConnectionCheckerThatMustNotRun(),
+        webhook_secrets=cast("WebhookSecrets", PortThatMustNotRun()),
     )
 
 
@@ -195,6 +206,25 @@ def renew(
     return client.post(ACCESS.format(name=name), json=body, headers=headers)
 
 
+def renew_webhook(
+    client: TestClient,
+    name: str,
+    headers: dict[str, str] | None = None,
+    *,
+    content: str | None = None,
+    body: object = None,
+) -> Response:
+    """Post to the source's webhook-secret renewal; it reads no body of its own.
+
+    Every answer, whatever it is, must not be stored by a cache.
+    """
+    answer = client.post(
+        WEBHOOK_RENEWAL.format(name=name), headers=headers, content=content, json=body
+    )
+    assert_no_store(answer)
+    return answer
+
+
 def a_client_with_no_header_of_its_own(scene: Scene) -> TestClient:
     """Reaches the scene's lobby with nothing but what the test adds per request."""
     return TestClient(
@@ -263,6 +293,7 @@ class World:
     checker: RecordingChecker
     store: FakeSourceStore
     drafts: FakeDeployKeyDrafts
+    webhook_secrets: FakeWebhookSecrets
 
 
 def a_world(checker: RecordingChecker | None = None) -> World:
@@ -270,10 +301,15 @@ def a_world(checker: RecordingChecker | None = None) -> World:
     store = FakeSourceStore(key_drafts=drafts)
     clock = FrozenClock(instant=decks_over(store).clock.now())
     recording = RecordingChecker() if checker is None else checker
+    webhook_secrets = FakeWebhookSecrets()
     decks = replace(
-        decks_over(store), checker=recording, clock=clock, key_drafts=drafts
+        decks_over(store),
+        checker=recording,
+        clock=clock,
+        key_drafts=drafts,
+        webhook_secrets=webhook_secrets,
     )
-    return World(decks, clock, recording, store, drafts)
+    return World(decks, clock, recording, store, drafts, webhook_secrets)
 
 
 def _cookie(world: World, _tmp_path: Path) -> Instance:
@@ -307,3 +343,30 @@ def draft(client: TestClient, headers: dict[str, str] | None = None) -> Response
 
 def check(client: TestClient, headers: dict[str, str] | None = None) -> Response:
     return client.post(CHECK, json=checked_body(), headers=headers)
+
+
+def a_created_source(
+    client: TestClient,
+    changes: dict[str, object] | None = None,
+    *,
+    headers: dict[str, str] | None = None,
+) -> str:
+    """Create the source through the API; the webhook secret it came with."""
+    body = checked_body(
+        **{"name": A_SOURCE_NAME} | ({} if changes is None else changes)
+    )
+    body["fingerprint"] = client.post(CHECK, json=body, headers=headers).json()[
+        "fingerprint"
+    ]
+    answer = client.post(LIST, json=body, headers=headers)
+    assert answer.status_code == HTTPStatus.CREATED
+    return answer.json()["webhook_secret"]
+
+
+def calling_hook(client: TestClient, name: str, *, offered: str) -> Response:
+    """Call the source's hook with this secret; no answer may be stored by a cache."""
+    answer = client.post(
+        hook_address(name), headers={"authorization": f"Bearer {offered}"}
+    )
+    assert_no_store(answer)
+    return answer
