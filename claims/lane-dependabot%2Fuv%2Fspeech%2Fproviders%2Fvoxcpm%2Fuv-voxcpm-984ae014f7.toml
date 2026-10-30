@@ -1,0 +1,7 @@
+claim_id = "ca2e406f4827473aaf92c4189282c2ae"
+agent = "Claude 93a46f44-d067-462a-8d40-ab658990b2ee"
+role = "builder"
+base = "31a1d6d23eee6b666c547edfe0839fad87656314"
+branch = "dependabot/uv/speech/providers/voxcpm/uv-voxcpm-984ae014f7"
+scope = ["speech/providers/voxcpm/pyproject.toml", "speech/providers/voxcpm/uv.lock"]
+opened_commit = "2f9eaf24afbc69d103deb7af67229e3f35b5aefc"
