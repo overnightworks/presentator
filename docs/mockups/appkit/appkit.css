@@ -3,8 +3,9 @@
    prefers-color-scheme); data-theme='light' and data-theme='dark' force a
    theme, and each theme sets color-scheme. The state set (--ok, --busy, --fail
    and their -soft partners) is shared; the app colour (--primary, --accent,
-   --on-accent), the sign-in grid value and everything domain-specific stay
-   with the app. Only the latin and latin-ext subsets, woff2 only. */
+   --on-accent) and everything domain-specific stay with the app; the
+   sign-in grid value is computed by the SignInPage component. Only the latin
+   and latin-ext subsets, woff2 only. */
 
 @font-face {
 	font-family: 'Oswald';

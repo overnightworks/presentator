@@ -29,16 +29,21 @@ factor 2, cropped to each lobby `.board`: `<id>.png` in light and `<id>-dark.png
 dark, where `<id>` is the figure's `id`. The room and presenter boards are deck
 surfaces and keep their own renders. "Rulings" names the
 [#185](https://github.com/overnightworks/presentator/issues/185) sentences and
-rulings, the Voice requirements or the K13 sign-in picture each board shows; "new
+rulings or the K13 sign-in picture each board shows; "new
 words" marks a string that is a proposal because the catalog has none.
 
 ### How the sheet loads the look
 
 `m0-lobby.html` links `appkit/appkit.css`, the unmodified `appkit.css` and fonts of
-appkit v0.6.0 (the wheel's `appkit/static/`), so the sheet draws with appkit's own
-tokens and fonts, never a copy of its values. On top of it the sheet carries
-its own component styles for the boards (bar, tabs, rows, fields, cards, menu) and
-presentator's colour in the app slot; `appkit.css` itself stays as shipped.
+appkit v0.8.0 (the `src/appkit/static/` files of its npm tarball
+`overnightworks-appkit-0.8.0.tgz`, pinned by presentator#658), so the sheet draws
+with appkit's own tokens and fonts, never a copy of its values. F1a of
+[#185](https://github.com/overnightworks/presentator/issues/185) deletes this interim
+copy when the lobby pins the tarball itself. On top of it the sheet carries its own
+component styles for the boards (bar, tabs, rows, fields, cards, menu), presentator's
+colour in the app slot and one rule, `.typed`, that turns the uppercase transform off
+so a source's name keeps the case its admin typed inside a heading; `appkit.css`
+itself stays as shipped.
 
 The room and presenter groups (class `deck-surfaces`) keep the look their frozen pictures
 (#139, #293 S12) were drawn in: their tokens, board chrome and IBM Plex from Google
@@ -57,7 +62,7 @@ Playwright through the declared `playwright-chromium` of `slidev/`, so run
 |---|---|---|
 | `m0-lobby/login-redirect.png`, `login-redirect-dark.png` | Not signed in: straight to the central sign-in | sentence 2 |
 | `m0-lobby/login.png`, `login-dark.png` | Signed out | Picture · family §3, sentence 2 |
-| `m0-lobby/no-access.png`, `no-access-dark.png` | No access | E7, sentence 7 |
+| `m0-lobby/no-access.png`, `no-access-dark.png` | No access, Log out as the one way out | E7, sentence 7 |
 | `m0-lobby/login-failed.png`, `login-failed-dark.png` | Login failed | E7, sentence 7 |
 
 ### Decks
@@ -66,7 +71,7 @@ Playwright through the declared `playwright-chromium` of `slidev/`, so run
 |---|---|---|
 | `m0-lobby/deck-list-empty.png`, `deck-list-empty-dark.png` | Home · first day, empty | Picture · states |
 | `m0-lobby/deck-list.png`, `deck-list-dark.png` | Home · the deck list | Picture · states, sentence 9 |
-| `m0-lobby/person-menu.png`, `person-menu-dark.png` | Person menu open | Picture · family §4 |
+| `m0-lobby/person-menu.png`, `person-menu-dark.png` | Person menu open: name, Theme, Log out, legal row | Picture · family §4, appkit K7 (name row from appkit) |
 
 ### Settings · General
 
@@ -89,21 +94,7 @@ Playwright through the declared `playwright-chromium` of `slidev/`, so run
 | `m0-lobby/sources-detail-ssh.png`, `sources-detail-ssh-dark.png` | Source · SSH deploy key | sentence 9, E1 |
 | `m0-lobby/sources-renew-access.png`, `sources-renew-access-dark.png` | Source · renew access | sentence 9, E1 |
 | `m0-lobby/sources-renew-webhook.png`, `sources-renew-webhook-dark.png` | Source · renew webhook | E1 |
-| `m0-lobby/sources-remove.png`, `sources-remove-dark.png` | Source · remove, confirm | Picture · new board |
-
-### Settings · Voice
-
-| PNG | Caption | Rulings |
-|---|---|---|
-| `m0-lobby/voice.png`, `voice-dark.png` | Voice · resting | V1–V9, Picture · states |
-| `m0-lobby/voice-downloading.png`, `voice-downloading-dark.png` | Voice · downloading | V1, V9 |
-| `m0-lobby/voice-loading.png`, `voice-loading-dark.png` | Voice · loading | V2, V3, V9 |
-| `m0-lobby/voice-failed-active.png`, `voice-failed-active-dark.png` | Voice · load failed, previous voice stays active | V4, V9 |
-| `m0-lobby/voice-failed-no-active.png`, `voice-failed-no-active-dark.png` | Voice · load failed, no active voice | V4, V5, V9 |
-| `m0-lobby/voice-service-unknown.png`, `voice-service-unknown-dark.png` | Voice · service status unknown | V9 |
-| `m0-lobby/voice-sample-loading.png`, `voice-sample-loading-dark.png` | Voice · sample loading | V8, V9 |
-| `m0-lobby/voice-sample-playing.png`, `voice-sample-playing-dark.png` | Voice · sample playing | V8, V9 |
-| `m0-lobby/voice-sample-error.png`, `voice-sample-error-dark.png` | Voice · playback failed | V8, V9 |
+| `m0-lobby/sources-remove.png`, `sources-remove-dark.png` | Source · remove, confirm (Remove in the app colour, not red; typed case of the name) | Picture · new board, appkit#48 |
 
 ### Account
 
@@ -140,19 +131,11 @@ Start belongs to the co-presenter run in M1. Instance language and theme live un
 Settings (admin); a personal override lives on Account, and theme in the bar lives
 in the person menu.
 
-The Settings · Voice picture was blessed by the operator on 10.09.2026 (issue
-#123, parent #108). Its V1–V9 behavior contract is owned by
-[`docs/requirements/0001-voice-models.md`](../requirements/0001-voice-models.md);
-the Voice boards remain surface evidence, not an implementation claim. Piper and
-Chatterbox are installed on the live instance; Qwen3-TTS 0.6B, VoxCPM2, and NVIDIA
-Magpie are proposed candidates only, and their not-downloaded state depicts intended
-future behaviour. No benchmark, percentage, size, or cost is shown for any candidate.
-
 ### Presenter Home (proposal · issue #139)
 
 The proposed pictures extend Slidev’s public navigation-controls hook, whose
 proposed source owner is `slidev/custom-nav-controls.vue`.
-They do not change the existing Voice picture or claim implementation. A
+They do not claim implementation. A
 home-outline Home pill returns to the homepage with all talks; Home is its
 accessible name and tooltip. Home and the one CoPresenter instance share the
 presenter toolbar layout: its 44 px AI toggle is in flow while inactive, and
