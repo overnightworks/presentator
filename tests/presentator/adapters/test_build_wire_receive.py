@@ -24,11 +24,13 @@ from presentator.adapters.build_wire import (
 from tests.support.worker_support import (
     BULK_SEND_SECONDS,
     WAIT_SECONDS,
+    descriptors_left_open_since,
     directory_entry,
     end_entry,
     entries_at_the_maximum,
     file_entry,
     file_header,
+    open_descriptor_targets,
 )
 
 SENDER_JOIN_SECONDS = 10
@@ -73,10 +75,6 @@ def deck_tree(tmp_path: Path) -> dict[bytes, bytes | None]:
         )
         for path in root.rglob("*")
     }
-
-
-def open_descriptors() -> set[Path]:
-    return set(Path("/proc/self/fd").iterdir())
 
 
 def receive_sent(
@@ -329,7 +327,7 @@ def test_a_symlink_in_the_deck_is_never_followed(
 def test_a_successful_upload_leaves_the_root_open_and_closes_what_it_opened(
     wire: tuple[socket.socket, socket.socket], deck: int
 ) -> None:
-    before = open_descriptors()
+    before = open_descriptor_targets()
 
     receive_sent(
         wire,
@@ -338,13 +336,13 @@ def test_a_successful_upload_leaves_the_root_open_and_closes_what_it_opened(
     )
 
     assert os.fstat(deck)
-    assert open_descriptors() == before
+    assert descriptors_left_open_since(before) == {}
 
 
 def test_a_refusal_three_levels_deep_closes_every_descriptor_but_the_root(
     wire: tuple[socket.socket, socket.socket], deck: int
 ) -> None:
-    before = open_descriptors()
+    before = open_descriptor_targets()
     sent = (
         directory_entry(b"a")
         + directory_entry(b"a/b")
@@ -356,14 +354,14 @@ def test_a_refusal_three_levels_deep_closes_every_descriptor_but_the_root(
         receive_sent(wire, deck, sent)
 
     assert os.fstat(deck)
-    assert open_descriptors() == before
+    assert descriptors_left_open_since(before) == {}
 
 
 def test_an_oserror_closes_every_descriptor_but_the_root_and_surfaces(
     wire: tuple[socket.socket, socket.socket], deck: int, tmp_path: Path
 ) -> None:
     (tmp_path / "deck/a").write_bytes(b"in the way")
-    before = open_descriptors()
+    before = open_descriptor_targets()
 
     sent = file_entry(b"a", b"x")
 
@@ -371,7 +369,7 @@ def test_an_oserror_closes_every_descriptor_but_the_root_and_surfaces(
         receive_sent(wire, deck, sent)
 
     assert os.fstat(deck)
-    assert open_descriptors() == before
+    assert descriptors_left_open_since(before) == {}
 
 
 def test_a_payload_is_received_in_chunks_and_written_before_the_next_is_read(
@@ -412,7 +410,7 @@ def test_a_declared_size_far_beyond_the_payload_is_refused_without_allocating_it
         + SIZE.pack(2**64 - 1)
         + bytes(10)
     )
-    before = open_descriptors()
+    before = open_descriptor_targets()
 
     tracemalloc.start()
     try:
@@ -425,7 +423,7 @@ def test_a_declared_size_far_beyond_the_payload_is_refused_without_allocating_it
     assert peak < MEGABYTE
     assert (tmp_path / "deck/f").read_bytes() == b""
     assert os.fstat(deck)
-    assert open_descriptors() == before
+    assert descriptors_left_open_since(before) == {}
 
 
 @pytest.mark.parametrize(
@@ -538,7 +536,7 @@ def test_an_empty_file_fits_a_spent_budget(
 def test_a_declared_size_beyond_the_budget_is_refused_before_create_with_the_root_open(
     wire: tuple[socket.socket, socket.socket], deck: int, tmp_path: Path
 ) -> None:
-    before = open_descriptors()
+    before = open_descriptor_targets()
     sent = file_header(b"f", 2**64 - 1)
 
     with pytest.raises(WireRefusedError):
@@ -546,13 +544,13 @@ def test_a_declared_size_beyond_the_budget_is_refused_before_create_with_the_roo
 
     assert deck_tree(tmp_path) == {}
     assert os.fstat(deck)
-    assert open_descriptors() == before
+    assert descriptors_left_open_since(before) == {}
 
 
 def test_a_budget_refusal_three_levels_deep_closes_every_descriptor_but_the_root(
     wire: tuple[socket.socket, socket.socket], deck: int
 ) -> None:
-    before = open_descriptors()
+    before = open_descriptor_targets()
     sent = (
         directory_entry(b"a")
         + directory_entry(b"a/b")
@@ -563,7 +561,7 @@ def test_a_budget_refusal_three_levels_deep_closes_every_descriptor_but_the_root
         receive_sent(wire, deck, sent, megabytes=1)
 
     assert os.fstat(deck)
-    assert open_descriptors() == before
+    assert descriptors_left_open_since(before) == {}
 
 
 def test_the_maximum_number_of_entries_is_accepted(
