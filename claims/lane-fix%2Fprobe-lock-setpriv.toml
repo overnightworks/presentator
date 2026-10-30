@@ -1,7 +1,0 @@
-claim_id = "11c4299c2b8b4800b253d6dd9b7a0d9f"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "1766cbd4aee3515e783414dcfeb91e349e6651f1"
-branch = "fix/probe-lock-setpriv"
-scope = ["speech/README.md", "speech/scripts/prove_speech.py"]
-opened_commit = "1469e558e436368846c72b17af2284dbd494610f"
