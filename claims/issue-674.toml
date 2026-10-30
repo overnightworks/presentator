@@ -3,6 +3,6 @@ agent = "Claude 93a46f44-d067-462a-8d40-ab658990b2ee"
 role = "builder"
 base = "0ca04cc34e962775fcc15320f63767ca6f5e44f5"
 branch = "claude/issue-674-an-admin-removes-a-source-through-the-js"
-scope = ["docs/reference/decks.md", "docs/reference/sources.md", "src/presentator/api/problems.py", "src/presentator/api/source_api.py", "src/presentator/application/decks.py", "tests/presentator/api/support/source_api_support.py", "tests/presentator/api/test_source_api_removal.py", "tests/support/vulture_allowlist.py"]
+scope = ["docs/reference/decks.md", "docs/reference/sources.md", "src/presentator/api/problems.py", "src/presentator/api/source_api.py", "src/presentator/application/decks.py", "tests/presentator/api/support/source_api_support.py", "tests/presentator/api/test_source_api_removal.py", "tests/support/sign_in_support.py", "tests/support/vulture_allowlist.py"]
 opened_commit = "93f417727e1222b0a50177543c19e2a70da4910f"
 whole_reason = "Remove a source as data, as D1 rules: the preview and the DELETE that takes the preview's counts, their stale and disk-leftover problems over the owner's one removal decision, the owner's lookup moved inside the lock so a raced removal answers 404, and the one fixed-type problem helper the three source problems share."
