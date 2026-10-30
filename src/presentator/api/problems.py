@@ -3,13 +3,19 @@
 A route raises `ProblemError`; the handler answers it. For `about:blank` the
 title is the HTTP reason phrase, so presentator words nothing and a client
 words the status from its own catalog. webauth's refusals and the framework's
-own answers keep their shape.
+own answers keep their shape. The framework's validation answer keeps its
+status, media type and shape too, but each error is reduced to `loc`, `msg`
+and `type`: pydantic's `input` and `ctx` would repeat what the request sent.
+Pydantic's own `msg` and `loc` can still carry a value for a discriminated-union
+tag, a `dict` key and UUID parsing, so a request model that takes a secret must
+not use those.
 """
 
 from http import HTTPStatus
 from typing import Final, cast
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict
 from starlette.responses import Response
 
@@ -59,6 +65,40 @@ def _answer(_request: Request, error: Exception) -> Response:
     )
 
 
-def install_problem_handler(app: FastAPI) -> None:
-    """Answer every `ProblemError` a route raises as problem details."""
+class ValidationFault(BaseModel):
+    """One validation error as the wire carries it: nothing the request sent."""
+
+    model_config = ConfigDict(frozen=True)
+
+    loc: tuple[str | int, ...]
+    msg: str
+    type: str
+
+
+class ValidationFaults(BaseModel):
+    """The body of a validation answer, in the framework's `detail` shape."""
+
+    model_config = ConfigDict(frozen=True)
+
+    detail: tuple[ValidationFault, ...]
+
+
+def _answer_validation(_request: Request, error: Exception) -> Response:
+    invalid = cast("RequestValidationError", error)
+    faults = ValidationFaults(
+        detail=tuple(
+            ValidationFault(loc=fault["loc"], msg=fault["msg"], type=fault["type"])
+            for fault in invalid.errors()
+        )
+    )
+    return Response(
+        faults.model_dump_json(),
+        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+        media_type="application/json",
+    )
+
+
+def install_error_answers(app: FastAPI) -> None:
+    """Answer every `ProblemError` as problem details, validation without input."""
     app.add_exception_handler(ProblemError, _answer)
+    app.add_exception_handler(RequestValidationError, _answer_validation)
