@@ -1,7 +1,0 @@
-claim_id = "3fb21cef03fb4af184bb61eb64f875a0"
-agent = "Claude 93a46f44-d067-462a-8d40-ab658990b2ee"
-role = "builder"
-base = "6778cd313046b8e28b9eb92dbb0f08ea8500bbae"
-branch = "dependabot/uv/speech/providers/qwen/uv-qwen-984ae014f7"
-scope = ["speech/providers/qwen/pyproject.toml", "speech/providers/qwen/uv.lock"]
-opened_commit = "acf4eb9f6b33fb8dac92c68535389481b87259a2"
