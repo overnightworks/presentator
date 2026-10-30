@@ -1,8 +1,0 @@
-claim_id = "adb414ca7c534dd1b7ce2ecaecdc67d0"
-agent = "Claude 0371b1a1-b02f-42ad-81bf-edfb1ec6959c"
-role = "builder"
-base = "884700f8b28d47674e5ba846da5773b14fb0a23b"
-branch = "claude/issue-651-an-admin-renews-a-source-s-access-throug"
-scope = ["docs/reference/sources.md", "src/presentator/adapters/decks.py", "src/presentator/api/preference_api.py", "src/presentator/api/problems.py", "src/presentator/api/source_api.py", "src/presentator/application/decks.py", "tests/presentator/adapters/test_decks_source_read_failures.py", "tests/presentator/api/support/source_api_support.py", "tests/presentator/api/test_deck_api.py", "tests/presentator/api/test_deck_list_api.py", "tests/presentator/api/test_source_api_access.py", "tests/support/sign_in_support.py"]
-opened_commit = "338c5cd9b5e29fa9f0f1704a22b430c593489653"
-whole_reason = "Renew access as data, with the guarantee that nothing returns the token: the route, the 422 spec helper that meets its second caller here, the owner's refusal of a token git cannot send (#638's deferral), and the test support the denial cells need cannot prove that guarantee apart."
