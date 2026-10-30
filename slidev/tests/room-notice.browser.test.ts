@@ -455,6 +455,11 @@ describe('the room notice', () => {
           document.elementFromPoint(x!, y!)?.closest('[data-room-notice]') ?? null
         ) !== null, [noticeBox.x + noticeBox.width / 2, noticeBox.y + noticeBox.height / 2])
         expect(covered).toBe(false)
+        const selectedText = await projector.evaluate(() => {
+          getSelection()!.selectAllChildren(document.body)
+          return getSelection()!.toString()
+        })
+        expect(selectedText).not.toContain(text)
         expect(await container.boundingBox()).toEqual(boxBefore)
       }
     })
@@ -513,6 +518,8 @@ describe('the room notice', () => {
       await switchOn(presenter)
       await showsPhase(projector, 'banner', BANNER.de)
       const second = await openPageIn(context, `${state.origin}/presenter/1`, 1024)
+      await second.waitForTimeout(1_000)
+      await second.getByTitle('Play Mode', { exact: true }).click()
       await second.waitForTimeout(1_000)
       await second.close()
       await projector.waitForTimeout(2_000)

@@ -52,6 +52,7 @@ const notice = useRoomNotice()
   inset: 0;
   z-index: 100;
   pointer-events: none;
+  user-select: none;
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
 .room-notice.dark {

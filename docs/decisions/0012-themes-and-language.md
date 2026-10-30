@@ -15,6 +15,9 @@ Audience: humans and agents writing any user-facing string or any colour.
   Amended again 2026-10-29: the addon overlay keeps no catalog, see
   The catalog format
   ([#616](https://github.com/overnightworks/presentator/issues/616)).
+  Amended 2026-10-30: the room notice takes its colours from the `room-*`
+  boards and follows the slide's brightness, see the named gap below
+  ([#616](https://github.com/overnightworks/presentator/issues/616)).
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06, including
   [#8](https://github.com/overnightworks/presentator/issues/8) line 22
@@ -73,7 +76,8 @@ stands once, in `slidev/global-top.vue`.
 Decks themselves are untouched. Slidev's per-deck theme mechanism stays exactly
 as it is; this record governs the lobby and the overlay, not slide design.
 
-**Named gap: the overlay does not adapt to a deck's theme.** A deck whose
+**Named gap: the overlay does not adapt to a deck's palette.** The room notice
+follows the deck's light or dark mode, though not its palette. A deck whose
 palette fights the instance theme will look wrong under the overlay. Nothing
 here promises otherwise, and the fix — whatever it turns out to be — is owned by
 [#8](https://github.com/overnightworks/presentator/issues/8) as a later M1
@@ -156,9 +160,10 @@ Amendment 2026-10-29: the addon overlay is the stated exception.
   cheap check reads intent from a string.
 - The first slice pays for a catalog and a token file that serve one language
   and one theme. That is the deliberate cost of the two retrofits it avoids.
-- The overlay looks like the instance, not like the deck. That is the accepted
-  cost of one theme file, and it is the gap named above rather than a defect to
-  be found later.
+- The presenter controls follow neither the instance nor the deck yet; that is
+  the gap named above, not a defect to be found later. The room notice follows
+  the deck's brightness on purpose, with the `room-*` boards' palette and its
+  pulse in the dot's own colour in both modes.
 - English-only at start means the operator's own German talks run under an
   English interface until a German catalog is added. Adding it is a file.
 - The Settings/Account structure owns these controls
