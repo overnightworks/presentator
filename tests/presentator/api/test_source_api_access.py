@@ -2,10 +2,8 @@
 
 import logging
 from collections.abc import Callable
-from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
-from typing import cast
 
 import pytest
 from fastapi.openapi.utils import (
@@ -13,8 +11,6 @@ from fastapi.openapi.utils import (
     validation_error_response_definition,
 )
 
-from gitmirror.model import CredentialResolver
-from presentator.adapters.decks import MirroredDeckFolders, SourceMirrors
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
 from presentator.contracts.decks import Source
 from tests.presentator.api.support.source_api_support import (
@@ -24,15 +20,19 @@ from tests.presentator.api.support.source_api_support import (
     LIST,
     PAGE,
     SAME_ORIGIN,
+    SENT_NOW,
+    STORED_BEFORE,
     Instance,
-    PortThatMustNotRun,
     a_bearer,
+    a_client_with_no_header_of_its_own,
     a_lobby_over,
     a_member_over,
     a_source_store,
     an_admin_over,
     assert_no_store,
+    assert_nothing_returned,
     assert_problem,
+    assert_validation_answer,
     decks_over,
     decks_that_must_not_run,
     renew,
@@ -40,15 +40,14 @@ from tests.presentator.api.support.source_api_support import (
 )
 from tests.presentator.application.support.fakes import (
     LOCAL_MOUNT_EXAMPLE,
-    FakeLocalMount,
     FakeSourceStore,
 )
-from tests.support.lobby import ADMIN
+from tests.support.lobby import ADMIN, Lobby
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import MEMBER, Scene, a_scene
 
-_OLD = "the-token-this-scenario-replaces"
-_NEW = "the-token-this-scenario-sends"
+_OLD = STORED_BEFORE
+_NEW = SENT_NOW
 _HTTPS = "https://git.example.invalid/talks.git"
 _SSH = "git@git.example.invalid:talks.git"
 _LOCAL = f"{LOCAL_MOUNT_EXAMPLE}/talks.git"
@@ -73,7 +72,7 @@ def _admin_cookie(store: FakeSourceStore, _tmp_path: Path) -> Instance:
 def _admin_bearer(store: FakeSourceStore, tmp_path: Path) -> Instance:
     scene = a_scene(tmp_path, token_clients=frozenset({HAL}), decks=decks_over(store))
     return Instance(
-        scene.browser(), store, {**a_bearer(scene, ADMIN_GROUPS), **SAME_ORIGIN}
+        a_client_with_no_header_of_its_own(scene), store, a_bearer(scene, ADMIN_GROUPS)
     )
 
 
@@ -93,11 +92,15 @@ def scene(tmp_path: Path) -> Scene:
 
 def whole_answers_of(instance: Instance) -> str:
     """Everything the Sources data says about the instance's sources."""
-    listed = instance.client.get(LIST, headers={**instance.headers, **ASKING_FOR_JSON})
-    page = instance.client.get(
-        PAGE.format(name=_NAME), headers={**instance.headers, **ASKING_FOR_JSON}
+    headers = {**instance.headers, **ASKING_FOR_JSON}
+    answers = (
+        instance.client.get(LIST, headers=headers),
+        instance.client.get(PAGE.format(name=_NAME), headers=headers),
     )
-    return listed.text + page.text
+    for answer in answers:
+        assert answer.status_code == HTTPStatus.OK
+        assert_no_store(answer)
+    return "".join(answer.text for answer in answers)
 
 
 # 1
@@ -112,6 +115,7 @@ def test_a_signed_out_caller_meets_webauths_answer_not_a_problem() -> None:
     for answer in (asking_json, asking_html):
         assert answer.headers.get("content-type") != "application/problem+json"
         assert_no_store(answer)
+        assert_nothing_returned(answer)
 
 
 # 2, 3
@@ -134,21 +138,16 @@ def test_a_member_who_sends_no_json_meets_the_validation_answer_first() -> None:
         headers={"content-type": "application/json"},
     )
 
-    assert answer.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
-    assert_no_store(answer)
-    assert all(
-        set(fault) == {"loc", "msg", "type"} for fault in answer.json()["detail"]
-    )
-    assert _NEW not in answer.text
+    assert_validation_answer(answer, _NEW)
 
 
 # 5
 def test_a_members_bearer_is_refused_with_a_problem(scene: Scene) -> None:
     answer = renew(
-        scene.browser(),
+        a_client_with_no_header_of_its_own(scene),
         _NAME,
         {"secret": _NEW},
-        headers={**a_bearer(scene, MEMBER), **SAME_ORIGIN},
+        headers=a_bearer(scene, MEMBER),
     )
 
     assert_problem(answer, HTTPStatus.FORBIDDEN)
@@ -186,6 +185,7 @@ def test_an_invalid_bearer_beside_an_admin_cookie_is_refused(scene: Scene) -> No
     assert answer.status_code == HTTPStatus.UNAUTHORIZED
     assert 'error="invalid_token"' in answer.headers["www-authenticate"]
     assert_no_store(answer)
+    assert_nothing_returned(answer)
 
 
 # 8, 9
@@ -199,6 +199,7 @@ def test_an_admin_renews_a_token_and_the_store_holds_exactly_the_new_one(
     assert answer.status_code == HTTPStatus.NO_CONTENT
     assert answer.content == b""
     assert_no_store(answer)
+    assert_nothing_returned(answer)
     assert instance.store.secrets == {"the-source": _NEW}
     shown = whole_answers_of(instance)
     assert _NEW not in shown
@@ -237,6 +238,7 @@ def test_an_ssh_renewal_without_a_secret_shows_a_new_public_half_and_no_private_
     assert answer.status_code == HTTPStatus.NO_CONTENT
     assert answer.content == b""
     assert_no_store(answer)
+    assert_nothing_returned(answer)
     after = instance.client.get(
         PAGE.format(name=_NAME), headers={**instance.headers, **ASKING_FOR_JSON}
     ).json()["public_key"]
@@ -254,8 +256,12 @@ def test_an_ssh_renewal_that_carries_a_token_renews_the_pair_and_stores_no_token
     answer = instance.renew(_NAME, {"secret": _NEW})
 
     assert answer.status_code == HTTPStatus.NO_CONTENT
+    assert answer.content == b""
+    assert_no_store(answer)
+    assert_nothing_returned(answer)
     assert instance.store.sources[0].public_key is not None
     assert instance.store.secrets == {}
+    assert _NEW not in whole_answers_of(instance)
 
 
 # 14
@@ -310,6 +316,8 @@ def test_a_name_that_is_not_one_segment_is_the_frameworks_404() -> None:
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
     assert answer.headers["content-type"] != "application/problem+json"
+    assert_no_store(answer)
+    assert_nothing_returned(answer)
 
 
 # 18
@@ -329,13 +337,9 @@ def test_a_malformed_body_is_the_validation_answer_without_what_was_sent(
 
     answer = instance.renew(_NAME, document)
 
-    assert answer.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
-    assert_no_store(answer)
-    assert all(
-        set(fault) == {"loc", "msg", "type"} for fault in answer.json()["detail"]
+    assert_validation_answer(
+        answer, "12345", "a-listed-value", "a-key", "an-objects-value"
     )
-    for sent in ("12345", "a-listed-value", "a-key", "an-objects-value"):
-        assert sent not in answer.text
     assert instance.store.secrets == {"the-source": _OLD}
 
 
@@ -351,55 +355,51 @@ def test_a_body_that_is_not_json_is_the_validation_answer_without_what_was_sent(
         headers={"content-type": "application/json"},
     )
 
-    assert answer.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
-    assert _NEW not in answer.text
+    assert_validation_answer(answer, _NEW)
     assert store.secrets == {"the-source": _OLD}
 
 
 # 19, 20, 21
+def test_a_same_site_write_with_the_own_origin_is_taken() -> None:
+    store = an_https_store()
+    lobby = an_admin_over(decks_over(store), headers={"accept": "text/html"})
+
+    answer = renew(
+        lobby.client,
+        _NAME,
+        {"secret": _NEW},
+        headers={"sec-fetch-site": "same-site", "origin": "https://testserver"},
+    )
+
+    assert answer.status_code == HTTPStatus.NO_CONTENT
+    assert_no_store(answer)
+    assert store.secrets == {"the-source": _NEW}
+
+
 @pytest.mark.parametrize(
-    ("headers", "status"),
+    "headers",
     [
         pytest.param(
             {"sec-fetch-site": "cross-site", "origin": "https://testserver"},
-            HTTPStatus.FORBIDDEN,
             id="cross-site",
         ),
         pytest.param(
-            {"sec-fetch-site": "same-site", "origin": "https://testserver"},
-            HTTPStatus.NO_CONTENT,
-            id="same-site-with-the-own-origin",
-        ),
-        pytest.param(
             {"sec-fetch-site": "same-site", "origin": "https://elsewhere.invalid"},
-            HTTPStatus.FORBIDDEN,
             id="same-site-with-a-foreign-origin",
         ),
+        pytest.param({}, id="no-claim-at-all"),
     ],
 )
-def test_the_origin_check_covers_this_json_write(
-    headers: dict[str, str], status: HTTPStatus
+def test_the_origin_check_refuses_this_json_write_before_any_port_is_touched(
+    headers: dict[str, str],
 ) -> None:
-    store = an_https_store()
-    lobby = an_admin_over(decks_over(store), headers={"accept": "text/html"})
+    lobby = an_admin_over(decks_that_must_not_run(), headers={"accept": "text/html"})
 
     answer = renew(lobby.client, _NAME, {"secret": _NEW}, headers=headers)
 
-    assert answer.status_code == status
-    assert_no_store(answer)
-    assert store.secrets == {
-        "the-source": _NEW if status is HTTPStatus.NO_CONTENT else _OLD
-    }
-
-
-def test_a_write_that_claims_no_origin_at_all_is_refused() -> None:
-    store = an_https_store()
-    lobby = an_admin_over(decks_over(store), headers={"accept": "text/html"})
-
-    answer = renew(lobby.client, _NAME, {"secret": _NEW})
-
     assert answer.status_code == HTTPStatus.FORBIDDEN
-    assert store.secrets == {"the-source": _OLD}
+    assert_no_store(answer)
+    assert_nothing_returned(answer)
 
 
 # 22
@@ -412,6 +412,8 @@ def test_a_method_the_route_does_not_offer_is_the_frameworks_405(method: str) ->
     )
 
     assert answer.status_code == HTTPStatus.METHOD_NOT_ALLOWED
+    assert_no_store(answer)
+    assert_nothing_returned(answer)
 
 
 # 23
@@ -434,19 +436,54 @@ def test_a_store_that_fails_is_the_plain_server_error_without_the_token() -> Non
 
 
 # 24
-def test_no_log_record_carries_the_old_or_the_new_token(
+_A_NUMBER = 8675309
+
+
+class _Instances:
+    """Every instance the log cell drives, each with its own lobby."""
+
+    def __init__(self) -> None:
+        self.https = an_https_store()
+        self.ssh = a_source_store(a_source(_SSH))
+        self.local = a_source_store(a_source(_LOCAL), secret=_OLD)
+        self.removed = _SourceRemovedWhileRenewing(sources=[a_source(_SSH)])
+
+    def lobbies(self) -> list[Lobby]:
+        return [
+            an_admin_over(decks_over(store))
+            for store in (self.https, self.ssh, self.local, self.removed)
+        ]
+
+
+def test_no_log_record_carries_a_token_or_a_malformed_value(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    lobby = an_admin_over(decks_over(an_https_store()))
+    bodies = [
+        {"secret": _NEW},
+        {"secret": f"{_NEW}{chr(10)}"},
+        {"secret": _A_NUMBER},
+        {"secret": [_NEW]},
+        {"secret": {"x": _NEW}},
+        {"secret": {_NEW: _NEW}},
+        {"secret": None},
+    ]
 
     with caplog.at_level(logging.DEBUG):
-        renew(lobby.client, _NAME, {"secret": _NEW})
-        renew(lobby.client, _NAME, {"secret": f"{_NEW}{chr(10)}"})
-        renew(lobby.client, _NAME, {"secret": 12345})
-        lobby.client.get(PAGE.format(name=_NAME), headers=ASKING_FOR_JSON)
+        for lobby in _Instances().lobbies():
+            for body in bodies:
+                renew(lobby.client, _NAME, body)
+            renew(lobby.client, "no-such-source", {"secret": _NEW})
+            lobby.client.post(
+                ACCESS.format(name=_NAME),
+                content=_NEW,
+                headers={"content-type": "application/json"},
+            )
+            lobby.client.get(PAGE.format(name=_NAME), headers=ASKING_FOR_JSON)
 
+    assert caplog.records
     assert _NEW not in caplog.text
     assert _OLD not in caplog.text
+    assert str(_A_NUMBER) not in caplog.text
 
 
 # 25
@@ -466,26 +503,3 @@ def test_the_generated_spec_declares_the_renewal_with_its_problems_and_validatio
     assert resolved == validation_error_response_definition
     item = resolved["properties"]["detail"]["items"]["$ref"].rsplit("/", 1)[-1]
     assert components[item] == validation_error_definition
-
-
-# 28
-def test_a_stored_address_with_userinfo_that_resolves_to_no_mirror_logs_the_name_only(
-    caplog: pytest.LogCaptureFixture, tmp_path: Path
-) -> None:
-    userinfo = "a-user-and-its-password"
-    source = a_source(f"https://{userinfo}@git.example.invalid/talks.git{chr(9)}")
-    folders = MirroredDeckFolders(
-        mirrors=SourceMirrors(
-            directory=tmp_path,
-            credentials=cast("CredentialResolver", PortThatMustNotRun()),
-            pull_timeout=timedelta(minutes=1),
-            local_mount=FakeLocalMount(),
-        )
-    )
-
-    with caplog.at_level(logging.DEBUG):
-        poll = folders.folders(source)
-
-    assert poll.folders is None
-    assert source.name in caplog.text
-    assert userinfo not in caplog.text

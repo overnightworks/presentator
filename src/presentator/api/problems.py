@@ -54,7 +54,7 @@ def problem_response(status: HTTPStatus) -> dict[int | str, dict[str, object]]:
     }
 
 
-def unspoken_beside_validation() -> dict[str, object]:
+def problem_beside_validation() -> dict[str, object]:
     """A write's 422 spec: FastAPI's own validation answer plus our problem.
 
     FastAPI generates the validation entry (and its components) only while the

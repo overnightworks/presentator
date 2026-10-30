@@ -17,8 +17,8 @@ from presentator.api.admission import gated_admin
 from presentator.api.hooks import hook_url
 from presentator.api.problems import (
     ProblemError,
+    problem_beside_validation,
     problem_response,
-    unspoken_beside_validation,
 )
 from presentator.application.decks import Decks
 from presentator.contracts.decks import (
@@ -182,6 +182,6 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         methods=["POST"],
         status_code=HTTPStatus.NO_CONTENT,
         responses=not_found,
-        openapi_extra=unspoken_beside_validation(),
+        openapi_extra=problem_beside_validation(),
     )
     return router

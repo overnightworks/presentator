@@ -40,6 +40,8 @@ PROBLEM = "application/problem+json"
 ASKING_FOR_JSON = {"accept": "application/json"}
 SAME_ORIGIN = {"sec-fetch-site": "same-origin"}
 HAL = "hal-client"
+STORED_BEFORE = "the-token-this-scenario-replaces"
+SENT_NOW = "the-token-this-scenario-sends"
 
 
 class PortThatMustNotRun:
@@ -140,14 +142,41 @@ def renew(
     return client.post(ACCESS.format(name=name), json=body, headers=headers)
 
 
+def a_client_with_no_header_of_its_own(scene: Scene) -> TestClient:
+    """Reaches the scene's lobby with nothing but what the test adds per request."""
+    return TestClient(
+        scene.lobby.app, base_url=A_BROWSERS_ADDRESS, follow_redirects=False
+    )
+
+
 def assert_no_store(answer: Response) -> None:
     assert answer.headers["cache-control"] == "no-store"
+
+
+def assert_nothing_returned(answer: Response) -> None:
+    """No answer, in its body or its headers, carries either scenario token."""
+    shown = answer.text + str(answer.headers)
+    assert SENT_NOW not in shown
+    assert STORED_BEFORE not in shown
+
+
+def assert_validation_answer(answer: Response, *sent: str) -> None:
+    """The framework's 422 shape, never repeating what the request carried."""
+    assert answer.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    assert_no_store(answer)
+    assert all(
+        set(fault) == {"loc", "msg", "type"} for fault in answer.json()["detail"]
+    )
+    assert_nothing_returned(answer)
+    for each in sent:
+        assert each not in answer.text
 
 
 def assert_problem(answer: Response, status: HTTPStatus) -> None:
     assert answer.status_code == status
     assert answer.headers["content-type"] == PROBLEM
     assert_no_store(answer)
+    assert_nothing_returned(answer)
 
 
 @dataclass(frozen=True, slots=True)

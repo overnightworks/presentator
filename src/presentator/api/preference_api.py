@@ -16,8 +16,8 @@ from pydantic import BaseModel, ConfigDict
 from presentator.api.admission import gated_admin, gated_person
 from presentator.api.problems import (
     ProblemError,
+    problem_beside_validation,
     problem_response,
-    unspoken_beside_validation,
 )
 from presentator.application.preferences import Preferences, UnspokenLanguageError
 from presentator.contracts.preferences import (
@@ -88,7 +88,7 @@ def _mounted(
 ) -> APIRouter:
     """The four addresses, with the admin gate and the documented refusals."""
     router = APIRouter()
-    unspoken = unspoken_beside_validation()
+    unspoken = problem_beside_validation()
     admin_only = problem_response(HTTPStatus.FORBIDDEN)
     router.add_api_route(ACCOUNT_PATH, read_account, methods=["GET"])
     router.add_api_route(

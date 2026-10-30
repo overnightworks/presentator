@@ -246,25 +246,6 @@ def test_a_failing_store_answers_500_without_deck_data() -> None:
     assert "deck store" not in answer.text
 
 
-def test_a_persons_bearer_reads_that_persons_decks(tmp_path: Path) -> None:
-    client_id = "hal-client"
-    scene = a_scene(tmp_path, token_clients=frozenset({client_id}))
-    minted = scene.issuer.mint_access_token(
-        subject="keycloak-subject-of-a-member",
-        groups=MEMBER,
-        authorized_party=client_id,
-        audience=None,
-    )
-
-    answer = scene.browser().get(
-        DECK_LIST_PATH,
-        headers={"authorization": f"Bearer {minted}", **asking_for_json()},
-    )
-
-    assert answer.status_code == HTTPStatus.OK
-    assert DeckListView.model_validate(answer.json()).decks == []
-
-
 def test_a_persons_bearer_reads_only_that_persons_own_decks(tmp_path: Path) -> None:
     client_id = "hal-client"
     subject = "keycloak-subject-of-a-member"
