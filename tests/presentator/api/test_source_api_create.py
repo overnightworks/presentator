@@ -370,6 +370,8 @@ def test_the_fingerprint_of_another_address_is_not_a_check_of_this_one() -> None
     assert_problem(answer, HTTPStatus.UNPROCESSABLE_ENTITY, SENT, "webhook_secret")
     assert answer.json()["reason"] == SourceRefusal.NOT_CHECKED
     assert world.store.sources == []
+    assert world.store.hashes == {}
+    assert calling_hook(client, _NAME, SENT).status_code == HTTPStatus.NOT_FOUND
 
 
 @pytest.mark.parametrize(
@@ -532,6 +534,18 @@ def _refused_in_the_log(
     return create(lobby.client, **changes)
 
 
+def _other_urls_fingerprint_in_the_log(_world: World, lobby: Lobby) -> Response:
+    other_proof = lobby.client.post(CHECK, json=checked_body(url=_OTHER_URL)).json()
+    return create(lobby.client, fingerprint=other_proof["fingerprint"])
+
+
+def _duplicate_in_the_log(
+    changes: dict[str, object], _world: World, lobby: Lobby
+) -> Response:
+    a_created_source(lobby.client)
+    return create(lobby.client, **changes)
+
+
 def _ssh_in_the_log(_world: World, lobby: Lobby) -> Response:
     drafted = draft(lobby.client).json()
     return create(
@@ -549,6 +563,15 @@ def _ssh_in_the_log(_world: World, lobby: Lobby) -> Response:
         (_https_in_the_log, HTTPStatus.CREATED),
         (_ssh_in_the_log, HTTPStatus.CREATED),
         (_refusal_in_the_log, HTTPStatus.UNPROCESSABLE_ENTITY),
+        (_other_urls_fingerprint_in_the_log, HTTPStatus.UNPROCESSABLE_ENTITY),
+        (
+            partial(_duplicate_in_the_log, {"url": _OTHER_URL}),
+            HTTPStatus.UNPROCESSABLE_ENTITY,
+        ),
+        (
+            partial(_duplicate_in_the_log, {"name": "other"}),
+            HTTPStatus.UNPROCESSABLE_ENTITY,
+        ),
         *(
             (
                 partial(_refused_in_the_log, refused.changes),
@@ -557,7 +580,15 @@ def _ssh_in_the_log(_world: World, lobby: Lobby) -> Response:
             for refused in _REFUSALS.values()
         ),
     ],
-    ids=["https", "ssh", "user-part", *_REFUSALS],
+    ids=[
+        "https",
+        "ssh",
+        "user-part",
+        "other-url fingerprint",
+        "duplicate name",
+        "duplicate url",
+        *_REFUSALS,
+    ],
 )
 def test_no_log_record_carries_the_token_the_webhook_secret_or_a_private_half(
     send: Callable[[World, Lobby], Response],

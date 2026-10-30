@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
-from typing import Annotated, Final
+from typing import Annotated, Final, NamedTuple
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, WithJsonSchema
@@ -124,10 +124,20 @@ class SourceProbe(BaseModel):
     secret: SecretStr | None
     key_draft_id: str | None
 
-    def in_the_owners_form(self) -> tuple[str, str]:
+    def in_the_owners_form(self) -> OwnersForm:
         """The secret and the draft id, null as "", as the fingerprint binds them."""
-        secret = "" if self.secret is None else self.secret.get_secret_value()
-        return secret, self.key_draft_id or ""
+        return OwnersForm(_owners_secret(self.secret), self.key_draft_id or "")
+
+
+class OwnersForm(NamedTuple):
+    """A probe's credential and key draft as the owner takes them: text only."""
+
+    secret: str
+    key_draft_id: str
+
+
+def _owners_secret(secret: SecretStr | None) -> str:
+    return "" if secret is None else secret.get_secret_value()
 
 
 class NewSource(SourceProbe):
@@ -244,8 +254,7 @@ class _SourceData:
         renewal: AccessRenewal,
         admin: Annotated[User, Depends(gated_admin)],
     ) -> Response:
-        secret = "" if renewal.secret is None else renewal.secret.get_secret_value()
-        if not self.decks.renew_access(name, secret):
+        if not self.decks.renew_access(name, _owners_secret(renewal.secret)):
             if self.decks.shown_source(name, viewer=admin.id) is None:
                 raise ProblemError(HTTPStatus.NOT_FOUND)
             raise ProblemError(HTTPStatus.UNPROCESSABLE_ENTITY)
