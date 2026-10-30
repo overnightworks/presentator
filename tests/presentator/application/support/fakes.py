@@ -331,11 +331,28 @@ class FakeSourceStore:
 
 
 @dataclass
+class FakeWebhookSecrets:
+    """Hands out scenario secrets in a fixed order and remembers each one.
+
+    Fixed-width counters keep every value distinct and none a substring of
+    another, so a test can search an answer or a log for each of them.
+    """
+
+    handed_out: list[str] = field(default_factory=list[str])
+
+    def new_secret(self) -> str:
+        secret = f"scenario-webhook-secret-handed-out-number-{len(self.handed_out):04d}"
+        self.handed_out.append(secret)
+        return secret
+
+
+@dataclass
 class FakeDeployKeyDrafts:
     """One admin's own unbound draft keypair at a time, the way the table is."""
 
     drafts: dict[str, DeployKeyDraft] = field(default_factory=dict[str, DeployKeyDraft])
     minted: int = 0
+    private_keys: list[str] = field(default_factory=list[str])
 
     def unconsumed_for(
         self,
@@ -356,6 +373,7 @@ class FakeDeployKeyDrafts:
             created_at=at,
         )
         self.drafts[owner_id] = draft
+        self.private_keys.append(draft.private_key)
         return draft
 
     def get_or_mint(
@@ -637,7 +655,7 @@ class FakeBuildRunner:
         if self.while_building is not None:
             self.while_building(deck)
         if self.fails:
-            return BuildFailure(text=self.says)
+            return BuildFailure.said(self.says)
         root = _SOMEWHERE_ELSE if self.writes_outside_the_root else self.root
         run = BuildRun(f"run-{len(self.built)}")
         self.on_disk.add(run)

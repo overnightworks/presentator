@@ -21,7 +21,7 @@ in for a higher one.
 | `api` | Routes and wire schemas | FastAPI `TestClient` driving the real routes with the real application and fake or tmp adapters. |
 | Template | Lobby HTML as the surface of a route | A ruled person-sentence is proven by a delegated agent driving the real interface. A route or fragment is FastAPI `TestClient` on the real route. A direct Jinja unit test is not the proof. |
 | `host` | Composition | Once: start the app with a test configuration. |
-| Slidev addon | That Slidev resolves this package | Vitest driving Slidev's own resolver, as `slidev/tests/addon-package.test.ts` does. |
+| Slidev addon | That a deck staged outside the toolchain builds by the addon's name | Vitest building such a deck with `slidev build` from `slidev/`, as `slidev/tests/addon-package.test.ts` does. |
 | Surface | A person does X at the lobby | A delegated agent driving the real interface at the widths the dispatch brief names, taken from the picture at [mockups/README.md](mockups/README.md). One flow per ruled sentence. A unit test is not this proof. |
 
 `gitmirror` is proven the same way as an adapter: against a tmp bare repository,
@@ -58,6 +58,34 @@ Assert outcomes: the return value, the effect on state, or the error raised. No
 private fields, no mock call counts, no pinned log strings, unless the
 interaction itself is the contract. No sleeps, no timing races, no order
 dependence, no process-global state another test can observe.
+
+## Shipped values
+
+The code policy's Value Ownership rule decides which assertion stays; in this
+repository each kind of shipped value is proven here:
+
+- `compose.yaml`: `tests/test_compose.py` parses the file and checks a
+  relation read from both owners, for example the back-channel alias against
+  `PRESENTATOR_PUBLIC_ORIGIN`, and the socket volume options. The kept sealing
+  and hardening keys are still substring matches within the service block, and
+  the Docker-authority check matches over the whole file. The live properties
+  (limits, hardening, socket volume, gateway) are proven by the sealed probe of
+  the mandatory CI job "Build worker: sealed step".
+- The Dockerfile's build and wire users: the existence check in the CI image
+  job reads the passwd entry of `presentator-build` and `presentator-wire` for
+  a non-zero UID and a shell ending in `nologin`, without naming a shipped UID;
+  the same step's refusal loop names the reserved UIDs, a protective limit.
+- The catalog and the deck manifests: tests read the owner (`en.po`,
+  `deck.toml`) or use scenario data. The page tests that still repeat catalog
+  sentences are frozen and go with their pages. New tests name a word through
+  the catalog rather than copying it.
+
+Two traps are real. A port above 1023 does not prove a non-root user. A
+substring match stays green on an apex host, a path prefix or a repeated
+option.
+
+A slice that removes copied assertions also gets a separate check of every
+removed assertion: two reviews approved the loss of the back-channel proof once.
 
 ## Per-behaviour cost
 

@@ -1,8 +1,9 @@
 """Stage proof: start the service, drive health/speak/hear, then the contract client.
 
-Takes /tmp/probe-stack.lock, checks the 1-minute load, runs one heavy step at a
-time, and leaves no process behind. Model weights stay in the Hugging Face and
-Piper caches.
+Runs under the caller's probe lock in the fleet form (flock -o -w 1200
+/tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 30 1800 ...),
+checks the 1-minute load, runs one heavy step at a time, and leaves no
+process behind. Model weights stay in the Hugging Face and Piper caches.
 """
 
 # ruff: noqa: T201 - this stage proof reports its progress on standard output
@@ -11,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import fcntl
 import json
 import os
 import shutil
@@ -25,7 +25,7 @@ import time
 from array import array
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, TextIO
+from typing import TYPE_CHECKING
 
 import httpx2
 from presentator_speech_provider_contract import CHATTERBOX_SAMPLE_RATE
@@ -45,7 +45,6 @@ ENGLISH = (
     "automatically prepared in the background."
 )
 SECOND = "Die nächste Folie bitte."
-LOCK_PATH = Path("/tmp/probe-stack.lock")  # noqa: S108 - the lock path is the machine-wide probe lock shared across repositories
 GERMAN_WAV_PATH = Path("/tmp/issue-83-voice/german.wav")  # noqa: S108 - the path is the proof's fixed listening output that the README names and it runs on the operator's single-user machine
 MEASURE_REPETITIONS = 5
 MEASURE_FLAG = {False: [], True: ["--measure"]}
@@ -81,12 +80,6 @@ def _wait_for_load() -> None:
             return
         print(f"load {load:.2f} is above {LOAD_CEILING}, waiting")
         time.sleep(15)
-
-
-def _acquire_lock(lock: TextIO) -> None:
-    print("waiting_for_lock", LOCK_PATH)
-    fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-    print("lock_acquired", LOCK_PATH)
 
 
 def _get_json(socket_path: Path, target: str) -> dict[str, object]:
@@ -546,7 +539,9 @@ def _speech_environment(private_directory: Path, speaking_model: str) -> dict[st
 def parse_arguments(arguments: list[str]) -> argparse.Namespace:
     """Read the command line before anything starts; `--help` and typos exit here."""
     parser = argparse.ArgumentParser(
-        description="Stage proof of the speech service under the probe-stack lock.",
+        description=(
+            "Stage proof of the speech service; the caller holds the probe-stack lock."
+        ),
         allow_abbrev=False,
     )
     parser.add_argument(
@@ -558,55 +553,50 @@ def parse_arguments(arguments: list[str]) -> argparse.Namespace:
 
 
 def main() -> None:
-    """Run the stage proof under the probe-stack lock."""
+    """Run the stage proof; the caller holds the machine's probe lock."""
     options = parse_arguments(sys.argv[1:])
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(line_buffering=True)
-    LOCK_PATH.touch()
-    with LOCK_PATH.open("a", encoding="utf-8") as lock:
-        _acquire_lock(lock)
-        _wait_for_load()
-        print("gpu_before", _nvidia_memory())
-        private_directory = Path(tempfile.mkdtemp(prefix="speech-"))
-        socket_path = private_directory / "speech.sock"
-        speaking_model = os.environ.get(
-            "SPEECH_SPEAKING_MODEL",
-            CHATTERBOX_SPEAKING_MODEL,
-        )
-        project = Path(__file__).resolve().parents[1]
-        try:
-            env = _speech_environment(private_directory, speaking_model)
-            with _speech_server(project, env, socket_path) as running:
-                print("health_ready", json.dumps(running.health, sort_keys=True))
-                print("load_to_ready_s", f"{running.ready_seconds:.1f}")
-                print(
-                    "gpu_compute_pids",
-                    _nvidia_compute_pids(),
-                    f"speech_pid={running.process.pid}",
-                )
-                _require_speaking(running.health, speaking_model)
-                print("gpu_both_resident", _nvidia_memory())
-                print("whisper_cache", WHISPER_CACHE)
-                print("chatterbox_cache", CHATTERBOX_CACHE)
-                print("piper_cache", PIPER_CACHE)
-                german = _prove_speak(socket_path, speaking_model)
-                GERMAN_WAV_PATH.parent.mkdir(parents=True, exist_ok=True)
-                GERMAN_WAV_PATH.write_bytes(german)
-                print("german_wav", GERMAN_WAV_PATH)
-                _prove_concurrent_speak(socket_path, speaking_model)
-                _prove_contract(project, socket_path, env, measure=options.measure)
-                print("peak_rss_mib", f"{running.peak_rss_mib():.0f}")
-            print("gpu_after", _nvidia_memory())
-            print("caches_kept")
-            print("  huggingface:", HF_CACHE)
-            print("  chatterbox:", CHATTERBOX_CACHE)
-            print("  piper:", PIPER_CACHE)
-            print("PROOF_OK")
-        finally:
-            shutil.rmtree(private_directory)
-            print("gpu_released", _nvidia_memory())
-            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
-            print("lock_released")
+    _wait_for_load()
+    print("gpu_before", _nvidia_memory())
+    private_directory = Path(tempfile.mkdtemp(prefix="speech-"))
+    socket_path = private_directory / "speech.sock"
+    speaking_model = os.environ.get(
+        "SPEECH_SPEAKING_MODEL",
+        CHATTERBOX_SPEAKING_MODEL,
+    )
+    project = Path(__file__).resolve().parents[1]
+    try:
+        env = _speech_environment(private_directory, speaking_model)
+        with _speech_server(project, env, socket_path) as running:
+            print("health_ready", json.dumps(running.health, sort_keys=True))
+            print("load_to_ready_s", f"{running.ready_seconds:.1f}")
+            print(
+                "gpu_compute_pids",
+                _nvidia_compute_pids(),
+                f"speech_pid={running.process.pid}",
+            )
+            _require_speaking(running.health, speaking_model)
+            print("gpu_both_resident", _nvidia_memory())
+            print("whisper_cache", WHISPER_CACHE)
+            print("chatterbox_cache", CHATTERBOX_CACHE)
+            print("piper_cache", PIPER_CACHE)
+            german = _prove_speak(socket_path, speaking_model)
+            GERMAN_WAV_PATH.parent.mkdir(parents=True, exist_ok=True)
+            GERMAN_WAV_PATH.write_bytes(german)
+            print("german_wav", GERMAN_WAV_PATH)
+            _prove_concurrent_speak(socket_path, speaking_model)
+            _prove_contract(project, socket_path, env, measure=options.measure)
+            print("peak_rss_mib", f"{running.peak_rss_mib():.0f}")
+        print("gpu_after", _nvidia_memory())
+        print("caches_kept")
+        print("  huggingface:", HF_CACHE)
+        print("  chatterbox:", CHATTERBOX_CACHE)
+        print("  piper:", PIPER_CACHE)
+        print("PROOF_OK")
+    finally:
+        shutil.rmtree(private_directory)
+        print("gpu_released", _nvidia_memory())
 
 
 if __name__ == "__main__":

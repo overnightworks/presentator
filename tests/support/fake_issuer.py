@@ -69,6 +69,8 @@ class FakeIssuer:
         self._revoked_refresh_tokens: set[str] = set()
         self.grant_types: list[str] = []
         self.workload_is_refused = False
+        self.workload_scope_is_invalid = False
+        self.workload_scopes: list[str] = []
         self.during_token_request: Callable[[], None] = lambda: None
         self.redirect_uris: list[str] = []
         self.token_endpoint_is_down = False
@@ -212,7 +214,7 @@ class FakeIssuer:
             return self._code_exchange(request.form["code"])
         if grant_type == _REFRESH_TOKEN:
             return self._refresh(request.form[_REFRESH_TOKEN])
-        return self._client_credentials()
+        return self._client_credentials(request.form["scope"])
 
     def _code_exchange(self, code: str) -> TokenEndpointAnswer:
         document = {"id_token": self._tokens_by_code[code]}
@@ -228,9 +230,12 @@ class FakeIssuer:
             document[_REFRESH_TOKEN] = self._rotated_refresh_token
         return TokenEndpointAnswer(HTTPStatus.OK, json.dumps(document).encode())
 
-    def _client_credentials(self) -> TokenEndpointAnswer:
+    def _client_credentials(self, scope: str) -> TokenEndpointAnswer:
+        self.workload_scopes.append(scope)
         if self.workload_is_refused:
             return _refusal("invalid_client", HTTPStatus.UNAUTHORIZED)
+        if self.workload_scope_is_invalid:
+            return _refusal("invalid_scope", HTTPStatus.BAD_REQUEST)
         return TokenEndpointAnswer(
             HTTPStatus.OK,
             json.dumps(_access_document(self._workload_access_token)).encode(),

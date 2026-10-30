@@ -12,8 +12,10 @@ def test_finished_web_client_preserves_its_run_and_refusal_outcome(
     web = load_script("probe_build_worker_web")
     program = """
 print('{"run": "refused-build"}')
-print('{"steps": [{"step": "build", "failed": true, "text": "Build refused"}], '
-      '"staged": [], "out": [], "talk_page": false, "pdf": false}')
+print('{"steps": [{"step": "build", "failed": true, "failure": '
+      '{"reason": "toolchain", "text": "Build refused"}}], '
+      '"staged": [], "out": [], "talk_page": false, "pdf": false, '
+      '"worklet": false, "worklet_sha256": null}')
 """
     with subprocess.Popen(  # noqa: S603
         (sys.executable, "-c", program),
@@ -26,12 +28,18 @@ print('{"steps": [{"step": "build", "failed": true, "text": "Build refused"}], '
             assert web.run_name_of(client) == "refused-build"
             assert web.outcome_of(client) == web.Outcome(
                 steps=(
-                    web.StepOutcome(step="build", failed=True, text="Build refused"),
+                    web.StepOutcome(
+                        step="build",
+                        failed=True,
+                        failure={"reason": "toolchain", "text": "Build refused"},
+                    ),
                 ),
                 staged=(),
                 out=(),
                 talk_page=False,
                 pdf=False,
+                worklet=False,
+                worklet_sha256=None,
             )
         finally:
             if client.poll() is None:

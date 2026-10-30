@@ -4,7 +4,7 @@ Usage: probe_build_worker_web.py drive
 
 Runs where Docker is, after the worker's own drive has removed its project, with
 the same compose environment plus `WEB_PROBE_OVERRIDE`, the override file that
-adds the web's two read-only probe mounts (hello-deck and
+adds the web's three read-only probe mounts (hello-deck, copresenter-deck and
 `probe_build_worker`), publishes the probe's port, which `compose.yaml` never
 does, and carries the job's origins and test issuer; the master key and the
 client secret are compose's own file secrets. It starts the real `presentator`
@@ -19,9 +19,9 @@ names at the end of a poll, and the program lays runs of its own under the
 builds root that no row names.
 """
 
+import hashlib
 import json
 import os
-import re
 import subprocess
 import sys
 import time
@@ -53,13 +53,8 @@ from probe_build_worker_lives import (
 from ruamel.yaml import YAML
 
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES, SOCKET_DIRECTORY
-from presentator.adapters.build_worker import (
-    CONNECT_WINDOW_SECONDS,
-    DECK_PATHS_FOR_A_PAGE,
-    DECK_SIZE_FOR_A_PAGE,
-    OUTPUT_SHAPE_FOR_A_PAGE,
-)
-from presentator.adapters.builds import TOO_MANY_FOR_A_PAGE, TOO_MUCH_FOR_A_PAGE
+from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
+from presentator.contracts.decks import BuildFailureReason
 from presentator.host.config import DEFAULT_BUILD_OUTPUT_MEGABYTES
 from presentator.host.main import WAITING_FOR_THE_WORKER
 
@@ -67,7 +62,9 @@ WEB = "presentator"
 CLIENT_PROGRAM = PROBE_SOURCES / "web_client.py"
 ROUTE = "http://127.0.0.1:8000/login"
 BUILDS_ROOT = "/data/builds"
-OVERRIDE_MOUNTS = frozenset({"/decks/hello-deck", "/decks/probe"})
+OVERRIDE_MOUNTS = frozenset(
+    {"/decks/hello-deck", "/decks/copresenter-deck", "/decks/probe"}
+)
 SECRET_MOUNTS = frozenset(
     {"/run/secrets/presentator_secret_key", "/run/secrets/oidc_client_secret"}
 )
@@ -82,9 +79,9 @@ WAITING_HOLD_SECONDS = 4.0
 STEP_SECONDS = 900
 STAGING_POLLS = 1200
 RESTART_SECONDS = 60
-CELLS = ("B25", "whole file", "B12 C", "B13", "B15 C")
-UNWRITTEN = "WRITTENNUMBER"
+CELLS = ("B25", "whole file", "B12 C", "B13", "B15 C", "addon deck")
 HELLO_STEPS = ("build", "export")
+ADDON_WORKLET = REPOSITORY / "slidev/worklets/pcm-capture-processor.js"
 
 
 def web_command(*arguments: str) -> tuple[str, ...]:
@@ -139,11 +136,11 @@ def run_name_of(client: subprocess.Popen[str]) -> str:
 
 @dataclass(frozen=True, slots=True)
 class StepOutcome:
-    """How one step of a client run ended: the page text of a failure, if any."""
+    """How one step of a client run ended: the failure the build reported, if any."""
 
     step: str
     failed: bool
-    text: str | None
+    failure: dict[str, str | int | None] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +152,8 @@ class Outcome:
     out: tuple[str, ...]
     talk_page: bool
     pdf: bool
+    worklet: bool
+    worklet_sha256: str | None
 
 
 def outcome_of(client: subprocess.Popen[str]) -> Outcome:
@@ -170,13 +169,15 @@ def outcome_of(client: subprocess.Popen[str]) -> Outcome:
     said = json.loads(lines[-1])
     return Outcome(
         steps=tuple(
-            StepOutcome(step["step"], step["failed"], step.get("text"))
+            StepOutcome(step["step"], step["failed"], step.get("failure"))
             for step in said["steps"]
         ),
         staged=tuple(said["staged"]),
         out=tuple(said["out"]),
         talk_page=said["talk_page"],
         pdf=said["pdf"],
+        worklet=said["worklet"],
+        worklet_sha256=said["worklet_sha256"],
     )
 
 
@@ -398,7 +399,7 @@ def prove_reply_cut_off(report: Report) -> None:
     subprocess.run(("sudo", "-n", "kill", "-KILL", pid), check=True)  # noqa: S603, S607 - argv is a tuple of literal words and probe values and run without a shell; sudo is picked from the operator's trusted PATH on the operator's own machine as when run by hand
     done = outcome_of(client)
     if (
-        [(step.failed, step.text) for step in done.steps] != [(True, None)]
+        [reason_of(step) for step in done.steps] != [BuildFailureReason.NO_WORDS.value]
         or done.staged
         or done.out
     ):
@@ -407,56 +408,98 @@ def prove_reply_cut_off(report: Report) -> None:
     the_next_build_delivers_hello_deck()
     report.cell(
         "B13",
-        f"BuildFailure(text=None); staging gone, out/ empty; restart count"
+        f"BuildFailure(no-words); staging gone, out/ empty; restart count"
         f" {restarts} -> {int(restarts) + 1}; the next build delivered",
     )
 
 
-def text_matching(template: str, **values: object) -> re.Pattern[str]:
-    """The pattern of a page text whose `written` is the number the worker reported."""
-    filled = template.format(written=UNWRITTEN, **values)
-    return re.compile(re.escape(filled).replace(UNWRITTEN, r"(\d+)"))
+def reason_of(step: StepOutcome) -> object:
+    """The reason code a step failed with, or nothing while it did not fail."""
+    return None if step.failure is None else step.failure["reason"]
 
 
-def failure_text_of(case: str) -> str | None:
-    """The text of the one failed build step of a case, whatever it ended in."""
+def failure_of(case: str) -> dict[str, str | int | None]:
+    """The failure of the one failed build step of a case, whatever it ended in."""
     steps = build(case, "build").steps
-    if len(steps) != 1 or not steps[0].failed:
+    if len(steps) != 1 or steps[0].failure is None:
         refuse(f"{case} did not fail: {steps}")
-    return steps[0].text
+    return steps[0].failure
 
 
-def prove_refusal_texts(report: Report) -> None:
-    """B15 C: each limit's page text equals its owner's constant, formatted."""
+def failure_naming(
+    reason: BuildFailureReason, **counts: str | int | None
+) -> dict[str, str | int | None]:
+    """The failure a reason is reported as: no text, and the counts it names."""
+    return {
+        "reason": reason.value,
+        "text": None,
+        "written_megabytes": None,
+        "allowed_megabytes": None,
+        "allowed_entries": None,
+    } | counts
+
+
+def prove_refusal_reasons(report: Report) -> None:
+    """B15 C: each limit is reported as its reason code with the counts it names."""
     allowed = DEFAULT_BUILD_OUTPUT_MEGABYTES
     expected = {
-        "output-entries": TOO_MANY_FOR_A_PAGE.format(allowed=MAXIMUM_ENTRIES),
-        "output-shape": OUTPUT_SHAPE_FOR_A_PAGE,
-    }
-    for case, text in expected.items():
-        wait_for_uptime()
-        if failure_text_of(case) != text:
-            refuse(f"{case}: the page text is not {text!r}")
-    wait_for_uptime()
-    megabytes = text_matching(TOO_MUCH_FOR_A_PAGE, allowed=allowed).fullmatch(
-        failure_text_of("output-megabytes") or ""
-    )
-    if megabytes is None or int(megabytes.group(1)) <= allowed:
-        refuse("output-megabytes: the page text does not name a size over the bound")
-    restarts, log = state()[1], compose("logs", "--no-color", SERVICE)
-    deck_texts = {
-        "deck-megabytes": DECK_SIZE_FOR_A_PAGE.format(
-            megabytes=allowed, entries=MAXIMUM_ENTRIES
+        "output-entries": failure_naming(
+            BuildFailureReason.OUTPUT_ENTRIES, allowed_entries=MAXIMUM_ENTRIES
         ),
-        "deck-paths": DECK_PATHS_FOR_A_PAGE,
+        "output-shape": failure_naming(BuildFailureReason.OUTPUT_SHAPE),
     }
-    for case, text in deck_texts.items():
-        if failure_text_of(case) != text:
-            refuse(f"{case}: the page text is not {text!r}")
+    for case, failure in expected.items():
+        wait_for_uptime()
+        if failure_of(case) != failure:
+            refuse(f"{case}: the failure is not {failure!r}")
+    wait_for_uptime()
+    megabytes = failure_of("output-megabytes")
+    written = megabytes["written_megabytes"]
+    if (
+        megabytes
+        != failure_naming(
+            BuildFailureReason.OUTPUT_MEGABYTES,
+            written_megabytes=written,
+            allowed_megabytes=allowed,
+        )
+        or not isinstance(written, int)
+        or written <= allowed
+    ):
+        refuse("output-megabytes: the failure does not name a size over the bound")
+    restarts, log = state()[1], compose("logs", "--no-color", SERVICE)
+    deck_failures = {
+        "deck-megabytes": failure_naming(
+            BuildFailureReason.DECK_MEGABYTES,
+            allowed_megabytes=allowed,
+            allowed_entries=MAXIMUM_ENTRIES,
+        ),
+        "deck-paths": failure_naming(BuildFailureReason.DECK_PATHS),
+    }
+    for case, failure in deck_failures.items():
+        if failure_of(case) != failure:
+            refuse(f"{case}: the failure is not {failure!r}")
     if (state()[1], compose("logs", "--no-color", SERVICE)) != (restarts, log):
         refuse("a deck refused before the connection touched the worker")
     report.cell(
-        "B15 C", "five page texts equal their owners'; deck cases left the worker alone"
+        "B15 C",
+        "five refusals reported as their reasons; deck cases left the worker alone",
+    )
+
+
+def prove_addon_deck(report: Report) -> None:
+    """The example deck, which enables the addon by name, builds with its worklet."""
+    done = build("addon", *HELLO_STEPS)
+    expected = hashlib.sha256(ADDON_WORKLET.read_bytes()).hexdigest()
+    if (
+        tuple(step.step for step in done.steps) != HELLO_STEPS
+        or any(step.failed for step in done.steps)
+        or not (done.talk_page and done.pdf)
+        or not done.worklet
+        or done.worklet_sha256 != expected
+    ):
+        refuse(f"the addon deck was not delivered with its worklet: {done}")
+    report.cell(
+        "addon deck", "built and exported; the talk carries the addon's worklet"
     )
 
 
@@ -468,7 +511,8 @@ def drive() -> None:
         prove_the_whole_file_starts(report)
         prove_restart_mid_step(report)
         prove_reply_cut_off(report)
-        prove_refusal_texts(report)
+        prove_refusal_reasons(report)
+        prove_addon_deck(report)
     finally:
         for service in (WEB, SERVICE):
             say(f"--- {service} log")

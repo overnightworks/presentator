@@ -13,7 +13,9 @@ The agent service is the operator's own, reached at `PRESENTATOR_AGENT_SERVICE`
 over the `hal_agent_presentator` network. Presentator reads the asked deck's words at its
 built commit, sends them with the question as one message, with no tools, and
 streams the model's text back. Both the person's fresh access token and
-Presentator's own workload token go with every run. Presentator splits the text
+Presentator's own workload token go with every run; the workload grant asks for
+the scope in `PRESENTATOR_AGENT_SERVICE_SCOPE`, so that token names the agent
+service and no other as its audience. Presentator splits the text
 into sentences and speaks them.
 
 A host process can sit beside a checkout run; it is not part of a deployed
@@ -27,8 +29,9 @@ models run and what they cost on the card is owned by the speech README.
 
 ## Routes and access
 
-The repository overlay calls relative `/copresenter/who`, `/copresenter/ask`
-and `/copresenter/hear` routes. The talk host serves them under its own session
+The overlay, which a deck enables as the addon `slidev-addon-presentator`,
+calls relative `/copresenter/who`, `/copresenter/ask` and `/copresenter/hear`
+routes. The talk host serves them under its own session
 cookie and its own Origin; the lobby answers 404 on them. Any signed-in person
 may use them, through the existing active session; the agent service's own
 subscription and API groups decide who may ask, and deck ownership limits which
@@ -36,6 +39,12 @@ deck. Without a session `/who` and `/ask` get 401 and `/hear` a refused
 handshake (HTTP 403, before accept); an accepted hearing ends with a 1008 close
 when the session goes. Presentator checks the session and, for the WebSocket, the exact
 Origin before opening the socket.
+`/who` takes the deck's slug as `deck` and checks it after the session, as
+`/ask` does: a deck its asker does not own built, or a missing or malformed
+slug, gets the same 404 `/ask` gives. It answers the deck's `language`, `de` or
+`en` as the deck's `deck.toml` names it and `de` for anything else, beside the
+speech readiness, so the overlay speaks and hears in the deck's language. A
+mirror that cannot be read, or a built commit without slides, answers 503.
 `/ask` is guarded by the origin check alone, like every mutating request
 ([sign-in and session](sign-in-and-session.md)). Logout, expiry, loss of the account row
 or a session-store failure closes the hearing lease and an ongoing answer
@@ -56,6 +65,34 @@ own words for them: "Not enabled" for the `not-enabled` reason, "Sign in again"
 for either 401, and "No answer" for everything else, without navigating away
 and never with a message the server sent. A refusal line clears when the next
 question is asked.
+
+## What the room sees
+
+While the AI listens or answers, the projector and the presenter's current-slide
+preview carry a notice that the room hears an AI. Nothing shows while the AI is
+off, or while it is on but capture does not run (a pending or denied
+microphone, a worklet that fails, "Voice offline", "Unreachable", "Local
+hearing not ready", "No hearing"). Capture runs once the worklet is connected to
+the microphone.
+
+From the moment capture runs after a switch-on until the first answer's audio
+starts to play, a banner stands at the bottom of the slide with the whole
+sentence: speech is converted to text locally and sent with the slides to an AI
+service, and the Datenschutzerklärung says which one. Afterwards a pill stands
+top-right: "KI hört zu" / "AI is listening", and "KI antwortet" / "AI is
+answering" while answer audio plays. The words follow the deck's language; the
+presenter's own controls stay English. The notice has no switch, takes no clicks
+and never shrinks the slide. It shows only on the play and presenter routes,
+never in print, export or overview. A refused question or a failed playback does
+not end it, because speech is still heard; it ends when capture stops.
+
+The presenter window decides this and writes it as a Slidev sync state that is
+never stored or sent to the server; it reaches the windows of one browser on one
+origin, the reach of the slide position. The writer stamps the state every
+second while it is on, and a reader treats a stamp older than three seconds as
+off, so a presenter window that stops without closing clears the projector
+within about three seconds. A projector opened later shows the notice within
+about a second. Across machines nothing carries it.
 
 ## Bounds on `/ask`
 
@@ -91,6 +128,9 @@ running instance.
 - One verified active row also names a local player: its DE or EN fixed sample
   waits while current speech owns synthesis, then plays through that exact
   active voice.
+
+The catalogue and the load, download and sample actions are also reachable as
+JSON at `/api/voice`, admin only and `no-store`; the sample answers `audio/wav`.
 
 ## Voices
 

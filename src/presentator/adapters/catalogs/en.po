@@ -143,6 +143,33 @@ msgstr ""
 "This build left no message. It may have run past its time or been "
 "interrupted."
 
+msgid "deck_failed_output_megabytes"
+msgstr ""
+"The talk this build wrote is {written} MB; a build may leave at most "
+"{allowed} MB."
+
+msgid "deck_failed_output_entries"
+msgstr ""
+"The talk this build wrote holds more than {entries} files; a build may leave "
+"fewer."
+
+msgid "deck_failed_output_shape"
+msgstr ""
+"The talk this build wrote cannot be taken: it holds a link, a special or "
+"unreadable file, a path of more than 32 parts (folders and the file) or 1024 "
+"bytes, or a file this step may not write."
+
+msgid "deck_failed_deck_megabytes"
+msgstr ""
+"This deck is too large to build: a deck may hold at most {megabytes} MB and "
+"at most {entries} files and folders together, not counting its top-level "
+"node_modules."
+
+msgid "deck_failed_deck_paths"
+msgstr ""
+"This deck cannot be built: it holds a path of more than 32 parts (folders "
+"and the file) or 1024 bytes, or a link, a special or an unreadable file."
+
 msgid "deck_failed_last_talk_stands"
 msgstr "The last talk that was built still opens in both views."
 
@@ -523,7 +550,7 @@ msgid "source_run_refused"
 msgstr "Login refused"
 
 msgid "source_run_failed"
-msgstr "Host answered, fetch failed"
+msgstr "Fetch failed"
 
 msgid "source_run_column_state"
 msgstr "State"

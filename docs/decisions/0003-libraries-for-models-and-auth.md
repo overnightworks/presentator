@@ -425,6 +425,48 @@ uncertain outcome and keeps the deletion. `delete_account` takes the same lock
 and transaction. The gate's per-call stores and the session sweep still commit
 on their own.
 
+### Amendment 2026-10-29 — webauth 0.25.0: a person's hal token on `/api/`
+
+Authority: [#609](https://github.com/overnightworks/presentator/issues/609),
+webauth#405.
+
+`webauth` 0.25.0 lets a verified hal access token on named paths be the account
+behind it. The lobby names `/api/` (`PersonPaths`) over the same
+`SignInTransaction` that sign-in enters, so an unknown member gets an account
+and a known one the role of the token's groups, and no session is made. A path
+both rules select is a machine path, so `/api/admin/` stays token-only. The
+one setting that names hal's clients is now `PRESENTATOR_TOKEN_CLIENTS`
+(formerly `PRESENTATOR_ADMIN_TOKEN_CLIENTS`, no alias): it opens both
+prefixes. `session_id_from_request` answers `None` on a bearer-admitted
+request; no caller meets one today.
+
+### Amendment 2026-10-30 — the agent service client moves to protocol 4
+
+Authority: [#656](https://github.com/overnightworks/presentator/issues/656),
+agent-runtime 0.11.0.
+
+The client is pinned at agent-runtime 0.11.0, which speaks protocol 4. It is a
+switch day with no coexistence: the service and every app move together, a
+`v: 3` body is refused and the client refuses a `v: 3` event, so this build is
+deployed on or after the day the service runs 0.11.0 or later. `Succeeded`
+gains a required `files`; presentator never reads `Succeeded` or its files, so
+nothing beyond the pin changes in the adapter. The adapters-only rule stands.
+
+### Amendment 2026-10-30 — webauth 0.26.0: the workload grant names the agent service's scope
+
+Authority: [#673](https://github.com/overnightworks/presentator/issues/673),
+webauth#516.
+
+`OidcRelyingParty.workload_access_token` now requires the scopes of the
+`client_credentials` grant, so a token carries one service's audience and not
+every service's. Presentator asks for one scope, the agent service's, and takes
+it from `PRESENTATOR_AGENT_SERVICE_SCOPE`: a deployment fact with no default,
+checked at start as one RFC 6749 scope token. The person sign-in, for the lobby
+and the talk host, asks for the same scope beside `openid`, `profile` and
+`groups`, because a person's token without the agent service's audience is
+rejected by it. An issuer's `invalid_scope` is the
+typed refusal the co-presenter already answers as "unavailable".
+
 ## Consequences
 
 - Which model presents becomes configuration, not code, and the phase M1 work is

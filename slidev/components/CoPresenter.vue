@@ -1,15 +1,18 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useNav } from '@slidev/client'
+// `no-inline`: the file is under Vite's inline limit, and a `data:` URL would
+// break the production CSP.
+import WORKLET_URL from '../worklets/pcm-capture-processor.js?url&no-inline'
+import { publish } from '../room-notice.js'
 
 const { currentSlideNo } = useNav()
 
-const LANGUAGE = 'de'
 const COPRESENTER = '/copresenter'
 // The host delivers this deck at `/deck/<slug>/`, so the base names its slug.
 // Vite refuses a base with a raw `%`, so a folder `50%off` arrives as `50%25off`.
 const DECK_SLUG = decodeURIComponent(
-  import.meta.env.BASE_URL.split('/').filter(Boolean).pop() ?? '',
+  import.meta.env.BASE_URL.split('/').findLast(Boolean) ?? '',
 )
 
 // The overlay shows only these lines, never a message the server sent.
@@ -41,13 +44,6 @@ function errorEventLine(data) {
   return data?.reason === NOT_ENABLED_REASON ? NOT_ENABLED : NO_ANSWER
 }
 
-// Built on Vite's own `BASE_URL` (Slidev uses the same for its PDF link),
-// never on the current address: Slidev's router is history-mode, so once a
-// slide or the presenter view has been opened the browser's own address has
-// moved past the talk's root, and a plain relative URL would resolve beside
-// it instead of beside the file this deck's `public/` directory puts there.
-const WORKLET_URL = `${import.meta.env.BASE_URL}pcm-capture-processor.js`
-
 const on = ref(false)
 const heard = ref('')
 const answer = ref('')
@@ -55,6 +51,12 @@ const hearing = ref('off')
 const error = ref('')
 const audioSeconds = ref(0)
 const speaking = ref(false)
+// What the room can observe, which room-notice.js turns into banner and pill:
+// the worklet is connected to the microphone, an answer's audio is playing, and
+// an answer's audio has played since the switch-on.
+const capturing = ref(false)
+const playing = ref(false)
+const answeredSinceOn = ref(false)
 
 let mediaStream = null
 let audioContext = null
@@ -65,10 +67,23 @@ let playQueue = Promise.resolve()
 let spokenText = ''
 let unvoicedSentence = ''
 let sampleRate = 16000
+// The deck's language, which the server reports before the hearing lease opens.
+let language = ''
 let activationGeneration = 0
 let playGeneration = 0
 let activeAudio = null
 let finishActivePlay = null
+
+function publishRoomFacts() {
+  publish({
+    capturing: capturing.value,
+    playing: playing.value,
+    answeredSinceOn: answeredSinceOn.value,
+    language,
+  })
+}
+// Synchronous, so a window that turns off has said so when its handler returns.
+watch([capturing, playing, answeredSinceOn], publishRoomFacts, { flush: 'sync' })
 
 const state = computed(() => {
   if (!on.value) return 'off'
@@ -89,7 +104,9 @@ function snapshot() {
     hearOpen: Boolean(hearSocket && hearSocket.readyState === WebSocket.OPEN),
     speaking: speaking.value,
     micLive: tracks.some((track) => track.readyState === 'live'),
-    workletLive: Boolean(workletNode),
+    capturing: capturing.value,
+    playing: playing.value,
+    workletLive: capturing.value,
     audioPlaying: Boolean(activeAudio && !activeAudio.paused && !activeAudio.ended),
   }
 }
@@ -128,18 +145,20 @@ async function turnOn() {
   heard.value = ''
   answer.value = ''
   audioSeconds.value = 0
+  answeredSinceOn.value = false
   spokenText = ''
   let report
   try {
-    const response = await fetch(`${COPRESENTER}/who`)
+    const response = await fetch(`${COPRESENTER}/who?deck=${encodeURIComponent(DECK_SLUG)}`)
     if (!stillActive(generation)) return
     if (!response.ok) throw new WhoRefused(response.status)
     report = await response.json()
     if (!stillActive(generation)) return
     sampleRate = report.speech?.sample_rate || 16000
-  } catch (failure) {
+    language = report.language
+  } catch (error_) {
     if (!stillActive(generation)) return
-    error.value = failure instanceof WhoRefused && failure.status === 503 ? VOICE_OFFLINE : 'Unreachable'
+    error.value = error_ instanceof WhoRefused && error_.status === 503 ? VOICE_OFFLINE : 'Unreachable'
     hearing.value = 'off'
     return
   }
@@ -179,7 +198,7 @@ function stopWork() {
 
 async function openHearingLease(generation) {
   const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const url = `${scheme}//${window.location.host}${COPRESENTER}/hear?language=${LANGUAGE}`
+  const url = `${scheme}//${window.location.host}${COPRESENTER}/hear?language=${language}`
   const socket = new WebSocket(url)
   socket.binaryType = 'arraybuffer'
   bindHearSocket(socket, generation)
@@ -245,6 +264,7 @@ async function startLocalHear(generation) {
       }
     }
     source.connect(node)
+    capturing.value = true
   } catch {
     abandon({ stream, context, node })
     if (!stillActive(generation)) return
@@ -282,26 +302,37 @@ function bindHearSocket(socket, generation) {
 }
 
 function abandon({ socket, stream, context, node } = {}) {
-  if (socket) {
-    if (hearSocket === socket) hearSocket = null
-    socket.onmessage = null
-    socket.onerror = null
-    socket.onclose = null
-    try { socket.close() } catch { /* already closed */ }
+  if (socket) closeSocket(socket)
+  if (node) disconnectNode(node)
+  if (context) closeContext(context)
+  if (stream) stopStream(stream)
+}
+
+function closeSocket(socket) {
+  if (hearSocket === socket) hearSocket = null
+  socket.onmessage = null
+  socket.onerror = null
+  socket.onclose = null
+  try { socket.close() } catch { /* already closed */ }
+}
+
+function disconnectNode(node) {
+  if (workletNode === node) {
+    workletNode = null
+    capturing.value = false
   }
-  if (node) {
-    if (workletNode === node) workletNode = null
-    node.port.onmessage = null
-    try { node.disconnect() } catch { /* already disconnected */ }
-  }
-  if (context) {
-    if (audioContext === context) audioContext = null
-    try { context.close() } catch { /* already closed */ }
-  }
-  if (stream) {
-    if (mediaStream === stream) mediaStream = null
-    for (const track of stream.getTracks()) track.stop()
-  }
+  node.port.onmessage = null
+  try { node.disconnect() } catch { /* already disconnected */ }
+}
+
+function closeContext(context) {
+  if (audioContext === context) audioContext = null
+  try { context.close() } catch { /* already closed */ }
+}
+
+function stopStream(stream) {
+  if (mediaStream === stream) mediaStream = null
+  for (const track of stream.getTracks()) track.stop()
 }
 
 function releaseCapture() {
@@ -355,7 +386,7 @@ async function ask(text) {
       body: JSON.stringify({
         said: text,
         slide: currentSlideNo.value,
-        language: LANGUAGE,
+        language,
         deck: DECK_SLUG,
       }),
       signal: controller.signal,
@@ -388,7 +419,7 @@ async function readSse(body, signal) {
 function applySse(block) {
   if (!on.value) return
   const kind = (block.match(/^event:\s*(\S+)/m) || [])[1]
-  const dataLine = (block.match(/^data:\s*(.*)$/m) || [])[1]
+  const dataLine = (block.match(/^data: ?(.*)$/m) || [])[1]
   if (!kind || dataLine == null) return
   let data
   try { data = JSON.parse(dataLine) } catch { return }
@@ -406,7 +437,7 @@ function applySse(block) {
 function enqueueWav(b64) {
   if (!on.value) return
   const generation = playGeneration
-  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+  const bytes = Uint8Array.from(atob(b64), (c) => c.codePointAt(0))
   const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }))
   playQueue = playQueue.then(() => {
     if (generation !== playGeneration) return undefined
@@ -420,6 +451,7 @@ function playUrl(url, generation) {
       resolve()
       return
     }
+    const activation = activationGeneration
     const audio = new Audio(url)
     activeAudio = audio
     speaking.value = true
@@ -428,7 +460,10 @@ function playUrl(url, generation) {
       if (settled) return
       settled = true
       if (finishActivePlay === abortPlay) finishActivePlay = null
-      if (activeAudio === audio) activeAudio = null
+      if (activeAudio === audio) {
+        activeAudio = null
+        playing.value = false
+      }
       if (generation !== playGeneration) {
         resolve()
         return
@@ -448,7 +483,12 @@ function playUrl(url, generation) {
     audio.onended = () => settle(false)
     audio.onerror = () => settle(true)
     audio.play().then(() => {
-      if (generation !== playGeneration) abortPlay()
+      if (generation !== playGeneration || !stillActive(activation)) {
+        abortPlay()
+        return
+      }
+      playing.value = true
+      answeredSinceOn.value = true
     }).catch(() => settle(true))
   })
 }
@@ -469,6 +509,7 @@ function invalidatePlayback() {
   playGeneration += 1
   stopActiveAudio()
   speaking.value = false
+  playing.value = false
   if (finishActivePlay) {
     const finish = finishActivePlay
     finishActivePlay = null
@@ -503,6 +544,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('pagehide', turnOff)
   turnOff()
+  // Vue stops this component's watchers before onUnmounted runs.
+  publishRoomFacts()
   delete window.__copresenter
 })
 </script>

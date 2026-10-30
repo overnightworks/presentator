@@ -23,7 +23,9 @@ from presentator.adapters.identity import (
     SqliteSubjectUserStore,
     create_identity_tables,
 )
+from presentator.application.decks import Decks
 from tests.presentator.application.support.fakes import FrozenClock
+from tests.presentator.application.support.person_instance_support import an_instance
 from tests.support.fake_issuer import FakeIssuer
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -37,6 +39,7 @@ from tests.support.lobby import (
     a_crowd,
     a_lobby_app,
     a_relying_party,
+    an_admin_people,
     an_installed_auth,
 )
 
@@ -146,6 +149,8 @@ def a_scene(  # noqa: PLR0913
     audit: Callable[[RecordingAudit], AuditSink] = lambda recording: recording,
     admission: AdmissionConfig | None = None,
     token_requests: Callable[[TokenRequestPost], TokenRequestPost] = lambda real: real,
+    token_clients: frozenset[str] = frozenset(),
+    decks: Decks | None = None,
 ) -> Scene:
     database = tmp_path / "identity.sqlite3"
     create_identity_tables(database)
@@ -171,7 +176,11 @@ def a_scene(  # noqa: PLR0913
         signing_in=SigningIn(
             sessions=sessions,
             auth=auth if admission is None else replace(auth, admission=admission),
+            decks=decks,
         ),
+        admin_people=an_admin_people(an_instance().people, clients=token_clients)
+        if token_clients
+        else None,
     )
     lobby = a_browser_at(
         app, people=people, base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS
@@ -195,19 +204,35 @@ def cookie_names(answer: BrowserAnswer) -> list[str]:
 
 @dataclass
 class ContentionSignalingLock:
-    """A real re-entrant lock that says when a taker found it held."""
+    """A real re-entrant lock that says each time a taker found it held.
+
+    `contended` is set at the first such taker, `held_up` gains one permit for
+    every taker, so a test waits for as many takers as it started.
+    """
 
     contended: threading.Event = field(default_factory=threading.Event)
+    held_up: threading.Semaphore = field(default_factory=lambda: threading.Semaphore(0))
     _real: threading.RLock = field(default_factory=threading.RLock)
 
     def __enter__(self) -> bool:
         """Take the lock, announcing first when it was already held."""
-        if self._real.acquire(blocking=False):
-            return True
-        self.contended.set()
-        return self._real.acquire()
+        return self.acquire()
 
     def __exit__(self, *_exception: object) -> None:
+        """Let go of the lock."""
+        self._real.release()
+
+    def acquire(self, *, blocking: bool = True) -> bool:
+        """Take the lock; a taker that finds it held announces itself, then waits."""
+        if self._real.acquire(blocking=False):
+            return True
+        if not blocking:
+            return False
+        self.contended.set()
+        self.held_up.release()
+        return self._real.acquire()
+
+    def release(self) -> None:
         """Let go of the lock."""
         self._real.release()
 

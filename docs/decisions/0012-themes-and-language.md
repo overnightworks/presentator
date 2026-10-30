@@ -10,6 +10,14 @@ Audience: humans and agents writing any user-facing string or any colour.
   ([#8](https://github.com/overnightworks/presentator/issues/8) line 22).
   Amended 2026-09-07: the lobby's one token file is the vendored
   `overnightworks/ui-tokens` pin; leftover Pico chrome is not a second theme.
+  Amended 2026-10-29: the catalog is also served as data, see
+  [ADR 0020](0020-the-lobby-is-a-json-api.md).
+  Amended again 2026-10-29: the addon overlay keeps no catalog, see
+  The catalog format
+  ([#616](https://github.com/overnightworks/presentator/issues/616)).
+  Amended 2026-10-30: the room notice takes its colours from the `room-*`
+  boards and follows the slide's brightness, see the named gap below
+  ([#616](https://github.com/overnightworks/presentator/issues/616)).
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06, including
   [#8](https://github.com/overnightworks/presentator/issues/8) line 22
@@ -52,17 +60,25 @@ caller here yet; Settings Users
 ([#61](https://github.com/overnightworks/presentator/issues/61))
 adopts `.list-head` / `nav.tabs` / `.rows` on Settings and Account.
 
-The co-presenter overlay in the Slidev addon reads the same token file. Lobby
-and overlay share the same active theme — one token file on both surfaces —
-which is what
+The co-presenter overlay in the Slidev addon is meant to read the same token
+file, so that lobby and overlay share the same active theme — one token file on
+both surfaces — which is what
 [#8](https://github.com/overnightworks/presentator/issues/8) line 22
 rules. Which theme is active follows the preference levels below.
+
+**Named gap: the overlay does not read the token file today.** The presenter
+controls in `CoPresenter.vue` use literal colours. The room notice is the
+stated exception: it takes its colours from the frozen `room-*` boards in
+`docs/mockups/m0-lobby.html`, the newer blessed picture, and follows the
+slide's brightness (Slidev's dark mode), not the instance theme. Its palette
+stands once, in `slidev/global-top.vue`.
 
 Decks themselves are untouched. Slidev's per-deck theme mechanism stays exactly
 as it is; this record governs the lobby and the overlay, not slide design.
 
-**Named gap: the overlay does not adapt to a deck's theme.** A deck whose
-palette fights the instance theme will look wrong under the overlay. Nothing
+**Named gap: the overlay does not adapt to a deck's palette.** The room notice
+follows the deck's light or dark mode, though not its palette. A deck whose
+palette fights the overlay's fixed colours will look wrong under it. Nothing
 here promises otherwise, and the fix — whatever it turns out to be — is owned by
 [#8](https://github.com/overnightworks/presentator/issues/8) as a later M1
 item, once a real deck has shown what the clash actually looks like.
@@ -76,9 +92,14 @@ already uses a token set, and it is the first theme's source.
 
 ### Language is an adapter
 
-Every user-facing string in the lobby and in the overlay goes through one
-message catalog, from the first line of code. English is the only catalog at
-start. Adding a language is adding a catalog file — never a code change.
+Every user-facing string in the lobby goes through one message catalog, from
+the first line of code. English is the only catalog at start. Adding a language
+is adding a catalog file — never a code change. The addon overlay is the
+exception named under The catalog format.
+
+Amendment 2026-10-29: the reader's resolved catalog is also served as data by
+`GET /api/session`, so a page holds no strings of its own
+([ADR 0020](0020-the-lobby-is-a-json-api.md)).
 
 ### Preference levels (amendment 2026-09-06)
 
@@ -112,21 +133,37 @@ language around it.
 
 Vetted with the first strings and taken: Babel owns the gettext `.po` catalogs
 of the Jinja2 lobby, read once at startup into a typed record, so that adding a
-language stays adding a file and no template holds a sentence. For the addon
-overlay `vue-i18n` is still a candidate, to be vetted when the overlay gets its
-first string.
+language stays adding a file and no template holds a sentence. The lobby's
+catalog policy is unchanged: its `.po` catalogs stay the only home of lobby
+strings.
+
+Amendment 2026-10-29: the addon overlay is the stated exception.
+
+- The presenter controls' words are English literals in the component.
+- The room notice's words follow the deck's language, the way the AI's speech
+  does ("Deck content is never translated"). They are two word sets, `de` and
+  `en`, in the addon's room module, closed to those two by the speech contract.
+- `vue-i18n` was vetted and not taken: two fixed sets of three strings do not
+  earn a dependency.
+- The lobby catalog that `/api/session` serves is rejected for the room: it
+  follows the reader's language, not the deck's, it is English only, and a new
+  request from the talk host would break "nothing new leaves the machine".
 
 ## Consequences
 
-- A review rejects any literal user-facing string outside the catalog, and any
-  colour outside the token set. That is the whole enforcement, and it is a
-  review rule rather than a gate because no cheap check reads intent from a
-  string.
+- A review rejects any literal user-facing string outside the lobby's catalog
+  and, in the addon, outside the component's English control words and the room
+  module's two word sets, and any colour outside the token set. Two places are
+  named exceptions to the colour rule: the presenter controls' literal colours
+  (the named gap above) and the room notice's palette in `global-top.vue`. That is the
+  whole enforcement, and it is a review rule rather than a gate because no
+  cheap check reads intent from a string.
 - The first slice pays for a catalog and a token file that serve one language
   and one theme. That is the deliberate cost of the two retrofits it avoids.
-- The overlay looks like the instance, not like the deck. That is the accepted
-  cost of one theme file, and it is the gap named above rather than a defect to
-  be found later.
+- The presenter controls follow neither the instance nor the deck yet; that is
+  the gap named above, not a defect to be found later. The room notice follows
+  the deck's brightness on purpose, with the `room-*` boards' palette and its
+  pulse in the dot's own colour in both modes.
 - English-only at start means the operator's own German talks run under an
   English interface until a German catalog is added. Adding it is a file.
 - The Settings/Account structure owns these controls

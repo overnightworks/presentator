@@ -14,16 +14,10 @@ from http import HTTPMethod, HTTPStatus
 from pathlib import Path
 from typing import Final, cast
 
-from fastapi import FastAPI, Request, Response
+from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
-from starlette.requests import HTTPConnection
-from webauth.config import WebAuthConfig, install_web_auth_config, web_auth_config
-from webauth.dependencies import (
-    ConnectionRefusal,
-    admit_session,
-    session_id_from_request,
-)
-from webauth.middleware.bearer_gate import BearerGate
+from webauth.config import WebAuthConfig, install_web_auth_config
+from webauth.middleware.bearer_gate import BearerGate, PersonPaths
 from webauth.middleware.session_gate import SessionGate
 from webauth.middleware.stack import install_web_auth_middleware
 from webauth.oidc import OidcRelyingParty
@@ -46,22 +40,22 @@ from webauth.sign_in_routes import (
     install_sign_in_routes,
 )
 
+from presentator.api.admission import gated_person
+from presentator.api.deck_list_api import deck_list_routes
 from presentator.api.decks import add_deck_pages
 from presentator.api.health import HEALTH_IS_PUBLIC, add_health_route
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
-from presentator.api.pages import (
-    TEMPLATES,
-    Pages,
-    gated_person,
-    state_word,
-    user_of_admitted,
-)
+from presentator.api.pages import TEMPLATES, Pages, state_word
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
+from presentator.api.preference_api import preference_api_routes
 from presentator.api.preferences import preference_routes
+from presentator.api.problems import install_error_answers
+from presentator.api.session_api import SESSION_PATH, SessionAddresses, session_routes
+from presentator.api.source_api import source_api_routes
 from presentator.api.sources import source_routes
+from presentator.api.voice_api import voice_api_routes
 from presentator.application.decks import Decks
 from presentator.application.voice import VoiceStatusUse
-from presentator.contracts.models import User
 from presentator.contracts.text import LobbyText
 
 _STATIC_DIR: Final = Path(__file__).parent / "static"
@@ -95,6 +89,8 @@ def talk_sign_in_refusal_path(refusal: RefusalPage) -> str:
     """The lobby's address that shows a talk sign-in refusal."""
     return f"/login/talk/{refusal.value}"
 
+
+_PERSON_API: Final = "/api/"
 
 # Signing in (its start and the issuer's return) and signing out are the
 # addresses the gate leaves alone, and the library derives them from the
@@ -164,34 +160,6 @@ def content_security_policy() -> str:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SignedInConnection:
-    """The hash-free person and authoritative session behind one connection."""
-
-    person: User
-    session_id: str
-
-    @property
-    def user_id(self) -> str:
-        """The signed-in person's account id."""
-        return self.person.id
-
-
-def signed_in_connection(
-    connection: HTTPConnection,
-    sessions: SessionRecordStore,
-) -> SignedInConnection | None:
-    """Resolve one HTTP or WebSocket connection through the library's one decider."""
-    config = web_auth_config(connection)
-    session_id = session_id_from_request(connection, config)
-    if session_id is None:
-        return None
-    admitted = admit_session(session_id, sessions=sessions, config=config)
-    if isinstance(admitted, ConnectionRefusal):
-        return None
-    return SignedInConnection(person=user_of_admitted(admitted), session_id=session_id)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class InstalledAuth:
     """The library configuration this host runs the lobby with."""
 
@@ -203,6 +171,11 @@ class InstalledAuth:
     # The talk host signs in through its own installation of the same wiring;
     # the lobby sends a refused talk sign-in's retry there.
     talk_origin: str
+
+    @property
+    def talk_sign_in_address(self) -> str:
+        """Where a sign-in starts at the talk host."""
+        return f"{self.talk_origin}{START_SIGN_IN_PATH}"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -272,7 +245,7 @@ class _Surfaces:
             return self.refused_page(
                 request,
                 refusal,
-                retry=f"{self.auth.talk_origin}{START_SIGN_IN_PATH}",
+                retry=self.auth.talk_sign_in_address,
             )
 
         return show
@@ -301,7 +274,10 @@ def _install_middleware(
     security headers. The gate's store calls commit on their own and `touch` is
     one update-only statement (ADR 0003), so the gate's admission takes no lock.
     The admin prefix, when it is served, takes a bearer token and no cookie.
+    While the admin prefix is served, `/api/` takes a person's token as that
+    person; a request without a token is decided by the session cookie.
     """
+    install_error_answers(lobby)
     install_web_auth_middleware(
         lobby,
         security_headers=SecurityHeadersPolicy(
@@ -318,6 +294,7 @@ def _install_middleware(
             session_transaction=lambda: nullcontext(sessions),
             login_redirect=LOGIN_REDIRECT,
             public=_PUBLIC_RULES,
+            optional=PathRules(exact=frozenset({SESSION_PATH})),
         ),
     )
 
@@ -328,6 +305,18 @@ def _bearer_gate(auth: InstalledAuth, admin: AdminPeople) -> BearerGate:
         relying_party=auth.relying_party,
         admission=auth.admission,
         authorized_parties=AuthorizedParties(admin.admitted_clients),
+        person_paths=PersonPaths(PathRules(prefixes=(_PERSON_API,)), auth.transaction),
+    )
+
+
+def _session_routes(pages: Pages, auth: InstalledAuth) -> APIRouter:
+    return session_routes(
+        preferences=pages.preferences,
+        addresses=SessionAddresses(
+            start=START_SIGN_IN_PATH,
+            logout=LOGOUT_PATH,
+            talk_start=auth.talk_sign_in_address,
+        ),
     )
 
 
@@ -345,11 +334,7 @@ def create_lobby(
     stored source and its secret is answered alike, and GET stays behind the
     session.
     """
-    surfaces = _Surfaces(
-        decks=decks,
-        pages=pages,
-        auth=auth,
-    )
+    surfaces = _Surfaces(decks=decks, pages=pages, auth=auth)
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(lobby, auth.config)
     _install_middleware(lobby, auth, sessions, private.admin_people)
@@ -375,8 +360,13 @@ def create_lobby(
             methods=["GET"],
         )
     add_health_route(lobby)
+    lobby.include_router(_session_routes(pages, auth))
+    lobby.include_router(deck_list_routes(decks=decks))
+    lobby.include_router(preference_api_routes(preferences=pages.preferences))
     lobby.include_router(preference_routes(pages=pages, voice=private.voice))
+    lobby.include_router(voice_api_routes(voice=private.voice))
     lobby.include_router(source_routes(pages=pages, decks=decks))
+    lobby.include_router(source_api_routes(decks=decks))
     add_deck_pages(lobby, decks=decks, pages=pages, talk_origin=auth.talk_origin)
     lobby.mount(_STATIC_PATH, StaticFiles(directory=_STATIC_DIR), name="static")
     lobby.include_router(fetch_hook(decks=decks))

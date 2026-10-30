@@ -202,7 +202,8 @@ uv sync --group dev
 uv run presentator-speech
 ```
 
-Stage proof (takes `/tmp/probe-stack.lock`, checks load, one heavy step at a
+Stage proof (run it under the machine's probe lock in the fleet form, so it
+waits for its turn and `timeout` ends it; it checks load, one heavy step at a
 time). It selects Chatterbox when the durable selection is absent and points
 `SPEECH_PROVIDER_ROOT` at `speech/providers` unless the caller set it, so each
 provider needs its virtual environment first (`uv sync --locked` inside
@@ -214,7 +215,8 @@ large-v3) pass through; on `cpu` the card is hidden from speech with an empty
 `HF_HUB_OFFLINE=1` is the default and resolves `refs/main`:
 
 ```sh
-uv run python scripts/prove_speech.py
+flock -o -w 1200 /tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 30 1800 \
+  uv run python scripts/prove_speech.py
 ```
 
 Every run reports load to ready, the card's compute pids at health ready and
@@ -223,8 +225,9 @@ for the hearing measurement behind "CPU" (five repetitions, two final timings,
 missed gates kept as values):
 
 ```sh
-SPEECH_DEVICE=cpu SPEECH_SPEAKING_MODEL=de_DE-thorsten-medium \
-  OMP_NUM_THREADS=4 uv run python scripts/prove_speech.py --measure
+SPEECH_DEVICE=cpu SPEECH_SPEAKING_MODEL=de_DE-thorsten-medium OMP_NUM_THREADS=4 \
+  flock -o -w 1200 /tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 30 1800 \
+  uv run python scripts/prove_speech.py --measure
 ```
 
 Checks:

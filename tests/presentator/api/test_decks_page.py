@@ -11,7 +11,13 @@ from urllib.parse import quote
 import pytest
 from fastapi.testclient import TestClient
 
-from presentator.contracts.decks import Build, BuildAttempt, BuildOutcome
+from presentator.contracts.decks import (
+    Build,
+    BuildAttempt,
+    BuildFailure,
+    BuildFailureReason,
+    BuildOutcome,
+)
 from presentator.contracts.text import Catalogs
 from tests.support.deck_page_support import (
     COMMIT,
@@ -53,6 +59,7 @@ _HOW_LONG_SINCE_THE_ATTEMPT: Final = "26 minutes ago"
 _RUNNING_FOR: Final = timedelta(seconds=40)
 _HOW_LONG_IT_HAS_RUN: Final = "40 seconds"
 _WHAT_THE_TOOLCHAIN_SAID: Final = "slides.md:41:3 Unexpected token in frontmatter"
+_THE_TOOLCHAIN_FAILED: Final = BuildFailure.said(_WHAT_THE_TOOLCHAIN_SAID)
 _A_DECK_THAT_WRITES_MARKUP: Final = "<script>alert('slides')</script>"
 _THEMES: Final = ("apple-basic", "bricks", "default", "seriph", "shibainu")
 
@@ -67,7 +74,7 @@ def a_running_attempt() -> BuildAttempt:
     )
 
 
-def a_failed_attempt(*, said: str | None = _WHAT_THE_TOOLCHAIN_SAID) -> BuildAttempt:
+def a_failed_attempt(*, said: BuildFailure = _THE_TOOLCHAIN_FAILED) -> BuildAttempt:
     """A build that broke a while ago, with or without words of its own."""
     return BuildAttempt(
         commit=_ATTEMPT_COMMIT,
@@ -610,7 +617,7 @@ def test_the_last_good_talk_still_opens_from_a_failed_decks_page(
 def test_what_a_failing_deck_printed_reaches_the_page_as_words_not_markup() -> None:
     page = a_page_of_a_deck(
         built=a_build(),
-        attempt=a_failed_attempt(said=_A_DECK_THAT_WRITES_MARKUP),
+        attempt=a_failed_attempt(said=BuildFailure.said(_A_DECK_THAT_WRITES_MARKUP)),
     )
 
     assert _A_DECK_THAT_WRITES_MARKUP not in page
@@ -618,10 +625,64 @@ def test_what_a_failing_deck_printed_reaches_the_page_as_words_not_markup() -> N
 
 
 def test_a_failed_build_that_said_nothing_is_still_explained() -> None:
-    page = a_page_of_a_deck(built=a_build(), attempt=a_failed_attempt(said=None))
+    page = a_page_of_a_deck(
+        built=a_build(), attempt=a_failed_attempt(said=BuildFailure.without_words())
+    )
 
     assert ENGLISH.deck_failed_without_a_message in page
     assert "<pre>" not in page
+
+
+@pytest.mark.parametrize(
+    ("failure", "sentence"),
+    [
+        (
+            BuildFailure(
+                reason=BuildFailureReason.OUTPUT_MEGABYTES,
+                written_megabytes=700,
+                allowed_megabytes=500,
+            ),
+            ENGLISH.deck_failed_output_megabytes.format(written=700, allowed=500),
+        ),
+        (
+            BuildFailure(
+                reason=BuildFailureReason.OUTPUT_ENTRIES, allowed_entries=20000
+            ),
+            ENGLISH.deck_failed_output_entries.format(entries=20000),
+        ),
+        (
+            BuildFailure(reason=BuildFailureReason.OUTPUT_SHAPE),
+            ENGLISH.deck_failed_output_shape,
+        ),
+        (
+            BuildFailure(
+                reason=BuildFailureReason.DECK_MEGABYTES,
+                allowed_megabytes=500,
+                allowed_entries=20000,
+            ),
+            ENGLISH.deck_failed_deck_megabytes.format(megabytes=500, entries=20000),
+        ),
+        (
+            BuildFailure(reason=BuildFailureReason.DECK_PATHS),
+            ENGLISH.deck_failed_deck_paths,
+        ),
+    ],
+    ids=[
+        "output-megabytes",
+        "output-entries",
+        "output-shape",
+        "deck-megabytes",
+        "deck-paths",
+    ],
+)
+def test_a_build_the_server_refused_is_worded_from_the_catalog_with_its_numbers(
+    failure: BuildFailure,
+    sentence: str,
+) -> None:
+    page = a_page_of_a_deck(built=a_build(), attempt=a_failed_attempt(said=failure))
+
+    assert f"<pre>{sentence}</pre>" in page
+    assert ENGLISH.deck_failed_without_a_message not in page
 
 
 def test_a_deck_that_never_built_and_failed_promises_no_talk_to_open() -> None:

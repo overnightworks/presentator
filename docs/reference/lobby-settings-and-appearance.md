@@ -35,6 +35,17 @@ instance defaults live in one SQLite row, a person's overrides in a row beside
 their account, and a theme chosen in the person menu is that same Account
 preference. Account carries neither a password nor a sessions part.
 
+## JSON
+
+Settings and Account are also readable and writable as JSON: `GET` and `PUT`
+`/api/settings` (admin only, else a 403 problem) and `/api/account` (every
+signed-in person). A write replaces what the page writes and answers with what
+is now stored; a newly chosen language no catalog speaks is a 422 problem and
+nothing is written; the language already stored is accepted back. Both reads
+carry the language list (`tag` and the catalog's own `name`), so no page holds
+one of its own
+([ADR 0020](../decisions/0020-the-lobby-is-a-json-api.md)).
+
 ## Language
 
 English is the only catalog the repository ships. Every catalog file the

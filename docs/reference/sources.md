@@ -51,6 +51,43 @@ admin adds one under Settings · Sources.
   carrying the public half in clear and the private half encrypted the same
   way; *Create* binds it to the new source and deletes the draft, and a draft
   nobody creates a source from is swept a day after it was minted.
+- The key draft and *Check connection* are also served as JSON to an admin:
+  `POST /api/sources/new/key-draft` answers the draft's `id` and public key
+  (the private half is in no answer), and `POST /api/sources/new/check` takes
+  the URL, the access (`AccessKind`), the token or null and the draft id, and
+  answers the probe's `failure`, `commit`, `detail` and `fingerprint`. A
+  mismatch between the access and the URL is refused before any probe, as the
+  problem `source-refused`.
+- *Create* is also served as JSON to an admin: `POST /api/sources` takes the
+  check's values (the URL, the access, the token or null, the draft id) with the
+  source's `name` and the `fingerprint` of the check that succeeded for exactly
+  those values. It answers 201 with the source's `name`, its absolute `hook_url`
+  and its `webhook_secret`, and a `Location` naming only the source
+  (`/api/sources/<name>`). The webhook secret is in that one answer: nothing
+  keeps it, no GET and no log carries it, and a lost answer is recovered by
+  renewing it. A refusal is a `source-refused` problem (422) and creates no
+  source and delivers or keeps no webhook secret. It does not promise that
+  nothing changes: a draft that is not this admin's, or is stale, makes the admin a
+  fresh draft before it is refused, and a store that rejects the row at the write (a
+  concurrent duplicate) answers `duplicate-name`. A failure after the row is
+  written (the first fetch) is a plain 500 with the source created and the
+  secret lost, so the person renews it.
+- The problem type `source-refused` is the URI
+  `tag:hallucinai.de,2026-09-08:presentator/problems/source-refused`, with the
+  title `Unprocessable Content`, status 422 and the member `reason`, one of:
+  `malformed-name` (not a source name, or the reserved `new`),
+  `duplicate-name` (another source has the name), `duplicate-url` (another
+  source has the URL), `access-mismatch` (the access is not the one the URL
+  names, or the URL names none: a user part, plain `http`), `missing-secret` (HTTPS without a
+  token), `not-checked` (no matching successful Check), `credential-not-allowed` (a
+  token for SSH or a folder), `outside-local-mount` (a folder outside the
+  mount) and `deploy-key-unavailable` (the draft key is gone or not this
+  admin's).
+  Check answers only `access-mismatch`; Create answers all nine. The date is the one RFC 4151 asks for:
+  presentator's commit `37beebc` of 2026-09-08 is the first that names
+  `hallucinai.de`, as the operator's hosts `presentator.hallucinai.de` and
+  `copresenter.hallucinai.de`; the domain's registration date is not in the
+  repository, so the type takes the date that evidence shows.
 
 ## Keeping it current
 
@@ -75,7 +112,8 @@ bound ends a slow one. A pull is bounded by
 `PRESENTATOR_SOURCE_TIMEOUT_SECONDS`, so an unreachable source costs one poll
 that bound and no more. Opening the deck list reads the database and pulls
 nothing. A refresh walks the sources one after another, taking each one in and
-building its decks before it reads the next.
+building its decks before it reads the next. A source that cannot be read ends
+its run and the walk goes on with the next one.
 
 `POST /sources/<name>/fetch` with the source's own secret does the same at
 once. It reads no payload, so every git host and a `post-receive` hook are the
@@ -88,14 +126,15 @@ flood of calls collapses into the one refresh that runs at a time.
 
 ## Runs and state
 
-Every poll of a source, reachable or not, records one run: the moment, whether
-it reached the source, and either the commit it found or a typed reason it did
-not, never the raw error a git command left behind. The table keeps the newest
-three runs per source. The Sources list shows the newest run's state: never
-fetched; reachable; refused when the host turns the login down; failed when
-the host answered with anything else; unreachable only when the host never
-answers; or Error when a credential could not be resolved, never the internal
-reason why.
+Every poll of a source, reachable or not, and every read of it that fails,
+records one run: the moment, whether it reached the source, and either the
+commit it found or a typed reason it did not, never the raw error a git
+command left behind. The table keeps the newest three runs per source. The
+Sources list shows the newest run's state: never fetched; reachable; refused
+when the host turns the login down; failed when the host answered with
+anything else or its mirror could not be read; unreachable only when the host
+never answers; or Error when a credential could not be resolved or sent, never
+the internal reason why.
 
 ## The source's page
 
@@ -112,8 +151,61 @@ created or renewed it.
 On the Sources list, each row's *Fetch now* refreshes only that source and
 returns to the list; on the source's page it returns to that page.
 
+The list, a source's page and *Fetch now* are also served as JSON for an admin
+(a session or a person's bearer). A signed-in non-admin gets a 403 problem;
+a signed-out caller or an invalid bearer meets the sign-in gate's own 401 or
+redirect instead:
+`GET /api/sources`, `GET /api/sources/<name>` and `POST /api/sources/<name>/fetch`
+(204 once that source is taken in and built; an unknown name is a 404 problem).
+They carry the state, the stored `fetched_at` instant of the newest run and, on
+the page, the absolute `hook_url`, the SSH `public_key`, the newest three runs
+(each with its own state, `at`, short `commit` or failure `reason`) and the
+viewer's own decks. They carry instants where the Jinja pages word ages, and no
+secret: the webhook secret comes back only in the answer to create or renew.
+
+Renewing access is also a JSON write for an admin, with the same refusals:
+`POST /api/sources/<name>/access` takes `{"secret": <token or null>}` and answers
+204 with no content, never the value. An SSH source renews its own pair
+and ignores the secret (the new public half is on the page); an unknown name is
+a 404 problem; a blank or null HTTPS token, a token that is not one printable
+line (git cannot be handed it) and a local folder are a 422 problem, which says
+no reason.
+
+Renewing the webhook secret is a JSON write for an admin too, with the same
+refusals: `POST /api/sources/<name>/webhook-secret` takes no body (anything sent
+is ignored) and answers 200 with `{"webhook_secret": <the new value>}`, the one
+answer that ever carries it. The old secret stops working at once. An unknown
+name is a 404 problem. Nothing keeps the value, so an answer that was lost is
+recovered by renewing again.
+
 Remove, at the bottom, asks once for a confirm naming the source's decks and
 runs, then deletes the source row, its runs, its decks, its mirror, and every
 built talk those decks left on disk, so the same URL can be added again
 straight after as a new source with a fresh secret. Once a talk was pointed
 at, only this takes it off disk.
+
+Removal is also JSON for an admin, in two steps. `GET /api/sources/<name>/removal`
+reads only and answers 200 with `{"deck_count", "run_count"}`: every deck row the
+source ever carried (each is one deck and its built talk, whoever owns it and
+marked removed or not) and the runs it keeps. `DELETE /api/sources/<name>` takes
+those two counts as required non-negative query parameters and no body; missing
+or malformed counts are the framework's 422 and remove nothing. It removes what
+the paragraph above names and answers 204 with no content, after which the name
+and the URL can be added again. An unknown name, `new`, a source removed
+meanwhile, or a second removal that found it gone is a 404 problem. Every
+other answer removes no row:
+
+- counts that no longer match what removal would take (a refresh added a deck
+  or a run since) are a `source-removal-stale` problem, 409, with `deck_count`
+  and `run_count` as they stand now; confirming again sends those;
+- a mirror or a built talk that would not leave the disk is a
+  `source-removal-refused` problem, 500, with the member `reason` `disk-leftover`
+  and no path. The source, its decks and its runs stay listed and its URL stays
+  taken; some talks may already be gone from disk. Repeating the call with the
+  same counts finishes it.
+
+The two problem types are the URIs
+`tag:hallucinai.de,2026-09-08:presentator/problems/source-removal-stale` (members
+`deck_count`, `run_count`) and
+`tag:hallucinai.de,2026-09-08:presentator/problems/source-removal-refused`
+(member `reason`).

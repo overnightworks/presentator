@@ -13,7 +13,7 @@ from presentator.api.auth import LOGIN_PATH, SIGN_IN_CALLBACK_PATH
 from presentator.host.config import Settings, cannot_start, read_secret_file
 
 _PROTOCOL_PATH: Final = "protocol/openid-connect"
-_SCOPES: Final = ("openid", "profile", "groups")
+_PERSON_SCOPES: Final = ("openid", "profile", "groups")
 _CLOCK_LEEWAY_SECONDS: Final = 30
 # Who may enter is set in Keycloak alone: these two group paths are the
 # product's, not a deployment's.
@@ -28,6 +28,8 @@ def oidc_client_config(
 
     The lobby and the talk host sign in through the one client, each as its own
     relying party with its own redirect URI; signing out returns to the lobby.
+    The sign-in also asks for the agent service's scope, so the person's token
+    names the agent service as an audience.
     """
     realm = f"{settings.oidc_issuer}/{_PROTOCOL_PATH}"
     try:
@@ -41,7 +43,7 @@ def oidc_client_config(
             client_secret=client_secret,
             redirect_uri=f"{origin}{SIGN_IN_CALLBACK_PATH}",
             post_logout_redirect_uri=f"{settings.public_origin}{LOGIN_PATH}",
-            scopes=_SCOPES,
+            scopes=(*_PERSON_SCOPES, settings.agent_service_scope),
             leeway_seconds=_CLOCK_LEEWAY_SECONDS,
         )
     except ValueError as refused:

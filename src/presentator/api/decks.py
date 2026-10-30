@@ -27,11 +27,15 @@ from starlette.responses import FileResponse
 from starlette.staticfiles import NotModifiedResponse
 from starlette.types import Receive, Scope, Send
 
-from presentator.api.pages import Pages, gated_person, state_word
+from presentator.api.admission import gated_person
+from presentator.api.deck_api import deck_routes
+from presentator.api.pages import Pages, state_word
 from presentator.application.decks import Decks
 from presentator.contracts.decks import (
     DECK_PATH,
     TALK_PAGE,
+    BuildFailure,
+    BuildFailureReason,
     DeckPage,
     DeckState,
     ShownAttempt,
@@ -48,6 +52,28 @@ _SAVED_AS: Final = "{slug}.pdf"
 _UNKNOWN_TYPE: Final = "application/octet-stream"
 _READS: Final = frozenset({"GET", "HEAD"})
 _THE_OPEN_FILE: Final = "/proc/self/fd/{descriptor}"
+
+
+def _worded(failure: BuildFailure, text: LobbyText) -> str | None:
+    """The words a failure is shown in: the toolchain's own, or the catalog's."""
+    counts = {
+        "written": failure.written_megabytes,
+        "allowed": failure.allowed_megabytes,
+        "megabytes": failure.allowed_megabytes,
+        "entries": failure.allowed_entries,
+    }
+    sentence = {
+        BuildFailureReason.TOOLCHAIN: failure.text,
+        BuildFailureReason.NO_WORDS: None,
+        BuildFailureReason.OUTPUT_MEGABYTES: text.deck_failed_output_megabytes,
+        BuildFailureReason.OUTPUT_ENTRIES: text.deck_failed_output_entries,
+        BuildFailureReason.OUTPUT_SHAPE: text.deck_failed_output_shape,
+        BuildFailureReason.DECK_MEGABYTES: text.deck_failed_deck_megabytes,
+        BuildFailureReason.DECK_PATHS: text.deck_failed_deck_paths,
+    }[failure.reason]
+    if failure.reason is BuildFailureReason.TOOLCHAIN or sentence is None:
+        return sentence
+    return sentence.format(**counts)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -91,10 +117,7 @@ class _DeckPage:
             commit=page.commit,
             state=page.state.value,
             state_word=state_word(page.state, text),
-            # A build that is running may deliver a half-written talk at any
-            # moment, so the two views are not offered while one runs; the PDF
-            # beside them is the last good build's file and stays offered.
-            views_open=page.state is not DeckState.BUILDING,
+            views_open=page.views_open,
             banner=self._banner(page, text),
             builds_with=self._builds_with(page.themes, text),
         )
@@ -127,7 +150,12 @@ class _DeckPage:
         text: LobbyText,
     ) -> Banner:
         """What broke, when it was tried, and what still stands (lines 9, 16)."""
-        no_words = () if attempt.failure else (text.deck_failed_without_a_message,)
+        failure = attempt.failure
+        no_words = (
+            (text.deck_failed_without_a_message,)
+            if failure is None or failure.reason is BuildFailureReason.NO_WORDS
+            else ()
+        )
         still_standing = (
             (text.deck_failed_last_talk_stands,) if page.built_ago is not None else ()
         )
@@ -136,7 +164,7 @@ class _DeckPage:
             label=text.deck_attempt_label,
             commit=attempt.commit,
             when=self.pages.age_in_words(attempt.ago, text.language_tag),
-            failure=attempt.failure,
+            failure=None if failure is None else _worded(failure, text),
             sentences=(*no_words, *still_standing),
         )
 
@@ -311,10 +339,14 @@ def _leaves_the_talk(directory: Path, path: str) -> bool:
 def add_deck_pages(
     lobby: FastAPI, *, decks: Decks, pages: Pages, talk_origin: str
 ) -> None:
-    """Give the lobby the deck page and its download; its views are at `talk_origin`."""
+    """Give the lobby the deck page, its download and its JSON facts.
+
+    The views are at `talk_origin`.
+    """
     page = _DeckPage(decks=decks, pages=pages, talk_origin=talk_origin)
     lobby.add_api_route(_DECK_PAGE, page.deck, methods=["GET"])
     lobby.add_api_route(_DECK_PDF, page.pdf, methods=["GET"])
+    lobby.include_router(deck_routes(decks=decks, talk_origin=talk_origin))
 
 
 def add_talk_mount(app: FastAPI, *, decks: Decks) -> None:

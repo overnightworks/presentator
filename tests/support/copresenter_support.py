@@ -142,6 +142,7 @@ class RecordingSpeech:
     readiness_unavailable: bool = False
     hearing_unavailable: bool = False
     grouped_hearing_context: bool = False
+    local_hearing_ready: bool = True
 
     async def readiness(self) -> CoPresenterReadiness:
         self.readiness_calls += 1
@@ -149,7 +150,7 @@ class RecordingSpeech:
             raise CoPresenterUnavailableError
         return CoPresenterReadiness(
             hearing_sample_rate=16_000,
-            local_hearing_ready=True,
+            local_hearing_ready=self.local_hearing_ready,
         )
 
     def hear(self, language: str) -> AbstractAsyncContextManager[PrivateHearing]:
@@ -318,6 +319,16 @@ def a_copresenter_talk_host(
 
 def ask(client: TestClient, body: Mapping[str, object] = QUESTION) -> Response:
     return client.post("/copresenter/ask", json=body)
+
+
+def who(
+    client: TestClient,
+    deck: str | None = A_DECK,
+    *,
+    headers: Mapping[str, str] | None = None,
+) -> Response:
+    params = {} if deck is None else {"deck": deck}
+    return client.get("/copresenter/who", params=params, headers=headers)
 
 
 @dataclass

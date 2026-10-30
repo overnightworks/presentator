@@ -6,10 +6,11 @@ Run inside the `presentator` service as its own user. It reads the settings
 with `load_settings()`, takes the worker from `the_build_worker` and runs the
 named steps of a deck in a fresh run directory under the builds root. It prints
 the run's name as the first JSON line, so a driver can watch the run directory,
-and the outcome as the last one: each step's `BuildFailure` text, and what the
-run directory holds when the steps are over.
+and the outcome as the last one: each step's `BuildFailure` reason, text and
+counts, and what the run directory holds when the steps are over.
 """
 
+import hashlib
 import json
 import sys
 from dataclasses import dataclass
@@ -32,17 +33,20 @@ from presentator.host.main import build_bound_of, the_build_worker
 
 DECKS = Path("/decks")
 HELLO_DECK = DECKS / "hello-deck"
+ADDON_DECK = DECKS / "copresenter-deck"
 FLOOD_DECK = DECKS / "probe" / "flood"
 LIMITS_DECK = DECKS / "probe" / "limits"
 LIMIT_FILE = "limit.txt"
 STAGED_PREFIX = "staged-"
 EXTRA_PART = "a"
+WORKLET_GLOB = "assets/pcm-capture-processor-*.js"
 
 
 class Case(StrEnum):
     """The decks this client builds, each by the way it reaches a limit."""
 
     HELLO = "hello"
+    ADDON = "addon"
     HOLD = "hold"
     MANY_ENTRIES = "many-entries"
     OUTPUT_MEGABYTES = "output-megabytes"
@@ -62,6 +66,7 @@ class Source:
 
 SOURCES = {
     Case.HELLO: Source(HELLO_DECK),
+    Case.ADDON: Source(ADDON_DECK),
     Case.HOLD: Source(FLOOD_DECK),
     Case.MANY_ENTRIES: Source(LIMITS_DECK, Case.MANY_ENTRIES),
     Case.OUTPUT_MEGABYTES: Source(LIMITS_DECK, Case.OUTPUT_MEGABYTES),
@@ -112,13 +117,20 @@ def staged_names(place: BuildPlace) -> list[str]:
     )
 
 
-def delivered(place: BuildPlace) -> dict[str, bool]:
-    """Whether the talk's page and the PDF reached out/."""
+def delivered(place: BuildPlace) -> dict[str, bool | str | None]:
+    """What reached out/: the talk's page, the PDF and the addon's worklet."""
     out = place.here / OUTPUT_DIRECTORY
     pdf = out / PDF_FILE
+    worklets = list((out / TALK_DIRECTORY).glob(WORKLET_GLOB))
     return {
         "talk_page": (out / TALK_DIRECTORY / "index.html").is_file(),
         "pdf": pdf.is_file() and pdf.read_bytes().startswith(b"%PDF-"),
+        "worklet": len(worklets) == 1,
+        "worklet_sha256": (
+            hashlib.sha256(worklets[0].read_bytes()).hexdigest()
+            if len(worklets) == 1
+            else None
+        ),
     }
 
 
@@ -142,7 +154,13 @@ def main(case: Case, kinds: list[StepKind]) -> None:
         )
         step: dict[str, object] = {"step": kind.value, "failed": failure is not None}
         if failure is not None:
-            step["text"] = failure.text
+            step["failure"] = {
+                "reason": failure.reason.value,
+                "text": failure.text,
+                "written_megabytes": failure.written_megabytes,
+                "allowed_megabytes": failure.allowed_megabytes,
+                "allowed_entries": failure.allowed_entries,
+            }
         steps.append(step)
         if failure is not None:
             break

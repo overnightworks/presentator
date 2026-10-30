@@ -52,9 +52,11 @@ nobody.
 
 Only an access token of the instance's Keycloak client, with that client as
 its one audience, type `at+jwt`, an `azp` listed in
-`PRESENTATOR_ADMIN_TOKEN_CLIENTS` and the admin group or a subgroup. `webauth`
+`PRESENTATOR_TOKEN_CLIENTS` and the admin group or a subgroup. `webauth`
 checks it; the cookie counts for nothing. With the setting empty (the
-default) neither the gate nor the route exists.
+default) neither the gate nor the route exists. The same setting opens a
+person's own `/api/` to their token (see [sign-in and
+session](sign-in-and-session.md)).
 
 ## What is logged
 

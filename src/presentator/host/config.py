@@ -1,5 +1,6 @@
 """What varies by deployment; everything else is a constant beside its owner."""
 
+import re
 import threading
 from enum import StrEnum
 from functools import cached_property
@@ -25,7 +26,11 @@ SECRET_LENGTH: Final = 32
 
 _INVALID_PORT: Final = "has an invalid port"
 _REFUSED: Final = "this environment cannot start an instance"
-_EMPTY_CLIENT_ID: Final = "admin_token_clients: names an empty client id"
+_EMPTY_CLIENT_ID: Final = "token_clients: names an empty client id"
+_SCOPE_RULE: Final = (
+    "is one scope token of printable characters without a space, quote or backslash"
+)
+_SCOPE_SHAPE: Final = re.compile(r"[\x21\x23-\x5B\x5D-\x7E]+")
 _ONE_HOSTNAME: Final = "talk_origin: is another hostname than public_origin"
 
 ENVIRONMENT_PREFIX: Final = "PRESENTATOR_"
@@ -103,6 +108,13 @@ def _one_origin(given: str, *, schemes: tuple[str, ...]) -> str:
     except ValueError as refused:
         message = _INVALID_PORT
         raise ValueError(message) from refused
+    return given
+
+
+def _one_scope_token(given: str) -> str:
+    """Require one RFC 6749 scope-token: 1*( %x21 / %x23-5B / %x5D-7E )."""
+    if not _SCOPE_SHAPE.fullmatch(given):
+        raise ValueError(_SCOPE_RULE)
     return given
 
 
@@ -192,15 +204,19 @@ class Settings(BaseSettings, env_prefix=ENVIRONMENT_PREFIX, env_file=".env"):
     # Where the agent service answers: its origin on the network it shares with
     # this instance. It is a deployment fact: no default.
     agent_service: Annotated[str, AfterValidator(_one_service_origin)]
+    # The scope the workload grant asks for, so the token it gets names the agent
+    # service as its audience. It is a deployment fact: no default.
+    agent_service_scope: Annotated[str, AfterValidator(_one_scope_token)]
     speech_socket: Annotated[Path, AfterValidator(_an_absolute_path)] = Path(
         "/run/presentator-speech/speech.sock"
     )
     # Empty: the client address is the ASGI peer. A list is the peers whose
     # X-Forwarded-For this instance believes.
     trusted_proxies: Annotated[str, AfterValidator(_a_proxy_list)] = ""
-    # The `azp` of the access tokens the admin routes take, hal's client ids.
-    # Empty: no token is admitted and the admin routes do not exist.
-    admin_token_clients: Annotated[str, AfterValidator(_client_ids)] = ""
+    # The `azp` of the access tokens `/api/` takes, hal's client ids: a token
+    # opens `/api/` as the person and `/api/admin/` for an admin. Empty: no
+    # token is admitted and the admin routes do not exist.
+    token_clients: Annotated[str, AfterValidator(_client_ids)] = ""
 
     @cached_property
     def secret_key(self) -> SecretStr:
@@ -212,10 +228,10 @@ class Settings(BaseSettings, env_prefix=ENVIRONMENT_PREFIX, env_file=".env"):
         )
 
     def admitted_token_clients(self) -> frozenset[str]:
-        """The client ids whose tokens the admin routes take."""
-        if not self.admin_token_clients:
+        """The client ids whose tokens `/api/` takes."""
+        if not self.token_clients:
             return frozenset()
-        return frozenset(_split_client_ids(self.admin_token_clients))
+        return frozenset(_split_client_ids(self.token_clients))
 
     @model_validator(mode="after")
     def _two_hostnames(self) -> Self:

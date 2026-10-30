@@ -13,8 +13,8 @@ dependencies = [
     "fastapi==0.141.1",
     "httpx2[ws]==2.13.1",
     "jinja2==3.1.6",
-    "overnightworks-agent-runtime-client @ https://github.com/overnightworks/agent-runtime/releases/download/v0.10.0/overnightworks_agent_runtime_client-0.10.0-py3-none-any.whl#sha256=b5d15a343ed74aa1bad50c0327983c5008cda9e11b173e6fd0db8ffa1bee9ea9",
-    "overnightworks-webauth @ https://github.com/overnightworks/webauth/releases/download/v0.24.0/overnightworks_webauth-0.24.0-py3-none-any.whl#sha256=51e568884b14dbe005fe9b1174cb6546843357f23a298b3d3acbd17bdc1039b7",
+    "overnightworks-agent-runtime-client @ https://github.com/overnightworks/agent-runtime/releases/download/v0.12.0/overnightworks_agent_runtime_client-0.12.0-py3-none-any.whl#sha256=b4652a8b64ece25136663ce7719f8cb540905148efec896a9eecc841c2380e28",
+    "overnightworks-webauth @ https://github.com/overnightworks/webauth/releases/download/v0.26.0/overnightworks_webauth-0.26.0-py3-none-any.whl#sha256=85191c4f41d1c287682f55625a4ad12f574dcc53c523376b48b419a2a469582f",
     "pydantic-settings==2.15.0",
     "python-multipart==0.0.32",
     "syntok==1.4.4",
@@ -214,6 +214,24 @@ forbidden_modules = ["gitmirror"]
 as_packages = true
 # The host composes the adapter that owns it, so the legal chain runs through
 # it; only naming the package in a layer above is the violation.
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+id = "randomness-belongs-to-an-adapter"
+name = "Only adapters draw randomness"
+type = "forbidden"
+# ADR 0001, `ports/identity.py`: a layer above asks a port for a secret and
+# draws none. The host composes the adapters that draw, so the legal chain
+# runs through them; only a direct import above them is the violation.
+source_modules = [
+    "presentator.host",
+    "presentator.api",
+    "presentator.application",
+    "presentator.ports",
+    "presentator.contracts",
+]
+forbidden_modules = ["secrets"]
+as_packages = true
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]

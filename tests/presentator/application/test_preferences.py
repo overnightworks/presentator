@@ -2,7 +2,7 @@
 
 import pytest
 
-from presentator.application.preferences import Preferences
+from presentator.application.preferences import Preferences, UnspokenLanguageError
 from presentator.contracts.preferences import (
     InstanceSettings,
     PersonPreferences,
@@ -150,3 +150,45 @@ def test_an_instance_speaks_the_languages_whose_catalogs_it_has(
     spoken: bool,
 ) -> None:
     assert a_lobby().speaks(language_tag) is spoken
+
+
+def test_saving_an_unspoken_language_for_a_person_is_refused_and_writes_nothing() -> (
+    None
+):
+    lobby = a_lobby()
+    unspoken = PersonPreferences(language_tag="xx")
+
+    with pytest.raises(UnspokenLanguageError):
+        lobby.save_preferences_of(_PERSON, unspoken)
+
+    assert lobby.preferences_of(_PERSON) == PersonPreferences()
+
+
+def test_a_person_with_a_vanished_catalog_can_still_change_the_theme() -> None:
+    lobby = a_lobby(chosen=PersonPreferences(language_tag="xx"))
+
+    lobby.save_preferences_of(
+        _PERSON, PersonPreferences(language_tag="xx", theme=ThemeChoice.DARK)
+    )
+
+    assert lobby.preferences_of(_PERSON).theme is ThemeChoice.DARK
+
+
+def test_an_instance_with_a_vanished_catalog_can_still_change_the_theme() -> None:
+    lobby = a_lobby(instance=InstanceSettings(language_tag="xx"))
+
+    lobby.save_instance_settings(
+        InstanceSettings(language_tag="xx", theme=ThemeChoice.DARK)
+    )
+
+    assert lobby.instance_settings().theme is ThemeChoice.DARK
+
+
+def test_saving_an_unspoken_instance_language_is_refused_and_writes_nothing() -> None:
+    lobby = a_lobby()
+    unspoken = InstanceSettings(language_tag="xx")
+
+    with pytest.raises(UnspokenLanguageError):
+        lobby.save_instance_settings(unspoken)
+
+    assert lobby.instance_settings() == InstanceSettings()

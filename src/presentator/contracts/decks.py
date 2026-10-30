@@ -295,9 +295,9 @@ class SourcePoll:
 class ConnectionCheckResult:
     """What a bounded probe of an unsaved source found, without writing anything.
 
-    No failure and a commit is reachable; a failure and no commit is not, and
-    carries git's own sanitised first line only for `SourceRunFailure.FAILED`
-    — the one reason with no fixed sentence of its own. The fingerprint is
+    No failure and a commit is reachable; a failure and no commit is not. A
+    probe may carry git's sanitised first line for any failure, and
+    `as_answered` keeps it only for `SourceRunFailure.FAILED`. The fingerprint is
     the proof the form later needs to create what this probe found, and
     travels only when the state is reachable.
     """
@@ -306,6 +306,17 @@ class ConnectionCheckResult:
     commit: str | None
     detail: str | None
     fingerprint: str | None = None
+
+    def as_answered(self) -> ConnectionCheckResult:
+        """This result with git's line dropped unless the failure is `failed`."""
+        if self.failure is SourceRunFailure.FAILED:
+            return self
+        return ConnectionCheckResult(
+            failure=self.failure,
+            commit=self.commit,
+            detail=None,
+            fingerprint=self.fingerprint,
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -337,16 +348,76 @@ class Artefacts:
     pdf: Path
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class BuildFailure:
-    """That a build produced nothing, and what its toolchain said about it.
+class BuildFailureReason(StrEnum):
+    """Why a build produced nothing; the codes a page words in its own language.
 
-    The words are the toolchain's own, bounded by `bounded_failure`, or nothing
-    where none reached the server — a run given up on, or one that printed
-    nothing at all.
+    The server refusals are named as the build-worker probe names its cases.
     """
 
-    text: str | None
+    TOOLCHAIN = "toolchain"
+    NO_WORDS = "no-words"
+    OUTPUT_MEGABYTES = "output-megabytes"
+    OUTPUT_ENTRIES = "output-entries"
+    OUTPUT_SHAPE = "output-shape"
+    DECK_MEGABYTES = "deck-megabytes"
+    DECK_PATHS = "deck-paths"
+
+
+# The counts each reason names, and no others.
+_COUNTS_NAMED: Final = {
+    BuildFailureReason.OUTPUT_MEGABYTES: frozenset(
+        {"written_megabytes", "allowed_megabytes"}
+    ),
+    BuildFailureReason.OUTPUT_ENTRIES: frozenset({"allowed_entries"}),
+    BuildFailureReason.DECK_MEGABYTES: frozenset(
+        {"allowed_megabytes", "allowed_entries"}
+    ),
+}
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BuildFailure:
+    """That a build produced nothing, and why, as data and never as a sentence.
+
+    The text is the toolchain's own words, bounded by `bounded_failure`, and
+    only a `toolchain` reason carries it. A server refusal carries the counts
+    its sentence names; `no-words` is a run given up on, or one that printed
+    nothing at all. A combination a reason does not name is refused on
+    construction.
+    """
+
+    reason: BuildFailureReason
+    text: str | None = None
+    written_megabytes: int | None = None
+    allowed_megabytes: int | None = None
+    allowed_entries: int | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse a text off `toolchain` and a count the reason does not name."""
+        counts = {
+            "written_megabytes": self.written_megabytes,
+            "allowed_megabytes": self.allowed_megabytes,
+            "allowed_entries": self.allowed_entries,
+        }
+        named = _COUNTS_NAMED.get(self.reason, frozenset())
+        held = frozenset(name for name, count in counts.items() if count is not None)
+        if held != named or (self.text is not None) != (
+            self.reason is BuildFailureReason.TOOLCHAIN
+        ):
+            message = f"a {self.reason} failure cannot carry this text and these counts"
+            raise ValueError(message)
+
+    @classmethod
+    def without_words(cls) -> BuildFailure:
+        """Nothing reached the server."""
+        return cls(reason=BuildFailureReason.NO_WORDS)
+
+    @classmethod
+    def said(cls, text: str | None) -> BuildFailure:
+        """The toolchain's words, or `no-words` where it printed none."""
+        if not text:
+            return cls.without_words()
+        return cls(reason=BuildFailureReason.TOOLCHAIN, text=text)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -384,7 +455,7 @@ class BuildAttempt:
     commit: str
     started_at: datetime
     outcome: BuildOutcome
-    failure: str | None
+    failure: BuildFailure | None
 
 
 class DeckState(StrEnum):
@@ -426,6 +497,7 @@ class ListedDeck:
     slug: str
     title: str
     state: DeckState
+    changed_at: datetime
     age: timedelta
 
 
@@ -456,14 +528,17 @@ class ListedSource:
     access: AccessKind | None
     state: SourceState
     age: timedelta | None
+    fetched_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ShownSourceRun:
-    """One recent poll as the source page shows it: age, commit, or why not."""
+    """One recent poll as the source page shows it: when, commit, or why not."""
 
     outcome: SourceRunOutcome
+    state: SourceState
     age: timedelta
+    at: datetime
     commit: str | None
     reason: SourceRunFailure | None
 
@@ -485,6 +560,7 @@ class SourcePage:
     access: AccessKind | None
     state: SourceState
     age: timedelta | None
+    fetched_at: datetime | None
     public_key: str | None
     runs: tuple[ShownSourceRun, ...]
     decks: tuple[SourceDeck, ...]
@@ -510,7 +586,9 @@ class ShownAttempt:
 
     commit: str
     ago: timedelta
-    failure: str | None
+    started_at: datetime
+    outcome: BuildOutcome
+    failure: BuildFailure | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -522,9 +600,19 @@ class DeckPage:
     source: str | None
     commit: str
     built_ago: timedelta | None
+    built_at: datetime | None
     state: DeckState
     attempt: ShownAttempt | None
     # The themes this instance's toolchain carries (ADR 0014), or nothing
     # while its project cannot be read: an empty set is never shown as if it
     # were the real one (R3).
     themes: tuple[str, ...] | None
+
+    @property
+    def views_open(self) -> bool:
+        """Whether a view can be opened: a talk is delivered and no build runs.
+
+        A build that is running may deliver a half-written talk at any moment,
+        so the two views are not offered while one runs.
+        """
+        return self.built_at is not None and self.state is not DeckState.BUILDING

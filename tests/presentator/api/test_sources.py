@@ -1023,14 +1023,14 @@ def test_an_existing_source_without_a_stored_secret_stays_when_another_is_added(
             id="http URL",
         ),
         pytest.param(
-            {
-                "name": "talks",
-                "url": _HTTPS_URL,
-                "access": "ssh",
-                "secret": _READ_ONLY,
-            },
+            {"name": "talks", "url": _HTTPS_URL, "access": "ssh", "secret": _READ_ONLY},
             ENGLISH.source_refused_access,
             id="ssh radio",
+        ),
+        pytest.param(
+            {"name": "talks", "url": _HTTPS_URL, "access": "git", "secret": _READ_ONLY},
+            ENGLISH.source_refused_access,
+            id="unknown radio",
         ),
         pytest.param(
             {"name": "talks", "url": _HTTPS_URL, "access": "https", "secret": ""},

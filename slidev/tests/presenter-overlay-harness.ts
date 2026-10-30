@@ -1,27 +1,24 @@
 import { createHash } from 'node:crypto'
 import { createServer, type ServerResponse } from 'node:http'
-import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, extname, join, normalize, resolve } from 'node:path'
+import { extname, join, normalize, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-import { chromium, type ElementHandle, type Page } from 'playwright-chromium'
+import { chromium, type BrowserContext, type ElementHandle, type Page } from 'playwright-chromium'
 import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest'
 
 const run = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
 const slidevRoot = join(repositoryRoot, 'slidev')
-export const overlayDeckSourceDirectory = join(repositoryRoot, 'examples/copresenter-deck')
+export const addonRootDirectory = slidevRoot
+const exampleDeckDirectory = join(repositoryRoot, 'examples/copresenter-deck')
+const addonFixtureDeck = fileURLToPath(new URL('./fixtures/addon-fixture.md', import.meta.url))
 const providedBuild = process.env.PRESENTER_RETURN_BUILD_DIR
 const evidenceDirectory = process.env.PRESENTER_RETURN_EVIDENCE_DIR
 const wav = 'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
-// Exactly what `examples/copresenter-deck/README.md` tells an operator to
-// copy next to their own `slides.md` — proven by assembling a fresh deck from
-// only these files, never the repository's own example directory, where
-// every other file already happens to sit beside them regardless of whether
-// the README's own list is complete.
 // What the server answers before any stream starts: F1's refusals, plus the
 // two shapes it never sends, a 403 and a 401 that is not JSON.
 const REFUSED_REQUESTS = {
@@ -31,14 +28,6 @@ const REFUSED_REQUESTS = {
   'unavailable': { status: 503, contentType: 'application/json', body: '{"detail":"Co-presenter unavailable"}' },
   'unreadable-401': { status: 401, contentType: 'text/plain', body: 'Sign in again' },
 } as const
-
-const COPIED_OVERLAY_FILES = [
-  'custom-nav-controls.vue',
-  'style.css',
-  'components/CoPresenter.vue',
-  'public/pcm-capture-processor.js',
-]
-
 
 let buildDirectory = providedBuild ?? ''
 let server: ReturnType<typeof createServer>
@@ -72,8 +61,12 @@ export const state = {
   pendingAnswerClosed: 0,
   askHeaderNames: [] as string[],
   answerMode: 'audio' as AnswerMode,
-  askBodies: [] as { said: string, deck: string }[],
-  hearingMode: 'ready' as 'ready' | 'not-ready' | 'socket-error' | 'unreachable' | 'who-fails',
+  askBodies: [] as { said: string, deck: string, language: string }[],
+  whoLanguage: 'de' as 'de' | 'en',
+  hearLanguages: [] as (string | null)[],
+  hearingMode: 'ready' as 'ready' | 'not-ready' | 'socket-error' | 'error-on-open' | 'unreachable' | 'who-fails' | 'who-not-found',
+  // Whether the fake hearing sends a final question as soon as the lease opens.
+  heardOnConnect: true,
   media: createMediaObservation(),
 }
 
@@ -136,27 +129,33 @@ export async function saveEvidence(page: Page, name: string) {
   await page.screenshot({ path: join(evidenceDirectory, name), fullPage: true })
 }
 
-// Builds a second, independent deck containing only the files
-// `examples/copresenter-deck/README.md` names, plus the minimal `slides.md`
-// every deck needs (the one file that is the operator's own, never copied).
-export async function buildCopiedOverlayDeck(base = '/'): Promise<string> {
-  const deckDirectory = await mkdtemp(join(tmpdir(), 'presenter-copied-overlay-deck-'))
-  for (const relativePath of COPIED_OVERLAY_FILES) {
-    const destination = join(deckDirectory, relativePath)
-    await mkdir(dirname(destination), { recursive: true })
-    await copyFile(join(overlayDeckSourceDirectory, relativePath), destination)
-  }
-  await writeFile(
-    join(deckDirectory, 'slides.md'),
-    '---\ntitle: Copied overlay\nfonts:\n  provider: none\nfavicon: false\n---\n\n# Copied overlay\n',
-  )
-  const outDirectory = await mkdtemp(join(tmpdir(), 'presenter-copied-overlay-build-'))
+// A deck folder outside the repository and the toolchain that holds only the
+// fixture's `slides.md`: the overlay reaches it by the addon's name, never by
+// a copy.
+export async function stageAddonDeck(): Promise<string> {
+  const deckDirectory = await mkdtemp(join(tmpdir(), 'presenter-addon-deck-'))
+  await copyFile(addonFixtureDeck, join(deckDirectory, 'slides.md'))
+  return deckDirectory
+}
+
+// Builds the staged deck the way the build worker does: `slidev build` run
+// from the toolchain project, the deck folder staged outside it.
+export async function buildStagedDeck(deckDirectory: string, outDirectory: string, base = '/') {
   await run(
     'pnpm',
     ['exec', 'slidev', 'build', join(deckDirectory, 'slides.md'), '--out', outDirectory, '--base', base],
     { cwd: slidevRoot },
   )
-  await rm(deckDirectory, { recursive: true, force: true })
+}
+
+export async function buildAddonDeck(base = '/'): Promise<string> {
+  const deckDirectory = await stageAddonDeck()
+  const outDirectory = await mkdtemp(join(tmpdir(), 'presenter-addon-build-'))
+  try {
+    await buildStagedDeck(deckDirectory, outDirectory, base)
+  } finally {
+    await rm(deckDirectory, { recursive: true, force: true })
+  }
   return outDirectory
 }
 
@@ -192,14 +191,19 @@ function websocketAcceptKey(key: string) {
   return createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64')
 }
 
-// The minimal server the copied-overlay proof needs: the static build plus
+// The minimal server the addon-deck proof needs: the static build plus
 // the two routes `startLocalHear`'s own path calls before it ever reaches the
 // AudioWorklet (`/who`, then the hearing lease). `/ask` only reports what it
 // was asked, and there are no observation beacons: no proof here drives a
 // spoken turn. `basePath` serves the build below the folder a deck lives in.
 export async function createOverlayDeckServer(
   directory: string,
-  { basePath = '', onAsk = () => undefined }: { basePath?: string, onAsk?: (said: string, deck: string) => void } = {},
+  { basePath = '', alsoServing = [], onAsk = () => undefined, onWho = () => undefined }: {
+    basePath?: string
+    alsoServing?: { directory: string, basePath: string }[]
+    onAsk?: (said: string, deck: string) => void
+    onWho?: (deck: string | null) => void
+  } = {},
 ) {
   // `closeAllConnections` does not reach an upgraded (WebSocket) connection
   // (Node's own documented behaviour) — the same reason `startServer` below
@@ -209,9 +213,11 @@ export async function createOverlayDeckServer(
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://presenter.test')
     if (url.pathname === '/copresenter/who') {
+      onWho(url.searchParams.get('deck'))
       response.writeHead(200, { 'content-type': 'application/json' })
       response.end(
         JSON.stringify({
+          language: 'de',
           speech: { sample_rate: 16000, hearing: { ready: true } },
         }),
       )
@@ -226,8 +232,15 @@ export async function createOverlayDeckServer(
       return
     }
     // Vite writes the base percent-encoded into scripts but raw into the HTML.
-    const prefix = [basePath, basePath.replaceAll('%25', '%')].find((base) => base && url.pathname.startsWith(base))
-    await serveFile(directory, prefix ? url.pathname.slice(prefix.length) || '/' : url.pathname, response)
+    for (const deck of [{ directory, basePath }, ...alsoServing]) {
+      const prefix = [deck.basePath, deck.basePath.replaceAll('%25', '%')]
+        .find((base) => base && url.pathname.startsWith(base))
+      if (prefix) {
+        await serveFile(deck.directory, url.pathname.slice(prefix.length) || '/', response)
+        return
+      }
+    }
+    await serveFile(directory, url.pathname, response)
   })
   server.on('upgrade', (request, socket) => {
     const key = request.headers['sec-websocket-key']
@@ -255,6 +268,11 @@ async function startServer() {
   server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://presenter.test')
     if (url.pathname === '/copresenter/who') {
+      if (state.hearingMode === 'who-not-found') {
+        response.writeHead(404, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ detail: 'Not found' }))
+        return
+      }
       if (state.hearingMode === 'who-fails') {
         response.writeHead(500, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ detail: 'Co-presenter failed' }))
@@ -266,7 +284,10 @@ async function startServer() {
         return
       }
       response.writeHead(200, { 'content-type': 'application/json' })
-      response.end(JSON.stringify({ speech: { sample_rate: 16000, hearing: { ready: state.hearingMode !== 'not-ready' } } }))
+      response.end(JSON.stringify({
+        language: state.whoLanguage,
+        speech: { sample_rate: 16000, hearing: { ready: state.hearingMode !== 'not-ready' } },
+      }))
       return
     }
     if (url.pathname === '/copresenter/ask') {
@@ -339,13 +360,15 @@ async function startServer() {
       return
     }
     state.hearingOpened += 1
+    state.hearLanguages.push(new URL(request.url, 'http://presenter.test').searchParams.get('language'))
     socket.write(
       'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
       + `Sec-WebSocket-Accept: ${websocketAcceptKey(key)}\r\n\r\n`,
     )
-    if (state.hearingMode === 'ready') {
+    if (state.hearingMode === 'ready' && state.heardOnConnect) {
       socket.write(frame(JSON.stringify({ text: 'Where does the handoff slow down?', final: true })))
     }
+    if (state.hearingMode === 'error-on-open') socket.write(frame(JSON.stringify({ error: 'hearing failed' })))
     recordUnexpectedSocketErrors(socket)
     hearingSockets.add(socket)
     let closed = false
@@ -376,7 +399,7 @@ function sendEvent(response: ServerResponse, event: string, data: object) {
 async function readAskBody(request: import('node:http').IncomingMessage) {
   const chunks: Buffer[] = []
   for await (const chunk of request) chunks.push(chunk as Buffer)
-  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as { said: string, deck: string }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as { said: string, deck: string, language: string }
 }
 
 export function sendHeard(text: string) {
@@ -385,6 +408,11 @@ export function sendHeard(text: string) {
 
 export function sendHearingError() {
   for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ error: 'hearing failed' })))
+}
+
+// The server ends every open hearing lease, as it does when a session ends.
+export function closeHearingLeases() {
+  for (const socket of hearingSockets) socket.write(Buffer.from([0x88, 0x00]))
 }
 
 export function createMediaObservation(): MediaObservation {
@@ -401,6 +429,16 @@ async function installMediaFakes(page: Page) {
     const report = (event: string) => {
       navigator.sendBeacon(`/observations/${event}`)
     }
+    // What a test sets on the page before it switches the AI on.
+    const fakes = {
+      microphone: 'ready' as 'ready' | 'pending' | 'denied',
+      worklet: 'ready' as 'ready' | 'failing',
+      playback: 'resolve' as 'resolve' | 'pending' | 'rejected',
+      played: [] as HTMLMediaElement[],
+      releaseMicrophone: () => {},
+      endPlayback: () => fakes.played.forEach((audio) => audio.dispatchEvent(new Event('ended'))),
+    }
+    Object.assign(window, { __fakes: fakes })
     const track = {
       readyState: 'live',
       stop() {
@@ -414,6 +452,10 @@ async function installMediaFakes(page: Page) {
       value: {
         getUserMedia: async () => {
           microphones.__microphonesRequested += 1
+          if (fakes.microphone === 'denied') throw new DOMException('denied', 'NotAllowedError')
+          if (fakes.microphone === 'pending') {
+            await new Promise<void>((release) => { fakes.releaseMicrophone = release })
+          }
           report('microphone-opened')
           return { getTracks: () => [track] }
         },
@@ -430,7 +472,9 @@ async function installMediaFakes(page: Page) {
         // component names actually loads under that policy. Everything past
         // this point stays fake, because the component's own media graph
         // never has to be real for these tests to drive it.
-        addModule: (moduleUrl: string) => new RealAudioContext().audioWorklet.addModule(moduleUrl),
+        addModule: (moduleUrl: string) => (fakes.worklet === 'failing'
+          ? Promise.reject(new Error('worklet failed to load'))
+          : new RealAudioContext().audioWorklet.addModule(moduleUrl)),
       }
       createMediaStreamSource() { return { connect: () => undefined } }
       close() { return Promise.resolve() }
@@ -452,7 +496,10 @@ async function installMediaFakes(page: Page) {
       webkitSpeechRecognition: CountedSpeechRecognition,
     })
     HTMLMediaElement.prototype.play = async function () {
+      if (fakes.playback === 'pending') return new Promise<void>(() => undefined)
+      if (fakes.playback === 'rejected') throw new DOMException('blocked', 'NotAllowedError')
       Object.defineProperty(this, 'paused', { value: false, configurable: true })
+      fakes.played.push(this)
       report('playback-started')
     }
     HTMLMediaElement.prototype.pause = function () {
@@ -499,6 +546,45 @@ export async function openPresenterAt(
   return { browser, page }
 }
 
+// One browser context, so its pages share an origin's BroadcastChannel the way
+// a presenter window and a projector window of one browser do.
+export async function openRoomBrowser(colorScheme: 'light' | 'dark' = 'light') {
+  const browser = await chromium.launch({ headless: true })
+  const context = await browser.newContext({ colorScheme })
+  return { browser, context }
+}
+
+export async function openPageIn(
+  context: BrowserContext,
+  url: string,
+  width: number,
+  prepare: (page: Page) => Promise<void> = async () => undefined,
+) {
+  const page = await context.newPage()
+  await page.setViewportSize({ width, height: 900 })
+  page.setDefaultTimeout(5_000)
+  await installCspGuard(page)
+  await installMediaFakes(page)
+  await prepare(page)
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 })
+  return page
+}
+
+// Halts a page's script the way a crashed or frozen window stops: its timers
+// stop and it fires no `pagehide`. (`Page.setWebLifecycleState` frozen does not
+// stop a visible headless page.)
+export async function freezePage(page: Page) {
+  const session = await page.context().newCDPSession(page)
+  await session.send('Debugger.enable')
+  const paused = new Promise((resolve) => session.once('Debugger.paused', resolve))
+  await session.send('Debugger.pause')
+  await paused
+  return async () => {
+    await session.send('Debugger.resume')
+    await session.send('Debugger.disable')
+  }
+}
+
 export async function openPresenter(width: number) {
   return openPresenterAt(state.origin, '/presenter/1', width)
 }
@@ -512,7 +598,7 @@ export function registerOverlayHarness() {
       buildDirectory = await mkdtemp(join(tmpdir(), 'presenter-controls-'))
       await run(
         'pnpm',
-        ['exec', 'slidev', 'build', join(overlayDeckSourceDirectory, 'slides.md'), '--out', buildDirectory],
+        ['exec', 'slidev', 'build', join(exampleDeckDirectory, 'slides.md'), '--out', buildDirectory],
         { cwd: slidevRoot },
       )
     }
@@ -531,6 +617,7 @@ export function registerOverlayHarness() {
     cspViolations = []
     socketErrors.length = 0
     state.askBodies = []
+    state.hearLanguages = []
   })
 
   afterEach(() => {

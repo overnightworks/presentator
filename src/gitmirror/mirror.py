@@ -146,8 +146,10 @@ class GitMirror:
     def entries(self, revision: Revision, *, inside: str = "") -> tuple[TreeEntry, ...]:
         """The names one level below `inside` in the tree at this commit."""
         within = (f"{inside}/",) if inside else ()
-        listing = self._text("ls-tree", revision.commit, *within)
-        return tuple(_tree_entry(line) for line in listing.splitlines())
+        listing = self._run("ls-tree", "-z", revision.commit, "--", *within)
+        return tuple(
+            _tree_entry(record) for record in os.fsdecode(listing).split("\0") if record
+        )
 
     def read(self, revision: Revision, path: str) -> bytes:
         """The file's bytes at this commit; nothing is ever checked out."""
@@ -182,7 +184,11 @@ class GitMirror:
         """
         stamped = self._text("log", "-1", _LAST_CHANGE, revision.commit, "--", path)
         commit, _, at = stamped.partition(_BETWEEN_THEM)
-        return Change(commit=commit, at=datetime.fromisoformat(at))
+        try:
+            return Change(commit=commit, at=datetime.fromisoformat(at))
+        except ValueError as unreadable:
+            message = f"commit {commit} carries a date no calendar can hold: {at}"
+            raise MirrorError(message) from unreadable
 
     def _pull(self, *, secret: str | None) -> Connection:
         url = self.source.url
@@ -238,13 +244,20 @@ class GitMirror:
 
     def _run(self, *arguments: str) -> bytes:
         completed = subprocess.run(  # noqa: S603 - argv is a list led by the resolved git executable with no shell
-            [_git_executable(), "--git-dir", str(self.directory), *arguments],
+            [
+                _git_executable(),
+                "--literal-pathspecs",
+                "--git-dir",
+                str(self.directory),
+                *arguments,
+            ],
             capture_output=True,
             check=False,
             env=unattended_environment(secret=None),
         )
         if completed.returncode != 0:
-            message = f"git {' '.join(arguments)}: {completed.stderr.decode().strip()}"
+            reason = completed.stderr.decode(errors="replace").strip()
+            message = f"git {' '.join(arguments)}: {reason}"
             raise MirrorError(message)
         return completed.stdout
 
@@ -443,7 +456,7 @@ def _sanitized(stderr: str, *, secret: str | None) -> str:
     return redacted
 
 
-def _tree_entry(line: str) -> TreeEntry:
-    attributes, _, path = line.partition("\t")
+def _tree_entry(record: str) -> TreeEntry:
+    attributes, _, path = record.partition("\t")
     _mode, kind, _object = attributes.split()
     return TreeEntry(name=PurePosixPath(path).name, is_directory=kind == "tree")

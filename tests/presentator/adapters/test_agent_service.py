@@ -62,8 +62,7 @@ def test_the_request_is_the_run_request_of_the_contract() -> None:
     assert request.method == "POST"
     assert str(request.url) == f"{ORIGIN}/runs"
     run = RunRequest.model_validate_json(request.content)
-    assert (run.v, run.agent) == (PROTOCOL_VERSION, "copresenter")
-    assert run.roles == ["admin", "user"]
+    assert run.v == PROTOCOL_VERSION
     assert run.tools == {}
     assert run.turn.system
     assert [(m.role, m.text) for m in run.turn.messages] == [(TurnRole.USER, QUESTION)]

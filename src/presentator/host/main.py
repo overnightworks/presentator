@@ -37,6 +37,7 @@ from presentator.adapters.catalog import (
     duration_in_words,
     load_catalogs,
 )
+from presentator.adapters.deck_store import SqliteDeckStore
 from presentator.adapters.deck_texts import MirroredDeckTexts
 from presentator.adapters.decks import (
     FilesystemLocalMount,
@@ -44,7 +45,6 @@ from presentator.adapters.decks import (
     MirroredDeckFolders,
     SourceCredentials,
     SourceMirrors,
-    SqliteDeckStore,
     SqliteSourceRunStore,
     SqliteSourceStore,
 )
@@ -63,6 +63,7 @@ from presentator.adapters.preferences import (
 )
 from presentator.adapters.schema import create_tables
 from presentator.adapters.secrets import (
+    TokenWebhookSecrets,
     connection_fingerprint_key,
     secret_box,
     talk_session_secret,
@@ -233,6 +234,7 @@ def _decks(
         ),
         clock=SystemClock(),
         local_mount=local_mount,
+        webhook_secrets=TokenWebhookSecrets(),
     )
 
 
@@ -282,7 +284,9 @@ def _copresenter_surface(
         use=CoPresenterUse(
             answers=ServiceAnswerer(
                 origin=settings.agent_service,
-                workload_token=WorkloadToken(auth.relying_party),
+                workload_token=WorkloadToken(
+                    auth.relying_party, (settings.agent_service_scope,)
+                ),
             ),
             speech=UdsSpeechHearing(settings.speech_socket),
             decks=decks.store,

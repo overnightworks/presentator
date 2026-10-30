@@ -8,7 +8,6 @@ git, TOML, SQL, and the build toolchain stay outside (ADR 0001, ADR 0005).
 import hmac
 import logging
 import re
-import secrets
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
@@ -27,6 +26,7 @@ from presentator.contracts.decks import (
     Artefacts,
     Build,
     BuildAttempt,
+    BuildFailure,
     BuildOutcome,
     ConnectionCheckResult,
     Deck,
@@ -60,6 +60,7 @@ from presentator.ports.decks import (
     SourceRuns,
     SourceStore,
     ToolchainThemes,
+    WebhookSecrets,
 )
 
 _log = logging.getLogger(__name__)
@@ -75,21 +76,9 @@ _NAME_BELONGS_TO_ANOTHER_SOURCE: Final = (
 # itself: lowercase, digits, hyphens, starting with a letter or digit.
 _SOURCE_NAME: Final = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 # The form lives at this path segment, so a source must not take it.
-_RESERVED_SOURCE_NAME: Final = "new"
-_HTTPS_ACCESS: Final = "https"
-_SSH_ACCESS: Final = "ssh"
-_FILE_ACCESS: Final = "file"
-# The access value the form's own kind maps to, so a mismatch between what a
-# person picked and what the URL actually names is one lookup, not a growing
-# chain of conditions per kind.
-_EXPECTED_ACCESS_KIND: Final = {
-    _HTTPS_ACCESS: AccessKind.HTTPS,
-    _SSH_ACCESS: AccessKind.SSH,
-    _FILE_ACCESS: AccessKind.FILE,
-}
+RESERVED_SOURCE_NAME: Final = "new"
 # Added sources follow main; a later slice is what offers another ref.
 _ADDED_REF: Final = "main"
-_WEBHOOK_SECRET_BYTES: Final = 32
 _HASH_LENGTH: Final = 32
 _NO_HASH: Final = bytes(_HASH_LENGTH)
 # A draft nobody creates a source from is discarded after this long (operator
@@ -146,7 +135,7 @@ class NewSourceDraft:
 
     name: str
     url: str
-    access: str
+    access: AccessKind | None
     secret: str
     fingerprint: str
     # The draft key the Add form was shown; blank unless SSH was posted.
@@ -170,14 +159,13 @@ def hash_webhook_secret(secret: str) -> bytes:
     return sha256(secret.encode()).digest()
 
 
-def _access_matches_url(access: str, url: str) -> bool:
+def _access_matches_url(access: AccessKind | None, url: str) -> bool:
     """Whether the posted access names the kind this URL unambiguously is.
 
     An unknown access or a URL naming no kind never match, so two "nothing"s
     cannot agree and let an ambiguous address through.
     """
-    expected = _EXPECTED_ACCESS_KIND.get(access)
-    return expected is not None and expected is access_kind_of(url)
+    return access is not None and access is access_kind_of(url)
 
 
 def _refusal_for(
@@ -195,7 +183,7 @@ def _refusal_for(
     access, secret = draft.access, draft.secret
     checks = (
         (
-            name == _RESERVED_SOURCE_NAME or _SOURCE_NAME.fullmatch(name) is None,
+            name == RESERVED_SOURCE_NAME or _SOURCE_NAME.fullmatch(name) is None,
             SourceRefusal.MALFORMED_NAME,
         ),
         # A wrong radio for this URL is refused here, ahead of what that radio
@@ -206,9 +194,9 @@ def _refusal_for(
             not _access_matches_url(access, url),
             SourceRefusal.ACCESS_MISMATCH,
         ),
-        (access == _HTTPS_ACCESS and not secret.strip(), SourceRefusal.BLANK_ACCESS),
+        (access is AccessKind.HTTPS and not secret.strip(), SourceRefusal.BLANK_ACCESS),
         (
-            access in (_FILE_ACCESS, _SSH_ACCESS) and bool(secret.strip()),
+            access in (AccessKind.FILE, AccessKind.SSH) and bool(secret.strip()),
             SourceRefusal.CREDENTIAL_NOT_ALLOWED,
         ),
         (any(source.name == name for source in existing), SourceRefusal.DUPLICATE_NAME),
@@ -283,6 +271,7 @@ class Decks:
     toolchain_themes: ToolchainThemes
     clock: Clock
     local_mount: LocalMount
+    webhook_secrets: WebhookSecrets
     # How long a build may take before the refresh stops believing it is still
     # running: a process that died with the server leaves its attempt behind,
     # and nobody may read that as building for ever.
@@ -327,11 +316,14 @@ class Decks:
             access=listed.access,
             state=listed.state,
             age=listed.age,
+            fetched_at=listed.fetched_at,
             public_key=source.public_key,
             runs=tuple(
                 ShownSourceRun(
                     outcome=run.outcome,
+                    state=_source_state_of(run),
                     age=now - run.at,
+                    at=run.at,
                     commit=None if run.commit is None else run.commit[:_SHORT_COMMIT],
                     reason=run.reason,
                 )
@@ -351,11 +343,9 @@ class Decks:
         )
 
     def renew_access(self, name: str, secret: str) -> bool:
-        """Replace a source's token or generated deploy key.
+        """Replace a source's HTTPS token (one printable line) or SSH deploy key.
 
-        An SSH source needs no input because it gets a new pair immediately.
-        HTTPS still needs a nonblank replacement token. A local or unknown
-        source has no access value this operation can renew.
+        SSH needs no input; a local or unknown source has nothing to renew.
         """
         source = self._named(name)
         if source is None:
@@ -363,7 +353,9 @@ class Decks:
         kind = access_kind_of(source.url)
         if kind is AccessKind.SSH:
             return self.sources.renew_deploy_key(source.id)
-        if kind is not AccessKind.HTTPS or not secret.strip():
+        if kind is not AccessKind.HTTPS or not (
+            secret.strip() and secret.isprintable()
+        ):
             return False
         self.sources.put_credential(source.id, secret)
         return True
@@ -371,14 +363,14 @@ class Decks:
     def renew_webhook(self, name: str) -> str | None:
         """Mint a new webhook secret, store only its hash, and return the value once.
 
-        A name nobody stored is not a source to renew.
+        A name nobody stored, or one removed before the write, has nothing to renew.
         """
-        source = self._named(name)
-        if source is None:
+        if self._named(name) is None:
             return None
-        webhook_secret = secrets.token_urlsafe(_WEBHOOK_SECRET_BYTES)
-        self.sources.put_hook_secret_hash(name, hash_webhook_secret(webhook_secret))
-        return webhook_secret
+        secret = self.webhook_secrets.new_secret()
+        if not self.sources.put_hook_secret_hash(name, hash_webhook_secret(secret)):
+            return None
+        return secret
 
     def removal(self, name: str) -> SourceRemoval | None:
         """What removing that source would take with it, or nothing if unknown.
@@ -399,20 +391,20 @@ class Decks:
         """Delete that source, its decks, its runs, and everything they built.
 
         Waits for a refresh already under way, so nothing of this source's decks
-        is still building when their directories go (R1). The counts a person
-        confirmed are compared against a fresh count read inside the lock: a
-        refresh that changed them since is not deleted under a number nobody
-        confirmed, and the fresh count is handed back for a new confirm. Disk
+        is still building when their directories go (R1). The name and the
+        counts are read inside the lock, so a source removed meanwhile is
+        unknown and a refresh that changed the counts since is not deleted under
+        a number nobody confirmed: the fresh count is handed back. Disk
         goes first: the mirror and every run a deck delivers from are taken
         away before a row is touched, and if either survives, or a build lies
         where no run can be placed, nothing is deleted and the source stays
         taken rather than a leftover becoming an address a later add reopens
         with a new secret (R3); only a clean disk frees the URL (R2).
         """
-        source = self._named(name)
-        if source is None:
-            return None
         with self.one_at_a_time:
+            source = self._named(name)
+            if source is None:
+                return None
             carried = self.store.for_source(source.id)
             preview = self._preview_of(source, carried)
             if (
@@ -451,7 +443,7 @@ class Decks:
         self,
         *,
         url: str,
-        access: str,
+        access: AccessKind | None,
         secret: str,
         owner_id: str,
         key_draft_id: str,
@@ -467,7 +459,7 @@ class Decks:
         if not _access_matches_url(access, address):
             return SourceRefusal.ACCESS_MISMATCH
         deploy_key = None
-        if access == _SSH_ACCESS:
+        if access is AccessKind.SSH:
             deploy_key = self.key_drafts.unconsumed_for(
                 owner_id,
                 newer_than=self.clock.now() - DRAFT_MAX_AGE,
@@ -481,7 +473,7 @@ class Decks:
         credential = secret if deploy_key is None else deploy_key.private_key
         probed = self.checker.check(url=address, ref=_ADDED_REF, secret=credential)
         if probed.failure is not None:
-            return probed
+            return probed.as_answered()
         return ConnectionCheckResult(
             failure=None,
             commit=None if probed.commit is None else probed.commit[:_SHORT_COMMIT],
@@ -574,7 +566,7 @@ class Decks:
         if isinstance(canonical, SourceRefusal):
             return canonical
         address = canonical
-        webhook_secret = secrets.token_urlsafe(_WEBHOOK_SECRET_BYTES)
+        webhook_secret = self.webhook_secrets.new_secret()
         write = SourceWrite(
             name=named,
             url=address,
@@ -657,14 +649,14 @@ class Decks:
         now = self.clock.now()
         newest_first = sorted(
             (deck for deck in self.store.all() if deck.is_owned_by(viewer)),
-            key=lambda deck: deck.changed_at,
-            reverse=True,
+            key=lambda deck: (-deck.changed_at.timestamp(), deck.slug),
         )
         return tuple(
             ListedDeck(
                 slug=deck.slug,
                 title=deck.title,
                 state=_state_of(deck),
+                changed_at=deck.changed_at,
                 age=now - deck.changed_at,
             )
             for deck in newest_first
@@ -693,6 +685,7 @@ class Decks:
             source=self._address_of(deck),
             commit=(deck.commit if built is None else built.commit)[:_SHORT_COMMIT],
             built_ago=None if built is None else self.clock.now() - built.built_at,
+            built_at=None if built is None else built.built_at,
             state=_state_of(deck),
             attempt=self._shown(deck.attempt),
             themes=self.toolchain_themes.names(),
@@ -709,6 +702,8 @@ class Decks:
         return ShownAttempt(
             commit=attempt.commit[:_SHORT_COMMIT],
             ago=self.clock.now() - attempt.started_at,
+            started_at=attempt.started_at,
+            outcome=attempt.outcome,
             failure=attempt.failure,
         )
 
@@ -756,20 +751,13 @@ class Decks:
     def _listed_source(self, source: Source, now: datetime) -> ListedSource:
         """The row for that source, derived from its newest run and nothing else."""
         run = self.source_runs.newest(source.id)
-        if run is None:
-            return ListedSource(
-                name=source.name,
-                url=source.url,
-                access=access_kind_of(source.url),
-                state=SourceState.NEVER_FETCHED,
-                age=None,
-            )
         return ListedSource(
             name=source.name,
             url=source.url,
             access=access_kind_of(source.url),
-            state=_source_state_of(run),
-            age=now - run.at,
+            state=SourceState.NEVER_FETCHED if run is None else _source_state_of(run),
+            age=None if run is None else now - run.at,
+            fetched_at=None if run is None else run.at,
         )
 
     def _run_one_at_a_time(self, work: Callable[[], None]) -> None:
@@ -927,10 +915,7 @@ class Decks:
             return
         if self.clock.now() - attempt.started_at <= self.build_bound:
             return
-        self.store.put_attempt(
-            deck.slug,
-            replace(attempt, outcome=BuildOutcome.FAILED),
-        )
+        self._failed(deck, attempt, BuildFailure.without_words())
 
     def _switch_over(self, deck: Deck, source: Source) -> None:
         """Deliver this deck from its new build, once there really is one.
@@ -951,10 +936,10 @@ class Decks:
         self.store.put_attempt(deck.slug, attempt)
         built = self.builder.build(deck, source=source)
         if not isinstance(built, Artefacts):
-            self._failed(deck, attempt, said=built.text)
+            self._failed(deck, attempt, built)
             return
         if not self.builder.holds(built):
-            self._failed(deck, attempt, said=None)
+            self._failed(deck, attempt, BuildFailure.without_words())
             return
         self.store.put_build(
             deck.slug,
@@ -966,9 +951,9 @@ class Decks:
             ),
         )
 
-    def _failed(self, deck: Deck, attempt: BuildAttempt, *, said: str | None) -> None:
+    def _failed(self, deck: Deck, attempt: BuildAttempt, failure: BuildFailure) -> None:
         """Close this attempt as failed, keeping the moment it started."""
         self.store.put_attempt(
             deck.slug,
-            replace(attempt, outcome=BuildOutcome.FAILED, failure=said),
+            replace(attempt, outcome=BuildOutcome.FAILED, failure=failure),
         )
