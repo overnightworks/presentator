@@ -30,8 +30,8 @@ _IDENTITY: Final = ("type", "title", "status")
 def _describe_wire(schema: JsonDict) -> None:
     """Every problem answers its `type`, `title` and `status`, so the spec says so.
 
-    `title` and `status` carry placeholders until `ProblemError` sets them, and
-    the members stay open on the wire, so neither shows in the schema.
+    `title` and `status` carry placeholders until `ProblemError` sets them, so
+    neither shows a default in the schema.
     """
     required = schema.setdefault("required", [])
     if isinstance(required, list):
@@ -42,19 +42,12 @@ def _describe_wire(schema: JsonDict) -> None:
             member = properties.get(each)
             if isinstance(member, dict):
                 member.pop("default", None)
-    schema.pop("additionalProperties", None)
 
 
 class ProblemDetails(BaseModel):
-    """The body of a problem; fields that are `None` stay out of the wire.
+    """The body of a problem; fields that are `None` stay out of the wire."""
 
-    A route builds one beside the status it raises and never words `title` or
-    `status`: `ProblemError` sets both from the status.
-    """
-
-    model_config = ConfigDict(
-        frozen=True, extra="forbid", json_schema_extra=_describe_wire
-    )
+    model_config = ConfigDict(frozen=True, json_schema_extra=_describe_wire)
 
     type: str = _ABOUT_BLANK
     title: str = Field(default="", init=False)

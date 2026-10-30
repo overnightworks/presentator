@@ -52,6 +52,16 @@ def test_the_title_is_the_raised_statuss_phrase_whatever_the_problem_carried(
     assert body["status"] == HTTPStatus.CONFLICT
 
 
-def test_a_member_the_problem_does_not_declare_is_refused() -> None:
-    with pytest.raises(ValueError, match="Extra inputs"):
-        _Typed.model_validate({"reason": "why", "reasn": "typo"})
+@pytest.mark.parametrize("problem", [ProblemDetails, _Typed], ids=["plain", "typed"])
+def test_the_published_schema_requires_the_identity_and_names_no_python_class(
+    problem: type[ProblemDetails],
+) -> None:
+    schema = problem.model_json_schema()
+
+    assert {"type", "title", "status"} <= set(schema["required"])
+    assert "default" not in schema["properties"]["title"]
+    assert "default" not in schema["properties"]["status"]
+    assert "additionalProperties" not in schema
+    description = schema.get("description", "")
+    assert "ProblemError" not in description
+    assert "ProblemDetails" not in description
