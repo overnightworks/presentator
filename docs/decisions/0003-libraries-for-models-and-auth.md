@@ -440,6 +440,18 @@ one setting that names hal's clients is now `PRESENTATOR_TOKEN_CLIENTS`
 prefixes. `session_id_from_request` answers `None` on a bearer-admitted
 request; no caller meets one today.
 
+### Amendment 2026-10-30 — the agent service client moves to protocol 4
+
+Authority: [#656](https://github.com/overnightworks/presentator/issues/656),
+agent-runtime 0.11.0.
+
+The client is pinned at agent-runtime 0.11.0, which speaks protocol 4. It is a
+switch day with no coexistence: the service and every app move together, a
+`v: 3` body is refused and the client refuses a `v: 3` event, so this build is
+deployed on or after the day the service runs 0.11.0 or later. `Succeeded`
+gains a required `files`; presentator never reads `Succeeded` or its files, so
+nothing beyond the pin changes in the adapter. The adapters-only rule stands.
+
 ## Consequences
 
 - Which model presents becomes configuration, not code, and the phase M1 work is
