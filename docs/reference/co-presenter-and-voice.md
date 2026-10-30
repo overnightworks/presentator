@@ -127,6 +127,9 @@ running instance.
   waits while current speech owns synthesis, then plays through that exact
   active voice.
 
+The catalogue and the load, download and sample actions are also reachable as
+JSON at `/api/voice`, admin only and `no-store`; the sample answers `audio/wav`.
+
 ## Voices
 
 Speech runs selected Chatterbox, Qwen, VoxCPM2 and Magpie voices through one

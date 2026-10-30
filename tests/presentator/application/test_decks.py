@@ -22,6 +22,7 @@ from presentator.contracts.decks import (
     RECENT_SOURCE_RUNS,
     AccessKind,
     BuildAttempt,
+    BuildFailure,
     BuildOutcome,
     ConnectionCheckResult,
     Deck,
@@ -29,7 +30,6 @@ from presentator.contracts.decks import (
     DeckPage,
     DeckState,
     ListedDeck,
-    ListedSource,
     Source,
     SourceDeck,
     SourceRemoval,
@@ -306,21 +306,14 @@ def test_a_build_that_failed_leaves_the_talk_that_stands_standing() -> None:
     assert standing_page.commit == _SHORT_COMMIT
 
 
-def test_a_deck_nothing_could_build_delivers_nothing_and_says_so() -> None:
-    decks = decks_over(
-        a_folder("kundenfeedback"),
-        fakes=DecksFakes(builder=FakeBuildRunner(fails=True)),
-    )
-
-    decks.refresh()
-
-    assert page_of(decks, "kundenfeedback").built_ago is None
-    assert decks.built_talk("kundenfeedback", viewer=OWNER) is None
-    assert decks.exported_pdf("kundenfeedback", viewer=OWNER) is None
-
-
-def test_a_build_that_wrote_outside_the_builds_root_becomes_no_address() -> None:
-    builder = FakeBuildRunner(writes_outside_the_root=True)
+@pytest.mark.parametrize(
+    "builder",
+    [FakeBuildRunner(fails=True), FakeBuildRunner(writes_outside_the_root=True)],
+    ids=["the toolchain failed", "the build wrote outside the builds root"],
+)
+def test_a_deck_nothing_could_build_or_hold_delivers_nothing_and_says_so(
+    builder: FakeBuildRunner,
+) -> None:
     decks = decks_over(a_folder("kundenfeedback"), fakes=DecksFakes(builder=builder))
 
     decks.refresh()
@@ -329,6 +322,8 @@ def test_a_build_that_wrote_outside_the_builds_root_becomes_no_address() -> None
     page = page_of(decks, "kundenfeedback")
     assert page.built_ago is None
     assert page.state is DeckState.FAILED
+    assert page.attempt is not None
+    assert page.attempt.failure == BuildFailure.without_words()
     assert decks.built_talk("kundenfeedback", viewer=OWNER) is None
     assert decks.exported_pdf("kundenfeedback", viewer=OWNER) is None
 
@@ -401,7 +396,7 @@ def test_a_build_that_failed_names_its_commit_and_what_the_toolchain_said() -> N
     assert page.attempt is not None
     assert page.attempt.commit == _SHORT_COMMIT
     assert page.attempt.ago == timedelta(minutes=26)
-    assert page.attempt.failure == _WHAT_THE_TOOLCHAIN_SAID
+    assert page.attempt.failure == BuildFailure.said(_WHAT_THE_TOOLCHAIN_SAID)
     assert _listed_states(decks) == [DeckState.FAILED]
 
 
@@ -507,7 +502,7 @@ def test_a_build_that_died_with_the_server_is_failed_at_the_next_refresh() -> No
     page = page_of(decks, "kundenfeedback")
     assert page.state is DeckState.FAILED
     assert page.attempt is not None
-    assert page.attempt.failure is None
+    assert page.attempt.failure == BuildFailure.without_words()
     assert builder.built == []
 
 
@@ -818,14 +813,12 @@ def test_an_unreachable_source_records_a_failed_run_naming_why() -> None:
 
 
 def test_a_source_nobody_has_polled_lists_as_never_fetched() -> None:
-    assert decks_over().listed_sources() == (
-        ListedSource(
-            name=SOURCE.name,
-            url=SOURCE.url,
-            access=access_kind_of(SOURCE.url),
-            state=SourceState.NEVER_FETCHED,
-            age=None,
-        ),
+    (row,) = decks_over().listed_sources()
+
+    assert (row.state, row.age, row.fetched_at) == (
+        SourceState.NEVER_FETCHED,
+        None,
+        None,
     )
 
 

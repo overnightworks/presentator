@@ -56,6 +56,11 @@ class LobbyText:
     deck_failed_title: str
     deck_attempt_label: str
     deck_failed_without_a_message: str
+    deck_failed_output_megabytes: str
+    deck_failed_output_entries: str
+    deck_failed_output_shape: str
+    deck_failed_deck_megabytes: str
+    deck_failed_deck_paths: str
     deck_failed_last_talk_stands: str
     deck_presenter_view: str
     deck_projector_view: str

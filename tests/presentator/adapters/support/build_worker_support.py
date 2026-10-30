@@ -23,7 +23,7 @@ from tests.support.worker_support import OWN_GID, OWN_UID
 
 MEGABYTES = 1
 WINDOW = 0.6
-WITHOUT_A_REASON = BuildFailure(text=None)
+WITHOUT_A_REASON = BuildFailure.without_words()
 INDEX = b"<html>"
 PDF = b"%PDF"
 BUILT_TALK = support.OUTCOME_BUILT + support.talk_entries(INDEX)

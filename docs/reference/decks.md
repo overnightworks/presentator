@@ -24,9 +24,11 @@ Only a refresh reconciles; a page view never does.
   another source already carries is skipped with a line in the log, and the
   source that carried it first keeps it.
 - A source that cannot be read is logged and says nothing about what it
-  carries, so every deck stays listed. A folder whose manifest cannot be read
-  is logged too and counts as a folder without a title, so the deck row stands
-  as it was.
+  carries, so every deck stays listed. That includes a listing the mirror could
+  not finish, so a listing is either complete or absent, never shorter. A
+  folder whose manifest cannot be read, whether it is malformed or not a file
+  git can hand back, is logged too and counts as a folder without a title, so
+  the deck row stands as it was.
 
 ## The list
 
@@ -57,7 +59,19 @@ than shown empty while that project cannot be read
 ([ADR 0014](../decisions/0014-toolchain-owns-build-dependencies.md)).
 The same facts, with the instants of the build and of the attempt in place of
 their ages, are readable as JSON at `/api/decks/<folder>`; another person's deck
-and an unknown one answer the same bare 404 problem.
+and an unknown one answer the same bare 404 problem. A failed attempt carries its
+`failure` as a reason code (`toolchain`, `no-words` or one of the server's
+refusals, see [builds](builds.md#reason-codes)), the counts that reason names and,
+for `toolchain` only, the toolchain's own text; it is `null` while the attempt
+runs.
+
+A file from before the reason is upgraded in place on start: each missing
+column is added and no row is lost. On every start the reason is also made to
+agree with the stored text, so a file an earlier release wrote to after the
+upgrade is read again; two cases stay: a rolled-back release failing without
+words over a stored server reason, and an upgraded failed row whose text was one of
+the server's sentences, which reads as `toolchain` and shows that sentence; the page
+words both until the deck's next build.
 
 - While a build runs, the page says so with the commit being built and how long
   it has been running, and the two views are shown locked rather than offered:
@@ -66,8 +80,8 @@ and an unknown one answer the same bare 404 problem.
 - Where the last build failed, the page names the commit that was tried, how
   long ago, and what the toolchain said, as text and never as markup, cut to
   the last two thousand characters, and says the last talk that was built still
-  opens. A build that left no words at all is explained in the lobby's own
-  sentence.
+  opens. A build the server refused, and one that left no words at all, are
+  explained in the lobby's own sentence for their reason.
 - A deck no build has switched over yet says so and offers no view rather than
   a dead link.
 - A deck exists only for the account that owns its source: the list, the

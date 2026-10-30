@@ -33,6 +33,7 @@ from presentator.contracts.decks import (
     OUTPUT_DIRECTORY,
     Artefacts,
     BuildFailure,
+    BuildFailureReason,
     Deck,
     Source,
     talk_address,
@@ -465,7 +466,7 @@ def test_a_build_of_a_source_that_left_its_mount_is_not_attempted(
 
     built = builds.build(a_deck(remote), source=source)
 
-    assert built == BuildFailure(text=None)
+    assert built == BuildFailure.without_words()
 
 
 def test_a_second_build_of_the_same_deck_leaves_the_first_one_where_it_stands(
@@ -583,7 +584,7 @@ def test_a_build_that_did_not_finish_says_why_and_leaves_nothing_to_point_at(
     )
     built = builds.build(a_deck(remote), source=source)
 
-    assert built == BuildFailure(text=said)
+    assert built == BuildFailure.said(said)
     assert list(builds.builds.iterdir()) == []
 
 
@@ -604,7 +605,7 @@ def test_a_step_that_stopped_talking_but_not_running_is_given_up_on_too(
 
     built = builds.build(a_deck(remote), source=source)
 
-    assert built == BuildFailure(text=None)
+    assert built == BuildFailure.without_words()
     assert list(builds.builds.iterdir()) == []
 
 
@@ -644,7 +645,7 @@ def test_a_build_past_its_bound_takes_the_whole_toolchain_tree_down_with_it(
 
     built = builds.build(a_deck(remote), source=source)
 
-    assert built == BuildFailure(text=None)
+    assert built == BuildFailure.without_words()
     grandchild = int(pid_file.read_text(encoding="utf-8"))
     assert _gone_within(grandchild, deadline=_GRANDCHILD_GONE_WITHIN)
 
@@ -682,7 +683,7 @@ def test_without_a_toolchain_on_the_machine_there_is_no_build(
 
     # What the operating system says names paths of this host, so it stays in
     # the log; the page is told that this build left no words.
-    assert built == BuildFailure(text=None)
+    assert built == BuildFailure.without_words()
     assert EXAMPLE_SLUG in caplog.text
     assert _TOOLCHAIN_PROGRAM in caplog.text
 
@@ -703,7 +704,7 @@ def test_a_commit_the_mirror_cannot_read_the_deck_at_builds_nothing(
 
     # A tree this host could not read out of its own mirror is nothing a deck's
     # author could act on, so the page is told nothing and the log holds it.
-    assert built == BuildFailure(text=None)
+    assert built == BuildFailure.without_words()
     assert "never-pushed" in caplog.text
 
 
@@ -913,10 +914,11 @@ def test_a_talk_larger_than_a_build_may_leave_is_refused_with_that_reason(
 
     built = builds.build(a_deck(remote), source=source)
 
-    assert isinstance(built, BuildFailure)
-    assert built.text is not None
-    assert f"{_MEGABYTES_A_GREEDY_BUILD_WRITES} MB" in built.text
-    assert f"at most {_ONLY_A_MEGABYTE_MAY_BE_LEFT} MB" in built.text
+    assert built == BuildFailure(
+        reason=BuildFailureReason.OUTPUT_MEGABYTES,
+        written_megabytes=_MEGABYTES_A_GREEDY_BUILD_WRITES,
+        allowed_megabytes=_ONLY_A_MEGABYTE_MAY_BE_LEFT,
+    )
     assert list(builds.builds.iterdir()) == []
 
 
@@ -948,9 +950,7 @@ def test_a_build_that_has_written_too_much_is_stopped_where_it_stands(
     built = builds.build(a_deck(remote), source=source)
 
     assert time.monotonic() - began < _A_GENEROUS_BOUND.total_seconds()
-    assert isinstance(built, BuildFailure)
-    assert built.text is not None
-    assert f"{_MEGABYTES_A_GREEDY_BUILD_WRITES} MB" in built.text
+    assert getattr(built, "reason", None) is BuildFailureReason.OUTPUT_MEGABYTES
     assert list(builds.builds.iterdir()) == []
 
 
@@ -972,9 +972,9 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
 
     built = builds.build(a_deck(remote), source=source)
 
-    assert isinstance(built, BuildFailure)
-    assert built.text is not None
-    assert f"more than {MAXIMUM_ENTRIES} files" in built.text
+    assert built == BuildFailure(
+        reason=BuildFailureReason.OUTPUT_ENTRIES, allowed_entries=MAXIMUM_ENTRIES
+    )
     assert list(builds.builds.iterdir()) == []
     assert {held.name for held in Path("/proc/self/fd").iterdir()} <= open_before
 
@@ -993,7 +993,7 @@ def test_a_talk_that_cannot_be_added_up_in_time_is_refused_without_words(
     built = builds.build(a_deck(remote), source=source)
 
     # What this host could not do is nothing a deck's author could act on.
-    assert built == BuildFailure(text=None)
+    assert built == BuildFailure.without_words()
     assert EXAMPLE_SLUG in caplog.text
     assert list(builds.builds.iterdir()) == []
 
@@ -1011,7 +1011,7 @@ def test_a_talk_holding_something_this_server_cannot_read_is_refused(
     built = builds.build(a_deck(remote), source=source)
 
     # An entry nobody can read is a talk nobody added up, never a talk of none.
-    assert built == BuildFailure(text=None)
+    assert built == BuildFailure.without_words()
     assert EXAMPLE_SLUG in caplog.text
     assert list(builds.builds.iterdir()) == []
 
@@ -1138,7 +1138,7 @@ def test_a_talk_that_is_gone_by_the_time_it_is_added_up_is_refused(
 
     # A build that took its own talk away left nothing to add up and nothing
     # to deliver; what was written is not guessed at.
-    assert built == BuildFailure(text=None)
+    assert built == BuildFailure.without_words()
     assert EXAMPLE_SLUG in caplog.text
 
 
@@ -1178,6 +1178,6 @@ def test_a_name_that_is_no_longer_a_directory_when_it_is_opened_is_refused(
     built = builds.build(a_deck(remote), source=source)
 
     # Refused, and never followed: nothing of this machine was added up.
-    assert built == BuildFailure(text=None)
+    assert built == BuildFailure.without_words()
     assert EXAMPLE_SLUG in caplog.text
     assert list(builds.builds.iterdir()) == []

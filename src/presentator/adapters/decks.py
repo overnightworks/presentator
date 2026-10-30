@@ -21,6 +21,8 @@ from gitmirror.model import (
     CredentialReference,
     CredentialResolver,
     GitSource,
+    InvalidCredentialError,
+    MirrorError,
     Revision,
 )
 from presentator.adapters.deck_manifest import MalformedManifestError, titled_by
@@ -84,6 +86,10 @@ CREATE TABLE IF NOT EXISTS decks (
     attempt_started_at TEXT,
     attempt_outcome TEXT,
     attempt_failure TEXT,
+    attempt_reason TEXT,
+    attempt_written_megabytes INTEGER,
+    attempt_allowed_megabytes INTEGER,
+    attempt_allowed_entries INTEGER,
     removed_at TEXT
 );
 CREATE TABLE IF NOT EXISTS source_runs (
@@ -515,10 +521,21 @@ class MirroredDeckFolders:
                 commit=None,
                 failure=SourceRunFailure.FAILED,
             )
+        try:
+            return self._poll(source, mirror)
+        except InvalidCredentialError as unsendable:
+            _log.warning(_UNREADABLE_SOURCE, source.name, unsendable)
+            failure = SourceRunFailure.CREDENTIAL_UNRESOLVABLE
+        except MirrorError as unreadable:
+            _log.warning(_UNREADABLE_SOURCE, source.name, unreadable)
+            failure = SourceRunFailure.FAILED
+        return SourcePoll(folders=None, commit=None, failure=failure)
+
+    def _poll(self, source: Source, mirror: GitMirror) -> SourcePoll:
         connection = mirror.connect()
         revision = connection.revision
         if revision is None:
-            _log.warning(_UNREADABLE_SOURCE, source.url, connection.state)
+            _log.warning(_UNREADABLE_SOURCE, source.name, connection.state)
             return SourcePoll(
                 folders=None,
                 commit=None,
@@ -577,7 +594,7 @@ class MirroredDeckFolders:
                 mirror.read(revision, f"{name}/{MANIFEST_FILE}"),
                 folder=name,
             )
-        except MalformedManifestError as unreadable:
+        except (MalformedManifestError, MirrorError) as unreadable:
             _log.warning(_UNREADABLE_MANIFEST, name, unreadable)
             return None
 

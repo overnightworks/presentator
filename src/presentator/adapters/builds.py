@@ -51,6 +51,7 @@ from presentator.contracts.decks import (
     TALK_PAGE,
     Artefacts,
     BuildFailure,
+    BuildFailureReason,
     Deck,
     Source,
     StepKind,
@@ -96,15 +97,6 @@ _TOO_MUCH_WRITTEN: Final = "deck %s wrote %s MB, which is more than a build may 
 _UNACCOUNTABLE: Final = "what the build of deck %s wrote could not be added up: %s"
 _TOOK_TOO_LONG_TO_ADD_UP: Final = (
     "what the build of deck %s wrote could not be added up inside %s"
-)
-# What a person reads on the deck page when no toolchain failed but the build
-# is refused all the same.
-TOO_MUCH_FOR_A_PAGE: Final = (
-    "The talk this build wrote is {written} MB; a build may leave at most {allowed} MB."
-)
-TOO_MANY_FOR_A_PAGE: Final = (
-    "The talk this build wrote holds more than {allowed} files;"
-    " a build may leave fewer."
 )
 
 _log = logging.getLogger(__name__)
@@ -420,7 +412,7 @@ class SlidevBuilds:
         if not self._exported(deck, source=source, into=place.here / DECK_DIRECTORY):
             # A tree this server cannot read out of its own mirror is a fault
             # of this host, not words a deck's author could act on.
-            return BuildFailure(text=None)
+            return BuildFailure.without_words()
         # The walk stops at the first step that failed, so a deck that does not
         # build is never exported either.
         for kind in StepKind:
@@ -448,7 +440,7 @@ class SlidevBuilds:
         cannot keep is a machine that stops keeping the others. It is asked
         while the build runs and once more when it is over, because a build
         that fills this machine has filled it long before it ends. No toolchain
-        failed, so the words a page shows here are this server's own; what only
+        failed, so the reason a page words here is this server's own; what only
         this host can act on stays in the log.
         """
         added = _added_up(
@@ -457,23 +449,23 @@ class SlidevBuilds:
         )
         if added.unreadable is not None:
             _log.warning(_UNACCOUNTABLE, deck.slug, added.unreadable)
-            return BuildFailure(text=None)
+            return BuildFailure.without_words()
         if not added.in_time:
             _log.warning(_TOOK_TOO_LONG_TO_ADD_UP, deck.slug, _ADDING_UP_WITHIN)
-            return BuildFailure(text=None)
+            return BuildFailure.without_words()
         if added.entries > MAXIMUM_ENTRIES:
             _log.warning(_TOO_MUCH_WRITTEN, deck.slug, added.entries)
             return BuildFailure(
-                text=TOO_MANY_FOR_A_PAGE.format(allowed=MAXIMUM_ENTRIES),
+                reason=BuildFailureReason.OUTPUT_ENTRIES,
+                allowed_entries=MAXIMUM_ENTRIES,
             )
         if added.megabytes <= self.output_megabytes:
             return None
         _log.warning(_TOO_MUCH_WRITTEN, deck.slug, added.megabytes)
         return BuildFailure(
-            text=TOO_MUCH_FOR_A_PAGE.format(
-                written=added.megabytes,
-                allowed=self.output_megabytes,
-            ),
+            reason=BuildFailureReason.OUTPUT_MEGABYTES,
+            written_megabytes=added.megabytes,
+            allowed_megabytes=self.output_megabytes,
         )
 
     def _exported(self, deck: Deck, *, source: Source, into: Path) -> bool:
@@ -527,7 +519,7 @@ def _what_a_step_said(
             # deck's page is told that no words came back, and the log keeps
             # them.
             _log.exception(_TOOLCHAIN_UNAVAILABLE, step.name, step.slug, unavailable)
-            return BuildFailure(text=None)
+            return BuildFailure.without_words()
         finally:
             # The child holds the writing end now, and only this process
             # letting go of it lets the reading end ever see an end.
@@ -542,11 +534,11 @@ def _what_a_step_said(
         _log.warning(_TOOLCHAIN_TIMED_OUT, step.name, step.slug, how.bound)
         # What a step that was killed had printed is not shown: it is the words
         # of a run nobody waited for, and the page says so in its own sentence.
-        return BuildFailure(text=None)
+        return BuildFailure.without_words()
     if process.returncode != 0:
         words = failure_text(went.said)
         _log.warning(_TOOLCHAIN_FAILED, step.name, step.slug, words)
-        return BuildFailure(text=words or None)
+        return BuildFailure.said(words)
     return None
 
 

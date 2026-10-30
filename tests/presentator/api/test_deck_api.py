@@ -8,7 +8,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from presentator.api.deck_api import DeckView
-from presentator.contracts.decks import BuildAttempt, BuildOutcome, DeckState
+from presentator.contracts.decks import (
+    BuildAttempt,
+    BuildFailure,
+    BuildFailureReason,
+    BuildOutcome,
+    DeckState,
+)
 from presentator.contracts.models import Role
 from tests.presentator.application.support.fakes import FakeDeckStore
 from tests.support.deck_page_support import SLUG, a_build, a_deck_store
@@ -31,7 +37,9 @@ _NOT_FOUND = b'{"type":"about:blank","title":"Not Found","status":404}'
 _PROBLEM = "application/problem+json"
 
 
-def an_attempt(outcome: BuildOutcome, *, failure: str | None = None) -> BuildAttempt:
+def an_attempt(
+    outcome: BuildOutcome, *, failure: BuildFailure | None = None
+) -> BuildAttempt:
     return BuildAttempt(
         commit="e91c5ad4f3b2a1908877665544332211aabbccdd",
         started_at=NOW - timedelta(minutes=26),
@@ -44,7 +52,7 @@ def a_running_attempt() -> BuildAttempt:
     return an_attempt(BuildOutcome.RUNNING)
 
 
-def a_failed_attempt(*, said: str | None) -> BuildAttempt:
+def a_failed_attempt(*, said: BuildFailure) -> BuildAttempt:
     return an_attempt(BuildOutcome.FAILED, failure=said)
 
 
@@ -121,23 +129,72 @@ def test_a_first_build_that_runs_has_no_talk_and_no_open_view() -> None:
     assert view.views_open is False
 
 
-@pytest.mark.parametrize("said", ["slides.md:41:3 broke", "<b>markup</b>", None])
-def test_a_failed_build_carries_the_toolchains_words_unchanged_or_none(
-    said: str | None,
+_EVERY_FAILURE_AS_THE_WIRE_CARRIES_IT = [
+    (
+        BuildFailure.said("slides.md:41:3 broke"),
+        {"reason": "toolchain", "text": "slides.md:41:3 broke"},
+    ),
+    (
+        BuildFailure.said("<b>markup</b>"),
+        {"reason": "toolchain", "text": "<b>markup</b>"},
+    ),
+    (BuildFailure.without_words(), {"reason": "no-words"}),
+    (
+        BuildFailure(
+            reason=BuildFailureReason.OUTPUT_MEGABYTES,
+            written_megabytes=700,
+            allowed_megabytes=500,
+        ),
+        {
+            "reason": "output-megabytes",
+            "written_megabytes": 700,
+            "allowed_megabytes": 500,
+        },
+    ),
+    (
+        BuildFailure(reason=BuildFailureReason.OUTPUT_ENTRIES, allowed_entries=20000),
+        {"reason": "output-entries", "allowed_entries": 20000},
+    ),
+    (BuildFailure(reason=BuildFailureReason.OUTPUT_SHAPE), {"reason": "output-shape"}),
+    (
+        BuildFailure(
+            reason=BuildFailureReason.DECK_MEGABYTES,
+            allowed_megabytes=500,
+            allowed_entries=20000,
+        ),
+        {
+            "reason": "deck-megabytes",
+            "allowed_megabytes": 500,
+            "allowed_entries": 20000,
+        },
+    ),
+    (BuildFailure(reason=BuildFailureReason.DECK_PATHS), {"reason": "deck-paths"}),
+]
+
+
+@pytest.mark.parametrize(
+    ("failure", "carried"),
+    _EVERY_FAILURE_AS_THE_WIRE_CARRIES_IT,
+    ids=[carried["reason"] for _, carried in _EVERY_FAILURE_AS_THE_WIRE_CARRIES_IT],
+)
+def test_a_failed_build_carries_its_reason_counts_and_only_a_toolchains_text(
+    failure: BuildFailure,
+    carried: dict[str, object],
 ) -> None:
-    attempt: BuildAttempt = a_failed_attempt(said=said)
+    attempt = a_failed_attempt(said=failure)
     lobby = a_lobby_with(a_deck_store(built=a_build(), attempt=attempt))
     lobby.sign_in()
 
-    view = deck_of(lobby)
+    body = lobby.client.get(f"/api/decks/{SLUG}", headers=_JSON).json()
 
-    assert view.state is DeckState.FAILED
-    assert view.attempt is not None
-    assert view.attempt.outcome is BuildOutcome.FAILED
-    assert view.attempt.failure == said
-    assert view.attempt.commit == attempt.commit[:7]
-    assert view.built_at == a_build().built_at
-    assert view.views_open is True
+    unnamed = dict.fromkeys(
+        ("text", "written_megabytes", "allowed_megabytes", "allowed_entries")
+    )
+    assert body["attempt"]["outcome"] == BuildOutcome.FAILED
+    assert body["attempt"]["failure"] == unnamed | carried
+    assert body["state"] == DeckState.FAILED
+    assert body["attempt"]["commit"] == attempt.commit[:7]
+    assert body["views_open"] is True
 
 
 def test_a_deck_never_built_has_the_sources_commit_and_nothing_delivered() -> None:
@@ -154,7 +211,7 @@ def test_a_deck_never_built_has_the_sources_commit_and_nothing_delivered() -> No
 
 
 def test_the_instants_carry_their_offset_as_stored() -> None:
-    attempt = a_failed_attempt(said="broke")
+    attempt = a_failed_attempt(said=BuildFailure.said("broke"))
     lobby = a_lobby_with(a_deck_store(built=a_build(), attempt=attempt))
     lobby.sign_in()
 

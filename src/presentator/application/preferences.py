@@ -18,6 +18,15 @@ from presentator.ports.preferences import (
 )
 
 
+class UnspokenLanguageError(Exception):
+    """A language was chosen that no installed catalog speaks."""
+
+    def __init__(self, language_tag: str) -> None:
+        """Remember the refused tag."""
+        super().__init__(language_tag)
+        self.language_tag = language_tag
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Preferences:
     """Every use case the lobby has around language and theme."""
@@ -31,7 +40,15 @@ class Preferences:
         return self.instance.read() or InstanceSettings()
 
     def save_instance_settings(self, settings: InstanceSettings) -> None:
-        """Keep the defaults every person without an override reads."""
+        """Keep the defaults every person without an override reads.
+
+        Raises `UnspokenLanguageError` for a language newly chosen that no catalog
+        speaks; the one already stored stays, so a theme change survives a
+        removed catalog.
+        """
+        self._require_newly_chosen_spoken(
+            settings.language_tag, stored=self.instance_settings().language_tag
+        )
         self.instance.write(settings)
 
     def preferences_of(self, user_id: str) -> PersonPreferences:
@@ -39,7 +56,15 @@ class Preferences:
         return self.people.read(user_id) or PersonPreferences()
 
     def save_preferences_of(self, user_id: str, chosen: PersonPreferences) -> None:
-        """Keep that person's overrides; the instance default stays untouched."""
+        """Keep that person's overrides; the instance default stays untouched.
+
+        Raises `UnspokenLanguageError` for a language newly chosen that no catalog
+        speaks; the one already stored stays, so a theme change survives a
+        removed catalog.
+        """
+        self._require_newly_chosen_spoken(
+            chosen.language_tag, stored=self.preferences_of(user_id).language_tag
+        )
         self.people.write(user_id, chosen)
 
     def appearance_for(self, user_id: str | None) -> Appearance:
@@ -56,6 +81,14 @@ class Preferences:
     def languages(self) -> tuple[Language, ...]:
         """Every language a select may offer."""
         return self.catalogs.languages()
+
+    def _require_newly_chosen_spoken(
+        self, language_tag: str | None, *, stored: str | None
+    ) -> None:
+        if language_tag == stored:
+            return
+        if language_tag is not None and not self.speaks(language_tag):
+            raise UnspokenLanguageError(language_tag)
 
     def speaks(self, language_tag: str) -> bool:
         """Say whether this instance has a catalog for a submitted language."""

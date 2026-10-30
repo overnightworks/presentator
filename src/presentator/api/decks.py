@@ -34,6 +34,8 @@ from presentator.application.decks import Decks
 from presentator.contracts.decks import (
     DECK_PATH,
     TALK_PAGE,
+    BuildFailure,
+    BuildFailureReason,
     DeckPage,
     DeckState,
     ShownAttempt,
@@ -50,6 +52,28 @@ _SAVED_AS: Final = "{slug}.pdf"
 _UNKNOWN_TYPE: Final = "application/octet-stream"
 _READS: Final = frozenset({"GET", "HEAD"})
 _THE_OPEN_FILE: Final = "/proc/self/fd/{descriptor}"
+
+
+def _worded(failure: BuildFailure, text: LobbyText) -> str | None:
+    """The words a failure is shown in: the toolchain's own, or the catalog's."""
+    counts = {
+        "written": failure.written_megabytes,
+        "allowed": failure.allowed_megabytes,
+        "megabytes": failure.allowed_megabytes,
+        "entries": failure.allowed_entries,
+    }
+    sentence = {
+        BuildFailureReason.TOOLCHAIN: failure.text,
+        BuildFailureReason.NO_WORDS: None,
+        BuildFailureReason.OUTPUT_MEGABYTES: text.deck_failed_output_megabytes,
+        BuildFailureReason.OUTPUT_ENTRIES: text.deck_failed_output_entries,
+        BuildFailureReason.OUTPUT_SHAPE: text.deck_failed_output_shape,
+        BuildFailureReason.DECK_MEGABYTES: text.deck_failed_deck_megabytes,
+        BuildFailureReason.DECK_PATHS: text.deck_failed_deck_paths,
+    }[failure.reason]
+    if failure.reason is BuildFailureReason.TOOLCHAIN or sentence is None:
+        return sentence
+    return sentence.format(**counts)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -126,7 +150,12 @@ class _DeckPage:
         text: LobbyText,
     ) -> Banner:
         """What broke, when it was tried, and what still stands (lines 9, 16)."""
-        no_words = () if attempt.failure else (text.deck_failed_without_a_message,)
+        failure = attempt.failure
+        no_words = (
+            (text.deck_failed_without_a_message,)
+            if failure is None or failure.reason is BuildFailureReason.NO_WORDS
+            else ()
+        )
         still_standing = (
             (text.deck_failed_last_talk_stands,) if page.built_ago is not None else ()
         )
@@ -135,7 +164,7 @@ class _DeckPage:
             label=text.deck_attempt_label,
             commit=attempt.commit,
             when=self.pages.age_in_words(attempt.ago, text.language_tag),
-            failure=attempt.failure,
+            failure=None if failure is None else _worded(failure, text),
             sentences=(*no_words, *still_standing),
         )
 

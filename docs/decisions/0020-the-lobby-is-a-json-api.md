@@ -27,9 +27,12 @@ sign-in and sign-out are. Until now these existed only inside Jinja rendering.
   and no catch-all. `GET /api/session` is the first.
 - A person's hal access token opens `/api/` as that person, as webauth's person
   paths define it; a bearer beside a cookie wins, and an invalid bearer is
-  refused, never answered from the cookie. This holds while `token_clients`
-  names a client; with it empty no bearer gate is installed and a bearer on
+  refused, never answered from the cookie. This holds while
+  `PRESENTATOR_TOKEN_CLIENTS` names a client; with it empty no bearer gate is installed and a bearer on
   `/api/` is ignored, as the sign-in reference states.
+- JSON writes rely on webauth's origin check (`Sec-Fetch-Site` first, then
+  `Origin`) and carry no CSRF token; a write admitted by a bearer skips that
+  check.
 - The wire is typed: every answer of a route is a model with named fields, not
   a dict. The library's refusals are not routes.
 - The catalog is served as data: `words` is the resolved `LobbyText` of the
@@ -42,7 +45,13 @@ sign-in and sign-out are. Until now these existed only inside Jinja rendering.
   library's refusals keep their shape: webauth answers the gate's 401 and a CSRF
   refusal in its own format, `/api/admin/`, the co-presenter, the fetch hook and
   the talk host keep theirs, the framework's own 404 and 405 stay as they are,
-  and a store failure is its plain 500.
+  and a store failure is its plain 500. The framework's validation 422 keeps
+  its status, media type and `detail` shape on every lobby route, `/api/admin/`
+  and the form posts included, but each error is reduced to `loc`, `msg` and
+  `type`, so no answer repeats what the request carried. Pydantic's own `msg` and
+  `loc` can still carry a value for a discriminated-union tag, a `dict` key and
+  UUID parsing, so a request model that takes a secret must not use those; the
+  talk host keeps the framework's default.
 - OpenAPI is generated from the models and not served: `openapi_url` stays
   `None`.
 

@@ -20,7 +20,6 @@ from presentator.adapters.build_wire import (
     SOCKET_MODE,
     TOOLCHAIN_SCRATCH_NAME,
     BuiltOutcome,
-    FailedOutcome,
     RefusalLimit,
     RefusedOutcome,
     StepHeader,
@@ -37,18 +36,14 @@ from presentator.adapters.build_wire import (
     send_step,
     send_tree,
 )
-from presentator.adapters.builds import (
-    TOO_MANY_FOR_A_PAGE,
-    TOO_MUCH_FOR_A_PAGE,
-    BuildPlace,
-    BuildStep,
-)
+from presentator.adapters.builds import BuildPlace, BuildStep
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
     OUTPUT_DIRECTORY,
     PDF_FILE,
     TALK_DIRECTORY,
     BuildFailure,
+    BuildFailureReason,
     StepKind,
 )
 
@@ -59,20 +54,6 @@ REPLY_MARGIN_SECONDS: Final = 5.0
 STAGED_PREFIX: Final = "staged-"
 STAGING_MODE: Final = 0o700
 
-OUTPUT_SHAPE_FOR_A_PAGE: Final = (
-    "The talk this build wrote cannot be taken: it holds a link, a special or"
-    " unreadable file, a path of more than 32 parts (folders and the file) or"
-    " 1024 bytes, or a file this step may not write."
-)
-DECK_SIZE_FOR_A_PAGE: Final = (
-    "This deck is too large to build: a deck may hold at most {megabytes} MB and"
-    " at most {entries} files and folders together, not counting its top-level"
-    " node_modules."
-)
-DECK_PATHS_FOR_A_PAGE: Final = (
-    "This deck cannot be built: it holds a path of more than 32 parts (folders"
-    " and the file) or 1024 bytes, or a link, a special or an unreadable file."
-)
 _FAULTED: Final = "build %s of deck %s failed: %s"
 _ANSWERING: Final = "the build worker did not answer: %s (%s)"
 _NOT_REMOVED: Final = "the staging %s of a build reply could not be removed: %s"
@@ -216,15 +197,21 @@ def _nothing_follows(connection: socket.socket) -> None:
         raise WireRefusedError
 
 
-def _refusal_text(outcome: RefusedOutcome, megabytes: int) -> str:
-    """The page text of a refused reply; a written count off its limit is a fault."""
+def _refusal(outcome: RefusedOutcome, megabytes: int) -> BuildFailure:
+    """The failure of a refused reply; a written count off its limit is a fault."""
     if (outcome.written is not None) != (outcome.limit is RefusalLimit.MEGABYTES):
         raise WireRefusedError
     if outcome.limit is RefusalLimit.MEGABYTES:
-        return TOO_MUCH_FOR_A_PAGE.format(written=outcome.written, allowed=megabytes)
+        return BuildFailure(
+            reason=BuildFailureReason.OUTPUT_MEGABYTES,
+            written_megabytes=outcome.written,
+            allowed_megabytes=megabytes,
+        )
     if outcome.limit is RefusalLimit.ENTRIES:
-        return TOO_MANY_FOR_A_PAGE.format(allowed=MAXIMUM_ENTRIES)
-    return OUTPUT_SHAPE_FOR_A_PAGE
+        return BuildFailure(
+            reason=BuildFailureReason.OUTPUT_ENTRIES, allowed_entries=MAXIMUM_ENTRIES
+        )
+    return BuildFailure(reason=BuildFailureReason.OUTPUT_SHAPE)
 
 
 def _admitted(staged: Path, place: BuildPlace, kind: StepKind) -> None:
@@ -250,14 +237,6 @@ def _staged_reply(
     _admitted(staged, step.place, step.name)
 
 
-def _failure_text(
-    outcome: FailedOutcome | RefusedOutcome, megabytes: int
-) -> str | None:
-    if isinstance(outcome, RefusedOutcome):
-        return _refusal_text(outcome, megabytes)
-    return outcome.text
-
-
 def _answer(
     connection: socket.socket, staged: Path, step: BuildStep, megabytes: int
 ) -> BuildFailure | None:
@@ -265,15 +244,19 @@ def _answer(
     if isinstance(outcome, BuiltOutcome):
         _staged_reply(connection, staged, step, megabytes)
         return None
-    text = _failure_text(outcome, megabytes)
+    failure = (
+        _refusal(outcome, megabytes)
+        if isinstance(outcome, RefusedOutcome)
+        else BuildFailure.said(outcome.text)
+    )
     read_empty_end(connection)
     _nothing_follows(connection)
-    return BuildFailure(text=text)
+    return failure
 
 
 def _failure_of(error: Exception, step: BuildStep) -> BuildFailure:
     _log.warning(_FAULTED, step.name, step.slug, fault_of(error))
-    return BuildFailure(text=None)
+    return BuildFailure.without_words()
 
 
 def _cleared(staged: Path, remove_staging: Callable[[Path], None]) -> None:
@@ -362,11 +345,11 @@ class WorkerToolchain:
             check_upload(deck, self.megabytes)
         except TreeRefusedError as refusal:
             if refusal.outcome.limit is RefusalLimit.SHAPE:
-                return BuildFailure(text=DECK_PATHS_FOR_A_PAGE)
+                return BuildFailure(reason=BuildFailureReason.DECK_PATHS)
             return BuildFailure(
-                text=DECK_SIZE_FOR_A_PAGE.format(
-                    megabytes=self.megabytes, entries=MAXIMUM_ENTRIES
-                )
+                reason=BuildFailureReason.DECK_MEGABYTES,
+                allowed_megabytes=self.megabytes,
+                allowed_entries=MAXIMUM_ENTRIES,
             )
         except OSError as error:
             return _failure_of(error, step)

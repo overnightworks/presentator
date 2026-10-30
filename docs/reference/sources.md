@@ -75,7 +75,8 @@ bound ends a slow one. A pull is bounded by
 `PRESENTATOR_SOURCE_TIMEOUT_SECONDS`, so an unreachable source costs one poll
 that bound and no more. Opening the deck list reads the database and pulls
 nothing. A refresh walks the sources one after another, taking each one in and
-building its decks before it reads the next.
+building its decks before it reads the next. A source that cannot be read ends
+its run and the walk goes on with the next one.
 
 `POST /sources/<name>/fetch` with the source's own secret does the same at
 once. It reads no payload, so every git host and a `post-receive` hook are the
@@ -88,14 +89,15 @@ flood of calls collapses into the one refresh that runs at a time.
 
 ## Runs and state
 
-Every poll of a source, reachable or not, records one run: the moment, whether
-it reached the source, and either the commit it found or a typed reason it did
-not, never the raw error a git command left behind. The table keeps the newest
-three runs per source. The Sources list shows the newest run's state: never
-fetched; reachable; refused when the host turns the login down; failed when
-the host answered with anything else; unreachable only when the host never
-answers; or Error when a credential could not be resolved, never the internal
-reason why.
+Every poll of a source, reachable or not, and every read of it that fails,
+records one run: the moment, whether it reached the source, and either the
+commit it found or a typed reason it did not, never the raw error a git
+command left behind. The table keeps the newest three runs per source. The
+Sources list shows the newest run's state: never fetched; reachable; refused
+when the host turns the login down; failed when the host answered with
+anything else or its mirror could not be read; unreachable only when the host
+never answers; or Error when a credential could not be resolved or sent, never
+the internal reason why.
 
 ## The source's page
 
@@ -111,6 +113,18 @@ created or renewed it.
 
 On the Sources list, each row's *Fetch now* refreshes only that source and
 returns to the list; on the source's page it returns to that page.
+
+The list, a source's page and *Fetch now* are also served as JSON for an admin
+(a session or a person's bearer). A signed-in non-admin gets a 403 problem;
+a signed-out caller or an invalid bearer meets the sign-in gate's own 401 or
+redirect instead:
+`GET /api/sources`, `GET /api/sources/<name>` and `POST /api/sources/<name>/fetch`
+(204 once that source is taken in and built; an unknown name is a 404 problem).
+They carry the state, the stored `fetched_at` instant of the newest run and, on
+the page, the absolute `hook_url`, the SSH `public_key`, the newest three runs
+(each with its own state, `at`, short `commit` or failure `reason`) and the
+viewer's own decks. They carry instants where the Jinja pages word ages, and no
+secret: the webhook secret comes back only in the answer to create or renew.
 
 Remove, at the bottom, asks once for a confirm naming the source's decks and
 runs, then deletes the source row, its runs, its decks, its mirror, and every
