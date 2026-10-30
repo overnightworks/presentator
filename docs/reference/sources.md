@@ -51,6 +51,29 @@ admin adds one under Settings · Sources.
   carrying the public half in clear and the private half encrypted the same
   way; *Create* binds it to the new source and deletes the draft, and a draft
   nobody creates a source from is swept a day after it was minted.
+- The key draft and *Check connection* are also served as JSON to an admin:
+  `POST /api/sources/new/key-draft` answers the draft's `id` and public key
+  (the private half is in no answer), and `POST /api/sources/new/check` takes
+  the URL, the access (`AccessKind`), the token or null and the draft id, and
+  answers the probe's `failure`, `commit`, `detail` and `fingerprint`. A
+  mismatch between the access and the URL is refused before any probe, as the
+  problem `source-refused`.
+- The problem type `source-refused` is the URI
+  `tag:hallucinai.de,2026-09-08:presentator/problems/source-refused`, with the
+  title `Unprocessable Content`, status 422 and the member `reason`, one of:
+  `malformed-name` (not a source name, or the reserved `new`),
+  `duplicate-name` (another source has the name), `duplicate-url` (another
+  source has the URL), `access-mismatch` (the access is not the one the URL
+  names, or the URL names none: a user part, plain `http`), `missing-secret` (HTTPS without a
+  token), `not-checked` (no matching successful Check), `credential-not-allowed` (a
+  token for SSH or a folder), `outside-local-mount` (a folder outside the
+  mount) and `deploy-key-unavailable` (the draft key is gone or not this
+  admin's).
+  Check answers only `access-mismatch`. The date is the one RFC 4151 asks for:
+  presentator's commit `37beebc` of 2026-09-08 is the first that names
+  `hallucinai.de`, as the operator's hosts `presentator.hallucinai.de` and
+  `copresenter.hallucinai.de`; the domain's registration date is not in the
+  repository, so the type takes the date that evidence shows.
 
 ## Keeping it current
 

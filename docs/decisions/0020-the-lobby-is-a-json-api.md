@@ -41,7 +41,19 @@ sign-in and sign-out are. Until now these existed only inside Jinja rendering.
   problem details (`application/problem+json`; `api/problems.py`), from
   [#185](https://github.com/overnightworks/presentator/issues/185) A3 on. The
   type is `about:blank` and the title the HTTP reason phrase, so presentator
-  words nothing and a client words the status from its own catalog. The
+  words nothing and a client words the status from its own catalog. A problem
+  with members of its own has its own type, a `tag:` URI under `hallucinai.de`
+  defined in the reference of its area (`source-refused` in
+  [Sources](../reference/sources.md)) and minted under the date RFC 4151 asks
+  for, the day the domain is first evidenced in the repository. That departs
+  on purpose from RFC 9457 §4, which says a problem type URI SHOULD resolve to
+  HTML documentation: the documentation is the reference section, found by the
+  type's name. The cost is that resolvable type URIs later mean a new identity
+  for the type, a breaking change for every client that matches `type`. A
+  stable HTTPS address (`https://hallucinai.de/problems/presentator/…`) was
+  compared and rejected: it meets §4 only if a page answers there, which is
+  edge's work (ADR 0015) with no caller today, and a locator that answers 404
+  breaks §3.1.1; a GitHub URL of the reference moves with the branch. The
   library's refusals keep their shape: webauth answers the gate's 401 and a CSRF
   refusal in its own format, `/api/admin/`, the co-presenter, the fetch hook and
   the talk host keep theirs, the framework's own 404 and 405 stay as they are,

@@ -336,6 +336,7 @@ class FakeDeployKeyDrafts:
 
     drafts: dict[str, DeployKeyDraft] = field(default_factory=dict[str, DeployKeyDraft])
     minted: int = 0
+    private_keys: list[str] = field(default_factory=list[str])
 
     def unconsumed_for(
         self,
@@ -356,6 +357,7 @@ class FakeDeployKeyDrafts:
             created_at=at,
         )
         self.drafts[owner_id] = draft
+        self.private_keys.append(draft.private_key)
         return draft
 
     def get_or_mint(

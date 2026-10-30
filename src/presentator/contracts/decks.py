@@ -295,9 +295,9 @@ class SourcePoll:
 class ConnectionCheckResult:
     """What a bounded probe of an unsaved source found, without writing anything.
 
-    No failure and a commit is reachable; a failure and no commit is not, and
-    carries git's own sanitised first line only for `SourceRunFailure.FAILED`
-    — the one reason with no fixed sentence of its own. The fingerprint is
+    No failure and a commit is reachable; a failure and no commit is not. A
+    probe may carry git's sanitised first line for any failure, and
+    `as_answered` keeps it only for `SourceRunFailure.FAILED`. The fingerprint is
     the proof the form later needs to create what this probe found, and
     travels only when the state is reachable.
     """
@@ -306,6 +306,17 @@ class ConnectionCheckResult:
     commit: str | None
     detail: str | None
     fingerprint: str | None = None
+
+    def as_answered(self) -> ConnectionCheckResult:
+        """This result with git's line dropped unless the failure is `failed`."""
+        if self.failure is SourceRunFailure.FAILED:
+            return self
+        return ConnectionCheckResult(
+            failure=self.failure,
+            commit=self.commit,
+            detail=None,
+            fingerprint=self.fingerprint,
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

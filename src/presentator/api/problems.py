@@ -2,9 +2,11 @@
 
 A route raises `ProblemError`; the handler answers it. For `about:blank` the
 title is the HTTP reason phrase, so presentator words nothing and a client
-words the status from its own catalog. webauth's refusals and the framework's
-own answers keep their shape. The framework's validation answer keeps its
-status, media type and shape too, but each error is reduced to `loc`, `msg`
+words the status from its own catalog. A problem with members of its own is a
+`ProblemDetails` subclass that fixes its type and carries those members.
+webauth's refusals and the framework's own answers keep their shape. The
+framework's validation answer keeps its status, media type and shape too, but
+each error is reduced to `loc`, `msg`
 and `type`: pydantic's `input` and `ctx` would repeat what the request sent.
 Pydantic's own `msg` and `loc` can still carry a value for a discriminated-union
 tag, a `dict` key and UUID parsing, so a request model that takes a secret must
@@ -16,45 +18,75 @@ from typing import Final, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.config import JsonDict
 from starlette.responses import Response
 
 PROBLEM_MEDIA_TYPE: Final = "application/problem+json"
 _ABOUT_BLANK: Final = "about:blank"
+_IDENTITY: Final = ("type", "title", "status")
+
+
+def _describe_wire(schema: JsonDict) -> None:
+    """Every problem answers its `type`, `title` and `status`, so the spec says so.
+
+    `title` and `status` carry placeholders until `ProblemError` sets them, so
+    neither shows a default in the schema.
+    """
+    required = cast("list[str]", schema.setdefault("required", []))
+    required.extend(each for each in _IDENTITY if each not in required)
+    properties = cast("dict[str, JsonDict]", schema["properties"])
+    for each in ("title", "status"):
+        properties[each].pop("default", None)
 
 
 class ProblemDetails(BaseModel):
     """The body of a problem; fields that are `None` stay out of the wire."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, json_schema_extra=_describe_wire)
 
     type: str = _ABOUT_BLANK
-    title: str
-    status: int
+    title: str = Field(default="", init=False)
+    status: int = Field(default=0, init=False)
     detail: str | None = None
 
 
 class ProblemError(Exception):
-    """Raised by a route to answer a status as a problem of type `about:blank`."""
+    """Raised by a route to answer a status as a problem, `about:blank` by default.
 
-    def __init__(self, status: HTTPStatus) -> None:
-        """Remember the status the handler answers with."""
+    The handler is the one owner of the body's `title` and `status`: whatever
+    the problem carried, they are the raised status's phrase and value.
+    """
+
+    def __init__(
+        self, status: HTTPStatus, problem: ProblemDetails | None = None
+    ) -> None:
+        """Remember the status, and the problem that answers it."""
         super().__init__(status.phrase)
         self.status = status
+        self.problem = (problem or ProblemDetails()).model_copy(
+            update={"title": status.phrase, "status": status.value}
+        )
 
 
-def problem_response(status: HTTPStatus) -> dict[int | str, dict[str, object]]:
-    """The route's OpenAPI `responses` entry, so a generated client types it."""
+def problem_response(
+    status: HTTPStatus, problem: type[ProblemDetails] = ProblemDetails
+) -> dict[int | str, dict[str, object]]:
+    """The route's OpenAPI `responses` entry, so a generated client types it.
+
+    A typed problem writes every member's schema inline, because a `$ref` would
+    dangle once the schema sits in the OpenAPI document beside the framework's.
+    """
     return {
         status.value: {
-            "content": {
-                PROBLEM_MEDIA_TYPE: {"schema": ProblemDetails.model_json_schema()}
-            },
+            "content": {PROBLEM_MEDIA_TYPE: {"schema": problem.model_json_schema()}},
         }
     }
 
 
-def problem_beside_validation() -> dict[str, object]:
+def problem_beside_validation(
+    problem: type[ProblemDetails] = ProblemDetails,
+) -> dict[str, object]:
     """A write's 422 spec: FastAPI's own validation answer plus our problem.
 
     FastAPI generates the validation entry (and its components) only while the
@@ -62,16 +94,18 @@ def problem_beside_validation() -> dict[str, object]:
     through the route's `openapi_extra`.
     """
     status = HTTPStatus.UNPROCESSABLE_ENTITY
-    return {"responses": {str(status.value): problem_response(status)[status.value]}}
+    return {
+        "responses": {
+            str(status.value): problem_response(status, problem)[status.value]
+        }
+    }
 
 
 def _answer(_request: Request, error: Exception) -> Response:
     problem_error = cast("ProblemError", error)
-    status = problem_error.status
-    problem = ProblemDetails(title=status.phrase, status=status.value)
     return Response(
-        problem.model_dump_json(exclude_none=True),
-        status_code=status.value,
+        problem_error.problem.model_dump_json(exclude_none=True),
+        status_code=problem_error.status.value,
         media_type=PROBLEM_MEDIA_TYPE,
     )
 

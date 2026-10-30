@@ -76,18 +76,7 @@ _NAME_BELONGS_TO_ANOTHER_SOURCE: Final = (
 # itself: lowercase, digits, hyphens, starting with a letter or digit.
 _SOURCE_NAME: Final = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 # The form lives at this path segment, so a source must not take it.
-_RESERVED_SOURCE_NAME: Final = "new"
-_HTTPS_ACCESS: Final = "https"
-_SSH_ACCESS: Final = "ssh"
-_FILE_ACCESS: Final = "file"
-# The access value the form's own kind maps to, so a mismatch between what a
-# person picked and what the URL actually names is one lookup, not a growing
-# chain of conditions per kind.
-_EXPECTED_ACCESS_KIND: Final = {
-    _HTTPS_ACCESS: AccessKind.HTTPS,
-    _SSH_ACCESS: AccessKind.SSH,
-    _FILE_ACCESS: AccessKind.FILE,
-}
+RESERVED_SOURCE_NAME: Final = "new"
 # Added sources follow main; a later slice is what offers another ref.
 _ADDED_REF: Final = "main"
 _WEBHOOK_SECRET_BYTES: Final = 32
@@ -147,7 +136,7 @@ class NewSourceDraft:
 
     name: str
     url: str
-    access: str
+    access: AccessKind | None
     secret: str
     fingerprint: str
     # The draft key the Add form was shown; blank unless SSH was posted.
@@ -171,14 +160,13 @@ def hash_webhook_secret(secret: str) -> bytes:
     return sha256(secret.encode()).digest()
 
 
-def _access_matches_url(access: str, url: str) -> bool:
+def _access_matches_url(access: AccessKind | None, url: str) -> bool:
     """Whether the posted access names the kind this URL unambiguously is.
 
     An unknown access or a URL naming no kind never match, so two "nothing"s
     cannot agree and let an ambiguous address through.
     """
-    expected = _EXPECTED_ACCESS_KIND.get(access)
-    return expected is not None and expected is access_kind_of(url)
+    return access is not None and access is access_kind_of(url)
 
 
 def _refusal_for(
@@ -196,7 +184,7 @@ def _refusal_for(
     access, secret = draft.access, draft.secret
     checks = (
         (
-            name == _RESERVED_SOURCE_NAME or _SOURCE_NAME.fullmatch(name) is None,
+            name == RESERVED_SOURCE_NAME or _SOURCE_NAME.fullmatch(name) is None,
             SourceRefusal.MALFORMED_NAME,
         ),
         # A wrong radio for this URL is refused here, ahead of what that radio
@@ -207,9 +195,9 @@ def _refusal_for(
             not _access_matches_url(access, url),
             SourceRefusal.ACCESS_MISMATCH,
         ),
-        (access == _HTTPS_ACCESS and not secret.strip(), SourceRefusal.BLANK_ACCESS),
+        (access is AccessKind.HTTPS and not secret.strip(), SourceRefusal.BLANK_ACCESS),
         (
-            access in (_FILE_ACCESS, _SSH_ACCESS) and bool(secret.strip()),
+            access in (AccessKind.FILE, AccessKind.SSH) and bool(secret.strip()),
             SourceRefusal.CREDENTIAL_NOT_ALLOWED,
         ),
         (any(source.name == name for source in existing), SourceRefusal.DUPLICATE_NAME),
@@ -455,7 +443,7 @@ class Decks:
         self,
         *,
         url: str,
-        access: str,
+        access: AccessKind | None,
         secret: str,
         owner_id: str,
         key_draft_id: str,
@@ -471,7 +459,7 @@ class Decks:
         if not _access_matches_url(access, address):
             return SourceRefusal.ACCESS_MISMATCH
         deploy_key = None
-        if access == _SSH_ACCESS:
+        if access is AccessKind.SSH:
             deploy_key = self.key_drafts.unconsumed_for(
                 owner_id,
                 newer_than=self.clock.now() - DRAFT_MAX_AGE,
@@ -485,7 +473,7 @@ class Decks:
         credential = secret if deploy_key is None else deploy_key.private_key
         probed = self.checker.check(url=address, ref=_ADDED_REF, secret=credential)
         if probed.failure is not None:
-            return probed
+            return probed.as_answered()
         return ConnectionCheckResult(
             failure=None,
             commit=None if probed.commit is None else probed.commit[:_SHORT_COMMIT],

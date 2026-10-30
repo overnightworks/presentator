@@ -983,7 +983,7 @@ def _add(
     *,
     name: str = "talks",
     url: str = _HTTPS_URL,
-    access: str = "https",
+    access: AccessKind | None = AccessKind.HTTPS,
     secret: str = _READ_ONLY,
 ) -> AddedSource | SourceRefusal:
     checked = decks.check_connection(
@@ -1012,7 +1012,7 @@ def _probed(
     decks: Decks,
     *,
     url: str = _HTTPS_URL,
-    access: str = "https",
+    access: AccessKind | None = AccessKind.HTTPS,
     secret: str = _READ_ONLY,
     key_draft_id: str = "",
 ) -> ConnectionCheckResult:
@@ -1097,13 +1097,13 @@ def test_an_ssh_create_binds_the_shown_draft_and_deletes_it() -> None:
     draft = decks.source_key_draft(owner_id=OWNER)
 
     checked = _probed(
-        decks, url=_SSH_URL, access="ssh", secret="", key_draft_id=draft.id
+        decks, url=_SSH_URL, access=AccessKind.SSH, secret="", key_draft_id=draft.id
     )
     added = decks.add_source(
         NewSourceDraft(
             name="talks",
             url=_SSH_URL,
-            access="ssh",
+            access=AccessKind.SSH,
             secret="",
             fingerprint=checked.fingerprint or "",
             key_draft_id=draft.id,
@@ -1124,7 +1124,7 @@ def test_an_ssh_create_without_its_own_check_proof_is_refused() -> None:
         NewSourceDraft(
             name="talks",
             url=_SSH_URL,
-            access="ssh",
+            access=AccessKind.SSH,
             secret="",
             fingerprint="",
             key_draft_id=draft.id,
@@ -1138,9 +1138,9 @@ def test_an_ssh_create_without_its_own_check_proof_is_refused() -> None:
 
 def test_an_ssh_check_proof_cannot_create_for_another_account() -> None:
     decks = decks_over(sources=having())
-    owner_draft = decks.source_key_draft(owner_id=OWNER)
+    owned = decks.source_key_draft(owner_id=OWNER)
     checked = _probed(
-        decks, url=_SSH_URL, access="ssh", secret="", key_draft_id=owner_draft.id
+        decks, url=_SSH_URL, access=AccessKind.SSH, secret="", key_draft_id=owned.id
     )
     another_owner = "another admin entirely"
     other_draft = decks.source_key_draft(owner_id=another_owner)
@@ -1149,7 +1149,7 @@ def test_an_ssh_check_proof_cannot_create_for_another_account() -> None:
         NewSourceDraft(
             name="talks",
             url=_SSH_URL,
-            access="ssh",
+            access=AccessKind.SSH,
             secret="",
             fingerprint=checked.fingerprint or "",
             key_draft_id=other_draft.id,
@@ -1168,7 +1168,7 @@ def test_a_foreign_or_missing_draft_id_is_refused_and_mints_a_fresh_one() -> Non
         NewSourceDraft(
             name="talks",
             url=_SSH_URL,
-            access="ssh",
+            access=AccessKind.SSH,
             secret="",
             fingerprint="",
             key_draft_id=someone_elses_draft.id,
@@ -1210,7 +1210,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "Talks",
             _HTTPS_URL,
-            "https",
+            AccessKind.HTTPS,
             _READ_ONLY,
             SourceRefusal.MALFORMED_NAME,
             id="uppercase",
@@ -1218,7 +1218,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "new",
             _HTTPS_URL,
-            "https",
+            AccessKind.HTTPS,
             _READ_ONLY,
             SourceRefusal.MALFORMED_NAME,
             id="the form's own path",
@@ -1226,7 +1226,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "-talks",
             _HTTPS_URL,
-            "https",
+            AccessKind.HTTPS,
             _READ_ONLY,
             SourceRefusal.MALFORMED_NAME,
             id="leading hyphen",
@@ -1234,7 +1234,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "t" * 65,
             _HTTPS_URL,
-            "https",
+            AccessKind.HTTPS,
             _READ_ONLY,
             SourceRefusal.MALFORMED_NAME,
             id="too long",
@@ -1242,7 +1242,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "talks",
             _HTTPS_URL,
-            "https",
+            AccessKind.HTTPS,
             "",
             SourceRefusal.BLANK_ACCESS,
             id="blank secret",
@@ -1250,7 +1250,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "talks",
             "https://user:token@git.example.invalid/talks.git",
-            "https",
+            AccessKind.HTTPS,
             _READ_ONLY,
             SourceRefusal.ACCESS_MISMATCH,
             id="password in the URL",
@@ -1258,7 +1258,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "talks",
             "git@git.example.invalid:talks.git",
-            "https",
+            AccessKind.HTTPS,
             _READ_ONLY,
             SourceRefusal.ACCESS_MISMATCH,
             id="ssh URL with https radio",
@@ -1266,7 +1266,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "talks",
             _HTTPS_URL,
-            "ssh",
+            AccessKind.SSH,
             _READ_ONLY,
             SourceRefusal.ACCESS_MISMATCH,
             id="ssh radio",
@@ -1274,7 +1274,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "talks",
             "file:///tmp/talks.git",
-            "https",
+            AccessKind.HTTPS,
             _READ_ONLY,
             SourceRefusal.ACCESS_MISMATCH,
             id="file URL",
@@ -1282,7 +1282,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "talks",
             "http://git.example.invalid/talks.git",
-            "https",
+            AccessKind.HTTPS,
             _READ_ONLY,
             SourceRefusal.ACCESS_MISMATCH,
             id="http URL",
@@ -1290,7 +1290,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "talks",
             "https://git.example.invalid/talks.git\x00evil",
-            "https",
+            AccessKind.HTTPS,
             _READ_ONLY,
             SourceRefusal.ACCESS_MISMATCH,
             id="nul in the URL",
@@ -1298,7 +1298,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "talks",
             "https://git.example.invalid/talks.git\nevil",
-            "https",
+            AccessKind.HTTPS,
             _READ_ONLY,
             SourceRefusal.ACCESS_MISMATCH,
             id="newline in the URL",
@@ -1306,7 +1306,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "talks",
             "https://git.example.invalid/talks.git\tevil",
-            "https",
+            AccessKind.HTTPS,
             _READ_ONLY,
             SourceRefusal.ACCESS_MISMATCH,
             id="tab in the URL",
@@ -1314,7 +1314,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "talks",
             "https://[::1/r.git",
-            "https",
+            AccessKind.HTTPS,
             _READ_ONLY,
             SourceRefusal.ACCESS_MISMATCH,
             id="unclosed bracket in an https URL",
@@ -1322,7 +1322,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         pytest.param(
             "talks",
             "ssh://git@[dead.beef]/r.git",
-            "ssh",
+            AccessKind.SSH,
             "",
             SourceRefusal.ACCESS_MISMATCH,
             id="bracket holding a name in an ssh URL",
@@ -1332,7 +1332,7 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
 def test_a_draft_that_cannot_be_a_source_is_refused(
     name: str,
     url: str,
-    access: str,
+    access: AccessKind | None,
     secret: str,
     reason: SourceRefusal,
 ) -> None:
@@ -1396,7 +1396,7 @@ def test_a_source_never_checked_for_these_values_is_refused() -> None:
         NewSourceDraft(
             name="talks",
             url=_HTTPS_URL,
-            access="https",
+            access=AccessKind.HTTPS,
             secret=_READ_ONLY,
             fingerprint="",
         ),
@@ -1417,7 +1417,7 @@ def test_a_fingerprint_from_a_different_secret_is_refused() -> None:
         NewSourceDraft(
             name="talks",
             url=_HTTPS_URL,
-            access="https",
+            access=AccessKind.HTTPS,
             secret=_A_DIFFERENT_SECRET,
             fingerprint=checked.fingerprint,
         ),
@@ -1442,7 +1442,7 @@ def test_a_different_spelling_of_an_existing_local_source_is_a_duplicate_url() -
         decks,
         name="other",
         url=f"file://{LOCAL_MOUNT_EXAMPLE}/talks.git",
-        access="file",
+        access=AccessKind.FILE,
         secret="",
     )
 
@@ -1894,13 +1894,13 @@ def test_a_url_whose_host_reads_two_ways_names_no_access(url: str) -> None:
 @pytest.mark.parametrize(
     ("url", "access"),
     [
-        (_HTTPS_TWO_HOSTS[0], "https"),
-        (_SSH_TWO_HOSTS[1], "ssh"),
-        ("https://user:token@git.example.invalid/talks.git", "https"),
-        ("ssh://git:secret@git.example.invalid/talks.git", "ssh"),
+        (_HTTPS_TWO_HOSTS[0], AccessKind.HTTPS),
+        (_SSH_TWO_HOSTS[1], AccessKind.SSH),
+        ("https://user:token@git.example.invalid/talks.git", AccessKind.HTTPS),
+        ("ssh://git:secret@git.example.invalid/talks.git", AccessKind.SSH),
     ],
 )
-def test_check_refuses_an_address_outside_the_grammar(url: str, access: str) -> None:
+def test_check_refuses_an_address_off_the_grammar(url: str, access: AccessKind) -> None:
     """#439 U2: Check answers the refusal Add answers and probes nothing."""
     decks = decks_over(fakes=DecksFakes(checker=ConnectionCheckerThatMustNotRun()))
     draft = decks.source_key_draft(owner_id=OWNER)
@@ -1908,7 +1908,7 @@ def test_check_refuses_an_address_outside_the_grammar(url: str, access: str) -> 
     checked = decks.check_connection(
         url=url,
         access=access,
-        secret=_READ_ONLY if access == "https" else "",
+        secret=_READ_ONLY if access is AccessKind.HTTPS else "",
         owner_id=OWNER,
         key_draft_id=draft.id,
     )
@@ -1921,13 +1921,11 @@ _URLS_NAMING_NO_ACCESS = (
     "https://good.example:pw\\@evil.example/r.git",
     "http://h/r.git",
 )
-_ACCESS_VALUES_NOT_AN_ACCESS = ("", "bogus", "unsupported")
 
 
-@pytest.mark.parametrize("access", _ACCESS_VALUES_NOT_AN_ACCESS)
 @pytest.mark.parametrize("url", _URLS_NAMING_NO_ACCESS)
 def test_an_unknown_access_never_matches_a_url_that_names_no_access(
-    url: str, access: str, monkeypatch: pytest.MonkeyPatch
+    url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     store = having()
     decks = decks_over(
@@ -1935,7 +1933,7 @@ def test_an_unknown_access_never_matches_a_url_that_names_no_access(
     )
 
     checked = decks.check_connection(
-        url=url, access=access, secret=_READ_ONLY, owner_id=OWNER, key_draft_id=""
+        url=url, access=None, secret=_READ_ONLY, owner_id=OWNER, key_draft_id=""
     )
 
     def read_as_https(_url: str) -> AccessKind:
@@ -1953,7 +1951,7 @@ def test_an_unknown_access_never_matches_a_url_that_names_no_access(
         NewSourceDraft(
             name="talks",
             url=url,
-            access=access,
+            access=None,
             secret=_READ_ONLY,
             fingerprint=earlier_fingerprint or "",
         ),
