@@ -341,7 +341,7 @@ class FakeWebhookSecrets:
     handed_out: list[str] = field(default_factory=list[str])
 
     def new_secret(self) -> str:
-        secret = f"scenario-webhook-secret-{len(self.handed_out):04d}"
+        secret = f"scenario-webhook-secret-handed-out-number-{len(self.handed_out):04d}"
         self.handed_out.append(secret)
         return secret
 
