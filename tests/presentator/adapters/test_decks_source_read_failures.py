@@ -1,5 +1,6 @@
 """A source whose repository cannot be read ends its run; the others go on."""
 
+import os
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
@@ -186,14 +187,39 @@ def test_a_source_that_cannot_be_read_ends_its_run_failed_and_the_next_is_taken_
     assert BuildRun("nobody-names-me") in instance.fakes.builder.removed
 
 
+def _record_every_git_launch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Put a `git` first on PATH that logs each launch, then runs the real one."""
+    real_git = shutil.which("git")
+    assert real_git is not None
+    log = tmp_path / "git-launches.log"
+    wrapper = tmp_path / "recording-bin" / "git"
+    wrapper.parent.mkdir()
+    wrapper.write_text(
+        f'#!/bin/sh\nprintf \'%s\\n\' "$PWD $*" >> "{log}"\nexec "{real_git}" "$@"\n',
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{wrapper.parent}:{os.environ['PATH']}")
+    return log
+
+
 def test_a_https_credential_git_cannot_be_sent_starts_no_git_for_its_source(
     instance: _Instance,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _a_https_credential_git_cannot_be_sent(instance)
+    spoiled_mirror = str(instance.mirror_directory_of_the_spoiled())
+    launches = _record_every_git_launch(instance.tmp_path, monkeypatch)
 
     instance.refresh_after_the_healthy_source_pushed()
 
-    assert not instance.mirror_directory_of_the_spoiled().exists()
+    launched = launches.read_text(encoding="utf-8").splitlines()
+    assert launched
+    assert not [
+        launch
+        for launch in launched
+        if spoiled_mirror in launch or _AN_ADDRESS_NOBODY_ANSWERS in launch
+    ]
 
 
 def assert_the_siblings_and_the_other_source_were_taken_in(
