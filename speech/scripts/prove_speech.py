@@ -1,9 +1,9 @@
 """Stage proof: start the service, drive health/speak/hear, then the contract client.
 
 Runs under the caller's probe lock in the fleet form (flock -o -w 1200
-/tmp/probe-stack.lock timeout -k 30 1800), checks the 1-minute load, runs one
-heavy step at a time, and leaves no process behind, also when `timeout` sends
-SIGTERM. Model weights stay in the Hugging Face and Piper caches.
+/tmp/probe-stack.lock timeout -k 30 1800 ...), checks the 1-minute load, runs
+one heavy step at a time, and leaves no process behind. Model weights stay in
+the Hugging Face and Piper caches.
 """
 
 # ruff: noqa: T201 - this stage proof reports its progress on standard output
@@ -15,7 +15,6 @@ import contextlib
 import json
 import os
 import shutil
-import signal
 import socket
 import statistics
 import subprocess
@@ -81,13 +80,6 @@ def _wait_for_load() -> None:
             return
         print(f"load {load:.2f} is above {LOAD_CEILING}, waiting")
         time.sleep(15)
-
-
-def _exit_on_sigterm(signal_number: int, _frame: object) -> None:
-    # `timeout` signals the whole process group and `uv run` forwards the signal
-    # again, so a second SIGTERM must not interrupt the teardown this one starts.
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-    raise SystemExit(128 + signal_number)
 
 
 def _get_json(socket_path: Path, target: str) -> dict[str, object]:
@@ -547,7 +539,9 @@ def _speech_environment(private_directory: Path, speaking_model: str) -> dict[st
 def parse_arguments(arguments: list[str]) -> argparse.Namespace:
     """Read the command line before anything starts; `--help` and typos exit here."""
     parser = argparse.ArgumentParser(
-        description="Stage proof of the speech service; run it under the probe lock.",
+        description=(
+            "Stage proof of the speech service; the caller holds the probe-stack lock."
+        ),
         allow_abbrev=False,
     )
     parser.add_argument(
@@ -559,25 +553,20 @@ def parse_arguments(arguments: list[str]) -> argparse.Namespace:
 
 
 def main() -> None:
-    """Run the stage proof; the caller holds the probe lock in the fleet form.
-
-    SIGTERM ends the run through the normal exit path, so the speech process
-    stops and the private directory goes.
-    """
+    """Run the stage proof; the caller holds the machine's probe lock."""
     options = parse_arguments(sys.argv[1:])
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(line_buffering=True)
-    signal.signal(signal.SIGTERM, _exit_on_sigterm)
     _wait_for_load()
     print("gpu_before", _nvidia_memory())
+    private_directory = Path(tempfile.mkdtemp(prefix="speech-"))
+    socket_path = private_directory / "speech.sock"
     speaking_model = os.environ.get(
         "SPEECH_SPEAKING_MODEL",
         CHATTERBOX_SPEAKING_MODEL,
     )
     project = Path(__file__).resolve().parents[1]
-    private_directory = Path(tempfile.mkdtemp(prefix="speech-"))
     try:
-        socket_path = private_directory / "speech.sock"
         env = _speech_environment(private_directory, speaking_model)
         with _speech_server(project, env, socket_path) as running:
             print("health_ready", json.dumps(running.health, sort_keys=True))
