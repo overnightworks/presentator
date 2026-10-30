@@ -3,7 +3,7 @@
 from dataclasses import dataclass, replace
 from http import HTTPStatus
 from pathlib import Path
-from typing import cast
+from typing import Final, cast
 
 from fastapi.testclient import TestClient
 from httpx2 import Response
@@ -31,6 +31,9 @@ from tests.support.lobby import (
     a_decks,
     a_lobby_app,
     an_installed_auth,
+)
+from tests.support.lobby import (
+    ADMIN as ADMIN_PERSON,
 )
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import Scene, a_scene
@@ -113,7 +116,7 @@ def a_member_over(decks: Decks) -> Lobby:
 
 def an_admin_cookie_instance(decks: Decks, store: FakeSourceStore) -> Instance:
     """The signed-in admin browser, reaching the lobby by its session cookie."""
-    return Instance(an_admin_over(decks).client, store, {})
+    return Instance(an_admin_over(decks).client, store, {}, ADMIN_PERSON)
 
 
 def an_admin_bearer_instance(
@@ -122,7 +125,10 @@ def an_admin_bearer_instance(
     """An admin reaching the lobby by a bearer alone, with no cookie."""
     scene = a_scene(tmp_path, token_clients=frozenset({HAL}), decks=decks)
     return Instance(
-        a_client_with_no_header_of_its_own(scene), store, a_bearer(scene, ADMIN_GROUPS)
+        a_client_with_no_header_of_its_own(scene),
+        store,
+        a_bearer(scene, ADMIN_GROUPS),
+        BEARER_PERSON,
     )
 
 
@@ -158,10 +164,13 @@ def without_raising(lobby: Lobby) -> TestClient:
     )
 
 
+BEARER_PERSON: Final = "a-person"
+
+
 def a_bearer(scene: Scene, groups: list[str]) -> dict[str, str]:
     """The headers of a person's access token minted for the hal client."""
     minted = scene.issuer.mint_access_token(
-        subject="a-person", groups=groups, authorized_party=HAL, audience=None
+        subject=BEARER_PERSON, groups=groups, authorized_party=HAL, audience=None
     )
     return {"authorization": f"Bearer {minted}", **ASKING_FOR_JSON}
 
@@ -219,6 +228,7 @@ class Instance:
     client: TestClient
     store: FakeSourceStore
     headers: dict[str, str]
+    person_id: str
 
     def renew(self, name: str, body: object) -> Response:
         return renew(self.client, name, body, headers=self.headers)

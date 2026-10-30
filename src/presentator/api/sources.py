@@ -683,7 +683,7 @@ def _check_banner(
     return CheckBanner(
         state=checked.failure.value,
         message=_run_reason(checked.failure, text),
-        detail=checked.detail if checked.failure is SourceRunFailure.FAILED else None,
+        detail=checked.detail,
         fingerprint=None,
     )
 

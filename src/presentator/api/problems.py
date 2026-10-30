@@ -14,7 +14,7 @@ not use those.
 """
 
 from http import HTTPStatus
-from typing import Final, cast
+from typing import Any, Final, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -23,12 +23,19 @@ from starlette.responses import Response
 
 PROBLEM_MEDIA_TYPE: Final = "application/problem+json"
 _ABOUT_BLANK: Final = "about:blank"
+_IDENTITY: Final = ("type", "title", "status")
+
+
+def _require_identity(schema: dict[str, Any]) -> None:
+    """Every problem answers its `type`, `title` and `status`, so the spec says so."""
+    required: list[str] = schema.setdefault("required", [])
+    required.extend(each for each in _IDENTITY if each not in required)
 
 
 class ProblemDetails(BaseModel):
     """The body of a problem; fields that are `None` stay out of the wire."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, json_schema_extra=_require_identity)
 
     type: str = _ABOUT_BLANK
     title: str
@@ -37,18 +44,24 @@ class ProblemDetails(BaseModel):
 
 
 class ProblemError(Exception):
-    """Raised by a route to answer a status as a problem, `about:blank` by default."""
+    """Raised by a route to answer a status as a problem, `about:blank` by default.
+
+    The handler is the one owner of the body's `title` and `status`: a typed
+    problem declares its `type` and its own members, and is built here beside
+    the status it answers.
+    """
 
     def __init__(
-        self, status: HTTPStatus, problem: ProblemDetails | None = None
+        self,
+        status: HTTPStatus,
+        problem_type: type[ProblemDetails] = ProblemDetails,
+        **members: object,
     ) -> None:
-        """Remember the status, and the typed problem to answer it with."""
+        """Remember the status, and the problem built to answer it."""
         super().__init__(status.phrase)
         self.status = status
-        self.problem = (
-            ProblemDetails(title=status.phrase, status=status.value)
-            if problem is None
-            else problem
+        self.problem = problem_type.model_validate(
+            {"title": status.phrase, "status": status.value, **members}
         )
 
 

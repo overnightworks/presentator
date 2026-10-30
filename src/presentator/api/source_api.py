@@ -5,13 +5,14 @@ and an access token or private key never comes back, so no answer here carries
 one. Instants come from the stored runs; a client words how long ago they were.
 """
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel, ConfigDict, SecretStr, WithJsonSchema
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, WithJsonSchema
 
 from presentator.api.admission import gated_admin
 from presentator.api.hooks import hook_url
@@ -143,9 +144,11 @@ class ConnectionCheckView(BaseModel):
 class SourceRefusedProblem(ProblemDetails):
     """A source the application would not take, and the reason code why."""
 
-    type: str = _REFUSED_TYPE
-    title: str = _REFUSED.phrase
-    status: int = _REFUSED.value
+    type: Annotated[
+        str,
+        Field(pattern=f"^{re.escape(_REFUSED_TYPE)}$"),
+        WithJsonSchema({"type": "string", "const": _REFUSED_TYPE}),
+    ] = _REFUSED_TYPE
     reason: Annotated[
         SourceRefusal,
         WithJsonSchema(
@@ -236,7 +239,7 @@ class _SourceData:
             key_draft_id=probe.key_draft_id or "",
         )
         if isinstance(checked, SourceRefusal):
-            raise ProblemError(_REFUSED, SourceRefusedProblem(reason=checked))
+            raise ProblemError(_REFUSED, SourceRefusedProblem, reason=checked)
         return ConnectionCheckView.of(checked)
 
 

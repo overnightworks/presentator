@@ -473,7 +473,7 @@ class Decks:
         credential = secret if deploy_key is None else deploy_key.private_key
         probed = self.checker.check(url=address, ref=_ADDED_REF, secret=credential)
         if probed.failure is not None:
-            return probed
+            return probed.as_answered()
         return ConnectionCheckResult(
             failure=None,
             commit=None if probed.commit is None else probed.commit[:_SHORT_COMMIT],

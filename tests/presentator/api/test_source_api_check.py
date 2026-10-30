@@ -47,7 +47,7 @@ from tests.presentator.application.support.fakes import (
     FakeSourceStore,
     FrozenClock,
 )
-from tests.support.lobby import ADMIN
+from tests.support.lobby import ADMIN, Lobby
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import MEMBER, Scene
 
@@ -58,6 +58,7 @@ _SENT = "the-token-this-scenario-sends"
 _HTTPS = "https://git.example.invalid/talks.git"
 _SSH = "git@git.example.invalid:talks.git"
 _USER_PART = "https://user:pw@git.example.invalid/talks.git"
+_REFUSED_TYPE = "tag:hallucinai.de,2026-09-08:presentator/problems/source-refused"
 _GIT_SAID = "git said something of its own"
 
 
@@ -259,6 +260,7 @@ def test_an_admin_drafts_a_key_and_the_private_half_is_in_no_answer(
     (stored,) = world.drafts.drafts.values()
     assert answer.status_code == HTTPStatus.OK
     assert answer.json() == {"id": stored.id, "public_key": stored.public_key}
+    assert stored.owner_id == instance.person_id
     assert_no_store(answer)
     assert_nothing_returned(answer, stored.private_key)
 
@@ -268,13 +270,15 @@ def test_a_draft_is_reused_until_it_is_older_than_the_limit() -> None:
     world = a_world()
     client = an_admin_over(world.decks).client
 
-    first = _draft(client).json()
-    again = _draft(client).json()
+    first = _draft(client)
+    again = _draft(client)
     world.clock.advance(DRAFT_MAX_AGE + timedelta(seconds=1))
-    later = _draft(client).json()
+    later = _draft(client)
 
-    assert again == first
-    assert later["id"] != first["id"]
+    assert again.json() == first.json()
+    assert later.json()["id"] != first.json()["id"]
+    for answer in (first, again, later):
+        assert_no_store(answer)
 
 
 # 12
@@ -284,10 +288,12 @@ def test_two_admins_each_get_their_own_draft() -> None:
     second = first.another_browser()
     second.sign_in(username="second-admin", role=Role.ADMIN)
 
-    mine = _draft(first.client).json()
-    theirs = _draft(second.client).json()
+    mine = _draft(first.client)
+    theirs = _draft(second.client)
 
-    assert mine["id"] != theirs["id"]
+    assert mine.json()["id"] != theirs.json()["id"]
+    assert_no_store(mine)
+    assert_no_store(theirs)
     assert set(world.drafts.drafts) == {ADMIN, "id-of-second-admin"}
 
 
@@ -315,8 +321,7 @@ def test_a_reachable_https_check_hands_the_token_to_the_checker_and_back_to_nobo
 def test_an_unreachable_check_answers_its_failure_and_no_fingerprint(
     failure: SourceRunFailure,
 ) -> None:
-    detail = _GIT_SAID if failure is SourceRunFailure.FAILED else None
-    found = ConnectionCheckResult(failure=failure, commit=None, detail=detail)
+    found = ConnectionCheckResult(failure=failure, commit=None, detail=_GIT_SAID)
     world = a_world(_RecordingChecker(answer=found))
 
     answer = _check(an_admin_over(world.decks).client)
@@ -325,7 +330,7 @@ def test_an_unreachable_check_answers_its_failure_and_no_fingerprint(
     assert answer.json() == {
         "failure": failure,
         "commit": None,
-        "detail": detail,
+        "detail": _GIT_SAID if failure is SourceRunFailure.FAILED else None,
         "fingerprint": None,
     }
     assert_no_store(answer)
@@ -348,6 +353,7 @@ def test_an_ssh_check_probes_with_the_admins_own_draft_and_never_shows_it() -> N
 
     assert answer.json()["failure"] is None
     assert world.checker.asked == [(_SSH, stored.private_key)]
+    assert_no_store(answer)
     assert_nothing_returned(answer, stored.private_key)
 
 
@@ -356,9 +362,12 @@ def test_an_ssh_check_with_a_foreign_or_stale_draft_is_refused_unprobed(
     which: str,
 ) -> None:
     world = a_world()
-    client = an_admin_over(world.decks).client
+    admin = an_admin_over(world.decks)
+    client = admin.client
     drafted = _draft(client).json()
-    sent = "somebody-elses-draft" if which == "foreign" else drafted["id"]
+    other = admin.another_browser()
+    other.sign_in(username="second-admin", role=Role.ADMIN)
+    sent = _draft(other.client).json()["id"] if which == "foreign" else drafted["id"]
     if which == "stale":
         world.clock.advance(DRAFT_MAX_AGE + timedelta(seconds=1))
 
@@ -373,6 +382,7 @@ def test_an_ssh_check_with_a_foreign_or_stale_draft_is_refused_unprobed(
     assert answer.json()["failure"] == SourceRunFailure.REFUSED
     assert answer.json()["fingerprint"] is None
     assert world.checker.asked == []
+    assert_no_store(answer)
 
 
 # 16
@@ -396,9 +406,8 @@ def test_an_access_that_does_not_match_the_url_is_a_typed_source_refused_problem
     problem = answer.json()
     assert problem["reason"] == SourceRefusal.ACCESS_MISMATCH
     assert problem["title"] == HTTPStatus.UNPROCESSABLE_ENTITY.phrase
-    assert problem["status"] == HTTPStatus.UNPROCESSABLE_ENTITY
-    assert problem["type"].startswith("tag:hallucinai.de,")
-    assert problem["type"].endswith("/source-refused")
+    assert problem["status"] == answer.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    assert problem["type"] == _REFUSED_TYPE
     assert world.checker.asked == []
 
 
@@ -442,48 +451,116 @@ def test_the_reserved_name_is_no_source_page() -> None:
 
 
 # 19
-def _drafted(client: TestClient) -> Response:
-    return _draft(client)
+_SECRET_NUMBER = 7391825
+_FOREIGN_DRAFT = "somebody-elses-draft"
 
 
-def _ssh_check(client: TestClient) -> Response:
-    drafted = _draft(client).json()
-    return client.post(
-        _CHECK,
-        json=_checked_body(
-            url=_SSH, access="ssh-deploy-key", secret=None, key_draft_id=drafted["id"]
-        ),
+@dataclass(frozen=True, slots=True)
+class _Logged:
+    send: Callable[[_World, Lobby], Response]
+    status: HTTPStatus
+    found: ConnectionCheckResult = A_REACHABLE_CHECK
+
+
+def _ssh_body(draft_id: str) -> dict[str, object]:
+    return _checked_body(
+        url=_SSH, access="ssh-deploy-key", secret=None, key_draft_id=draft_id
     )
 
 
-def _body_check(**changes: object) -> Callable[[TestClient], Response]:
-    return lambda client: client.post(_CHECK, json=_checked_body(**changes))
+def _own_draft_check(_world: _World, lobby: Lobby) -> Response:
+    drafted = _draft(lobby.client).json()
+    return lobby.client.post(_CHECK, json=_ssh_body(drafted["id"]))
 
 
-@pytest.mark.parametrize(
-    "send",
-    [
-        _drafted,
-        _ssh_check,
-        _body_check(),
-        _body_check(access="local-folder", secret=None),
-        _body_check(access="https"),
-        _body_check(secret=12345),
-    ],
-    ids=["draft", "ssh", "reachable", "mismatch", "radio-token", "number"],
-)
+def _foreign_draft_check(_world: _World, lobby: Lobby) -> Response:
+    other = lobby.another_browser()
+    other.sign_in(username="second-admin", role=Role.ADMIN)
+    theirs = _draft(other.client).json()
+    return lobby.client.post(_CHECK, json=_ssh_body(theirs["id"]))
+
+
+def _stale_draft_check(world: _World, lobby: Lobby) -> Response:
+    drafted = _draft(lobby.client).json()
+    world.clock.advance(DRAFT_MAX_AGE + timedelta(seconds=1))
+    return lobby.client.post(_CHECK, json=_ssh_body(drafted["id"]))
+
+
+def _expired_draft(world: _World, lobby: Lobby) -> Response:
+    _draft(lobby.client)
+    world.clock.advance(DRAFT_MAX_AGE + timedelta(seconds=1))
+    return _draft(lobby.client)
+
+
+def _second_admins_draft(_world: _World, lobby: Lobby) -> Response:
+    other = lobby.another_browser()
+    other.sign_in(username="second-admin", role=Role.ADMIN)
+    _draft(lobby.client)
+    return _draft(other.client)
+
+
+def _posting(**changes: object) -> Callable[[_World, Lobby], Response]:
+    return lambda _world, lobby: lobby.client.post(
+        _CHECK, json=_checked_body(**changes)
+    )
+
+
+_LOGGED = {
+    "10 draft": _Logged(lambda _w, lobby: _draft(lobby.client), HTTPStatus.OK),
+    "11 reused": _Logged(
+        lambda _w, lobby: (_draft(lobby.client), _draft(lobby.client))[1], HTTPStatus.OK
+    ),
+    "11 expired": _Logged(_expired_draft, HTTPStatus.OK),
+    "12 two admins": _Logged(_second_admins_draft, HTTPStatus.OK),
+    "13 reachable": _Logged(_posting(), HTTPStatus.OK),
+    **{
+        f"14 {failure.value}": _Logged(
+            _posting(),
+            HTTPStatus.OK,
+            ConnectionCheckResult(failure=failure, commit=None, detail=_GIT_SAID),
+        )
+        for failure in SourceRunFailure
+    },
+    "15 own draft": _Logged(_own_draft_check, HTTPStatus.OK),
+    "15 foreign draft": _Logged(_foreign_draft_check, HTTPStatus.OK),
+    "15 stale draft": _Logged(_stale_draft_check, HTTPStatus.OK),
+    "16 ssh for https": _Logged(
+        _posting(access="ssh-deploy-key", secret=None), HTTPStatus.UNPROCESSABLE_ENTITY
+    ),
+    "16 user part": _Logged(_posting(url=_USER_PART), HTTPStatus.UNPROCESSABLE_ENTITY),
+    "16 folder for https": _Logged(
+        _posting(access="local-folder", secret=None), HTTPStatus.UNPROCESSABLE_ENTITY
+    ),
+    "17 radio token": _Logged(
+        _posting(access="https"), HTTPStatus.UNPROCESSABLE_ENTITY
+    ),
+    "17 missing url": _Logged(
+        lambda _w, lobby: lobby.client.post(
+            _CHECK, json={"access": "https-token", "secret": _SENT}
+        ),
+        HTTPStatus.UNPROCESSABLE_ENTITY,
+    ),
+    "17 number": _Logged(
+        _posting(secret=_SECRET_NUMBER), HTTPStatus.UNPROCESSABLE_ENTITY
+    ),
+}
+
+
+@pytest.mark.parametrize("logged", _LOGGED.values(), ids=_LOGGED.keys())
 def test_no_log_record_carries_the_token_or_a_private_half(
-    send: Callable[[TestClient], Response],
+    logged: _Logged,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    world = a_world()
-    client = an_admin_over(world.decks).client
+    world = a_world(_RecordingChecker(answer=logged.found))
+    lobby = an_admin_over(world.decks)
 
     with caplog.at_level(logging.DEBUG):
-        send(client)
+        answer = logged.send(world, lobby)
 
+    assert answer.status_code == logged.status
     assert caplog.records
-    assert _SENT not in caplog.text
+    for value in (_SENT, _USER_PART, "user:pw", str(_SECRET_NUMBER)):
+        assert value not in caplog.text
     for stored in world.drafts.drafts.values():
         assert stored.private_key not in caplog.text
 
@@ -497,6 +574,7 @@ def test_a_checker_that_raises_is_the_plain_server_error_without_the_token() -> 
 
     assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert answer.headers["content-type"] != PROBLEM_MEDIA_TYPE
+    assert_no_store(answer)
     assert_nothing_returned(answer, _SENT)
 
 
@@ -508,7 +586,8 @@ def test_the_generated_spec_types_the_refusal_and_both_forbidden_answers() -> No
 
     assert set(check["422"]["content"]) == {PROBLEM_MEDIA_TYPE, "application/json"}
     assert refused["properties"]["reason"]["enum"] == [r.value for r in SourceRefusal]
-    assert refused["properties"]["type"]["default"].endswith("/source-refused")
+    assert refused["properties"]["type"]["const"] == _REFUSED_TYPE
+    assert {"type", "title", "status", "reason"} <= set(refused["required"])
     for path in (_KEY_DRAFT, _CHECK):
         forbidden = spec["paths"][path]["post"]["responses"]["403"]
         assert set(forbidden["content"]) == {PROBLEM_MEDIA_TYPE}

@@ -62,9 +62,10 @@ admin adds one under Settings · Sources.
   `tag:hallucinai.de,2026-09-08:presentator/problems/source-refused`, with the
   title `Unprocessable Content`, status 422 and the member `reason`, one of:
   `malformed-name` (not a source name, or the reserved `new`),
-  `duplicate-name`, `duplicate-url`, `access-mismatch` (the access does not
-  match what the URL names), `missing-secret` (HTTPS without a token),
-  `not-checked` (no matching successful Check), `credential-not-allowed` (a
+  `duplicate-name` (another source has the name), `duplicate-url` (another
+  source has the URL), `access-mismatch` (the access is not the one the URL
+  names, or the URL names none: a user part, plain `http`), `missing-secret` (HTTPS without a
+  token), `not-checked` (no matching successful Check), `credential-not-allowed` (a
   token for SSH or a folder), `outside-local-mount` (a folder outside the
   mount) and `deploy-key-unavailable` (the draft key is gone or not this
   admin's).
