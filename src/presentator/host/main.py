@@ -284,7 +284,9 @@ def _copresenter_surface(
         use=CoPresenterUse(
             answers=ServiceAnswerer(
                 origin=settings.agent_service,
-                workload_token=WorkloadToken(auth.relying_party),
+                workload_token=WorkloadToken(
+                    auth.relying_party, (settings.agent_service_scope,)
+                ),
             ),
             speech=UdsSpeechHearing(settings.speech_socket),
             decks=decks.store,

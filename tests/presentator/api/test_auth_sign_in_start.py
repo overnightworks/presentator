@@ -3,7 +3,7 @@
 from http import HTTPStatus
 from urllib.parse import parse_qs, urlsplit
 
-from tests.support.lobby import A_CLIENT_ID, AN_ISSUER, ENGLISH, Lobby
+from tests.support.lobby import A_CLIENT_ID, AN_ISSUER, ENGLISH, Lobby, a_settings
 
 _AUTHORIZATION_ENDPOINT = f"{AN_ISSUER}/protocol/openid-connect/auth"
 
@@ -30,7 +30,8 @@ def test_the_start_sends_the_browser_to_the_issuer_with_pkce_state_and_nonce(
     assert parameters["response_type"] == "code"
     assert parameters["client_id"] == A_CLIENT_ID
     assert parameters["redirect_uri"] == "https://testserver/auth/callback"
-    assert parameters["scope"] == "openid profile groups"
+    assert parameters["scope"].split()[-1] == a_settings().agent_service_scope
+    assert parameters["scope"].split()[:3] == ["openid", "profile", "groups"]
     assert parameters["code_challenge_method"] == "S256"
     assert parameters["state"]
     assert parameters["nonce"]

@@ -73,6 +73,7 @@ from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     A_TALK_ADDRESS,
     AN_AGENT_SERVICE,
+    AN_AGENT_SERVICE_SCOPE,
     NOW,
 )
 from tests.support.talk_support import A_DECK, B_DECK, A, Hosts, two_hosts
@@ -217,7 +218,9 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
             use=CoPresenterUse(
                 answers=ServiceAnswerer(
                     origin=AN_AGENT_SERVICE,
-                    workload_token=WorkloadToken(auth.relying_party),
+                    workload_token=WorkloadToken(
+                        auth.relying_party, (AN_AGENT_SERVICE_SCOPE,)
+                    ),
                     transport=scenario.transport or wire.transport,
                 ),
                 speech=fakes.speech,

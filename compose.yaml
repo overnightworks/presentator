@@ -39,6 +39,7 @@ services:
       PRESENTATOR_OIDC_CLIENT_ID: presentator
       PRESENTATOR_TRUSTED_PROXIES: 172.31.251.1
       PRESENTATOR_AGENT_SERVICE: http://agent-service:8080
+      PRESENTATOR_AGENT_SERVICE_SCOPE: agent-service-audience
       PRESENTATOR_BUILD_RUNNER: worker
       PRESENTATOR_SECRET_KEY_FILE: /run/secrets/presentator_secret_key
       PRESENTATOR_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret

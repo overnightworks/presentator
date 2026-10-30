@@ -40,7 +40,29 @@ def test_the_client_is_derived_from_the_issuer_and_the_public_origin() -> None:
     assert config.client_id == A_CLIENT_ID
     assert config.redirect_uri == "https://testserver/auth/callback"
     assert config.post_logout_redirect_uri == "https://testserver/login"
-    assert config.scopes == ("openid", "profile", "groups")
+    assert config.scopes == (
+        "openid",
+        "profile",
+        "groups",
+        a_settings().agent_service_scope,
+    )
+
+
+@pytest.mark.parametrize("scope", ["an-agent-service-audience", "another-audience"])
+def test_the_sign_in_asks_for_the_configured_agent_service_scope_at_both_hosts(
+    tmp_path: Path, scope: str
+) -> None:
+    secret_file = tmp_path / "secret"
+    secret_file.write_text(f"{A_CLIENT_CREDENTIAL}\n", encoding="utf-8")
+    settings = a_settings().model_copy(
+        update={"oidc_client_secret_file": secret_file, "agent_service_scope": scope}
+    )
+
+    lobby, talk = client_configs_of(settings)
+
+    assert lobby.scopes == talk.scopes
+    assert lobby.scopes[-1] == scope
+    assert scope not in lobby.scopes[:-1]
 
 
 # T3.

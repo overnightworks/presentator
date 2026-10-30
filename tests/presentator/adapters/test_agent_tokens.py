@@ -12,6 +12,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from webauth.oidc import OidcRefusal
 
 from presentator.adapters.agent_service import ServiceAnswerer
 from presentator.adapters.agent_tokens import PersonAccessTokens, WorkloadToken
@@ -55,7 +56,7 @@ _THREAD_WAIT_SECONDS = 10
 class Arranged:
     """A signed-in session over a fake issuer, and the two token sources on it."""
 
-    def __init__(self, scene: Scene, *, refresh_token: str | None) -> None:
+    def __init__(self, scene: Scene, *, refresh_token: str | None, scope: str) -> None:
         """Sign a person in; their one session row is the one asked about."""
         scene.issuer.issue_person_access_token(PERSON_ACCESS)
         scene.issuer.issue_workload_access_token(WORKLOAD_ACCESS)
@@ -67,7 +68,7 @@ class Arranged:
         self.person: PersonAccess = PersonAccessTokens(
             scene.relying_party, scene.sessions, scene.config
         )
-        self.workload = WorkloadToken(scene.relying_party)
+        self.workload = WorkloadToken(scene.relying_party, (scope,))
 
     def grants_so_far(self) -> int:
         """How many token requests the issuer has answered."""
@@ -78,7 +79,7 @@ class Arranged:
 def arranged(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> Iterator[Arranged]:
     """A signed-in session; its test ends with no marker in any record at DEBUG."""
     caplog.set_level(logging.DEBUG)
-    yield Arranged(a_scene(tmp_path), refresh_token=REFRESH)
+    yield Arranged(a_scene(tmp_path), refresh_token=REFRESH, scope="a-service-audience")
     assert not _markers_seen(caplog)
 
 
@@ -149,6 +150,41 @@ def test_the_workload_token_is_fetched_on_every_call(arranged: Arranged) -> None
     asyncio.run(arranged.workload())
 
     assert arranged.scene.issuer.grant_types.count("client_credentials") == first + 1
+
+
+@pytest.mark.parametrize(
+    "scope", ["a-service-audience", "another-audience"], ids=["first", "second"]
+)
+def test_the_workload_grant_names_the_scope_it_was_built_with(
+    tmp_path: Path, scope: str
+) -> None:
+    """Cells 1 and 2 (#673): the grant posts the scope it was built with."""
+    built = Arranged(a_scene(tmp_path), refresh_token=None, scope=scope)
+
+    asyncio.run(built.workload())
+
+    assert built.scene.issuer.workload_scopes == [scope]
+
+
+def test_a_workload_scope_the_issuer_refuses_is_one_unavailable_error(
+    arranged: Arranged,
+) -> None:
+    """Cell 3 (#673): invalid_scope answers unavailable, leaking nothing."""
+    arranged.scene.issuer.workload_scope_is_invalid = True
+
+    _failure_of(arranged.workload())
+
+
+def test_the_library_keeps_an_invalid_scope_a_typed_refusal(
+    arranged: Arranged,
+) -> None:
+    """Cell 3 (#673): the library answers invalid_scope as a typed refusal."""
+    arranged.scene.issuer.workload_scope_is_invalid = True
+
+    answer = arranged.scene.relying_party.workload_access_token(scopes=("any",))
+
+    assert isinstance(answer, OidcRefusal)
+    assert answer.idp_error == "invalid_scope"
 
 
 def _without_a_refresh_token(arranged: Arranged) -> None:
