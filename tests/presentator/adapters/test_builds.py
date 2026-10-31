@@ -16,17 +16,13 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from errno import ELOOP
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
 from presentator.adapters import builds as builds_module
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
-from presentator.adapters.builds import (
-    DeckToolchain,
-    HostToolchain,
-    SlidevBuilds,
-)
+from presentator.adapters.builds import DeckToolchain, HostToolchain, SlidevBuilds
 from presentator.adapters.decks import FilesystemLocalMount, SourceMirrors
 from presentator.contracts.decks import (
     FAILURE_TEXT_LIMIT,
@@ -38,6 +34,7 @@ from presentator.contracts.decks import (
     Source,
     talk_address,
 )
+from presentator.ports.decks import BuildRun
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
 from tests.support.git_remote import (
     EXAMPLE_SLUG,
@@ -1092,7 +1089,7 @@ def test_what_a_build_closed_behind_it_is_opened_and_taken_away_all_the_same(
     assert list(builds.builds.iterdir()) == []
 
 
-def test_what_could_not_be_taken_away_is_named_in_the_log(
+def test_a_run_that_could_not_be_taken_away_is_logged_and_answered_as_its_volume_path(
     remote: GitRemote,
     source: Source,
     machine: pytest.MonkeyPatch,
@@ -1104,11 +1101,13 @@ def test_what_could_not_be_taken_away_is_named_in_the_log(
 
     with _opened_again_afterwards(builds.builds):
         built = builds.build(a_deck(remote), source=source)
+        logged = caplog.text
+        (left,) = builds.builds.iterdir()
+        named = builds.remove(BuildRun(left.name))
 
     assert isinstance(built, BuildFailure)
-    left = list(builds.builds.iterdir())
-    assert len(left) == 1
-    assert left[0].name in caplog.text
+    assert left.name in logged
+    assert named == PurePosixPath(builds.builds.name, left.name)
 
 
 @contextmanager

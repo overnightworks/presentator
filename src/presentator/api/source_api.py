@@ -28,6 +28,7 @@ from presentator.application.decks import (
     NewSourceDraft,
     SourceRefusal,
     SourceRemovalRefusal,
+    SourceRemovalRefused,
     SourceRemovalStale,
 )
 from presentator.contracts.decks import (
@@ -305,10 +306,10 @@ class _SourceData:
         )
         if removed is None:
             raise ProblemError(HTTPStatus.NOT_FOUND)
-        if isinstance(removed, SourceRemovalRefusal):
+        if isinstance(removed, SourceRemovalRefused):
             raise ProblemError(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
-                SourceRemovalRefusedProblem(reason=removed),
+                SourceRemovalRefusedProblem(reason=removed.reason),
             )
         if isinstance(removed, SourceRemovalStale):
             raise ProblemError(

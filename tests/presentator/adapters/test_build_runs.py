@@ -85,6 +85,7 @@ def test_only_real_runs_are_listed_and_everything_else_is_left_alone(
     a_run(root, "real")
     (root / "a-file").write_text("x", encoding="utf-8")
     (root / "no-output").mkdir()
+    (root / "no-output" / "keep").write_text("x", encoding="utf-8")
     (root / "linked-run").symlink_to(tmp_path)
     (root / "linked-out").mkdir()
     (root / "linked-out" / "out").symlink_to(tmp_path)
@@ -97,6 +98,35 @@ def test_only_real_runs_are_listed_and_everything_else_is_left_alone(
         "no-output",
         "real",
     ]
+
+
+def test_an_empty_directory_under_the_root_is_a_run_that_is_listed_and_removed(
+    root: Path,
+) -> None:
+    """An empty directory holds nothing to lose and is a run's last state."""
+    (root / "empty").mkdir()
+
+    assert listed_runs(root) == {"empty"}
+    assert removed_run(root, "empty")
+
+    assert not (root / "empty").exists()
+
+
+def test_a_removal_that_stopped_halfway_is_finished_by_the_next_attempt(
+    root: Path,
+) -> None:
+    """A root closed to writing lets a run be emptied but not taken away."""
+    a_run(root, "halfway")
+    root.chmod(0o500)
+    try:
+        assert not removed_run(root, "halfway")
+    finally:
+        root.chmod(0o700)
+
+    assert list((root / "halfway").iterdir()) == []
+    assert listed_runs(root) == {"halfway"}
+    assert removed_run(root, "halfway")
+    assert not (root / "halfway").exists()
 
 
 def test_a_root_that_cannot_be_listed_lists_nothing_at_all(tmp_path: Path) -> None:
@@ -152,6 +182,21 @@ def test_a_run_that_cannot_be_looked_at_is_not_reported_gone(
         root.chmod(0o700)
 
     assert "unseen" in caplog.text
+
+
+def test_a_directory_that_cannot_be_read_is_not_taken_for_an_empty_run(
+    root: Path,
+) -> None:
+    """An unreadable directory is not known to hold nothing."""
+    (root / "closed").mkdir()
+    (root / "closed").chmod(0o000)
+    try:
+        assert listed_runs(root) == frozenset()
+        assert not removed_run(root, "closed")
+    finally:
+        (root / "closed").chmod(0o700)
+
+    assert (root / "closed").is_dir()
 
 
 def test_removing_a_run_that_is_already_gone_succeeds(root: Path) -> None:

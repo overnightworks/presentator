@@ -11,6 +11,8 @@ privacy section states, and that pass's sweep takes its runs.
 import logging
 from collections.abc import Iterable
 from datetime import datetime, timedelta
+from operator import attrgetter
+from pathlib import PurePosixPath
 from typing import Final
 
 from presentator.contracts.decks import Deck
@@ -60,13 +62,18 @@ def delete_absent(
         _log.info(_DELETED_ABSENT, deleted, source_id)
 
 
-def builds_removed(builder: BuildRunner, decks: Iterable[Deck]) -> bool:
-    """Whether every run these decks deliver from is gone from disk."""
+def builds_removed(
+    builder: BuildRunner, decks: Iterable[Deck]
+) -> tuple[PurePosixPath, ...] | None:
+    """Take every run these decks deliver from off disk, and name the ones that stayed.
+
+    Nothing where one stored path is not placed: then no run was attempted.
+    """
     runs = _runs_named_by(builder, decks)
     if runs is None:
-        return False
-    stayed = [run for run in runs if not builder.remove(run)]
-    return not stayed
+        return None
+    attempts = (builder.remove(run) for run in sorted(runs, key=attrgetter("name")))
+    return tuple(stayed for stayed in attempts if stayed is not None)
 
 
 def _runs_named_by(

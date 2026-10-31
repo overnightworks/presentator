@@ -523,20 +523,16 @@ def test_removing_a_sources_mirror_deletes_it_from_disk(
     mirror.connect()
     assert mirror.directory.exists()
 
-    gone = mirrors.remove(source)
-
-    assert gone is True
+    assert mirrors.remove(source) is None
     assert not mirror.directory.exists()
 
 
 def test_removing_a_mirror_that_was_never_fetched_deletes_nothing_calmly(
     tmp_path: Path,
 ) -> None:
-    gone = mirrors_under(tmp_path).remove(
-        a_source("git@example.invalid:never-fetched.git"),
-    )
+    never_fetched = a_source("git@example.invalid:never-fetched.git")
 
-    assert gone is True
+    assert mirrors_under(tmp_path).remove(never_fetched) is None
 
 
 def test_a_mirror_whose_parent_refuses_the_delete_is_reported_not_gone(
@@ -563,13 +559,16 @@ def test_a_mirror_whose_parent_refuses_the_delete_is_reported_not_gone(
     parent.chmod(0o500)
     try:
         with caplog.at_level(logging.WARNING):
-            gone = mirrors.remove(source)
+            left = mirrors.remove(source)
     finally:
         parent.chmod(0o700)
 
-    assert gone is False
     assert mirror.directory.exists()
-    assert source.name in caplog.text
+    assert str(left) == f"{mirrors.directory.name}/{mirror.directory.name}"
+    warned = " ".join(caplog.messages)
+    assert source.id in warned
+    for kept_private in (source.name, source.url):
+        assert kept_private not in f"{warned} {left}"
 
 
 def test_a_real_git_source_can_be_added_removed_and_added_again(
@@ -586,11 +585,11 @@ def test_a_real_git_source_can_be_added_removed_and_added_again(
     first_poll = folders.folders(first)
     assert first_poll.folders is not None
 
-    mirror_gone = folders.forget(first)
+    mirror_left = folders.forget(first)
     sources.remove(first.id)
     second = sources.add(a_write(name=SOURCE_NAME, url=remote.url))
 
-    assert mirror_gone is True
+    assert mirror_left is None
     assert second is not None
     assert second.id != first.id
     second_poll = folders.folders(second)

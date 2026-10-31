@@ -6,7 +6,7 @@ from typing import Final
 
 from presentator.application.decks import (
     Decks,
-    SourceRemovalRefusal,
+    SourceRemovalRefused,
     SourceRemovalStale,
 )
 from presentator.contracts.decks import Deck, Source, SourceRemoval, SourceRun
@@ -14,6 +14,7 @@ from presentator.contracts.people import (
     DeckExport,
     KeyDraftExport,
     KindCount,
+    LeftoverDirectory,
     PersonBusy,
     PersonData,
     PersonDiskLeftover,
@@ -153,26 +154,53 @@ class People:
         self.sessions.delete_for_user(subject)
         self.preferences.delete(subject)
         self.key_drafts.remove_for_owner(subject)
+        leftovers = self._every_source_removed(owned)
+        if not leftovers:
+            return PersonErased(kinds=census)
+        remaining = self._census(subject, self._sources_of(subject))
+        return PersonDiskLeftover(
+            removed=_removed_between(census, remaining), leftovers=leftovers
+        )
+
+    def _every_source_removed(
+        self, owned: tuple[Source, ...]
+    ) -> tuple[LeftoverDirectory, ...]:
+        """Try every source, then name what stayed; one that stayed stops no other.
+
+        A stored build no run can be placed for has no directory to name, so
+        it fails loud once every other source was tried.
+        """
+        leftovers: list[LeftoverDirectory] = []
+        unplaced: list[str] = []
         for source in owned:
-            leftover = self._removed(source)
-            if leftover is not None:
-                return leftover
-        return PersonErased(kinds=census)
+            refused = self._removed(source)
+            if refused is None:
+                continue
+            if refused.builds is None:
+                unplaced.append(source.id)
+            else:
+                leftovers.extend(_directories_of(refused))
+        if unplaced:
+            message = (
+                f"source {', '.join(unplaced)} has a build no run can be placed for"
+            )
+            raise RuntimeError(message)
+        return tuple(leftovers)
 
     def _account_gone(self, subject: str, outcome: PersonErasure) -> PersonErasure:
         if isinstance(outcome, PersonErased):
             self.accounts.delete_account(subject)
         return outcome
 
-    def _removed(self, source: Source) -> PersonDiskLeftover | None:
+    def _removed(self, source: Source) -> SourceRemovalRefused | None:
         confirmed = self._removal_of(source)
         outcome = self.decks.remove_source(
             source.name,
             expected_deck_count=confirmed.deck_count,
             expected_run_count=confirmed.run_count,
         )
-        if outcome is SourceRemovalRefusal.DISK_LEFTOVER:
-            return PersonDiskLeftover(source=source.name)
+        if isinstance(outcome, SourceRemovalRefused):
+            return outcome
         if outcome is None or isinstance(outcome, SourceRemovalStale):
             message = f"source {source.name} changed under the refresh lock"
             raise RuntimeError(message)
@@ -209,6 +237,28 @@ class People:
         return tuple(
             KindCount(kind=kind, count=count) for kind, count in counts.items()
         )
+
+
+def _directories_of(refused: SourceRemovalRefused) -> list[LeftoverDirectory]:
+    mirrors = [] if refused.mirror is None else [refused.mirror]
+    return [
+        *(LeftoverDirectory(kind=PersonKind.MIRRORS, path=path) for path in mirrors),
+        *(
+            LeftoverDirectory(kind=PersonKind.BUILDS, path=path)
+            for path in refused.builds or ()
+        ),
+    ]
+
+
+def _removed_between(
+    before: tuple[KindCount, ...], after: tuple[KindCount, ...]
+) -> tuple[KindCount, ...]:
+    """What went between two censuses of the same kinds, kind by kind."""
+    remaining = {counted.kind: counted.count for counted in after}
+    return tuple(
+        KindCount(kind=counted.kind, count=counted.count - remaining[counted.kind])
+        for counted in before
+    )
 
 
 def _deck_export(deck: Deck) -> DeckExport:

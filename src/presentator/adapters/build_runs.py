@@ -1,7 +1,9 @@
 """The runs of the build on disk: which exist, which a path belongs to, taking one away.
 
 A run is a directory directly under the builds root that holds an `out`
-directory, and a stored talk or PDF belongs to it only at exactly
+directory, or that is empty: a removal that could empty a run but not take its
+own directory away leaves exactly that, and an empty directory holds nothing to
+lose. A stored talk or PDF belongs to it only at exactly
 `<root>/<name>/out/talk` or `<root>/<name>/out/deck.pdf`. Everything here is
 anchored to the configured root and names no run from a stored path alone,
 because automatic retention deletes what these functions answer for.
@@ -92,13 +94,30 @@ def _still_stands(directory: Path) -> bool:
 
 
 def _is_a_run(directory: Path) -> bool:
-    """Whether this is a real directory holding a real `out` directory."""
+    """Whether this is a real directory holding a real `out` directory or nothing.
+
+    The empty directory is what a removal leaves when it could take the run's
+    contents away but not the run's own directory; counting it lets the next
+    attempt finish the removal, and taking away what holds nothing loses nothing.
+    """
     try:
-        return stat.S_ISDIR(directory.lstat().st_mode) and stat.S_ISDIR(
-            (directory / OUTPUT_DIRECTORY).lstat().st_mode,
+        return stat.S_ISDIR(directory.lstat().st_mode) and (
+            _holds_a_real_output(directory) or _holds_nothing(directory)
         )
     except OSError:
         return False
+
+
+def _holds_a_real_output(directory: Path) -> bool:
+    try:
+        return stat.S_ISDIR((directory / OUTPUT_DIRECTORY).lstat().st_mode)
+    except OSError:
+        return False
+
+
+def _holds_nothing(directory: Path) -> bool:
+    with os.scandir(directory) as entries:
+        return next(entries, None) is None
 
 
 def taken_away(directory: Path) -> bool:

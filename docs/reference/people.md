@@ -20,10 +20,34 @@ counts are what was removed in a real run. `affects_others` is always empty.
 | 403 | A valid token without the admin group or a group below it. |
 | 409 | A refresh or build holds the lock for longer than 60 seconds; nothing was deleted. `Retry-After` is the wait in whole seconds, and `busy` lists the running work. hal's timeout must exceed 60 seconds. |
 | 422 | `dry_run` is not a boolean; nothing was deleted. |
-| 500 | A mirror or build could not be removed; the person remains and a repeat finishes it. The body's `leftover` counts the source, never names it. |
+| 500 | A mirror or build directory could not be removed; the body is the 200's plus `leftover` (below). The person remains and a repeat finishes it. A plain 500 without `leftover` is a failed step (below). |
 
 Every answer carries `Cache-Control: no-store`. A request never creates an
 account.
+
+### What is left
+
+A real run tries every source the person owns, even after one could not be
+removed. A source whose mirror or build directory stays keeps its rows and the
+person keeps the account; every other source is still removed. The 500 then
+carries `dry_run` `false`, `kinds` (what this attempt removed: the account and
+a source that stayed count zero), `affects_others` `[]` and `leftover`: one
+entry per directory that stayed, `{kind, count, path}` with `count` 1. `kind`
+is `mirrors` or `builds`; `path` is relative to the data volume, as
+`mirrors/<64 hex digits>.git` or `builds/<run>`, the first part being the
+configured directory's own name. A path never holds a source name, an address,
+a deck, a commit, an email or file content; a mirror's hex name is the SHA-256
+of the source address, so it can be checked against a guessed address. The
+`mirrors` count in `kinds` counts source rows, not mirror directories on disk.
+
+A stored build that lies where no run can be placed (a corrupted row or a
+changed builds root) has no directory to name: the run still tries every other
+source, keeps the account, and fails with a plain 500. No `person erase:` line
+is written for that call; the server logs the exception with the source's
+internal id. A dry run never lists a leftover.
+
+The log line of a leftover holds the kinds and counts left over and removed,
+never a path or a name; the mirror's own warning names the source's internal id.
 
 ## Export a person
 
