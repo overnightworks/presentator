@@ -598,7 +598,7 @@ def test_one_sources_purge_leaves_an_unreadable_sources_marks_alone() -> None:
 def test_refreshing_one_source_deletes_its_decks_missed_thirty_days() -> None:
     """#511 matrix 9."""
     instance = missed_on_day_zero()
-    instance.fakes.clock.instant = _NOW + 30 * _DAY
+    instance.fakes.clock.instant = _NOW + REMOVED_DECK_KEPT
 
     assert instance.decks.refresh_named(_SOURCE.name)
 
