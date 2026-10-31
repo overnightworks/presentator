@@ -421,6 +421,7 @@ async def _cancel_as_the_thread_returns(
     # Blocking the loop here keeps the returned thread's result undelivered, so
     # the cancellation reaches a task still waiting on a thread that is done.
     executor.recorded[0].result(_THREAD_WAIT_SECONDS)
+    assert executor.recorded[0].done()
     assert not task.done()
     task.cancel()
     with pytest.raises(asyncio.CancelledError) as caught:
