@@ -42,12 +42,6 @@ msgstr "User"
 msgid "log_out"
 msgstr "Log out"
 
-msgid "logged_out_title"
-msgstr "You are logged out."
-
-msgid "log_in"
-msgstr "Log in"
-
 msgid "login_failed_title"
 msgstr "Login failed"
 

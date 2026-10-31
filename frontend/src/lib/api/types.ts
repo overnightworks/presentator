@@ -600,12 +600,8 @@ export interface components {
             language_name: string;
             /** Language Tag */
             language_tag: string;
-            /** Log In */
-            log_in: string;
             /** Log Out */
             log_out: string;
-            /** Logged Out Title */
-            logged_out_title: string;
             /** Login Failed Explanation */
             login_failed_explanation: string;
             /** Login Failed Retry */

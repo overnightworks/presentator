@@ -711,16 +711,8 @@
             "title": "Language Tag",
             "type": "string"
           },
-          "log_in": {
-            "title": "Log In",
-            "type": "string"
-          },
           "log_out": {
             "title": "Log Out",
-            "type": "string"
-          },
-          "logged_out_title": {
-            "title": "Logged Out Title",
             "type": "string"
           },
           "login_failed_explanation": {
@@ -1314,8 +1306,6 @@
           "theme_dark",
           "role_admin",
           "role_user",
-          "logged_out_title",
-          "log_in",
           "login_failed_title",
           "login_failed_explanation",
           "login_failed_retry",

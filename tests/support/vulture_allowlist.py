@@ -82,8 +82,6 @@ Banner.sentences
 # missing any field of `LobbyText`; that a page renders them is proven by the
 # route tests.
 LobbyText.section_decks
-LobbyText.logged_out_title
-LobbyText.log_in
 LobbyText.login_failed_title
 LobbyText.login_failed_explanation
 LobbyText.login_failed_retry
