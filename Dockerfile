@@ -1,7 +1,8 @@
 # One image stands here, built in layers. `toolchain` is what a deck's own build
 # runs in: Slidev, the Chromium it exports a PDF with, and nothing else (line
-# 14a). `instance` is that layer plus the packaged server; the web and the build
-# worker run from it.
+# 14a). `lobby` builds the lobby's SvelteKit app and is thrown away but for its
+# output. `instance` is the toolchain layer plus the packaged server and the
+# lobby's output; the web and the build worker run from it.
 #
 # Node is the base because the toolchain's version is the narrow one
 # (slidev/.nvmrc); uv brings the Python that .python-version names. Every
@@ -32,6 +33,17 @@ RUN case "$PRESENTATOR_RUNTIME_UID" in \
 ENV HOME=/home/presentator \
     PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
     COREPACK_HOME=/opt/corepack
+
+# The lobby is built here alone, so neither its sources nor its toolchain reach
+# the deck build environment; Node stays in the image for Slidev only.
+FROM runtime-user AS lobby
+RUN corepack enable pnpm
+WORKDIR /lobby
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+COPY frontend/patches ./patches
+RUN corepack install && pnpm install --frozen-lockfile
+COPY frontend ./
+RUN pnpm build
 
 FROM runtime-user AS toolchain
 
@@ -87,6 +99,7 @@ COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --locked --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --locked --no-dev --no-editable
+COPY --from=lobby /lobby/build /app/lobby
 
 # The directories the instance keeps its state in are made here so that an empty
 # volume mounted over one belongs to the user that writes it.
@@ -100,6 +113,7 @@ ENV PRESENTATOR_DATABASE=/data/database/presentator.sqlite3 \
     PRESENTATOR_MIRRORS=/data/mirrors \
     PRESENTATOR_BUILDS=/data/builds \
     PRESENTATOR_TOOLCHAIN=/app/slidev \
+    PRESENTATOR_LOBBY_BUILD=/app/lobby \
     PRESENTATOR_HOST=0.0.0.0 \
     PRESENTATOR_LOCAL_SOURCES_MOUNT=/data/local-sources
 USER presentator
