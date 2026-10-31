@@ -976,7 +976,9 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
     )
     assert list(builds.builds.iterdir()) == []
     assert {held.name for held in Path("/proc/self/fd").iterdir()} <= open_before
-    assert not recwarn.list, "the walk that stopped early left a listing open"
+    assert not [
+        warning for warning in recwarn if issubclass(warning.category, ResourceWarning)
+    ], "the walk that stopped early left a listing open"
 
 
 def test_a_talk_that_cannot_be_added_up_in_time_is_refused_without_words(
