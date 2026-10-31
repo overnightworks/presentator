@@ -103,7 +103,7 @@ def test_only_real_runs_are_listed_and_everything_else_is_left_alone(
 def test_an_empty_directory_under_the_root_is_a_run_that_is_listed_and_removed(
     root: Path,
 ) -> None:
-    """#705: an empty directory holds nothing to lose and is a run's last state."""
+    """An empty directory holds nothing to lose and is a run's last state."""
     (root / "empty").mkdir()
 
     assert listed_runs(root) == {"empty"}
@@ -115,7 +115,7 @@ def test_an_empty_directory_under_the_root_is_a_run_that_is_listed_and_removed(
 def test_a_removal_that_stopped_halfway_is_finished_by_the_next_attempt(
     root: Path,
 ) -> None:
-    """#705: a root closed to writing lets a run be emptied but not taken away."""
+    """A root closed to writing lets a run be emptied but not taken away."""
     a_run(root, "halfway")
     root.chmod(0o500)
     try:
@@ -123,6 +123,7 @@ def test_a_removal_that_stopped_halfway_is_finished_by_the_next_attempt(
     finally:
         root.chmod(0o700)
 
+    assert list((root / "halfway").iterdir()) == []
     assert listed_runs(root) == {"halfway"}
     assert removed_run(root, "halfway")
     assert not (root / "halfway").exists()
