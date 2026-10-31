@@ -510,12 +510,16 @@ class FakeDeckFolders:
             failure=None,
         )
 
-    def forget(self, source: Source) -> bool:
+    def forget(self, source: Source) -> PurePosixPath | None:
         self.forgotten.append(source.id)
         if source.id in self.stuck:
-            return False
+            return self.mirror_of(source.id)
         self.carried.pop(source.id, None)
-        return True
+        return None
+
+    def mirror_of(self, source_id: str) -> PurePosixPath:
+        """Where this fake says a source's mirror stands, relative to the volume."""
+        return PurePosixPath("mirrors", f"{source_id}.git")
 
 
 @dataclass
@@ -549,6 +553,12 @@ class FakeDeckStore:
 
     def put_build(self, slug: str, build: Build) -> None:
         self.kept[slug] = replace(self.kept[slug], build=build, attempt=None)
+
+    def misplace_build(self, slug: str, *, talk: Path) -> None:
+        """Point a stored build's talk at `talk`, the way a corrupted row would."""
+        deck = self.kept[slug]
+        assert deck.build is not None
+        self.kept[slug] = replace(deck, build=replace(deck.build, directory=talk))
 
     def put_attempt(self, slug: str, attempt: BuildAttempt) -> None:
         self.kept[slug] = replace(self.kept[slug], attempt=attempt)
@@ -620,9 +630,9 @@ class HeldDeckFolders:
             self.inside -= 1
         return SourcePoll(folders=self.found, commit=_A_FETCHED_COMMIT, failure=None)
 
-    def forget(self, source: Source) -> bool:
+    def forget(self, source: Source) -> PurePosixPath | None:
         del source
-        return True
+        return None
 
     def _enter(self) -> None:
         with self.counting:
@@ -694,12 +704,16 @@ class FakeBuildRunner:
             return None
         return BuildRun(path.parent.parent.name)
 
-    def remove(self, run: BuildRun) -> bool:
+    def remove(self, run: BuildRun) -> PurePosixPath | None:
         self.removed.append(run)
         if run in self.stuck:
-            return False
+            return self.directory_of(run)
         self.on_disk.discard(run)
-        return True
+        return None
+
+    def directory_of(self, run: BuildRun) -> PurePosixPath:
+        """Where this fake says a run stands, relative to the volume."""
+        return PurePosixPath(self.root.name, run.name)
 
 
 # What most tests need from the toolchain set, without naming a real one.

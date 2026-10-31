@@ -13,7 +13,7 @@ from presentator.application.decks import (
     Decks,
     NewSourceDraft,
     SourceRefusal,
-    SourceRemovalRefusal,
+    SourceRemovalRefused,
     SourceRemovalStale,
     access_kind_of,
 )
@@ -1592,7 +1592,7 @@ def test_renewing_a_name_this_instance_does_not_have_does_nothing() -> None:
 def _confirmed(
     decks: Decks,
     name: str,
-) -> SourceRemoval | SourceRemovalRefusal | SourceRemovalStale | None:
+) -> SourceRemoval | SourceRemovalRefused | SourceRemovalStale | None:
     """Confirm a removal the way a person who just saw the ask step would.
 
     The ask step's own counts travel back exactly as the form carries them;
@@ -1768,7 +1768,7 @@ def test_a_stuck_mirror_or_build_refuses_the_removal_and_deletes_nothing(
 
     outcome = _confirmed(decks, SOURCE.name)
 
-    assert outcome is SourceRemovalRefusal.DISK_LEFTOVER
+    assert isinstance(outcome, SourceRemovalRefused)
     assert store.all() == (SOURCE,)
     assert fakes.store.all() != ()
     assert mirror.forgotten == [SOURCE.id]
@@ -1782,7 +1782,7 @@ def test_removing_a_source_waits_for_a_refresh_then_checks_the_fresh_count() -> 
     refreshing.start()
     assert held.entered.wait(PATIENCE.total_seconds())
 
-    outcome: list[SourceRemoval | SourceRemovalRefusal | SourceRemovalStale | None] = []
+    outcome: list[SourceRemoval | SourceRemovalRefused | SourceRemovalStale | None] = []
 
     def remove_now() -> None:
         outcome.append(

@@ -22,7 +22,7 @@ from presentator.application.decks import (
     Decks,
     NewSourceDraft,
     SourceRefusal,
-    SourceRemovalRefusal,
+    SourceRemovalRefused,
     SourceRemovalStale,
 )
 from presentator.contracts.decks import (
@@ -444,7 +444,7 @@ class _Surfaces:
                 "source_remove.html",
                 removal=_removal_view(outcome.current, text),
             )
-        if outcome is SourceRemovalRefusal.DISK_LEFTOVER:
+        if isinstance(outcome, SourceRemovalRefused):
             shown = self.decks.shown_source(name, viewer=gated_person(request).id)
             if shown is None:
                 return Response(status_code=HTTPStatus.NOT_FOUND)

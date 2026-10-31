@@ -12,7 +12,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from hashlib import sha256
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Final
 
 from gitmirror.mirror import GitMirror, check_connection
@@ -416,22 +416,23 @@ class SourceMirrors:
             pull_timeout=self.pull_timeout,
         )
 
-    def remove(self, source: Source) -> bool:
-        """Delete this source's mirror from disk, and say whether it is gone.
+    def remove(self, source: Source) -> PurePosixPath | None:
+        """Delete this source's mirror from disk, and name it if it stayed.
 
         The directory is named off the address alone (`_directory_of`), so
         this goes whether or not `of` could still open it — a mount that
         vanished must not leave the mirror it once carried behind. A path
-        that survives the attempt is named in the log, because a caller that
-        must not delete a source's row while its mirror still stands needs
-        to know, not just be told.
+        that survives the attempt is answered under the mirrors directory's
+        own name and logged by the source's id, never its name or address,
+        because a caller that must not delete a source's row while its mirror
+        still stands needs to know, not just be told.
         """
         directory = self._directory_of(source)
         shutil.rmtree(directory, ignore_errors=True)
         if directory.exists():
-            _log.warning(_MIRROR_STAYED, source.name)
-            return False
-        return True
+            _log.warning(_MIRROR_STAYED, source.id)
+            return PurePosixPath(self.directory.absolute().name, directory.name)
+        return None
 
     def _directory_of(self, source: Source) -> Path:
         """Where this source's mirror stands.
@@ -507,8 +508,8 @@ class MirroredDeckFolders:
 
     mirrors: SourceMirrors
 
-    def forget(self, source: Source) -> bool:
-        """Delete this source's mirror from disk, and say whether it is gone."""
+    def forget(self, source: Source) -> PurePosixPath | None:
+        """Delete this source's mirror from disk, and name it if it stayed."""
         return self.mirrors.remove(source)
 
     def folders(self, source: Source) -> SourcePoll:

@@ -12,6 +12,7 @@ from presentator.application.build_retention import REMOVED_DECK_KEPT
 from presentator.application.decks import (
     Decks,
     SourceRemovalRefusal,
+    SourceRemovalRefused,
     SourceRemovalStale,
 )
 from presentator.contracts.decks import (
@@ -392,7 +393,9 @@ def test_removing_a_source_over_a_build_no_run_owns_keeps_every_row() -> None:
 
     outcome = _confirmed(decks, _SOURCE.name)
 
-    assert outcome is SourceRemovalRefusal.DISK_LEFTOVER
+    assert outcome == SourceRemovalRefused(
+        reason=SourceRemovalRefusal.DISK_LEFTOVER, mirror=None, builds=None
+    )
     assert set(store.kept) == {"odd"}
     assert source_store.sources == [_SOURCE]
     assert runs_left(builder) == {"other"}

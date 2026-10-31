@@ -26,7 +26,7 @@ from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from tempfile import mkdtemp
 from time import monotonic
 from typing import IO, BinaryIO, Final, Protocol, cast
@@ -382,9 +382,12 @@ class SlidevBuilds:
         name = run_name_of(self.builds.absolute(), path)
         return None if name is None else BuildRun(name)
 
-    def remove(self, run: BuildRun) -> bool:
-        """Take that run's whole directory off disk, or say it is still there."""
-        return removed_run(self.builds.absolute(), run.name)
+    def remove(self, run: BuildRun) -> PurePosixPath | None:
+        """Take that run's whole directory off disk, or name it if it stayed."""
+        root = self.builds.absolute()
+        if removed_run(root, run.name):
+            return None
+        return PurePosixPath(root.name, run.name)
 
     def _a_place_of_its_own(self) -> BuildPlace:
         """Where this run works: a directory of its own under the root.

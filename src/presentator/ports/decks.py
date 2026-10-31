@@ -7,7 +7,7 @@ Named for decks rather than for a catalogue, because the message catalog
 from abc import abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import BinaryIO, Protocol
 
 from presentator.contracts.decks import (
@@ -161,14 +161,15 @@ class DeckFolders(Protocol):
         """
 
     @abstractmethod
-    def forget(self, source: Source) -> bool:
-        """Delete this source's mirror from disk, and say whether it is gone.
+    def forget(self, source: Source) -> PurePosixPath | None:
+        """Delete this source's mirror from disk, and name it if it stayed.
 
         A source whose mount or host has since gone away still has a mirror
         to delete; nothing to delete is fine too, so a name asked about twice
-        answers true calmly. A path that survives the attempt answers false,
-        so a caller that must not go on believing a mirror was cleared can
-        stop rather than take that on faith.
+        answers nothing calmly. A directory that survives the attempt is
+        answered by its path relative to the data volume, so a caller that
+        must not go on believing a mirror was cleared can stop and say what
+        stayed rather than take that on faith.
         """
 
 
@@ -355,15 +356,15 @@ class BuildRunner(Protocol):
         """
 
     @abstractmethod
-    def remove(self, run: BuildRun) -> bool:
-        """Take that run's whole directory off disk, and say whether it is gone.
+    def remove(self, run: BuildRun) -> PurePosixPath | None:
+        """Take that run's whole directory off disk, and name it if it stayed.
 
         Not only the two files a deck's page ever pointed at: the run's own
         directory carried what the deck's own code wrote alongside them, too.
         Only a directory shaped like a run directly under the root goes. One
-        that survives the attempt answers false, so a caller that must not go
-        on believing a build was cleared can stop rather than take that on
-        faith.
+        that survives the attempt is answered by its path relative to the data
+        volume, so a caller that must not go on believing a build was cleared
+        can stop and say what stayed rather than take that on faith.
         """
 
 
