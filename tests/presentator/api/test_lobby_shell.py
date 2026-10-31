@@ -76,11 +76,20 @@ def test_the_bootstrap_hash_follows_the_built_script(tmp_path: Path) -> None:
         pytest.param(_HTML.format(""), id="no-inline-script"),
         pytest.param(_HTML.format(_BOOTSTRAP * 2), id="two-inline-scripts"),
         pytest.param(f"<html><body>{_BOOTSTRAP}</body></html>", id="no-marks"),
+        pytest.param(
+            _HTML.format(_BOOTSTRAP + '<script type="module">boot()</script>'),
+            id="second-inline-script-with-an-attribute",
+        ),
+        pytest.param(
+            _HTML.format(_BOOTSTRAP + "<SCRIPT>boot()</SCRIPT>"),
+            id="second-inline-script-in-upper-case",
+        ),
     ],
 )
 def test_a_shell_this_host_cannot_serve_is_refused(tmp_path: Path, page: str) -> None:
+    build = _a_build(tmp_path, page)
     with pytest.raises(LobbyBuildError):
-        LobbyShell.read(_a_build(tmp_path, page))
+        LobbyShell.read(build)
 
 
 def test_a_missing_build_is_refused(tmp_path: Path) -> None:

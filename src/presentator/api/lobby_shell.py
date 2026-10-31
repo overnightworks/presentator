@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import re
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Final
 
@@ -21,11 +21,32 @@ LANGUAGE_MARK: Final = "%lobby.lang%"
 THEME_MARK: Final = "%lobby.theme%"
 _SHELL_FILE: Final = "index.html"
 _ASSETS_DIRECTORY: Final = "_app"
-_INLINE_SCRIPT: Final = re.compile(r"<script>(.*?)</script>", re.DOTALL)
 
 
 class LobbyBuildError(Exception):
     """The lobby's build is missing or is not the shell this host can serve."""
+
+
+class _InlineScripts(HTMLParser):
+    """Collects the text of every script element that has no `src`."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.texts: list[str] = []
+        self._open: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "script" and all(name != "src" for name, _ in attrs):
+            self._open = []
+
+    def handle_data(self, data: str) -> None:
+        if self._open is not None:
+            self._open.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script" and self._open is not None:
+            self.texts.append("".join(self._open))
+            self._open = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +70,10 @@ class LobbyShell:
         if missing:
             message = f"{shell} lacks {', '.join(missing)}"
             raise LobbyBuildError(message)
-        scripts = _INLINE_SCRIPT.findall(page)
+        parser = _InlineScripts()
+        parser.feed(page)
+        parser.close()
+        scripts = parser.texts
         if len(scripts) != 1:
             message = (
                 f"{shell} has {len(scripts)} inline scripts, not the one bootstrap"
