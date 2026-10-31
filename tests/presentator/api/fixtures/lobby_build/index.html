@@ -5,8 +5,9 @@
 		<link href="/_app/immutable/entry/start.js" rel="modulepreload">
 	</head>
 	<body>
-		<script>
-			import("/_app/immutable/entry/start.js").then((kit) => kit.start(document.body));
+		<script type="module">
+			const entry = "/_app/immutable/entry/start.js";
+			(await import(entry)).start(document.body);
 		</script>
 	</body>
 </html>
