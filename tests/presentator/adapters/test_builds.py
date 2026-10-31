@@ -7,11 +7,13 @@ that the worker really denies it this machine, is proven by driving the real
 interface.
 """
 
+import gc
 import os
 import shutil
 import stat
 import subprocess
 import time
+import warnings
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -46,6 +48,10 @@ from tests.support.git_remote import (
     a_path_carrying,
     with_the_program,
 )
+from tests.support.worker_support import (
+    descriptors_left_open_since,
+    open_descriptor_targets,
+)
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _A_GENEROUS_BOUND = timedelta(seconds=30)
@@ -68,6 +74,7 @@ _ARGUMENTS_OF_EVERY_KIND = (
     "--network=none --cap-add=ALL",
 )
 _NO_BUDGET_AT_ALL = timedelta(0)
+_ALREADY_PAST = -1.0
 _OWNER = "the-admin"
 _SOURCE_ID = "the-source-that-carried-it"
 _A_SERVER_SECRET = "PRESENTATOR_" + "A_VALUE_ONLY_THIS_TEST_SET"
@@ -977,6 +984,25 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
     )
     assert list(builds.builds.iterdir()) == []
     assert {held.name for held in Path("/proc/self/fd").iterdir()} <= open_before
+
+
+def test_a_walk_that_stops_early_leaves_no_directory_open_for_the_collector(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "first").write_bytes(b"x")
+    (tmp_path / "second").write_bytes(b"x")
+    before = open_descriptor_targets()
+
+    with warnings.catch_warnings(record=True) as left_to_the_collector:
+        warnings.simplefilter("always", ResourceWarning)
+        added = builds_module._added_up(  # noqa: SLF001 - the walk owns this exit
+            tmp_path, ends_by=_ALREADY_PAST
+        )
+        gc.collect()
+
+    assert added.in_time is False
+    assert [warning.message for warning in left_to_the_collector] == []
+    assert descriptors_left_open_since(before) == {}
 
 
 def test_a_talk_that_cannot_be_added_up_in_time_is_refused_without_words(
