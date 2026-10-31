@@ -4,7 +4,7 @@ import errno
 import logging
 import socket
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
@@ -35,12 +35,39 @@ from tests.support.worker_support import (
     BoundedListener,
     ScriptedLife,
     StopServingError,
-    connect,
-    connect_when_bound,
     listening_with,
     serving,
     wake_until_ended,
 )
+from tests.support.worker_support import (
+    connect as open_connection,
+)
+from tests.support.worker_support import (
+    connect_when_bound as open_connection_when_bound,
+)
+
+_CLIENTS_OF_THE_TEST: list[socket.socket] = []
+
+
+@pytest.fixture(autouse=True)
+def clients_closed_with_the_test() -> Iterator[None]:
+    yield
+    while _CLIENTS_OF_THE_TEST:
+        _CLIENTS_OF_THE_TEST.pop().close()
+
+
+def connect(volume: Path) -> socket.socket:
+    """A client of the worker's socket, closed when the test ends."""
+    _CLIENTS_OF_THE_TEST.append(open_connection(volume))
+    return _CLIENTS_OF_THE_TEST[-1]
+
+
+def connect_when_bound(
+    volume: Path, still_serving: Callable[[], bool]
+) -> socket.socket:
+    """The first client the socket admits once bound, closed when the test ends."""
+    _CLIENTS_OF_THE_TEST.append(open_connection_when_bound(volume, still_serving))
+    return _CLIENTS_OF_THE_TEST[-1]
 
 
 def test_the_runtime_uid_is_admitted() -> None:

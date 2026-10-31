@@ -249,12 +249,12 @@ def test_a_socket_not_yet_listening_is_retried_until_the_window_ends(
 ) -> None:
     """Cell B1."""
     worker.prepare_socket_directory(volume, OWN_UID, OWN_GID)
-    worker.bind_socket(volume, OWN_UID, OWN_GID)
-    started = time.monotonic()
+    with worker.bind_socket(volume, OWN_UID, OWN_GID):
+        started = time.monotonic()
 
-    assert not toolchain(volume).is_answering()
+        assert not toolchain(volume).is_answering()
 
-    assert WINDOW <= time.monotonic() - started < WINDOW + 0.5
+        assert WINDOW <= time.monotonic() - started < WINDOW + 0.5
 
 
 def test_a_worker_answering_a_hello_is_answering(volume: Path) -> None:

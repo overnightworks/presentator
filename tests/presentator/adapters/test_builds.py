@@ -74,7 +74,6 @@ _ARGUMENTS_OF_EVERY_KIND = (
     "--network=none --cap-add=ALL",
 )
 _NO_BUDGET_AT_ALL = timedelta(0)
-_ALREADY_PAST = -1.0
 _OWNER = "the-admin"
 _SOURCE_ID = "the-source-that-carried-it"
 _A_SERVER_SECRET = "PRESENTATOR_" + "A_VALUE_ONLY_THIS_TEST_SET"
@@ -987,20 +986,22 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
 
 
 def test_a_walk_that_stops_early_leaves_no_directory_open_for_the_collector(
+    remote: GitRemote,
+    source: Source,
+    machine: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    (tmp_path / "first").write_bytes(b"x")
-    (tmp_path / "second").write_bytes(b"x")
+    machine.setattr(builds_module, "_ADDING_UP_WITHIN", _NO_BUDGET_AT_ALL)
+    with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_BUILDS)
+    builds = builds_ready_for(tmp_path, source)
     before = open_descriptor_targets()
 
     with warnings.catch_warnings(record=True) as left_to_the_collector:
         warnings.simplefilter("always", ResourceWarning)
-        added = builds_module._added_up(  # noqa: SLF001 - the walk owns this exit
-            tmp_path, ends_by=_ALREADY_PAST
-        )
+        built = builds.build(a_deck(remote), source=source)
         gc.collect()
 
-    assert added.in_time is False
+    assert built == BuildFailure.without_words()
     assert [warning.message for warning in left_to_the_collector] == []
     assert descriptors_left_open_since(before) == {}
 
