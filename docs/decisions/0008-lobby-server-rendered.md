@@ -3,8 +3,9 @@
 Audience: humans and agents building the pages the operator sees before a talk
 starts.
 
-- Status: ACCEPTED 2026-09-06 — logging in and starting a deck are phase M0 of
-  [VISION.md](../VISION.md)
+- Status: SUPERSEDED 2026-10-31 by
+  [ADR 0021](0021-the-lobby-is-a-sveltekit-app.md); ACCEPTED 2026-09-06 —
+  logging in and starting a deck are phase M0 of [VISION.md](../VISION.md)
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06 recorded on
   [#2](https://github.com/overnightworks/presentator/issues/2)

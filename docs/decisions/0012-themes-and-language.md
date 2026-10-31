@@ -18,12 +18,15 @@ Audience: humans and agents writing any user-facing string or any colour.
   Amended 2026-10-30: the room notice takes its colours from the `room-*`
   boards and follows the slide's brightness, see the named gap below
   ([#616](https://github.com/overnightworks/presentator/issues/616)).
+  Amended 2026-10-31: the lobby's SvelteKit pages take the look from appkit's
+  pinned npm tarball, see The look of the SvelteKit pages
+  ([ADR 0021](0021-the-lobby-is-a-sveltekit-app.md)).
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06, including
   [#8](https://github.com/overnightworks/presentator/issues/8) line 22
   (theme is a per-user preference, not a header-bar control)
-- Neighbours: [ADR 0008](0008-lobby-server-rendered.md) owns how the lobby is
-  built; [ADR 0005](0005-deck-folder-and-slidev.md) owns the addon this theme
+- Neighbours: [ADR 0021](0021-the-lobby-is-a-sveltekit-app.md) owns how the
+  lobby is built; [ADR 0005](0005-deck-folder-and-slidev.md) owns the addon this theme
   also reaches
 
 ## Context
@@ -59,6 +62,16 @@ second theme. The settings grammar classes in the package have no markup
 caller here yet; Settings Users
 ([#61](https://github.com/overnightworks/presentator/issues/61))
 adopts `.list-head` / `nav.tabs` / `.rows` on Settings and Account.
+
+#### The look of the SvelteKit pages
+
+A lobby page that has moved to SvelteKit takes its tokens, fonts and components
+from appkit's npm tarball, pinned in `frontend/package.json` and imported from
+`node_modules` (`overnightworks-appkit/appkit.css`), never a copy of it.
+presentator fills only appkit's app slot with its teal: `#0c6c77` with ink
+`#ffffff` in light, `#56c3cd` with ink `#06181b` in dark
+(`frontend/src/app.css`). The ui-console pin and Pico above stay for the Jinja
+pages until the last of them moves.
 
 The co-presenter overlay in the Slidev addon is meant to read the same token
 file, so that lobby and overlay share the same active theme — one token file on
