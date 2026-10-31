@@ -1,8 +1,0 @@
-claim_id = "5485b5a571a049d895f7c2f450d06de1"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "077ffcf94a837a39e1bcdd2fcb43b63f8b6682e8"
-branch = "claude/issue-483-the-erasure-s-500-lists-what-is-left-kin"
-scope = ["docs/reference/people.md", "src/presentator/adapters/builds.py", "src/presentator/adapters/decks.py", "src/presentator/api/people.py", "src/presentator/api/source_api.py", "src/presentator/api/sources.py", "src/presentator/application/build_retention.py", "src/presentator/application/decks.py", "src/presentator/application/people.py", "src/presentator/contracts/people.py", "src/presentator/ports/decks.py", "tests/presentator/adapters/test_builds.py", "tests/presentator/adapters/test_decks.py", "tests/presentator/api/test_people_erasure_route.py", "tests/presentator/api/test_source_api_removal.py", "tests/presentator/application/support/fakes.py", "tests/presentator/application/test_build_retention.py", "tests/presentator/application/test_decks.py", "tests/presentator/application/test_people_erasure.py"]
-opened_commit = "72329e5238a25078780efeb026d4e4bff2dd103c"
-whole_reason = "The two disk ports' result type, their adapters, the run removal that folds the runs' answers (builds_removed), the refusal value, its three consumers (the people use case and the web's and the JSON API's source removal), the fakes and the route's body are one type change that cannot be built or type-checked half done, and a slice that only widened the removal result would be read by no entry point."
