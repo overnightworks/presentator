@@ -9,7 +9,7 @@ excuse.
 from presentator.api.auth import DeckRow
 from presentator.api.copresenter import AskRequest
 from presentator.api.decks import Banner, TalkFiles
-from presentator.api.lobby_shell import _InlineScripts
+from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
 from presentator.api.problems import ValidationFault
 from presentator.api.sources import (
     SourceDeckRow,
