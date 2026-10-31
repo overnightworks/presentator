@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "91041d9b4aa7cc44916b8c421a5eb093d936fb45"
 branch = "claude/issue-685-tests-and-the-deck-size-walk-leave-socke"
-scope = ["src/presentator/adapters/builds.py", "tests/presentator/adapters/test_agent_service_tokens.py", "tests/presentator/adapters/test_build_worker.py", "tests/presentator/adapters/test_builds.py", "tests/presentator/host/test_worker_serving_loop.py"]
+scope = ["src/presentator/adapters/builds.py", "tests/presentator/adapters/test_agent_service_tokens.py", "tests/presentator/adapters/test_build_worker.py", "tests/presentator/adapters/test_builds.py", "tests/presentator/adapters/test_deck_store_failures.py", "tests/presentator/adapters/test_identity.py", "tests/presentator/host/test_worker_serving_loop.py"]
 opened_commit = "8de5385a0d0f6c357e5dc9febb9b26207bfcd7f8"
 whole_reason = "One defect class, resources left to the garbage collector, proven by one warnings-as-errors run over the two directories; the sqlite-leaking test joins by rescope once found."
