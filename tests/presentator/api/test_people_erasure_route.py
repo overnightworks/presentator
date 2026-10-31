@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Callable
 from contextlib import nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
@@ -16,9 +16,15 @@ from httpx2 import Response
 from presentator.application.people import People
 from presentator.host import main
 from presentator.host.config import ConfigurationError, load_settings
+from tests.presentator.application.support.decks_support import (
+    a_folder,
+    a_source,
+    having,
+)
 from tests.presentator.application.support.fakes import (
     FakeDeckFolders,
     FakePeople,
+    FakeSourceStore,
     FrozenClock,
 )
 from tests.presentator.application.support.person_instance_support import (
@@ -99,9 +105,10 @@ def a_scene(
     *,
     clients: frozenset[str] | None = frozenset({HAL}),
     folders: FakeDeckFolders | None = None,
+    source_store: FakeSourceStore | None = None,
     lock_wait: timedelta = timedelta(milliseconds=50),
 ) -> Scene:
-    instance = an_instance(folders=folders)
+    instance = an_instance(folders=folders, source_store=source_store)
     clock = FrozenClock(instant=NOW)
     people = FakePeople(users=instance.users, sessions=instance.sessions, clock=clock)
     issuer = FakeIssuer(issuer=AN_ISSUER, client_id=A_CLIENT_ID, now=NOW)
@@ -297,24 +304,127 @@ def test_a_running_build_answers_409_with_the_wait_and_deletes_nothing() -> None
     assert scene.state() == before
 
 
-def test_a_mirror_that_cannot_go_answers_500_and_a_repeat_finishes() -> None:
-    """D9: a disk leftover answers 500 without a source name, and the person stays."""
+def test_a_mirror_that_cannot_go_answers_500_listing_it_and_a_repeat_finishes() -> None:
+    """E1-E5 (#483), edge people.md Leftovers: the 200's body plus `leftover`."""
     stuck = FakeDeckFolders(stuck=frozenset({"talks-id"}))
     scene = a_scene(folders=stuck)
+    preview = scene.erase(query="?dry_run=true")
 
     answer = scene.erase()
 
+    assert preview.status_code == HTTPStatus.OK
+    assert "leftover" not in preview.json()
     assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert answer.json() == {
         "people_erasure": 1,
         "app": "presentator",
         "subject": THE_PERSON.id,
-        "leftover": [{"kind": "sources", "count": 1}],
+        "dry_run": False,
+        "kinds": [
+            {"kind": "account", "count": 0},
+            {"kind": "sessions", "count": 1},
+            {"kind": "preferences", "count": 1},
+            {"kind": "key-draft", "count": 1},
+            {"kind": "sources", "count": 1},
+            {"kind": "decks", "count": 1},
+            {"kind": "runs", "count": 1},
+            {"kind": "mirrors", "count": 1},
+            {"kind": "builds", "count": 1},
+        ],
+        "affects_others": [],
+        "leftover": [
+            {
+                "kind": "mirrors",
+                "count": 1,
+                "path": stuck.mirror_of("talks-id").as_posix(),
+            },
+        ],
     }
     assert answer.headers["cache-control"] == _NO_STORE
     assert THE_PERSON.id in scene.instance.users.users
     stuck.stuck = frozenset()
     assert scene.erase().status_code == HTTPStatus.OK
+    again = scene.erase(query="?dry_run=true").json()
+    assert {one["count"] for one in again["kinds"]} == {0}
+
+
+_RECOGNISABLE_NAME = "vortrag-firma-x"
+_RECOGNISABLE_ADDRESS = "git@firma-x.example:geheimprojekt/vortrag.git"
+_RECOGNISABLE_DECK = "kundengeheimnis"
+
+
+@pytest.mark.parametrize(
+    "recognisable",
+    [_RECOGNISABLE_NAME, "geheimprojekt", _RECOGNISABLE_DECK, THE_PERSON.username],
+    ids=["name", "address", "deck", "username"],
+)
+def test_a_leftover_answer_names_no_source_address_deck_or_person(
+    recognisable: str,
+) -> None:
+    """E2 (#483): a path may hold an internal id, never a name or an address."""
+    source = replace(
+        a_source(_RECOGNISABLE_NAME, identifier="a-source-of-the-person"),
+        url=_RECOGNISABLE_ADDRESS,
+        owner_id=THE_PERSON.id,
+    )
+    stuck = FakeDeckFolders(
+        carried={source.id: (a_folder(_RECOGNISABLE_DECK),)},
+        stuck=frozenset({source.id}),
+    )
+    scene = a_scene(folders=stuck, source_store=having(source))
+    builder = scene.instance.fakes.builder
+    builder.stuck = frozenset(builder.on_disk)
+
+    answer = scene.erase()
+
+    assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert {entry["kind"] for entry in answer.json()["leftover"]} == {
+        "mirrors",
+        "builds",
+    }
+    assert recognisable not in answer.text
+
+
+def test_a_leftover_writes_one_audit_line_of_kinds_and_counts(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """E6 (#483): the leftover line holds kinds and counts, no path and no name."""
+    stuck = FakeDeckFolders(stuck=frozenset({"talks-id"}))
+    scene = a_scene(folders=stuck)
+    caplog.set_level(logging.INFO)
+
+    scene.erase()
+
+    (line,) = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "presentator.api.people"
+    ]
+    assert "left over mirrors=1" in line
+    assert "sessions=1" in line
+    assert "/" not in line
+    assert "talks" not in line
+
+
+def test_a_build_no_run_owns_answers_a_plain_500_without_a_leftover() -> None:
+    """D2b (#483): an unplaceable build is a failed step, never an invented path."""
+    scene = a_scene()
+    store = scene.instance.fakes.store
+    (talk,) = store.for_source("talks-id")
+    store.misplace_build(talk.slug, talk=Path("/nowhere/a-run/out/talk"))
+    client = TestClient(
+        scene.lobby.app,
+        base_url=A_BROWSERS_ADDRESS,
+        headers=A_BROWSERS_HEADERS,
+        raise_server_exceptions=False,
+    )
+
+    answer = client.delete(f"{_PATH}{THE_PERSON.id}", headers=scene.token())
+
+    assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert "leftover" not in answer.text
+    assert THE_PERSON.id in scene.instance.users.users
+    assert store.for_source("talks-id")
 
 
 def test_an_empty_setting_serves_no_such_route() -> None:

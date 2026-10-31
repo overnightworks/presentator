@@ -4,6 +4,7 @@ import threading
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
 from threading import RLock
 
 import pytest
@@ -12,14 +13,17 @@ from presentator.contracts.decks import Source, SourceRun
 from presentator.contracts.models import Role, User
 from presentator.contracts.people import (
     KindCount,
+    LeftoverDirectory,
     PersonBusy,
     PersonDiskLeftover,
     PersonErased,
     PersonErasure,
     PersonKind,
 )
+from presentator.ports.decks import BuildRun
 from tests.presentator.application.support.decks_support import (
     DecksFakes,
+    a_folder,
 )
 from tests.presentator.application.support.fakes import (
     PATIENCE,
@@ -30,6 +34,7 @@ from tests.presentator.application.support.fakes import (
 from tests.presentator.application.support.person_instance_support import (
     ANOTHER,
     THE_PERSON,
+    Instance,
     an_instance,
 )
 
@@ -210,35 +215,128 @@ def test_an_unknown_subjects_dry_run_does_not_list_running_work() -> None:
     assert counts(outcome) == _NOTHING
 
 
-def test_a_mirror_that_cannot_go_stops_the_run_with_the_person_still_there() -> None:
-    """E5 (#418): a mirror that cannot go stops the run with the account kept."""
-    stuck = FakeDeckFolders(stuck=frozenset({"talks-id"}))
-    instance = an_instance(folders=stuck)
-
-    outcome = instance.people.erase_person(THE_PERSON.id, dry_run=False)
-
-    assert outcome == PersonDiskLeftover(source="talks")
-    assert THE_PERSON.id in instance.users.users
-    assert "talks-id" in {source.id for source in instance.decks.sources.all()}
-    assert any(
-        deck.source_id == "talks-id" for deck in instance.fakes.store.kept.values()
+def _runs_of(instance: Instance, source_id: str) -> frozenset[BuildRun]:
+    builder = instance.fakes.builder
+    return frozenset(
+        run
+        for deck in instance.fakes.store.for_source(source_id)
+        if deck.build is not None
+        for path in (deck.build.directory, deck.build.pdf)
+        if (run := builder.run_of(path)) is not None
     )
 
 
-def test_a_repeat_after_a_leftover_finishes_the_erasure() -> None:
-    """E5 (#418): a repeat after a disk leftover finishes the erasure."""
+def _owned_source_ids(instance: Instance) -> set[str]:
+    return {
+        source.id
+        for source in instance.decks.sources.all()
+        if source.owner_id == THE_PERSON.id
+    }
+
+
+def test_every_directory_one_source_left_is_listed_once_by_its_kind() -> None:
+    """E1-E3 (#483): a stuck mirror and two stuck builds are three entries."""
     stuck = FakeDeckFolders(stuck=frozenset({"talks-id"}))
     instance = an_instance(folders=stuck)
-    instance.people.erase_person(THE_PERSON.id, dry_run=False)
-    stuck.stuck = frozenset()
+    talk_decks = (a_folder("talks-deck"), a_folder("talks-more"))
+    stuck.carried["talks-id"] = talk_decks
+    instance.decks.refresh()
+    builder = instance.fakes.builder
+    builder.stuck = _runs_of(instance, "talks-id")
+    assert len(builder.stuck) == len(talk_decks)
 
     outcome = instance.people.erase_person(THE_PERSON.id, dry_run=False)
 
-    assert isinstance(outcome, PersonErased)
+    assert isinstance(outcome, PersonDiskLeftover)
+    assert len(outcome.leftovers) == 1 + len(talk_decks)
+    assert set(outcome.leftovers) == {
+        LeftoverDirectory(kind=PersonKind.MIRRORS, path=stuck.mirror_of("talks-id")),
+        *(
+            LeftoverDirectory(kind=PersonKind.BUILDS, path=builder.directory_of(run))
+            for run in builder.stuck
+        ),
+    }
+    assert THE_PERSON.id in instance.users.users
+    assert _owned_source_ids(instance) == {"talks-id"}
+    assert len(instance.fakes.store.for_source("talks-id")) == len(talk_decks)
+
+
+def test_every_stuck_source_is_listed_in_one_answer() -> None:
+    """E4 (#483): two stuck sources are both listed; neither loses a row."""
+    stuck = FakeDeckFolders(stuck=frozenset({"decks-id", "talks-id"}))
+    instance = an_instance(folders=stuck)
+
+    outcome = instance.people.erase_person(THE_PERSON.id, dry_run=False)
+
+    assert isinstance(outcome, PersonDiskLeftover)
+    assert outcome.leftovers == tuple(
+        LeftoverDirectory(kind=PersonKind.MIRRORS, path=stuck.mirror_of(source_id))
+        for source_id in ("decks-id", "talks-id")
+    )
+    assert _owned_source_ids(instance) == {"decks-id", "talks-id"}
+    assert instance.fakes.store.for_source("decks-id")
+    assert instance.fakes.store.for_source("talks-id")
+
+
+def test_a_stuck_source_does_not_keep_the_others_and_a_repeat_finishes() -> None:
+    """E4 (#483): the removable source goes, the stuck one and the account stay."""
+    stuck = FakeDeckFolders(stuck=frozenset({"talks-id"}))
+    instance = an_instance(folders=stuck)
+
+    outcome = instance.people.erase_person(THE_PERSON.id, dry_run=False)
+
+    assert isinstance(outcome, PersonDiskLeftover)
+    assert _owned_source_ids(instance) == {"talks-id"}
+    assert instance.fakes.store.for_source("decks-id") == ()
+    assert "decks-id" not in stuck.carried
+    assert instance.fakes.store.for_source("talks-id")
+    assert THE_PERSON.id in instance.users.users
+    stuck.stuck = frozenset()
+    assert isinstance(
+        instance.people.erase_person(THE_PERSON.id, dry_run=False), PersonErased
+    )
     assert THE_PERSON.id not in instance.users.users
-    assert [source.owner_id for source in instance.decks.sources.all()] == [
-        ANOTHER.id,
-    ]
+    assert counts(instance.people.erase_person(THE_PERSON.id, dry_run=True)) == _NOTHING
+
+
+def test_a_leftover_counts_only_what_this_attempt_removed() -> None:
+    """E5 (#483): the account and the stuck source count zero, the rest what went."""
+    stuck = FakeDeckFolders(stuck=frozenset({"talks-id"}))
+    instance = an_instance(folders=stuck)
+
+    outcome = instance.people.erase_person(THE_PERSON.id, dry_run=False)
+
+    assert isinstance(outcome, PersonDiskLeftover)
+    assert {entry.kind: entry.count for entry in outcome.removed} == {
+        PersonKind.ACCOUNT: 0,
+        PersonKind.SESSIONS: 1,
+        PersonKind.PREFERENCES: 1,
+        PersonKind.KEY_DRAFT: 1,
+        PersonKind.SOURCES: 1,
+        PersonKind.DECKS: 1,
+        PersonKind.RUNS: 1,
+        PersonKind.MIRRORS: 1,
+        PersonKind.BUILDS: 1,
+    }
+
+
+def test_a_build_no_run_owns_fails_loud_after_the_other_sources_went() -> None:
+    """D2b (#483): the erasure goes on, keeps the account, then names the id."""
+    instance = an_instance()
+    store = instance.fakes.store
+    (talk,) = store.for_source("talks-id")
+    talks_runs = _runs_of(instance, "talks-id")
+    store.misplace_build(talk.slug, talk=Path("/nowhere/a-run/out/talk"))
+
+    with pytest.raises(RuntimeError, match="talks-id") as raised:
+        instance.people.erase_person(THE_PERSON.id, dry_run=False)
+
+    assert "talks" not in str(raised.value).replace("talks-id", "")
+    assert _owned_source_ids(instance) == {"talks-id"}
+    assert store.for_source("talks-id")
+    assert store.for_source("decks-id") == ()
+    assert talks_runs <= instance.fakes.builder.on_disk
+    assert THE_PERSON.id in instance.users.users
 
 
 @dataclass
@@ -248,7 +346,7 @@ class _FoldersThatWatchTheRows(FakeDeckFolders):
     watch: Callable[[], tuple[object, ...]] = field(default=lambda: ())
     seen: list[tuple[object, ...]] = field(default_factory=list[tuple[object, ...]])
 
-    def forget(self, source: Source) -> bool:
+    def forget(self, source: Source) -> PurePosixPath | None:
         self.seen.append(self.watch())
         return super().forget(source)
 

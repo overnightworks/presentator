@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from pathlib import PurePosixPath
 
 from presentator.contracts.decks import SourceRunFailure, SourceRunOutcome
 from presentator.contracts.models import User
@@ -63,13 +64,26 @@ class PersonBusy:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PersonDiskLeftover:
-    """A mirror or build of this source survived; the source and the person remain.
+class LeftoverDirectory:
+    """One mirror or build directory an erasure could not take away.
 
-    A repeat run finishes the removal.
+    The path is relative to the data volume and names no person, source
+    name, address or deck: only directory names the app chose.
     """
 
-    source: str
+    kind: PersonKind
+    path: PurePosixPath
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PersonDiskLeftover:
+    """Directories survived; their sources and the person remain.
+
+    `removed` counts what this attempt took away; a repeat run finishes it.
+    """
+
+    removed: tuple[KindCount, ...]
+    leftovers: tuple[LeftoverDirectory, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

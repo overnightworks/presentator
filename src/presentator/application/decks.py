@@ -15,7 +15,7 @@ from enum import StrEnum
 from functools import partial
 from hashlib import sha256
 from hmac import compare_digest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from threading import RLock
 from typing import BinaryIO, Final
 
@@ -106,6 +106,20 @@ class SourceRemovalRefusal(StrEnum):
     # The mirror or a built directory survived the attempt to take it away;
     # disk goes first, so no row is touched while either still stands.
     DISK_LEFTOVER = "disk-leftover"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SourceRemovalRefused:
+    """A confirmed removal that deleted no row: why, and what stayed on disk.
+
+    Each path is relative to the data volume. `builds` is nothing where no run
+    was attempted, because a stored build lies where no run can be placed; an
+    empty tuple means every run went.
+    """
+
+    reason: SourceRemovalRefusal
+    mirror: PurePosixPath | None
+    builds: tuple[PurePosixPath, ...] | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -387,7 +401,7 @@ class Decks:
         *,
         expected_deck_count: int,
         expected_run_count: int,
-    ) -> SourceRemoval | SourceRemovalRefusal | SourceRemovalStale | None:
+    ) -> SourceRemoval | SourceRemovalRefused | SourceRemovalStale | None:
         """Delete that source, its decks, its runs, and everything they built.
 
         Waits for a refresh already under way, so nothing of this source's decks
@@ -399,7 +413,8 @@ class Decks:
         away before a row is touched, and if either survives, or a build lies
         where no run can be placed, nothing is deleted and the source stays
         taken rather than a leftover becoming an address a later add reopens
-        with a new secret (R3); only a clean disk frees the URL (R2).
+        with a new secret (R3); only a clean disk frees the URL (R2). The
+        refusal names every directory that stayed.
         """
         with self.one_at_a_time:
             source = self._named(name)
@@ -412,10 +427,14 @@ class Decks:
                 or preview.run_count != expected_run_count
             ):
                 return SourceRemovalStale(current=preview)
-            mirror_gone = self.folders.forget(source)
-            builds_gone = builds_removed(self.builder, carried)
-            if not mirror_gone or not builds_gone:
-                return SourceRemovalRefusal.DISK_LEFTOVER
+            mirror_left = self.folders.forget(source)
+            builds_left = builds_removed(self.builder, carried)
+            if mirror_left is not None or builds_left != ():
+                return SourceRemovalRefused(
+                    reason=SourceRemovalRefusal.DISK_LEFTOVER,
+                    mirror=mirror_left,
+                    builds=builds_left,
+                )
             self.store.remove_for_source(source.id)
             self.source_runs.remove_for_source(source.id)
             self.sources.remove(source.id)

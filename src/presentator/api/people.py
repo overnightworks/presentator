@@ -10,6 +10,7 @@ import json
 import logging
 import math
 import zipfile
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -25,13 +26,13 @@ from webauth.ports import BearerCaller
 from presentator.application.people import People
 from presentator.contracts.people import (
     KindCount,
+    LeftoverDirectory,
     PersonBusy,
     PersonData,
     PersonDiskLeftover,
     PersonErased,
     PersonErasure,
     PersonExport,
-    PersonKind,
 )
 
 ADMIN_PREFIX: Final = "/api/admin/"
@@ -63,6 +64,23 @@ def _counts(kinds: tuple[KindCount, ...]) -> list[dict[str, object]]:
     return [{"kind": counted.kind.value, "count": counted.count} for counted in kinds]
 
 
+def _leftover(leftovers: tuple[LeftoverDirectory, ...]) -> list[dict[str, object]]:
+    """One entry per directory that stayed, so each counts one."""
+    return [
+        {"kind": left.kind.value, "count": 1, "path": left.path.as_posix()}
+        for left in leftovers
+    ]
+
+
+def _kinds_left(leftovers: tuple[LeftoverDirectory, ...]) -> tuple[KindCount, ...]:
+    tally = Counter(left.kind for left in leftovers)
+    return tuple(KindCount(kind=kind, count=count) for kind, count in tally.items())
+
+
+def _erased_body(kinds: tuple[KindCount, ...], *, dry_run: bool) -> dict[str, object]:
+    return {"dry_run": dry_run, "kinds": _counts(kinds), "affects_others": []}
+
+
 def _envelope(app: str, subject: str) -> dict[str, object]:
     return {
         "people_erasure": _PEOPLE_ERASURE_VERSION,
@@ -77,22 +95,18 @@ def _answer(
     body = _envelope(app, subject)
     match outcome:
         case PersonErased(kinds=kinds):
-            body |= {
-                "dry_run": dry_run,
-                "kinds": _counts(kinds),
-                "affects_others": [],
-            }
-            return JSONResponse(body)
+            return JSONResponse(body | _erased_body(kinds, dry_run=dry_run))
         case PersonBusy(running=running):
             return JSONResponse(
                 body | {"busy": _counts(running)},
                 HTTPStatus.CONFLICT,
                 headers={"Retry-After": str(wait_seconds)},
             )
-        case PersonDiskLeftover():
-            leftover = KindCount(kind=PersonKind.SOURCES, count=1)
+        case PersonDiskLeftover(removed=removed, leftovers=leftovers):
             return JSONResponse(
-                body | {"leftover": _counts((leftover,))},
+                body
+                | _erased_body(removed, dry_run=dry_run)
+                | {"leftover": _leftover(leftovers)},
                 HTTPStatus.INTERNAL_SERVER_ERROR,
             )
         case _:
@@ -112,8 +126,13 @@ def _audited(outcome: PersonErasure, *, dry_run: bool) -> None:
             _log.info("person %s: %s %s", operation, verb, _tallied(kinds))
         case PersonBusy(running=running):
             _log.info("person %s: busy with %s", operation, _tallied(running))
-        case PersonDiskLeftover():
-            _log.info("person %s: disk leftover", operation)
+        case PersonDiskLeftover(removed=removed, leftovers=leftovers):
+            _log.info(
+                "person %s: left over %s, erased %s",
+                operation,
+                _tallied(_kinds_left(leftovers)),
+                _tallied(removed),
+            )
         case _:
             assert_never(outcome)
 
