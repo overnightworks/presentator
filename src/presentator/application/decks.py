@@ -119,7 +119,7 @@ class SourceRemovalRefused:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SourceRemovalStale:
-    """Counts that moved since the confirm: nothing deleted, the fresh ones go back."""
+    """Moved counts: nothing deleted, so no earlier yes covers more than it saw."""
 
     current: SourceRemoval
 
