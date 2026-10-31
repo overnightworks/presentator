@@ -380,13 +380,33 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Chromium and Firefox
+        run: pnpm exec playwright install --with-deps chromium firefox
+
+      # The OpenAPI document comes from the lobby's routes, and the drive
+      # serves the build from the lobby itself, so both need this instance's
+      # Python environment.
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: true
+          version: "0.10.9"
+
+      - name: Install locked Python dependencies
+        working-directory: .
+        run: uv sync --locked --all-groups
+
       - name: Check source
         run: pnpm lint
 
       - name: Check types
         run: pnpm check
 
-      - name: Check that the wire types are generated from the OpenAPI document
+      - name: Generate the OpenAPI document from the lobby's routes
+        working-directory: .
+        run: uv run --locked python -m tests.support.lobby_drive openapi frontend/src/lib/api/openapi.json
+
+      - name: Check that the OpenAPI document and the wire types are generated
         run: pnpm generate:types && git diff --exit-code -- src/lib/api
 
       - name: Test
@@ -404,6 +424,17 @@ jobs:
 
       - name: Build the lobby
         run: pnpm build
+
+      - name: Drive the lobby in Chromium and Firefox
+        run: pnpm drive
+
+      - name: Upload the drive's traces
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lobby-drive
+          path: frontend/test-results/
+          retention-days: 7
 
   image:
     name: "Container image"
