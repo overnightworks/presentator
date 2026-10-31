@@ -18,13 +18,17 @@ async function showsAServerRenderedPage(page: Page, session: SessionView): Promi
 	await expect(page.locator('.signin')).toHaveCount(0);
 }
 
-test('the signed-out page renders the sign-in board from the kit', async ({ page }) => {
-	const session = await sessionOf(page);
+test.describe('signed out', () => {
+	test.use({ storageState: { cookies: [], origins: [] } });
 
-	await page.goto('/login');
+	test('the signed-out page renders the sign-in board from the kit', async ({ page }) => {
+		const session = await sessionOf(page);
 
-	await showsTheSignInBoard(page, session);
-	await expect(page).toHaveTitle(session.words.wordmark);
+		await page.goto('/login');
+
+		await showsTheSignInBoard(page, session);
+		await expect(page).toHaveTitle(session.words.wordmark);
+	});
 });
 
 test("SvelteKit's announcer is there and visually hidden", async ({ page }) => {
