@@ -1,0 +1,7 @@
+claim_id = "f26f91f857494428af12c3bab8a5071f"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "c2d010031d965a438de853bfc522e349e538b763"
+branch = "claude/issue-690-the-agent-token-cell-that-cancels-after"
+scope = ["tests/presentator/adapters/test_agent_tokens.py"]
+opened_commit = "7b9e2ed59dd948f0ec6d7954def867de22398773"
