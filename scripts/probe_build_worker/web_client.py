@@ -97,11 +97,14 @@ def prepared_run(case: Case, builds: Path, megabytes: int) -> BuildPlace:
     copytree(source.deck, deck)
     if source.limit is not None:
         # One more than each bound, so the limits deck reaches exactly the
-        # bounds this client holds and has no copy of either number.
+        # bounds this client holds and has no copy of either number; the
+        # many-entries count is nine tenths of the entries bound, large enough
+        # to take seconds to send and under the bound.
         case_file = {
             "mode": source.limit,
             "output_megabytes": megabytes + 1,
             "output_entries": MAXIMUM_ENTRIES + 1,
+            "many_entries": MAXIMUM_ENTRIES * 9 // 10,
         }
         (deck / LIMIT_FILE).write_text(json.dumps(case_file), encoding="utf-8")
     swell(deck, case, megabytes)

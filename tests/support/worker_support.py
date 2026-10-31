@@ -551,8 +551,12 @@ def wake_until_ended(volume: Path, thread: threading.Thread) -> None:
 
 def connect(volume: Path, timeout: float = WAIT_SECONDS) -> socket.socket:
     client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    client.settimeout(timeout)
-    client.connect(str(volume / build_wire.SOCKET_NAME))
+    try:
+        client.settimeout(timeout)
+        client.connect(str(volume / build_wire.SOCKET_NAME))
+    except BaseException:
+        client.close()
+        raise
     return client
 
 
@@ -659,5 +663,23 @@ def accept_time() -> float:
     return time.monotonic()
 
 
-def open_descriptor_count() -> int:
-    return len(list(Path("/proc/self/fd").iterdir()))
+def open_descriptor_targets() -> dict[int, str]:
+    """Every descriptor of this process with what it points at."""
+    targets: dict[int, str] = {}
+    for entry in Path("/proc/self/fd").iterdir():
+        with suppress(FileNotFoundError):
+            targets[int(entry.name)] = str(entry.readlink())
+    return targets
+
+
+def descriptors_left_open_since(before: dict[int, str]) -> dict[int, str]:
+    """The descriptors open now that were not open, as the same target, before.
+
+    A descriptor that closed meanwhile never counts; a number reused for another
+    target does.
+    """
+    return {
+        descriptor: target
+        for descriptor, target in open_descriptor_targets().items()
+        if before.get(descriptor) != target
+    }

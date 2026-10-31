@@ -25,7 +25,8 @@ from tests.support.worker_chain import (
 )
 from tests.support.worker_support import (
     accept_time,
-    open_descriptor_count,
+    descriptors_left_open_since,
+    open_descriptor_targets,
     serving_with,
 )
 
@@ -102,7 +103,7 @@ def test_a_refused_pidfd_kills_and_reaps_the_child_and_closes_both_gate_ends(
 ) -> None:
     process_ids: list[int] = []
     monkeypatch.setattr(worker_children, "open_pidfd", refused_pidfd(process_ids))
-    before = open_descriptor_count()
+    before = open_descriptor_targets()
 
     try:
         with pytest.raises(OSError, match="too many open files"):
@@ -112,7 +113,7 @@ def test_a_refused_pidfd_kills_and_reaps_the_child_and_closes_both_gate_ends(
     finally:
         reaped_by_process_id(process_ids)
     assert len(process_ids) == 1
-    assert open_descriptor_count() == before
+    assert descriptors_left_open_since(before) == {}
 
 
 def test_a_refused_pidfd_ends_the_life_as_spawn_with_nothing_released(
@@ -139,14 +140,14 @@ def test_a_refused_pidfd_ends_the_life_as_spawn_with_nothing_released(
 def test_closing_a_child_closes_its_pidfd_once_and_leaves_no_descriptor_behind() -> (
     None
 ):
-    before = open_descriptor_count()
+    before = open_descriptor_targets()
     child = true_child()
     exit_descriptor = child.exit_descriptor
 
     end_child(child)
 
     assert is_closed(exit_descriptor)
-    assert open_descriptor_count() == before
+    assert descriptors_left_open_since(before) == {}
 
 
 @pytest.mark.parametrize("path", ["a gate mismatch", "an expiry", "an exit", "a raise"])

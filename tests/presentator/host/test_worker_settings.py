@@ -1,5 +1,6 @@
 """The build worker reads its own bounded settings, and nothing of the web's."""
 
+import re
 import subprocess
 import sys
 import threading
@@ -14,6 +15,7 @@ from presentator.host.config import (
     load_worker_settings,
     worker_settings_variables,
 )
+from presentator.host.worker import TOOLCHAIN_PROJECT
 
 TIMEOUT_VARIABLE = "PRESENTATOR_BUILD_TIMEOUT_SECONDS"
 MEGABYTES_VARIABLE = "PRESENTATOR_BUILD_OUTPUT_MEGABYTES"
@@ -152,3 +154,13 @@ def test_importing_the_worker_reads_no_setting(
     )
 
     assert imported.returncode == 0, imported.stderr
+
+
+def test_the_worker_step_project_is_the_toolchain_path_of_the_image() -> None:
+    dockerfile = Path(__file__).parents[3] / "Dockerfile"
+    declared = re.search(
+        r"^\s+PRESENTATOR_TOOLCHAIN=(\S+)", dockerfile.read_text(), re.MULTILINE
+    )
+    assert declared, "the Dockerfile's ENV no longer sets PRESENTATOR_TOOLCHAIN"
+
+    assert Path("/") / TOOLCHAIN_PROJECT == Path(declared.group(1))

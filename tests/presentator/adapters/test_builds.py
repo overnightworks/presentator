@@ -954,11 +954,12 @@ def test_a_build_that_has_written_too_much_is_stopped_where_it_stands(
     assert list(builds.builds.iterdir()) == []
 
 
-def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
+def test_too_many_files_are_refused_and_leave_no_listing_open(
     remote: GitRemote,
     source: Source,
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
+    recwarn: pytest.WarningsRecorder,
 ) -> None:
     with_the_toolchain(
         machine,
@@ -969,14 +970,13 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
     )
     builds = builds_ready_for(tmp_path, source)
     open_before = {held.name for held in Path("/proc/self/fd").iterdir()}
-
     built = builds.build(a_deck(remote), source=source)
-
     assert built == BuildFailure(
         reason=BuildFailureReason.OUTPUT_ENTRIES, allowed_entries=MAXIMUM_ENTRIES
     )
     assert list(builds.builds.iterdir()) == []
     assert {held.name for held in Path("/proc/self/fd").iterdir()} <= open_before
+    assert not [w for w in recwarn if w.category is ResourceWarning]
 
 
 def test_a_talk_that_cannot_be_added_up_in_time_is_refused_without_words(

@@ -342,10 +342,9 @@ class RecordingExecutor(ThreadPoolExecutor):
     """A thread pool that keeps each future it hands out."""
 
     def __init__(self) -> None:
-        """Start with nothing recorded and no done callback."""
+        """Start with nothing recorded."""
         super().__init__()
         self.recorded: list[Future[Any]] = []
-        self.when_done: Callable[[], object] | None = None
 
     def submit[**Arguments, Result](
         self,
@@ -354,11 +353,9 @@ class RecordingExecutor(ThreadPoolExecutor):
         *args: Arguments.args,
         **kwargs: Arguments.kwargs,
     ) -> Future[Result]:
-        """Run on the pool, and call `when_done` before asyncio hears of the result."""
+        """Run on the pool and record the future."""
         future = super().submit(fn, *args, **kwargs)
         self.recorded.append(future)
-        if (when_done := self.when_done) is not None:
-            future.add_done_callback(lambda _done: when_done())
         return future
 
 
@@ -386,9 +383,8 @@ def test_a_cancellation_before_the_thread_asks_no_issuer_and_leaves_no_chain(
     assert (error.__cause__, error.__context__) == (None, None)
 
 
-async def _cancel_while_the_thread_runs(
-    arranged: Arranged, executor: RecordingExecutor
-) -> asyncio.CancelledError:
+def _hold_the_thread(arranged: Arranged) -> tuple[asyncio.Event, threading.Event]:
+    """Park the person's thread at the issuer; return (entered, release)."""
     loop = asyncio.get_running_loop()
     entered = asyncio.Event()
     release = threading.Event()
@@ -398,6 +394,13 @@ async def _cancel_while_the_thread_runs(
         release.wait(_THREAD_WAIT_SECONDS)
 
     arranged.scene.issuer.during_token_request = hold_the_thread
+    return entered, release
+
+
+async def _cancel_while_the_thread_runs(
+    arranged: Arranged, executor: RecordingExecutor
+) -> asyncio.CancelledError:
+    entered, release = _hold_the_thread(arranged)
     task = asyncio.create_task(arranged.person.fresh(arranged.session_id))
     await entered.wait()
     task.cancel()
@@ -411,12 +414,18 @@ async def _cancel_while_the_thread_runs(
 async def _cancel_as_the_thread_returns(
     arranged: Arranged, executor: RecordingExecutor
 ) -> asyncio.CancelledError:
-    loop = asyncio.get_running_loop()
+    entered, release = _hold_the_thread(arranged)
     task = asyncio.create_task(arranged.person.fresh(arranged.session_id))
-    executor.when_done = lambda: loop.call_soon_threadsafe(task.cancel)
+    await entered.wait()
+    release.set()
+    # Blocking the loop here keeps the returned thread's result undelivered, so
+    # the cancellation reaches a task still waiting on a thread that is done.
+    executor.recorded[0].result(_THREAD_WAIT_SECONDS)
+    assert executor.recorded[0].done()
+    assert not task.done()
+    task.cancel()
     with pytest.raises(asyncio.CancelledError) as caught:
         await task
-    await asyncio.wrap_future(executor.recorded[0])
     return caught.value
 
 

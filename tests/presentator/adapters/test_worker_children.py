@@ -44,7 +44,8 @@ from tests.support import worker_support as support
 from tests.support.step_support import OWN_IDENTITY, quick_step
 from tests.support.worker_support import (
     accept_time,
-    open_descriptor_count,
+    descriptors_left_open_since,
+    open_descriptor_targets,
     role_of,
     serving_with,
     wake_until_ended,
@@ -372,7 +373,7 @@ def test_the_status_of_a_waiting_child_names_the_user_it_runs_as() -> None:
 
 
 def test_both_gate_ends_are_closed_after_a_child_ran_and_after_a_spawn_failed() -> None:
-    before = open_descriptor_count()
+    before = open_descriptor_targets()
     child = spawn_gated(
         ["/bin/true"], identity=OWN_IDENTITY, environment={"PATH": PATH}, pass_fds=()
     )
@@ -385,7 +386,7 @@ def test_both_gate_ends_are_closed_after_a_child_ran_and_after_a_spawn_failed() 
             ["/bin/true"], identity=foreign, environment={"PATH": PATH}, pass_fds=()
         )
 
-    assert open_descriptor_count() == before
+    assert descriptors_left_open_since(before) == {}
 
 
 class RecordedPopen:
