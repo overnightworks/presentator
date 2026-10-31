@@ -22,6 +22,8 @@ somebody else can push to.
   only you can read.
 - The build toolchain on this machine
   ([install it](install-the-host-build-toolchain.md)).
+- The built lobby. In `frontend/`, run `pnpm install --frozen-lockfile` and
+  then `pnpm build`; without `frontend/build` the start refuses.
 - A gitignored `.env` at the repository root may carry the values instead of
   the shell.
 

@@ -34,16 +34,14 @@ words" marks a string that is a proposal because the catalog has none.
 
 ### How the sheet loads the look
 
-`m0-lobby.html` links `appkit/appkit.css`, the unmodified `appkit.css` and fonts of
-appkit v0.8.0 (the `src/appkit/static/` files of its npm tarball
-`overnightworks-appkit-0.8.0.tgz`, pinned by presentator#658), so the sheet draws
-with appkit's own tokens and fonts, never a copy of its values. F1a of
-[#185](https://github.com/overnightworks/presentator/issues/185) deletes this interim
-copy when the lobby pins the tarball itself. On top of it the sheet carries its own
-component styles for the boards (bar, tabs, rows, fields, cards, menu), presentator's
-colour in the app slot and one rule, `.typed`, that turns the uppercase transform off
-so a source's name keeps the case its admin typed inside a heading; `appkit.css`
-itself stays as shipped.
+`m0-lobby.html` links `appkit.css` from the lobby's pinned appkit tarball, at
+`frontend/node_modules/overnightworks-appkit/src/appkit/static/`, so the sheet draws
+with appkit's own tokens and fonts, never a copy of its values; `pnpm install` in
+`frontend/` puts it there. On top of it the sheet carries its own component styles
+for the boards (bar, tabs, rows, fields, cards, menu) and presentator's colour in the
+app slot. A source's name keeps the case its admin typed inside an uppercase heading
+through the kit's class `as-typed`, and the wordmark's two coloured layers carry no
+alternative text, so a screen reader reads the name once.
 
 The room and presenter groups (class `deck-surfaces`) keep the look their frozen pictures
 (#139, #293 S12) were drawn in: their tokens, board chrome and IBM Plex from Google

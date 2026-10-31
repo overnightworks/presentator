@@ -7,6 +7,7 @@
 !uv.lock
 !src
 !slidev
+!frontend
 
 # What the build makes for itself, so this machine's copy never travels.
 **/node_modules
@@ -14,8 +15,13 @@
 **/__pycache__
 **/dist
 **/.slidev
+**/.svelte-kit
+frontend/build
+frontend/test-results
+frontend/playwright-report
+frontend/playwright
 
-# The two trees above are admitted whole, so what must never be in an image is
+# The trees above are admitted whole, so what must never be in an image is
 # named again here: a secret or a key nested inside one of them would otherwise
 # ride in on its parent directory.
 **/.env*

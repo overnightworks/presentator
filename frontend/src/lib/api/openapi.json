@@ -1,0 +1,4380 @@
+{
+  "components": {
+    "schemas": {
+      "AccessKind": {
+        "description": "How a source is read, derived from its URL's scheme and nothing else.\n\nHTTPS is a token; SSH and the scp form are a deploy key; a `file://`\naddress or a bare absolute path is this box's own mount, and carries no\nsecret at all. The radio on the form has to match this, and a mismatch is\nrefused rather than stored as a fourth kind.",
+        "enum": [
+          "https-token",
+          "ssh-deploy-key",
+          "local-folder"
+        ],
+        "title": "AccessKind",
+        "type": "string"
+      },
+      "AccessRenewal": {
+        "description": "The new HTTPS token, or null for an SSH source, which renews its own pair.",
+        "properties": {
+          "secret": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret"
+          }
+        },
+        "required": [
+          "secret"
+        ],
+        "title": "AccessRenewal",
+        "type": "object"
+      },
+      "AccountView": {
+        "description": "One person's overrides and the languages they may choose from.",
+        "properties": {
+          "language_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language Tag"
+          },
+          "languages": {
+            "items": {
+              "$ref": "#/components/schemas/LanguageView"
+            },
+            "title": "Languages",
+            "type": "array"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThemeChoice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "language_tag",
+          "theme",
+          "languages"
+        ],
+        "title": "AccountView",
+        "type": "object"
+      },
+      "AccountWrite": {
+        "description": "Both overrides of one person; `None` leaves the choice to the instance.",
+        "properties": {
+          "language_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language Tag"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThemeChoice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "language_tag",
+          "theme"
+        ],
+        "title": "AccountWrite",
+        "type": "object"
+      },
+      "AttemptView": {
+        "description": "The build that ran last while it did not become the talk.",
+        "properties": {
+          "commit": {
+            "title": "Commit",
+            "type": "string"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/BuildOutcome"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commit",
+          "started_at",
+          "outcome",
+          "failure"
+        ],
+        "title": "AttemptView",
+        "type": "object"
+      },
+      "BuildFailureReason": {
+        "description": "Why a build produced nothing; the codes a page words in its own language.\n\nThe server refusals are named as the build-worker probe names its cases.",
+        "enum": [
+          "toolchain",
+          "no-words",
+          "output-megabytes",
+          "output-entries",
+          "output-shape",
+          "deck-megabytes",
+          "deck-paths"
+        ],
+        "title": "BuildFailureReason",
+        "type": "string"
+      },
+      "BuildOutcome": {
+        "description": "How the build a deck last started ended, while it is not its talk yet.",
+        "enum": [
+          "running",
+          "failed"
+        ],
+        "title": "BuildOutcome",
+        "type": "string"
+      },
+      "ConnectionCheckView": {
+        "description": "What a probe found; `detail` is git's own first line, not presentator's.",
+        "properties": {
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceRunFailure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fingerprint"
+          }
+        },
+        "required": [
+          "failure",
+          "commit",
+          "detail",
+          "fingerprint"
+        ],
+        "title": "ConnectionCheckView",
+        "type": "object"
+      },
+      "CreatedSourceView": {
+        "description": "The new source and the webhook secret, which no other answer carries.",
+        "properties": {
+          "hook_url": {
+            "title": "Hook Url",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "webhook_secret": {
+            "title": "Webhook Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "hook_url",
+          "webhook_secret"
+        ],
+        "title": "CreatedSourceView",
+        "type": "object"
+      },
+      "DeckListView": {
+        "description": "The reader's decks, newest change first, and where an empty list points.",
+        "properties": {
+          "decks": {
+            "items": {
+              "$ref": "#/components/schemas/DeckSummary"
+            },
+            "title": "Decks",
+            "type": "array"
+          },
+          "source_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Address"
+          }
+        },
+        "required": [
+          "decks",
+          "source_address"
+        ],
+        "title": "DeckListView",
+        "type": "object"
+      },
+      "DeckState": {
+        "description": "What the list and the deck page say a deck is, in one word.\n\nIt is read off the talk that stands and the attempt beside it, never\nstored: two records that can each be written on their own would otherwise\ndisagree about one deck.",
+        "enum": [
+          "ready",
+          "building",
+          "failed",
+          "never-built"
+        ],
+        "title": "DeckState",
+        "type": "string"
+      },
+      "DeckSummary": {
+        "description": "One of the reader's decks: what it is, how it stands and when it changed.",
+        "properties": {
+          "changed_at": {
+            "format": "date-time",
+            "title": "Changed At",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DeckState"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "title",
+          "state",
+          "changed_at"
+        ],
+        "title": "DeckSummary",
+        "type": "object"
+      },
+      "DeckView": {
+        "description": "What a deck page says about one deck, as data.",
+        "properties": {
+          "attempt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AttemptView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "built_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Built At"
+          },
+          "commit": {
+            "title": "Commit",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DeckState"
+          },
+          "talk": {
+            "title": "Talk",
+            "type": "string"
+          },
+          "themes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Themes"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "views_open": {
+            "title": "Views Open",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "slug",
+          "title",
+          "state",
+          "source",
+          "commit",
+          "built_at",
+          "attempt",
+          "themes",
+          "talk",
+          "views_open"
+        ],
+        "title": "DeckView",
+        "type": "object"
+      },
+      "DownloadView": {
+        "description": "What the private service did with the Qwen download.",
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/VoiceDownloadOutcome"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "DownloadView",
+        "type": "object"
+      },
+      "FailureView": {
+        "description": "Why a build failed: a code and its counts, and the toolchain's own words.\n\nThe text is set only for the `toolchain` reason; no sentence of this\nserver's is on the wire, the page words each reason itself.",
+        "properties": {
+          "allowed_entries": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Entries"
+          },
+          "allowed_megabytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Megabytes"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/BuildFailureReason"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "written_megabytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Written Megabytes"
+          }
+        },
+        "required": [
+          "reason",
+          "text",
+          "written_megabytes",
+          "allowed_megabytes",
+          "allowed_entries"
+        ],
+        "title": "FailureView",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "KeyDraftView": {
+        "description": "An admin's draft deploy key: the id to bind and the half to install.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "public_key": {
+            "title": "Public Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "public_key"
+        ],
+        "title": "KeyDraftView",
+        "type": "object"
+      },
+      "LanguageView": {
+        "description": "A language an instance can speak, named the way its own catalog names it.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tag": {
+            "title": "Tag",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag",
+          "name"
+        ],
+        "title": "LanguageView",
+        "type": "object"
+      },
+      "LoadView": {
+        "description": "What the private service did with a load.",
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/VoiceLoadOutcome"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "LoadView",
+        "type": "object"
+      },
+      "LobbyText": {
+        "description": "One field per message a catalog file has to fill.",
+        "properties": {
+          "account_instance_default": {
+            "title": "Account Instance Default",
+            "type": "string"
+          },
+          "account_language": {
+            "title": "Account Language",
+            "type": "string"
+          },
+          "account_preferences": {
+            "title": "Account Preferences",
+            "type": "string"
+          },
+          "account_theme": {
+            "title": "Account Theme",
+            "type": "string"
+          },
+          "account_title": {
+            "title": "Account Title",
+            "type": "string"
+          },
+          "deck_attempt_label": {
+            "title": "Deck Attempt Label",
+            "type": "string"
+          },
+          "deck_back": {
+            "title": "Deck Back",
+            "type": "string"
+          },
+          "deck_building_explanation": {
+            "title": "Deck Building Explanation",
+            "type": "string"
+          },
+          "deck_building_for": {
+            "title": "Deck Building For",
+            "type": "string"
+          },
+          "deck_building_label": {
+            "title": "Deck Building Label",
+            "type": "string"
+          },
+          "deck_builds_with": {
+            "title": "Deck Builds With",
+            "type": "string"
+          },
+          "deck_built": {
+            "title": "Deck Built",
+            "type": "string"
+          },
+          "deck_failed_deck_megabytes": {
+            "title": "Deck Failed Deck Megabytes",
+            "type": "string"
+          },
+          "deck_failed_deck_paths": {
+            "title": "Deck Failed Deck Paths",
+            "type": "string"
+          },
+          "deck_failed_last_talk_stands": {
+            "title": "Deck Failed Last Talk Stands",
+            "type": "string"
+          },
+          "deck_failed_output_entries": {
+            "title": "Deck Failed Output Entries",
+            "type": "string"
+          },
+          "deck_failed_output_megabytes": {
+            "title": "Deck Failed Output Megabytes",
+            "type": "string"
+          },
+          "deck_failed_output_shape": {
+            "title": "Deck Failed Output Shape",
+            "type": "string"
+          },
+          "deck_failed_title": {
+            "title": "Deck Failed Title",
+            "type": "string"
+          },
+          "deck_failed_without_a_message": {
+            "title": "Deck Failed Without A Message",
+            "type": "string"
+          },
+          "deck_not_built_explanation": {
+            "title": "Deck Not Built Explanation",
+            "type": "string"
+          },
+          "deck_pdf": {
+            "title": "Deck Pdf",
+            "type": "string"
+          },
+          "deck_presenter_view": {
+            "title": "Deck Presenter View",
+            "type": "string"
+          },
+          "deck_projector_view": {
+            "title": "Deck Projector View",
+            "type": "string"
+          },
+          "deck_state_building": {
+            "title": "Deck State Building",
+            "type": "string"
+          },
+          "deck_state_failed": {
+            "title": "Deck State Failed",
+            "type": "string"
+          },
+          "deck_state_never_built": {
+            "title": "Deck State Never Built",
+            "type": "string"
+          },
+          "deck_state_ready": {
+            "title": "Deck State Ready",
+            "type": "string"
+          },
+          "deck_status": {
+            "title": "Deck Status",
+            "type": "string"
+          },
+          "deck_theme_separator": {
+            "title": "Deck Theme Separator",
+            "type": "string"
+          },
+          "deck_unknown_explanation": {
+            "title": "Deck Unknown Explanation",
+            "type": "string"
+          },
+          "deck_unknown_title": {
+            "title": "Deck Unknown Title",
+            "type": "string"
+          },
+          "decks_column_changed": {
+            "title": "Decks Column Changed",
+            "type": "string"
+          },
+          "decks_column_deck": {
+            "title": "Decks Column Deck",
+            "type": "string"
+          },
+          "decks_column_state": {
+            "title": "Decks Column State",
+            "type": "string"
+          },
+          "decks_empty_explanation": {
+            "title": "Decks Empty Explanation",
+            "type": "string"
+          },
+          "decks_empty_title": {
+            "title": "Decks Empty Title",
+            "type": "string"
+          },
+          "decks_title": {
+            "title": "Decks Title",
+            "type": "string"
+          },
+          "footer_datenschutz": {
+            "title": "Footer Datenschutz",
+            "type": "string"
+          },
+          "footer_impressum": {
+            "title": "Footer Impressum",
+            "type": "string"
+          },
+          "language_name": {
+            "title": "Language Name",
+            "type": "string"
+          },
+          "language_tag": {
+            "title": "Language Tag",
+            "type": "string"
+          },
+          "log_out": {
+            "title": "Log Out",
+            "type": "string"
+          },
+          "login_failed_explanation": {
+            "title": "Login Failed Explanation",
+            "type": "string"
+          },
+          "login_failed_retry": {
+            "title": "Login Failed Retry",
+            "type": "string"
+          },
+          "login_failed_title": {
+            "title": "Login Failed Title",
+            "type": "string"
+          },
+          "menu_account": {
+            "title": "Menu Account",
+            "type": "string"
+          },
+          "menu_theme": {
+            "title": "Menu Theme",
+            "type": "string"
+          },
+          "no_access_back": {
+            "title": "No Access Back",
+            "type": "string"
+          },
+          "no_access_explanation": {
+            "title": "No Access Explanation",
+            "type": "string"
+          },
+          "no_access_title": {
+            "title": "No Access Title",
+            "type": "string"
+          },
+          "role_admin": {
+            "title": "Role Admin",
+            "type": "string"
+          },
+          "role_user": {
+            "title": "Role User",
+            "type": "string"
+          },
+          "section_decks": {
+            "title": "Section Decks",
+            "type": "string"
+          },
+          "section_settings": {
+            "title": "Section Settings",
+            "type": "string"
+          },
+          "settings_default_language": {
+            "title": "Settings Default Language",
+            "type": "string"
+          },
+          "settings_default_theme": {
+            "title": "Settings Default Theme",
+            "type": "string"
+          },
+          "settings_instance_name": {
+            "title": "Settings Instance Name",
+            "type": "string"
+          },
+          "settings_language_hint": {
+            "title": "Settings Language Hint",
+            "type": "string"
+          },
+          "settings_save": {
+            "title": "Settings Save",
+            "type": "string"
+          },
+          "settings_sources": {
+            "title": "Settings Sources",
+            "type": "string"
+          },
+          "settings_title": {
+            "title": "Settings Title",
+            "type": "string"
+          },
+          "settings_voice": {
+            "title": "Settings Voice",
+            "type": "string"
+          },
+          "source_access": {
+            "title": "Source Access",
+            "type": "string"
+          },
+          "source_access_deploy_key": {
+            "title": "Source Access Deploy Key",
+            "type": "string"
+          },
+          "source_access_file": {
+            "title": "Source Access File",
+            "type": "string"
+          },
+          "source_access_heading": {
+            "title": "Source Access Heading",
+            "type": "string"
+          },
+          "source_access_https": {
+            "title": "Source Access Https",
+            "type": "string"
+          },
+          "source_access_local": {
+            "title": "Source Access Local",
+            "type": "string"
+          },
+          "source_access_renew_info": {
+            "title": "Source Access Renew Info",
+            "type": "string"
+          },
+          "source_access_ssh": {
+            "title": "Source Access Ssh",
+            "type": "string"
+          },
+          "source_access_token": {
+            "title": "Source Access Token",
+            "type": "string"
+          },
+          "source_check": {
+            "title": "Source Check",
+            "type": "string"
+          },
+          "source_check_reachable": {
+            "title": "Source Check Reachable",
+            "type": "string"
+          },
+          "source_copy": {
+            "title": "Source Copy",
+            "type": "string"
+          },
+          "source_create": {
+            "title": "Source Create",
+            "type": "string"
+          },
+          "source_created": {
+            "title": "Source Created",
+            "type": "string"
+          },
+          "source_created_done": {
+            "title": "Source Created Done",
+            "type": "string"
+          },
+          "source_created_toast": {
+            "title": "Source Created Toast",
+            "type": "string"
+          },
+          "source_decks": {
+            "title": "Source Decks",
+            "type": "string"
+          },
+          "source_deploy_key_heading": {
+            "title": "Source Deploy Key Heading",
+            "type": "string"
+          },
+          "source_deploy_key_hint": {
+            "title": "Source Deploy Key Hint",
+            "type": "string"
+          },
+          "source_deploy_key_info": {
+            "title": "Source Deploy Key Info",
+            "type": "string"
+          },
+          "source_deploy_key_renew": {
+            "title": "Source Deploy Key Renew",
+            "type": "string"
+          },
+          "source_later": {
+            "title": "Source Later",
+            "type": "string"
+          },
+          "source_name": {
+            "title": "Source Name",
+            "type": "string"
+          },
+          "source_public_key": {
+            "title": "Source Public Key",
+            "type": "string"
+          },
+          "source_push_inbox": {
+            "title": "Source Push Inbox",
+            "type": "string"
+          },
+          "source_recent_runs": {
+            "title": "Source Recent Runs",
+            "type": "string"
+          },
+          "source_refused_access": {
+            "title": "Source Refused Access",
+            "type": "string"
+          },
+          "source_refused_deploy_key": {
+            "title": "Source Refused Deploy Key",
+            "type": "string"
+          },
+          "source_refused_duplicate_name": {
+            "title": "Source Refused Duplicate Name",
+            "type": "string"
+          },
+          "source_refused_duplicate_url": {
+            "title": "Source Refused Duplicate Url",
+            "type": "string"
+          },
+          "source_refused_name": {
+            "title": "Source Refused Name",
+            "type": "string"
+          },
+          "source_refused_not_checked": {
+            "title": "Source Refused Not Checked",
+            "type": "string"
+          },
+          "source_refused_outside_mount": {
+            "title": "Source Refused Outside Mount",
+            "type": "string"
+          },
+          "source_refused_secret": {
+            "title": "Source Refused Secret",
+            "type": "string"
+          },
+          "source_refused_secret_not_allowed": {
+            "title": "Source Refused Secret Not Allowed",
+            "type": "string"
+          },
+          "source_remove_button": {
+            "title": "Source Remove Button",
+            "type": "string"
+          },
+          "source_remove_cancel": {
+            "title": "Source Remove Cancel",
+            "type": "string"
+          },
+          "source_remove_confirm": {
+            "title": "Source Remove Confirm",
+            "type": "string"
+          },
+          "source_remove_confirm_body": {
+            "title": "Source Remove Confirm Body",
+            "type": "string"
+          },
+          "source_remove_confirm_title": {
+            "title": "Source Remove Confirm Title",
+            "type": "string"
+          },
+          "source_remove_deck_plural": {
+            "title": "Source Remove Deck Plural",
+            "type": "string"
+          },
+          "source_remove_deck_singular": {
+            "title": "Source Remove Deck Singular",
+            "type": "string"
+          },
+          "source_remove_heading": {
+            "title": "Source Remove Heading",
+            "type": "string"
+          },
+          "source_remove_hint": {
+            "title": "Source Remove Hint",
+            "type": "string"
+          },
+          "source_remove_refused": {
+            "title": "Source Remove Refused",
+            "type": "string"
+          },
+          "source_remove_run_plural": {
+            "title": "Source Remove Run Plural",
+            "type": "string"
+          },
+          "source_remove_run_singular": {
+            "title": "Source Remove Run Singular",
+            "type": "string"
+          },
+          "source_remove_talk_plural": {
+            "title": "Source Remove Talk Plural",
+            "type": "string"
+          },
+          "source_remove_talk_singular": {
+            "title": "Source Remove Talk Singular",
+            "type": "string"
+          },
+          "source_removed": {
+            "title": "Source Removed",
+            "type": "string"
+          },
+          "source_renew": {
+            "title": "Source Renew",
+            "type": "string"
+          },
+          "source_reverse": {
+            "title": "Source Reverse",
+            "type": "string"
+          },
+          "source_run_column_detail": {
+            "title": "Source Run Column Detail",
+            "type": "string"
+          },
+          "source_run_column_fetched": {
+            "title": "Source Run Column Fetched",
+            "type": "string"
+          },
+          "source_run_column_state": {
+            "title": "Source Run Column State",
+            "type": "string"
+          },
+          "source_run_failed": {
+            "title": "Source Run Failed",
+            "type": "string"
+          },
+          "source_run_fetched": {
+            "title": "Source Run Fetched",
+            "type": "string"
+          },
+          "source_run_refused": {
+            "title": "Source Run Refused",
+            "type": "string"
+          },
+          "source_run_secret": {
+            "title": "Source Run Secret",
+            "type": "string"
+          },
+          "source_run_unreachable": {
+            "title": "Source Run Unreachable",
+            "type": "string"
+          },
+          "source_secret": {
+            "title": "Source Secret",
+            "type": "string"
+          },
+          "source_secret_dots": {
+            "title": "Source Secret Dots",
+            "type": "string"
+          },
+          "source_secret_info": {
+            "title": "Source Secret Info",
+            "type": "string"
+          },
+          "source_secret_info_mark": {
+            "title": "Source Secret Info Mark",
+            "type": "string"
+          },
+          "source_state_error": {
+            "title": "Source State Error",
+            "type": "string"
+          },
+          "source_state_failed": {
+            "title": "Source State Failed",
+            "type": "string"
+          },
+          "source_state_never_fetched": {
+            "title": "Source State Never Fetched",
+            "type": "string"
+          },
+          "source_state_reachable": {
+            "title": "Source State Reachable",
+            "type": "string"
+          },
+          "source_state_refused": {
+            "title": "Source State Refused",
+            "type": "string"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          },
+          "source_webhook": {
+            "title": "Source Webhook",
+            "type": "string"
+          },
+          "source_webhook_address": {
+            "title": "Source Webhook Address",
+            "type": "string"
+          },
+          "source_webhook_heading": {
+            "title": "Source Webhook Heading",
+            "type": "string"
+          },
+          "source_webhook_held_elsewhere": {
+            "title": "Source Webhook Held Elsewhere",
+            "type": "string"
+          },
+          "source_webhook_later": {
+            "title": "Source Webhook Later",
+            "type": "string"
+          },
+          "source_webhook_once": {
+            "title": "Source Webhook Once",
+            "type": "string"
+          },
+          "source_webhook_payload": {
+            "title": "Source Webhook Payload",
+            "type": "string"
+          },
+          "source_webhook_secret": {
+            "title": "Source Webhook Secret",
+            "type": "string"
+          },
+          "sources_add": {
+            "title": "Sources Add",
+            "type": "string"
+          },
+          "sources_back": {
+            "title": "Sources Back",
+            "type": "string"
+          },
+          "sources_column_access": {
+            "title": "Sources Column Access",
+            "type": "string"
+          },
+          "sources_column_fetched": {
+            "title": "Sources Column Fetched",
+            "type": "string"
+          },
+          "sources_column_source": {
+            "title": "Sources Column Source",
+            "type": "string"
+          },
+          "sources_empty_explanation": {
+            "title": "Sources Empty Explanation",
+            "type": "string"
+          },
+          "sources_empty_https": {
+            "title": "Sources Empty Https",
+            "type": "string"
+          },
+          "sources_empty_need": {
+            "title": "Sources Empty Need",
+            "type": "string"
+          },
+          "sources_empty_or": {
+            "title": "Sources Empty Or",
+            "type": "string"
+          },
+          "sources_empty_ssh": {
+            "title": "Sources Empty Ssh",
+            "type": "string"
+          },
+          "sources_empty_title": {
+            "title": "Sources Empty Title",
+            "type": "string"
+          },
+          "sources_fetch_now": {
+            "title": "Sources Fetch Now",
+            "type": "string"
+          },
+          "theme_dark": {
+            "title": "Theme Dark",
+            "type": "string"
+          },
+          "theme_follow_system": {
+            "title": "Theme Follow System",
+            "type": "string"
+          },
+          "theme_light": {
+            "title": "Theme Light",
+            "type": "string"
+          },
+          "voice_check_again": {
+            "title": "Voice Check Again",
+            "type": "string"
+          },
+          "voice_download": {
+            "title": "Voice Download",
+            "type": "string"
+          },
+          "voice_language": {
+            "title": "Voice Language",
+            "type": "string"
+          },
+          "voice_load": {
+            "title": "Voice Load",
+            "type": "string"
+          },
+          "voice_model": {
+            "title": "Voice Model",
+            "type": "string"
+          },
+          "voice_recovery_durability": {
+            "title": "Voice Recovery Durability",
+            "type": "string"
+          },
+          "voice_recovery_failed": {
+            "title": "Voice Recovery Failed",
+            "type": "string"
+          },
+          "voice_recovery_invalid_selection": {
+            "title": "Voice Recovery Invalid Selection",
+            "type": "string"
+          },
+          "voice_sample": {
+            "title": "Voice Sample",
+            "type": "string"
+          },
+          "voice_sample_active": {
+            "title": "Voice Sample Active",
+            "type": "string"
+          },
+          "voice_sample_english": {
+            "title": "Voice Sample English",
+            "type": "string"
+          },
+          "voice_sample_failed_explanation": {
+            "title": "Voice Sample Failed Explanation",
+            "type": "string"
+          },
+          "voice_sample_failed_title": {
+            "title": "Voice Sample Failed Title",
+            "type": "string"
+          },
+          "voice_sample_german": {
+            "title": "Voice Sample German",
+            "type": "string"
+          },
+          "voice_sample_language": {
+            "title": "Voice Sample Language",
+            "type": "string"
+          },
+          "voice_sample_loading": {
+            "title": "Voice Sample Loading",
+            "type": "string"
+          },
+          "voice_sample_play": {
+            "title": "Voice Sample Play",
+            "type": "string"
+          },
+          "voice_sample_stop": {
+            "title": "Voice Sample Stop",
+            "type": "string"
+          },
+          "voice_sample_waiting": {
+            "title": "Voice Sample Waiting",
+            "type": "string"
+          },
+          "voice_state": {
+            "title": "Voice State",
+            "type": "string"
+          },
+          "voice_state_active": {
+            "title": "Voice State Active",
+            "type": "string"
+          },
+          "voice_state_download_failed": {
+            "title": "Voice State Download Failed",
+            "type": "string"
+          },
+          "voice_state_downloaded": {
+            "title": "Voice State Downloaded",
+            "type": "string"
+          },
+          "voice_state_downloading": {
+            "title": "Voice State Downloading",
+            "type": "string"
+          },
+          "voice_state_failed": {
+            "title": "Voice State Failed",
+            "type": "string"
+          },
+          "voice_state_loading": {
+            "title": "Voice State Loading",
+            "type": "string"
+          },
+          "voice_state_not_downloaded": {
+            "title": "Voice State Not Downloaded",
+            "type": "string"
+          },
+          "voice_state_unavailable": {
+            "title": "Voice State Unavailable",
+            "type": "string"
+          },
+          "voice_unknown_explanation": {
+            "title": "Voice Unknown Explanation",
+            "type": "string"
+          },
+          "voice_unknown_title": {
+            "title": "Voice Unknown Title",
+            "type": "string"
+          },
+          "wordmark": {
+            "title": "Wordmark",
+            "type": "string"
+          }
+        },
+        "required": [
+          "language_tag",
+          "language_name",
+          "wordmark",
+          "log_out",
+          "section_decks",
+          "section_settings",
+          "menu_account",
+          "menu_theme",
+          "theme_follow_system",
+          "theme_light",
+          "theme_dark",
+          "role_admin",
+          "role_user",
+          "login_failed_title",
+          "login_failed_explanation",
+          "login_failed_retry",
+          "no_access_title",
+          "no_access_explanation",
+          "no_access_back",
+          "footer_impressum",
+          "footer_datenschutz",
+          "decks_title",
+          "decks_column_state",
+          "decks_column_deck",
+          "decks_column_changed",
+          "decks_empty_title",
+          "decks_empty_explanation",
+          "deck_back",
+          "deck_status",
+          "deck_state_ready",
+          "deck_state_building",
+          "deck_state_failed",
+          "deck_state_never_built",
+          "deck_built",
+          "deck_builds_with",
+          "deck_theme_separator",
+          "deck_not_built_explanation",
+          "deck_building_explanation",
+          "deck_building_label",
+          "deck_building_for",
+          "deck_failed_title",
+          "deck_attempt_label",
+          "deck_failed_without_a_message",
+          "deck_failed_output_megabytes",
+          "deck_failed_output_entries",
+          "deck_failed_output_shape",
+          "deck_failed_deck_megabytes",
+          "deck_failed_deck_paths",
+          "deck_failed_last_talk_stands",
+          "deck_presenter_view",
+          "deck_projector_view",
+          "deck_pdf",
+          "deck_unknown_title",
+          "deck_unknown_explanation",
+          "settings_title",
+          "settings_sources",
+          "settings_voice",
+          "settings_instance_name",
+          "settings_default_language",
+          "settings_language_hint",
+          "settings_default_theme",
+          "settings_save",
+          "voice_model",
+          "voice_language",
+          "voice_state",
+          "voice_state_active",
+          "voice_state_loading",
+          "voice_state_failed",
+          "voice_state_downloaded",
+          "voice_state_not_downloaded",
+          "voice_state_downloading",
+          "voice_state_download_failed",
+          "voice_state_unavailable",
+          "voice_unknown_title",
+          "voice_unknown_explanation",
+          "voice_check_again",
+          "voice_load",
+          "voice_download",
+          "voice_recovery_failed",
+          "voice_recovery_invalid_selection",
+          "voice_recovery_durability",
+          "voice_sample",
+          "voice_sample_active",
+          "voice_sample_language",
+          "voice_sample_german",
+          "voice_sample_english",
+          "voice_sample_play",
+          "voice_sample_stop",
+          "voice_sample_loading",
+          "voice_sample_waiting",
+          "voice_sample_failed_title",
+          "voice_sample_failed_explanation",
+          "account_title",
+          "account_preferences",
+          "account_language",
+          "account_theme",
+          "account_instance_default",
+          "sources_column_source",
+          "sources_column_fetched",
+          "sources_fetch_now",
+          "source_state_reachable",
+          "source_state_error",
+          "source_state_refused",
+          "source_state_failed",
+          "source_state_never_fetched",
+          "sources_empty_title",
+          "sources_empty_explanation",
+          "sources_empty_need",
+          "sources_empty_ssh",
+          "sources_empty_or",
+          "sources_empty_https",
+          "sources_add",
+          "sources_back",
+          "sources_column_access",
+          "source_name",
+          "source_url",
+          "source_access",
+          "source_access_ssh",
+          "source_access_https",
+          "source_access_file",
+          "source_access_token",
+          "source_access_deploy_key",
+          "source_access_local",
+          "source_secret",
+          "source_secret_info_mark",
+          "source_secret_info",
+          "source_webhook_later",
+          "source_deploy_key_heading",
+          "source_deploy_key_hint",
+          "source_check",
+          "source_create",
+          "source_created",
+          "source_webhook",
+          "source_webhook_address",
+          "source_webhook_secret",
+          "source_webhook_once",
+          "source_webhook_held_elsewhere",
+          "source_copy",
+          "source_webhook_payload",
+          "source_created_done",
+          "source_created_toast",
+          "source_refused_name",
+          "source_refused_duplicate_name",
+          "source_refused_duplicate_url",
+          "source_refused_access",
+          "source_refused_secret",
+          "source_refused_not_checked",
+          "source_check_reachable",
+          "source_refused_secret_not_allowed",
+          "source_refused_outside_mount",
+          "source_refused_deploy_key",
+          "source_access_heading",
+          "source_webhook_heading",
+          "source_recent_runs",
+          "source_decks",
+          "source_reverse",
+          "source_push_inbox",
+          "source_later",
+          "source_renew",
+          "source_secret_dots",
+          "source_access_renew_info",
+          "source_deploy_key_info",
+          "source_public_key",
+          "source_deploy_key_renew",
+          "source_run_fetched",
+          "source_run_unreachable",
+          "source_run_secret",
+          "source_run_refused",
+          "source_run_failed",
+          "source_run_column_state",
+          "source_run_column_fetched",
+          "source_run_column_detail",
+          "source_remove_heading",
+          "source_remove_hint",
+          "source_remove_button",
+          "source_remove_confirm_title",
+          "source_remove_confirm_body",
+          "source_remove_deck_singular",
+          "source_remove_deck_plural",
+          "source_remove_talk_singular",
+          "source_remove_talk_plural",
+          "source_remove_run_singular",
+          "source_remove_run_plural",
+          "source_remove_cancel",
+          "source_remove_confirm",
+          "source_remove_refused",
+          "source_removed"
+        ],
+        "title": "LobbyText",
+        "type": "object"
+      },
+      "NewSource": {
+        "description": "A checked source to store: the probe, its name and the check's fingerprint.",
+        "properties": {
+          "access": {
+            "$ref": "#/components/schemas/AccessKind"
+          },
+          "fingerprint": {
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "key_draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Draft Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "secret": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "access",
+          "secret",
+          "key_draft_id",
+          "name",
+          "fingerprint"
+        ],
+        "title": "NewSource",
+        "type": "object"
+      },
+      "Role": {
+        "description": "An instance has only these two roles (ADR 0011).",
+        "enum": [
+          "admin",
+          "user"
+        ],
+        "title": "Role",
+        "type": "string"
+      },
+      "SampleLanguage": {
+        "description": "The closed browser-to-speech language token for a fixed voice sample.",
+        "enum": [
+          "de",
+          "en"
+        ],
+        "title": "SampleLanguage",
+        "type": "string"
+      },
+      "SessionAddresses": {
+        "description": "Where a page sends a person to sign in or out.",
+        "properties": {
+          "logout": {
+            "title": "Logout",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          },
+          "talk_start": {
+            "title": "Talk Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "logout",
+          "talk_start"
+        ],
+        "title": "SessionAddresses",
+        "type": "object"
+      },
+      "SessionPerson": {
+        "description": "The signed-in person as the page shows them.",
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "role"
+        ],
+        "title": "SessionPerson",
+        "type": "object"
+      },
+      "SessionView": {
+        "description": "Everything a page needs to know about the reader before it renders.",
+        "properties": {
+          "person": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sign_in": {
+            "$ref": "#/components/schemas/SessionAddresses"
+          },
+          "theme": {
+            "$ref": "#/components/schemas/ThemeChoice"
+          },
+          "words": {
+            "$ref": "#/components/schemas/LobbyText"
+          }
+        },
+        "required": [
+          "person",
+          "theme",
+          "words",
+          "sign_in"
+        ],
+        "title": "SessionView",
+        "type": "object"
+      },
+      "SettingsView": {
+        "description": "The instance defaults and the languages an admin may choose from.",
+        "properties": {
+          "language_tag": {
+            "title": "Language Tag",
+            "type": "string"
+          },
+          "languages": {
+            "items": {
+              "$ref": "#/components/schemas/LanguageView"
+            },
+            "title": "Languages",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "theme": {
+            "$ref": "#/components/schemas/ThemeChoice"
+          }
+        },
+        "required": [
+          "name",
+          "language_tag",
+          "theme",
+          "languages"
+        ],
+        "title": "SettingsView",
+        "type": "object"
+      },
+      "SettingsWrite": {
+        "description": "The instance defaults an admin sets for everyone without an override.",
+        "properties": {
+          "language_tag": {
+            "title": "Language Tag",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "theme": {
+            "$ref": "#/components/schemas/ThemeChoice"
+          }
+        },
+        "required": [
+          "name",
+          "language_tag",
+          "theme"
+        ],
+        "title": "SettingsWrite",
+        "type": "object"
+      },
+      "SourceDeckView": {
+        "description": "A deck the source carries.",
+        "properties": {
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "title"
+        ],
+        "title": "SourceDeckView",
+        "type": "object"
+      },
+      "SourceListView": {
+        "description": "Every source of the instance, in the owner's order.",
+        "properties": {
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceSummary"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sources"
+        ],
+        "title": "SourceListView",
+        "type": "object"
+      },
+      "SourceProbe": {
+        "description": "The address, access and credential of a source that is not stored yet.",
+        "properties": {
+          "access": {
+            "$ref": "#/components/schemas/AccessKind"
+          },
+          "key_draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Draft Id"
+          },
+          "secret": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "access",
+          "secret",
+          "key_draft_id"
+        ],
+        "title": "SourceProbe",
+        "type": "object"
+      },
+      "SourceRemovalPreview": {
+        "description": "What removing a source takes with it: its decks and the runs it keeps.",
+        "properties": {
+          "deck_count": {
+            "title": "Deck Count",
+            "type": "integer"
+          },
+          "run_count": {
+            "title": "Run Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deck_count",
+          "run_count"
+        ],
+        "title": "SourceRemovalPreview",
+        "type": "object"
+      },
+      "SourceRunFailure": {
+        "description": "Why a poll failed, in this product's own words rather than gitmirror's.\n\nA separate enum from `gitmirror.model.ConnectionState` keeps that\npackage's exact wording from reaching a board by accident; the adapter,\nwhich already speaks both vocabularies, owns the translation between them.",
+        "enum": [
+          "credential-unresolvable",
+          "refused",
+          "failed",
+          "unreachable"
+        ],
+        "title": "SourceRunFailure",
+        "type": "string"
+      },
+      "SourceRunOutcome": {
+        "description": "Whether a poll of a source found its newest commit or could not.\n\nClosed to these two. The third word a board may show \u2014 \"never fetched\" \u2014\nis not a value here: a source nobody has polled yet has no run at all, so\nthat case is told apart by the absence of a `SourceRun`, not by a member\nof this enum.",
+        "enum": [
+          "success",
+          "failure"
+        ],
+        "title": "SourceRunOutcome",
+        "type": "string"
+      },
+      "SourceRunView": {
+        "description": "One poll of a source: when, how it ended and why it did not succeed.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/SourceRunOutcome"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceRunFailure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/SourceState"
+          }
+        },
+        "required": [
+          "outcome",
+          "state",
+          "at",
+          "commit",
+          "reason"
+        ],
+        "title": "SourceRunView",
+        "type": "object"
+      },
+      "SourceState": {
+        "description": "What the sources list says a source is, read off its newest run.\n\nNo run is never-fetched, a successful run is reachable, and the reason a\ncredential the instance could not resolve never becomes a word on the\nboard: it folds into error. A refused login and a host that answered with\nsomething else each keep their own word instead, because a wrong token, a\ndead host, and a host that answered but not with the repository are three\ndifferent things an operator needs told apart.",
+        "enum": [
+          "reachable",
+          "error",
+          "refused",
+          "failed",
+          "never-fetched"
+        ],
+        "title": "SourceState",
+        "type": "string"
+      },
+      "SourceSummary": {
+        "description": "One source of the list: where it is, how it stands and when it was fetched.",
+        "properties": {
+          "access": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccessKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fetched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/SourceState"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "url",
+          "access",
+          "state",
+          "fetched_at"
+        ],
+        "title": "SourceSummary",
+        "type": "object"
+      },
+      "SourceView": {
+        "description": "One source with its newest runs and the viewer's own decks from it.",
+        "properties": {
+          "access": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccessKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decks": {
+            "items": {
+              "$ref": "#/components/schemas/SourceDeckView"
+            },
+            "title": "Decks",
+            "type": "array"
+          },
+          "fetched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched At"
+          },
+          "hook_url": {
+            "title": "Hook Url",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "public_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Key"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/SourceRunView"
+            },
+            "title": "Runs",
+            "type": "array"
+          },
+          "state": {
+            "$ref": "#/components/schemas/SourceState"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "url",
+          "access",
+          "state",
+          "fetched_at",
+          "hook_url",
+          "public_key",
+          "runs",
+          "decks"
+        ],
+        "title": "SourceView",
+        "type": "object"
+      },
+      "ThemeChoice": {
+        "description": "The three looks the picture's theme rows offer.",
+        "enum": [
+          "follow-system",
+          "light",
+          "dark"
+        ],
+        "title": "ThemeChoice",
+        "type": "string"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VoiceDownloadOutcome": {
+        "description": "The bounded result of starting the fixed Qwen download.",
+        "enum": [
+          "started",
+          "already_complete"
+        ],
+        "title": "VoiceDownloadOutcome",
+        "type": "string"
+      },
+      "VoiceId": {
+        "description": "The closed, ordered administration catalogue.",
+        "enum": [
+          "piper",
+          "chatterbox",
+          "qwen3-tts-0.6b",
+          "voxcpm2",
+          "nvidia-magpie"
+        ],
+        "title": "VoiceId",
+        "type": "string"
+      },
+      "VoiceLoadOutcome": {
+        "description": "The private Load result an authenticated caller may act on.",
+        "enum": [
+          "activated",
+          "activated_durability_unconfirmed",
+          "not_activated"
+        ],
+        "title": "VoiceLoadOutcome",
+        "type": "string"
+      },
+      "VoiceRecoveryKind": {
+        "description": "The private explanation for a recoverable unavailable voice.",
+        "enum": [
+          "invalid_selection",
+          "load_failed",
+          "durability_unconfirmed"
+        ],
+        "title": "VoiceRecoveryKind",
+        "type": "string"
+      },
+      "VoiceRecoveryView": {
+        "description": "Why a selection needs the admin's attention, and which voice it names.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/VoiceRecoveryKind"
+          },
+          "voice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VoiceId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "voice"
+        ],
+        "title": "VoiceRecoveryView",
+        "type": "object"
+      },
+      "VoiceRowView": {
+        "description": "One voice of the closed catalogue and where it stands.",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/VoiceId"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/VoiceState"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "language",
+          "state"
+        ],
+        "title": "VoiceRowView",
+        "type": "object"
+      },
+      "VoiceState": {
+        "description": "A state whose source is the private speech process.",
+        "enum": [
+          "active",
+          "loading",
+          "failed",
+          "downloaded",
+          "not_downloaded",
+          "downloading",
+          "download_failed",
+          "unavailable"
+        ],
+        "title": "VoiceState",
+        "type": "string"
+      },
+      "VoiceView": {
+        "description": "The verified catalogue in the owner's order and its recovery, if any.",
+        "properties": {
+          "recovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VoiceRecoveryView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "voices": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceRowView"
+            },
+            "title": "Voices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "voices",
+          "recovery"
+        ],
+        "title": "VoiceView",
+        "type": "object"
+      },
+      "WebhookSecretView": {
+        "description": "The renewed webhook secret, which no other answer carries.",
+        "properties": {
+          "webhook_secret": {
+            "title": "Webhook Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "webhook_secret"
+        ],
+        "title": "WebhookSecretView",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "FastAPI",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/account": {
+      "get": {
+        "operationId": "read_account_api_account_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Read Account"
+      },
+      "put": {
+        "operationId": "write_account_api_account_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Write Account"
+      }
+    },
+    "/api/decks": {
+      "get": {
+        "operationId": "deck_list_api_decks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeckListView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Deck List"
+      }
+    },
+    "/api/decks/{slug}": {
+      "get": {
+        "operationId": "deck_api_decks__slug__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeckView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deck"
+      }
+    },
+    "/api/session": {
+      "get": {
+        "operationId": "session_api_session_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Session"
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "operationId": "read_settings_api_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "Read Settings"
+      },
+      "put": {
+        "operationId": "write_settings_api_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Write Settings"
+      }
+    },
+    "/api/sources": {
+      "get": {
+        "operationId": "source_list_api_sources_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceListView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "Source List"
+      },
+      "post": {
+        "operationId": "create_api_sources_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedSourceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "description": "A source the application would not take, and the reason code why.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "reason": {
+                      "enum": [
+                        "malformed-name",
+                        "duplicate-name",
+                        "duplicate-url",
+                        "access-mismatch",
+                        "missing-secret",
+                        "not-checked",
+                        "credential-not-allowed",
+                        "outside-local-mount",
+                        "deploy-key-unavailable"
+                      ],
+                      "type": "string"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "tag:hallucinai.de,2026-09-08:presentator/problems/source-refused",
+                      "default": "tag:hallucinai.de,2026-09-08:presentator/problems/source-refused",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "reason",
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "SourceRefusedProblem",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create"
+      }
+    },
+    "/api/sources/new/check": {
+      "post": {
+        "operationId": "check_connection_api_sources_new_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceProbe"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionCheckView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "description": "A source the application would not take, and the reason code why.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "reason": {
+                      "enum": [
+                        "malformed-name",
+                        "duplicate-name",
+                        "duplicate-url",
+                        "access-mismatch",
+                        "missing-secret",
+                        "not-checked",
+                        "credential-not-allowed",
+                        "outside-local-mount",
+                        "deploy-key-unavailable"
+                      ],
+                      "type": "string"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "tag:hallucinai.de,2026-09-08:presentator/problems/source-refused",
+                      "default": "tag:hallucinai.de,2026-09-08:presentator/problems/source-refused",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "reason",
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "SourceRefusedProblem",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Connection"
+      }
+    },
+    "/api/sources/new/key-draft": {
+      "post": {
+        "operationId": "key_draft_api_sources_new_key_draft_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyDraftView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "Key Draft"
+      }
+    },
+    "/api/sources/{name}": {
+      "delete": {
+        "operationId": "remove_api_sources__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "deck_count",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "title": "Deck Count",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "run_count",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "title": "Run Count",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The counts a removal was confirmed with no longer stand: the current ones.",
+                  "properties": {
+                    "deck_count": {
+                      "title": "Deck Count",
+                      "type": "integer"
+                    },
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "run_count": {
+                      "title": "Run Count",
+                      "type": "integer"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "tag:hallucinai.de,2026-09-08:presentator/problems/source-removal-stale",
+                      "default": "tag:hallucinai.de,2026-09-08:presentator/problems/source-removal-stale",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "deck_count",
+                    "run_count",
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "SourceRemovalStaleProblem",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "A removal that deleted no row, and the reason code why.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "reason": {
+                      "enum": [
+                        "disk-leftover"
+                      ],
+                      "type": "string"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "tag:hallucinai.de,2026-09-08:presentator/problems/source-removal-refused",
+                      "default": "tag:hallucinai.de,2026-09-08:presentator/problems/source-removal-refused",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "reason",
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "SourceRemovalRefusedProblem",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Remove"
+      },
+      "get": {
+        "operationId": "source_api_sources__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Source"
+      }
+    },
+    "/api/sources/{name}/access": {
+      "post": {
+        "operationId": "renew_access_api_sources__name__access_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessRenewal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Renew Access"
+      }
+    },
+    "/api/sources/{name}/fetch": {
+      "post": {
+        "operationId": "fetch_now_api_sources__name__fetch_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fetch Now"
+      }
+    },
+    "/api/sources/{name}/removal": {
+      "get": {
+        "operationId": "removal_api_sources__name__removal_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRemovalPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Removal"
+      }
+    },
+    "/api/sources/{name}/webhook-secret": {
+      "post": {
+        "operationId": "renew_webhook_secret_api_sources__name__webhook_secret_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSecretView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Renew Webhook Secret"
+      }
+    },
+    "/api/voice": {
+      "get": {
+        "operationId": "status_api_voice_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Status"
+      }
+    },
+    "/api/voice/qwen3-tts-0.6b/download": {
+      "post": {
+        "operationId": "download_api_voice_qwen3_tts_0_6b_download_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Download"
+      }
+    },
+    "/api/voice/{voice_id}/load": {
+      "post": {
+        "operationId": "load_api_voice__voice_id__load_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voice_id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/VoiceId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Load"
+      }
+    },
+    "/api/voice/{voice_id}/sample/{language}": {
+      "post": {
+        "operationId": "sample_api_voice__voice_id__sample__language__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voice_id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/VoiceId"
+            }
+          },
+          {
+            "in": "path",
+            "name": "language",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/SampleLanguage"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "audio/wav": {}
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Sample"
+      }
+    }
+  }
+}

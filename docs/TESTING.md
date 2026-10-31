@@ -22,6 +22,8 @@ in for a higher one.
 | Template | Lobby HTML as the surface of a route | A ruled person-sentence is proven by a delegated agent driving the real interface. A route or fragment is FastAPI `TestClient` on the real route. A direct Jinja unit test is not the proof. |
 | `host` | Composition | Once: start the app with a test configuration. |
 | Slidev addon | That a deck staged outside the toolchain builds by the addon's name | Vitest building such a deck with `slidev build` from `slidev/`, as `slidev/tests/addon-package.test.ts` does. |
+| Lobby app | The app's own TypeScript and Svelte logic | Vitest beside the module in `frontend/src`. Its report, `lcov-lobby.info`, has no threshold of its own. |
+| Lobby drive | The production build served by FastAPI under the lobby's policy | Playwright in `frontend/e2e/`, in Chromium and Firefox, against the lobby that `tests/support/lobby_drive.py` composes over in-memory stores with one person signed in; never an issuer. Any CSP violation fails it. |
 | Surface | A person does X at the lobby | A delegated agent driving the real interface at the widths the dispatch brief names, taken from the picture at [mockups/README.md](mockups/README.md). One flow per ruled sentence. A unit test is not this proof. |
 
 `gitmirror` is proven the same way as an adapter: against a tmp bare repository,
@@ -35,7 +37,9 @@ a path allowlist.
 
 Every line and every branch is reached. The floor is owned by `fail_under` in
 `pyproject.toml` and by Vitest coverage thresholds. It is met only by useful
-tests, each pinning one observable behaviour.
+tests, each pinning one observable behaviour. The lobby app's floor counts its
+Vitest report and its drive together; until the drive's coverage is merged
+(#699), the lobby app is the reported gap.
 
 A hard line — one that talks to a process, a file, a network, or a composition
 choice — is reached in one of three ways:
@@ -100,8 +104,8 @@ Parametrize and fixture rather than copy. A review rejects:
 
 Local runs are targeted — a named module or `-k` on the behaviour, from the
 repository root with `uv run --locked pytest`, or a named file from `slidev/`
-with `pnpm exec vitest run`; never the whole suite or a Playwright suite unless
-the operator asked. CI on the pull request is the full run and the gate. What
+or `frontend/` with `pnpm exec vitest run`; never the whole suite or a
+Playwright suite unless the operator asked. CI on the pull request is the full run and the gate. What
 `main` requires is [ci-and-branch-protection.md](reference/ci-and-branch-protection.md). What the workflow runs is
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml). The coverage floor is
 the configuration above, not a number restated here.

@@ -1,5 +1,5 @@
 [gate]
-mandatory_jobs = ["Python: architecture, lint, types", "Python: tests", "Speech: lint, tests", "Speech: Chatterbox provider", "Speech: Qwen provider", "Speech: VoxCPM provider", "Speech: Magpie provider", "Frontend: lint, types, tests, deck build", "Coverage report", "Container image", "Build worker: sealed step"]
+mandatory_jobs = ["Python: architecture, lint, types", "Python: tests", "Speech: lint, tests", "Speech: Chatterbox provider", "Speech: Qwen provider", "Speech: VoxCPM provider", "Speech: Magpie provider", "Frontend: lint, types, tests, deck build", "Lobby: lint, types, tests, drive", "Coverage report", "Container image", "Build worker: sealed step"]
 
 [[gate.loosened]]
 what = 'mandatory job "Co-presenter: lint, tests" removed'
@@ -14,6 +14,10 @@ reason = "the example decks the documentation and the probes build"
 [[root.allow]]
 entry = "slidev/"
 reason = "the Slidev addon and its pnpm toolchain, built apart from the Python package"
+
+[[root.allow]]
+entry = "frontend/"
+reason = "the lobby's SvelteKit app and its pnpm toolchain, built apart from the Python package and from the Slidev addon"
 
 [[root.allow]]
 entry = "legal/"

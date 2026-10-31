@@ -228,21 +228,13 @@ def test_there_is_no_first_start_page_for_a_signed_out_reader_either(
     assert answer.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_the_login_page_offers_no_form_and_no_password_field(lobby: Lobby) -> None:
-    page = lobby.client.get("/login").text
-
-    assert ENGLISH.logged_out_title in page
-    assert "<form" not in page
-    assert 'type="password"' not in page
-
-
 def test_a_password_posted_to_the_login_signs_nobody_in(lobby: Lobby) -> None:
     refused = lobby.client.post(
         "/login",
         data={"username": USERNAME, "password": "the words only this test types"},
     )
 
-    assert refused.status_code == HTTPStatus.METHOD_NOT_ALLOWED
+    assert refused.status_code == HTTPStatus.NOT_FOUND
     assert DEFAULT_SESSION_COOKIE_NAME not in lobby.client.cookies
 
 
@@ -404,16 +396,6 @@ def test_a_same_site_or_schemeless_form_post_is_refused(
     assert signed_in_lobby.client.get("/").status_code == HTTPStatus.OK
 
 
-def test_the_three_stylesheets_are_linked_on_the_open_login_page(
-    lobby: Lobby,
-) -> None:
-    page = lobby.client.get("/login").text
-
-    assert '<link rel="stylesheet" href="/static/pico.classless.min.css">' in page
-    assert '<link rel="stylesheet" href="/static/ui-console.css">' in page
-    assert '<link rel="stylesheet" href="/static/lobby.css">' in page
-
-
 def test_the_three_stylesheets_are_linked_on_the_signed_in_home_page(
     signed_in_lobby: Lobby,
 ) -> None:
@@ -447,14 +429,13 @@ def test_an_address_that_only_starts_like_a_stylesheet_still_asks_for_the_login(
     assert walked_out.headers["location"] == "/login/oidc?next=%2F"
 
 
-def test_no_signed_in_page_carries_a_hex_colour_or_an_inline_style(
+def test_the_signed_in_home_page_carries_no_hex_colour_and_no_inline_style(
     signed_in_lobby: Lobby,
 ) -> None:
-    for path in ("/", "/login"):
-        page = signed_in_lobby.client.get(path).text
+    page = signed_in_lobby.client.get("/").text
 
-        assert not _HEX_COLOUR.search(page)
-        assert "style=" not in page
+    assert not _HEX_COLOUR.search(page)
+    assert "style=" not in page
 
 
 def test_the_signed_in_header_offers_the_person_and_log_out(
@@ -464,14 +445,6 @@ def test_the_signed_in_header_offers_the_person_and_log_out(
 
     assert USERNAME in page
     assert ENGLISH.log_out in page
-
-
-def test_a_signed_out_page_carries_only_the_wordmark(lobby: Lobby) -> None:
-    page = lobby.client.get("/login").text
-
-    assert ENGLISH.wordmark in page
-    assert ENGLISH.log_out not in page
-    assert USERNAME not in page
 
 
 def _links_the_impressum_and_the_datenschutz(page: str) -> bool:
@@ -484,12 +457,12 @@ def _links_the_impressum_and_the_datenschutz(page: str) -> bool:
     )
 
 
-@pytest.mark.parametrize("path", ["/login", "/login/talk/no-access"])
 def test_a_signed_out_page_links_the_impressum_and_the_datenschutz(
     lobby: Lobby,
-    path: str,
 ) -> None:
-    assert _links_the_impressum_and_the_datenschutz(lobby.client.get(path).text)
+    page = lobby.client.get("/login/talk/no-access").text
+
+    assert _links_the_impressum_and_the_datenschutz(page)
 
 
 @pytest.mark.parametrize("path", ["/", "/account"])

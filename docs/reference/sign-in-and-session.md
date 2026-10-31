@@ -10,8 +10,9 @@ protects a request. Setup of the Keycloak client is
 There is no password login and no `/setup`; accounts arrive with the Keycloak
 sign-in, and no password is stored.
 
-- `/login` says "You are logged out." with one Log in button and the legal
-  links. The button starts the sign-in at `/login/oidc`, which answers 303 to
+- `/login` is the lobby app's page: appkit's sign-in board says "You are
+  logged out." in the kit's own words, with one Log in button and the legal
+  links. The button leaves the app for `/login/oidc`, which answers 303 to
   the issuer with PKCE, `state` and `nonce`. The scopes are `openid`,
   `profile`, `groups` and `PRESENTATOR_AGENT_SERVICE_SCOPE`, so the person's
   token names the agent service as an audience.
@@ -118,9 +119,13 @@ signed `SameSite=Lax` session cookie.
   `webauth`'s `SecurityHeadersMiddleware` headers: `Cache-Control: no-store`
   (no answer may be replayed from the browser cache), a
   `Content-Security-Policy` admitting only this origin's own scripts, styles
-  and connections (the lobby admits no inline style; the talk host does,
-  because a built Slidev talk inlines its styles; the logout page brings its
-  own, with one hashed script and a form to Keycloak), and a `Permissions-Policy`
+  and connections (the lobby admits one inline script, the app's bootstrap by
+  its hash, and one style attribute, SvelteKit's accessibility announcer by its
+  hash under `'unsafe-hashes'`
+  ([ADR 0021](../decisions/0021-the-lobby-is-a-sveltekit-app.md)); the talk
+  host admits inline styles, because a built Slidev talk inlines them; the
+  logout page brings its own, with one hashed script and a form to Keycloak),
+  and a `Permissions-Policy`
   granting `microphone=(self)` on the talk host for the co-presenter deck and
   nothing else; the lobby sends `microphone=()`. `Strict-Transport-Security`
   follows the always-on `Secure` cookie setting, so it is always sent.
@@ -140,8 +145,10 @@ one gets 404, so a healthcheck sends the lobby's or the talk host's own name.
 Every lobby page, signed in or out, ends with two links: Impressum goes to the
 operator's one Impressum at `https://hallucinai.de/impressum`, Datenschutz to
 `https://hallucinai.de/datenschutz#presentator`. Presentator serves no privacy
-page: `/datenschutz` is no route on either host, so a signed-in GET is 404 and
-a signed-out one is sent to sign-in like any other non-public path. The
+page: `/datenschutz` is no route on either host, so a signed-in page load on
+the lobby gets the lobby app, whose router shows not-found; any other
+signed-in caller, on either host, gets 404; a signed-out one is sent to
+sign-in like any other non-public path. The
 German text is the section `legal/datenschutz.html`, which edge assembles into the central page; a test
 holds its numbers equal to the code constants
 ([ADR 0015](../decisions/0015-public-like-songmaker-own-login.md)).

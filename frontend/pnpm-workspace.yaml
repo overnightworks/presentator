@@ -1,0 +1,26 @@
+packages:
+  - .
+
+# Registry packages resolve only to releases at least two weeks old (minutes).
+minimumReleaseAge: 20160
+
+# Stopgap for minimatch below 11.0.1 (GHSA-g3hv-75wg-m249, medium denial of
+# service), which the eslint toolchain and one more parent pin; the resolved
+# minimatch 11.0.3 and its new dependency @isaacs/nonrecursive-glob-match 1.0.3
+# were published 2026-10-28, younger than the age gate above.
+# Risk: these two exact versions skip the age gate; any other version still
+# waits. Drop the exclude on 2026-11-11, when both are two weeks old, and the
+# override together with it once every parent itself depends on minimatch >= 11.0.1.
+minimumReleaseAgeExclude:
+  - minimatch@11.0.3
+  - "@isaacs/nonrecursive-glob-match@1.0.3"
+
+# deepmerge 4.3.1 has an unfixed prototype-poisoning advisory (GHSA-gcqx-w48m-w2h4).
+# vite-plugin-svelte's one call site is patched to merge itself, as appkit and
+# songmaker do, and the override drops the now unused dependency from the lockfile.
+patchedDependencies:
+  '@sveltejs/vite-plugin-svelte@7.3.1': patches/@sveltejs__vite-plugin-svelte@7.3.1.patch
+
+overrides:
+  deepmerge: '-'
+  minimatch: ^11.0.1

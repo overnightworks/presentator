@@ -172,6 +172,9 @@ class Settings(BaseSettings, env_prefix=ENVIRONMENT_PREFIX, env_file=".env"):
     # them; both are places on the machine the instance runs on.
     builds: Path = Path("builds")
     toolchain: Path = Path("slidev")
+    # Where the lobby app's build lies; a direct run serves the checkout's
+    # `pnpm build` output, and the image fixes it to the copy it carries.
+    lobby_build: Path = Path("frontend/build")
     # A build that hangs would hold every later build behind it, so each step
     # of the toolchain is bounded.
     build_timeout_seconds: float = DEFAULT_BUILD_TIMEOUT_SECONDS
