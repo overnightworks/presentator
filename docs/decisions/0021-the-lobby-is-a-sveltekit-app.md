@@ -35,10 +35,14 @@ interaction became a template, a fragment and a form route.
   data-theme>` per request from the person's stored preference, so the first
   paint has the right theme without device storage. No Node web service runs;
   Node stays in the image for Slidev only.
-- The shell answers only HTML GETs on lobby addresses that have moved. `/_app/`
-  is public and serves the build's assets; a missing asset or API is still a
-  404, never the shell. A page not yet moved stays a Jinja page, and a link to
-  it carries `data-sveltekit-reload`.
+- The shell answers a browser's page load on any lobby address no route
+  claims, so the app's router decides it, a not-found page included. It takes
+  the router's not-found place rather than a catch-all route, so a route's own
+  404 and a wrong method's 405 stay the framework's. `/api/`, `/_app/`,
+  `/auth/`, the hook prefix, `/static/`, `/login/oidc`, `/logout`, `/health`
+  and the retired `/setup` never fall back to it: a missing asset or API is
+  still a 404. `/_app/` is public and serves the build's assets. A page not yet
+  moved stays a Jinja page, and a link to it carries `data-sveltekit-reload`.
 - The look comes from appkit's npm tarball, pinned by release URL in
   `frontend/package.json` with the lockfile's integrity, and imported from
   `node_modules`; presentator adds only its colour in the app slot.
