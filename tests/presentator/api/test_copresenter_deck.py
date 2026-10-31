@@ -51,7 +51,7 @@ def an_instance(
         decks.put(deck)
         if deck.build is not None:
             decks.put_build(deck.slug, deck.build)
-    decks.removed.update(removed)
+    decks.removed.update(dict.fromkeys(removed, NOW))
     lobby, private, _clock = a_copresenter_talk_host(
         decks=decks,
         limiter=AskLimiter(clock=FrozenClock(instant=NOW), limits=ONE_QUESTION_ONLY),

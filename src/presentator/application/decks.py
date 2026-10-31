@@ -19,7 +19,7 @@ from pathlib import Path
 from threading import RLock
 from typing import BinaryIO, Final
 
-from presentator.application.build_retention import builds_removed, sweep
+from presentator.application.build_retention import builds_removed, delete_absent, sweep
 from presentator.contracts.decks import (
     SLIDES_FILE,
     AccessKind,
@@ -805,10 +805,11 @@ class Decks:
         A folder whose name is not a folder's own name — such as `..`, planted
         as a git tree entry — is skipped here rather than stored, so it is never
         used as a path component by this deck or its build. A folder the source
-        has stopped carrying is marked as removed rather than deleted, and a
-        folder that comes back under its old name loses that mark, so it is the
-        deck it was. A source nobody could read carries no such news, and leaves
-        every deck where it is. A folder whose name another source already
+        has stopped carrying is marked as removed, and its deck deleted once the
+        folder has been missing for `REMOVED_DECK_KEPT`; a folder that comes back
+        under its old name before then loses that mark, so it is the deck it
+        was. A source nobody could read carries no such news, and leaves every
+        deck where it is. A folder whose name another source already
         carries is skipped too: the slug is the address of one deck on this
         instance, and the source that carried it first keeps it. Whatever the
         poll found or failed to is recorded as this source's newest run, so a
@@ -851,11 +852,8 @@ class Decks:
             )
             if not taken_in:
                 _log.warning(_NAME_BELONGS_TO_ANOTHER_SOURCE, folder.name, source.name)
-        self.store.mark_removed_except(
-            present=frozenset(folder.name for folder in poll.folders),
-            source_id=source.id,
-            at=at,
-        )
+        present = frozenset(folder.name for folder in poll.folders)
+        delete_absent(self.store, present=present, source_id=source.id, at=at)
 
     def _build_what_changed(self, source: Source) -> None:
         """Build that source's decks whose commit nothing has tried yet.

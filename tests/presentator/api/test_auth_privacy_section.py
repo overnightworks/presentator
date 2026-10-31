@@ -7,10 +7,12 @@ from pathlib import Path
 import pytest
 from webauth.oidc import PENDING_LOGIN_MAX_AGE_SECONDS
 
+from presentator.application.build_retention import REMOVED_DECK_KEPT
 from presentator.application.decks import DRAFT_MAX_AGE
 from presentator.application.identity import SESSION_LIFETIME, SESSION_SWEEP_INTERVAL
 
 _SECTION = Path(__file__).parents[3] / "legal" / "datenschutz.html"
+_DAY = timedelta(days=1)
 _HOUR = timedelta(hours=1)
 _MINUTE = timedelta(minutes=1)
 
@@ -31,6 +33,7 @@ _MINUTE = timedelta(minutes=1)
             SESSION_SWEEP_INTERVAL / _MINUTE,
         ),
         (r"rund (\d+) Stunden nach Erzeugung", DRAFT_MAX_AGE / _HOUR),
+        (r"(\d+) Tage nach dem ersten Abgleich", REMOVED_DECK_KEPT / _DAY),
         (
             r"nur über HTTPS, (\d+) Minuten gültig",
             timedelta(seconds=PENDING_LOGIN_MAX_AGE_SECONDS) / _MINUTE,
