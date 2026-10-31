@@ -324,18 +324,21 @@ def test_a_build_no_run_owns_fails_loud_after_the_other_sources_went() -> None:
     """D2b (#483): the erasure goes on, keeps the account, then names the id."""
     instance = an_instance()
     store = instance.fakes.store
-    (talk,) = store.for_source("talks-id")
+    (deck,) = store.for_source("decks-id")
+    decks_runs = _runs_of(instance, "decks-id")
     talks_runs = _runs_of(instance, "talks-id")
-    store.misplace_build(talk.slug, talk=Path("/nowhere/a-run/out/talk"))
+    store.misplace_build(deck.slug, talk=Path("/nowhere/a-run/out/talk"))
 
-    with pytest.raises(RuntimeError, match="talks-id") as raised:
+    with pytest.raises(RuntimeError, match="decks-id") as raised:
         instance.people.erase_person(THE_PERSON.id, dry_run=False)
 
-    assert "talks" not in str(raised.value).replace("talks-id", "")
-    assert _owned_source_ids(instance) == {"talks-id"}
-    assert store.for_source("talks-id")
-    assert store.for_source("decks-id") == ()
-    assert talks_runs <= instance.fakes.builder.on_disk
+    assert "decks" not in str(raised.value).replace("decks-id", "")
+    assert _owned_source_ids(instance) == {"decks-id"}
+    assert store.for_source("decks-id")
+    assert store.for_source("talks-id") == ()
+    assert decks_runs <= instance.fakes.builder.on_disk
+    assert talks_runs
+    assert not talks_runs & instance.fakes.builder.on_disk
     assert THE_PERSON.id in instance.users.users
 
 

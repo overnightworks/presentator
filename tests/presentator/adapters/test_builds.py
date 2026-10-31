@@ -1101,11 +1101,12 @@ def test_what_could_not_be_taken_away_is_named_in_the_log(
 
     with _opened_again_afterwards(builds.builds):
         built = builds.build(a_deck(remote), source=source)
+        logged = caplog.text
         (left,) = builds.builds.iterdir()
         named = builds.remove(BuildRun(left.name))
 
     assert isinstance(built, BuildFailure)
-    assert left.name in caplog.text
+    assert left.name in logged
     assert named == PurePosixPath(builds.builds.name, left.name)
 
 
