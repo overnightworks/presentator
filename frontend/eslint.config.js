@@ -3,11 +3,11 @@ import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import ts from 'typescript-eslint';
 
-// E4 (#185): SvelteKit's own navigation state is the only thing the lobby
+// ADR 0021: SvelteKit's own navigation state is the only thing the lobby
 // keeps in the browser, so no app code calls a storage API, and no page
 // exports a `snapshot`, which would put form input into sessionStorage.
 const NO_STORAGE =
-	'The lobby keeps nothing in browser storage (#185 E4): read and write through the API.';
+	'The lobby keeps nothing in browser storage (ADR 0021): read and write through the API.';
 const STORAGE_GLOBALS = ['localStorage', 'sessionStorage', 'indexedDB'].map((name) => ({
 	name,
 	message: NO_STORAGE
@@ -23,7 +23,7 @@ const STORAGE_PROPERTIES = [
 	{ object: 'document', property: 'cookie', message: NO_STORAGE }
 ];
 const NO_SNAPSHOT =
-	'No page exports a snapshot (#185 E1, E4): SvelteKit would keep its form input in sessionStorage.';
+	'No page exports a snapshot (ADR 0021): SvelteKit would keep its form input in sessionStorage.';
 const SNAPSHOT_EXPORTS = [
 	"ExportNamedDeclaration > VariableDeclaration > VariableDeclarator[id.name='snapshot']",
 	"ExportNamedDeclaration > FunctionDeclaration[id.name='snapshot']",
@@ -45,7 +45,7 @@ export default ts.config(
 		languageOptions: { parserOptions: { parser: ts.parser } }
 	},
 	{
-		// I3 (#185): the CSP allows no style attribute in the app's own markup.
+		// ADR 0021: the CSP allows no style attribute in the app's own markup.
 		files: ['src/**/*.svelte'],
 		rules: { 'svelte/no-inline-styles': ['error', { allowTransitions: false }] }
 	},

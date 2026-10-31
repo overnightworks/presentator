@@ -6,7 +6,7 @@ declare global {
 	}
 }
 
-// Every drive fails on a CSP violation (#185 I3): the page's
+// Every drive fails on a CSP violation (ADR 0021): the page's
 // securitypolicyviolation event and the console line a browser writes for one,
 // so a changed announcer style or a new inline script is red here.
 export const test = base.extend<{ violations: string[] }>({

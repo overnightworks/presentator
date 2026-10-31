@@ -71,7 +71,7 @@ scan can prove a template's own markup and expressions stay literal-free; it
 cannot prove the whole rendered page does.
 
 The lobby's Svelte pages under `frontend/src` are held to the same rule
-(#185 I4). A `.svelte` file is markup with `{expression}` holes and a
+(ADR 0021). A `.svelte` file is markup with `{expression}` holes and a
 `<script>` and `<style>` block. The blocks are code and are dropped; each hole
 is folded the way a Jinja expression is: a hole that is only a string literal
 (`{'Sign in'}`, or a template literal without a substitution) renders that
@@ -80,7 +80,7 @@ literal and counts as text, a logic block (`{#if}`, `{:else}`, `{/if}`,
 What is left goes through the same scanner, so the same text positions and
 attributes are flagged, on an element and on a component alike. A kit
 component's own words (appkit's `SignInPage`) are the kit's, not
-presentator's (#185 I4): they ship inside the kit's package, which this scan
+presentator's (ADR 0021): they ship inside the kit's package, which this scan
 never reads, and what a page hands such a component is held like any other
 markup. Named gap: a literal inside a larger expression (`{ok ? 'Saved' :
 x}`) is not followed, because telling a shown string from a class name or a

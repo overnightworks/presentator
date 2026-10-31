@@ -131,7 +131,7 @@ _PUBLIC_RULES: Final = (
 )
 # The lobby app's shell answers a page load on any lobby address no route
 # claims, but never on these: a missing asset, API or server route stays the
-# framework's 404 instead of becoming the app (#185 Architecture).
+# framework's 404 instead of becoming the app (ADR 0021).
 _NEVER_THE_SHELL: Final = PathRules(
     exact=frozenset({START_SIGN_IN_PATH, LOGOUT_PATH, HEALTH_PATH, _SETUP}),
     prefixes=(
@@ -172,12 +172,12 @@ cast("dict[str, object]", TEMPLATES.env.globals).update(
 
 
 # SvelteKit writes its accessibility announcer with this one inline style
-# attribute, which `style-src 'self'` refuses; the operator ruled to admit
-# exactly it by its hash under 'unsafe-hashes' (#683, A, 31.10.2026), since
-# hiding it by a build step would patch the framework. It is the sha256 of the
-# attribute's value in @sveltejs/kit 3.1.0's runtime/components/root.svelte, so
-# a kit update that changes the style turns the browser drive red. It goes when
-# SvelteKit writes the announcer without an inline style (sveltejs/kit#11747).
+# attribute, which `style-src 'self'` refuses; ADR 0021 admits exactly it by
+# its hash under 'unsafe-hashes', since hiding it by a build step would patch
+# the framework. It is the sha256 of the attribute's value in @sveltejs/kit
+# 3.1.0's runtime/components/root.svelte, so a kit update that changes the
+# style turns the browser drive red. It goes when SvelteKit writes the
+# announcer without an inline style (sveltejs/kit#11747).
 _ANNOUNCER_STYLE_HASH: Final = "sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo="
 
 
