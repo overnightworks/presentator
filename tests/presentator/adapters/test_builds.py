@@ -954,7 +954,7 @@ def test_a_build_that_has_written_too_much_is_stopped_where_it_stands(
     assert list(builds.builds.iterdir()) == []
 
 
-def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
+def test_too_many_files_are_refused_and_leave_no_listing_open(
     remote: GitRemote,
     source: Source,
     machine: pytest.MonkeyPatch,
