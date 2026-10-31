@@ -531,7 +531,8 @@ class FakeDeckStore:
     """Deck rows in a dictionary, keyed by slug the way the table is."""
 
     kept: dict[str, Deck] = field(default_factory=dict[str, Deck])
-    removed: set[str] = field(default_factory=set[str])
+    # Each marked slug and the instant a pass first missed its folder.
+    removed: dict[str, datetime] = field(default_factory=dict[str, datetime])
 
     def put(self, deck: Deck) -> bool:
         standing = self.kept.get(deck.slug)
@@ -567,11 +568,24 @@ class FakeDeckStore:
         source_id: str,
         at: datetime,
     ) -> None:
-        reconciled = {
-            slug for slug, deck in self.kept.items() if deck.source_id == source_id
-        }
-        self.removed -= reconciled
-        self.removed |= reconciled - present
+        for slug, deck in self.kept.items():
+            if deck.source_id != source_id:
+                continue
+            if slug in present:
+                self.removed.pop(slug, None)
+            else:
+                self.removed.setdefault(slug, at)
+
+    def remove_marked_before(self, source_id: str, *, before: datetime) -> int:
+        gone = [
+            slug
+            for slug, marked in self.removed.items()
+            if marked <= before and self.kept[slug].source_id == source_id
+        ]
+        for slug in gone:
+            del self.kept[slug]
+            del self.removed[slug]
+        return len(gone)
 
     def for_source(self, source_id: str) -> tuple[Deck, ...]:
         return tuple(deck for deck in self.kept.values() if deck.source_id == source_id)
@@ -579,7 +593,7 @@ class FakeDeckStore:
     def remove_for_source(self, source_id: str) -> None:
         for deck in self.for_source(source_id):
             del self.kept[deck.slug]
-            self.removed.discard(deck.slug)
+            self.removed.pop(deck.slug, None)
 
 
 @dataclass

@@ -1,13 +1,16 @@
-"""Which runs of the build the deck rows still deliver, and which go.
+"""Which deck rows and runs of the build stay, and which go.
 
 Rows decide and files obey: a run any deck row names through its talk or its
 PDF, marked removed or not, stays; every other run on disk is taken off it. A
 stored path the build runner cannot place, or a listing that did not finish,
-refuses the whole decision, because every run would then look unreferenced.
+refuses the whole decision, because every run would then look unreferenced. A
+row marked removed goes once its folder has been missing for the period the
+privacy section states, and that pass's sweep takes its runs.
 """
 
 import logging
 from collections.abc import Iterable
+from datetime import datetime, timedelta
 from typing import Final
 
 from presentator.contracts.decks import Deck
@@ -15,6 +18,10 @@ from presentator.ports.decks import BuildRun, BuildRunner, DeckStore, SourceStor
 
 _UNPLACED: Final = "build %s is not a run under the builds root"
 _NOT_LISTED: Final = "the runs on disk could not be listed, nothing is swept"
+_DELETED_ABSENT: Final = "deleted %d decks of source %s missing past their retention"
+# How long a deck stays after a pass first missed its folder; the privacy
+# section states the same number.
+REMOVED_DECK_KEPT: Final = timedelta(days=30)
 
 _log = logging.getLogger(__name__)
 
@@ -36,6 +43,21 @@ def sweep(builder: BuildRunner, sources: SourceStore, store: DeckStore) -> None:
         return
     for run in on_disk - named:
         builder.remove(run)
+
+
+def delete_absent(
+    store: DeckStore, *, present: frozenset[str], source_id: str, at: datetime
+) -> None:
+    """Mark that source's decks outside `present`, then delete those marked too long.
+
+    Only a pass that read the source calls this, and the marks of the folders
+    it saw are cleared before anything is deleted, so a folder that came back
+    keeps its deck however late the pass that sees it runs.
+    """
+    store.mark_removed_except(present, source_id=source_id, at=at)
+    deleted = store.remove_marked_before(source_id, before=at - REMOVED_DECK_KEPT)
+    if deleted:
+        _log.info(_DELETED_ABSENT, deleted, source_id)
 
 
 def builds_removed(builder: BuildRunner, decks: Iterable[Deck]) -> bool:

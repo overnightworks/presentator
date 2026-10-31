@@ -87,6 +87,12 @@ UPDATE decks SET removed_at = ?
 WHERE removed_at IS NULL AND source_id = ?
   AND slug NOT IN (SELECT value FROM json_each(?))
 """
+# ISO text compares as the instants it spells, because every writer stamps
+# `removed_at` from the same UTC clock.
+_REMOVE_MARKED_BEFORE: Final = """
+DELETE FROM decks
+WHERE source_id = ? AND removed_at <= ?
+"""
 _UNMARK_CARRIED: Final = """
 UPDATE decks SET removed_at = NULL
 WHERE removed_at IS NOT NULL AND source_id = ?
@@ -200,6 +206,14 @@ class SqliteDeckStore:
         with rows(self.database) as cursor:
             cursor.execute(_MARK_REMOVED, (at.isoformat(), source_id, carried))
             cursor.execute(_UNMARK_CARRIED, (source_id, carried))
+
+    def remove_marked_before(self, source_id: str, *, before: datetime) -> int:
+        """Delete that source's decks marked removed at or before `before`."""
+        with rows(self.database) as cursor:
+            removed = cursor.execute(
+                _REMOVE_MARKED_BEFORE, (source_id, before.isoformat())
+            )
+            return removed.rowcount
 
     def all(self) -> tuple[Deck, ...]:
         """Read every deck row whose folder is still at its source."""
