@@ -15,7 +15,10 @@ from pathlib import Path
 from typing import Final, cast
 
 from fastapi import APIRouter, FastAPI, Request, Response
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.types import Receive, Scope, Send
 from webauth.config import WebAuthConfig, install_web_auth_config
 from webauth.middleware.bearer_gate import BearerGate, PersonPaths
 from webauth.middleware.session_gate import SessionGate
@@ -27,6 +30,7 @@ from webauth.policies import (
     BodySizePolicy,
     BodySizeRule,
     CacheControlRule,
+    CspDirective,
     CsrfPolicy,
     PathRules,
     PublicRule,
@@ -43,8 +47,9 @@ from webauth.sign_in_routes import (
 from presentator.api.admission import gated_person
 from presentator.api.deck_list_api import deck_list_routes
 from presentator.api.decks import add_deck_pages
-from presentator.api.health import HEALTH_IS_PUBLIC, add_health_route
+from presentator.api.health import HEALTH_IS_PUBLIC, HEALTH_PATH, add_health_route
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
+from presentator.api.lobby_shell import LobbyShell
 from presentator.api.pages import TEMPLATES, Pages, state_word
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
 from presentator.api.preference_api import preference_api_routes
@@ -62,10 +67,15 @@ _STATIC_DIR: Final = Path(__file__).parent / "static"
 _STATIC_PATH: Final = "/static"
 _INSIDE_STATIC: Final = f"{_STATIC_PATH}/"
 _LOBBY: Final = "/"
+_APP_ASSETS: Final = "/_app"
+_INSIDE_APP_ASSETS: Final = f"{_APP_ASSETS}/"
+_HTML: Final = "text/html"
+_PAGE_LOADS: Final = frozenset({HTTPMethod.GET, HTTPMethod.HEAD})
 LOGIN_PATH: Final = "/login"
 START_SIGN_IN_PATH: Final = "/login/oidc"
-SIGN_IN_CALLBACK_PATH: Final = "/auth/callback"
-BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
+_INSIDE_AUTH: Final = "/auth/"
+SIGN_IN_CALLBACK_PATH: Final = f"{_INSIDE_AUTH}callback"
+BACKCHANNEL_LOGOUT_PATH: Final = f"{_INSIDE_AUTH}backchannel-logout"
 LOGOUT_PATH: Final = "/logout"
 LOBBY_SIGN_IN: Final = SignInPaths(
     start=START_SIGN_IN_PATH,
@@ -95,10 +105,10 @@ _PERSON_API: Final = "/api/"
 # Signing in (its start and the issuer's return) and signing out are the
 # addresses the gate leaves alone, and the library derives them from the
 # sign-in paths; logging out ends a session rather than using one. The theme
-# stylesheet has to render the open pages themselves, so it is public too, and
-# so is the address another server posts to: a source host's POST under the
-# hook prefix. Keycloak's back-channel logout is open and exempt from the
-# origin check through the sign-in paths.
+# stylesheet and the lobby app's built assets have to render the open pages
+# themselves, so they are public too, and so is the address another server
+# posts to: a source host's POST under the hook prefix. Keycloak's back-channel
+# logout is open and exempt from the origin check through the sign-in paths.
 # `/setup` is a retired address: it answers 404 to everyone, so a signed-out
 # reader is not sent to a login for a page that does not exist.
 _SERVER_CALLS: Final = PathRules(prefixes=(HOOK_CALLS,))
@@ -114,10 +124,23 @@ _PUBLIC_RULES: Final = (
             )
         )
     ),
-    PublicRule(PathRules(prefixes=(_INSIDE_STATIC,))),
+    PublicRule(PathRules(prefixes=(_INSIDE_STATIC, _INSIDE_APP_ASSETS))),
     HEALTH_IS_PUBLIC,
     PublicRule(_SERVER_CALLS, methods=frozenset({HTTPMethod.POST})),
     *LOBBY_SIGN_IN.public_rules,
+)
+# The lobby app's shell answers a page load on any lobby address no route
+# claims, but never on these: a missing asset, API or server route stays the
+# framework's 404 instead of becoming the app (#185 Architecture).
+_NEVER_THE_SHELL: Final = PathRules(
+    exact=frozenset({START_SIGN_IN_PATH, LOGOUT_PATH, HEALTH_PATH, _SETUP}),
+    prefixes=(
+        _PERSON_API,
+        _INSIDE_APP_ASSETS,
+        HOOK_CALLS,
+        _INSIDE_AUTH,
+        _INSIDE_STATIC,
+    ),
 )
 PERMISSIONS_POLICY: Final = "camera=(), microphone=(), geolocation=()"
 _CSRF_POLICY: Final = CsrfPolicy(
@@ -148,15 +171,31 @@ cast("dict[str, object]", TEMPLATES.env.globals).update(
 )
 
 
-def content_security_policy() -> str:
+# SvelteKit writes its accessibility announcer with this one inline style
+# attribute, which `style-src 'self'` refuses; the operator ruled to admit
+# exactly it by its hash under 'unsafe-hashes' (#683, A, 31.10.2026), since
+# hiding it by a build step would patch the framework. It is the sha256 of the
+# attribute's value in @sveltejs/kit 3.1.0's runtime/components/root.svelte, so
+# a kit update that changes the style turns the browser drive red. It goes when
+# SvelteKit writes the announcer without an inline style (sveltejs/kit#11747).
+_ANNOUNCER_STYLE_HASH: Final = "sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo="
+
+
+def content_security_policy(shell: LobbyShell) -> str:
     """The one policy every answer of the lobby carries, except the logout page.
 
-    Nothing in the lobby needs an inline script, an inline style, an external
-    script host, or a frame: every asset ships under `/static`, served from this
-    origin. The logout page brings its own policy, which webauth's security
-    headers leave in place.
+    Nothing in the lobby needs an external host or a frame: every asset ships
+    under `/static` or `/_app`, served from this origin. The one inline script
+    is the app's bootstrap, admitted by its hash, and the one inline style is
+    SvelteKit's announcer. The logout page brings its own policy, which
+    webauth's security headers leave in place.
     """
-    return default_content_security_policy([])
+    return default_content_security_policy(
+        [shell.bootstrap_hash],
+        added_sources={
+            CspDirective.STYLE_SRC: ["'unsafe-hashes'", f"'{_ANNOUNCER_STYLE_HASH}'"]
+        },
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -205,6 +244,7 @@ class _Surfaces:
     decks: Decks
     pages: Pages
     auth: InstalledAuth
+    shell: LobbyShell
 
     def home(self, request: Request) -> Response:
         """List the signed-in person's decks, newest first."""
@@ -228,9 +268,9 @@ class _Surfaces:
             for deck in self.decks.listed(viewer=viewer)
         )
 
-    def login_page(self, request: Request) -> Response:
-        """Show the signed-out page, whose one button starts the sign-in."""
-        return self.pages.page(request, "login.html", start_sign_in=START_SIGN_IN_PATH)
+    def lobby_app(self, request: Request) -> Response:
+        """The lobby app's shell, in the reader's language and theme."""
+        return HTMLResponse(self.shell.filled(self.pages.appearance(request)))
 
     def talk_sign_in_refusal_page(
         self, refusal: RefusalPage
@@ -260,6 +300,38 @@ class _Surfaces:
             status=HTTPStatus.FORBIDDEN,
             start_sign_in=retry,
         )
+
+
+def _loads_the_lobby_app(request: Request) -> bool:
+    """A browser's page load on an address the app's router decides."""
+    return (
+        request.method in _PAGE_LOADS
+        and _HTML in request.headers.get("accept", "")
+        and not _NEVER_THE_SHELL.matches(request.url.path)
+    )
+
+
+def _install_lobby_app(lobby: FastAPI, surfaces: _Surfaces) -> None:
+    """Answer a page load no route claims with the app's shell.
+
+    It takes the router's not-found place rather than a catch-all route, so a
+    route's own 404 and a wrong method's 405 stay the framework's, and
+    everything that is no page load still gets the framework's 404.
+    """
+    not_found = lobby.router.default
+
+    async def lobby_app_or_not_found(
+        scope: Scope, receive: Receive, send: Send
+    ) -> None:
+        if scope["type"] == "http":
+            request = Request(scope, receive)
+            if _loads_the_lobby_app(request):
+                answer = await run_in_threadpool(surfaces.lobby_app, request)
+                await answer(scope, receive, send)
+                return
+        await not_found(scope, receive, send)
+
+    lobby.router.default = lobby_app_or_not_found
 
 
 def _install_middleware(
@@ -320,26 +392,26 @@ def _session_routes(pages: Pages, auth: InstalledAuth) -> APIRouter:
     )
 
 
-def create_lobby(
+def create_lobby(  # noqa: PLR0913 - the composition root's one call names each owner
     *,
     sessions: SessionRecordStore,
     decks: Decks,
     pages: Pages,
     auth: InstalledAuth,
     private: LobbyPrivate,
+    shell: LobbyShell,
 ) -> FastAPI:
     """Build the lobby around the use cases and the adapters the host chose.
 
     The fetch hook always stands under `/sources/`; a call that cannot name a
     stored source and its secret is answered alike, and GET stays behind the
-    session.
+    session. The app's shell answers only what no route claims.
     """
-    surfaces = _Surfaces(decks=decks, pages=pages, auth=auth)
+    surfaces = _Surfaces(decks=decks, pages=pages, auth=auth, shell=shell)
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(lobby, auth.config)
     _install_middleware(lobby, auth, sessions, private.admin_people)
     lobby.add_api_route(_LOBBY, surfaces.home, methods=["GET"])
-    lobby.add_api_route(LOGIN_PATH, surfaces.login_page, methods=["GET"])
     install_sign_in_routes(
         lobby,
         paths=LOBBY_SIGN_IN,
@@ -369,6 +441,7 @@ def create_lobby(
     lobby.include_router(source_api_routes(decks=decks))
     add_deck_pages(lobby, decks=decks, pages=pages, talk_origin=auth.talk_origin)
     lobby.mount(_STATIC_PATH, StaticFiles(directory=_STATIC_DIR), name="static")
+    lobby.mount(_APP_ASSETS, StaticFiles(directory=shell.assets), name="lobby_app")
     lobby.include_router(fetch_hook(decks=decks))
     if private.admin_people is not None:
         lobby.include_router(
@@ -378,4 +451,5 @@ def create_lobby(
                 app=str(auth.admission.login_group).rsplit("/", 1)[-1],
             )
         )
+    _install_lobby_app(lobby, surfaces)
     return lobby

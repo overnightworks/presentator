@@ -1,5 +1,6 @@
-"""The lobby's built shell: read once, hashed for the policy, filled per reader."""
+"""The lobby's built shell: read once, hashed for the policy, served per reader."""
 
+from http import HTTPStatus
 from pathlib import Path
 
 import pytest
@@ -11,8 +12,20 @@ from presentator.api.lobby_shell import (
     LobbyBuildError,
     LobbyShell,
 )
-from presentator.contracts.preferences import Appearance, ThemeChoice
-from tests.support.lobby import ENGLISH
+from presentator.contracts.preferences import (
+    Appearance,
+    PersonPreferences,
+    ThemeChoice,
+)
+from tests.presentator.application.support.fakes import FakePersonPreferencesStore
+from tests.support.lobby import (
+    A_LOBBY_ASSET,
+    ADMIN,
+    ENGLISH,
+    LOBBY_SHELL,
+    Lobby,
+    a_lobby,
+)
 
 _HTML = (
     f'<html lang="{LANGUAGE_MARK}" data-theme="{THEME_MARK}"><body>{{}}</body></html>'
@@ -73,3 +86,97 @@ def test_a_shell_this_host_cannot_serve_is_refused(tmp_path: Path, page: str) ->
 def test_a_missing_build_is_refused(tmp_path: Path) -> None:
     with pytest.raises(LobbyBuildError, match="pnpm build"):
         LobbyShell.read(tmp_path)
+
+
+def _directives(policy: str) -> dict[str, list[str]]:
+    named = (part.split() for part in policy.split(";") if part.strip())
+    return {name: sources for name, *sources in named}
+
+
+def _is_the_lobby_app(answer_text: str) -> bool:
+    return A_LOBBY_ASSET in answer_text
+
+
+def test_the_signed_out_login_loads_the_lobby_app(lobby: Lobby) -> None:
+    answer = lobby.client.get("/login")
+
+    assert answer.status_code == HTTPStatus.OK
+    assert _is_the_lobby_app(answer.text)
+    assert f'lang="{ENGLISH.language_tag}"' in answer.text
+
+
+def test_the_lobby_app_opens_in_the_readers_own_theme() -> None:
+    lobby = a_lobby(
+        person_preferences=FakePersonPreferencesStore(
+            chosen={ADMIN: PersonPreferences(theme=ThemeChoice.DARK)}
+        )
+    )
+    lobby.sign_in()
+
+    assert 'data-theme="dark"' in lobby.client.get("/an-address-the-app-decides").text
+
+
+def test_an_address_no_route_claims_loads_the_lobby_app_for_a_signed_in_reader(
+    signed_in_lobby: Lobby,
+) -> None:
+    answer = signed_in_lobby.client.get("/an-address-the-app-decides")
+
+    assert answer.status_code == HTTPStatus.OK
+    assert _is_the_lobby_app(answer.text)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/no-such-route",
+        "/_app/no-such-asset.js",
+        "/auth/no-such-step",
+        "/static/no-such-sheet.css",
+        "/setup",
+    ],
+)
+def test_an_excluded_address_stays_the_frameworks_not_found(
+    signed_in_lobby: Lobby, path: str
+) -> None:
+    answer = signed_in_lobby.client.get(path)
+
+    assert answer.status_code == HTTPStatus.NOT_FOUND
+    assert not _is_the_lobby_app(answer.text)
+
+
+def test_a_json_caller_at_an_unclaimed_address_gets_the_frameworks_not_found(
+    signed_in_lobby: Lobby,
+) -> None:
+    answer = signed_in_lobby.client.get(
+        "/an-address-the-app-decides", headers={"accept": "application/json"}
+    )
+
+    assert answer.status_code == HTTPStatus.NOT_FOUND
+    assert not _is_the_lobby_app(answer.text)
+
+
+def test_the_lobby_apps_assets_load_without_signing_in(lobby: Lobby) -> None:
+    answer = lobby.client.get(A_LOBBY_ASSET)
+
+    assert answer.status_code == HTTPStatus.OK
+
+
+def test_the_policy_admits_the_built_bootstrap_and_no_other_inline_script(
+    lobby: Lobby,
+) -> None:
+    policy = lobby.client.get("/login").headers["content-security-policy"]
+
+    assert _directives(policy)["script-src"] == [
+        "'self'",
+        f"'{LOBBY_SHELL.bootstrap_hash}'",
+    ]
+
+
+def test_the_policy_admits_one_style_attribute_by_its_hash_and_no_inline_style(
+    lobby: Lobby,
+) -> None:
+    policy = lobby.client.get("/login").headers["content-security-policy"]
+
+    self_keyword, unsafe_hashes, *hashes = _directives(policy)["style-src"]
+    assert (self_keyword, unsafe_hashes) == ("'self'", "'unsafe-hashes'")
+    assert [source.startswith("'sha256-") for source in hashes] == [True]
