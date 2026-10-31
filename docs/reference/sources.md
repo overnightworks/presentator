@@ -196,7 +196,8 @@ meanwhile, or a second removal that found it gone is a 404 problem. Every
 other answer removes no row:
 
 - counts that no longer match what removal would take (a refresh added a deck
-  or a run since) are a `source-removal-stale` problem, 409, with `deck_count`
+  or a run since, or deleted a deck whose folder was missing past its
+  retention) are a `source-removal-stale` problem, 409, with `deck_count`
   and `run_count` as they stand now; confirming again sends those;
 - a mirror or a built talk that would not leave the disk is a
   `source-removal-refused` problem, 500, with the member `reason` `disk-leftover`

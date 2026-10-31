@@ -259,17 +259,27 @@ class DeckStore(Protocol):
         """Mark that source's decks outside `present` removed, clear it inside.
 
         A mark is not a delete: the row keeps its identity and its owner, so a
-        folder pushed again is the deck it was. One source's folders say
-        nothing about another's, so only the named source's decks are read.
+        folder pushed again before the mark ends is the deck it was. A marked
+        row keeps the instant it was first marked, the start of its retention.
+        One source's folders say nothing about another's, so only the named
+        source's decks are read.
+        """
+
+    @abstractmethod
+    def remove_marked_before(self, source_id: str, *, before: datetime) -> int:
+        """Delete that source's decks marked removed at or before `before`.
+
+        This ends a mark: the answer is how many rows went. Their builds stay
+        for the sweep, which takes every run no row names any more.
         """
 
     @abstractmethod
     def for_source(self, source_id: str) -> tuple[Deck, ...]:
         """Every deck row this source has ever carried, marked removed or not.
 
-        Read-only: a folder dropped earlier kept its row and its built talk,
-        so this is the whole set a removal counts and cleans disk against,
-        never only the ones the list still shows.
+        Read-only: a folder dropped earlier keeps its row and its built talk
+        until its mark ends, so this is the whole set a removal counts and
+        cleans disk against, never only the ones the list still shows.
         """
 
     @abstractmethod

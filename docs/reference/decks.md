@@ -15,14 +15,24 @@ that carried it.
 Only a refresh reconciles; a page view never does.
 
 - A folder the source no longer carries leaves the list: the refresh marks its
-  deck as removed instead of deleting anything, and a folder pushed again under
-  the same name loses that mark and is the deck it was, at the same address
-  with the same owner.
+  deck as removed, and a folder pushed again under the same name loses that
+  mark and is the deck it was, at the same address with the same owner. The
+  first refresh that reads the source 30 days or more after the one that first
+  missed the folder deletes the deck's row (`REMOVED_DECK_KEPT`), and the same
+  pass's sweep takes its build and PDF. Pushed again after that, the folder is a
+  new deck at the same address, built in that pass. A folder still in the tree
+  counts as carried, even without a readable manifest or `slides.md`. The
+  source's mirror keeps the folder in its git history until the source is
+  removed.
 - Only that source's decks are reconciled, so what one source stopped carrying
   says nothing about another's.
 - The folder name is one address for the whole instance: a folder whose name
   another source already carries is skipped with a line in the log, and the
-  source that carried it first keeps it.
+  source that carried it first keeps it. A marked deck keeps its address until
+  its row is deleted; then another source carrying that name takes it, in the
+  same pass if that source comes later, otherwise at its next refresh, and old
+  links show its deck. The first source's re-push is then skipped the same way.
+  Removing a source or erasing a person frees an address alike.
 - A source that cannot be read is logged and says nothing about what it
   carries, so every deck stays listed. That includes a listing the mirror could
   not finish, so a listing is either complete or absent, never shorter. A
