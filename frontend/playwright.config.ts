@@ -10,7 +10,7 @@ const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 const storageState = fileURLToPath(new URL('./playwright/.auth/signed-in.json', import.meta.url));
 
 export default defineConfig({
-	testDir: 'drive',
+	testDir: 'e2e',
 	forbidOnly: Boolean(process.env.CI),
 	retries: 0,
 	reporter: [['list']],

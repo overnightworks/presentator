@@ -23,7 +23,7 @@ in for a higher one.
 | `host` | Composition | Once: start the app with a test configuration. |
 | Slidev addon | That a deck staged outside the toolchain builds by the addon's name | Vitest building such a deck with `slidev build` from `slidev/`, as `slidev/tests/addon-package.test.ts` does. |
 | Lobby app | The app's own TypeScript and Svelte logic | Vitest beside the module in `frontend/src`. Its report, `lcov-lobby.info`, has no threshold of its own. |
-| Lobby drive | The production build served by FastAPI under the lobby's policy | Playwright in `frontend/drive/`, in Chromium and Firefox, against the lobby that `tests/support/lobby_drive.py` composes over in-memory stores with one person signed in; never an issuer. Any CSP violation fails it. |
+| Lobby drive | The production build served by FastAPI under the lobby's policy | Playwright in `frontend/e2e/`, in Chromium and Firefox, against the lobby that `tests/support/lobby_drive.py` composes over in-memory stores with one person signed in; never an issuer. Any CSP violation fails it. |
 | Surface | A person does X at the lobby | A delegated agent driving the real interface at the widths the dispatch brief names, taken from the picture at [mockups/README.md](mockups/README.md). One flow per ruled sentence. A unit test is not this proof. |
 
 `gitmirror` is proven the same way as an adapter: against a tmp bare repository,

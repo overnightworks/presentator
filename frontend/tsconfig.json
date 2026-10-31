@@ -11,6 +11,6 @@
 		"playwright.config.ts",
 		"src/**/*.ts",
 		"src/**/*.svelte",
-		"drive/**/*.ts"
+		"e2e/**/*.ts"
 	]
 }
