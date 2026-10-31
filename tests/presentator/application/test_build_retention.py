@@ -1,12 +1,14 @@
 """Which runs of the build a refresh pass leaves on disk: those a deck row names."""
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Self
 
 import pytest
 
+from presentator.application.build_retention import REMOVED_DECK_KEPT
 from presentator.application.decks import (
     Decks,
     SourceRemovalRefusal,
@@ -397,6 +399,7 @@ def test_removing_a_source_over_a_build_no_run_owns_keeps_every_row() -> None:
 
 
 _DAY = timedelta(days=1)
+_KEPT = REMOVED_DECK_KEPT.days
 _SECOND = timedelta(seconds=1)
 _RETENTION_LOG = "presentator.application.build_retention"
 
@@ -455,11 +458,11 @@ def test_a_deck_missed_for_thirty_days_goes_with_its_run_not_a_second_sooner() -
     """#511 matrix 1."""
     instance = missed_on_day_zero()
 
-    instance.on_day(30, early_by=_SECOND)
+    instance.on_day(_KEPT, early_by=_SECOND)
     assert set(instance.store.kept) == {_A_DECK}
     assert instance.runs == {"run-1"}
 
-    instance.on_day(30)
+    instance.on_day(_KEPT)
     assert instance.store.kept == {}
     assert instance.runs == set()
 
@@ -477,7 +480,7 @@ def test_a_renamed_folder_is_a_new_deck_and_its_old_name_goes_after_thirty_days(
     assert instance.address_of(_A_DECK) is None
     assert instance.runs == {"run-1", "run-2"}
 
-    instance.on_day(30)
+    instance.on_day(_KEPT)
     assert set(instance.store.kept) == {"kundenfeedback-q4"}
     assert instance.runs == {"run-2"}
 
@@ -487,7 +490,7 @@ def test_a_second_miss_keeps_counting_from_the_first() -> None:
     instance = missed_on_day_zero()
     instance.on_day(10)
 
-    instance.on_day(30)
+    instance.on_day(_KEPT)
 
     assert instance.store.kept == {}
 
@@ -498,17 +501,17 @@ def test_a_folder_back_before_the_thirty_days_is_the_deck_it_was() -> None:
     before = instance.store.kept[_A_DECK]
     instance.carries(a_folder(_A_DECK))
 
-    instance.on_day(29)
+    instance.on_day(_KEPT - 1)
     assert instance.store.kept[_A_DECK] == before
     assert instance.store.removed == {}
     assert instance.runs == {"run-1"}
 
     instance.carries()
-    instance.on_day(40)
-    instance.on_day(70, early_by=_SECOND)
+    instance.on_day(_KEPT + 10)
+    instance.on_day(2 * _KEPT + 10, early_by=_SECOND)
     assert set(instance.store.kept) == {_A_DECK}
 
-    instance.on_day(70)
+    instance.on_day(2 * _KEPT + 10)
     assert instance.store.kept == {}
     assert instance.runs == set()
 
@@ -518,7 +521,7 @@ def test_a_folder_back_while_nothing_ran_is_kept_by_the_first_pass_after() -> No
     instance = missed_on_day_zero()
     instance.carries(a_folder(_A_DECK))
 
-    instance.on_day(31)
+    instance.on_day(_KEPT + 1)
 
     assert set(instance.store.kept) == {_A_DECK}
     assert instance.runs == {"run-1"}
@@ -527,10 +530,10 @@ def test_a_folder_back_while_nothing_ran_is_kept_by_the_first_pass_after() -> No
 def test_a_folder_pushed_again_after_the_purge_is_a_new_deck_built_at_once() -> None:
     """#511 matrix 5."""
     instance = missed_on_day_zero()
-    instance.on_day(30)
+    instance.on_day(_KEPT)
     instance.carries(a_folder(_A_DECK))
 
-    instance.on_day(31)
+    instance.on_day(_KEPT + 1)
 
     again = instance.store.kept[_A_DECK]
     assert again.owner_id == _OWNER
@@ -551,13 +554,13 @@ def test_an_unreadable_source_deletes_nothing_until_it_reads_again(
     """#511 matrix 6: unreadable from day 5 to day 40."""
     instance = missed_on_day_zero()
     instance.cannot_read()
-    for day in (5, 30, 39):
+    for day in (5, _KEPT, _KEPT + 9):
         instance.on_day(day)
     assert set(instance.store.kept) == {_A_DECK}
     assert instance.runs == {"run-1"}
 
     instance.carries(*carried_on_day_40)
-    instance.on_day(40)
+    instance.on_day(_KEPT + 10)
 
     assert set(instance.store.kept) == kept
     assert instance.runs == ({"run-1"} if kept else set())
@@ -570,7 +573,7 @@ def test_an_emptied_branch_takes_every_deck_of_its_source_after_thirty_days() ->
     instance.carries()
     instance.on_day(0)
 
-    instance.on_day(30)
+    instance.on_day(_KEPT)
 
     assert instance.store.kept == {}
     assert instance.runs == set()
@@ -587,7 +590,7 @@ def test_one_sources_purge_leaves_an_unreadable_sources_marks_alone() -> None:
     instance.on_day(0)
     instance.cannot_read(_ANOTHER_SOURCE)
 
-    instance.on_day(30)
+    instance.on_day(_KEPT)
 
     assert set(instance.store.kept) == {"their-talk"}
 
@@ -619,7 +622,7 @@ def test_a_folder_still_in_the_tree_keeps_its_deck(still_listed: DeckFolder) -> 
     instance.on_day(0)
     instance.carries(still_listed)
 
-    for day in (0, 31, 60):
+    for day in (0, _KEPT + 1, 2 * _KEPT):
         instance.on_day(day)
 
     assert set(instance.store.kept) == {_A_DECK}
@@ -627,7 +630,7 @@ def test_a_folder_still_in_the_tree_keeps_its_deck(still_listed: DeckFolder) -> 
 
 
 def a_month_after_a_miss(*rows: Deck, carried: tuple[DeckFolder, ...]) -> _Instance:
-    """Those rows, the first marked on day 0, and a clock 30 days on."""
+    """Those rows, the first marked at _NOW, and the folders the source carries."""
     instance = _Instance().carries(*carried)
     for row in rows:
         instance.store.kept[row.slug] = row
@@ -644,7 +647,7 @@ def test_a_purged_rows_run_another_row_names_stays() -> None:
     )
     laid_down(instance.fakes.builder, "shared")
 
-    instance.on_day(30)
+    instance.on_day(_KEPT)
 
     assert set(instance.store.kept) == {"kept"}
     assert instance.runs == {"shared"}
@@ -665,13 +668,13 @@ def test_a_refused_sweep_leaves_the_purged_rows_run_to_the_next_pass() -> None:
     )
     laid_down(instance.fakes.builder, "old")
 
-    instance.on_day(30)
+    instance.on_day(_KEPT)
     assert set(instance.store.kept) == {"odd"}
     assert instance.runs == {"old"}
 
     instance.store.put_build("odd", a_build_in("placed"))
     laid_down(instance.fakes.builder, "placed")
-    instance.on_day(31)
+    instance.on_day(_KEPT + 1)
     assert instance.runs == {"placed"}
 
 
@@ -679,7 +682,7 @@ def test_a_purged_row_without_a_build_touches_no_run() -> None:
     """#511 matrix 13."""
     instance = a_month_after_a_miss(a_row("never-built"), carried=())
 
-    instance.on_day(30)
+    instance.on_day(_KEPT)
 
     assert instance.store.kept == {}
     assert instance.fakes.builder.removed == []
@@ -698,7 +701,7 @@ def a_name_both_sources_carry(*order: Source) -> _Instance:
 
 
 @pytest.mark.parametrize(
-    ("order", "on_day_30"),
+    ("order", "at_expiry"),
     [
         pytest.param((_SOURCE, _ANOTHER_SOURCE), _ANOTHER_SOURCE.url, id="same-pass"),
         pytest.param((_ANOTHER_SOURCE, _SOURCE), None, id="next-pass"),
@@ -706,20 +709,20 @@ def a_name_both_sources_carry(*order: Source) -> _Instance:
 )
 def test_another_source_takes_a_purged_address_and_not_before(
     order: tuple[Source, Source],
-    on_day_30: str | None,
+    at_expiry: str | None,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """#511 matrix 14."""
     with caplog.at_level(logging.WARNING):
         instance = a_name_both_sources_carry(*order)
-        instance.on_day(29)
+        instance.on_day(_KEPT - 1)
     assert "already carried by another source" in caplog.text
     assert set(instance.store.removed) == {_A_DECK}
 
-    instance.on_day(30)
-    assert instance.address_of(_A_DECK) == on_day_30
+    instance.on_day(_KEPT)
+    assert instance.address_of(_A_DECK) == at_expiry
 
-    instance.on_day(31)
+    instance.on_day(_KEPT + 1)
     assert instance.address_of(_A_DECK) == _ANOTHER_SOURCE.url
     assert instance.decks.built_talk(_A_DECK, viewer=_OWNER) is not None
 
@@ -729,12 +732,12 @@ def test_a_re_push_after_another_source_took_the_address_is_skipped(
 ) -> None:
     """#511 matrix 15."""
     instance = a_name_both_sources_carry(_SOURCE, _ANOTHER_SOURCE)
-    instance.on_day(30)
+    instance.on_day(_KEPT)
     instance.carries(a_folder(_A_DECK))
     caplog.clear()
 
     with caplog.at_level(logging.WARNING):
-        instance.on_day(31)
+        instance.on_day(_KEPT + 1)
 
     assert "already carried by another source" in caplog.text
     assert instance.address_of(_A_DECK) == _ANOTHER_SOURCE.url
@@ -743,10 +746,10 @@ def test_a_re_push_after_another_source_took_the_address_is_skipped(
 def test_a_removal_confirmed_before_a_purge_is_stale() -> None:
     """#511 matrix 16."""
     instance = missed_on_day_zero()
-    instance.on_day(29)
+    instance.on_day(_KEPT - 1)
     before = instance.decks.removal(_SOURCE.name)
     assert before is not None
-    instance.on_day(30)
+    instance.on_day(_KEPT)
     runs_now = instance.decks.removal(_SOURCE.name)
     assert runs_now is not None
 
@@ -776,8 +779,8 @@ def test_a_purge_names_its_source_and_count_in_one_line(
             if record.name == _RETENTION_LOG and record.levelno == logging.INFO
         ]
 
-    assert said_on(29) == []
-    (line,) = said_on(30)
+    assert said_on(_KEPT - 1) == []
+    (line,) = said_on(_KEPT)
     assert _SOURCE.id in line
-    assert "1" in line
+    assert re.search(r"\b1\b", line)
     assert _A_DECK not in line
