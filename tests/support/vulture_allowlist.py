@@ -25,6 +25,7 @@ from presentator.contracts.voice import (
 )
 from presentator.host.config import Settings, WorkerSettings
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
+from tests.presentator.host.test_worker_serving_loop import clients_closed_with_the_test
 from tests.presentator.host.test_worker_settings import no_worker_variables
 
 # `BaseHTTPRequestHandler`'s own request dispatch calls this by name; nothing
@@ -202,6 +203,9 @@ Settings._two_hostnames  # noqa: SLF001 - pydantic, not Python code, is the call
 
 # pytest applies this autouse fixture to every worker-settings test by itself.
 no_worker_variables  # pyright: ignore[reportUnusedExpression]
+
+# pytest applies this autouse fixture to every serving-loop test by itself.
+clients_closed_with_the_test  # pyright: ignore[reportUnusedExpression]
 
 # Pydantic reads these fields when it writes a validation answer.
 ValidationFault.loc

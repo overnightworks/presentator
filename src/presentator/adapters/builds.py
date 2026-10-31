@@ -623,12 +623,13 @@ def _walked(still_open: list[int], *, ends_by: float) -> _Added:
     while still_open:
         holder = still_open.pop()
         try:
-            for entry in os.scandir(holder):
-                entries += 1
-                stopped = _stopped_at(entries, ends_by=ends_by)
-                if stopped is not None:
-                    return stopped
-                held += _size_of(entry, held_by=holder, still_open=still_open)
+            with os.scandir(holder) as listing:
+                for entry in listing:
+                    entries += 1
+                    stopped = _stopped_at(entries, ends_by=ends_by)
+                    if stopped is not None:
+                        return stopped
+                    held += _size_of(entry, held_by=holder, still_open=still_open)
         except OSError as unreadable:
             return _Added(entries=entries, unreadable=str(unreadable))
         finally:
