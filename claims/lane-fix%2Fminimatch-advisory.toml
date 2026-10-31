@@ -1,0 +1,7 @@
+claim_id = "fc99d5184473429a963bf99fec6aeea6"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "91041d9b4aa7cc44916b8c421a5eb093d936fb45"
+branch = "fix/minimatch-advisory"
+scope = ["slidev/package.json", "slidev/pnpm-lock.yaml"]
+opened_commit = "79705dec7d1b50133621e58f289a294387199620"
