@@ -1089,7 +1089,7 @@ def test_what_a_build_closed_behind_it_is_opened_and_taken_away_all_the_same(
     assert list(builds.builds.iterdir()) == []
 
 
-def test_what_could_not_be_taken_away_is_named_in_the_log(
+def test_a_run_that_could_not_be_taken_away_is_logged_and_answered_as_its_volume_path(
     remote: GitRemote,
     source: Source,
     machine: pytest.MonkeyPatch,
