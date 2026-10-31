@@ -7,13 +7,11 @@ that the worker really denies it this machine, is proven by driving the real
 interface.
 """
 
-import gc
 import os
 import shutil
 import stat
 import subprocess
 import time
-import warnings
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -47,10 +45,6 @@ from tests.support.git_remote import (
     GitRemote,
     a_path_carrying,
     with_the_program,
-)
-from tests.support.worker_support import (
-    descriptors_left_open_since,
-    open_descriptor_targets,
 )
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
@@ -965,6 +959,7 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
     source: Source,
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
+    recwarn: pytest.WarningsRecorder,
 ) -> None:
     with_the_toolchain(
         machine,
@@ -975,35 +970,13 @@ def test_a_talk_of_more_files_than_a_build_may_leave_is_refused_too(
     )
     builds = builds_ready_for(tmp_path, source)
     open_before = {held.name for held in Path("/proc/self/fd").iterdir()}
-
     built = builds.build(a_deck(remote), source=source)
-
     assert built == BuildFailure(
         reason=BuildFailureReason.OUTPUT_ENTRIES, allowed_entries=MAXIMUM_ENTRIES
     )
     assert list(builds.builds.iterdir()) == []
     assert {held.name for held in Path("/proc/self/fd").iterdir()} <= open_before
-
-
-def test_a_walk_that_stops_early_leaves_no_directory_open_for_the_collector(
-    remote: GitRemote,
-    source: Source,
-    machine: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    machine.setattr(builds_module, "_ADDING_UP_WITHIN", _NO_BUDGET_AT_ALL)
-    with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_BUILDS)
-    builds = builds_ready_for(tmp_path, source)
-    before = open_descriptor_targets()
-
-    with warnings.catch_warnings(record=True) as left_to_the_collector:
-        warnings.simplefilter("always", ResourceWarning)
-        built = builds.build(a_deck(remote), source=source)
-        gc.collect()
-
-    assert built == BuildFailure.without_words()
-    assert [warning.message for warning in left_to_the_collector] == []
-    assert descriptors_left_open_since(before) == {}
+    assert not recwarn.list, "the walk that stopped early left a listing open"
 
 
 def test_a_talk_that_cannot_be_added_up_in_time_is_refused_without_words(

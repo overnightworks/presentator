@@ -5,6 +5,7 @@ import logging
 import socket
 import threading
 from collections.abc import Callable, Iterator
+from contextlib import ExitStack
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
@@ -35,39 +36,30 @@ from tests.support.worker_support import (
     BoundedListener,
     ScriptedLife,
     StopServingError,
+    connect,
+    connect_when_bound,
     listening_with,
     serving,
     wake_until_ended,
 )
-from tests.support.worker_support import (
-    connect as open_connection,
-)
-from tests.support.worker_support import (
-    connect_when_bound as open_connection_when_bound,
-)
 
-_CLIENTS_OF_THE_TEST: list[socket.socket] = []
+_CLIENTS = ExitStack()
 
 
 @pytest.fixture(autouse=True)
 def clients_closed_with_the_test() -> Iterator[None]:
     yield
-    while _CLIENTS_OF_THE_TEST:
-        _CLIENTS_OF_THE_TEST.pop().close()
+    _CLIENTS.close()
 
 
-def connect(volume: Path) -> socket.socket:
-    """A client of the worker's socket, closed when the test ends."""
-    _CLIENTS_OF_THE_TEST.append(open_connection(volume))
-    return _CLIENTS_OF_THE_TEST[-1]
+def connected(volume: Path) -> socket.socket:
+    return _CLIENTS.enter_context(connect(volume))
 
 
-def connect_when_bound(
+def connected_when_bound(
     volume: Path, still_serving: Callable[[], bool]
 ) -> socket.socket:
-    """The first client the socket admits once bound, closed when the test ends."""
-    _CLIENTS_OF_THE_TEST.append(open_connection_when_bound(volume, still_serving))
-    return _CLIENTS_OF_THE_TEST[-1]
+    return _CLIENTS.enter_context(connect_when_bound(volume, still_serving))
 
 
 def test_the_runtime_uid_is_admitted() -> None:
@@ -128,7 +120,7 @@ def test_a_foreign_peer_is_reset_unread_and_never_spawns_a_child(
 ) -> None:
     life = ScriptedLife()
     with listening_with(volume, accepts=1) as listener:
-        client = connect(volume)
+        client = connected(volume)
         client.send(b"x")
         with pytest.raises(StopServingError):
             accept_from(life, listener, FOREIGN_UID)
@@ -144,7 +136,7 @@ def test_a_connection_without_readable_credentials_is_closed_and_ends_the_life(
     life = ScriptedLife()
     monkeypatch.setattr(UnidentifiableConnection, "accepted", [])
     with listening_with(volume, 1, UnidentifiableListener) as listener:
-        connect(volume)
+        connected(volume)
         outcome = accept_from(life, listener, OWN_UID)
 
     assert outcome == LifeEnd.ACCEPT
@@ -160,7 +152,7 @@ def test_uid_zero_is_closed_at_the_accept_loop_even_when_it_is_the_runtime_uid(
 ) -> None:
     life = ScriptedLife()
     with listening_with(volume, 1, RootListener) as listener:
-        client = connect(volume)
+        client = connected(volume)
         with pytest.raises(StopServingError):
             accept_from(life, listener, 0)
         assert client.recv(1) == b""
@@ -173,8 +165,8 @@ def test_a_refused_peer_is_swept_and_the_watchdog_cancelled_before_the_next_acce
 ) -> None:
     life = ScriptedLife()
     with listening_with(volume, accepts=2) as listener:
-        connect(volume)
-        connect(volume)
+        connected(volume)
+        connected(volume)
         with pytest.raises(StopServingError):
             accept_from(life, listener, FOREIGN_UID)
 
@@ -188,7 +180,7 @@ def test_a_kept_life_connection_is_handed_to_a_gated_child_then_swept(
     monkeypatch.setenv("PATH", ADMITTING_PATH)
     life = ScriptedLife(exit_status=exit_status)
     with listening_with(volume, accepts=2) as listener:
-        clients = [connect(volume), connect(volume)]
+        clients = [connected(volume), connected(volume)]
         with pytest.raises(StopServingError):
             accept_from(life, listener, OWN_UID)
         assert [client.recv(1) for client in clients] == [b"", b""]
@@ -213,7 +205,7 @@ def test_the_child_is_told_the_descriptor_of_its_connection_and_inherits_only_it
 ) -> None:
     life = ScriptedLife()
     with listening_with(volume, accepts=1) as listener:
-        connect(volume)
+        connected(volume)
         with pytest.raises(StopServingError):
             accept_from(life, listener, OWN_UID)
 
@@ -255,8 +247,8 @@ def test_a_sweep_that_is_quiet_only_after_its_deadline_ends_the_life_armed(
     )
     late_serving = replace(life.serving(), sweep=partial(sweep, late))
     with listening_with(volume, accepts=2) as listener:
-        connect(volume)
-        connect(volume)
+        connected(volume)
+        connected(volume)
         outcome = worker_serving.accept_connections(listener, OWN_UID, late_serving)
 
     assert outcome == LifeEnd.SWEEP
@@ -293,7 +285,7 @@ def test_an_accepted_step_re_arms_the_watchdog_to_the_emergency_end_from_the_acc
         inspection_takes=inspection_takes,
     )
     with listening_with(volume, accepts=1) as listener:
-        connect(volume)
+        connected(volume)
         accept_from(life, listener, OWN_UID)
 
     assert life.events == [
@@ -312,7 +304,7 @@ def test_an_accepted_step_re_arms_the_watchdog_to_the_emergency_end_from_the_acc
 
 def consume_an_accepted_step(volume: Path, life: ScriptedLife) -> None:
     with listening_with(volume, accepts=1) as listener:
-        connect(volume)
+        connected(volume)
         accept_from(life, listener, OWN_UID)
 
 
@@ -423,7 +415,7 @@ def test_a_failing_step_ends_the_life_and_leaves_the_watchdog_armed(
 ) -> None:
     life = make_life()
     with listening_with(volume, accepts=1) as listener:
-        client = connect(volume)
+        client = connected(volume)
         outcome = accept_from(life, listener, OWN_UID)
         assert client.recv(1) == b""
 
@@ -459,7 +451,7 @@ def test_serve_returns_zero_and_logs_the_name_of_what_ended_the_life_at_its_leve
     )
     thread.start()
     try:
-        connect_when_bound(volume, thread.is_alive).close()
+        connected_when_bound(volume, thread.is_alive).close()
         thread.join(WAIT_SECONDS)
     finally:
         life.spawn_error = OSError("stop")
@@ -476,7 +468,7 @@ def test_a_sweep_that_fails_for_another_reason_surfaces_with_its_error(
 ) -> None:
     life = ScriptedLife(sweep_error=PermissionError("kill refused"))
     with listening_with(volume, accepts=1) as listener:
-        connect(volume)
+        connected(volume)
         with pytest.raises(PermissionError, match="kill refused"):
             accept_from(life, listener, OWN_UID)
 
@@ -529,7 +521,7 @@ def test_serve_returns_zero_and_names_the_accept_fault(
 def test_the_runtime_uid_gets_one_gated_child_per_connection(volume: Path) -> None:
     life = ScriptedLife()
     with listening_with(volume, accepts=CONNECTIONS) as listener:
-        clients = [connect(volume), connect(volume)]
+        clients = [connected(volume), connected(volume)]
         with pytest.raises(StopServingError):
             accept_from(life, listener, OWN_UID)
 
@@ -541,7 +533,7 @@ def test_serve_binds_listens_and_hands_over_connections_until_the_life_ends(
 ) -> None:
     with serving(volume, OWN_UID, admitted=CONNECTIONS) as (thread, handled, outcome):
         for _ in range(CONNECTIONS):
-            client = connect_when_bound(volume, thread.is_alive)
+            client = connected_when_bound(volume, thread.is_alive)
             assert client.recv(1) == b""
             client.close()
         thread.join(WAIT_SECONDS)
@@ -650,7 +642,7 @@ EXPIRED_AT_RELEASE = [
 
 def accept_twice_from(life: ScriptedLife, volume: Path) -> list[bytes]:
     with listening_with(volume, accepts=2) as listener:
-        clients = [connect(volume), connect(volume)]
+        clients = [connected(volume), connected(volume)]
         with pytest.raises(StopServingError):
             accept_from(life, listener, OWN_UID)
         return [client.recv(1) for client in clients]
@@ -673,8 +665,8 @@ def test_a_stalled_header_never_ends_the_life_while_the_sweep_is_quiet(
 ) -> None:
     life = ScriptedLife(headers_stalled=2)
     with listening_with(volume, accepts=2) as listener:
-        connect(volume)
-        connect(volume)
+        connected(volume)
+        connected(volume)
         with pytest.raises(StopServingError):
             accept_from(life, listener, OWN_UID)
 
@@ -704,9 +696,9 @@ def test_serve_cuts_a_stalled_header_off_and_serves_the_next_connection_in_one_l
     )
     thread.start()
     try:
-        first = connect_when_bound(volume, thread.is_alive)
+        first = connected_when_bound(volume, thread.is_alive)
         assert first.recv(1) == b""
-        second = connect(volume)
+        second = connected(volume)
         second.sendall(HELLO)
         assert second.recv(len(STATUS)) == STATUS
         thread.join(WAIT_SECONDS)
@@ -743,7 +735,7 @@ def test_the_header_budget_covers_the_gate_and_the_release_as_well_as_the_wait(
 ) -> None:
     life = ScriptedLife(inspection_takes=inspection_takes, release_takes=release_takes)
     with listening_with(volume, accepts=1) as listener:
-        client = connect(volume)
+        client = connected(volume)
         with pytest.raises(StopServingError):
             accept_from(life, listener, OWN_UID)
         assert client.recv(1) == b""
@@ -758,7 +750,7 @@ def test_the_life_is_kept_after_an_expiry_only_when_the_sweep_is_quiet(
 ) -> None:
     life = ScriptedLife(inspection_takes=HEADER_SECONDS, sweep_quiet=sweep_quiet)
     with listening_with(volume, accepts=1) as listener:
-        connect(volume)
+        connected(volume)
         if sweep_quiet:
             with pytest.raises(StopServingError):
                 accept_from(life, listener, OWN_UID)
@@ -774,7 +766,7 @@ def test_a_stall_that_spends_the_header_budget_before_the_launch_spawns_no_idle_
 ) -> None:
     life = ScriptedLife(arm_takes=HEADER_SECONDS, sweep_quiet=sweep_quiet)
     with listening_with(volume, accepts=1) as listener:
-        client = connect(volume)
+        client = connected(volume)
         if sweep_quiet:
             with pytest.raises(StopServingError):
                 accept_from(life, listener, OWN_UID)
@@ -789,7 +781,7 @@ def test_a_stall_that_spends_the_header_budget_before_the_launch_spawns_no_idle_
 def test_a_gate_mismatch_is_a_gate_end_whatever_the_clock_says(volume: Path) -> None:
     life = ScriptedLife(gate_admits=False, inspection_takes=HEADER_SECONDS)
     with listening_with(volume, accepts=1) as listener:
-        connect(volume)
+        connected(volume)
         outcome = accept_from(life, listener, OWN_UID)
 
     assert outcome == LifeEnd.GATE
