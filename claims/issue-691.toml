@@ -1,0 +1,7 @@
+claim_id = "4ad060cac25746bfac3cfa94415e7cac"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "d3440c0d7af3c145d7270ac7ca226d307393d7eb"
+branch = "claude/issue-691-the-limits-probe-s-many-entries-count-co"
+scope = ["scripts/probe_build_worker/limits/vite.config.mjs", "scripts/probe_build_worker/web_client.py"]
+opened_commit = "26c1874656a883c4f3086f3c86b0f77b070ff4b4"
