@@ -13,7 +13,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"lint": "eslint .",
 		"test": "vitest run --coverage",
-		"drive": "playwright test"
+		"drive": "playwright test",
+		"generate:types": "openapi-typescript src/lib/api/openapi.json -o src/lib/api/types.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "10.0.1",
