@@ -314,10 +314,14 @@ def _loads_the_lobby_app(request: Request) -> bool:
 def _install_lobby_app(lobby: FastAPI, surfaces: _Surfaces) -> None:
     """Answer a page load no route claims with the app's shell.
 
-    It takes the router's not-found place rather than a catch-all route, so a
-    route's own 404 and a wrong method's 405 stay the framework's, and
-    everything that is no page load still gets the framework's 404.
+    The app's built assets are served under `/_app`. The shell takes the
+    router's not-found place rather than a catch-all route, so a route's own
+    404 and a wrong method's 405 stay the framework's, and everything that is
+    no page load still gets the framework's 404.
     """
+    lobby.mount(
+        _APP_ASSETS, StaticFiles(directory=surfaces.shell.assets), name="lobby_app"
+    )
     not_found = lobby.router.default
 
     async def lobby_app_or_not_found(
@@ -332,6 +336,32 @@ def _install_lobby_app(lobby: FastAPI, surfaces: _Surfaces) -> None:
         await not_found(scope, receive, send)
 
     lobby.router.default = lobby_app_or_not_found
+
+
+def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
+    """The library's sign-in routes, and the pages of the talk host's refusals."""
+    auth = surfaces.auth
+    install_sign_in_routes(
+        lobby,
+        paths=LOBBY_SIGN_IN,
+        relying_party=lambda _request: auth.relying_party,
+        admission=auth.admission,
+        transaction=auth.transaction,
+        refused=lambda request, refusal: surfaces.refused_page(
+            request, refusal.page, retry=START_SIGN_IN_PATH
+        ),
+        keeps_id_token=True,
+        max_sessions=None,
+        logout_button_label=lambda request: (
+            surfaces.pages.appearance(request).text.log_out
+        ),
+    )
+    for refusal in RefusalPage:
+        lobby.add_api_route(
+            talk_sign_in_refusal_path(refusal),
+            surfaces.talk_sign_in_refusal_page(refusal),
+            methods=["GET"],
+        )
 
 
 def _install_middleware(
@@ -412,25 +442,7 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     install_web_auth_config(lobby, auth.config)
     _install_middleware(lobby, auth, sessions, private.admin_people)
     lobby.add_api_route(_LOBBY, surfaces.home, methods=["GET"])
-    install_sign_in_routes(
-        lobby,
-        paths=LOBBY_SIGN_IN,
-        relying_party=lambda _request: auth.relying_party,
-        admission=auth.admission,
-        transaction=auth.transaction,
-        refused=lambda request, refusal: surfaces.refused_page(
-            request, refusal.page, retry=START_SIGN_IN_PATH
-        ),
-        keeps_id_token=True,
-        max_sessions=None,
-        logout_button_label=lambda request: pages.appearance(request).text.log_out,
-    )
-    for refusal in RefusalPage:
-        lobby.add_api_route(
-            talk_sign_in_refusal_path(refusal),
-            surfaces.talk_sign_in_refusal_page(refusal),
-            methods=["GET"],
-        )
+    _install_sign_in(lobby, surfaces)
     add_health_route(lobby)
     lobby.include_router(_session_routes(pages, auth))
     lobby.include_router(deck_list_routes(decks=decks))
@@ -441,7 +453,6 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     lobby.include_router(source_api_routes(decks=decks))
     add_deck_pages(lobby, decks=decks, pages=pages, talk_origin=auth.talk_origin)
     lobby.mount(_STATIC_PATH, StaticFiles(directory=_STATIC_DIR), name="static")
-    lobby.mount(_APP_ASSETS, StaticFiles(directory=shell.assets), name="lobby_app")
     lobby.include_router(fetch_hook(decks=decks))
     if private.admin_people is not None:
         lobby.include_router(
