@@ -100,7 +100,7 @@ def stored_expiry(database: Path, session_id: str) -> str:
 
 
 def test_the_database_keeps_its_write_ahead_log(database: Path) -> None:
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
 
     assert mode == "wal"
@@ -323,7 +323,7 @@ def test_creating_the_tables_twice_leaves_the_people_as_they_were(
 def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_address(
     database: Path,
 ) -> None:
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         user_columns = [
             column[1] for column in connection.execute("PRAGMA table_info(users)")
         ]

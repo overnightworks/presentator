@@ -2,6 +2,7 @@
 
 import sqlite3
 from collections.abc import Callable
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -113,7 +114,7 @@ def an_attempt(failure: BuildFailure | None) -> BuildAttempt:
 
 
 def columns_of(database: Path) -> list[str]:
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         found = connection.execute("SELECT name FROM pragma_table_info('decks')")
         return [name for (name,) in found]
 
@@ -147,7 +148,7 @@ def test_a_switch_over_clears_the_attempt_with_its_reason_and_counts(
     assert kept.attempt is None
     assert kept.build == a_build(tmp_path)
 
-    with sqlite3.connect(store.database) as connection:
+    with closing(sqlite3.connect(store.database)) as connection, connection:
         left = connection.execute(
             "SELECT attempt_failure, attempt_reason, attempt_written_megabytes,"
             " attempt_allowed_megabytes, attempt_allowed_entries FROM decks"
@@ -159,7 +160,7 @@ def test_a_failed_attempt_without_a_reason_is_refused_loudly(tmp_path: Path) -> 
     store = a_store(tmp_path)
     store.put(a_deck())
     store.put_attempt(_SLUG, an_attempt(BuildFailure.without_words()))
-    with sqlite3.connect(store.database) as connection:
+    with closing(sqlite3.connect(store.database)) as connection, connection:
         connection.execute("UPDATE decks SET attempt_reason = NULL")
 
     with pytest.raises(ValueError, match="carries no reason"):
@@ -202,7 +203,7 @@ def test_a_combination_a_reason_does_not_name_cannot_be_built(
 def an_old_file_with_every_kind_of_row(tmp_path: Path) -> Path:
     """A file the release before this one made, with a row of every kind."""
     database = tmp_path / "presentator.sqlite3"
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         connection.execute(_DECKS_BEFORE)
         old_rows = [
             ("failed-with-text", "failed", _TOOLCHAIN_TEXT),
@@ -238,7 +239,7 @@ def an_old_file_with_every_kind_of_row(tmp_path: Path) -> Path:
 
 
 def everything_in(database: Path, statement: str) -> list[tuple[Any, ...]]:
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         return connection.execute(statement).fetchall()
 
 
@@ -327,7 +328,7 @@ def test_the_release_before_reads_and_writes_an_upgraded_file_as_before(
     create_tables(database)
 
     read = everything_in(database, _READ_BEFORE)
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         connection.execute(
             _PUT_ATTEMPT_BEFORE,
             (COMMIT, _TRIED_AT.isoformat(), "failed", "x", "running"),
@@ -342,7 +343,7 @@ def test_the_release_before_reads_and_writes_an_upgraded_file_as_before(
 
 def run_the_release_before(database: Path, slug: str, failure: str | None) -> None:
     """The release before this one ends a run: its statement knows no reason."""
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         connection.execute(
             _PUT_ATTEMPT_BEFORE,
             (
@@ -379,7 +380,7 @@ def test_a_failure_the_release_before_wrote_replaces_a_stale_server_reason(
 ) -> None:
     database = an_old_file_with_every_kind_of_row(tmp_path)
     create_tables(database)
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         connection.execute(
             "UPDATE decks SET attempt_reason = 'output-megabytes',"
             " attempt_written_megabytes = 9, attempt_allowed_megabytes = 5"
@@ -397,7 +398,7 @@ def test_a_run_the_release_before_started_carries_no_stale_reason(
 ) -> None:
     database = an_old_file_with_every_kind_of_row(tmp_path)
     create_tables(database)
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         connection.execute(
             "UPDATE decks SET attempt_reason = 'output-megabytes',"
             " attempt_written_megabytes = 9, attempt_allowed_megabytes = 5"
@@ -425,7 +426,7 @@ def test_a_stored_text_is_read_as_the_failure_that_said_would_make(
     database = an_old_file_with_every_kind_of_row(tmp_path)
     create_tables(database)
     run_the_release_before(database, "running", "x")
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         connection.execute(
             "UPDATE decks SET attempt_failure = ? WHERE slug = 'running'", (stored,)
         )
@@ -455,7 +456,7 @@ def test_a_table_missing_only_some_of_the_columns_gets_each_missing_one(
     tmp_path: Path,
 ) -> None:
     database = an_old_file_with_every_kind_of_row(tmp_path)
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         connection.execute("ALTER TABLE decks ADD COLUMN attempt_reason TEXT")
     fresh = tmp_path / "fresh.sqlite3"
     create_tables(fresh)
@@ -473,7 +474,7 @@ def test_a_failure_the_release_before_rewrote_without_words_is_read_as_none(
     store.put(a_deck())
     store.put_attempt(_SLUG, an_attempt(BuildFailure.said("words")))
     database = tmp_path / "presentator.sqlite3"
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         connection.execute("UPDATE decks SET attempt_failure = ?", (text,))
 
     create_tables(database)
