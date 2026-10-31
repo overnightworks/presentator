@@ -1,0 +1,7 @@
+claim_id = "ac20c58addf74f02be1bde5b98d5f479"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "708002c504cf986c6f4d77871b43858a31a283e6"
+branch = "claude/issue-700-adopt-quality-v0-9-1-a-contract-change-t"
+scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml"]
+opened_commit = "1aadf54e95eec37f777c5ed25b3030b3d8736b05"
