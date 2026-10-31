@@ -1,0 +1,7 @@
+claim_id = "db46955dd6de41549ad07d3be71848b8"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "d7ad52a81500a44b80fc4039eaf1ae7c57825862"
+branch = "claude/issue-692-the-web-s-toolchain-path-and-the-worker"
+scope = ["tests/presentator/host/test_worker_settings.py"]
+opened_commit = "dab5d9d4f12e8d281af32bb2ec4e6c70afd91784"
