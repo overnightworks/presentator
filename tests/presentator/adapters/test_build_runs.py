@@ -184,6 +184,21 @@ def test_a_run_that_cannot_be_looked_at_is_not_reported_gone(
     assert "unseen" in caplog.text
 
 
+def test_a_directory_that_cannot_be_read_is_not_taken_for_an_empty_run(
+    root: Path,
+) -> None:
+    """An unreadable directory is not known to hold nothing."""
+    (root / "closed").mkdir()
+    (root / "closed").chmod(0o000)
+    try:
+        assert listed_runs(root) == frozenset()
+        assert not removed_run(root, "closed")
+    finally:
+        (root / "closed").chmod(0o700)
+
+    assert (root / "closed").is_dir()
+
+
 def test_removing_a_run_that_is_already_gone_succeeds(root: Path) -> None:
     """#505 invariant: remove is idempotent."""
     assert removed_run(root, "never-there")
