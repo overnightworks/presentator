@@ -9,6 +9,7 @@ excuse.
 from presentator.api.auth import DeckRow
 from presentator.api.copresenter import AskRequest
 from presentator.api.decks import Banner, TalkFiles
+from presentator.api.lobby_shell import _InlineScripts
 from presentator.api.problems import ValidationFault
 from presentator.api.sources import (
     SourceDeckRow,
@@ -32,6 +33,11 @@ from tests.presentator.host.test_worker_settings import no_worker_variables
 # in the test that stands the server up ever calls it itself.
 DumbHttpHandler.log_message
 RespondingHandler.log_message
+
+# `HTMLParser.feed` dispatches to these by name; nothing calls them directly.
+_InlineScripts.handle_starttag
+_InlineScripts.handle_data
+_InlineScripts.handle_endtag
 
 # `presentator/api/templates/home.html` renders it in the "Changed" column.
 DeckRow.changed

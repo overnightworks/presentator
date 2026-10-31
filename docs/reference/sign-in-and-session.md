@@ -146,8 +146,9 @@ Every lobby page, signed in or out, ends with two links: Impressum goes to the
 operator's one Impressum at `https://hallucinai.de/impressum`, Datenschutz to
 `https://hallucinai.de/datenschutz#presentator`. Presentator serves no privacy
 page: `/datenschutz` is no route on either host, so a signed-in page load on
-the lobby gets the lobby app, whose router shows not-found, and any other
-caller gets 404, and a signed-out one is sent to sign-in like any other non-public path. The
+the lobby gets the lobby app, whose router shows not-found; any other
+signed-in caller, on either host, gets 404; a signed-out one is sent to
+sign-in like any other non-public path. The
 German text is the section `legal/datenschutz.html`, which edge assembles into the central page; a test
 holds its numbers equal to the code constants
 ([ADR 0015](../decisions/0015-public-like-songmaker-own-login.md)).
