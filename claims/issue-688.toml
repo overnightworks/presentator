@@ -1,7 +1,0 @@
-claim_id = "41c281b4df2c46dab2a8e13839e6b919"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "c2d010031d965a438de853bfc522e349e538b763"
-branch = "claude/issue-688-a-resource-the-tests-leave-to-the-garbag"
-scope = ["docs/TESTING.md", "pyproject.toml", "tests/scripts/test_probe_build_worker_lives_handshake.py"]
-opened_commit = "5a4e4c81d9976a011fb6c463139bc9b156c3531a"
