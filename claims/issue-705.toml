@@ -1,0 +1,7 @@
+claim_id = "1946244c9e6d4f80a80db7e8d2079a97"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "8a1c0436e397c9211fbf9df4563c17404492fea0"
+branch = "claude/issue-705-a-build-run-left-half-removed-is-finishe"
+scope = ["docs/reference/builds.md", "src/presentator/adapters/build_runs.py", "tests/presentator/adapters/test_build_runs.py"]
+opened_commit = "d5554ba37e74fed4dd77dd76c4a8054a6afb51a8"
