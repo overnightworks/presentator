@@ -53,9 +53,12 @@ A row delivers from the run of its talk and the run of its PDF, and a deck
 marked removed still counts until its row is deleted
 ([decks](decks.md#what-counts-as-a-deck)), so none of them is touched before.
 A run is a real directory directly under the root that holds a real `out`
-directory; a stored path counts only as exactly `<root>/<name>/out/talk` or
-`<root>/<name>/out/deck.pdf`, read as an absolute path without following links.
-Anything else under the root is left alone and logged.
+directory, or that is empty, which is what a removal leaves when it could empty
+the run but not take it away; the next attempt finishes it. A stored path
+counts only as exactly `<root>/<name>/out/talk` or `<root>/<name>/out/deck.pdf`,
+read as an absolute path without following links.
+Anything else under the root, such as a link, a file or a directory that holds
+something but no `out`, is left alone and logged.
 
 A run and everything in it are readable by others, so that edge's backup of the
 volume, which runs as another user, can read it. The exception is a

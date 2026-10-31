@@ -85,6 +85,7 @@ def test_only_real_runs_are_listed_and_everything_else_is_left_alone(
     a_run(root, "real")
     (root / "a-file").write_text("x", encoding="utf-8")
     (root / "no-output").mkdir()
+    (root / "no-output" / "keep").write_text("x", encoding="utf-8")
     (root / "linked-run").symlink_to(tmp_path)
     (root / "linked-out").mkdir()
     (root / "linked-out" / "out").symlink_to(tmp_path)
@@ -97,6 +98,34 @@ def test_only_real_runs_are_listed_and_everything_else_is_left_alone(
         "no-output",
         "real",
     ]
+
+
+def test_an_empty_directory_under_the_root_is_a_run_that_is_listed_and_removed(
+    root: Path,
+) -> None:
+    """#705: an empty directory holds nothing to lose and is a run's last state."""
+    (root / "empty").mkdir()
+
+    assert listed_runs(root) == {"empty"}
+    assert removed_run(root, "empty")
+
+    assert not (root / "empty").exists()
+
+
+def test_a_removal_that_stopped_halfway_is_finished_by_the_next_attempt(
+    root: Path,
+) -> None:
+    """#705: a root closed to writing lets a run be emptied but not taken away."""
+    a_run(root, "halfway")
+    root.chmod(0o500)
+    try:
+        assert not removed_run(root, "halfway")
+    finally:
+        root.chmod(0o700)
+
+    assert listed_runs(root) == {"halfway"}
+    assert removed_run(root, "halfway")
+    assert not (root / "halfway").exists()
 
 
 def test_a_root_that_cannot_be_listed_lists_nothing_at_all(tmp_path: Path) -> None:
