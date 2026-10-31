@@ -106,6 +106,13 @@ the operator asked. CI on the pull request is the full run and the gate. What
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml). The coverage floor is
 the configuration above, not a number restated here.
 
+A resource left to the garbage collector fails the run: pytest's configuration
+(`[tool.pytest.ini_options]` in `pyproject.toml`) turns a `ResourceWarning`, and
+any exception a finalizer swallows, into a failure, which pytest reports as an
+unraisable exception naming the leaked object. The failure can land on a later
+test than the one that leaked, because the collector runs when it runs.
+`PYTHONTRACEMALLOC=25` on a targeted run shows where that object was allocated.
+
 Targeted browser proofs and live probe stacks follow the global contract's
 probe-stack rules; the widths a surface proof drives are taken from the picture
 at [mockups/README.md](mockups/README.md).
