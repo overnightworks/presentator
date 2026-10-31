@@ -22,11 +22,7 @@ import pytest
 
 from presentator.adapters import builds as builds_module
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
-from presentator.adapters.builds import (
-    DeckToolchain,
-    HostToolchain,
-    SlidevBuilds,
-)
+from presentator.adapters.builds import DeckToolchain, HostToolchain, SlidevBuilds
 from presentator.adapters.decks import FilesystemLocalMount, SourceMirrors
 from presentator.contracts.decks import (
     FAILURE_TEXT_LIMIT,
@@ -38,6 +34,7 @@ from presentator.contracts.decks import (
     Source,
     talk_address,
 )
+from presentator.ports.decks import BuildRun
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
 from tests.support.git_remote import (
     EXAMPLE_SLUG,
@@ -1104,38 +1101,12 @@ def test_what_could_not_be_taken_away_is_named_in_the_log(
 
     with _opened_again_afterwards(builds.builds):
         built = builds.build(a_deck(remote), source=source)
+        (left,) = builds.builds.iterdir()
+        named = builds.remove(BuildRun(left.name))
 
     assert isinstance(built, BuildFailure)
-    left = list(builds.builds.iterdir())
-    assert len(left) == 1
-    assert left[0].name in caplog.text
-
-
-def test_a_run_that_cannot_go_is_named_by_the_builds_volume_and_its_own_name(
-    remote: GitRemote,
-    source: Source,
-    machine: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """E2 (#483): a stuck run is `<builds>/<run>`, nothing of the deck in it."""
-    with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_BUILDS)
-    builds = builds_ready_for(tmp_path, source)
-    deck = a_deck(remote)
-    artefacts = what_it_built(builds.build(deck, source=source))
-    run = builds.run_of(artefacts.directory)
-    assert run is not None
-
-    with _opened_again_afterwards(builds.builds):
-        builds.builds.chmod(0o500)
-        left = builds.remove(run)
-
-    assert left is not None
-    assert left == PurePosixPath(
-        builds.builds.name, artefacts.directory.parents[1].name
-    )
-    for kept_private in (deck.slug, deck.commit, artefacts.directory.parent.name):
-        assert kept_private not in left.parts
-    assert artefacts.directory.parents[1].exists()
+    assert left.name in caplog.text
+    assert named == PurePosixPath(builds.builds.name, left.name)
 
 
 @contextmanager

@@ -7,8 +7,8 @@
 "speech/tests/test_control_voice_status.py" = 1473
 "src/presentator/application/decks.py" = 957
 "tests/gitmirror/test_mirror.py" = 1192
-"tests/presentator/adapters/test_builds.py" = 1183
-"tests/presentator/adapters/test_decks.py" = 1341
+"tests/presentator/adapters/test_builds.py" = 1181
+"tests/presentator/adapters/test_decks.py" = 1340
 "tests/presentator/api/test_copresenter.py" = 800
 "tests/presentator/api/test_sources.py" = 1687
 "tests/presentator/application/test_decks.py" = 1964

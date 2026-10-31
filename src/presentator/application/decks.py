@@ -110,12 +110,7 @@ class SourceRemovalRefusal(StrEnum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SourceRemovalRefused:
-    """A confirmed removal that deleted no row: why, and what stayed on disk.
-
-    Each path is relative to the data volume. `builds` is nothing where no run
-    was attempted, because a stored build lies where no run can be placed; an
-    empty tuple means every run went.
-    """
+    """A removal that deleted no row; `builds` is nothing where none was attempted."""
 
     reason: SourceRemovalRefusal
     mirror: PurePosixPath | None
@@ -124,13 +119,7 @@ class SourceRemovalRefused:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SourceRemovalStale:
-    """A confirm whose counts no longer match what removal would take.
-
-    Nothing was deleted: a refresh moved the numbers between the confirm
-    being shown and being posted, so the fresh count travels back for the
-    confirm to be shown again rather than a person's earlier yes reaching
-    past what they actually agreed to.
-    """
+    """Counts that moved since the confirm: nothing deleted, the fresh ones go back."""
 
     current: SourceRemoval
 
@@ -389,11 +378,12 @@ class Decks:
     def removal(self, name: str) -> SourceRemoval | None:
         """What removing that source would take with it, or nothing if unknown.
 
-        Read-only: nothing changes until `remove_source` is called with the
-        same name, once a person has seen this and confirmed it (R1).
+        Read-only: nothing changes until a person confirmed it (R1).
         """
         source = self._named(name)
-        return None if source is None else self._preview(source)
+        if source is None:
+            return None
+        return self._preview_of(source, self.store.for_source(source.id))
 
     def remove_source(
         self,
@@ -404,17 +394,14 @@ class Decks:
     ) -> SourceRemoval | SourceRemovalRefused | SourceRemovalStale | None:
         """Delete that source, its decks, its runs, and everything they built.
 
-        Waits for a refresh already under way, so nothing of this source's decks
-        is still building when their directories go (R1). The name and the
-        counts are read inside the lock, so a source removed meanwhile is
-        unknown and a refresh that changed the counts since is not deleted under
-        a number nobody confirmed: the fresh count is handed back. Disk
-        goes first: the mirror and every run a deck delivers from are taken
-        away before a row is touched, and if either survives, or a build lies
-        where no run can be placed, nothing is deleted and the source stays
-        taken rather than a leftover becoming an address a later add reopens
-        with a new secret (R3); only a clean disk frees the URL (R2). The
-        refusal names every directory that stayed.
+        Waits for a refresh under way, so nothing of this source is still
+        building when its directories go (R1). Name and counts are read inside
+        the lock: a source removed meanwhile is unknown, and changed counts are
+        handed back rather than deleted under a number nobody confirmed. Disk
+        goes first: if the mirror or a run survives, or a build lies where no
+        run can be placed, no row is deleted and the refusal names what stayed,
+        so the source stays taken rather than a leftover becoming an address a
+        later add reopens with a new secret (R3); a clean disk frees the URL (R2).
         """
         with self.one_at_a_time:
             source = self._named(name)
@@ -427,30 +414,24 @@ class Decks:
                 or preview.run_count != expected_run_count
             ):
                 return SourceRemovalStale(current=preview)
-            mirror_left = self.folders.forget(source)
-            builds_left = builds_removed(self.builder, carried)
-            if mirror_left is not None or builds_left != ():
-                return SourceRemovalRefused(
-                    reason=SourceRemovalRefusal.DISK_LEFTOVER,
-                    mirror=mirror_left,
-                    builds=builds_left,
-                )
+            left = SourceRemovalRefused(
+                reason=SourceRemovalRefusal.DISK_LEFTOVER,
+                mirror=self.folders.forget(source),
+                builds=builds_removed(self.builder, carried),
+            )
+            if left.mirror is not None or left.builds != ():
+                return left
             self.store.remove_for_source(source.id)
             self.source_runs.remove_for_source(source.id)
             self.sources.remove(source.id)
         return preview
 
-    def _preview(self, source: Source) -> SourceRemoval:
-        """What removing this source would take with it, read but not touched."""
-        return self._preview_of(source, self.store.for_source(source.id))
-
     def _preview_of(self, source: Source, carried: tuple[Deck, ...]) -> SourceRemoval:
-        """The same preview, over decks already read, so a caller reuses one read.
+        """What removing this source would take with it, over decks already read.
 
-        `recent` is every run the source has: the table itself keeps no more
-        than that bound per source. `carried` is every deck this source has
-        ever carried, marked removed or not, because that is the set a
-        removal actually deletes (`DeckStore.for_source`).
+        `recent` is every run the source has, the table keeping no more per
+        source. `carried` is every deck this source ever carried, marked removed
+        or not: the set a removal deletes (`DeckStore.for_source`).
         """
         return SourceRemoval(
             name=source.name,

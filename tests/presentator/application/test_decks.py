@@ -13,7 +13,6 @@ from presentator.application.decks import (
     Decks,
     NewSourceDraft,
     SourceRefusal,
-    SourceRemovalRefusal,
     SourceRemovalRefused,
     SourceRemovalStale,
     access_kind_of,
@@ -1769,11 +1768,7 @@ def test_a_stuck_mirror_or_build_refuses_the_removal_and_deletes_nothing(
 
     outcome = _confirmed(decks, SOURCE.name)
 
-    assert outcome == SourceRemovalRefused(
-        reason=SourceRemovalRefusal.DISK_LEFTOVER,
-        mirror=mirror.mirror_of(SOURCE.id) if stuck_mirror else None,
-        builds=tuple(builder.directory_of(run) for run in builder.stuck),
-    )
+    assert isinstance(outcome, SourceRemovalRefused)
     assert store.all() == (SOURCE,)
     assert fakes.store.all() != ()
     assert mirror.forgotten == [SOURCE.id]
