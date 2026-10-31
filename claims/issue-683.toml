@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "fe657cca62167d86da9a983312d0e8bc484dd241"
 branch = "claude/issue-683-the-lobby-s-sveltekit-app-scaffold-servi"
-scope = [".github/workflows/ci.yml", "Dockerfile", "docs/TESTING.md", "docs/decisions", "docs/mockups", "docs/reference", "frontend", "legal/datenschutz.html", "quality/config.toml", "sonar-project.properties", "src/presentator/api", "src/presentator/host", "tests/presentator/api"]
+scope = [".github/dependabot.yml", ".github/workflows/ci.yml", "Dockerfile", "docs/TESTING.md", "docs/decisions", "docs/mockups", "docs/reference", "frontend", "legal/datenschutz.html", "quality/config.toml", "sonar-project.properties", "src/presentator/api", "src/presentator/host", "tests/presentator/api", "tests/presentator/host"]
 opened_commit = "66db92b1d12cd37c2edb70a9b07ac39bcc661b5b"
 whole_reason = "A bootstrap cannot be served or proven in halves: the app, its serving under the CSP, its CI job and its first page prove each other (#185 F1a)."
