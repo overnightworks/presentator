@@ -11,6 +11,11 @@ minimumReleaseAge: 20160
 # Risk: these two exact versions skip the age gate; any other version still
 # waits. Drop the exclude on 2026-11-11, when both are two weeks old, and the
 # override together with it once every parent itself depends on minimatch >= 11.0.1.
+# minimatch 11 breaks one call of @redocly/openapi-core: lib/utils.js calls
+# require('minimatch') as a function, which only happens for remote specs with
+# header matching. The lobby's type generation reads a local file and never
+# reaches it; keep that in mind before pointing it at a remote spec or removing
+# this stopgap.
 minimumReleaseAgeExclude:
   - minimatch@11.0.3
   - "@isaacs/nonrecursive-glob-match@1.0.3"

@@ -191,7 +191,9 @@ def build(case: str, *steps: str) -> Outcome:
 def web_answers() -> bool:
     """Whether the signed-out page answers 200 over the published port."""
     host = urlsplit(os.environ["PRESENTATOR_PUBLIC_ORIGIN"]).hostname or ""
-    request = urllib.request.Request(ROUTE, headers={"Host": host})
+    request = urllib.request.Request(
+        ROUTE, headers={"Host": host, "Accept": "text/html"}
+    )
     try:
         with urllib.request.urlopen(request, timeout=5) as answer:  # noqa: S310 - the URL is the probe stack's own published route over http
             return bool(answer.status == HTTPStatus.OK)
