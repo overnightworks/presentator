@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import RedirectResponse
 from starlette.types import Receive, Scope, Send
 from webauth.config import WebAuthConfig, install_web_auth_config
-from webauth.middleware.bearer_gate import BearerGate, PersonPaths
+from webauth.middleware.bearer_gate import BearerGate, MachinePaths, PersonPaths
 from webauth.middleware.session_gate import SessionGate
 from webauth.middleware.stack import install_web_auth_middleware
 from webauth.oidc import OidcRelyingParty
@@ -378,12 +378,14 @@ def _install_middleware(
 
 
 def _bearer_gate(auth: InstalledAuth, admin: AdminPeople) -> BearerGate:
+    parties = AuthorizedParties(admin.admitted_clients)
     return BearerGate(
-        paths=PathRules(prefixes=(ADMIN_PREFIX,)),
         relying_party=auth.relying_party,
         admission=auth.admission,
-        authorized_parties=AuthorizedParties(admin.admitted_clients),
-        person_paths=PersonPaths(PathRules(prefixes=(_PERSON_API,)), auth.transaction),
+        machine_paths=MachinePaths(PathRules(prefixes=(ADMIN_PREFIX,)), parties),
+        person_paths=PersonPaths(
+            PathRules(prefixes=(_PERSON_API,)), parties, auth.transaction
+        ),
     )
 
 
