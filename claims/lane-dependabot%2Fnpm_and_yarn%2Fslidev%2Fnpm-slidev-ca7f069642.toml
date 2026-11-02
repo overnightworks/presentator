@@ -1,7 +1,0 @@
-claim_id = "e0575c0f6d7d4df6888b6379687d2350"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "47742a8ac8355d1010504791ec96d0aae4e36e55"
-branch = "dependabot/npm_and_yarn/slidev/npm-slidev-ca7f069642"
-scope = ["slidev/package.json", "slidev/pnpm-lock.yaml"]
-opened_commit = "60b595f0206c686fba5e1feaf1203cd5a37425c2"
