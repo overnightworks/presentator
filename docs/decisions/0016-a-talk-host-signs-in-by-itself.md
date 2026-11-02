@@ -43,7 +43,8 @@ reachable under the other's name.
 - **A refusal shows on the lobby.** The talk host has no page of its own. A
   refused talk sign-in is a redirect to `/login/talk/no-access` or
   `/login/talk/login-failed` on the lobby, whose Try again restarts the
-  sign-in at the talk host.
+  sign-in at the talk host. Both addresses are lobby app routes that answer
+  under 403, like the lobby's own `/login/no-access` and `/login/login-failed`.
 - **One owner check.** The talk host serves a talk through the owner-checked
   `built_talk` and compares no owner itself; the lobby serves no talk.
 

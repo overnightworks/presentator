@@ -20,9 +20,12 @@ sign-in, and no password is stored.
   `/apps/presentator` (admins: `/apps/presentator/admin`), opens one session,
   sets the cookies once and lands on the requested path or `/`. The groups
   mapper must send full paths (`full.path` on).
-- A person who signs in at Keycloak but is not in that group sees "No access"
-  (Log out and Back, nothing written). Every other refused sign-in shows one
-  "Login failed" page with a Try again link. A failing store answers 500 and
+- A refused sign-in is a 303 to `/login/no-access` (a person who signs in at
+  Keycloak but is not in that group; Log out, nothing written) or to
+  `/login/login-failed` (every other refusal; Try again), and the library's
+  pending-login cookie deletion rides on it. Both addresses are public and
+  answer the lobby app under 403, which renders the page from the address. A
+  failing store answers 500 and
   leaves no account, no session and no log line behind: the sign-in is one
   transaction.
 - A sign-in writes an INFO log line when it creates an account or changes its

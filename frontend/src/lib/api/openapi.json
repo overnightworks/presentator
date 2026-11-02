@@ -715,36 +715,12 @@
             "title": "Log Out",
             "type": "string"
           },
-          "login_failed_explanation": {
-            "title": "Login Failed Explanation",
-            "type": "string"
-          },
-          "login_failed_retry": {
-            "title": "Login Failed Retry",
-            "type": "string"
-          },
-          "login_failed_title": {
-            "title": "Login Failed Title",
-            "type": "string"
-          },
           "menu_account": {
             "title": "Menu Account",
             "type": "string"
           },
           "menu_theme": {
             "title": "Menu Theme",
-            "type": "string"
-          },
-          "no_access_back": {
-            "title": "No Access Back",
-            "type": "string"
-          },
-          "no_access_explanation": {
-            "title": "No Access Explanation",
-            "type": "string"
-          },
-          "no_access_title": {
-            "title": "No Access Title",
             "type": "string"
           },
           "role_admin": {
@@ -1306,12 +1282,6 @@
           "theme_dark",
           "role_admin",
           "role_user",
-          "login_failed_title",
-          "login_failed_explanation",
-          "login_failed_retry",
-          "no_access_title",
-          "no_access_explanation",
-          "no_access_back",
           "footer_impressum",
           "footer_datenschutz",
           "decks_title",

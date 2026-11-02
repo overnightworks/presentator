@@ -1,4 +1,4 @@
 import { readSession } from '#lib/api/session.ts';
-import type { PageLoad } from './$types';
+import type { LayoutLoad } from './$types';
 
-export const load: PageLoad = async ({ fetch }) => ({ session: await readSession(fetch) });
+export const load: LayoutLoad = async ({ fetch }) => ({ session: await readSession(fetch) });

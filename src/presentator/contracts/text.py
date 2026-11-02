@@ -24,12 +24,6 @@ class LobbyText:
     theme_dark: str
     role_admin: str
     role_user: str
-    login_failed_title: str
-    login_failed_explanation: str
-    login_failed_retry: str
-    no_access_title: str
-    no_access_explanation: str
-    no_access_back: str
     footer_impressum: str
     footer_datenschutz: str
     decks_title: str
