@@ -17,6 +17,7 @@ from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import RedirectResponse
 from starlette.types import Receive, Scope, Send
 from webauth.config import WebAuthConfig, install_web_auth_config
 from webauth.middleware.bearer_gate import BearerGate, PersonPaths
@@ -109,6 +110,11 @@ _PERSON_API: Final = "/api/"
 # logout is open and exempt from the origin check through the sign-in paths.
 # `/setup` is a retired address: it answers 404 to everyone, so a signed-out
 # reader is not sent to a login for a page that does not exist.
+_REFUSAL_PATHS: Final = frozenset(
+    path
+    for refusal in RefusalPage
+    for path in (sign_in_refusal_path(refusal), talk_sign_in_refusal_path(refusal))
+)
 _SERVER_CALLS: Final = PathRules(prefixes=(HOOK_CALLS,))
 _PUBLIC_RULES: Final = (
     PublicRule(
@@ -117,8 +123,7 @@ _PUBLIC_RULES: Final = (
                 {
                     LOGIN_PATH,
                     _SETUP,
-                    *(sign_in_refusal_path(refusal) for refusal in RefusalPage),
-                    *(talk_sign_in_refusal_path(refusal) for refusal in RefusalPage),
+                    *_REFUSAL_PATHS,
                 }
             )
         )
@@ -313,12 +318,6 @@ def _install_lobby_app(lobby: FastAPI, surfaces: _Surfaces) -> None:
     lobby.router.default = lobby_app_or_not_found
 
 
-def _see_other(address: str) -> Response:
-    answer = Response(status_code=HTTPStatus.SEE_OTHER)
-    answer.headers["location"] = address
-    return answer
-
-
 def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
     """The library's sign-in routes, and the 403 shell at every refusal address."""
     auth = surfaces.auth
@@ -328,8 +327,8 @@ def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
         relying_party=lambda _request: auth.relying_party,
         admission=auth.admission,
         transaction=auth.transaction,
-        refused=lambda _request, refusal: _see_other(
-            sign_in_refusal_path(refusal.page)
+        refused=lambda _request, refusal: RedirectResponse(
+            sign_in_refusal_path(refusal.page), status_code=HTTPStatus.SEE_OTHER
         ),
         keeps_id_token=True,
         max_sessions=None,
@@ -337,9 +336,8 @@ def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
             surfaces.pages.appearance(request).text.log_out
         ),
     )
-    for refusal in RefusalPage:
-        for path in (sign_in_refusal_path(refusal), talk_sign_in_refusal_path(refusal)):
-            lobby.add_api_route(path, surfaces.refusal_page, methods=["GET"])
+    for path in _REFUSAL_PATHS:
+        lobby.add_api_route(path, surfaces.refusal_page, methods=["GET"])
 
 
 def _install_middleware(
@@ -413,7 +411,8 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
 
     The fetch hook always stands under `/sources/`; a call that cannot name a
     stored source and its secret is answered alike, and GET stays behind the
-    session. The app's shell answers only what no route claims.
+    session. The app's shell answers what no route claims, and the refusal
+    addresses under 403.
     """
     surfaces = _Surfaces(decks=decks, pages=pages, auth=auth, shell=shell)
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
