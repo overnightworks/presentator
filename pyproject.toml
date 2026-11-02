@@ -13,7 +13,7 @@ dependencies = [
     "fastapi==0.162.0",
     "httpx2[ws]==2.16.0",
     "jinja2==3.1.6",
-    "overnightworks-agent-runtime-client @ git+https://github.com/overnightworks/agent-runtime@v0.13.0#subdirectory=packages/client",
+    "overnightworks-agent-runtime-client[backend] @ git+https://github.com/overnightworks/agent-runtime@v0.16.0#subdirectory=packages/client",
     "overnightworks-webauth @ git+https://github.com/overnightworks/webauth@v0.27.0",
     "pydantic-settings==2.16.2",
     "python-multipart==0.0.32",

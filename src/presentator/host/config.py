@@ -5,7 +5,7 @@ import threading
 from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
-from typing import Annotated, Final, Self
+from typing import Annotated, Final, Literal, Self
 from urllib.parse import urlsplit
 
 from pydantic import (
@@ -207,6 +207,10 @@ class Settings(BaseSettings, env_prefix=ENVIRONMENT_PREFIX, env_file=".env"):
     # The scope the workload grant asks for, so the token it gets names the agent
     # service as its audience. It is a deployment fact: no default.
     agent_service_scope: Annotated[str, AfterValidator(_one_scope_token)]
+    # What answers the co-presenter. The service is the recipient the privacy text
+    # names, so a backend that sends the question elsewhere needs its own sentence
+    # there before this list grows.
+    agent_backend: Literal["service"] = "service"
     speech_socket: Annotated[Path, AfterValidator(_an_absolute_path)] = Path(
         "/run/presentator-speech/speech.sock"
     )
