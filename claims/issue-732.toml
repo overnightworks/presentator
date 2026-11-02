@@ -1,0 +1,8 @@
+claim_id = "618b4071f8fa44819cfc9a06ae178ce8"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "232f80a2a6c838a71c013110df57c3259d085a5a"
+branch = "claude/issue-732-the-session-names-the-central-account-ad"
+scope = ["docs/reference/sign-in-and-session.md", "frontend/src/lib/api", "quality/baseline.toml", "quality/config.toml", "src/presentator/api/auth.py", "src/presentator/api/session_api.py", "src/presentator/host/main.py", "tests/presentator/api", "tests/support/lobby.py"]
+opened_commit = "b3d2984c60adcb75dc631b1f432cfe2ce3a558ee"
+whole_reason = "The wire field, its generated client and its proof are one change: a field without its client fails the lobby job's regeneration check."
