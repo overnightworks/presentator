@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NoReturn, Self
 from uuid import UUID, uuid4
 
+from agent_runtime_client.backend.service import ServiceBackend
 from agent_runtime_client.sse import encode_event
 from agent_runtime_client.wire import (
     PROTOCOL_VERSION,
@@ -38,6 +39,8 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     import pytest
+    from agent_runtime_client.backend import AgentBackend
+    from agent_runtime_client.config import AgentConfig
     from agent_runtime_client.wire import RunEvent
     from starlette.types import Receive, Scope, Send
 
@@ -361,6 +364,7 @@ def an_answerer(
     workload_token: TokenSource,
     *,
     monotonic: Callable[[], float] = time.monotonic,
+    backend_factory: Callable[[AgentConfig], AgentBackend] = ServiceBackend,
 ) -> ServiceAnswerer:
     config = agent_config(backend="service", service_url=origin, workload_scope=_SCOPE)
     return ServiceAnswerer(
@@ -368,6 +372,7 @@ def an_answerer(
         issuer=ISSUER,
         workload_token=workload_token,
         monotonic=monotonic,
+        backend_factory=backend_factory,
     )
 
 

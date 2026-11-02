@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Final, NoReturn, assert_never
 
 from agent_runtime_client.agents import load_agent
 from agent_runtime_client.backend import (
+    AgentBackend,
     Asker,
     RunTokens,
     TurnEvent,
@@ -160,12 +161,13 @@ class ServiceAnswerer:
         issuer: str,
         workload_token: TokenSource,
         monotonic: Callable[[], float] = time.monotonic,
+        backend_factory: Callable[[AgentConfig], AgentBackend] = ServiceBackend,
     ) -> None:
         """Reach the service this configuration names, as this workload.
 
         `issuer` is the relying party's, which names every account that asks.
         """
-        self._backend = ServiceBackend(config)
+        self._backend = backend_factory(config)
         self._issuer = issuer
         self._workload_token = workload_token
         self._monotonic = monotonic

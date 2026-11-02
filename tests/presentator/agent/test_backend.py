@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import pytest
 from agent_runtime_client.backend import Asker
 from agent_runtime_client.capability import CapabilityPrincipal
+from agent_runtime_client.turn_events import FinalEvent
 from agent_runtime_client.wire import (
     PROTOCOL_VERSION,
     FailureCode,
@@ -54,6 +55,8 @@ from tests.presentator.agent.support.agent_service_support import (
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
+
+    from agent_runtime_client.backend import TurnEvent
 
     from tests.presentator.agent.support.agent_service_support import Step
 
@@ -503,25 +506,23 @@ def test_a_refusal_before_the_stream_logs_no_summary(
     assert summary_lines(caplog) == []
 
 
-def test_the_run_names_the_asking_person_with_the_issuer_and_the_account(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """#709 M3b: the run's principal is the verified person, never none."""
+def test_the_run_names_the_asking_person_with_the_issuer_and_the_account() -> None:
+    """The run's principal is the verified person, never none."""
     principals: list[CapabilityPrincipal | None] = []
 
     class RecordingBackend:
-        def __init__(self, _config: object) -> None:
-            pass
-
-        async def run(self, _request: object, asker: Asker) -> AsyncGenerator[None]:
+        async def run(
+            self, request: RunRequest, asker: Asker
+        ) -> AsyncGenerator[TurnEvent]:
             principals.append(asker.principal)
-            return
-            yield
-
-    monkeypatch.setattr("presentator.agent.backend.ServiceBackend", RecordingBackend)
+            yield FinalEvent(text="Eine Antwort.")
 
     async def ask() -> None:
-        answerer = an_answerer("http://service.invalid", Token(WORKLOAD))
+        answerer = an_answerer(
+            "http://service.invalid",
+            Token(WORKLOAD),
+            backend_factory=lambda _config: RecordingBackend(),
+        )
         async with answerer.answer(
             message=QUESTION, subject=SUBJECT, person_token=Token(PERSON)
         ) as texts:
