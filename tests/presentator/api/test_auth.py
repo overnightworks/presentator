@@ -457,14 +457,6 @@ def _links_the_impressum_and_the_datenschutz(page: str) -> bool:
     )
 
 
-def test_a_signed_out_page_links_the_impressum_and_the_datenschutz(
-    lobby: Lobby,
-) -> None:
-    page = lobby.client.get("/login/talk/no-access").text
-
-    assert _links_the_impressum_and_the_datenschutz(page)
-
-
 @pytest.mark.parametrize("path", ["/", "/account"])
 def test_a_signed_in_page_links_the_impressum_and_the_datenschutz(
     signed_in_lobby: Lobby,

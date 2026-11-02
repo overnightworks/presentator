@@ -71,8 +71,8 @@ def test_a_refresh_token_outside_printable_ascii_fails_the_login_with_no_session
 
     page = scene.sign_in()
 
-    assert page.status_code == HTTPStatus.FORBIDDEN
-    assert "<h1>Login failed</h1>" in page.text
+    assert page.status_code == HTTPStatus.SEE_OTHER
+    assert page.headers["location"] == "/login/login-failed"
     assert scene.count("sessions") == 0
     assert DEFAULT_SESSION_COOKIE_NAME not in " ".join(cookie_names(page))
 
@@ -142,8 +142,8 @@ def test_a_refused_refresh_token_leaks_to_neither_page_nor_log(
 
     answer = scene.sign_in()
 
-    assert answer.status_code == HTTPStatus.FORBIDDEN
-    assert "<h1>Login failed</h1>" in answer.text
+    assert answer.status_code == HTTPStatus.SEE_OTHER
+    assert answer.headers["location"] == "/login/login-failed"
     assert _MARKER not in answer.text + str(answer.headers)
     assert _MARKER not in everything_shown(log.records)
 
@@ -225,7 +225,7 @@ def test_a_refused_sign_in_leaks_the_id_token_to_neither_page_nor_log(
 
     answer = scene.sign_in()
 
-    assert answer.status_code == HTTPStatus.FORBIDDEN
+    assert answer.status_code == HTTPStatus.SEE_OTHER
     for secret in _the_id_tokens_and_their_claims(issued_id_tokens):
         assert secret not in answer.text + str(answer.headers)
         assert secret not in everything_shown(log.records)

@@ -7,7 +7,6 @@ exceptions, a form another site submitted is refused, and no answer may be
 replayed from the browser cache (issue #8, lines 11 to 15).
 """
 
-from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
@@ -18,6 +17,7 @@ from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import RedirectResponse
 from starlette.types import Receive, Scope, Send
 from webauth.config import WebAuthConfig, install_web_auth_config
 from webauth.middleware.bearer_gate import BearerGate, MachinePaths, PersonPaths
@@ -89,18 +89,23 @@ TALK_SIGN_IN: Final = SignInPaths(
 _SETUP: Final = "/setup"
 
 
-_REFUSAL_PAGES: Final = {
-    RefusalPage.NO_ACCESS: "no_access.html",
-    RefusalPage.LOGIN_FAILED: "login_failed.html",
-}
+def sign_in_refusal_path(refusal: RefusalPage) -> str:
+    """The lobby's address that shows a refused lobby sign-in."""
+    return f"{LOGIN_PATH}/{refusal.value}"
 
 
 def talk_sign_in_refusal_path(refusal: RefusalPage) -> str:
     """The lobby's address that shows a talk sign-in refusal."""
-    return f"/login/talk/{refusal.value}"
+    return f"{LOGIN_PATH}/talk/{refusal.value}"
 
 
 _PERSON_API: Final = "/api/"
+
+_REFUSAL_PATHS: Final = frozenset(
+    path
+    for refusal in RefusalPage
+    for path in (sign_in_refusal_path(refusal), talk_sign_in_refusal_path(refusal))
+)
 
 # Signing in (its start and the issuer's return) and signing out are the
 # addresses the gate leaves alone, and the library derives them from the
@@ -119,7 +124,7 @@ _PUBLIC_RULES: Final = (
                 {
                     LOGIN_PATH,
                     _SETUP,
-                    *(talk_sign_in_refusal_path(refusal) for refusal in RefusalPage),
+                    *_REFUSAL_PATHS,
                 }
             )
         )
@@ -165,10 +170,7 @@ _BODY_SIZE: Final = BodySizePolicy(
 LOGIN_REDIRECT: Final = LOBBY_SIGN_IN.login_redirect
 # Jinja's stubs type the globals as its own defaults only, so the dict is
 # named as the mixed bag it is.
-cast("dict[str, object]", TEMPLATES.env.globals).update(
-    login_path=LOGIN_PATH,
-    logout_path=LOGOUT_PATH,
-)
+cast("dict[str, object]", TEMPLATES.env.globals).update(logout_path=LOGOUT_PATH)
 
 
 # SvelteKit writes its accessibility announcer with this one inline style
@@ -268,38 +270,17 @@ class _Surfaces:
             for deck in self.decks.listed(viewer=viewer)
         )
 
-    def lobby_app(self, request: Request) -> Response:
-        """The lobby app's shell, in the reader's language and theme."""
-        return HTMLResponse(self.shell.filled(self.pages.appearance(request)))
-
-    def talk_sign_in_refusal_page(
-        self, refusal: RefusalPage
-    ) -> Callable[[Request], Response]:
-        """The route that shows why the talk host refused a sign-in.
-
-        Its retry restarts the sign-in at the talk host, and the page is one
-        address per refusal so no request chooses what it says.
-        """
-
-        def show(request: Request) -> Response:
-            return self.refused_page(
-                request,
-                refusal,
-                retry=self.auth.talk_sign_in_address,
-            )
-
-        return show
-
-    def refused_page(
-        self, request: Request, refusal: RefusalPage, *, retry: str
+    def lobby_app(
+        self, request: Request, *, status: HTTPStatus = HTTPStatus.OK
     ) -> Response:
-        """A refusal's page and where to retry; the library adds the cookie deletion."""
-        return self.pages.page(
-            request,
-            _REFUSAL_PAGES[refusal],
-            status=HTTPStatus.FORBIDDEN,
-            start_sign_in=retry,
+        """The lobby app's shell, in the reader's language and theme."""
+        return HTMLResponse(
+            self.shell.filled(self.pages.appearance(request)), status_code=status
         )
+
+    def refusal_page(self, request: Request) -> Response:
+        """The app's shell under 403; the router shows why from the address."""
+        return self.lobby_app(request, status=HTTPStatus.FORBIDDEN)
 
 
 def _loads_the_lobby_app(request: Request) -> bool:
@@ -339,7 +320,7 @@ def _install_lobby_app(lobby: FastAPI, surfaces: _Surfaces) -> None:
 
 
 def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
-    """The library's sign-in routes, and the pages of the talk host's refusals."""
+    """The library's sign-in routes, and the 403 shell at every refusal address."""
     auth = surfaces.auth
     install_sign_in_routes(
         lobby,
@@ -347,8 +328,8 @@ def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
         relying_party=lambda _request: auth.relying_party,
         admission=auth.admission,
         transaction=auth.transaction,
-        refused=lambda request, refusal: surfaces.refused_page(
-            request, refusal.page, retry=START_SIGN_IN_PATH
+        refused=lambda _request, refusal: RedirectResponse(
+            sign_in_refusal_path(refusal.page), status_code=HTTPStatus.SEE_OTHER
         ),
         keeps_id_token=True,
         max_sessions=None,
@@ -356,12 +337,8 @@ def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
             surfaces.pages.appearance(request).text.log_out
         ),
     )
-    for refusal in RefusalPage:
-        lobby.add_api_route(
-            talk_sign_in_refusal_path(refusal),
-            surfaces.talk_sign_in_refusal_page(refusal),
-            methods=["GET"],
-        )
+    for path in _REFUSAL_PATHS:
+        lobby.add_api_route(path, surfaces.refusal_page, methods=["GET"])
 
 
 def _install_middleware(
@@ -437,7 +414,8 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
 
     The fetch hook always stands under `/sources/`; a call that cannot name a
     stored source and its secret is answered alike, and GET stays behind the
-    session. The app's shell answers only what no route claims.
+    session. The app's shell answers what no route claims, and the refusal
+    addresses under 403.
     """
     surfaces = _Surfaces(decks=decks, pages=pages, auth=auth, shell=shell)
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)

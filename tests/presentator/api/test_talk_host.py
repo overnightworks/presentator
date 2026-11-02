@@ -23,7 +23,6 @@ from tests.support.lobby import (
     A_TALK_ADDRESS,
     AN_ASSET,
     BUILT_TALK,
-    ENGLISH,
     Lobby,
 )
 from tests.support.people import seed_user
@@ -37,9 +36,6 @@ from tests.support.talk_support import (
     two_hosts,
 )
 
-_IMPRESSUM = f'<a href="https://hallucinai.de/impressum">{ENGLISH.footer_impressum}</a>'
-_DATENSCHUTZ = f'<a href="https://hallucinai.de/datenschutz#presentator">{ENGLISH.footer_datenschutz}</a>'
-
 
 @pytest.fixture(params=["signed out", "signed in"])
 def either_visitor(request: pytest.FixtureRequest, lobby: Lobby) -> Lobby:
@@ -50,36 +46,21 @@ def either_visitor(request: pytest.FixtureRequest, lobby: Lobby) -> Lobby:
 
 # T9b.
 @pytest.mark.parametrize(
-    ("state", "title", "explanation"),
+    "refusal_path",
     [
-        ("no-access", ENGLISH.no_access_title, ENGLISH.no_access_explanation),
-        ("login-failed", ENGLISH.login_failed_title, ENGLISH.login_failed_explanation),
+        "/login/no-access",
+        "/login/login-failed",
+        "/login/talk/no-access",
+        "/login/talk/login-failed",
     ],
 )
-def test_the_lobby_shows_a_refused_talk_sign_in_alike_with_and_without_a_session(
-    either_visitor: Lobby,
-    state: str,
-    title: str,
-    explanation: str,
+def test_a_refusal_address_answers_the_app_under_403_with_or_without_a_session(
+    either_visitor: Lobby, refusal_path: str
 ) -> None:
-    page = either_visitor.client.get(f"/login/talk/{state}")
+    page = either_visitor.client.get(refusal_path)
 
     assert page.status_code == HTTPStatus.FORBIDDEN
-    assert f"<h1>{title}</h1>" in page.text
-    assert explanation in page.text
-    assert _IMPRESSUM in page.text
-    assert _DATENSCHUTZ in page.text
-
-
-# T9b.
-def test_no_access_logs_out_at_the_lobby_and_login_failed_retries_at_the_talk_host(
-    lobby: Lobby,
-) -> None:
-    no_access = lobby.client.get("/login/talk/no-access").text
-    login_failed = lobby.client.get("/login/talk/login-failed").text
-
-    assert '<form method="post" action="/logout">' in no_access
-    assert f'href="{A_TALK_ADDRESS}/login/oidc"' in login_failed
+    assert A_LOBBY_ASSET in page.text
 
 
 # T9b.
@@ -347,8 +328,8 @@ def test_a_pending_login_of_one_host_cannot_be_completed_at_the_other(
             f"{A_BROWSERS_ADDRESS}/login/talk/login-failed"
         )
     else:
-        assert answer.status_code == HTTPStatus.FORBIDDEN
-        assert f"<h1>{ENGLISH.login_failed_title}</h1>" in answer.text
+        assert answer.status_code == HTTPStatus.SEE_OTHER
+        assert answer.headers["location"] == "/login/login-failed"
 
 
 # T7c.
