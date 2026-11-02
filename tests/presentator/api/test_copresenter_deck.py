@@ -22,6 +22,7 @@ from tests.support.copresenter_support import (
     the_admins_decks,
     who,
 )
+from tests.support.lobby import USERNAME
 
 if TYPE_CHECKING:
     from httpx2 import Response
@@ -75,6 +76,14 @@ def test_the_owner_asks_about_their_own_built_deck() -> None:
 
     assert answer.status_code == HTTPStatus.OK
     assert private.texts.asked == [(ASKED.deck, ASKED.source)]
+
+
+def test_the_answer_is_asked_for_the_signed_in_account() -> None:
+    lobby, private = an_instance()
+
+    ask(lobby.client)
+
+    assert private.answers.subjects == [f"id-of-{USERNAME}"]
 
 
 @pytest.mark.parametrize(
