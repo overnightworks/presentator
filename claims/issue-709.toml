@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "8d766913d3d6dffeec752d3d9fc0831e5f40961f"
 branch = "claude/issue-709-pr-1-the-copresenter-answers-through-age"
-scope = ["docs/decisions/0003-libraries-for-models-and-auth.md", "docs/reference", "pyproject.toml", "src/presentator/adapters/agent_service.py", "src/presentator/adapters/agent_tokens.py", "src/presentator/agent", "src/presentator/host", "tests/presentator/adapters", "tests/presentator/agent", "tests/presentator/api", "tests/presentator/host", "tests/support", "uv.lock"]
+scope = ["docs/decisions/0003-libraries-for-models-and-auth.md", "docs/reference", "pyproject.toml", "src/presentator/adapters/agent_service.py", "src/presentator/adapters/agent_tokens.py", "src/presentator/agent", "src/presentator/api/copresenter.py", "src/presentator/application/copresenter.py", "src/presentator/host", "src/presentator/ports/copresenter.py", "tests/presentator/adapters", "tests/presentator/agent", "tests/presentator/api", "tests/presentator/host", "tests/support", "uv.lock"]
 opened_commit = "7229272cd78b92516ecedf8765232d12cf518a02"
 whole_reason = "The new owner and the deletion of its two predecessors are one change: either alone leaves two paths to the agent service."
