@@ -99,6 +99,14 @@ THE_ASKED_DECK: Final = {**SPOKEN_QUESTION, "deck": A_DECK}
 FIRST_AUDIO: Final = "presentator.application.copresenter"
 SERVICE_LOG: Final = "presentator.agent.backend"
 _HANG_WAIT_SECONDS: Final = 5
+CUT_MID_STREAM: Final = Reply(
+    chunks=whole(event_frames(run_started())), breaks_after_chunks=True
+)
+TOO_LARGE: Final = refusal_reply(RejectionCode.TOO_LARGE, 413)
+NO_SUCH_MODEL: Final = refusal_reply(RejectionCode.MODEL_NOT_OFFERED, 422)
+FILES_ONLY: Final = reply_with(
+    *event_frames(run_started(), succeeded_with_a_file_and_no_words())
+)
 
 
 @dataclass
@@ -191,11 +199,7 @@ class Scenario:
 
 def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
     """Sign an admin in at the talk host, then ask once of a served fake service."""
-    with Wire(scenario.reply) as wire:
-        return _ask_of(wire, tmp_path, scenario)
-
-
-def _ask_of(wire: Wire, tmp_path: Path, scenario: Scenario) -> Run:
+    wire = Wire(scenario.reply)
     limiter = RecordingLimiter(clock=FrozenClock(instant=NOW))
     fakes = PrivateFakes()
     fakes.speaking.fails_at = scenario.speaking_fails_at
@@ -231,19 +235,20 @@ def _ask_of(wire: Wire, tmp_path: Path, scenario: Scenario) -> Run:
             delay=wait,
         )
 
-    hosts = two_hosts(tmp_path, copresenter=surface)
-    hosts_made.append(hosts)
-    hosts.issuer.issue_person_access_token(PERSON)
-    hosts.issuer.issue_workload_access_token(WORKLOAD)
-    hosts.issuer.rotate_refresh_token_to(ROTATED)
-    if scenario.refresh_token is not None:
-        hosts.issuer.issue_refresh_token(scenario.refresh_token)
-    scenario.arrange(hosts)
-    talk = hosts.browser(A_TALK_ADDRESS, headers=A_BROWSERS_HEADERS)
-    hosts.sign_in(talk, A_TALK_ADDRESS, subject=A.id, groups=ADMIN_GROUPS)
-    grants_before = list(hosts.issuer.grant_types)
-    scenario.before_ask(hosts)
-    response = ask(talk, scenario.body)
+    with wire:
+        hosts = two_hosts(tmp_path, copresenter=surface)
+        hosts_made.append(hosts)
+        hosts.issuer.issue_person_access_token(PERSON)
+        hosts.issuer.issue_workload_access_token(WORKLOAD)
+        hosts.issuer.rotate_refresh_token_to(ROTATED)
+        if scenario.refresh_token is not None:
+            hosts.issuer.issue_refresh_token(scenario.refresh_token)
+        scenario.arrange(hosts)
+        talk = hosts.browser(A_TALK_ADDRESS, headers=A_BROWSERS_HEADERS)
+        hosts.sign_in(talk, A_TALK_ADDRESS, subject=A.id, groups=ADMIN_GROUPS)
+        grants_before = list(hosts.issuer.grant_types)
+        scenario.before_ask(hosts)
+        response = ask(talk, scenario.body)
     return Run(response, hosts, wire, fakes, talk, limiter, grants_before)
 
 
@@ -547,38 +552,10 @@ def test_a_service_that_refuses_the_token_ends_in_error_without_a_reason(
             ["error"],
             id="stream-violation",
         ),
-        pytest.param(
-            Scenario(
-                reply=Reply(
-                    chunks=whole(event_frames(run_started())), breaks_after_chunks=True
-                )
-            ),
-            ["error"],
-            id="cut-mid-stream",
-        ),
-        pytest.param(
-            Scenario(
-                reply=refusal_reply(RejectionCode.TOO_LARGE, 413),
-            ),
-            ["error"],
-            id="too-large",
-        ),
-        pytest.param(
-            Scenario(
-                reply=refusal_reply(RejectionCode.MODEL_NOT_OFFERED, 422),
-            ),
-            ["error"],
-            id="model-not-offered",
-        ),
-        pytest.param(
-            Scenario(
-                reply=reply_with(
-                    *event_frames(run_started(), succeeded_with_a_file_and_no_words())
-                )
-            ),
-            ["error"],
-            id="files-and-no-words",
-        ),
+        pytest.param(Scenario(reply=CUT_MID_STREAM), ["error"], id="cut-mid-stream"),
+        pytest.param(Scenario(reply=TOO_LARGE), ["error"], id="too-large"),
+        pytest.param(Scenario(reply=NO_SUCH_MODEL), ["error"], id="model-not-offered"),
+        pytest.param(Scenario(reply=FILES_ONLY), ["error"], id="files-and-no-words"),
         pytest.param(
             Scenario(reply=Reply(refuses_connection=True)),
             ["error"],
@@ -748,9 +725,7 @@ LEAK_SCENARIOS: Final = {
         ),
         speaking_fails_at=1,
     ),
-    "cut-mid-stream": Scenario(
-        reply=Reply(chunks=whole(event_frames(run_started())), breaks_after_chunks=True)
-    ),
+    "cut-mid-stream": Scenario(reply=CUT_MID_STREAM),
     "refused-connection": Scenario(reply=Reply(refuses_connection=True)),
 }
 
