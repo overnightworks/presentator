@@ -18,15 +18,13 @@ from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Final
 
-import httpx2
 import pytest
 from agent_runtime_client.wire import FailureCode, RejectionCode, RunRequest
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
-from presentator.adapters.agent_service import ServiceAnswerer
-from presentator.adapters.agent_tokens import PersonAccessTokens, WorkloadToken
 from presentator.adapters.deck_texts import MirroredDeckTexts
 from presentator.adapters.sentences import split_sentences
+from presentator.agent.backend import PersonAccessTokens, WorkloadToken
 from presentator.api.copresenter import (
     NOT_ENABLED_REASON,
     CoPresenterSurface,
@@ -38,11 +36,12 @@ from presentator.application.copresenter import (
     RetryAfter,
 )
 from presentator.contracts.decks import Build, Deck, Source
-from tests.presentator.adapters.support.agent_service_support import (
+from tests.presentator.agent.support.agent_service_support import (
     GOOD_ANSWER,
     SERVICE_MESSAGE,
     Reply,
     Wire,
+    an_answerer,
     assistant_text,
     cancelled,
     event_frames,
@@ -51,6 +50,7 @@ from tests.presentator.adapters.support.agent_service_support import (
     reply_with,
     run_started,
     succeeded,
+    succeeded_with_a_file_and_no_words,
     violating_frame,
     whole,
 )
@@ -72,7 +72,6 @@ from tests.support.deck_source_support import a_source, folders_under, mirrors_u
 from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     A_TALK_ADDRESS,
-    AN_AGENT_SERVICE,
     AN_AGENT_SERVICE_SCOPE,
     NOW,
 )
@@ -98,14 +97,8 @@ TOKENS: Final = (PERSON, WORKLOAD, REFRESH, ROTATED)
 ADMIN_GROUPS: Final = ["/apps/presentator", "/apps/presentator/admin"]
 THE_ASKED_DECK: Final = {**SPOKEN_QUESTION, "deck": A_DECK}
 FIRST_AUDIO: Final = "presentator.application.copresenter"
-SERVICE_LOG: Final = "presentator.adapters.agent_service"
-
-
-def a_stalled_transport() -> httpx2.AsyncBaseTransport:
-    def stall(request: httpx2.Request) -> httpx2.Response:
-        raise httpx2.ReadTimeout(PERSON, request=request)
-
-    return httpx2.MockTransport(stall)
+SERVICE_LOG: Final = "presentator.agent.backend"
+_HANG_WAIT_SECONDS: Final = 5
 
 
 @dataclass
@@ -190,7 +183,6 @@ class Scenario:
     before_ask: Callable[[Hosts], None] = nothing_happens
     texts: DeckTexts | None = None
     delay: Callable[[Wire, Hosts, float], Awaitable[None]] | None = None
-    transport: Callable[[], httpx2.AsyncBaseTransport] | None = None
     body: Mapping[str, object] = field(default_factory=lambda: dict(THE_ASKED_DECK))
     sources: list[Source] | None = None
     arrange: Callable[[Hosts], None] = nothing_happens
@@ -198,8 +190,12 @@ class Scenario:
 
 
 def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
-    """Sign an admin in at the talk host, then ask once."""
-    wire = Wire(scenario.reply)
+    """Sign an admin in at the talk host, then ask once of a served fake service."""
+    with Wire(scenario.reply) as wire:
+        return _ask_of(wire, tmp_path, scenario)
+
+
+def _ask_of(wire: Wire, tmp_path: Path, scenario: Scenario) -> Run:
     limiter = RecordingLimiter(clock=FrozenClock(instant=NOW))
     fakes = PrivateFakes()
     fakes.speaking.fails_at = scenario.speaking_fails_at
@@ -216,12 +212,9 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
     ) -> CoPresenterSurface:
         return CoPresenterSurface(
             use=CoPresenterUse(
-                answers=ServiceAnswerer(
-                    origin=AN_AGENT_SERVICE,
-                    workload_token=WorkloadToken(
-                        auth.relying_party, (AN_AGENT_SERVICE_SCOPE,)
-                    ),
-                    transport=scenario.transport or wire.transport,
+                answers=an_answerer(
+                    wire.origin,
+                    WorkloadToken(auth.relying_party, (AN_AGENT_SERVICE_SCOPE,)),
                 ),
                 speech=fakes.speech,
                 decks=store,
@@ -555,9 +548,36 @@ def test_a_service_that_refuses_the_token_ends_in_error_without_a_reason(
             id="stream-violation",
         ),
         pytest.param(
-            Scenario(transport=a_stalled_transport),
+            Scenario(
+                reply=Reply(
+                    chunks=whole(event_frames(run_started())), breaks_after_chunks=True
+                )
+            ),
             ["error"],
-            id="stall",
+            id="cut-mid-stream",
+        ),
+        pytest.param(
+            Scenario(
+                reply=refusal_reply(RejectionCode.TOO_LARGE, 413),
+            ),
+            ["error"],
+            id="too-large",
+        ),
+        pytest.param(
+            Scenario(
+                reply=refusal_reply(RejectionCode.MODEL_NOT_OFFERED, 422),
+            ),
+            ["error"],
+            id="model-not-offered",
+        ),
+        pytest.param(
+            Scenario(
+                reply=reply_with(
+                    *event_frames(run_started(), succeeded_with_a_file_and_no_words())
+                )
+            ),
+            ["error"],
+            id="files-and-no-words",
         ),
         pytest.param(
             Scenario(reply=Reply(refuses_connection=True)),
@@ -607,7 +627,7 @@ class ChangeOnceTheAnswerHangs:
 
     async def __call__(self, wire: Wire, hosts: Hosts, _seconds: float) -> None:
         self.waits += 1
-        await asyncio.wait_for(wire.response_stream.hung.wait(), timeout=5)
+        await asyncio.to_thread(wire.hung.wait, _HANG_WAIT_SECONDS)
         self.change(hosts)
 
 
@@ -623,7 +643,7 @@ def test_an_answer_ends_within_one_recheck_when_the_session_goes(
     assert run.response.status_code == HTTPStatus.OK
     assert run.events == ["text"]
     assert recheck.waits == 1
-    assert run.wire.response_stream.closed.is_set()
+    assert run.wire.closed.wait(_HANG_WAIT_SECONDS)
     assert the_ticket_was_released(run)
 
 
@@ -728,7 +748,9 @@ LEAK_SCENARIOS: Final = {
         ),
         speaking_fails_at=1,
     ),
-    "stall": Scenario(transport=a_stalled_transport),
+    "cut-mid-stream": Scenario(
+        reply=Reply(chunks=whole(event_frames(run_started())), breaks_after_chunks=True)
+    ),
     "refused-connection": Scenario(reply=Reply(refuses_connection=True)),
 }
 

@@ -21,8 +21,6 @@ from webauth.oidc import OidcClientConfig, OidcRelyingParty
 from webauth.proxies import TrustedProxies
 from webauth.rate_limit import SingleProcessRateLimitBackend
 
-from presentator.adapters.agent_service import ServiceAnswerer
-from presentator.adapters.agent_tokens import PersonAccessTokens, WorkloadToken
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.build_worker import WorkerToolchain
 from presentator.adapters.builds import (
@@ -70,6 +68,12 @@ from presentator.adapters.secrets import (
 )
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.speech import UdsSpeaking, UdsSpeech, UdsSpeechHearing
+from presentator.agent.backend import (
+    PersonAccessTokens,
+    ServiceAnswerer,
+    WorkloadToken,
+    agent_config,
+)
 from presentator.api.auth import (
     InstalledAuth,
     LobbyPrivate,
@@ -280,12 +284,17 @@ def _copresenter_surface(
     mirrors: SourceMirrors,
 ) -> CoPresenterSurface:
     """What only a signed-in admin may reach at the talk host: the agent service."""
+    config = agent_config(
+        backend=settings.agent_backend,
+        service_url=settings.agent_service,
+        workload_scope=settings.agent_service_scope,
+    )
     return CoPresenterSurface(
         use=CoPresenterUse(
             answers=ServiceAnswerer(
-                origin=settings.agent_service,
+                config=config,
                 workload_token=WorkloadToken(
-                    auth.relying_party, (settings.agent_service_scope,)
+                    auth.relying_party, (config.workload_scope,)
                 ),
             ),
             speech=UdsSpeechHearing(settings.speech_socket),

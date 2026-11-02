@@ -1,18 +1,17 @@
-"""Fakes and builders the service answerer's tests share: a wire, a service, tokens."""
+"""Fakes and builders the answerer's tests share: a service on a socket, tokens."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import socket
+import threading
 import time
 from collections.abc import Awaitable, Callable
-from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Annotated, NoReturn
+from typing import TYPE_CHECKING, NoReturn, Self
 from uuid import UUID, uuid4
 
-import httpx2
 from agent_runtime_client.sse import encode_event
 from agent_runtime_client.wire import (
     PROTOCOL_VERSION,
@@ -23,23 +22,25 @@ from agent_runtime_client.wire import (
     Heartbeat,
     RejectionCode,
     RouteKind,
+    RunFile,
     RunRejection,
     RunRequest,
     RunStarted,
     Succeeded,
 )
-from fastapi import FastAPI, Header
-from fastapi.responses import Response, StreamingResponse
 
-from presentator.adapters.agent_service import ServiceAnswerer
+from presentator.agent.backend import ServiceAnswerer, agent_config
 from presentator.contracts.copresenter import CoPresenterUnavailableError
 from tests.presentator.adapters.support.serving import Serving, loopback_listener
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, AsyncIterator
+    from types import TracebackType
 
     import pytest
     from agent_runtime_client.wire import RunEvent
+    from starlette.types import Receive, Scope, Send
+
+    from presentator.ports.copresenter import TokenSource
 
 ORIGIN = "http://agent-service.test"
 PERSON = "person-token-MARKER"
@@ -57,7 +58,9 @@ MARKERS = (
     CONTEXT,
 )
 EVENT_STREAM = {"content-type": "text/event-stream"}
-LOGGER = "presentator.adapters.agent_service"
+LOGGER = "presentator.agent.backend"
+_SCOPE = "agent-service-audience"
+_SERVER_WAIT_SECONDS = 10
 
 type Step = Callable[[UUID, int], RunEvent]
 
@@ -86,6 +89,16 @@ def heartbeat() -> Step:
 def succeeded() -> Step:
     return lambda run, seq: Succeeded(
         v=PROTOCOL_VERSION, run_id=run, seq=seq, text="fertig", files=()
+    )
+
+
+def succeeded_with_a_file_and_no_words() -> Step:
+    return lambda run, seq: Succeeded(
+        v=PROTOCOL_VERSION,
+        run_id=run,
+        seq=seq,
+        text="",
+        files=(RunFile(name="notes.txt", content=b"Notizen"),),
     )
 
 
@@ -132,7 +145,7 @@ class Reply:
     hangs_after_chunks: bool = False
     refuses_connection: bool = False
     late_chunks: list[bytes] = field(default_factory=list[bytes])
-    gate: asyncio.Event | None = None
+    gate: threading.Event | None = None
 
 
 def reply_with(*chunks: bytes) -> Reply:
@@ -150,55 +163,129 @@ def refusal_reply(code: RejectionCode, status: int, **headers: str) -> Reply:
     )
 
 
-class Chunks(httpx2.AsyncByteStream):
-    """A response body that plays a reply's chunks and then breaks or hangs."""
+@dataclass(frozen=True)
+class ReceivedRun:
+    """One request as it reached the fake service."""
 
-    def __init__(self, reply: Reply) -> None:
-        """Play this reply's chunks."""
-        self._reply = reply
-        self.closed = asyncio.Event()
-        self.hung = asyncio.Event()
-
-    async def __aiter__(self) -> AsyncIterator[bytes]:
-        """Yield the chunks, then break or hang as the reply says."""
-        for chunk in self._reply.chunks:
-            yield chunk
-        if self._reply.breaks_after_chunks:
-            raise httpx2.ReadError(PERSON)
-        if self._reply.hangs_after_chunks:
-            self.hung.set()
-            await asyncio.Event().wait()
-
-    async def aclose(self) -> None:
-        self.closed.set()
+    method: str
+    path: str
+    headers: dict[str, str]
+    content: bytes
 
 
 class Wire:
-    """A MockTransport that records what reached it and answers with one reply."""
+    """A fake agent service on a loopback socket for the length of a ``with``.
 
-    def __init__(self, reply: Reply) -> None:
+    It plays one reply, or one chosen by the question, and records every request.
+    ``hung`` says it stopped sending; ``closed`` says the caller then left.
+    """
+
+    def __init__(self, reply: Reply | Callable[[str], Reply]) -> None:
         """Answer every request with this reply."""
         self._reply = reply
-        self.requests: list[httpx2.Request] = []
-        self.transports_built = 0
-        self.response_stream = Chunks(reply)
+        self.requests: list[ReceivedRun] = []
+        self.hung = threading.Event()
+        self.closed = threading.Event()
+        self.origin = ""
+        self._stop_serving: Callable[[], object] | None = None
+        self._thread: threading.Thread | None = None
 
-    def transport(self) -> httpx2.AsyncBaseTransport:
-        self.transports_built += 1
-        return httpx2.MockTransport(self._handle)
+    def __enter__(self) -> Self:
+        """Serve on a thread of its own, so a blocking caller can reach it."""
+        listener = loopback_listener()
+        self.origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
+        if isinstance(self._reply, Reply) and self._reply.refuses_connection:
+            self.origin = closed_port_origin()
+        serving = threading.Event()
 
-    def _handle(self, request: httpx2.Request) -> httpx2.Response:
-        self.requests.append(request)
-        if self._reply.refuses_connection:
-            raise httpx2.ConnectError(PERSON)
-        return httpx2.Response(
-            self._reply.status,
-            headers=[
-                (name.encode(), value.encode())
-                for name, value in self._reply.headers.items()
-            ],
-            stream=self.response_stream,
+        async def serve() -> None:
+            loop, stop = asyncio.get_running_loop(), asyncio.Event()
+            self._stop_serving = lambda: loop.call_soon_threadsafe(stop.set)
+            async with Serving(self, listener):
+                serving.set()
+                await stop.wait()
+
+        self._thread = threading.Thread(
+            target=asyncio.run, args=(serve(),), daemon=True
         )
+        self._thread.start()
+        assert serving.wait(_SERVER_WAIT_SECONDS)
+        return self
+
+    def __exit__(
+        self,
+        kind: type[BaseException] | None,
+        error: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Stop serving; what it recorded stays readable."""
+        assert self._stop_serving is not None
+        assert self._thread is not None
+        self._stop_serving()
+        self._thread.join(_SERVER_WAIT_SECONDS)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Answer one ASGI request as the served app."""
+        if scope["type"] != "http":
+            return
+        content = await _whole_body(receive)
+        self.requests.append(
+            ReceivedRun(
+                scope["method"],
+                scope["path"],
+                {name.decode(): value.decode() for name, value in scope["headers"]},
+                content,
+            )
+        )
+        reply = self._reply_to(content)
+        await send(
+            {
+                "type": "http.response.start",
+                "status": reply.status,
+                "headers": [
+                    (name.encode(), value.encode())
+                    for name, value in reply.headers.items()
+                ],
+            }
+        )
+        await _send_chunks(send, reply.chunks)
+        if reply.gate is not None:
+            await asyncio.to_thread(reply.gate.wait, _SERVER_WAIT_SECONDS)
+        await _send_chunks(send, reply.late_chunks)
+        if reply.breaks_after_chunks:
+            raise RuntimeError
+        if reply.hangs_after_chunks:
+            self.hung.set()
+            await _until_disconnected(receive)
+            self.closed.set()
+            return
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+    def _reply_to(self, content: bytes) -> Reply:
+        if isinstance(self._reply, Reply):
+            return self._reply
+        return self._reply(
+            RunRequest.model_validate_json(content).turn.messages[0].text
+        )
+
+
+async def _whole_body(receive: Receive) -> bytes:
+    body = bytearray()
+    while True:
+        message = await receive()
+        body.extend(message.get("body", b""))
+        if not message.get("more_body"):
+            return bytes(body)
+
+
+async def _send_chunks(send: Send, chunks: list[bytes]) -> None:
+    for chunk in chunks:
+        await send({"type": "http.response.body", "body": chunk, "more_body": True})
+
+
+async def _until_disconnected(receive: Receive) -> None:
+    while (await receive())["type"] != "http.disconnect":
+        pass
 
 
 class RaisedBeforeAwaitingError(RuntimeError):
@@ -264,17 +351,33 @@ async def ask_once(
     return Outcome(texts, None)
 
 
+def an_answerer(
+    origin: str,
+    workload_token: TokenSource,
+    *,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> ServiceAnswerer:
+    config = agent_config(backend="service", service_url=origin, workload_scope=_SCOPE)
+    return ServiceAnswerer(
+        config=config, workload_token=workload_token, monotonic=monotonic
+    )
+
+
 @dataclass
 class Asker:
-    """One ask against a MockTransport: its token callables and its wire."""
+    """One ask against a fake service: its token callables and its wire."""
 
     person: Token
     workload: Token
     wire: Wire
-    answerer: ServiceAnswerer
+    monotonic: Callable[[], float]
+
+    def answerer(self) -> ServiceAnswerer:
+        return an_answerer(self.wire.origin, self.workload, monotonic=self.monotonic)
 
     async def ask(self, *, message: str = QUESTION) -> Outcome:
-        return await ask_once(self.answerer, self.person, message=message)
+        with self.wire:
+            return await ask_once(self.answerer(), self.person, message=message)
 
 
 def an_asker(
@@ -282,22 +385,9 @@ def an_asker(
     *,
     person: str | BaseException = PERSON,
     workload: str | BaseException = WORKLOAD,
-    origin: str = ORIGIN,
     monotonic: Callable[[], float] = time.monotonic,
 ) -> Asker:
-    wire = Wire(reply)
-    workload_token = Token(workload)
-    return Asker(
-        Token(person),
-        workload_token,
-        wire,
-        ServiceAnswerer(
-            origin=origin,
-            workload_token=workload_token,
-            transport=wire.transport,
-            monotonic=monotonic,
-        ),
-    )
+    return Asker(Token(person), Token(workload), Wire(reply), monotonic)
 
 
 def unavailable(outcome: Outcome) -> CoPresenterUnavailableError:
@@ -326,64 +416,6 @@ def summary_lines(caplog: pytest.LogCaptureFixture) -> list[str]:
 def one_warning(caplog: pytest.LogCaptureFixture) -> str:
     (warning,) = warning_lines(caplog)
     return warning
-
-
-@dataclass(frozen=True)
-class ReceivedCredentials:
-    """The ``Authorization`` and ``Agent-Workload-Token`` headers of one request."""
-
-    authorization: str | None
-    workload_token: str | None
-
-
-@asynccontextmanager
-async def fake_service(
-    reply_for: Callable[[str], Reply],
-    *,
-    credentials_seen: list[ReceivedCredentials] | None = None,
-) -> AsyncGenerator[str]:
-    """Serve ``POST /runs`` on 127.0.0.1; the reply may depend on the question.
-
-    Each request's two credential headers are appended to ``credentials_seen``.
-    """
-    app = FastAPI()
-    stopped = asyncio.Event()
-
-    @app.post("/runs")
-    async def runs(
-        run: RunRequest,
-        authorization: Annotated[str | None, Header()] = None,
-        agent_workload_token: Annotated[str | None, Header()] = None,
-    ) -> Response:
-        if credentials_seen is not None:
-            credentials_seen.append(
-                ReceivedCredentials(authorization, agent_workload_token)
-            )
-        reply = reply_for(run.turn.messages[0].text)
-
-        async def body() -> AsyncIterator[bytes]:
-            for chunk in reply.chunks:
-                yield chunk
-            if reply.gate is not None:
-                await reply.gate.wait()
-            for chunk in reply.late_chunks:
-                yield chunk
-            if reply.breaks_after_chunks:
-                raise RuntimeError
-            if reply.hangs_after_chunks:
-                await stopped.wait()
-
-        return StreamingResponse(
-            body(), status_code=reply.status, headers=reply.headers
-        )
-
-    listener = loopback_listener()
-    port = listener.getsockname()[1]
-    async with Serving(app, listener):
-        try:
-            yield f"http://127.0.0.1:{port}"
-        finally:
-            stopped.set()
 
 
 def closed_port_origin() -> str:

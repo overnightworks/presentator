@@ -13,14 +13,13 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi import FastAPI
 
-from presentator.adapters.agent_service import ServiceAnswerer
 from presentator.api.copresenter import (
     MAX_SAID_LENGTH,
     CoPresenterSurface,
     add_copresenter_routes,
 )
 from presentator.application.copresenter import AskLimiter, AskTicket
-from tests.presentator.adapters.support.agent_service_support import Wire
+from tests.presentator.agent.support.agent_service_support import Wire, an_answerer
 from tests.presentator.application.support.fakes import FrozenClock
 from tests.support.copresenter_support import (
     A_DECK,
@@ -37,7 +36,7 @@ from tests.support.copresenter_support import (
     ask,
     the_admins_decks,
 )
-from tests.support.lobby import A_TALK_ADDRESS, ADMIN, AN_AGENT_SERVICE
+from tests.support.lobby import A_TALK_ADDRESS, ADMIN
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -223,6 +222,9 @@ async def _ask_and_disconnect_before_the_body_is_sent(app: ASGIApp) -> None:
     await app(scope, receive, send)
 
 
+_SERVICE_WAIT_SECONDS = 5
+
+
 def _a_hanging_app(
     wire: Wire, limiter: AskLimiter, admission: Callable[[object], FixedSession]
 ) -> FastAPI:
@@ -232,11 +234,7 @@ def _a_hanging_app(
         surface=CoPresenterSurface(
             use=replace(
                 a_use(PrivateFakes(), the_admins_decks()),
-                answers=ServiceAnswerer(
-                    origin=AN_AGENT_SERVICE,
-                    workload_token=a_workload_token,
-                    transport=wire.transport,
-                ),
+                answers=an_answerer(wire.origin, a_workload_token),
             ),
             limiter=limiter,
             browser_origin=A_TALK_ADDRESS,
@@ -248,13 +246,13 @@ def _a_hanging_app(
 
 def test_a_browser_that_leaves_mid_answer_closes_the_services_connection() -> None:
     """Cell 18."""
-    wire = Wire(HANGING_AFTER_THE_FIRST_WORDS)
     limiter = AskLimiter(clock=FrozenClock(instant=NOW))
-    app = _a_hanging_app(wire, limiter, lambda _connection: FixedSession())
 
-    asyncio.run(_ask_and_leave_after_the_first_words(app))
+    with Wire(HANGING_AFTER_THE_FIRST_WORDS) as wire:
+        app = _a_hanging_app(wire, limiter, lambda _connection: FixedSession())
+        asyncio.run(_ask_and_leave_after_the_first_words(app))
+        assert wire.closed.wait(_SERVICE_WAIT_SECONDS)
 
-    assert wire.response_stream.closed.is_set()
     assert isinstance(limiter.admit(FixedSession().session_id), AskTicket)
 
 
@@ -266,13 +264,11 @@ def test_the_admission_runs_off_the_event_loop_thread() -> None:
         admitted_on.append(threading.get_ident())
         return FixedSession()
 
-    app = _a_hanging_app(
-        Wire(HANGING_AFTER_THE_FIRST_WORDS),
-        AskLimiter(clock=FrozenClock(instant=NOW)),
-        admission,
-    )
-
-    asyncio.run(_ask_and_leave_after_the_first_words(app))
+    with Wire(HANGING_AFTER_THE_FIRST_WORDS) as wire:
+        app = _a_hanging_app(
+            wire, AskLimiter(clock=FrozenClock(instant=NOW)), admission
+        )
+        asyncio.run(_ask_and_leave_after_the_first_words(app))
 
     assert admitted_on
     assert threading.get_ident() not in admitted_on

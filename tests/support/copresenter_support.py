@@ -24,7 +24,7 @@ from presentator.contracts.copresenter import (
     SlideText,
 )
 from presentator.contracts.decks import Deck, Source
-from tests.presentator.adapters.support.agent_service_support import (
+from tests.presentator.agent.support.agent_service_support import (
     Reply,
     assistant_text,
     event_frames,

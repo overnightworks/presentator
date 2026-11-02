@@ -15,8 +15,7 @@ from agent_runtime_client.wire import (
     RunRejection,
 )
 
-from presentator.adapters.agent_service import ServiceAnswerer
-from tests.presentator.adapters.support.agent_service_support import (
+from tests.presentator.agent.support.agent_service_support import (
     GOOD_ANSWER,
     MARKERS,
     ORIGIN,
@@ -24,18 +23,15 @@ from tests.presentator.adapters.support.agent_service_support import (
     QUESTION,
     WORKLOAD,
     CustomBaseError,
-    Outcome,
     RaisedBeforeAwaitingError,
     Reply,
     Token,
-    Wire,
+    an_answerer,
     an_asker,
     ask_once,
     assistant_text,
-    closed_port_origin,
     event_frames,
     failed,
-    fake_service,
     one_warning,
     refusal_reply,
     reply_with,
@@ -90,7 +86,6 @@ def test_a_failure_before_the_run_sends_no_run(
 
     unavailable(outcome)
     assert outcome.texts == []
-    assert asker.wire.transports_built == 0
     assert asker.wire.requests == []
     one_warning(caplog)
 
@@ -136,11 +131,8 @@ def test_a_token_callable_that_interrupts_leaves_answer_to_the_caller(
         return read()
 
     async def drive() -> BaseException:
-        wire = Wire(reply_with())
-        answerer = ServiceAnswerer(
-            origin=ORIGIN,
-            workload_token=interrupting if which == "workload" else Token(WORKLOAD),
-            transport=wire.transport,
+        answerer = an_answerer(
+            ORIGIN, interrupting if which == "workload" else Token(WORKLOAD)
         )
         person = interrupting if which == "person" else Token(PERSON)
         with pytest.raises(type(error)) as caught:
@@ -211,32 +203,16 @@ _LEAK_CASES = {
 }
 
 
-@pytest.mark.parametrize("transport", ["mock", "fake-service"])
 @pytest.mark.parametrize("case", list(_LEAK_CASES))
 def test_no_secret_and_no_question_leaks(
-    case: str, transport: str, caplog: pytest.LogCaptureFixture
+    case: str, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Cells 15-18 (#452): no sink holds a secret or the question."""
     leak = _LEAK_CASES[case]
-    reply, person, workload, message = (
-        leak.reply,
-        leak.person,
-        leak.workload,
-        leak.message,
-    )
     caplog.set_level(logging.DEBUG)
+    asker = an_asker(leak.reply, person=leak.person, workload=leak.workload)
 
-    async def drive() -> Outcome:
-        if transport == "mock":
-            return await an_asker(reply, person=person, workload=workload).ask(
-                message=message
-            )
-        async with fake_service(lambda _question: reply) as url:
-            runs_url = closed_port_origin() if reply.refuses_connection else url
-            answerer = ServiceAnswerer(origin=runs_url, workload_token=Token(workload))
-            return await ask_once(answerer, Token(person), message=message)
-
-    outcome = asyncio.run(drive())
+    outcome = asyncio.run(asker.ask(message=leak.message))
 
     errors = [] if outcome.error is None else [unavailable(outcome)]
     shown = everything_shown(caplog.records, errors)
@@ -348,11 +324,8 @@ def test_a_token_source_cancelled_inside_its_error_handler_leaves_no_chain(
                 await asyncio.Event().wait()
             raise AssertionError
 
-        wire = Wire(reply_with())
-        answerer = ServiceAnswerer(
-            origin=ORIGIN,
-            workload_token=source if which == "workload" else Token(WORKLOAD),
-            transport=wire.transport,
+        answerer = an_answerer(
+            ORIGIN, source if which == "workload" else Token(WORKLOAD)
         )
         person = source if which == "person" else Token(PERSON)
         task = asyncio.create_task(ask_once(answerer, person, message=QUESTION))

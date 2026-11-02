@@ -12,7 +12,7 @@ import uvicorn
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from fastapi import FastAPI
+    from starlette.types import ASGIApp
 
 
 def unix_listener(path: Path) -> socket.socket:
@@ -43,7 +43,7 @@ class _AnnouncingServer(uvicorn.Server):
 class Serving:
     """Serve ``app`` on a bound ``listener`` for the length of an ``async with``."""
 
-    def __init__(self, app: FastAPI, listener: socket.socket) -> None:
+    def __init__(self, app: ASGIApp, listener: socket.socket) -> None:
         """Hold the app and the socket it will serve on."""
         self._app = app
         self._listener = listener

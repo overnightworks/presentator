@@ -1,10 +1,11 @@
-"""The service answerer posts one run to its origin and reads it to its end."""
+"""The service answerer runs one turn through the client and maps how it ends."""
 
 from __future__ import annotations
 
 import asyncio
 import itertools
 import logging
+import threading
 from typing import TYPE_CHECKING
 
 import pytest
@@ -16,11 +17,9 @@ from agent_runtime_client.wire import (
     TurnRole,
 )
 
-from presentator.adapters.agent_service import ServiceAnswerer
 from presentator.contracts.copresenter import NotEnabledError
-from tests.presentator.adapters.support.agent_service_support import (
+from tests.presentator.agent.support.agent_service_support import (
     GOOD_ANSWER,
-    ORIGIN,
     PERSON,
     QUESTION,
     SERVICE_MESSAGE,
@@ -29,18 +28,20 @@ from tests.presentator.adapters.support.agent_service_support import (
     Outcome,
     Reply,
     Token,
+    Wire,
+    an_answerer,
     an_asker,
     assistant_text,
     byte_by_byte,
     cancelled,
     event_frames,
     failed,
-    fake_service,
     one_warning,
     refusal_reply,
     reply_with,
     run_started,
     succeeded,
+    succeeded_with_a_file_and_no_words,
     summary_lines,
     unavailable,
     violating_frame,
@@ -50,7 +51,10 @@ from tests.presentator.adapters.support.agent_service_support import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from tests.presentator.adapters.support.agent_service_support import Step
+    from tests.presentator.agent.support.agent_service_support import Step
+
+
+_WAIT_SECONDS = 5
 
 
 def test_the_request_is_the_run_request_of_the_contract() -> None:
@@ -59,19 +63,12 @@ def test_the_request_is_the_run_request_of_the_contract() -> None:
     asyncio.run(asker.ask())
 
     (request,) = asker.wire.requests
-    assert request.method == "POST"
-    assert str(request.url) == f"{ORIGIN}/runs"
+    assert (request.method, request.path) == ("POST", "/runs")
     run = RunRequest.model_validate_json(request.content)
     assert run.v == PROTOCOL_VERSION
     assert run.tools == {}
     assert run.turn.system
     assert [(m.role, m.text) for m in run.turn.messages] == [(TurnRole.USER, QUESTION)]
-    assert request.extensions["timeout"] == {
-        "connect": 5,
-        "write": 5,
-        "pool": 5,
-        "read": 60,
-    }
 
 
 def test_both_tokens_go_with_every_run_and_each_is_awaited_once() -> None:
@@ -82,7 +79,6 @@ def test_both_tokens_go_with_every_run_and_each_is_awaited_once() -> None:
     (request,) = asker.wire.requests
     assert request.headers["authorization"] == f"Bearer {PERSON}"
     assert request.headers["agent-workload-token"] == WORKLOAD
-    assert request.headers["accept"] == "text/event-stream"
     assert (asker.person.calls, asker.workload.calls) == (1, 1)
 
 
@@ -110,8 +106,8 @@ def _extra_in_a_later_chunk(frames: list[bytes]) -> list[bytes]:
     [_extra_in_the_terminals_chunk, _extra_in_a_later_chunk],
     ids=["same-chunk", "later-chunk"],
 )
-def test_nothing_may_follow_the_terminal(
-    arrange: Callable[[list[bytes]], list[bytes]], caplog: pytest.LogCaptureFixture
+def test_the_run_ends_at_its_terminal_and_what_follows_it_is_never_read(
+    arrange: Callable[[list[bytes]], list[bytes]],
 ) -> None:
     frames = event_frames(
         run_started(), assistant_text("Hallo"), succeeded(), assistant_text("zu viel")
@@ -120,9 +116,35 @@ def test_nothing_may_follow_the_terminal(
 
     outcome = asyncio.run(asker.ask())
 
-    assert outcome.texts == ["Hallo"]
+    assert outcome == Outcome(["Hallo"], None)
+
+
+def test_a_run_that_ends_with_files_and_no_words_is_unavailable(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    asker = an_asker(
+        reply_with(*event_frames(run_started(), succeeded_with_a_file_and_no_words()))
+    )
+
+    outcome = asyncio.run(asker.ask())
+
+    assert outcome.texts == []
     unavailable(outcome)
-    assert "event_after_terminal" in one_warning(caplog)
+    assert "files and no words" in one_warning(caplog)
+
+
+def test_a_run_with_words_keeps_them_though_it_also_left_a_file() -> None:
+    asker = an_asker(
+        reply_with(
+            *event_frames(
+                run_started(),
+                assistant_text("Hallo"),
+                succeeded_with_a_file_and_no_words(),
+            )
+        )
+    )
+
+    assert asyncio.run(asker.ask()) == Outcome(["Hallo"], None)
 
 
 @pytest.mark.parametrize(
@@ -204,8 +226,10 @@ _SERVICE_STATUS = {
     RejectionCode.INVALID_REQUEST: 422,
     RejectionCode.CAPABILITY_TOO_LARGE: 422,
     RejectionCode.NOT_FOUND: 404,
+    RejectionCode.TOO_LARGE: 413,
+    RejectionCode.MODEL_NOT_OFFERED: 422,
 }
-_SERVICE_RETRY_AFTER = {RejectionCode.BUSY: "10", RejectionCode.UNAVAILABLE: "30"}
+_SERVICE_RETRY_AFTER = {RejectionCode.BUSY: "10"}
 
 
 @pytest.mark.parametrize("code", list(RejectionCode))
@@ -250,7 +274,7 @@ _UNKNOWN_CODE = (
     ],
     ids=["unknown-code", "html-502", "json-200", "rejection-looking-200", "redirect"],
 )
-def test_a_refusal_without_a_known_code_is_unavailable_with_code_none(
+def test_a_refusal_without_a_known_code_is_unavailable(
     reply: Reply, caplog: pytest.LogCaptureFixture
 ) -> None:
     asker = an_asker(reply)
@@ -259,8 +283,7 @@ def test_a_refusal_without_a_known_code_is_unavailable_with_code_none(
 
     unavailable(outcome)
     warning = one_warning(caplog)
-    assert "None" in warning
-    assert not [code for code in RejectionCode if code.value in warning]
+    assert f"refused {RejectionCode.UNAVAILABLE.value}" in warning
     assert "bribe_me" not in warning
     assert len(asker.wire.requests) == 1
 
@@ -280,13 +303,15 @@ def test_a_retry_after_that_is_not_a_whole_number_of_seconds_is_not_logged(
     assert retry_after not in warning
 
 
-def test_a_transport_that_cannot_connect_is_unavailable() -> None:
+def test_a_service_that_cannot_be_reached_is_unavailable(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     asker = an_asker(Reply(refuses_connection=True))
 
     outcome = asyncio.run(asker.ask())
 
     unavailable(outcome)
-    assert asker.wire.transports_built == 1
+    assert "transport_lost" in one_warning(caplog)
 
 
 def test_a_transport_failure_mid_stream_is_unavailable_after_the_text() -> None:
@@ -312,17 +337,18 @@ def test_leaving_early_closes_the_response() -> None:
     )
 
     async def leave_after_first_text() -> None:
-        async with asker.answerer.answer(
-            message=QUESTION, person_token=asker.person
-        ) as stream:
-            assert await anext(stream) == "Hallo"
-        assert asker.wire.response_stream.closed.is_set()
+        with asker.wire:
+            async with asker.answerer().answer(
+                message=QUESTION, person_token=asker.person
+            ) as stream:
+                assert await anext(stream) == "Hallo"
+            assert await asyncio.to_thread(asker.wire.closed.wait, _WAIT_SECONDS)
 
     asyncio.run(leave_after_first_text())
 
 
 def test_one_asks_end_leaves_another_intact() -> None:
-    first_left = asyncio.Event()
+    first_left = threading.Event()
     second_frames = event_frames(
         run_started(),
         assistant_text("zweite "),
@@ -343,8 +369,8 @@ def test_one_asks_end_leaves_another_intact() -> None:
         )
 
     async def drive() -> list[str]:
-        async with fake_service(reply_for) as url:
-            answerer = ServiceAnswerer(origin=url, workload_token=Token(WORKLOAD))
+        with Wire(reply_for) as wire:
+            answerer = an_answerer(wire.origin, Token(WORKLOAD))
             person = Token(PERSON)
             async with answerer.answer(message="second", person_token=person) as second:
                 async with answerer.answer(
@@ -357,17 +383,22 @@ def test_one_asks_end_leaves_another_intact() -> None:
     assert asyncio.run(drive()) == ["zweite ", "Antwort."]
 
 
-@pytest.mark.parametrize(
-    "origin", ["http://agent-service.test", "http://agent-service.test/"]
-)
-def test_the_run_is_posted_to_the_origins_runs_path(origin: str) -> None:
+@pytest.mark.parametrize("suffix", ["", "/"], ids=["bare", "trailing-slash"])
+def test_the_run_is_posted_to_the_origins_runs_path(suffix: str) -> None:
     """#452: the origin with or without a trailing slash posts to /runs."""
-    asker = an_asker(reply_with(*whole(event_frames(*GOOD_ANSWER))), origin=origin)
 
-    asyncio.run(asker.ask())
+    async def ask(wire: Wire) -> None:
+        answerer = an_answerer(wire.origin + suffix, Token(WORKLOAD))
+        async with answerer.answer(
+            message=QUESTION, person_token=Token(PERSON)
+        ) as texts:
+            assert [text async for text in texts]
 
-    (request,) = asker.wire.requests
-    assert str(request.url) == "http://agent-service.test/runs"
+    with Wire(reply_with(*whole(event_frames(*GOOD_ANSWER)))) as wire:
+        asyncio.run(ask(wire))
+
+    (request,) = wire.requests
+    assert request.path == "/runs"
 
 
 @pytest.mark.parametrize("code", list(RejectionCode))
@@ -400,8 +431,8 @@ def test_a_good_run_logs_its_event_types_and_times_counted_from_the_post(
     summary = _summary_of_a_run(reply_with(*whole(event_frames(*GOOD_ANSWER))), caplog)
 
     assert summary == (
-        "agent service run summary: events=RunStarted:1,AssistantText:2,"
-        "Heartbeat:1,Succeeded:1 violation=None first_text_ms=1000 end_ms=2000"
+        "agent service run summary: events=AssistantTextEvent:2,FinalEvent:1 "
+        "stop=None first_text_ms=1000 end_ms=2000"
     )
 
 
@@ -417,7 +448,7 @@ def test_a_failed_run_logs_one_summary_without_the_service_message(
 
     summary = _summary_of_a_run(reply, caplog)
 
-    assert "events=RunStarted:1,AssistantText:1,Failed:1" in summary
+    assert "events=AssistantTextEvent:1 stop=failed" in summary
     assert SERVICE_MESSAGE not in summary
 
 
@@ -425,30 +456,33 @@ def test_a_stream_violation_logs_its_kind_and_not_its_detail(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """#452: the run summary of a violation."""
-    summary = _summary_of_a_run(reply_with(violating_frame()), caplog)
+    frames = event_frames(run_started())
 
-    assert "events=StreamViolation:1 violation=unsupported_version" in summary
+    summary = _summary_of_a_run(reply_with(*frames, violating_frame()), caplog)
+
+    assert "events= stop=unsupported_version" in summary
     assert "first_text_ms=None" in summary
     assert VIOLATION_DETAIL not in summary
 
 
-def test_leaving_before_the_first_read_logs_one_summary(
+def test_leaving_before_the_first_read_opens_no_run_and_logs_no_summary(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """#452: the run summary of an early leave."""
     caplog.set_level(logging.INFO)
-    asker = an_asker(
-        reply_with(*whole(event_frames(*GOOD_ANSWER))), monotonic=_ticking_clock()
-    )
+    asker = an_asker(reply_with(*whole(event_frames(*GOOD_ANSWER))))
 
     async def leave() -> None:
-        async with asker.answerer.answer(message=QUESTION, person_token=asker.person):
-            pass
+        with asker.wire:
+            async with asker.answerer().answer(
+                message=QUESTION, person_token=asker.person
+            ):
+                pass
 
     asyncio.run(leave())
 
-    (summary,) = summary_lines(caplog)
-    assert summary.endswith("events= violation=None first_text_ms=None end_ms=1000")
+    assert asker.wire.requests == []
+    assert summary_lines(caplog) == []
 
 
 def test_a_refusal_before_the_stream_logs_no_summary(

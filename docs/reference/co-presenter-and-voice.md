@@ -10,12 +10,15 @@ the authority it shares is [trust boundaries](../explanation/trust-boundaries.md
 The agent service answers; the speech service speaks and hears.
 
 The agent service is the operator's own, reached at `PRESENTATOR_AGENT_SERVICE`
-over the `hal_agent_presentator` network. Presentator reads the asked deck's words at its
-built commit, sends them with the question as one message, with no tools, and
-streams the model's text back. Both the person's fresh access token and
-Presentator's own workload token go with every run; the workload grant asks for
-the scope in `PRESENTATOR_AGENT_SERVICE_SCOPE`, so that token names the agent
-service and no other as its audience. Presentator splits the text
+over the `hal_agent_presentator` network, chosen by `PRESENTATOR_AGENT_BACKEND`.
+Presentator reads the asked deck's words at its built commit, sends them with
+the question as one message, with no tools, and streams the model's text back.
+Both the person's fresh access token and Presentator's own workload token go
+with every run; the workload grant asks for the scope in
+`PRESENTATOR_AGENT_SERVICE_SCOPE`, so that token names the agent service and no
+other as its audience. The request, the stream and their timeouts belong to
+agent-runtime's client (`ServiceBackend`); `src/presentator/agent/backend.py`
+maps how a turn ends onto the overlay's answers. Presentator splits the text
 into sentences and speaks them.
 
 A host process can sit beside a checkout run; it is not part of a deployed
@@ -59,8 +62,9 @@ session whose refresh token is missing or refused gets 401
 of these cases, and the question is counted. Once the answer streams, the
 events are `text`, `sentence`, `audio` and `done`, each carrying
 `"ai_generated": true` (AI Act Art. 50(2)); the mark has no switch. Every failure ends in an
-`error` event, and an answer the service refuses because the person is not
-enabled carries `"reason": "not-enabled"` in it. The overlay shows only its
+`error` event, a run that ends with files and no words included, and an answer
+the service refuses because the person is not enabled carries
+`"reason": "not-enabled"` in it. The overlay shows only its
 own words for them: "Not enabled" for the `not-enabled` reason, "Sign in again"
 for either 401, and "No answer" for everything else, without navigating away
 and never with a message the server sent. A refusal line clears when the next

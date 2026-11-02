@@ -467,6 +467,20 @@ and the talk host, asks for the same scope beside `openid`, `profile` and
 rejected by it. An issuer's `invalid_scope` is the
 typed refusal the co-presenter already answers as "unavailable".
 
+### Amendment 2026-11-02 — the client's connector owns the way to the agent service
+
+Authority: [#709](https://github.com/overnightworks/presentator/issues/709),
+agent-runtime#672 and the operator's ruling of 2026-10-31 that agent-runtime
+ships the client every app uses, under the same names.
+
+`overnightworks-agent-runtime-client[backend]` is pinned at agent-runtime
+0.16.0, which speaks protocol 6. The client's `ServiceBackend` owns the POST,
+the SSE decoding, the refusal mapping and the timeouts; presentator keeps no copy
+of them. `presentator.agent` replaces the two hand-built adapters and takes
+their place in the adapters-only rule: it is the one package that names the
+client, and it maps a `TurnStopped` onto the co-presenter's errors. The deploy
+goes in the service's protocol 6 window, because there is no coexistence.
+
 ## Consequences
 
 - Which model presents becomes configuration, not code, and the phase M1 work is

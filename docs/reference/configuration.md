@@ -35,6 +35,7 @@ some of them.
 | `PRESENTATOR_MIRRORS` | `mirrors` | Where the bare mirrors of the deck sources live. |
 | `PRESENTATOR_HOST` | `127.0.0.1` | Listen address. |
 | `PRESENTATOR_PORT` | `8000` | Listen port. |
+| `PRESENTATOR_AGENT_BACKEND` | `service` | What answers the co-presenter. `service` is the agent service at `PRESENTATOR_AGENT_SERVICE`, the recipient the privacy text names; any other value refuses the start. |
 | `PRESENTATOR_TRUSTED_PROXIES` | empty | Comma-separated addresses or networks; see below. |
 | `PRESENTATOR_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/` as the person and `/api/admin/` as an admin; empty serves no token route. See [people](people.md). |
 | `PRESENTATOR_SOURCE_POLL_SECONDS` | `300` | Interval of the source poll. |

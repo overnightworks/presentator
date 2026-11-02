@@ -161,7 +161,7 @@ layers = ["host", "api", "application", "ports", "contracts"]
 id = "adapters-reach-down-only"
 name = "Adapters never reach up into application, api, or host"
 type = "forbidden"
-source_modules = ["presentator.adapters"]
+source_modules = ["presentator.adapters", "presentator.agent"]
 forbidden_modules = [
     "presentator.application",
     "presentator.api",
@@ -179,7 +179,7 @@ source_modules = [
     "presentator.ports",
     "presentator.contracts",
 ]
-forbidden_modules = ["presentator.adapters"]
+forbidden_modules = ["presentator.adapters", "presentator.agent"]
 as_packages = true
 
 [[tool.importlinter.contracts]]
@@ -365,9 +365,10 @@ allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 id = "agent-runtime-client-library"
-name = "Only adapters import agent_runtime_client"
+name = "Only presentator.agent imports agent_runtime_client"
 type = "forbidden"
 source_modules = [
+    "presentator.adapters",
     "presentator.host",
     "presentator.api",
     "presentator.application",
