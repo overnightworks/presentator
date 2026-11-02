@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 
 import type { SessionView } from '../src/lib/api/session.ts';
-import { expect, test } from './csp.ts';
+import { expect, test } from './coverage.ts';
 
 async function sessionOf(page: Page): Promise<SessionView> {
 	const answer = await page.request.get('/api/session', { headers: { Accept: 'application/json' } });

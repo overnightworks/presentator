@@ -412,6 +412,20 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Only this job builds the instrumented lobby; the image builds the
+      # production one. The drive writes its counters beside vitest's.
+      - name: Build the instrumented lobby
+        run: pnpm build:instrumented
+
+      - name: Drive the lobby in Chromium and Firefox
+        run: pnpm drive
+
+      # Vitest and the drive count the same source files; the lobby's branches
+      # are checked on their sum, so no vitest-only threshold asks for tests
+      # that mirror the drive.
+      - name: Merge the lobby's coverage and check its branches
+        run: pnpm coverage:merge
+
       - name: Upload the coverage report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -421,12 +435,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           overwrite: true
-
-      - name: Build the lobby
-        run: pnpm build
-
-      - name: Drive the lobby in Chromium and Firefox
-        run: pnpm drive
 
       - name: Upload the drive's traces
         if: ${{ failure() }}
