@@ -295,7 +295,8 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: slidev/.nvmrc
+          node-version-file: slidev/package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: slidev/pnpm-lock.yaml
 
@@ -371,7 +372,8 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: frontend/.nvmrc
+          node-version-file: frontend/package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
