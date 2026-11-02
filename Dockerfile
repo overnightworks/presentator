@@ -5,10 +5,10 @@
 # lobby's output; the web and the build worker run from it.
 #
 # Node is the base because the toolchain's version is the narrow one
-# (slidev/.nvmrc); uv brings the Python that .python-version names. Every
+# (the engines field of slidev/package.json); uv brings the Python that .python-version names. Every
 # image named here is held by digest, because a tag is a name its owner may
 # move.
-FROM node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 AS runtime-user
+FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS runtime-user
 
 # The two identities a build worker runs steps as: one builds, one only reads
 # what the build wrote. They are made before the runtime user so that a runtime
@@ -28,6 +28,10 @@ RUN case "$PRESENTATOR_RUNTIME_UID" in \
     esac \
     && test "$PRESENTATOR_RUNTIME_UID" -gt 0 \
     && useradd --create-home --non-unique --uid "$PRESENTATOR_RUNTIME_UID" presentator
+# Node 26 no longer bundles corepack, which hands out the pnpm that each
+# package.json names in packageManager.
+RUN npm install --global corepack@0.36.0
+
 # The browser and corepack's package managers are root's and live outside the
 # runtime HOME, so every one of the three users can run them.
 ENV HOME=/home/presentator \
