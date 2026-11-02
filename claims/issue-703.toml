@@ -1,0 +1,8 @@
+claim_id = "d5b95de4e15540daa843577b5a3ac042"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "58722944a42f9d48a24629b6c4aea49e694dd4c7"
+branch = "claude/issue-703-presentator-allows-node-24-and-26-and-bu"
+scope = [".github/workflows/ci.yml", "Dockerfile", "docs/TESTING.md", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/pnpm-workspace.yaml", "slidev/.nvmrc", "slidev/package.json", "slidev/pnpm-lock.yaml"]
+opened_commit = "7c86de5b09e81f5c070085dd800c05256cf7b7eb"
+whole_reason = "One Node version owner per package, read by CI and matched by the image: a split would leave CI and the image on different Node versions."
