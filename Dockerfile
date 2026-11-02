@@ -4,10 +4,13 @@
 # output. `instance` is the toolchain layer plus the packaged server and the
 # lobby's output; the web and the build worker run from it.
 #
-# Node is the base because the toolchain's version is the narrow one
-# (the engines field of slidev/package.json); uv brings the Python that .python-version names. Every
-# image named here is held by digest, because a tag is a name its owner may
-# move.
+# Node is the base because the toolchain's version is the narrow one (the
+# engines field of slidev/package.json); uv brings the Python that
+# .python-version names. Every image named here is held by digest, because a
+# tag is a name its owner may move. uv's tag is read from the `uv` stage by CI
+# (.github/actions/setup-uv), so the image and CI run one uv.
+FROM ghcr.io/astral-sh/uv:0.10.9@sha256:10902f58a1606787602f303954cea099626a4adb02acbac4c69920fe9d278f82 AS uv
+
 FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS runtime-user
 
 # The two identities a build worker runs steps as: one builds, one only reads
@@ -90,7 +93,7 @@ RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates git openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:0.10.9@sha256:10902f58a1606787602f303954cea099626a4adb02acbac4c69920fe9d278f82 /uv /usr/local/bin/uv
+COPY --from=uv /uv /usr/local/bin/uv
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON_INSTALL_DIR=/opt/python \
