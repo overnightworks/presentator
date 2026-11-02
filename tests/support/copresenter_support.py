@@ -174,6 +174,7 @@ class RecordingAnswers:
     """The agent service's text, behind the real application use case."""
 
     messages: list[str] = field(default_factory=list[str])
+    subjects: list[str] = field(default_factory=list[str])
     person_tokens: list[str] = field(default_factory=list[str])
     exits: int = 0
     hold: bool = False
@@ -186,11 +187,12 @@ class RecordingAnswers:
     reader_closed_before_context_exit: bool = False
 
     def answer(
-        self, *, message: str, person_token: TokenSource
+        self, *, message: str, subject: str, person_token: TokenSource
     ) -> AbstractAsyncContextManager[AsyncIterator[str]]:
         @asynccontextmanager
         async def operation() -> AsyncGenerator[AsyncIterator[str]]:
             self.messages.append(message)
+            self.subjects.append(subject)
             self.person_tokens.append(await person_token())
             if self.unavailable is not None:
                 raise self.unavailable

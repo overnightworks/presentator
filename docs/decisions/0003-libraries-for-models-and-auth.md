@@ -473,8 +473,8 @@ Authority: [#709](https://github.com/overnightworks/presentator/issues/709),
 agent-runtime#672 and the operator's ruling of 2026-10-31 that agent-runtime
 ships the client every app uses, under the same names.
 
-`overnightworks-agent-runtime-client[backend]` is pinned at agent-runtime
-0.16.0, which speaks protocol 6. The client's `ServiceBackend` owns the POST,
+`overnightworks-agent-runtime-client[backend]` is pinned at an
+agent-runtime release that speaks protocol 6. The client's `ServiceBackend` owns the POST,
 the SSE decoding, the refusal mapping and the timeouts; presentator keeps no copy
 of them. `presentator.agent` replaces the two hand-built adapters and takes
 their place in the adapters-only rule: it is the one package that names the

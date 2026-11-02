@@ -53,6 +53,7 @@ class PreparedAsk:
 
     asked: AskedDeck
     person: PersonToken
+    subject: str
     started: float
 
 
@@ -99,7 +100,7 @@ class CoPresenterUse:
         return await self.speech.readiness()
 
     async def prepare(
-        self, asked: AskedDeck, session_id: str
+        self, asked: AskedDeck, session_id: str, *, subject: str
     ) -> PreparedAsk | AccessRefusal:
         """Fetch the session's fresh person token, before anything is streamed.
 
@@ -109,7 +110,7 @@ class CoPresenterUse:
         person = await self.person_access.fresh(session_id)
         if isinstance(person, AccessRefusal):
             return person
-        return PreparedAsk(asked=asked, person=person, started=started)
+        return PreparedAsk(asked=asked, person=person, subject=subject, started=started)
 
     @asynccontextmanager
     async def answer(
@@ -127,7 +128,9 @@ class CoPresenterUse:
             return prepared.person.value
 
         async with self.answers.answer(
-            message=user_message(question, deck_text), person_token=person_token
+            message=user_message(question, deck_text),
+            subject=prepared.subject,
+            person_token=person_token,
         ) as texts:
             events = spoken_events(texts, self.boundaries, self.speaking, language)
             async with aclosing(self._timed(events, prepared.started)) as timed:

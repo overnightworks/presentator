@@ -39,9 +39,9 @@ class AgentAnswers(Protocol):
     """The text of a model's answer to one message, streamed."""
 
     def answer(
-        self, *, message: str, person_token: TokenSource
+        self, *, message: str, subject: str, person_token: TokenSource
     ) -> AbstractAsyncContextManager[AsyncIterator[str]]:
-        """Open one answer: the text deltas, until the model has finished.
+        """Open one answer for the account `subject`: the text deltas, until done.
 
         Raises CoPresenterUnavailableError when the answer cannot be had, and
         NotEnabledError when the service does not answer this person.

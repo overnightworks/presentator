@@ -29,7 +29,8 @@ from agent_runtime_client.wire import (
     Succeeded,
 )
 
-from presentator.agent.backend import ServiceAnswerer, agent_config
+from presentator.agent.backend import ServiceAnswerer
+from presentator.agent.settings import agent_config
 from presentator.contracts.copresenter import CoPresenterUnavailableError
 from tests.presentator.adapters.support.serving import Serving, loopback_listener
 
@@ -59,6 +60,8 @@ MARKERS = (
 )
 EVENT_STREAM = {"content-type": "text/event-stream"}
 LOGGER = "presentator.agent.backend"
+ISSUER = "https://issuer.example/realms/people"
+SUBJECT = "account-7"
 _SCOPE = "agent-service-audience"
 _SERVER_WAIT_SECONDS = 10
 
@@ -340,7 +343,9 @@ async def ask_once(
 ) -> Outcome:
     texts: list[str] = []
     try:
-        async with answerer.answer(message=message, person_token=person) as stream:
+        async with answerer.answer(
+            message=message, subject=SUBJECT, person_token=person
+        ) as stream:
             while True:
                 try:
                     texts.append(await anext(stream))
@@ -359,7 +364,10 @@ def an_answerer(
 ) -> ServiceAnswerer:
     config = agent_config(backend="service", service_url=origin, workload_scope=_SCOPE)
     return ServiceAnswerer(
-        config=config, workload_token=workload_token, monotonic=monotonic
+        config=config,
+        issuer=ISSUER,
+        workload_token=workload_token,
+        monotonic=monotonic,
     )
 
 

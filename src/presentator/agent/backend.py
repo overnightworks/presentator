@@ -20,7 +20,7 @@ from agent_runtime_client.backend import (
     TurnStopped,
 )
 from agent_runtime_client.backend.service import ServiceBackend
-from agent_runtime_client.config import AgentConfig
+from agent_runtime_client.capability import CapabilityPrincipal
 from agent_runtime_client.errors import raise_without_chain
 from agent_runtime_client.turn_events import AssistantTextEvent, FinalEvent
 from agent_runtime_client.wire import RejectionCode, RunRequest, TurnMessage, TurnRole
@@ -42,6 +42,7 @@ from presentator.contracts.copresenter import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Callable
 
+    from agent_runtime_client.config import AgentConfig
     from webauth.config import WebAuthConfig
     from webauth.oidc import OidcRelyingParty
     from webauth.ports import SessionRecordStore
@@ -51,17 +52,6 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 _AGENT_FILE: Final = Path(__file__).parent.parent / "agents" / "copresenter.md"
 _MILLISECONDS: Final = 1000
-
-
-def agent_config(*, backend: str, service_url: str, workload_scope: str) -> AgentConfig:
-    """The client's `agent` section, from what the host's settings hold."""
-    return AgentConfig.model_validate(
-        {
-            "backend": backend,
-            "service_url": service_url,
-            "workload_scope": workload_scope,
-        }
-    )
 
 
 def _fail(reason: str) -> NoReturn:
@@ -167,18 +157,23 @@ class ServiceAnswerer:
         self,
         *,
         config: AgentConfig,
+        issuer: str,
         workload_token: TokenSource,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
-        """Reach the service this configuration names, as this workload."""
+        """Reach the service this configuration names, as this workload.
+
+        `issuer` is the relying party's, which names every account that asks.
+        """
         self._backend = ServiceBackend(config)
+        self._issuer = issuer
         self._workload_token = workload_token
         self._monotonic = monotonic
         self._agent = load_agent(_AGENT_FILE, [])
 
     @asynccontextmanager
     async def answer(
-        self, *, message: str, person_token: TokenSource
+        self, *, message: str, subject: str, person_token: TokenSource
     ) -> AsyncGenerator[AsyncIterator[str]]:
         """Stream the run's text; any refusal or failure is one unavailable error.
 
@@ -186,8 +181,10 @@ class ServiceAnswerer:
         """
         request = self._run_request(message)
         tally = _RunTally(self._monotonic)
-        # Only a run lifecycle reads the principal, and a run without tools has none.
-        asker = Asker(principal=None, tokens=partial(self._tokens, person_token, tally))
+        asker = Asker(
+            principal=CapabilityPrincipal(iss=self._issuer, sub=subject),
+            tokens=partial(self._tokens, person_token, tally),
+        )
         texts = _texts(self._backend.run(request, asker), tally)
         try:
             yield texts

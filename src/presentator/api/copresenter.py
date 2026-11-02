@@ -188,6 +188,7 @@ class _Ask:
     asked: AskedDeck
     question: Question
     ticket: AskTicket
+    subject: str
 
 
 def _ask_route(
@@ -252,12 +253,15 @@ def _admit(
             language=question.language and question.language.value,
         ),
         ticket=ticket,
+        subject=connection.user_id,
     )
 
 
 async def _prepare(use: CoPresenterUse, ask: _Ask) -> PreparedAsk | Response:
     try:
-        prepared = await use.prepare(ask.asked, ask.ticket.session_id)
+        prepared = await use.prepare(
+            ask.asked, ask.ticket.session_id, subject=ask.subject
+        )
     except CoPresenterUnavailableError:
         return _unavailable()
     if isinstance(prepared, AccessRefusal):

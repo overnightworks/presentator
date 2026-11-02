@@ -24,7 +24,7 @@ FIRST_AUDIO = "presentator.application.copresenter"
 
 
 def a_prepared_ask(use: CoPresenterUse) -> PreparedAsk:
-    prepared = asyncio.run(use.prepare(ASKED, "session"))
+    prepared = asyncio.run(use.prepare(ASKED, "session", subject="account"))
     assert isinstance(prepared, PreparedAsk)
     return prepared
 
@@ -48,7 +48,7 @@ def test_a_refused_person_token_is_returned_before_any_answer() -> None:
     fakes.person_access.refusal = AccessRefusal.SIGN_IN_AGAIN
     use = a_use(fakes, FakeDeckStore())
 
-    refused = asyncio.run(use.prepare(ASKED, "session"))
+    refused = asyncio.run(use.prepare(ASKED, "session", subject="account"))
 
     assert refused is AccessRefusal.SIGN_IN_AGAIN
     assert fakes.answers.messages == []
@@ -59,7 +59,7 @@ def test_a_failing_token_source_is_unavailable() -> None:
     fakes = PrivateFakes()
     fakes.person_access.unavailable = True
     use = a_use(fakes, FakeDeckStore())
-    preparing = use.prepare(ASKED, "session")
+    preparing = use.prepare(ASKED, "session", subject="account")
 
     with pytest.raises(CoPresenterUnavailableError):
         asyncio.run(preparing)
@@ -80,6 +80,7 @@ def test_the_service_gets_the_asked_decks_words_and_the_persons_token() -> None:
     assert events[-1] == Done(text="Eine Antwort.")
     assert fakes.texts.asked == [(ASKED.deck, ASKED.source)]
     assert fakes.answers.person_tokens == ["person-token"]
+    assert fakes.answers.subjects == ["account"]
     (message,) = fakes.answers.messages
     assert message.startswith("Deck: Kundenfeedback\nYou are on slide 1.")
     assert "The person said: Frage" in message
@@ -109,7 +110,7 @@ async def _cancel_answer() -> None:
     fakes = PrivateFakes()
     fakes.answers.hold = True
     use = a_use(fakes, FakeDeckStore())
-    prepared = await use.prepare(ASKED, "session")
+    prepared = await use.prepare(ASKED, "session", subject="account")
     assert isinstance(prepared, PreparedAsk)
 
     async with use.answer(prepared, A_QUESTION) as events:

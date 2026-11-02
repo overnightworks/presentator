@@ -9,6 +9,8 @@ import threading
 from typing import TYPE_CHECKING
 
 import pytest
+from agent_runtime_client.backend import Asker
+from agent_runtime_client.capability import CapabilityPrincipal
 from agent_runtime_client.wire import (
     PROTOCOL_VERSION,
     FailureCode,
@@ -20,9 +22,11 @@ from agent_runtime_client.wire import (
 from presentator.contracts.copresenter import NotEnabledError
 from tests.presentator.agent.support.agent_service_support import (
     GOOD_ANSWER,
+    ISSUER,
     PERSON,
     QUESTION,
     SERVICE_MESSAGE,
+    SUBJECT,
     VIOLATION_DETAIL,
     WORKLOAD,
     Outcome,
@@ -49,7 +53,7 @@ from tests.presentator.agent.support.agent_service_support import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import AsyncGenerator, Callable
 
     from tests.presentator.agent.support.agent_service_support import Step
 
@@ -339,7 +343,7 @@ def test_leaving_early_closes_the_response() -> None:
     async def leave_after_first_text() -> None:
         with asker.wire:
             async with asker.answerer().answer(
-                message=QUESTION, person_token=asker.person
+                message=QUESTION, subject=SUBJECT, person_token=asker.person
             ) as stream:
                 assert await anext(stream) == "Hallo"
             assert await asyncio.to_thread(asker.wire.closed.wait, _WAIT_SECONDS)
@@ -372,9 +376,11 @@ def test_one_asks_end_leaves_another_intact() -> None:
         with Wire(reply_for) as wire:
             answerer = an_answerer(wire.origin, Token(WORKLOAD))
             person = Token(PERSON)
-            async with answerer.answer(message="second", person_token=person) as second:
+            async with answerer.answer(
+                message="second", subject=SUBJECT, person_token=person
+            ) as second:
                 async with answerer.answer(
-                    message="first", person_token=person
+                    message="first", subject=SUBJECT, person_token=person
                 ) as first:
                     assert await anext(first) == "erst"
                 first_left.set()
@@ -390,7 +396,7 @@ def test_the_run_is_posted_to_the_origins_runs_path(suffix: str) -> None:
     async def ask(wire: Wire) -> None:
         answerer = an_answerer(wire.origin + suffix, Token(WORKLOAD))
         async with answerer.answer(
-            message=QUESTION, person_token=Token(PERSON)
+            message=QUESTION, subject=SUBJECT, person_token=Token(PERSON)
         ) as texts:
             assert [text async for text in texts]
 
@@ -475,7 +481,7 @@ def test_leaving_before_the_first_read_opens_no_run_and_logs_no_summary(
     async def leave() -> None:
         with asker.wire:
             async with asker.answerer().answer(
-                message=QUESTION, person_token=asker.person
+                message=QUESTION, subject=SUBJECT, person_token=asker.person
             ):
                 pass
 
@@ -495,3 +501,32 @@ def test_a_refusal_before_the_stream_logs_no_summary(
     asyncio.run(asker.ask())
 
     assert summary_lines(caplog) == []
+
+
+def test_the_run_names_the_asking_person_with_the_issuer_and_the_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#709 M3b: the run's principal is the verified person, never none."""
+    principals: list[CapabilityPrincipal | None] = []
+
+    class RecordingBackend:
+        def __init__(self, _config: object) -> None:
+            pass
+
+        async def run(self, _request: object, asker: Asker) -> AsyncGenerator[None]:
+            principals.append(asker.principal)
+            return
+            yield
+
+    monkeypatch.setattr("presentator.agent.backend.ServiceBackend", RecordingBackend)
+
+    async def ask() -> None:
+        answerer = an_answerer("http://service.invalid", Token(WORKLOAD))
+        async with answerer.answer(
+            message=QUESTION, subject=SUBJECT, person_token=Token(PERSON)
+        ) as texts:
+            assert [text async for text in texts] == []
+
+    asyncio.run(ask())
+
+    assert principals == [CapabilityPrincipal(iss=ISSUER, sub=SUBJECT)]

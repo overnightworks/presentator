@@ -72,8 +72,8 @@ from presentator.agent.backend import (
     PersonAccessTokens,
     ServiceAnswerer,
     WorkloadToken,
-    agent_config,
 )
+from presentator.agent.settings import agent_config
 from presentator.api.auth import (
     InstalledAuth,
     LobbyPrivate,
@@ -293,6 +293,7 @@ def _copresenter_surface(
         use=CoPresenterUse(
             answers=ServiceAnswerer(
                 config=config,
+                issuer=settings.oidc_issuer,
                 workload_token=WorkloadToken(
                     auth.relying_party, (config.workload_scope,)
                 ),

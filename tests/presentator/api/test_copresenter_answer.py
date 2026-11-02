@@ -604,7 +604,7 @@ class ChangeOnceTheAnswerHangs:
 
     async def __call__(self, wire: Wire, hosts: Hosts, _seconds: float) -> None:
         self.waits += 1
-        await asyncio.to_thread(wire.hung.wait, _HANG_WAIT_SECONDS)
+        assert await asyncio.to_thread(wire.hung.wait, _HANG_WAIT_SECONDS)
         self.change(hosts)
 
 
