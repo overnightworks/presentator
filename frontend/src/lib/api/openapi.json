@@ -1527,8 +1527,12 @@
         "type": "string"
       },
       "SessionAddresses": {
-        "description": "Where a page sends a person to sign in or out.",
+        "description": "Where a page sends a person to sign in, sign out or manage the central account.",
         "properties": {
+          "account_console_url": {
+            "title": "Account Console Url",
+            "type": "string"
+          },
           "logout": {
             "title": "Logout",
             "type": "string"
@@ -1545,7 +1549,8 @@
         "required": [
           "start",
           "logout",
-          "talk_start"
+          "talk_start",
+          "account_console_url"
         ],
         "title": "SessionAddresses",
         "type": "object"

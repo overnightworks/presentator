@@ -13,6 +13,12 @@ item = "#683"
 date = 2026-11-02
 reason = "the generated typed client stays a baseline entry until #708 declares it as [[size.generated]] at quality R (operator ruling 2.11.2026)"
 
+[[gate.loosened]]
+what = 'size baseline raises file_lines frontend/src/lib/api/types.ts 2470 -> 2472'
+item = "#732"
+date = 2026-11-03
+reason = "the generated typed client stays a baseline entry until #708 declares it as [[size.generated]] at quality R"
+
 [[root.allow]]
 entry = "examples/"
 reason = "the example decks the documentation and the probes build"

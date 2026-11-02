@@ -212,11 +212,18 @@ class InstalledAuth:
     # The talk host signs in through its own installation of the same wiring;
     # the lobby sends a refused talk sign-in's retry there.
     talk_origin: str
+    # The realm that signs people in, which also serves their central account.
+    issuer: str
 
     @property
     def talk_sign_in_address(self) -> str:
         """Where a sign-in starts at the talk host."""
         return f"{self.talk_origin}{START_SIGN_IN_PATH}"
+
+    @property
+    def account_console_url(self) -> str:
+        """Where the person manages their central account."""
+        return f"{self.issuer}/account"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -397,6 +404,7 @@ def _session_routes(pages: Pages, auth: InstalledAuth) -> APIRouter:
             start=START_SIGN_IN_PATH,
             logout=LOGOUT_PATH,
             talk_start=auth.talk_sign_in_address,
+            account_console_url=auth.account_console_url,
         ),
     )
 

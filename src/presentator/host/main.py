@@ -357,6 +357,7 @@ def installed_auths(
         transaction=identity_writes,
         content_security_policy=content_security_policy(shell),
         talk_origin=settings.talk_origin,
+        issuer=settings.oidc_issuer,
     )
     talk = replace(
         lobby,
