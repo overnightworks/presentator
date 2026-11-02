@@ -7,6 +7,12 @@ item = "#477"
 date = 2026-10-24
 reason = "the host co-presenter package is deleted (D1 of #355, operator ruling 21.10.2026); its job checks code that no longer exists"
 
+[[gate.loosened]]
+what = 'size baseline adds file_lines frontend/src/lib/api/types.ts 2482'
+item = "#683"
+date = 2026-11-02
+reason = "the generated typed client stays a baseline entry until #708 declares it as [[size.generated]] at quality R (operator ruling 2.11.2026)"
+
 [[root.allow]]
 entry = "examples/"
 reason = "the example decks the documentation and the probes build"
