@@ -22,8 +22,8 @@ in for a higher one.
 | Template | Lobby HTML as the surface of a route | A ruled person-sentence is proven by a delegated agent driving the real interface. A route or fragment is FastAPI `TestClient` on the real route. A direct Jinja unit test is not the proof. |
 | `host` | Composition | Once: start the app with a test configuration. |
 | Slidev addon | That a deck staged outside the toolchain builds by the addon's name | Vitest building such a deck with `slidev build` from `slidev/`, as `slidev/tests/addon-package.test.ts` does. |
-| Lobby app | The app's own TypeScript and Svelte logic | Vitest beside the module in `frontend/src`. Its report, `lcov-lobby.info`, has no threshold of its own. |
-| Lobby drive | The production build served by FastAPI under the lobby's policy | Playwright in `frontend/e2e/`, in Chromium and Firefox, against the lobby that `tests/support/lobby_drive.py` composes over in-memory stores with one person signed in; never an issuer. Any CSP violation fails it. |
+| Lobby app | The app's own TypeScript and Svelte logic | Vitest beside the module in `frontend/src`. Its coverage has no threshold of its own. |
+| Lobby drive | The lobby's build served by FastAPI under its policy | Playwright in `frontend/e2e/`, in Chromium and Firefox, against the lobby that `tests/support/lobby_drive.py` composes over in-memory stores with one person signed in; never an issuer. Any CSP violation fails it. The drive's CI job runs it against an instrumented build, which only that job makes (the image builds the production one), and each page reports its counters as it unloads. |
 | Surface | A person does X at the lobby | A delegated agent driving the real interface at the widths the dispatch brief names, taken from the picture at [mockups/README.md](mockups/README.md). One flow per ruled sentence. A unit test is not this proof. |
 
 `gitmirror` is proven the same way as an adapter: against a tmp bare repository,
@@ -38,8 +38,13 @@ a path allowlist.
 Every line and every branch is reached. The floor is owned by `fail_under` in
 `pyproject.toml` and by Vitest coverage thresholds. It is met only by useful
 tests, each pinning one observable behaviour. The lobby app's floor counts its
-Vitest report and its drive together; until the drive's coverage is merged
-(#699), the lobby app is the reported gap.
+Vitest report and its drive together: both use the Istanbul counters on the
+same source files, `pnpm coverage:merge` adds them up into the one
+`lcov-lobby.info` that is uploaded, and it fails unless every branch of the sum
+is reached. The Slidev overlay components (`CoPresenter.vue`,
+`custom-nav-controls.vue`) are still outside this and listed in
+`sonar.coverage.exclusions`, because only their browser tests against a built
+deck run them (#614).
 
 A hard line — one that talks to a process, a file, a network, or a composition
 choice — is reached in one of three ways:
