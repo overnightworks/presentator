@@ -365,7 +365,7 @@ allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 id = "agent-runtime-client-library"
-name = "Only presentator.agent imports agent_runtime_client"
+name = "Only adapters import agent_runtime_client"
 type = "forbidden"
 source_modules = [
     "presentator.adapters",

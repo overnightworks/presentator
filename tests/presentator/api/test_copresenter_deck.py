@@ -22,7 +22,7 @@ from tests.support.copresenter_support import (
     the_admins_decks,
     who,
 )
-from tests.support.lobby import USERNAME
+from tests.support.lobby import ADMIN
 
 if TYPE_CHECKING:
     from httpx2 import Response
@@ -83,7 +83,7 @@ def test_the_answer_is_asked_for_the_signed_in_account() -> None:
 
     ask(lobby.client)
 
-    assert private.answers.subjects == [f"id-of-{USERNAME}"]
+    assert private.answers.subjects == [ADMIN]
 
 
 @pytest.mark.parametrize(

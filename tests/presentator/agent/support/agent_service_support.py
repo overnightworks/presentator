@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NoReturn, Self
 from uuid import UUID, uuid4
 
-from agent_runtime_client.backend.service import ServiceBackend
 from agent_runtime_client.sse import encode_event
 from agent_runtime_client.wire import (
     PROTOCOL_VERSION,
@@ -364,9 +363,16 @@ def an_answerer(
     workload_token: TokenSource,
     *,
     monotonic: Callable[[], float] = time.monotonic,
-    backend_factory: Callable[[AgentConfig], AgentBackend] = ServiceBackend,
+    backend_factory: Callable[[AgentConfig], AgentBackend] | None = None,
 ) -> ServiceAnswerer:
     config = agent_config(backend="service", service_url=origin, workload_scope=_SCOPE)
+    if backend_factory is None:
+        return ServiceAnswerer(
+            config=config,
+            issuer=ISSUER,
+            workload_token=workload_token,
+            monotonic=monotonic,
+        )
     return ServiceAnswerer(
         config=config,
         issuer=ISSUER,

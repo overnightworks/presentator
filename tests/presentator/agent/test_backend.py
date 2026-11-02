@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import pytest
 from agent_runtime_client.backend import Asker
 from agent_runtime_client.capability import CapabilityPrincipal
-from agent_runtime_client.turn_events import FinalEvent
+from agent_runtime_client.turn_events import AssistantTextEvent, FinalEvent
 from agent_runtime_client.wire import (
     PROTOCOL_VERSION,
     FailureCode,
@@ -515,6 +515,7 @@ def test_the_run_names_the_asking_person_with_the_issuer_and_the_account() -> No
             self, request: RunRequest, asker: Asker
         ) -> AsyncGenerator[TurnEvent]:
             principals.append(asker.principal)
+            yield AssistantTextEvent(text="Eine Antwort.")
             yield FinalEvent(text="Eine Antwort.")
 
     async def ask() -> None:
@@ -526,7 +527,7 @@ def test_the_run_names_the_asking_person_with_the_issuer_and_the_account() -> No
         async with answerer.answer(
             message=QUESTION, subject=SUBJECT, person_token=Token(PERSON)
         ) as texts:
-            assert [text async for text in texts] == []
+            assert [text async for text in texts] == ["Eine Antwort."]
 
     asyncio.run(ask())
 
