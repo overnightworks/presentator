@@ -1,0 +1,8 @@
+claim_id = "b9f9e2efbe3143e79168c1e2b4ad9519"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "58722944a42f9d48a24629b6c4aea49e694dd4c7"
+branch = "claude/issue-699-f1a2-the-lobby-s-browser-drive-counts-to"
+scope = [".github/workflows/ci.yml", "docs/TESTING.md", "frontend", "slidev", "sonar-project.properties"]
+opened_commit = "c69739ca2270e1bd1dd4be577cee1570a02bb015"
+whole_reason = "The instrumented build, the drive's coverage and the merge in CI prove each other; none measures anything alone."
