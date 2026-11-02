@@ -16,9 +16,16 @@ minimumReleaseAge: 20160
 # header matching. The lobby's type generation reads a local file and never
 # reaches it; keep that in mind before pointing it at a remote spec or removing
 # this stopgap.
+#
+# Same stopgap for glob below 14.0.2 (GHSA-3g3m-2fjr-6pw4), pinned by test-exclude
+# through vite-plugin-istanbul: glob 14.0.2 (2026-10-27) and its path-scurry 3.0.0
+# are younger than the age gate. Drop both excludes on 2026-11-11 and the glob
+# override once test-exclude itself depends on glob >= 14.0.2.
 minimumReleaseAgeExclude:
   - minimatch@11.0.3
   - "@isaacs/nonrecursive-glob-match@1.0.3"
+  - glob@14.0.2
+  - path-scurry@3.0.0
 
 # deepmerge 4.3.1 has an unfixed prototype-poisoning advisory (GHSA-gcqx-w48m-w2h4).
 # vite-plugin-svelte's one call site is patched to merge itself, as appkit and
@@ -29,3 +36,4 @@ patchedDependencies:
 overrides:
   deepmerge: '-'
   minimatch: ^11.0.1
+  glob: ^14.0.2
