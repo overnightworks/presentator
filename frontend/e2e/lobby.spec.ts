@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 
 import type { SessionView } from '../src/lib/api/session.ts';
-import { expect, test } from './coverage.ts';
+import { expect, test } from './person.ts';
 
 async function sessionOf(page: Page): Promise<SessionView> {
 	const answer = await page.request.get('/api/session', {
@@ -9,6 +9,8 @@ async function sessionOf(page: Page): Promise<SessionView> {
 	});
 	return (await answer.json()) as SessionView;
 }
+
+const VOICE_PAGE = '/settings/voice';
 
 async function showsTheSignInBoard(page: Page, session: SessionView): Promise<void> {
 	await expect(page.locator('.signin .wordmark')).toHaveText(session.words.wordmark);
@@ -25,17 +27,13 @@ async function showsAServerRenderedPage(page: Page, session: SessionView): Promi
 	await expect(page.locator('.signin')).toHaveCount(0);
 }
 
-test.describe('signed out', () => {
-	test.use({ storageState: { cookies: [], origins: [] } });
+test('the signed-out page renders the sign-in board from the kit', async ({ page }) => {
+	const session = await sessionOf(page);
 
-	test('the signed-out page renders the sign-in board from the kit', async ({ page }) => {
-		const session = await sessionOf(page);
+	await page.goto('/login');
 
-		await page.goto('/login');
-
-		await showsTheSignInBoard(page, session);
-		await expect(page).toHaveTitle(session.words.wordmark);
-	});
+	await showsTheSignInBoard(page, session);
+	await expect(page).toHaveTitle(session.words.wordmark);
 });
 
 const refusals = [
@@ -84,42 +82,46 @@ test("SvelteKit's announcer is there and visually hidden", async ({ page }) => {
 	expect(box?.height).toBeLessThanOrEqual(1);
 });
 
-test('Svelte, Jinja and Svelte again, then back and forward across them', async ({ page }) => {
-	const session = await sessionOf(page);
+test.describe('signed in as an admin', () => {
+	test.use({ person: { role: 'admin' } });
 
-	await page.goto('/login');
-	await showsTheSignInBoard(page, session);
-	await page.goto('/');
-	await showsAServerRenderedPage(page, session);
-	await page.goto('/login');
-	await showsTheSignInBoard(page, session);
+	test('Svelte, Jinja and Svelte again, then back and forward across them', async ({ page }) => {
+		const session = await sessionOf(page);
 
-	await page.goBack();
-	await showsAServerRenderedPage(page, session);
-	await page.goBack();
-	await showsTheSignInBoard(page, session);
-	await page.goForward();
-	await showsAServerRenderedPage(page, session);
-	await page.goForward();
-	await showsTheSignInBoard(page, session);
-});
+		await page.goto('/login');
+		await showsTheSignInBoard(page, session);
+		await page.goto(VOICE_PAGE);
+		await showsAServerRenderedPage(page, session);
+		await page.goto('/login');
+		await showsTheSignInBoard(page, session);
 
-test('back and forward across a Jinja page and a refusal land on the right page', async ({
-	page
-}) => {
-	const session = await sessionOf(page);
+		await page.goBack();
+		await showsAServerRenderedPage(page, session);
+		await page.goBack();
+		await showsTheSignInBoard(page, session);
+		await page.goForward();
+		await showsAServerRenderedPage(page, session);
+		await page.goForward();
+		await showsTheSignInBoard(page, session);
+	});
 
-	await page.goto('/');
-	await showsAServerRenderedPage(page, session);
-	await page.goto('/login/login-failed');
-	await expect(page).toHaveURL(/\/login\/login-failed$/);
-	await expect(page.locator('.signin [role=alert]')).toBeVisible();
+	test('back and forward across a Jinja page and a refusal land on the right page', async ({
+		page
+	}) => {
+		const session = await sessionOf(page);
 
-	await page.goBack();
-	await showsAServerRenderedPage(page, session);
-	await page.goForward();
-	await expect(page).toHaveURL(/\/login\/login-failed$/);
-	await expect(page.locator('.signin [role=alert]')).toBeVisible();
+		await page.goto(VOICE_PAGE);
+		await showsAServerRenderedPage(page, session);
+		await page.goto('/login/login-failed');
+		await expect(page).toHaveURL(/\/login\/login-failed$/);
+		await expect(page.locator('.signin [role=alert]')).toBeVisible();
+
+		await page.goBack();
+		await showsAServerRenderedPage(page, session);
+		await page.goForward();
+		await expect(page).toHaveURL(/\/login\/login-failed$/);
+		await expect(page.locator('.signin [role=alert]')).toBeVisible();
+	});
 });
 
 test('a link to a page the app does not own leaves the app by a page load', async ({ page }) => {
@@ -151,9 +153,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
 	for (const width of [390, 1280]) {
 		for (const board of boards) {
 			test.describe(`${board.path} at ${width} px, ${colorScheme}`, () => {
-				test.use({ storageState: { cookies: [], origins: [] } });
-
-				test('shows its board and saves a screenshot', async ({ page }, testInfo) => {
+				test('shows its board, answers 403 on a refusal address and saves a screenshot', async ({
+					page
+				}, testInfo) => {
 					const session = await sessionOf(page);
 					await page.setViewportSize({ width, height: 844 });
 					await page.emulateMedia({ colorScheme });
