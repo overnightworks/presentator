@@ -1,0 +1,8 @@
+claim_id = "2945cfffe21043c8bc15269c55708d8d"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "232f80a2a6c838a71c013110df57c3259d085a5a"
+branch = "claude/issue-741-the-lobby-drive-gives-each-test-its-own"
+scope = [".github/workflows/ci.yml", "docs/TESTING.md", "frontend/e2e", "frontend/playwright.config.ts", "tests/support/lobby.py", "tests/support/lobby_drive.py"]
+opened_commit = "6be68cb89302e200713fa3ac8a0df1d85b131043"
+whole_reason = "The route, its fixture and the cells that use it prove each other: a harness ability without a drive cell is code ahead of its caller."
