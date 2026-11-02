@@ -19,6 +19,7 @@ from webauth.oidc_login import AdmissionConfig
 from presentator.api.talk import TALK_PERMISSIONS_POLICY, talk_content_security_policy
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
+    A_LOBBY_ASSET,
     A_TALK_ADDRESS,
     AN_ASSET,
     BUILT_TALK,
@@ -82,10 +83,13 @@ def test_no_access_logs_out_at_the_lobby_and_login_failed_retries_at_the_talk_ho
 
 
 # T9b.
-def test_an_unknown_talk_sign_in_refusal_is_not_found(signed_in_lobby: Lobby) -> None:
+def test_an_unknown_talk_sign_in_refusal_is_no_refusal_but_the_lobby_app(
+    signed_in_lobby: Lobby,
+) -> None:
     unknown = signed_in_lobby.client.get("/login/talk/other")
 
-    assert unknown.status_code == HTTPStatus.NOT_FOUND
+    assert unknown.status_code == HTTPStatus.OK
+    assert A_LOBBY_ASSET in unknown.text
 
 
 # ---- the talk host itself ----------------------------------------------------
@@ -127,13 +131,21 @@ def test_a_lobby_page_is_not_found_on_the_talk_host(hosts: Hosts, path: str) -> 
     assert _is_the_talk_host(answer)
 
 
-@pytest.mark.parametrize("address", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])
-def test_signed_in_the_privacy_text_is_no_route_on_either_host(
-    hosts: Hosts, address: str
+def test_signed_in_the_privacy_text_is_no_route_on_the_talk_host(
+    hosts: Hosts,
 ) -> None:
-    answer = hosts.signed_in_at(address).get("/datenschutz")
+    answer = hosts.signed_in_at(A_TALK_ADDRESS).get("/datenschutz")
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_signed_in_the_privacy_text_is_no_route_but_the_lobby_app_on_the_lobby(
+    hosts: Hosts,
+) -> None:
+    answer = hosts.signed_in_at(A_BROWSERS_ADDRESS).get("/datenschutz")
+
+    assert answer.status_code == HTTPStatus.OK
+    assert A_LOBBY_ASSET in answer.text
 
 
 @pytest.mark.parametrize("address", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])

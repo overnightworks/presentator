@@ -14,6 +14,7 @@ from tests.support.lobby import (
     AN_AGENT_SERVICE,
     AN_AGENT_SERVICE_SCOPE,
     INSTANCE_KEY,
+    LOBBY_BUILD,
     configure_oidc,
     configure_secret_key,
 )
@@ -89,6 +90,7 @@ def bare_environment(
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("PRESENTATOR_SECRET_KEY_FILE", raising=False)
     monkeypatch.setenv("PRESENTATOR_DATABASE", str(tmp_path / "presentator.sqlite3"))
+    monkeypatch.setenv("PRESENTATOR_LOBBY_BUILD", str(LOBBY_BUILD))
     # `remote`/`another_remote` write their bare
     # repositories straight into `tmp_path`, the one directory every real
     # git address these tests build stands under; naming it as the mount

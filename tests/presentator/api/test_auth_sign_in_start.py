@@ -3,7 +3,7 @@
 from http import HTTPStatus
 from urllib.parse import parse_qs, urlsplit
 
-from tests.support.lobby import A_CLIENT_ID, AN_ISSUER, ENGLISH, Lobby, a_settings
+from tests.support.lobby import A_CLIENT_ID, AN_ISSUER, Lobby, a_settings
 
 _AUTHORIZATION_ENDPOINT = f"{AN_ISSUER}/protocol/openid-connect/auth"
 
@@ -48,13 +48,3 @@ def test_the_start_hands_over_one_host_only_pending_login_cookie(
     assert "SameSite=lax" in cookie
     assert "Secure" in cookie
     assert "Max-Age=600" in cookie
-
-
-def test_the_signed_out_page_offers_one_log_in_button_that_starts_the_sign_in(
-    lobby: Lobby,
-) -> None:
-    answer = lobby.client.get("/login")
-
-    assert answer.status_code == HTTPStatus.OK
-    assert ENGLISH.logged_out_title in answer.text
-    assert answer.text.count('data-action data-wide href="/login/oidc">Log in</a>') == 1

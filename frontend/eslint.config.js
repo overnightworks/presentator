@@ -1,0 +1,68 @@
+import eslint from '@eslint/js';
+import svelte from 'eslint-plugin-svelte';
+import globals from 'globals';
+import ts from 'typescript-eslint';
+
+// ADR 0021: SvelteKit's own navigation state is the only thing the lobby
+// keeps in the browser, so no app code calls a storage API, and no page
+// exports or calls a `snapshot`, which would put form input into sessionStorage.
+const NO_STORAGE =
+	'The lobby keeps nothing in browser storage (ADR 0021): read and write through the API.';
+const STORAGE_GLOBALS = ['localStorage', 'sessionStorage', 'indexedDB'].map((name) => ({
+	name,
+	message: NO_STORAGE
+}));
+const STORAGE_PROPERTIES = [
+	...['window', 'globalThis', 'self'].flatMap((object) =>
+		['localStorage', 'sessionStorage', 'indexedDB'].map((property) => ({
+			object,
+			property,
+			message: NO_STORAGE
+		}))
+	),
+	{ object: 'document', property: 'cookie', message: NO_STORAGE }
+];
+const NO_SNAPSHOT =
+	'No page exports or calls a snapshot (ADR 0021): SvelteKit would keep its form input in sessionStorage.';
+const SNAPSHOT_IMPORTS = [
+	{ name: '$app/navigation', importNames: ['snapshot'], message: NO_SNAPSHOT }
+];
+const SNAPSHOT_EXPORTS = [
+	"ExportNamedDeclaration > VariableDeclaration > VariableDeclarator[id.name='snapshot']",
+	"ExportNamedDeclaration > FunctionDeclaration[id.name='snapshot']",
+	"ExportSpecifier[exported.name='snapshot']"
+].map((selector) => ({ selector, message: NO_SNAPSHOT }));
+
+export default ts.config(
+	{ linterOptions: { reportUnusedDisableDirectives: 'error' } },
+	eslint.configs.recommended,
+	...ts.configs.strict,
+	...svelte.configs.recommended,
+	{
+		languageOptions: {
+			globals: { ...globals.browser, ...globals.node }
+		}
+	},
+	{
+		files: ['**/*.svelte', '**/*.svelte.ts'],
+		languageOptions: { parserOptions: { parser: ts.parser } }
+	},
+	{
+		// ADR 0021: the CSP allows no style attribute in the app's own markup.
+		files: ['src/**/*.svelte'],
+		rules: { 'svelte/no-inline-styles': ['error', { allowTransitions: false }] }
+	},
+	{
+		files: ['src/**'],
+		rules: {
+			'no-restricted-globals': ['error', ...STORAGE_GLOBALS],
+			'no-restricted-imports': ['error', { paths: SNAPSHOT_IMPORTS }],
+			'no-restricted-properties': ['error', ...STORAGE_PROPERTIES],
+			'no-restricted-syntax': ['error', ...SNAPSHOT_EXPORTS]
+		}
+	},
+	{
+		// The generated wire types are openapi-typescript's output.
+		ignores: ['build/', '.svelte-kit/', 'test-results/', 'playwright-report/', 'src/lib/api/types.ts']
+	}
+);

@@ -1,4 +1,4 @@
-"""Catalog purity: no template carries a literal, user-facing string.
+"""Catalog purity: no template or Svelte page carries a literal, user-facing string.
 
 Owner: [ADR 0012](../docs/decisions/0012-themes-and-language.md), "Language is
 an adapter". Every user-facing word in a Jinja2 lobby template must come from
@@ -70,6 +70,22 @@ text or attribute position" this rule stays mechanical by asking. A template
 scan can prove a template's own markup and expressions stay literal-free; it
 cannot prove the whole rendered page does.
 
+The lobby's Svelte pages under `frontend/src` are held to the same rule
+(ADR 0021). A `.svelte` file is markup with `{expression}` holes and a
+`<script>` and `<style>` block. The blocks are code and are dropped; each hole
+is folded the way a Jinja expression is: a hole that is only a string literal
+(`{'Sign in'}`, or a template literal without a substitution) renders that
+literal and counts as text, a logic block (`{#if}`, `{:else}`, `{/if}`,
+`{@render}`) and every other expression render nothing the scan can see.
+What is left goes through the same scanner, so the same text positions and
+attributes are flagged, on an element and on a component alike. A kit
+component's own words (appkit's `SignInPage`) are the kit's, not
+presentator's (ADR 0021): they ship inside the kit's package, which this scan
+never reads, and what a page hands such a component is held like any other
+markup. Named gap: a literal inside a larger expression (`{ok ? 'Saved' :
+x}`) is not followed, because telling a shown string from a class name or a
+key in JavaScript needs a JavaScript parser this check does not carry.
+
 Rejected: a regular expression over the raw template source, which the task
 that named this check already rejected — it cannot tell a `{{ catalog_value
 }}` from a literal sentence, or a class name from a word a person reads. A
@@ -80,6 +96,8 @@ narrow rule needs, with no new dependency.
 
 from __future__ import annotations
 
+import html
+import re
 import sys
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -90,6 +108,13 @@ from jinja2 import nodes
 
 _TEMPLATES_DIRECTORY = Path("src") / "presentator" / "api" / "templates"
 _TEMPLATE_GLOB = "*.html"
+_SVELTE_DIRECTORY = Path("frontend") / "src"
+_SVELTE_GLOB = "*.svelte"
+_SVELTE_CODE_BLOCK = re.compile(
+    r"<(script|style)(?:\s[^>]*)?>.*?</\1\s*>", re.DOTALL | re.IGNORECASE
+)
+_SVELTE_LOGIC_MARKS = frozenset("#:/@")
+_QUOTES = frozenset("'\"`")
 
 _ALWAYS_FLAGGED_ATTRIBUTES: frozenset[str] = frozenset(
     {
@@ -117,14 +142,17 @@ _UNCLOSED_RAW_TEXT_PROBLEM = (
 )
 _NO_TEMPLATES_DIRECTORY_PROBLEM = "no templates directory"
 _NO_TEMPLATE_FOUND_PROBLEM = "no template found"
+_NO_SVELTE_DIRECTORY_PROBLEM = "no Svelte source directory"
+_NO_SVELTE_PAGE_FOUND_PROBLEM = "no Svelte page found"
+_UNCLOSED_SVELTE_EXPRESSION_PROBLEM = "an expression is opened but never closed"
 
 
 @dataclass(frozen=True)
 class CatalogPurityFinding:
-    """One problem found under the templates directory.
+    """One problem found under the templates or the Svelte pages.
 
-    A literal string, a syntax error, an unclosed script/style tag, or a
-    missing or empty templates directory.
+    A literal string, a syntax error, an unclosed script/style tag or Svelte
+    expression, or a missing or empty directory.
     """
 
     template_name: str
@@ -245,14 +273,38 @@ def _scan_template(template_ast: nodes.Template) -> _CatalogPurityScanner:
     return scanner
 
 
-def _require_template_paths(templates_directory: Path) -> tuple[Path, ...]:
-    """Return every template path, sorted; refuse silence when there is none."""
-    if not templates_directory.is_dir():
-        raise FileNotFoundError(_NO_TEMPLATES_DIRECTORY_PROBLEM)
-    template_paths = tuple(sorted(templates_directory.rglob(_TEMPLATE_GLOB)))
-    if not template_paths:
-        raise FileNotFoundError(_NO_TEMPLATE_FOUND_PROBLEM)
-    return template_paths
+def _require_paths(
+    directory: Path, glob: str, *, missing: str, empty: str
+) -> tuple[Path, ...]:
+    """Return every path under the directory that matches, sorted; refuse silence."""
+    if not directory.is_dir():
+        raise FileNotFoundError(missing)
+    paths = tuple(sorted(directory.rglob(glob)))
+    if not paths:
+        raise FileNotFoundError(empty)
+    return paths
+
+
+def _scanner_findings(
+    scanner: _CatalogPurityScanner, name: str
+) -> list[CatalogPurityFinding]:
+    findings = [
+        CatalogPurityFinding(
+            template_name=name,
+            problem=_LITERAL_TEXT_PROBLEM.format(text=text),
+        )
+        for text in scanner.literal_texts
+    ]
+    if scanner.open_raw_text_tag is not None:
+        findings.append(
+            CatalogPurityFinding(
+                template_name=name,
+                problem=_UNCLOSED_RAW_TEXT_PROBLEM.format(
+                    tag=scanner.open_raw_text_tag
+                ),
+            )
+        )
+    return findings
 
 
 def _template_findings(
@@ -264,45 +316,145 @@ def _template_findings(
     except jinja2.TemplateSyntaxError as error:
         problem = _PARSE_ERROR_PROBLEM.format(error=error.message)
         return [CatalogPurityFinding(template_name=relative_name, problem=problem)]
-    scanner = _scan_template(template_ast)
-    findings = [
-        CatalogPurityFinding(
-            template_name=relative_name,
-            problem=_LITERAL_TEXT_PROBLEM.format(text=text),
-        )
-        for text in scanner.literal_texts
-    ]
-    if scanner.open_raw_text_tag is not None:
-        findings.append(
-            CatalogPurityFinding(
-                template_name=relative_name,
-                problem=_UNCLOSED_RAW_TEXT_PROBLEM.format(
-                    tag=scanner.open_raw_text_tag
-                ),
-            )
-        )
-    return findings
+    return _scanner_findings(_scan_template(template_ast), relative_name)
 
 
-def find_catalog_purity_findings(repository: Path) -> tuple[CatalogPurityFinding, ...]:
-    """Return every problem found under the templates.
+def _end_of_quoted(source: str, opening: int) -> int:
+    """The index of the quote that closes the string opened at `opening`, or -1."""
+    quote = source[opening]
+    index = opening + 1
+    while index < len(source):
+        if source[index] == "\\":
+            index += 2
+            continue
+        if source[index] == quote:
+            return index
+        index += 1
+    return -1
 
-    Names the templates directory itself when there is nothing to scan.
+
+def _closing_brace(source: str, opening: int) -> int:
+    """The index of the `}` that closes the hole opened at `opening`, or -1."""
+    depth = 0
+    index = opening
+    while index < len(source):
+        character = source[index]
+        if character in _QUOTES:
+            index = _end_of_quoted(source, index)
+            if index == -1:
+                return -1
+        elif character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return index
+        index += 1
+    return -1
+
+
+def _only_a_string_literal(expression: str) -> str | None:
+    """The literal's text when the expression is one string literal, else None."""
+    stripped = expression.strip()
+    if not stripped or stripped[0] not in _QUOTES:
+        return None
+    if _end_of_quoted(stripped, 0) != len(stripped) - 1:
+        return None
+    literal = stripped[1:-1]
+    return None if stripped[0] == "`" and "${" in literal else literal
+
+
+def _folded_hole(expression: str) -> str:
+    if expression[:1] in _SVELTE_LOGIC_MARKS:
+        return ""
+    return _only_a_string_literal(expression) or ""
+
+
+def _fold_svelte_markup(source: str) -> str:
+    """The page's markup as HTML, each hole folded to what the scan may see.
+
+    A hole right after `=` is an unquoted attribute value, so its text is
+    quoted to stay one value. A hole that never closes is a ValueError.
     """
+    markup = _SVELTE_CODE_BLOCK.sub("", source)
+    parts: list[str] = []
+    position = 0
+    while (opening := markup.find("{", position)) != -1:
+        closing = _closing_brace(markup, opening)
+        if closing == -1:
+            raise ValueError(_UNCLOSED_SVELTE_EXPRESSION_PROBLEM)
+        parts.append(markup[position:opening])
+        shown = html.escape(_folded_hole(markup[opening + 1 : closing]))
+        is_attribute_value = markup[:opening].rstrip().endswith("=")
+        parts.append(f'"{shown}"' if is_attribute_value else shown)
+        position = closing + 1
+    parts.append(markup[position:])
+    return "".join(parts)
+
+
+def _svelte_page_findings(
+    page_path: Path, relative_name: str
+) -> list[CatalogPurityFinding]:
+    try:
+        markup = _fold_svelte_markup(page_path.read_text(encoding="utf-8"))
+    except ValueError as error:
+        return [CatalogPurityFinding(template_name=relative_name, problem=str(error))]
+    scanner = _CatalogPurityScanner()
+    scanner.feed(markup)
+    scanner.close()
+    return _scanner_findings(scanner, relative_name)
+
+
+def _jinja_findings(repository: Path) -> list[CatalogPurityFinding]:
     environment = jinja2.Environment(autoescape=True)
     templates_directory = repository / _TEMPLATES_DIRECTORY
     try:
-        template_paths = _require_template_paths(templates_directory)
-    except FileNotFoundError as error:
-        problem = CatalogPurityFinding(
-            template_name=_TEMPLATES_DIRECTORY.as_posix(), problem=str(error)
+        template_paths = _require_paths(
+            templates_directory,
+            _TEMPLATE_GLOB,
+            missing=_NO_TEMPLATES_DIRECTORY_PROBLEM,
+            empty=_NO_TEMPLATE_FOUND_PROBLEM,
         )
-        return (problem,)
+    except FileNotFoundError as error:
+        return [
+            CatalogPurityFinding(
+                template_name=_TEMPLATES_DIRECTORY.as_posix(), problem=str(error)
+            )
+        ]
     findings: list[CatalogPurityFinding] = []
     for template_path in template_paths:
         relative_name = template_path.relative_to(templates_directory).as_posix()
         findings.extend(_template_findings(template_path, relative_name, environment))
-    return tuple(findings)
+    return findings
+
+
+def _svelte_findings(repository: Path) -> list[CatalogPurityFinding]:
+    try:
+        page_paths = _require_paths(
+            repository / _SVELTE_DIRECTORY,
+            _SVELTE_GLOB,
+            missing=_NO_SVELTE_DIRECTORY_PROBLEM,
+            empty=_NO_SVELTE_PAGE_FOUND_PROBLEM,
+        )
+    except FileNotFoundError as error:
+        return [
+            CatalogPurityFinding(
+                template_name=_SVELTE_DIRECTORY.as_posix(), problem=str(error)
+            )
+        ]
+    findings: list[CatalogPurityFinding] = []
+    for page_path in page_paths:
+        relative_name = page_path.relative_to(repository).as_posix()
+        findings.extend(_svelte_page_findings(page_path, relative_name))
+    return findings
+
+
+def find_catalog_purity_findings(repository: Path) -> tuple[CatalogPurityFinding, ...]:
+    """Return every problem found under the templates and the Svelte pages.
+
+    Names a directory itself when there is nothing to scan in it.
+    """
+    return (*_jinja_findings(repository), *_svelte_findings(repository))
 
 
 def main() -> int:

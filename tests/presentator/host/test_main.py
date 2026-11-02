@@ -127,7 +127,10 @@ def test_the_composition_root_serves_a_lobby_that_answers_the_login(
     main.main()
 
     assert len(served) == 1
-    assert TestClient(served[0], base_url=A_BROWSERS_ADDRESS).get("/login").is_success
+    browser = TestClient(
+        served[0], base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS
+    )
+    assert browser.get("/login").is_success
 
 
 def test_a_trusted_proxy_list_that_is_not_addresses_refuses_to_start(
@@ -277,9 +280,18 @@ def test_the_real_stack_offers_no_password_login_and_no_first_start() -> None:
         data={"username": _PERSON, "password": "the words only this test types"},
     )
 
-    assert password_posted.status_code == HTTPStatus.METHOD_NOT_ALLOWED
+    assert password_posted.status_code == HTTPStatus.NOT_FOUND
     assert real_lobby.get("/setup").status_code == HTTPStatus.NOT_FOUND
     assert 'type="password"' not in real_lobby.get("/login").text
+
+
+def test_an_instance_without_a_lobby_build_refuses_to_start(
+    environment: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    environment.setenv("PRESENTATOR_LOBBY_BUILD", str(tmp_path / "no-build-here"))
+
+    with pytest.raises(ConfigurationError, match="no built lobby"):
+        a_real_instance()
 
 
 @pytest.mark.usefixtures("bare_environment")

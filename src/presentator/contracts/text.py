@@ -24,8 +24,6 @@ class LobbyText:
     theme_dark: str
     role_admin: str
     role_user: str
-    logged_out_title: str
-    log_in: str
     login_failed_title: str
     login_failed_explanation: str
     login_failed_retry: str

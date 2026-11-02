@@ -13,10 +13,12 @@ from tests.support.lobby import A_TALK_ADDRESS, a_content_security_policy
 from tests.support.talk_support import A_DECK, two_hosts
 
 # Outside `form-action`, a source names no host when it is 'self', 'none',
-# 'unsafe-inline', a hash or nonce, or the data: or blob: scheme; every other
-# spelling can admit one ('strict-dynamic' makes the browser ignore host sources).
+# 'unsafe-inline', 'unsafe-hashes', a hash or nonce, or the data: or blob:
+# scheme; every other spelling can admit one ('strict-dynamic' makes the
+# browser ignore host sources).
 _A_SOURCE_WITHOUT_A_HOST: Final = re.compile(
-    r"'(?:self|none|unsafe-inline|(?:sha(?:256|384|512)|nonce)-[^']+)'|data:|blob:"
+    r"'(?:self|none|unsafe-(?:inline|hashes)|(?:sha(?:256|384|512)|nonce)-[^']+)'"
+    r"|data:|blob:"
 )
 _ADDRESS_ATTRIBUTE: Final = re.compile(r"""\b(?:href|src)\s*=\s*["']([^"']*)["']""")
 _AN_ADDRESS_ON_ANOTHER_HOST: Final = re.compile(

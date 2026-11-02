@@ -77,6 +77,7 @@ from presentator.api.auth import (
     create_lobby,
 )
 from presentator.api.copresenter import CoPresenterSurface
+from presentator.api.lobby_shell import LobbyBuildError, LobbyShell
 from presentator.api.pages import Pages
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_content_security_policy
@@ -129,11 +130,8 @@ def build_instance(
     relying_party_for: RelyingPartyFor = relying_party,
 ) -> Instance:
     """Choose the adapter behind every port and hand the routes their use cases."""
-    try:
-        create_tables(settings.database)
-    except OldDatabaseError as refused:
-        raise cannot_start(str(refused)) from None
-    clock = SystemClock()
+    _create_tables(settings)
+    shell = _lobby_shell(settings)
     # One box for both directions: what the store writes down is what the
     # resolver opens at the pull, and neither picks its own key.
     box = secret_box(settings.secret_key.get_secret_value())
@@ -172,23 +170,42 @@ def build_instance(
         settings.database, ProcessWriteLock(), LoggingAuditSink()
     )
     lobby_auth, talk_auth = installed_auths(
-        settings, identity_writes, relying_party_for
+        settings, shell, identity_writes, relying_party_for
     )
     return Instance(
-        lobby=_lobby(
-            settings,
-            decks,
-            sessions,
-            lobby_auth,
-            _lobby_private(settings, decks, sessions, key_drafts, identity_writes),
+        lobby=create_lobby(
+            sessions=sessions,
+            decks=decks,
+            pages=_pages(settings),
+            auth=lobby_auth,
+            private=_lobby_private(
+                settings, decks, sessions, key_drafts, identity_writes
+            ),
+            shell=shell,
         ),
         talk=_talk(settings, decks, sessions, talk_auth, mirrors),
         poller=Schedule(
             chore=decks.refresh,
             interval=timedelta(seconds=settings.source_poll_seconds),
         ),
-        session_sweep=_session_sweep(sessions, clock),
+        session_sweep=_session_sweep(sessions, SystemClock()),
     )
+
+
+def _create_tables(settings: Settings) -> None:
+    """Bring the database to this release's tables, or refuse to start on it."""
+    try:
+        create_tables(settings.database)
+    except OldDatabaseError as refused:
+        raise cannot_start(str(refused)) from None
+
+
+def _lobby_shell(settings: Settings) -> LobbyShell:
+    """The lobby app's build, or a refusal to start without one it can serve."""
+    try:
+        return LobbyShell.read(settings.lobby_build)
+    except LobbyBuildError as refused:
+        raise cannot_start(str(refused)) from None
 
 
 def _source_timeout(settings: Settings) -> timedelta:
@@ -235,23 +252,6 @@ def _decks(
         clock=SystemClock(),
         local_mount=local_mount,
         webhook_secrets=TokenWebhookSecrets(),
-    )
-
-
-def _lobby(
-    settings: Settings,
-    decks: Decks,
-    sessions: SqliteSessionRecordStore,
-    auth: InstalledAuth,
-    private: LobbyPrivate,
-) -> FastAPI:
-    """The lobby host, with the pages and the private routes it serves."""
-    return create_lobby(
-        sessions=sessions,
-        decks=decks,
-        pages=_pages(settings),
-        auth=auth,
-        private=private,
     )
 
 
@@ -334,6 +334,7 @@ def _lobby_private(
 
 def installed_auths(
     settings: Settings,
+    shell: LobbyShell,
     identity_writes: SqliteIdentityWrites,
     relying_party_for: RelyingPartyFor = relying_party,
 ) -> tuple[InstalledAuth, InstalledAuth]:
@@ -354,7 +355,7 @@ def installed_auths(
         relying_party=relying_party_for(lobby_client),
         admission=admission_of(settings),
         transaction=identity_writes,
-        content_security_policy=content_security_policy(),
+        content_security_policy=content_security_policy(shell),
         talk_origin=settings.talk_origin,
     )
     talk = replace(

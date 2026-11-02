@@ -40,6 +40,7 @@ some of them.
 | `PRESENTATOR_SOURCE_POLL_SECONDS` | `300` | Interval of the source poll. |
 | `PRESENTATOR_SOURCE_TIMEOUT_SECONDS` | `20` | Bound of one pull. |
 | `PRESENTATOR_TOOLCHAIN` | `slidev` | The project carrying Slidev. |
+| `PRESENTATOR_LOBBY_BUILD` | `frontend/build` | The lobby app's `pnpm build` output; an instance without a build it can serve refuses to start. |
 | `PRESENTATOR_BUILDS` | `builds` | Where built talks and PDFs are kept. |
 | `PRESENTATOR_BUILD_TIMEOUT_SECONDS` | `300` | Bound of each build step; compose also hands it to the build worker by name. |
 | `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves; compose also hands it to the build worker by name. |
@@ -89,6 +90,7 @@ image sets them and the defaults above do not apply; compose sets the rest.
 | `PRESENTATOR_BUILDS` | `/data/builds` |
 | `PRESENTATOR_LOCAL_SOURCES_MOUNT` | `/data/local-sources` |
 | `PRESENTATOR_TOOLCHAIN` | `/app/slidev` |
+| `PRESENTATOR_LOBBY_BUILD` | `/app/lobby` |
 | `PRESENTATOR_HOST` | `0.0.0.0`, reached through the edge's proxy |
 | `PRESENTATOR_BUILD_RUNNER` | `worker`, set by `compose.yaml` |
 | `PRESENTATOR_AGENT_SERVICE` | `http://agent-service:8080`, set by `compose.yaml` |
@@ -99,7 +101,8 @@ An instance configuration that sets `PRESENTATOR_TOOLCHAIN` to `/app/frontend` b
 
 `Dockerfile` builds one image in two layers: the Slidev toolchain with the
 Chromium its PDF export drives (what a deck's own build runs in), and the whole
-instance on top of it. The image holds no Docker client. It carries the CA
+instance on top of it. The lobby app is built in a stage of its own, and only
+its output enters the instance layer; the toolchain layer holds nothing of it. The image holds no Docker client. It carries the CA
 certificates an HTTPS source needs to verify the git host's TLS certificate;
 CI proves it with a live HTTPS fetch on every build.
 

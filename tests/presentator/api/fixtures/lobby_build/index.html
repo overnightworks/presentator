@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="%lobby.lang%" data-theme="%lobby.theme%">
+	<head>
+		<meta charset="utf-8" />
+		<link href="/_app/immutable/entry/start.js" rel="modulepreload">
+	</head>
+	<body>
+		<script type="module">
+			const entry = "/_app/immutable/entry/start.js";
+			(await import(entry)).start(document.body);
+		</script>
+	</body>
+</html>

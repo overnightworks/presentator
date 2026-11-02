@@ -116,7 +116,8 @@ away the PDF that already downloads.
   single-page application: the presenter is a client-side route of that
   application. The slide is in the address so a closed window comes back to
   the same slide. The deck page links both there, absolute to the talk origin,
-  and the lobby serves no talk byte: its old talk addresses answer 404,
+  and the lobby serves no talk byte: a page load on its old talk addresses gets
+  the lobby app, whose router shows not-found, and any other caller gets 404,
   `/deck/<folder>/` answers a 307 to the deck page, and a WebSocket into one
   is closed before it is accepted, alike for every slug.
 - A path under the deck that is not a real file is answered with the

@@ -59,6 +59,7 @@ from presentator.api.auth import (
     create_lobby,
 )
 from presentator.api.copresenter import CoPresenterSurface
+from presentator.api.lobby_shell import LobbyShell
 from presentator.api.pages import Pages
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_content_security_policy
@@ -123,14 +124,16 @@ def _write_test_key_file() -> Path:
 
 
 NOW: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
+_FIXTURES: Final = Path(__file__).parents[1] / "presentator" / "api" / "fixtures"
 # What `slidev build` of `examples/hello-deck` writes, `--base /deck/hello-deck/`.
-BUILT_TALK: Final = (
-    Path(__file__).parents[1] / "presentator" / "api" / "fixtures" / "built_talk"
-)
+BUILT_TALK: Final = _FIXTURES / "built_talk"
 AN_ASSET: Final = "assets/index-mRcVgIkQ.js"
-EXPORTED_PDF: Final = (
-    Path(__file__).parents[1] / "presentator" / "api" / "fixtures" / "exported_deck.pdf"
-)
+EXPORTED_PDF: Final = _FIXTURES / "exported_deck.pdf"
+# A lobby build in the shape `pnpm build` leaves: one shell, one bootstrap,
+# one asset under `_app/`.
+LOBBY_BUILD: Final = _FIXTURES / "lobby_build"
+A_LOBBY_ASSET: Final = "/_app/immutable/entry/start.js"
+LOBBY_SHELL: Final = LobbyShell.read(LOBBY_BUILD)
 _KEY_FILE: Final = _write_test_key_file()
 _BUILT_DECK_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 # No route test waits for a build, so the bound only has to be longer than the
@@ -316,12 +319,13 @@ def a_settings() -> Settings:
         oidc_issuer=AN_ISSUER,
         oidc_client_id=A_CLIENT_ID,
         oidc_client_secret_file=Path("/run/oidc-client-secret"),
+        lobby_build=LOBBY_BUILD,
     )
 
 
 def a_content_security_policy() -> str:
     """The policy every answer of an instance carries but the logout page."""
-    return content_security_policy()
+    return content_security_policy(LOBBY_SHELL)
 
 
 def a_relying_party(
@@ -383,6 +387,7 @@ def an_installed_auth(
     *,
     relying_party: OidcRelyingParty | None = None,
     transaction: SignInTransaction | None = None,
+    shell: LobbyShell = LOBBY_SHELL,
 ) -> InstalledAuth:
     """The host's sign-in wiring, each part replaceable by the test that proves it."""
     return InstalledAuth(
@@ -392,7 +397,7 @@ def an_installed_auth(
         else relying_party,
         admission=admission_of(a_settings()),
         transaction=NoSignInTransaction() if transaction is None else transaction,
-        content_security_policy=a_content_security_policy(),
+        content_security_policy=content_security_policy(shell),
         talk_origin=A_TALK_ADDRESS,
     )
 
@@ -549,13 +554,14 @@ def a_preferences(
     )
 
 
-def a_lobby_app(
+def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
     *,
     people: FakePeople | None = None,
     preferences: Preferences | None = None,
     given: GivenDecks = NO_DECKS,
     signing_in: SigningIn | None = None,
     admin_people: AdminPeople | None = None,
+    shell: LobbyShell = LOBBY_SHELL,
 ) -> tuple[FastAPI, FrozenClock]:
     """The whole lobby wiring, so a test that needs two clients shares one app."""
     crowd = a_crowd() if people is None else people
@@ -574,7 +580,9 @@ def a_lobby_app(
             duration_in_words=duration_in_words,
         ),
         auth=(
-            an_installed_auth(clock, transaction=SessionsOnly(crowd.sessions))
+            an_installed_auth(
+                clock, transaction=SessionsOnly(crowd.sessions), shell=shell
+            )
             if signing_in is None
             else signing_in.auth
         ),
@@ -586,6 +594,7 @@ def a_lobby_app(
             ),
             admin_people=admin_people,
         ),
+        shell=shell,
     )
     return lobby, clock
 

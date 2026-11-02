@@ -65,12 +65,12 @@ def _unvarying(response: Response, *, besides: frozenset[str] = frozenset()) -> 
 # C10.
 @pytest.mark.parametrize("method", ["get", "head"])
 @pytest.mark.parametrize("shape", _SHAPES_OF_A_TALK)
-def test_a_talk_address_on_the_lobby_answers_not_found_alike_for_every_slug(
+def test_a_talk_address_on_the_lobby_loads_the_lobby_app_alike_for_every_slug(
     lobby: TestClient, method: str, shape: str
 ) -> None:
     answers = [getattr(lobby, method)(f"/deck/{slug}/{shape}") for slug in _THE_THREE]
 
-    assert {answer.status_code for answer in answers} == {HTTPStatus.NOT_FOUND}
+    assert {answer.status_code for answer in answers} == {HTTPStatus.OK}
     assert len({_unvarying(answer) for answer in answers}) == 1
 
 

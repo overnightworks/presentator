@@ -32,7 +32,8 @@ models run and what they cost on the card is owned by the speech README.
 The overlay, which a deck enables as the addon `slidev-addon-presentator`,
 calls relative `/copresenter/who`, `/copresenter/ask` and `/copresenter/hear`
 routes. The talk host serves them under its own session
-cookie and its own Origin; the lobby answers 404 on them. Any signed-in person
+cookie and its own Origin; the lobby answers 404 on them to a call and gives a page load its app,
+whose router shows not-found. Any signed-in person
 may use them, through the existing active session; the agent service's own
 subscription and API groups decide who may ask, and deck ownership limits which
 deck. Without a session `/who` and `/ask` get 401 and `/hear` a refused

@@ -1,0 +1,27 @@
+/* presentator's colour in appkit's app slot (docs/mockups/m0-lobby.html). */
+:root {
+	--app-l: #0c6c77;
+	--on-app-l: #ffffff;
+	--app-d: #56c3cd;
+	--on-app-d: #06181b;
+	--accent: var(--app-l);
+	--on-accent: var(--on-app-l);
+	--primary: var(--app-l);
+}
+:root[data-theme='dark'] {
+	--accent: var(--app-d);
+	--on-accent: var(--on-app-d);
+	--primary: var(--app-d);
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		--accent: var(--app-d);
+		--on-accent: var(--on-app-d);
+		--primary: var(--app-d);
+	}
+}
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+}

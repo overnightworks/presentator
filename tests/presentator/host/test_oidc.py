@@ -20,6 +20,7 @@ from tests.support.lobby import (
     A_CLIENT_ID,
     A_TALK_ADDRESS,
     AN_ISSUER,
+    LOBBY_SHELL,
     a_settings,
 )
 
@@ -297,7 +298,7 @@ def test_both_hosts_share_the_one_identity_writes_owner(
         settings.database, ProcessWriteLock(), LoggingAuditSink()
     )
 
-    lobby, talk = main.installed_auths(settings, writes)
+    lobby, talk = main.installed_auths(settings, LOBBY_SHELL, writes)
 
     assert talk.transaction is lobby.transaction is writes
     assert talk.config.session_secret != lobby.config.session_secret
