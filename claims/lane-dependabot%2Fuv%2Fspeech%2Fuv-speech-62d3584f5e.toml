@@ -1,0 +1,7 @@
+claim_id = "ba607ebd1a754ee88c832d174fcc6e61"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "aa04fdb63d796bce254c2557f46fd799779c5fdb"
+branch = "dependabot/uv/speech/uv-speech-62d3584f5e"
+scope = ["speech/pyproject.toml", "speech/uv.lock"]
+opened_commit = "7b9b7f4c536316f05d8a96ce517eb997e5cefebe"
