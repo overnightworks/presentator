@@ -7,7 +7,7 @@ its own toolchain; skip this there.
 
 ## Before you start
 
-- `pnpm` on `PATH`, and the Node version `slidev/.nvmrc` names.
+- `pnpm` on `PATH`, and a Node version `slidev/package.json` allows (`engines.node`).
 - `PRESENTATOR_TOOLCHAIN` points at the project carrying Slidev (default
   `slidev`).
 

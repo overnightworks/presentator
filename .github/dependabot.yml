@@ -97,6 +97,6 @@ updates:
       docker:
         update-types: [minor, patch]
     ignore:
-      # The Node major moves Dockerfile, slidev/.nvmrc, the engines field and CI together, and Node 26 images drop corepack: a deliberate lane, not a bot PR
+      # The Node major moves Dockerfile, the engines fields and CI together: a deliberate lane, not a bot PR
       - dependency-name: node
         update-types: ["version-update:semver-major"]
