@@ -17,7 +17,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"lint": "eslint .",
 		"test": "vitest run --coverage",
-		"drive": "playwright test",
+		"drive": "rm -rf ../reports/lobby-coverage/drive && playwright test",
 		"coverage:merge": "node scripts/merge-coverage.ts",
 		"generate:types": "openapi-typescript src/lib/api/openapi.json -o src/lib/api/types.ts"
 	},
