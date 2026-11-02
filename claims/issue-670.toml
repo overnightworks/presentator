@@ -1,7 +1,0 @@
-claim_id = "f15e02f2a7bd4aef8aee9fde93417f5d"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "6ee5731c1e3ba083c5991e0121769c88e8cb4152"
-branch = "claude/issue-670-presentator-pins-webauth-and-the-agent-r"
-scope = [".github/dependabot.yml", "pyproject.toml", "uv.lock"]
-opened_commit = "82262a6f0ba8399cbca3ab6d98333d7dbb73431b"
