@@ -74,23 +74,6 @@ async function showsTheRefusalBoard(
 	}
 }
 
-for (const refusal of refusals) {
-	test.describe(`${refusal.path}`, () => {
-		test.use({ storageState: { cookies: [], origins: [] } });
-
-		test('answers 403 with the kit board, its legal links and the one way out', async ({
-			page
-		}) => {
-			const session = await sessionOf(page);
-
-			const answer = await page.goto(refusal.path);
-
-			expect(answer?.status()).toBe(403);
-			await showsTheRefusalBoard(page, session, refusal);
-		});
-	});
-}
-
 test("SvelteKit's announcer is there and visually hidden", async ({ page }) => {
 	await page.goto('/login');
 

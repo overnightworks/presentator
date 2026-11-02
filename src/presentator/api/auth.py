@@ -101,6 +101,12 @@ def talk_sign_in_refusal_path(refusal: RefusalPage) -> str:
 
 _PERSON_API: Final = "/api/"
 
+_REFUSAL_PATHS: Final = frozenset(
+    path
+    for refusal in RefusalPage
+    for path in (sign_in_refusal_path(refusal), talk_sign_in_refusal_path(refusal))
+)
+
 # Signing in (its start and the issuer's return) and signing out are the
 # addresses the gate leaves alone, and the library derives them from the
 # sign-in paths; logging out ends a session rather than using one. The theme
@@ -110,11 +116,6 @@ _PERSON_API: Final = "/api/"
 # logout is open and exempt from the origin check through the sign-in paths.
 # `/setup` is a retired address: it answers 404 to everyone, so a signed-out
 # reader is not sent to a login for a page that does not exist.
-_REFUSAL_PATHS: Final = frozenset(
-    path
-    for refusal in RefusalPage
-    for path in (sign_in_refusal_path(refusal), talk_sign_in_refusal_path(refusal))
-)
 _SERVER_CALLS: Final = PathRules(prefixes=(HOOK_CALLS,))
 _PUBLIC_RULES: Final = (
     PublicRule(
