@@ -2,12 +2,12 @@ import { fileURLToPath } from 'node:url';
 
 import { defineConfig, devices } from '@playwright/test';
 
-// The drive runs against the production build served by FastAPI under the
-// lobby's own policy, composed over in-memory stores with one person signed in
-// (tests/support/lobby_drive.py); nobody signs in at an issuer.
+// The drive runs against the lobby's build served by FastAPI under the
+// lobby's own policy, composed over in-memory stores; each test makes its own
+// person at a drive-only route (tests/support/lobby_drive.py), and nobody signs
+// in at an issuer.
 const port = 8790;
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
-const storageState = fileURLToPath(new URL('./playwright/.auth/signed-in.json', import.meta.url));
 
 export default defineConfig({
 	testDir: 'e2e',
@@ -16,7 +16,6 @@ export default defineConfig({
 	reporter: [['list']],
 	use: {
 		baseURL: `http://localhost:${port}`,
-		storageState,
 		trace: 'retain-on-failure'
 	},
 	projects: [
@@ -24,7 +23,7 @@ export default defineConfig({
 		{ name: 'firefox', use: { ...devices['Desktop Firefox'] } }
 	],
 	webServer: {
-		command: `uv run --locked python -m tests.support.lobby_drive serve frontend/build ${port} ${storageState}`,
+		command: `uv run --locked python -m tests.support.lobby_drive serve frontend/build ${port}`,
 		cwd: repositoryRoot,
 		url: `http://localhost:${port}/health`,
 		reuseExistingServer: false,

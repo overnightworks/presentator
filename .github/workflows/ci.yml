@@ -438,6 +438,17 @@ jobs:
           retention-days: 7
           overwrite: true
 
+      # The pictures are kept on a green run too, so each page slice has its
+      # I7 screenshots from CI; the traces are kept on a failure only.
+      - name: Upload the drive's screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lobby-drive-screenshots
+          path: frontend/test-results/**/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload the drive's traces
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
