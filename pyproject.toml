@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling==1.32.4"]
+requires = ["hatchling==1.33.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -10,12 +10,12 @@ license = "MIT"
 dependencies = [
     "babel==2.18.0",
     "cryptography==50.0.2",
-    "fastapi==0.141.1",
-    "httpx2[ws]==2.13.1",
+    "fastapi==0.162.0",
+    "httpx2[ws]==2.16.0",
     "jinja2==3.1.6",
-    "overnightworks-agent-runtime-client @ https://github.com/overnightworks/agent-runtime/releases/download/v0.13.0/overnightworks_agent_runtime_client-0.13.0-py3-none-any.whl#sha256=f4ec279dfa3d7002297c15d89c612343fdde95c6e4e7a89b9440f8d5ba1ff1e2",
-    "overnightworks-webauth @ https://github.com/overnightworks/webauth/releases/download/v0.27.0/overnightworks_webauth-0.27.0-py3-none-any.whl#sha256=a22b557912ec97b4f4280ae3d99f815bb043e9fc90ebc86ee80febf1d968b1e7",
-    "pydantic-settings==2.15.0",
+    "overnightworks-agent-runtime-client @ git+https://github.com/overnightworks/agent-runtime@v0.13.0#subdirectory=packages/client",
+    "overnightworks-webauth @ git+https://github.com/overnightworks/webauth@v0.27.0",
+    "pydantic-settings==2.16.2",
     "python-multipart==0.0.32",
     "syntok==1.4.4",
     "uvicorn==0.54.0",
@@ -28,11 +28,11 @@ presentator-worker = "presentator.host.worker:main"
 [dependency-groups]
 dev = [
     "import-linter==2.15",
-    "pytest==9.1.1",
+    "pytest==9.2.0",
     "pytest-cov==7.1.0",
     "pyright==1.1.414",
     "ruamel-yaml==0.19.1",
-    "ruff==0.17.1",
+    "ruff==0.17.3",
     "vulture==2.16",
 ]
 

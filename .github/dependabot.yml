@@ -14,6 +14,9 @@ updates:
     groups:
       uv-root:
         update-types: [minor, patch]
+    ignore:
+      # Dependabot looks a direct git reference up on PyPI by name, so a name taken there later could propose a package against the git pin
+      - dependency-name: "overnightworks-*"
   - package-ecosystem: uv
     directory: /speech
     schedule:
