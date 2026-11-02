@@ -1,0 +1,7 @@
+claim_id = "c7512c13c633448b9434dc3bc3aa6a87"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "1c0ba34f509b3b410063d62d86fe808776bb7f88"
+branch = "dependabot/uv/speech/providers/chatterbox/uv-chatterbox-5c624be22a"
+scope = ["speech/providers/chatterbox/pyproject.toml", "speech/providers/chatterbox/uv.lock"]
+opened_commit = "a41cb42e2070ac8a4558877aa16520075b242f56"
