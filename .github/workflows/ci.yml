@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: ./.github/actions/setup-uv
+        uses: $/.github/actions/setup-uv
 
       - name: Verify the dependency lock
         run: uv lock --check
@@ -64,7 +64,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: ./.github/actions/setup-uv
+        uses: $/.github/actions/setup-uv
 
       - name: Verify the dependency lock
         run: uv lock --check
@@ -99,7 +99,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: ./.github/actions/setup-uv
+        uses: $/.github/actions/setup-uv
         with:
           cache-dependency-glob: |
             speech/uv.lock
@@ -134,7 +134,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: ./.github/actions/setup-uv
+        uses: $/.github/actions/setup-uv
         with:
           cache-dependency-glob: |
             speech/uv.lock
@@ -172,7 +172,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: ./.github/actions/setup-uv
+        uses: $/.github/actions/setup-uv
         with:
           cache-dependency-glob: speech/providers/qwen/uv.lock
 
@@ -208,7 +208,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: ./.github/actions/setup-uv
+        uses: $/.github/actions/setup-uv
         with:
           cache-dependency-glob: speech/providers/voxcpm/uv.lock
 
@@ -243,7 +243,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install uv
-        uses: ./.github/actions/setup-uv
+        uses: $/.github/actions/setup-uv
         with:
           cache-dependency-glob: speech/providers/magpie/uv.lock
       - name: Verify the dependency lock
@@ -294,7 +294,7 @@ jobs:
       # the production security policy through this Python environment, so they
       # need this instance's own copy too — never a second, hand-copied value of it.
       - name: Install uv
-        uses: ./.github/actions/setup-uv
+        uses: $/.github/actions/setup-uv
 
       - name: Install locked Python dependencies
         working-directory: .
@@ -370,7 +370,7 @@ jobs:
       # serves the build from the lobby itself, so both need this instance's
       # Python environment.
       - name: Install uv
-        uses: ./.github/actions/setup-uv
+        uses: $/.github/actions/setup-uv
 
       - name: Install locked Python dependencies
         working-directory: .
@@ -516,7 +516,7 @@ jobs:
           (umask 0133 && printf '%s\n' "$client_secret" > "$HOME/.secrets/keycloak/clients/presentator")
 
       - name: Install uv
-        uses: ./.github/actions/setup-uv
+        uses: $/.github/actions/setup-uv
 
       - name: Install the probe's tools
         run: |
