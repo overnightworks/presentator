@@ -17,7 +17,7 @@ dependencies = [
     "piper-tts==1.8.0",
     "pydantic-settings==2.16.2",
     "uvicorn==0.54.0",
-    "websockets==17.3",
+    "websockets==17.4",
     "overnightworks-presentator-speech-provider-contract",
 ]
 
