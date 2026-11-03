@@ -52,21 +52,45 @@ describe('putJson', () => {
 	});
 });
 
+describe('two calls that meet a 401 together', () => {
+	it('leave for the sign-in once', async () => {
+		const navigated = vi.spyOn(documentNavigation, 'to').mockImplementation(() => undefined);
+		signInStartsAt('/login/oidc');
+		window.history.replaceState(null, '', '/together');
+
+		void getJson(answering(401, {}).fetcher, '/api/session');
+		void getJson(answering(401, {}).fetcher, '/api/decks');
+		await new Promise((resolve) => setTimeout(resolve, 20));
+
+		expect(navigated).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe.each([
-	{ name: 'a read', call: (fetcher: typeof fetch) => getJson(fetcher, '/api/decks') },
-	{ name: 'a write', call: (fetcher: typeof fetch) => putJson(fetcher, '/api/account', {}) }
-])('$name that meets a 401', ({ call }) => {
+	{
+		name: 'a read',
+		page: '/read',
+		call: (fetcher: typeof fetch) => getJson(fetcher, '/api/decks')
+	},
+	{
+		name: 'a write',
+		page: '/write',
+		call: (fetcher: typeof fetch) => putJson(fetcher, '/api/account', {})
+	}
+])('$name that meets a 401', ({ page, call }) => {
 	it('leaves for the sign-in with the current page as next and never settles', async () => {
 		const navigated = vi.spyOn(documentNavigation, 'to').mockImplementation(() => undefined);
 		signInStartsAt('/login/oidc');
-		window.history.replaceState(null, '', '/some/page?filter=a b');
+		window.history.replaceState(null, '', `${page}?filter=a b`);
 		const settled = vi.fn();
 
 		void call(answering(401, {}).fetcher).then(settled, settled);
 		await vi.waitFor(() => expect(navigated).toHaveBeenCalledTimes(1));
 		await new Promise((resolve) => setTimeout(resolve, 20));
 
-		expect(navigated).toHaveBeenCalledWith('/login/oidc?next=%2Fsome%2Fpage%3Ffilter%3Da%2520b');
+		expect(navigated).toHaveBeenCalledWith(
+			`/login/oidc?next=${encodeURIComponent(`${page}?filter=a%20b`)}`
+		);
 		expect(settled).not.toHaveBeenCalled();
 	});
 });

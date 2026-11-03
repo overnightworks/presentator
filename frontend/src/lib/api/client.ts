@@ -9,6 +9,7 @@ export const documentNavigation = {
 };
 
 let signInStart: string | undefined;
+let leftFor: string | undefined;
 
 /** Tells the transport where sign-in starts, as the session says. */
 export function signInStartsAt(address: string): void {
@@ -16,15 +17,19 @@ export function signInStartsAt(address: string): void {
 }
 
 // An ended session ends in the sign-in, whichever call met the 401. The page
-// is left by a document navigation, so no unsaved state is carried over and
-// the answer never settles: the load or handler behind it renders no error
-// on the way out.
+// is left by one document navigation however many calls meet it, so no
+// unsaved state is carried over, and the answer never settles: the load or
+// handler behind it renders no error on the way out.
 export function leaveForSignIn(): Promise<never> {
 	if (signInStart === undefined) {
 		throw new Error('a 401 came before the session said where sign-in starts');
 	}
 	const here = window.location.pathname + window.location.search;
-	documentNavigation.to(`${signInStart}?next=${encodeURIComponent(here)}`);
+	const target = `${signInStart}?next=${encodeURIComponent(here)}`;
+	if (target !== leftFor) {
+		leftFor = target;
+		documentNavigation.to(target);
+	}
 	return new Promise<never>(() => undefined);
 }
 
