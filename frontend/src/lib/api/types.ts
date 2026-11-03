@@ -526,6 +526,10 @@ export interface components {
             account_theme: string;
             /** Account Title */
             account_title: string;
+            /** Address Unknown Explanation */
+            address_unknown_explanation: string;
+            /** Address Unknown Title */
+            address_unknown_title: string;
             /** Deck Attempt Label */
             deck_attempt_label: string;
             /** Deck Back */
@@ -596,6 +600,10 @@ export interface components {
             footer_datenschutz: string;
             /** Footer Impressum */
             footer_impressum: string;
+            /** For Admins Explanation */
+            for_admins_explanation: string;
+            /** For Admins Title */
+            for_admins_title: string;
             /** Language Name */
             language_name: string;
             /** Language Tag */

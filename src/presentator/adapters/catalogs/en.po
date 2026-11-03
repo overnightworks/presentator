@@ -164,6 +164,18 @@ msgstr "No such deck"
 msgid "deck_unknown_explanation"
 msgstr "No deck stands under this address."
 
+msgid "address_unknown_title"
+msgstr "Not found"
+
+msgid "address_unknown_explanation"
+msgstr "Nothing stands under this address."
+
+msgid "for_admins_title"
+msgstr "For admins"
+
+msgid "for_admins_explanation"
+msgstr "Settings are for admins. Your account has no admin role."
+
 msgid "settings_title"
 msgstr "General"
 

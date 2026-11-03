@@ -563,6 +563,14 @@
             "title": "Account Title",
             "type": "string"
           },
+          "address_unknown_explanation": {
+            "title": "Address Unknown Explanation",
+            "type": "string"
+          },
+          "address_unknown_title": {
+            "title": "Address Unknown Title",
+            "type": "string"
+          },
           "deck_attempt_label": {
             "title": "Deck Attempt Label",
             "type": "string"
@@ -701,6 +709,14 @@
           },
           "footer_impressum": {
             "title": "Footer Impressum",
+            "type": "string"
+          },
+          "for_admins_explanation": {
+            "title": "For Admins Explanation",
+            "type": "string"
+          },
+          "for_admins_title": {
+            "title": "For Admins Title",
             "type": "string"
           },
           "language_name": {
@@ -1317,6 +1333,10 @@
           "deck_pdf",
           "deck_unknown_title",
           "deck_unknown_explanation",
+          "address_unknown_title",
+          "address_unknown_explanation",
+          "for_admins_title",
+          "for_admins_explanation",
           "settings_title",
           "settings_sources",
           "settings_voice",

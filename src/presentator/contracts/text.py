@@ -59,6 +59,10 @@ class LobbyText:
     deck_pdf: str
     deck_unknown_title: str
     deck_unknown_explanation: str
+    address_unknown_title: str
+    address_unknown_explanation: str
+    for_admins_title: str
+    for_admins_explanation: str
     settings_title: str
     settings_sources: str
     settings_voice: str
