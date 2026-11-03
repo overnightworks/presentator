@@ -163,6 +163,8 @@ for (const { role, source } of emptyCards) {
 
 			await expect(page.getByRole('heading', { name: words.decks_empty_title })).toBeVisible();
 			await expect(page.locator('table')).toHaveCount(0);
+			// An empty list offers no way to add a deck or a source.
+			await expect(page.locator('main input, main button')).toHaveCount(0);
 			await expect(page.getByRole('link', { name: words.decks_empty_explanation })).toHaveCount(
 				role === 'admin' ? 1 : 0
 			);
@@ -499,6 +501,8 @@ test.describe('log out', () => {
 		});
 		expect(next.status()).toBe(302);
 		expect(next.headers()['location']).toBe(`${SIGN_IN_START}?next=%2F`);
+		// The logout page goes on to the issuer, which nobody answers in the drive.
+		await page.goto('about:blank').catch(() => undefined);
 	});
 });
 
