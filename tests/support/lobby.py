@@ -59,9 +59,11 @@ from presentator.api.auth import (
     create_lobby,
 )
 from presentator.api.copresenter import CoPresenterSurface
+from presentator.api.deck_list_api import DECK_LIST_PATH, DeckListView
 from presentator.api.lobby_shell import LobbyShell
 from presentator.api.pages import Pages
 from presentator.api.people import AdminPeople
+from presentator.api.session_api import SESSION_PATH, SessionView
 from presentator.api.talk import create_talk, talk_content_security_policy
 from presentator.application.decks import Decks
 from presentator.application.people import People
@@ -422,6 +424,7 @@ class GivenDecks:
     source: Source | None = None
     sources: tuple[Source, ...] = ()
     store: FakeDeckStore | None = None
+    source_store: FakeSourceStore | None = None
     runs: tuple[SourceRun, ...] = ()
     carried: dict[str, tuple[DeckFolder, ...] | None] | None = None
     failures: dict[str, SourceRunFailure] | None = None
@@ -502,7 +505,8 @@ def a_decks(given: GivenDecks, clock: FrozenClock) -> Decks:
         minted=given.key_drafts.minted,
     )
     decks = Decks(
-        sources=FakeSourceStore(
+        sources=given.source_store
+        or FakeSourceStore(
             sources=stored,
             hashes=dict(given.hook_hashes),
             key_drafts=key_drafts,
@@ -747,13 +751,40 @@ def a_signed_in_lobby(given: GivenDecks = NO_DECKS) -> TestClient:
     return lobby.client
 
 
-def put_a_built_deck(store: FakeDeckStore, *, slug: str, owner_id: str) -> None:
+def deck_list(client: TestClient) -> DeckListView:
+    """What `GET /api/decks` answers the client's signed-in person."""
+    answer = client.get(DECK_LIST_PATH, headers={"accept": "application/json"})
+    assert answer.status_code == HTTPStatus.OK
+    return DeckListView.model_validate(answer.json())
+
+
+def signed_in_username(client: TestClient) -> str | None:
+    """Who `GET /api/session` says the client is signed in as."""
+    answer = client.get(SESSION_PATH, headers={"accept": "application/json"})
+    assert answer.status_code == HTTPStatus.OK
+    person = SessionView.model_validate(answer.json()).person
+    return None if person is None else person.username
+
+
+def listed_titles(client: TestClient) -> list[str]:
+    """The titles `GET /api/decks` lists for the client's signed-in person."""
+    return [deck.title for deck in deck_list(client).decks]
+
+
+def put_a_built_deck(
+    store: FakeDeckStore,
+    *,
+    slug: str,
+    owner_id: str,
+    title: str = "Hello Co-Presenter",
+    changed_at: datetime = NOW,
+) -> None:
     """A deck of this owner whose built talk is the example talk's real build."""
     store.put(
         Deck(
             slug=slug,
-            title="Hello Co-Presenter",
-            changed_at=NOW,
+            title=title,
+            changed_at=changed_at,
             owner_id=owner_id,
             source_id=SOURCE_ID,
             commit=_BUILT_DECK_COMMIT,

@@ -37,6 +37,7 @@ from presentator.host import main
 from tests.support.lobby import (
     AN_ISSUER,
     a_settings,
+    signed_in_username,
 )
 from tests.support.sign_in_support import (
     ADMIN,
@@ -172,10 +173,7 @@ def test_the_request_after_sign_in_is_signed_in_through_the_session_decider(
 ) -> None:
     scene.sign_in(username="anna")
 
-    opened = scene.lobby.client.get("/")
-
-    assert opened.status_code == HTTPStatus.OK
-    assert "anna" in opened.text
+    assert signed_in_username(scene.lobby.client) == "anna"
     assert scene.count("sessions") == 1
 
 

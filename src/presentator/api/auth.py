@@ -44,13 +44,12 @@ from webauth.sign_in_routes import (
     install_sign_in_routes,
 )
 
-from presentator.api.admission import gated_person
 from presentator.api.deck_list_api import deck_list_routes
 from presentator.api.decks import add_deck_pages
 from presentator.api.health import HEALTH_IS_PUBLIC, HEALTH_PATH, add_health_route
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
 from presentator.api.lobby_shell import LobbyShell
-from presentator.api.pages import TEMPLATES, Pages, state_word
+from presentator.api.pages import TEMPLATES, Pages
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
 from presentator.api.preference_api import preference_api_routes
 from presentator.api.preferences import preference_routes
@@ -61,12 +60,10 @@ from presentator.api.sources import source_routes
 from presentator.api.voice_api import voice_api_routes
 from presentator.application.decks import Decks
 from presentator.application.voice import VoiceStatusUse
-from presentator.contracts.text import LobbyText
 
 _STATIC_DIR: Final = Path(__file__).parent / "static"
 _STATIC_PATH: Final = "/static"
 _INSIDE_STATIC: Final = f"{_STATIC_PATH}/"
-_LOBBY: Final = "/"
 _APP_ASSETS: Final = "/_app"
 _INSIDE_APP_ASSETS: Final = f"{_APP_ASSETS}/"
 _HTML: Final = "text/html"
@@ -236,46 +233,12 @@ class LobbyPrivate:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DeckRow:
-    """One deck as the list renders it: its state, name, folder, and age."""
-
-    title: str
-    slug: str
-    state: str
-    state_word: str
-    changed: str
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class _Surfaces:
     """The lobby's HTML answers, each one asking the use cases what is true."""
 
-    decks: Decks
     pages: Pages
     auth: InstalledAuth
     shell: LobbyShell
-
-    def home(self, request: Request) -> Response:
-        """List the signed-in person's decks, newest first."""
-        viewer = gated_person(request).id
-        return self.pages.page(
-            request,
-            "home.html",
-            source_address=self.decks.source_address(viewer=viewer),
-            decks=self._rows(self.pages.appearance(request).text, viewer),
-        )
-
-    def _rows(self, text: LobbyText, viewer: str) -> tuple[DeckRow, ...]:
-        return tuple(
-            DeckRow(
-                title=deck.title,
-                slug=deck.slug,
-                state=deck.state.value,
-                state_word=state_word(deck.state, text),
-                changed=self.pages.age_in_words(deck.age, text.language_tag),
-            )
-            for deck in self.decks.listed(viewer=viewer)
-        )
 
     def lobby_app(
         self, request: Request, *, status: HTTPStatus = HTTPStatus.OK
@@ -425,11 +388,10 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     session. The app's shell answers what no route claims, and the refusal
     addresses under 403.
     """
-    surfaces = _Surfaces(decks=decks, pages=pages, auth=auth, shell=shell)
+    surfaces = _Surfaces(pages=pages, auth=auth, shell=shell)
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(lobby, auth.config)
     _install_middleware(lobby, auth, sessions, private.admin_people)
-    lobby.add_api_route(_LOBBY, surfaces.home, methods=["GET"])
     _install_sign_in(lobby, surfaces)
     add_health_route(lobby)
     lobby.include_router(_session_routes(pages, auth))

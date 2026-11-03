@@ -6,7 +6,6 @@ way. Every entry names the site that reaches it; an entry without one is an
 excuse.
 """
 
-from presentator.api.auth import DeckRow
 from presentator.api.copresenter import AskRequest
 from presentator.api.decks import Banner, TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
@@ -38,9 +37,6 @@ RespondingHandler.log_message
 _InlineScripts.handle_starttag
 _InlineScripts.handle_data
 _InlineScripts.handle_endtag
-
-# `presentator/api/templates/home.html` renders it in the "Changed" column.
-DeckRow.changed
 
 # `presentator/api/templates/sources.html` renders each row of the Sources list.
 SourceRow.name

@@ -525,7 +525,7 @@ def test_the_instance_default_theme_reaches_a_person_who_chose_nothing(
 
     signed_in_as(instance, NEIGHBOUR)
 
-    assert 'data-theme="dark"' in instance.client.get("/").text
+    assert 'data-theme="dark"' in instance.client.get(ACCOUNT).text
 
 
 @pytest.mark.parametrize("method", ["get", "post"])
@@ -543,21 +543,21 @@ def test_a_person_without_the_admin_role_is_refused_at_settings(
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
     signed_in_as(instance, USERNAME)
-    assert "data-theme" not in instance.client.get("/").text
+    assert "data-theme" not in instance.client.get(ACCOUNT).text
 
 
 def test_only_an_admin_is_offered_the_settings_section(instance: Lobby) -> None:
-    assert ENGLISH.section_settings in instance.client.get("/").text
+    assert ENGLISH.section_settings in instance.client.get(ACCOUNT).text
 
     signed_in_as(instance, NEIGHBOUR)
 
-    assert ENGLISH.section_settings not in instance.client.get("/").text
+    assert ENGLISH.section_settings not in instance.client.get(ACCOUNT).text
 
 
 def test_the_person_menu_offers_account_the_theme_rows_and_log_out(
     instance: Lobby,
 ) -> None:
-    page = instance.client.get("/").text
+    page = instance.client.get(ACCOUNT).text
 
     assert ENGLISH.menu_account in page
     assert ENGLISH.menu_theme in page
@@ -574,7 +574,7 @@ def test_choosing_dark_in_the_person_menu_paints_that_persons_pages(
 
     assert chosen.status_code == HTTPStatus.NO_CONTENT
     assert chosen.headers["HX-Refresh"] == "true"
-    assert 'data-theme="dark"' in instance.client.get("/").text
+    assert 'data-theme="dark"' in instance.client.get(ACCOUNT).text
     assert 'data-theme="dark"' in instance.client.get(ACCOUNT).text
 
 
@@ -585,7 +585,7 @@ def test_a_theme_chosen_in_the_menu_leaves_the_neighbours_pages_alone(
 
     signed_in_as(instance, NEIGHBOUR)
 
-    assert "data-theme" not in instance.client.get("/").text
+    assert "data-theme" not in instance.client.get(ACCOUNT).text
 
 
 def test_following_the_system_again_writes_no_theme_onto_the_page(
@@ -595,7 +595,7 @@ def test_following_the_system_again_writes_no_theme_onto_the_page(
 
     instance.client.post(THEME, data={"theme": ThemeChoice.FOLLOW_SYSTEM.value})
 
-    assert "data-theme" not in instance.client.get("/").text
+    assert "data-theme" not in instance.client.get(ACCOUNT).text
 
 
 def test_account_shows_who_you_are_and_what_you_chose(instance: Lobby) -> None:
@@ -630,9 +630,9 @@ def test_an_account_choice_paints_that_persons_pages_and_nobody_elses(
 
     assert changed.status_code == HTTPStatus.NO_CONTENT
     assert changed.headers["HX-Refresh"] == "true"
-    assert 'data-theme="dark"' in instance.client.get("/").text
+    assert 'data-theme="dark"' in instance.client.get(ACCOUNT).text
     signed_in_as(instance, NEIGHBOUR)
-    assert "data-theme" not in instance.client.get("/").text
+    assert "data-theme" not in instance.client.get(ACCOUNT).text
 
 
 def test_handing_the_theme_back_to_the_instance_follows_it_again(
@@ -642,7 +642,7 @@ def test_handing_the_theme_back_to_the_instance_follows_it_again(
 
     save_account(instance, language=_NO_OVERRIDE, theme=_NO_OVERRIDE)
 
-    assert "data-theme" not in instance.client.get("/").text
+    assert "data-theme" not in instance.client.get(ACCOUNT).text
 
 
 def test_an_account_language_switches_that_persons_words_only() -> None:
@@ -701,7 +701,7 @@ def test_the_instance_default_language_switches_the_words_for_everybody() -> Non
 def test_the_menu_that_writes_a_theme_carries_the_script_that_posts_it(
     instance: Lobby,
 ) -> None:
-    page = instance.client.get("/").text
+    page = instance.client.get(ACCOUNT).text
 
     assert '<script src="/static/htmx.min.js" defer></script>' in page
     assert instance.client.get("/static/htmx.min.js").status_code == HTTPStatus.OK

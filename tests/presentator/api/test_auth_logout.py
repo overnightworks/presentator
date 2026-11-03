@@ -348,6 +348,6 @@ def test_the_header_form_names_the_path_of_the_logout_route(
     scene: Scene,
 ) -> None:
     scene.sign_in()
-    signed_in_page = scene.lobby.client.get("/").text
+    signed_in_page = scene.lobby.client.get("/account").text
 
     assert f'action="{LOGOUT_PATH}"' in signed_in_page
