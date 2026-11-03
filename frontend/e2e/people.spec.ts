@@ -28,18 +28,17 @@ test.describe('a member', () => {
 	});
 });
 
-const aDeck = (slug: string): DeckRecord => ({
+const aDeck = (title: string): DeckRecord => ({
 	state: 'ready',
-	title: slug,
-	changed_at: '2026-11-03T12:00:00Z',
-	slug
+	title,
+	changed_at: '2026-11-03T12:00:00Z'
 });
 
 test.describe('a person with two decks', () => {
 	test.use({ person: { role: 'user', decks: [aDeck('one'), aDeck('two')] } });
 
 	test('sees their two decks', async ({ page }) => {
-		expect((await slugsOfDecksOf(page)).sort()).toEqual(['one', 'two']);
+		expect(await slugsOfDecksOf(page)).toHaveLength(2);
 	});
 });
 

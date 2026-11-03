@@ -201,6 +201,18 @@ main {
 	font-size: 18px;
 }
 
+@media (max-width: 480px) {
+	.top {
+		gap: 8px 12px;
+		padding: 0 12px;
+	}
+	.top nav {
+		gap: 12px;
+	}
+	.wordmark {
+		font-size: 16px;
+	}
+}
 @media (max-width: 640px) {
 	.decks thead {
 		position: absolute;

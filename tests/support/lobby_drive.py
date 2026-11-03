@@ -93,7 +93,6 @@ class DeckRecord(BaseModel):
     state: DeckState
     title: str
     changed_at: datetime
-    slug: str | None = None
 
 
 class NewPerson(BaseModel):
@@ -128,8 +127,9 @@ class _Newcomers:
         person = User(
             id=f"id-of-person-{number}", username=f"person-{number}", role=wanted.role
         )
-        for record in wanted.decks:
-            self.add_deck(person.id, record)
+        slugs: list[JsonNode] = [
+            self.add_deck(person.id, record) for record in wanted.decks
+        ]
         if wanted.source is not None:
             self.sources.sources.append(
                 replace(
@@ -147,11 +147,15 @@ class _Newcomers:
         )
         issued = Response()
         issue_session_cookies(issued, self.people.open_session_for(person), self.config)
-        return {"person_id": person.id, **_session_cookies(issued)}
+        return {"person_id": person.id, "slugs": slugs, **_session_cookies(issued)}
 
     def add_deck(self, person_id: str, record: DeckRecord) -> str:
-        """Add the record to that person's decks; answer its slug."""
-        slug = record.slug or f"{person_id}-deck-{len(self.decks.all())}"
+        """Add the record to that person's decks; answer its slug.
+
+        A slug names a deck for the whole instance, so each is new and a test
+        reads it from the answer rather than choosing it.
+        """
+        slug = f"deck-{next(self.numbers)}"
         self.decks.put(
             Deck(
                 slug=slug,

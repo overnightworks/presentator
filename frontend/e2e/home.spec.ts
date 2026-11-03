@@ -16,7 +16,6 @@ const aDeck = (overrides: Partial<DeckRecord> = {}): DeckRecord => ({
 	state: 'ready',
 	title: 'Kundenfeedback Q3',
 	changed_at: minutesAgo(5),
-	slug: 'kundenfeedback',
 	...overrides
 });
 
@@ -39,6 +38,14 @@ function startsSignIn(page: Page, next = '%2F') {
 	});
 }
 
+// The sign-in's address is an issuer nobody answers in the drive, so the page
+// is parked once the request was seen, and no navigation is left in flight.
+async function leftForSignIn(page: Page, started: ReturnType<typeof startsSignIn>): Promise<void> {
+	await started;
+	// The failed load of the issuer's address may land first; either way the page is parked.
+	await page.goto('about:blank').catch(() => undefined);
+}
+
 const entriesOf = (page: Page): Promise<number> => page.evaluate(() => history.length);
 
 async function chooseTheme(page: Page, name: 'Follow system' | 'Light' | 'Dark'): Promise<void> {
@@ -52,32 +59,28 @@ test('a signed-out / is sent to the sign-in with next set to /', async ({ page }
 
 	await page.goto('/').catch(() => undefined);
 
-	await started;
+	await leftForSignIn(page, started);
 });
 
 const fourStates = [
 	aDeck({
 		state: 'building',
 		title: 'Kundenfeedback Q3',
-		slug: 'kundenfeedback',
 		changed_at: minutesAgo(2)
 	}),
 	aDeck({
 		state: 'failed',
 		title: 'Knowledge Fabric',
-		slug: 'knowledge-fabric',
 		changed_at: minutesAgo(26)
 	}),
 	aDeck({
 		state: 'ready',
 		title: 'Agenten-Fabrik',
-		slug: 'agenten-fabrik',
 		changed_at: minutesAgo(180)
 	}),
 	aDeck({
 		state: 'never-built',
 		title: 'Jahresrückblick 2025',
-		slug: 'jahresrueckblick-2025',
 		changed_at: minutesAgo(6 * 24 * 60)
 	})
 ];
@@ -99,7 +102,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
 			});
 
 			test('lists four states newest first, their ages in the second language, and saves a screenshot', async ({
-				page
+				page,
+				signedIn
 			}, testInfo) => {
 				const { words } = await sessionOf(page);
 				await page.clock.setFixedTime(NOW);
@@ -121,7 +125,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
 					await expect(row.locator('.state')).toHaveAttribute('data-state', deck.state);
 					await expect(row.locator('a')).toHaveText(deck.title);
 					await expect(row.locator('a')).toHaveCSS('text-transform', 'none');
-					await expect(row.locator('code')).toHaveText(deck.slug ?? '');
+					await expect(row.locator('code')).toHaveText(
+						signedIn?.slugs[fourStates.length - 1 - index] ?? ''
+					);
 					await expect(row.locator('.changed')).toHaveText(secondLanguageAges[index] ?? '');
 				}
 				await expect(page.locator('html')).toHaveAttribute('lang', words.language_tag);
@@ -181,7 +187,7 @@ test.describe('sentence 9', () => {
 		await page.goto('/');
 
 		const centres = await page
-			.locator('header.top > *')
+			.locator('header.top > :not([popover])')
 			.evaluateAll((parts) =>
 				parts.map((part) => part.getBoundingClientRect()).map((box) => box.top + box.height / 2)
 			);
@@ -253,13 +259,13 @@ test.describe('the theme', () => {
 	}) => {
 		await page.goto('/');
 		const entries = await entriesOf(page);
-		let navigations = 0;
-		page.on('framenavigated', () => (navigations += 1));
+		// A document navigation would drop this mark.
+		await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
 
 		await chooseTheme(page, 'Dark');
 
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-		expect(navigations).toBe(0);
+		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 		expect(await entriesOf(page)).toBe(entries);
 		await expect.poll(async () => (await sessionOf(page)).theme).toBe('dark');
 		await page.reload();
@@ -315,13 +321,15 @@ test.describe('sentence 6', () => {
 	test.use({ person: { role: 'admin', decks: [aDeck()] } });
 
 	test('an ended session meets the sign-in when the theme changes', async ({ page, context }) => {
+		const { words } = await sessionOf(page);
 		await page.goto('/');
+		await expect(page.getByRole('heading', { name: words.decks_title })).toBeVisible();
 		await endsTheSession(context);
 		const started = startsSignIn(page);
 
 		await chooseTheme(page, 'Dark');
 
-		await started;
+		await leftForSignIn(page, started);
 	});
 
 	test('an ended session meets the sign-in on the Decks link, the client-side load', async ({
@@ -330,12 +338,13 @@ test.describe('sentence 6', () => {
 	}) => {
 		const { words } = await sessionOf(page);
 		await page.goto('/');
+		await expect(page.getByRole('heading', { name: words.decks_title })).toBeVisible();
 		await endsTheSession(context);
 		const started = startsSignIn(page);
 
 		await page.getByRole('link', { name: words.section_decks }).click();
 
-		await started;
+		await leftForSignIn(page, started);
 	});
 });
 
@@ -384,7 +393,6 @@ test.describe('sentence 4', () => {
 			signedIn?.personId ?? '',
 			aDeck({
 				title: 'Added meanwhile',
-				slug: 'added-meanwhile',
 				changed_at: minutesAgo(1)
 			})
 		);
@@ -426,13 +434,13 @@ test.describe('the links to pages that are still Jinja', () => {
 		);
 	});
 
-	test('a deck row', async ({ page }) => {
+	test('a deck row', async ({ page, signedIn }) => {
 		await page.goto('/');
 
 		await leavesTheApp(
 			page,
 			() => page.getByRole('link', { name: 'Kundenfeedback Q3' }).click(),
-			'/deck/kundenfeedback'
+			`/deck/${signedIn?.slugs[0]}`
 		);
 	});
 });
@@ -459,7 +467,11 @@ test.describe('the empty card of an admin', () => {
 test.describe('log out', () => {
 	test.use({ person: { role: 'user' } });
 
-	test('posts to /logout and the next / is sent to the sign-in', async ({ page }) => {
+	test('posts to /logout and the next / is sent to the sign-in', async ({
+		page,
+		violations,
+		browserName
+	}) => {
 		await page.goto('/');
 		await opensTheMenu(page);
 
@@ -470,9 +482,23 @@ test.describe('log out', () => {
 		await posted.response();
 
 		expect(posted.method()).toBe('POST');
-		const started = startsSignIn(page);
-		await page.goto('/').catch(() => undefined);
-		await started;
+		// The library's logout page carries a policy of its own, under which
+		// Firefox's request for a favicon is refused; that one violation is this
+		// page's alone to excuse, and no other is.
+		if (browserName === 'firefox') {
+			await expect.poll(() => violations.some((one) => one.includes('favicon.ico'))).toBe(true);
+		}
+		violations.splice(
+			0,
+			violations.length,
+			...violations.filter((one) => !one.includes('favicon.ico'))
+		);
+		const next = await page.request.get('/', {
+			headers: { Accept: 'text/html' },
+			maxRedirects: 0
+		});
+		expect(next.status()).toBe(302);
+		expect(next.headers()['location']).toBe(`${SIGN_IN_START}?next=%2F`);
 	});
 });
 
