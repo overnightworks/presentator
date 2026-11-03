@@ -79,6 +79,12 @@ Banner.lead
 Banner.when
 Banner.sentences
 
+# The words below reach a person through the Svelte Home page alone, which reads
+# them from `/api/session`; the drive proves the page shows them.
+LobbyText.decks_column_changed
+LobbyText.decks_empty_title
+LobbyText.decks_empty_explanation
+
 # The words below reach a person through a Jinja template alone. That a catalog
 # carries each of them is proven by `load_lobby_text`, which refuses a catalog
 # missing any field of `LobbyText`; that a page renders them is proven by the
