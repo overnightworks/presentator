@@ -247,6 +247,7 @@ test.describe('sentence 9', () => {
 	});
 
 	test('shows a focus ring on every control of the open menu', async ({ page }) => {
+		const { person } = await sessionOf(page);
 		await page.goto('/');
 		await opensTheMenu(page);
 
@@ -258,6 +259,7 @@ test.describe('sentence 9', () => {
 			}
 		}
 
+		expect(focused).toContain(person?.username);
 		expect(focused).toContain('Log out');
 		expect(focused.length).toBeGreaterThanOrEqual(3);
 		expect(focused.some((control) => ['Follow system', 'Light', 'Dark'].includes(control))).toBe(true);
