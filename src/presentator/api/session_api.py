@@ -19,13 +19,14 @@ SESSION_PATH: Final = "/api/session"
 
 
 class SessionAddresses(BaseModel):
-    """Where a page sends a person to sign in or out."""
+    """Where a page sends a person to sign in or out, or to the central account."""
 
     model_config = ConfigDict(frozen=True)
 
     start: str
     logout: str
     talk_start: str
+    account_console_url: str
 
 
 class SessionPerson(BaseModel):

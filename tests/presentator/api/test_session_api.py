@@ -18,6 +18,7 @@ from presentator.contracts.text import Catalogs
 from tests.presentator.application.support.fakes import FakePersonPreferencesStore
 from tests.support.lobby import (
     A_TALK_ADDRESS,
+    AN_ISSUER,
     ENGLISH,
     NEIGHBOUR,
     USERNAME,
@@ -59,6 +60,25 @@ def test_a_signed_out_caller_gets_the_instances_words_and_theme_and_no_person() 
     assert view.sign_in.start == START_SIGN_IN_PATH
     assert view.sign_in.logout == LOGOUT_PATH
     assert view.sign_in.talk_start == f"{A_TALK_ADDRESS}{START_SIGN_IN_PATH}"
+
+
+@pytest.mark.parametrize("signed_in", [False, True])
+def test_the_session_names_the_central_account_at_the_configured_issuer(
+    *, signed_in: bool
+) -> None:
+    lobby = a_lobby()
+    if signed_in:
+        lobby.sign_in()
+
+    body = lobby.client.get(_SESSION).json()
+
+    assert body["sign_in"] == {
+        "start": START_SIGN_IN_PATH,
+        "logout": LOGOUT_PATH,
+        "talk_start": f"{A_TALK_ADDRESS}{START_SIGN_IN_PATH}",
+        "account_console_url": f"{AN_ISSUER}/account",
+    }
+    assert set(body) == {"person", "theme", "words", "sign_in"}
 
 
 def test_a_users_own_language_and_theme_win_over_the_instances() -> None:

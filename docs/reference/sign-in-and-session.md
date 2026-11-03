@@ -68,7 +68,7 @@ The SQLite stores stay this repository's
 
 ## What protects a request
 
-`webauth` 0.26.0 owns the mechanism, the sign-in routes included. `issue_session_cookies`,
+`webauth` owns the mechanism, the sign-in routes included. `issue_session_cookies`,
 `clear_session_cookies` and `session_id_from_request` set, clear and read the
 signed `SameSite=Lax` session cookie.
 
@@ -78,7 +78,9 @@ signed `SameSite=Lax` session cookie.
   co-presenter's WebSocket admits through it in its own route), that decides
   whether the cookie's session id names a person.
   `GET /api/session` is the one exact optional path: it admits a live session
-  and answers a signed-out caller with the instance's defaults and no person
+  and answers a signed-out caller with the instance's defaults and no person;
+  its sign-in addresses include `account_console_url`, the configured issuer
+  with `/account`, served signed in and out alike
   ([ADR 0020](../decisions/0020-the-lobby-is-a-json-api.md)).
 - `BearerGate` takes `/api/admin/` by an access token alone and never by the
   cookie (see [people](people.md)). On the rest of `/api/` a person's hal

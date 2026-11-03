@@ -399,6 +399,7 @@ def an_installed_auth(
         transaction=NoSignInTransaction() if transaction is None else transaction,
         content_security_policy=content_security_policy(shell),
         talk_origin=A_TALK_ADDRESS,
+        issuer=AN_ISSUER,
     )
 
 

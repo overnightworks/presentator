@@ -910,9 +910,11 @@ export interface components {
         SampleLanguage: "de" | "en";
         /**
          * SessionAddresses
-         * @description Where a page sends a person to sign in or out.
+         * @description Where a page sends a person to sign in or out, or to the central account.
          */
         SessionAddresses: {
+            /** Account Console Url */
+            account_console_url: string;
             /** Logout */
             logout: string;
             /** Start */
