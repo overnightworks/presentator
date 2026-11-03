@@ -97,6 +97,12 @@ LobbyText.deck_status
 LobbyText.deck_presenter_view
 LobbyText.deck_projector_view
 LobbyText.deck_unknown_explanation
+# The Svelte lobby's not-found board (F2b) and for-admins board (F4b) read these
+# from `/api/session`.
+LobbyText.address_unknown_title
+LobbyText.address_unknown_explanation
+LobbyText.for_admins_title
+LobbyText.for_admins_explanation
 LobbyText.settings_title
 LobbyText.settings_instance_name
 LobbyText.settings_default_language
