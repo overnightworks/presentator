@@ -43,6 +43,12 @@ interaction became a template, a fragment and a form route.
   and the retired `/setup` never fall back to it: a missing asset or API is
   still a 404. `/_app/` is public and serves the build's assets. A page not yet
   moved stays a Jinja page, and a link to it carries `data-sveltekit-reload`.
+- The root load reads the session once; the `(lobby)` route group holds the
+  header and footer, so `/login` and the refusals stay headerless. Home, at
+  `/`, is the first page in the group. A 401 from any read or write leaves the
+  app by a document navigation to the sign-in with the current address as
+  `next`, and its promise never settles, so no error page shows on the way
+  out.
 - The look comes from appkit's npm tarball, pinned by release URL in
   `frontend/package.json` with the lockfile's integrity, and imported from
   `node_modules`; presentator adds only its colour in the app slot.

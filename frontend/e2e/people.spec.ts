@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 
 import type { SessionView } from '../src/lib/api/session.ts';
-import { expect, secondLanguage, signIn, test } from './person.ts';
+import { type DeckRecord, expect, signIn, test } from './person.ts';
 
 async function sessionOf(page: Page): Promise<SessionView> {
 	const answer = await page.request.get('/api/session', {
@@ -28,11 +28,18 @@ test.describe('a member', () => {
 	});
 });
 
+const aDeck = (slug: string): DeckRecord => ({
+	state: 'ready',
+	title: slug,
+	changed_at: '2026-11-03T12:00:00Z',
+	slug
+});
+
 test.describe('a person with two decks', () => {
-	test.use({ person: { role: 'user', decks: 2 } });
+	test.use({ person: { role: 'user', decks: [aDeck('one'), aDeck('two')] } });
 
 	test('sees their two decks', async ({ page }) => {
-		expect(await slugsOfDecksOf(page)).toHaveLength(2);
+		expect((await slugsOfDecksOf(page)).sort()).toEqual(['one', 'two']);
 	});
 });
 
@@ -45,7 +52,7 @@ test.describe('a person without decks', () => {
 });
 
 test.describe('a person of the second language', () => {
-	test.use({ person: { role: 'user', language_tag: secondLanguage } });
+	test.use({ person: { role: 'user', language: 'second' } });
 
 	test('gets its words', async ({ page, browser, baseURL }) => {
 		const theirs = await sessionOf(page);

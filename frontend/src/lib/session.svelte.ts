@@ -27,13 +27,9 @@ $effect.root(() => {
 		if (view === undefined) {
 			return;
 		}
-		const root = document.documentElement;
-		if (view.theme === 'follow-system') {
-			delete root.dataset.theme;
-		} else {
-			root.dataset.theme = view.theme;
-		}
-		root.lang = view.words.language_tag;
+		// The same marks the server's shell writes on first paint.
+		document.documentElement.dataset.theme = view.theme;
+		document.documentElement.lang = view.words.language_tag;
 	});
 });
 

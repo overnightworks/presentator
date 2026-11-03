@@ -31,7 +31,7 @@ describe('the session store', () => {
 		expect(languageTag()).toBe('de');
 	});
 
-	it('paints a chosen theme and removes the mark again when the device is followed', () => {
+	it('paints a chosen theme and hands the look back to the device when it is followed', () => {
 		commitSession(sessionIn('en', 'follow-system'));
 		showTheme('dark');
 		flushSync();
@@ -40,6 +40,6 @@ describe('the session store', () => {
 		showTheme('follow-system');
 		flushSync();
 
-		expect(document.documentElement.dataset.theme).toBeUndefined();
+		expect(document.documentElement.dataset.theme).toBe('follow-system');
 	});
 });
