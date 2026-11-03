@@ -1,8 +1,14 @@
 <script lang="ts">
 	import 'overnightworks-appkit/appkit.css';
 	import '../app.css';
+	import { commitSession } from '#lib/session.svelte.ts';
+	import type { LayoutProps } from './$types';
 
-	let { children } = $props();
+	let { data, children }: LayoutProps = $props();
+
+	$effect.pre(() => {
+		commitSession(data.session);
+	});
 </script>
 
 {@render children()}

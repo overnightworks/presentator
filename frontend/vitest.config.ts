@@ -5,6 +5,8 @@ import { coverageSources, sveltekitOptions } from './vite.config';
 
 export default defineConfig({
 	plugins: [sveltekit(sveltekitOptions)],
+	// Svelte's runtime resolves to its server build without this, where effects never run.
+	resolve: { conditions: ['browser'] },
 	test: {
 		include: ['src/**/*.test.ts'],
 		environment: 'jsdom',
