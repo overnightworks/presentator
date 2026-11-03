@@ -32,8 +32,8 @@ from tests.support.lobby import (
     a_content_security_policy,
     a_lobby_app,
     a_lobby_that_claims_no_origin_of_its_own,
-    signed_in_username,
 )
+from tests.support.lobby_reads import signed_in_username
 
 _HEX_COLOUR = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 # The lobby's own policy (`presentator.api.auth`): no camera, no microphone,

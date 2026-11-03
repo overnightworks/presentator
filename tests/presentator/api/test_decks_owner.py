@@ -30,9 +30,8 @@ from tests.support.lobby import (
     GivenDecks,
     a_configured_source,
     a_lobby,
-    deck_list,
-    listed_titles,
 )
+from tests.support.lobby_reads import deck_list, listed_titles
 from tests.support.talk_support import cookies_without_values, two_hosts
 
 _COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"

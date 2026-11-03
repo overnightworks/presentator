@@ -59,11 +59,9 @@ from presentator.api.auth import (
     create_lobby,
 )
 from presentator.api.copresenter import CoPresenterSurface
-from presentator.api.deck_list_api import DECK_LIST_PATH, DeckListView
 from presentator.api.lobby_shell import LobbyShell
 from presentator.api.pages import Pages
 from presentator.api.people import AdminPeople
-from presentator.api.session_api import SESSION_PATH, SessionView
 from presentator.api.talk import create_talk, talk_content_security_policy
 from presentator.application.decks import Decks
 from presentator.application.people import People
@@ -749,26 +747,6 @@ def a_signed_in_lobby(given: GivenDecks = NO_DECKS) -> TestClient:
     lobby = a_lobby(given=given)
     lobby.sign_in()
     return lobby.client
-
-
-def deck_list(client: TestClient) -> DeckListView:
-    """What `GET /api/decks` answers the client's signed-in person."""
-    answer = client.get(DECK_LIST_PATH, headers={"accept": "application/json"})
-    assert answer.status_code == HTTPStatus.OK
-    return DeckListView.model_validate(answer.json())
-
-
-def signed_in_username(client: TestClient) -> str | None:
-    """Who `GET /api/session` says the client is signed in as."""
-    answer = client.get(SESSION_PATH, headers={"accept": "application/json"})
-    assert answer.status_code == HTTPStatus.OK
-    person = SessionView.model_validate(answer.json()).person
-    return None if person is None else person.username
-
-
-def listed_titles(client: TestClient) -> list[str]:
-    """The titles `GET /api/decks` lists for the client's signed-in person."""
-    return [deck.title for deck in deck_list(client).decks]
 
 
 def put_a_built_deck(

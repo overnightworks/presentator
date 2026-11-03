@@ -37,8 +37,8 @@ from presentator.host import main
 from tests.support.lobby import (
     AN_ISSUER,
     a_settings,
-    signed_in_username,
 )
+from tests.support.lobby_reads import signed_in_username
 from tests.support.sign_in_support import (
     ADMIN,
     MEMBER,

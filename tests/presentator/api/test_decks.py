@@ -9,8 +9,8 @@ from tests.support.lobby import (
     GivenDecks,
     a_configured_source,
     a_signed_in_lobby,
-    deck_list,
 )
+from tests.support.lobby_reads import deck_list
 
 _ADDRESS: Final = "git@heimserver:decks.git"
 _A_DECK: Final = frozenset({MANIFEST_FILE, SLIDES_FILE})

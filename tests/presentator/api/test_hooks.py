@@ -17,8 +17,8 @@ from tests.support.lobby import (
     GivenDecks,
     Lobby,
     a_lobby,
-    listed_titles,
 )
+from tests.support.lobby_reads import listed_titles
 
 _SOURCE_A = "alpha"
 _SOURCE_B = "beta"

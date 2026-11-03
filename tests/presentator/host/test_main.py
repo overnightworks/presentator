@@ -49,11 +49,9 @@ from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     INSTANCE_KEY,
     configure_secret_key,
-    deck_list,
     hand_over_session_cookies,
-    listed_titles,
-    signed_in_username,
 )
+from tests.support.lobby_reads import deck_list, listed_titles, signed_in_username
 from tests.support.people import (
     copy_of_a_crashed_database,
     seed_user,
