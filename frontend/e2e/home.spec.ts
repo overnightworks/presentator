@@ -53,6 +53,32 @@ async function chooseTheme(page: Page, name: 'Follow system' | 'Light' | 'Dark')
 	await page.getByRole('radio', { name }).click();
 }
 
+// Presses Tab and returns the focused control's name after asserting it shows a ring.
+async function tabbedControlWithRing(page: Page): Promise<string | null> {
+	await page.keyboard.press('Tab');
+	const ring = await page.evaluate(() => {
+		const active = document.activeElement;
+		if (!active || active === document.body) {
+			return null;
+		}
+		const style = getComputedStyle(active);
+		return {
+			control:
+				active.textContent?.trim() ||
+				(active as HTMLInputElement).labels?.[0]?.textContent?.trim() ||
+				active.className,
+			style: style.outlineStyle,
+			width: parseFloat(style.outlineWidth)
+		};
+	});
+	if (!ring) {
+		return null;
+	}
+	expect(ring.style, ring.control).not.toBe('none');
+	expect(ring.width, ring.control).toBeGreaterThanOrEqual(2);
+	return ring.control;
+}
+
 // Cell 1.
 test('a signed-out / is sent to the sign-in with next set to /', async ({ page }) => {
 	const started = startsSignIn(page);
@@ -212,26 +238,29 @@ test.describe('sentence 9', () => {
 
 		const focused: string[] = [];
 		for (let tab = 0; tab < 7; tab++) {
-			await page.keyboard.press('Tab');
-			const ring = await page.evaluate(() => {
-				const active = document.activeElement;
-				if (!active || active === document.body) {
-					return null;
-				}
-				const style = getComputedStyle(active);
-				return {
-					control: active.textContent?.trim() || active.className,
-					style: style.outlineStyle,
-					width: parseFloat(style.outlineWidth)
-				};
-			});
-			if (ring) {
-				expect(ring.style, ring.control).not.toBe('none');
-				expect(ring.width, ring.control).toBeGreaterThanOrEqual(2);
-				focused.push(ring.control);
+			const control = await tabbedControlWithRing(page);
+			if (control) {
+				focused.push(control);
 			}
 		}
 		expect(focused.length).toBeGreaterThanOrEqual(5);
+	});
+
+	test('shows a focus ring on every control of the open menu', async ({ page }) => {
+		await page.goto('/');
+		await opensTheMenu(page);
+
+		const focused: string[] = [];
+		for (let tab = 0; tab < 12 && !focused.includes('Log out'); tab++) {
+			const control = await tabbedControlWithRing(page);
+			if (control) {
+				focused.push(control);
+			}
+		}
+
+		expect(focused).toContain('Log out');
+		expect(focused.length).toBeGreaterThanOrEqual(3);
+		expect(focused.some((control) => ['Follow system', 'Light', 'Dark'].includes(control))).toBe(true);
 	});
 
 	test('closes the menu on Escape and returns focus to its button; a click outside leaves focus where it landed', async ({
@@ -425,7 +454,7 @@ test.describe('the links to pages that are still Jinja', () => {
 		await expect(page.locator('#svelte-announcer')).toHaveCount(0);
 	}
 
-	test('Settings', async ({ page }) => {
+	test('the Settings link leaves the app by a document navigation to the Jinja page', async ({ page }) => {
 		const { words } = await sessionOf(page);
 		await page.goto('/');
 
@@ -436,7 +465,7 @@ test.describe('the links to pages that are still Jinja', () => {
 		);
 	});
 
-	test('a deck row', async ({ page, signedIn }) => {
+	test('a deck row links to its page by a document navigation', async ({ page, signedIn }) => {
 		await page.goto('/');
 
 		await leavesTheApp(

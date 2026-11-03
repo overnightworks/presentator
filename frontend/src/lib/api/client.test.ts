@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { documentNavigation, getJson, putJson, signInStartsAt } from '#lib/api/client.ts';
+import { getJson, putJson } from '#lib/api/client.ts';
 
 function answering(status: number, body: unknown): { fetcher: typeof fetch; asked: Request[] } {
 	const asked: Request[] = [];
@@ -52,17 +52,55 @@ describe('putJson', () => {
 	});
 });
 
+type Client = typeof import('#lib/api/client.ts');
+
+// Each test starts from a client that has not met a 401 yet.
+async function freshClient(): Promise<Client> {
+	vi.resetModules();
+	return import('#lib/api/client.ts');
+}
+
+describe('a 401 before the session said where sign-in starts', () => {
+	it('fails loud instead of navigating', async () => {
+		const client = await freshClient();
+		const navigated = vi.spyOn(client.documentNavigation, 'to').mockImplementation(() => undefined);
+
+		await expect(client.getJson(answering(401, {}).fetcher, '/api/decks')).rejects.toThrow(
+			'a 401 came before the session said where sign-in starts'
+		);
+		expect(navigated).not.toHaveBeenCalled();
+	});
+});
+
 describe('two calls that meet a 401 together', () => {
 	it('leave for the sign-in once', async () => {
-		const navigated = vi.spyOn(documentNavigation, 'to').mockImplementation(() => undefined);
-		signInStartsAt('/login/oidc');
+		const client = await freshClient();
+		const navigated = vi.spyOn(client.documentNavigation, 'to').mockImplementation(() => undefined);
+		client.signInStartsAt('/login/oidc');
 		window.history.replaceState(null, '', '/together');
 
-		void getJson(answering(401, {}).fetcher, '/api/session');
-		void getJson(answering(401, {}).fetcher, '/api/decks');
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		void client.getJson(answering(401, {}).fetcher, '/api/session');
+		void client.getJson(answering(401, {}).fetcher, '/api/decks');
+		await vi.waitFor(() => expect(navigated).toHaveBeenCalledTimes(1));
+		await Promise.resolve();
 
 		expect(navigated).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('a page restored from the back/forward cache', () => {
+	it('leaves for the sign-in again on its next 401', async () => {
+		const client = await freshClient();
+		const navigated = vi.spyOn(client.documentNavigation, 'to').mockImplementation(() => undefined);
+		client.signInStartsAt('/login/oidc');
+		window.history.replaceState(null, '', '/restored');
+		void client.getJson(answering(401, {}).fetcher, '/api/decks');
+		await vi.waitFor(() => expect(navigated).toHaveBeenCalledTimes(1));
+
+		window.dispatchEvent(new Event('pagehide'));
+		void client.getJson(answering(401, {}).fetcher, '/api/decks');
+
+		await vi.waitFor(() => expect(navigated).toHaveBeenCalledTimes(2));
 	});
 });
 
@@ -70,23 +108,24 @@ describe.each([
 	{
 		name: 'a read',
 		page: '/read',
-		call: (fetcher: typeof fetch) => getJson(fetcher, '/api/decks')
+		call: (client: Client, fetcher: typeof fetch) => client.getJson(fetcher, '/api/decks')
 	},
 	{
 		name: 'a write',
 		page: '/write',
-		call: (fetcher: typeof fetch) => putJson(fetcher, '/api/account', {})
+		call: (client: Client, fetcher: typeof fetch) => client.putJson(fetcher, '/api/account', {})
 	}
 ])('$name that meets a 401', ({ page, call }) => {
 	it('leaves for the sign-in with the current page as next and never settles', async () => {
-		const navigated = vi.spyOn(documentNavigation, 'to').mockImplementation(() => undefined);
-		signInStartsAt('/login/oidc');
+		const client = await freshClient();
+		const navigated = vi.spyOn(client.documentNavigation, 'to').mockImplementation(() => undefined);
+		client.signInStartsAt('/login/oidc');
 		window.history.replaceState(null, '', `${page}?filter=a b`);
 		const settled = vi.fn();
 
-		void call(answering(401, {}).fetcher).then(settled, settled);
+		void call(client, answering(401, {}).fetcher).then(settled, settled);
 		await vi.waitFor(() => expect(navigated).toHaveBeenCalledTimes(1));
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		await Promise.resolve();
 
 		expect(navigated).toHaveBeenCalledWith(
 			`/login/oidc?next=${encodeURIComponent(`${page}?filter=a%20b`)}`

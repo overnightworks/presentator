@@ -16,6 +16,11 @@ export function signInStartsAt(address: string): void {
 	signInStart = address;
 }
 
+// A page restored from the back/forward cache is left again by its next 401.
+window.addEventListener('pagehide', () => {
+	leftFor = undefined;
+});
+
 // An ended session ends in the sign-in, whichever call met the 401. The page
 // is left by one document navigation however many calls meet it, so no
 // unsaved state is carried over, and the answer never settles: the load or

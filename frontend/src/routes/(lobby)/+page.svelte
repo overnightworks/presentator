@@ -12,11 +12,12 @@
 		failed: words.deck_state_failed,
 		'never-built': words.deck_state_never_built
 	});
-	const tag = $derived(languageTag() ?? words.language_tag);
+	const tag = $derived(languageTag());
 </script>
 
 <svelte:head>
-	<title>{words.decks_title}</title>
+	<!-- A template literal: a bare interpolation compiles to a `?? ''` branch no page reaches. -->
+	<title>{`${words.decks_title}`}</title>
 </svelte:head>
 
 <h1>{words.decks_title}</h1>
@@ -34,7 +35,7 @@
 				<tr>
 					<td><span class="state" data-state={deck.state}><i></i>{stateWords[deck.state]}</span></td>
 					<td>
-						<a class="as-typed" href="/deck/{deck.slug}" rel="external" data-sveltekit-reload>{deck.title}</a>
+						<a class="as-typed" href={`/deck/${deck.slug}`} rel="external" data-sveltekit-reload>{deck.title}</a>
 						<code>{deck.slug}</code>
 					</td>
 					<td class="changed">{ageInWords(deck.changed_at, Date.now(), tag)}</td>

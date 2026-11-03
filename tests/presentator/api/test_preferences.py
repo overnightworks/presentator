@@ -575,7 +575,6 @@ def test_choosing_dark_in_the_person_menu_paints_that_persons_pages(
     assert chosen.status_code == HTTPStatus.NO_CONTENT
     assert chosen.headers["HX-Refresh"] == "true"
     assert 'data-theme="dark"' in instance.client.get(ACCOUNT).text
-    assert 'data-theme="dark"' in instance.client.get(ACCOUNT).text
 
 
 def test_a_theme_chosen_in_the_menu_leaves_the_neighbours_pages_alone(

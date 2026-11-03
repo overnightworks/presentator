@@ -6,11 +6,11 @@
 	import { currentTheme, showTheme } from '#lib/session.svelte.ts';
 
 	let { session, person }: { session: SessionView; person: SessionPerson } = $props();
-	let popover: HTMLElement | undefined = $state();
+	let popover: HTMLElement;
 
 	// The radio shows the choice at once and snaps back when the write fails.
 	async function chooseTheme(choice: ThemeChoice): Promise<void> {
-		const before = currentTheme() ?? session.theme;
+		const before = currentTheme();
 		showTheme(choice);
 		try {
 			await writeTheme(fetch, choice);
@@ -33,9 +33,9 @@
 	<AccountMenu
 		name={person.username}
 		accountHref={session.sign_in.account_console_url}
-		onAccountOpen={() => popover?.hidePopover()}
+		onAccountOpen={() => popover.hidePopover()}
 		appRows={[]}
-		theme={{ choice: currentTheme() ?? session.theme, onChange: chooseTheme }}
+		theme={{ choice: currentTheme(), onChange: chooseTheme }}
 		legalLinks={legalLinks(session.words)}
 		logOutAction={session.sign_in.logout}
 	/>
