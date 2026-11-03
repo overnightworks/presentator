@@ -1,8 +1,0 @@
-claim_id = "85211f1ec30e4105882bb9b68820cfea"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "447a8188015d1b202fd3da0370017f70a07dcda5"
-branch = "claude/issue-748-the-session-serves-the-lobby-s-not-found"
-scope = ["frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "quality/baseline.toml", "quality/config.toml", "src/presentator/adapters/catalogs/en.po", "src/presentator/contracts/text.py", "tests/presentator/api", "tests/support/vulture_allowlist.py"]
-opened_commit = "54b646cf9baa03abf737cac74d7b6a3997bf4815"
-whole_reason = "Four words, their generated client and the declared raise are one change: the words without the regeneration fail the generated-types check, and the regeneration without the declaration fails the baseline."
