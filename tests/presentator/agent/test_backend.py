@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING
@@ -281,3 +282,44 @@ async def test_a_stream_that_ends_without_a_final_event_ends_the_answer() -> Non
     )
 
     assert await spoken(answerer) == "Hallo."
+
+
+@on_an_event_loop
+async def test_one_asks_end_leaves_another_intact() -> None:
+    """C9: closing one ask cancels only its own call, not an overlapping ask's."""
+    first_left = asyncio.Event()
+    first_arrived = asyncio.Event()
+    first_cancelled = False
+
+    async def reply_for(request: httpx2.Request) -> httpx2.Response:
+        nonlocal first_cancelled
+        if b"first-question" in request.content:
+            first_arrived.set()
+            try:
+                await asyncio.get_running_loop().create_future()
+            except asyncio.CancelledError:
+                first_cancelled = True
+                raise
+        await first_left.wait()
+        return httpx2.Response(200, content=completion("Zweite Antwort.").body)
+
+    answerer = gateway_answerer(
+        an_agent_config(),
+        a_relying_party(FrozenClock(instant=NOW)),
+        transport=httpx2.MockTransport(reply_for),
+    )
+
+    async def ask(message: str) -> str:
+        async with answerer.answer(message=message, person=a_person()) as texts:
+            return "".join([text async for text in texts])
+
+    second = asyncio.create_task(ask("second-question"))
+    first = asyncio.create_task(ask("first-question"))
+    await first_arrived.wait()
+    first.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first
+    first_left.set()
+
+    assert await second == "Zweite Antwort."
+    assert first_cancelled

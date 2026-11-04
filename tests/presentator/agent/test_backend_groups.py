@@ -225,3 +225,27 @@ def test_a_cancelled_read_still_stores_the_rotation_and_leaves_no_chain(
     drive()
 
     assert arranged.scene.stored_tokens() == [ROTATED]
+
+
+@pytest.mark.parametrize(
+    "interruption", [KeyboardInterrupt(), SystemExit(1)], ids=["keyboard", "exit"]
+)
+def test_process_control_in_the_groups_thread_passes_through_without_a_chain(
+    arranged: Arranged, interruption: BaseException
+) -> None:
+    """C11: an interrupt is the caller's, not one more unavailable error."""
+    scene = arranged.scene
+
+    class LoadInterrupts(SqliteSessionRecordStore):
+        def load(self, session_id: str) -> StoredSession | None:
+            raise interruption
+
+    reader = SessionGroups(
+        scene.relying_party, LoadInterrupts(scene.database), scene.config
+    )
+
+    with pytest.raises(type(interruption)) as passed:
+        asyncio.run(reader.groups_of(arranged.session_id))
+
+    assert passed.value is interruption
+    assert (passed.value.__cause__, passed.value.__context__) == (None, None)
