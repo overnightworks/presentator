@@ -140,6 +140,7 @@
 	}
 	.muted {
 		margin: 0;
+		font-size: 14px;
 		color: var(--text-muted);
 	}
 	.banner {

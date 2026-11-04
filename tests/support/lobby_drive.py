@@ -22,12 +22,12 @@ from datetime import datetime
 from http.cookies import SimpleCookie
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Final, Literal
+from typing import Final, Literal, Self
 
 import uvicorn
 from babel.messages.pofile import read_po, write_po
 from fastapi import FastAPI, Response
-from pydantic import BaseModel, ConfigDict, SecretStr
+from pydantic import BaseModel, ConfigDict, SecretStr, model_validator
 from webauth.config import WebAuthConfig
 from webauth.cookies import issue_session_cookies
 
@@ -36,6 +36,8 @@ from presentator.api.lobby_shell import LobbyShell
 from presentator.contracts.decks import (
     Build,
     BuildAttempt,
+    BuildFailure,
+    BuildFailureReason,
     BuildOutcome,
     Deck,
     DeckState,
@@ -80,19 +82,70 @@ _DECK_ROUTE: Final = f"{_PERSON_ROUTE}/{{person_id}}/deck"
 SECOND_LANGUAGE_TAG: Final = "de"
 _SECOND_LANGUAGE_NAME: Final = "German"
 _SOME_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
+_ATTEMPT_COMMIT: Final = "e91c5ad4f3b2a1908877665544332211aabbccdd"
+_A_PDF_NOBODY_WROTE: Final = EXPORTED_PDF.with_name("nobody-wrote-this.pdf")
 _LANGUAGE_NAME_MESSAGE: Final = "language_name"
 
 type JsonNode = dict[str, JsonNode] | list[JsonNode] | str | int | float | bool | None
 
 
+class FailureRecord(BaseModel):
+    """Why an attempt failed, as `BuildFailure` carries it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    reason: BuildFailureReason
+    text: str | None = None
+    written_megabytes: int | None = None
+    allowed_megabytes: int | None = None
+    allowed_entries: int | None = None
+
+
+class AttemptRecord(BaseModel):
+    """The build that ran last without becoming the talk."""
+
+    model_config = ConfigDict(frozen=True)
+
+    commit: str = _ATTEMPT_COMMIT
+    started_at: datetime = NOW
+    failure: FailureRecord | None = None
+
+
 class DeckRecord(BaseModel):
-    """One deck of a person: its state, title and the instant it changed."""
+    """One deck of a person: its state, title, the instant it changed and its builds.
+
+    A ready deck has a build, made at `built_at` (the drive's `NOW` unless
+    given); a building or failed deck has one only when `built_at` is given,
+    and has an attempt (a default one unless given). `pdf` says the build's PDF
+    file is gone.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     state: DeckState
     title: str
     changed_at: datetime
+    built_at: datetime | None = None
+    attempt: AttemptRecord | None = None
+    pdf: Literal["missing"] | None = None
+
+    @model_validator(mode="after")
+    def _builds_fit_the_state(self) -> Self:
+        """Refuse a build or an attempt the state cannot have."""
+        runs_since = self.state in {DeckState.BUILDING, DeckState.FAILED}
+        has_build = self.state is DeckState.READY or (
+            runs_since and self.built_at is not None
+        )
+        if self.built_at is not None and self.state is DeckState.NEVER_BUILT:
+            message = "a deck never built has no build instant"
+            raise ValueError(message)
+        if self.attempt is not None and not runs_since:
+            message = "only a building or failed deck has an attempt"
+            raise ValueError(message)
+        if self.pdf is not None and not has_build:
+            message = "a deck without a build has no PDF to be missing"
+            raise ValueError(message)
+        return self
 
 
 class NewPerson(BaseModel):
@@ -127,9 +180,6 @@ class _Newcomers:
         person = User(
             id=f"id-of-person-{number}", username=f"person-{number}", role=wanted.role
         )
-        slugs: list[JsonNode] = [
-            self.add_deck(person.id, record) for record in wanted.decks
-        ]
         if wanted.source is not None:
             self.sources.sources.append(
                 replace(
@@ -139,6 +189,9 @@ class _Newcomers:
                     owner_id=person.id,
                 )
             )
+        slugs: list[JsonNode] = [
+            self.add_deck(person.id, record) for record in wanted.decks
+        ]
         self.preferences.write(
             person.id,
             PersonPreferences(
@@ -162,35 +215,45 @@ class _Newcomers:
                 title=record.title,
                 changed_at=record.changed_at,
                 owner_id=person_id,
-                source_id=SOURCE_ID,
+                source_id=self._source_of(person_id),
                 commit=_SOME_COMMIT,
                 build=None,
                 attempt=None,
             )
         )
-        if record.state is DeckState.READY:
+        if record.state is DeckState.READY or record.built_at is not None:
             self.decks.put_build(
                 slug,
                 Build(
                     directory=BUILT_TALK,
-                    pdf=EXPORTED_PDF,
+                    pdf=_A_PDF_NOBODY_WROTE if record.pdf else EXPORTED_PDF,
                     commit=_SOME_COMMIT,
-                    built_at=NOW,
+                    built_at=record.built_at or NOW,
                 ),
             )
-        elif record.state is not DeckState.NEVER_BUILT:
+        if record.state in {DeckState.BUILDING, DeckState.FAILED}:
+            attempt = record.attempt or AttemptRecord()
             self.decks.put_attempt(
                 slug,
                 BuildAttempt(
-                    commit=_SOME_COMMIT,
-                    started_at=NOW,
+                    commit=attempt.commit,
+                    started_at=attempt.started_at,
                     outcome=BuildOutcome.RUNNING
                     if record.state is DeckState.BUILDING
                     else BuildOutcome.FAILED,
-                    failure=None,
+                    failure=None
+                    if attempt.failure is None
+                    else BuildFailure(**attempt.failure.model_dump()),
                 ),
             )
         return slug
+
+    def _source_of(self, person_id: str) -> str:
+        """The person's own source, else one the instance does not carry."""
+        return next(
+            (item.id for item in self.sources.sources if item.owner_id == person_id),
+            SOURCE_ID,
+        )
 
     def add_deck_of(self, person_id: str, record: DeckRecord) -> dict[str, str]:
         """The drive-only route that adds a record to a person already made."""
