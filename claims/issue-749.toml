@@ -1,0 +1,8 @@
+claim_id = "65d7c9f81a07444692b13e4055d022f2"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "30dd554dba97d071251266b7d507b50ace90593c"
+branch = "claude/issue-749-a-lobby-page-shows-not-found-inside-the"
+scope = ["docs/decisions/0021-the-lobby-is-a-sveltekit-app.md", "frontend/e2e/not-found.spec.ts", "frontend/src/lib/LobbyHeader.svelte", "frontend/src/lib/api/client.test.ts", "frontend/src/lib/api/client.ts", "frontend/src/lib/api/decks.ts", "frontend/src/lib/section.test.ts", "frontend/src/lib/section.ts", "frontend/src/routes"]
+opened_commit = "fcefde9cdf17cbee3264e724d4d47881e0fffe44"
+whole_reason = "How a lobby page reads, fails and leaves is one contract: split, two lanes would write client.ts and the error page."
