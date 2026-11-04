@@ -39,7 +39,12 @@ function answers(): void {
 		'fetch',
 		vi.fn(async (path: string) => {
 			if (path === '/api/sources/new/check') {
-				return Response.json({ commit: 'c0ffee1', detail: null, failure: null, fingerprint: 'fp-1' });
+				return Response.json({
+					commit: 'c0ffee1',
+					detail: null,
+					failure: null,
+					fingerprint: 'fp-1'
+				});
 			}
 			if (path === '/api/sources') {
 				return Response.json(created, { status: 201 });
@@ -68,7 +73,9 @@ function type(label: string, text: string): void {
 }
 
 function press(label: string): void {
-	const button = [...document.querySelectorAll('button')].find((each) => each.textContent === label);
+	const button = [...document.querySelectorAll('button')].find(
+		(each) => each.textContent === label
+	);
 	button?.click();
 }
 

@@ -17,8 +17,8 @@ accepted is [sources](../reference/sources.md).
    register its public half at the Git host.
 3. Choose *Check connection*. It probes that exact token or draft before
    anything is stored; *Create* stays disabled until it answers reachable.
-4. Choose *Create*. The page shows the webhook secret exactly once, to your
-   session; store it if a Git host will call the
+4. Choose *Create*. The page shows the webhook secret exactly once, in this
+   page only: leaving it or reloading loses it. Store it if a Git host will call the
    [fetch-now hook](call-the-fetch-now-hook.md).
 
 ## Check

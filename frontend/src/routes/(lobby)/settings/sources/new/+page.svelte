@@ -208,7 +208,8 @@
 		</div>
 	</form>
 {:else}
-	<h1><span class="as-typed">{created.name}</span> {words.source_created}</h1>
+	<!-- Template literals: a bare interpolation in a text compiles to a `?? ''` branch no page reaches. -->
+	<h1><span class="as-typed">{`${created.name}`}</span>{` ${words.source_created}`}</h1>
 	<section class="sec">
 		<h2>{words.source_webhook}</h2>
 		<div class="fld">
@@ -221,8 +222,7 @@
 		</div>
 		<div class="fld">
 			<span class="lb" id="hook-secret-label"
-				>{words.source_webhook_secret}
-				<span class="once">{words.source_webhook_once}</span></span
+				>{words.source_webhook_secret}<span class="once">{words.source_webhook_once}</span></span
 			>
 			<CopyValue
 				value={created.webhook_secret}

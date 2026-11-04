@@ -42,7 +42,9 @@ interaction became a template, a fragment and a form route.
   `/auth/`, the hook prefix, `/static/`, `/login/oidc`, `/logout`, `/health`
   and the retired `/setup` never fall back to it: a missing asset or API is
   still a 404. `/_app/` is public and serves the build's assets. A page not yet
-  moved stays a Jinja page, and a link to it carries `data-sveltekit-reload`.
+  moved stays a Jinja page, and a link to it carries `data-sveltekit-reload`;
+  a Jinja page's link back to the app (the Sources list's Add) is an ordinary
+  document link.
   `/deck/{slug}/pdf` stays a server download; for a deck that is missing,
   foreign or unknown, or whose file is gone, it answers the shell under 404,
   so the app shows the root not-found board. That shell is the route's own
@@ -52,7 +54,8 @@ interaction became a template, a fragment and a form route.
 - The root load reads the session once; the `(lobby)` route group holds the
   header and footer, so `/login` and the refusals stay headerless. Home, at
   `/`, is the first page in the group; the deck page at `/deck/{slug}` is the
-  second, and it draws its own unknown-deck board for a 404. A 401 from any read or write leaves the
+  second, and it draws its own unknown-deck board for a 404. Settings General
+  and Add source (`/settings/sources/new`) are the pages below them. A 401 from any read or write leaves the
   app by a document navigation to the sign-in with the current address as
   `next`, and its promise never settles, so no error page shows on the way
   out. A load names its own `url` as `next`, because it runs before the
@@ -72,8 +75,29 @@ interaction became a template, a fragment and a form route.
   shell answers 200 and the API's 403 becomes `error(403)`. The board carries
   its own header and no settings tab strip, which the layout below the error
   boundary draws.
-- Settings has its own layout with the tab strip. General is a Svelte page;
-  Sources links to its Jinja page by a document navigation until it moves.
+- Settings has its own layout with the tab strip, and its tabs are
+  conditional: General is current at `/settings` only, Sources under
+  `/settings/sources`. General is a Svelte page; Sources links to its Jinja
+  page by a document navigation until it moves.
+- Add source keeps the one display of the webhook secret in its own component
+  state. Its load reads the admin's key draft with a POST (idempotent per
+  owner, so a member's 403 becomes the for-admins board); Check and Create go
+  through the typed client, and a 422 `source-refused` is the client's
+  `Refused`, worded by the catalog. A create answer replaces the form in the
+  same document: the address and history entry stay, so the secret is in no
+  URL, no storage, no title and no later GET. On `pagehide` the page forgets
+  that secret and the typed one, so a page the browser keeps and shows again
+  shows the empty form; `visibilitychange` would also drop it from a person who
+  switches tabs to paste it. Chromium keeps no lobby page in its back/forward
+  cache (every answer is `no-store` and the page makes requests of its own), so
+  the drive cannot restore one; the `pagehide` handler is driven by dispatching
+  the event, and the cache clause is held by that construction. The drive's
+  cache cell restores a control page first and is skipped, with the browser's
+  reasons, while it cannot.
+- The server answers the shell at `/settings/sources/new` itself (a route
+  registered before the Jinja `/settings/sources/{name}`, which would otherwise
+  take `new` for a source name). It stays until the source page moves; then the
+  router default answers the address and the route goes.
 - A form's save writes through the typed client, then re-reads the session so
   the page repaints in its own document; the effective look belongs to the
   server.

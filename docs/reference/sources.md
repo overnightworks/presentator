@@ -46,7 +46,7 @@ admin adds one under Settings · Sources.
   `git`: that source's fetch fails and its decks stay listed. A source row
   always carries its encrypted secret; private halves and HTTPS tokens are
   never shown.
-- Opening Add with the SSH radio mints this admin an ed25519 deploy key, or
+- Opening Add mints this admin an ed25519 deploy key, or
   shows the one already minted for them today, as a `source_key_drafts` row
   carrying the public half in clear and the private half encrypted the same
   way; *Create* binds it to the new source and deletes the draft, and a draft
@@ -65,7 +65,8 @@ admin adds one under Settings · Sources.
   and its `webhook_secret`, and a `Location` naming only the source
   (`/api/sources/<name>`). The webhook secret is in that one answer: nothing
   keeps it, no GET and no log carries it, and a lost answer is recovered by
-  renewing it. A refusal is a `source-refused` problem (422) and creates no
+  renewing it. The Add page shows it once from its own memory only: leaving
+  the page, reloading, back and forward lose it. A refusal is a `source-refused` problem (422) and creates no
   source and delivers or keeps no webhook secret. It does not promise that
   nothing changes: a draft that is not this admin's, or is stale, makes the admin a
   fresh draft before it is refused, and a store that rejects the row at the write (a
@@ -146,7 +147,7 @@ the viewer owns). SSH Renew replaces the local pair immediately, leaves the
 replacement public half ready to register, and neither updates the Git host nor
 keeps an old-key overlap; HTTPS renewal takes a new value and shows nothing
 back; webhook renewal shows its new value exactly once to the session that
-created or renewed it.
+renewed it.
 
 On the Sources list, each row's *Fetch now* refreshes only that source and
 returns to the list; on the source's page it returns to that page.
