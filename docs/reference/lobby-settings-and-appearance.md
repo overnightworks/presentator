@@ -7,7 +7,7 @@ Settings and Account do and how the lobby is themed.
 
 Every signed-in page carries the picture's header
 ([mockups](../mockups/README.md)): the product name, the Decks section and
-Settings for an admin. On the SvelteKit pages (Home so far) it also has one
+Settings for an admin. On the SvelteKit pages it also has one
 round person button, which opens appkit's account menu in a native popover: the
 person's name opening the central account in a new tab, the three theme rows,
 Log out, and the legal links; Escape and a click outside close it. The Svelte
@@ -19,11 +19,15 @@ the Datenschutz links.
 ## Settings
 
 An admin opens Settings and sets the instance name, the default language and
-the default theme; a person without the admin role is refused there rather
-than sent to the login. Settings is one area with a tab strip. There is no
-Users tab.
+the default theme. A person without the admin role is told inside the lobby
+that Settings are for admins, and the header shows them no Settings link; the
+API refuses the read and the write. Settings is one area with a tab strip. There
+is no Users tab.
 
-- General holds those instance defaults. The instance name is kept and shown
+- General is a SvelteKit page under the settings layout, which draws the tab
+  strip. It holds those instance defaults. Save writes all three at once and
+  shows what is stored; the page repaints in the same document, because the
+  session is read again, so a person's own theme still outranks the default. The instance name is kept and shown
   back there and read nowhere else.
 - Sources lists each source with the state and age of its newest run
   ([sources](sources.md)). An instance with no source says what a source is
