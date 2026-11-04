@@ -16,21 +16,14 @@ from presentator.application.copresenter import AskLimiter, CoPresenterUse
 from presentator.contracts.copresenter import (
     AccessRefusal,
     AskedDeck,
+    AskingPerson,
     CoPresenterReadiness,
     CoPresenterUnavailableError,
     DeckText,
     HearingTranscript,
-    PersonToken,
     SlideText,
 )
 from presentator.contracts.decks import Deck, Source
-from tests.presentator.adapters.support.agent_service_support import (
-    Reply,
-    assistant_text,
-    event_frames,
-    run_started,
-    whole,
-)
 from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeSourceStore,
@@ -43,6 +36,7 @@ from tests.support.lobby import (
     A_TALK_ADDRESS,
     A_TALK_SOCKET_ADDRESS,
     ADMIN,
+    AN_API_GROUP,
     NOW,
     SOURCE_ID,
     Lobby,
@@ -63,18 +57,13 @@ if TYPE_CHECKING:
     from fastapi.testclient import TestClient
     from httpx2 import Response
 
-    from presentator.ports.copresenter import PrivateHearing, TokenSource
+    from presentator.ports.copresenter import PrivateHearing
 
 TALK_ORIGIN = A_TALK_ADDRESS
 A_DECK = "kundenfeedback"
 QUESTION = {"said": "Was ist wichtig?", "slide": 2, "language": "de", "deck": A_DECK}
 ASK = "/copresenter/ask"
-WORKLOAD = "workload-access-MARKER"
 SPOKEN_QUESTION = {"said": "Was ist wichtig?", "slide": 1, "language": "de"}
-HANGING_AFTER_THE_FIRST_WORDS = Reply(
-    chunks=whole(event_frames(run_started(), assistant_text("Erst "))),
-    hangs_after_chunks=True,
-)
 A_SOURCE = Source(id=SOURCE_ID, name="s", url="u", ref="main", owner_id=ADMIN)
 
 
@@ -174,7 +163,7 @@ class RecordingAnswers:
     """The agent service's text, behind the real application use case."""
 
     messages: list[str] = field(default_factory=list[str])
-    person_tokens: list[str] = field(default_factory=list[str])
+    persons: list[AskingPerson] = field(default_factory=list[AskingPerson])
     exits: int = 0
     hold: bool = False
     unavailable: BaseException | None = None
@@ -186,12 +175,12 @@ class RecordingAnswers:
     reader_closed_before_context_exit: bool = False
 
     def answer(
-        self, *, message: str, person_token: TokenSource
+        self, *, message: str, person: AskingPerson
     ) -> AbstractAsyncContextManager[AsyncIterator[str]]:
         @asynccontextmanager
         async def operation() -> AsyncGenerator[AsyncIterator[str]]:
             self.messages.append(message)
-            self.person_tokens.append(await person_token())
+            self.persons.append(person)
             if self.unavailable is not None:
                 raise self.unavailable
 
@@ -237,17 +226,17 @@ class FakeSpeaking:
 
 @dataclass
 class FakePersonAccess:
-    """Gives every session the same person token, or refuses it."""
+    """Gives every session the groups of the API group, or refuses it."""
 
     refusal: AccessRefusal | None = None
     unavailable: bool = False
     sessions: list[str] = field(default_factory=list[str])
 
-    async def fresh(self, session_id: str) -> PersonToken | AccessRefusal:
+    async def groups_of(self, session_id: str) -> frozenset[str] | AccessRefusal:
         self.sessions.append(session_id)
         if self.unavailable:
             raise CoPresenterUnavailableError
-        return self.refusal or PersonToken("person-token")
+        return self.refusal or frozenset({AN_API_GROUP})
 
 
 @dataclass

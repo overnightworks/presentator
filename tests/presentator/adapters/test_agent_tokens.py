@@ -12,16 +12,8 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from webauth.oidc import OidcRefusal
-
 from presentator.adapters.agent_service import ServiceAnswerer
 from presentator.adapters.agent_tokens import PersonAccessTokens, WorkloadToken
-from presentator.adapters.identity import SqliteSessionRecordStore
-from presentator.contracts.copresenter import (
-    AccessRefusal,
-    CoPresenterUnavailableError,
-    PersonToken,
-)
 from tests.presentator.adapters.support.agent_service_support import (
     GOOD_ANSWER,
     ReceivedCredentials,
@@ -30,6 +22,14 @@ from tests.presentator.adapters.support.agent_service_support import (
     fake_service,
     reply_with,
     whole,
+)
+from webauth.oidc import OidcRefusal
+
+from presentator.adapters.identity import SqliteSessionRecordStore
+from presentator.contracts.copresenter import (
+    AccessRefusal,
+    CoPresenterUnavailableError,
+    PersonToken,
 )
 from tests.support.leak_support import everything_shown
 from tests.support.sign_in_support import Scene, a_scene

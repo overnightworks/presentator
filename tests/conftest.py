@@ -11,8 +11,9 @@ import pytest
 from tests.support.git_remote import GitRemote, a_remote
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
-    AN_AGENT_SERVICE,
-    AN_AGENT_SERVICE_SCOPE,
+    A_GATEWAY_KEY_FILE,
+    A_GATEWAY_ORIGIN,
+    AN_API_GROUP,
     INSTANCE_KEY,
     LOBBY_BUILD,
     configure_oidc,
@@ -99,8 +100,10 @@ def bare_environment(
     monkeypatch.setenv("PRESENTATOR_LOCAL_SOURCES_MOUNT", str(tmp_path))
     monkeypatch.setenv("PRESENTATOR_PUBLIC_ORIGIN", A_BROWSERS_ADDRESS)
     configure_oidc(monkeypatch, tmp_path)
-    monkeypatch.setenv("PRESENTATOR_AGENT_SERVICE", AN_AGENT_SERVICE)
-    monkeypatch.setenv("PRESENTATOR_AGENT_SERVICE_SCOPE", AN_AGENT_SERVICE_SCOPE)
+    monkeypatch.setenv("PRESENTATOR_AGENT__BACKEND", "litellm")
+    monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__ORIGIN", A_GATEWAY_ORIGIN)
+    monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__KEY_FILE", str(A_GATEWAY_KEY_FILE))
+    monkeypatch.setenv("PRESENTATOR_AGENT__API_GROUP", AN_API_GROUP)
     return monkeypatch
 
 

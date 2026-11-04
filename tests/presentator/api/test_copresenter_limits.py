@@ -13,31 +13,35 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi import FastAPI
 
-from presentator.adapters.agent_service import ServiceAnswerer
+from presentator.agent.backend import gateway_answerer
 from presentator.api.copresenter import (
     MAX_SAID_LENGTH,
     CoPresenterSurface,
     add_copresenter_routes,
 )
 from presentator.application.copresenter import AskLimiter, AskTicket
-from tests.presentator.adapters.support.agent_service_support import Wire
+from presentator.contracts.models import Role
+from tests.presentator.agent.support.transports import HeldTransport
 from tests.presentator.application.support.fakes import FrozenClock
 from tests.support.copresenter_support import (
     A_DECK,
     ASK,
-    HANGING_AFTER_THE_FIRST_WORDS,
     NOW,
     QUESTION,
     SPOKEN_QUESTION,
     TALK_ORIGIN,
-    WORKLOAD,
     PrivateFakes,
     a_copresenter_talk_host,
     a_use,
     ask,
     the_admins_decks,
 )
-from tests.support.lobby import A_TALK_ADDRESS, ADMIN, AN_AGENT_SERVICE
+from tests.support.lobby import (
+    A_TALK_ADDRESS,
+    ADMIN,
+    a_relying_party,
+    an_agent_config,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -167,6 +171,7 @@ class FixedSession:
 
     session_id: str = "session"
     user_id: str = ADMIN
+    role: Role = Role.ADMIN
 
 
 def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> None:
@@ -224,7 +229,9 @@ async def _ask_and_disconnect_before_the_body_is_sent(app: ASGIApp) -> None:
 
 
 def _a_hanging_app(
-    wire: Wire, limiter: AskLimiter, admission: Callable[[object], FixedSession]
+    gateway: HeldTransport,
+    limiter: AskLimiter,
+    admission: Callable[[object], FixedSession],
 ) -> FastAPI:
     app = FastAPI()
     add_copresenter_routes(
@@ -232,10 +239,10 @@ def _a_hanging_app(
         surface=CoPresenterSurface(
             use=replace(
                 a_use(PrivateFakes(), the_admins_decks()),
-                answers=ServiceAnswerer(
-                    origin=AN_AGENT_SERVICE,
-                    workload_token=a_workload_token,
-                    transport=wire.transport,
+                answers=gateway_answerer(
+                    an_agent_config(),
+                    a_relying_party(FrozenClock(instant=NOW)),
+                    transport=gateway,
                 ),
             ),
             limiter=limiter,
@@ -246,15 +253,18 @@ def _a_hanging_app(
     return app
 
 
-def test_a_browser_that_leaves_mid_answer_closes_the_services_connection() -> None:
-    """Cell 18."""
-    wire = Wire(HANGING_AFTER_THE_FIRST_WORDS)
+def test_a_browser_that_leaves_mid_answer_closes_the_backend_and_starts_no_later_call() -> (
+    None
+):
+    """C9: the held gateway call is cancelled, none follows, and the ticket is freed."""
+    gateway = HeldTransport()
     limiter = AskLimiter(clock=FrozenClock(instant=NOW))
-    app = _a_hanging_app(wire, limiter, lambda _connection: FixedSession())
+    app = _a_hanging_app(gateway, limiter, lambda _connection: FixedSession())
 
-    asyncio.run(_ask_and_leave_after_the_first_words(app))
+    asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
 
-    assert wire.response_stream.closed.is_set()
+    assert gateway.cancelled
+    assert len(gateway.requests) == 1
     assert isinstance(limiter.admit(FixedSession().session_id), AskTicket)
 
 
@@ -266,24 +276,18 @@ def test_the_admission_runs_off_the_event_loop_thread() -> None:
         admitted_on.append(threading.get_ident())
         return FixedSession()
 
-    app = _a_hanging_app(
-        Wire(HANGING_AFTER_THE_FIRST_WORDS),
-        AskLimiter(clock=FrozenClock(instant=NOW)),
-        admission,
-    )
+    gateway = HeldTransport()
+    app = _a_hanging_app(gateway, AskLimiter(clock=FrozenClock(instant=NOW)), admission)
 
-    asyncio.run(_ask_and_leave_after_the_first_words(app))
+    asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
 
     assert admitted_on
     assert threading.get_ident() not in admitted_on
 
 
-async def a_workload_token() -> str:
-    return WORKLOAD
-
-
-async def _ask_and_leave_after_the_first_words(app: ASGIApp) -> None:
-    first_words_sent = asyncio.Event()
+async def _ask_and_leave_while_the_gateway_holds(
+    app: ASGIApp, gateway: HeldTransport
+) -> None:
     messages: list[Message] = [
         {
             "type": "http.request",
@@ -294,12 +298,11 @@ async def _ask_and_leave_after_the_first_words(app: ASGIApp) -> None:
     async def receive() -> Message:
         if messages:
             return messages.pop(0)
-        await first_words_sent.wait()
+        await gateway.arrived.wait()
         return {"type": "http.disconnect"}
 
     async def send(message: Message) -> None:
-        if message["type"] == "http.response.body" and message.get("body"):
-            first_words_sent.set()
+        del message
 
     scope: Scope = {
         "type": "http",
