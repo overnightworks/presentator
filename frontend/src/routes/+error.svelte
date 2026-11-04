@@ -13,7 +13,7 @@
 </script>
 
 <svelte:head>
-	<title>{words.address_unknown_title}</title>
+	<title>{`${words.address_unknown_title}`}</title>
 </svelte:head>
 
 <LobbyHeader {session} {person} />
