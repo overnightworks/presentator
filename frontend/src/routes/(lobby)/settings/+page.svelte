@@ -81,7 +81,7 @@
 		</select>
 	</div>
 	<div class="actions">
-		<button class="primary" type="submit" disabled={saving}>{words.settings_save}</button>
+		<button class="btn primary" type="submit" disabled={saving}>{words.settings_save}</button>
 	</div>
 </form>
 

@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { ageInWords, durationInWords } from '#lib/age.ts';
-	import { buildsWith, failureWords, fill, stateWords } from '#lib/deck.ts';
+	import { buildsWith, failureWords, stateWords } from '#lib/deck.ts';
 	import { languageTag } from '#lib/session.svelte.ts';
+	import { fill } from '#lib/words.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -107,10 +108,6 @@
 		font-size: 22px;
 		overflow-wrap: anywhere;
 	}
-	.back {
-		font-size: 14px;
-		text-underline-offset: 3px;
-	}
 	.status {
 		display: flex;
 		flex-direction: column;
@@ -146,22 +143,6 @@
 	.standing {
 		margin-bottom: 16px;
 	}
-	.banner {
-		display: flex;
-		gap: 10px;
-		align-items: flex-start;
-		margin-bottom: 16px;
-		padding: 10px 12px;
-		border: 1px solid var(--fail);
-		border-left-width: 3px;
-		border-radius: 4px;
-		background: var(--fail-soft);
-		font-size: 13.5px;
-	}
-	.banner[data-banner='building'] {
-		border-color: var(--busy);
-		background: var(--busy-soft);
-	}
 	.banner .state {
 		margin-top: 3px;
 	}
@@ -180,30 +161,6 @@
 		flex-wrap: wrap;
 		gap: 8px;
 		align-items: center;
-	}
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 36px;
-		padding: 0 14px;
-		border: 1px solid transparent;
-		border-radius: 4px;
-		font-family: var(--font-display);
-		font-size: 14px;
-		letter-spacing: 0.05em;
-		text-decoration: none;
-		text-transform: uppercase;
-		white-space: nowrap;
-	}
-	.btn.primary {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--on-accent);
-	}
-	.btn.secondary {
-		border-color: var(--border);
-		color: var(--text);
 	}
 	.btn.off {
 		opacity: 0.5;

@@ -498,7 +498,7 @@ class Decks:
         """Store a source with its secrets, fetch it once, return the webhook secret.
 
         The webhook secret is generated here and returned in the clear so the
-        created screen can show it once; only its hash is stored. The access
+        Add page's created view can show it once; only its hash is stored. The access
         secret is handed to the store and never returned. A source is stored
         only for the exact URL and secret a Check connection already proved
         reachable, never on the fingerprint of a different pair — SSH proves

@@ -19,3 +19,11 @@ function sectionOf(pathname: string): Section | null {
 export function ariaCurrent(pathname: string, section: Section): 'page' | undefined {
 	return sectionOf(pathname) === section ? 'page' : undefined;
 }
+
+const SOURCES_ADDRESS = `${SETTINGS_ADDRESS}/sources`;
+
+/** The `aria-current` value of the Settings tab to `tab` at `pathname`. */
+export function tabCurrent(pathname: string, tab: 'general' | 'sources'): 'page' | undefined {
+	const underSources = pathname === SOURCES_ADDRESS || pathname.startsWith(`${SOURCES_ADDRESS}/`);
+	return underSources === (tab === 'sources') ? 'page' : undefined;
+}

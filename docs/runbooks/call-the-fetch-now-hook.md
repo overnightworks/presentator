@@ -10,7 +10,7 @@ in with; the secret guards it instead
 
 ## Before you start
 
-The source's webhook secret. It is generated, shown exactly once to the session
+The source's webhook secret. It is generated, shown exactly once on the page
 that created the source, stored only as a SHA-256 hash, and never shown again
 until [Renew](renew-a-webhook-secret.md) mints another.
 

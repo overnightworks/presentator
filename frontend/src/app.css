@@ -201,8 +201,8 @@ main {
 	font-size: 18px;
 }
 
-/* Form controls shared by the lobby's forms: a field, its label, the hint
-   behind an info button, and the primary button. */
+/* Controls shared by the lobby's pages: a field, its label, the hint behind an
+   info button, the buttons, the banner and the value to copy. */
 .fld {
 	display: flex;
 	flex-direction: column;
@@ -261,25 +261,108 @@ main {
 	color: var(--text-muted);
 	font-size: 13px;
 }
-.primary {
+.btn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	min-height: 36px;
 	padding: 0 14px;
-	border: 1px solid var(--accent);
+	border: 1px solid transparent;
 	border-radius: 4px;
-	background: var(--accent);
-	color: var(--on-accent);
+	background: transparent;
+	color: var(--text);
 	font-family: var(--font-display);
 	font-size: 14px;
 	letter-spacing: 0.05em;
+	text-decoration: none;
 	text-transform: uppercase;
+	white-space: nowrap;
 	cursor: pointer;
 }
-.primary:disabled {
+.btn.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--on-accent);
+}
+.btn.secondary {
+	border-color: var(--border);
+	color: var(--text);
+}
+.btn.sm {
+	min-height: 28px;
+	padding: 0 10px;
+	font-size: 13px;
+}
+.btn:disabled {
 	opacity: 0.5;
 	cursor: default;
+}
+.back {
+	font-size: 14px;
+	text-underline-offset: 3px;
+}
+
+/* A finding the page makes: ok, fail or a build under way, beside its shape. */
+.banner {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	margin-bottom: 16px;
+	padding: 10px 12px;
+	border: 1px solid var(--fail);
+	border-left-width: 3px;
+	border-radius: 4px;
+	background: var(--fail-soft);
+	font-size: 13.5px;
+}
+.banner[data-banner='ok'] {
+	border-color: var(--ok);
+	background: var(--ok-soft);
+}
+.banner[data-banner='building'] {
+	border-color: var(--busy);
+	background: var(--busy-soft);
+}
+
+/* A value to copy: the value, then its button. */
+.code {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: var(--bg-deep);
+}
+.code code {
+	flex: 1 1 220px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.once {
+	display: inline-flex;
+	align-items: center;
+	height: 20px;
+	padding: 0 8px;
+	border: 1px solid var(--busy);
+	border-radius: 999px;
+	color: var(--busy);
+	font-family: var(--font-display);
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.toast {
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 14px;
+	border: 1px solid var(--ok);
+	border-radius: 4px;
+	background: var(--ok-soft);
+	font-size: 14px;
 }
 
 @media (max-width: 480px) {
