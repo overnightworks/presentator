@@ -416,16 +416,6 @@ test.describe('the links to pages that are still Jinja', () => {
 			'/settings'
 		);
 	});
-
-	test('a deck row links to its page by a document navigation', async ({ page, signedIn }) => {
-		await page.goto('/');
-
-		await leavesTheApp(
-			page,
-			() => page.getByRole('link', { name: 'Kundenfeedback Q3' }).click(),
-			`/deck/${signedIn?.slugs[0]}`
-		);
-	});
 });
 
 test.describe('the empty card of an admin', () => {
