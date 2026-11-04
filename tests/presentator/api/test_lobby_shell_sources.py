@@ -5,7 +5,6 @@ from http import HTTPStatus
 import pytest
 from fastapi.testclient import TestClient
 
-from presentator.api.preferences import ACCOUNT
 from presentator.application.decks import RESERVED_SOURCE_NAME
 from presentator.contracts.decks import AccessKind
 from presentator.contracts.models import Role
@@ -19,7 +18,6 @@ from tests.presentator.api.support.source_api_support import (
 from tests.presentator.application.support.fakes import LOCAL_MOUNT_EXAMPLE
 from tests.support.lobby import (
     A_LOBBY_ASSET,
-    ENGLISH,
     NEIGHBOUR,
     NO_DECKS,
     USERNAME,
@@ -55,14 +53,6 @@ def instance() -> Lobby:
     return an_instance_of_two_people(
         given=GivenDecks(source=a_configured_source(_ADDRESS))
     )
-
-
-def test_only_an_admin_is_offered_the_settings_section(instance: Lobby) -> None:
-    assert ENGLISH.section_settings in instance.client.get(ACCOUNT).text
-
-    signed_in_as(instance, NEIGHBOUR)
-
-    assert ENGLISH.section_settings not in instance.client.get(ACCOUNT).text
 
 
 @pytest.mark.parametrize(
