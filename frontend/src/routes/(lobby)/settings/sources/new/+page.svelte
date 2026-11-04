@@ -218,7 +218,7 @@
 			<div class="banner" data-banner={banner.shape} role="status">
 				<span class="state" data-state={banner.shape === 'ok' ? 'ready' : 'failed'}><i></i></span>
 				<div>
-					<p><span class="state-word">{banner.state}</span> {banner.message}</p>
+					<p><span class="state-word">{banner.state}</span>{` ${banner.message}`}</p>
 					{#if banner.detail !== null}
 						<p><samp>{banner.detail}</samp></p>
 					{/if}

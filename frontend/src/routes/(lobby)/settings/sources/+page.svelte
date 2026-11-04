@@ -111,11 +111,11 @@
 	<section class="empty">
 		<h2>{words.sources_empty_title}</h2>
 		<p>{words.sources_empty_explanation}</p>
+		<!-- Template literals: a bare interpolation beside other text compiles to a `?? ''` branch no page reaches. -->
 		<p>
-			{words.sources_empty_need}
-			<code>{words.sources_empty_ssh}</code>
-			{words.sources_empty_or}
-			<code>{words.sources_empty_https}</code>
+			{`${words.sources_empty_need} `}<code>{words.sources_empty_ssh}</code>{` ${words.sources_empty_or} `}<code
+				>{words.sources_empty_https}</code
+			>
 		</p>
 		<a class="btn primary" href={resolve('/(lobby)/settings/sources/new')}>{words.sources_add}</a>
 	</section>
