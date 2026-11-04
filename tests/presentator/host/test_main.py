@@ -1,7 +1,6 @@
 """The composition root, from the environment to a lobby that answers."""
 
 import asyncio
-import re
 import shutil
 import sqlite3
 from contextlib import closing
@@ -52,6 +51,7 @@ from tests.support.lobby import (
     configure_secret_key,
     hand_over_session_cookies,
 )
+from tests.support.lobby_reads import deck_list, listed_titles, signed_in_username
 from tests.support.people import (
     copy_of_a_crashed_database,
     seed_user,
@@ -226,7 +226,7 @@ def test_a_removed_build_key_in_the_env_file_of_a_direct_run_refuses_to_start(
 @pytest.mark.usefixtures("environment")
 def test_the_real_stack_keeps_a_seeded_person_in_until_they_sign_out() -> None:
     real_lobby = signed_in(a_real_instance())
-    assert _PERSON in real_lobby.get("/").text
+    assert signed_in_username(real_lobby) == _PERSON
 
     signed_in_cookie = real_lobby.cookies[DEFAULT_SESSION_COOKIE_NAME]
     assert real_lobby.post("/logout").status_code == HTTPStatus.OK
@@ -421,9 +421,9 @@ def a_polled_source(
     return instance
 
 
-def listed_addresses(page: str) -> list[str]:
-    """The deck each row of the list links to, in the order they stand."""
-    return re.findall(r'href="/deck/([^"]+)"', page)
+def listed_slugs(lobby: TestClient) -> list[str]:
+    """The slug of each deck the list answers, in the order they stand."""
+    return [deck.slug for deck in deck_list(lobby).decks]
 
 
 def owner_of(database: Path, slug: str) -> str:
@@ -471,11 +471,11 @@ def test_the_real_stack_pulls_with_the_secret_its_own_key_can_open(
         _WHAT_THE_GIT_HOST_EXPECTS,
     )
     asyncio.run(instance.poller.tick())
-    while_the_row_held_what_this_key_cannot_open = lobby.get("/").text
+    while_the_row_held_what_this_key_cannot_open = listed_titles(lobby)
 
     sources_over(database).put_credential(stored.id, _WHAT_THE_GIT_HOST_EXPECTS)
     asyncio.run(instance.poller.tick())
-    after_this_instance_wrote_it = lobby.get("/").text
+    after_this_instance_wrote_it = listed_titles(lobby)
 
     assert EXAMPLE_TITLE not in while_the_row_held_what_this_key_cannot_open
     assert EXAMPLE_TITLE in after_this_instance_wrote_it
@@ -490,13 +490,12 @@ def test_a_deck_pushed_after_the_start_is_listed_after_one_tick_and_no_request(
     lobby = signed_in(instance)
     remote.commit_example_deck(at=_PUSHED_AT)
 
-    before_the_tick = lobby.get("/").text
+    before_the_tick = listed_titles(lobby)
     asyncio.run(instance.poller.tick())
-    after_the_tick = lobby.get("/").text
+    after_the_tick = listed_titles(lobby)
 
     assert EXAMPLE_TITLE not in before_the_tick
     assert EXAMPLE_TITLE in after_the_tick
-    assert f'href="/deck/{EXAMPLE_SLUG}"' in after_the_tick
 
 
 @pytest.mark.usefixtures("environment")
@@ -512,7 +511,7 @@ def test_the_hook_with_the_sources_secret_lists_a_push_at_once(
     called = call_the_hook(lobby, carrying=_WHAT_THE_HOST_CARRIES)
 
     assert called.status_code == HTTPStatus.NO_CONTENT
-    assert EXAMPLE_TITLE in lobby.get("/").text
+    assert EXAMPLE_TITLE in listed_titles(lobby)
 
 
 @pytest.mark.usefixtures("environment")
@@ -528,7 +527,7 @@ def test_a_hook_call_with_a_wrong_secret_leaves_the_list_as_it_was(
     refused = call_the_hook(lobby, carrying="guessed")
 
     assert (refused.status_code, refused.content) == (HTTPStatus.NOT_FOUND, b"")
-    assert EXAMPLE_TITLE not in lobby.get("/").text
+    assert EXAMPLE_TITLE not in listed_titles(lobby)
 
 
 @pytest.mark.usefixtures("environment")
@@ -544,7 +543,7 @@ def test_a_source_without_a_webhook_hash_is_refused_alike_not_sent_to_login(
 
     assert (called.status_code, called.content) == (HTTPStatus.NOT_FOUND, b"")
     assert called.headers.get("location") is None
-    assert EXAMPLE_TITLE not in signed_in(a_real_instance()).get("/").text
+    assert EXAMPLE_TITLE not in listed_titles(signed_in(a_real_instance()))
 
 
 @pytest.mark.usefixtures("environment")
@@ -591,11 +590,7 @@ def test_a_tick_whose_fetch_exceeds_its_bound_leaves_the_list_answering(
     remote.commit_example_deck(at=_PUSHED_AT)
 
     asyncio.run(instance.poller.tick())
-    listed = lobby.get("/")
-
-    assert listed.status_code == HTTPStatus.OK
-    assert EXAMPLE_TITLE not in listed.text
-    assert "<table" not in listed.text
+    assert EXAMPLE_TITLE not in listed_titles(lobby)
 
 
 @pytest.mark.usefixtures("environment")
@@ -609,18 +604,12 @@ def test_a_source_that_has_gone_away_still_leaves_its_decks_listed(
     asyncio.run(instance.poller.tick())
 
     shutil.rmtree(remote.bare)
-    listed = lobby.get("/")
-
-    assert listed.status_code == HTTPStatus.OK
-    assert EXAMPLE_TITLE in listed.text
+    assert EXAMPLE_TITLE in listed_titles(lobby)
 
 
 @pytest.mark.usefixtures("environment")
 def test_an_instance_without_a_source_shows_the_empty_list() -> None:
-    listed = a_signed_in_instance().get("/")
-
-    assert listed.status_code == HTTPStatus.OK
-    assert "<table" not in listed.text
+    assert deck_list(a_signed_in_instance()).decks == []
 
 
 def test_a_configured_source_url_in_the_environment_changes_nothing(
@@ -633,11 +622,9 @@ def test_a_configured_source_url_in_the_environment_changes_nothing(
     environment.setenv(_CREDENTIAL_VARIABLE, _WHAT_THE_GIT_HOST_EXPECTS)
     lobby = a_signed_in_instance()
 
-    listed = lobby.get("/")
     sources = lobby.get("/settings/sources")
 
-    assert listed.status_code == HTTPStatus.OK
-    assert "<table" not in listed.text
+    assert deck_list(lobby).decks == []
     assert "<table" not in sources.text
     assert remote.url not in sources.text
 
@@ -653,16 +640,16 @@ def test_a_deck_deleted_in_git_leaves_the_lobby_and_returns_as_the_same_deck(
     remote.commit_example_deck(at=_PUSHED_AT)
     remote.commit_example_deck(at=_PUSHED_AT, into=_ANOTHER_SLUG)
     asyncio.run(instance.poller.tick())
-    both_pushed = listed_addresses(lobby.get("/").text)
+    both_pushed = listed_slugs(lobby)
     owner_before_the_delete = owner_of(database, EXAMPLE_SLUG)
 
     remote.remove(EXAMPLE_SLUG, at=_DELETED_AT)
     asyncio.run(instance.poller.tick())
-    after_the_delete = listed_addresses(lobby.get("/").text)
+    after_the_delete = listed_slugs(lobby)
 
     remote.commit_example_deck(at=_PUSHED_AGAIN_AT)
     asyncio.run(instance.poller.tick())
-    after_it_came_back = listed_addresses(lobby.get("/").text)
+    after_it_came_back = listed_slugs(lobby)
 
     assert sorted(both_pushed) == sorted([EXAMPLE_SLUG, _ANOTHER_SLUG])
     assert after_the_delete == [_ANOTHER_SLUG]
@@ -696,11 +683,11 @@ def test_two_sources_each_list_their_own_decks_and_reconcile_alone(
     both = a_real_instance()
 
     asyncio.run(both.poller.tick())
-    listed_together = listed_addresses(lobby.get("/").text)
+    listed_together = listed_slugs(lobby)
 
     remote.remove(EXAMPLE_SLUG, at=_DELETED_AT)
     asyncio.run(both.poller.tick())
-    after_the_delete = listed_addresses(lobby.get("/").text)
+    after_the_delete = listed_slugs(lobby)
 
     assert sorted(listed_together) == sorted([EXAMPLE_SLUG, _ANOTHER_SLUG])
     assert after_the_delete == [_ANOTHER_SLUG]

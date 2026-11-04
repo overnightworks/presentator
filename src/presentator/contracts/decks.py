@@ -492,13 +492,12 @@ class Deck:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ListedDeck:
-    """One row of the deck list, with the state and the age the row shows."""
+    """One row of the deck list, with the state the row shows."""
 
     slug: str
     title: str
     state: DeckState
     changed_at: datetime
-    age: timedelta
 
 
 class SourceState(StrEnum):

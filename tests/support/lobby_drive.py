@@ -4,8 +4,9 @@
 use, with the app's real build, inside an outer app, and serves it at an http
 origin on this machine; nobody signs in at an issuer. The outer app's one
 drive-only route sits outside the lobby's gate: it makes a new person (a role,
-a language, built decks of their own) and answers their session cookies, so
-each test of the drive signs in as its own person. `openapi` writes the
+a language, deck records and a source of their own) and answers their id and
+session cookies, so each test of the drive signs in as its own person. A second
+drive-only route adds a deck record to a person it made. `openapi` writes the
 document the lobby's wire types are generated from, so the empty-regeneration
 check holds the committed one to the routes.
 """
@@ -17,20 +18,28 @@ import itertools
 import json
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
+from datetime import datetime
 from http.cookies import SimpleCookie
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Final
+from typing import Final, Literal
 
 import uvicorn
 from babel.messages.pofile import read_po, write_po
 from fastapi import FastAPI, Response
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, SecretStr
 from webauth.config import WebAuthConfig
 from webauth.cookies import issue_session_cookies
 
 from presentator.adapters.catalog import CATALOG_DIRECTORY, load_lobby_text
 from presentator.api.lobby_shell import LobbyShell
+from presentator.contracts.decks import (
+    Build,
+    BuildAttempt,
+    BuildOutcome,
+    Deck,
+    DeckState,
+)
 from presentator.contracts.models import Role, User
 from presentator.contracts.preferences import PersonPreferences
 from presentator.contracts.text import DEFAULT_LANGUAGE_TAG, Catalogs
@@ -39,18 +48,23 @@ from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakePeople,
     FakePersonPreferencesStore,
+    FakeSourceStore,
 )
 from tests.support.lobby import (
+    BUILT_TALK,
     CATALOGS,
+    EXPORTED_PDF,
+    NOW,
+    SOURCE_ID,
     GivenDecks,
     SessionsOnly,
     SigningIn,
+    a_configured_source,
     a_crowd,
     a_lobby,
     a_lobby_app,
     a_preferences,
     an_installed_auth,
-    put_a_built_deck,
 )
 
 _LOOPBACK: Final = "127.0.0.1"
@@ -60,21 +74,40 @@ _MACHINE_ROUTES: Final = "/api/admin/"
 _SCHEMA_REFERENCE: Final = "#/components/schemas/"
 _SECRET: Final = SecretStr("a drive's own key of at least 32 bytes")
 _PERSON_ROUTE: Final = "/drive/person"
-SECOND_LANGUAGE_TAG: Final = "eo"
-_SECOND_LANGUAGE_NAME: Final = "Esperanto"
+_DECK_ROUTE: Final = f"{_PERSON_ROUTE}/{{person_id}}/deck"
+# Chromium words ages in this language and has none for `eo`; it is no shipped
+# catalog, so the drive builds it from English (`_second_language`).
+SECOND_LANGUAGE_TAG: Final = "de"
+_SECOND_LANGUAGE_NAME: Final = "German"
+_SOME_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _LANGUAGE_NAME_MESSAGE: Final = "language_name"
 
 type JsonNode = dict[str, JsonNode] | list[JsonNode] | str | int | float | bool | None
 
 
+class DeckRecord(BaseModel):
+    """One deck of a person: its state, title and the instant it changed."""
+
+    model_config = ConfigDict(frozen=True)
+
+    state: DeckState
+    title: str
+    changed_at: datetime
+
+
 class NewPerson(BaseModel):
-    """Who a test of the drive asks for: a role, a language and how many decks."""
+    """Who a test of the drive asks for.
+
+    A role, the second language by name (the person's own choice, the one
+    the harness builds), deck records and the address of a source of their own.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     role: Role
-    language_tag: str | None = None
-    decks: int = Field(default=0, ge=0)
+    language: Literal["second"] | None = None
+    decks: tuple[DeckRecord, ...] = ()
+    source: str | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -84,25 +117,84 @@ class _Newcomers:
     people: FakePeople
     preferences: FakePersonPreferencesStore
     decks: FakeDeckStore
+    sources: FakeSourceStore
     config: WebAuthConfig
     numbers: Iterator[int]
 
     def enter(self, wanted: NewPerson) -> dict[str, JsonNode]:
-        """Make the person with their decks and language; answer their cookies."""
+        """Make the person with their decks, source and language; answer them."""
         number = next(self.numbers)
         person = User(
             id=f"id-of-person-{number}", username=f"person-{number}", role=wanted.role
         )
-        for deck in range(wanted.decks):
-            put_a_built_deck(
-                self.decks, slug=f"{person.username}-deck-{deck}", owner_id=person.id
+        slugs: list[JsonNode] = [
+            self.add_deck(person.id, record) for record in wanted.decks
+        ]
+        if wanted.source is not None:
+            self.sources.sources.append(
+                replace(
+                    a_configured_source(wanted.source),
+                    id=f"source-of-{number}",
+                    name=f"source-{number}",
+                    owner_id=person.id,
+                )
             )
         self.preferences.write(
-            person.id, PersonPreferences(language_tag=wanted.language_tag)
+            person.id,
+            PersonPreferences(
+                language_tag=SECOND_LANGUAGE_TAG if wanted.language else None
+            ),
         )
         issued = Response()
         issue_session_cookies(issued, self.people.open_session_for(person), self.config)
-        return _session_cookies(issued)
+        return {"person_id": person.id, "slugs": slugs, **_session_cookies(issued)}
+
+    def add_deck(self, person_id: str, record: DeckRecord) -> str:
+        """Add the record to that person's decks; answer its slug.
+
+        A slug names a deck for the whole instance, so each is new and a test
+        reads it from the answer rather than choosing it.
+        """
+        slug = f"deck-{next(self.numbers)}"
+        self.decks.put(
+            Deck(
+                slug=slug,
+                title=record.title,
+                changed_at=record.changed_at,
+                owner_id=person_id,
+                source_id=SOURCE_ID,
+                commit=_SOME_COMMIT,
+                build=None,
+                attempt=None,
+            )
+        )
+        if record.state is DeckState.READY:
+            self.decks.put_build(
+                slug,
+                Build(
+                    directory=BUILT_TALK,
+                    pdf=EXPORTED_PDF,
+                    commit=_SOME_COMMIT,
+                    built_at=NOW,
+                ),
+            )
+        elif record.state is not DeckState.NEVER_BUILT:
+            self.decks.put_attempt(
+                slug,
+                BuildAttempt(
+                    commit=_SOME_COMMIT,
+                    started_at=NOW,
+                    outcome=BuildOutcome.RUNNING
+                    if record.state is DeckState.BUILDING
+                    else BuildOutcome.FAILED,
+                    failure=None,
+                ),
+            )
+        return slug
+
+    def add_deck_of(self, person_id: str, record: DeckRecord) -> dict[str, str]:
+        """The drive-only route that adds a record to a person already made."""
+        return {"slug": self.add_deck(person_id, record)}
 
 
 def _second_language(catalogs: Catalogs) -> Catalogs:
@@ -145,10 +237,11 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
     )
     chosen = FakePersonPreferencesStore()
     store = FakeDeckStore()
+    sources = FakeSourceStore()
     lobby, _ = a_lobby_app(
         people=people,
         preferences=a_preferences(catalogs=_second_language(CATALOGS), people=chosen),
-        given=GivenDecks(store=store),
+        given=GivenDecks(store=store, source_store=sources),
         signing_in=SigningIn(sessions=people.sessions, auth=auth),
         shell=shell,
     )
@@ -156,12 +249,14 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
         people=people,
         preferences=chosen,
         decks=store,
+        sources=sources,
         config=config,
         numbers=itertools.count(1),
     )
     outer = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     outer.add_api_route(_PERSON_ROUTE, newcomers.enter, methods=["POST"])
+    outer.add_api_route(_DECK_ROUTE, newcomers.add_deck_of, methods=["POST"])
     outer.mount("/", lobby)
     return outer
 

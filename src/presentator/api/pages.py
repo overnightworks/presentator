@@ -51,11 +51,7 @@ def theme_choices(text: LobbyText) -> tuple[tuple[str, str], ...]:
 
 
 def state_word(state: DeckState, text: LobbyText) -> str:
-    """The catalog's own word for what a deck is, shown wherever it is shown.
-
-    The list and the deck page say the same word about the same deck, so which
-    word belongs to which state is decided once.
-    """
+    """The catalog's own word for what a deck is, on the deck page."""
     return {
         DeckState.READY: text.deck_state_ready,
         DeckState.BUILDING: text.deck_state_building,

@@ -11,7 +11,14 @@ from httpx2 import Response
 from presentator.api.hooks import hook_address
 from presentator.application.decks import hash_webhook_secret
 from presentator.contracts.decks import MANIFEST_FILE, SLIDES_FILE, DeckFolder, Source
-from tests.support.lobby import ADMIN, NOW, GivenDecks, Lobby, a_lobby
+from tests.support.lobby import (
+    ADMIN,
+    NOW,
+    GivenDecks,
+    Lobby,
+    a_lobby,
+)
+from tests.support.lobby_reads import listed_titles
 
 _SOURCE_A = "alpha"
 _SOURCE_B = "beta"
@@ -103,7 +110,7 @@ def test_a_call_carrying_the_sources_secret_takes_the_push_in(hooked: Lobby) -> 
     hooked.sign_in()
 
     assert called.status_code == HTTPStatus.NO_CONTENT
-    assert "Kundenfeedback Q3" in hooked.client.get("/").text
+    assert "Kundenfeedback Q3" in listed_titles(hooked.client)
 
 
 def test_a_call_with_the_gitlab_header_takes_the_push_in(hooked: Lobby) -> None:
@@ -111,7 +118,7 @@ def test_a_call_with_the_gitlab_header_takes_the_push_in(hooked: Lobby) -> None:
     hooked.sign_in()
 
     assert called.status_code == HTTPStatus.NO_CONTENT
-    assert "Kundenfeedback Q3" in hooked.client.get("/").text
+    assert "Kundenfeedback Q3" in listed_titles(hooked.client)
 
 
 def test_the_hook_answers_a_host_that_has_no_session_and_no_page_here(
@@ -140,7 +147,7 @@ def test_whatever_a_host_posts_in_its_body_changes_nothing(hooked: Lobby) -> Non
     hooked.sign_in()
 
     assert called.status_code == HTTPStatus.NO_CONTENT
-    assert "Kundenfeedback Q3" in hooked.client.get("/").text
+    assert "Kundenfeedback Q3" in listed_titles(hooked.client)
 
 
 def test_a_large_push_payload_from_a_git_host_is_taken_in(hooked: Lobby) -> None:
@@ -155,7 +162,7 @@ def test_a_large_push_payload_from_a_git_host_is_taken_in(hooked: Lobby) -> None
 
     assert len(payload) > _ONE_MEBIBYTE
     assert called.status_code == HTTPStatus.NO_CONTENT
-    assert "Kundenfeedback Q3" in hooked.client.get("/").text
+    assert "Kundenfeedback Q3" in listed_titles(hooked.client)
 
 
 @pytest.mark.parametrize(
@@ -181,7 +188,7 @@ def test_a_hook_call_declaring_over_25_mebibytes_is_refused_before_the_route(
     hooked.sign_in()
 
     assert called.status_code == status
-    assert ("Kundenfeedback Q3" in hooked.client.get("/").text) is taken_in
+    assert ("Kundenfeedback Q3" in listed_titles(hooked.client)) is taken_in
 
 
 def test_source_bs_secret_does_not_open_source_a(hooked: Lobby) -> None:
@@ -189,7 +196,7 @@ def test_source_bs_secret_does_not_open_source_a(hooked: Lobby) -> None:
     hooked.sign_in()
 
     assert (refused.status_code, refused.content) == (HTTPStatus.NOT_FOUND, b"")
-    assert "Kundenfeedback Q3" not in hooked.client.get("/").text
+    assert "Kundenfeedback Q3" not in listed_titles(hooked.client)
 
 
 @pytest.mark.parametrize(

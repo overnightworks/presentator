@@ -33,6 +33,7 @@ from tests.support.lobby import (
     a_lobby_app,
     a_lobby_that_claims_no_origin_of_its_own,
 )
+from tests.support.lobby_reads import signed_in_username
 
 _HEX_COLOUR = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 # The lobby's own policy (`presentator.api.auth`): no camera, no microphone,
@@ -164,10 +165,7 @@ def submit_the_logout_form(
 def test_a_seeded_session_opens_the_lobby(lobby: Lobby) -> None:
     lobby.sign_in()
 
-    opened = lobby.client.get("/")
-
-    assert opened.status_code == HTTPStatus.OK
-    assert USERNAME in opened.text
+    assert signed_in_username(lobby.client) == USERNAME
 
 
 def test_an_ordinary_signed_in_answer_sets_no_cookie(signed_in_lobby: Lobby) -> None:
@@ -396,10 +394,10 @@ def test_a_same_site_or_schemeless_form_post_is_refused(
     assert signed_in_lobby.client.get("/").status_code == HTTPStatus.OK
 
 
-def test_the_three_stylesheets_are_linked_on_the_signed_in_home_page(
+def test_the_three_stylesheets_are_linked_on_a_signed_in_page(
     signed_in_lobby: Lobby,
 ) -> None:
-    page = signed_in_lobby.client.get("/").text
+    page = signed_in_lobby.client.get("/account").text
 
     assert '<link rel="stylesheet" href="/static/pico.classless.min.css">' in page
     assert '<link rel="stylesheet" href="/static/ui-console.css">' in page
@@ -429,10 +427,10 @@ def test_an_address_that_only_starts_like_a_stylesheet_still_asks_for_the_login(
     assert walked_out.headers["location"] == "/login/oidc?next=%2F"
 
 
-def test_the_signed_in_home_page_carries_no_hex_colour_and_no_inline_style(
+def test_a_signed_in_page_carries_no_hex_colour_and_no_inline_style(
     signed_in_lobby: Lobby,
 ) -> None:
-    page = signed_in_lobby.client.get("/").text
+    page = signed_in_lobby.client.get("/account").text
 
     assert not _HEX_COLOUR.search(page)
     assert "style=" not in page
@@ -441,7 +439,7 @@ def test_the_signed_in_home_page_carries_no_hex_colour_and_no_inline_style(
 def test_the_signed_in_header_offers_the_person_and_log_out(
     signed_in_lobby: Lobby,
 ) -> None:
-    page = signed_in_lobby.client.get("/").text
+    page = signed_in_lobby.client.get("/account").text
 
     assert USERNAME in page
     assert ENGLISH.log_out in page
@@ -457,12 +455,10 @@ def _links_the_impressum_and_the_datenschutz(page: str) -> bool:
     )
 
 
-@pytest.mark.parametrize("path", ["/", "/account"])
 def test_a_signed_in_page_links_the_impressum_and_the_datenschutz(
     signed_in_lobby: Lobby,
-    path: str,
 ) -> None:
-    page = signed_in_lobby.client.get(path).text
+    page = signed_in_lobby.client.get("/account").text
 
     assert ENGLISH.log_out in page
     assert _links_the_impressum_and_the_datenschutz(page)

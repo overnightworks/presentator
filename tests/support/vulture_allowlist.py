@@ -6,7 +6,6 @@ way. Every entry names the site that reaches it; an entry without one is an
 excuse.
 """
 
-from presentator.api.auth import DeckRow
 from presentator.api.copresenter import AskRequest
 from presentator.api.decks import Banner, TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
@@ -38,9 +37,6 @@ RespondingHandler.log_message
 _InlineScripts.handle_starttag
 _InlineScripts.handle_data
 _InlineScripts.handle_endtag
-
-# `presentator/api/templates/home.html` renders it in the "Changed" column.
-DeckRow.changed
 
 # `presentator/api/templates/sources.html` renders each row of the Sources list.
 SourceRow.name
@@ -82,6 +78,12 @@ SourceRemovalView.body
 Banner.lead
 Banner.when
 Banner.sentences
+
+# The words below reach a person through the Svelte Home page alone, which reads
+# them from `/api/session`; the drive proves the page shows them.
+LobbyText.decks_column_changed
+LobbyText.decks_empty_title
+LobbyText.decks_empty_explanation
 
 # The words below reach a person through a Jinja template alone. That a catalog
 # carries each of them is proven by `load_lobby_text`, which refuses a catalog

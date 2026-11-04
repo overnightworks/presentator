@@ -31,6 +31,7 @@ from tests.support.lobby import (
     a_configured_source,
     a_lobby,
 )
+from tests.support.lobby_reads import deck_list, listed_titles
 from tests.support.talk_support import cookies_without_values, two_hosts
 
 _COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
@@ -225,13 +226,8 @@ def test_the_owner_receives_every_shape_of_request_for_the_own_deck(
 def test_each_admin_lists_exactly_the_own_deck(tmp_path: Path) -> None:
     admins = _two_admins(tmp_path)
 
-    listed_for_a = admins.as_a.get("/").text
-    listed_for_b = admins.as_b.get("/").text
-
-    assert "Title of a-deck" in listed_for_a
-    assert "Title of b-deck" not in listed_for_a
-    assert "Title of b-deck" in listed_for_b
-    assert "Title of a-deck" not in listed_for_b
+    assert listed_titles(admins.as_a) == ["Title of a-deck"]
+    assert listed_titles(admins.as_b) == ["Title of b-deck"]
 
 
 def test_an_admin_with_no_deck_gets_an_empty_list_that_names_no_address() -> None:
@@ -240,10 +236,11 @@ def test_an_admin_with_no_deck_gets_an_empty_list_that_names_no_address() -> Non
     lobby = a_lobby(given=GivenDecks(store=store, source=_b_source()))
     lobby.sign_in()
 
-    home = lobby.client.get("/").text
+    listed = deck_list(lobby.client)
 
-    assert "Title of" not in home
-    assert _B_SOURCE_URL not in home
+    assert listed.decks == []
+    assert listed.source_address is None
+    assert _B_SOURCE_URL not in lobby.client.get("/api/decks").text
 
 
 _WALTER: Final = User(id="id-of-walter", username="walter", role=Role.USER)
@@ -259,9 +256,7 @@ def test_a_member_without_the_admin_role_has_no_deck_of_another_account(
 ) -> None:
     hosts = two_hosts(tmp_path, given=GivenDecks(store=_store_of_built_decks()))
 
-    assert (
-        "Title of" not in hosts.signed_in_at(A_BROWSERS_ADDRESS, _WALTER).get("/").text
-    )
+    assert listed_titles(hosts.signed_in_at(A_BROWSERS_ADDRESS, _WALTER)) == []
     for origin, tail in _AT_THE_LOBBY_OR_THE_TALK_HOST:
         member = hosts.signed_in_at(origin, _WALTER)
         _alike(
@@ -278,7 +273,7 @@ def test_the_owner_without_the_admin_role_has_the_own_deck_but_no_sources(
     hosts = two_hosts(tmp_path, given=GivenDecks(store=store))
     client = hosts.signed_in_at(A_BROWSERS_ADDRESS, _WALTER)
 
-    assert "Title of a-deck" in client.get("/").text
+    assert listed_titles(client) == ["Title of a-deck"]
     for origin, tail in _AT_THE_LOBBY_OR_THE_TALK_HOST:
         member = hosts.signed_in_at(origin, _WALTER)
         assert member.get(f"/deck/a-deck{tail}").status_code == HTTPStatus.OK

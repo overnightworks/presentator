@@ -422,6 +422,7 @@ class GivenDecks:
     source: Source | None = None
     sources: tuple[Source, ...] = ()
     store: FakeDeckStore | None = None
+    source_store: FakeSourceStore | None = None
     runs: tuple[SourceRun, ...] = ()
     carried: dict[str, tuple[DeckFolder, ...] | None] | None = None
     failures: dict[str, SourceRunFailure] | None = None
@@ -502,7 +503,8 @@ def a_decks(given: GivenDecks, clock: FrozenClock) -> Decks:
         minted=given.key_drafts.minted,
     )
     decks = Decks(
-        sources=FakeSourceStore(
+        sources=given.source_store
+        or FakeSourceStore(
             sources=stored,
             hashes=dict(given.hook_hashes),
             key_drafts=key_drafts,
@@ -747,13 +749,20 @@ def a_signed_in_lobby(given: GivenDecks = NO_DECKS) -> TestClient:
     return lobby.client
 
 
-def put_a_built_deck(store: FakeDeckStore, *, slug: str, owner_id: str) -> None:
+def put_a_built_deck(
+    store: FakeDeckStore,
+    *,
+    slug: str,
+    owner_id: str,
+    title: str = "Hello Co-Presenter",
+    changed_at: datetime = NOW,
+) -> None:
     """A deck of this owner whose built talk is the example talk's real build."""
     store.put(
         Deck(
             slug=slug,
-            title="Hello Co-Presenter",
-            changed_at=NOW,
+            title=title,
+            changed_at=changed_at,
             owner_id=owner_id,
             source_id=SOURCE_ID,
             commit=_BUILT_DECK_COMMIT,
