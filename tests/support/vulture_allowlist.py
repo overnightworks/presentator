@@ -102,19 +102,14 @@ LobbyText.deck_presenter_view
 LobbyText.deck_projector_view
 LobbyText.deck_pdf
 LobbyText.deck_unknown_explanation
-
-# The words below reach a person through a Jinja template alone. That a catalog
-# carries each of them is proven by `load_lobby_text`, which refuses a catalog
-# missing any field of `LobbyText`; that a page renders them is proven by the
-# route tests.
-LobbyText.section_decks
 LobbyText.decks_title
 LobbyText.decks_column_deck
-LobbyText.deck_back
-LobbyText.deck_status
-LobbyText.deck_presenter_view
-LobbyText.deck_projector_view
-LobbyText.deck_unknown_explanation
+
+# The words below reach a person through a Jinja template, some through a Svelte
+# page too. That a catalog carries each of them is proven by `load_lobby_text`,
+# which refuses a catalog missing any field of `LobbyText`; that a page renders
+# them is proven by the route tests.
+LobbyText.section_decks
 # The Svelte lobby's not-found board, for-admins board and Settings page read
 # these from `/api/session`.
 LobbyText.address_unknown_title
