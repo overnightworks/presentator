@@ -581,10 +581,9 @@ class SourceRemoval:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ShownAttempt:
-    """The build a deck page reports on: its commit, its age, and what broke."""
+    """The build a deck page reports on: its commit, when it started, and what broke."""
 
     commit: str
-    ago: timedelta
     started_at: datetime
     outcome: BuildOutcome
     failure: BuildFailure | None
@@ -598,7 +597,6 @@ class DeckPage:
     title: str
     source: str | None
     commit: str
-    built_ago: timedelta | None
     built_at: datetime | None
     state: DeckState
     attempt: ShownAttempt | None

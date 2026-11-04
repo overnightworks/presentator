@@ -387,9 +387,9 @@ def test_a_removed_sources_talk_answers_not_found(tmp_path: Path) -> None:
     client = an_admin_over(decks).client
     preview = preview_removal(client, source.name).json()
 
-    before = client.get("/deck/kundenfeedback")
+    before = client.get("/api/decks/kundenfeedback")
     removed = remove(client, source.name, **preview)
-    after = client.get("/deck/kundenfeedback")
+    after = client.get("/api/decks/kundenfeedback")
 
     assert removed.status_code == HTTPStatus.NO_CONTENT
     assert before.status_code == HTTPStatus.OK

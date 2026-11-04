@@ -245,6 +245,10 @@ class _Surfaces:
             self.shell.filled(self.pages.appearance(request)), status_code=status
         )
 
+    def not_found_page(self, request: Request) -> Response:
+        """The app's shell under 404; the router shows the not-found board."""
+        return self.lobby_app(request, status=HTTPStatus.NOT_FOUND)
+
     def refusal_page(self, request: Request) -> Response:
         """The app's shell under 403; the router shows why from the address."""
         return self.lobby_app(request, status=HTTPStatus.FORBIDDEN)
@@ -397,7 +401,12 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     lobby.include_router(preference_routes(pages=pages))
     lobby.include_router(source_routes(pages=pages, decks=decks))
     lobby.include_router(source_api_routes(decks=decks))
-    add_deck_pages(lobby, decks=decks, pages=pages, talk_origin=auth.talk_origin)
+    add_deck_pages(
+        lobby,
+        decks=decks,
+        talk_origin=auth.talk_origin,
+        not_found=surfaces.not_found_page,
+    )
     lobby.mount(_STATIC_PATH, StaticFiles(directory=_STATIC_DIR), name="static")
     lobby.include_router(fetch_hook(decks=decks))
     if private.admin_people is not None:

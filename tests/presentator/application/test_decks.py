@@ -250,7 +250,7 @@ def test_a_deck_whose_commit_was_never_built_is_built_and_then_delivered() -> No
     decks.refresh()
     clock.advance(by=timedelta(minutes=12))
 
-    assert page_of(decks, "kundenfeedback").built_ago == timedelta(minutes=12)
+    assert page_of(decks, "kundenfeedback").built_at == NOW
     talk = decks.built_talk("kundenfeedback", viewer=OWNER)
     export = decks.exported_pdf("kundenfeedback", viewer=OWNER)
     assert talk is not None
@@ -291,7 +291,7 @@ def test_a_build_that_failed_leaves_the_talk_that_stands_standing() -> None:
     decks.refresh()
     standing = decks.built_talk("kundenfeedback", viewer=OWNER)
     exported = decks.exported_pdf("kundenfeedback", viewer=OWNER)
-    built_when = page_of(decks, "kundenfeedback").built_ago
+    built_when = page_of(decks, "kundenfeedback").built_at
 
     builder.fails = True
     mirror.carried[SOURCE.id] = (a_folder("kundenfeedback", commit=_A_LATER_COMMIT),)
@@ -300,7 +300,7 @@ def test_a_build_that_failed_leaves_the_talk_that_stands_standing() -> None:
     assert decks.built_talk("kundenfeedback", viewer=OWNER) == standing
     assert decks.exported_pdf("kundenfeedback", viewer=OWNER) == exported
     standing_page = page_of(decks, "kundenfeedback")
-    assert standing_page.built_ago == built_when
+    assert standing_page.built_at == built_when
     assert standing_page.commit == _SHORT_COMMIT
 
 
@@ -318,7 +318,7 @@ def test_a_deck_nothing_could_build_or_hold_delivers_nothing_and_says_so(
 
     assert builder.built == ["kundenfeedback"]
     page = page_of(decks, "kundenfeedback")
-    assert page.built_ago is None
+    assert page.built_at is None
     assert page.state is DeckState.FAILED
     assert page.attempt is not None
     assert page.attempt.failure == BuildFailure.without_words()
@@ -344,7 +344,7 @@ def test_a_deck_being_built_says_so_with_the_commit_and_how_long_it_has_run() ->
     assert building.state is DeckState.BUILDING
     assert building.attempt is not None
     assert building.attempt.commit == _SHORT_COMMIT
-    assert building.attempt.ago == timedelta(seconds=40)
+    assert building.attempt.started_at == NOW
     assert building.attempt.failure is None
 
 
@@ -393,7 +393,7 @@ def test_a_build_that_failed_names_its_commit_and_what_the_toolchain_said() -> N
     assert page.state is DeckState.FAILED
     assert page.attempt is not None
     assert page.attempt.commit == _SHORT_COMMIT
-    assert page.attempt.ago == timedelta(minutes=26)
+    assert page.attempt.started_at == NOW
     assert page.attempt.failure == BuildFailure.said(_WHAT_THE_TOOLCHAIN_SAID)
     assert _listed_states(decks) == [DeckState.FAILED]
 
@@ -479,7 +479,7 @@ def test_a_revert_to_the_talk_that_stands_is_ready_again_without_building() -> N
     assert reverted.commit == _SHORT_COMMIT
     # The talk that stands is the one that was built before the broken push:
     # its own build time, and no second run of the toolchain.
-    assert reverted.built_ago == timedelta(minutes=15)
+    assert reverted.built_at == NOW
     assert decks.built_talk("kundenfeedback", viewer=OWNER) == standing
     assert builder.built == tried_before_the_revert
     assert _listed_states(decks) == [DeckState.READY]

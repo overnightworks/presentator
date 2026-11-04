@@ -7,7 +7,7 @@ excuse.
 """
 
 from presentator.api.copresenter import AskRequest
-from presentator.api.decks import Banner, TalkFiles
+from presentator.api.decks import TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
 from presentator.api.problems import ValidationFault
 from presentator.api.sources import (
@@ -69,16 +69,38 @@ SourceRemovalView.name
 SourceRemovalView.title
 SourceRemovalView.body
 
-# `presentator/api/templates/deck.html` renders the build block out of these.
-Banner.lead
-Banner.when
-Banner.sentences
-
-# The words below reach a person through the Svelte Home page alone, which reads
-# them from `/api/session`; the drive proves the page shows them.
+# The words below reach a person through the Svelte Home page and deck page
+# alone, which read them from `/api/session`; the drive proves the pages show
+# them.
 LobbyText.decks_column_changed
 LobbyText.decks_empty_title
 LobbyText.decks_empty_explanation
+LobbyText.deck_back
+LobbyText.deck_status
+LobbyText.deck_state_ready
+LobbyText.deck_state_building
+LobbyText.deck_state_failed
+LobbyText.deck_state_never_built
+LobbyText.deck_built
+LobbyText.deck_builds_with
+LobbyText.deck_theme_separator
+LobbyText.deck_not_built_explanation
+LobbyText.deck_building_explanation
+LobbyText.deck_building_label
+LobbyText.deck_building_for
+LobbyText.deck_failed_title
+LobbyText.deck_attempt_label
+LobbyText.deck_failed_without_a_message
+LobbyText.deck_failed_output_megabytes
+LobbyText.deck_failed_output_entries
+LobbyText.deck_failed_output_shape
+LobbyText.deck_failed_deck_megabytes
+LobbyText.deck_failed_deck_paths
+LobbyText.deck_failed_last_talk_stands
+LobbyText.deck_presenter_view
+LobbyText.deck_projector_view
+LobbyText.deck_pdf
+LobbyText.deck_unknown_explanation
 
 # The words below reach a person through a Jinja template alone. That a catalog
 # carries each of them is proven by `load_lobby_text`, which refuses a catalog
@@ -87,11 +109,6 @@ LobbyText.decks_empty_explanation
 LobbyText.section_decks
 LobbyText.decks_title
 LobbyText.decks_column_deck
-LobbyText.deck_back
-LobbyText.deck_status
-LobbyText.deck_presenter_view
-LobbyText.deck_projector_view
-LobbyText.deck_unknown_explanation
 # The Svelte lobby's not-found board (F2b) and for-admins board (F4b) read these
 # from `/api/session`.
 LobbyText.address_unknown_title
