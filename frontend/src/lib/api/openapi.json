@@ -641,10 +641,6 @@
             "title": "Menu Account",
             "type": "string"
           },
-          "menu_theme": {
-            "title": "Menu Theme",
-            "type": "string"
-          },
           "section_decks": {
             "title": "Section Decks",
             "type": "string"
@@ -1058,7 +1054,6 @@
           "section_decks",
           "section_settings",
           "menu_account",
-          "menu_theme",
           "theme_follow_system",
           "theme_light",
           "theme_dark",

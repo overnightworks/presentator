@@ -125,6 +125,27 @@ def test_a_member_keeps_a_theme_that_the_session_then_serves() -> None:
     assert the_session(lobby)["theme"] == ThemeChoice.DARK.value
 
 
+def test_a_theme_chosen_in_the_menu_leaves_the_neighbours_pages_alone() -> None:
+    admin = an_admin_lobby()
+    admin.client.put(_ACCOUNT, json=an_account(ThemeChoice.DARK.value))
+    neighbour = admin.another_browser()
+    neighbour.sign_in(username=NEIGHBOUR)
+
+    assert the_session(neighbour)["theme"] == ThemeChoice.FOLLOW_SYSTEM.value
+
+
+def test_following_the_system_again_stores_follow_system() -> None:
+    lobby = a_member_lobby()
+    lobby.client.put(_ACCOUNT, json=an_account(ThemeChoice.DARK.value))
+
+    lobby.client.put(_ACCOUNT, json=an_account(ThemeChoice.FOLLOW_SYSTEM.value))
+
+    assert the_session(lobby)["theme"] == ThemeChoice.FOLLOW_SYSTEM.value
+    assert lobby.client.get(_ACCOUNT).json() == an_account(
+        ThemeChoice.FOLLOW_SYSTEM.value
+    )
+
+
 def test_a_member_who_clears_the_theme_gets_the_instance_default_again() -> None:
     lobby = a_member_lobby()
     lobby.client.put(_ACCOUNT, json=an_account(ThemeChoice.DARK.value))

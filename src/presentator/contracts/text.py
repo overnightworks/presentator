@@ -1,4 +1,4 @@
-"""The lobby's words, so no template and no route carries a literal (ADR 0012)."""
+"""The lobby's words, so no page and no route carries a literal (ADR 0012)."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -18,7 +18,6 @@ class LobbyText:
     section_decks: str
     section_settings: str
     menu_account: str
-    menu_theme: str
     theme_follow_system: str
     theme_light: str
     theme_dark: str

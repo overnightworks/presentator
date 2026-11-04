@@ -41,7 +41,6 @@ def test_an_instance_nobody_configured_speaks_english_and_follows_the_system() -
 
     assert appearance.text == _ENGLISH
     assert appearance.theme is ThemeChoice.FOLLOW_SYSTEM
-    assert appearance.explicit_theme is None
 
 
 def test_a_person_without_a_choice_of_their_own_reads_the_instance_default() -> None:
@@ -52,7 +51,7 @@ def test_a_person_without_a_choice_of_their_own_reads_the_instance_default() -> 
     appearance = lobby.appearance_for(_PERSON)
 
     assert appearance.text == _GERMAN
-    assert appearance.explicit_theme is ThemeChoice.DARK
+    assert appearance.theme is ThemeChoice.DARK
 
 
 def test_a_persons_own_choice_wins_over_the_instance_default() -> None:
@@ -64,16 +63,16 @@ def test_a_persons_own_choice_wins_over_the_instance_default() -> None:
     appearance = lobby.appearance_for(_PERSON)
 
     assert appearance.text == _GERMAN
-    assert appearance.explicit_theme is ThemeChoice.LIGHT
+    assert appearance.theme is ThemeChoice.LIGHT
 
 
-def test_a_person_who_follows_the_system_leaves_the_theme_to_the_browser() -> None:
+def test_a_person_who_follows_the_system_reads_follow_system() -> None:
     lobby = a_lobby(
         instance=InstanceSettings(theme=ThemeChoice.DARK),
         chosen=PersonPreferences(theme=ThemeChoice.FOLLOW_SYSTEM),
     )
 
-    assert lobby.appearance_for(_PERSON).explicit_theme is None
+    assert lobby.appearance_for(_PERSON).theme is ThemeChoice.FOLLOW_SYSTEM
 
 
 def test_one_persons_choice_leaves_everybody_else_at_the_instance_default() -> None:
@@ -85,7 +84,7 @@ def test_one_persons_choice_leaves_everybody_else_at_the_instance_default() -> N
     neighbour = lobby.appearance_for(_NEIGHBOUR)
 
     assert neighbour.text == _ENGLISH
-    assert neighbour.explicit_theme is ThemeChoice.LIGHT
+    assert neighbour.theme is ThemeChoice.LIGHT
 
 
 def test_nobody_signed_in_reads_the_instance_default() -> None:
@@ -95,7 +94,7 @@ def test_nobody_signed_in_reads_the_instance_default() -> None:
     )
 
     assert lobby.appearance_for(None).text == _GERMAN
-    assert lobby.appearance_for(None).explicit_theme is None
+    assert lobby.appearance_for(None).theme is ThemeChoice.FOLLOW_SYSTEM
 
 
 def test_an_instance_whose_catalog_file_is_gone_reads_english_again() -> None:
@@ -112,8 +111,8 @@ def test_saving_the_instance_defaults_leaves_a_persons_own_choice_alone() -> Non
     )
 
     assert lobby.instance_settings().name == "Heim"
-    assert lobby.appearance_for(_PERSON).explicit_theme is ThemeChoice.LIGHT
-    assert lobby.appearance_for(_NEIGHBOUR).explicit_theme is ThemeChoice.DARK
+    assert lobby.appearance_for(_PERSON).theme is ThemeChoice.LIGHT
+    assert lobby.appearance_for(_NEIGHBOUR).theme is ThemeChoice.DARK
 
 
 def test_a_person_can_hand_their_choice_back_to_the_instance() -> None:
@@ -125,7 +124,7 @@ def test_a_person_can_hand_their_choice_back_to_the_instance() -> None:
     lobby.save_preferences_of(_PERSON, PersonPreferences())
 
     assert lobby.preferences_of(_PERSON) == PersonPreferences()
-    assert lobby.appearance_for(_PERSON).explicit_theme is ThemeChoice.DARK
+    assert lobby.appearance_for(_PERSON).theme is ThemeChoice.DARK
 
 
 def test_every_installed_catalog_is_offered_as_a_language() -> None:

@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from http import HTTPStatus
+from pathlib import PurePosixPath
 
 import httpx2
 import pytest
@@ -28,6 +29,7 @@ from tests.presentator.application.support.fakes import (
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
+    A_LOBBY_ASSET,
     ENGLISH,
     Lobby,
     a_browser_at,
@@ -149,7 +151,7 @@ def test_a_route_added_after_the_lobby_was_built_still_needs_a_session(
         ("GET", "/setup", HTTPStatus.NOT_FOUND),
         ("POST", "/setup", HTTPStatus.NOT_FOUND),
         ("POST", "/logout", HTTPStatus.OK),
-        ("GET", "/static/ui-console.css", HTTPStatus.OK),
+        ("GET", A_LOBBY_ASSET, HTTPStatus.OK),
     ],
 )
 def test_a_public_path_answers_a_signed_out_browser_without_a_store_read(
@@ -164,7 +166,7 @@ def test_a_public_path_answers_a_signed_out_browser_without_a_store_read(
     assert _counts(lobby) == (0, 0)
 
 
-@pytest.mark.parametrize("path", ["/setup", "/static/ui-console.css", "/login/oidc"])
+@pytest.mark.parametrize("path", ["/setup", A_LOBBY_ASSET, "/login/oidc"])
 def test_a_signed_in_browser_on_a_public_path_costs_no_store_read(
     signed_in_lobby: Lobby,
     path: str,
@@ -184,7 +186,12 @@ def test_the_sign_in_callback_is_not_turned_to_the_login_by_the_gate(
 
 
 @pytest.mark.parametrize(
-    "path", ["/login/extra", "/staticity/x", "/static/%2e/lobby.css"]
+    "path",
+    [
+        "/login/extra",
+        "/_appx/x",
+        f"/_app/%2e/{PurePosixPath(A_LOBBY_ASSET).name}",
+    ],
 )
 def test_an_address_beside_a_public_one_is_gated(lobby: Lobby, path: str) -> None:
     answer = lobby.client.get(path)

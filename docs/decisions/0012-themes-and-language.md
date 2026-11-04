@@ -10,6 +10,9 @@ Audience: humans and agents writing any user-facing string or any colour.
   ([#8](https://github.com/overnightworks/presentator/issues/8) line 22).
   Amended 2026-09-07: the lobby's one token file is the vendored
   `overnightworks/ui-tokens` pin; leftover Pico chrome is not a second theme.
+  Amended 2026-11-04: the Jinja pages, the vendored `ui-console` and Pico
+  files, htmx and the `/theme` form route are gone; the look is appkit's alone,
+  see "The look of the SvelteKit pages".
   Amended 2026-10-29: the catalog is also served as data, see
   [ADR 0020](0020-the-lobby-is-a-json-api.md).
   Amended again 2026-10-29: the addon overlay keeps no catalog, see
@@ -59,19 +62,9 @@ named below rather than papered over with a promise.
 
 The lobby is styled only through design tokens — colour, type, spacing, and
 state colours — defined once. A theme is one token file. Switching a theme or
-adding one is configuration, not code, and no template names a colour.
+adding one is configuration, not code, and no page names a colour.
 
-That token file is the vendored pin of
-[`overnightworks/ui-console`](https://github.com/overnightworks/ui-console)
-(`src/presentator/api/static/ui-console.css`, currently v0.2.0). The package
-owns tokens and the grammar of a console page — no components, no layout, no
-JavaScript, no fonts. `lobby.css`
-is this product's Pico bridge and leftover chrome — page layout, Pico
-theming, `[data-state]` and the rest of the first theme's overlays — not a
-second theme. The settings grammar classes in the package have no markup
-caller here yet; Settings Users
-([#61](https://github.com/overnightworks/presentator/issues/61))
-adopts `.list-head` / `nav.tabs` / `.rows` on Settings and Account.
+That token file is appkit's, described below.
 
 #### The look of the SvelteKit pages
 
@@ -80,8 +73,7 @@ from appkit's npm tarball, pinned in `frontend/package.json` and imported from
 `node_modules` (`overnightworks-appkit/appkit.css`), never a copy of it.
 presentator fills only appkit's app slot with its teal: `#0c6c77` with ink
 `#ffffff` in light, `#56c3cd` with ink `#06181b` in dark
-(`frontend/src/app.css`). The ui-console pin and Pico above stay for the Jinja
-pages until the last of them moves.
+(`frontend/src/app.css`).
 
 The person menu on those pages is appkit's `AccountMenu` in a native popover,
 and the footer is its `LegalLinks`; presentator draws only the round button.
@@ -118,8 +110,8 @@ here promises otherwise, and the fix — whatever it turns out to be — is owne
 [#8](https://github.com/overnightworks/presentator/issues/8) as a later M1
 item, once a real deck has shown what the clash actually looks like.
 
-This record owns appearance. [ADR 0008](0008-lobby-server-rendered.md) chooses
-the base stylesheet the lobby ships; the tokens here are what drive it.
+This record owns appearance. [ADR 0021](0021-the-lobby-is-a-sveltekit-app.md) chooses
+the app the lobby ships; the tokens here are what drive it.
 
 The mockup at
 [the operator's canvas](https://claude.ai/code/artifact/4a808e26-07d5-49ca-858e-a99677d63e0d)
@@ -167,8 +159,8 @@ language around it.
 ### The catalog format
 
 Vetted with the first strings and taken: Babel owns the gettext `.po` catalogs
-of the Jinja2 lobby, read once at startup into a typed record, so that adding a
-language stays adding a file and no template holds a sentence. The lobby's
+of the lobby, read once at startup into a typed record, so that adding a
+language stays adding a file and no page holds a sentence. The lobby's
 catalog policy is unchanged: its `.po` catalogs stay the only home of lobby
 strings.
 
@@ -209,8 +201,8 @@ Amendment 2026-10-29: the addon overlay is the stated exception.
   language waits for the central account, as its own item at webauth and edge
   once someone asks (ruling C of #185, 2026-11-04). There is no standalone
   theme toggle in the header bar. The
-  [ADR 0008](0008-lobby-server-rendered.md) lobby therefore gains a Settings
-  area; that record still owns how the lobby is built.
+  [ADR 0021](0021-the-lobby-is-a-sveltekit-app.md) lobby therefore gains a
+  Settings area; that record owns how the lobby is built.
 
 ## Rejected alternatives
 

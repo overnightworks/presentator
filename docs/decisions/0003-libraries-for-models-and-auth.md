@@ -186,7 +186,7 @@ worker thread, so the `touch` that renews it no longer runs on the event loop.
 Its `session_transaction` is `nullcontext(sessions)` and takes no lock: each
 store call commits on its own and `touch` is one update-only statement, so a lock
 would only queue every page behind sign-ins. The public rules are the sign-in,
-sign-out and `/setup` paths for every method, the `/static/` prefix for every
+sign-out and `/setup` paths for every method, the `/_app/` prefix for every
 method, and the `/sources/` hook prefix for POST only; `/datenschutz` is
 optional. A path with a `.` or `..` segment is never public. Pages read who is
 signed in through `admitted_user`, and `request.state` carries nothing. The

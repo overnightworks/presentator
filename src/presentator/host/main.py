@@ -75,7 +75,6 @@ from presentator.api.auth import (
 )
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.api.lobby_shell import LobbyBuildError, LobbyShell
-from presentator.api.pages import Pages
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_content_security_policy
 from presentator.application.copresenter import AskLimiter, CoPresenterUse
@@ -172,7 +171,7 @@ def build_instance(
         lobby=create_lobby(
             sessions=sessions,
             decks=decks,
-            pages=_pages(settings),
+            preferences=_preferences(settings),
             auth=lobby_auth,
             private=_lobby_private(
                 settings, decks, sessions, key_drafts, identity_writes
@@ -362,13 +361,11 @@ def installed_auths(
     return lobby, talk
 
 
-def _pages(settings: Settings) -> Pages:
-    return Pages(
-        preferences=Preferences(
-            instance=SqliteInstanceSettingsStore(settings.database),
-            people=SqlitePersonPreferencesStore(settings.database),
-            catalogs=load_catalogs(CATALOG_DIRECTORY),
-        ),
+def _preferences(settings: Settings) -> Preferences:
+    return Preferences(
+        instance=SqliteInstanceSettingsStore(settings.database),
+        people=SqlitePersonPreferencesStore(settings.database),
+        catalogs=load_catalogs(CATALOG_DIRECTORY),
     )
 
 

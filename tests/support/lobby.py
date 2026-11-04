@@ -59,7 +59,6 @@ from presentator.api.auth import (
 )
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.api.lobby_shell import LobbyShell
-from presentator.api.pages import Pages
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_content_security_policy
 from presentator.application.decks import Decks
@@ -556,9 +555,7 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
     lobby = create_lobby(
         sessions=crowd.sessions if signing_in is None else signing_in.sessions,
         decks=decks,
-        pages=Pages(
-            preferences=a_preferences() if preferences is None else preferences,
-        ),
+        preferences=a_preferences() if preferences is None else preferences,
         auth=(
             an_installed_auth(
                 clock, transaction=SessionsOnly(crowd.sessions), shell=shell

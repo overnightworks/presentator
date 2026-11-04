@@ -11,7 +11,6 @@ from fastapi.openapi.utils import (
 )
 from httpx2 import Response
 
-from presentator.api.preferences import THEME
 from tests.support.lobby import NEIGHBOUR, Lobby, a_lobby
 from tests.support.sign_in_support import ADMIN, Scene, a_scene
 
@@ -90,16 +89,6 @@ def test_a_body_that_is_not_json_is_answered_without_a_word_of_it() -> None:
         content=f'{{"theme": "{_MARKER}"'.encode(),
         headers={**_JSON, "content-type": "application/json"},
     )
-
-    is_the_frameworks_validation_answer(answer, marker=_MARKER)
-
-
-def test_a_form_post_with_a_theme_outside_the_set_is_answered_without_the_value() -> (
-    None
-):
-    lobby = a_member_lobby()
-
-    answer = lobby.client.post(THEME, data={"theme": _MARKER})
 
     is_the_frameworks_validation_answer(answer, marker=_MARKER)
 

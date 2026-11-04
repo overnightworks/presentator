@@ -19,7 +19,6 @@ in for a higher one.
 | `ports` | A protocol | It is a protocol; it is not proven by a port suite. Application tests against a fake of that port prove it. Tests do not invent the port. |
 | `adapters` | The real dependency, in a temporary form | A tmp SQLite file; a tmp bare git repository; a `pnpm` the test wrote, on PATH, for the build adapter. A fixture sits next to the test that reads it. |
 | `api` | Routes and wire schemas | FastAPI `TestClient` driving the real routes with the real application and fake or tmp adapters. |
-| Template | Lobby HTML as the surface of a route | A ruled person-sentence is proven by a delegated agent driving the real interface. A route or fragment is FastAPI `TestClient` on the real route. A direct Jinja unit test is not the proof. |
 | `host` | Composition | Once: start the app with a test configuration. |
 | Slidev addon | That a deck staged outside the toolchain builds by the addon's name | Vitest building such a deck with `slidev build` from `slidev/`, as `slidev/tests/addon-package.test.ts` does. |
 | Lobby app | The app's own TypeScript and Svelte logic | Vitest beside the module in `frontend/src`. Its coverage has no threshold of its own. |
@@ -92,9 +91,8 @@ repository each kind of shipped value is proven here:
   a non-zero UID and a shell ending in `nologin`, without naming a shipped UID;
   the same step's refusal loop names the reserved UIDs, a protective limit.
 - The catalog and the deck manifests: tests read the owner (`en.po`,
-  `deck.toml`) or use scenario data. The page tests that still repeat catalog
-  sentences are frozen and go with their pages. New tests name a word through
-  the catalog rather than copying it.
+  `deck.toml`) or use scenario data. New tests name a word through the
+  catalog rather than copying it.
 
 Two traps are real. A port above 1023 does not prove a non-root user. A
 substring match stays green on an apex host, a path prefix or a repeated
