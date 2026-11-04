@@ -13,7 +13,7 @@ import json
 import logging
 import re
 import sqlite3
-from contextlib import closing
+from contextlib import asynccontextmanager, closing
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from http import HTTPStatus
@@ -63,7 +63,13 @@ from tests.support.lobby import (
 from tests.support.talk_support import A_DECK, B_DECK, A, Hosts, two_hosts
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Mapping
+    from collections.abc import (
+        AsyncGenerator,
+        AsyncIterator,
+        Awaitable,
+        Callable,
+        Mapping,
+    )
     from pathlib import Path
 
     from fastapi.testclient import TestClient
@@ -71,7 +77,13 @@ if TYPE_CHECKING:
 
     from presentator.adapters.identity import SqliteSessionRecordStore
     from presentator.api.auth import InstalledAuth
-    from presentator.ports.copresenter import DeckTexts
+    from presentator.ports.copresenter import (
+        AccessRefusal,
+        AgentAnswers,
+        AskingPerson,
+        DeckTexts,
+        PersonAccess,
+    )
     from tests.support.git_remote import GitRemote
 from tests.support.leak_support import everything_shown
 
@@ -115,6 +127,42 @@ class RecordingLogs(logging.Handler):
         self.records.append(record)
 
 
+class WitnessedAnswers:
+    """The real answerer, keeping every error it lets out for the leak check."""
+
+    def __init__(self, answers: AgentAnswers, errors: list[BaseException]) -> None:
+        """Wrap these answers."""
+        self._answers = answers
+        self._errors = errors
+
+    @asynccontextmanager
+    async def answer(
+        self, *, message: str, person: AskingPerson
+    ) -> AsyncGenerator[AsyncIterator[str]]:
+        try:
+            async with self._answers.answer(message=message, person=person) as events:
+                yield events
+        except BaseException as error:
+            self._errors.append(error)
+            raise
+
+
+class WitnessedAccess:
+    """The real group read, keeping every error it lets out for the leak check."""
+
+    def __init__(self, access: PersonAccess, errors: list[BaseException]) -> None:
+        """Wrap this access."""
+        self._access = access
+        self._errors = errors
+
+    async def groups_of(self, session_id: str) -> frozenset[str] | AccessRefusal:
+        try:
+            return await self._access.groups_of(session_id)
+        except BaseException as error:
+            self._errors.append(error)
+            raise
+
+
 @dataclass
 class Run:
     """One ask by a signed-in admin, and everything that could have seen it."""
@@ -127,6 +175,7 @@ class Run:
     limiter: RecordingLimiter
     logged: list[logging.LogRecord]
     grants_before: list[str] = field(default_factory=list[str])
+    errors: list[BaseException] = field(default_factory=list[BaseException])
 
     @property
     def events(self) -> list[str]:
@@ -186,6 +235,7 @@ class Scenario:
     sources: list[Source] | None = None
     arrange: Callable[[Hosts], None] = nothing_happens
     speaking_fails_at: int | None = None
+    headers: Mapping[str, str] = field(default_factory=dict[str, str])
 
 
 def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
@@ -195,6 +245,7 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
     fakes = PrivateFakes()
     fakes.speaking.fails_at = scenario.speaking_fails_at
     hosts_made: list[Hosts] = []
+    errors: list[BaseException] = []
 
     async def wait(seconds: float) -> None:
         if scenario.delay is None:
@@ -207,8 +258,11 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
     ) -> CoPresenterSurface:
         return CoPresenterSurface(
             use=CoPresenterUse(
-                answers=gateway_answerer(
-                    an_agent_config(), auth.relying_party, transport=gateway
+                answers=WitnessedAnswers(
+                    gateway_answerer(
+                        an_agent_config(), auth.relying_party, transport=gateway
+                    ),
+                    errors,
                 ),
                 speech=fakes.speech,
                 decks=store,
@@ -216,7 +270,9 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
                 texts=scenario.texts or fakes.texts,
                 boundaries=split_sentences,
                 speaking=fakes.speaking,
-                person_access=SessionGroups(auth.relying_party, sessions, auth.config),
+                person_access=WitnessedAccess(
+                    SessionGroups(auth.relying_party, sessions, auth.config), errors
+                ),
             ),
             limiter=limiter,
             browser_origin=A_TALK_ADDRESS,
@@ -240,17 +296,29 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
     root.addHandler(logs)
     root.setLevel(logging.DEBUG)
     try:
-        response = ask(talk, scenario.body)
+        response = ask(talk, scenario.body, scenario.headers)
     finally:
         root.removeHandler(logs)
         root.setLevel(level)
     return Run(
-        response, hosts, gateway, fakes, talk, limiter, logs.records, grants_before
+        response,
+        hosts,
+        gateway,
+        fakes,
+        talk,
+        limiter,
+        logs.records,
+        grants_before,
+        errors,
     )
 
 
-def ask(talk: TestClient, body: Mapping[str, object] = THE_ASKED_DECK) -> Response:
-    return talk.post(ASK, json=body)
+def ask(
+    talk: TestClient,
+    body: Mapping[str, object] = THE_ASKED_DECK,
+    headers: Mapping[str, str] | None = None,
+) -> Response:
+    return talk.post(ASK, json=body, headers=headers)
 
 
 A_PUSH: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
@@ -617,7 +685,20 @@ LEAK_SCENARIOS: Final = {
     "not-enabled": Scenario(groups=ADMIN_GROUPS),
     "busy": Scenario(gateway=lambda: FakeGateway(Reply(429, {"retry-after": "7"}))),
     "gateway-echoes-the-key": Scenario(gateway=_echoing_the_key),
+    "gateway-forbids": Scenario(gateway=lambda: FakeGateway(Reply(403))),
+    "gateway-rejects-the-request": Scenario(
+        gateway=lambda: FakeGateway(
+            Reply(422, {}, json.dumps({"detail": f"{A_GATEWAY_KEY}"}).encode())
+        )
+    ),
+    "busy-without-a-wait": Scenario(gateway=lambda: FakeGateway(Reply(429))),
     "gateway-down": Scenario(gateway=lambda: FakeGateway(Reply(500))),
+    "malformed-reply": Scenario(
+        gateway=lambda: FakeGateway(Reply(body=f"{{{REPLY_BODY}".encode()))
+    ),
+    "foreign-origin": Scenario(headers={"origin": "https://elsewhere.example"}),
+    "question-too-long": Scenario(body={**THE_ASKED_DECK, "said": "x" * 2_001}),
+    "deck-name-too-long": Scenario(body={**THE_ASKED_DECK, "deck": "d" * 5_000}),
     "no-words": Scenario(gateway=lambda: FakeGateway(completion(""))),
     "refused-connection": Scenario(gateway=RefusingTransport),
     "speech-fails-on-the-second-sentence": Scenario(
@@ -658,10 +739,10 @@ def accounts_of(hosts: Hosts) -> list[str]:
 def test_no_secret_or_word_of_the_person_reaches_a_log_record_or_the_browser(
     tmp_path: Path, scenario: Scenario
 ) -> None:
-    """C10: every logger at DEBUG during the ask, and all the browser got."""
+    """C10: every log record and error of the ask, and all the browser got."""
     run = drive(tmp_path, scenario)
 
-    logged = everything_shown(run.logged)
+    logged = everything_shown(run.logged, run.errors)
     browser = f"{run.response.headers}\n{run.response.text}"
     for marker in what_the_ask_must_not_show(run):
         assert marker not in logged

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
@@ -171,7 +171,9 @@ class FixedSession:
 
     session_id: str = "session"
     user_id: str = ADMIN
-    person: User = User(id=ADMIN, username="admin", role=Role.ADMIN)
+    person: User = field(
+        default_factory=lambda: User(id=ADMIN, username="admin", role=Role.ADMIN)
+    )
 
 
 def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> None:
