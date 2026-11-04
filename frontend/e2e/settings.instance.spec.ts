@@ -6,6 +6,8 @@ import {
 	chooseTheme,
 	endsTheSession,
 	entriesOf,
+	expectsHeaderOnOneLine,
+	expectsNoHorizontalScroll,
 	leftForSignIn,
 	sessionOf,
 	startsSignIn,
@@ -63,9 +65,6 @@ function otherLanguage(settings: SettingsView): { tag: string; name: string } {
 	return other as { tag: string; name: string };
 }
 
-const overflowOf = (page: Page): Promise<number> =>
-	page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-
 // Cell 1.
 for (const colorScheme of ['light', 'dark'] as const) {
 	for (const width of [390, 1280]) {
@@ -109,15 +108,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await page.keyboard.press('Escape');
 
 				if (width === 390) {
-					expect(await overflowOf(page)).toBeLessThanOrEqual(0);
-					const centres = await page
-						.locator('header.top > :not([popover])')
-						.evaluateAll((parts) =>
-							parts
-								.map((part) => part.getBoundingClientRect())
-								.map((box) => box.top + box.height / 2)
-						);
-					expect(Math.max(...centres) - Math.min(...centres)).toBeLessThan(8);
+					await expectsNoHorizontalScroll(page);
+					await expectsHeaderOnOneLine(page);
 				}
 				await page.locator('body').click({ position: { x: 1, y: 1 } });
 				const focused: (string | null)[] = [];
@@ -383,7 +375,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(page.getByRole('link', { name: words.section_settings })).toHaveCount(0);
 				await expect(page.getByRole('navigation', { name: words.section_settings })).toHaveCount(0);
 				await expect(page.locator('header.top button.account')).toBeVisible();
-				expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+				await expectsNoHorizontalScroll(page);
 				await page.screenshot({
 					path: testInfo.outputPath(`for-admins-${width}-${colorScheme}.png`),
 					fullPage: true

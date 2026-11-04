@@ -5,6 +5,8 @@ import {
 	chooseTheme,
 	entriesOf,
 	endsTheSession,
+	expectsHeaderOnOneLine,
+	expectsNoHorizontalScroll,
 	leftForSignIn,
 	MENU,
 	minutesAgo,
@@ -159,16 +161,8 @@ test.describe('sentence 9', () => {
 
 		await page.goto('/');
 
-		const centres = await page
-			.locator('header.top > :not([popover])')
-			.evaluateAll((parts) =>
-				parts.map((part) => part.getBoundingClientRect()).map((box) => box.top + box.height / 2)
-			);
-		expect(Math.max(...centres) - Math.min(...centres)).toBeLessThan(8);
-		const overflow = await page.evaluate(
-			() => document.documentElement.scrollWidth - document.documentElement.clientWidth
-		);
-		expect(overflow).toBeLessThanOrEqual(0);
+		await expectsHeaderOnOneLine(page);
+		await expectsNoHorizontalScroll(page);
 	});
 
 	test('shows a focus ring on each control and marks Decks as the current page', async ({
