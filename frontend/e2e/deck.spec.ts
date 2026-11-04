@@ -169,7 +169,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(banner).toContainText(wire.attempt?.commit ?? '');
 				await expect(banner).toContainText(inTheSecondLanguage.attempt);
 				await expect(banner.locator('pre')).toHaveText(toolchainFailure.text);
-				await expect(banner).toContainText(words.deck_failed_last_talk_stands);
+				await expect(banner).not.toContainText(words.deck_failed_last_talk_stands);
+				await expect(page.getByText(words.deck_failed_last_talk_stands)).toBeVisible();
 				for (const view of views(wire)) {
 					await expect(view).toBeVisible();
 				}
@@ -180,7 +181,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await page.goto(`/deck/${failedWithout}`);
 				await expect(banner).toContainText(words.deck_failed_without_a_message);
 				await expect(banner.locator('pre')).toHaveCount(0);
-				await expect(banner).not.toContainText(words.deck_failed_last_talk_stands);
+				await expect(page.getByText(words.deck_failed_last_talk_stands)).toHaveCount(0);
 				await expect(page.getByText(words.deck_not_built_explanation)).toBeVisible();
 				await expect(page.locator('.actions')).toHaveCount(0);
 				await page.evaluate(() => document.fonts.ready);

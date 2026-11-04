@@ -71,12 +71,12 @@
 					{:else}
 						<pre>{failure}</pre>
 					{/if}
-					{#if deck.built_at}
-						<p>{words.deck_failed_last_talk_stands}</p>
-					{/if}
 				{/if}
 			</div>
 		</aside>
+		{#if deck.state !== 'building' && deck.built_at}
+			<p class="muted standing">{words.deck_failed_last_talk_stands}</p>
+		{/if}
 	{/if}
 	{#if deck.built_at}
 		<div class="actions">
@@ -142,6 +142,9 @@
 		margin: 0;
 		font-size: 14px;
 		color: var(--text-muted);
+	}
+	.standing {
+		margin-bottom: 16px;
 	}
 	.banner {
 		display: flex;
