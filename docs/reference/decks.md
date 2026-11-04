@@ -62,7 +62,10 @@ not the browser's own locale.
 
 ## A deck's page
 
-`/deck/<folder>` shows the deck's title, its folder, the state of its build,
+`/deck/<folder>` is a page of the lobby app; it reads `/api/decks/<folder>`,
+words the state, the age of the build and the length of a running build in the
+browser from the catalog and the person's language tag, and shows an unknown
+deck's board inside the lobby. It shows the deck's title, its folder, the state of its build,
 the address it was mirrored from, the short commit the talk it delivers was
 built from, and how long ago that build ran. Until a build has switched
 anything over, the commit shown is the one the source last carried under that
@@ -70,8 +73,7 @@ folder. Beside the state, the page names the theme set this instance builds
 with, read from the toolchain project's own `package.json` and omitted rather
 than shown empty while that project cannot be read
 ([ADR 0014](../decisions/0014-toolchain-owns-build-dependencies.md)).
-The same facts, with the instants of the build and of the attempt in place of
-their ages, are readable as JSON at `/api/decks/<folder>`; another person's deck
+The same facts, with the instants of the build and of the attempt, are readable as JSON at `/api/decks/<folder>`; another person's deck
 and an unknown one answer the same bare 404 problem. A failed attempt carries its
 `failure` as a reason code (`toolchain`, `no-words` or one of the server's
 refusals, see [builds](builds.md#reason-codes)), the counts that reason names and,
@@ -120,15 +122,16 @@ away the PDF that already downloads.
   application. The slide is in the address so a closed window comes back to
   the same slide. The deck page links both there, absolute to the talk origin,
   and the lobby serves no talk byte: a page load on its old talk addresses gets
-  the lobby app, whose router shows not-found, and any other caller gets 404,
-  `/deck/<folder>/` answers a 307 to the deck page, and a WebSocket into one
-  is closed before it is accepted, alike for every slug.
+  the lobby app, whose router shows not-found, and any other caller gets 404.
+  A page load on `/deck/<folder>/` gets the lobby app too, and its router
+  settles on the deck page. A WebSocket into one is closed before it is
+  accepted, alike for every slug.
 - A path under the deck that is not a real file is answered with the
   application's `index.html`. A projector or presenter address under a deck
   that is unknown, not built, another account's, or whose build directory has
   since gone from disk, answers a bare empty 404 with no templated page and no
-  content type; only the deck's own page route on the lobby renders the
-  lobby's not-found page.
+  content type; on the lobby, an unknown deck is the deck page's own board and
+  the PDF's 404 is the lobby app under 404.
 - The views stand behind the talk host's own session
   ([ADR 0016](../decisions/0016-a-talk-host-signs-in-by-itself.md)), the deck
   page and the PDF behind the lobby's
@@ -145,8 +148,9 @@ away the PDF that already downloads.
 - `/deck/<folder>/pdf` hands the file that row names over as
   `application/pdf`, to be saved under the deck's folder name, and the page
   offers that download only while the column is set. An address with nothing
-  behind it (no file put yet, or one gone from disk) answers the lobby's own
-  not-found page rather than a traceback, and a signed-out request answers
+  behind it (a deck that is missing, foreign or unknown, no file put yet, or
+  one gone from disk) answers the lobby app under 404, which shows the root
+  not-found board, rather than a traceback, and a signed-out request answers
   the login. The saved name is derived from the folder name alone, and a slug
   that is no folder's own name (carrying a separator, a quote, or a line
   break) hands over nothing, so nothing an address carries reaches a response

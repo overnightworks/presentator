@@ -7,7 +7,7 @@ Settings and Account do and how the lobby is themed.
 
 Every signed-in page carries the picture's header
 ([mockups](../mockups/README.md)): the product name, the Decks section and
-Settings for an admin. On the SvelteKit pages (Home so far) it also has one
+Settings for an admin. On the SvelteKit pages (Home and the deck page so far) it also has one
 round person button, which opens appkit's account menu in a native popover: the
 person's name opening the central account in a new tab, the three theme rows,
 Log out, and the legal links; Escape and a click outside close it. The Svelte
