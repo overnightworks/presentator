@@ -88,12 +88,12 @@ and the footer is its `LegalLinks`; presentator draws only the round button.
 Ages ("2 minutes ago") are worded by the browser with `Intl.RelativeTimeFormat`
 in the language tag from the session, which is the instance's, so they change
 with the instance language and no catalog holds a unit word; the server sends
-the changed instant only. A running build's duration is worded the same way, in its largest whole
-unit with `Intl.NumberFormat`, and the deck page's build and attempt instants
-are on the wire; its wording at a unit's edge may differ from what Babel said.
-Babel stays for the catalog files. A theme or language
-change paints through one reactive session store that sets `<html data-theme
-lang>`, so it needs no reload.
+the changed instant only. A running build's duration is worded the same way, in
+its largest whole unit with `Intl.NumberFormat`, and the deck page's build and
+attempt instants are on the wire; its wording at a unit's edge may differ from
+what Babel said. Babel stays for the catalog files. A theme or language change
+paints through one reactive session store that sets `<html data-theme lang>`,
+so it needs no reload.
 
 The co-presenter overlay in the Slidev addon is meant to read the same token
 file, so that lobby and overlay share the same active theme — one token file on
