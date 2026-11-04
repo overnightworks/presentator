@@ -8,9 +8,12 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-function loadWith(person: SessionView['person']): ReturnType<typeof load> {
+function loadWith(
+	person: SessionView['person'],
+	url = new URL('http://lobby.test/')
+): ReturnType<typeof load> {
 	const parent = async () => ({ session: { person } as SessionView });
-	return load({ parent } as unknown as Parameters<typeof load>[0]);
+	return load({ parent, url } as unknown as Parameters<typeof load>[0]);
 }
 
 describe('the lobby layout load', () => {
@@ -30,5 +33,18 @@ describe('the lobby layout load', () => {
 		await vi.waitFor(() => expect(navigated).toHaveBeenCalledTimes(1));
 		await Promise.resolve();
 		expect(settled).not.toHaveBeenCalled();
+	});
+
+	it('leaves for the sign-in with the address being loaded as next', async () => {
+		const navigated = vi.spyOn(documentNavigation, 'to').mockImplementation(() => undefined);
+		signInStartsAt('/login/oidc');
+
+		void loadWith(null, new URL('http://lobby.test/target?a=1'));
+
+		await vi.waitFor(() =>
+			expect(navigated).toHaveBeenCalledWith(
+				`/login/oidc?next=${encodeURIComponent('/target?a=1')}`
+			)
+		);
 	});
 });

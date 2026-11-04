@@ -1,3 +1,4 @@
+import { isHttpError } from '@sveltejs/kit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getJson, putJson } from '#lib/api/client.ts';
@@ -30,6 +31,17 @@ describe('getJson', () => {
 	it('fails loud on a refusal that is not a 401', async () => {
 		const { fetcher } = answering(500, {});
 		await expect(getJson(fetcher, '/api/decks')).rejects.toThrow('/api/decks answered 500');
+	});
+});
+
+describe.each([403, 404])('a %i from the API', (status) => {
+	it.each([
+		{ name: 'a read', call: (fetcher: typeof fetch) => getJson(fetcher, '/api/decks') },
+		{ name: 'a write', call: (fetcher: typeof fetch) => putJson(fetcher, '/api/account', {}) }
+	])('becomes a kit error with its status for $name', async ({ call }) => {
+		const refusal = await call(answering(status, {}).fetcher).catch((failure: unknown) => failure);
+
+		expect(isHttpError(refusal, status)).toBe(true);
 	});
 });
 
@@ -131,5 +143,25 @@ describe.each([
 			`/login/oidc?next=${encodeURIComponent(`${page}?filter=a%20b`)}`
 		);
 		expect(settled).not.toHaveBeenCalled();
+	});
+});
+
+describe('a 401 met by a load', () => {
+	it('names the load event url as next, not the page shown', async () => {
+		const client = await freshClient();
+		const navigated = vi.spyOn(client.documentNavigation, 'to').mockImplementation(() => undefined);
+		client.signInStartsAt('/login/oidc');
+		window.history.replaceState(null, '', '/shown');
+
+		void client.getJson(
+			answering(401, {}).fetcher,
+			'/api/decks',
+			new URL('http://lobby.test/target?a=1')
+		);
+		await vi.waitFor(() => expect(navigated).toHaveBeenCalledTimes(1));
+
+		expect(navigated).toHaveBeenCalledWith(
+			`/login/oidc?next=${encodeURIComponent('/target?a=1')}`
+		);
 	});
 });
