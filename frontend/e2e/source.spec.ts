@@ -1,4 +1,4 @@
-import type { Locator, Page, Route } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 import type { SourceView, WebhookSecretView } from '../src/lib/api/sources.ts';
 import { expect, test } from './person.ts';
@@ -15,6 +15,7 @@ import {
 } from './scenario.ts';
 import {
 	ACCESS_TOKEN,
+	answersWith,
 	givenADeployKey,
 	JSON_ACCEPT,
 	opensALocalSource,
@@ -38,21 +39,6 @@ test.use({ launchOptions: { ignoreDefaultArgs: ['--disable-back-forward-cache'] 
 
 const section = (page: Page, heading: string): Locator =>
 	page.locator('section.sec').filter({ has: page.getByRole('heading', { name: heading }) });
-
-// The page answer of one source, changed on its way to the page.
-async function answersWith(
-	page: Page,
-	name: string,
-	change: (view: SourceView) => SourceView
-): Promise<void> {
-	await page.route(`**${SOURCES_API}/${name}`, async (route: Route) => {
-		if (route.request().method() !== 'GET') {
-			return route.continue();
-		}
-		const real = await route.fetch();
-		return route.fulfill({ response: real, json: change((await real.json()) as SourceView) });
-	});
-}
 
 async function renewsTheWebhook(page: Page, words: Words, name: string): Promise<string> {
 	const answered = page.waitForResponse(
@@ -706,10 +692,10 @@ test.describe('as an admin', () => {
 });
 
 // Cell 5.
-test.describe('in the second language', () => {
-	test.use({ person: { role: 'admin', language: 'second', source: OWN_SOURCE } });
+test.describe('the age of the fetch', () => {
+	test.use({ person: { role: 'admin', source: OWN_SOURCE }, locale: 'en-US' });
 
-	test('words the age of the fetch in the browser, in the session language', async ({ page }) => {
+	test("is worded in English", async ({ page }) => {
 		const session = await sessionOf(page);
 		const name = await ownSourceName(page, OWN_SOURCE);
 		await answersWith(page, name, (view) => ({
@@ -719,11 +705,7 @@ test.describe('in the second language', () => {
 
 		await page.goto(sourceAddress(name));
 
-		const expected = await page.evaluate(
-			(tag) => new Intl.RelativeTimeFormat(tag, { numeric: 'auto' }).format(-3, 'day'),
-			session.words.language_tag
-		);
-		await expect(page.locator('.meta')).toContainText(expected);
+		await expect(page.locator('.meta')).toContainText('3 days ago');
 		await expect(page.getByRole('link', { name: session.words.sources_back })).toBeVisible();
 	});
 });

@@ -35,26 +35,8 @@
         "type": "object"
       },
       "AccountView": {
-        "description": "One person's overrides and the languages they may choose from.",
+        "description": "One person's theme override, read and written; `None` leaves it to the instance.\n\nNo default: one schema serves the body and the answer.",
         "properties": {
-          "language_tag": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Language Tag"
-          },
-          "languages": {
-            "items": {
-              "$ref": "#/components/schemas/LanguageView"
-            },
-            "title": "Languages",
-            "type": "array"
-          },
           "theme": {
             "anyOf": [
               {
@@ -67,43 +49,9 @@
           }
         },
         "required": [
-          "language_tag",
-          "theme",
-          "languages"
-        ],
-        "title": "AccountView",
-        "type": "object"
-      },
-      "AccountWrite": {
-        "description": "Both overrides of one person; `None` leaves the choice to the instance.",
-        "properties": {
-          "language_tag": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Language Tag"
-          },
-          "theme": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ThemeChoice"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "language_tag",
           "theme"
         ],
-        "title": "AccountWrite",
+        "title": "AccountView",
         "type": "object"
       },
       "AttemptView": {
@@ -521,26 +469,6 @@
       "LobbyText": {
         "description": "One field per message a catalog file has to fill.",
         "properties": {
-          "account_instance_default": {
-            "title": "Account Instance Default",
-            "type": "string"
-          },
-          "account_language": {
-            "title": "Account Language",
-            "type": "string"
-          },
-          "account_preferences": {
-            "title": "Account Preferences",
-            "type": "string"
-          },
-          "account_theme": {
-            "title": "Account Theme",
-            "type": "string"
-          },
-          "account_title": {
-            "title": "Account Title",
-            "type": "string"
-          },
           "address_unknown_explanation": {
             "title": "Address Unknown Explanation",
             "type": "string"
@@ -715,14 +643,6 @@
           },
           "menu_theme": {
             "title": "Menu Theme",
-            "type": "string"
-          },
-          "role_admin": {
-            "title": "Role Admin",
-            "type": "string"
-          },
-          "role_user": {
-            "title": "Role User",
             "type": "string"
           },
           "section_decks": {
@@ -1142,8 +1062,6 @@
           "theme_follow_system",
           "theme_light",
           "theme_dark",
-          "role_admin",
-          "role_user",
           "footer_impressum",
           "footer_datenschutz",
           "decks_title",
@@ -1190,11 +1108,6 @@
           "settings_language_hint",
           "settings_default_theme",
           "settings_save",
-          "account_title",
-          "account_preferences",
-          "account_language",
-          "account_theme",
-          "account_instance_default",
           "sources_column_source",
           "sources_column_fetched",
           "sources_fetch_now",
@@ -1904,7 +1817,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AccountWrite"
+                "$ref": "#/components/schemas/AccountView"
               }
             }
           },
@@ -1926,44 +1839,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              },
-              "application/problem+json": {
-                "schema": {
-                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
-                  "properties": {
-                    "detail": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "title": "Detail"
-                    },
-                    "status": {
-                      "title": "Status",
-                      "type": "integer"
-                    },
-                    "title": {
-                      "title": "Title",
-                      "type": "string"
-                    },
-                    "type": {
-                      "default": "about:blank",
-                      "title": "Type",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "type",
-                    "title",
-                    "status"
-                  ],
-                  "title": "ProblemDetails",
-                  "type": "object"
                 }
               }
             },

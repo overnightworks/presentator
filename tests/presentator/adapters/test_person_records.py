@@ -19,7 +19,7 @@ from presentator.adapters.preferences import SqlitePersonPreferencesStore
 from presentator.adapters.schema import create_tables
 from presentator.contracts.models import Role, User
 from presentator.contracts.people import SessionTimes
-from presentator.contracts.preferences import PersonPreferences
+from presentator.contracts.preferences import PersonPreferences, ThemeChoice
 from tests.presentator.adapters.support.key_draft_support import a_key_drafts_store
 from tests.support.people import seed_user
 
@@ -116,13 +116,13 @@ def test_deleting_preferences_removes_only_that_persons_row(database: Path) -> N
     """S9 (#293): preferences go per person and a repeat deletes zero."""
     preferences = SqlitePersonPreferencesStore(database)
     for person in (_THE_PERSON, _ANOTHER):
-        preferences.write(person.id, PersonPreferences(language_tag="de"))
+        preferences.write(person.id, PersonPreferences(theme=ThemeChoice.DARK))
 
     assert preferences.delete(_THE_PERSON.id) == 1
     assert preferences.delete(_THE_PERSON.id) == 0
 
     assert preferences.read(_THE_PERSON.id) is None
-    assert preferences.read(_ANOTHER.id) == PersonPreferences(language_tag="de")
+    assert preferences.read(_ANOTHER.id) == PersonPreferences(theme=ThemeChoice.DARK)
 
 
 def test_a_draft_is_counted_and_removed_whether_or_not_its_key_still_opens(

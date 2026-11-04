@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS instance_settings (
 );
 CREATE TABLE IF NOT EXISTS person_preferences (
     user_id TEXT PRIMARY KEY REFERENCES users(id),
-    language_tag TEXT,
     theme TEXT
 );
 """
@@ -77,7 +76,7 @@ class SqliteInstanceSettingsStore:
 
 @dataclass(frozen=True, slots=True)
 class SqlitePersonPreferencesStore:
-    """One row per person who chose something of their own."""
+    """One row per person who chose a theme of their own."""
 
     database: Path
 
@@ -85,32 +84,22 @@ class SqlitePersonPreferencesStore:
         """Read that person's overrides."""
         with rows(self.database) as cursor:
             row = cursor.execute(
-                "SELECT language_tag, theme FROM person_preferences WHERE user_id = ?",
+                "SELECT theme FROM person_preferences WHERE user_id = ?",
                 (user_id,),
             ).fetchone()
         if row is None:
             return None
-        language_tag, theme = row
-        return PersonPreferences(
-            language_tag=language_tag,
-            theme=None if theme is None else ThemeChoice(theme),
-        )
+        (theme,) = row
+        return PersonPreferences(theme=None if theme is None else ThemeChoice(theme))
 
     def write(self, user_id: str, preferences: PersonPreferences) -> None:
         """Write that person's overrides over whatever stood there."""
         theme = preferences.theme
         with rows(self.database) as cursor:
             cursor.execute(
-                "INSERT INTO person_preferences (user_id, language_tag, theme)"
-                " VALUES (?, ?, ?)"
-                " ON CONFLICT(user_id) DO UPDATE SET"
-                " language_tag = excluded.language_tag,"
-                " theme = excluded.theme",
-                (
-                    user_id,
-                    preferences.language_tag,
-                    None if theme is None else theme.value,
-                ),
+                "INSERT INTO person_preferences (user_id, theme) VALUES (?, ?)"
+                " ON CONFLICT(user_id) DO UPDATE SET theme = excluded.theme",
+                (user_id, None if theme is None else theme.value),
             )
 
     def delete(self, user_id: str) -> int:

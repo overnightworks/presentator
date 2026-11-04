@@ -30,12 +30,12 @@ const toolchainFailure = {
 } as const;
 const JSON_HEADERS = { Accept: 'application/json' };
 
-// The ages and the duration are worded by the browser in the person's language
-// (the second one), not in the browser's own.
-const inTheSecondLanguage = {
-	built: 'vor 12 Minuten',
-	attempt: 'vor 26 Minuten',
-	building: '40 Sekunden'
+// The ages and the duration are worded in the instance's language, English
+// here, as scenario literals.
+const inEnglish = {
+	built: '12 minutes ago',
+	attempt: '26 minutes ago',
+	building: '40 seconds'
 };
 
 async function wireOf(page: Page, slug: string): Promise<DeckView> {
@@ -83,7 +83,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
 			test.use({
 				person: {
 					role: 'admin',
-					language: 'second',
 					source: SOURCE_ADDRESS,
 					decks: fiveBoards
 				},
@@ -121,7 +120,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(page.locator('.meta')).toContainText(SOURCE_ADDRESS);
 				await expect(page.locator('.meta')).toContainText(wire.commit);
 				await expect(page.locator('.meta')).toContainText(
-					filled(words.deck_built, inTheSecondLanguage.built)
+					filled(words.deck_built, inEnglish.built)
 				);
 				await expect(page.locator('.status .muted')).toContainText(
 					words.deck_builds_with.split('{themes}')[0] ?? ''
@@ -148,7 +147,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(banner).toHaveAttribute('data-banner', 'building');
 				await expect(banner).toContainText(words.deck_building_label);
 				await expect(banner).toContainText(wire.attempt?.commit ?? '');
-				await expect(banner).toContainText(filled(words.deck_building_for, inTheSecondLanguage.building));
+				await expect(banner).toContainText(filled(words.deck_building_for, inEnglish.building));
 				await expect(banner).toContainText(words.deck_building_explanation);
 				await expect(page.locator('.actions .off')).toHaveText([
 					words.deck_presenter_view,
@@ -167,7 +166,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(banner).toContainText(words.deck_failed_title);
 				await expect(banner).toContainText(words.deck_attempt_label);
 				await expect(banner).toContainText(wire.attempt?.commit ?? '');
-				await expect(banner).toContainText(inTheSecondLanguage.attempt);
+				await expect(banner).toContainText(inEnglish.attempt);
 				await expect(banner.locator('pre')).toHaveText(toolchainFailure.text);
 				await expect(banner).not.toContainText(words.deck_failed_last_talk_stands);
 				await expect(page.getByText(words.deck_failed_last_talk_stands)).toBeVisible();
@@ -193,7 +192,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(page.getByText(words.deck_not_built_explanation)).toBeVisible();
 				await expect(page.locator('aside.banner')).toHaveCount(0);
 				await expect(page.locator('.actions')).toHaveCount(0);
-				await expect(page.locator('.meta')).not.toContainText(words.deck_built.split('{age}')[0] ?? '');
+				// The state word "never built" holds the template's first word, so the build's age is told by its unit.
+				await expect(page.locator('.meta')).not.toContainText(/built \d+ \w+ ago/);
 				const overflow = await page.evaluate(
 					() => document.documentElement.scrollWidth - document.documentElement.clientWidth
 				);
@@ -206,7 +206,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
 }
 
 // Cell 2 and 3.
-const reasons: { reason: NonNullable<DeckRecord['attempt']>['failure'] & object; counts: string[] }[] = [
+const reasons: {
+	reason: NonNullable<DeckRecord['attempt']>['failure'] & object;
+	counts: string[];
+}[] = [
 	{ reason: toolchainFailure, counts: [] },
 	{ reason: { reason: 'output-megabytes', written_megabytes: 700, allowed_megabytes: 500 }, counts: ['700', '500'] },
 	{ reason: { reason: 'output-entries', allowed_entries: 20000 }, counts: ['20000'] },
@@ -268,7 +271,7 @@ test.describe('what a failed build says', () => {
 });
 
 // Cell 4.
-test.describe('an unknown deck and another person\'s', () => {
+test.describe("an unknown deck and another person's", () => {
 	test.use({ person: { role: 'admin' } });
 
 	test('show the same board inside the lobby at 200', async ({ page, browser, baseURL }) => {
@@ -415,7 +418,7 @@ test.describe('the PDF', () => {
 		}
 	});
 
-	test('downloads under the deck\'s slug as a document navigation', async ({ page, signedIn }) => {
+	test("downloads under the deck's slug as a document navigation", async ({ page, signedIn }) => {
 		const { words } = await sessionOf(page);
 		await page.goto(`/deck/${signedIn?.slugs[0]}`);
 

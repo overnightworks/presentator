@@ -254,22 +254,11 @@ export interface components {
         };
         /**
          * AccountView
-         * @description One person's overrides and the languages they may choose from.
+         * @description One person's theme override, read and written; `None` leaves it to the instance.
+         *
+         *     No default: one schema serves the body and the answer.
          */
         AccountView: {
-            /** Language Tag */
-            language_tag: string | null;
-            /** Languages */
-            languages: components["schemas"]["LanguageView"][];
-            theme: components["schemas"]["ThemeChoice"] | null;
-        };
-        /**
-         * AccountWrite
-         * @description Both overrides of one person; `None` leaves the choice to the instance.
-         */
-        AccountWrite: {
-            /** Language Tag */
-            language_tag: string | null;
             theme: components["schemas"]["ThemeChoice"] | null;
         };
         /**
@@ -435,16 +424,6 @@ export interface components {
          * @description One field per message a catalog file has to fill.
          */
         LobbyText: {
-            /** Account Instance Default */
-            account_instance_default: string;
-            /** Account Language */
-            account_language: string;
-            /** Account Preferences */
-            account_preferences: string;
-            /** Account Theme */
-            account_theme: string;
-            /** Account Title */
-            account_title: string;
             /** Address Unknown Explanation */
             address_unknown_explanation: string;
             /** Address Unknown Title */
@@ -533,10 +512,6 @@ export interface components {
             menu_account: string;
             /** Menu Theme */
             menu_theme: string;
-            /** Role Admin */
-            role_admin: string;
-            /** Role User */
-            role_user: string;
             /** Section Decks */
             section_decks: string;
             /** Section Settings */
@@ -1014,7 +989,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AccountWrite"];
+                "application/json": components["schemas"]["AccountView"];
             };
         };
         responses: {
@@ -1034,19 +1009,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
                 };
             };
         };

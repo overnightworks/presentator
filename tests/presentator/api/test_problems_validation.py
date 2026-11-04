@@ -20,6 +20,7 @@ _HAL = "hal-client"
 _MARKER = "zq-marker-7431"
 _NUMBER_MARKER = 987654321
 _ACCOUNT = "/api/account"
+_SETTINGS = "/api/settings"
 _JSON = {"accept": "application/json"}
 _NO_STORE = "no-store"
 
@@ -27,6 +28,12 @@ _NO_STORE = "no-store"
 def a_member_lobby() -> Lobby:
     lobby = a_lobby()
     lobby.sign_in(username=NEIGHBOUR)
+    return lobby
+
+
+def an_admin_lobby() -> Lobby:
+    lobby = a_lobby()
+    lobby.sign_in()
     return lobby
 
 
@@ -57,19 +64,19 @@ def test_a_theme_outside_the_set_is_answered_without_the_value_and_stores_nothin
 ):
     lobby = a_member_lobby()
 
-    answer = lobby.client.put(
-        _ACCOUNT, json={"language_tag": None, "theme": _MARKER}, headers=_JSON
-    )
+    answer = lobby.client.put(_ACCOUNT, json={"theme": _MARKER}, headers=_JSON)
 
     is_the_frameworks_validation_answer(answer, marker=_MARKER)
     assert lobby.client.get(_ACCOUNT, headers=_JSON).json()["theme"] is None
 
 
 def test_a_language_of_the_wrong_json_type_is_answered_without_the_value() -> None:
-    lobby = a_member_lobby()
+    lobby = an_admin_lobby()
 
     answer = lobby.client.put(
-        _ACCOUNT, json={"language_tag": _NUMBER_MARKER, "theme": None}, headers=_JSON
+        _SETTINGS,
+        json={"name": "", "language_tag": _NUMBER_MARKER, "theme": "dark"},
+        headers=_JSON,
     )
 
     is_the_frameworks_validation_answer(answer, marker=_NUMBER_MARKER)
