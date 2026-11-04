@@ -90,18 +90,18 @@ interaction became a template, a fragment and a form route.
   `shallow` and `replace`: no new history entry, empty page state. Kit keeps
   `page.url` at the Add address and records that Add address as the entry's
   `pageUrl` while the browser's own address is the source's, so Back to that
-  entry loads the Add route under the source's address. The Add page checks `page.shallow` once, at
-  mount and never reactively (a reactive check would destroy the display right
-  after a create), and replaces itself by the source's page. The secret is in
-  no URL, no storage, no title and no later GET. On `pagehide` the page forgets
-  that secret and the typed one, so a page the browser keeps and shows again
-  shows the empty form; `visibilitychange` would also drop it from a person who
-  switches tabs to paste it. Chromium keeps no lobby page in its back/forward
-  cache (every answer is `no-store` and the page makes requests of its own), so
-  the drive cannot restore one; the `pagehide` handler is driven by dispatching
-  the event, and the cache clause is held by that construction. The drive's
-  cache cell restores a control page first and is skipped, with the browser's
-  reasons, while it cannot.
+  entry loads the Add route under the source's address. The Add page checks
+  `page.shallow` once, at mount and never reactively (a reactive check would
+  destroy the display right after a create), and replaces itself by the source's
+  page. The secret is in no URL, no storage, no title and no later GET. On
+  `pagehide` the page forgets that secret and the typed one, so a page the
+  browser keeps and shows again shows the empty form; `visibilitychange` would
+  also drop it from a person who switches tabs to paste it. Chromium keeps no
+  lobby page in its back/forward cache (every answer is `no-store` and the page
+  makes requests of its own), so the drive cannot restore one; the `pagehide`
+  handler is driven by dispatching the event, and the cache clause is held by
+  that construction. The drive's cache cell restores a control page first and is
+  skipped, with the browser's reasons, while it cannot.
 - A source's page reads `GET /api/sources/<name>`, which carries no secret,
   and renews through the typed client. A renewed webhook secret lives in the
   page's `renewed` state and reaches the DOM only as the copy control's value:
