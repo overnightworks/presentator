@@ -17,6 +17,7 @@ import {
 	ACCESS_TOKEN,
 	givenADeployKey,
 	JSON_ACCEPT,
+	opensALocalSource,
 	opensAnHttpsSource,
 	OWN_SOURCE,
 	ownSourceName,
@@ -99,15 +100,10 @@ test.describe('as an admin', () => {
 						if (kind === 'ssh') {
 							name = await ownSourceName(page, OWN_SOURCE);
 							await givenADeployKey(page, name);
+						} else if (kind === 'local') {
+							({ name } = await opensALocalSource(page, words, testInfo));
 						} else {
 							({ name } = await opensAnHttpsSource(page, words, testInfo));
-						}
-						if (kind === 'local') {
-							await answersWith(page, name, (view) => ({
-								...view,
-								access: 'local-folder',
-								url: '/srv/talks.git'
-							}));
 						}
 						const shell = await page.goto(sourceAddress(name));
 
@@ -135,6 +131,7 @@ test.describe('as an admin', () => {
 							await expect(access.getByRole('button')).toHaveCount(0);
 							await expect(dots).toHaveCount(1);
 						}
+						await expect(webhook.getByRole('group', { name: words.source_webhook_address })).toBeVisible();
 						await expect(webhook.getByRole('button', { name: words.source_copy })).toBeVisible();
 						await expect(page.locator('main form form')).toHaveCount(0);
 						await expectsNoHorizontalScroll(page);
@@ -348,10 +345,10 @@ test.describe('as an admin', () => {
 
 		await page.getByRole('button', { name: words.sources_fetch_now }).click();
 
-		for (const button of await page.locator('main button:not(.info)').all()) {
-			if (!(await button.evaluate((each) => each.closest('.code') !== null))) {
-				await expect(button).toBeDisabled();
-			}
+		const buttons = page.locator('main button');
+		expect(await buttons.count()).toBeGreaterThan(1);
+		for (const button of await buttons.all()) {
+			await expect(button).toBeDisabled();
 		}
 		release();
 		await answered;
@@ -505,11 +502,15 @@ test.describe('as an admin', () => {
 				state: history.state,
 				address: location.href,
 				performance: performance.getEntries().map((entry) => entry.name),
-				databases: await indexedDB.databases(),
-				caches: await caches.keys()
+				attributes: [...document.querySelectorAll('*')].flatMap((element) =>
+					element.getAttributeNames().map((each) => `${each}=${element.getAttribute(each)}`)
+				)
 			})
 		);
 		expect(kept).not.toContain(secret);
+		// The page keeps nothing in these two, so empty is the whole proof.
+		expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
+		expect(await page.evaluate(() => caches.keys())).toEqual([]);
 		expect(JSON.stringify(await context.cookies())).not.toContain(secret);
 		expect(requested.join('\n')).not.toContain(secret);
 		expect(consoleLines.join('\n')).not.toContain(secret);

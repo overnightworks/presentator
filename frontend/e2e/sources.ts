@@ -18,6 +18,8 @@ export const KEY_DRAFT_API = `${SOURCES_API}/new/key-draft`;
 export const JSON_ACCEPT = { Accept: 'application/json' };
 export const SAME_ORIGIN = { ...JSON_ACCEPT, 'Sec-Fetch-Site': 'same-origin' };
 export const ACCESS_TOKEN = 'a-read-only-token-of-this-drive';
+// The mount the drive's lobby accepts local folders under.
+const LOCAL_MOUNT = '/data/local-sources';
 const SSH_ADDRESS = 'git@git.example.invalid';
 
 // Chromium and Firefox share the default stack, so every name and address is
@@ -136,6 +138,25 @@ export async function opensAnHttpsSource(
 	const name = aName(testInfo);
 	await opensTheForm(page);
 	const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
+	await page.goto(sourceAddress(name));
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+	return { name, created };
+}
+
+/** A local-folder source made through the Add page, then opened at its own address. */
+export async function opensALocalSource(
+	page: Page,
+	words: Words,
+	testInfo: TestInfo
+): Promise<{ name: string; created: CreatedSourceView }> {
+	const name = aName(testInfo);
+	await opensTheForm(page);
+	await choosesAccess(page, words.source_access_file);
+	await page.getByLabel(words.source_name, { exact: true }).fill(name);
+	await page.getByLabel(words.source_url, { exact: true }).fill(`${LOCAL_MOUNT}/${name}`);
+	await checks(page, words);
+	await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
+	const created = await creates(page, words);
 	await page.goto(sourceAddress(name));
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
 	return { name, created };
