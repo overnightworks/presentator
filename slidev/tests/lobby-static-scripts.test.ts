@@ -57,23 +57,3 @@ describe('copy-value.js', () => {
     await vi.waitFor(() => expect(report).toHaveBeenCalledWith('Copying to the clipboard failed', refusal))
   })
 })
-
-describe('source-new.js', () => {
-  const markup = (proven: boolean) => `
-    <input type="radio" name="access" value="ssh">
-    <input type="radio" name="access" value="https" checked>
-    <button type="submit" data-create data-proven="${proven}" disabled>Create</button>`
-
-  it.each([
-    { proven: true, disabled: false },
-    { proven: false, disabled: true },
-  ])('changing access leaves create disabled=$disabled when proven=$proven', async ({ proven, disabled }) => {
-    await runScript('source-new', markup(proven))
-    const ssh = element<HTMLInputElement>('input[value="ssh"]')
-
-    ssh.checked = true
-    ssh.dispatchEvent(new Event('change'))
-
-    expect(element<HTMLButtonElement>('[data-create]').disabled).toBe(disabled)
-  })
-})

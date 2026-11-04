@@ -86,7 +86,7 @@ _LOBBY_ONLY_PAGES = [
 _LOBBY_ONLY_POSTS = [
     "/logout",
     "/auth/backchannel-logout",
-    "/settings/sources/new",
+    "/api/sources",
     "/sources/decks/fetch",
 ]
 _TALK_ORIGIN_CLAIMS = {"origin": A_TALK_ADDRESS, "sec-fetch-site": "same-origin"}
@@ -612,7 +612,7 @@ def test_the_talk_host_passes_its_own_origin_to_the_talk_files(hosts: Hosts) -> 
         pytest.param({"referer": f"{A_TALK_ADDRESS}/deck"}, id="referer only"),
     ],
 )
-@pytest.mark.parametrize("path", ["/logout", "/settings/sources/new"])
+@pytest.mark.parametrize("path", ["/logout", "/api/sources"])
 def test_the_lobby_refuses_a_form_that_the_talk_host_submitted(
     hosts: Hosts, claims: dict[str, str], path: str
 ) -> None:

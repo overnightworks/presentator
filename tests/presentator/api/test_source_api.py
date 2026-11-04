@@ -1,6 +1,5 @@
 """The Sources list, a source's page and Fetch now as data, for an admin only."""
 
-import re
 from dataclasses import replace
 from datetime import timedelta
 from http import HTTPStatus
@@ -11,7 +10,6 @@ from fastapi.testclient import TestClient
 
 from presentator.api.hooks import hook_address
 from presentator.api.source_api import SourceListView, SourceView
-from presentator.api.sources import CHECK, NEW
 from presentator.contracts.decks import (
     MANIFEST_FILE,
     SLIDES_FILE,
@@ -48,8 +46,6 @@ _SSH_ADDRESS = "git@git.example.invalid:talks.git"
 _COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _HAL = "hal-client"
 _PROBLEM = "application/problem+json"
-_FINGERPRINT = re.compile(r'name="fingerprint"\s+value="([^"]*)"')
-_HOOK_SECRET = re.compile(r"data-hook-secret>([^<]+)<")
 _JSON = {"accept": "application/json"}
 _SAME_ORIGIN = {"sec-fetch-site": "same-origin"}
 _OTHER_ID = "the-other-source"
@@ -246,29 +242,6 @@ def test_the_hook_url_takes_the_scheme_of_the_requests_own_url() -> None:
     assert SourceView.model_validate(answer.json()).hook_url == (
         f"https://{lobby.client.base_url.netloc.decode()}{hook_address('decks')}"
     )
-
-
-def test_the_page_carries_no_one_time_secret_the_jinja_page_still_shows_once() -> None:
-    client = a_signed_in_lobby()
-    form = {
-        "name": "talks",
-        "url": "https://git.example.invalid/talks.git",
-        "access": "https",
-        "secret": "a-read-only-token",
-    }
-    checked = client.post(CHECK, data=form)
-    fingerprint = _FINGERPRINT.search(checked.text)
-    assert fingerprint is not None
-    created = client.post(NEW, data={**form, "fingerprint": fingerprint.group(1)})
-
-    api_answer = client.get(_PAGE.format(name="talks"), headers=_JSON)
-    jinja_page = client.get(created.headers["location"]).text
-
-    secret = _HOOK_SECRET.search(jinja_page)
-    assert secret is not None
-    assert secret.group(1) not in api_answer.text
-    assert secret.group(1) not in client.get(_LIST, headers=_JSON).text
-    assert "a-read-only-token" not in api_answer.text
 
 
 @pytest.mark.parametrize("name", ["no-such-source"])

@@ -105,6 +105,37 @@ LobbyText.deck_unknown_explanation
 LobbyText.decks_title
 LobbyText.decks_column_deck
 
+# The words below reach a person through the Svelte Add source page alone, which
+# reads them from `/api/session`; the drive proves the page shows them.
+LobbyText.source_access
+LobbyText.source_secret_info
+LobbyText.source_webhook_later
+LobbyText.source_deploy_key_hint
+LobbyText.source_webhook
+LobbyText.source_webhook_address
+LobbyText.source_webhook_payload
+LobbyText.source_created_done
+LobbyText.source_created
+LobbyText.source_name
+LobbyText.source_url
+LobbyText.source_check
+LobbyText.source_create
+LobbyText.source_access_ssh
+LobbyText.source_access_https
+LobbyText.source_access_file
+LobbyText.source_deploy_key_heading
+LobbyText.source_webhook_once
+LobbyText.source_created_toast
+LobbyText.source_check_reachable
+LobbyText.source_refused_name
+LobbyText.source_refused_duplicate_name
+LobbyText.source_refused_duplicate_url
+LobbyText.source_refused_access
+LobbyText.source_refused_not_checked
+LobbyText.source_refused_secret_not_allowed
+LobbyText.source_refused_outside_mount
+LobbyText.source_refused_deploy_key
+
 # The words below reach a person through a Jinja template, some through a Svelte
 # page too. That a catalog carries each of them is proven by `load_lobby_text`,
 # which refuses a catalog missing any field of `LobbyText`; that a page renders
@@ -126,20 +157,11 @@ LobbyText.account_preferences
 LobbyText.account_language
 LobbyText.account_theme
 LobbyText.sources_back
-LobbyText.source_access
 LobbyText.source_secret
 LobbyText.source_secret_info_mark
-LobbyText.source_secret_info
-LobbyText.source_webhook_later
-LobbyText.source_deploy_key_hint
-LobbyText.source_webhook
-LobbyText.source_webhook_address
 LobbyText.source_webhook_secret
 LobbyText.source_webhook_held_elsewhere
 LobbyText.source_copy
-LobbyText.source_webhook_payload
-LobbyText.source_created_done
-LobbyText.source_created
 LobbyText.source_access_heading
 LobbyText.source_webhook_heading
 LobbyText.source_recent_runs
