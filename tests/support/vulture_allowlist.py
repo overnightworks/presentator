@@ -161,6 +161,15 @@ LobbyText.source_remove_confirm
 # which refuses a catalog missing any field of `LobbyText`; that a page renders
 # them is proven by the route tests.
 LobbyText.section_decks
+# `api/templates/header.html` and `base.html` render these and stay, unrendered
+# by any route, until the Jinja chrome is deleted with the last of its pages.
+LobbyText.section_settings
+LobbyText.menu_theme
+LobbyText.theme_follow_system
+LobbyText.theme_light
+LobbyText.theme_dark
+LobbyText.footer_impressum
+LobbyText.footer_datenschutz
 # The Svelte lobby's not-found board, for-admins board and Settings page read
 # these from `/api/session`, and the person menu its round button.
 LobbyText.address_unknown_title

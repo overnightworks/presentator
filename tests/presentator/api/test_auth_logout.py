@@ -23,7 +23,7 @@ from tests.support.lobby import (
     A_CLIENT_CREDENTIAL,
     a_settings,
 )
-from tests.support.sign_in_support import ADMIN, Scene, TransactionDouble, a_scene
+from tests.support.sign_in_support import Scene, TransactionDouble, a_scene
 
 _A_FORM = {"content-type": "application/x-www-form-urlencoded"}
 _END_SESSION = oidc_client_config(
@@ -342,12 +342,3 @@ def test_a_logout_by_get_is_no_logout(scene: Scene) -> None:
 
     assert answer.status_code == HTTPStatus.METHOD_NOT_ALLOWED
     assert scene.count("sessions") == 1
-
-
-def test_the_header_form_names_the_path_of_the_logout_route(
-    scene: Scene,
-) -> None:
-    scene.sign_in(groups=ADMIN)
-    signed_in_page = scene.lobby.client.get("/settings/sources").text
-
-    assert f'action="{LOGOUT_PATH}"' in signed_in_page

@@ -26,7 +26,6 @@ from presentator.application.identity import (
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
-    ENGLISH,
     USERNAME,
     Lobby,
     a_content_security_policy,
@@ -394,16 +393,6 @@ def test_a_same_site_or_schemeless_form_post_is_refused(
     assert signed_in_lobby.client.get("/").status_code == HTTPStatus.OK
 
 
-def test_the_three_stylesheets_are_linked_on_a_signed_in_page(
-    signed_in_lobby: Lobby,
-) -> None:
-    page = signed_in_lobby.client.get("/settings/sources").text
-
-    assert '<link rel="stylesheet" href="/static/pico.classless.min.css">' in page
-    assert '<link rel="stylesheet" href="/static/ui-console.css">' in page
-    assert '<link rel="stylesheet" href="/static/lobby.css">' in page
-
-
 def test_the_theme_files_are_served_without_signing_in(lobby: Lobby) -> None:
     console = lobby.client.get("/static/ui-console.css")
     leftover = lobby.client.get("/static/lobby.css")
@@ -434,31 +423,3 @@ def test_a_signed_in_page_carries_no_hex_colour_and_no_inline_style(
 
     assert not _HEX_COLOUR.search(page)
     assert "style=" not in page
-
-
-def test_the_signed_in_header_offers_the_person_and_log_out(
-    signed_in_lobby: Lobby,
-) -> None:
-    page = signed_in_lobby.client.get("/settings/sources").text
-
-    assert USERNAME in page
-    assert ENGLISH.log_out in page
-
-
-def _links_the_impressum_and_the_datenschutz(page: str) -> bool:
-    """Both footer links, the Impressum pointing at the operator's one page."""
-    return (
-        f'<a href="https://hallucinai.de/impressum">{ENGLISH.footer_impressum}</a>'
-        in page
-        and f'<a href="https://hallucinai.de/datenschutz#presentator">{ENGLISH.footer_datenschutz}</a>'
-        in page
-    )
-
-
-def test_a_signed_in_page_links_the_impressum_and_the_datenschutz(
-    signed_in_lobby: Lobby,
-) -> None:
-    page = signed_in_lobby.client.get("/settings/sources").text
-
-    assert ENGLISH.log_out in page
-    assert _links_the_impressum_and_the_datenschutz(page)

@@ -11,7 +11,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
 from pathlib import Path
-from typing import Final, cast
+from typing import Final
 
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.concurrency import run_in_threadpool
@@ -49,7 +49,7 @@ from presentator.api.decks import add_deck_pages
 from presentator.api.health import HEALTH_IS_PUBLIC, HEALTH_PATH, add_health_route
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
 from presentator.api.lobby_shell import LobbyShell
-from presentator.api.pages import TEMPLATES, Pages
+from presentator.api.pages import Pages
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
 from presentator.api.preference_api import preference_api_routes
 from presentator.api.preferences import preference_routes
@@ -162,9 +162,6 @@ _BODY_SIZE: Final = BodySizePolicy(
     ),
 )
 LOGIN_REDIRECT: Final = LOBBY_SIGN_IN.login_redirect
-# Jinja's stubs type the globals as its own defaults only, so the dict is
-# named as the mixed bag it is.
-cast("dict[str, object]", TEMPLATES.env.globals).update(logout_path=LOGOUT_PATH)
 
 
 # SvelteKit writes its accessibility announcer with this one inline style
