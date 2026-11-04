@@ -26,6 +26,7 @@ from presentator.application.identity import (
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
+    A_LOBBY_ASSET,
     USERNAME,
     Lobby,
     a_content_security_policy,
@@ -39,7 +40,7 @@ _HEX_COLOUR = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 # never a page's own location.
 _NO_DEVICE_PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=()"
 # Every one of these answers the same way whatever carried the request: a
-# page, a static file, a 404 nothing names, or an exception nothing caught.
+# page, an app asset, a 404 nothing names, or an exception nothing caught.
 _EVERY_SECURITY_HEADER = {
     "cache-control": "no-store",
     "x-content-type-options": CONTENT_TYPE_OPTIONS,
@@ -136,18 +137,6 @@ def test_a_path_only_resembling_the_hook_prefix_is_not_exempt_from_the_origin_ch
     refused = signed_in_lobby.client.post("/sourcesx/talks/fetch")
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
-
-
-def test_a_json_post_with_a_session_and_no_provenance_is_refused(
-    signed_in_lobby: Lobby,
-) -> None:
-    """#474 cell 2: a JSON POST with a session and neither header is refused."""
-    del signed_in_lobby.client.headers["sec-fetch-site"]
-
-    refused = signed_in_lobby.client.post("/theme", json={"theme": "dark"})
-
-    assert refused.status_code == HTTPStatus.FORBIDDEN
-    assert refused.json() == {"detail": "Missing Origin header"}
 
 
 def submit_the_logout_form(
@@ -310,8 +299,8 @@ def test_the_lobbys_permissions_policy_admits_no_device(
 
 @pytest.mark.parametrize(
     "path",
-    ["/", "/static/lobby.css", "/an/address/nothing/names"],
-    ids=["a signed-in page", "a static file", "a handled 404"],
+    ["/", A_LOBBY_ASSET, "/an/address/nothing/names"],
+    ids=["a signed-in page", "an app asset", "a handled 404"],
 )
 def test_every_real_answer_carries_the_full_set_of_security_headers(
     signed_in_lobby: Lobby,
@@ -393,24 +382,10 @@ def test_a_same_site_or_schemeless_form_post_is_refused(
     assert signed_in_lobby.client.get("/").status_code == HTTPStatus.OK
 
 
-def test_the_theme_files_are_served_without_signing_in(lobby: Lobby) -> None:
-    console = lobby.client.get("/static/ui-console.css")
-    leftover = lobby.client.get("/static/lobby.css")
-    pico = lobby.client.get("/static/pico.classless.min.css")
-
-    assert console.status_code == HTTPStatus.OK
-    assert "--canvas:" in console.text
-    assert "@media (prefers-color-scheme: dark)" in console.text
-    assert leftover.status_code == HTTPStatus.OK
-    assert "--pico-background-color:" in leftover.text
-    assert pico.status_code == HTTPStatus.OK
-    assert "Pico CSS" in pico.text
-
-
-def test_an_address_that_only_starts_like_a_stylesheet_still_asks_for_the_login(
+def test_a_dot_segment_beside_the_app_assets_still_asks_for_the_login(
     lobby: Lobby,
 ) -> None:
-    walked_out = lobby.client.get("/static/%2e%2e/deck/a-deck/")
+    walked_out = lobby.client.get("/_app/%2e%2e/deck/a-deck/")
 
     assert walked_out.status_code == HTTPStatus.FOUND
     assert walked_out.headers["location"] == "/login/oidc?next=%2F"

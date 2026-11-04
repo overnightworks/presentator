@@ -111,7 +111,7 @@ def test_a_websocket_into_a_deck_address_on_the_lobby_is_never_accepted(
     "address",
     [
         *(f"/deck/{A_DECK}/{shape}" for shape in _SHAPES_AROUND_A_TALK),
-        "/static/%2e%2e/deck/a-deck/",
+        "/_app/%2e%2e/deck/a-deck/",
         f"/deck/{A_DECK}",
     ],
 )

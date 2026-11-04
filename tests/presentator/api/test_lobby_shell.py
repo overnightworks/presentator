@@ -144,11 +144,12 @@ def test_account_is_an_address_no_route_claims_and_loads_the_lobby_app(
     assert "<form" not in answer.text
 
 
-def test_a_post_to_account_is_the_frameworks_not_found_and_writes_nothing(
-    signed_in_lobby: Lobby,
+@pytest.mark.parametrize("path", ["/account", "/theme"])
+def test_a_post_to_a_retired_form_address_is_the_frameworks_not_found(
+    signed_in_lobby: Lobby, path: str
 ) -> None:
     answer = signed_in_lobby.client.post(
-        "/account", data={"language": "de", "theme": ThemeChoice.DARK.value}
+        path, data={"language": "de", "theme": ThemeChoice.DARK.value}
     )
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
@@ -161,7 +162,6 @@ def test_a_post_to_account_is_the_frameworks_not_found_and_writes_nothing(
         "/api/no-such-route",
         "/_app/no-such-asset.js",
         "/auth/no-such-step",
-        "/static/no-such-sheet.css",
         "/setup",
     ],
 )

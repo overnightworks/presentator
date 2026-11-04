@@ -6,13 +6,14 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.adapters.preferences import SqlitePersonPreferencesStore
 from presentator.adapters.schema import create_tables
 from presentator.api.auth import LOGOUT_PATH, START_SIGN_IN_PATH
-from presentator.api.session_api import SessionView
+from presentator.api.session_api import SessionView, appearance_of
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.preferences import PersonPreferences, ThemeChoice
 from presentator.contracts.text import Catalogs
@@ -29,6 +30,7 @@ from tests.support.lobby import (
     Lobby,
     a_lobby,
     a_lobby_that_claims_no_origin_of_its_own,
+    a_preferences,
 )
 from tests.support.sign_in_support import ADMIN, MEMBER, Scene, a_scene
 
@@ -48,6 +50,21 @@ def a_german_lobby() -> Lobby:
 
 def choose(lobby: Lobby, *, theme: ThemeChoice) -> None:
     lobby.client.put("/api/account", json={"theme": theme.value})
+
+
+def test_the_appearance_of_a_request_is_the_theme_its_person_chose() -> None:
+    people = FakePersonPreferencesStore()
+    lobby = a_lobby(person_preferences=people)
+    lobby.sign_in()
+    choose(lobby, theme=ThemeChoice.DARK)
+
+    @lobby.app.get("/an-address-that-reads-its-appearance")
+    def reads_its_appearance(request: Request) -> str:
+        return appearance_of(request, a_preferences(people=people)).theme.value
+
+    answer = lobby.client.get("/an-address-that-reads-its-appearance")
+
+    assert answer.json() == ThemeChoice.DARK.value
 
 
 def test_a_signed_out_caller_gets_the_instances_words_and_theme_and_no_person() -> None:

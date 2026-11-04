@@ -80,7 +80,7 @@ _LOBBY_ONLY_PAGES = [
     "/settings",
     "/settings/sources",
     "/login",
-    "/static/lobby.css",
+    A_LOBBY_ASSET,
     "/login/talk/no-access",
 ]
 _LOBBY_ONLY_POSTS = [

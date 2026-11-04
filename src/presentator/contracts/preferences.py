@@ -36,8 +36,3 @@ class Appearance:
 
     text: LobbyText
     theme: ThemeChoice
-
-    @property
-    def explicit_theme(self) -> ThemeChoice | None:
-        """Nothing while the theme follows the system, so the browser decides."""
-        return None if self.theme is ThemeChoice.FOLLOW_SYSTEM else self.theme
