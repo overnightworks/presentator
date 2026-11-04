@@ -406,17 +406,6 @@ test.describe('the links to pages that are still Jinja', () => {
 		await expect(page.locator('#svelte-announcer')).toHaveCount(0);
 	}
 
-	test('the Settings link leaves the app by a document navigation to the Jinja page', async ({ page }) => {
-		const { words } = await sessionOf(page);
-		await page.goto('/');
-
-		await leavesTheApp(
-			page,
-			() => page.getByRole('link', { name: words.section_settings }).click(),
-			'/settings'
-		);
-	});
-
 	test('a deck row links to its page by a document navigation', async ({ page, signedIn }) => {
 		await page.goto('/');
 

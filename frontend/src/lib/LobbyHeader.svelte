@@ -18,9 +18,7 @@
 		>
 		{#if person.role === 'admin'}
 			<a
-				href="/settings"
-				rel="external"
-				data-sveltekit-reload
+				href={resolve('/(lobby)/settings')}
 				aria-current={ariaCurrent(pathname, 'settings')}>{words.section_settings}</a
 			>
 		{/if}
