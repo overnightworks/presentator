@@ -21,13 +21,14 @@ from presentator.contracts.copresenter import (
     AccessRefusal,
     AnswerEvent,
     AskedDeck,
+    AskingPerson,
     Audio,
     CoPresenterReadiness,
     CoPresenterUnavailableError,
-    PersonToken,
     Question,
 )
 from presentator.contracts.decks import is_a_plain_folder_name
+from presentator.contracts.models import Role
 from presentator.contracts.voice import SampleLanguage
 from presentator.ports.clock import Clock
 from presentator.ports.copresenter import (
@@ -49,10 +50,10 @@ _MILLISECONDS = 1000
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PreparedAsk:
-    """An ask whose person's token is in hand, and when it began."""
+    """An ask whose person's groups are in hand, and when it began."""
 
     asked: AskedDeck
-    person: PersonToken
+    person: AskingPerson
     started: float
 
 
@@ -99,16 +100,17 @@ class CoPresenterUse:
         return await self.speech.readiness()
 
     async def prepare(
-        self, asked: AskedDeck, session_id: str
+        self, asked: AskedDeck, *, session_id: str, subject: str, role: Role
     ) -> PreparedAsk | AccessRefusal:
-        """Fetch the session's fresh person token, before anything is streamed.
+        """Read the asking person's groups now, before anything is streamed.
 
-        Raises CoPresenterUnavailableError when the token source fails.
+        Raises CoPresenterUnavailableError when the groups cannot be read.
         """
         started = self.monotonic()
-        person = await self.person_access.fresh(session_id)
-        if isinstance(person, AccessRefusal):
-            return person
+        groups = await self.person_access.groups_of(session_id)
+        if isinstance(groups, AccessRefusal):
+            return groups
+        person = AskingPerson(subject=subject, role=role, groups=groups)
         return PreparedAsk(asked=asked, person=person, started=started)
 
     @asynccontextmanager
@@ -123,11 +125,8 @@ class CoPresenterUse:
             raise CoPresenterUnavailableError
         language = spoken_language(question.language, deck_text.language)
 
-        async def person_token() -> str:  # NOSONAR(S7503) TokenSource is awaited
-            return prepared.person.value
-
         async with self.answers.answer(
-            message=user_message(question, deck_text), person_token=person_token
+            message=user_message(question, deck_text), person=prepared.person
         ) as texts:
             events = spoken_events(texts, self.boundaries, self.speaking, language)
             async with aclosing(self._timed(events, prepared.started)) as timed:

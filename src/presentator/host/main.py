@@ -21,8 +21,6 @@ from webauth.oidc import OidcClientConfig, OidcRelyingParty
 from webauth.proxies import TrustedProxies
 from webauth.rate_limit import SingleProcessRateLimitBackend
 
-from presentator.adapters.agent_service import ServiceAnswerer
-from presentator.adapters.agent_tokens import PersonAccessTokens, WorkloadToken
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.build_worker import WorkerToolchain
 from presentator.adapters.builds import (
@@ -68,6 +66,7 @@ from presentator.adapters.secrets import (
 )
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.speech import UdsSpeaking, UdsSpeechHearing
+from presentator.agent.backend import SessionGroups, gateway_answerer
 from presentator.api.auth import (
     InstalledAuth,
     LobbyPrivate,
@@ -276,22 +275,17 @@ def _copresenter_surface(
     auth: InstalledAuth,
     mirrors: SourceMirrors,
 ) -> CoPresenterSurface:
-    """What only a signed-in admin may reach at the talk host: the agent service."""
+    """What only a signed-in admin may reach at the talk host: the gateway's answers."""
     return CoPresenterSurface(
         use=CoPresenterUse(
-            answers=ServiceAnswerer(
-                origin=settings.agent_service,
-                workload_token=WorkloadToken(
-                    auth.relying_party, (settings.agent_service_scope,)
-                ),
-            ),
+            answers=gateway_answerer(settings.agent, auth.relying_party),
             speech=UdsSpeechHearing(settings.speech_socket),
             decks=decks.store,
             sources=decks.sources,
             texts=MirroredDeckTexts(mirrors=mirrors),
             boundaries=split_sentences,
             speaking=UdsSpeaking(settings.speech_socket),
-            person_access=PersonAccessTokens(auth.relying_party, sessions, auth.config),
+            person_access=SessionGroups(auth.relying_party, sessions, auth.config),
         ),
         limiter=AskLimiter(clock=SystemClock()),
         browser_origin=settings.talk_origin,

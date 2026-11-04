@@ -1,13 +1,14 @@
 """Provider-neutral values carried by the authenticated co-presenter path."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 
 from presentator.contracts.decks import Deck, Source
+from presentator.contracts.models import Role
 
 
 class CoPresenterUnavailableError(RuntimeError):
-    """The private service refused or could not satisfy an operation."""
+    """The private service or the gateway refused or could not satisfy an operation."""
 
     def __str__(self) -> str:
         """Keep the expected failure provider-neutral."""
@@ -15,22 +16,24 @@ class CoPresenterUnavailableError(RuntimeError):
 
 
 class NotEnabledError(CoPresenterUnavailableError):
-    """The service does not answer this person: they are not enabled for it."""
+    """The gateway does not answer this person: they are not enabled for it."""
 
 
 class AccessRefusal(Enum):
-    """Why a session yields no access token for the agent service."""
+    """Why a session yields no groups to answer a question for."""
 
     SIGN_IN_AGAIN = auto()
     SESSION_ENDED = auto()
     ISSUER_UNAVAILABLE = auto()
 
 
-@dataclass(frozen=True, slots=True)
-class PersonToken:
-    """A person's access token; neither `repr` nor `str` shows it."""
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AskingPerson:
+    """The signed-in person who asks: their account, their role and their groups now."""
 
-    value: str = field(repr=False)
+    subject: str
+    role: Role
+    groups: frozenset[str]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

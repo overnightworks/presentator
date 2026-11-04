@@ -36,13 +36,15 @@ export PRESENTATOR_TALK_ORIGIN=https://presentator-talk.example.test
 export PRESENTATOR_OIDC_ISSUER=https://auth.example.test/realms/example
 export PRESENTATOR_OIDC_CLIENT_ID=presentator
 export PRESENTATOR_OIDC_CLIENT_SECRET_FILE=/run/user/"$(id -u)"/presentator/oidc-client-secret
-export PRESENTATOR_AGENT_SERVICE=http://agent-service:8080
-export PRESENTATOR_AGENT_SERVICE_SCOPE=agent-service-audience
+export PRESENTATOR_AGENT__BACKEND=litellm
+export PRESENTATOR_AGENT__GATEWAY__ORIGIN=http://litellm-front:4000
+export PRESENTATOR_AGENT__GATEWAY__KEY_FILE=/run/user/"$(id -u)"/presentator/litellm-key
+export PRESENTATOR_AGENT__API_GROUP=/services/agent-service/api
 export PRESENTATOR_BUILD_RUNNER=host
 uv run presentator
 ```
 
-The co-presenter cannot answer from a checkout: the agent service sits on the
+The co-presenter cannot answer from a checkout: the gateway sits on the
 `hal_agent_presentator` network, which has no host address and publishes no port, so every
 ask ends in an `error` event.
 

@@ -13,7 +13,7 @@ dependencies = [
     "fastapi==0.162.0",
     "httpx2[ws]==2.16.0",
     "jinja2==3.1.6",
-    "overnightworks-agent-runtime-client @ git+https://github.com/overnightworks/agent-runtime@v0.13.0#subdirectory=packages/client",
+    "overnightworks-agent-runtime-client[backend] @ git+https://github.com/overnightworks/agent-runtime@v0.20.0#subdirectory=packages/client",
     "overnightworks-webauth @ git+https://github.com/overnightworks/webauth@v0.29.0",
     "pydantic-settings==2.16.2",
     "python-multipart==0.0.32",
@@ -161,7 +161,7 @@ layers = ["host", "api", "application", "ports", "contracts"]
 id = "adapters-reach-down-only"
 name = "Adapters never reach up into application, api, or host"
 type = "forbidden"
-source_modules = ["presentator.adapters"]
+source_modules = ["presentator.adapters", "presentator.agent"]
 forbidden_modules = [
     "presentator.application",
     "presentator.api",
@@ -179,7 +179,7 @@ source_modules = [
     "presentator.ports",
     "presentator.contracts",
 ]
-forbidden_modules = ["presentator.adapters"]
+forbidden_modules = ["presentator.adapters", "presentator.agent"]
 as_packages = true
 
 [[tool.importlinter.contracts]]

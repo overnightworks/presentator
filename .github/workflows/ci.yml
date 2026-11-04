@@ -542,19 +542,22 @@ jobs:
         with:
           persist-credentials: false
 
-      # Compose mounts both secrets from the runner's home as file secrets;
+      # Compose mounts the three secrets from the runner's home as file secrets;
       # the container's user reads them, so the files are world-readable and
       # the directories above them stay private.
       - name: Write the throwaway secret files
         run: |
           key=$(openssl rand -hex 32)
           client_secret=$(openssl rand -hex 32)
+          gateway_key=$(openssl rand -hex 32)
           echo "::add-mask::$key"
           echo "::add-mask::$client_secret"
-          mkdir -m 0700 -p "$HOME/.secrets/presentator" "$HOME/.secrets/keycloak/clients"
-          chmod 0700 "$HOME/.secrets" "$HOME/.secrets/keycloak"
+          echo "::add-mask::$gateway_key"
+          mkdir -m 0700 -p "$HOME/.secrets/presentator" "$HOME/.secrets/keycloak/clients" "$HOME/.secrets/litellm/apps"
+          chmod 0700 "$HOME/.secrets" "$HOME/.secrets/keycloak" "$HOME/.secrets/litellm"
           (umask 0133 && printf '%s\n' "$key" > "$HOME/.secrets/presentator/secret-key")
           (umask 0133 && printf '%s\n' "$client_secret" > "$HOME/.secrets/keycloak/clients/presentator")
+          (umask 0133 && printf '%s\n' "$gateway_key" > "$HOME/.secrets/litellm/apps/presentator")
 
       - name: Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
