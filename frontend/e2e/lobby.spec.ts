@@ -14,7 +14,7 @@ async function showsTheSignInBoard(page: Page, session: SessionView): Promise<vo
 	);
 }
 
-async function showsAServerRenderedPage(page: Page, session: SessionView): Promise<void> {
+async function showsALobbyPage(page: Page, session: SessionView): Promise<void> {
 	await expect(
 		page.getByRole('link', { name: session.words.section_decks, exact: true })
 	).toBeVisible();
@@ -79,39 +79,19 @@ test("SvelteKit's announcer is there and visually hidden", async ({ page }) => {
 test.describe('signed in as an admin', () => {
 	test.use({ person: { role: 'admin' } });
 
-	test('Svelte, Jinja and Svelte again, then back and forward across them', async ({ page }) => {
-		const session = await sessionOf(page);
-
-		await page.goto('/login');
-		await showsTheSignInBoard(page, session);
-		await page.goto(SOURCES_PAGE);
-		await showsAServerRenderedPage(page, session);
-		await page.goto('/login');
-		await showsTheSignInBoard(page, session);
-
-		await page.goBack();
-		await showsAServerRenderedPage(page, session);
-		await page.goBack();
-		await showsTheSignInBoard(page, session);
-		await page.goForward();
-		await showsAServerRenderedPage(page, session);
-		await page.goForward();
-		await showsTheSignInBoard(page, session);
-	});
-
-	test('back and forward across a Jinja page and a refusal land on the right page', async ({
+	test('back and forward across a lobby page and a refusal land on the right page', async ({
 		page
 	}) => {
 		const session = await sessionOf(page);
 
 		await page.goto(SOURCES_PAGE);
-		await showsAServerRenderedPage(page, session);
+		await showsALobbyPage(page, session);
 		await page.goto('/login/login-failed');
 		await expect(page).toHaveURL(/\/login\/login-failed$/);
 		await expect(page.locator('.signin [role=alert]')).toBeVisible();
 
 		await page.goBack();
-		await showsAServerRenderedPage(page, session);
+		await showsALobbyPage(page, session);
 		await page.goForward();
 		await expect(page).toHaveURL(/\/login\/login-failed$/);
 		await expect(page.locator('.signin [role=alert]')).toBeVisible();

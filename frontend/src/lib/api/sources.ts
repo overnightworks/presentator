@@ -1,4 +1,12 @@
-import { Declined, getJson, postJson } from '#lib/api/client.ts';
+import {
+	Declined,
+	deleteJson,
+	getJson,
+	postJson,
+	RemovalRefused,
+	RemovalStale,
+	type RemovalCounts
+} from '#lib/api/client.ts';
 import type { components } from '#lib/api/types.ts';
 
 export type AccessRenewal = components['schemas']['AccessRenewal'];
@@ -8,15 +16,18 @@ export type CreatedSourceView = components['schemas']['CreatedSourceView'];
 export type KeyDraftView = components['schemas']['KeyDraftView'];
 export type NewSource = components['schemas']['NewSource'];
 export type SourceProbe = components['schemas']['SourceProbe'];
+export type SourceRemovalPreview = components['schemas']['SourceRemovalPreview'];
 export type SourceRunFailure = components['schemas']['SourceRunFailure'];
 export type SourceRunView = components['schemas']['SourceRunView'];
+export type SourceSummary = components['schemas']['SourceSummary'];
 export type SourceState = components['schemas']['SourceState'];
 export type SourceView = components['schemas']['SourceView'];
 export type WebhookSecretView = components['schemas']['WebhookSecretView'];
 
 // `new` is the name no source can have, so the address is never a source's own.
 const NEW_SOURCE_PATH = '/api/sources/new';
-const SOURCES_PATH = '/api/sources';
+/** The address of the list's JSON, which the list re-reads by invalidating it. */
+export const SOURCES_PATH = '/api/sources';
 
 type Here = Pick<Location, 'pathname' | 'search'>;
 
@@ -73,4 +84,43 @@ export async function renewAccess(
 /** Mints a new webhook secret; the answer is the one place it is shown. */
 export function renewWebhook(fetcher: typeof fetch, name: string): Promise<WebhookSecretView> {
 	return postJson<WebhookSecretView>(fetcher, `${sourcePath(name)}/webhook-secret`, undefined);
+}
+
+/** Every source of the instance, in the list's order. */
+export async function readSources(fetcher: typeof fetch, here: Here): Promise<SourceSummary[]> {
+	return (await getJson<{ sources: SourceSummary[] }>(fetcher, SOURCES_PATH, here)).sources;
+}
+
+/** What removing that source would take with it; deletes nothing. */
+export function previewRemoval(fetcher: typeof fetch, name: string): Promise<SourceRemovalPreview> {
+	return getJson<SourceRemovalPreview>(fetcher, `${sourcePath(name)}/removal`);
+}
+
+/**
+ * Removes the source with the counts a person confirmed. A source whose counts
+ * changed answers "stale" with the current ones and keeps everything; a mirror
+ * or build that would not go answers "refused" and keeps every row; any other
+ * failure propagates.
+ */
+export async function removeSource(
+	fetcher: typeof fetch,
+	name: string,
+	counts: RemovalCounts
+): Promise<'removed' | 'refused' | { stale: RemovalCounts }> {
+	const query = new URLSearchParams({
+		deck_count: String(counts.deck_count),
+		run_count: String(counts.run_count)
+	});
+	try {
+		await deleteJson<undefined>(fetcher, `${sourcePath(name)}?${query}`);
+		return 'removed';
+	} catch (error_) {
+		if (error_ instanceof RemovalStale) {
+			return { stale: error_.counts };
+		}
+		if (error_ instanceof RemovalRefused) {
+			return 'refused';
+		}
+		throw error_;
+	}
 }

@@ -241,7 +241,7 @@ test.describe('the theme', () => {
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 	});
 
-	test('shows on a Jinja page, keeps the stored theme, and follows the device again', async ({
+	test('shows on a page loaded as a document, keeps the stored theme, and follows the device again', async ({
 		page
 	}) => {
 		const backgroundOf = () =>
@@ -339,7 +339,7 @@ test.describe('sentence 6', () => {
 test.describe('sentence 4', () => {
 	test.use({ person: { role: 'admin', decks: [aDeck()] } });
 
-	test('walks back and forward across Svelte, Jinja, Svelte and a refusal board', async ({
+	test('walks back and forward across lobby pages and a refusal board', async ({
 		page
 	}) => {
 		const { words } = await sessionOf(page);
@@ -397,18 +397,17 @@ test.describe('sentence 4', () => {
 test.describe('the empty card of an admin', () => {
 	test.use({ person: { role: 'admin' } });
 
-	test('links Sources by a document navigation', async ({ page }) => {
+	test('links Sources by a client navigation', async ({ page }) => {
 		const { words } = await sessionOf(page);
 		await page.goto('/');
+		await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
 
-		const [answer] = await Promise.all([
-			page.waitForResponse((received) => new URL(received.url()).pathname === '/settings/sources'),
-			page.getByRole('link', { name: words.decks_empty_explanation }).click()
-		]);
+		await page.getByRole('link', { name: words.decks_empty_explanation }).click();
 
-		expect(answer.request().isNavigationRequest()).toBe(true);
-		expect(answer.status()).toBe(200);
-		await expect(page.locator('#svelte-announcer')).toHaveCount(0);
+		await expect(page).toHaveURL(/\/settings\/sources$/);
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_sources);
+		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
+		await expect(page.locator('#svelte-announcer')).toHaveCount(1);
 	});
 });
 

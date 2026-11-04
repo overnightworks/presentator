@@ -11,7 +11,6 @@ from presentator.api.pages import Pages
 from presentator.application.preferences import Preferences
 from presentator.contracts.preferences import PersonPreferences, ThemeChoice
 
-SETTINGS: Final = "/settings"
 THEME: Final = "/theme"
 
 
