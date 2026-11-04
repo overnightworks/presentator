@@ -209,9 +209,13 @@
               }
             ],
             "title": "Fingerprint"
+          },
+          "state": {
+            "$ref": "#/components/schemas/SourceState"
           }
         },
         "required": [
+          "state",
           "failure",
           "commit",
           "detail",
@@ -1685,6 +1689,16 @@
             "title": "Name",
             "type": "string"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceRunFailure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "state": {
             "$ref": "#/components/schemas/SourceState"
           },
@@ -1698,6 +1712,7 @@
           "url",
           "access",
           "state",
+          "reason",
           "fetched_at"
         ],
         "title": "SourceSummary",
@@ -1754,6 +1769,16 @@
             ],
             "title": "Public Key"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceRunFailure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "runs": {
             "items": {
               "$ref": "#/components/schemas/SourceRunView"
@@ -1774,6 +1799,7 @@
           "url",
           "access",
           "state",
+          "reason",
           "fetched_at",
           "hook_url",
           "public_key",

@@ -163,38 +163,32 @@ test.describe('as an admin', () => {
 	});
 
 	const markup = '<b onclick="alert(1)">not found</b> & gone';
-	const failures: {
-		failure: NonNullable<ConnectionCheckView['failure']>;
-		sentence: (words: Words) => string;
-		detail: string | null;
-	}[] = [
-		{ failure: 'refused', sentence: (words) => words.source_run_refused, detail: null },
-		{ failure: 'unreachable', sentence: (words) => words.source_run_unreachable, detail: null },
-		{ failure: 'failed', sentence: (words) => words.source_run_failed, detail: markup },
-		{
-			failure: 'credential-unresolvable',
-			sentence: (words) => words.source_run_secret,
-			detail: null
-		}
+	const failures: [
+		NonNullable<ConnectionCheckView['failure']>,
+		ConnectionCheckView['state'],
+		keyof Words,
+		string | null
+	][] = [
+		['refused', 'refused', 'source_run_refused', null],
+		['unreachable', 'error', 'source_run_unreachable', null],
+		['failed', 'failed', 'source_run_failed', markup],
+		['credential-unresolvable', 'error', 'source_run_secret', null]
 	];
-	for (const { failure, sentence, detail } of failures) {
+	for (const [failure, state, sentence, detail] of failures) {
 		test(`a ${failure} check shows its reason, git's line as text and leaves Create disabled`, async ({
 			page
 		}, testInfo) => {
 			const { words } = await sessionOf(page);
 			const name = aName(testInfo);
 			await opensTheForm(page);
-			await page.route(`**${CHECK_API}`, (route) =>
-				route.fulfill({
-					json: { commit: null, detail, failure, fingerprint: null } satisfies ConnectionCheckView
-				})
-			);
+			const answer: ConnectionCheckView = { commit: null, detail, failure, fingerprint: null, state };
+			await page.route(`**${CHECK_API}`, (route) => route.fulfill({ json: answer }));
 			await fillsTheForm(page, words, { name, url: anHttpsAddress(name) });
 
 			await checks(page, words);
 
 			const banner = page.locator('.banner[data-banner="fail"]');
-			await expect(banner).toContainText(sentence(words));
+			await expect(banner).toContainText(words[sentence]);
 			if (detail === null) {
 				await expect(banner.locator('samp')).toHaveCount(0);
 			} else {
