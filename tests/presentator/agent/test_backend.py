@@ -60,6 +60,7 @@ LOGGER = "presentator.agent.backend"
 WIRE_VECTOR = "fp-2db44d96ffdef38f9e1cbfe73e9cf248fb66955b894846b34843a2d3a849d764"
 AN_ISSUER_OF_THE_VECTOR = "https://issuer.example"
 THE_QUESTION = "Was steht auf Folie zwei?"
+A_PERSON_TOKEN = "person-token-MARKER"
 
 
 def a_person(*, groups: frozenset[str] = frozenset({AN_API_GROUP})) -> AskingPerson:
@@ -193,14 +194,17 @@ class EchoingTransport(httpx2.MockTransport):
 async def test_what_the_gateway_echoes_reaches_no_exception_text_or_log_record(
     through: str, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """C10: the key, the subject, the groups and the question stay out of errors."""
+    """C10: the key, token, subject, groups and question stay out of errors."""
     caplog.set_level(logging.DEBUG)
     person = AskingPerson(
         subject="subject-MARKER",
         role=Role.ADMIN,
         groups=frozenset({AN_API_GROUP, "/group-MARKER"}),
     )
-    echoed = f"{A_GATEWAY_KEY} {person.subject} /group-MARKER {THE_QUESTION}"
+    echoed = (
+        f"{A_GATEWAY_KEY} {A_PERSON_TOKEN} {person.subject} /group-MARKER "
+        f"{THE_QUESTION}"
+    )
     transport: httpx2.AsyncBaseTransport = (
         FakeGateway(Reply(500, body=echoed.encode()))
         if through == "reply"
@@ -211,7 +215,13 @@ async def test_what_the_gateway_echoes_reaches_no_exception_text_or_log_record(
         await spoken(answerer_over(transport), person)
 
     shown = everything_shown(caplog.records, errors=[stopped.value])
-    for marker in (A_GATEWAY_KEY, person.subject, "/group-MARKER", THE_QUESTION):
+    for marker in (
+        A_GATEWAY_KEY,
+        A_PERSON_TOKEN,
+        person.subject,
+        "/group-MARKER",
+        THE_QUESTION,
+    ):
         assert marker not in shown
 
 
