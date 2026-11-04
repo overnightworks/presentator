@@ -511,6 +511,65 @@ test.describe('as an admin', () => {
 		expect(await sourceNames(page)).not.toContain(name);
 	});
 
+	// Cell 24c.
+	test('a DELETE answered while another navigation is still loading changes neither the history nor the notice', async ({
+		page
+	}, testInfo) => {
+		const { words } = await sessionOf(page);
+		const { name } = await opensAnHttpsSource(page, words, testInfo);
+		await opensTheDialog(page, words);
+		const held = await holdsTheDelete(page, name);
+		await confirmOf(page, words).click();
+		await expect.poll(() => held.seen.length).toBe(1);
+		await page.keyboard.press('Escape');
+		await expect(dialogOf(page)).toBeHidden();
+		let releaseLoad!: () => void;
+		const loadGate = new Promise<void>((resolve) => (releaseLoad = resolve));
+		let loadHeld = false;
+		await page.route(
+			(url) => url.pathname === '/api/settings',
+			async (route: Route) => {
+				loadHeld = true;
+				await loadGate;
+				await route.continue();
+			}
+		);
+		const entries = await entriesOf(page);
+
+		await tabsOf(page, words).getByRole('link', { name: words.settings_title }).click();
+		await expect.poll(() => loadHeld).toBe(true);
+		const removed = page.waitForResponse(
+			(received) => received.url().includes(`${SOURCES_API}/${name}?`) && received.status() === 204
+		);
+		held.release();
+		await removed;
+		// Two frames let the page act on the answer before the held load goes on.
+		await page.evaluate(
+			() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
+		);
+		releaseLoad();
+
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_title);
+		await expect(page).toHaveURL(/\/settings$/);
+		expect(await entriesOf(page)).toBe(entries + 1);
+		await tabsOf(page, words).getByRole('link', { name: words.settings_sources }).click();
+		await expect(page).toHaveURL(SOURCES_LIST);
+		await expect(page.locator('output.toast')).toHaveCount(0);
+		expect(await sourceNames(page)).not.toContain(name);
+	});
+
+	// Cell 24d.
+	test('hiding the page closes the removal dialog', async ({ page }, testInfo) => {
+		const { words } = await sessionOf(page);
+		await opensAnHttpsSource(page, words, testInfo);
+		await opensTheDialog(page, words);
+		await expect(dialogOf(page)).toBeVisible();
+
+		await page.evaluate(() => dispatchEvent(new Event('pagehide')));
+
+		await expect(dialogOf(page)).toBeHidden();
+	});
+
 	// Cell 25.
 	for (const step of ['the preview', 'the DELETE'] as const) {
 		test(`with the session ended, ${step} leaves for the sign-in once with the source address as next`, async ({

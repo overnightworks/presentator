@@ -124,11 +124,14 @@
 		});
 
 	// A page kept by the back/forward cache is shown again as it was left, so it
-	// leaves nothing to show: what was typed and what was shown are gone first.
+	// leaves nothing to show: what was typed, shown and asked is gone first.
 	function forget(): void {
 		renewed = null;
 		typed = '';
 		declined = false;
+		counts = null;
+		refused = false;
+		dialog.close();
 		flushSync();
 	}
 </script>
