@@ -1,0 +1,7 @@
+claim_id = "9bc1eea1377f4f0a9995d7ac506cb13a"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "32f8baa45704bf239cf5e7c6944c339e4640f244"
+branch = "claude/issue-776-line-11-of-the-privacy-section-leaves-th"
+scope = ["legal/datenschutz.html"]
+opened_commit = "a633c01bb5133b3af498060b6fdfd70487001e2c"
