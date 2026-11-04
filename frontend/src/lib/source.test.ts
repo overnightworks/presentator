@@ -44,6 +44,7 @@ const probe = (overrides: Partial<ConnectionCheckView>): ConnectionCheckView => 
 	detail: null,
 	failure: null,
 	fingerprint: null,
+	state: 'reachable',
 	...overrides
 });
 

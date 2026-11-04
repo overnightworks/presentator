@@ -226,19 +226,36 @@ test.describe('as an admin', () => {
 	const markup = '<b onclick="alert(1)">not found</b> & gone';
 	const failures: {
 		failure: NonNullable<ConnectionCheckView['failure']>;
+		state: ConnectionCheckView['state'];
 		sentence: (words: Words) => string;
 		detail: string | null;
 	}[] = [
-		{ failure: 'refused', sentence: (words) => words.source_run_refused, detail: null },
-		{ failure: 'unreachable', sentence: (words) => words.source_run_unreachable, detail: null },
-		{ failure: 'failed', sentence: (words) => words.source_run_failed, detail: markup },
+		{
+			failure: 'refused',
+			state: 'refused',
+			sentence: (words) => words.source_run_refused,
+			detail: null
+		},
+		{
+			failure: 'unreachable',
+			state: 'error',
+			sentence: (words) => words.source_run_unreachable,
+			detail: null
+		},
+		{
+			failure: 'failed',
+			state: 'failed',
+			sentence: (words) => words.source_run_failed,
+			detail: markup
+		},
 		{
 			failure: 'credential-unresolvable',
+			state: 'error',
 			sentence: (words) => words.source_run_secret,
 			detail: null
 		}
 	];
-	for (const { failure, sentence, detail } of failures) {
+	for (const { failure, state, sentence, detail } of failures) {
 		test(`a ${failure} check shows its reason, git's line as text and leaves Create disabled`, async ({
 			page
 		}, testInfo) => {
@@ -247,7 +264,13 @@ test.describe('as an admin', () => {
 			await opensTheForm(page);
 			await page.route(`**${CHECK_API}`, (route) =>
 				route.fulfill({
-					json: { commit: null, detail, failure, fingerprint: null } satisfies ConnectionCheckView
+					json: {
+						commit: null,
+						detail,
+						failure,
+						fingerprint: null,
+						state
+					} satisfies ConnectionCheckView
 				})
 			);
 			await fillsTheForm(page, words, { name, url: anHttpsAddress(name) });
