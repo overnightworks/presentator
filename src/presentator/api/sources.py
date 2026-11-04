@@ -27,6 +27,7 @@ from presentator.contracts.decks import (
 from presentator.contracts.text import LobbyText
 
 SOURCES: Final = f"{SETTINGS}/sources"
+REMOVAL_TEMPLATE: Final = "source_remove.html"
 FETCH: Final = f"{SOURCES}/{{name}}/fetch"
 REMOVE: Final = f"{SOURCES}/{{name}}/remove"
 REMOVE_CONFIRMED: Final = f"{SOURCES}/{{name}}/remove/confirmed"
@@ -105,7 +106,7 @@ class _Surfaces:
         text = self.pages.appearance(request).text
         return self.pages.page(
             request,
-            "source_remove.html",
+            REMOVAL_TEMPLATE,
             removal=_removal_view(removal, text),
         )
 
@@ -137,7 +138,7 @@ class _Surfaces:
         if isinstance(outcome, SourceRemovalStale):
             return self.pages.page(
                 request,
-                "source_remove.html",
+                REMOVAL_TEMPLATE,
                 removal=_removal_view(outcome.current, text),
             )
         if isinstance(outcome, SourceRemovalRefused):
@@ -146,7 +147,7 @@ class _Surfaces:
                 return Response(status_code=HTTPStatus.NOT_FOUND)
             return self.pages.page(
                 request,
-                "source_remove.html",
+                REMOVAL_TEMPLATE,
                 removal=_removal_view(removal, text),
                 refused=text.source_remove_refused,
             )

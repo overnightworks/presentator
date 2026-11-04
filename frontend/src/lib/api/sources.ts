@@ -62,11 +62,11 @@ export async function renewAccess(
 ): Promise<'declined' | undefined> {
 	try {
 		await postJson<undefined, AccessRenewal>(fetcher, `${sourcePath(name)}/access`, { secret });
-	} catch (failure) {
-		if (failure instanceof Declined) {
+	} catch (error_) {
+		if (error_ instanceof Declined) {
 			return 'declined';
 		}
-		throw failure;
+		throw error_;
 	}
 }
 

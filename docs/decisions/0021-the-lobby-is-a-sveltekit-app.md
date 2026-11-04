@@ -56,11 +56,11 @@ interaction became a template, a fragment and a form route.
   `/`, is the first page in the group; the deck page at `/deck/{slug}` is the
   second, and it draws its own unknown-deck board for a 404. Settings General,
   Add source (`/settings/sources/new`) and a source's own page
-  (`/settings/sources/<name>`) are the pages below them. A 401 from any read or write leaves the
-  app by a document navigation to the sign-in with the current address as
-  `next`, and its promise never settles, so no error page shows on the way
-  out. A load names its own `url` as `next`, because it runs before the
-  address commits.
+  (`/settings/sources/<name>`) are the pages below them. A 401 from any read
+  or write leaves the app by a document navigation to the sign-in with the
+  current address as `next`, and its promise never settles, so no error page
+  shows on the way out. A load names its own `url` as `next`, because it runs
+  before the address commits.
 - A 404 or 403 from the API becomes SvelteKit's `error()` with its status, and
   any other refusal fails loud. The root `+error.svelte` shows the lobby's
   header and the unknown-address words, answered at 200 by the shell. There is
