@@ -238,12 +238,25 @@ class Scenario:
     headers: Mapping[str, str] = field(default_factory=dict[str, str])
 
 
+def the_fakes_of(scenario: Scenario) -> PrivateFakes:
+    fakes = PrivateFakes()
+    fakes.speaking.fails_at = scenario.speaking_fails_at
+    return fakes
+
+
+def arrange_the_issuer(hosts: Hosts, scenario: Scenario) -> None:
+    hosts.issuer.issue_person_access_token(ACCESS)
+    hosts.issuer.rotate_refresh_token_to(ROTATED)
+    if scenario.refresh_token is not None:
+        hosts.issuer.issue_refresh_token(scenario.refresh_token)
+    scenario.arrange(hosts)
+
+
 def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
     """Sign an admin in at the talk host, then ask once."""
     gateway = scenario.gateway()
     limiter = RecordingLimiter(clock=FrozenClock(instant=NOW))
-    fakes = PrivateFakes()
-    fakes.speaking.fails_at = scenario.speaking_fails_at
+    fakes = the_fakes_of(scenario)
     hosts_made: list[Hosts] = []
     errors: list[BaseException] = []
 
@@ -281,15 +294,29 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
 
     hosts = two_hosts(tmp_path, copresenter=surface)
     hosts_made.append(hosts)
-    hosts.issuer.issue_person_access_token(ACCESS)
-    hosts.issuer.rotate_refresh_token_to(ROTATED)
-    if scenario.refresh_token is not None:
-        hosts.issuer.issue_refresh_token(scenario.refresh_token)
-    scenario.arrange(hosts)
+    arrange_the_issuer(hosts, scenario)
     talk = hosts.browser(A_TALK_ADDRESS, headers=A_BROWSERS_HEADERS)
     hosts.sign_in(talk, A_TALK_ADDRESS, subject=A.id, groups=scenario.groups)
     grants_before = list(hosts.issuer.grant_types)
     scenario.before_ask(hosts)
+    response, logged = ask_recording_logs(talk, scenario)
+    return Run(
+        response,
+        hosts,
+        gateway,
+        fakes,
+        talk,
+        limiter,
+        logged,
+        grants_before,
+        errors,
+    )
+
+
+def ask_recording_logs(
+    talk: TestClient, scenario: Scenario
+) -> tuple[Response, list[logging.LogRecord]]:
+    """One ask with every logger at DEBUG; the response and each record raised."""
     logs = RecordingLogs()
     root = logging.getLogger()
     level = root.level
@@ -300,17 +327,7 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
     finally:
         root.removeHandler(logs)
         root.setLevel(level)
-    return Run(
-        response,
-        hosts,
-        gateway,
-        fakes,
-        talk,
-        limiter,
-        logs.records,
-        grants_before,
-        errors,
-    )
+    return response, logs.records
 
 
 def ask(
