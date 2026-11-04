@@ -1,6 +1,5 @@
 """Settings · Sources, driven the way a browser drives them."""
 
-import logging
 import re
 from datetime import timedelta
 from http import HTTPStatus
@@ -14,7 +13,6 @@ from presentator.api.hooks import hook_address
 from presentator.api.preferences import ACCOUNT, SETTINGS
 from presentator.api.sources import (
     ACCESS,
-    CHECK,
     NEW,
     REMOVE,
     REMOVE_CONFIRMED,
@@ -25,8 +23,8 @@ from presentator.application.decks import Decks
 from presentator.contracts.decks import (
     MANIFEST_FILE,
     SLIDES_FILE,
+    AccessKind,
     Build,
-    ConnectionCheckResult,
     Deck,
     DeckFolder,
     Source,
@@ -41,12 +39,19 @@ from tests.presentator.api.support.removal_support import (
     ask_removal,
     confirm_removal,
 )
+from tests.presentator.api.support.source_api_support import (
+    HTTPS,
+    SENT,
+    a_created_source,
+    draft,
+)
 from tests.presentator.application.support.fakes import (
     LOCAL_MOUNT_EXAMPLE,
     FakeBuildRunner,
     FakeDeckStore,
 )
 from tests.support.lobby import (
+    A_LOBBY_ASSET,
     ADMIN,
     ENGLISH,
     NEIGHBOUR,
@@ -67,15 +72,16 @@ _COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _A_DECK = frozenset({MANIFEST_FILE, SLIDES_FILE})
 _FETCH = f"{SOURCES}/{{name}}/fetch"
 _NEVER_AN_AGE = "—"
-_HTTPS_URL = "https://git.example.invalid/talks.git"
-_READ_ONLY = "a-read-only-token"
+_A_BOX_FOLDER: dict[str, object] = {
+    "url": f"{LOCAL_MOUNT_EXAMPLE}/talks.git",
+    "access": AccessKind.FILE,
+    "secret": None,
+}
 _SHORT_ACCESS = "zz-short-token"
-_LONG_ACCESS = f"long-{_READ_ONLY}-and-then-some"
+_LONG_ACCESS = f"long-{SENT}-and-then-some"
 _SECRET_DOT_ROWS = 2
 _HOOK_SECRET = re.compile(r"data-hook-secret>([^<]+)<")
 _DEPLOY_PUBLIC_KEY = re.compile(r"data-deploy-public-key>([^<]+)<")
-_FINGERPRINT = re.compile(r'name="fingerprint"\s+value="([^"]*)"')
-_DRAFT_ID = re.compile(r'name="key_draft_id"\s+value="([^"]*)"')
 
 
 def another_source() -> Source:
@@ -138,17 +144,17 @@ def instance() -> Lobby:
     )
 
 
-@pytest.mark.parametrize("method", ["get", "post"])
+@pytest.mark.parametrize("method", ["get", "post", "get_source"])
 def test_a_person_without_the_admin_role_is_refused_at_sources(
     instance: Lobby, method: str
 ) -> None:
     signed_in_as(instance, NEIGHBOUR)
 
-    refused = (
-        instance.client.get(SOURCES)
-        if method == "get"
-        else fetch(instance.client, "decks")
-    )
+    refused = {
+        "get": lambda: instance.client.get(SOURCES),
+        "post": lambda: fetch(instance.client, "decks"),
+        "get_source": lambda: instance.client.get(f"{SOURCES}/decks"),
+    }[method]()
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
 
@@ -369,92 +375,11 @@ def test_a_visitor_who_is_not_signed_in_is_sent_to_the_login() -> None:
     )
 
 
-def check_source(
-    client: TestClient,
-    *,
-    url: str = _HTTPS_URL,
-    access: str = "https",
-    secret: str = _READ_ONLY,
-    headers: dict[str, str] | None = None,
-) -> Response:
-    return client.post(
-        CHECK,
-        data={
-            "name": "talks",
-            "url": url,
-            "access": access,
-            "secret": secret,
-        },
-        headers=headers,
-    )
-
-
-def fingerprint_of(checked: Response) -> str:
-    """The proof a reachable Check response carries in its hidden field."""
-    found = _FINGERPRINT.search(checked.text)
-    return found.group(1) if found else ""
-
-
-def draft_id_of(page: str) -> str:
-    """The Add form's own draft key id, carried in its hidden field."""
-    found = _DRAFT_ID.search(page)
-    assert found is not None
-    return found.group(1)
-
-
 def _deploy_public_key_of(page: str) -> str:
     """The clear public half the source page exposes for host registration."""
     found = _DEPLOY_PUBLIC_KEY.search(page)
     assert found is not None
     return found.group(1)
-
-
-def create_source(
-    client: TestClient,
-    *,
-    name: str = "talks",
-    url: str = _HTTPS_URL,
-    access: str = "https",
-    secret: str = _READ_ONLY,
-) -> Response:
-    """Check the same values first, the way the form itself now requires."""
-    proven = fingerprint_of(check_source(client, url=url, access=access, secret=secret))
-    return client.post(
-        NEW,
-        data={
-            "name": name,
-            "url": url,
-            "access": access,
-            "secret": secret,
-            "fingerprint": proven,
-        },
-    )
-
-
-def the_created_page(client: TestClient, created: Response) -> Response:
-    assert created.status_code == HTTPStatus.SEE_OTHER
-    return client.get(created.headers["location"])
-
-
-def two_admin_sessions(
-    *,
-    other_username: str = NEIGHBOUR,
-) -> tuple[TestClient, TestClient]:
-    """Two browser sessions over one app, each with its own cookie jar."""
-    first = a_lobby()
-    first.sign_in()
-    second = first.another_browser()
-    second.sign_in(username=other_username, role=Role.ADMIN)
-    return first.client, second.client
-
-
-def a_one_time_secret(operation: str, creator: TestClient) -> Response:
-    """Mint a one-time secret, then the redirect that carries it to the page."""
-    if operation == "create":
-        return create_source(creator, name="talks")
-    created = create_source(creator, name="talks")
-    the_created_page(creator, created)
-    return creator.post(WEBHOOK.format(name="talks"))
 
 
 def test_the_list_and_the_empty_state_offer_add_source() -> None:
@@ -482,44 +407,43 @@ def test_the_access_column_names_how_the_url_is_read() -> None:
     assert ENGLISH.source_access_deploy_key in page
 
 
-def test_only_an_admin_reaches_the_add_form(instance: Lobby) -> None:
-    signed_in_as(instance, NEIGHBOUR)
-
-    assert instance.client.get(NEW).status_code == HTTPStatus.FORBIDDEN
-    assert create_source(instance.client).status_code == HTTPStatus.FORBIDDEN
-
-
-def test_only_an_admin_reaches_the_created_page(instance: Lobby) -> None:
-    created = create_source(instance.client)
-    signed_in_as(instance, NEIGHBOUR)
-
-    assert instance.client.get(created.headers["location"]).status_code == (
-        HTTPStatus.FORBIDDEN
-    )
-
-
 def test_a_created_page_for_a_name_this_instance_does_not_have_is_not_found() -> None:
     assert (
         a_signed_in_lobby().get(f"{SOURCES}/talks").status_code == HTTPStatus.NOT_FOUND
     )
 
 
-def test_the_source_pages_load_their_scripts_from_static_files() -> None:
+def test_the_source_page_loads_its_script_from_a_static_file() -> None:
     lobby = a_signed_in_lobby()
-    add_form = lobby.get(NEW).text
-    created = the_created_page(lobby, create_source(lobby)).text
+    a_created_source(lobby)
     source_page = lobby.get(f"{SOURCES}/talks").text
-    copy_value = '<script src="/static/copy-value.js" defer></script>'
-    access_toggle = '<script src="/static/source-new.js" defer></script>'
 
-    assert copy_value in add_form
-    assert access_toggle in add_form
-    assert copy_value in created
-    assert ENGLISH.source_webhook_once in created
-    assert copy_value in source_page
+    assert '<script src="/static/copy-value.js" defer></script>' in source_page
     assert ENGLISH.source_webhook_once not in source_page
-    for script in ("copy-value.js", "source-new.js"):
-        assert lobby.get(f"/static/{script}").status_code == HTTPStatus.OK
+    assert lobby.get("/static/copy-value.js").status_code == HTTPStatus.OK
+
+
+def test_a_created_source_is_listed_with_its_address_state_and_access() -> None:
+    lobby = a_signed_in_lobby()
+    a_created_source(lobby)
+
+    listed = lobby.get(SOURCES).text
+
+    assert "talks" in listed
+    assert HTTPS in listed
+    assert ENGLISH.source_state_reachable in listed
+    assert ENGLISH.source_access_token in listed
+
+
+def test_a_source_created_on_this_box_is_listed_with_its_address_and_tag() -> None:
+    lobby = a_signed_in_lobby()
+    a_created_source(lobby, _A_BOX_FOLDER)
+
+    listed = lobby.get(SOURCES).text
+
+    assert "talks" in listed
+    assert str(_A_BOX_FOLDER["url"]) in listed
+    assert ENGLISH.source_access_local in listed
 
 
 def test_a_url_that_names_no_access_kind_has_no_access_tag() -> None:
@@ -538,424 +462,13 @@ def test_a_url_that_names_no_access_kind_has_no_access_tag() -> None:
     assert ENGLISH.source_access_local not in page
 
 
-def _button_tag_of(page: str, label: str) -> str:
-    """One button's own opening tag, so its `disabled` state can be read."""
-    before_label = page.split(f">{label}<", maxsplit=1)[0]
-    return before_label.rsplit("<button", 1)[1]
-
-
-def check_button_of(page: str) -> str:
-    return _button_tag_of(page, ENGLISH.source_check)
-
-
-def create_button_of(page: str) -> str:
-    return _button_tag_of(page, ENGLISH.source_create)
-
-
-def test_the_add_form_ships_https_and_ssh_live_check_live_create_disabled() -> None:
-    page = a_signed_in_lobby().get(NEW).text
-
-    assert ENGLISH.sources_add in page
-    assert ENGLISH.source_name in page
-    assert ENGLISH.source_url in page
-    assert ENGLISH.source_access_https in page
-    assert ENGLISH.source_access_ssh in page
-    assert 'name="access" value="ssh"' in page
-    assert 'name="access" value="ssh" disabled' not in page
-    assert 'name="access" value="https"' in page
-    assert "checked" in page
-    assert ENGLISH.source_check in page
-    assert "disabled" not in check_button_of(page)
-    assert ENGLISH.source_create in page
-    assert "disabled" in create_button_of(page)
-    assert 'name="secret"' in page
-    assert 'value="' not in page.split('name="secret"')[1].split(">")[0]
-
-
-def test_opening_add_shows_a_draft_deploy_keys_public_half_to_paste() -> None:
-    page = a_signed_in_lobby().get(NEW).text
-
-    assert 'name="key_draft_id" value="draft-1"' in page
-    assert "ssh-ed25519 AAAAtestkey1 presentator" in page
-    assert ENGLISH.source_deploy_key_heading in page
-    assert "-----BEGIN OPENSSH PRIVATE KEY-----" not in page
-
-
-def test_opening_add_twice_keeps_the_same_draft_key() -> None:
-    client = a_signed_in_lobby()
-
-    first = draft_id_of(client.get(NEW).text)
-    second = draft_id_of(client.get(NEW).text)
-
-    assert first == second
-
-
-def test_two_sessions_for_one_admin_see_the_same_draft_key() -> None:
-    first, second = two_admin_sessions(other_username=USERNAME)
-
-    first_page = first.get(NEW).text
-    second_page = second.get(NEW).text
-
-    assert draft_id_of(first_page) == draft_id_of(second_page)
-    assert _deploy_public_key_of(first_page) == _deploy_public_key_of(second_page)
-
-
-def create_ssh_source(
-    client: TestClient,
-    *,
-    name: str = "talks",
-    url: str = _ADDRESS,
-    key_draft_id: str,
-) -> Response:
-    checked = client.post(
-        CHECK,
-        data={
-            "name": name,
-            "url": url,
-            "access": "ssh",
-            "secret": "",
-            "key_draft_id": key_draft_id,
-        },
-    )
-    proven = fingerprint_of(checked)
-    return client.post(
-        NEW,
-        data={
-            "name": name,
-            "url": url,
-            "access": "ssh",
-            "key_draft_id": key_draft_id,
-            "fingerprint": proven,
-        },
-    )
-
-
-def test_an_ssh_create_binds_the_shown_draft_and_deletes_it() -> None:
-    client = a_signed_in_lobby()
-    draft_id = draft_id_of(client.get(NEW).text)
-
-    created = create_ssh_source(client, key_draft_id=draft_id)
-
-    assert created.status_code == HTTPStatus.SEE_OTHER
-    reopened = draft_id_of(client.get(NEW).text)
-    assert reopened != draft_id
-
-
-def test_a_cross_site_ssh_create_keeps_its_checked_draft_for_same_site_create() -> None:
-    client = a_signed_in_lobby()
-    draft_id = draft_id_of(client.get(NEW).text)
-    checked = client.post(
-        CHECK,
-        data={
-            "name": "talks",
-            "url": _ADDRESS,
-            "access": "ssh",
-            "secret": "",
-            "key_draft_id": draft_id,
-        },
-    )
-    assert checked.status_code == HTTPStatus.OK
-    creation = {
-        "name": "talks",
-        "url": _ADDRESS,
-        "access": "ssh",
-        "key_draft_id": draft_id,
-        "fingerprint": fingerprint_of(checked),
-    }
-
-    refused = client.post(
-        NEW,
-        data=creation,
-        headers={"origin": "https://another.example", "sec-fetch-site": "cross-site"},
-    )
-
-    assert refused.status_code == HTTPStatus.FORBIDDEN
-    assert f'href="{SOURCES}/talks"' not in client.get(SOURCES).text
-    assert draft_id_of(client.get(NEW).text) == draft_id
-
-    created = client.post(NEW, data=creation)
-
-    assert created.status_code == HTTPStatus.SEE_OTHER
-
-
-def test_a_foreign_draft_id_is_refused_with_a_freshly_minted_draft() -> None:
-    creator, other = two_admin_sessions()
-    creators_draft = draft_id_of(creator.get(NEW).text)
-    others_draft = draft_id_of(other.get(NEW).text)
-
-    refused = create_ssh_source(other, key_draft_id=creators_draft)
-
-    assert refused.status_code == HTTPStatus.OK
-    assert ENGLISH.source_refused_deploy_key in refused.text
-    reopened = draft_id_of(refused.text)
-    assert reopened not in (creators_draft, others_draft)
-
-
-def test_an_https_create_leaves_the_admins_draft_key_where_it_is() -> None:
-    client = a_signed_in_lobby()
-    draft_id = draft_id_of(client.get(NEW).text)
-
-    created = create_source(client)
-
-    assert created.status_code == HTTPStatus.SEE_OTHER
-    reopened = draft_id_of(client.get(NEW).text)
-    assert reopened == draft_id
-
-
-_A_REFUSED_CHECK = ConnectionCheckResult(
-    failure=SourceRunFailure.REFUSED,
-    commit=None,
-    detail=None,
-)
-_AN_UNREACHABLE_CHECK = ConnectionCheckResult(
-    failure=SourceRunFailure.UNREACHABLE,
-    commit=None,
-    detail=None,
-)
-_FAILED_DETAIL = "fatal: repository https://git.example.invalid/talks.git/ not found"
-_A_FAILED_CHECK = ConnectionCheckResult(
-    failure=SourceRunFailure.FAILED, commit=None, detail=_FAILED_DETAIL
-)
-
-
-def test_a_reachable_check_shows_the_commit_and_enables_create() -> None:
-    lobby = a_signed_in_lobby()
-
-    checked = check_source(lobby, secret=_READ_ONLY)
-
-    assert checked.status_code == HTTPStatus.OK
-    assert ENGLISH.source_check_reachable.format(commit=_COMMIT[:7]) in checked.text
-    assert _READ_ONLY not in checked.text
-    assert fingerprint_of(checked)
-    assert "disabled" not in create_button_of(checked.text)
-
-
-_A_USER_PART_URL = "https://user:token@git.example.invalid/talks.git"
-
-
-@pytest.mark.parametrize(
-    ("checked", "words"),
-    [
-        (_A_REFUSED_CHECK, (ENGLISH.source_run_refused,)),
-        (_AN_UNREACHABLE_CHECK, (ENGLISH.source_run_unreachable,)),
-        (_A_FAILED_CHECK, (ENGLISH.source_run_failed, _FAILED_DETAIL)),
-    ],
-)
-def test_a_check_that_found_no_commit_reads_the_words_the_source_list_uses(
-    checked: ConnectionCheckResult, words: tuple[str, ...]
-) -> None:
-    """#97: a check without a commit reads the source list's own words."""
-    lobby = a_signed_in_lobby(GivenDecks(checked=checked))
-
-    shown = check_source(lobby)
-
-    assert all(word in shown.text for word in words)
-    assert not fingerprint_of(shown)
-    assert "disabled" in create_button_of(shown.text)
-
-
-def test_a_check_of_an_address_with_a_user_part_reads_the_form_refusal() -> None:
-    """#439 U2: Check on an address outside the grammar reads Add's refusal sentence."""
-    shown = check_source(a_signed_in_lobby(), url=_A_USER_PART_URL)
-
-    assert ENGLISH.source_refused_access in shown.text
-    assert not fingerprint_of(shown)
-    assert "disabled" in create_button_of(shown.text)
-
-
-def test_the_secret_never_appears_in_a_check_response_or_the_log(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    caplog.set_level(logging.WARNING)
-    lobby = a_signed_in_lobby()
-
-    checked = check_source(lobby, secret=_READ_ONLY)
-
-    assert _READ_ONLY not in checked.text
-    assert all(_READ_ONLY not in record.message for record in caplog.records)
-
-
-def test_a_fingerprint_from_different_values_is_refused_and_writes_no_row() -> None:
-    lobby = a_signed_in_lobby()
-    checked = check_source(lobby, url=_HTTPS_URL, secret=_READ_ONLY)
-    proven_for_a_different_url = fingerprint_of(checked)
-
-    tampered = lobby.post(
-        NEW,
-        data={
-            "name": "talks",
-            "url": "https://git.example.invalid/a-different-repository.git",
-            "access": "https",
-            "secret": _READ_ONLY,
-            "fingerprint": proven_for_a_different_url,
-        },
-    )
-
-    assert tampered.status_code == HTTPStatus.OK
-    assert ENGLISH.source_refused_not_checked in tampered.text
-    assert ENGLISH.sources_empty_title in lobby.get(SOURCES).text
-
-
-def test_only_an_admin_reaches_check_connection(instance: Lobby) -> None:
-    signed_in_as(instance, NEIGHBOUR)
-
-    assert check_source(instance.client).status_code == HTTPStatus.FORBIDDEN
-
-
-def test_check_connection_from_another_site_is_refused() -> None:
-    lobby = a_signed_in_lobby()
-
-    refused = check_source(
-        lobby,
-        headers={"sec-fetch-site": "cross-site"},
-    )
-
-    assert refused.status_code == HTTPStatus.FORBIDDEN
-
-
-def test_the_add_form_offers_a_folder_on_this_box_option() -> None:
-    page = a_signed_in_lobby().get(NEW).text
-
-    assert ENGLISH.source_access_file in page
-    assert 'name="access" value="file"' in page
-    assert 'name="access" value="file" disabled' not in page
-
-
-def test_creating_a_source_on_this_box_accepts_a_file_address_under_the_mount() -> None:
-    lobby = a_signed_in_lobby()
-    url = f"{LOCAL_MOUNT_EXAMPLE}/talks.git"
-
-    the_created_page(
-        lobby,
-        create_source(lobby, url=url, access="file", secret=""),
-    )
-    listed = lobby.get(SOURCES).text
-
-    assert "talks" in listed
-    assert url in listed
-    assert ENGLISH.source_access_local in listed
-
-
-def test_a_secret_is_refused_for_a_source_on_this_box() -> None:
-    lobby = a_signed_in_lobby()
-    url = f"{LOCAL_MOUNT_EXAMPLE}/talks.git"
-
-    refused = create_source(lobby, url=url, access="file", secret=_READ_ONLY)
-
-    assert ENGLISH.source_refused_secret_not_allowed in refused.text
-    assert _READ_ONLY not in refused.text
-
-
-def test_a_file_address_outside_the_mount_is_refused() -> None:
-    lobby = a_signed_in_lobby()
-
-    refused = create_source(
-        lobby,
-        url="/etc/talks.git",
-        access="file",
-        secret="",
-    )
-
-    assert ENGLISH.source_refused_outside_mount in refused.text
-
-
-def test_creating_a_source_stores_it_fetches_it_and_shows_address_and_secret() -> None:
-    lobby = a_signed_in_lobby()
-
-    page = the_created_page(lobby, create_source(lobby)).text
-    secret = _HOOK_SECRET.search(page)
-
-    assert secret is not None
-    assert secret.group(1) != _READ_ONLY
-    assert hook_address("talks") in page
-    assert ENGLISH.source_webhook_once in page
-    assert ENGLISH.source_created_toast in page
-    listed = lobby.get(SOURCES).text
-    assert "talks" in listed
-    assert _HTTPS_URL in listed
-    assert ENGLISH.source_state_reachable in listed
-    assert ENGLISH.source_access_token in listed
-
-
-def test_a_second_load_of_the_created_page_shows_the_secret_no_more() -> None:
-    lobby = a_signed_in_lobby()
-    created = create_source(lobby)
-    first = the_created_page(lobby, created)
-    secret = _HOOK_SECRET.search(first.text)
-    assert secret is not None
-
-    second = lobby.get(created.headers["location"]).text
-
-    assert secret.group(1) in first.text
-    assert secret.group(1) not in second
-    assert ENGLISH.source_webhook_once not in second
-    assert hook_address("talks") in second
-
-
-@pytest.mark.parametrize("operation", ["create", "renew"])
-def test_the_once_shown_secret_is_bound_to_the_session_that_asked(
-    operation: str,
-) -> None:
-    creator, other = two_admin_sessions()
-    minted = a_one_time_secret(operation, creator)
-
-    assert minted.status_code == HTTPStatus.SEE_OTHER
-    first = creator.get(minted.headers["location"]).text
-    secret = _HOOK_SECRET.search(first)
-    assert secret is not None
-    assert secret.group(1) != _READ_ONLY
-    assert ENGLISH.source_webhook_once in first
-    assert _HOOK_SECRET.search(other.get(minted.headers["location"]).text) is None
-    reloaded = creator.get(minted.headers["location"]).text
-    assert secret.group(1) not in reloaded
-    assert _HOOK_SECRET.search(other.get(minted.headers["location"]).text) is None
-
-
-@pytest.mark.parametrize("operation", ["create", "renew"])
-def test_a_different_session_sees_the_held_sentence_and_no_secret(
-    operation: str,
-) -> None:
-    creator, other = two_admin_sessions()
-    minted = a_one_time_secret(operation, creator)
-
-    page = other.get(minted.headers["location"]).text
-    assert _HOOK_SECRET.search(page) is None
-    assert "data-hook-secret" not in page
-    assert ENGLISH.source_webhook_held_elsewhere in page
-    assert ENGLISH.source_secret_dots in page
-    assert ENGLISH.source_created_toast not in page
-    creator.get(minted.headers["location"])
-    after = other.get(minted.headers["location"]).text
-    assert ENGLISH.source_webhook_held_elsewhere not in after
-    assert "data-hook-secret" not in after
-
-
-def test_a_call_to_the_shown_address_with_the_shown_secret_answers_204() -> None:
-    lobby = a_signed_in_lobby()
-    page = the_created_page(lobby, create_source(lobby, name="alpha")).text
-    secret = _HOOK_SECRET.search(page)
-    assert secret is not None
-
-    called = lobby.post(
-        hook_address("alpha"),
-        headers={"authorization": f"Bearer {secret.group(1)}"},
-    )
-    gitlab = lobby.post(
-        hook_address("alpha"),
-        headers={"x-gitlab-token": secret.group(1)},
-    )
-
-    assert called.status_code == HTTPStatus.NO_CONTENT
-    assert gitlab.status_code == HTTPStatus.NO_CONTENT
-
-
 def test_an_existing_source_without_a_stored_secret_stays_when_another_is_added() -> (
     None
 ):
     existing = a_configured_source(_ADDRESS)
     lobby = a_signed_in_lobby(GivenDecks(source=existing))
 
-    the_created_page(lobby, create_source(lobby))
+    a_created_source(lobby)
     listed = lobby.get(SOURCES).text
 
     assert "decks" in listed
@@ -964,128 +477,71 @@ def test_an_existing_source_without_a_stored_secret_stays_when_another_is_added(
     assert "talks" in listed
 
 
-@pytest.mark.parametrize(
-    ("fields", "sentence"),
-    [
-        pytest.param(
-            {
-                "name": "Talks",
-                "url": _HTTPS_URL,
-                "access": "https",
-                "secret": _READ_ONLY,
-            },
-            ENGLISH.source_refused_name,
-            id="malformed name",
-        ),
-        pytest.param(
-            {"name": "new", "url": _HTTPS_URL, "access": "https", "secret": _READ_ONLY},
-            ENGLISH.source_refused_name,
-            id="reserved name",
-        ),
-        pytest.param(
-            {
-                "name": "talks",
-                "url": _A_USER_PART_URL,
-                "access": "https",
-                "secret": _READ_ONLY,
-            },
-            ENGLISH.source_refused_access,
-            id="password in the URL",
-        ),
-        pytest.param(
-            {
-                "name": "talks",
-                "url": "git@git.example.invalid:talks.git",
-                "access": "https",
-                "secret": _READ_ONLY,
-            },
-            ENGLISH.source_refused_access,
-            id="scheme mismatch",
-        ),
-        pytest.param(
-            {
-                "name": "talks",
-                "url": "http://git.example.invalid/talks.git",
-                "access": "https",
-                "secret": _READ_ONLY,
-            },
-            ENGLISH.source_refused_access,
-            id="http URL",
-        ),
-        pytest.param(
-            {"name": "talks", "url": _HTTPS_URL, "access": "ssh", "secret": _READ_ONLY},
-            ENGLISH.source_refused_access,
-            id="ssh radio",
-        ),
-        pytest.param(
-            {"name": "talks", "url": _HTTPS_URL, "access": "git", "secret": _READ_ONLY},
-            ENGLISH.source_refused_access,
-            id="unknown radio",
-        ),
-        pytest.param(
-            {"name": "talks", "url": _HTTPS_URL, "access": "https", "secret": ""},
-            ENGLISH.source_refused_secret,
-            id="missing secret",
-        ),
-    ],
-)
-def test_a_refused_form_comes_back_without_the_secret(
-    fields: dict[str, str],
-    sentence: str,
+@pytest.mark.parametrize("username", [USERNAME, NEIGHBOUR])
+def test_the_add_address_answers_the_apps_shell_to_any_signed_in_person(
+    instance: Lobby, username: str
 ) -> None:
-    lobby = a_signed_in_lobby()
+    signed_in_as(instance, username)
 
-    refused = create_source(lobby, **fields)
+    answer = instance.client.get(NEW)
 
-    assert refused.status_code == HTTPStatus.OK
-    assert sentence in refused.text
-    assert 'name="secret"' in refused.text
-    secret_input = refused.text.split('name="secret"')[1].split(">")[0]
-    assert "value=" not in secret_input
-    assert _READ_ONLY not in refused.text
-    assert ENGLISH.sources_empty_title in lobby.get(SOURCES).text
+    assert answer.status_code == HTTPStatus.OK
+    assert A_LOBBY_ASSET in answer.text
+    assert answer.headers["cache-control"] == "no-store"
 
 
-def test_a_duplicate_name_or_url_is_refused() -> None:
-    lobby = a_signed_in_lobby()
-    the_created_page(lobby, create_source(lobby))
+def test_a_visitor_who_is_not_signed_in_is_sent_to_sign_in_from_the_add_address() -> (
+    None
+):
+    answer = a_lobby().client.get(NEW)
 
-    duplicate_name = create_source(lobby, url="https://git.example.invalid/other.git")
-    duplicate_url = create_source(lobby, name="other")
-
-    assert ENGLISH.source_refused_duplicate_name in duplicate_name.text
-    assert ENGLISH.source_refused_duplicate_url in duplicate_url.text
-    assert _READ_ONLY not in duplicate_name.text
-    assert _READ_ONLY not in duplicate_url.text
+    assert answer.status_code == HTTPStatus.FOUND
+    assert answer.headers["location"] == "/login/oidc?next=%2Fsettings%2Fsources%2Fnew"
 
 
-def test_add_source_from_another_site_is_refused() -> None:
-    lobby = a_signed_in_lobby()
-
-    refused = lobby.post(
-        NEW,
-        data={
-            "name": "talks",
-            "url": _HTTPS_URL,
-            "access": "https",
-            "secret": _READ_ONLY,
-        },
-        headers={"sec-fetch-site": "cross-site"},
-    )
-
-    assert refused.status_code == HTTPStatus.FORBIDDEN
+def two_admin_sessions() -> tuple[TestClient, TestClient]:
+    """Two browser sessions over one app, each with its own cookie jar."""
+    first = a_lobby()
+    first.sign_in()
+    second = first.another_browser()
+    second.sign_in(username=NEIGHBOUR, role=Role.ADMIN)
+    return first.client, second.client
 
 
-def test_a_visitor_who_is_not_signed_in_cannot_add_a_source() -> None:
-    lobby = a_lobby()
+def a_renewed_webhook_secret(creator: TestClient) -> Response:
+    """Create a source and renew its webhook secret: the redirect shows it once."""
+    a_created_source(creator)
+    return creator.post(WEBHOOK.format(name="talks"))
 
-    reading = lobby.client.get(NEW)
-    posting = create_source(lobby.client)
 
-    assert reading.status_code == HTTPStatus.FOUND
-    assert reading.headers["location"] == "/login/oidc?next=%2Fsettings%2Fsources%2Fnew"
-    assert posting.status_code == HTTPStatus.FOUND
-    assert posting.headers["location"] == "/login/oidc?next=%2Fsettings%2Fsources%2Fnew"
+def test_the_once_shown_secret_is_bound_to_the_session_that_asked() -> None:
+    creator, other = two_admin_sessions()
+    minted = a_renewed_webhook_secret(creator)
+
+    assert minted.status_code == HTTPStatus.SEE_OTHER
+    first = creator.get(minted.headers["location"]).text
+    secret = _HOOK_SECRET.search(first)
+    assert secret is not None
+    assert ENGLISH.source_webhook_once in first
+    assert _HOOK_SECRET.search(other.get(minted.headers["location"]).text) is None
+    reloaded = creator.get(minted.headers["location"]).text
+    assert secret.group(1) not in reloaded
+    assert _HOOK_SECRET.search(other.get(minted.headers["location"]).text) is None
+
+
+def test_a_different_session_sees_the_held_sentence_and_no_secret() -> None:
+    creator, other = two_admin_sessions()
+    minted = a_renewed_webhook_secret(creator)
+
+    page = other.get(minted.headers["location"]).text
+    assert _HOOK_SECRET.search(page) is None
+    assert "data-hook-secret" not in page
+    assert ENGLISH.source_webhook_held_elsewhere in page
+    assert ENGLISH.source_secret_dots in page
+    creator.get(minted.headers["location"])
+    after = other.get(minted.headers["location"]).text
+    assert ENGLISH.source_webhook_held_elsewhere not in after
+    assert "data-hook-secret" not in after
 
 
 def a_deck_from(source: Source) -> Deck:
@@ -1205,9 +661,8 @@ def test_a_failed_run_on_the_source_page_reads_failed_not_error() -> None:
 
 def test_a_source_on_this_box_offers_neither_dots_nor_renew_on_its_page() -> None:
     lobby = a_signed_in_lobby()
-    url = f"{LOCAL_MOUNT_EXAMPLE}/talks.git"
 
-    the_created_page(lobby, create_source(lobby, url=url, access="file", secret=""))
+    a_created_source(lobby, _A_BOX_FOLDER)
     page = lobby.get(f"{SOURCES}/talks").text
 
     assert "data-renew-access" not in page
@@ -1237,18 +692,14 @@ def test_fetch_now_from_the_source_page_refreshes_it_and_stays() -> None:
 
 def test_renewing_the_webhook_secret_shows_it_once_and_retires_the_old_one() -> None:
     lobby = a_signed_in_lobby()
-    created = create_source(lobby, name="alpha")
-    first = the_created_page(lobby, created)
-    old_secret = _HOOK_SECRET.search(first.text)
-    assert old_secret is not None
-    lobby.get(created.headers["location"])
+    old_secret = a_created_source(lobby, {"name": "alpha"})
 
     renewed = lobby.post(WEBHOOK.format(name="alpha"))
     assert renewed.status_code == HTTPStatus.SEE_OTHER
     shown = lobby.get(renewed.headers["location"])
     new_secret = _HOOK_SECRET.search(shown.text)
     assert new_secret is not None
-    assert new_secret.group(1) != old_secret.group(1)
+    assert new_secret.group(1) != old_secret
     assert ENGLISH.source_webhook_once in shown.text
     reloaded = lobby.get(renewed.headers["location"]).text
     assert new_secret.group(1) not in reloaded
@@ -1256,7 +707,7 @@ def test_renewing_the_webhook_secret_shows_it_once_and_retires_the_old_one() -> 
 
     old_call = lobby.post(
         hook_address("alpha"),
-        headers={"authorization": f"Bearer {old_secret.group(1)}"},
+        headers={"authorization": f"Bearer {old_secret}"},
     )
     new_call = lobby.post(
         hook_address("alpha"),
@@ -1268,8 +719,8 @@ def test_renewing_the_webhook_secret_shows_it_once_and_retires_the_old_one() -> 
 
 def test_renewing_the_access_secret_takes_a_value_and_shows_nothing_back() -> None:
     lobby = a_signed_in_lobby()
-    the_created_page(lobby, create_source(lobby))
-    rotated = f"rotated-{_READ_ONLY}"
+    a_created_source(lobby)
+    rotated = f"rotated-{SENT}"
 
     renewed = lobby.post(
         ACCESS.format(name="talks"),
@@ -1279,7 +730,7 @@ def test_renewing_the_access_secret_takes_a_value_and_shows_nothing_back() -> No
     assert renewed.status_code == HTTPStatus.SEE_OTHER
     page = lobby.get(renewed.headers["location"]).text
     assert rotated not in page
-    assert _READ_ONLY not in page
+    assert SENT not in page
     assert ENGLISH.source_secret_dots in page
     assert page.count(ENGLISH.source_secret_dots) == _SECRET_DOT_ROWS
 
@@ -1288,19 +739,26 @@ def test_a_blank_access_renewal_comes_back_without_storing_and_without_the_value
     None
 ):
     lobby = a_signed_in_lobby()
-    the_created_page(lobby, create_source(lobby))
+    a_created_source(lobby)
 
     refused = lobby.post(ACCESS.format(name="talks"), data={"secret": "  "})
 
     assert refused.status_code == HTTPStatus.OK
     assert ENGLISH.source_refused_secret in refused.text
-    assert _READ_ONLY not in refused.text
+    assert SENT not in refused.text
 
 
 def test_renewing_an_ssh_deploy_key_needs_no_secret_and_shows_the_replacement() -> None:
     lobby = a_signed_in_lobby()
-    draft_id = draft_id_of(lobby.get(NEW).text)
-    the_created_page(lobby, create_ssh_source(lobby, key_draft_id=draft_id))
+    a_created_source(
+        lobby,
+        {
+            "url": _ADDRESS,
+            "access": AccessKind.SSH,
+            "secret": None,
+            "key_draft_id": draft(lobby).json()["id"],
+        },
+    )
     first = _deploy_public_key_of(lobby.get(f"{SOURCES}/talks").text)
 
     renewed = lobby.post(ACCESS.format(name="talks"), data={})
@@ -1316,31 +774,26 @@ def test_renewing_an_ssh_deploy_key_needs_no_secret_and_shows_the_replacement() 
 
 def test_renewing_the_access_secret_is_refused_for_a_source_on_this_box() -> None:
     lobby = a_signed_in_lobby()
-    url = f"{LOCAL_MOUNT_EXAMPLE}/talks.git"
-    the_created_page(
-        lobby,
-        create_source(lobby, url=url, access="file", secret=""),
-    )
+    a_created_source(lobby, _A_BOX_FOLDER)
 
-    refused = lobby.post(ACCESS.format(name="talks"), data={"secret": _READ_ONLY})
+    refused = lobby.post(ACCESS.format(name="talks"), data={"secret": SENT})
 
     assert refused.status_code == HTTPStatus.OK
-    assert _READ_ONLY not in refused.text
+    assert SENT not in refused.text
     page = lobby.get(f"{SOURCES}/talks").text
     assert "data-renew-access" not in page
 
 
 def test_the_source_page_never_derives_dot_count_from_a_secret() -> None:
     lobby = a_signed_in_lobby()
-    the_created_page(lobby, create_source(lobby, name="short", secret=_SHORT_ACCESS))
-    the_created_page(
+    a_created_source(lobby, {"name": "short", "secret": _SHORT_ACCESS})
+    a_created_source(
         lobby,
-        create_source(
-            lobby,
-            name="long",
-            url="https://git.example.invalid/long.git",
-            secret=_LONG_ACCESS,
-        ),
+        {
+            "name": "long",
+            "url": "https://git.example.invalid/long.git",
+            "secret": _LONG_ACCESS,
+        },
     )
     short = lobby.get(f"{SOURCES}/short").text
     long = lobby.get(f"{SOURCES}/long").text
@@ -1354,12 +807,11 @@ def test_the_source_page_never_derives_dot_count_from_a_secret() -> None:
 
 @pytest.mark.parametrize("method", ["access", "webhook"])
 def test_only_an_admin_renews_either_secret(instance: Lobby, method: str) -> None:
-    created = create_source(instance.client)
-    the_created_page(instance.client, created)
+    a_created_source(instance.client)
     signed_in_as(instance, NEIGHBOUR)
     path = (ACCESS if method == "access" else WEBHOOK).format(name="talks")
 
-    refused = instance.client.post(path, data={"secret": _READ_ONLY})
+    refused = instance.client.post(path, data={"secret": SENT})
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
 
@@ -1369,8 +821,7 @@ def test_source_page_posts_from_another_site_are_refused(
     instance: Lobby,
     method: str,
 ) -> None:
-    created = create_source(instance.client)
-    the_created_page(instance.client, created)
+    a_created_source(instance.client)
     path = {
         "access": ACCESS.format(name="talks"),
         "webhook": WEBHOOK.format(name="talks"),
@@ -1379,7 +830,7 @@ def test_source_page_posts_from_another_site_are_refused(
 
     refused = instance.client.post(
         path,
-        data={"secret": _READ_ONLY, "stay": "page"},
+        data={"secret": SENT, "stay": "page"},
         headers={"sec-fetch-site": "cross-site"},
     )
 
@@ -1392,7 +843,7 @@ def test_renewing_a_name_this_instance_does_not_have_is_not_found() -> None:
     assert (
         lobby.post(
             ACCESS.format(name="missing"),
-            data={"secret": _READ_ONLY},
+            data={"secret": SENT},
         ).status_code
         == HTTPStatus.NOT_FOUND
     )
@@ -1632,15 +1083,13 @@ def test_removal_of_a_name_this_instance_does_not_have_is_not_found(step: str) -
 
 def test_after_removal_the_same_url_and_name_can_be_added_again() -> None:
     lobby = a_signed_in_lobby()
-    created = create_source(lobby, name="talks", url=_HTTPS_URL)
-    the_created_page(lobby, created)
+    a_created_source(lobby)
 
     confirm_removal(lobby, "talks")
-    re_created = create_source(lobby, name="talks", url=_HTTPS_URL)
+    re_created = a_created_source(lobby)
 
-    assert re_created.status_code == HTTPStatus.SEE_OTHER
-    page = the_created_page(lobby, re_created).text
-    assert ENGLISH.source_webhook_secret in page
+    assert re_created
+    assert lobby.get(f"{SOURCES}/talks").status_code == HTTPStatus.OK
 
 
 def test_a_removed_decks_talk_answers_not_found(tmp_path: Path) -> None:

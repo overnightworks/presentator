@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { isHttpError } from '@sveltejs/kit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getJson, putJson } from '#lib/api/client.ts';
+import { getJson, postJson, putJson, Refused } from '#lib/api/client.ts';
 
 function answering(status: number, body: unknown): { fetcher: typeof fetch; asked: Request[] } {
 	const asked: Request[] = [];
@@ -37,7 +40,8 @@ describe('getJson', () => {
 describe.each([403, 404])('a %i from the API', (status) => {
 	it.each([
 		{ name: 'a read', call: (fetcher: typeof fetch) => getJson(fetcher, '/api/decks') },
-		{ name: 'a write', call: (fetcher: typeof fetch) => putJson(fetcher, '/api/account', {}) }
+		{ name: 'a write', call: (fetcher: typeof fetch) => putJson(fetcher, '/api/account', {}) },
+		{ name: 'a post', call: (fetcher: typeof fetch) => postJson(fetcher, '/api/sources', {}) }
 	])('becomes a kit error with its status for $name', async ({ call }) => {
 		const refusal = await call(answering(status, {}).fetcher).catch((failure: unknown) => failure);
 
@@ -61,6 +65,72 @@ describe('putJson', () => {
 	it('fails loud on a refusal that is not a 401', async () => {
 		const { fetcher } = answering(422, {});
 		await expect(putJson(fetcher, '/api/account', {})).rejects.toThrow('/api/account answered 422');
+	});
+});
+
+// The wire's own tag of a refused source, read from the document the types are generated from.
+interface Document {
+	paths: {
+		'/api/sources': {
+			post: {
+				responses: {
+					422: {
+						content: {
+							'application/problem+json': { schema: { properties: { type: { const: string } } } };
+						};
+					};
+				};
+			};
+		};
+	};
+}
+const refusedType = (
+	JSON.parse(readFileSync(join(import.meta.dirname, 'openapi.json'), 'utf8')) as Document
+).paths['/api/sources'].post.responses[422].content['application/problem+json'].schema.properties
+	.type.const;
+
+describe('postJson', () => {
+	it('sends the body as JSON with the POST verb and returns the answer', async () => {
+		const { fetcher, asked } = answering(201, { name: 'talks' });
+
+		await expect(postJson(fetcher, '/api/sources', { name: 'talks' })).resolves.toEqual({
+			name: 'talks'
+		});
+
+		expect(asked[0]?.method).toBe('POST');
+		expect(asked[0]?.headers.get('accept')).toBe('application/json');
+		await expect(asked[0]?.json()).resolves.toEqual({ name: 'talks' });
+	});
+
+	it('sends no body when it is given none', async () => {
+		const { fetcher, asked } = answering(200, {});
+
+		await postJson(fetcher, '/api/sources/new/key-draft', undefined);
+
+		await expect(asked[0]?.text()).resolves.toBe('');
+	});
+
+	it('raises Refused with the reason when a source is refused with a 422', async () => {
+		const { fetcher } = answering(422, { type: refusedType, reason: 'duplicate-name', title: 't' });
+
+		const refusal = await postJson(fetcher, '/api/sources', {}).catch((failure: unknown) => failure);
+
+		expect(refusal).toBeInstanceOf(Refused);
+		expect((refusal as Refused).reason).toBe('duplicate-name');
+	});
+
+	it('fails loud on a 422 that is no refused source', async () => {
+		const { fetcher } = answering(422, { detail: [] });
+
+		await expect(postJson(fetcher, '/api/sources', {})).rejects.toThrow(
+			'/api/sources answered 422'
+		);
+	});
+
+	it('fails loud on a failure that is no refusal', async () => {
+		await expect(postJson(answering(500, {}).fetcher, '/api/sources', {})).rejects.toThrow(
+			'/api/sources answered 500'
+		);
 	});
 });
 
@@ -126,6 +196,11 @@ describe.each([
 		name: 'a write',
 		page: '/write',
 		call: (client: Client, fetcher: typeof fetch) => client.putJson(fetcher, '/api/account', {})
+	},
+	{
+		name: 'a post',
+		page: '/post',
+		call: (client: Client, fetcher: typeof fetch) => client.postJson(fetcher, '/api/sources', {})
 	}
 ])('$name that meets a 401', ({ page, call }) => {
 	it('leaves for the sign-in with the current page as next and never settles', async () => {

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import { tabCurrent } from '#lib/section.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -7,8 +9,15 @@
 </script>
 
 <nav class="tabs" aria-label={words.section_settings}>
-	<a href={resolve('/(lobby)/settings')} aria-current="page">{words.settings_title}</a>
-	<a href="/settings/sources" rel="external" data-sveltekit-reload>{words.settings_sources}</a>
+	<a href={resolve('/(lobby)/settings')} aria-current={tabCurrent(page.url.pathname, 'general')}
+		>{words.settings_title}</a
+	>
+	<a
+		href="/settings/sources"
+		rel="external"
+		data-sveltekit-reload
+		aria-current={tabCurrent(page.url.pathname, 'sources')}>{words.settings_sources}</a
+	>
 </nav>
 {@render children()}
 

@@ -1,5 +1,6 @@
 import type { DeckState, FailureView } from '#lib/api/decks.ts';
 import type { LobbyText } from '#lib/api/session.ts';
+import { fill } from '#lib/words.ts';
 
 /** The catalog's word for each state a deck is in. */
 export function stateWords(words: LobbyText): Record<DeckState, string> {
@@ -9,11 +10,6 @@ export function stateWords(words: LobbyText): Record<DeckState, string> {
 		failed: words.deck_state_failed,
 		'never-built': words.deck_state_never_built
 	};
-}
-
-/** Puts each `{name}` of a catalog sentence in place; the wire carries every count a sentence names. */
-export function fill(template: string, values: Readonly<Record<string, string | number | null>>): string {
-	return template.replace(/\{(\w+)\}/g, (_placeholder, name: string) => String(values[name]));
 }
 
 /** The words a failed build is shown in: the toolchain's own, or the catalog's with the counts; none when it left no message. */
