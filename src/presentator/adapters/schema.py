@@ -10,6 +10,10 @@ from presentator.adapters.sqlite import immediate_transaction
 from presentator.contracts.decks import BuildFailureReason
 
 _DECK_COLUMNS: Final = "SELECT name FROM pragma_table_info('decks')"
+_PERSON_PREFERENCE_COLUMNS: Final = (
+    "SELECT name FROM pragma_table_info('person_preferences')"
+)
+_THE_PERSONAL_LANGUAGE: Final = "language_tag"
 _ADD_COLUMNS: Final = {
     "attempt_reason": "ALTER TABLE decks ADD COLUMN attempt_reason TEXT",
     "attempt_written_megabytes": (
@@ -58,6 +62,7 @@ def create_tables(database: Path) -> None:
     create_preference_tables(database)
     create_deck_tables(database)
     _keep_the_failure_reason(database)
+    _drop_the_personal_language(database)
 
 
 def _keep_the_failure_reason(database: Path) -> None:
@@ -81,3 +86,19 @@ def _keep_the_failure_reason(database: Path) -> None:
             _THE_REASON_FOLLOWS_THE_TEXT,
             (BuildFailureReason.NO_WORDS.value, toolchain, toolchain, toolchain),
         )
+
+
+def _drop_the_personal_language(database: Path) -> None:
+    """Drop the language a person once chose, on every start; it is one-way.
+
+    One immediate transaction, so two starts on one file cannot both drop, and a
+    failed statement rolls back whole. No row goes and no theme changes. A release
+    from before this selects the column on every session read, so it cannot read
+    the migrated file: the way back is the backup taken before the start (ADR 0006).
+    """
+    with immediate_transaction(database) as cursor:
+        present = {name for (name,) in cursor.execute(_PERSON_PREFERENCE_COLUMNS)}
+        if _THE_PERSONAL_LANGUAGE in present:
+            cursor.execute(
+                f"ALTER TABLE person_preferences DROP COLUMN {_THE_PERSONAL_LANGUAGE}"
+            )

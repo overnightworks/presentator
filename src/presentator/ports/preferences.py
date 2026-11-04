@@ -1,4 +1,4 @@
-"""The stores Settings and Account read and write; adapters fill them."""
+"""The stores Settings and the person menu's theme read and write."""
 
 from abc import abstractmethod
 from typing import Protocol

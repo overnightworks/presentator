@@ -397,7 +397,7 @@ def test_a_same_site_or_schemeless_form_post_is_refused(
 def test_the_three_stylesheets_are_linked_on_a_signed_in_page(
     signed_in_lobby: Lobby,
 ) -> None:
-    page = signed_in_lobby.client.get("/account").text
+    page = signed_in_lobby.client.get("/settings/sources").text
 
     assert '<link rel="stylesheet" href="/static/pico.classless.min.css">' in page
     assert '<link rel="stylesheet" href="/static/ui-console.css">' in page
@@ -430,7 +430,7 @@ def test_an_address_that_only_starts_like_a_stylesheet_still_asks_for_the_login(
 def test_a_signed_in_page_carries_no_hex_colour_and_no_inline_style(
     signed_in_lobby: Lobby,
 ) -> None:
-    page = signed_in_lobby.client.get("/account").text
+    page = signed_in_lobby.client.get("/settings/sources").text
 
     assert not _HEX_COLOUR.search(page)
     assert "style=" not in page
@@ -439,7 +439,7 @@ def test_a_signed_in_page_carries_no_hex_colour_and_no_inline_style(
 def test_the_signed_in_header_offers_the_person_and_log_out(
     signed_in_lobby: Lobby,
 ) -> None:
-    page = signed_in_lobby.client.get("/account").text
+    page = signed_in_lobby.client.get("/settings/sources").text
 
     assert USERNAME in page
     assert ENGLISH.log_out in page
@@ -458,7 +458,7 @@ def _links_the_impressum_and_the_datenschutz(page: str) -> bool:
 def test_a_signed_in_page_links_the_impressum_and_the_datenschutz(
     signed_in_lobby: Lobby,
 ) -> None:
-    page = signed_in_lobby.client.get("/account").text
+    page = signed_in_lobby.client.get("/settings/sources").text
 
     assert ENGLISH.log_out in page
     assert _links_the_impressum_and_the_datenschutz(page)

@@ -1,7 +1,7 @@
 """The instance's defaults, a person's overrides, and how a page resolves them.
 
-The order is the operator's ruling of 06.09.2026 on issue #8, line 22: the
-person's Account preference first, the instance default behind it.
+The language is the instance's alone; the theme is the person's own, with the
+instance default behind it (ADR 0012).
 """
 
 from dataclasses import dataclass
@@ -56,25 +56,17 @@ class Preferences:
         return self.people.read(user_id) or PersonPreferences()
 
     def save_preferences_of(self, user_id: str, chosen: PersonPreferences) -> None:
-        """Keep that person's overrides; the instance default stays untouched.
-
-        Raises `UnspokenLanguageError` for a language newly chosen that no catalog
-        speaks; the one already stored stays, so a theme change survives a
-        removed catalog.
-        """
-        self._require_newly_chosen_spoken(
-            chosen.language_tag, stored=self.preferences_of(user_id).language_tag
-        )
+        """Keep that person's override; the instance default stays untouched."""
         self.people.write(user_id, chosen)
 
     def appearance_for(self, user_id: str | None) -> Appearance:
-        """The words and the look, the person's choice first, the instance's next."""
+        """The instance's words, and the person's theme or else the instance's."""
         settings = self.instance_settings()
         chosen = (
             PersonPreferences() if user_id is None else self.preferences_of(user_id)
         )
         return Appearance(
-            text=self.catalogs.text(chosen.language_tag or settings.language_tag),
+            text=self.catalogs.text(settings.language_tag),
             theme=chosen.theme or settings.theme,
         )
 
@@ -82,14 +74,6 @@ class Preferences:
         """Every language a select may offer."""
         return self.catalogs.languages()
 
-    def _require_newly_chosen_spoken(
-        self, language_tag: str | None, *, stored: str | None
-    ) -> None:
-        if language_tag == stored:
-            return
-        if language_tag is not None and not self.speaks(language_tag):
+    def _require_newly_chosen_spoken(self, language_tag: str, *, stored: str) -> None:
+        if language_tag != stored and not self.catalogs.speaks(language_tag):
             raise UnspokenLanguageError(language_tag)
-
-    def speaks(self, language_tag: str) -> bool:
-        """Say whether this instance has a catalog for a submitted language."""
-        return self.catalogs.speaks(language_tag)

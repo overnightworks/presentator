@@ -4,7 +4,7 @@
 "Runtime._activate_voice" = 18
 
 [file_lines]
-"frontend/src/lib/api/types.ts" = 1978
+"frontend/src/lib/api/types.ts" = 1940
 "speech/tests/test_control_voice_status.py" = 1473
 "src/presentator/application/decks.py" = 935
 "tests/gitmirror/test_mirror.py" = 1192

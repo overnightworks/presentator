@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 
 import type { SettingsView, SettingsWrite } from '../src/lib/api/settings.ts';
-import { expect, signIn, test as base } from './person.ts';
+import { type DeckRecord, expect, signIn, test as base } from './person.ts';
 import {
 	chooseTheme,
 	endsTheSession,
@@ -9,10 +9,13 @@ import {
 	expectsHeaderOnOneLine,
 	expectsNoHorizontalScroll,
 	leftForSignIn,
+	minutesAgo,
+	NOW,
 	sessionOf,
 	startsSignIn,
 	tabbedControlWithRing
 } from './scenario.ts';
+import { answersWith, OWN_SOURCE, ownSourceName, sourceAddress } from './sources.ts';
 
 // The instance defaults are one store per stack, so every cell that asserts a
 // stored value or a repaint first arranges its own baseline through the API.
@@ -20,6 +23,7 @@ const JSON_ACCEPT = { Accept: 'application/json' };
 const SAME_ORIGIN = { ...JSON_ACCEPT, 'Sec-Fetch-Site': 'same-origin' };
 const SETTINGS_ADDRESS = '/settings';
 const SETTINGS_API = '/api/settings';
+const LANGUAGES_ROUTE = '/drive/languages';
 
 async function storedSettings(page: Page): Promise<SettingsView> {
 	const answer = await page.request.get(SETTINGS_API, { headers: JSON_ACCEPT });
@@ -27,33 +31,26 @@ async function storedSettings(page: Page): Promise<SettingsView> {
 	return (await answer.json()) as SettingsView;
 }
 
-// The baseline speaks the language the driven lobby starts with: the one that
-// is not the harness's second language, which a person made with it names.
-const test = base.extend<{ arrangeBaseline: (name?: string) => Promise<SettingsView> }>({
-	arrangeBaseline: async ({ page, browser, baseURL }, use) => {
+// The baseline speaks the language the driven lobby starts with; the harness
+// names it, so no cell restates a tag.
+const test = base.extend<{
+	arrangeBaseline: (name?: string) => Promise<SettingsView>;
+}>({
+	arrangeBaseline: async ({ page }, use) => {
 		await use(async (name = 'Heim') => {
-			const speaker = await browser.newContext({ baseURL });
-			try {
-				await signIn(speaker, { role: 'user', language: 'second' });
-				const account = await speaker.request.get('/api/account', { headers: JSON_ACCEPT });
-				const secondTag = ((await account.json()) as { language_tag: string }).language_tag;
-				const { languages } = await storedSettings(page);
-				const first = languages.find((language) => language.tag !== secondTag);
-				expect(first).toBeDefined();
-				const baseline: SettingsWrite = {
-					name,
-					language_tag: first?.tag ?? '',
-					theme: 'follow-system'
-				};
-				const answer = await page.request.put(SETTINGS_API, {
-					headers: SAME_ORIGIN,
-					data: baseline
-				});
-				expect(answer.status()).toBe(200);
-				return storedSettings(page);
-			} finally {
-				await speaker.close();
-			}
+			const languages = await page.request.get(LANGUAGES_ROUTE);
+			const { first } = (await languages.json()) as { first: string };
+			const baseline: SettingsWrite = {
+				name,
+				language_tag: first,
+				theme: 'follow-system'
+			};
+			const answer = await page.request.put(SETTINGS_API, {
+				headers: SAME_ORIGIN,
+				data: baseline
+			});
+			expect(answer.status()).toBe(200);
+			return storedSettings(page);
 		});
 	}
 });
@@ -398,4 +395,97 @@ test('a signed-out /settings is sent to the sign-in with next set to /settings',
 	await page.goto(SETTINGS_ADDRESS).catch(() => undefined);
 
 	await leftForSignIn(page, started);
+});
+
+// Cell 7: words and ages follow the language the server serves, not the browser's.
+const secondsAgo = (seconds: number): string =>
+	new Date(Date.parse(NOW) - seconds * 1000).toISOString();
+const DAY = 24 * 60 * 60 * 1000;
+const agedDecks: DeckRecord[] = [
+	{
+		state: 'never-built',
+		title: 'Jahresrückblick 2025',
+		changed_at: minutesAgo(6 * 24 * 60)
+	},
+	{
+		state: 'ready',
+		title: 'Kundenfeedback Q3',
+		changed_at: minutesAgo(180),
+		built_at: minutesAgo(12)
+	},
+	{
+		state: 'failed',
+		title: 'Knowledge Fabric',
+		changed_at: minutesAgo(26),
+		attempt: { started_at: minutesAgo(26), failure: { reason: 'no-words' } }
+	},
+	{
+		state: 'building',
+		title: 'Agenten-Fabrik',
+		changed_at: minutesAgo(2),
+		attempt: { started_at: secondsAgo(40) }
+	}
+];
+
+test.describe('an instance in the second language', () => {
+	test.use({
+		person: { role: 'admin', source: OWN_SOURCE, decks: agedDecks },
+		locale: 'en-US'
+	});
+
+	test('words the list, the deck page and the source page in it, with no reload', async ({
+		page,
+		signedIn,
+		arrangeBaseline
+	}) => {
+		const settings = await arrangeBaseline();
+		const second = otherLanguage(settings);
+		const put = await page.request.put(SETTINGS_API, {
+			headers: SAME_ORIGIN,
+			data: {
+				name: settings.name,
+				language_tag: second.tag,
+				theme: settings.theme
+			}
+		});
+		expect(put.status()).toBe(200);
+		try {
+			const { words } = await sessionOf(page);
+			const filled = (template: string, age: string): string => template.replace('{age}', age);
+			await page.clock.setFixedTime(NOW);
+
+			await page.goto('/');
+			await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
+
+			await expect(page.locator('html')).toHaveAttribute('lang', second.tag);
+			await expect(page.locator('table.decks tbody tr .changed')).toHaveText([
+				'vor 2 Minuten',
+				'vor 26 Minuten',
+				'vor 3 Stunden',
+				'vor 6 Tagen'
+			]);
+			const slugs = signedIn?.slugs ?? [];
+			await page.locator('table.decks tbody tr', { hasText: slugs[1] }).getByRole('link').click();
+			await expect(page.locator('.meta')).toContainText(filled(words.deck_built, 'vor 12 Minuten'));
+			expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
+			await page.goto(`/deck/${slugs[0]}`);
+			await expect(page.locator('h1')).toHaveText(agedDecks[0]?.title ?? '');
+			await page.goto(`/deck/${slugs[3]}`);
+			await expect(page.locator('aside.banner')).toContainText(
+				filled(words.deck_building_for, '40 Sekunden')
+			);
+			await page.goto(`/deck/${slugs[2]}`);
+			await expect(page.locator('aside.banner')).toContainText('vor 26 Minuten');
+
+			const name = await ownSourceName(page, OWN_SOURCE);
+			await answersWith(page, name, (view) => ({
+				...view,
+				fetched_at: new Date(Date.parse(NOW) - 3 * DAY).toISOString()
+			}));
+			await page.goto(sourceAddress(name));
+			await expect(page.locator('.meta')).toContainText('vor 3 Tagen');
+		} finally {
+			await arrangeBaseline(settings.name);
+		}
+	});
 });

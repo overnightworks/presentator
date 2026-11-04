@@ -1,8 +1,8 @@
 """How a lobby page is rendered: its words, its look, and the chrome it carries.
 
-Every page resolves its own language and theme, because both are a person's
-choice (ADR 0012) rather than a property of the instance the routes were built
-with.
+Every page resolves its own theme, a person's choice (ADR 0012), and the
+instance's language, rather than a property of the instance the routes were
+built with.
 """
 
 from collections.abc import Iterable

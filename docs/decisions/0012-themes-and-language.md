@@ -27,6 +27,10 @@ Audience: humans and agents writing any user-facing string or any colour.
   duration in the browser too; the server sends the build and attempt instants.
   Amended 2026-11-04: the Sources list words its ages in the browser too, so
   no Python age wording remains.
+  Amended 2026-11-04: no personal language and no Account page; the language is
+  the instance's alone, the theme stays the person's own, written by the person
+  menu (ruling C of [#185](https://github.com/overnightworks/presentator/issues/185),
+  item #769).
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06, including
   [#8](https://github.com/overnightworks/presentator/issues/8) line 22
@@ -82,9 +86,9 @@ pages until the last of them moves.
 The person menu on those pages is appkit's `AccountMenu` in a native popover,
 and the footer is its `LegalLinks`; presentator draws only the round button.
 Ages ("2 minutes ago") are worded by the browser with `Intl.RelativeTimeFormat`
-in the person's language tag from the session, so they change with the stored
-language and no catalog holds a unit word; the server sends the changed instant
-only. A running build's duration is worded the same way, in its largest whole
+in the language tag from the session, which is the instance's, so they change
+with the instance language and no catalog holds a unit word; the server sends
+the changed instant only. A running build's duration is worded the same way, in its largest whole
 unit with `Intl.NumberFormat`, and the deck page's build and attempt instants
 are on the wire; its wording at a unit's edge may differ from what Babel said.
 Babel stays for the catalog files. A theme or language
@@ -138,19 +142,19 @@ Amendment 2026-10-29: the reader's resolved catalog is also served as data by
 operator ruling 2026-09-06: a per-user preference is no longer deferred, and
 there is no standalone theme toggle in the header bar.
 
-Language and theme resolve in this order; the first set value wins:
+The language is the instance default alone, set by an admin under Settings.
+The theme resolves in this order; the first set value wins:
 
-1. The signed-in person's Account preference, which overrides the instance
-   default for that person alone.
+1. The signed-in person's own theme, written by the person menu, which
+   overrides the instance default for that person alone.
 2. The instance default, set by an admin under Settings.
 
-An unset higher level falls through. Account does not write the instance
-default.
+An unset person's theme falls through to the instance default.
 
 The lobby header follows the app convention: product name and sections on the
 left (Decks, and Settings for admins); one person control on the right, opening
-Account, Theme (follow system / light / dark), and Log out. The Theme entry in
-that person menu writes the Account preference.
+the central account, Theme (follow system / light / dark), and Log out. The
+Theme entry in that person menu writes the person's theme override.
 
 Presenter and projector views use Slidev's own `d` key for dark mode. That is
 the deck's own dark mode, not the lobby theme.
@@ -197,12 +201,14 @@ Amendment 2026-10-29: the addon overlay is the stated exception.
   pulse in the dot's own colour in both modes.
 - English-only at start means the operator's own German talks run under an
   English interface until a German catalog is added. Adding it is a file.
-- The Settings/Account structure owns these controls
+- Settings owns the instance defaults
   ([#8](https://github.com/overnightworks/presentator/issues/8) line 22,
   operator ruling 2026-09-06): instance defaults live under Settings for admins
-  (General, alongside Sources and Users); personal overrides live under
-  Account; Theme in the person menu writes that Account preference. There is
-  no standalone theme toggle in the header bar. The
+  (General, alongside Sources and Users); the theme is the person's own, in the
+  person menu. There is no Account page and no personal language; a personal
+  language waits for the central account, as its own item at webauth and edge
+  once someone asks (ruling C of #185, 2026-11-04). There is no standalone
+  theme toggle in the header bar. The
   [ADR 0008](0008-lobby-server-rendered.md) lobby therefore gains a Settings
   area; that record still owns how the lobby is built.
 

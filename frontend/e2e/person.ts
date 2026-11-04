@@ -25,9 +25,6 @@ export interface DeckRecord {
 
 export interface Person {
 	role: 'admin' | 'user';
-	// The one language besides English that the driven lobby speaks, by name:
-	// tests/support/lobby_drive.py owns its tag.
-	language?: 'second';
 	decks?: DeckRecord[];
 	// The address of a source this person owns.
 	source?: string;
