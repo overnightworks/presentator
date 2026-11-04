@@ -22,8 +22,6 @@ class LobbyText:
     theme_follow_system: str
     theme_light: str
     theme_dark: str
-    role_admin: str
-    role_user: str
     footer_impressum: str
     footer_datenschutz: str
     decks_title: str
@@ -70,11 +68,6 @@ class LobbyText:
     settings_language_hint: str
     settings_default_theme: str
     settings_save: str
-    account_title: str
-    account_preferences: str
-    account_language: str
-    account_theme: str
-    account_instance_default: str
     sources_column_source: str
     sources_column_fetched: str
     sources_fetch_now: str

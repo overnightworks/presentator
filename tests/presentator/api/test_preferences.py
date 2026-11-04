@@ -1,46 +1,15 @@
-"""Settings, Account, and the person menu, driven the way a browser drives them."""
+"""The Jinja header's person menu: its theme rows, driven as a browser drives them."""
 
-import re
-from dataclasses import replace
 from http import HTTPStatus
 
 import pytest
-from httpx2 import Response
 
-from presentator.api.preferences import ACCOUNT, THEME
+from presentator.api.preferences import THEME
 from presentator.contracts.preferences import ThemeChoice
-from presentator.contracts.text import Catalogs
-from tests.support.lobby import (
-    CATALOGS,
-    ENGLISH,
-    NEIGHBOUR,
-    USERNAME,
-    Lobby,
-    a_lobby,
-)
+from tests.support.lobby import ENGLISH, NEIGHBOUR, Lobby, a_lobby
 
-_GERMAN = replace(
-    ENGLISH,
-    language_tag="de",
-    language_name="Deutsch",
-    account_title="Konto",
-)
-_NO_OVERRIDE = ""
-_SELECTED = re.compile(r'value="([^"]+)"\s*selected')
-
-
-def what_the_selects_show(page: str) -> list[str]:
-    """The value every select on the page stands on, in the order they appear."""
-    return _SELECTED.findall(page)
-
-
-def an_instance_of_two_people(*, catalogs: Catalogs = CATALOGS) -> Lobby:
-    """An admin and a person without the role, both able to sign in."""
-    lobby = a_lobby(
-        catalogs=catalogs,
-    )
-    lobby.sign_in()
-    return lobby
+_A_JINJA_PAGE = "/settings/sources"
+_SESSION = "/api/session"
 
 
 def signed_in_as(lobby: Lobby, username: str) -> None:
@@ -48,34 +17,28 @@ def signed_in_as(lobby: Lobby, username: str) -> None:
     lobby.sign_in(username=username)
 
 
-def save_account(lobby: Lobby, *, language: str, theme: str) -> Response:
-    return lobby.client.post(ACCOUNT, data={"language": language, "theme": theme})
+def the_stored_theme(lobby: Lobby) -> str:
+    return str(lobby.client.get(_SESSION).json()["theme"])
 
 
 @pytest.fixture
 def instance() -> Lobby:
-    return an_instance_of_two_people()
+    lobby = a_lobby()
+    lobby.sign_in()
+    return lobby
 
 
-def test_only_an_admin_is_offered_the_settings_section(instance: Lobby) -> None:
-    assert ENGLISH.section_settings in instance.client.get(ACCOUNT).text
-
-    signed_in_as(instance, NEIGHBOUR)
-
-    assert ENGLISH.section_settings not in instance.client.get(ACCOUNT).text
-
-
-def test_the_person_menu_offers_account_the_theme_rows_and_log_out(
+def test_the_person_menu_offers_the_theme_rows_and_log_out_and_no_link_to_account(
     instance: Lobby,
 ) -> None:
-    page = instance.client.get(ACCOUNT).text
+    page = instance.client.get(_A_JINJA_PAGE).text
 
-    assert ENGLISH.menu_account in page
     assert ENGLISH.menu_theme in page
     assert ENGLISH.theme_follow_system in page
     assert ENGLISH.theme_light in page
     assert ENGLISH.theme_dark in page
     assert ENGLISH.log_out in page
+    assert 'href="/account"' not in page
 
 
 def test_choosing_dark_in_the_person_menu_paints_that_persons_pages(
@@ -85,7 +48,7 @@ def test_choosing_dark_in_the_person_menu_paints_that_persons_pages(
 
     assert chosen.status_code == HTTPStatus.NO_CONTENT
     assert chosen.headers["HX-Refresh"] == "true"
-    assert 'data-theme="dark"' in instance.client.get(ACCOUNT).text
+    assert the_stored_theme(instance) == ThemeChoice.DARK.value
 
 
 def test_a_theme_chosen_in_the_menu_leaves_the_neighbours_pages_alone(
@@ -95,7 +58,7 @@ def test_a_theme_chosen_in_the_menu_leaves_the_neighbours_pages_alone(
 
     signed_in_as(instance, NEIGHBOUR)
 
-    assert "data-theme" not in instance.client.get(ACCOUNT).text
+    assert the_stored_theme(instance) == ThemeChoice.FOLLOW_SYSTEM.value
 
 
 def test_following_the_system_again_writes_no_theme_onto_the_page(
@@ -105,91 +68,13 @@ def test_following_the_system_again_writes_no_theme_onto_the_page(
 
     instance.client.post(THEME, data={"theme": ThemeChoice.FOLLOW_SYSTEM.value})
 
-    assert "data-theme" not in instance.client.get(ACCOUNT).text
-
-
-def test_account_shows_who_you_are_and_what_you_chose(instance: Lobby) -> None:
-    save_account(instance, language=ENGLISH.language_tag, theme=ThemeChoice.LIGHT.value)
-
-    page = instance.client.get(ACCOUNT).text
-
-    assert USERNAME in page
-    assert ENGLISH.role_admin in page
-    assert what_the_selects_show(page) == [
-        ENGLISH.language_tag,
-        ThemeChoice.LIGHT.value,
-    ]
-
-
-def test_a_person_without_the_admin_role_reads_their_role_on_account(
-    instance: Lobby,
-) -> None:
-    signed_in_as(instance, NEIGHBOUR)
-
-    assert ENGLISH.role_user in instance.client.get(ACCOUNT).text
-
-
-def test_an_account_choice_paints_that_persons_pages_and_nobody_elses(
-    instance: Lobby,
-) -> None:
-    changed = save_account(
-        instance,
-        language=ENGLISH.language_tag,
-        theme=ThemeChoice.DARK.value,
-    )
-
-    assert changed.status_code == HTTPStatus.NO_CONTENT
-    assert changed.headers["HX-Refresh"] == "true"
-    assert 'data-theme="dark"' in instance.client.get(ACCOUNT).text
-    signed_in_as(instance, NEIGHBOUR)
-    assert "data-theme" not in instance.client.get(ACCOUNT).text
-
-
-def test_handing_the_theme_back_to_the_instance_follows_it_again(
-    instance: Lobby,
-) -> None:
-    save_account(instance, language=_NO_OVERRIDE, theme=ThemeChoice.DARK.value)
-
-    save_account(instance, language=_NO_OVERRIDE, theme=_NO_OVERRIDE)
-
-    assert "data-theme" not in instance.client.get(ACCOUNT).text
-
-
-def test_an_account_language_switches_that_persons_words_only() -> None:
-    instance = an_instance_of_two_people(
-        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN}),
-    )
-
-    save_account(instance, language=_GERMAN.language_tag, theme=_NO_OVERRIDE)
-
-    assert _GERMAN.account_title in instance.client.get(ACCOUNT).text
-    signed_in_as(instance, NEIGHBOUR)
-    assert ENGLISH.account_title in instance.client.get(ACCOUNT).text
-
-
-def test_a_catalog_file_this_instance_has_is_offered_as_a_choice() -> None:
-    instance = an_instance_of_two_people(
-        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN}),
-    )
-
-    page = instance.client.get(ACCOUNT).text
-
-    assert _GERMAN.language_name in page
-    assert ENGLISH.language_name in page
-
-
-def test_a_language_the_instance_does_not_speak_is_refused_on_account(
-    instance: Lobby,
-) -> None:
-    refused = save_account(instance, language="fr", theme=_NO_OVERRIDE)
-
-    assert refused.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    assert the_stored_theme(instance) == ThemeChoice.FOLLOW_SYSTEM.value
 
 
 def test_the_menu_that_writes_a_theme_carries_the_script_that_posts_it(
     instance: Lobby,
 ) -> None:
-    page = instance.client.get(ACCOUNT).text
+    page = instance.client.get(_A_JINJA_PAGE).text
 
     assert '<script src="/static/htmx.min.js" defer></script>' in page
     assert instance.client.get("/static/htmx.min.js").status_code == HTTPStatus.OK

@@ -44,14 +44,12 @@ from presentator.contracts.decks import (
     DeckState,
 )
 from presentator.contracts.models import Role, User
-from presentator.contracts.preferences import PersonPreferences
 from presentator.contracts.text import DEFAULT_LANGUAGE_TAG, Catalogs
 from presentator.host.main import web_auth_config_for
 from tests.presentator.application.support.fakes import (
     LOCAL_MOUNT_EXAMPLE,
     FakeDeckStore,
     FakePeople,
-    FakePersonPreferencesStore,
     FakeSourceStore,
 )
 from tests.support.lobby import (
@@ -78,6 +76,7 @@ _MACHINE_ROUTES: Final = "/api/admin/"
 _SCHEMA_REFERENCE: Final = "#/components/schemas/"
 _SECRET: Final = SecretStr("a drive's own key of at least 32 bytes")
 _PERSON_ROUTE: Final = "/drive/person"
+_LANGUAGES_ROUTE: Final = "/drive/languages"
 _DECK_ROUTE: Final = f"{_PERSON_ROUTE}/{{person_id}}/deck"
 _LOCAL_MOUNT_ROUTE: Final = "/drive/local-mount"
 # Chromium words ages in this language and has none for `eo`; it is no shipped
@@ -154,14 +153,12 @@ class DeckRecord(BaseModel):
 class NewPerson(BaseModel):
     """Who a test of the drive asks for.
 
-    A role, the second language by name (the person's own choice, the one
-    the harness builds), deck records and the address of a source of their own.
+    A role, deck records and the address of a source of their own.
     """
 
     model_config = ConfigDict(frozen=True)
 
     role: Role
-    language: Literal["second"] | None = None
     decks: tuple[DeckRecord, ...] = ()
     source: str | None = None
 
@@ -171,14 +168,13 @@ class _Newcomers:
     """The stores a new person is entered into, and the names it hands out."""
 
     people: FakePeople
-    preferences: FakePersonPreferencesStore
     decks: FakeDeckStore
     sources: FakeSourceStore
     config: WebAuthConfig
     numbers: Iterator[int]
 
     def enter(self, wanted: NewPerson) -> dict[str, JsonNode]:
-        """Make the person with their decks, source and language; answer them."""
+        """Make the person with their decks and source; answer them."""
         number = next(self.numbers)
         person = User(
             id=f"id-of-person-{number}", username=f"person-{number}", role=wanted.role
@@ -195,12 +191,6 @@ class _Newcomers:
         slugs: list[JsonNode] = [
             self.add_deck(person.id, record) for record in wanted.decks
         ]
-        self.preferences.write(
-            person.id,
-            PersonPreferences(
-                language_tag=SECOND_LANGUAGE_TAG if wanted.language else None
-            ),
-        )
         issued = Response()
         issue_session_cookies(issued, self.people.open_session_for(person), self.config)
         return {"person_id": person.id, "slugs": slugs, **_session_cookies(issued)}
@@ -284,6 +274,11 @@ def _second_language(catalogs: Catalogs) -> Catalogs:
     return Catalogs(by_tag={**catalogs.by_tag, SECOND_LANGUAGE_TAG: second})
 
 
+def _the_two_languages() -> dict[str, str]:
+    """The tag the lobby starts with and the second one, so no spec restates them."""
+    return {"first": DEFAULT_LANGUAGE_TAG, "second": SECOND_LANGUAGE_TAG}
+
+
 def _driven_lobby(build: Path, origin: str) -> FastAPI:
     """The lobby over in-memory stores inside the outer app that makes its people."""
     people = a_crowd()
@@ -301,19 +296,17 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
         ),
         config=config,
     )
-    chosen = FakePersonPreferencesStore()
     store = FakeDeckStore()
     sources = FakeSourceStore()
     lobby, _ = a_lobby_app(
         people=people,
-        preferences=a_preferences(catalogs=_second_language(CATALOGS), people=chosen),
+        preferences=a_preferences(catalogs=_second_language(CATALOGS)),
         given=GivenDecks(store=store, source_store=sources),
         signing_in=SigningIn(sessions=people.sessions, auth=auth),
         shell=shell,
     )
     newcomers = _Newcomers(
         people=people,
-        preferences=chosen,
         decks=store,
         sources=sources,
         config=config,
@@ -322,6 +315,7 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
     outer = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     outer.add_api_route(_PERSON_ROUTE, newcomers.enter, methods=["POST"])
+    outer.add_api_route(_LANGUAGES_ROUTE, _the_two_languages, methods=["GET"])
     outer.add_api_route(_DECK_ROUTE, newcomers.add_deck_of, methods=["POST"])
     outer.add_api_route(_LOCAL_MOUNT_ROUTE, _local_mount, methods=["GET"])
     outer.mount("/", lobby)

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from httpx2 import Response
 
 from presentator.api.hooks import hook_address
-from presentator.api.preferences import ACCOUNT, SETTINGS
+from presentator.api.preferences import SETTINGS
 from presentator.api.sources import REMOVE, REMOVE_CONFIRMED, SOURCES
 from presentator.application.decks import RESERVED_SOURCE_NAME, Decks
 from presentator.contracts.decks import (
@@ -143,14 +143,6 @@ def test_a_person_without_the_admin_role_is_refused_at_sources(
     }[method]()
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
-
-
-def test_only_an_admin_is_offered_the_settings_section(instance: Lobby) -> None:
-    assert ENGLISH.section_settings in instance.client.get(ACCOUNT).text
-
-    signed_in_as(instance, NEIGHBOUR)
-
-    assert ENGLISH.section_settings not in instance.client.get(ACCOUNT).text
 
 
 def test_the_settings_link_is_current_on_the_sources_address(instance: Lobby) -> None:
