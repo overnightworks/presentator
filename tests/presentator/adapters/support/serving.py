@@ -22,13 +22,6 @@ def unix_listener(path: Path) -> socket.socket:
     return listener
 
 
-def loopback_listener() -> socket.socket:
-    """Bind 127.0.0.1 on a port the operating system picks."""
-    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    listener.bind(("127.0.0.1", 0))
-    return listener
-
-
 class _AnnouncingServer(uvicorn.Server):
     """A uvicorn server that says when it has started, so a stop never beats it."""
 
