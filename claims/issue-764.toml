@@ -1,0 +1,8 @@
+claim_id = "fef2ce85997c49dca06014550568aa99"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "d765ba079a3465215edafb75940ee92177dc5db6"
+branch = "claude/issue-764-the-source-list-carries-a-failed-run-s-r"
+scope = ["docs/reference/sources.md", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "quality/baseline.toml", "quality/config.toml", "src/presentator/api/source_api.py", "src/presentator/application/decks.py", "src/presentator/application/source_state.py", "src/presentator/contracts/decks.py", "tests/presentator/api/test_source_api.py", "tests/presentator/api/test_source_api_check.py"]
+opened_commit = "e323e158bbe8471829b1025f0a2be7d45563ce56"
+whole_reason = "The two wire fields, the one decision they share, its move out of a file at its size ratchet and the regenerated client with its declared raise are one change: the fields without the decision copy it, the move without the fields has no caller, and the regeneration without the declaration fails the baseline."
