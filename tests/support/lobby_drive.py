@@ -2,11 +2,12 @@
 
 `serve` composes the whole lobby over the in-memory stores the route tests
 use, with the app's real build, inside an outer app, and serves it at an http
-origin on this machine; nobody signs in at an issuer. The outer app's one
-drive-only route sits outside the lobby's gate: it makes a new person (a role,
+origin on this machine; nobody signs in at an issuer. The outer app's
+drive-only routes sit outside the lobby's gate: one makes a new person (a role,
 a language, deck records and a source of their own) and answers their id and
 session cookies, so each test of the drive signs in as its own person. A second
-drive-only route adds a deck record to a person it made. `openapi` writes the
+drive-only route adds a deck record to a person it made, and a third answers
+the folder local sources are accepted under. `openapi` writes the
 document the lobby's wire types are generated from, so the empty-regeneration
 check holds the committed one to the routes.
 """
@@ -47,6 +48,7 @@ from presentator.contracts.preferences import PersonPreferences
 from presentator.contracts.text import DEFAULT_LANGUAGE_TAG, Catalogs
 from presentator.host.main import web_auth_config_for
 from tests.presentator.application.support.fakes import (
+    LOCAL_MOUNT_EXAMPLE,
     FakeDeckStore,
     FakePeople,
     FakePersonPreferencesStore,
@@ -77,6 +79,7 @@ _SCHEMA_REFERENCE: Final = "#/components/schemas/"
 _SECRET: Final = SecretStr("a drive's own key of at least 32 bytes")
 _PERSON_ROUTE: Final = "/drive/person"
 _DECK_ROUTE: Final = f"{_PERSON_ROUTE}/{{person_id}}/deck"
+_LOCAL_MOUNT_ROUTE: Final = "/drive/local-mount"
 # Chromium words ages in this language and has none for `eo`; it is no shipped
 # catalog, so the drive builds it from English (`_second_language`).
 SECOND_LANGUAGE_TAG: Final = "de"
@@ -320,8 +323,14 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
 
     outer.add_api_route(_PERSON_ROUTE, newcomers.enter, methods=["POST"])
     outer.add_api_route(_DECK_ROUTE, newcomers.add_deck_of, methods=["POST"])
+    outer.add_api_route(_LOCAL_MOUNT_ROUTE, _local_mount, methods=["GET"])
     outer.mount("/", lobby)
     return outer
+
+
+def _local_mount() -> dict[str, str]:
+    """The folder the driven lobby accepts local sources under."""
+    return {"path": str(LOCAL_MOUNT_EXAMPLE)}
 
 
 def _session_cookies(issued: Response) -> dict[str, JsonNode]:
