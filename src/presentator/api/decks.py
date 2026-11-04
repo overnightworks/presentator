@@ -3,12 +3,11 @@
 The lobby app is the deck's page and the lobby serves the download; the talk
 host serves the talk, and the page links there. The address names a deck; what
 that deck's row points at is what the talk is served from and what the
-download hands over. Nothing a
-request carries ever becomes part of a path: Starlette's static files resolve
-every asset below the build directory and refuse whatever would leave it, a
-path that is not a file is the application's `index.html`, and the export is
-the file the row names. The session guard in front of the whole lobby covers
-the download.
+download hands over. Nothing a request carries ever becomes part of a path:
+Starlette's static files resolve every asset below the build directory and
+refuse whatever would leave it, a path that is not a file is the application's
+`index.html`, and the export is the file the row names. The session guard in
+front of the whole lobby covers the download.
 """
 
 import os

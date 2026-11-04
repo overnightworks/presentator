@@ -219,6 +219,9 @@
 	.note-card h1 {
 		margin: 0;
 		font-size: 20px;
+		font-weight: 400;
+		letter-spacing: 0.03em;
+		text-transform: none;
 	}
 	.note-card p {
 		margin: 0;

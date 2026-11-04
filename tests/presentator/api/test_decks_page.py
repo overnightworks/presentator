@@ -314,7 +314,7 @@ def test_a_pdf_replaced_by_a_link_answers_as_if_it_were_missing(
     assert_the_app_under_not_found(signed_in, refused)
 
 
-def test_a_deck_removed_by_reconciliation_answers_nothing_until_it_returns(
+def test_a_deck_removed_by_reconciliation_answers_not_found_until_it_returns(
     tmp_path: Path,
 ) -> None:
     store = a_deck_store(built=a_build())

@@ -7,10 +7,10 @@ import type { PageLoad } from './$types';
 export const load: PageLoad = async ({ fetch, params, url }) => {
 	try {
 		return { deck: await readDeck(fetch, params.slug, url) };
-	} catch (failure) {
-		if (isHttpError(failure, 404)) {
+	} catch (error_) {
+		if (isHttpError(error_, 404)) {
 			return { deck: null };
 		}
-		throw failure;
+		throw error_;
 	}
 };

@@ -65,16 +65,17 @@ not the browser's own locale.
 `/deck/<folder>` is a page of the lobby app; it reads `/api/decks/<folder>`,
 words the state, the age of the build and the length of a running build in the
 browser from the catalog and the person's language tag, and shows an unknown
-deck's board inside the lobby. It shows the deck's title, its folder, the state of its build,
-the address it was mirrored from, the short commit the talk it delivers was
-built from, and how long ago that build ran. Until a build has switched
-anything over, the commit shown is the one the source last carried under that
-folder. Beside the state, the page names the theme set this instance builds
-with, read from the toolchain project's own `package.json` and omitted rather
-than shown empty while that project cannot be read
-([ADR 0014](../decisions/0014-toolchain-owns-build-dependencies.md)).
-The same facts, with the instants of the build and of the attempt, are readable as JSON at `/api/decks/<folder>`; another person's deck
-and an unknown one answer the same bare 404 problem. A failed attempt carries its
+deck's board inside the lobby. It shows the deck's title, its folder, the state
+of its build, the address it was mirrored from, the short commit the talk it
+delivers was built from, and how long ago that build ran. Until a build has
+switched anything over, the commit shown is the one the source last carried
+under that folder. Beside the state, the page names the theme set this instance
+builds with, read from the toolchain project's own `package.json` and omitted
+rather than shown empty while that project cannot be read ([ADR
+0014](../decisions/0014-toolchain-owns-build-dependencies.md)).
+The same facts, with the instants of the build and of the attempt, are readable
+as JSON at `/api/decks/<folder>`; another person's deck and an unknown one
+answer the same bare 404 problem. A failed attempt carries its
 `failure` as a reason code (`toolchain`, `no-words` or one of the server's
 refusals, see [builds](builds.md#reason-codes)), the counts that reason names and,
 for `toolchain` only, the toolchain's own text; it is `null` while the attempt
