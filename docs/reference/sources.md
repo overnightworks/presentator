@@ -147,11 +147,11 @@ with Copy and its own Renew, the newest three runs, and its decks (only those
 the viewer owns). SSH Renew replaces the local pair immediately, leaves the
 replacement public half ready to register, and neither updates the Git host nor
 keeps an old-key overlap; HTTPS renewal takes a new value and shows nothing
-back; webhook renewal shows its new value exactly once to the session that
-renewed it.
+back; webhook renewal shows its new value in the page that renewed it, held in
+that page's memory only: leaving it, reloading, back and forward lose it.
 
 On the Sources list, each row's *Fetch now* refreshes only that source and
-returns to the list; on the source's page it returns to that page.
+returns to the list; on the source's page it refreshes the page in place.
 
 The list, a source's page and *Fetch now* are also served as JSON for an admin
 (a session or a person's bearer). A signed-in non-admin gets a 403 problem;
@@ -162,7 +162,8 @@ redirect instead:
 They carry the state, the stored `fetched_at` instant of the newest run and, on
 the page, the absolute `hook_url`, the SSH `public_key`, the newest three runs
 (each with its own state, `at`, short `commit` or failure `reason`) and the
-viewer's own decks. They carry instants where the Jinja pages word ages, and no
+viewer's own decks. They carry instants, which the source's page words in the browser (the Jinja
+list still words its ages on the server until it moves), and no
 secret: the webhook secret comes back only in the answer to create or renew.
 
 Renewing access is also a JSON write for an admin, with the same refusals:

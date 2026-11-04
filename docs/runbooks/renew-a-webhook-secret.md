@@ -16,7 +16,7 @@ it holds the new value.
 ## Steps
 
 1. Open `/settings/sources/<name>` and choose the webhook's own Renew. The new
-   value is shown exactly once, to the session that renewed it. The old value
+   value is shown on the page that renewed it, until you leave it. The old value
    stops working.
 2. Put the new value into the caller of the hook (the Git host's webhook or
    `post-receive` hook).
