@@ -48,7 +48,15 @@ interaction became a template, a fragment and a form route.
   `/`, is the first page in the group. A 401 from any read or write leaves the
   app by a document navigation to the sign-in with the current address as
   `next`, and its promise never settles, so no error page shows on the way
-  out.
+  out. A load names its own `url` as `next`, because it runs before the
+  address commits.
+- A 404 or 403 from the API becomes SvelteKit's `error()` with its status, and
+  any other refusal fails loud. The root `+error.svelte` shows the lobby's
+  header and the unknown-address words, answered at 200 by the shell. There is
+  no catch-all route, so an address no route claims still reaches the server
+  by a page load. The header is one component for the `(lobby)` group and the
+  error page; `aria-current` follows the section of the address (Decks on
+  exactly `/`, Settings on `/settings` and below, none elsewhere).
 - The look comes from appkit's npm tarball, pinned by release URL in
   `frontend/package.json` with the lockfile's integrity, and imported from
   `node_modules`; presentator adds only its colour in the app slot.
