@@ -1,8 +1,0 @@
-claim_id = "b3ff7b8981ea4381a1f639ae1ad57161"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "30dd554dba97d071251266b7d507b50ace90593c"
-branch = "claude/issue-746-the-voice-page-and-api-voice-leave-the-l"
-scope = ["docs/README.md", "docs/reference/co-presenter-and-voice.md", "docs/reference/lobby-settings-and-appearance.md", "docs/requirements/0001-voice-models.md", "docs/runbooks/run-the-speech-service-on-the-host.md", "frontend/e2e/home.spec.ts", "frontend/e2e/lobby.spec.ts", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "quality/baseline.toml", "slidev/tests/lobby-static-scripts.test.ts", "src/presentator/adapters/catalogs/en.po", "src/presentator/adapters/speech.py", "src/presentator/api/auth.py", "src/presentator/api/preferences.py", "src/presentator/api/static/lobby.css", "src/presentator/api/static/voice-sample.js", "src/presentator/api/templates/settings_tabs.html", "src/presentator/api/templates/voice.html", "src/presentator/api/voice_api.py", "src/presentator/application/voice.py", "src/presentator/contracts/text.py", "src/presentator/contracts/voice.py", "src/presentator/host/main.py", "src/presentator/ports/speech.py", "tests/presentator/adapters/test_speech.py", "tests/presentator/api/test_preferences.py", "tests/presentator/api/test_voice_api.py", "tests/presentator/application/test_voice.py", "tests/support/lobby.py", "tests/support/vulture_allowlist.py"]
-opened_commit = "410921a3812c4d61de022368604d008bda5be7b9"
-whole_reason = "The voice surface leaves whole: a route, port or word left behind is dead code reached only by tests."
