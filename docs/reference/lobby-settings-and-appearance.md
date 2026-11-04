@@ -27,8 +27,8 @@ is no Users tab.
 - General is a SvelteKit page under the settings layout, which draws the tab
   strip. It holds those instance defaults. Save writes all three at once and
   shows what is stored; the page repaints in the same document, because the
-  session is read again, so a person's own theme still outranks the default. The instance name is kept and shown
-  back there and read nowhere else.
+  session is read again, so a person's own theme still outranks the default. The instance name is
+  kept and shown back there and read nowhere else.
 - Sources lists each source with the state and age of its newest run
   ([sources](sources.md)). An instance with no source says what a source is
   and what you need for it.

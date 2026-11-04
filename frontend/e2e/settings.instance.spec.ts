@@ -252,9 +252,14 @@ test.describe('as an admin', () => {
 		await page.keyboard.press('Escape');
 
 		await page.getByLabel(words.settings_default_theme).selectOption({ label: words.theme_dark });
+		const sessionRead = page.waitForResponse(
+			(received) =>
+				new URL(received.url()).pathname === '/api/session' && received.request().method() === 'GET'
+		);
 		await page.getByRole('button', { name: words.settings_save }).click();
 
 		await expect.poll(async () => (await storedSettings(page)).theme).toBe('dark');
+		await sessionRead;
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 	});
 
