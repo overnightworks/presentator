@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { FailureView } from '#lib/api/decks.ts';
 import type { LobbyText } from '#lib/api/session.ts';
-import { buildsWith, failureWords, fill, stateWords } from '#lib/deck.ts';
+import { buildsWith, failureWords, stateWords } from '#lib/deck.ts';
 
 // A scenario's own templates: none of them is the catalog's sentence.
 const words = {
@@ -26,16 +26,6 @@ const failure = (overrides: Partial<FailureView>): FailureView => ({
 	allowed_megabytes: null,
 	allowed_entries: null,
 	...overrides
-});
-
-describe('fill', () => {
-	it('puts each placeholder in place, a repeated one every time', () => {
-		expect(fill('{a} then {b} then {a}', { a: 'one', b: 2 })).toBe('one then 2 then one');
-	});
-
-	it('leaves a sentence without placeholders alone', () => {
-		expect(fill('no gaps', { a: 'one' })).toBe('no gaps');
-	});
 });
 
 describe('stateWords', () => {
