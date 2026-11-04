@@ -38,7 +38,9 @@ from presentator.contracts.models import Role
 from tests.presentator.agent.support.driving import on_an_event_loop
 from tests.presentator.agent.support.transports import RefusingTransport
 from tests.presentator.application.support.fakes import FrozenClock
+from tests.support.leak_support import everything_shown
 from tests.support.lobby import (
+    A_GATEWAY_KEY,
     A_GATEWAY_KEY_FILE,
     AN_API_GROUP,
     AN_ISSUER,
@@ -172,6 +174,45 @@ async def test_a_refused_connection_ends_as_the_plain_unavailable_error() -> Non
         await spoken(answerer)
 
     assert len(refusing.requests) == 1
+
+
+class EchoingTransport(httpx2.MockTransport):
+    """Fails every request with an error text that repeats these words."""
+
+    def __init__(self, words: str) -> None:
+        """Remember `words` for the error text."""
+        super().__init__(self._fail)
+        self._words = words
+
+    async def _fail(self, request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ConnectError(self._words, request=request)
+
+
+@pytest.mark.parametrize("through", ["reply", "transport-error"])
+@on_an_event_loop
+async def test_what_the_gateway_echoes_reaches_no_exception_text_or_log_record(
+    through: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """C10: the key, the subject, the groups and the question stay out of errors."""
+    caplog.set_level(logging.DEBUG)
+    person = AskingPerson(
+        subject="subject-MARKER",
+        role=Role.ADMIN,
+        groups=frozenset({AN_API_GROUP, "/group-MARKER"}),
+    )
+    echoed = f"{A_GATEWAY_KEY} {person.subject} /group-MARKER {THE_QUESTION}"
+    transport: httpx2.AsyncBaseTransport = (
+        FakeGateway(Reply(500, body=echoed.encode()))
+        if through == "reply"
+        else EchoingTransport(echoed)
+    )
+
+    with pytest.raises(CoPresenterUnavailableError) as stopped:
+        await spoken(answerer_over(transport), person)
+
+    shown = everything_shown(caplog.records, errors=[stopped.value])
+    for marker in (A_GATEWAY_KEY, person.subject, "/group-MARKER", THE_QUESTION):
+        assert marker not in shown
 
 
 @on_an_event_loop
