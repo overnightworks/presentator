@@ -1,7 +1,0 @@
-claim_id = "b4775a37f0574ac79aa047ea07fc0969"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "dafe6a87714fb3142649f0dec6e9d55ca4a68b60"
-branch = "claude/issue-757-a-rerun-of-failed-ci-jobs-rebuilds-the-m"
-scope = [".github/workflows/ci.yml"]
-opened_commit = "2d55d622e15428302ae8704d97ee7fe4381f04b1"
