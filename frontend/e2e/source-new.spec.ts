@@ -292,9 +292,9 @@ test.describe('as an admin', () => {
 		const { words } = await sessionOf(page);
 		const name = aName(testInfo);
 		const newerKey = { id: 'a-newer-draft', public_key: 'ssh-ed25519 AAAAnewer a-newer-key' };
-		let draftReads = 0;
+		let createRefused = false;
 		await page.route(`**${KEY_DRAFT_API}`, (route) =>
-			++draftReads === 1 ? route.continue() : route.fulfill({ json: newerKey })
+			createRefused ? route.fulfill({ json: newerKey }) : route.continue()
 		);
 		const real = await page.request.post(SOURCES_API, {
 			headers: SAME_ORIGIN,
@@ -309,15 +309,17 @@ test.describe('as an admin', () => {
 		});
 		expect(real.status()).toBe(422);
 		const refusal = (await real.json()) as { reason: string };
-		await page.route(`**${SOURCES_API}`, (route) =>
-			route.request().method() === 'POST'
-				? route.fulfill({
-						status: 422,
-						contentType: 'application/problem+json',
-						json: { ...refusal, reason: 'deploy-key-unavailable' }
-					})
-				: route.continue()
-		);
+		await page.route(`**${SOURCES_API}`, (route) => {
+			if (route.request().method() !== 'POST') {
+				return route.continue();
+			}
+			createRefused = true;
+			return route.fulfill({
+				status: 422,
+				contentType: 'application/problem+json',
+				json: { ...refusal, reason: 'deploy-key-unavailable' }
+			});
+		});
 		await opensTheForm(page);
 		const before = await keyDraftOf(page);
 		await expect(page.getByText(before.public_key, { exact: true })).toBeVisible();
@@ -481,6 +483,25 @@ test.describe('as an admin', () => {
 		await expect(page.locator('main form')).toBeVisible();
 		await expect(secretField(page, words)).toHaveValue('');
 		await expect(page.locator('body')).not.toContainText(created.webhook_secret);
+	});
+
+	// Cell 5: a page hidden while a secret is typed shows the empty form.
+	test('hiding the page on the form forgets the typed fields and the secret', async ({
+		page
+	}, testInfo) => {
+		const { words } = await sessionOf(page);
+		const name = aName(testInfo);
+		await opensTheForm(page);
+		await fillsTheForm(page, words, {
+			name,
+			url: anHttpsAddress(name),
+			secret: 'a-typed-access-token'
+		});
+
+		await page.evaluate(() => dispatchEvent(new Event('pagehide')));
+
+		await showsTheEmptyForm(page);
+		await expect(secretField(page, words)).toHaveValue('');
 	});
 
 	// Cell 5, the back-forward cache, which this spec enables in Chromium.
@@ -717,7 +738,7 @@ test.describe('as an admin', () => {
 	});
 
 	// Cell 11 (wire): the radio values are the generated ones.
-	test('the segments post the generated access kinds', async ({ page }) => {
+	test('each access segment carries the generated access kind as its value', async ({ page }) => {
 		const { words } = await sessionOf(page);
 		const kinds: Record<string, AccessKind> = {
 			[words.source_access_ssh]: 'ssh-deploy-key',

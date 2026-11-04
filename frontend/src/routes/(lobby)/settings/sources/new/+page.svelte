@@ -60,6 +60,9 @@
 		try {
 			try {
 				await attempt();
+				if (created !== null) {
+					return;
+				}
 			} catch (failure) {
 				refused(failure);
 			}
@@ -94,10 +97,16 @@
 	}
 
 	// A page kept by the back/forward cache is shown again as it was left, so it
-	// leaves nothing to show: the secret is gone before the page is frozen.
+	// leaves nothing to show: the form is empty before the page is frozen.
 	function forget(): void {
 		created = null;
+		name = '';
+		url = '';
+		access = 'https-token';
 		secret = '';
+		banner = null;
+		fingerprint = null;
+		refusal = null;
 		flushSync();
 	}
 </script>

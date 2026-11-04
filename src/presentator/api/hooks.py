@@ -51,7 +51,7 @@ class _FetchHook:
 
 
 def hook_address(name: str) -> str:
-    """The path a host posts to for that source, as the created screen prints it."""
+    """The path a host posts to for that source, as the Add page shows it."""
     return f"{HOOK_CALLS}{name}/{_FETCH}"
 
 

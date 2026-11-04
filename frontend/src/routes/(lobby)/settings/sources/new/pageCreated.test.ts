@@ -98,13 +98,27 @@ describe('the Add source page after a create', () => {
 		expect(document.body.textContent).toContain(words.source_webhook_once);
 	});
 
-	it('forgets the webhook secret and the typed one when the page is hidden', async () => {
+	it('forgets the webhook secret when the page is hidden', async () => {
 		await createdSource();
 
 		window.dispatchEvent(new Event('pagehide'));
 
 		expect(document.body.textContent).not.toContain(created.webhook_secret);
 		expect(document.querySelector('form')).not.toBeNull();
-		expect(document.querySelector<HTMLInputElement>('#source-secret')?.value).toBe('');
+		expect(document.querySelector<HTMLInputElement>('#source-name')?.value).toBe('');
+	});
+
+	it('forgets what was typed on the form when the page is hidden', () => {
+		open();
+		type('source-name', 'talks');
+		type('source-url', 'https://git.test/talks.git');
+		type('source-secret', 'an-access-token');
+
+		window.dispatchEvent(new Event('pagehide'));
+		flushSync();
+
+		for (const field of ['source-name', 'source-url', 'source-secret']) {
+			expect(document.querySelector<HTMLInputElement>(`#${field}`)?.value).toBe('');
+		}
 	});
 });

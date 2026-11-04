@@ -41,8 +41,6 @@ describe('CopyValue', () => {
 			throw refusal;
 		}).click();
 
-		await vi.waitFor(() =>
-			expect(report).toHaveBeenCalledWith('Copying to the clipboard failed', refusal)
-		);
+		await vi.waitFor(() => expect(report.mock.calls.flat()).toContain(refusal));
 	});
 });

@@ -10,7 +10,7 @@ export type SourceProbe = components['schemas']['SourceProbe'];
 
 // `new` is the name no source can have, so the address is never a source's own.
 const NEW_SOURCE_PATH = '/api/sources/new';
-export const SOURCES_PATH = '/api/sources';
+const SOURCES_PATH = '/api/sources';
 
 type Here = Pick<Location, 'pathname' | 'search'>;
 
