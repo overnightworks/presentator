@@ -36,6 +36,7 @@ from presentator.application.copresenter import (
     CoPresenterUse,
     RetryAfter,
 )
+from presentator.contracts.copresenter import DeckText, SlideText
 from presentator.contracts.decks import Build, Deck, Source
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
 from tests.presentator.application.support.fakes import (
@@ -692,6 +693,17 @@ def _echoing_the_key() -> Gateway:
     )
 
 
+def a_deck_text_over_the_clients_bound() -> DeckText:
+    """The asked deck's words, followed by a slide too large for the client."""
+    return replace(
+        A_DECK_TEXT,
+        slides=(
+            *A_DECK_TEXT.slides,
+            SlideText(number=3, title="Lang", body="x" * 5_000_000, notes=""),
+        ),
+    )
+
+
 LEAK_SCENARIOS: Final = {
     "happy": Scenario(),
     "sign-in-again": Scenario(refresh_token=None),
@@ -716,6 +728,9 @@ LEAK_SCENARIOS: Final = {
     "foreign-origin": Scenario(headers={"origin": "https://elsewhere.example"}),
     "question-too-long": Scenario(body={**THE_ASKED_DECK, "said": "x" * 2_001}),
     "deck-name-too-long": Scenario(body={**THE_ASKED_DECK, "deck": "d" * 5_000}),
+    "deck-content-over-the-clients-bound": Scenario(
+        texts=FakeDeckTexts(text=a_deck_text_over_the_clients_bound())
+    ),
     "no-words": Scenario(gateway=lambda: FakeGateway(completion(""))),
     "refused-connection": Scenario(gateway=RefusingTransport),
     "speech-fails-on-the-second-sentence": Scenario(
