@@ -88,9 +88,9 @@ interaction became a template, a fragment and a form route.
   `Refused`, worded by the catalog. A create answer replaces the form in the
   same document, and the bar takes the source's address by `goto` with
   `shallow` and `replace`: no new history entry, empty page state. Kit keeps
-  `page.url` at the Add address and records the source's address as the
-  entry's `pageUrl`, which a reload keeps, so Back to that entry loads the Add
-  route under the source's address. The Add page checks `page.shallow` once, at
+  `page.url` at the Add address and records that Add address as the entry's
+  `pageUrl` while the browser's own address is the source's, so Back to that
+  entry loads the Add route under the source's address. The Add page checks `page.shallow` once, at
   mount and never reactively (a reactive check would destroy the display right
   after a create), and replaces itself by the source's page. The secret is in
   no URL, no storage, no title and no later GET. On `pagehide` the page forgets
