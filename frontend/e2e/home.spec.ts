@@ -309,8 +309,17 @@ test.describe('the theme', () => {
 		page
 	}) => {
 		const { words } = await sessionOf(page);
+		const backgroundOf = () =>
+			page.locator('body').evaluate((body) => getComputedStyle(body).backgroundColor);
 		await page.goto('/');
+		await chooseTheme(page, 'Light');
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+		const lightBackground = await backgroundOf();
+		await page.keyboard.press('Escape');
 		await chooseTheme(page, 'Dark');
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+		const darkBackground = await backgroundOf();
+		expect(darkBackground).not.toBe(lightBackground);
 		await expect.poll(async () => (await sessionOf(page)).theme).toBe('dark');
 
 		await page.goto('/settings/voice');
@@ -326,9 +335,9 @@ test.describe('the theme', () => {
 		await chooseTheme(page, 'Follow system');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'follow-system');
 		await page.emulateMedia({ colorScheme: 'dark' });
-		await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(13, 13, 13)');
+		await expect(page.locator('body')).toHaveCSS('background-color', darkBackground);
 		await page.emulateMedia({ colorScheme: 'light' });
-		await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(244, 244, 246)');
+		await expect(page.locator('body')).toHaveCSS('background-color', lightBackground);
 	});
 
 	test('snaps the radio back when the write is refused', async ({ page }) => {

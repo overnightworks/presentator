@@ -6,13 +6,14 @@ Settings and Account do and how the lobby is themed.
 ## Header
 
 Every signed-in page carries the picture's header
-([mockups](../mockups/README.md)): the product name, the Decks section,
-Settings for an admin, and one round person button. On the SvelteKit pages
-(Home so far) the button opens appkit's account menu in a native popover: the
+([mockups](../mockups/README.md)): the product name, the Decks section and
+Settings for an admin. On the SvelteKit pages (Home so far) it also has one
+round person button, which opens appkit's account menu in a native popover: the
 person's name opening the central account in a new tab, the three theme rows,
-Log out, and the legal links; Escape and a click outside close it. The same
-menu is what a Jinja page's header still draws as a details control. The
-Svelte header has no way to Account yet. The footer carries the Impressum and
+Log out, and the legal links; Escape and a click outside close it. The Svelte
+header has no way to Account yet. A retained Jinja page's header shows the
+username as a details control instead, whose menu holds a link to the local
+account page, the three theme rows and Log out, without legal links. The footer carries the Impressum and
 the Datenschutz links.
 
 ## Settings
