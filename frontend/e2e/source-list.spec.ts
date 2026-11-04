@@ -409,10 +409,10 @@ test.describe('as an admin', () => {
 });
 
 // Cell 11.
-test.describe('in the second language', () => {
-	test.use({ person: { role: 'admin', language: 'second' } });
+test.describe('in the instance language', () => {
+	test.use({ person: { role: 'admin' } });
 
-	test('words the age of the fetch in the browser, in the session language', async ({ page }) => {
+	test('words the age of the fetch in the browser, in the instance language', async ({ page }) => {
 		const session = await sessionOf(page);
 		await listAnswers(page, [aSummary('one-source', { fetched_at: minutesAgo(3 * 24 * 60) })]);
 
