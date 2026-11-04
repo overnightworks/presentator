@@ -56,7 +56,7 @@ from presentator.api.preferences import preference_routes
 from presentator.api.problems import install_error_answers
 from presentator.api.session_api import SESSION_PATH, SessionAddresses, session_routes
 from presentator.api.source_api import source_api_routes
-from presentator.api.sources import NEW, source_routes
+from presentator.api.sources import source_routes
 from presentator.application.decks import Decks
 
 _STATIC_DIR: Final = Path(__file__).parent / "static"
@@ -245,10 +245,6 @@ class _Surfaces:
             self.shell.filled(self.pages.appearance(request)), status_code=status
         )
 
-    def app_page(self, request: Request) -> Response:
-        """The app's shell at 200, for an address a Jinja route would otherwise take."""
-        return self.lobby_app(request)
-
     def not_found_page(self, request: Request) -> Response:
         """The app's shell under 404; the router shows the not-found board."""
         return self.lobby_app(request, status=HTTPStatus.NOT_FOUND)
@@ -403,9 +399,6 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     lobby.include_router(deck_list_routes(decks=decks))
     lobby.include_router(preference_api_routes(preferences=pages.preferences))
     lobby.include_router(preference_routes(pages=pages))
-    # The app's page at the add address: `/settings/sources/{name}` is still a
-    # Jinja route and would take `new` for a source name.
-    lobby.add_api_route(NEW, surfaces.app_page, methods=["GET"])
     lobby.include_router(source_routes(pages=pages, decks=decks))
     lobby.include_router(source_api_routes(decks=decks))
     add_deck_pages(

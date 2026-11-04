@@ -1009,10 +1009,6 @@
             "title": "Source Secret Info",
             "type": "string"
           },
-          "source_secret_info_mark": {
-            "title": "Source Secret Info Mark",
-            "type": "string"
-          },
           "source_state_error": {
             "title": "Source State Error",
             "type": "string"
@@ -1047,10 +1043,6 @@
           },
           "source_webhook_heading": {
             "title": "Source Webhook Heading",
-            "type": "string"
-          },
-          "source_webhook_held_elsewhere": {
-            "title": "Source Webhook Held Elsewhere",
             "type": "string"
           },
           "source_webhook_later": {
@@ -1226,7 +1218,6 @@
           "source_access_deploy_key",
           "source_access_local",
           "source_secret",
-          "source_secret_info_mark",
           "source_secret_info",
           "source_webhook_later",
           "source_deploy_key_heading",
@@ -1238,7 +1229,6 @@
           "source_webhook_address",
           "source_webhook_secret",
           "source_webhook_once",
-          "source_webhook_held_elsewhere",
           "source_copy",
           "source_webhook_payload",
           "source_created_done",

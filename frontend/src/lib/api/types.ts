@@ -680,8 +680,6 @@ export interface components {
             source_secret_dots: string;
             /** Source Secret Info */
             source_secret_info: string;
-            /** Source Secret Info Mark */
-            source_secret_info_mark: string;
             /** Source State Error */
             source_state_error: string;
             /** Source State Failed */
@@ -700,8 +698,6 @@ export interface components {
             source_webhook_address: string;
             /** Source Webhook Heading */
             source_webhook_heading: string;
-            /** Source Webhook Held Elsewhere */
-            source_webhook_held_elsewhere: string;
             /** Source Webhook Later */
             source_webhook_later: string;
             /** Source Webhook Once */

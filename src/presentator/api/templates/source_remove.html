@@ -3,6 +3,7 @@
 {% block body %}
 <main data-source-remove>
   <p><a href="/settings/sources">{{ text.sources_back }}</a></p>
+  {% if refused %}<p role="alert" data-refused>{{ refused }}</p>{% endif %}
   <aside data-banner="failed">
     <p data-lead>{{ removal.title }}</p>
     <p>{{ removal.body }}</p>

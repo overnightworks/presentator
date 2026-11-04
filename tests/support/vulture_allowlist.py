@@ -10,13 +10,7 @@ from presentator.api.copresenter import AskRequest
 from presentator.api.decks import TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
 from presentator.api.problems import ValidationFault
-from presentator.api.sources import (
-    SourceDeckRow,
-    SourceRemovalView,
-    SourceRow,
-    SourceRunRow,
-    SourceView,
-)
+from presentator.api.sources import SourceRemovalView, SourceRow
 from presentator.contracts.text import LobbyText
 from presentator.host.config import Settings, WorkerSettings
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
@@ -41,29 +35,6 @@ SourceRow.access
 SourceRow.state
 SourceRow.state_word
 SourceRow.fetched
-
-# `presentator/api/templates/source.html` renders the source page.
-SourceView.name
-SourceView.url
-SourceView.access
-SourceView.state
-SourceView.state_word
-SourceView.fetched
-SourceView.address
-SourceView.webhook_secret
-SourceView.webhook_secret_held_elsewhere
-SourceView.carries_no_secret
-SourceView.renews_deploy_key
-SourceView.public_key
-SourceView.runs
-SourceView.decks
-SourceRunRow.state
-SourceRunRow.state_word
-SourceRunRow.fetched
-SourceRunRow.commit
-SourceRunRow.reason
-SourceDeckRow.slug
-SourceDeckRow.title
 
 # `presentator/api/templates/source_remove.html` renders the confirm page.
 SourceRemovalView.name
@@ -105,8 +76,9 @@ LobbyText.deck_unknown_explanation
 LobbyText.decks_title
 LobbyText.decks_column_deck
 
-# The words below reach a person through the Svelte Add source page alone, which
-# reads them from `/api/session`; the drive proves the page shows them.
+# The words below reach a person through the Svelte Add source page and source
+# page alone, which read them from `/api/session`; the drive proves the pages
+# show them.
 LobbyText.source_access
 LobbyText.source_secret_info
 LobbyText.source_webhook_later
@@ -135,6 +107,34 @@ LobbyText.source_refused_not_checked
 LobbyText.source_refused_secret_not_allowed
 LobbyText.source_refused_outside_mount
 LobbyText.source_refused_deploy_key
+LobbyText.source_secret
+LobbyText.source_webhook_secret
+LobbyText.source_copy
+LobbyText.source_access_heading
+LobbyText.source_webhook_heading
+LobbyText.source_recent_runs
+LobbyText.source_decks
+LobbyText.source_reverse
+LobbyText.source_push_inbox
+LobbyText.source_later
+LobbyText.source_renew
+LobbyText.source_secret_dots
+LobbyText.source_access_renew_info
+LobbyText.source_deploy_key_info
+LobbyText.source_public_key
+LobbyText.source_deploy_key_renew
+LobbyText.source_run_fetched
+LobbyText.source_run_unreachable
+LobbyText.source_run_secret
+LobbyText.source_remove_heading
+LobbyText.source_remove_hint
+LobbyText.source_remove_button
+LobbyText.source_refused_secret
+LobbyText.source_run_refused
+LobbyText.source_run_failed
+LobbyText.source_run_column_state
+LobbyText.source_run_column_fetched
+LobbyText.source_run_column_detail
 
 # The words below reach a person through a Jinja template, some through a Svelte
 # page too. That a catalog carries each of them is proven by `load_lobby_text`,
@@ -157,30 +157,6 @@ LobbyText.account_preferences
 LobbyText.account_language
 LobbyText.account_theme
 LobbyText.sources_back
-LobbyText.source_secret
-LobbyText.source_secret_info_mark
-LobbyText.source_webhook_secret
-LobbyText.source_webhook_held_elsewhere
-LobbyText.source_copy
-LobbyText.source_access_heading
-LobbyText.source_webhook_heading
-LobbyText.source_recent_runs
-LobbyText.source_decks
-LobbyText.source_reverse
-LobbyText.source_push_inbox
-LobbyText.source_later
-LobbyText.source_renew
-LobbyText.source_secret_dots
-LobbyText.source_access_renew_info
-LobbyText.source_deploy_key_info
-LobbyText.source_public_key
-LobbyText.source_deploy_key_renew
-LobbyText.source_run_fetched
-LobbyText.source_run_unreachable
-LobbyText.source_run_secret
-LobbyText.source_remove_heading
-LobbyText.source_remove_hint
-LobbyText.source_remove_button
 LobbyText.source_remove_cancel
 LobbyText.source_remove_confirm
 

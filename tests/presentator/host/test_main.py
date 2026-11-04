@@ -263,12 +263,19 @@ def test_the_hook_address_names_https_only_behind_a_trusted_proxy(
     # header to reach the lobby the way a proxy that terminated TLS would.
     cookie = "; ".join(f"{name}={value}" for name, value in browser.cookies.items())
 
-    page = browser.get(
-        f"http://presentator.test/settings/sources/{_SOURCE_NAME}",
-        headers={"x-forwarded-proto": "https", "cookie": cookie},
+    source = browser.get(
+        f"http://presentator.test/api/sources/{_SOURCE_NAME}",
+        headers={
+            "accept": "application/json",
+            "x-forwarded-proto": "https",
+            "cookie": cookie,
+        },
     )
 
-    assert f"{hook_scheme}://presentator.test{hook_address(_SOURCE_NAME)}" in page.text
+    assert (
+        source.json()["hook_url"]
+        == f"{hook_scheme}://presentator.test{hook_address(_SOURCE_NAME)}"
+    )
 
 
 @pytest.mark.usefixtures("environment")

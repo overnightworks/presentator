@@ -295,9 +295,6 @@ msgstr "On this box"
 msgid "source_secret"
 msgstr "Secret"
 
-msgid "source_secret_info_mark"
-msgstr "i"
-
 msgid "source_secret_info"
 msgstr ""
 "Stored encrypted and never shown again after creation. It only needs read "
@@ -333,9 +330,6 @@ msgstr "Secret"
 
 msgid "source_webhook_once"
 msgstr "visible only now"
-
-msgid "source_webhook_held_elsewhere"
-msgstr "Shown to whoever created or renewed it."
 
 msgid "source_copy"
 msgstr "Copy"
