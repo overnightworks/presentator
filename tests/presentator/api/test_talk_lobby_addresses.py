@@ -76,7 +76,7 @@ def test_a_talk_address_on_the_lobby_loads_the_lobby_app_alike_for_every_slug(
 
 # C11.
 @pytest.mark.parametrize("method", ["get", "head"])
-def test_the_slash_address_of_a_deck_on_the_lobby_loads_the_lobby_app_alike_for_every_slug(
+def test_the_slash_address_of_a_deck_loads_the_lobby_app_alike_for_every_slug(
     lobby: TestClient, method: str
 ) -> None:
     answers = [getattr(lobby, method)(f"/deck/{slug}/") for slug in _THE_THREE]
