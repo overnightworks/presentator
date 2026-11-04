@@ -260,6 +260,7 @@ test.describe('as an admin', () => {
 
 		await expect.poll(async () => (await storedSettings(page)).theme).toBe('dark');
 		await sessionRead;
+		await expect(page.getByRole('button', { name: words.settings_save })).toBeEnabled();
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 	});
 
