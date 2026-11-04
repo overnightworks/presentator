@@ -326,12 +326,8 @@
 <dialog
 	bind:this={dialog}
 	aria-labelledby="remove-title"
-	oncancel={(event) => {
-		// Closed under a pending DELETE, the dialog would hide the answer to it.
-		if (pending) {
-			event.preventDefault();
-		}
-	}}
+	// Closed under a pending DELETE, the dialog would hide the answer to it.
+	closedby={pending ? 'none' : 'closerequest'}
 	onclose={() => {
 		counts = null;
 		refused = false;
