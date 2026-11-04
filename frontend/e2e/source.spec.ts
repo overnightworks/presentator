@@ -264,7 +264,7 @@ test.describe('as an admin', () => {
 	});
 
 	// Cell 7.
-	test('the back link leaves for the list as a document and General is a client navigation', async ({
+	test('the back link and General are client navigations and Sources is the current tab', async ({
 		page
 	}, testInfo) => {
 		const { words } = await sessionOf(page);
@@ -281,12 +281,20 @@ test.describe('as an admin', () => {
 		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 		await page.goBack();
 		await expect(page).toHaveURL(sourceAddress(name));
-		const listed = page.waitForResponse(
-			(received) => new URL(received.url()).pathname === SOURCES_LIST
-		);
+		const documents: string[] = [];
+		page.on('request', (sent) => {
+			if (sent.resourceType() === 'document') {
+				documents.push(sent.url());
+			}
+		});
 		await page.getByRole('link', { name: words.sources_back }).click();
-		expect((await listed).status()).toBe(200);
 		await expect(page).toHaveURL(SOURCES_LIST);
+		await expect(tabs.getByRole('link', { name: words.settings_sources })).toHaveAttribute(
+			'aria-current',
+			'page'
+		);
+		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
+		expect(documents).toEqual([]);
 	});
 
 	// Cell 8.
@@ -560,6 +568,16 @@ test.describe('as an admin', () => {
 		await page.goForward();
 		await expect(page).toHaveURL(SOURCES_LIST);
 		await notInThePage(page, secondSecret);
+
+		await page.goBack();
+		const thirdSecret = await renewsTheWebhook(page, words, name);
+		await page.goto(SOURCES_LIST);
+		await page.goBack();
+		await expect(page).toHaveURL(sourceAddress(name));
+		await notInThePage(page, thirdSecret);
+		await page.goForward();
+		await expect(page).toHaveURL(SOURCES_LIST);
+		await notInThePage(page, thirdSecret);
 	});
 
 	// Cell 22.
@@ -610,35 +628,11 @@ test.describe('as an admin', () => {
 
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		const secret = await renewsTheWebhook(page, words, name);
-		await page.getByRole('link', { name: words.sources_back }).click();
+		await page.goto(SOURCES_LIST);
 		await page.goBack();
 
 		expect(await page.evaluate(() => 'restoredFromTheCache' in window)).toBe(true);
 		await notInThePage(page, secret);
-	});
-
-	// Cells 24 and 25.
-	test('Remove leads to the Jinja confirm, Cancel returns and Confirm lists the notice then not found', async ({
-		page
-	}, testInfo) => {
-		const { words } = await sessionOf(page);
-		const { name } = await opensAnHttpsSource(page, words, testInfo);
-		const removal = section(page, words.source_remove_heading);
-		await expect(removal.locator('form')).toHaveAttribute('action', `${sourceAddress(name)}/remove`);
-
-		await removal.getByRole('button', { name: words.source_remove_button }).click();
-		await expect(page).toHaveURL(`${sourceAddress(name)}/remove`);
-		await expect(page.getByRole('link', { name: words.source_remove_cancel })).toBeVisible();
-		await page.getByRole('link', { name: words.source_remove_cancel }).click();
-		await expect(page).toHaveURL(sourceAddress(name));
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
-
-		await removal.getByRole('button', { name: words.source_remove_button }).click();
-		await page.getByRole('button', { name: words.source_remove_confirm }).click();
-		await expect(page).toHaveURL(SOURCES_LIST);
-		await expect(page.locator('body')).toContainText(name);
-		await page.goto(sourceAddress(name));
-		await expect(page.locator('main h1')).toHaveText(words.address_unknown_title);
 	});
 
 	// Cell 26.

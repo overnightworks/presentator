@@ -1,18 +1,30 @@
 <script lang="ts">
-	import { flushSync } from 'svelte';
-	import { invalidate } from '$app/navigation';
+	import { flushSync, onDestroy } from 'svelte';
+	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { navigating } from '$app/state';
 	import { ageInWords } from '#lib/age.ts';
 	import CopyValue from '#lib/CopyValue.svelte';
+	import type { RemovalCounts } from '#lib/api/client.ts';
 	import {
 		fetchNow,
+		previewRemoval,
+		removeSource,
 		renewAccess,
 		renewWebhook,
 		sourcePath,
 		type WebhookSecretView
 	} from '#lib/api/sources.ts';
+	import { noticeOf } from '#lib/notice.ts';
 	import { languageTag } from '#lib/session.svelte.ts';
-	import { accessView, runRow, stateShape, stateWords } from '#lib/source.ts';
+	import {
+		accessView,
+		removalBody,
+		removalTitle,
+		runRow,
+		stateShape,
+		stateWords
+	} from '#lib/source.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -24,11 +36,25 @@
 		source.runs.map((run) => ({ ...runRow(run, words), age: ageInWords(run.at, Date.now(), tag) }))
 	);
 
+	const title = $derived(removalTitle(words));
+	// A 204 is acted on only while this page is mounted and no other navigation is under way.
+	const notice = noticeOf();
+	let destroyed = false;
+	onDestroy(() => {
+		destroyed = true;
+	});
+
 	// The renewed webhook secret lives here and nowhere else.
 	let renewed = $state<WebhookSecretView | null>(null);
 	let typed = $state('');
 	let declined = $state(false);
 	let pending = $state(false);
+	// The dialog is mounted with the page, so a click handler always finds it.
+	let dialog = $state() as HTMLDialogElement;
+	let opener = $state() as HTMLButtonElement;
+	// What the open dialog shows and sends; null while it is closed.
+	let counts = $state<RemovalCounts | null>(null);
+	let refused = $state(false);
 
 	async function work(attempt: () => Promise<void>): Promise<void> {
 		pending = true;
@@ -68,6 +94,35 @@
 			renewed = await renewWebhook(fetch, source.name);
 		});
 
+	// The dialog opens once the buttons are enabled again, from the control that
+	// asked, so closing it returns focus there and Cancel takes it on opening.
+	async function askRemoval(): Promise<void> {
+		await work(async () => {
+			counts = await previewRemoval(fetch, source.name);
+			refused = false;
+		});
+		flushSync();
+		opener.focus();
+		dialog.showModal();
+	}
+
+	const confirmRemoval = (): Promise<void> =>
+		work(async () => {
+			const confirmed = counts as RemovalCounts;
+			refused = false;
+			const answer = await removeSource(fetch, source.name, confirmed);
+			if (answer === 'refused') {
+				refused = true;
+			} else if (answer !== 'removed') {
+				counts = answer.stale;
+			} else if (!destroyed && navigating.type === null) {
+				notice.show({ name: source.name, counts: confirmed });
+				await goto(resolve('/(lobby)/settings/sources'), { replace: true });
+				// An overtaking navigation leaves the notice untaken; the list took it otherwise.
+				notice.take();
+			}
+		});
+
 	// A page kept by the back/forward cache is shown again as it was left, so it
 	// leaves nothing to show: what was typed and what was shown are gone first.
 	function forget(): void {
@@ -84,7 +139,7 @@
 </svelte:head>
 <svelte:window onpagehide={forget} />
 
-<a class="back" href="/settings/sources" rel="external" data-sveltekit-reload>{words.sources_back}</a>
+<a class="back" href={resolve('/(lobby)/settings/sources')}>{words.sources_back}</a>
 <h1 class="as-typed">{source.name}</h1>
 <div class="meta">
 	<code>{source.url}</code>
@@ -251,20 +306,50 @@
 	</p>
 </section>
 
-<!-- Removal stays the Jinja confirm until the removal dialog replaces this form. -->
 <section class="sec">
 	<h2>{words.source_remove_heading}</h2>
 	<p class="muted">{words.source_remove_hint}</p>
-	<form
-		class="actions"
-		method="post"
-		action={`/settings/sources/${encodeURIComponent(source.name)}/remove`}
-	>
-		<button class="btn secondary sm" type="submit" disabled={pending}
-			>{words.source_remove_button}</button
+	<div class="actions">
+		<button
+			class="btn secondary sm"
+			type="button"
+			bind:this={opener}
+			disabled={pending}
+			onclick={askRemoval}>{words.source_remove_button}</button
 		>
-	</form>
+	</div>
 </section>
+
+<dialog
+	bind:this={dialog}
+	aria-labelledby="remove-title"
+	onclose={() => {
+		counts = null;
+		refused = false;
+	}}
+>
+	{#if counts !== null}
+		<h2 id="remove-title">{title.before}<span class="as-typed">{source.name}</span>{title.after}</h2>
+		{#if refused}
+			<div class="banner" data-banner="fail" role="alert">
+				<span class="state" data-state="failed"><i></i></span>
+				<p>{words.source_remove_refused}</p>
+			</div>
+		{/if}
+		<p>{removalBody(counts, words)}</p>
+		<div class="actions">
+			<button
+				class="btn secondary"
+				type="button"
+				disabled={pending}
+				onclick={() => dialog.close()}>{words.source_remove_cancel}</button
+			>
+			<button class="btn primary" type="button" disabled={pending} onclick={confirmRemoval}
+				>{words.source_remove_confirm}</button
+			>
+		</div>
+	{/if}
+</dialog>
 
 <style>
 	h1 {
@@ -286,5 +371,25 @@
 	}
 	.banner p {
 		margin: 0;
+	}
+	dialog {
+		box-sizing: border-box;
+		max-width: min(480px, calc(100vw - 32px));
+		padding: 20px;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--surface);
+		color: var(--text);
+	}
+	dialog::backdrop {
+		background: rgb(0 0 0 / 50%);
+	}
+	dialog h2 {
+		margin: 0 0 12px;
+		font-size: 18px;
+		overflow-wrap: anywhere;
+	}
+	dialog p {
+		margin: 0 0 16px;
 	}
 </style>

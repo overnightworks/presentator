@@ -24,8 +24,9 @@ accepted is [sources](../reference/sources.md).
 ## Check
 
 The source's row shows reachable. A token the host turns down shows as
-refused, an answer of any other kind as failed; unreachable is only a host
-that never answers. The next poll (`PRESENTATOR_SOURCE_POLL_SECONDS`) or
+Refused, an answer of any other kind as Failed, and a host that never answers
+(or a credential that cannot be read) as Error, with the reason under the
+source's name. The next poll (`PRESENTATOR_SOURCE_POLL_SECONDS`) or
 *Fetch now* on the source's page brings its decks into the list.
 
 Related: [renew a source's secret](renew-a-source-secret.md).

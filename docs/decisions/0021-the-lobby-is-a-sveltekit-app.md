@@ -41,10 +41,9 @@ interaction became a template, a fragment and a form route.
   404 and a wrong method's 405 stay the framework's. `/api/`, `/_app/`,
   `/auth/`, the hook prefix, `/static/`, `/login/oidc`, `/logout`, `/health`
   and the retired `/setup` never fall back to it: a missing asset or API is
-  still a 404. `/_app/` is public and serves the build's assets. A page not yet
-  moved stays a Jinja page, and a link to it carries `data-sveltekit-reload`;
-  a Jinja page's link back to the app (the Sources list's Add) is an ordinary
-  document link.
+  still a 404. `/_app/` is public and serves the build's assets. No lobby page
+  is a Jinja page any more; the unrendered chrome that served them
+  (`base.html`, `header.html`) stands until the Jinja package goes.
   `/deck/{slug}/pdf` stays a server download; for a deck that is missing,
   foreign or unknown, or whose file is gone, it answers the shell under 404,
   so the app shows the root not-found board. That shell is the route's own
@@ -55,8 +54,8 @@ interaction became a template, a fragment and a form route.
   header and footer, so `/login` and the refusals stay headerless. Home, at
   `/`, is the first page in the group; the deck page at `/deck/{slug}` is the
   second, and it draws its own unknown-deck board for a 404. Settings General,
-  Add source (`/settings/sources/new`) and a source's own page
-  (`/settings/sources/<name>`) are the pages below them. A 401 from any read
+  the Sources list (`/settings/sources`), Add source (`/settings/sources/new`)
+  and a source's own page (`/settings/sources/<name>`) are the pages below them. A 401 from any read
   or write leaves the app by a document navigation to the sign-in with the
   current address as `next`, and its promise never settles, so no error page
   shows on the way out. A load names its own `url` as `next`, because it runs
@@ -78,9 +77,8 @@ interaction became a template, a fragment and a form route.
   boundary draws.
 - Settings has its own layout with the tab strip, and its tabs are
   conditional: General is current at `/settings` only, Sources under
-  `/settings/sources`. General is a Svelte page; Sources links to its Jinja
-  page by a document navigation until it moves, as do the Add and name links
-  of the list.
+  `/settings/sources`. Both are Svelte pages, and every link among Sources, its
+  Add page and a source's page is a client navigation.
 - Add source keeps the one display of the webhook secret in its own component
   state. Its load reads the admin's key draft with a POST (idempotent per
   owner, so a member's 403 becomes the for-admins board); Check and Create go
@@ -110,7 +108,20 @@ interaction became a template, a fragment and a form route.
   it either. On `pagehide` the page forgets the secret, the typed token and the
   refusal; the drive's cache cell is skipped with the browser's reasons while
   Chromium keeps no lobby page, and the cache clause is held by that
-  construction. Removal stays the Jinja confirm until its dialog replaces it.
+  construction. Removal is a native `<dialog>` on that page: it asks
+  `GET /api/sources/<name>/removal`, confirms with `DELETE` and the counts, and
+  shows the current counts on a 409 and `source_remove_refused` on a 500. A 204
+  is acted on only while the page is mounted and no other navigation is under
+  way. The page is rebuilt on every navigation onto a source page, because
+  SvelteKit re-uses a page and its state across a history jump to another name
+  or to the same name: a `[name]` layout keys its children by a counter raised
+  in `onNavigate`, which fires for every committing navigation, Back and
+  Forward included, where `beforeNavigate` is skipped while another navigation
+  is in flight. The one-time notice of a removal is held by the `(lobby)`
+  layout (`createContext`), in memory only: never in a URL, `history.state` or
+  storage. The list takes it once at initialisation and shows it as a toast;
+  any committing navigation away drops it, and a reload, a second tab or a
+  visit to General shows none.
 - A form's save writes through the typed client, then re-reads the session so
   the page repaints in its own document; the effective look belongs to the
   server.

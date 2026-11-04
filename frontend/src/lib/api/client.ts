@@ -76,8 +76,58 @@ export class Declined extends Error {
 	}
 }
 
+// What a removal answers 409 when the counts a person confirmed are no longer
+// the source's, and 500 when a mirror or build would not go. Typed by the
+// generated schema, like the refused tag.
+type RemovalProblems = operations['remove_api_sources__name__delete']['responses'];
+type RemovalStaleProblem = RemovalProblems[409]['content']['application/problem+json'];
+const REMOVAL_STALE: RemovalStaleProblem['type'] =
+	'tag:hallucinai.de,2026-09-08:presentator/problems/source-removal-stale';
+const REMOVAL_REFUSED: RemovalProblems[500]['content']['application/problem+json']['type'] =
+	'tag:hallucinai.de,2026-09-08:presentator/problems/source-removal-refused';
+
+/** What a removal would take with it, as the wire counts it. */
+export interface RemovalCounts {
+	deck_count: number;
+	run_count: number;
+}
+
+/** A 409: the counts changed since they were shown; nothing was removed. */
+export class RemovalStale extends Error {
+	readonly counts: RemovalCounts;
+
+	constructor(path: string, problem: RemovalStaleProblem) {
+		super(`${path} found other counts than the confirmed ones`);
+		this.counts = { deck_count: problem.deck_count, run_count: problem.run_count };
+	}
+}
+
+/** A 500: a mirror or build would not go, so every row is kept. */
+export class RemovalRefused extends Error {
+	constructor(path: string) {
+		super(`${path} refused the removal`);
+	}
+}
+
 // The refusals the error page answers for; any other refusal fails loud.
 const PAGE_REFUSALS = new Set([403, 404]);
+
+const problemOf = (answer: Response): Promise<{ type?: string }> =>
+	answer.json().catch(() => ({}));
+
+// The two problems a removal answers for; either is the caller's to show.
+async function removalProblem(path: string, answer: Response): Promise<void> {
+	if (answer.status !== 409 && answer.status !== 500) {
+		return;
+	}
+	const problem = await problemOf(answer);
+	if (answer.status === 409 && problem.type === REMOVAL_STALE) {
+		throw new RemovalStale(path, problem as RemovalStaleProblem);
+	}
+	if (answer.status === 500 && problem.type === REMOVAL_REFUSED) {
+		throw new RemovalRefused(path);
+	}
+}
 
 async function answerOf<Answer>(path: string, answer: Response, here: Here): Promise<Answer> {
 	if (answer.status === 401) {
@@ -86,8 +136,9 @@ async function answerOf<Answer>(path: string, answer: Response, here: Here): Pro
 	if (PAGE_REFUSALS.has(answer.status)) {
 		error(answer.status, `${path} answered ${answer.status}`);
 	}
+	await removalProblem(path, answer);
 	if (answer.status === 422) {
-		const problem = (await answer.json()) as { type?: string };
+		const problem = await problemOf(answer);
 		if (problem.type === SOURCE_REFUSED) {
 			throw new Refused(path, problem as SourceRefusedProblem);
 		}
@@ -145,4 +196,12 @@ export async function postJson<Answer, Body = undefined>(
 		}),
 		here
 	);
+}
+
+export async function deleteJson<Answer>(
+	fetcher: typeof fetch,
+	path: string,
+	here: Here = window.location
+): Promise<Answer> {
+	return answerOf(path, await fetcher(path, { method: 'DELETE', headers: JSON_HEADERS }), here);
 }

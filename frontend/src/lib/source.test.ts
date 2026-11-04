@@ -4,7 +4,17 @@ import type { SourceRefusalReason } from '#lib/api/client.ts';
 import type { LobbyText } from '#lib/api/session.ts';
 import type { ConnectionCheckView } from '#lib/api/sources.ts';
 import type { AccessKind, SourceRunView, SourceState } from '#lib/api/sources.ts';
-import { accessView, checkBanner, refusalWords, runRow, stateShape, stateWords } from '#lib/source.ts';
+import {
+	accessView,
+	checkBanner,
+	refusalWords,
+	removalBody,
+	removalTitle,
+	removedNotice,
+	runRow,
+	stateShape,
+	stateWords
+} from '#lib/source.ts';
 
 // A scenario's own templates: none of them is the catalog's sentence.
 const words = {
@@ -30,7 +40,16 @@ const words = {
 	source_state_never_fetched: 'untouched',
 	source_access_token: 'a token',
 	source_access_deploy_key: 'a key pair',
-	source_access_local: 'this box'
+	source_access_local: 'this box',
+	source_remove_confirm_body: '{decks} {deck_word} and {talk_word}, {runs} {run_word} go',
+	source_remove_deck_singular: 'one-deck',
+	source_remove_deck_plural: 'many-decks',
+	source_remove_talk_singular: 'its talk',
+	source_remove_talk_plural: 'their talks',
+	source_remove_run_singular: 'one-run',
+	source_remove_run_plural: 'many-runs',
+	source_remove_confirm_title: 'Drop {name} for good?',
+	source_removed: '{name} left with {decks} {deck_word} and {runs} {run_word}'
 } as LobbyText;
 
 describe('refusalWords', () => {
@@ -62,19 +81,31 @@ describe('checkBanner', () => {
 	it('names the head a reachable check read, as given', () => {
 		expect(checkBanner(probe({ commit: 'abc12345678' }), words)).toEqual({
 			shape: 'ok',
+			state: 'up',
 			message: 'head is abc12345678',
 			detail: null
 		});
 	});
 
-	it.each<{ failure: NonNullable<ConnectionCheckView['failure']>; worded: string }>([
-		{ failure: 'unreachable', worded: 'no route' },
-		{ failure: 'refused', worded: 'turned away' },
-		{ failure: 'failed', worded: 'broke' },
-		{ failure: 'credential-unresolvable', worded: 'the secret did not resolve' }
-	])('words a $failure check by the reason given', ({ failure, worded }) => {
-		expect(checkBanner(probe({ failure }), words)).toEqual({
+	it.each<{
+		failure: NonNullable<ConnectionCheckView['failure']>;
+		state: SourceState;
+		stated: string;
+		worded: string;
+	}>([
+		{ failure: 'unreachable', state: 'error', stated: 'erroring', worded: 'no route' },
+		{ failure: 'refused', state: 'refused', stated: 'rebuffed', worded: 'turned away' },
+		{ failure: 'failed', state: 'failed', stated: 'broken', worded: 'broke' },
+		{
+			failure: 'credential-unresolvable',
+			state: 'error',
+			stated: 'erroring',
+			worded: 'the secret did not resolve'
+		}
+	])('words a $failure check by the state and reason given', ({ failure, state, stated, worded }) => {
+		expect(checkBanner(probe({ failure, state }), words)).toEqual({
 			shape: 'fail',
+			state: stated,
 			message: worded,
 			detail: null
 		});
@@ -144,5 +175,30 @@ describe('accessView', () => {
 		{ access: null, control: 'token', tag: null }
 	])('shows the $control control for $access', ({ access, control, tag }) => {
 		expect(accessView(access, words)).toEqual({ control, tag });
+	});
+});
+
+describe('the removal sentences', () => {
+	// One deck with two runs: the talk word follows the deck count, the run word the run count.
+	const counts = { deck_count: 1, run_count: 2 };
+
+	it('words what a removal takes with it, singular for exactly one', () => {
+		expect(removalBody(counts, words)).toBe('1 one-deck and its talk, 2 many-runs go');
+	});
+
+	it('words what a removal took with it, with the name as given', () => {
+		expect(removedNotice('Talks', counts, words)).toBe('Talks left with 1 one-deck and 2 many-runs');
+	});
+
+	it('words a count of none in the plural', () => {
+		expect(removalBody({ deck_count: 0, run_count: 1 }, words)).toBe(
+			'0 many-decks and their talks, 1 one-run go'
+		);
+	});
+});
+
+describe('removalTitle', () => {
+	it('splits the heading where the name stands', () => {
+		expect(removalTitle(words)).toEqual({ before: 'Drop ', after: ' for good?' });
 	});
 });

@@ -25,6 +25,8 @@ Audience: humans and agents writing any user-facing string or any colour.
   person menu from appkit, see The look of the SvelteKit pages.
   Amended 2026-11-04: the deck page words a build's age and a running build's
   duration in the browser too; the server sends the build and attempt instants.
+  Amended 2026-11-04: the Sources list words its ages in the browser too, so
+  no Python age wording remains.
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06, including
   [#8](https://github.com/overnightworks/presentator/issues/8) line 22
@@ -85,7 +87,7 @@ language and no catalog holds a unit word; the server sends the changed instant
 only. A running build's duration is worded the same way, in its largest whole
 unit with `Intl.NumberFormat`, and the deck page's build and attempt instants
 are on the wire; its wording at a unit's edge may differ from what Babel said.
-Babel stays for the catalog files and for Sources' ages. A theme or language
+Babel stays for the catalog files. A theme or language
 change paints through one reactive session store that sets `<html data-theme
 lang>`, so it needs no reload.
 

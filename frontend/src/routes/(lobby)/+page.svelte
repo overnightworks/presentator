@@ -44,7 +44,7 @@
 		<h2>{words.decks_empty_title}</h2>
 		<p>
 			{#if data.person.role === 'admin'}
-				<a href="/settings/sources" rel="external" data-sveltekit-reload>{words.decks_empty_explanation}</a>
+				<a href={resolve('/(lobby)/settings/sources')}>{words.decks_empty_explanation}</a>
 			{:else}
 				{words.decks_empty_explanation}
 			{/if}
