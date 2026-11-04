@@ -130,7 +130,7 @@ class DeckRecord(BaseModel):
     pdf: Literal["missing"] | None = None
 
     @model_validator(mode="after")
-    def _builds_fit_the_state(self) -> Self:
+    def builds_fit_the_state(self) -> Self:
         """Refuse a build or an attempt the state cannot have."""
         runs_since = self.state in {DeckState.BUILDING, DeckState.FAILED}
         has_build = self.state is DeckState.READY or (
