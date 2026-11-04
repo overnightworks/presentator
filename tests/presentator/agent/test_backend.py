@@ -211,8 +211,10 @@ async def test_what_the_gateway_echoes_reaches_no_exception_text_or_log_record(
         else EchoingTransport(echoed)
     )
 
+    answerer = answerer_over(transport)
+
     with pytest.raises(CoPresenterUnavailableError) as stopped:
-        await spoken(answerer_over(transport), person)
+        await spoken(answerer, person)
 
     shown = everything_shown(caplog.records, errors=[stopped.value])
     for marker in (
