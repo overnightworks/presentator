@@ -73,11 +73,6 @@ class SignedInConnection:
         """The signed-in person's account id."""
         return self.person.id
 
-    @property
-    def role(self) -> Role:
-        """The signed-in person's role."""
-        return self.person.role
-
 
 def signed_in_connection(
     connection: HTTPConnection,

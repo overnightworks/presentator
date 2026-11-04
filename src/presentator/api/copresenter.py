@@ -261,7 +261,7 @@ def _admit(
         ),
         ticket=ticket,
         subject=connection.user_id,
-        role=connection.role,
+        role=connection.person.role,
     )
 
 
