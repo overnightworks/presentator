@@ -111,7 +111,7 @@
 		{/if}
 		{#if access.control !== 'none'}
 			{@const hint = access.control === 'token' ? words.source_access_renew_info : words.source_deploy_key_info}
-			<button class="info" type="button" popovertarget="access-hint" aria-label={hint}>
+			<button class="info" type="button" popovertarget="access-hint" aria-label={hint} disabled={pending}>
 				<svg viewBox="0 0 24 24" aria-hidden="true">
 					<circle cx="12" cy="12" r="9" />
 					<path d="M12 11v5M12 7.5v.01" />
@@ -128,6 +128,7 @@
 					value={source.public_key}
 					label={words.source_copy}
 					labelledby="public-key-label"
+					disabled={pending}
 				/>
 			</div>
 		{/if}
@@ -167,7 +168,15 @@
 
 <section class="sec">
 	<h2>{words.source_webhook_heading}</h2>
-	<CopyValue value={source.hook_url} label={words.source_copy} labelledby="hook-address-label" />
+	<div class="fld">
+		<span class="lb" id="hook-address-label">{words.source_webhook_address}</span>
+		<CopyValue
+			value={source.hook_url}
+			label={words.source_copy}
+			labelledby="hook-address-label"
+			disabled={pending}
+		/>
+	</div>
 	{#if renewed === null}
 		<div class="ctrl"><samp class="dots">{words.source_secret_dots}</samp></div>
 	{:else}
@@ -179,6 +188,7 @@
 				value={renewed.webhook_secret}
 				label={words.source_copy}
 				labelledby="hook-secret-label"
+				disabled={pending}
 			/>
 		</div>
 	{/if}
