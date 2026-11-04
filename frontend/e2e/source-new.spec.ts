@@ -387,6 +387,7 @@ test.describe('as an admin', () => {
 		const name = aName(testInfo);
 		await opensTheForm(page);
 		const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
+		await expect(page).toHaveURL(`${SOURCES_LIST}/${name}`);
 		await page.reload();
 		await showsTheSourcePage(page, words);
 
