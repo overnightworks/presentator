@@ -36,7 +36,6 @@ from presentator.application.copresenter import (
     CoPresenterUse,
     RetryAfter,
 )
-from presentator.contracts.copresenter import DeckText, SlideText
 from presentator.contracts.decks import Build, Deck, Source
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
 from tests.presentator.application.support.fakes import (
@@ -51,6 +50,7 @@ from tests.support.copresenter_support import (
     SPOKEN_QUESTION,
     FakeDeckTexts,
     PrivateFakes,
+    a_deck_text_over_the_clients_bound,
 )
 from tests.support.deck_source_support import a_source, folders_under, mirrors_under
 from tests.support.lobby import (
@@ -690,17 +690,6 @@ def _echoing_the_key() -> Gateway:
             {"content-type": "application/json"},
             json.dumps({"detail": f"bad {A_GATEWAY_KEY} {REPLY_BODY}"}).encode(),
         )
-    )
-
-
-def a_deck_text_over_the_clients_bound() -> DeckText:
-    """The asked deck's words, followed by a slide too large for the client."""
-    return replace(
-        A_DECK_TEXT,
-        slides=(
-            *A_DECK_TEXT.slides,
-            SlideText(number=3, title="Lang", body="x" * 5_000_000, notes=""),
-        ),
     )
 
 

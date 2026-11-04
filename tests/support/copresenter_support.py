@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import anyio
@@ -79,6 +79,19 @@ A_DECK_TEXT = DeckText(
         SlideText(number=2, title="Wichtig", body="Der Kern", notes="Betonen"),
     ),
 )
+
+
+def a_deck_text_over_the_clients_bound() -> DeckText:
+    """The asked deck's words, followed by a slide too large for the client."""
+    return replace(
+        A_DECK_TEXT,
+        slides=(
+            *A_DECK_TEXT.slides,
+            SlideText(number=3, title="Lang", body="x" * 5_000_000, notes=""),
+        ),
+    )
+
+
 ASKED = AskedDeck(deck=the_admins_decks().kept[A_DECK], source=A_SOURCE)
 
 
