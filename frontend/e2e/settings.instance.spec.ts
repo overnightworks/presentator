@@ -482,7 +482,7 @@ test.describe('an instance in the second language', () => {
 			const name = await ownSourceName(page, OWN_SOURCE);
 			await answersWith(page, name, (view) => ({
 				...view,
-				fetched_at: new Date(Date.now() - 3 * DAY).toISOString()
+				fetched_at: new Date(Date.parse(NOW) - 3 * DAY).toISOString()
 			}));
 			await page.goto(sourceAddress(name));
 			await expect(page.locator('.meta')).toContainText('vor 3 Tagen');

@@ -192,7 +192,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(page.getByText(words.deck_not_built_explanation)).toBeVisible();
 				await expect(page.locator('aside.banner')).toHaveCount(0);
 				await expect(page.locator('.actions')).toHaveCount(0);
-				await expect(page.locator('.meta')).not.toContainText(words.deck_built.split('{age}')[0] ?? '');
+				// The state word "never built" holds the template's first word, so the build's age is told by its unit.
+				await expect(page.locator('.meta')).not.toContainText(/built \d+ \w+ ago/);
 				const overflow = await page.evaluate(
 					() => document.documentElement.scrollWidth - document.documentElement.clientWidth
 				);
