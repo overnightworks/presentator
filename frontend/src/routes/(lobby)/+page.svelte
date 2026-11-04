@@ -1,17 +1,13 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { ageInWords } from '#lib/age.ts';
-	import type { DeckState } from '#lib/api/decks.ts';
+	import { stateWords } from '#lib/deck.ts';
 	import { languageTag } from '#lib/session.svelte.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const words = $derived(data.session.words);
-	const stateWords = $derived<Record<DeckState, string>>({
-		ready: words.deck_state_ready,
-		building: words.deck_state_building,
-		failed: words.deck_state_failed,
-		'never-built': words.deck_state_never_built
-	});
+	const states = $derived(stateWords(words));
 	const tag = $derived(languageTag());
 </script>
 
@@ -33,9 +29,9 @@
 		<tbody>
 			{#each data.list.decks as deck (deck.slug)}
 				<tr>
-					<td><span class="state" data-state={deck.state}><i></i>{stateWords[deck.state]}</span></td>
+					<td><span class="state" data-state={deck.state}><i></i>{states[deck.state]}</span></td>
 					<td>
-						<a class="as-typed" href={`/deck/${deck.slug}`} rel="external" data-sveltekit-reload>{deck.title}</a>
+						<a class="as-typed" href={resolve('/(lobby)/deck/[slug]', { slug: deck.slug })}>{deck.title}</a>
 						<code>{deck.slug}</code>
 					</td>
 					<td class="changed">{ageInWords(deck.changed_at, Date.now(), tag)}</td>

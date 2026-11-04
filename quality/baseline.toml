@@ -6,7 +6,7 @@
 [file_lines]
 "frontend/src/lib/api/types.ts" = 1979
 "speech/tests/test_control_voice_status.py" = 1473
-"src/presentator/application/decks.py" = 955
+"src/presentator/application/decks.py" = 953
 "tests/gitmirror/test_mirror.py" = 1192
 "tests/presentator/adapters/test_builds.py" = 1182
 "tests/presentator/adapters/test_decks.py" = 1340

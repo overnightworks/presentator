@@ -572,11 +572,11 @@ def test_a_deck_the_real_stack_cannot_build_keeps_its_page_and_offers_no_view(
     remote.commit_example_deck(at=_PUSHED_AT)
 
     asyncio.run(instance.poller.tick())
-    page = lobby.get(f"/deck/{EXAMPLE_SLUG}")
+    deck = lobby.get(f"/api/decks/{EXAMPLE_SLUG}")
 
-    assert page.status_code == HTTPStatus.OK
-    assert EXAMPLE_TITLE in page.text
-    assert f"/deck/{EXAMPLE_SLUG}/presenter/" not in page.text
+    assert deck.status_code == HTTPStatus.OK
+    assert deck.json()["title"] == EXAMPLE_TITLE
+    assert deck.json()["views_open"] is False
 
 
 def test_a_tick_whose_fetch_exceeds_its_bound_leaves_the_list_answering(

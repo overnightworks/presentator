@@ -8,7 +8,12 @@ describe('the header link marked as the current page', () => {
 		{ address: '/settings', decks: undefined, settings: 'page' },
 		{ address: '/settings/sources', decks: undefined, settings: 'page' },
 		{ address: '/settingsish', decks: undefined, settings: undefined },
-		{ address: '/deck/anything', decks: undefined, settings: undefined },
+		{ address: '/deck/anything', decks: 'page', settings: undefined },
+		{ address: '/deck/anything/', decks: 'page', settings: undefined },
+		{ address: '/deck/anything/pdf', decks: undefined, settings: undefined },
+		{ address: '/deck/a/b/c', decks: undefined, settings: undefined },
+		{ address: '/deck/', decks: undefined, settings: undefined },
+		{ address: '/decks', decks: undefined, settings: undefined },
 		{ address: '/account', decks: undefined, settings: undefined },
 		{ address: '/nope', decks: undefined, settings: undefined }
 	])('marks $decks for Decks and $settings for Settings at $address', (row) => {

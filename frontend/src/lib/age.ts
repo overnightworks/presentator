@@ -16,3 +16,15 @@ export function ageInWords(changedAt: string, now: number, languageTag: string):
 	}
 	return words.format(0, 'second');
 }
+
+/** How long something has run since `startedAt`, in its largest whole unit, worded by the browser. */
+export function durationInWords(startedAt: string, now: number, languageTag: string): string {
+	const elapsed = Math.max(0, now - Date.parse(startedAt));
+	const { unit, milliseconds } = UNITS.find((candidate) => elapsed >= candidate.milliseconds) ?? {
+		unit: 'second',
+		milliseconds: SECOND
+	};
+	return new Intl.NumberFormat(languageTag, { style: 'unit', unit, unitDisplay: 'long' }).format(
+		Math.floor(elapsed / milliseconds)
+	);
+}

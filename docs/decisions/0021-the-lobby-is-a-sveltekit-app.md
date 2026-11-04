@@ -43,9 +43,16 @@ interaction became a template, a fragment and a form route.
   and the retired `/setup` never fall back to it: a missing asset or API is
   still a 404. `/_app/` is public and serves the build's assets. A page not yet
   moved stays a Jinja page, and a link to it carries `data-sveltekit-reload`.
+  `/deck/{slug}/pdf` stays a server download; for a deck that is missing,
+  foreign or unknown, or whose file is gone, it answers the shell under 404,
+  so the app shows the root not-found board. That shell is the route's own
+  refusal, never a fallback for an unmatched address. `/deck/{slug}/` has no
+  redirect: a page load there gets the shell, and the router settles on
+  `/deck/{slug}`.
 - The root load reads the session once; the `(lobby)` route group holds the
   header and footer, so `/login` and the refusals stay headerless. Home, at
-  `/`, is the first page in the group. A 401 from any read or write leaves the
+  `/`, is the first page in the group; the deck page at `/deck/{slug}` is the
+  second, and it draws its own unknown-deck board for a 404. A 401 from any read or write leaves the
   app by a document navigation to the sign-in with the current address as
   `next`, and its promise never settles, so no error page shows on the way
   out. A load names its own `url` as `next`, because it runs before the
@@ -55,8 +62,9 @@ interaction became a template, a fragment and a form route.
   header and the unknown-address words, answered at 200 by the shell. There is
   no catch-all route, so an address no route claims still reaches the server
   by a page load. The header is one component for the `(lobby)` group and the
-  error page; `aria-current` follows the section of the address (Decks on
-  exactly `/`, Settings on `/settings` and below, none elsewhere).
+  error page; `aria-current="page"` follows the section of the address (Decks on `/` and
+  on a deck page, `/deck/<one segment>` with an optional trailing slash and no
+  deeper address, Settings on `/settings` and below, none elsewhere).
 - The error page picks its words by status: 403 shows the for-admins words, 404
   the unknown-address words, and any other status shows the header and the
   status number with no sentence, because the catalog has no general failure

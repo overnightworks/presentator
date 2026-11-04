@@ -1,4 +1,3 @@
-import type { Page } from '@playwright/test';
 
 import { addDeck, type DeckRecord, expect, type Person, test } from './person.ts';
 import {
@@ -381,33 +380,6 @@ test.describe('sentence 4', () => {
 		await chooseTheme(page, 'Dark');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 		expect(await entriesOf(page)).toBe(entries);
-	});
-});
-
-// Cell 8: a link to a page that is still Jinja is a document navigation, never
-// SvelteKit's 404 for an address its router does not know.
-test.describe('the links to pages that are still Jinja', () => {
-	test.use({ person: { role: 'admin', decks: [aDeck()] } });
-
-	async function leavesTheApp(page: Page, click: () => Promise<void>, path: string): Promise<void> {
-		const [answer] = await Promise.all([
-			page.waitForResponse((received) => new URL(received.url()).pathname === path),
-			click()
-		]);
-		expect(answer.request().isNavigationRequest()).toBe(true);
-		expect(answer.status()).toBe(200);
-		await expect(page).toHaveURL(new RegExp(`${path}$`));
-		await expect(page.locator('#svelte-announcer')).toHaveCount(0);
-	}
-
-	test('a deck row links to its page by a document navigation', async ({ page, signedIn }) => {
-		await page.goto('/');
-
-		await leavesTheApp(
-			page,
-			() => page.getByRole('link', { name: 'Kundenfeedback Q3' }).click(),
-			`/deck/${signedIn?.slugs[0]}`
-		);
 	});
 });
 

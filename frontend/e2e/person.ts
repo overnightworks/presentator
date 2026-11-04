@@ -1,11 +1,26 @@
 import type { BrowserContext } from '@playwright/test';
 
+import type { FailureView } from '../src/lib/api/decks.ts';
 import { expect, test as base } from './coverage.ts';
 
+export interface AttemptRecord {
+	commit?: string;
+	started_at?: string;
+	// The reason is the wire's own type; a reason names only the counts it needs.
+	failure?: Partial<FailureView> & Pick<FailureView, 'reason'>;
+}
+
+// A ready deck has a build made at `built_at` (the drive's own instant unless
+// given); a building or failed one has a build only when `built_at` is given,
+// and an attempt (a default one unless given). The harness refuses an attempt
+// on a ready or never-built deck, and a missing PDF without a build.
 export interface DeckRecord {
 	state: 'ready' | 'building' | 'failed' | 'never-built';
 	title: string;
 	changed_at: string;
+	built_at?: string;
+	attempt?: AttemptRecord;
+	pdf?: 'missing';
 }
 
 export interface Person {

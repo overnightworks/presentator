@@ -135,7 +135,6 @@ def _alike(answer: Response, unknown: Response) -> None:
 
 _NO_HEADERS: Final[dict[str, str]] = {}
 _REQUESTS: Final = [
-    pytest.param(A_BROWSERS_ADDRESS, "get", "", _NO_HEADERS, id="the-deck-page"),
     pytest.param(A_TALK_ADDRESS, "get", "/", _NO_HEADERS, id="the-projector"),
     pytest.param(A_TALK_ADDRESS, "get", "/presenter/", _NO_HEADERS, id="the-presenter"),
     pytest.param(A_TALK_ADDRESS, "get", f"/{AN_ASSET}", _NO_HEADERS, id="an-asset"),
@@ -245,7 +244,6 @@ def test_an_admin_with_no_deck_gets_an_empty_list_that_names_no_address() -> Non
 
 _WALTER: Final = User(id="id-of-walter", username="walter", role=Role.USER)
 _AT_THE_LOBBY_OR_THE_TALK_HOST: Final = [
-    (A_BROWSERS_ADDRESS, ""),
     (A_TALK_ADDRESS, "/presenter/"),
     (A_BROWSERS_ADDRESS, "/pdf"),
 ]
@@ -263,6 +261,8 @@ def test_a_member_without_the_admin_role_has_no_deck_of_another_account(
             member.get(f"/deck/b-deck{tail}"),
             member.get(f"/deck/{_THE_UNKNOWN}{tail}"),
         )
+    member = hosts.signed_in_at(A_BROWSERS_ADDRESS, _WALTER)
+    _alike(member.get("/api/decks/b-deck"), member.get(f"/api/decks/{_THE_UNKNOWN}"))
 
 
 def test_the_owner_without_the_admin_role_has_the_own_deck_but_no_sources(
@@ -277,6 +277,7 @@ def test_the_owner_without_the_admin_role_has_the_own_deck_but_no_sources(
     for origin, tail in _AT_THE_LOBBY_OR_THE_TALK_HOST:
         member = hosts.signed_in_at(origin, _WALTER)
         assert member.get(f"/deck/a-deck{tail}").status_code == HTTPStatus.OK
+    assert client.get("/api/decks/a-deck").status_code == HTTPStatus.OK
     assert client.get(SOURCES).status_code == HTTPStatus.FORBIDDEN
 
 
@@ -295,7 +296,11 @@ def test_a_deck_of_a_removed_source_answers_like_an_unknown_slug_for_its_owner(
             talk_host.get(f"/deck/{_THE_UNKNOWN}/presenter/"),
         )
     for client in (admins.as_a, admins.as_b):
-        _alike(client.get("/deck/a-deck"), client.get(f"/deck/{_THE_UNKNOWN}"))
+        _alike(
+            client.get("/api/decks/a-deck"),
+            client.get(f"/api/decks/{_THE_UNKNOWN}"),
+        )
+        _alike(client.get("/deck/a-deck/pdf"), client.get(f"/deck/{_THE_UNKNOWN}/pdf"))
 
 
 def test_an_admin_opens_the_source_of_another_without_its_deck_chips(

@@ -1,8 +1,6 @@
 """One deck's page, the talk it leads into, and its PDF, as a browser gets them."""
 
 import shutil
-from dataclasses import replace
-from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
 from typing import Final
@@ -10,15 +8,13 @@ from urllib.parse import quote
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx2 import Response
 
 from presentator.contracts.decks import (
     Build,
     BuildAttempt,
-    BuildFailure,
-    BuildFailureReason,
     BuildOutcome,
 )
-from presentator.contracts.text import Catalogs
 from tests.support.deck_page_support import (
     COMMIT,
     SLUG,
@@ -31,7 +27,6 @@ from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
     BUILT_TALK,
-    ENGLISH,
     EXPORTED_PDF,
     NOW,
     SOURCE_ID,
@@ -43,7 +38,6 @@ from tests.support.lobby import (
 )
 from tests.support.talk_support import ONLY_THIS_TEST_WROTE_IT, two_hosts
 
-_SHORT_COMMIT: Final = "a3f19c2"
 _ADDRESS: Final = "git@heimserver:decks.git"
 _PAGE: Final = f"/deck/{SLUG}"
 _PROJECTOR: Final = f"/deck/{SLUG}/"
@@ -51,52 +45,17 @@ _PRESENTER: Final = f"/deck/{SLUG}/presenter/"
 _PDF: Final = f"/deck/{SLUG}/pdf"
 _PDF_TYPE: Final = "application/pdf"
 _SAVED_AS: Final = f'attachment; filename="{SLUG}.pdf"'
-_HOW_LONG_AGO: Final = "12 minutes ago"
-_ATTEMPT_COMMIT: Final = "e91c5ad4f3b2a1908877665544332211aabbccdd"
-_SHORT_ATTEMPT_COMMIT: Final = "e91c5ad"
-_TRIED_AGO: Final = timedelta(minutes=26)
-_HOW_LONG_SINCE_THE_ATTEMPT: Final = "26 minutes ago"
-_RUNNING_FOR: Final = timedelta(seconds=40)
-_HOW_LONG_IT_HAS_RUN: Final = "40 seconds"
-_WHAT_THE_TOOLCHAIN_SAID: Final = "slides.md:41:3 Unexpected token in frontmatter"
-_THE_TOOLCHAIN_FAILED: Final = BuildFailure.said(_WHAT_THE_TOOLCHAIN_SAID)
-_A_DECK_THAT_WRITES_MARKUP: Final = "<script>alert('slides')</script>"
-_THEMES: Final = ("apple-basic", "bricks", "default", "seriph", "shibainu")
+_A_BROWSER: Final = {"accept": "text/html"}
+_NO_SUCH_ADDRESS: Final = "/no-such-page"
 
 
-def a_running_attempt() -> BuildAttempt:
-    """A build that said it began and has not reported back, as the picture shows."""
-    return BuildAttempt(
-        commit=_ATTEMPT_COMMIT,
-        started_at=NOW - _RUNNING_FOR,
-        outcome=BuildOutcome.RUNNING,
-        failure=None,
-    )
-
-
-def a_failed_attempt(*, said: BuildFailure = _THE_TOOLCHAIN_FAILED) -> BuildAttempt:
-    """A build that broke a while ago, with or without words of its own."""
-    return BuildAttempt(
-        commit=_ATTEMPT_COMMIT,
-        started_at=NOW - _TRIED_AGO,
-        outcome=BuildOutcome.FAILED,
-        failure=said,
-    )
-
-
-def a_page_of_a_deck(
-    *,
-    built: Build | None = None,
-    attempt: BuildAttempt | None = None,
-) -> str:
-    """The deck page as a signed-in person receives it in that state."""
-    signed_in = a_signed_in_lobby(
-        GivenDecks(
-            store=a_deck_store(built=built, attempt=attempt),
-            source=a_configured_source(_ADDRESS),
-        ),
-    )
-    return signed_in.get(_PAGE).text
+def assert_the_app_under_not_found(client: TestClient, answer: Response) -> None:
+    """The answer is the lobby app's own shell, refused, and hands over no file."""
+    shell = client.get(_NO_SUCH_ADDRESS, headers=_A_BROWSER)
+    assert answer.status_code == HTTPStatus.NOT_FOUND
+    assert answer.headers["content-type"].startswith("text/html")
+    assert "content-disposition" not in answer.headers
+    assert answer.content == shell.content
 
 
 @pytest.fixture
@@ -104,16 +63,6 @@ def lobby() -> TestClient:
     return a_signed_in_lobby(
         GivenDecks(
             store=a_deck_store(built=a_build()),
-            source=a_configured_source(_ADDRESS),
-        ),
-    )
-
-
-@pytest.fixture
-def unbuilt_lobby() -> TestClient:
-    return a_signed_in_lobby(
-        GivenDecks(
-            store=a_deck_store(),
             source=a_configured_source(_ADDRESS),
         ),
     )
@@ -139,32 +88,6 @@ def talk_host(tmp_path: Path) -> TestClient:
             source=a_configured_source(_ADDRESS),
         ),
     )
-
-
-def test_the_deck_page_names_the_title_the_source_and_the_commit_it_was_taken_from(
-    lobby: TestClient,
-) -> None:
-    page = lobby.get(_PAGE)
-
-    assert page.status_code == HTTPStatus.OK
-    assert TITLE in page.text
-    assert SLUG in page.text
-    assert _ADDRESS in page.text
-    assert _SHORT_COMMIT in page.text
-    assert COMMIT not in page.text
-
-
-# C13.
-@pytest.mark.parametrize(
-    "view", [_PRESENTER, _PROJECTOR], ids=["presenter", "projector"]
-)
-def test_a_deck_with_a_built_talk_links_its_views_at_the_talk_host(
-    lobby: TestClient, view: str
-) -> None:
-    page = lobby.get(_PAGE).text
-
-    assert f'href="{A_TALK_ADDRESS}{view}"' in page
-    assert ENGLISH.deck_state_ready in page
 
 
 # D4.
@@ -196,15 +119,6 @@ def test_a_talk_is_served_with_the_slide_in_the_address_it_was_left_at(
     assert slide.headers["content-type"].startswith("text/html")
 
 
-def test_a_deck_with_an_exported_pdf_offers_it_for_download_on_its_page(
-    lobby: TestClient,
-) -> None:
-    page = lobby.get(_PAGE).text
-
-    assert f'href="{_PDF}"' in page
-    assert ENGLISH.deck_pdf in page
-
-
 def test_the_download_hands_the_file_the_deck_names_over_to_be_saved(
     lobby: TestClient,
 ) -> None:
@@ -216,118 +130,12 @@ def test_the_download_hands_the_file_the_deck_names_over_to_be_saved(
     assert download.content == EXPORTED_PDF.read_bytes()
 
 
-def test_the_deck_page_names_the_themes_this_instance_builds_with() -> None:
-    signed_in = a_signed_in_lobby(
-        GivenDecks(
-            store=a_deck_store(built=a_build()),
-            source=a_configured_source(_ADDRESS),
-            themes=_THEMES,
-        ),
-    )
-
-    page = signed_in.get(_PAGE).text
-
-    assert ENGLISH.deck_builds_with.format(themes=", ".join(_THEMES)) in page
-    start = page.index("data-builds-with")
-    row = page[start : page.index("</p>", start)]
-    assert all(theme in row for theme in _THEMES)
-    # Names only (R4): the row that carries them has no path and no version.
-    assert "/" not in row
-    assert not any(character.isdigit() for character in row)
-
-
-def test_the_deck_page_omits_the_row_while_the_toolchain_cannot_be_read() -> None:
-    signed_in = a_signed_in_lobby(
-        GivenDecks(
-            store=a_deck_store(built=a_build()),
-            source=a_configured_source(_ADDRESS),
-            themes=None,
-        ),
-    )
-
-    page = signed_in.get(_PAGE).text
-
-    assert "data-builds-with" not in page
-
-
-def test_the_builds_with_row_stays_one_paragraph_at_twelve_themes() -> None:
-    themes = tuple(f"theme-{index:02d}" for index in range(12))
-    signed_in = a_signed_in_lobby(
-        GivenDecks(
-            store=a_deck_store(built=a_build()),
-            source=a_configured_source(_ADDRESS),
-            themes=themes,
-        ),
-    )
-
-    page = signed_in.get(_PAGE).text
-
-    # One wrapped sentence at any set size (R6): one paragraph, not one chip
-    # per theme and not a table.
-    assert page.count("data-builds-with") == 1
-    start = page.index("data-builds-with")
-    row = page[start : page.index("</p>", start)]
-    assert all(theme in row for theme in themes)
-
-
-def test_a_toolchain_manifest_package_json_does_not_carry_omits_the_row(
-    tmp_path: Path,
-) -> None:
-    project = tmp_path / "slidev"
-    project.mkdir()
-    (project / "package.json").write_text('{"dependencies": ["@slidev/theme-seriph"]}')
-    signed_in = a_signed_in_lobby(
-        GivenDecks(
-            store=a_deck_store(built=a_build()),
-            source=a_configured_source(_ADDRESS),
-            toolchain_project=project,
-        ),
-    )
-
-    page = signed_in.get(_PAGE)
-
-    assert page.status_code == HTTPStatus.OK
-    assert "data-builds-with" not in page.text
-
-
-def test_the_row_uses_the_catalogs_own_separator_between_names() -> None:
-    catalog = replace(ENGLISH, deck_theme_separator=" | ")
-    lobby = a_lobby(
-        catalogs=Catalogs(by_tag={catalog.language_tag: catalog}),
-        given=GivenDecks(
-            store=a_deck_store(built=a_build()),
-            source=a_configured_source(_ADDRESS),
-            themes=_THEMES,
-        ),
-    )
-    lobby.sign_in()
-
-    page = lobby.client.get(_PAGE).text
-
-    assert " | ".join(_THEMES) in page
-    assert ", ".join(_THEMES) not in page
-
-
-def test_a_built_decks_page_says_how_long_ago_its_talk_was_built() -> None:
-    signed_in = a_signed_in_lobby(
-        GivenDecks(
-            store=a_deck_store(built=a_build()),
-            source=a_configured_source(_ADDRESS),
-        ),
-    )
-
-    page = signed_in.get(_PAGE).text
-
-    assert ENGLISH.deck_built.format(age=_HOW_LONG_AGO) in page
-    assert _SHORT_COMMIT in page
-
-
 @pytest.mark.parametrize(
     "built",
     [None, a_build(pdf=Path("/var/lib/presentator/builds/nothing-was-written.pdf"))],
     ids=["nothing built", "a file that is gone"],
 )
-def test_a_download_with_nothing_behind_it_answers_the_lobbys_own_page(
+def test_a_download_with_nothing_behind_it_answers_the_lobby_app_under_not_found(
     built: Build | None,
 ) -> None:
     signed_in = a_signed_in_lobby(
@@ -339,10 +147,7 @@ def test_a_download_with_nothing_behind_it_answers_the_lobbys_own_page(
 
     missing = signed_in.get(_PDF)
 
-    assert missing.status_code == HTTPStatus.NOT_FOUND
-    assert ENGLISH.deck_unknown_title in missing.text
-    assert missing.headers["content-type"].startswith("text/html")
-    assert '"detail"' not in missing.text
+    assert_the_app_under_not_found(signed_in, missing)
 
 
 @pytest.mark.parametrize(
@@ -362,22 +167,7 @@ def test_a_slug_that_could_reach_a_header_is_refused_before_one_is_built(
 
     refused = signed_in.get(f"/deck/{quote(slug, safe='')}/pdf")
 
-    assert refused.status_code == HTTPStatus.NOT_FOUND
-    assert "content-disposition" not in refused.headers
-    assert ENGLISH.deck_unknown_title in refused.text
-
-
-def test_a_deck_nothing_has_been_built_from_says_so_and_offers_no_view(
-    unbuilt_lobby: TestClient,
-) -> None:
-    page = unbuilt_lobby.get(_PAGE)
-
-    assert page.status_code == HTTPStatus.OK
-    assert ENGLISH.deck_not_built_explanation in page.text
-    assert ENGLISH.deck_state_never_built in page.text
-    assert _PRESENTER not in page.text
-    assert _PROJECTOR not in page.text
-    assert ENGLISH.deck_pdf not in page.text
+    assert_the_app_under_not_found(signed_in, refused)
 
 
 @pytest.mark.parametrize(
@@ -521,37 +311,10 @@ def test_a_pdf_replaced_by_a_link_answers_as_if_it_were_missing(
 
     refused = signed_in.get(_PDF)
 
-    assert refused.status_code == HTTPStatus.NOT_FOUND
-    assert ENGLISH.deck_unknown_title in refused.text
+    assert_the_app_under_not_found(signed_in, refused)
 
 
-def test_an_address_no_deck_carries_answers_the_lobbys_own_page(
-    lobby: TestClient,
-) -> None:
-    unknown = lobby.get("/deck/nothing-was-pushed-here")
-
-    assert unknown.status_code == HTTPStatus.NOT_FOUND
-    assert ENGLISH.deck_unknown_title in unknown.text
-    assert unknown.headers["content-type"].startswith("text/html")
-    assert '"detail"' not in unknown.text
-
-
-def test_a_deck_page_carries_the_header_and_its_person_menu(
-    lobby: TestClient,
-) -> None:
-    page = lobby.get(_PAGE).text
-
-    assert f">{ENGLISH.section_decks}<" in page
-    assert ENGLISH.menu_account in page
-    assert ENGLISH.menu_theme in page
-    assert ENGLISH.log_out in page
-
-
-def test_a_deck_page_marks_no_section_as_the_current_one(lobby: TestClient) -> None:
-    assert "aria-current" not in lobby.get(_PAGE).text
-
-
-def test_a_deck_removed_by_reconciliation_answers_the_lobbys_not_found(
+def test_a_deck_removed_by_reconciliation_answers_not_found_until_it_returns(
     tmp_path: Path,
 ) -> None:
     store = a_deck_store(built=a_build())
@@ -563,164 +326,40 @@ def test_a_deck_removed_by_reconciliation_answers_the_lobbys_not_found(
     talk_host = hosts.signed_in_at(A_TALK_ADDRESS)
 
     store.mark_removed_except(present=frozenset(), source_id=SOURCE_ID, at=NOW)
-    removed = signed_in.get(_PAGE)
+    removed = signed_in.get(_PDF)
     removed_talk = talk_host.get(_PRESENTER)
 
     store.mark_removed_except(present=frozenset({SLUG}), source_id=SOURCE_ID, at=NOW)
-    returned = signed_in.get(_PAGE)
+    returned = signed_in.get(_PDF)
 
-    assert removed.status_code == HTTPStatus.NOT_FOUND
-    assert ENGLISH.deck_unknown_title in removed.text
+    assert_the_app_under_not_found(signed_in, removed)
     assert returned.status_code == HTTPStatus.OK
-    assert ENGLISH.deck_state_ready in returned.text
     assert removed_talk.status_code == HTTPStatus.NOT_FOUND
     assert talk_host.get(_PRESENTER).status_code == HTTPStatus.OK
 
 
-def test_a_deck_whose_build_failed_names_the_attempt_and_what_broke() -> None:
-    page = a_page_of_a_deck(built=a_build(), attempt=a_failed_attempt())
-
-    assert ENGLISH.deck_state_failed in page
-    assert ENGLISH.deck_failed_title in page
-    assert ENGLISH.deck_attempt_label in page
-    assert _SHORT_ATTEMPT_COMMIT in page
-    assert _ATTEMPT_COMMIT not in page
-    assert _HOW_LONG_SINCE_THE_ATTEMPT in page
-    assert _WHAT_THE_TOOLCHAIN_SAID in page
+def an_attempt(outcome: BuildOutcome) -> BuildAttempt:
+    """A build that ran after the one that stands, with no words of its own."""
+    return BuildAttempt(commit=COMMIT, started_at=NOW, outcome=outcome, failure=None)
 
 
 # C13.
-def test_the_last_good_talk_still_opens_from_a_failed_decks_page(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    "outcome", [BuildOutcome.FAILED, BuildOutcome.RUNNING], ids=["failed", "running"]
+)
+def test_the_last_good_talk_and_its_pdf_stay_open_beside_a_later_attempt(
+    tmp_path: Path, outcome: BuildOutcome
 ) -> None:
     hosts = two_hosts(
         tmp_path,
         given=GivenDecks(
-            store=a_deck_store(built=a_build(), attempt=a_failed_attempt()),
+            store=a_deck_store(built=a_build(), attempt=an_attempt(outcome)),
             source=a_configured_source(_ADDRESS),
         ),
     )
     lobby = hosts.signed_in_at(A_BROWSERS_ADDRESS)
     talk_host = hosts.signed_in_at(A_TALK_ADDRESS)
 
-    page = lobby.get(_PAGE).text
-
-    assert ENGLISH.deck_failed_last_talk_stands in page
-    assert f'href="{A_TALK_ADDRESS}{_PRESENTER}"' in page
-    assert f'href="{A_TALK_ADDRESS}{_PROJECTOR}"' in page
-    assert f'href="{_PDF}"' in page
     assert talk_host.get(_PRESENTER).status_code == HTTPStatus.OK
     assert talk_host.get(_PROJECTOR).status_code == HTTPStatus.OK
     assert lobby.get(_PDF).status_code == HTTPStatus.OK
-
-
-def test_what_a_failing_deck_printed_reaches_the_page_as_words_not_markup() -> None:
-    page = a_page_of_a_deck(
-        built=a_build(),
-        attempt=a_failed_attempt(said=BuildFailure.said(_A_DECK_THAT_WRITES_MARKUP)),
-    )
-
-    assert _A_DECK_THAT_WRITES_MARKUP not in page
-    assert "&lt;script&gt;" in page
-
-
-def test_a_failed_build_that_said_nothing_is_still_explained() -> None:
-    page = a_page_of_a_deck(
-        built=a_build(), attempt=a_failed_attempt(said=BuildFailure.without_words())
-    )
-
-    assert ENGLISH.deck_failed_without_a_message in page
-    assert "<pre>" not in page
-
-
-@pytest.mark.parametrize(
-    ("failure", "sentence"),
-    [
-        (
-            BuildFailure(
-                reason=BuildFailureReason.OUTPUT_MEGABYTES,
-                written_megabytes=700,
-                allowed_megabytes=500,
-            ),
-            ENGLISH.deck_failed_output_megabytes.format(written=700, allowed=500),
-        ),
-        (
-            BuildFailure(
-                reason=BuildFailureReason.OUTPUT_ENTRIES, allowed_entries=20000
-            ),
-            ENGLISH.deck_failed_output_entries.format(entries=20000),
-        ),
-        (
-            BuildFailure(reason=BuildFailureReason.OUTPUT_SHAPE),
-            ENGLISH.deck_failed_output_shape,
-        ),
-        (
-            BuildFailure(
-                reason=BuildFailureReason.DECK_MEGABYTES,
-                allowed_megabytes=500,
-                allowed_entries=20000,
-            ),
-            ENGLISH.deck_failed_deck_megabytes.format(megabytes=500, entries=20000),
-        ),
-        (
-            BuildFailure(reason=BuildFailureReason.DECK_PATHS),
-            ENGLISH.deck_failed_deck_paths,
-        ),
-    ],
-    ids=[
-        "output-megabytes",
-        "output-entries",
-        "output-shape",
-        "deck-megabytes",
-        "deck-paths",
-    ],
-)
-def test_a_build_the_server_refused_is_worded_from_the_catalog_with_its_numbers(
-    failure: BuildFailure,
-    sentence: str,
-) -> None:
-    page = a_page_of_a_deck(built=a_build(), attempt=a_failed_attempt(said=failure))
-
-    assert f"<pre>{sentence}</pre>" in page
-    assert ENGLISH.deck_failed_without_a_message not in page
-
-
-def test_a_deck_that_never_built_and_failed_promises_no_talk_to_open() -> None:
-    page = a_page_of_a_deck(attempt=a_failed_attempt())
-
-    assert ENGLISH.deck_state_failed in page
-    assert ENGLISH.deck_not_built_explanation in page
-    assert ENGLISH.deck_failed_last_talk_stands not in page
-    assert _PRESENTER not in page
-    assert ENGLISH.deck_pdf not in page
-
-
-# C13.
-def test_a_deck_being_built_locks_both_views_and_still_offers_the_pdf() -> None:
-    lobby = a_signed_in_lobby(
-        GivenDecks(
-            store=a_deck_store(built=a_build(), attempt=a_running_attempt()),
-            source=a_configured_source(_ADDRESS),
-        ),
-    )
-
-    page = lobby.get(_PAGE).text
-
-    assert ENGLISH.deck_state_building in page
-    assert ENGLISH.deck_building_explanation in page
-    assert ENGLISH.deck_building_label in page
-    assert _SHORT_ATTEMPT_COMMIT in page
-    assert ENGLISH.deck_building_for.format(age=_HOW_LONG_IT_HAS_RUN) in page
-    assert f'href="{A_TALK_ADDRESS}{_PRESENTER}"' not in page
-    assert f'href="{A_TALK_ADDRESS}{_PROJECTOR}"' not in page
-    assert f"data-locked>{ENGLISH.deck_presenter_view}<" in page
-    assert f"data-locked>{ENGLISH.deck_projector_view}<" in page
-    assert f'href="{_PDF}"' in page
-    assert lobby.get(_PDF).status_code == HTTPStatus.OK
-
-
-def test_a_deck_that_delivers_a_talk_and_ran_nothing_since_carries_no_banner() -> None:
-    page = a_page_of_a_deck(built=a_build())
-
-    assert ENGLISH.deck_state_ready in page
-    assert "data-banner" not in page
