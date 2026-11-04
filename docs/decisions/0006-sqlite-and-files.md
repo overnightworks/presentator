@@ -40,6 +40,11 @@ replaceable if this decision's assumption ever stops holding.
 
 - Backup is a file copy, and inspection is one `sqlite3` command.
 - There is no separate service to start, upgrade, or monitor beside the app.
+- A column the code no longer reads is dropped in place by `create_tables`
+  (`adapters/schema.py`), one way: `person_preferences.language_tag` went this
+  way. The release before selects that column on every session read, so it
+  cannot read the migrated file, and the way back is the backup taken before
+  the start, then the earlier release.
 - A column an operated file lacks is added in place by `create_tables`
   (`adapters/schema.py`), additive and in one transaction, losing no row; every
   statement names its columns, so the release before still reads the file. On

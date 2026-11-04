@@ -58,15 +58,12 @@ def test_a_person_without_a_choice_of_their_own_reads_the_instance_default() -> 
 def test_a_persons_own_choice_wins_over_the_instance_default() -> None:
     lobby = a_lobby(
         instance=InstanceSettings(language_tag="de", theme=ThemeChoice.DARK),
-        chosen=PersonPreferences(
-            language_tag=_ENGLISH.language_tag,
-            theme=ThemeChoice.LIGHT,
-        ),
+        chosen=PersonPreferences(theme=ThemeChoice.LIGHT),
     )
 
     appearance = lobby.appearance_for(_PERSON)
 
-    assert appearance.text == _ENGLISH
+    assert appearance.text == _GERMAN
     assert appearance.explicit_theme is ThemeChoice.LIGHT
 
 
@@ -82,7 +79,7 @@ def test_a_person_who_follows_the_system_leaves_the_theme_to_the_browser() -> No
 def test_one_persons_choice_leaves_everybody_else_at_the_instance_default() -> None:
     lobby = a_lobby(
         instance=InstanceSettings(theme=ThemeChoice.LIGHT),
-        chosen=PersonPreferences(language_tag="de", theme=ThemeChoice.DARK),
+        chosen=PersonPreferences(theme=ThemeChoice.DARK),
     )
 
     neighbour = lobby.appearance_for(_NEIGHBOUR)
@@ -94,14 +91,15 @@ def test_one_persons_choice_leaves_everybody_else_at_the_instance_default() -> N
 def test_nobody_signed_in_reads_the_instance_default() -> None:
     lobby = a_lobby(
         instance=InstanceSettings(language_tag="de"),
-        chosen=PersonPreferences(language_tag=_ENGLISH.language_tag),
+        chosen=PersonPreferences(theme=ThemeChoice.DARK),
     )
 
     assert lobby.appearance_for(None).text == _GERMAN
+    assert lobby.appearance_for(None).explicit_theme is None
 
 
-def test_a_person_whose_catalog_file_is_gone_reads_english_again() -> None:
-    lobby = a_lobby(chosen=PersonPreferences(language_tag="fr"))
+def test_an_instance_whose_catalog_file_is_gone_reads_english_again() -> None:
+    lobby = a_lobby(instance=InstanceSettings(language_tag="fr"))
 
     assert lobby.appearance_for(_PERSON).text == _ENGLISH
 
@@ -120,17 +118,14 @@ def test_saving_the_instance_defaults_leaves_a_persons_own_choice_alone() -> Non
 
 def test_a_person_can_hand_their_choice_back_to_the_instance() -> None:
     lobby = a_lobby(
-        instance=InstanceSettings(language_tag="de"),
-        chosen=PersonPreferences(
-            language_tag=_ENGLISH.language_tag,
-            theme=ThemeChoice.LIGHT,
-        ),
+        instance=InstanceSettings(language_tag="de", theme=ThemeChoice.DARK),
+        chosen=PersonPreferences(theme=ThemeChoice.LIGHT),
     )
 
     lobby.save_preferences_of(_PERSON, PersonPreferences())
 
     assert lobby.preferences_of(_PERSON) == PersonPreferences()
-    assert lobby.appearance_for(_PERSON).text == _GERMAN
+    assert lobby.appearance_for(_PERSON).explicit_theme is ThemeChoice.DARK
 
 
 def test_every_installed_catalog_is_offered_as_a_language() -> None:
@@ -138,40 +133,6 @@ def test_every_installed_catalog_is_offered_as_a_language() -> None:
         Language(tag="de", name="Deutsch"),
         Language(tag=_ENGLISH.language_tag, name=_ENGLISH.language_name),
     )
-
-
-@pytest.mark.parametrize(
-    ("language_tag", "spoken"),
-    [pytest.param("de", True, id="installed"), pytest.param("fr", False, id="absent")],
-)
-def test_an_instance_speaks_the_languages_whose_catalogs_it_has(
-    language_tag: str,
-    *,
-    spoken: bool,
-) -> None:
-    assert a_lobby().speaks(language_tag) is spoken
-
-
-def test_saving_an_unspoken_language_for_a_person_is_refused_and_writes_nothing() -> (
-    None
-):
-    lobby = a_lobby()
-    unspoken = PersonPreferences(language_tag="xx")
-
-    with pytest.raises(UnspokenLanguageError):
-        lobby.save_preferences_of(_PERSON, unspoken)
-
-    assert lobby.preferences_of(_PERSON) == PersonPreferences()
-
-
-def test_a_person_with_a_vanished_catalog_can_still_change_the_theme() -> None:
-    lobby = a_lobby(chosen=PersonPreferences(language_tag="xx"))
-
-    lobby.save_preferences_of(
-        _PERSON, PersonPreferences(language_tag="xx", theme=ThemeChoice.DARK)
-    )
-
-    assert lobby.preferences_of(_PERSON).theme is ThemeChoice.DARK
 
 
 def test_an_instance_with_a_vanished_catalog_can_still_change_the_theme() -> None:

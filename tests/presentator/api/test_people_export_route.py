@@ -15,6 +15,7 @@ from httpx2 import Response
 from pydantic import SecretStr
 
 from presentator.application.people import People
+from presentator.contracts.preferences import ThemeChoice
 from tests.presentator.application.support.fakes import (
     FakePeople,
     FakeSourceStore,
@@ -172,7 +173,7 @@ def test_every_kind_of_row_is_exported_and_each_secret_kind_counted_withheld() -
     data = cast("dict[str, object]", document["data"])
     assert set(data) == {"account", "sessions", "preferences", "key_draft", "sources"}
     assert data["account"] == {"id": THE_PERSON.id, "username": "pia", "role": "admin"}
-    assert data["preferences"] == {"language_tag": "de", "theme": None}
+    assert data["preferences"] == {"theme": ThemeChoice.DARK.value}
     assert data["key_draft"] == {
         "created_at": "2026-01-15T09:00:00Z",
         "public_key": "ssh-ed25519 AAAAtestkey1 presentator",

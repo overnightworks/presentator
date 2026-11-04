@@ -9,7 +9,7 @@ from presentator.application.decks import Decks
 from presentator.application.people import People
 from presentator.contracts.decks import Source
 from presentator.contracts.models import Role, User
-from presentator.contracts.preferences import PersonPreferences
+from presentator.contracts.preferences import PersonPreferences, ThemeChoice
 from tests.presentator.application.support.decks_support import (
     DecksFakes,
     a_folder,
@@ -106,7 +106,7 @@ def an_instance(
         resolved.key_drafts.mint(person.id, at=clock.now())
     preferences = FakePersonPreferencesStore(
         chosen={
-            person.id: PersonPreferences(language_tag="de")
+            person.id: PersonPreferences(theme=ThemeChoice.DARK)
             for person in (THE_PERSON, ANOTHER)
         },
     )

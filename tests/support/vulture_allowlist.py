@@ -142,20 +142,18 @@ LobbyText.source_run_column_detail
 # them is proven by the route tests.
 LobbyText.section_decks
 # The Svelte lobby's not-found board, for-admins board and Settings page read
-# these from `/api/session`.
+# these from `/api/session`, and the person menu its round button.
 LobbyText.address_unknown_title
 LobbyText.address_unknown_explanation
 LobbyText.for_admins_title
 LobbyText.for_admins_explanation
+LobbyText.menu_account
 LobbyText.settings_title
 LobbyText.settings_instance_name
 LobbyText.settings_default_language
 LobbyText.settings_language_hint
 LobbyText.settings_default_theme
 LobbyText.settings_save
-LobbyText.account_preferences
-LobbyText.account_language
-LobbyText.account_theme
 LobbyText.sources_back
 LobbyText.source_remove_cancel
 LobbyText.source_remove_confirm

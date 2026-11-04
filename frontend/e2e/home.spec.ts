@@ -56,8 +56,8 @@ const fourStates = [
 	})
 ];
 
-// Cell 2: the browser words the ages, in the person's language, not its own.
-const secondLanguageAges = ['vor 2 Minuten', 'vor 26 Minuten', 'vor 3 Stunden', 'vor 6 Tagen'];
+// Cell 2: the ages are worded in the instance's language.
+const englishAges = ['2 minutes ago', '26 minutes ago', '3 hours ago', '6 days ago'];
 
 for (const colorScheme of ['light', 'dark'] as const) {
 	for (const width of [390, 1280]) {
@@ -65,14 +65,13 @@ for (const colorScheme of ['light', 'dark'] as const) {
 			test.use({
 				person: {
 					role: 'admin',
-					language: 'second',
 					decks: [...fourStates].reverse()
 				},
 				locale: 'en-US',
 				colorScheme
 			});
 
-			test('lists four states newest first, their ages in the second language, and saves a screenshot', async ({
+			test('lists four states newest first, their ages in English, and saves a screenshot', async ({
 				page,
 				signedIn
 			}, testInfo) => {
@@ -99,7 +98,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 					await expect(row.locator('code')).toHaveText(
 						signedIn?.slugs[fourStates.length - 1 - index] ?? ''
 					);
-					await expect(row.locator('.changed')).toHaveText(secondLanguageAges[index] ?? '');
+					await expect(row.locator('.changed')).toHaveText(englishAges[index] ?? '');
 				}
 				await expect(page.locator('html')).toHaveAttribute('lang', words.language_tag);
 				await page.evaluate(() => document.fonts.ready);
@@ -222,7 +221,7 @@ test.describe('sentence 9', () => {
 
 // Cell 5.
 test.describe('the theme', () => {
-	test.use({ person: { role: 'admin', language: 'second' } });
+	test.use({ person: { role: 'admin' } });
 
 	test('turns dark with no navigation and no history entry, and a reload keeps it', async ({
 		page
@@ -242,10 +241,9 @@ test.describe('the theme', () => {
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 	});
 
-	test('shows on a Jinja page, keeps the stored language, and follows the device again', async ({
+	test('shows on a Jinja page, keeps the stored theme, and follows the device again', async ({
 		page
 	}) => {
-		const { words } = await sessionOf(page);
 		const backgroundOf = () =>
 			page.locator('body').evaluate((body) => getComputedStyle(body).backgroundColor);
 		await page.goto('/');
@@ -264,9 +262,7 @@ test.describe('the theme', () => {
 		const account = await page.request.get('/api/account', {
 			headers: { Accept: 'application/json' }
 		});
-		expect(((await account.json()) as { language_tag: string }).language_tag).toBe(
-			words.language_tag
-		);
+		expect(((await account.json()) as { theme: string }).theme).toBe('dark');
 
 		await page.goto('/');
 		await chooseTheme(page, 'Follow system');
@@ -275,6 +271,22 @@ test.describe('the theme', () => {
 		await expect(page.locator('body')).toHaveCSS('background-color', darkBackground);
 		await page.emulateMedia({ colorScheme: 'light' });
 		await expect(page.locator('body')).toHaveCSS('background-color', lightBackground);
+	});
+
+	test('sends one write with the theme alone and no read first', async ({ page }) => {
+		const requests: { method: string; body: string | null }[] = [];
+		page.on('request', (request) => {
+			if (new URL(request.url()).pathname === '/api/account') {
+				requests.push({ method: request.method(), body: request.postData() });
+			}
+		});
+		await page.goto('/');
+
+		await chooseTheme(page, 'Dark');
+
+		await expect.poll(() => requests.length).toBe(1);
+		expect(requests[0]?.method).toBe('PUT');
+		expect(JSON.parse(requests[0]?.body ?? '')).toEqual({ theme: 'dark' });
 	});
 
 	test('snaps the radio back when the write is refused', async ({ page }) => {
@@ -480,6 +492,7 @@ test.describe('the account menu', () => {
 		await expect(popup.locator('body')).toHaveText('the central account');
 		await expect(page.locator(MENU)).toBeHidden();
 		await opensTheMenu(page);
+		await expect(page.locator(MENU).locator('a[href="/account"]')).toHaveCount(0);
 		for (const label of [words.footer_impressum, words.footer_datenschutz]) {
 			await expect(page.getByRole('link', { name: label })).toHaveCount(2);
 			await expect(page.locator(MENU).getByRole('link', { name: label })).toBeVisible();

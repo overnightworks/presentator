@@ -134,6 +134,27 @@ def test_an_address_no_route_claims_loads_the_lobby_app_for_a_signed_in_reader(
     assert _is_the_lobby_app(answer.text)
 
 
+def test_account_is_an_address_no_route_claims_and_loads_the_lobby_app(
+    signed_in_lobby: Lobby,
+) -> None:
+    answer = signed_in_lobby.client.get("/account")
+
+    assert answer.status_code == HTTPStatus.OK
+    assert _is_the_lobby_app(answer.text)
+    assert "<form" not in answer.text
+
+
+def test_a_post_to_account_is_the_frameworks_not_found_and_writes_nothing(
+    signed_in_lobby: Lobby,
+) -> None:
+    answer = signed_in_lobby.client.post(
+        "/account", data={"language": "de", "theme": ThemeChoice.DARK.value}
+    )
+
+    assert answer.status_code == HTTPStatus.NOT_FOUND
+    assert signed_in_lobby.client.get("/api/account").json() == {"theme": None}
+
+
 @pytest.mark.parametrize(
     "path",
     [

@@ -32,7 +32,7 @@ interaction became a template, a fragment and a form route.
   frontend is.
 - The one FastAPI process serves it. The host reads the built shell once at
   start, hashes its one inline bootstrap script, and fills `<html lang
-  data-theme>` per request from the person's stored preference, so the first
+  data-theme>` per request from the instance's language and the person's theme, so the first
   paint has the right theme without device storage. No Node web service runs;
   Node stays in the image for Slidev only.
 - The shell answers a browser's page load on any lobby address no route

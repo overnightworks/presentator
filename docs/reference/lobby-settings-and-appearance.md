@@ -1,7 +1,7 @@
 # Lobby settings and appearance reference
 
 Audience: an engineer or operator looking up what the lobby's header,
-Settings and Account do and how the lobby is themed.
+Settings and theme do and how the lobby is themed.
 
 ## Header
 
@@ -10,11 +10,12 @@ Every signed-in page carries the picture's header
 Settings for an admin. On the SvelteKit pages it also has one
 round person button, which opens appkit's account menu in a native popover: the
 person's name opening the central account in a new tab, the three theme rows,
-Log out, and the legal links; Escape and a click outside close it. The Svelte
-header has no way to Account yet. A retained Jinja page's header shows the
-username as a details control instead, whose menu holds a link to the local
-account page, the three theme rows and Log out, without legal links. The footer carries the Impressum and
-the Datenschutz links.
+Log out, and the legal links; Escape and a click outside close it. A retained
+Jinja page's header shows the username as a details control instead, whose
+menu holds the three theme rows and Log out, without legal links. Neither
+header links to a lobby account page: there is none, and `/account` is an
+unknown address that shows the not-found board. The footer carries the
+Impressum and the Datenschutz links.
 
 ## Settings
 
@@ -33,30 +34,29 @@ is no Users tab.
   ([sources](sources.md)). An instance with no source says what a source is
   and what you need for it.
 
-## Account
+## Theme
 
-Everybody opens Account and overrides language and theme for themselves alone.
-Both resolve the same way: the person's own choice first, the instance default
+The language is the instance's: everybody reads the default an admin sets in
+Settings. The theme is a person's own override, with the instance default
 behind it. "Follow system" writes no `data-theme` attribute on a Jinja page,
 and the value `follow-system` on a SvelteKit page, which no theme rule
 matches; either way the browser decides
 ([ADR 0012](../decisions/0012-themes-and-language.md)). A theme chosen in the
-SvelteKit menu paints at once, with no reload, and is written by `GET` then
-`PUT /api/account` with the stored language override, because the write
-replaces both; if the write is refused the radio snaps back. The
-instance defaults live in one SQLite row, a person's overrides in a row beside
-their account, and a theme chosen in the person menu is that same Account
-preference. Account carries neither a password nor a sessions part.
+SvelteKit menu paints at once, with no reload, and is written by one
+`PUT /api/account` with the theme alone, no `GET` first; if the write is
+refused the radio snaps back. The instance defaults live in one SQLite row and
+a person's theme in a row beside their account. A person cannot hand a chosen
+theme back to the instance default in the menu; the API takes `null`.
 
 ## JSON
 
-Settings and Account are also readable and writable as JSON: `GET` and `PUT`
+Settings and the theme are also readable and writable as JSON: `GET` and `PUT`
 `/api/settings` (admin only, else a 403 problem) and `/api/account` (every
-signed-in person). A write replaces what the page writes and answers with what
-is now stored; a newly chosen language no catalog speaks is a 422 problem and
-nothing is written; the language already stored is accepted back. Both reads
-carry the language list (`tag` and the catalog's own `name`), so no page holds
-one of its own
+signed-in person, the theme alone). A write replaces what the page writes and
+answers with what is now stored; on Settings a newly chosen language no
+catalog speaks is a 422 problem and nothing is written, and the language
+already stored is accepted back. The Settings read carries the language list
+(`tag` and the catalog's own `name`), so no page holds one of its own
 ([ADR 0020](../decisions/0020-the-lobby-is-a-json-api.md)).
 
 ## Language
@@ -69,12 +69,12 @@ file and not a change to code, and each catalog names itself.
 
 The lobby's colours come from the vendored
 [`overnightworks/ui-console`](https://github.com/overnightworks/ui-console)
-v0.2.0 pin; Pico leftover chrome lives in `lobby.css`. Settings and Account use
-this product's Pico markup, not the package grammar.
+v0.2.0 pin; Pico leftover chrome lives in `lobby.css`. Settings uses this
+product's Pico markup, not the package grammar.
 
-htmx 2.x is vendored beside Pico and carries the two writes a person makes
-about themselves: the theme rows of the person menu and the Account
-preferences post, and the page is painted again in what they chose.
+htmx 2.x is vendored beside Pico and carries the one write a person makes
+about themselves: the theme rows of the person menu, and the page is painted
+again in what they chose.
 jinja2-fragments ([ADR 0008](../decisions/0008-lobby-server-rendered.md)) is
-not installed, because no surface here has a partial to serve: both writes
-change the whole document, down to the `<html>` element the theme sits on.
+not installed, because no surface here has a partial to serve: the write
+changes the whole document, down to the `<html>` element the theme sits on.

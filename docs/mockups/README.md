@@ -94,12 +94,6 @@ Playwright through the declared `playwright-chromium` of `slidev/`, so run
 | `m0-lobby/sources-renew-webhook.png`, `sources-renew-webhook-dark.png` | Source · renew webhook | E1 |
 | `m0-lobby/sources-remove.png`, `sources-remove-dark.png` | Source · remove, confirm (Remove in the app colour, not red; typed case of the name) | Picture · new board, appkit#48 |
 
-### Account
-
-| PNG | Caption | Rulings |
-|---|---|---|
-| `m0-lobby/account.png`, `account-dark.png` | Account | Picture · family §4 |
-
 ### Deck page
 
 | PNG | Caption | Rulings |
@@ -126,8 +120,7 @@ Datenschutz page itself is edge's, with presentator's words in
 
 M0 has no Start: the deck page offers presenter view, projector view, and the PDF.
 Start belongs to the co-presenter run in M1. Instance language and theme live under
-Settings (admin); a personal override lives on Account, and theme in the bar lives
-in the person menu.
+Settings (admin); a person's theme lives in the person menu.
 
 ### Presenter Home (proposal · issue #139)
 

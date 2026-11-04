@@ -33,12 +33,6 @@ msgstr "Light"
 msgid "theme_dark"
 msgstr "Dark"
 
-msgid "role_admin"
-msgstr "Admin"
-
-msgid "role_user"
-msgstr "User"
-
 msgid "log_out"
 msgstr "Log out"
 
@@ -196,21 +190,6 @@ msgstr "Default theme"
 
 msgid "settings_save"
 msgstr "Save"
-
-msgid "account_title"
-msgstr "Account"
-
-msgid "account_preferences"
-msgstr "Preferences"
-
-msgid "account_language"
-msgstr "Language"
-
-msgid "account_theme"
-msgstr "Theme"
-
-msgid "account_instance_default"
-msgstr "Instance default"
 
 msgid "sources_column_source"
 msgstr "Source"

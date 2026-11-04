@@ -25,9 +25,8 @@ class InstanceSettings:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PersonPreferences:
-    """One person's overrides; an unset one leaves the choice to the instance."""
+    """One person's override; an unset one leaves the choice to the instance."""
 
-    language_tag: str | None = None
     theme: ThemeChoice | None = None
 
 
