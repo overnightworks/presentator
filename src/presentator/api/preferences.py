@@ -16,7 +16,6 @@ from presentator.api.pages import Pages, options, theme_choices
 from presentator.application.preferences import Preferences
 from presentator.contracts.preferences import PersonPreferences, ThemeChoice
 
-SETTINGS: Final = "/settings"
 ACCOUNT: Final = "/account"
 THEME: Final = "/theme"
 

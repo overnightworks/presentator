@@ -56,7 +56,6 @@ from presentator.api.preferences import preference_routes
 from presentator.api.problems import install_error_answers
 from presentator.api.session_api import SESSION_PATH, SessionAddresses, session_routes
 from presentator.api.source_api import source_api_routes
-from presentator.api.sources import source_routes
 from presentator.application.decks import Decks
 
 _STATIC_DIR: Final = Path(__file__).parent / "static"
@@ -399,7 +398,6 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     lobby.include_router(deck_list_routes(decks=decks))
     lobby.include_router(preference_api_routes(preferences=pages.preferences))
     lobby.include_router(preference_routes(pages=pages))
-    lobby.include_router(source_routes(pages=pages, decks=decks))
     lobby.include_router(source_api_routes(decks=decks))
     add_deck_pages(
         lobby,

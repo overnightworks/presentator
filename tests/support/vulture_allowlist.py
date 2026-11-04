@@ -10,7 +10,6 @@ from presentator.api.copresenter import AskRequest
 from presentator.api.decks import TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
 from presentator.api.problems import ValidationFault
-from presentator.api.sources import SourceRemovalView, SourceRow
 from presentator.contracts.text import LobbyText
 from presentator.host.config import Settings, WorkerSettings
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
@@ -27,19 +26,6 @@ RespondingHandler.log_message
 _InlineScripts.handle_starttag
 _InlineScripts.handle_data
 _InlineScripts.handle_endtag
-
-# `presentator/api/templates/sources.html` renders each row of the Sources list.
-SourceRow.name
-SourceRow.url
-SourceRow.access
-SourceRow.state
-SourceRow.state_word
-SourceRow.fetched
-
-# `presentator/api/templates/source_remove.html` renders the confirm page.
-SourceRemovalView.name
-SourceRemovalView.title
-SourceRemovalView.body
 
 # The words below reach a person through the Svelte Home page and deck page
 # alone, which read them from `/api/session`; the drive proves the pages show
@@ -76,9 +62,9 @@ LobbyText.deck_unknown_explanation
 LobbyText.decks_title
 LobbyText.decks_column_deck
 
-# The words below reach a person through the Svelte Add source page and source
-# page alone, which read them from `/api/session`; the drive proves the pages
-# show them.
+# The words below reach a person through the Svelte Sources list, Add source
+# page, source page and removal dialog alone, which read them from
+# `/api/session`; the drive proves the pages show them.
 LobbyText.source_access
 LobbyText.source_secret_info
 LobbyText.source_webhook_later
@@ -135,6 +121,40 @@ LobbyText.source_run_failed
 LobbyText.source_run_column_state
 LobbyText.source_run_column_fetched
 LobbyText.source_run_column_detail
+LobbyText.decks_column_state
+LobbyText.settings_sources
+LobbyText.sources_column_source
+LobbyText.sources_column_fetched
+LobbyText.sources_fetch_now
+LobbyText.source_state_reachable
+LobbyText.source_state_error
+LobbyText.source_state_refused
+LobbyText.source_state_failed
+LobbyText.source_state_never_fetched
+LobbyText.sources_empty_title
+LobbyText.sources_empty_explanation
+LobbyText.sources_empty_need
+LobbyText.sources_empty_ssh
+LobbyText.sources_empty_or
+LobbyText.sources_empty_https
+LobbyText.sources_add
+LobbyText.sources_column_access
+LobbyText.source_access_token
+LobbyText.source_access_deploy_key
+LobbyText.source_access_local
+LobbyText.source_remove_confirm_title
+LobbyText.source_remove_confirm_body
+LobbyText.source_remove_deck_singular
+LobbyText.source_remove_deck_plural
+LobbyText.source_remove_talk_singular
+LobbyText.source_remove_talk_plural
+LobbyText.source_remove_run_singular
+LobbyText.source_remove_run_plural
+LobbyText.source_remove_refused
+LobbyText.source_removed
+LobbyText.sources_back
+LobbyText.source_remove_cancel
+LobbyText.source_remove_confirm
 
 # The words below reach a person through a Jinja template, some through a Svelte
 # page too. That a catalog carries each of them is proven by `load_lobby_text`,
@@ -156,9 +176,6 @@ LobbyText.settings_save
 LobbyText.account_preferences
 LobbyText.account_language
 LobbyText.account_theme
-LobbyText.sources_back
-LobbyText.source_remove_cancel
-LobbyText.source_remove_confirm
 
 # `StaticFiles.__call__` dispatches to this override for every talk request.
 TalkFiles.get_response

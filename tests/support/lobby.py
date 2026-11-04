@@ -46,7 +46,6 @@ from presentator.adapters.builds import (
 )
 from presentator.adapters.catalog import (
     CATALOG_DIRECTORY,
-    age_in_words,
     load_catalogs,
 )
 from presentator.adapters.decks import SourceMirrors
@@ -546,7 +545,6 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
         decks=decks,
         pages=Pages(
             preferences=a_preferences() if preferences is None else preferences,
-            age_in_words=age_in_words,
         ),
         auth=(
             an_installed_auth(

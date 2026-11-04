@@ -5,9 +5,8 @@ choice (ADR 0012) rather than a property of the instance the routes were built
 with.
 """
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
 from typing import Final
@@ -51,15 +50,9 @@ def theme_choices(text: LobbyText) -> tuple[tuple[str, str], ...]:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Pages:
-    """Renders every lobby page in the words and the look its reader chose.
-
-    How a length of time reads belongs here too: a source's age is a value a
-    page shows that Python words rather than the catalog, in the language the
-    same reader was resolved into.
-    """
+    """Resolves the words and the look each reader chose, and renders pages in them."""
 
     preferences: Preferences
-    age_in_words: Callable[[timedelta, str], str]
 
     def appearance(self, request: Request) -> Appearance:
         """The words and the look the person behind this request reads in."""

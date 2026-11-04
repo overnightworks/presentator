@@ -629,11 +629,10 @@ def test_a_configured_source_url_in_the_environment_changes_nothing(
     environment.setenv(_CREDENTIAL_VARIABLE, _WHAT_THE_GIT_HOST_EXPECTS)
     lobby = a_signed_in_instance()
 
-    sources = lobby.get("/settings/sources")
+    sources = lobby.get("/api/sources", headers={"accept": "application/json"})
 
     assert deck_list(lobby).decks == []
-    assert "<table" not in sources.text
-    assert remote.url not in sources.text
+    assert sources.json() == {"sources": []}
 
 
 @pytest.mark.usefixtures("environment")

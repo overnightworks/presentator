@@ -33,7 +33,6 @@ from presentator.adapters.builds import (
 )
 from presentator.adapters.catalog import (
     CATALOG_DIRECTORY,
-    age_in_words,
     load_catalogs,
 )
 from presentator.adapters.deck_store import SqliteDeckStore
@@ -376,7 +375,6 @@ def _pages(settings: Settings) -> Pages:
             people=SqlitePersonPreferencesStore(settings.database),
             catalogs=load_catalogs(CATALOG_DIRECTORY),
         ),
-        age_in_words=age_in_words,
     )
 
 

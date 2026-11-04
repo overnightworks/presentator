@@ -10,7 +10,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta
+from datetime import timedelta
 from enum import StrEnum
 from functools import partial
 from hashlib import sha256
@@ -295,8 +295,7 @@ class Decks:
         source = self._named(name)
         if source is None:
             return None
-        now = self.clock.now()
-        listed = self._listed_source(source, now)
+        listed = self._listed_source(source)
         return SourcePage(
             name=listed.name,
             url=listed.url,
@@ -617,11 +616,11 @@ class Decks:
     def listed_sources(self) -> tuple[ListedSource, ...]:
         """Each source as the list shows it, reading the newest run only.
 
-        No run is never-fetched; a successful newest run is reachable; a failed
-        one is error, including a credential the instance could not resolve.
+        No run is never-fetched and a successful newest run is reachable; a
+        failed one carries its state, reason and instant, worded by
+        `source_state_of`.
         """
-        now = self.clock.now()
-        return tuple(self._listed_source(source, now) for source in self.sources.all())
+        return tuple(self._listed_source(source) for source in self.sources.all())
 
     def listed(self, *, viewer: str) -> tuple[ListedDeck, ...]:
         """The viewer's own decks, newest changed first, reading no source.
@@ -727,7 +726,7 @@ class Decks:
         sources = [source for source in self.sources.all() if source.owner_id == viewer]
         return sources[0].url if len(sources) == 1 else None
 
-    def _listed_source(self, source: Source, now: datetime) -> ListedSource:
+    def _listed_source(self, source: Source) -> ListedSource:
         """The row for that source, derived from its newest run and nothing else."""
         run = self.source_runs.newest(source.id)
         return ListedSource(
@@ -736,7 +735,6 @@ class Decks:
             access=access_kind_of(source.url),
             state=SourceState.NEVER_FETCHED if run is None else source_state_of(run),
             reason=None if run is None else run.reason,
-            age=None if run is None else now - run.at,
             fetched_at=None if run is None else run.at,
         )
 

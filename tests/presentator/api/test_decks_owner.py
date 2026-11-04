@@ -10,10 +10,9 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
-from presentator.api.sources import SOURCES
 from presentator.contracts.decks import Build, Deck, Source
 from presentator.contracts.models import Role, User
-from tests.presentator.api.support.removal_support import ask_removal, confirm_removal
+from tests.presentator.api.support import source_api_support
 from tests.presentator.application.support.fakes import FakeBuildRunner, FakeDeckStore
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -22,7 +21,6 @@ from tests.support.lobby import (
     ADMIN,
     AN_ASSET,
     BUILT_TALK,
-    ENGLISH,
     EXPORTED_PDF,
     NEIGHBOUR,
     NOW,
@@ -278,7 +276,12 @@ def test_the_owner_without_the_admin_role_has_the_own_deck_but_no_sources(
         member = hosts.signed_in_at(origin, _WALTER)
         assert member.get(f"/deck/a-deck{tail}").status_code == HTTPStatus.OK
     assert client.get("/api/decks/a-deck").status_code == HTTPStatus.OK
-    assert client.get(SOURCES).status_code == HTTPStatus.FORBIDDEN
+    assert (
+        client.get(
+            source_api_support.LIST, headers=source_api_support.ASKING_FOR_JSON
+        ).status_code
+        == HTTPStatus.FORBIDDEN
+    )
 
 
 def test_a_deck_of_a_removed_source_answers_like_an_unknown_slug_for_its_owner(
@@ -287,9 +290,15 @@ def test_a_deck_of_a_removed_source_answers_like_an_unknown_slug_for_its_owner(
     admins = _two_admins(tmp_path)
     own_source = a_configured_source(_A_SOURCE_URL)
 
-    removed = confirm_removal(admins.as_a, own_source.name)
+    counts = source_api_support.preview_removal(admins.as_a, own_source.name).json()
+    removed = source_api_support.remove(
+        admins.as_a,
+        own_source.name,
+        deck_count=counts["deck_count"],
+        run_count=counts["run_count"],
+    )
 
-    assert removed.status_code == HTTPStatus.SEE_OTHER
+    assert removed.status_code == HTTPStatus.NO_CONTENT
     for talk_host in (admins.talk_as_a, admins.talk_as_b):
         _alike(
             talk_host.get("/deck/a-deck/presenter/"),
@@ -307,29 +316,14 @@ def test_a_refused_removal_of_anothers_source_shows_no_deck_titles(
     tmp_path: Path,
 ) -> None:
     admins = _two_admins(tmp_path, stuck_mirror=True)
+    counts = source_api_support.preview_removal(admins.as_a, "b-talks").json()
 
-    refused = confirm_removal(admins.as_a, "b-talks")
-
-    assert ENGLISH.source_remove_refused in refused.text
-    assert "b-deck" not in refused.text
-
-
-def test_the_removal_of_anothers_source_asks_with_its_deck_count_but_no_title(
-    tmp_path: Path,
-) -> None:
-    admins = _two_admins(tmp_path)
-
-    asked = ask_removal(admins.as_a, "b-talks")
-
-    assert (
-        ENGLISH.source_remove_confirm_body.format(
-            decks=1,
-            deck_word=ENGLISH.source_remove_deck_singular,
-            talk_word=ENGLISH.source_remove_talk_singular,
-            runs=0,
-            run_word=ENGLISH.source_remove_run_plural,
-        )
-        in asked.text
+    refused = source_api_support.remove(
+        admins.as_a,
+        "b-talks",
+        deck_count=counts["deck_count"],
+        run_count=counts["run_count"],
     )
-    assert "b-deck" not in asked.text
-    assert "Title of b-deck" not in asked.text
+
+    assert refused.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert "b-deck" not in refused.text
