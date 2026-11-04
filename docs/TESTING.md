@@ -26,6 +26,13 @@ in for a higher one.
 | Lobby drive | The lobby's build served by FastAPI under its policy | Playwright in `frontend/e2e/`, in Chromium and Firefox, against the lobby that `tests/support/lobby_drive.py` composes over in-memory stores; never an issuer. A test that names a person (`test.use({ person })` from `frontend/e2e/person.ts`: a role, the second language by name, deck records with state, title, changed instant, build instant, a typed attempt with its failure and a PDF that is gone, and a source address their decks belong to) gets its own account from the harness's drive-only route, outside the lobby's gate; one that names none is signed out. Any CSP violation fails it. The drive's CI job runs it against an instrumented build, which only that job makes (the image builds the production one), and each page reports its counters as it unloads. |
 | Surface | A person does X at the lobby | A delegated agent driving the real interface at the widths the dispatch brief names, taken from the picture at [mockups/README.md](mockups/README.md). One flow per ruled sentence. A unit test is not this proof. |
 
+A drive spec named `*.instance.spec.ts` writes instance-wide state, the
+instance defaults. It runs in its own Playwright projects, one per browser,
+each on a `lobby_drive serve` stack of its own, and the default projects skip
+it. That isolates it from the other specs and Chromium from Firefox; inside the
+spec the cells share one instance per browser, so each cell arranges its own
+baseline through the API instead of assuming the previous one.
+
 `gitmirror` is proven the same way as an adapter: against a tmp bare repository,
 with no presentation code in the loop.
 

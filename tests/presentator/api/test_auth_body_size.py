@@ -30,7 +30,7 @@ _BODY_SIZE = 16 * _CHUNK
 _CAP = 32 * 1024
 _FIRST_CHUNK_PASSING_THE_CAP = _CAP // _CHUNK + 1
 _A_NAME = "kleiner-fisch"
-_SETTINGS = "/settings"
+_SETTINGS = "/api/settings"
 _ASK = "/copresenter/ask"
 
 
@@ -44,9 +44,13 @@ class Streamed:
 
 
 def stream_to(
-    app: ASGIApp, path: str, headers: dict[str, str], body: bytes
+    app: ASGIApp,
+    path: str,
+    headers: dict[str, str],
+    body: bytes,
+    method: str = "POST",
 ) -> Streamed:
-    """POST the body to the app in 4 KiB chunks and count the chunks it takes."""
+    """Send the body to the app in 4 KiB chunks and count the chunks it takes."""
     streamed = Streamed()
     parts = [body[start : start + _CHUNK] for start in range(0, len(body), _CHUNK)]
     chunks = iter(range(len(parts)))
@@ -73,7 +77,7 @@ def stream_to(
         "type": "http",
         "asgi": {"version": "3.0"},
         "http_version": "1.1",
-        "method": "POST",
+        "method": method,
         "scheme": "https",
         "path": path,
         "raw_path": path.encode(),
@@ -106,11 +110,11 @@ def a_browsers_headers(
     }
 
 
-def a_settings_form(padding: int) -> str:
-    return urlencode(
+def a_settings_write(padding: int) -> str:
+    return json.dumps(
         {
             "name": _A_NAME + "x" * padding,
-            "language": DEFAULT_LANGUAGE_TAG,
+            "language_tag": DEFAULT_LANGUAGE_TAG,
             "theme": "dark",
         }
     )
@@ -140,14 +144,18 @@ def test_a_streamed_body_over_the_cap_on_the_back_channel_gets_413(
     assert scene.count("sessions") == 1
 
 
-def test_a_streamed_settings_form_over_the_cap_gets_400_and_saves_nothing() -> None:
+def test_a_streamed_settings_write_over_the_cap_gets_400_and_saves_nothing() -> None:
     admin = a_lobby()
     admin.sign_in()
     before = admin.client.get(_SETTINGS).text
-    body = padded_to_the_stream_size(a_settings_form(0))
+    body = a_settings_write(_BODY_SIZE - len(a_settings_write(0))).encode()
 
     streamed = stream_to(
-        admin.app, _SETTINGS, a_browsers_headers(admin.client, _FORM), body
+        admin.app,
+        _SETTINGS,
+        a_browsers_headers(admin.client, _JSON),
+        body,
+        method="PUT",
     )
 
     assert streamed.status == HTTPStatus.BAD_REQUEST
@@ -190,14 +198,14 @@ def test_the_longest_ask_in_the_widest_json_spelling_still_fits_the_cap() -> Non
     assert message.endswith("The person said: " + "\N{GRINNING FACE}" * MAX_SAID_LENGTH)
 
 
-def test_a_33_kib_settings_form_gets_413_with_the_security_headers() -> None:
+def test_a_33_kib_settings_write_gets_413_with_the_security_headers() -> None:
     admin = a_lobby()
     admin.sign_in(role=Role.ADMIN)
 
-    answer = admin.client.post(
+    answer = admin.client.put(
         _SETTINGS,
-        content=a_settings_form(33 * 1024),
-        headers={"content-type": _FORM},
+        content=a_settings_write(33 * 1024),
+        headers={"content-type": _JSON},
     )
 
     assert answer.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE

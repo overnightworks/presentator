@@ -201,6 +201,87 @@ main {
 	font-size: 18px;
 }
 
+/* Form controls shared by the lobby's forms: a field, its label, the hint
+   behind an info button, and the primary button. */
+.fld {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+.fld > label,
+.fld > .lb {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-family: var(--font-display);
+	font-size: 12px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+.control {
+	box-sizing: border-box;
+	min-height: 40px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+	font-size: 14px;
+}
+.info {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--accent);
+	cursor: pointer;
+}
+.info svg {
+	width: 20px;
+	height: 20px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.75;
+	stroke-linecap: round;
+}
+.hint {
+	inset: auto;
+	max-width: 520px;
+	margin: 2px 0 0;
+	padding: 8px 10px;
+	border: none;
+	border-left: 2px solid var(--accent);
+	background: var(--surface);
+	color: var(--text-muted);
+	font-size: 13px;
+}
+.primary {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 36px;
+	padding: 0 14px;
+	border: 1px solid var(--accent);
+	border-radius: 4px;
+	background: var(--accent);
+	color: var(--on-accent);
+	font-family: var(--font-display);
+	font-size: 14px;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+.primary:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
 @media (max-width: 480px) {
 	.top {
 		gap: 8px 12px;

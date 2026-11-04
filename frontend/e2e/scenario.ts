@@ -71,6 +71,23 @@ export async function tabbedControlWithRing(page: Page): Promise<string | null> 
 	return ring.control;
 }
 
+// The header's parts sit on one line: their vertical centres differ by less than 8 px.
+export async function expectsHeaderOnOneLine(page: Page): Promise<void> {
+	const centres = await page
+		.locator('header.top > :not([popover])')
+		.evaluateAll((parts) =>
+			parts.map((part) => part.getBoundingClientRect()).map((box) => box.top + box.height / 2)
+		);
+	expect(Math.max(...centres) - Math.min(...centres)).toBeLessThan(8);
+}
+
+export async function expectsNoHorizontalScroll(page: Page): Promise<void> {
+	const overflow = await page.evaluate(
+		() => document.documentElement.scrollWidth - document.documentElement.clientWidth
+	);
+	expect(overflow).toBeLessThanOrEqual(0);
+}
+
 export async function endsTheSession(context: BrowserContext): Promise<void> {
 	await context.clearCookies();
 }

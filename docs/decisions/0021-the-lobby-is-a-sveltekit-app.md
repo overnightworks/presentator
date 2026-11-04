@@ -65,6 +65,18 @@ interaction became a template, a fragment and a form route.
   error page; `aria-current="page"` follows the section of the address (Decks on `/` and
   on a deck page, `/deck/<one segment>` with an optional trailing slash and no
   deeper address, Settings on `/settings` and below, none elsewhere).
+- The error page picks its words by status: 403 shows the for-admins words, 404
+  the unknown-address words, and any other status shows the header and the
+  status number with no sentence, because the catalog has no general failure
+  words. A member at `/settings` meets the 403 board through the real path: the
+  shell answers 200 and the API's 403 becomes `error(403)`. The board carries
+  its own header and no settings tab strip, which the layout below the error
+  boundary draws.
+- Settings has its own layout with the tab strip. General is a Svelte page;
+  Sources links to its Jinja page by a document navigation until it moves.
+- A form's save writes through the typed client, then re-reads the session so
+  the page repaints in its own document; the effective look belongs to the
+  server.
 - The look comes from appkit's npm tarball, pinned by release URL in
   `frontend/package.json` with the lockfile's integrity, and imported from
   `node_modules`; presentator adds only its colour in the app slot.
@@ -100,6 +112,9 @@ The talk host's policy is not touched.
   that is accepted; a page that must work without it is not planned.
 - Old and new pages stand side by side until the last Jinja page moves; each
   page slice deletes the route, template and tests it replaces.
+- Instance defaults are one store per served lobby, so a drive spec that writes
+  them is named `*.instance.spec.ts` and runs on a stack of its own per browser;
+  the other specs share one stack and never write them.
 - The catalog stays the server's: `/api/session` serves it as data, and the
   catalog-purity check holds the Svelte pages to it. A kit component's own
   words are the kit's.
