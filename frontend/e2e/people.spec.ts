@@ -2,13 +2,7 @@ import type { Page } from '@playwright/test';
 
 import type { SessionView } from '../src/lib/api/session.ts';
 import { type DeckRecord, expect, signIn, test } from './person.ts';
-
-async function sessionOf(page: Page): Promise<SessionView> {
-	const answer = await page.request.get('/api/session', {
-		headers: { Accept: 'application/json' }
-	});
-	return (await answer.json()) as SessionView;
-}
+import { sessionOf } from './scenario.ts';
 
 async function slugsOfDecksOf(page: Page): Promise<string[]> {
 	const answer = await page.request.get('/api/decks', {
