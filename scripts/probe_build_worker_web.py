@@ -66,7 +66,11 @@ OVERRIDE_MOUNTS = frozenset(
     {"/decks/hello-deck", "/decks/copresenter-deck", "/decks/probe"}
 )
 SECRET_MOUNTS = frozenset(
-    {"/run/secrets/presentator_secret_key", "/run/secrets/oidc_client_secret"}
+    {
+        "/run/secrets/presentator_secret_key",
+        "/run/secrets/oidc_client_secret",
+        "/run/secrets/litellm_key",
+    }
 )
 COMPOSE_MOUNTS = frozenset(
     {"/data/database", "/data/mirrors", BUILDS_ROOT}

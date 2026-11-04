@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
@@ -11,10 +11,10 @@ if TYPE_CHECKING:
 
     from presentator.contracts.copresenter import (
         AccessRefusal,
+        AskingPerson,
         CoPresenterReadiness,
         DeckText,
         HearingTranscript,
-        PersonToken,
     )
     from presentator.contracts.decks import Deck, Source
 
@@ -32,19 +32,16 @@ class PrivateHearing(Protocol):
         """Close the connection and await its owned work."""
 
 
-type TokenSource = Callable[[], Awaitable[str]]
-
-
 class AgentAnswers(Protocol):
     """The text of a model's answer to one message, streamed."""
 
     def answer(
-        self, *, message: str, person_token: TokenSource
+        self, *, message: str, person: AskingPerson
     ) -> AbstractAsyncContextManager[AsyncIterator[str]]:
         """Open one answer: the text deltas, until the model has finished.
 
         Raises CoPresenterUnavailableError when the answer cannot be had, and
-        NotEnabledError when the service does not answer this person.
+        NotEnabledError when the gateway does not answer this person.
         """
         ...
 
@@ -88,10 +85,10 @@ class Speaking(Protocol):
 
 
 class PersonAccess(Protocol):
-    """Gives a signed-in person's fresh access token for the agent service."""
+    """Gives the groups the issuer holds for a signed-in person now."""
 
-    async def fresh(self, session_id: str) -> PersonToken | AccessRefusal:
-        """The session's person's token, or why it has none.
+    async def groups_of(self, session_id: str) -> frozenset[str] | AccessRefusal:
+        """The session's person's groups, or why it has none.
 
         Raises CoPresenterUnavailableError when the session store or a worker
         thread fails.

@@ -64,13 +64,11 @@ class FakeIssuer:
         self._tokens_by_code: dict[str, str] = {}
         self._refresh_token: str | None = None
         self._person_access_token = secrets.token_urlsafe(8)
-        self._workload_access_token = secrets.token_urlsafe(8)
         self._rotated_refresh_token: str | None = None
         self._revoked_refresh_tokens: set[str] = set()
         self.grant_types: list[str] = []
-        self.workload_is_refused = False
-        self.workload_scope_is_invalid = False
-        self.workload_scopes: list[str] = []
+        self._holding: tuple[str, list[str], str | None] | None = None
+        self.issued_id_tokens: list[str] = []
         self.during_token_request: Callable[[], None] = lambda: None
         self.redirect_uris: list[str] = []
         self.token_endpoint_is_down = False
@@ -84,9 +82,11 @@ class FakeIssuer:
         """Answer every later refresh grant with this access token."""
         self._person_access_token = token
 
-    def issue_workload_access_token(self, token: str) -> None:
-        """Answer every later client-credentials grant with this access token."""
-        self._workload_access_token = token
+    def hold_groups(self, groups: list[str]) -> None:
+        """Answer every later refresh grant with an ID token naming these groups."""
+        assert self._holding is not None, "nobody has signed in at this issuer"
+        subject, _, username = self._holding
+        self._holding = (subject, groups, username)
 
     def rotate_refresh_token_to(self, token: str) -> None:
         """Answer every later refresh grant with this new refresh token too."""
@@ -99,12 +99,12 @@ class FakeIssuer:
     def mint(
         self,
         *,
-        nonce: str,
+        nonce: str | None,
         subject: str,
         groups: list[str],
         username: str | None,
     ) -> str:
-        """An ID token for this client."""
+        """An ID token for this client; one with no nonce is a refresh grant's."""
         issued_at = int(self._now.timestamp())
         claims: dict[str, object] = {
             "iss": self._issuer,
@@ -112,9 +112,10 @@ class FakeIssuer:
             "sub": subject,
             "iat": issued_at,
             "exp": issued_at + _TOKEN_LIFETIME_SECONDS,
-            "nonce": nonce,
             "groups": groups,
         }
+        if nonce is not None:
+            claims["nonce"] = nonce
         if username is not None:
             claims["preferred_username"] = username
         return _signed(
@@ -191,6 +192,7 @@ class FakeIssuer:
     ) -> str:
         """The query the issuer sends the browser back with, after a person signs in."""
         parameters = parse_qs(urlsplit(authorization_url).query)
+        self._holding = (subject, groups, username)
         code = secrets.token_urlsafe(16)
         self._tokens_by_code[code] = self.mint(
             nonce=parameters["nonce"][0],
@@ -214,7 +216,7 @@ class FakeIssuer:
             return self._code_exchange(request.form["code"])
         if grant_type == _REFRESH_TOKEN:
             return self._refresh(request.form[_REFRESH_TOKEN])
-        return self._client_credentials(request.form["scope"])
+        return _refusal("unsupported_grant_type", HTTPStatus.BAD_REQUEST)
 
     def _code_exchange(self, code: str) -> TokenEndpointAnswer:
         document = {"id_token": self._tokens_by_code[code]}
@@ -226,20 +228,16 @@ class FakeIssuer:
         if presented in self._revoked_refresh_tokens:
             return _refusal("invalid_grant", HTTPStatus.BAD_REQUEST)
         document = _access_document(self._person_access_token)
+        if self._holding is not None:
+            subject, groups, username = self._holding
+            id_token = self.mint(
+                nonce=None, subject=subject, groups=groups, username=username
+            )
+            self.issued_id_tokens.append(id_token)
+            document["id_token"] = id_token
         if self._rotated_refresh_token is not None:
             document[_REFRESH_TOKEN] = self._rotated_refresh_token
         return TokenEndpointAnswer(HTTPStatus.OK, json.dumps(document).encode())
-
-    def _client_credentials(self, scope: str) -> TokenEndpointAnswer:
-        self.workload_scopes.append(scope)
-        if self.workload_is_refused:
-            return _refusal("invalid_client", HTTPStatus.UNAUTHORIZED)
-        if self.workload_scope_is_invalid:
-            return _refusal("invalid_scope", HTTPStatus.BAD_REQUEST)
-        return TokenEndpointAnswer(
-            HTTPStatus.OK,
-            json.dumps(_access_document(self._workload_access_token)).encode(),
-        )
 
     def fetch_key_set(self, url: str) -> bytes:
         """The key set endpoint: the one public key, or a failed fetch."""

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Final, Self
 
 import pytest
+from agent_runtime_client.config import AgentConfig, BackendKind, ChatGateway
 from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
 from httpx2 import Request as BrowserRequest
@@ -101,14 +102,14 @@ from tests.presentator.application.support.fakes import (
 )
 
 
-def _write_test_key_file() -> Path:
-    """Write the key every test lobby signs with to a file removed at exit."""
+def _write_throwaway_file(content: str) -> Path:
+    """Write a file only a test reads, removed at exit."""
     with tempfile.NamedTemporaryFile(
-        "w", prefix="presentator-test-key-", encoding="utf-8", delete=False
-    ) as key_file:
-        key_file.write("k3Tq9xVb2LmZ7wRc5NdH8sYa4PfJ6uEg\n")
-    atexit.register(Path(key_file.name).unlink, missing_ok=True)
-    return Path(key_file.name)
+        "w", prefix="presentator-test-", encoding="utf-8", delete=False
+    ) as written:
+        written.write(content)
+    atexit.register(Path(written.name).unlink, missing_ok=True)
+    return Path(written.name)
 
 
 NOW: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
@@ -122,7 +123,9 @@ EXPORTED_PDF: Final = _FIXTURES / "exported_deck.pdf"
 LOBBY_BUILD: Final = _FIXTURES / "lobby_build"
 A_LOBBY_ASSET: Final = "/_app/immutable/entry/start.js"
 LOBBY_SHELL: Final = LobbyShell.read(LOBBY_BUILD)
-_KEY_FILE: Final = _write_test_key_file()
+_KEY_FILE: Final = _write_throwaway_file("k3Tq9xVb2LmZ7wRc5NdH8sYa4PfJ6uEg\n")
+A_GATEWAY_KEY: Final = "gateway-key-MARKER"
+A_GATEWAY_KEY_FILE: Final = _write_throwaway_file(f"{A_GATEWAY_KEY}\n")
 _BUILT_DECK_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 # No route test waits for a build, so the bound only has to be longer than the
 # ages the tests arrange.
@@ -152,8 +155,8 @@ A_BROWSERS_SOCKET_ADDRESS: Final = "wss://testserver"
 # The talk host is a second hostname of the same instance.
 A_TALK_ADDRESS: Final = "https://talk.testserver"
 A_TALK_SOCKET_ADDRESS: Final = "wss://talk.testserver"
-AN_AGENT_SERVICE: Final = "http://agent-service.test:8080"
-AN_AGENT_SERVICE_SCOPE: Final = "an-agent-service-audience"
+A_GATEWAY_ORIGIN: Final = "http://gateway.test:4000"
+AN_API_GROUP: Final = "/services/agent-service/api"
 AN_ISSUER: Final = "https://auth.example.test/realms/test"
 A_CLIENT_ID: Final = "presentator-test"
 A_CLIENT_CREDENTIAL: Final = "the-secret-only-this-test-has"
@@ -274,14 +277,22 @@ def _no_key_set(url: str) -> bytes:
     raise AssertionError(url)
 
 
+def an_agent_config() -> AgentConfig:
+    """The `agent` section of an instance whose gateway key is a throwaway file."""
+    return AgentConfig(
+        backend=BackendKind.LITELLM,
+        gateway=ChatGateway(origin=A_GATEWAY_ORIGIN, key_file=A_GATEWAY_KEY_FILE),
+        api_group=AN_API_GROUP,
+    )
+
+
 def a_settings() -> Settings:
     """The settings of an instance at the test origin, signing in at a fake issuer."""
     return Settings(
         secret_key_file=_KEY_FILE,
         public_origin=A_BROWSERS_ADDRESS,
         talk_origin=A_TALK_ADDRESS,
-        agent_service=AN_AGENT_SERVICE,
-        agent_service_scope=AN_AGENT_SERVICE_SCOPE,
+        agent=an_agent_config(),
         oidc_issuer=AN_ISSUER,
         oidc_client_id=A_CLIENT_ID,
         oidc_client_secret_file=Path("/run/oidc-client-secret"),
@@ -300,10 +311,12 @@ def a_relying_party(
     post_token_request: TokenRequestPost = _no_token_endpoint,
     fetch_key_set: KeySetFetch = _no_key_set,
     origin: str = A_BROWSERS_ADDRESS,
+    issuer: str = AN_ISSUER,
 ) -> OidcRelyingParty:
     """The issuer's client, whose transports reach nobody unless a test gives some."""
+    settings = a_settings().model_copy(update={"oidc_issuer": issuer})
     return OidcRelyingParty(
-        oidc_client_config(a_settings(), SecretStr(A_CLIENT_CREDENTIAL), origin=origin),
+        oidc_client_config(settings, SecretStr(A_CLIENT_CREDENTIAL), origin=origin),
         post_token_request=post_token_request,
         fetch_key_set=fetch_key_set,
         wall_clock=lambda: clock.now().timestamp(),

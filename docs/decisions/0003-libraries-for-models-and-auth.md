@@ -467,6 +467,23 @@ and the talk host, asks for the same scope beside `openid`, `profile` and
 rejected by it. An issuer's `invalid_scope` is the
 typed refusal the co-presenter already answers as "unavailable".
 
+### Amendment 2026-11-04 — agent-runtime v0.20.0's gateway backend owns the model call
+
+Authority: [#709](https://github.com/overnightworks/presentator/issues/709),
+agent-runtime#672 (plan r8).
+
+The client is pinned at agent-runtime v0.20.0 with its `backend` extra, and the
+co-presenter's model call is the client's `GatewayBackend`, built in
+`presentator.agent`. The agent service, its protocol-4 request and the two
+hand-built adapters retire. Presentator holds its own gateway key, a file read
+for every question, and the person reaches the gateway as a fingerprint of
+issuer and account id. The workload grant and the agent service's scope on the
+sign-in are retired with them; the sign-in asks for `openid`, `profile` and
+`groups`, and the co-presenter reads the person's groups once per question
+through webauth's `current_groups`. The adapters-only rule now names
+`presentator.agent` as the one place that imports `agent_runtime_client`. The
+older amendments above keep their history.
+
 ## Consequences
 
 - Which model presents becomes configuration, not code, and the phase M1 work is

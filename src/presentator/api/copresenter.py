@@ -45,6 +45,7 @@ if TYPE_CHECKING:
         CoPresenterUse,
         PreparedAsk,
     )
+    from presentator.contracts.models import Role, User
 
 _CHECK_INTERVAL_SECONDS: Final = 0.5
 _POLICY_VIOLATION: Final = 1008
@@ -68,6 +69,11 @@ class SignedIn(Protocol):
     @property
     def user_id(self) -> str:
         """The account the session belongs to."""
+        ...
+
+    @property
+    def person(self) -> User:
+        """The account record the session belongs to."""
         ...
 
 
@@ -188,6 +194,8 @@ class _Ask:
     asked: AskedDeck
     question: Question
     ticket: AskTicket
+    subject: str
+    role: Role
 
 
 def _ask_route(
@@ -252,12 +260,19 @@ def _admit(
             language=question.language and question.language.value,
         ),
         ticket=ticket,
+        subject=connection.user_id,
+        role=connection.person.role,
     )
 
 
 async def _prepare(use: CoPresenterUse, ask: _Ask) -> PreparedAsk | Response:
     try:
-        prepared = await use.prepare(ask.asked, ask.ticket.session_id)
+        prepared = await use.prepare(
+            ask.asked,
+            session_id=ask.ticket.session_id,
+            subject=ask.subject,
+            role=ask.role,
+        )
     except CoPresenterUnavailableError:
         return _unavailable()
     if isinstance(prepared, AccessRefusal):

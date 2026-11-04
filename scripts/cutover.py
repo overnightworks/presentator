@@ -733,7 +733,7 @@ class Inspection(Retirement):
             if str(mount.get("Destination")).startswith(SECRETS_MOUNT)
         ]
         folder = self.home / SECRETS_FOLDER
-        return len(secrets) == 2 and all(  # noqa: PLR2004
+        return len(secrets) == 3 and all(  # noqa: PLR2004
             mount.get("Type") == "bind"
             and mount.get("RW") is False
             and Path(str(mount.get("Source"))).is_relative_to(folder)
