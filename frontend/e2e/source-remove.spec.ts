@@ -481,6 +481,37 @@ test.describe('as an admin', () => {
 		expect(held.seen).toHaveLength(1);
 	});
 
+	test('Escape while the DELETE is pending keeps the dialog, and a refused answer is shown in it', async ({
+		page
+	}, testInfo) => {
+		const { words } = await sessionOf(page);
+		const { name } = await opensAnHttpsSource(page, words, testInfo);
+		await opensTheDialog(page, words);
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		await page.route(deletePath(name), async (route) => {
+			await gate;
+			await route.fulfill({
+				status: 500,
+				contentType: 'application/problem+json',
+				json: {
+					type: refusedRemovalType,
+					title: 'Internal Server Error',
+					status: 500,
+					reason: 'disk-leftover'
+				}
+			});
+		});
+
+		await confirmOf(page, words).click();
+		await expect(confirmOf(page, words)).toBeDisabled();
+		await page.keyboard.press('Escape');
+		release();
+
+		await expect(dialogOf(page).getByRole('alert')).toHaveText(words.source_remove_refused);
+		await expect(confirmOf(page, words)).toBeEnabled();
+	});
+
 	// Cell 24b.
 	test('a DELETE answered after the person left the page removes the source and changes nothing else', async ({
 		page
