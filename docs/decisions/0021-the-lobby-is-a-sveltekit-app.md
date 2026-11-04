@@ -78,7 +78,8 @@ interaction became a template, a fragment and a form route.
 - Settings has its own layout with the tab strip, and its tabs are
   conditional: General is current at `/settings` only, Sources under
   `/settings/sources`. Both are Svelte pages, and every link among Sources, its
-  Add page and a source's page is a client navigation.
+  Add page and a source's page is a client navigation, except the Add page's
+  Done link, which is a document navigation so no page state survives it.
 - Add source keeps the one display of the webhook secret in its own component
   state. Its load reads the admin's key draft with a POST (idempotent per
   owner, so a member's 403 becomes the for-admins board); Check and Create go
