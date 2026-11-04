@@ -144,17 +144,17 @@ def instance() -> Lobby:
     )
 
 
-@pytest.mark.parametrize("method", ["get", "post"])
+@pytest.mark.parametrize("method", ["get", "post", "get_source"])
 def test_a_person_without_the_admin_role_is_refused_at_sources(
     instance: Lobby, method: str
 ) -> None:
     signed_in_as(instance, NEIGHBOUR)
 
-    refused = (
-        instance.client.get(SOURCES)
-        if method == "get"
-        else fetch(instance.client, "decks")
-    )
+    refused = {
+        "get": lambda: instance.client.get(SOURCES),
+        "post": lambda: fetch(instance.client, "decks"),
+        "get_source": lambda: instance.client.get(f"{SOURCES}/decks"),
+    }[method]()
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
 
