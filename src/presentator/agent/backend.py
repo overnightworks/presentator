@@ -26,7 +26,12 @@ from agent_runtime_client.turn import (
     TurnMessage,
     TurnRole,
 )
-from agent_runtime_client.turn_events import AssistantTextEvent, FinalEvent
+from agent_runtime_client.turn_events import (
+    AssistantTextEvent,
+    FinalEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 from webauth.oidc_login import (
     AccessTokenRefusal,
     AccessTokenRefusalReason,
@@ -149,6 +154,8 @@ async def _texts(
             match event:
                 case AssistantTextEvent(text=text):
                     yield text
+                case ToolCallEvent() | ToolResultEvent():
+                    continue
                 case FinalEvent():
                     return
     except TurnStopped as stopped:

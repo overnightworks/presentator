@@ -18,7 +18,11 @@ from agent_runtime_client.turn import (
     RejectionCode,
     person_fingerprint,
 )
-from agent_runtime_client.turn_events import AssistantTextEvent
+from agent_runtime_client.turn_events import (
+    AssistantTextEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 
 from presentator.agent.backend import (
     COPRESENTER_AGENT_FILE,
@@ -121,8 +125,11 @@ async def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made
     """C4: the client admits only a member of the API group."""
     gateway = FakeGateway(completion("Nie."))
 
+    answerer = answerer_over(gateway)
+    outsider = a_person(groups=frozenset({"/other"}))
+
     with pytest.raises(NotEnabledError):
-        await spoken(answerer_over(gateway), a_person(groups=frozenset({"/other"})))
+        await spoken(answerer, outsider)
 
     assert gateway.requests == []
 
@@ -145,8 +152,10 @@ async def test_every_gateway_refusal_ends_as_the_plain_unavailable_error(
     reply: Reply,
 ) -> None:
     """C7: no reason reaches the overlay, whatever the gateway said."""
+    answerer = answerer_over(FakeGateway(reply))
+
     with pytest.raises(CoPresenterUnavailableError) as stopped:
-        await spoken(answerer_over(FakeGateway(reply)))
+        await spoken(answerer)
 
     assert type(stopped.value) is CoPresenterUnavailableError
     assert (stopped.value.__cause__, stopped.value.__context__) == (None, None)
@@ -157,8 +166,10 @@ async def test_a_refused_connection_ends_as_the_plain_unavailable_error() -> Non
     """C7: the refusing transport."""
     refusing = RefusingTransport()
 
+    answerer = answerer_over(refusing)
+
     with pytest.raises(CoPresenterUnavailableError):
-        await spoken(answerer_over(refusing))
+        await spoken(answerer)
 
     assert len(refusing.requests) == 1
 
@@ -168,10 +179,12 @@ async def test_a_request_over_the_clients_bound_ends_unavailable() -> None:
     """C7: the client sends nothing it judges too large."""
     gateway = FakeGateway(completion("Nie."))
 
+    answering = answerer_over(gateway).answer(
+        message="x" * 5_000_000, person=a_person()
+    )
+
     with pytest.raises(CoPresenterUnavailableError):
-        async with answerer_over(gateway).answer(
-            message="x" * 5_000_000, person=a_person()
-        ) as texts:
+        async with answering as texts:
             _ = [text async for text in texts]
 
     assert gateway.requests == []
@@ -182,10 +195,10 @@ async def test_a_question_that_is_not_valid_unicode_ends_unavailable() -> None:
     """C7: the request is refused before it is built."""
     gateway = FakeGateway(completion("Nie."))
 
+    answering = answerer_over(gateway).answer(message="\ud800", person=a_person())
+
     with pytest.raises(CoPresenterUnavailableError):
-        async with answerer_over(gateway).answer(
-            message="\ud800", person=a_person()
-        ) as texts:
+        async with answering as texts:
             _ = [text async for text in texts]
 
     assert gateway.requests == []
@@ -247,8 +260,10 @@ async def test_a_refusal_logs_its_closed_values_and_no_run_summary(
     """C7: kind, code, detail and the wait, and nothing else."""
     caplog.set_level(logging.DEBUG)
 
+    answerer = answerer_over(FakeGateway(Reply(429, {"retry-after": "7"})))
+
     with pytest.raises(CoPresenterUnavailableError):
-        await spoken(answerer_over(FakeGateway(Reply(429, {"retry-after": "7"}))))
+        await spoken(answerer)
 
     (line,) = [r.getMessage() for r in caplog.records if r.name == LOGGER]
     assert "refused" in line
@@ -278,6 +293,23 @@ async def test_a_stream_that_ends_without_a_final_event_ends_the_answer() -> Non
     """C8: what was streamed is the answer; the stream's end ends it."""
     answerer = GatewayAnswerer(
         ScriptedBackend((AssistantTextEvent(text="Hallo."),)),
+        a_relying_party(FrozenClock(instant=NOW)),
+    )
+
+    assert await spoken(answerer) == "Hallo."
+
+
+@on_an_event_loop
+async def test_a_tool_step_in_the_stream_is_not_spoken() -> None:
+    """C8: only the assistant's words are the answer."""
+    answerer = GatewayAnswerer(
+        ScriptedBackend(
+            (
+                ToolCallEvent(tool_use_id="t", name="look"),
+                ToolResultEvent(tool_use_id="t", content="secret"),
+                AssistantTextEvent(text="Hallo."),
+            )
+        ),
         a_relying_party(FrozenClock(instant=NOW)),
     )
 

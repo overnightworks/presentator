@@ -127,8 +127,10 @@ def test_a_thread_that_raises_is_one_unavailable_error_naming_only_its_type(
     )
     caplog.set_level(logging.DEBUG)
 
+    reading = reader.groups_of(arranged.session_id)
+
     with pytest.raises(CoPresenterUnavailableError) as failed:
-        asyncio.run(reader.groups_of(arranged.session_id))
+        asyncio.run(reading)
 
     assert (failed.value.__cause__, failed.value.__context__) == (None, None)
     assert THREAD_ERROR not in caplog.text
@@ -244,8 +246,10 @@ def test_process_control_in_the_groups_thread_passes_through_without_a_chain(
         scene.relying_party, LoadInterrupts(scene.database), scene.config
     )
 
+    reading = reader.groups_of(arranged.session_id)
+
     with pytest.raises(type(interruption)) as passed:
-        asyncio.run(reader.groups_of(arranged.session_id))
+        asyncio.run(reading)
 
     assert passed.value is interruption
     assert (passed.value.__cause__, passed.value.__context__) == (None, None)
