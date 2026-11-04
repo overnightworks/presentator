@@ -60,7 +60,6 @@ LOGGER = "presentator.agent.backend"
 WIRE_VECTOR = "fp-2db44d96ffdef38f9e1cbfe73e9cf248fb66955b894846b34843a2d3a849d764"
 AN_ISSUER_OF_THE_VECTOR = "https://issuer.example"
 THE_QUESTION = "Was steht auf Folie zwei?"
-THE_PERSONS_BEARER_MARKER = "person-token-MARKER"
 
 
 def a_person(*, groups: frozenset[str] = frozenset({AN_API_GROUP})) -> AskingPerson:
@@ -196,13 +195,14 @@ async def test_what_the_gateway_echoes_reaches_no_exception_text_or_log_record(
 ) -> None:
     """C10: the key, token, subject, groups and question stay out of errors."""
     caplog.set_level(logging.DEBUG)
+    persons_bearer_marker = "person-token-MARKER"
     person = AskingPerson(
         subject="subject-MARKER",
         role=Role.ADMIN,
         groups=frozenset({AN_API_GROUP, "/group-MARKER"}),
     )
     echoed = (
-        f"{A_GATEWAY_KEY} {THE_PERSONS_BEARER_MARKER} {person.subject} /group-MARKER "
+        f"{A_GATEWAY_KEY} {persons_bearer_marker} {person.subject} /group-MARKER "
         f"{THE_QUESTION}"
     )
     transport: httpx2.AsyncBaseTransport = (
@@ -217,7 +217,7 @@ async def test_what_the_gateway_echoes_reaches_no_exception_text_or_log_record(
     shown = everything_shown(caplog.records, errors=[stopped.value])
     for marker in (
         A_GATEWAY_KEY,
-        THE_PERSONS_BEARER_MARKER,
+        persons_bearer_marker,
         person.subject,
         "/group-MARKER",
         THE_QUESTION,
