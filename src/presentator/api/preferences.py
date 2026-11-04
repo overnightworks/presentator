@@ -10,16 +10,11 @@ from typing import Annotated, Final
 
 from fastapi import APIRouter, Form, Request, Response
 from pydantic import BeforeValidator
-from starlette.responses import RedirectResponse
 
 from presentator.api.admission import gated_person
 from presentator.api.pages import Pages, options, theme_choices
 from presentator.application.preferences import Preferences
-from presentator.contracts.preferences import (
-    InstanceSettings,
-    PersonPreferences,
-    ThemeChoice,
-)
+from presentator.contracts.preferences import PersonPreferences, ThemeChoice
 
 SETTINGS: Final = "/settings"
 ACCOUNT: Final = "/account"
@@ -51,29 +46,6 @@ class _Surfaces:
 
     pages: Pages
     preferences: Preferences
-
-    def settings_page(self, request: Request) -> Response:
-        """Show the instance defaults to an admin."""
-        if not gated_person(request).is_admin:
-            return _refused()
-        return self._settings(request)
-
-    def save_settings(
-        self,
-        request: Request,
-        language: Annotated[str, Form()],
-        theme: Annotated[ThemeChoice, Form()],
-        name: Annotated[str, Form()] = InstanceSettings().name,
-    ) -> Response:
-        """Keep what every person without an override of their own reads."""
-        if not gated_person(request).is_admin:
-            return _refused()
-        if not self.preferences.speaks(language):
-            return _unspoken_language()
-        self.preferences.save_instance_settings(
-            InstanceSettings(name=name, language_tag=language, theme=theme),
-        )
-        return RedirectResponse(SETTINGS, status_code=HTTPStatus.SEE_OTHER)
 
     def account_page(self, request: Request) -> Response:
         """Show one person what is theirs."""
@@ -123,20 +95,6 @@ class _Surfaces:
         )
         return _painted_again()
 
-    def _settings(self, request: Request) -> Response:
-        text = self.pages.appearance(request).text
-        settings = self.preferences.instance_settings()
-        return self.pages.page(
-            request,
-            "settings.html",
-            instance_name=settings.name,
-            languages=options(
-                self._installed_languages(),
-                chosen=settings.language_tag,
-            ),
-            themes=options(theme_choices(text), chosen=settings.theme),
-        )
-
     def _installed_languages(self) -> tuple[tuple[str, str], ...]:
         return tuple(
             (language.tag, language.name) for language in self.preferences.languages()
@@ -147,17 +105,10 @@ def preference_routes(*, pages: Pages) -> APIRouter:
     """The Settings and Account addresses, for the lobby factory to include."""
     surfaces = _Surfaces(pages=pages, preferences=pages.preferences)
     router = APIRouter()
-    router.add_api_route(SETTINGS, surfaces.settings_page, methods=["GET"])
-    router.add_api_route(SETTINGS, surfaces.save_settings, methods=["POST"])
     router.add_api_route(ACCOUNT, surfaces.account_page, methods=["GET"])
     router.add_api_route(ACCOUNT, surfaces.save_account, methods=["POST"])
     router.add_api_route(THEME, surfaces.choose_theme, methods=["POST"])
     return router
-
-
-def _refused() -> Response:
-    """Settings is admin only, so a person without the role is turned away."""
-    return Response(status_code=HTTPStatus.FORBIDDEN)
 
 
 def _unspoken_language() -> Response:

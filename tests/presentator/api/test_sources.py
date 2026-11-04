@@ -172,16 +172,6 @@ def test_the_settings_link_is_current_on_the_sources_address(instance: Lobby) ->
     assert f'href="{SETTINGS}">{ENGLISH.settings_title}<' in page
 
 
-def test_settings_general_and_sources_share_the_tab_strip(instance: Lobby) -> None:
-    answer = instance.client.get(SETTINGS)
-
-    assert answer.status_code == HTTPStatus.OK
-    general = answer.text
-
-    assert f'href="{SETTINGS}" aria-current="page">{ENGLISH.settings_title}<' in general
-    assert f'href="{SOURCES}">{ENGLISH.settings_sources}<' in general
-
-
 def test_a_source_with_no_run_reads_never_fetched_with_an_em_dash_for_the_age() -> None:
     page = (
         a_signed_in_lobby(

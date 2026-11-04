@@ -234,7 +234,19 @@ def test_an_admins_instance_defaults_reach_a_member_without_overrides() -> None:
     assert answer.status_code == HTTPStatus.OK
     assert answer.json() == {**some_settings(), "languages": _LANGUAGES}
     assert admin.client.get(_SETTINGS).json() == answer.json()
-    assert member.client.get(_SESSION).json()["theme"] == ThemeChoice.DARK.value
+    session = member.client.get(_SESSION).json()
+    assert session["theme"] == ThemeChoice.DARK.value
+    assert session["words"]["language_tag"] == some_settings()["language_tag"]
+
+
+def test_an_admin_saves_an_empty_instance_name_and_reads_it_back_empty() -> None:
+    lobby = an_admin_lobby()
+
+    answer = lobby.client.put(_SETTINGS, json=some_settings(name=""))
+
+    assert answer.status_code == HTTPStatus.OK
+    assert answer.json()["name"] == ""
+    assert lobby.client.get(_SETTINGS).json()["name"] == ""
 
 
 def test_an_unspoken_language_on_settings_is_a_problem_and_writes_nothing() -> None:

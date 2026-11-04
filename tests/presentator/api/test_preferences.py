@@ -7,7 +7,7 @@ from http import HTTPStatus
 import pytest
 from httpx2 import Response
 
-from presentator.api.preferences import ACCOUNT, SETTINGS, THEME
+from presentator.api.preferences import ACCOUNT, THEME
 from presentator.contracts.preferences import ThemeChoice
 from presentator.contracts.text import Catalogs
 from tests.support.lobby import (
@@ -25,7 +25,6 @@ _GERMAN = replace(
     language_name="Deutsch",
     account_title="Konto",
 )
-_INSTANCE_NAME = "Heim"
 _NO_OVERRIDE = ""
 _SELECTED = re.compile(r'value="([^"]+)"\s*selected')
 
@@ -49,19 +48,6 @@ def signed_in_as(lobby: Lobby, username: str) -> None:
     lobby.sign_in(username=username)
 
 
-def save_settings(
-    lobby: Lobby,
-    *,
-    name: str = _INSTANCE_NAME,
-    language: str = ENGLISH.language_tag,
-    theme: ThemeChoice = ThemeChoice.FOLLOW_SYSTEM,
-) -> Response:
-    return lobby.client.post(
-        SETTINGS,
-        data={"name": name, "language": language, "theme": theme.value},
-    )
-
-
 def save_account(lobby: Lobby, *, language: str, theme: str) -> Response:
     return lobby.client.post(ACCOUNT, data={"language": language, "theme": theme})
 
@@ -69,70 +55,6 @@ def save_account(lobby: Lobby, *, language: str, theme: str) -> Response:
 @pytest.fixture
 def instance() -> Lobby:
     return an_instance_of_two_people()
-
-
-def test_an_admin_sets_the_instance_name_the_language_and_the_default_theme(
-    instance: Lobby,
-) -> None:
-    saved = save_settings(instance, theme=ThemeChoice.DARK)
-
-    assert saved.status_code == HTTPStatus.SEE_OTHER
-    assert saved.headers["location"] == SETTINGS
-    answer = instance.client.get(SETTINGS)
-    assert answer.status_code == HTTPStatus.OK
-    page = answer.text
-    assert _INSTANCE_NAME in page
-    assert what_the_selects_show(page) == [
-        ENGLISH.language_tag,
-        ThemeChoice.DARK.value,
-    ]
-    assert 'data-theme="dark"' in page
-
-
-def test_an_admin_with_a_fresh_unnamed_instance_saves_the_default_theme(
-    instance: Lobby,
-) -> None:
-    saved = save_settings(instance, name="", theme=ThemeChoice.DARK)
-
-    assert saved.status_code == HTTPStatus.SEE_OTHER
-    assert saved.headers["location"] == SETTINGS
-    answer = instance.client.get(SETTINGS)
-    assert answer.status_code == HTTPStatus.OK
-    page = answer.text
-    assert 'id="instance-name" name="name" value=""' in page
-    assert what_the_selects_show(page) == [
-        ENGLISH.language_tag,
-        ThemeChoice.DARK.value,
-    ]
-    assert 'data-theme="dark"' in page
-
-
-def test_the_instance_default_theme_reaches_a_person_who_chose_nothing(
-    instance: Lobby,
-) -> None:
-    save_settings(instance, theme=ThemeChoice.DARK)
-
-    signed_in_as(instance, NEIGHBOUR)
-
-    assert 'data-theme="dark"' in instance.client.get(ACCOUNT).text
-
-
-@pytest.mark.parametrize("method", ["get", "post"])
-def test_a_person_without_the_admin_role_is_refused_at_settings(
-    instance: Lobby,
-    method: str,
-) -> None:
-    signed_in_as(instance, NEIGHBOUR)
-
-    refused = (
-        instance.client.get(SETTINGS)
-        if method == "get"
-        else save_settings(instance, theme=ThemeChoice.DARK)
-    )
-
-    assert refused.status_code == HTTPStatus.FORBIDDEN
-    signed_in_as(instance, USERNAME)
-    assert "data-theme" not in instance.client.get(ACCOUNT).text
 
 
 def test_only_an_admin_is_offered_the_settings_section(instance: Lobby) -> None:
@@ -245,26 +167,15 @@ def test_an_account_language_switches_that_persons_words_only() -> None:
     assert ENGLISH.account_title in instance.client.get(ACCOUNT).text
 
 
-@pytest.mark.parametrize("address", [SETTINGS, ACCOUNT])
-def test_a_catalog_file_this_instance_has_is_offered_as_a_choice(
-    address: str,
-) -> None:
+def test_a_catalog_file_this_instance_has_is_offered_as_a_choice() -> None:
     instance = an_instance_of_two_people(
         catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN}),
     )
 
-    page = instance.client.get(address).text
+    page = instance.client.get(ACCOUNT).text
 
     assert _GERMAN.language_name in page
     assert ENGLISH.language_name in page
-
-
-def test_a_language_the_instance_does_not_speak_is_refused_on_settings(
-    instance: Lobby,
-) -> None:
-    refused = save_settings(instance, language="fr")
-
-    assert refused.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_a_language_the_instance_does_not_speak_is_refused_on_account(
@@ -273,17 +184,6 @@ def test_a_language_the_instance_does_not_speak_is_refused_on_account(
     refused = save_account(instance, language="fr", theme=_NO_OVERRIDE)
 
     assert refused.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
-
-
-def test_the_instance_default_language_switches_the_words_for_everybody() -> None:
-    instance = an_instance_of_two_people(
-        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN}),
-    )
-
-    save_settings(instance, language=_GERMAN.language_tag)
-
-    signed_in_as(instance, NEIGHBOUR)
-    assert _GERMAN.account_title in instance.client.get(ACCOUNT).text
 
 
 def test_the_menu_that_writes_a_theme_carries_the_script_that_posts_it(
