@@ -128,9 +128,10 @@ def test_a_list_of_no_sources_is_empty() -> None:
             SourceRunFailure.CREDENTIAL_UNRESOLVABLE,
             SourceState.ERROR,
         ),
+        (SourceRunOutcome.FAILURE, SourceRunFailure.UNREACHABLE, SourceState.ERROR),
     ],
 )
-def test_a_listed_source_says_its_newest_runs_state_and_stored_instant(
+def test_a_listed_source_says_its_newest_runs_state_reason_and_stored_instant(
     outcome: SourceRunOutcome, reason: SourceRunFailure | None, state: SourceState
 ) -> None:
     source = a_configured_source(_ADDRESS)
@@ -144,6 +145,8 @@ def test_a_listed_source_says_its_newest_runs_state_and_stored_instant(
 
     assert (row.name, row.url, row.access) == ("decks", _ADDRESS, AccessKind.SSH)
     assert row.state is state
+    assert row.reason is reason
+    assert shown(client).reason is reason
     assert row.fetched_at == NOW - timedelta(minutes=3)
     assert row.fetched_at is not None
     assert row.fetched_at.utcoffset() is not None
@@ -153,6 +156,7 @@ def test_a_never_fetched_source_has_no_instant() -> None:
     row = listed(a_lobby_of(a_configured_source(_ADDRESS))).sources[0]
 
     assert row.state is SourceState.NEVER_FETCHED
+    assert row.reason is None
     assert row.fetched_at is None
 
 

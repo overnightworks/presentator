@@ -55,7 +55,8 @@ admin adds one under Settings · Sources.
   `POST /api/sources/new/key-draft` answers the draft's `id` and public key
   (the private half is in no answer), and `POST /api/sources/new/check` takes
   the URL, the access (`AccessKind`), the token or null and the draft id, and
-  answers the probe's `failure`, `commit`, `detail` and `fingerprint`. A
+  answers the probe's `failure`, `commit`, `detail` and `fingerprint` and its
+  `state`, the `SourceState` word a run that failed the same way lists as. A
   mismatch between the access and the URL is refused before any probe, as the
   problem `source-refused`.
 - *Create* is also served as JSON to an admin: `POST /api/sources` takes the
@@ -157,7 +158,8 @@ a signed-out caller or an invalid bearer meets the sign-in gate's own 401 or
 redirect instead:
 `GET /api/sources`, `GET /api/sources/<name>` and `POST /api/sources/<name>/fetch`
 (204 once that source is taken in and built; an unknown name is a 404 problem).
-They carry the state, the stored `fetched_at` instant of the newest run and, on
+They carry the state, the `reason` (the newest run's failure code, null if it
+did not fail), the stored `fetched_at` instant of the newest run and, on
 the page, the absolute `hook_url`, the SSH `public_key`, the newest three runs
 (each with its own state, `at`, short `commit` or failure `reason`) and the
 viewer's own decks. They carry instants where the Jinja pages word ages, and no
