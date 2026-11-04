@@ -695,7 +695,7 @@ test.describe('as an admin', () => {
 test.describe('the age of the fetch', () => {
 	test.use({ person: { role: 'admin', source: OWN_SOURCE }, locale: 'en-US' });
 
-	test("is worded in the instance language, not the browser's", async ({ page }) => {
+	test("is worded in English", async ({ page }) => {
 		const session = await sessionOf(page);
 		const name = await ownSourceName(page, OWN_SOURCE);
 		await answersWith(page, name, (view) => ({

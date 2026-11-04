@@ -41,7 +41,7 @@ def test_the_person_menu_offers_the_theme_rows_and_log_out_and_no_link_to_accoun
     assert 'href="/account"' not in page
 
 
-def test_choosing_dark_in_the_person_menu_paints_that_persons_pages(
+def test_choosing_dark_in_the_person_menu_stores_that_persons_theme(
     instance: Lobby,
 ) -> None:
     chosen = instance.client.post(THEME, data={"theme": ThemeChoice.DARK.value})
@@ -61,7 +61,7 @@ def test_a_theme_chosen_in_the_menu_leaves_the_neighbours_pages_alone(
     assert the_stored_theme(instance) == ThemeChoice.FOLLOW_SYSTEM.value
 
 
-def test_following_the_system_again_writes_no_theme_onto_the_page(
+def test_following_the_system_again_stores_follow_system(
     instance: Lobby,
 ) -> None:
     instance.client.post(THEME, data={"theme": ThemeChoice.DARK.value})

@@ -72,7 +72,7 @@ The lobby's colours come from the vendored
 v0.2.0 pin; Pico leftover chrome lives in `lobby.css`. Settings uses this
 product's Pico markup, not the package grammar.
 
-htmx 2.x is vendored beside Pico and carries the two writes a person makes
+htmx 2.x is vendored beside Pico and carries the one write a person makes
 about themselves: the theme rows of the person menu, and the page is painted
 again in what they chose.
 jinja2-fragments ([ADR 0008](../decisions/0008-lobby-server-rendered.md)) is

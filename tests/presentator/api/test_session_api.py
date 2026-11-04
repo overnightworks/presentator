@@ -85,16 +85,26 @@ def test_the_session_names_the_central_account_at_the_configured_issuer(
     assert set(body) == {"person", "theme", "words", "sign_in"}
 
 
-def test_a_persons_own_theme_wins_and_the_instances_language_stays() -> None:
-    lobby = a_german_lobby()
-    lobby.sign_in(username=NEIGHBOUR)
-    choose(lobby, theme=ThemeChoice.DARK)
+def test_a_persons_own_theme_wins_and_the_instances_language_is_german() -> None:
+    admin = a_german_lobby()
+    admin.sign_in()
+    admin.client.put(
+        "/api/settings",
+        json={
+            "name": "Heim",
+            "language_tag": "de",
+            "theme": ThemeChoice.FOLLOW_SYSTEM.value,
+        },
+    )
+    member = admin.another_browser()
+    member.sign_in(username=NEIGHBOUR)
+    choose(member, theme=ThemeChoice.DARK)
 
-    body = lobby.client.get(_SESSION).json()
+    body = member.client.get(_SESSION).json()
 
     assert body["person"] == {"username": NEIGHBOUR, "role": "user"}
     assert body["theme"] == "dark"
-    assert body["words"]["language_tag"] == ENGLISH.language_tag
+    assert body["words"]["language_tag"] == "de"
 
 
 def test_a_person_whose_row_held_a_language_before_the_drop_reads_the_session(

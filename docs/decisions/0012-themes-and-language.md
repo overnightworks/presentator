@@ -85,8 +85,8 @@ The person menu on those pages is appkit's `AccountMenu` in a native popover,
 and the footer is its `LegalLinks`; presentator draws only the round button.
 Ages ("2 minutes ago") are worded by the browser with `Intl.RelativeTimeFormat`
 in the language tag from the session, which is the instance's, so they change
-with the instance language and no catalog holds a unit word; the server sends the changed instant
-only. A running build's duration is worded the same way, in its largest whole
+with the instance language and no catalog holds a unit word; the server sends
+the changed instant only. A running build's duration is worded the same way, in its largest whole
 unit with `Intl.NumberFormat`, and the deck page's build and attempt instants
 are on the wire; its wording at a unit's edge may differ from what Babel said.
 Babel stays for the catalog files and for Sources' ages. A theme or language
@@ -199,7 +199,7 @@ Amendment 2026-10-29: the addon overlay is the stated exception.
   pulse in the dot's own colour in both modes.
 - English-only at start means the operator's own German talks run under an
   English interface until a German catalog is added. Adding it is a file.
-- The Settings/Account structure owns these controls
+- Settings owns the instance defaults
   ([#8](https://github.com/overnightworks/presentator/issues/8) line 22,
   operator ruling 2026-09-06): instance defaults live under Settings for admins
   (General, alongside Sources and Users); the theme is the person's own, in the
