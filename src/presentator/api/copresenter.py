@@ -45,7 +45,7 @@ if TYPE_CHECKING:
         CoPresenterUse,
         PreparedAsk,
     )
-    from presentator.contracts.models import Role
+    from presentator.contracts.models import Role, User
 
 _CHECK_INTERVAL_SECONDS: Final = 0.5
 _POLICY_VIOLATION: Final = 1008
@@ -72,8 +72,8 @@ class SignedIn(Protocol):
         ...
 
     @property
-    def role(self) -> Role:
-        """The account's role."""
+    def person(self) -> User:
+        """The account record the session belongs to."""
         ...
 
 

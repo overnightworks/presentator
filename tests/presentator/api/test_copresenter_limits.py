@@ -20,7 +20,7 @@ from presentator.api.copresenter import (
     add_copresenter_routes,
 )
 from presentator.application.copresenter import AskLimiter, AskTicket
-from presentator.contracts.models import Role
+from presentator.contracts.models import Role, User
 from tests.presentator.agent.support.transports import HeldTransport
 from tests.presentator.application.support.fakes import FrozenClock
 from tests.support.copresenter_support import (
@@ -171,7 +171,7 @@ class FixedSession:
 
     session_id: str = "session"
     user_id: str = ADMIN
-    role: Role = Role.ADMIN
+    person: User = User(id=ADMIN, username="admin", role=Role.ADMIN)
 
 
 def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> None:

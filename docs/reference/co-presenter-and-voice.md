@@ -54,8 +54,8 @@ or a session-store failure closes the hearing lease and an ongoing answer
 within one second, since Presentator rechecks the answer and hearing lease
 every half second; generation, capture and queued or playing audio stop.
 
-Before the answer starts, `/ask` fetches the session's fresh access token. A
-session whose refresh token is missing or refused gets 401
+Before the answer starts, `/ask` reads the session's groups through a refresh
+grant. A session whose refresh token is missing or refused gets 401
 `{"detail": "Sign in again"}`; an ended session gets 401
 `{"detail": "Not authenticated"}`; an unreachable issuer gets 503
 `{"detail": "Co-presenter unavailable"}`. The gateway is not called in any

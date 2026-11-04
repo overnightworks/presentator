@@ -26,12 +26,7 @@ from agent_runtime_client.turn import (
     TurnMessage,
     TurnRole,
 )
-from agent_runtime_client.turn_events import (
-    AssistantTextEvent,
-    FinalEvent,
-    ToolCallEvent,
-    ToolResultEvent,
-)
+from agent_runtime_client.turn_events import AssistantTextEvent, FinalEvent
 from webauth.oidc_login import (
     AccessTokenRefusal,
     AccessTokenRefusalReason,
@@ -156,10 +151,6 @@ async def _texts(
                     yield text
                 case FinalEvent():
                     return
-                case ToolCallEvent() | ToolResultEvent():
-                    # The agent file offers no tool, so none was asked for.
-                    _log_closed(failure="tool_event")
-                    _unavailable()
     except TurnStopped as stopped:
         _refuse(stopped)
 

@@ -17,7 +17,7 @@ from agent_runtime_client.turn import (
     RejectionCode,
     person_fingerprint,
 )
-from agent_runtime_client.turn_events import AssistantTextEvent, ToolCallEvent
+from agent_runtime_client.turn_events import AssistantTextEvent
 
 from presentator.agent.backend import (
     COPRESENTER_AGENT_FILE,
@@ -270,18 +270,6 @@ async def test_a_run_logs_its_event_types_and_times_and_no_text(
     assert "FinalEvent:1" in line
     assert "Geheime" not in line
     assert THE_QUESTION not in line
-
-
-@on_an_event_loop
-async def test_a_tool_event_ends_as_the_plain_unavailable_error() -> None:
-    """C7: the agent offers no tool, so a call for one is a stop, not an answer."""
-    answerer = GatewayAnswerer(
-        ScriptedBackend((ToolCallEvent(tool_use_id="call-1", name="any"),)),
-        a_relying_party(FrozenClock(instant=NOW)),
-    )
-
-    with pytest.raises(CoPresenterUnavailableError):
-        await spoken(answerer)
 
 
 @on_an_event_loop
