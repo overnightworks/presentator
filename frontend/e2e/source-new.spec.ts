@@ -1,12 +1,6 @@
-import type { Page, TestInfo } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
-import type { SessionView } from '../src/lib/api/session.ts';
-import type {
-	ConnectionCheckView,
-	CreatedSourceView,
-	KeyDraftView
-} from '../src/lib/api/sources.ts';
-import type { components } from '../src/lib/api/types.ts';
+import type { ConnectionCheckView } from '../src/lib/api/sources.ts';
 import { expect, test } from './person.ts';
 import {
 	endsTheSession,
@@ -19,94 +13,39 @@ import {
 	startsSignIn,
 	tabbedControlWithRing
 } from './scenario.ts';
+import {
+	ACCESS_TOKEN,
+	aName,
+	anHttpsAddress,
+	anSshAddress,
+	type AccessKind,
+	checks,
+	choosesAccess,
+	CHECK_API,
+	createsASource,
+	fillsTheForm,
+	JSON_ACCEPT,
+	KEY_DRAFT_API,
+	keyDraftOf,
+	NEW_ADDRESS,
+	opensTheForm,
+	SAME_ORIGIN,
+	secretField,
+	shellAt,
+	sourceNames,
+	SOURCES_API,
+	SOURCES_LIST,
+	tabsOf,
+	type Words
+} from './sources.ts';
 
-type Words = SessionView['words'];
-type AccessKind = components['schemas']['AccessKind'];
-
-const NEW_ADDRESS = '/settings/sources/new';
 const NEXT = '%2Fsettings%2Fsources%2Fnew';
-const SOURCES_LIST = '/settings/sources';
-const SOURCES_API = '/api/sources';
-const CHECK_API = `${SOURCES_API}/new/check`;
-const KEY_DRAFT_API = `${SOURCES_API}/new/key-draft`;
-const JSON_ACCEPT = { Accept: 'application/json' };
-const SAME_ORIGIN = { ...JSON_ACCEPT, 'Sec-Fetch-Site': 'same-origin' };
-const ACCESS_TOKEN = 'a-read-only-token-of-this-drive';
-const SSH_ADDRESS = 'git@git.example.invalid';
 
-// Chromium and Firefox share the default stack, so every name and address is
-// the drive's own: the browser, the moment the file was read and a counter.
-const startedAt = Date.now().toString(36);
-let counter = 0;
-const aName = (testInfo: TestInfo, label = 'talks'): string =>
-	`${label}-${testInfo.project.name}-${startedAt}-${counter++}`;
-const anHttpsAddress = (name: string): string => `https://git.example.invalid/${name}.git`;
-const anSshAddress = (name: string): string => `${SSH_ADDRESS}:${name}.git`;
-
-// A segment is chosen the way a person does it: by its words.
-const choosesAccess = (page: Page, label: string) => page.getByText(label, { exact: true }).click();
-
-const secretField = (page: Page, words: Words) =>
-	page.getByLabel(words.source_secret, { exact: true });
-
-async function opensTheForm(page: Page): Promise<void> {
-	await page.goto(NEW_ADDRESS);
-	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-}
-
-async function fillsTheForm(
-	page: Page,
-	words: Words,
-	values: { name: string; url: string; secret?: string }
-): Promise<void> {
-	await page.getByLabel(words.source_name, { exact: true }).fill(values.name);
-	await page.getByLabel(words.source_url, { exact: true }).fill(values.url);
-	await secretField(page, words).fill(values.secret ?? ACCESS_TOKEN);
-}
-
-async function checks(page: Page, words: Words): Promise<ConnectionCheckView> {
-	const answered = page.waitForResponse(
-		(received) => new URL(received.url()).pathname === CHECK_API
-	);
-	await page.getByRole('button', { name: words.source_check }).click();
-	return (await (await answered).json()) as ConnectionCheckView;
-}
-
-async function creates(page: Page, words: Words): Promise<CreatedSourceView> {
-	const answered = page.waitForResponse(
-		(received) =>
-			new URL(received.url()).pathname === SOURCES_API && received.request().method() === 'POST'
-	);
-	await page.getByRole('button', { name: words.source_create }).click();
-	const answer = await answered;
-	expect(answer.status(), await answer.text()).toBe(201);
-	return (await answer.json()) as CreatedSourceView;
-}
-
-// A source that exists: the form filled, checked and created.
-async function createsASource(
-	page: Page,
-	words: Words,
-	values: { name: string; url: string; secret?: string }
-): Promise<CreatedSourceView> {
-	await fillsTheForm(page, words, values);
-	await checks(page, words);
-	await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
-	return creates(page, words);
-}
-
-const keyDraftOf = async (page: Page): Promise<KeyDraftView> =>
-	(await (await page.request.post(KEY_DRAFT_API, { headers: SAME_ORIGIN })).json()) as KeyDraftView;
-
-async function sourceNames(page: Page): Promise<string[]> {
-	const answer = await page.request.get(SOURCES_API, { headers: JSON_ACCEPT });
-	return ((await answer.json()) as { sources: { name: string }[] }).sources.map(
-		(source) => source.name
-	);
-}
-
-const tabsOf = (page: Page, words: Words) =>
-	page.getByRole('navigation', { name: words.section_settings });
+// The source's own page: the dots stand for its secrets and the Add form is gone.
+const showsTheSourcePage = async (page: Page, words: Words): Promise<void> => {
+	await expect(page.locator('body')).toContainText(words.source_secret_dots);
+	await expect(page.locator('input[name="name"]')).toHaveCount(0);
+};
 
 const showsTheEmptyForm = async (page: Page): Promise<void> => {
 	await expect(page.locator('main form')).toBeVisible();
@@ -368,7 +307,7 @@ test.describe('as an admin', () => {
 					).toBeVisible();
 					await expect(page.locator('main form')).toHaveCount(0);
 					await expect(page.locator('body')).not.toContainText(ACCESS_TOKEN);
-					await expect(page).toHaveURL(NEW_ADDRESS);
+					await expect(page).toHaveURL(`${SOURCES_LIST}/${name}`);
 					expect(await entriesOf(page)).toBe(entries);
 					expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 					await expectsNoHorizontalScroll(page);
@@ -385,9 +324,9 @@ test.describe('as an admin', () => {
 					const wire = await page.request.get(`${SOURCES_API}/${name}`, { headers: JSON_ACCEPT });
 					expect(wire.status()).toBe(200);
 					expect(await wire.text()).not.toContain(created.webhook_secret);
-					const jinja = await page.request.get(`${SOURCES_LIST}/${name}`);
-					expect(jinja.status()).toBe(200);
-					expect(await jinja.text()).not.toContain(created.webhook_secret);
+					const shell = await shellAt(page, `${SOURCES_LIST}/${name}`);
+					expect(shell.status()).toBe(200);
+					expect(await shell.text()).not.toContain(created.webhook_secret);
 
 					// Cell 4: nothing keeps the secret.
 					const kept = await page.evaluate(() => ({
@@ -403,15 +342,15 @@ test.describe('as an admin', () => {
 					expect(requested.join('\n')).not.toContain(created.webhook_secret);
 					expect(consoleLines.join('\n')).not.toContain(created.webhook_secret);
 					await page.reload();
-					await showsTheEmptyForm(page);
+					await showsTheSourcePage(page, words);
 					await expect(page.locator('body')).not.toContainText(created.webhook_secret);
 				});
 			});
 		}
 	}
 
-	// Cell 5.
-	test('leaving the created view by the General tab and returning never shows the secret again', async ({
+	// Cells 29 and 30.
+	test('the General tab then Back shows the source page with dots, never the secret or the form', async ({
 		page
 	}, testInfo) => {
 		const { words } = await sessionOf(page);
@@ -422,25 +361,49 @@ test.describe('as an admin', () => {
 		await tabsOf(page, words).getByRole('link', { name: words.settings_title }).click();
 		await expect(page).toHaveURL('/settings');
 		await page.goBack();
-		await expect(page).toHaveURL(NEW_ADDRESS);
-		await showsTheEmptyForm(page);
+		await expect(page).toHaveURL(`${SOURCES_LIST}/${name}`);
+		await showsTheSourcePage(page, words);
 		await expect(page.locator('body')).not.toContainText(created.webhook_secret);
 
 		await page.goForward();
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_title);
 		await expect(page.locator('body')).not.toContainText(created.webhook_secret);
 		await page.goBack();
-		await showsTheEmptyForm(page);
+		await showsTheSourcePage(page, words);
 		await expect(page.locator('body')).not.toContainText(created.webhook_secret);
 	});
 
-	test('Done leaves for the source page with dots, and back and forward never show the secret', async ({
+	// Cell 30b.
+	test('a reload at the source address, the General tab, then Back shows the source page with dots', async ({
 		page
 	}, testInfo) => {
 		const { words } = await sessionOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
 		const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
+		await expect(page).toHaveURL(`${SOURCES_LIST}/${name}`);
+		await page.reload();
+		await showsTheSourcePage(page, words);
+
+		await tabsOf(page, words).getByRole('link', { name: words.settings_title }).click();
+		await expect(page).toHaveURL('/settings');
+		await page.goBack();
+
+		await expect(page).toHaveURL(`${SOURCES_LIST}/${name}`);
+		await showsTheSourcePage(page, words);
+		await expect(page.locator('body')).not.toContainText(created.webhook_secret);
+	});
+
+	// Cell 31.
+	test('Done takes the address the bar shows as a replace, and back and forward never show the secret', async ({
+		page
+	}, testInfo) => {
+		const { words } = await sessionOf(page);
+		const name = aName(testInfo);
+		await page.goto(SOURCES_LIST);
+		await opensTheForm(page);
+		const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
+		const entries = await entriesOf(page);
 
 		const left = page.waitForResponse(
 			(received) => new URL(received.url()).pathname === `${SOURCES_LIST}/${name}`
@@ -449,17 +412,18 @@ test.describe('as an admin', () => {
 
 		expect((await left).status()).toBe(200);
 		await expect(page).toHaveURL(`${SOURCES_LIST}/${name}`);
-		await expect(page.locator('body')).toContainText(words.source_secret_dots);
+		await showsTheSourcePage(page, words);
+		expect(await entriesOf(page)).toBe(entries);
 		await expect(page.locator('body')).not.toContainText(created.webhook_secret);
 		await page.goBack();
-		await showsTheEmptyForm(page);
+		await expect(page).toHaveURL(SOURCES_LIST);
 		await expect(page.locator('body')).not.toContainText(created.webhook_secret);
 		await page.goForward();
 		await expect(page).toHaveURL(`${SOURCES_LIST}/${name}`);
+		await showsTheSourcePage(page, words);
 		await expect(page.locator('body')).not.toContainText(created.webhook_secret);
 		await page.goBack();
-		await showsTheEmptyForm(page);
-		await expect(page.locator('body')).not.toContainText(created.webhook_secret);
+		await expect(page).toHaveURL(SOURCES_LIST);
 	});
 
 	// Cell 5: a page hidden on its created view is shown as the empty form.
@@ -517,7 +481,7 @@ test.describe('as an admin', () => {
 				return (entry.notRestoredReasons?.reasons ?? []).map((each) => each.reason).join(', ');
 			});
 
-		test('restores the created view as the empty form once the control page is restored', async ({
+		test('restores the Add page under the source address as the empty form once the control page is restored', async ({
 			page,
 			browserName
 		}, testInfo) => {
@@ -545,8 +509,8 @@ test.describe('as an admin', () => {
 			await page.reload();
 			expect(await restoredFromTheCache(page)).toBe(false);
 			const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
-			await page.getByRole('link', { name: words.source_created_done }).click();
-			await expect(page).toHaveURL(`${SOURCES_LIST}/${name}`);
+			await page.getByRole('link', { name: words.sources_back }).click();
+			await expect(page).toHaveURL(SOURCES_LIST);
 			await page.goBack();
 
 			expect(await restoredFromTheCache(page), 'the created view was restored from the cache').toBe(

@@ -102,7 +102,6 @@ class LobbyText:
     source_access_deploy_key: str
     source_access_local: str
     source_secret: str
-    source_secret_info_mark: str
     source_secret_info: str
     source_webhook_later: str
     source_deploy_key_heading: str
@@ -114,7 +113,6 @@ class LobbyText:
     source_webhook_address: str
     source_webhook_secret: str
     source_webhook_once: str
-    source_webhook_held_elsewhere: str
     source_copy: str
     source_webhook_payload: str
     source_created_done: str

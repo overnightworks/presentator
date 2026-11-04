@@ -413,3 +413,136 @@ main {
 		filter: brightness(1.1);
 	}
 }
+
+/* A section of a page: a rule above, then its parts. */
+.sec {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 16px;
+	padding-top: 16px;
+	border-top: 1px solid var(--border);
+}
+.sec > h2 {
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: 13px;
+	font-weight: 400;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+.sec p {
+	margin: 0;
+}
+.muted {
+	margin: 0;
+	font-size: 14px;
+	color: var(--text-muted);
+}
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 16px 0;
+}
+.sec .actions {
+	margin: 0;
+}
+
+/* What a page is: its address, its state, when it was fetched. */
+.meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 16px;
+	font-size: 14px;
+	color: var(--text-muted);
+}
+.meta b {
+	margin-right: 4px;
+	font-family: var(--font-display);
+	font-size: 12px;
+	font-weight: 400;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.meta code {
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+.ctrl {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px 14px;
+}
+.tag {
+	display: inline-flex;
+	align-items: center;
+	padding: 1px 8px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	color: var(--text-muted);
+	font-family: var(--font-display);
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+.runs {
+	width: 100%;
+	border-collapse: collapse;
+	background: var(--surface);
+	border: 1px solid var(--border);
+}
+.runs th,
+.runs td {
+	padding: 8px 12px;
+	text-align: left;
+	vertical-align: middle;
+	border-bottom: 1px solid var(--border);
+	font-size: 14px;
+	overflow-wrap: anywhere;
+}
+.runs th {
+	background: var(--bg-deep);
+	font-size: 11px;
+	font-weight: 400;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+.runs .age {
+	color: var(--text-muted);
+}
+.chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.chip {
+	display: inline-flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 6px 12px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: var(--surface);
+	color: inherit;
+	font-size: 14px;
+	text-decoration: none;
+	overflow-wrap: anywhere;
+}
+.chip code {
+	font-size: 12px;
+	color: var(--text-muted);
+}
+.later {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	color: var(--text-muted);
+	font-size: 14px;
+}

@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
-from presentator.api.sources import ACCESS, SOURCES
+from presentator.api.sources import SOURCES
 from presentator.contracts.decks import Build, Deck, Source
 from presentator.contracts.models import Role, User
 from tests.presentator.api.support.removal_support import ask_removal, confirm_removal
@@ -303,30 +303,7 @@ def test_a_deck_of_a_removed_source_answers_like_an_unknown_slug_for_its_owner(
         _alike(client.get("/deck/a-deck/pdf"), client.get(f"/deck/{_THE_UNKNOWN}/pdf"))
 
 
-def test_an_admin_opens_the_source_of_another_without_its_deck_chips(
-    tmp_path: Path,
-) -> None:
-    admins = _two_admins(tmp_path)
-
-    page = admins.as_a.get(f"{SOURCES}/b-talks")
-
-    assert page.status_code == HTTPStatus.OK
-    assert _B_SOURCE_URL in page.text
-    assert "b-deck" not in page.text
-
-
-def test_a_refused_renewal_of_anothers_source_shows_no_deck_chips(
-    tmp_path: Path,
-) -> None:
-    admins = _two_admins(tmp_path)
-
-    refused = admins.as_a.post(ACCESS.format(name="b-talks"), data={"secret": "  "})
-
-    assert ENGLISH.source_refused_secret in refused.text
-    assert "b-deck" not in refused.text
-
-
-def test_a_refused_removal_of_anothers_source_shows_no_deck_chips(
+def test_a_refused_removal_of_anothers_source_shows_no_deck_titles(
     tmp_path: Path,
 ) -> None:
     admins = _two_admins(tmp_path, stuck_mirror=True)

@@ -1,6 +1,5 @@
 """Settings · Sources, driven the way a browser drives them."""
 
-import re
 from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
@@ -11,15 +10,8 @@ from httpx2 import Response
 
 from presentator.api.hooks import hook_address
 from presentator.api.preferences import ACCOUNT, SETTINGS
-from presentator.api.sources import (
-    ACCESS,
-    NEW,
-    REMOVE,
-    REMOVE_CONFIRMED,
-    SOURCES,
-    WEBHOOK,
-)
-from presentator.application.decks import Decks
+from presentator.api.sources import REMOVE, REMOVE_CONFIRMED, SOURCES
+from presentator.application.decks import RESERVED_SOURCE_NAME, Decks
 from presentator.contracts.decks import (
     MANIFEST_FILE,
     SLIDES_FILE,
@@ -43,7 +35,6 @@ from tests.presentator.api.support.source_api_support import (
     HTTPS,
     SENT,
     a_created_source,
-    draft,
 )
 from tests.presentator.application.support.fakes import (
     LOCAL_MOUNT_EXAMPLE,
@@ -72,16 +63,12 @@ _COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _A_DECK = frozenset({MANIFEST_FILE, SLIDES_FILE})
 _FETCH = f"{SOURCES}/{{name}}/fetch"
 _NEVER_AN_AGE = "—"
+_JSON = {"accept": "application/json"}
 _A_BOX_FOLDER: dict[str, object] = {
     "url": f"{LOCAL_MOUNT_EXAMPLE}/talks.git",
     "access": AccessKind.FILE,
     "secret": None,
 }
-_SHORT_ACCESS = "zz-short-token"
-_LONG_ACCESS = f"long-{SENT}-and-then-some"
-_SECRET_DOT_ROWS = 2
-_HOOK_SECRET = re.compile(r"data-hook-secret>([^<]+)<")
-_DEPLOY_PUBLIC_KEY = re.compile(r"data-deploy-public-key>([^<]+)<")
 
 
 def another_source() -> Source:
@@ -144,7 +131,7 @@ def instance() -> Lobby:
     )
 
 
-@pytest.mark.parametrize("method", ["get", "post", "get_source"])
+@pytest.mark.parametrize("method", ["get", "post"])
 def test_a_person_without_the_admin_role_is_refused_at_sources(
     instance: Lobby, method: str
 ) -> None:
@@ -153,7 +140,6 @@ def test_a_person_without_the_admin_role_is_refused_at_sources(
     refused = {
         "get": lambda: instance.client.get(SOURCES),
         "post": lambda: fetch(instance.client, "decks"),
-        "get_source": lambda: instance.client.get(f"{SOURCES}/decks"),
     }[method]()
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
@@ -375,13 +361,6 @@ def test_a_visitor_who_is_not_signed_in_is_sent_to_the_login() -> None:
     )
 
 
-def _deploy_public_key_of(page: str) -> str:
-    """The clear public half the source page exposes for host registration."""
-    found = _DEPLOY_PUBLIC_KEY.search(page)
-    assert found is not None
-    return found.group(1)
-
-
 def test_the_list_and_the_empty_state_offer_add_source() -> None:
     empty = a_signed_in_lobby().get(SOURCES).text
     filled = (
@@ -390,8 +369,9 @@ def test_the_list_and_the_empty_state_offer_add_source() -> None:
         .text
     )
 
-    assert f'href="{NEW}">{ENGLISH.sources_add}<' in empty
-    assert f'href="{NEW}">{ENGLISH.sources_add}<' in filled
+    new = a_source_address(RESERVED_SOURCE_NAME)
+    assert f'href="{new}">{ENGLISH.sources_add}<' in empty
+    assert f'href="{new}">{ENGLISH.sources_add}<' in filled
 
 
 def test_the_access_column_names_how_the_url_is_read() -> None:
@@ -405,22 +385,6 @@ def test_the_access_column_names_how_the_url_is_read() -> None:
 
     assert ENGLISH.sources_column_access in page
     assert ENGLISH.source_access_deploy_key in page
-
-
-def test_a_created_page_for_a_name_this_instance_does_not_have_is_not_found() -> None:
-    assert (
-        a_signed_in_lobby().get(f"{SOURCES}/talks").status_code == HTTPStatus.NOT_FOUND
-    )
-
-
-def test_the_source_page_loads_its_script_from_a_static_file() -> None:
-    lobby = a_signed_in_lobby()
-    a_created_source(lobby)
-    source_page = lobby.get(f"{SOURCES}/talks").text
-
-    assert '<script src="/static/copy-value.js" defer></script>' in source_page
-    assert ENGLISH.source_webhook_once not in source_page
-    assert lobby.get("/static/copy-value.js").status_code == HTTPStatus.OK
 
 
 def test_a_created_source_is_listed_with_its_address_state_and_access() -> None:
@@ -477,26 +441,36 @@ def test_an_existing_source_without_a_stored_secret_stays_when_another_is_added(
     assert "talks" in listed
 
 
-@pytest.mark.parametrize("username", [USERNAME, NEIGHBOUR])
-def test_the_add_address_answers_the_apps_shell_to_any_signed_in_person(
-    instance: Lobby, username: str
-) -> None:
-    signed_in_as(instance, username)
+def a_source_address(name: str) -> str:
+    return f"{SOURCES}/{name}"
 
-    answer = instance.client.get(NEW)
+
+@pytest.mark.parametrize("username", [USERNAME, NEIGHBOUR])
+@pytest.mark.parametrize("name", [RESERVED_SOURCE_NAME, "talks"])
+def test_the_add_and_a_source_address_answer_the_apps_shell_to_any_signed_in_person(
+    username: str, name: str
+) -> None:
+    lobby = an_instance_of_two_people()
+    a_created_source(lobby.client)
+    signed_in_as(lobby, username)
+
+    answer = lobby.client.get(a_source_address(name))
 
     assert answer.status_code == HTTPStatus.OK
     assert A_LOBBY_ASSET in answer.text
     assert answer.headers["cache-control"] == "no-store"
 
 
-def test_a_visitor_who_is_not_signed_in_is_sent_to_sign_in_from_the_add_address() -> (
-    None
-):
-    answer = a_lobby().client.get(NEW)
+@pytest.mark.parametrize("name", [RESERVED_SOURCE_NAME, "talks"])
+def test_a_visitor_who_is_not_signed_in_is_sent_to_sign_in_from_a_source_address(
+    name: str,
+) -> None:
+    answer = a_lobby().client.get(a_source_address(name))
 
     assert answer.status_code == HTTPStatus.FOUND
-    assert answer.headers["location"] == "/login/oidc?next=%2Fsettings%2Fsources%2Fnew"
+    assert answer.headers["location"] == (
+        f"/login/oidc?next=%2Fsettings%2Fsources%2F{name}"
+    )
 
 
 def two_admin_sessions() -> tuple[TestClient, TestClient]:
@@ -508,347 +482,18 @@ def two_admin_sessions() -> tuple[TestClient, TestClient]:
     return first.client, second.client
 
 
-def a_renewed_webhook_secret(creator: TestClient) -> Response:
-    """Create a source and renew its webhook secret: the redirect shows it once."""
-    a_created_source(creator)
-    return creator.post(WEBHOOK.format(name="talks"))
-
-
-def test_the_once_shown_secret_is_bound_to_the_session_that_asked() -> None:
-    creator, other = two_admin_sessions()
-    minted = a_renewed_webhook_secret(creator)
-
-    assert minted.status_code == HTTPStatus.SEE_OTHER
-    first = creator.get(minted.headers["location"]).text
-    secret = _HOOK_SECRET.search(first)
-    assert secret is not None
-    assert ENGLISH.source_webhook_once in first
-    assert _HOOK_SECRET.search(other.get(minted.headers["location"]).text) is None
-    reloaded = creator.get(minted.headers["location"]).text
-    assert secret.group(1) not in reloaded
-    assert _HOOK_SECRET.search(other.get(minted.headers["location"]).text) is None
-
-
-def test_a_different_session_sees_the_held_sentence_and_no_secret() -> None:
-    creator, other = two_admin_sessions()
-    minted = a_renewed_webhook_secret(creator)
-
-    page = other.get(minted.headers["location"]).text
-    assert _HOOK_SECRET.search(page) is None
-    assert "data-hook-secret" not in page
-    assert ENGLISH.source_webhook_held_elsewhere in page
-    assert ENGLISH.source_secret_dots in page
-    creator.get(minted.headers["location"])
-    after = other.get(minted.headers["location"]).text
-    assert ENGLISH.source_webhook_held_elsewhere not in after
-    assert "data-hook-secret" not in after
-
-
-def a_deck_from(source: Source) -> Deck:
-    return Deck(
-        slug="kundenfeedback",
-        title="Kundenfeedback Q3",
-        changed_at=NOW - timedelta(minutes=2),
-        owner_id=ADMIN,
-        source_id=source.id,
-        commit=_COMMIT,
-        build=None,
-        attempt=None,
-    )
-
-
-def test_the_source_page_shows_state_newest_runs_and_the_decks_from_here() -> None:
-    source = a_configured_source(_ADDRESS)
-    store = FakeDeckStore()
-    store.put(a_deck_from(source))
-    page = (
-        a_signed_in_lobby(
-            GivenDecks(
-                source=source,
-                store=store,
-                runs=(
-                    a_run(
-                        source.id,
-                        ago=timedelta(minutes=13),
-                        outcome=SourceRunOutcome.FAILURE,
-                        reason=SourceRunFailure.UNREACHABLE,
-                    ),
-                    a_run(
-                        source.id,
-                        ago=timedelta(minutes=8),
-                        outcome=SourceRunOutcome.SUCCESS,
-                    ),
-                    a_run(
-                        source.id,
-                        ago=timedelta(minutes=3),
-                        outcome=SourceRunOutcome.SUCCESS,
-                    ),
-                ),
-            ),
-        )
-        .get(f"{SOURCES}/{source.name}")
-        .text
-    )
-
-    assert source.name in page
-    assert _ADDRESS in page
-    assert ENGLISH.source_state_reachable in page
-    assert "3 minutes ago" in page
-    assert _COMMIT[:7] in page
-    assert ENGLISH.source_run_unreachable in page
-    assert ENGLISH.source_run_column_state in page
-    assert ENGLISH.source_run_column_fetched in page
-    assert ENGLISH.source_run_column_detail in page
-    assert "Kundenfeedback Q3" in page
-    assert "kundenfeedback" in page
-    assert ENGLISH.sources_fetch_now in page
-    assert ENGLISH.source_renew in page
-    assert ENGLISH.source_later in page
-    assert "data-later" in page
-    assert ENGLISH.source_secret_dots in page
-    assert "Built isolated" not in page
-
-
-def test_a_refused_run_on_the_source_page_reads_refused_not_error() -> None:
-    source = a_configured_source(_ADDRESS)
-    page = (
-        a_signed_in_lobby(
-            GivenDecks(
-                source=source,
-                runs=(
-                    a_run(
-                        source.id,
-                        ago=timedelta(minutes=5),
-                        outcome=SourceRunOutcome.FAILURE,
-                        reason=SourceRunFailure.REFUSED,
-                    ),
-                ),
-            ),
-        )
-        .get(f"{SOURCES}/{source.name}")
-        .text
-    )
-
-    assert ENGLISH.source_state_refused in page
-    assert ENGLISH.source_run_refused in page
-    assert 'data-state="refused"' in page
-
-
-def test_a_failed_run_on_the_source_page_reads_failed_not_error() -> None:
-    source = a_configured_source(_ADDRESS)
-    page = (
-        a_signed_in_lobby(
-            GivenDecks(
-                source=source,
-                runs=(
-                    a_run(
-                        source.id,
-                        ago=timedelta(minutes=9),
-                        outcome=SourceRunOutcome.FAILURE,
-                        reason=SourceRunFailure.FAILED,
-                    ),
-                ),
-            ),
-        )
-        .get(f"{SOURCES}/{source.name}")
-        .text
-    )
-
-    assert ENGLISH.source_state_failed in page
-    assert ENGLISH.source_run_failed in page
-    assert 'data-state="failed"' in page
-
-
-def test_a_source_on_this_box_offers_neither_dots_nor_renew_on_its_page() -> None:
-    lobby = a_signed_in_lobby()
-
-    a_created_source(lobby, _A_BOX_FOLDER)
-    page = lobby.get(f"{SOURCES}/talks").text
-
-    assert "data-renew-access" not in page
-    assert ENGLISH.source_access_local in page
-
-
-def test_fetch_now_from_the_source_page_refreshes_it_and_stays() -> None:
-    configured = a_configured_source(_ADDRESS)
-    lobby = a_signed_in_lobby(
-        GivenDecks(
-            sources=(configured, another_source()),
-            carried={configured.id: (a_folder(),), _OTHER_ID: (a_folder(),)},
-        ),
-    )
-
-    fetched = lobby.post(
-        _FETCH.format(name=configured.name),
-        data={"stay": "page"},
-    )
-
-    assert fetched.status_code == HTTPStatus.SEE_OTHER
-    assert fetched.headers["location"] == f"{SOURCES}/{configured.name}"
-    page = lobby.get(f"{SOURCES}/{configured.name}").text
-    assert ENGLISH.source_state_reachable in page
-    assert _COMMIT[:7] in page
-
-
-def test_renewing_the_webhook_secret_shows_it_once_and_retires_the_old_one() -> None:
-    lobby = a_signed_in_lobby()
-    old_secret = a_created_source(lobby, {"name": "alpha"})
-
-    renewed = lobby.post(WEBHOOK.format(name="alpha"))
-    assert renewed.status_code == HTTPStatus.SEE_OTHER
-    shown = lobby.get(renewed.headers["location"])
-    new_secret = _HOOK_SECRET.search(shown.text)
-    assert new_secret is not None
-    assert new_secret.group(1) != old_secret
-    assert ENGLISH.source_webhook_once in shown.text
-    reloaded = lobby.get(renewed.headers["location"]).text
-    assert new_secret.group(1) not in reloaded
-    assert ENGLISH.source_webhook_once not in reloaded
-
-    old_call = lobby.post(
-        hook_address("alpha"),
-        headers={"authorization": f"Bearer {old_secret}"},
-    )
-    new_call = lobby.post(
-        hook_address("alpha"),
-        headers={"authorization": f"Bearer {new_secret.group(1)}"},
-    )
-    assert old_call.status_code == HTTPStatus.NOT_FOUND
-    assert new_call.status_code == HTTPStatus.NO_CONTENT
-
-
-def test_renewing_the_access_secret_takes_a_value_and_shows_nothing_back() -> None:
-    lobby = a_signed_in_lobby()
-    a_created_source(lobby)
-    rotated = f"rotated-{SENT}"
-
-    renewed = lobby.post(
-        ACCESS.format(name="talks"),
-        data={"secret": rotated},
-    )
-
-    assert renewed.status_code == HTTPStatus.SEE_OTHER
-    page = lobby.get(renewed.headers["location"]).text
-    assert rotated not in page
-    assert SENT not in page
-    assert ENGLISH.source_secret_dots in page
-    assert page.count(ENGLISH.source_secret_dots) == _SECRET_DOT_ROWS
-
-
-def test_a_blank_access_renewal_comes_back_without_storing_and_without_the_value() -> (
+def test_the_shell_at_a_sources_address_carries_neither_a_minted_secret_nor_a_sent_token() -> (  # noqa: E501 - the name states the property
     None
 ):
-    lobby = a_signed_in_lobby()
-    a_created_source(lobby)
+    creator, other = two_admin_sessions()
+    created = a_created_source(creator)
+    renewed = creator.post("/api/sources/talks/webhook-secret").json()["webhook_secret"]
 
-    refused = lobby.post(ACCESS.format(name="talks"), data={"secret": "  "})
-
-    assert refused.status_code == HTTPStatus.OK
-    assert ENGLISH.source_refused_secret in refused.text
-    assert SENT not in refused.text
-
-
-def test_renewing_an_ssh_deploy_key_needs_no_secret_and_shows_the_replacement() -> None:
-    lobby = a_signed_in_lobby()
-    a_created_source(
-        lobby,
-        {
-            "url": _ADDRESS,
-            "access": AccessKind.SSH,
-            "secret": None,
-            "key_draft_id": draft(lobby).json()["id"],
-        },
-    )
-    first = _deploy_public_key_of(lobby.get(f"{SOURCES}/talks").text)
-
-    renewed = lobby.post(ACCESS.format(name="talks"), data={})
-
-    assert renewed.status_code == HTTPStatus.SEE_OTHER
-    replacement = lobby.get(renewed.headers["location"]).text
-    assert ENGLISH.source_access_deploy_key in replacement
-    assert ENGLISH.source_public_key in replacement
-    assert ENGLISH.source_deploy_key_renew in replacement
-    assert _deploy_public_key_of(replacement) != first
-    assert 'type="password"' not in replacement
-
-
-def test_renewing_the_access_secret_is_refused_for_a_source_on_this_box() -> None:
-    lobby = a_signed_in_lobby()
-    a_created_source(lobby, _A_BOX_FOLDER)
-
-    refused = lobby.post(ACCESS.format(name="talks"), data={"secret": SENT})
-
-    assert refused.status_code == HTTPStatus.OK
-    assert SENT not in refused.text
-    page = lobby.get(f"{SOURCES}/talks").text
-    assert "data-renew-access" not in page
-
-
-def test_the_source_page_never_derives_dot_count_from_a_secret() -> None:
-    lobby = a_signed_in_lobby()
-    a_created_source(lobby, {"name": "short", "secret": _SHORT_ACCESS})
-    a_created_source(
-        lobby,
-        {
-            "name": "long",
-            "url": "https://git.example.invalid/long.git",
-            "secret": _LONG_ACCESS,
-        },
-    )
-    short = lobby.get(f"{SOURCES}/short").text
-    long = lobby.get(f"{SOURCES}/long").text
-
-    assert short.count(ENGLISH.source_secret_dots) == long.count(
-        ENGLISH.source_secret_dots,
-    )
-    assert _SHORT_ACCESS not in short
-    assert _LONG_ACCESS not in long
-
-
-@pytest.mark.parametrize("method", ["access", "webhook"])
-def test_only_an_admin_renews_either_secret(instance: Lobby, method: str) -> None:
-    a_created_source(instance.client)
-    signed_in_as(instance, NEIGHBOUR)
-    path = (ACCESS if method == "access" else WEBHOOK).format(name="talks")
-
-    refused = instance.client.post(path, data={"secret": SENT})
-
-    assert refused.status_code == HTTPStatus.FORBIDDEN
-
-
-@pytest.mark.parametrize("method", ["access", "webhook", "fetch"])
-def test_source_page_posts_from_another_site_are_refused(
-    instance: Lobby,
-    method: str,
-) -> None:
-    a_created_source(instance.client)
-    path = {
-        "access": ACCESS.format(name="talks"),
-        "webhook": WEBHOOK.format(name="talks"),
-        "fetch": _FETCH.format(name="talks"),
-    }[method]
-
-    refused = instance.client.post(
-        path,
-        data={"secret": SENT, "stay": "page"},
-        headers={"sec-fetch-site": "cross-site"},
-    )
-
-    assert refused.status_code == HTTPStatus.FORBIDDEN
-
-
-def test_renewing_a_name_this_instance_does_not_have_is_not_found() -> None:
-    lobby = a_signed_in_lobby()
-
-    assert (
-        lobby.post(
-            ACCESS.format(name="missing"),
-            data={"secret": SENT},
-        ).status_code
-        == HTTPStatus.NOT_FOUND
-    )
-    missing = lobby.post(WEBHOOK.format(name="missing"))
-    assert missing.status_code == HTTPStatus.NOT_FOUND
+    for session in (creator, other):
+        shell = session.get(a_source_address("talks"))
+        assert shell.status_code == HTTPStatus.OK
+        for secret in (created, renewed, SENT):
+            assert secret not in shell.text
 
 
 def test_the_list_links_each_name_to_its_page() -> None:
@@ -859,19 +504,6 @@ def test_the_list_links_each_name_to_its_page() -> None:
     )
 
     assert f'href="{SOURCES}/decks"' in page
-
-
-def test_the_source_page_offers_a_remove_control_at_the_bottom() -> None:
-    page = (
-        a_signed_in_lobby(GivenDecks(source=a_configured_source(_ADDRESS)))
-        .get(f"{SOURCES}/decks")
-        .text
-    )
-
-    assert ENGLISH.source_remove_heading in page
-    assert ENGLISH.source_remove_hint in page
-    assert f'action="{SOURCES}/decks/remove"' in page
-    assert ENGLISH.source_remove_button in page
 
 
 def test_asking_to_remove_a_source_shows_the_confirm_and_deletes_nothing() -> None:
@@ -951,10 +583,13 @@ def test_confirming_removal_deletes_the_source_and_notices_the_list() -> None:
         )
         in listed
     )
-    assert lobby.get(f"{SOURCES}/{source.name}").status_code == HTTPStatus.NOT_FOUND
+    assert (
+        lobby.get(f"/api/sources/{source.name}", headers=_JSON).status_code
+        == HTTPStatus.NOT_FOUND
+    )
 
 
-def test_a_stuck_mirror_refuses_the_removal_and_the_page_says_so() -> None:
+def test_a_stuck_mirror_refuses_the_removal_and_offers_the_counts_again() -> None:
     source = a_configured_source(_ADDRESS)
     lobby = a_signed_in_lobby(GivenDecks(source=source, stuck_mirror=True))
 
@@ -962,6 +597,9 @@ def test_a_stuck_mirror_refuses_the_removal_and_the_page_says_so() -> None:
 
     assert confirmed.status_code == HTTPStatus.OK
     assert ENGLISH.source_remove_refused in confirmed.text
+    assert ENGLISH.source_remove_confirm in confirmed.text
+    assert DECK_COUNT_FIELD.search(confirmed.text) is not None
+    assert RUN_COUNT_FIELD.search(confirmed.text) is not None
     assert f'href="{SOURCES}/{source.name}"' in lobby.get(SOURCES).text
 
 
@@ -976,14 +614,22 @@ def test_a_source_gone_between_the_refusal_and_the_page_is_not_found(
     same way it answers any other name it does not have.
     """
 
-    def gone(self: Decks, name: str, *, viewer: str) -> None:
-        del self, name, viewer
+    def gone(self: Decks, name: str) -> None:
+        del self, name
 
     source = a_configured_source(_ADDRESS)
     lobby = a_signed_in_lobby(GivenDecks(source=source, stuck_mirror=True))
-    monkeypatch.setattr(Decks, "shown_source", gone)
+    asked = ask_removal(lobby, source.name)
+    deck_count = DECK_COUNT_FIELD.search(asked.text)
+    run_count = RUN_COUNT_FIELD.search(asked.text)
+    assert deck_count is not None
+    assert run_count is not None
+    monkeypatch.setattr(Decks, "removal", gone)
 
-    confirmed = confirm_removal(lobby, source.name)
+    confirmed = lobby.post(
+        REMOVE_CONFIRMED.format(name=source.name),
+        data={"deck_count": deck_count.group(1), "run_count": run_count.group(1)},
+    )
 
     assert confirmed.status_code == HTTPStatus.NOT_FOUND
 
@@ -1089,7 +735,7 @@ def test_after_removal_the_same_url_and_name_can_be_added_again() -> None:
     re_created = a_created_source(lobby)
 
     assert re_created
-    assert lobby.get(f"{SOURCES}/talks").status_code == HTTPStatus.OK
+    assert lobby.get("/api/sources/talks", headers=_JSON).status_code == HTTPStatus.OK
 
 
 def test_a_removed_decks_talk_answers_not_found(tmp_path: Path) -> None:

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { flushSync, untrack } from 'svelte';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { Refused } from '#lib/api/client.ts';
 	import {
 		type AccessKind,
@@ -10,6 +12,7 @@
 		type SourceProbe
 	} from '#lib/api/sources.ts';
 	import CopyValue from '#lib/CopyValue.svelte';
+	import { navigation } from '#lib/navigation.ts';
 	import { type CheckBanner, checkBanner, refusalWords } from '#lib/source.ts';
 	import type { PageProps } from './$types';
 
@@ -33,6 +36,14 @@
 	let pending = $state(false);
 	// The only place the webhook secret lives: this page's memory.
 	let created = $state<CreatedSourceView | null>(null);
+
+	// Back to the entry a create replaced loads this route under the source's
+	// address; the source's own page is what that address shows. Checked once,
+	// here: a reactive check would fire right after a create and destroy the
+	// one-time display. This page makes no other shallow navigation.
+	if (page.shallow !== null) {
+		void navigation.goto(page.shallow.url.href, { replace: true });
+	}
 
 	const probe = (): SourceProbe => ({
 		url,
@@ -93,6 +104,13 @@
 			secret = '';
 			banner = null;
 			fingerprint = null;
+			// The bar takes the source's address with no new history entry and no
+			// state, so Back and a reload meet the source's page, never the secret.
+			await navigation.goto(resolve('/(lobby)/settings/sources/[name]', { name: created.name }), {
+				shallow: true,
+				replace: true,
+				state: {}
+			});
 		});
 	}
 
@@ -260,33 +278,11 @@
 		font-size: 22px;
 		overflow-wrap: anywhere;
 	}
-	.form,
-	.sec {
+	.form {
 		display: flex;
 		flex-direction: column;
 		gap: 14px;
 		max-width: 520px;
-	}
-	.sec {
-		gap: 10px;
-	}
-	.sec h2 {
-		margin: 0;
-		font-size: 13px;
-		font-weight: 400;
-		letter-spacing: 0.1em;
-		color: var(--text-muted);
-	}
-	.muted {
-		margin: 0;
-		font-size: 14px;
-		color: var(--text-muted);
-	}
-	.actions {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-		margin: 16px 0;
 	}
 	.access {
 		margin: 0;

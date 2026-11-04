@@ -66,6 +66,16 @@ export class Refused extends Error {
 	}
 }
 
+// The problem a route answers when it took nothing and gives no reason.
+const DECLINED = 'about:blank';
+
+/** A 422 the server explained with no reason: nothing was taken. */
+export class Declined extends Error {
+	constructor(path: string) {
+		super(`${path} declined`);
+	}
+}
+
 // The refusals the error page answers for; any other refusal fails loud.
 const PAGE_REFUSALS = new Set([403, 404]);
 
@@ -77,13 +87,19 @@ async function answerOf<Answer>(path: string, answer: Response, here: Here): Pro
 		error(answer.status, `${path} answered ${answer.status}`);
 	}
 	if (answer.status === 422) {
-		const problem = (await answer.json()) as Partial<SourceRefusedProblem>;
+		const problem = (await answer.json()) as { type?: string };
 		if (problem.type === SOURCE_REFUSED) {
 			throw new Refused(path, problem as SourceRefusedProblem);
+		}
+		if (problem.type === DECLINED) {
+			throw new Declined(path);
 		}
 	}
 	if (!answer.ok) {
 		throw new Error(`${path} answered ${answer.status}`);
+	}
+	if (answer.status === 204) {
+		return undefined as Answer;
 	}
 	return (await answer.json()) as Answer;
 }

@@ -2,6 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobbyText } from '#lib/api/session.ts';
+import { navigation } from '#lib/navigation.ts';
 import Page from './+page.svelte';
 
 // A scenario's own templates: none of them is the catalog's sentence.
@@ -32,6 +33,7 @@ afterEach(() => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 });
 
 function answers(): void {
@@ -55,6 +57,7 @@ function answers(): void {
 }
 
 function open(): void {
+	vi.spyOn(navigation, 'goto').mockResolvedValue(undefined);
 	answers();
 	mounted = mount(Page, {
 		target: document.body,
@@ -113,10 +116,11 @@ describe('the Add source page after a create', () => {
 		type('source-url', 'https://git.test/talks.git');
 		type('source-secret', 'an-access-token');
 		const ssh = document.querySelector<HTMLInputElement>('input[value="ssh-deploy-key"]');
-		if (ssh) {
-			ssh.checked = true;
-			ssh.dispatchEvent(new Event('change', { bubbles: true }));
+		if (ssh === null) {
+			throw new Error('no ssh-deploy-key radio');
 		}
+		ssh.checked = true;
+		ssh.dispatchEvent(new Event('change', { bubbles: true }));
 		flushSync();
 
 		window.dispatchEvent(new Event('pagehide'));

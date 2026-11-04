@@ -15,7 +15,6 @@ from pydantic import JsonValue
 
 from presentator.api.hooks import hook_address
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
-from presentator.api.sources import SOURCES
 from presentator.application.decks import (
     DRAFT_MAX_AGE,
     RESERVED_SOURCE_NAME,
@@ -61,7 +60,7 @@ from tests.presentator.application.support.fakes import (
     FakeLocalMount,
     FakeSourceStore,
 )
-from tests.support.lobby import ENGLISH, Lobby
+from tests.support.lobby import Lobby
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import MEMBER, Scene
 
@@ -296,21 +295,6 @@ def test_no_get_carries_the_webhook_secret_or_the_token(
         instance.client.get(LIST, headers=instance.headers).json()["sources"][0]["name"]
         == _NAME
     )
-
-
-# 12
-def test_the_jinja_page_of_an_api_created_source_has_no_one_time_secret() -> None:
-    lobby = an_admin_over(a_world().decks)
-    webhook_secret = a_created_source(lobby.client)
-
-    answer = lobby.client.get(f"{SOURCES}/{_NAME}")
-    page = answer.text
-
-    assert_no_store(answer)
-    assert webhook_secret not in page
-    assert "data-hook-secret" not in page
-    assert ENGLISH.source_webhook_once not in page
-    assert ENGLISH.source_webhook_held_elsewhere not in page
 
 
 @dataclass(frozen=True, slots=True)

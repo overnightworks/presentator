@@ -537,7 +537,6 @@ class ShownSourceRun:
 
     outcome: SourceRunOutcome
     state: SourceState
-    age: timedelta
     at: datetime
     commit: str | None
     reason: SourceRunFailure | None
@@ -560,7 +559,6 @@ class SourcePage:
     access: AccessKind | None
     state: SourceState
     reason: SourceRunFailure | None
-    age: timedelta | None
     fetched_at: datetime | None
     public_key: str | None
     runs: tuple[ShownSourceRun, ...]

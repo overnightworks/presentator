@@ -123,23 +123,6 @@
 		letter-spacing: 0.1em;
 		color: var(--text-muted);
 	}
-	.meta {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 6px 16px;
-		font-size: 14px;
-		color: var(--text-muted);
-	}
-	.meta code {
-		color: var(--text);
-		overflow-wrap: anywhere;
-	}
-	.muted {
-		margin: 0;
-		font-size: 14px;
-		color: var(--text-muted);
-	}
 	.standing {
 		margin-bottom: 16px;
 	}

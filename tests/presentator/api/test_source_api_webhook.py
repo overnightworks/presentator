@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 from httpx2 import Response
 
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
-from presentator.api.sources import SOURCES
 from presentator.application.decks import RESERVED_SOURCE_NAME
 from presentator.contracts.decks import AccessKind
 from tests.presentator.api.support.source_api_support import (
@@ -45,7 +44,6 @@ from tests.presentator.application.support.fakes import (
     LOCAL_MOUNT_EXAMPLE,
     FakeSourceStore,
 )
-from tests.support.lobby import ENGLISH
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import MEMBER, Scene
 
@@ -403,22 +401,6 @@ def test_no_get_carries_the_renewed_or_the_old_secret(
     assert len(world.webhook_secrets.handed_out) == _CREATED_AND_RENEWED
     for minted in world.webhook_secrets.handed_out:
         assert minted not in shown
-
-
-# 18
-def test_the_jinja_page_after_a_renewal_has_no_one_time_secret() -> None:
-    world = a_world()
-    lobby = an_admin_over(world.decks)
-    a_created_source(lobby.client)
-    renew_webhook(lobby.client, _NAME)
-
-    answer = lobby.client.get(f"{SOURCES}/{_NAME}")
-
-    assert_no_store(answer)
-    assert "data-hook-secret" not in answer.text
-    assert ENGLISH.source_webhook_once not in answer.text
-    assert ENGLISH.source_webhook_held_elsewhere not in answer.text
-    assert_nothing_returned(answer, *world.webhook_secrets.handed_out)
 
 
 # 20

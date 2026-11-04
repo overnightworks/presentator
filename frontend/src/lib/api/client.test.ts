@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { isHttpError } from '@sveltejs/kit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getJson, postJson, putJson, Refused } from '#lib/api/client.ts';
+import { Declined, getJson, postJson, putJson, Refused } from '#lib/api/client.ts';
 
 function answering(status: number, body: unknown): { fetcher: typeof fetch; asked: Request[] } {
 	const asked: Request[] = [];
@@ -125,6 +125,25 @@ describe('postJson', () => {
 		await expect(postJson(fetcher, '/api/sources', {})).rejects.toThrow(
 			'/api/sources answered 422'
 		);
+	});
+
+	it('answers nothing to a 204', async () => {
+		const fetcher: typeof fetch = async () => new Response(null, { status: 204 });
+
+		await expect(postJson<undefined>(fetcher, '/api/sources/talks/fetch', undefined)).resolves.toBe(
+			undefined
+		);
+	});
+
+	it('raises Declined for a 422 problem that names no type and gives no reason', async () => {
+		const { fetcher } = answering(422, { type: 'about:blank', title: 'Unprocessable Content' });
+
+		const declined = await postJson(fetcher, '/api/sources/talks/access', {}).catch(
+			(failure: unknown) => failure
+		);
+
+		expect(declined).toBeInstanceOf(Declined);
+		expect(declined).not.toBeInstanceOf(Refused);
 	});
 
 	it('fails loud on a failure that is no refusal', async () => {

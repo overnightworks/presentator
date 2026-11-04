@@ -303,14 +303,12 @@ class Decks:
             access=listed.access,
             state=listed.state,
             reason=listed.reason,
-            age=listed.age,
             fetched_at=listed.fetched_at,
             public_key=source.public_key,
             runs=tuple(
                 ShownSourceRun(
                     outcome=run.outcome,
                     state=source_state_of(run),
-                    age=now - run.at,
                     at=run.at,
                     commit=None if run.commit is None else run.commit[:_SHORT_COMMIT],
                     reason=run.reason,
