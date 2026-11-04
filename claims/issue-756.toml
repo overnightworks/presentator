@@ -1,0 +1,8 @@
+claim_id = "3eba784db8bc4f458bb8e92cd5436450"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "46bb25621df806ef5eef0ccafa00a844c94fb2ec"
+branch = "claude/issue-756-the-lobby-drive-s-shared-steps-live-in-o"
+scope = ["frontend/e2e/coverage.ts", "frontend/e2e/home.spec.ts", "frontend/e2e/lobby.spec.ts", "frontend/e2e/not-found.spec.ts", "frontend/e2e/people.spec.ts", "frontend/e2e/person.ts", "frontend/e2e/scenario.ts"]
+opened_commit = "337e95dc0026ff8385af03bc378c605031710b8e"
+whole_reason = "One shared module replaces four copies of the same drive steps; the specs that held the copies change in the same commit, or a step would be defined twice or not at all."
