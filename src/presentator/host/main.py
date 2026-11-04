@@ -69,7 +69,7 @@ from presentator.adapters.secrets import (
     talk_session_secret,
 )
 from presentator.adapters.sentences import split_sentences
-from presentator.adapters.speech import UdsSpeaking, UdsSpeech, UdsSpeechHearing
+from presentator.adapters.speech import UdsSpeaking, UdsSpeechHearing
 from presentator.api.auth import (
     InstalledAuth,
     LobbyPrivate,
@@ -86,7 +86,6 @@ from presentator.application.decks import Decks
 from presentator.application.identity import SESSION_LIFETIME, SESSION_SWEEP_INTERVAL
 from presentator.application.people import People
 from presentator.application.preferences import Preferences
-from presentator.application.voice import VoiceStatusUse
 from presentator.host.config import (
     Settings,
     WhereBuildsRun,
@@ -308,14 +307,13 @@ def _lobby_private(
     key_drafts: SqliteSourceKeyDrafts,
     identity_writes: SqliteIdentityWrites,
 ) -> LobbyPrivate:
-    """What only an admin of the lobby may reach: the host's socket, the people route.
+    """What only an admin of the lobby may reach: the people route.
 
     The people route exists only while a client is named to call it. Its
     accounts delete over the lock the sign-in holds.
     """
     clients = settings.admitted_token_clients()
     return LobbyPrivate(
-        voice=VoiceStatusUse(private=UdsSpeech(settings.speech_socket)),
         admin_people=AdminPeople(
             people=People(
                 decks=decks,

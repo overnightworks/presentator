@@ -13,7 +13,6 @@ this map and an owner disagree, the owner is right.
 | Why does this tool exist, and what does the operator want from it? | Vision | [`VISION.md`](VISION.md) |
 | What does the instance do, exactly? | Reference | the documents under [Reference](#reference) |
 | Why was it built this way? | Decisions | Records indexed by [`decisions/README.md`](decisions/README.md) |
-| What must it be able to do? | Requirements | [`0001-voice-models.md`](requirements/0001-voice-models.md) |
 | How do I run, change or repair this installation? | Runbooks | the documents under [Runbooks](#runbooks) |
 | Why are the guards what they are? | Explanation | [`explanation/trust-boundaries.md`](explanation/trust-boundaries.md) |
 | How is a change proven? | Testing | [`TESTING.md`](TESTING.md) |

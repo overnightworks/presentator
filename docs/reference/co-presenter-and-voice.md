@@ -106,33 +106,6 @@ characters, else 422; any deck the asker does not own built (malformed, missing,
 nonexistent, unbuilt, source-less or another person's) gets one identical 404
 before the limiter, so it spends no question.
 
-## Settings · Voice
-
-An authenticated admin can open Settings · Voice; a non-admin receives 403
-before the private service is called. The surface reads one private, local
-status snapshot and shows Piper, Chatterbox, Qwen3-TTS 0.6B, VoxCPM2 and NVIDIA
-Magpie in that order. This describes source capability, not an inventory of any
-running instance.
-
-- Downloaded Piper or Chatterbox, and Qwen, VoxCPM2 or Magpie with their exact
-  local snapshots and executables, and a voice whose previous Load failed have
-  one Load action. A usable Qwen worker with an incomplete pinned snapshot has
-  explicit Download, which preserves selection and partials while the
-  catalogue polls local state.
-- The private speech service synchronously makes the choice active and durable
-  while current captured speech can finish. Speech owns
-  `SPEECH_STATE_DIRECTORY` (by default `~/.local/state/presentator-speech`) as
-  a mode-0700 directory; its mode-0600 `selected-voice` file records the
-  downloaded baseline chosen here.
-- A missing or malformed private response hides all rows and offers Check
-  again.
-- One verified active row also names a local player: its DE or EN fixed sample
-  waits while current speech owns synthesis, then plays through that exact
-  active voice.
-
-The catalogue and the load, download and sample actions are also reachable as
-JSON at `/api/voice`, admin only and `no-store`; the sample answers `audio/wav`.
-
 ## Voices
 
 Speech runs selected Chatterbox, Qwen, VoxCPM2 and Magpie voices through one

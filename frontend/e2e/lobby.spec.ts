@@ -10,7 +10,7 @@ async function sessionOf(page: Page): Promise<SessionView> {
 	return (await answer.json()) as SessionView;
 }
 
-const VOICE_PAGE = '/settings/voice';
+const SOURCES_PAGE = '/settings/sources';
 
 async function showsTheSignInBoard(page: Page, session: SessionView): Promise<void> {
 	await expect(page.locator('.signin .wordmark')).toHaveText(session.words.wordmark);
@@ -90,7 +90,7 @@ test.describe('signed in as an admin', () => {
 
 		await page.goto('/login');
 		await showsTheSignInBoard(page, session);
-		await page.goto(VOICE_PAGE);
+		await page.goto(SOURCES_PAGE);
 		await showsAServerRenderedPage(page, session);
 		await page.goto('/login');
 		await showsTheSignInBoard(page, session);
@@ -110,7 +110,7 @@ test.describe('signed in as an admin', () => {
 	}) => {
 		const session = await sessionOf(page);
 
-		await page.goto(VOICE_PAGE);
+		await page.goto(SOURCES_PAGE);
 		await showsAServerRenderedPage(page, session);
 		await page.goto('/login/login-failed');
 		await expect(page).toHaveURL(/\/login\/login-failed$/);

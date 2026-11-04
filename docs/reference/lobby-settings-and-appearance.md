@@ -28,8 +28,6 @@ Users tab.
 - Sources lists each source with the state and age of its newest run
   ([sources](sources.md)). An instance with no source says what a source is
   and what you need for it.
-- Voice is the admin's voice catalogue
-  ([co-presenter and voice](co-presenter-and-voice.md)).
 
 ## Account
 

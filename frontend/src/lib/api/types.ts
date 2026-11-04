@@ -229,74 +229,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/voice": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Status */
-        get: operations["status_api_voice_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/voice/qwen3-tts-0.6b/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Download */
-        post: operations["download_api_voice_qwen3_tts_0_6b_download_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/voice/{voice_id}/load": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Load */
-        post: operations["load_api_voice__voice_id__load_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/voice/{voice_id}/sample/{language}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Sample */
-        post: operations["sample_api_voice__voice_id__sample__language__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -455,13 +387,6 @@ export interface components {
             views_open: boolean;
         };
         /**
-         * DownloadView
-         * @description What the private service did with the Qwen download.
-         */
-        DownloadView: {
-            outcome: components["schemas"]["VoiceDownloadOutcome"];
-        };
-        /**
          * FailureView
          * @description Why a build failed: a code and its counts, and the toolchain's own words.
          *
@@ -503,13 +428,6 @@ export interface components {
             name: string;
             /** Tag */
             tag: string;
-        };
-        /**
-         * LoadView
-         * @description What the private service did with a load.
-         */
-        LoadView: {
-            outcome: components["schemas"]["VoiceLoadOutcome"];
         };
         /**
          * LobbyText
@@ -636,8 +554,6 @@ export interface components {
             settings_sources: string;
             /** Settings Title */
             settings_title: string;
-            /** Settings Voice */
-            settings_voice: string;
             /** Source Access */
             source_access: string;
             /** Source Access Deploy Key */
@@ -824,66 +740,6 @@ export interface components {
             theme_follow_system: string;
             /** Theme Light */
             theme_light: string;
-            /** Voice Check Again */
-            voice_check_again: string;
-            /** Voice Download */
-            voice_download: string;
-            /** Voice Language */
-            voice_language: string;
-            /** Voice Load */
-            voice_load: string;
-            /** Voice Model */
-            voice_model: string;
-            /** Voice Recovery Durability */
-            voice_recovery_durability: string;
-            /** Voice Recovery Failed */
-            voice_recovery_failed: string;
-            /** Voice Recovery Invalid Selection */
-            voice_recovery_invalid_selection: string;
-            /** Voice Sample */
-            voice_sample: string;
-            /** Voice Sample Active */
-            voice_sample_active: string;
-            /** Voice Sample English */
-            voice_sample_english: string;
-            /** Voice Sample Failed Explanation */
-            voice_sample_failed_explanation: string;
-            /** Voice Sample Failed Title */
-            voice_sample_failed_title: string;
-            /** Voice Sample German */
-            voice_sample_german: string;
-            /** Voice Sample Language */
-            voice_sample_language: string;
-            /** Voice Sample Loading */
-            voice_sample_loading: string;
-            /** Voice Sample Play */
-            voice_sample_play: string;
-            /** Voice Sample Stop */
-            voice_sample_stop: string;
-            /** Voice Sample Waiting */
-            voice_sample_waiting: string;
-            /** Voice State */
-            voice_state: string;
-            /** Voice State Active */
-            voice_state_active: string;
-            /** Voice State Download Failed */
-            voice_state_download_failed: string;
-            /** Voice State Downloaded */
-            voice_state_downloaded: string;
-            /** Voice State Downloading */
-            voice_state_downloading: string;
-            /** Voice State Failed */
-            voice_state_failed: string;
-            /** Voice State Loading */
-            voice_state_loading: string;
-            /** Voice State Not Downloaded */
-            voice_state_not_downloaded: string;
-            /** Voice State Unavailable */
-            voice_state_unavailable: string;
-            /** Voice Unknown Explanation */
-            voice_unknown_explanation: string;
-            /** Voice Unknown Title */
-            voice_unknown_title: string;
             /** Wordmark */
             wordmark: string;
         };
@@ -910,12 +766,6 @@ export interface components {
          * @enum {string}
          */
         Role: "admin" | "user";
-        /**
-         * SampleLanguage
-         * @description The closed browser-to-speech language token for a fixed voice sample.
-         * @enum {string}
-         */
-        SampleLanguage: "de" | "en";
         /**
          * SessionAddresses
          * @description Where a page sends a person to sign in or out, or to the central account.
@@ -1118,65 +968,6 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
-        };
-        /**
-         * VoiceDownloadOutcome
-         * @description The bounded result of starting the fixed Qwen download.
-         * @enum {string}
-         */
-        VoiceDownloadOutcome: "started" | "already_complete";
-        /**
-         * VoiceId
-         * @description The closed, ordered administration catalogue.
-         * @enum {string}
-         */
-        VoiceId: "piper" | "chatterbox" | "qwen3-tts-0.6b" | "voxcpm2" | "nvidia-magpie";
-        /**
-         * VoiceLoadOutcome
-         * @description The private Load result an authenticated caller may act on.
-         * @enum {string}
-         */
-        VoiceLoadOutcome: "activated" | "activated_durability_unconfirmed" | "not_activated";
-        /**
-         * VoiceRecoveryKind
-         * @description The private explanation for a recoverable unavailable voice.
-         * @enum {string}
-         */
-        VoiceRecoveryKind: "invalid_selection" | "load_failed" | "durability_unconfirmed";
-        /**
-         * VoiceRecoveryView
-         * @description Why a selection needs the admin's attention, and which voice it names.
-         */
-        VoiceRecoveryView: {
-            kind: components["schemas"]["VoiceRecoveryKind"];
-            voice: components["schemas"]["VoiceId"] | null;
-        };
-        /**
-         * VoiceRowView
-         * @description One voice of the closed catalogue and where it stands.
-         */
-        VoiceRowView: {
-            id: components["schemas"]["VoiceId"];
-            /** Language */
-            language: string;
-            /** Name */
-            name: string;
-            state: components["schemas"]["VoiceState"];
-        };
-        /**
-         * VoiceState
-         * @description A state whose source is the private speech process.
-         * @enum {string}
-         */
-        VoiceState: "active" | "loading" | "failed" | "downloaded" | "not_downloaded" | "downloading" | "download_failed" | "unavailable";
-        /**
-         * VoiceView
-         * @description The verified catalogue in the owner's order and its recovery, if any.
-         */
-        VoiceView: {
-            recovery: components["schemas"]["VoiceRecoveryView"] | null;
-            /** Voices */
-            voices: components["schemas"]["VoiceRowView"][];
         };
         /**
          * WebhookSecretView
@@ -2181,298 +1972,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    status_api_voice_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VoiceView"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-        };
-    };
-    download_api_voice_qwen3_tts_0_6b_download_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DownloadView"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-        };
-    };
-    load_api_voice__voice_id__load_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                voice_id: components["schemas"]["VoiceId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoadView"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-        };
-    };
-    sample_api_voice__voice_id__sample__language__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                voice_id: components["schemas"]["VoiceId"];
-                language: components["schemas"]["SampleLanguage"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "audio/wav": unknown;
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
                 };
             };
         };

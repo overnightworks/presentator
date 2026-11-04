@@ -33,8 +33,7 @@ SPEECH_PRIVATE_DIRECTORY=/run/presentator-speech PRESENTATOR_RUNTIME_UID=<uid> \
 
 Speech owns `SPEECH_STATE_DIRECTORY` (by default
 `~/.local/state/presentator-speech`) as a mode-0700 directory. Its mode-0600
-`selected-voice` file records the downloaded baseline chosen through
-Settings · Voice, so keep it with the host state when moving an instance.
+`selected-voice` file records the downloaded baseline, so keep it with the host state when moving an instance.
 
 ## Check
 

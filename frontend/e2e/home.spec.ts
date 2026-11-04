@@ -322,7 +322,7 @@ test.describe('the theme', () => {
 		expect(darkBackground).not.toBe(lightBackground);
 		await expect.poll(async () => (await sessionOf(page)).theme).toBe('dark');
 
-		await page.goto('/settings/voice');
+		await page.goto('/settings/sources');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 		const account = await page.request.get('/api/account', {
 			headers: { Accept: 'application/json' }
@@ -400,12 +400,12 @@ test.describe('sentence 4', () => {
 		const { words } = await sessionOf(page);
 		const showsHome = () =>
 			expect(page.getByRole('heading', { name: words.decks_title })).toBeVisible();
-		const showsVoice = () => expect(page).toHaveURL(/\/settings\/voice$/);
+		const showsSources = () => expect(page).toHaveURL(/\/settings\/sources$/);
 
 		await page.goto('/');
 		await showsHome();
-		await page.goto('/settings/voice');
-		await showsVoice();
+		await page.goto('/settings/sources');
+		await showsSources();
 		await page.goto('/');
 		await showsHome();
 		await page.goto('/login');
@@ -414,7 +414,7 @@ test.describe('sentence 4', () => {
 		await page.goBack();
 		await showsHome();
 		await page.goBack();
-		await showsVoice();
+		await showsSources();
 		await page.goForward();
 		await showsHome();
 		await page.goForward();

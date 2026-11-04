@@ -66,7 +66,6 @@ from presentator.api.talk import create_talk, talk_content_security_policy
 from presentator.application.decks import Decks
 from presentator.application.people import People
 from presentator.application.preferences import Preferences
-from presentator.application.voice import VoiceStatusUse
 from presentator.contracts.decks import (
     Build,
     ConnectionCheckResult,
@@ -78,14 +77,6 @@ from presentator.contracts.decks import (
 )
 from presentator.contracts.models import Role, User
 from presentator.contracts.text import DEFAULT_LANGUAGE_TAG, Catalogs
-from presentator.contracts.voice import (
-    SampleLanguage,
-    VoiceDownloadOutcome,
-    VoiceId,
-    VoiceLoadOutcome,
-    VoiceSnapshot,
-    VoiceUnavailableError,
-)
 from presentator.host.config import Settings
 from presentator.host.main import web_auth_config_for
 from presentator.host.oidc import admission_of, oidc_client_config
@@ -169,28 +160,6 @@ AN_AGENT_SERVICE_SCOPE: Final = "an-agent-service-audience"
 AN_ISSUER: Final = "https://auth.example.test/realms/test"
 A_CLIENT_ID: Final = "presentator-test"
 A_CLIENT_CREDENTIAL: Final = "the-secret-only-this-test-has"
-
-
-class UnavailableSpeech:
-    """The omitted test arrangement's private speech port."""
-
-    async def snapshot(self) -> VoiceSnapshot:
-        """Make the real use case surface the recoverable service failure."""
-        raise VoiceUnavailableError
-
-    async def load(self, voice: VoiceId) -> VoiceLoadOutcome:
-        """Make the private mutation unavailable in the default test arrangement."""
-        del voice
-        raise VoiceUnavailableError
-
-    async def download_qwen(self) -> VoiceDownloadOutcome:
-        """Make the omitted test arrangement's download capability unavailable."""
-        raise VoiceUnavailableError
-
-    async def sample(self, voice: VoiceId, language: SampleLanguage) -> bytes:
-        """Make the omitted test arrangement's sample capability unavailable."""
-        del voice, language
-        raise VoiceUnavailableError
 
 
 def hand_over_session_cookies(
@@ -436,7 +405,6 @@ class GivenDecks:
     # names `themes` and gets the fake above instead.
     toolchain_project: Path | None = None
     key_drafts: FakeDeployKeyDrafts = field(default_factory=FakeDeployKeyDrafts)
-    voice: VoiceStatusUse | None = None
     # Set only by a test proving what the real adapter lets a request read.
     builder: BuildRunner | None = None
 
@@ -590,11 +558,6 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
             else signing_in.auth
         ),
         private=LobbyPrivate(
-            voice=(
-                given.voice
-                if given.voice is not None
-                else VoiceStatusUse(private=UnavailableSpeech())
-            ),
             admin_people=admin_people,
         ),
         shell=shell,
@@ -649,7 +612,6 @@ def a_lobby(
     users: FakeUserStore | None = None,
     catalogs: Catalogs = CATALOGS,
     given: GivenDecks = NO_DECKS,
-    voice: VoiceStatusUse | None = None,
     person_preferences: PersonPreferencesStore | None = None,
 ) -> Lobby:
     """The whole lobby, with in-memory stores behind every port."""
@@ -657,7 +619,7 @@ def a_lobby(
     app, _ = a_lobby_app(
         people=people,
         preferences=a_preferences(catalogs=catalogs, people=person_preferences),
-        given=replace(given, voice=voice),
+        given=given,
     )
     return a_browser_at(
         app,

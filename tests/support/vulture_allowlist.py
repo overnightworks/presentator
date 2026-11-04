@@ -18,11 +18,6 @@ from presentator.api.sources import (
     SourceView,
 )
 from presentator.contracts.text import LobbyText
-from presentator.contracts.voice import (
-    VoiceDownloadOutcome,
-    VoiceLoadOutcome,
-    VoiceState,
-)
 from presentator.host.config import Settings, WorkerSettings
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
 from tests.presentator.host.test_worker_serving_loop import clients_closed_with_the_test
@@ -148,49 +143,6 @@ LobbyText.source_remove_hint
 LobbyText.source_remove_button
 LobbyText.source_remove_cancel
 LobbyText.source_remove_confirm
-
-# `presentator/api/templates/voice.html` renders these Voice-tab words.
-LobbyText.settings_voice
-LobbyText.voice_model
-LobbyText.voice_language
-LobbyText.voice_state
-LobbyText.voice_state_active
-LobbyText.voice_state_loading
-LobbyText.voice_state_failed
-LobbyText.voice_state_downloaded
-LobbyText.voice_state_not_downloaded
-LobbyText.voice_state_downloading
-LobbyText.voice_state_download_failed
-LobbyText.voice_state_unavailable
-LobbyText.voice_unknown_title
-LobbyText.voice_unknown_explanation
-LobbyText.voice_check_again
-LobbyText.voice_load
-LobbyText.voice_download
-LobbyText.voice_recovery_failed
-LobbyText.voice_recovery_invalid_selection
-LobbyText.voice_recovery_durability
-LobbyText.voice_sample
-LobbyText.voice_sample_active
-LobbyText.voice_sample_language
-LobbyText.voice_sample_german
-LobbyText.voice_sample_english
-LobbyText.voice_sample_play
-LobbyText.voice_sample_stop
-LobbyText.voice_sample_loading
-LobbyText.voice_sample_waiting
-LobbyText.voice_sample_failed_title
-LobbyText.voice_sample_failed_explanation
-
-# Pydantic constructs these private-wire values; `voice.html` renders states by value.
-VoiceState.LOADING
-VoiceState.DOWNLOADED
-VoiceState.NOT_DOWNLOADED
-VoiceState.DOWNLOAD_FAILED
-VoiceLoadOutcome.NOT_ACTIVATED
-
-# `UdsSpeech` decodes this private-wire outcome through `_DownloadPayload`.
-VoiceDownloadOutcome.ALREADY_COMPLETE
 
 # `StaticFiles.__call__` dispatches to this override for every talk request.
 TalkFiles.get_response

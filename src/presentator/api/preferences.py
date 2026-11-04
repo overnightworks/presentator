@@ -4,7 +4,6 @@ Settings is admin only, and a person's own choices live on Account; the person
 menu's theme rows write the same Account preference (issue #8, lines 21 to 23).
 """
 
-from contextlib import suppress
 from dataclasses import dataclass, replace
 from http import HTTPStatus
 from typing import Annotated, Final
@@ -16,21 +15,13 @@ from starlette.responses import RedirectResponse
 from presentator.api.admission import gated_person
 from presentator.api.pages import Pages, options, theme_choices
 from presentator.application.preferences import Preferences
-from presentator.application.voice import VoiceStatusUse
 from presentator.contracts.preferences import (
     InstanceSettings,
     PersonPreferences,
     ThemeChoice,
 )
-from presentator.contracts.voice import (
-    SampleLanguage,
-    VoiceId,
-    VoiceSampleBusyError,
-    VoiceUnavailableError,
-)
 
 SETTINGS: Final = "/settings"
-VOICE: Final = "/settings/voice"
 ACCOUNT: Final = "/account"
 THEME: Final = "/theme"
 
@@ -60,7 +51,6 @@ class _Surfaces:
 
     pages: Pages
     preferences: Preferences
-    voice: VoiceStatusUse
 
     def settings_page(self, request: Request) -> Response:
         """Show the instance defaults to an admin."""
@@ -104,55 +94,6 @@ class _Surfaces:
                 chosen=chosen.theme or _NO_OVERRIDE,
             ),
         )
-
-    async def voice_page(self, request: Request) -> Response:
-        """Show only an admin the verified private voice catalogue."""
-        if not gated_person(request).is_admin:
-            return _refused()
-        try:
-            snapshot = await self.voice.snapshot()
-        except VoiceUnavailableError:
-            snapshot = None
-        return self.pages.page(request, "voice.html", snapshot=snapshot)
-
-    async def load_voice(self, request: Request, voice: VoiceId) -> Response:
-        """Ask the verified private listener to make one downloaded voice active."""
-        if not gated_person(request).is_admin:
-            return _refused()
-        with suppress(VoiceUnavailableError):
-            await self.voice.load(voice)
-        if request.headers.get("HX-Request") == "true":
-            return Response(headers={"HX-Refresh": "true"})
-        return RedirectResponse(VOICE, status_code=HTTPStatus.SEE_OTHER)
-
-    async def download_qwen(self, request: Request) -> Response:
-        """Start a fixed Qwen download only after the admin boundary."""
-        if not gated_person(request).is_admin:
-            return _refused()
-        with suppress(VoiceUnavailableError):
-            await self.voice.download_qwen()
-        if request.headers.get("HX-Request") == "true":
-            return await self.voice_page(request)
-        return RedirectResponse(VOICE, status_code=HTTPStatus.SEE_OTHER)
-
-    async def sample_voice(
-        self, request: Request, voice: str, language: str
-    ) -> Response:
-        """Return a fixed active-voice sample only after the admin check."""
-        if not gated_person(request).is_admin:
-            return _refused()
-        try:
-            typed_voice = VoiceId(voice)
-            typed_language = SampleLanguage(language)
-        except ValueError:
-            return Response(status_code=HTTPStatus.SERVICE_UNAVAILABLE)
-        try:
-            audio = await self.voice.sample(typed_voice, typed_language)
-        except VoiceSampleBusyError:
-            return Response(status_code=HTTPStatus.CONFLICT)
-        except VoiceUnavailableError:
-            return Response(status_code=HTTPStatus.SERVICE_UNAVAILABLE)
-        return Response(content=audio, media_type="audio/wav")
 
     def save_account(
         self,
@@ -202,24 +143,12 @@ class _Surfaces:
         )
 
 
-def preference_routes(*, pages: Pages, voice: VoiceStatusUse) -> APIRouter:
+def preference_routes(*, pages: Pages) -> APIRouter:
     """The Settings and Account addresses, for the lobby factory to include."""
-    surfaces = _Surfaces(pages=pages, preferences=pages.preferences, voice=voice)
+    surfaces = _Surfaces(pages=pages, preferences=pages.preferences)
     router = APIRouter()
     router.add_api_route(SETTINGS, surfaces.settings_page, methods=["GET"])
     router.add_api_route(SETTINGS, surfaces.save_settings, methods=["POST"])
-    router.add_api_route(VOICE, surfaces.voice_page, methods=["GET"])
-    router.add_api_route(
-        f"{VOICE}/{{voice}}/load", surfaces.load_voice, methods=["POST"]
-    )
-    router.add_api_route(
-        f"{VOICE}/qwen3-tts-0.6b/download", surfaces.download_qwen, methods=["POST"]
-    )
-    router.add_api_route(
-        f"{VOICE}/{{voice}}/sample/{{language}}",
-        surfaces.sample_voice,
-        methods=["POST"],
-    )
     router.add_api_route(ACCOUNT, surfaces.account_page, methods=["GET"])
     router.add_api_route(ACCOUNT, surfaces.save_account, methods=["POST"])
     router.add_api_route(THEME, surfaces.choose_theme, methods=["POST"])
