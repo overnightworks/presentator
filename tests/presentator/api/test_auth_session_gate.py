@@ -17,7 +17,7 @@ from webauth.middleware.security_headers import (
     STRICT_TRANSPORT_SECURITY,
 )
 
-from presentator.api.admission import gated_person, gated_session_id
+from presentator.api.admission import gated_person
 from presentator.api.auth import PERMISSIONS_POLICY
 from presentator.api.hooks import hook_address
 from tests.presentator.application.support.fakes import (
@@ -259,17 +259,15 @@ def test_an_unreadable_session_store_runs_no_route_and_keeps_the_headers() -> No
     _assert_carries_the_security_headers(answer)
 
 
-@pytest.mark.parametrize("reader", [gated_person, gated_session_id])
 @pytest.mark.parametrize("fixture", ["lobby", "signed_in_lobby"])
 def test_a_gated_reader_fails_loud_on_a_path_the_gate_let_past(
     request: pytest.FixtureRequest,
     fixture: str,
-    reader: Callable[[Request], object],
 ) -> None:
     lobby: Lobby = request.getfixturevalue(fixture)
 
     def probe(incoming: Request) -> Response:
-        reader(incoming)
+        gated_person(incoming)
         return Response()
 
     lobby.app.add_api_route(_PUBLIC_PROBE, probe, methods=["POST"])

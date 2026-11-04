@@ -813,14 +813,12 @@ def test_an_unreachable_source_records_a_failed_run_naming_why() -> None:
 def test_a_source_nobody_has_polled_lists_as_never_fetched() -> None:
     (row,) = decks_over().listed_sources()
 
-    assert (row.state, row.age, row.fetched_at) == (
-        SourceState.NEVER_FETCHED,
-        None,
-        None,
-    )
+    assert (row.state, row.fetched_at) == (SourceState.NEVER_FETCHED, None)
 
 
-def test_a_successful_newest_run_lists_as_reachable_with_that_runs_age() -> None:
+def test_a_successful_newest_run_lists_as_reachable_with_that_runs_stored_instant() -> (
+    None
+):
     runs = FakeSourceRunStore()
     runs.record(
         SourceRun(
@@ -835,7 +833,7 @@ def test_a_successful_newest_run_lists_as_reachable_with_that_runs_age() -> None
     listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
 
     assert listed[0].state is SourceState.REACHABLE
-    assert listed[0].age == timedelta(minutes=3)
+    assert listed[0].fetched_at == NOW - timedelta(minutes=3)
 
 
 def test_a_failed_newest_run_lists_as_error_even_when_the_reason_is_unresolvable() -> (
@@ -855,7 +853,7 @@ def test_a_failed_newest_run_lists_as_error_even_when_the_reason_is_unresolvable
     listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
 
     assert listed[0].state is SourceState.ERROR
-    assert listed[0].age == timedelta(hours=2)
+    assert listed[0].fetched_at == NOW - timedelta(hours=2)
 
 
 def test_a_refused_login_lists_as_refused_rather_than_error() -> None:
@@ -873,7 +871,7 @@ def test_a_refused_login_lists_as_refused_rather_than_error() -> None:
     listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
 
     assert listed[0].state is SourceState.REFUSED
-    assert listed[0].age == timedelta(minutes=5)
+    assert listed[0].fetched_at == NOW - timedelta(minutes=5)
 
 
 def test_a_host_that_answered_with_something_else_lists_as_failed() -> None:
@@ -891,7 +889,7 @@ def test_a_host_that_answered_with_something_else_lists_as_failed() -> None:
     listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
 
     assert listed[0].state is SourceState.FAILED
-    assert listed[0].age == timedelta(minutes=7)
+    assert listed[0].fetched_at == NOW - timedelta(minutes=7)
 
 
 def test_the_list_reads_the_newest_run_only() -> None:
@@ -918,7 +916,7 @@ def test_the_list_reads_the_newest_run_only() -> None:
     listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
 
     assert listed[0].state is SourceState.ERROR
-    assert listed[0].age == timedelta(minutes=2)
+    assert listed[0].fetched_at == NOW - timedelta(minutes=2)
 
 
 def test_refreshing_one_source_leaves_another_unpolled() -> None:

@@ -13,9 +13,7 @@
 		>{words.settings_title}</a
 	>
 	<a
-		href="/settings/sources"
-		rel="external"
-		data-sveltekit-reload
+		href={resolve('/(lobby)/settings/sources')}
 		aria-current={tabCurrent(page.url.pathname, 'sources')}>{words.settings_sources}</a
 	>
 </nav>

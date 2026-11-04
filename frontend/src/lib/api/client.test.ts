@@ -4,7 +4,16 @@ import { join } from 'node:path';
 import { isHttpError } from '@sveltejs/kit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { Declined, getJson, postJson, putJson, Refused } from '#lib/api/client.ts';
+import {
+	Declined,
+	deleteJson,
+	getJson,
+	postJson,
+	putJson,
+	Refused,
+	RemovalRefused,
+	RemovalStale
+} from '#lib/api/client.ts';
 
 function answering(status: number, body: unknown): { fetcher: typeof fetch; asked: Request[] } {
 	const asked: Request[] = [];
@@ -88,6 +97,84 @@ const refusedType = (
 	JSON.parse(readFileSync(join(import.meta.dirname, 'openapi.json'), 'utf8')) as Document
 ).paths['/api/sources'].post.responses[422].content['application/problem+json'].schema.properties
 	.type.const;
+
+// The wire's own tags of the two removal problems, read from the same document.
+interface RemovalDocument {
+	paths: {
+		'/api/sources/{name}': {
+			delete: {
+				responses: Record<
+					number,
+					{
+						content: {
+							'application/problem+json': { schema: { properties: { type: { const: string } } } };
+						};
+					}
+				>;
+			};
+		};
+	};
+}
+const removal = (
+	JSON.parse(readFileSync(join(import.meta.dirname, 'openapi.json'), 'utf8')) as RemovalDocument
+).paths['/api/sources/{name}'].delete.responses;
+const staleType = removal[409]?.content['application/problem+json'].schema.properties.type.const;
+const refusedRemovalType = removal[500]?.content['application/problem+json'].schema.properties.type
+	.const;
+
+describe('deleteJson', () => {
+	it('sends the DELETE verb and answers nothing to a 204', async () => {
+		const asked: Request[] = [];
+		const fetcher: typeof fetch = async (input, init) => {
+			asked.push(new Request(new URL(String(input), 'http://lobby.test'), init));
+			return new Response(null, { status: 204 });
+		};
+
+		await expect(deleteJson<undefined>(fetcher, '/api/sources/talks?a=1')).resolves.toBe(undefined);
+
+		expect(asked[0]?.method).toBe('DELETE');
+		expect(asked[0]?.headers.get('accept')).toBe('application/json');
+	});
+
+	it('raises RemovalStale with the counts a 409 of the stale tag carries', async () => {
+		const { fetcher } = answering(409, { type: staleType, deck_count: 4, run_count: 9 });
+
+		const stale = await deleteJson(fetcher, '/api/sources/talks').catch((failure: unknown) => failure);
+
+		expect(stale).toBeInstanceOf(RemovalStale);
+		expect((stale as RemovalStale).counts).toEqual({ deck_count: 4, run_count: 9 });
+	});
+
+	it('raises RemovalRefused for a 500 of the refused tag', async () => {
+		const { fetcher } = answering(500, { type: refusedRemovalType, reason: 'disk-leftover' });
+
+		const refused = await deleteJson(fetcher, '/api/sources/talks').catch(
+			(failure: unknown) => failure
+		);
+
+		expect(refused).toBeInstanceOf(RemovalRefused);
+	});
+
+	it.each([
+		{ status: 409, body: { type: 'about:blank' } },
+		{ status: 500, body: { type: 'about:blank' } },
+		{ status: 500, body: {} }
+	])('fails loud on a $status of another shape', async ({ status, body }) => {
+		await expect(
+			deleteJson(answering(status, body).fetcher, '/api/sources/talks')
+		).rejects.toThrow(`/api/sources/talks answered ${status}`);
+	});
+});
+
+describe('a failure whose body is no JSON', () => {
+	it('fails loud with its status', async () => {
+		const fetcher: typeof fetch = async () => new Response('gateway down', { status: 500 });
+
+		await expect(deleteJson(fetcher, '/api/sources/talks')).rejects.toThrow(
+			'/api/sources/talks answered 500'
+		);
+	});
+});
 
 describe('postJson', () => {
 	it('sends the body as JSON with the POST verb and returns the answer', async () => {

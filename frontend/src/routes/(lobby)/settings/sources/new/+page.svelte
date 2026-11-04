@@ -135,7 +135,7 @@
 </svelte:head>
 <svelte:window onpagehide={forget} />
 
-<a class="back" href="/settings/sources" rel="external" data-sveltekit-reload>{words.sources_back}</a>
+<a class="back" href={resolve('/(lobby)/settings/sources')}>{words.sources_back}</a>
 {#if created === null}
 	<h1>{words.sources_add}</h1>
 	<form class="form" onsubmit={create}>
@@ -218,7 +218,7 @@
 			<div class="banner" data-banner={banner.shape} role="status">
 				<span class="state" data-state={banner.shape === 'ok' ? 'ready' : 'failed'}><i></i></span>
 				<div>
-					<p>{banner.message}</p>
+					<p><span class="state-word">{banner.state}</span>{` ${banner.message}`}</p>
 					{#if banner.detail !== null}
 						<p><samp>{banner.detail}</samp></p>
 					{/if}
@@ -340,6 +340,9 @@
 	.banner p {
 		margin: 0 0 4px;
 		overflow-wrap: anywhere;
+	}
+	.state-word {
+		font-weight: 600;
 	}
 	.banner samp {
 		font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;

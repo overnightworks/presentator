@@ -4,7 +4,7 @@ import posixpath
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import StrEnum
 from ipaddress import IPv6Address
 from pathlib import Path, PurePosixPath
@@ -503,12 +503,10 @@ class ListedDeck:
 class SourceState(StrEnum):
     """What the sources list says a source is, read off its newest run.
 
-    No run is never-fetched, a successful run is reachable, and the reason a
-    credential the instance could not resolve never becomes a word on the
-    board: it folds into error. A refused login and a host that answered with
-    something else each keep their own word instead, because a wrong token, a
-    dead host, and a host that answered but not with the repository are three
-    different things an operator needs told apart.
+    No run is never-fetched and a successful run is reachable. A host that
+    never answers and a credential the instance could not resolve share one
+    word, error; the run's reason tells them apart. A refused login and a host
+    that answered with something else keep their own words.
     """
 
     REACHABLE = "reachable"
@@ -520,14 +518,13 @@ class SourceState(StrEnum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ListedSource:
-    """One row of the sources list, with the state and the age the row shows."""
+    """One row of the sources list: where it is, how it stands and its newest run."""
 
     name: str
     url: str
     access: AccessKind | None
     state: SourceState
     reason: SourceRunFailure | None
-    age: timedelta | None
     fetched_at: datetime | None
 
 

@@ -25,6 +25,8 @@ Audience: humans and agents writing any user-facing string or any colour.
   person menu from appkit, see The look of the SvelteKit pages.
   Amended 2026-11-04: the deck page words a build's age and a running build's
   duration in the browser too; the server sends the build and attempt instants.
+  Amended 2026-11-04: the Sources list words its ages in the browser too, so
+  no Python age wording remains.
   Amended 2026-11-04: no personal language and no Account page; the language is
   the instance's alone, the theme stays the person's own, written by the person
   menu (ruling C of [#185](https://github.com/overnightworks/presentator/issues/185),
@@ -86,12 +88,12 @@ and the footer is its `LegalLinks`; presentator draws only the round button.
 Ages ("2 minutes ago") are worded by the browser with `Intl.RelativeTimeFormat`
 in the language tag from the session, which is the instance's, so they change
 with the instance language and no catalog holds a unit word; the server sends
-the changed instant only. A running build's duration is worded the same way, in its largest whole
-unit with `Intl.NumberFormat`, and the deck page's build and attempt instants
-are on the wire; its wording at a unit's edge may differ from what Babel said.
-Babel stays for the catalog files and for Sources' ages. A theme or language
-change paints through one reactive session store that sets `<html data-theme
-lang>`, so it needs no reload.
+the changed instant only. A running build's duration is worded the same way, in
+its largest whole unit with `Intl.NumberFormat`, and the deck page's build and
+attempt instants are on the wire; its wording at a unit's edge may differ from
+what Babel said. Babel stays for the catalog files. A theme or language change
+paints through one reactive session store that sets `<html data-theme lang>`,
+so it needs no reload.
 
 The co-presenter overlay in the Slidev addon is meant to read the same token
 file, so that lobby and overlay share the same active theme — one token file on

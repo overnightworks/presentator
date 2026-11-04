@@ -51,16 +51,6 @@ def gated_admin(request: Request) -> User:
     return person
 
 
-def gated_session_id(request: Request) -> str:
-    """The session the gate admitted on a gated route, so a secret binds to it."""
-    person = signed_in_person(request)
-    session_id = session_id_from_request(request, web_auth_config(request))
-    if person is None or session_id is None:
-        message = "The gate admitted no session on a route that needs one."
-        raise RuntimeError(message)
-    return session_id
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SignedInConnection:
     """The hash-free person and authoritative session behind one connection."""

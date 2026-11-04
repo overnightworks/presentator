@@ -1562,7 +1562,7 @@
         "type": "object"
       },
       "SourceState": {
-        "description": "What the sources list says a source is, read off its newest run.\n\nNo run is never-fetched, a successful run is reachable, and the reason a\ncredential the instance could not resolve never becomes a word on the\nboard: it folds into error. A refused login and a host that answered with\nsomething else each keep their own word instead, because a wrong token, a\ndead host, and a host that answered but not with the repository are three\ndifferent things an operator needs told apart.",
+        "description": "What the sources list says a source is, read off its newest run.\n\nNo run is never-fetched and a successful run is reachable. A host that\nnever answers and a credential the instance could not resolve share one\nword, error; the run's reason tells them apart. A refused login and a host\nthat answered with something else keep their own words.",
         "enum": [
           "reachable",
           "error",

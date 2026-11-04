@@ -172,20 +172,18 @@ test.describe('as an admin', () => {
 	});
 
 	// Cell 3.
-	test('Sources is a document navigation to the Jinja page, and its General link comes back', async ({
+	test('Sources is a client navigation to the list, and its General link comes back', async ({
 		page
 	}) => {
 		const { words } = await sessionOf(page);
 		await page.goto(SETTINGS_ADDRESS);
+		await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
 
-		const [answer] = await Promise.all([
-			page.waitForResponse((received) => new URL(received.url()).pathname === '/settings/sources'),
-			page.getByRole('link', { name: words.settings_sources }).click()
-		]);
+		await page.getByRole('link', { name: words.settings_sources }).click();
 
-		expect(answer.request().isNavigationRequest()).toBe(true);
-		expect(answer.status()).toBe(200);
-		await expect(page.locator('#svelte-announcer')).toHaveCount(0);
+		await expect(page).toHaveURL(/\/settings\/sources$/);
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_sources);
+		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 		await page.getByRole('link', { name: words.settings_title }).click();
 		await expect(page).toHaveURL(/\/settings$/);
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_title);

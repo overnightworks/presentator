@@ -135,9 +135,12 @@ commit it found or a typed reason it did not, never the raw error a git
 command left behind. The table keeps the newest three runs per source. The
 Sources list shows the newest run's state: never fetched; reachable; refused
 when the host turns the login down; failed when the host answered with
-anything else or its mirror could not be read; unreachable only when the host
-never answers; or Error when a credential could not be resolved or sent, never
-the internal reason why.
+anything else or its mirror could not be read; or Error, the one word both for
+a host that never answers and for a credential that could not be resolved or
+sent. No state word "unreachable" exists: the reason line under a failing row
+(and the run table's failure sentence on the source's page, and the check
+banner's message on the Add page) says "Host unreachable" or "Secret not
+stored" under the same Error word, never the internal reason code.
 
 ## The source's page
 
@@ -152,7 +155,8 @@ back; webhook renewal shows its new value in the page that renewed it, held in
 that page's memory only: leaving it, reloading, back and forward lose it.
 
 On the Sources list, each row's *Fetch now* refreshes only that source and
-returns to the list; on the source's page it refreshes the page in place.
+reads the list again in place; on the source's page it refreshes the page in
+place.
 
 The list, a source's page and *Fetch now* are also served as JSON for an admin
 (a session or a person's bearer). A signed-in non-admin gets a 403 problem;
@@ -164,9 +168,8 @@ They carry the state, the `reason` (the newest run's failure code, null if it
 did not fail), the stored `fetched_at` instant of the newest run and, on
 the page, the absolute `hook_url`, the SSH `public_key`, the newest three runs
 (each with its own state, `at`, short `commit` or failure `reason`) and the
-viewer's own decks. They carry instants, which the source's page words in the browser (the Jinja
-list still words its ages on the server until it moves), and no
-secret: the webhook secret comes back only in the answer to create or renew.
+viewer's own decks. They carry instants, which the list and the source's page word in the browser,
+and no secret: the webhook secret comes back only in the answer to create or renew.
 
 Renewing access is also a JSON write for an admin, with the same refusals:
 `POST /api/sources/<name>/access` takes `{"secret": <token or null>}` and answers
@@ -183,8 +186,13 @@ answer that ever carries it. The old secret stops working at once. An unknown
 name is a 404 problem. Nothing keeps the value, so an answer that was lost is
 recovered by renewing again.
 
-Remove, at the bottom, asks once for a confirm naming the source's decks and
-runs, then deletes the source row, its runs, its decks, its mirror, and every
+Remove, at the bottom, opens a dialog naming the source's decks and runs
+(`GET /api/sources/<name>/removal`) and confirms with `DELETE` carrying those
+counts: counts that changed meanwhile answer 409 with the current ones, which
+the dialog shows and sends next, and a mirror or build directory that would not
+go answers 500 and keeps every row, which the dialog says. On success the
+source page gives way to the list, which shows one notice of what went and
+nothing else one-time, once. The removal deletes the source row, its runs, its decks, its mirror, and every
 built talk those decks left on disk, so the same URL can be added again
 straight after as a new source with a fresh secret. Once a talk was pointed
 at, only this takes it off disk.

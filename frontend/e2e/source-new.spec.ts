@@ -120,25 +120,30 @@ test.describe('as an admin', () => {
 	}
 
 	// Cells 1 and 14.
-	test('the list opens the form and the back link returns to the list, both as documents', async ({
+	test('the list opens the form and the back link returns to the list, both by client navigation', async ({
 		page
 	}) => {
 		const { words } = await sessionOf(page);
 		await page.goto(SOURCES_LIST);
+		await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
+		const documents: string[] = [];
+		page.on('request', (sent) => {
+			if (sent.resourceType() === 'document') {
+				documents.push(sent.url());
+			}
+		});
 
 		await page.getByRole('link', { name: words.sources_add }).first().click();
 		await expect(page).toHaveURL(NEW_ADDRESS);
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.sources_add);
 		const back = page.getByRole('link', { name: words.sources_back });
 		await expect(back).toHaveAttribute('href', SOURCES_LIST);
-		const listed = page.waitForResponse(
-			(received) => new URL(received.url()).pathname === SOURCES_LIST
-		);
 		await back.click();
 
-		expect((await listed).status()).toBe(200);
 		await expect(page).toHaveURL(SOURCES_LIST);
-		await expect(page.locator('script[src*="/_app/"]')).toHaveCount(0);
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_sources);
+		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
+		expect(documents).toEqual([]);
 	});
 
 	// Cell 2.
@@ -154,7 +159,7 @@ test.describe('as an admin', () => {
 
 		const banner = page.getByRole('status').filter({ has: page.locator('.state') });
 		await expect(banner).toHaveText(
-			words.source_check_reachable.replace('{commit}', found.commit ?? '')
+			`${words.source_state_reachable} ${words.source_check_reachable.replace('{commit}', found.commit ?? '')}`
 		);
 		await expect(banner).toHaveAttribute('data-banner', 'ok');
 		await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
@@ -189,6 +194,9 @@ test.describe('as an admin', () => {
 
 			const banner = page.locator('.banner[data-banner="fail"]');
 			await expect(banner).toContainText(words[sentence]);
+			await expect(banner.locator('.state-word')).toHaveText(
+				words[`source_state_${state}` as keyof Words]
+			);
 			if (detail === null) {
 				await expect(banner.locator('samp')).toHaveCount(0);
 			} else {
@@ -509,7 +517,7 @@ test.describe('as an admin', () => {
 			await page.reload();
 			expect(await restoredFromTheCache(page)).toBe(false);
 			const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
-			await page.getByRole('link', { name: words.sources_back }).click();
+			await page.goto(SOURCES_LIST);
 			await expect(page).toHaveURL(SOURCES_LIST);
 			await page.goBack();
 
