@@ -1,4 +1,4 @@
-"""Which module names the client: import-linter squashes an external package, so the AST decides."""
+"""Which module names the client; import-linter squashes an external package."""
 
 import ast
 from pathlib import Path
@@ -36,7 +36,7 @@ def names(module: str, library: str) -> bool:
 def test_only_the_agent_package_names_the_client_and_its_settings_only_the_config(
     path: Path,
 ) -> None:
-    """C14: the connector is the one place; the settings name the client's config alone."""
+    """C14: the connector is the one place; settings name the config alone."""
     client = {module for module in imported_modules(path) if names(module, CLIENT)}
 
     assert not any(

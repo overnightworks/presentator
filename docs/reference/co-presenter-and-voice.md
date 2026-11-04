@@ -7,16 +7,18 @@ the authority it shares is [trust boundaries](../explanation/trust-boundaries.md
 
 ## Processes
 
-The agent service answers; the speech service speaks and hears.
+The operator's LiteLLM gateway answers; the speech service speaks and hears.
 
-The agent service is the operator's own, reached at `PRESENTATOR_AGENT_SERVICE`
-over the `hal_agent_presentator` network. Presentator reads the asked deck's words at its
-built commit, sends them with the question as one message, with no tools, and
-streams the model's text back. Both the person's fresh access token and
-Presentator's own workload token go with every run; the workload grant asks for
-the scope in `PRESENTATOR_AGENT_SERVICE_SCOPE`, so that token names the agent
-service and no other as its audience. Presentator splits the text
-into sentences and speaks them.
+The gateway is reached at `PRESENTATOR_AGENT__GATEWAY__ORIGIN` over the
+`hal_agent_presentator` network, with this app's own key from
+`PRESENTATOR_AGENT__GATEWAY__KEY_FILE`. Presentator reads the asked deck's words
+at its built commit and sends them with the question as one message, with no
+tools, to the model the agent file names, under a bound of 60 seconds for the
+whole turn. The answer arrives as one whole text, not as deltas, so the first
+sentence is spoken once the text exists; Presentator splits it into sentences
+and speaks them. The person reaches the gateway as a fingerprint of their
+issuer and account id (`fp-` and a SHA-256), never a name, a mail or a token,
+and no token of theirs leaves Presentator.
 
 A host process can sit beside a checkout run; it is not part of a deployed
 instance, which reports the voice as not yet available. The speech service
@@ -34,9 +36,9 @@ calls relative `/copresenter/who`, `/copresenter/ask` and `/copresenter/hear`
 routes. The talk host serves them under its own session
 cookie and its own Origin; the lobby answers 404 on them to a call and gives a page load its app,
 whose router shows not-found. Any signed-in person
-may use them, through the existing active session; the agent service's own
-subscription and API groups decide who may ask, and deck ownership limits which
-deck. Without a session `/who` and `/ask` get 401 and `/hear` a refused
+may use them, through the existing active session; membership of the group in
+`PRESENTATOR_AGENT__API_GROUP`, read from the issuer for every question, decides
+who is answered, and deck ownership limits which deck. Without a session `/who` and `/ask` get 401 and `/hear` a refused
 handshake (HTTP 403, before accept); an accepted hearing ends with a 1008 close
 when the session goes. Presentator checks the session and, for the WebSocket, the exact
 Origin before opening the socket.
@@ -56,7 +58,7 @@ Before the answer starts, `/ask` fetches the session's fresh access token. A
 session whose refresh token is missing or refused gets 401
 `{"detail": "Sign in again"}`; an ended session gets 401
 `{"detail": "Not authenticated"}`; an unreachable issuer gets 503
-`{"detail": "Co-presenter unavailable"}`. The agent service is not called in any
+`{"detail": "Co-presenter unavailable"}`. The gateway is not called in any
 of these cases, and the question is counted. Once the answer streams, the
 events are `text`, `sentence`, `audio` and `done`, each carrying
 `"ai_generated": true` (AI Act Art. 50(2)); the mark has no switch. Every failure ends in an

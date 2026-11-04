@@ -127,7 +127,7 @@ class Host:
                     "Source": str(self.home / ".secrets" / name),
                     "Destination": f"/run/secrets/{name}",
                 }
-                for name in ("first", "second")
+                for name in ("first", "second", "third")
             ],
             ".HostConfig.GroupAdd": None,
             ".HostConfig.PortBindings": {},

@@ -1,39 +1,40 @@
-"""Gateway transports that hold a request open or refuse the connection, parked on events."""
+"""Gateway transports that hold a request open or refuse the connection."""
 
 import asyncio
-from dataclasses import dataclass, field
 
 import httpx2
 
 
-@dataclass
-class HeldTransport(httpx2.AsyncBaseTransport):
-    """Takes a request and answers it never, until the test releases it or the caller leaves."""
+class HeldTransport(httpx2.MockTransport):
+    """Takes a request and never answers it, until the caller leaves."""
 
-    arrived: asyncio.Event = field(default_factory=asyncio.Event)
-    released: asyncio.Event = field(default_factory=asyncio.Event)
-    requests: list[httpx2.Request] = field(default_factory=list[httpx2.Request])
-    cancelled: bool = False
+    def __init__(self) -> None:
+        """Start with no request held."""
+        super().__init__(self._hold)
+        self.arrived = asyncio.Event()
+        self.requests: list[httpx2.Request] = []
+        self.cancelled = False
 
-    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
-        await request.aread()
+    async def _hold(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
         self.arrived.set()
         try:
-            await self.released.wait()
+            await asyncio.get_running_loop().create_future()
         except asyncio.CancelledError:
             self.cancelled = True
             raise
         return httpx2.Response(500)
 
 
-class RefusingTransport(httpx2.AsyncBaseTransport):
+class RefusingTransport(httpx2.MockTransport):
     """Refuses every connection."""
 
     def __init__(self) -> None:
+        """Start with no request seen."""
+        super().__init__(self._refuse)
         self.requests: list[httpx2.Request] = []
 
-    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
+    async def _refuse(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
         message = "connection refused"
         raise httpx2.ConnectError(message, request=request)

@@ -17,10 +17,8 @@ from tests.presentator.agent.support.driving import on_an_event_loop
 from tests.support.sign_in_support import Scene, a_scene
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterator
+    from collections.abc import Awaitable, Callable
     from pathlib import Path
-
-    from pydantic import SecretStr
 
     from presentator.adapters.identity import StoredSession
 
@@ -36,6 +34,7 @@ class Arranged:
     """A signed-in session over a fake issuer, and the groups reader on it."""
 
     def __init__(self, scene: Scene) -> None:
+        """Sign a person in; their one session row is the one asked about."""
         scene.issuer.issue_refresh_token(REFRESH)
         scene.sign_in(groups=GROUPS)
         (self.session_id,) = scene.stored_sessions()
@@ -44,8 +43,8 @@ class Arranged:
 
 
 @pytest.fixture
-def arranged(tmp_path: Path) -> Iterator[Arranged]:
-    yield Arranged(a_scene(tmp_path))
+def arranged(tmp_path: Path) -> Arranged:
+    return Arranged(a_scene(tmp_path))
 
 
 def test_a_signed_in_session_gets_the_groups_the_issuer_holds_now(
@@ -140,6 +139,7 @@ class RecordingExecutor(ThreadPoolExecutor):
     """A thread pool that keeps each future it hands out."""
 
     def __init__(self) -> None:
+        """Start with nothing recorded."""
         super().__init__()
         self.recorded: list[Future[Any]] = []
 
@@ -209,7 +209,7 @@ def test_a_cancelled_read_still_stores_the_rotation_and_leaves_no_chain(
     arranged: Arranged,
     cancel: Callable[[Arranged, RecordingExecutor], Awaitable[asyncio.CancelledError]],
 ) -> None:
-    """C11: cancelling during the groups read leaves no chain, and the rotation stands."""
+    """C11: cancelling the groups read leaves no chain; the rotation stands."""
     arranged.scene.issuer.rotate_refresh_token_to(ROTATED)
 
     @on_an_event_loop

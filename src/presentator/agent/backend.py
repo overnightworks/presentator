@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Final, NoReturn, assert_never
 from agent_runtime_client.agents import load_agent
 from agent_runtime_client.backend import (
     AgentBackend,
+    TurnEvent,
     TurnPerson,
     TurnStopKind,
     TurnStopped,
@@ -25,7 +26,12 @@ from agent_runtime_client.turn import (
     TurnMessage,
     TurnRole,
 )
-from agent_runtime_client.turn_events import AssistantTextEvent, FinalEvent
+from agent_runtime_client.turn_events import (
+    AssistantTextEvent,
+    FinalEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 from webauth.oidc_login import (
     AccessTokenRefusal,
     AccessTokenRefusalReason,
@@ -96,7 +102,7 @@ class GatewayAnswerer:
         *,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
-        """Run turns on this backend, for people the relying party's issuer vouches for."""
+        """Run turns on this backend, for this relying party's people."""
         self._backend = backend
         self._relying_party = relying_party
         self._monotonic = monotonic
@@ -140,7 +146,7 @@ class GatewayAnswerer:
 
 
 async def _texts(
-    events: AsyncIterator[object], summary: _RunSummary
+    events: AsyncIterator[TurnEvent], summary: _RunSummary
 ) -> AsyncGenerator[str]:
     try:
         async for event in events:
@@ -150,6 +156,10 @@ async def _texts(
                     yield text
                 case FinalEvent():
                     return
+                case ToolCallEvent() | ToolResultEvent():
+                    # The agent file offers no tool, so none was asked for.
+                    _log_closed(failure="tool_event")
+                    _unavailable()
     except TurnStopped as stopped:
         _refuse(stopped)
 
@@ -170,7 +180,7 @@ def _refuse(stopped: TurnStopped) -> NoReturn:
 
 
 def _log_closed(**values: str | None) -> None:
-    # Only closed values: a body, a message or an exception's text may carry what was asked.
+    # Only closed values: a body, a message or an exception may carry the question.
     shown = " ".join(
         f"{name}={value}" for name, value in values.items() if value is not None
     )

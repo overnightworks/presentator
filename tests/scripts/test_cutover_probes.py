@@ -632,10 +632,10 @@ def test_a_web_container_answering_a_malformed_scalar_fails_its_probe(
 def test_a_secret_mount_that_breaks_the_hardened_shape_fails(
     scene: Scene, fault: dict[str, object]
 ) -> None:
-    """S9h2 (#553) sentence 5: both mounts are read-only binds below ~/.secrets."""
+    """S9h2 (#553) sentence 5: every mount is a read-only bind below ~/.secrets."""
     secrets = scene.host.inspected[".Mounts"]
     assert isinstance(secrets, list)
-    scene.host.inspected |= {".Mounts": [{**secrets[0], **fault}, secrets[1]]}
+    scene.host.inspected |= {".Mounts": [{**secrets[0], **fault}, *secrets[1:]]}
 
     run = scene.drive()
 

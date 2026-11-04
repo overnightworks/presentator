@@ -17,6 +17,7 @@ from agent_runtime_client.turn import (
     RejectionCode,
     person_fingerprint,
 )
+from agent_runtime_client.turn_events import AssistantTextEvent, ToolCallEvent
 
 from presentator.agent.backend import (
     COPRESENTER_AGENT_FILE,
@@ -100,10 +101,8 @@ async def test_the_request_names_the_agent_files_model_the_words_and_the_key() -
 
 
 @on_an_event_loop
-async def test_the_person_goes_out_as_the_wire_vector_and_the_issuer_exactly_as_held() -> (
-    None
-):
-    """C3: the fixed vector of docs/wire.md, and another fingerprint for a trailing slash."""
+async def test_the_person_goes_out_as_the_wire_vector_with_the_issuer_as_held() -> None:
+    """C3: the vector of docs/wire.md, and another one for a trailing slash."""
     plain = FakeGateway(completion("Ja."))
     slashed = FakeGateway(completion("Ja."))
 
@@ -115,7 +114,7 @@ async def test_the_person_goes_out_as_the_wire_vector_and_the_issuer_exactly_as_
 
 
 @on_an_event_loop
-async def test_a_person_outside_the_api_group_is_not_enabled_and_the_gateway_is_not_called() -> (
+async def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made() -> (
     None
 ):
     """C4: the client admits only a member of the API group."""
@@ -164,9 +163,7 @@ async def test_a_refused_connection_ends_as_the_plain_unavailable_error() -> Non
 
 
 @on_an_event_loop
-async def test_a_request_over_the_clients_bound_ends_as_the_plain_unavailable_error() -> (
-    None
-):
+async def test_a_request_over_the_clients_bound_ends_unavailable() -> None:
     """C7: the client sends nothing it judges too large."""
     gateway = FakeGateway(completion("Nie."))
 
@@ -180,9 +177,7 @@ async def test_a_request_over_the_clients_bound_ends_as_the_plain_unavailable_er
 
 
 @on_an_event_loop
-async def test_a_question_that_is_not_valid_unicode_ends_as_the_plain_unavailable_error() -> (
-    None
-):
+async def test_a_question_that_is_not_valid_unicode_ends_unavailable() -> None:
     """C7: the request is refused before it is built."""
     gateway = FakeGateway(completion("Nie."))
 
@@ -195,18 +190,24 @@ async def test_a_question_that_is_not_valid_unicode_ends_as_the_plain_unavailabl
     assert gateway.requests == []
 
 
-class StoppingBackend:
-    """A backend whose turn ends short in exactly one way."""
+class ScriptedBackend:
+    """A backend that streams these events and then ends the turn with its stop."""
 
-    def __init__(self, stop: TurnStopped) -> None:
+    def __init__(
+        self, events: tuple[TurnEvent, ...] = (), stop: TurnStopped | None = None
+    ) -> None:
+        """Stream `events`, then raise `stop` unless there is none."""
+        self._events = events
         self._stop = stop
 
     async def run(
         self, request: TurnRequest, person: TurnPerson
     ) -> AsyncGenerator[TurnEvent]:
         del request, person
-        raise self._stop
-        yield
+        for event in self._events:
+            yield event
+        if self._stop is not None:
+            raise self._stop
 
 
 ALL_STOPS = [
@@ -223,7 +224,7 @@ async def test_only_a_not_enabled_refusal_is_not_enabled(
 ) -> None:
     """C7, C8: every kind and code of a stop has a mapping."""
     answerer = GatewayAnswerer(
-        StoppingBackend(TurnStopped(kind, code, retry_after_s=7, detail="closed")),
+        ScriptedBackend(stop=TurnStopped(kind, code, retry_after_s=7, detail="closed")),
         a_relying_party(FrozenClock(instant=NOW)),
     )
     expected = (
@@ -269,3 +270,26 @@ async def test_a_run_logs_its_event_types_and_times_and_no_text(
     assert "FinalEvent:1" in line
     assert "Geheime" not in line
     assert THE_QUESTION not in line
+
+
+@on_an_event_loop
+async def test_a_tool_event_ends_as_the_plain_unavailable_error() -> None:
+    """C7: the agent offers no tool, so a call for one is a stop, not an answer."""
+    answerer = GatewayAnswerer(
+        ScriptedBackend((ToolCallEvent(tool_use_id="call-1", name="any"),)),
+        a_relying_party(FrozenClock(instant=NOW)),
+    )
+
+    with pytest.raises(CoPresenterUnavailableError):
+        await spoken(answerer)
+
+
+@on_an_event_loop
+async def test_a_stream_that_ends_without_a_final_event_ends_the_answer() -> None:
+    """C8: what was streamed is the answer; the stream's end ends it."""
+    answerer = GatewayAnswerer(
+        ScriptedBackend((AssistantTextEvent(text="Hallo."),)),
+        a_relying_party(FrozenClock(instant=NOW)),
+    )
+
+    assert await spoken(answerer) == "Hallo."

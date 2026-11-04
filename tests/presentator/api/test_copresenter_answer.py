@@ -85,7 +85,6 @@ ADMIN_GROUPS: Final = ["/apps/presentator", "/apps/presentator/admin"]
 API_MEMBER_GROUPS: Final = [*ADMIN_GROUPS, AN_API_GROUP]
 THE_ASKED_DECK: Final = {**SPOKEN_QUESTION, "deck": A_DECK}
 FIRST_AUDIO: Final = "presentator.application.copresenter"
-BACKEND_LOG: Final = "presentator.agent.backend"
 TWO_SENTENCES: Final = "Erster Satz. Zweiter Satz."
 
 
@@ -108,6 +107,7 @@ class RecordingLogs(logging.Handler):
     """Every record any logger raises while an ask runs."""
 
     def __init__(self) -> None:
+        """Start with nothing recorded."""
         super().__init__(logging.NOTSET)
         self.records: list[logging.LogRecord] = []
 
@@ -319,7 +319,7 @@ def the_asked_decks_words_at_its_built_commit(
 def test_a_signed_in_admins_ask_reaches_the_gateway_with_only_that_decks_words(
     tmp_path: Path, remote: GitRemote, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The deck's words at its built commit, the key as bearer, and the events of one text."""
+    """The deck's words at its built commit, the key as bearer, one text's events."""
     run = the_asked_decks_words_at_its_built_commit(tmp_path, remote, caplog)
 
     (request,) = run.gateway.requests
@@ -431,14 +431,14 @@ def test_a_doubled_session_cookie_is_refused_before_any_grant(tmp_path: Path) ->
 def test_one_question_makes_one_refresh_grant_and_no_client_credentials_grant(
     tmp_path: Path,
 ) -> None:
-    """C4: the person's groups come from one refresh grant, and the app has no workload grant."""
+    """C4: the groups come from one refresh grant; no workload grant exists."""
     run = drive(tmp_path)
 
     assert run.response.status_code == HTTPStatus.OK
     assert run.grants_since_sign_in == ["refresh_token"]
 
 
-def test_a_person_outside_the_api_group_is_answered_not_enabled_and_the_gateway_is_not_called(
+def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made(
     tmp_path: Path,
 ) -> None:
     """C4: the overlay reads the literal `not-enabled`, so it is spelled out."""
@@ -471,7 +471,7 @@ def test_a_group_removed_at_the_issuer_between_two_questions_refuses_the_second(
 def test_a_talk_session_that_keeps_no_id_token_asks_and_is_answered(
     tmp_path: Path,
 ) -> None:
-    """C6: the talk host stores no ID token, and the groups come from the refresh grant."""
+    """C6: the talk host stores no ID token, and the answer comes anyway."""
     run = drive(tmp_path)
 
     with closing(sqlite3.connect(run.hosts.database)) as connection:
@@ -546,7 +546,7 @@ class ChangeOnceTheAnswerHangs:
 def test_an_answer_ends_within_one_recheck_when_the_session_goes(
     tmp_path: Path,
 ) -> None:
-    """C9: the buffered body has sent no text before the end, and the call is cancelled."""
+    """C9: no text was sent before the end, and the held call is cancelled."""
     recheck = ChangeOnceTheAnswerHangs(delete_the_sessions)
     scenario = Scenario(gateway=HeldTransport, delay=recheck)
 
@@ -658,7 +658,7 @@ def accounts_of(hosts: Hosts) -> list[str]:
 def test_no_secret_or_word_of_the_person_reaches_a_log_record_or_the_browser(
     tmp_path: Path, scenario: Scenario
 ) -> None:
-    """C10: every logger at DEBUG during the ask, and the whole of what the browser got."""
+    """C10: every logger at DEBUG during the ask, and all the browser got."""
     run = drive(tmp_path, scenario)
 
     logged = everything_shown(run.logged)

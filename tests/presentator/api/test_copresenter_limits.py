@@ -253,7 +253,7 @@ def _a_hanging_app(
     return app
 
 
-def test_a_browser_that_leaves_mid_answer_closes_the_backend_and_starts_no_later_call() -> (
+def test_a_browser_that_leaves_mid_answer_closes_the_backend_and_calls_no_more() -> (
     None
 ):
     """C9: the held gateway call is cancelled, none follows, and the ticket is freed."""

@@ -30,18 +30,20 @@ repositories, their metadata (a `gitdir` file, `objects/info/alternates`, a
 symlink) and everyone who can write there. It is the door for the operator's
 own folder, not for a repository somebody else controls.
 
-## The agent service holds the operator's Claude login
+## The gateway holds the operator's model account
 
-The co-presenter's answer comes from the operator's agent service, which holds
-the Claude subscription and its card. The person's fresh access token and
-Presentator's own workload token cross to it over the `hal_agent_presentator`
-network, an internal network with no host address and no published port, whose
-members the edge decides; the plain `http` hop is safe only because of that. The
-question and the asked deck's words cross with them, and the model gets no
-tools. The service checks the person's token on every ask; whom it admits is
-edge's decision (`edge/docs/agent-service.md`). Speech stays a private Unix
-socket under the shared UID: readiness, PCM, transcript and spoken sentences
-cross it, and browser identity and credentials do not.
+The co-presenter's answer comes from the operator's LiteLLM gateway, which holds
+the provider account and its budgets. Presentator holds its own gateway key, a
+file mounted into the instance alone, and sends it as the bearer over the
+`hal_agent_presentator` network, an internal network with no host address and no
+published port, whose members the edge decides; the plain `http` hop is safe
+only because of that. The question and the asked deck's words cross with it, and
+the model gets no tools. The person crosses as a fingerprint of their issuer and
+account id; no token of theirs and no name does. Whom the gateway admits is
+hal's; Presentator answers only members of its API group, read from the issuer
+for every question. Speech stays a private Unix socket under the shared UID:
+readiness, PCM, transcript and spoken sentences cross it, and browser identity
+and credentials do not.
 
 ## Keycloak reaches the logout route from inside
 

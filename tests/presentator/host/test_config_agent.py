@@ -21,7 +21,7 @@ _FOUR_SETTINGS = tuple(_FIELD_OF)
 def test_the_four_agent_values_start_the_instance_and_read_no_key(
     environment: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """C1: the key file is read per question, so an absent one does not refuse the start."""
+    """C1: the key file is read per question, so an absent one starts."""
     environment.setenv(
         "PRESENTATOR_AGENT__GATEWAY__KEY_FILE", str(tmp_path / "not-written-yet")
     )
@@ -99,8 +99,9 @@ def test_a_dot_env_with_the_four_keys_starts_the_instance(
     assert load_settings().agent.api_group == AN_API_GROUP
 
 
+@pytest.mark.usefixtures("environment")
 def test_a_leftover_agent_service_key_in_a_dot_env_refuses_the_start(
-    environment: pytest.MonkeyPatch, tmp_path: Path
+    tmp_path: Path,
 ) -> None:
     """C1b: the retired name is an unknown key like any other."""
     (tmp_path / ".env").write_text(

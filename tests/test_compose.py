@@ -187,8 +187,12 @@ def test_the_instance_holds_no_authority_over_this_machines_docker(
             "oidc_client_secret",
             "PRESENTATOR_OIDC_CLIENT_SECRET_FILE",
         ),
+        (
+            "litellm_key",
+            "PRESENTATOR_AGENT__GATEWAY__KEY_FILE",
+        ),
     ],
-    ids=["master key", "client secret"],
+    ids=["master key", "client secret", "gateway key"],
 )
 def test_each_secret_is_a_file_secret_that_only_the_instance_mounts(
     name: str, setting: str
