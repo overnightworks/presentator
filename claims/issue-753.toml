@@ -1,8 +1,0 @@
-claim_id = "d275871978514be581dba3009bb69ce6"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "52b0d35e16dac66737daf30f674c6099bd7fb357"
-branch = "claude/issue-753-settings-general-is-a-sveltekit-page-and"
-scope = ["docs/TESTING.md", "docs/decisions/0021-the-lobby-is-a-sveltekit-app.md", "docs/reference/lobby-settings-and-appearance.md", "frontend/e2e/home.spec.ts", "frontend/e2e/scenario.ts", "frontend/e2e/settings.instance.spec.ts", "frontend/playwright.config.ts", "frontend/src/app.css", "frontend/src/lib/LobbyHeader.svelte", "frontend/src/lib/api/settings.ts", "frontend/src/routes/(lobby)/settings", "frontend/src/routes/+error.svelte", "quality/baseline.toml", "src/presentator/api/preferences.py", "src/presentator/api/templates/settings.html", "tests/presentator/api/test_auth_body_size.py", "tests/presentator/api/test_preference_api.py", "tests/presentator/api/test_preferences.py", "tests/presentator/api/test_sources.py", "tests/support/vulture_allowlist.py"]
-opened_commit = "c997c80d5a7a90f7702ff22f37a6de712d84dbdd"
-whole_reason = "A Svelte page cannot stand while the Jinja route answers first, the for-admins branch has no real entry before the page, and the isolation has no caller before the spec: split, each part is dead code reached only by tests."
