@@ -11,21 +11,14 @@ import pytest
 _CHECK_SCRIPT = (
     Path(__file__).resolve().parents[2] / "scripts" / "check_catalog_purity.py"
 )
-_TEMPLATES_DIRECTORY = Path("src") / "presentator" / "api" / "templates"
 _SVELTE_DIRECTORY = Path("frontend") / "src"
 _SVELTE_PAGE = _SVELTE_DIRECTORY / "routes" / "+page.svelte"
-_CLEAN_TEMPLATE = "<p>{{ wordmark }}</p>\n"
-_CLEAN_SVELTE_PAGE = "<h1>{words.wordmark}</h1>\n"
 
 
 def _write(repository: Path, relative: Path, body: str) -> None:
     path = repository / relative
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body, encoding="utf-8")
-
-
-def _write_template(repository: Path, name: str, body: str) -> None:
-    _write(repository, _TEMPLATES_DIRECTORY / name, body)
 
 
 def _run_check(cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -36,192 +29,6 @@ def _run_check(cwd: Path) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
     )
-
-
-@pytest.mark.parametrize(
-    ("template_name", "template_body", "expected_returncode", "expected_stdout"),
-    [
-        pytest.param(
-            "probe.html",
-            "<p>{{ wordmark }}</p>\n"
-            '<input title="{{ hint }}" placeholder="{{ hint }}">\n'
-            '<button type="submit" value="{{ submit }}">{{ submit }}</button>\n',
-            0,
-            "",
-            id="catalog-lookups-only-passes",
-        ),
-        pytest.param(
-            "probe.html",
-            '<input class="hero" href="/decks" placeholder="42">\n',
-            0,
-            "",
-            id="markup-numbers-and-unflagged-attributes-pass",
-        ),
-        pytest.param(
-            "probe.html",
-            '<input type="text" value="Not flagged">\n',
-            0,
-            "",
-            id="value-on-a-plain-text-input-passes",
-        ),
-        pytest.param(
-            "probe.html",
-            "<p>Sign in below</p>\n",
-            1,
-            "probe.html: literal text outside the catalog: 'Sign in below'\n",
-            id="literal-text-node-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<input title="Enter your name">\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Enter your name'\n",
-            id="literal-flagged-attribute-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<button type="submit" value="Go now">{{ submit }}</button>\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Go now'\n",
-            id="literal-value-on-a-submit-button-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<button value="Go now">{{ submit }}</button>\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Go now'\n",
-            id="literal-value-on-a-button-with-omitted-type-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<input type="button" value="Go now">\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Go now'\n",
-            id="literal-value-on-an-input-button-control-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<input label="Enter your name">\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Enter your name'\n",
-            id="literal-label-attribute-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<div aria-description="Read this first">{{ body }}</div>\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Read this first'\n",
-            id="literal-aria-description-attribute-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<div aria-roledescription="Slide carousel">{{ body }}</div>\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Slide carousel'\n",
-            id="literal-aria-roledescription-attribute-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<input aria-valuetext="Half full">\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Half full'\n",
-            id="literal-aria-valuetext-attribute-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<meta name="description" content="A tool for a talk">\n',
-            1,
-            "probe.html: literal text outside the catalog: 'A tool for a talk'\n",
-            id="literal-meta-description-content-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<input title="Name{% if suffix %} ({{ suffix }}){% endif %}">\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Name ()'\n",
-            id="conditional-inside-an-attribute-value-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<p>{{ "Sign in below" }}</p>\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Sign in below'\n",
-            id="literal-inside-a-jinja-expression-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<p>{{ labels["home"] }}</p>\n',
-            0,
-            "",
-            id="literal-used-as-a-subscript-key-passes",
-        ),
-        pytest.param(
-            "probe.html",
-            '<p>{{ "Yes" if flag else "No" }}</p>\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Yes No'\n",
-            id="literal-conditional-expression-branch-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<p>{{ label or "Fallback" }}</p>\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Fallback'\n",
-            id="literal-or-chain-fallback-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<p>{{ "Welcome " ~ name }}</p>\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Welcome'\n",
-            id="literal-concatenation-operand-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            '<p>{{ value | default("Sign in") }}</p>\n',
-            1,
-            "probe.html: literal text outside the catalog: 'Sign in'\n",
-            id="literal-default-filter-argument-fails",
-        ),
-        pytest.param(
-            "probe.html",
-            "{% if debug %}<script>{% endif %}<p>Sign in below</p>\n",
-            1,
-            "probe.html: <script> is opened but never closed; everything "
-            "after it is invisible to this check\n",
-            id="unclosed-raw-text-tag-fails-loud",
-        ),
-        pytest.param(
-            "auth/probe.html",
-            "<p>Sign in below</p>\n",
-            1,
-            "auth/probe.html: literal text outside the catalog: 'Sign in below'\n",
-            id="template-in-a-subdirectory-is-scanned",
-        ),
-        pytest.param(
-            "probe.html",
-            '<script>const label = "Sign in";</script>\n'
-            "<style>.hero { color: red; }</style>\n",
-            0,
-            "",
-            id="script-and-style-bodies-are-not-text",
-        ),
-    ],
-)
-def test_catalog_purity_check_reports_whether_every_template_stays_literal_free(
-    tmp_path: Path,
-    template_name: str,
-    template_body: str,
-    expected_returncode: int,
-    expected_stdout: str,
-) -> None:
-    _write_template(tmp_path, template_name, template_body)
-    _write(tmp_path, _SVELTE_PAGE, _CLEAN_SVELTE_PAGE)
-
-    completed = _run_check(tmp_path)
-
-    assert completed.returncode == expected_returncode
-    assert completed.stdout == expected_stdout
 
 
 @pytest.mark.parametrize(
@@ -276,6 +83,68 @@ def test_catalog_purity_check_reports_whether_every_template_stays_literal_free(
             id="literal-page-title-is-flagged",
         ),
         pytest.param(
+            '<input type="submit" value="Send" />\n',
+            f"{_SVELTE_PAGE.as_posix()}: literal text outside the catalog: 'Send'\n",
+            id="a-submit-input-value-is-flagged",
+        ),
+        pytest.param(
+            '<input type="button" value="Open" />\n',
+            f"{_SVELTE_PAGE.as_posix()}: literal text outside the catalog: 'Open'\n",
+            id="a-button-input-value-is-flagged",
+        ),
+        pytest.param(
+            '<input type="reset" value="Clear" />\n',
+            f"{_SVELTE_PAGE.as_posix()}: literal text outside the catalog: 'Clear'\n",
+            id="a-reset-input-value-is-flagged",
+        ),
+        pytest.param(
+            '<button value="Save">{words.save}</button>\n',
+            f"{_SVELTE_PAGE.as_posix()}: literal text outside the catalog: 'Save'\n",
+            id="a-button-without-a-type-is-a-submit-and-its-value-is-flagged",
+        ),
+        pytest.param(
+            '<input type="text" value="draft" />\n',
+            "",
+            id="a-plain-input-value-is-data-and-passes",
+        ),
+        pytest.param(
+            '<button type="button" value="draft">{words.save}</button>\n',
+            "",
+            id="a-typed-button-value-passes",
+        ),
+        *[
+            pytest.param(
+                f'<div {attribute}="Some words"></div>\n',
+                f"{_SVELTE_PAGE.as_posix()}: literal text outside the catalog:"
+                " 'Some words'\n",
+                id=f"{attribute}-is-flagged",
+            )
+            for attribute in (
+                "label",
+                "aria-description",
+                "aria-roledescription",
+                "aria-valuetext",
+            )
+        ],
+        pytest.param(
+            '<svelte:head><meta name="description" content="About us" />'
+            "</svelte:head>\n",
+            f"{_SVELTE_PAGE.as_posix()}: literal text outside the catalog:"
+            " 'About us'\n",
+            id="a-meta-description-is-flagged",
+        ),
+        pytest.param(
+            '<div class="hero" id="top" href="/x"><b>42</b> <i>  </i></div>\n',
+            "",
+            id="markup-digits-and-unflagged-attributes-pass",
+        ),
+        pytest.param(
+            "<div><script>\n",
+            f"{_SVELTE_PAGE.as_posix()}: <script> is opened but never closed;"
+            " everything after it is invisible to this check\n",
+            id="an-unclosed-script-fails-loud",
+        ),
+        pytest.param(
             "<p>{words.title</p>\n",
             f"{_SVELTE_PAGE.as_posix()}: an expression is opened but never closed\n",
             id="an-unclosed-expression-is-reported",
@@ -285,7 +154,6 @@ def test_catalog_purity_check_reports_whether_every_template_stays_literal_free(
 def test_catalog_purity_check_reports_whether_every_svelte_page_stays_literal_free(
     tmp_path: Path, page_body: str, expected_stdout: str
 ) -> None:
-    _write_template(tmp_path, "probe.html", _CLEAN_TEMPLATE)
     _write(tmp_path, _SVELTE_PAGE, page_body)
 
     completed = _run_check(tmp_path)
@@ -294,83 +162,29 @@ def test_catalog_purity_check_reports_whether_every_svelte_page_stays_literal_fr
     assert completed.stdout == expected_stdout
 
 
-def test_catalog_purity_check_reports_a_template_syntax_error_without_crashing(
+def test_catalog_purity_check_reports_a_missing_directory_without_crashing(
     tmp_path: Path,
 ) -> None:
-    _write_template(tmp_path, "broken.html", "{% if x %}\n")
-    _write(tmp_path, _SVELTE_PAGE, _CLEAN_SVELTE_PAGE)
-
     completed = _run_check(tmp_path)
 
     assert completed.returncode == 1
-    assert completed.stdout == (
-        "broken.html: cannot parse: Unexpected end of template. Jinja was "
-        "looking for the following tags: 'elif' or 'else' or 'endif'. The "
-        "innermost block that needs to be closed is 'if'.\n"
-    )
-
-
-@pytest.mark.parametrize(
-    ("other_kind", "expected_stdout"),
-    [
-        pytest.param(
-            (_SVELTE_PAGE, _CLEAN_SVELTE_PAGE),
-            "src/presentator/api/templates: no templates directory\n",
-            id="templates",
-        ),
-        pytest.param(
-            (_TEMPLATES_DIRECTORY / "probe.html", _CLEAN_TEMPLATE),
-            "frontend/src: no Svelte source directory\n",
-            id="svelte-pages",
-        ),
-    ],
-)
-def test_catalog_purity_check_reports_a_missing_directory_without_crashing(
-    tmp_path: Path, other_kind: tuple[Path, str], expected_stdout: str
-) -> None:
-    _write(tmp_path, *other_kind)
-
-    completed = _run_check(tmp_path)
-
-    assert completed.returncode == 1
-    assert completed.stdout == expected_stdout
+    assert completed.stdout == "frontend/src: no Svelte source directory\n"
     assert completed.stderr == ""
 
 
-@pytest.mark.parametrize(
-    ("empty_directory", "other_kind", "expected_stdout"),
-    [
-        pytest.param(
-            _TEMPLATES_DIRECTORY,
-            (_SVELTE_PAGE, _CLEAN_SVELTE_PAGE),
-            "src/presentator/api/templates: no template found\n",
-            id="templates",
-        ),
-        pytest.param(
-            _SVELTE_DIRECTORY,
-            (_TEMPLATES_DIRECTORY / "probe.html", _CLEAN_TEMPLATE),
-            "frontend/src: no Svelte page found\n",
-            id="svelte-pages",
-        ),
-    ],
-)
 def test_catalog_purity_check_reports_an_empty_directory_without_crashing(
     tmp_path: Path,
-    empty_directory: Path,
-    other_kind: tuple[Path, str],
-    expected_stdout: str,
 ) -> None:
-    (tmp_path / empty_directory).mkdir(parents=True)
-    _write(tmp_path, *other_kind)
+    (tmp_path / _SVELTE_DIRECTORY).mkdir(parents=True)
 
     completed = _run_check(tmp_path)
 
     assert completed.returncode == 1
-    assert completed.stdout == expected_stdout
+    assert completed.stdout == "frontend/src: no Svelte page found\n"
     assert completed.stderr == ""
 
 
-def test_catalog_purity_check_passes_on_the_real_templates_and_pages() -> None:
+def test_catalog_purity_check_passes_on_the_real_pages() -> None:
     repository_root = Path(__file__).resolve().parents[2]
 
     completed = _run_check(repository_root)

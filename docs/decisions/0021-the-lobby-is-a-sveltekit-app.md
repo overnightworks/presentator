@@ -39,11 +39,11 @@ interaction became a template, a fragment and a form route.
   claims, so the app's router decides it, a not-found page included. It takes
   the router's not-found place rather than a catch-all route, so a route's own
   404 and a wrong method's 405 stay the framework's. `/api/`, `/_app/`,
-  `/auth/`, the hook prefix, `/static/`, `/login/oidc`, `/logout`, `/health`
+  `/auth/`, the hook prefix, `/login/oidc`, `/logout`, `/health`
   and the retired `/setup` never fall back to it: a missing asset or API is
   still a 404. `/_app/` is public and serves the build's assets. No lobby page
-  is a Jinja page any more; the unrendered chrome that served them
-  (`base.html`, `header.html`) stands until the Jinja package goes.
+  is a Jinja page any more, and no template, form route or vendored lobby
+  stylesheet is left.
   `/deck/{slug}/pdf` stays a server download; for a deck that is missing,
   foreign or unknown, or whose file is gone, it answers the shell under 404,
   so the app shows the root not-found board. That shell is the route's own
@@ -159,8 +159,9 @@ The talk host's policy is not touched.
   instance layer; the deck toolchain stage gets nothing of it.
 - A first load needs JavaScript. For a private lobby with a handful of pages
   that is accepted; a page that must work without it is not planned.
-- Old and new pages stand side by side until the last Jinja page moves; each
-  page slice deletes the route, template and tests it replaces.
+- Old and new pages stood side by side until the last Jinja page moved; each
+  page slice deleted the route, template and tests it replaced, and no Jinja
+  page is left.
 - Instance defaults are one store per served lobby, so a drive spec that writes
   them is named `*.instance.spec.ts` and runs on a stack of its own per browser;
   the other specs share one stack and never write them.

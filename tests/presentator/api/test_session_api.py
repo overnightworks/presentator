@@ -58,10 +58,12 @@ def test_the_appearance_of_a_request_is_the_theme_its_person_chose() -> None:
     lobby.sign_in()
     choose(lobby, theme=ThemeChoice.DARK)
 
-    @lobby.app.get("/an-address-that-reads-its-appearance")
     def reads_its_appearance(request: Request) -> str:
         return appearance_of(request, a_preferences(people=people)).theme.value
 
+    lobby.app.add_api_route(
+        "/an-address-that-reads-its-appearance", reads_its_appearance
+    )
     answer = lobby.client.get("/an-address-that-reads-its-appearance")
 
     assert answer.json() == ThemeChoice.DARK.value

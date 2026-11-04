@@ -510,8 +510,6 @@ export interface components {
             log_out: string;
             /** Menu Account */
             menu_account: string;
-            /** Menu Theme */
-            menu_theme: string;
             /** Section Decks */
             section_decks: string;
             /** Section Settings */

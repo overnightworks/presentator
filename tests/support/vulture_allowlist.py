@@ -1,7 +1,7 @@
 """Names that something other than a Python call site reaches.
 
-A Jinja template is not Python, so a field only a template renders looks
-unused; a standard-library base class's own dispatch is invisible the same
+A Svelte page is not Python, so a field only a page reads looks unused; a
+standard-library base class's own dispatch is invisible the same
 way. Every entry names the site that reaches it; an entry without one is an
 excuse.
 """
@@ -156,15 +156,11 @@ LobbyText.sources_back
 LobbyText.source_remove_cancel
 LobbyText.source_remove_confirm
 
-# The words below reach a person through a Jinja template, some through a Svelte
-# page too. That a catalog carries each of them is proven by `load_lobby_text`,
-# which refuses a catalog missing any field of `LobbyText`; that a page renders
-# them is proven by the route tests.
+# The words below reach a person through a Svelte page. That a catalog carries
+# each of them is proven by `load_lobby_text`, which refuses a catalog missing
+# any field of `LobbyText`; that a page renders them is proven by the drive.
 LobbyText.section_decks
-# `api/templates/header.html` and `base.html` render these and stay, unrendered
-# by any route, until the Jinja chrome is deleted with the last of its pages.
 LobbyText.section_settings
-LobbyText.menu_theme
 LobbyText.theme_follow_system
 LobbyText.theme_light
 LobbyText.theme_dark

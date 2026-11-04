@@ -21,9 +21,6 @@ msgstr "Settings"
 msgid "menu_account"
 msgstr "Account"
 
-msgid "menu_theme"
-msgstr "Theme"
-
 msgid "theme_follow_system"
 msgstr "Follow system"
 
