@@ -8,7 +8,7 @@ import {
 	expectsHeaderOnOneLine,
 	expectsNoHorizontalScroll,
 	leftForSignIn,
-		SIGN_IN_START,
+	SIGN_IN_START,
 	sessionOf,
 	startsSignIn,
 	tabbedControlWithRing
@@ -450,4 +450,3 @@ test('a signed-out list address is sent to the sign-in with next set to it', asy
 
 	await leftForSignIn(page, started);
 });
-
