@@ -158,6 +158,8 @@ async def _texts(
                     continue
                 case FinalEvent():
                     return
+                case _:
+                    assert_never(event)
     except TurnStopped as stopped:
         _refuse(stopped)
 
