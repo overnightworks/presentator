@@ -57,9 +57,7 @@ from presentator.api.problems import install_error_answers
 from presentator.api.session_api import SESSION_PATH, SessionAddresses, session_routes
 from presentator.api.source_api import source_api_routes
 from presentator.api.sources import source_routes
-from presentator.api.voice_api import voice_api_routes
 from presentator.application.decks import Decks
-from presentator.application.voice import VoiceStatusUse
 
 _STATIC_DIR: Final = Path(__file__).parent / "static"
 _STATIC_PATH: Final = "/static"
@@ -227,7 +225,6 @@ class InstalledAuth:
 class LobbyPrivate:
     """Private capabilities the authenticated lobby may expose to an admin."""
 
-    voice: VoiceStatusUse
     # Absent: no token is admitted, so neither the gate nor the route exists.
     admin_people: AdminPeople | None = None
 
@@ -397,8 +394,7 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     lobby.include_router(_session_routes(pages, auth))
     lobby.include_router(deck_list_routes(decks=decks))
     lobby.include_router(preference_api_routes(preferences=pages.preferences))
-    lobby.include_router(preference_routes(pages=pages, voice=private.voice))
-    lobby.include_router(voice_api_routes(voice=private.voice))
+    lobby.include_router(preference_routes(pages=pages))
     lobby.include_router(source_routes(pages=pages, decks=decks))
     lobby.include_router(source_api_routes(decks=decks))
     add_deck_pages(lobby, decks=decks, pages=pages, talk_origin=auth.talk_origin)

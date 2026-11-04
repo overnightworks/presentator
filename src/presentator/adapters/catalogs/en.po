@@ -182,9 +182,6 @@ msgstr "General"
 msgid "settings_sources"
 msgstr "Sources"
 
-msgid "settings_voice"
-msgstr "Voice"
-
 msgid "settings_instance_name"
 msgstr "Instance name"
 
@@ -199,96 +196,6 @@ msgstr "Default theme"
 
 msgid "settings_save"
 msgstr "Save"
-
-msgid "voice_model"
-msgstr "Model"
-
-msgid "voice_language"
-msgstr "Language"
-
-msgid "voice_state"
-msgstr "State"
-
-msgid "voice_state_active"
-msgstr "Active"
-
-msgid "voice_state_loading"
-msgstr "Loading"
-
-msgid "voice_state_failed"
-msgstr "Failed"
-
-msgid "voice_state_downloaded"
-msgstr "Downloaded"
-
-msgid "voice_state_not_downloaded"
-msgstr "Not downloaded"
-
-msgid "voice_state_downloading"
-msgstr "Downloading"
-
-msgid "voice_state_download_failed"
-msgstr "Download failed"
-
-msgid "voice_state_unavailable"
-msgstr "Not yet available"
-
-msgid "voice_unknown_title"
-msgstr "Voice status unknown"
-
-msgid "voice_unknown_explanation"
-msgstr "The local speech service has not confirmed its voice status."
-
-msgid "voice_check_again"
-msgstr "Check again"
-
-msgid "voice_load"
-msgstr "Load"
-
-msgid "voice_download"
-msgstr "Download"
-
-msgid "voice_recovery_failed"
-msgstr "Voice load failed"
-
-msgid "voice_recovery_invalid_selection"
-msgstr "Saved voice selection is invalid"
-
-msgid "voice_recovery_durability"
-msgstr "Voice is active; restart persistence is unconfirmed"
-
-msgid "voice_sample"
-msgstr "Sample"
-
-msgid "voice_sample_active"
-msgstr "{name} — active"
-
-msgid "voice_sample_language"
-msgstr "Sample language"
-
-msgid "voice_sample_german"
-msgstr "DE"
-
-msgid "voice_sample_english"
-msgstr "EN"
-
-msgid "voice_sample_play"
-msgstr "Play sample"
-
-msgid "voice_sample_stop"
-msgstr "Stop"
-
-msgid "voice_sample_loading"
-msgstr "Loading"
-
-msgid "voice_sample_waiting"
-msgstr "Waiting"
-
-msgid "voice_sample_failed_title"
-msgstr "Playback failed"
-
-msgid "voice_sample_failed_explanation"
-msgstr "The sample could not be generated. Play sample tries again."
 
 msgid "account_title"
 msgstr "Account"

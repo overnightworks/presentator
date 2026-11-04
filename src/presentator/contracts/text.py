@@ -65,42 +65,11 @@ class LobbyText:
     for_admins_explanation: str
     settings_title: str
     settings_sources: str
-    settings_voice: str
     settings_instance_name: str
     settings_default_language: str
     settings_language_hint: str
     settings_default_theme: str
     settings_save: str
-    voice_model: str
-    voice_language: str
-    voice_state: str
-    voice_state_active: str
-    voice_state_loading: str
-    voice_state_failed: str
-    voice_state_downloaded: str
-    voice_state_not_downloaded: str
-    voice_state_downloading: str
-    voice_state_download_failed: str
-    voice_state_unavailable: str
-    voice_unknown_title: str
-    voice_unknown_explanation: str
-    voice_check_again: str
-    voice_load: str
-    voice_download: str
-    voice_recovery_failed: str
-    voice_recovery_invalid_selection: str
-    voice_recovery_durability: str
-    voice_sample: str
-    voice_sample_active: str
-    voice_sample_language: str
-    voice_sample_german: str
-    voice_sample_english: str
-    voice_sample_play: str
-    voice_sample_stop: str
-    voice_sample_loading: str
-    voice_sample_waiting: str
-    voice_sample_failed_title: str
-    voice_sample_failed_explanation: str
     account_title: str
     account_preferences: str
     account_language: str
