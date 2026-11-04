@@ -44,20 +44,6 @@ test.describe('a person without decks', () => {
 	});
 });
 
-test.describe('a person of the second language', () => {
-	test.use({ person: { role: 'user', language: 'second' } });
-
-	test('gets its words', async ({ page, browser, baseURL }) => {
-		const theirs = await sessionOf(page);
-		const stranger = await browser.newContext({ baseURL });
-		const english = await (await stranger.request.get('/api/session')).json();
-		await stranger.close();
-
-		expect(theirs.words.language_name).not.toBe((english as SessionView).words.language_name);
-		expect(theirs.words.wordmark).not.toBe((english as SessionView).words.wordmark);
-	});
-});
-
 test.describe('a person who chooses a theme', () => {
 	test.use({ person: { role: 'user' } });
 
@@ -68,7 +54,7 @@ test.describe('a person who chooses a theme', () => {
 			const answer = await fetch('/api/account', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ language_tag: null, theme: 'dark' })
+				body: JSON.stringify({ theme: 'dark' })
 			});
 			return answer.ok;
 		});

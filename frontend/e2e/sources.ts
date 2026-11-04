@@ -1,9 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
-import type { Page, TestInfo } from '@playwright/test';
+import type { Page, Route, TestInfo } from '@playwright/test';
 
 import type { SessionView } from '../src/lib/api/session.ts';
-import type { ConnectionCheckView, CreatedSourceView, KeyDraftView } from '../src/lib/api/sources.ts';
+import type {
+	ConnectionCheckView,
+	CreatedSourceView,
+	KeyDraftView,
+	SourceView
+} from '../src/lib/api/sources.ts';
 import type { components } from '../src/lib/api/types.ts';
 import { expect } from './person.ts';
 
@@ -95,7 +100,6 @@ export async function sourceNames(page: Page): Promise<string[]> {
 export const tabsOf = (page: Page, words: Words) =>
 	page.getByRole('navigation', { name: words.section_settings });
 
-
 /** The address of a source's own page. */
 export const sourceAddress = (name: string): string => `${SOURCES_LIST}/${name}`;
 
@@ -106,7 +110,9 @@ export const OWN_SOURCE = `git@git.example.invalid:own-${randomUUID().slice(0, 8
 /** The newest source at the address: the harness numbers the sources it makes. */
 export async function ownSourceName(page: Page, address: string): Promise<string> {
 	const answer = await page.request.get(SOURCES_API, { headers: JSON_ACCEPT });
-	const { sources } = (await answer.json()) as { sources: { name: string; url: string }[] };
+	const { sources } = (await answer.json()) as {
+		sources: { name: string; url: string }[];
+	};
 	const own = sources
 		.filter((source) => source.url === address)
 		.map((source) => source.name)
@@ -150,7 +156,9 @@ export async function opensALocalSource(
 ): Promise<{ name: string; created: CreatedSourceView }> {
 	const name = aName(testInfo);
 	// The folder the drive's lobby accepts local sources under is the harness's to say.
-	const mount = (await (await page.request.get(LOCAL_MOUNT_ROUTE)).json()) as { path: string };
+	const mount = (await (await page.request.get(LOCAL_MOUNT_ROUTE)).json()) as {
+		path: string;
+	};
 	await opensTheForm(page);
 	await choosesAccess(page, words.source_access_file);
 	await page.getByLabel(words.source_name, { exact: true }).fill(name);
@@ -161,4 +169,22 @@ export async function opensALocalSource(
 	await page.goto(sourceAddress(name));
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
 	return { name, created };
+}
+
+// The page answer of one source, changed on its way to the page.
+export async function answersWith(
+	page: Page,
+	name: string,
+	change: (view: SourceView) => SourceView
+): Promise<void> {
+	await page.route(`**${SOURCES_API}/${name}`, async (route: Route) => {
+		if (route.request().method() !== 'GET') {
+			return route.continue();
+		}
+		const real = await route.fetch();
+		return route.fulfill({
+			response: real,
+			json: change((await real.json()) as SourceView)
+		});
+	});
 }
