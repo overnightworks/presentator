@@ -62,7 +62,7 @@ class SourceRemovalView:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class _Surfaces:
-    """The Sources pages: the list, one source's page, its renewals and removal."""
+    """The Sources pages: the list, Fetch now and removal."""
 
     pages: Pages
     decks: Decks
@@ -121,8 +121,8 @@ class _Surfaces:
         The counts a person confirmed travel back in the form; a mismatch at
         the moment this runs is not deleted, it shows the confirm again with
         the numbers as they stand now. A mirror or a build that would not go
-        stops this too, before any row is touched, and the source's own page
-        says so.
+        stops this too, before any row is touched, and the re-rendered removal
+        page says so.
         """
         if not gated_person(request).is_admin:
             return _refused()
