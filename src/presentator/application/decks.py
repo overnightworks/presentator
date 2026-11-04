@@ -20,6 +20,7 @@ from threading import RLock
 from typing import BinaryIO, Final
 
 from presentator.application.build_retention import builds_removed, delete_absent, sweep
+from presentator.application.source_state import source_state_of
 from presentator.contracts.decks import (
     SLIDES_FILE,
     AccessKind,
@@ -228,23 +229,6 @@ def _connection_fingerprint(key: bytes, proof: _ConnectionProof) -> str:
     return hmac.new(key, message, sha256).hexdigest()
 
 
-def _source_state_of(run: SourceRun) -> SourceState:
-    """The one word the sources list says, read off a run and its reason.
-
-    A refused login and a host that answered with something else each keep
-    their own word, so a valid token, a dead host, and a host that answered
-    but not with the repository no longer all read the same; a credential the
-    instance could not resolve still folds into error.
-    """
-    if run.outcome is SourceRunOutcome.SUCCESS:
-        return SourceState.REACHABLE
-    if run.reason is SourceRunFailure.REFUSED:
-        return SourceState.REFUSED
-    if run.reason is SourceRunFailure.FAILED:
-        return SourceState.FAILED
-    return SourceState.ERROR
-
-
 def _state_of(deck: Deck) -> DeckState:
     """The one word for what this deck is, read off its talk and its attempt.
 
@@ -318,13 +302,14 @@ class Decks:
             url=listed.url,
             access=listed.access,
             state=listed.state,
+            reason=listed.reason,
             age=listed.age,
             fetched_at=listed.fetched_at,
             public_key=source.public_key,
             runs=tuple(
                 ShownSourceRun(
                     outcome=run.outcome,
-                    state=_source_state_of(run),
+                    state=source_state_of(run),
                     age=now - run.at,
                     at=run.at,
                     commit=None if run.commit is None else run.commit[:_SHORT_COMMIT],
@@ -751,7 +736,8 @@ class Decks:
             name=source.name,
             url=source.url,
             access=access_kind_of(source.url),
-            state=SourceState.NEVER_FETCHED if run is None else _source_state_of(run),
+            state=SourceState.NEVER_FETCHED if run is None else source_state_of(run),
+            reason=None if run is None else run.reason,
             age=None if run is None else now - run.at,
             fetched_at=None if run is None else run.at,
         )

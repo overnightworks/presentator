@@ -526,6 +526,7 @@ class ListedSource:
     url: str
     access: AccessKind | None
     state: SourceState
+    reason: SourceRunFailure | None
     age: timedelta | None
     fetched_at: datetime | None
 
@@ -558,6 +559,7 @@ class SourcePage:
     url: str
     access: AccessKind | None
     state: SourceState
+    reason: SourceRunFailure | None
     age: timedelta | None
     fetched_at: datetime | None
     public_key: str | None

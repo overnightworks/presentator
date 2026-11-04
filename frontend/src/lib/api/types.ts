@@ -313,6 +313,7 @@ export interface components {
             failure: components["schemas"]["SourceRunFailure"] | null;
             /** Fingerprint */
             fingerprint: string | null;
+            state: components["schemas"]["SourceState"];
         };
         /**
          * CreatedSourceView
@@ -924,6 +925,7 @@ export interface components {
             fetched_at: string | null;
             /** Name */
             name: string;
+            reason: components["schemas"]["SourceRunFailure"] | null;
             state: components["schemas"]["SourceState"];
             /** Url */
             url: string;
@@ -944,6 +946,7 @@ export interface components {
             name: string;
             /** Public Key */
             public_key: string | null;
+            reason: components["schemas"]["SourceRunFailure"] | null;
             /** Runs */
             runs: components["schemas"]["SourceRunView"][];
             state: components["schemas"]["SourceState"];
