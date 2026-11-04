@@ -650,13 +650,15 @@ jobs:
     steps:
       # The gate downloads the one artifact `coverage`; its Sonar scan reads
       # coverage.xml (pytest), lcov.info (the Slidev addon's vitest) and
-      # lcov-lobby.info (the lobby's vitest) from the artifact's root.
+      # lcov-lobby.info (the lobby's vitest) from the artifact's root. The
+      # parts stay: a rerun of only the failed jobs re-uploads just their
+      # reports, and this merge must still find all three.
       - name: Merge the coverage reports into one artifact
         uses: actions/upload-artifact/merge@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage
           pattern: coverage-*
-          delete-merged: true
+          delete-merged: false
           separate-directories: false
           retention-days: 7
           overwrite: true
