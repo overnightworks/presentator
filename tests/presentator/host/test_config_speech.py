@@ -16,12 +16,9 @@ _VARIABLES = (
 )
 
 
-def test_the_three_speech_values_start_the_instance_with_no_network_call(
-    environment: pytest.MonkeyPatch,
-) -> None:
+@pytest.mark.usefixtures("environment")
+def test_the_three_speech_values_start_the_instance_with_no_network_call() -> None:
     """S1: reading the settings reaches nobody."""
-    assert environment is not None
-
     settings = load_settings()
 
     assert (

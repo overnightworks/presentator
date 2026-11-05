@@ -17,7 +17,7 @@ whole turn. The answer arrives as one whole text, not as deltas, so the first
 sentence is spoken once the text exists; Presentator splits it into sentences
 and speaks them. The person reaches the gateway as a fingerprint of their
 issuer and account id (`fp-` and a SHA-256), never a name, a mail or a token,
-and no token of theirs leaves Presentator.
+and no token of theirs reaches the gateway.
 
 The shared speech service is reached at `PRESENTATOR_SPEECH_SERVICE` over the
 `hal_speech_presentator` network. Presentator speaks and hears through its
@@ -56,7 +56,8 @@ hearing model loads ("Local hearing not ready"). `/who` takes the deck's slug as
 `/ask` does: a deck its asker does not own built, or a missing or malformed
 slug, gets the same 404 `/ask` gives. It answers the deck's `language`, `de` or
 `en` as the deck's `deck.toml` names it and `de` for anything else, beside the
-speech readiness, so the overlay speaks and hears in the deck's language. A
+speech readiness, so the overlay hears in the deck's language; speaking is German
+only. A
 mirror that cannot be read, or a built commit without slides, answers 503.
 `/ask` is guarded by the origin check alone, like every mutating request
 ([sign-in and session](sign-in-and-session.md)). Logout, expiry, loss of the account row

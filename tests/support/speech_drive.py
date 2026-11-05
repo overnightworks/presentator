@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import base64
 import re
+import sqlite3
+from contextlib import closing
 from dataclasses import replace
 from typing import TYPE_CHECKING, Final
 
 from presentator.adapters.speech import SpeechHearing, SpeechSpeaking
 from tests.support.copresenter_support import (
+    ACCESS,
     HEARING,
+    REFRESH,
+    ROTATED,
     TALK_ORIGIN,
     Run,
     Scenario,
@@ -24,6 +29,7 @@ from tests.support.speech_service import (
 )
 
 if TYPE_CHECKING:
+    import logging
     from pathlib import Path
 
     from tests.support.talk_support import Hosts
@@ -69,8 +75,10 @@ def the_audio_of(run: Run) -> list[bytes]:
     return [base64.b64decode(wav) for wav in encoded]
 
 
-def hear_through(run: Run, *frames: bytes) -> tuple[list[object], list[str]]:
-    """Open the browser's hearing socket; the JSON it received and every log line."""
+def hear_through(
+    run: Run, *frames: bytes, frames_back: int = 1
+) -> tuple[list[object], list[logging.LogRecord]]:
+    """Open the browser's hearing socket; the JSON it received and every log record."""
     received: list[object] = []
     with (
         recording_every_logger() as logs,
@@ -78,5 +86,19 @@ def hear_through(run: Run, *frames: bytes) -> tuple[list[object], list[str]]:
     ):
         for frame in frames:
             socket.send_bytes(frame)
-        received.append(socket.receive_json())
-    return received, [record.getMessage() for record in logs.records]
+        received.extend(socket.receive_json() for _ in range(frames_back))
+    return received, logs.records
+
+
+def stored_session_rows_but_the_refresh_token(run: Run) -> str:
+    """Every stored session column the refresh token does not own, as text."""
+    with closing(sqlite3.connect(run.hosts.database)) as connection:
+        rows = connection.execute(
+            "SELECT id, user_id, created_at, expires_at, id_token FROM sessions"
+        ).fetchall()
+    return repr(rows)
+
+
+def what_a_stored_session_must_not_hold() -> tuple[str, ...]:
+    """The tokens and words of a speech call; the refresh token has its own column."""
+    return (ACCESS, REFRESH, ROTATED, WORKLOAD, SAID)

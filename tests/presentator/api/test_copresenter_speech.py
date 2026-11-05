@@ -14,7 +14,6 @@ from tests.support.copresenter_support import (
     ACCESS,
     ADMIN_GROUPS,
     HEARING,
-    REFRESH,
     ROTATED,
     TALK_ORIGIN,
     Scenario,
@@ -30,12 +29,15 @@ from tests.support.speech_drive import (
     WORKLOAD,
     drive_through_speech,
     hear_through,
+    stored_session_rows_but_the_refresh_token,
     the_audio_of,
+    what_a_stored_session_must_not_hold,
     what_speech_must_not_show,
 )
 from tests.support.speech_service import (
     A_MARKED_WAV,
     A_SPEECH_SCOPE,
+    DELTA,
     FakeSpeech,
     a_refusal,
     completed,
@@ -241,9 +243,11 @@ def test_an_access_refusal_on_the_speech_read_is_answered_before_the_stream(
     assert the_ticket_was_released(run)
 
 
-def _heard(tmp_path: Path, fake: FakeSpeech) -> tuple[list[object], list[str]]:
+def _heard(
+    tmp_path: Path, fake: FakeSpeech, frames_back: int = 1
+) -> tuple[list[object], list[logging.LogRecord]]:
     run = drive_through_speech(tmp_path, fake)
-    return hear_through(run, b"\x01\x02")
+    return hear_through(run, b"\x01\x02", frames_back=frames_back)
 
 
 def test_a_hearing_carries_the_two_tokens_and_gives_the_browser_the_final_text(
@@ -252,9 +256,12 @@ def test_a_hearing_carries_the_two_tokens_and_gives_the_browser_the_final_text(
     """H1, H3: through the real route."""
     fake = FakeSpeech(after_audio=[delta("geh"), completed("gehört")])
 
-    received, _ = _heard(tmp_path, fake)
+    received, _ = _heard(tmp_path, fake, frames_back=2)
 
-    assert received == [{"text": "geh", "final": False}]
+    assert received == [
+        {"text": "geh", "final": False},
+        {"text": "gehört", "final": True},
+    ]
     (upgrade,) = fake.upgrades
     assert upgrade.headers["authorization"] == f"Bearer {ACCESS}"
     assert upgrade.headers[wire.WORKLOAD_TOKEN_HEADER.lower()] == WORKLOAD
@@ -355,29 +362,52 @@ def test_no_token_or_word_of_the_ask_reaches_a_log_an_error_or_the_browser(
 
 
 @pytest.mark.parametrize(
-    "service",
+    ("service", "browser_hears_the_word"),
     [
-        FakeSpeech(after_audio=[delta(SAID.replace("MARKER", "x")), completed("ok")]),
-        _hearing_error_with_a_marker(),
-        FakeSpeech(
-            upgrade_refusal=a_refusal(
-                wire.RefusalCode.BUSY, retry_after="3", message=SAID
-            )
+        pytest.param(
+            FakeSpeech(after_audio=[delta(SAID), completed("ok")]),
+            True,
+            id="good-hearing",
+        ),
+        pytest.param(_hearing_error_with_a_marker(), False, id="error-with-a-marker"),
+        pytest.param(
+            FakeSpeech(after_audio=[{"type": DELTA, "delta": SAID}]),
+            False,
+            id="malformed-event",
+        ),
+        pytest.param(
+            FakeSpeech(after_audio=[f"not json {SAID}"]), False, id="non-json"
+        ),
+        pytest.param(
+            FakeSpeech(
+                upgrade_refusal=a_refusal(
+                    wire.RefusalCode.BUSY, retry_after="3", message=SAID
+                )
+            ),
+            False,
+            id="busy-at-the-upgrade",
         ),
     ],
-    ids=["good-hearing", "error-with-a-marker", "busy-at-the-upgrade"],
 )
-def test_no_token_or_word_of_a_hearing_reaches_a_log_or_the_browser(
-    tmp_path: Path, service: FakeSpeech
+def test_no_token_or_heard_word_of_a_hearing_reaches_a_log_an_error_or_a_row(
+    tmp_path: Path, service: FakeSpeech, *, browser_hears_the_word: bool
 ) -> None:
-    """L1: the hearing walk."""
+    """L1: records, errors and stored rows; the heard word only to the browser."""
     run = drive_through_speech(tmp_path, service)
 
-    received, logged = hear_through(run, b"\x01\x02")
+    received, records = hear_through(run, b"\x01\x02")
 
-    shown = "\n".join(logged) + str(received)
-    for marker in (ACCESS, REFRESH, ROTATED, WORKLOAD, "Bearer ", "eyJ", SAID):
-        assert marker not in shown
+    logged = everything_shown(records, run.errors)
+    stored = stored_session_rows_but_the_refresh_token(run)
+    browser = str(received)
+    for marker in what_a_stored_session_must_not_hold():
+        assert marker not in stored
+    for marker in what_speech_must_not_show(run):
+        assert marker not in logged
+        if marker != SAID:
+            assert marker not in browser
+    assert (SAID in browser) is browser_hears_the_word
+    assert records
 
 
 def test_a_garbage_health_body_with_a_marker_shows_nothing_of_it(

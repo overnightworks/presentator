@@ -19,6 +19,7 @@ from presentator.contracts.copresenter import (
     HearingTranscript,
     SpeechTokens,
 )
+from tests.support.leak_support import everything_shown
 from tests.support.speech_service import (
     A_SPEECH_ORIGIN,
     A_SPEECH_VOICE,
@@ -290,6 +291,51 @@ def test_a_frame_that_is_not_a_modelled_event_is_no_hearing(
         heard(FakeSpeech(after_audio=[frame]))
 
     assert MARKER not in caplog.text
+
+
+def _unreachable_service() -> SpeechHearing:
+    return SpeechHearing("http://127.0.0.1:1", A_SPEECH_VOICE)
+
+
+@pytest.mark.parametrize(
+    "service",
+    [
+        pytest.param(
+            lambda: hearing_through(
+                FakeSpeech(
+                    after_audio=[
+                        {"type": DELTA, "delta": MARKER}  # no item_id
+                    ]
+                )
+            ),
+            id="malformed-event",
+        ),
+        pytest.param(
+            lambda: hearing_through(FakeSpeech(after_audio=[f"not json {MARKER}"])),
+            id="non-json",
+        ),
+        pytest.param(
+            lambda: hearing_through(
+                FakeSpeech(
+                    upgrade_refusal=a_refusal(
+                        wire.RefusalCode.BUSY, retry_after="3", message=MARKER
+                    )
+                )
+            ),
+            id="upgrade-refusal",
+        ),
+        pytest.param(_unreachable_service, id="connection-refused"),
+    ],
+)
+def test_a_failed_hearing_keeps_no_exception_that_saw_the_input(
+    service: Callable[[], SpeechHearing],
+) -> None:
+    """G4, L1: neither `__cause__` nor `__context__`, and no word in the error."""
+    with pytest.raises(CoPresenterUnavailableError) as failed:
+        asyncio.run(hear_everything(service()))
+
+    assert (failed.value.__cause__, failed.value.__context__) == (None, None)
+    assert MARKER not in everything_shown(errors=[failed.value])
 
 
 class _CallerFaultError(Exception):

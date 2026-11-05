@@ -97,26 +97,31 @@ class SpeechSpeaking:
         voice: str,
         *,
         transports: TransportFactory = httpx2.AsyncHTTPTransport,
-        read_timeout: float = _SPEAK_READ_TIMEOUT,
     ) -> None:
-        """Keep the service's origin, the one voice and how long it may stay silent."""
+        """Keep the service's origin, the one voice and how to reach it."""
         self._origin = origin
         self._voice = voice
         self._transports = transports
-        self._timeout = httpx2.Timeout(_STEP_TIMEOUT, read=read_timeout)
+        self._timeout = httpx2.Timeout(_STEP_TIMEOUT, read=_SPEAK_READ_TIMEOUT)
 
     async def speak(self, text: str, language: str, tokens: SpeechTokens) -> bytes:
         """Read the whole WAV, or close the connection and raise."""
         # The wire speaks German only, so the sentence's language is not sent.
         del language
         try:
-            body = wire.speech_request_body(text, self._voice)
+            body: bytes | None = wire.speech_request_body(text, self._voice)
         except ValidationError:
-            raise _unavailable(request="not speakable") from None
+            body = None
+        # Every failure is raised outside its handler, so no exception that
+        # quotes the person's words or a token is kept as `__context__`.
+        if body is None:
+            raise _unavailable(request="not speakable")
         headers = wire.speech_request_headers(
             workload_token=tokens.workload, person_token=tokens.person
         )
         refused: CoPresenterUnavailableError | None = None
+        failure: str | None = None
+        audio = b""
         try:
             async with (
                 _client(self._origin, self._timeout, self._transports) as client,
@@ -131,7 +136,9 @@ class SpeechSpeaking:
                     audio = b""
                     refused = _refusal_of(response)
         except httpx2.HTTPError as failed:
-            raise _unavailable(failure=type(failed).__name__) from None
+            failure = type(failed).__name__
+        if failure is not None:
+            raise _unavailable(failure=failure)
         # Raised after the client closed, so a transport that wraps what leaves
         # it in a group cannot hide the refusal.
         if refused is not None:
@@ -161,16 +168,21 @@ class SpeechHearing:
 
     async def readiness(self) -> CoPresenterReadiness:
         """The hearing's state and rate; unavailable while the voice cannot speak."""
+        health: wire.Health | None = None
+        unreadable: dict[str, object] = {}
         try:
             async with self._client() as client:
                 response = await client.get(wire.HEALTH_PATH)
-            if response.status_code != HTTPStatus.OK:
-                raise _unavailable(status=response.status_code)
-            health = wire.Health.model_validate_json(response.content)
+            if response.status_code == HTTPStatus.OK:
+                health = wire.Health.model_validate_json(response.content)
+            else:
+                unreadable = {"status": response.status_code}
         except httpx2.HTTPError as refused:
-            raise _unavailable(failure=type(refused).__name__) from None
+            unreadable = {"failure": type(refused).__name__}
         except ValidationError:
-            raise _unavailable(health="unreadable") from None
+            unreadable = {"health": "unreadable"}
+        if health is None:
+            raise _unavailable(**unreadable)
         rate = wire.SessionInput().format.rate
         if not health.hearing.ready:
             return CoPresenterReadiness(
@@ -187,13 +199,17 @@ class SpeechHearing:
     ) -> AsyncGenerator[PrivateHearing]:
         """Open one Realtime transcription session for the person's speech."""
         try:
-            setup = _session_update(language)
+            setup: str | None = _session_update(language)
         except ValueError:
-            raise _unavailable(language="not heard") from None
+            setup = None
+        if setup is None:
+            raise _unavailable(language="not heard")
         headers = wire.speech_request_headers(
             workload_token=tokens.workload, person_token=tokens.person
         )
         del headers[wire.CONTENT_TYPE_HEADER]
+        closed: dict[str, object] = {}
+        known: BaseException | None = None
         try:
             async with (
                 self._client() as client,
@@ -207,16 +223,34 @@ class SpeechHearing:
                 yield _RealtimeHearing(socket)
         except WebSocketUpgradeError as refused:
             status = refused.response.status_code
-            raise _unavailable(
-                upgrade=status, wait=_busy_seconds(status, refused.response.headers)
-            ) from None
+            closed = {
+                "upgrade": status,
+                "wait": _busy_seconds(status, refused.response.headers),
+            }
         except BaseExceptionGroup as group:
             _, caller = group.split(_EXPECTED)
             if caller is not None:
                 raise
-            raise _unavailable(session="failed") from None
+            known = _unavailable_in(group)
+            closed = {"session": "failed"}
+        except CoPresenterUnavailableError:
+            raise
         except _EXPECTED as refused:
-            raise _unavailable(failure=type(refused).__name__) from None
+            closed = {"failure": type(refused).__name__}
+        if known is not None:
+            raise known
+        if closed:
+            raise _unavailable(**closed)
+
+
+def _unavailable_in(group: BaseExceptionGroup[BaseException]) -> BaseException | None:
+    unavailable, _ = group.split(CoPresenterUnavailableError)
+    while unavailable is not None:
+        member = unavailable.exceptions[0]
+        if not isinstance(member, BaseExceptionGroup):
+            return member
+        unavailable = cast("BaseExceptionGroup[BaseException]", member)
+    return None
 
 
 _EXPECTED: Final = (CoPresenterUnavailableError, httpx2.HTTPError, HTTPXWSException)
@@ -246,12 +280,16 @@ class _RealtimeHearing:
 
     async def receive(self) -> HearingTranscript | None:
         while True:
+            failure: str | None = None
+            event: BaseModel | None = None
             try:
                 event = _event_of(await self._socket.receive_text())
             except WebSocketDisconnect:
                 return None
             except HTTPXWSException as refused:
-                raise _unavailable(failure=type(refused).__name__) from None
+                failure = type(refused).__name__
+            if failure is not None:
+                raise _unavailable(failure=failure)
             transcript = self._transcript_of(event)
             if transcript is not None:
                 return transcript
@@ -278,14 +316,17 @@ def _event_of(frame: str) -> BaseModel | None:
     try:
         payload: object = json.loads(frame)
     except ValueError:
-        raise _unavailable(frame="not json") from None
+        payload = None
     if not isinstance(payload, dict):
-        raise _unavailable(frame="not an object")
+        raise _unavailable(frame="not a json object")
     kind = str(cast("dict[str, object]", payload).get("type"))
     model = _EVENTS_THAT_MATTER.get(kind)
     if model is None:
         return None
     try:
-        return model.model_validate(payload)
+        event: BaseModel | None = model.model_validate(payload)
     except ValidationError:
-        raise _unavailable(event=kind) from None
+        event = None
+    if event is None:
+        raise _unavailable(event=kind)
+    return event

@@ -21,9 +21,9 @@ A_SPEECH_ORIGIN: Final = "http://speech.test:8080"
 A_SPEECH_SCOPE: Final = "a-speech-audience"
 A_SPEECH_VOICE: Final = "a-voice"
 # A RIFF/WAVE header with the AI mark's LIST/INFO/ICMT chunk the service plants.
-DELTA: Final = "conversation.item.input_audio_transcription.delta"
-COMPLETED: Final = "conversation.item.input_audio_transcription.completed"
-FAILED: Final = "conversation.item.input_audio_transcription.failed"
+DELTA: Final = str(wire.TranscriptDelta.model_fields["type"].get_default())
+COMPLETED: Final = str(wire.TranscriptCompleted.model_fields["type"].get_default())
+FAILED: Final = str(wire.TranscriptFailed.model_fields["type"].get_default())
 A_MARKED_WAV: Final = (
     b"RIFF\x00\x00\x00\x00WAVEfmt \x10\x00\x00\x00LIST\x0e\x00\x00\x00INFOICMT\x02\x00"
     b"\x00\x00ai\x00\x00data\x04\x00\x00\x00\x01\x02\x03\x04"

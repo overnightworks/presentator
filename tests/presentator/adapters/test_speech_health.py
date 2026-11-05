@@ -60,17 +60,21 @@ def test_hearing_that_is_still_loading_is_not_ready_whatever_the_voice_does(
     ],
 )
 def test_an_answer_that_is_no_health_is_unavailable(answer: Response) -> None:
-    """R3."""
-    with pytest.raises(CoPresenterUnavailableError):
+    """R3, G4: no exception of the unreadable body is kept."""
+    with pytest.raises(CoPresenterUnavailableError) as failed:
         readiness_of(FakeSpeech(health_answer=answer))
+
+    assert (failed.value.__cause__, failed.value.__context__) == (None, None)
 
 
 def test_an_unreachable_origin_is_unavailable() -> None:
     """R3."""
     hearing = SpeechHearing("http://127.0.0.1:1", A_SPEECH_VOICE)
 
-    with pytest.raises(CoPresenterUnavailableError):
+    with pytest.raises(CoPresenterUnavailableError) as failed:
         asyncio.run(hearing.readiness())
+
+    assert (failed.value.__cause__, failed.value.__context__) == (None, None)
 
 
 @pytest.mark.parametrize(

@@ -63,8 +63,10 @@ def test_a_sentence_without_a_letter_or_digit_is_unavailable_and_sent_nowhere() 
     """T5: the client refuses to build the body."""
     fake = FakeSpeech()
 
-    with pytest.raises(CoPresenterUnavailableError):
+    with pytest.raises(CoPresenterUnavailableError) as failed:
         speak(fake, "…")
+
+    assert (failed.value.__cause__, failed.value.__context__) == (None, None)
 
     assert fake.speaks == []
 
@@ -136,9 +138,10 @@ def test_a_body_that_breaks_is_unavailable_and_the_connection_is_closed(
         A_SPEECH_ORIGIN, A_SPEECH_VOICE, transports=lambda: broken
     )
 
-    with pytest.raises(CoPresenterUnavailableError):
+    with pytest.raises(CoPresenterUnavailableError) as failed:
         asyncio.run(speaking.speak("Eins.", "de", TOKENS))
 
+    assert (failed.value.__cause__, failed.value.__context__) == (None, None)
     assert broken.body.closed.is_set()
 
 
@@ -150,8 +153,10 @@ def test_a_refused_connection_is_unavailable() -> None:
 
     speaking = SpeechSpeaking(A_SPEECH_ORIGIN, A_SPEECH_VOICE, transports=refusing)
 
-    with pytest.raises(CoPresenterUnavailableError):
+    with pytest.raises(CoPresenterUnavailableError) as failed:
         asyncio.run(speaking.speak("Eins.", "de", TOKENS))
+
+    assert (failed.value.__cause__, failed.value.__context__) == (None, None)
 
 
 def _refuse(request: httpx2.Request) -> httpx2.Response:
