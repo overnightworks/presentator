@@ -193,9 +193,8 @@ def test_a_theme_the_release_before_wrote_as_nothing_is_folded_at_the_next_start
 
     create_tables(database)
 
-    assert (_WHO_CHOSE_ONLY_A_THEME, ThemeChoice.FOLLOW_SYSTEM.value) in (
-        everything_in(database, _THEMES_OF_EVERYONE)
-    )
+    themes = dict(everything_in(database, _THEMES_OF_EVERYONE))
+    assert themes[_WHO_CHOSE_ONLY_A_THEME] == ThemeChoice.FOLLOW_SYSTEM.value
 
 
 def test_the_start_leaves_the_instance_row_as_the_release_before_reads_it(
