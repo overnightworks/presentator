@@ -233,8 +233,6 @@ class SpeechHearing:
                 raise
             known = _unavailable_in(group)
             closed = {"session": "failed"}
-        except CoPresenterUnavailableError:
-            raise
         except _EXPECTED as refused:
             closed = {"failure": type(refused).__name__}
         if known is not None:
