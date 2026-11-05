@@ -28,6 +28,7 @@ from tests.support.copresenter_support import (
 )
 from tests.support.leak_support import recording_every_logger
 from tests.support.speech_drive import (
+    HEARD_AT_THE_END,
     SAID,
     WORKLOAD,
     drive_through_speech,
@@ -35,6 +36,7 @@ from tests.support.speech_drive import (
     leaks_of,
     the_ask_beyond_its_answer,
     the_audio_of,
+    the_hearing_beyond_its_transcript,
 )
 from tests.support.speech_service import (
     A_MARKED_WAV,
@@ -404,7 +406,7 @@ def test_no_token_or_word_of_the_ask_reaches_a_log_an_error_or_the_browser(
     ("service", "frames_back", "browser_hears_the_word"),
     [
         pytest.param(
-            FakeSpeech(after_audio=[delta(SAID), completed("ok")]),
+            FakeSpeech(after_audio=[delta(SAID), completed(HEARD_AT_THE_END)]),
             2,
             True,
             id="good-hearing",
@@ -446,8 +448,14 @@ def test_no_token_or_heard_word_of_a_hearing_reaches_a_log_an_error_or_a_row(
     received, records = hear_through(run, b"\x01\x02", frames_back=frames_back)
 
     browser = str(received)
-    assert leaks_of(run, records=records, browser=browser.replace(SAID, "")) == []
+    assert (
+        leaks_of(
+            run, records=records, browser=the_hearing_beyond_its_transcript(received)
+        )
+        == []
+    )
     assert (SAID in browser) is browser_hears_the_word
+    assert (HEARD_AT_THE_END in browser) is browser_hears_the_word
     assert records
 
 

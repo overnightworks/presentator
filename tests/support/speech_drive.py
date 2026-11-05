@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import re
 import sqlite3
 from contextlib import closing
@@ -37,11 +38,13 @@ if TYPE_CHECKING:
 
 WORKLOAD: Final = "workload-access-MARKER"
 SAID: Final = "heard-word-MARKER"
+HEARD_AT_THE_END: Final = "completed-word-MARKER"
 THE_SPEECH_MARKERS: Final = (
     WORKLOAD,
     "Bearer ",
     "eyJ",
     SAID,
+    HEARD_AT_THE_END,
     *THE_GOOD_ANSWER,
 )
 
@@ -120,23 +123,39 @@ def stored_session_markers(run: Run, markers: tuple[str, ...]) -> list[str]:
     ]
 
 
-def the_ask_beyond_its_answer(run: Run) -> str:
-    """What the browser got of an ask, less the answer's own words in its answer events.
+_ANSWER_EVENTS: Final = ("text", "sentence", "audio", "done")
 
-    The answer is the product: its sentences travel in every event of the answer,
-    and in no `error` event, header or other byte of the response.
+
+def the_ask_beyond_its_answer(run: Run) -> str:
+    """What the browser got of an ask, less the answer's words in its answer events.
+
+    The answer is the product: its words travel in the `text` field of the `text`,
+    `sentence`, `audio` and `done` events (the overlay shows the `done` text as the
+    final answer), and in no `error` event, other field, header or other byte.
     """
-    shown = [
-        block if block.startswith("event: error\n") else _without_the_answer(block)
-        for block in run.response.text.split("\n\n")
-    ]
+    shown = [_without_the_answer(block) for block in run.response.text.split("\n\n")]
     return "\n\n".join([str(run.response.headers), *shown])
 
 
 def _without_the_answer(block: str) -> str:
-    for sentence in THE_GOOD_ANSWER:
-        block = block.replace(sentence, "")
-    return block
+    event, _, data = block.removeprefix("event: ").partition("\ndata: ")
+    if event not in _ANSWER_EVENTS:
+        return block
+    payload = json.loads(data)
+    payload.pop("text", None)
+    return f"event: {event}\ndata: {json.dumps(payload)}"
+
+
+def the_hearing_beyond_its_transcript(received: list[object]) -> str:
+    """What the browser got of a hearing, less the words of its transcript frames."""
+    return str(
+        [
+            {key: value for key, value in frame.items() if key != "text"}
+            if isinstance(frame, dict) and "final" in frame
+            else frame
+            for frame in received
+        ]
+    )
 
 
 def leaks_of(run: Run, *, records: list[logging.LogRecord], browser: str) -> list[str]:
