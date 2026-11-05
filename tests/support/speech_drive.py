@@ -124,14 +124,16 @@ def stored_session_markers(run: Run, markers: tuple[str, ...]) -> list[str]:
 
 
 _ANSWER_EVENTS: Final = ("text", "sentence", "audio", "done")
+_HEARD_WORDS: Final = (SAID, HEARD_AT_THE_END)
 
 
 def the_ask_beyond_its_answer(run: Run) -> str:
-    """What the browser got of an ask, less the answer's words in its answer events.
+    """What the browser got of an ask, less the answer's sentences in its answer events.
 
-    The answer is the product: its words travel in the `text` field of the `text`,
-    `sentence`, `audio` and `done` events (the overlay shows the `done` text as the
-    final answer), and in no `error` event, other field, header or other byte.
+    The answer is the product: its sentences travel in the `text` field of the
+    `text`, `sentence`, `audio` and `done` events (the overlay shows the `done`
+    text as the final answer), and in no `error` event, other field, header or
+    other byte. Every other marker stays visible, in those fields too.
     """
     shown = [_without_the_answer(block) for block in run.response.text.split("\n\n")]
     return "\n\n".join([str(run.response.headers), *shown])
@@ -142,20 +144,30 @@ def _without_the_answer(block: str) -> str:
     if event not in _ANSWER_EVENTS:
         return block
     payload = json.loads(data)
-    payload.pop("text", None)
+    payload["text"] = _without_words(payload["text"], THE_GOOD_ANSWER)
     return f"event: {event}\ndata: {json.dumps(payload)}"
 
 
 def the_hearing_beyond_its_transcript(received: list[object]) -> str:
-    """What the browser got of a hearing, less the words of its transcript frames."""
+    """What the browser got of a hearing, less the heard words in transcript frames.
+
+    A transcript frame is a final or partial frame without an `error`; every other
+    marker stays visible in its text.
+    """
     return str(
         [
-            {key: value for key, value in frame.items() if key != "text"}
-            if isinstance(frame, dict) and "final" in frame
+            {**frame, "text": _without_words(frame["text"], _HEARD_WORDS)}
+            if isinstance(frame, dict) and "text" in frame and "error" not in frame
             else frame
             for frame in received
         ]
     )
+
+
+def _without_words(text: str, words: tuple[str, ...]) -> str:
+    for word in words:
+        text = text.replace(word, "")
+    return text
 
 
 def leaks_of(run: Run, *, records: list[logging.LogRecord], browser: str) -> list[str]:
