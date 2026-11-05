@@ -1,0 +1,8 @@
+claim_id = "0f8c72e12d0a420b99df42b191755a11"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "105e300f296bc20016230850602cfe3c1bf72139"
+branch = "claude/issue-788-a-deck-whose-built-talk-is-missing-on-di"
+scope = ["src/presentator/application/build_retention.py", "src/presentator/application/decks.py", "tests/presentator/application/test_build_retention.py", "tests/presentator/application/test_decks_vanished_runs.py"]
+opened_commit = "de73e6267315de4b815e3f809ea553187d151457"
+whole_reason = "The rule that a vanished run is built again, the retention rule it extends and their tests change together, or the docstrings and the tests describe two different caches."
