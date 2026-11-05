@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { LegalLinks } from 'overnightworks-appkit';
 	import { page } from '$app/state';
 	import LobbyHeader from '#lib/LobbyHeader.svelte';
 	import type { SessionPerson } from '#lib/api/session.ts';
-	import { legalLinks } from '#lib/legal.ts';
 
 	const session = $derived(page.data.session);
 	const words = $derived(session.words);
@@ -30,6 +28,3 @@
 		<p>{board.explanation}</p>
 	{/if}
 </main>
-<footer class="bottom">
-	<LegalLinks links={legalLinks(words)} />
-</footer>

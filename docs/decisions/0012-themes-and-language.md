@@ -76,7 +76,7 @@ presentator fills only appkit's app slot with its teal: `#0c6c77` with ink
 (`frontend/src/app.css`).
 
 The person menu on those pages is appkit's `AccountMenu` in a native popover,
-and the footer is its `LegalLinks`; presentator draws only the round button.
+and the legal links are its `LegalLinks` row; presentator draws only the round button and no footer.
 Ages ("2 minutes ago") are worded by the browser with `Intl.RelativeTimeFormat`
 in the language tag from the session, which is the instance's, so they change
 with the instance language and no catalog holds a unit word; the server sends

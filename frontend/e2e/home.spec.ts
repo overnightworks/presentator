@@ -1,3 +1,4 @@
+import { legalLinks } from '../src/lib/legal.ts';
 import { addDeck, type DeckRecord, expect, type Person, test } from './person.ts';
 import {
 	chooseTheme,
@@ -470,7 +471,7 @@ test.describe('a member', () => {
 test.describe('the account menu', () => {
 	test.use({ person: { role: 'admin' } });
 
-	test('opens the account address in a new tab and carries the legal rows beside the footer', async ({
+	test('opens the account address in a new tab and carries the legal rows', async ({
 		page,
 		context
 	}) => {
@@ -492,10 +493,34 @@ test.describe('the account menu', () => {
 		await expect(page.locator(MENU)).toBeHidden();
 		await opensTheMenu(page);
 		await expect(page.locator(MENU).locator('a[href="/account"]')).toHaveCount(0);
-		for (const label of [words.footer_impressum, words.footer_datenschutz]) {
-			await expect(page.getByRole('link', { name: label })).toHaveCount(2);
-			await expect(page.locator(MENU).getByRole('link', { name: label })).toBeVisible();
-			await expect(page.locator('footer').getByRole('link', { name: label })).toBeVisible();
+		for (const { label, href } of legalLinks(words)) {
+			await expect(page.getByRole('link', { name: label })).toHaveCount(1);
+			const row = page.locator(MENU).getByRole('link', { name: label });
+			await expect(row).toBeVisible();
+			await expect(row).toHaveAttribute('href', href);
 		}
 	});
+});
+
+// Cell 12.
+test.describe('no footer', () => {
+	test.use({ person: { role: 'admin' } });
+
+	for (const [kind, path] of [
+		['the deck list', '/'],
+		['the settings', '/settings'],
+		['the sources list', '/settings/sources'],
+		['the error board', '/no-such-address']
+	] as const) {
+		for (const width of [390, 1280]) {
+			test(`${kind} draws no footer at ${width} px`, async ({ page }) => {
+				await page.setViewportSize({ width, height: 800 });
+
+				await page.goto(path);
+
+				await expect(page.locator('header.top')).toBeVisible();
+				await expect(page.locator('footer')).toHaveCount(0);
+			});
+		}
+	}
 });

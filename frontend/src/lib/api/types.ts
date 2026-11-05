@@ -494,10 +494,6 @@ export interface components {
             decks_empty_title: string;
             /** Decks Title */
             decks_title: string;
-            /** Footer Datenschutz */
-            footer_datenschutz: string;
-            /** Footer Impressum */
-            footer_impressum: string;
             /** For Admins Explanation */
             for_admins_explanation: string;
             /** For Admins Title */
@@ -506,6 +502,10 @@ export interface components {
             language_name: string;
             /** Language Tag */
             language_tag: string;
+            /** Legal Datenschutz */
+            legal_datenschutz: string;
+            /** Legal Impressum */
+            legal_impressum: string;
             /** Log Out */
             log_out: string;
             /** Menu Account */
