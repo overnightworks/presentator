@@ -34,6 +34,8 @@ if TYPE_CHECKING:
     import logging
     from pathlib import Path
 
+    from httpx2 import Response
+
     from tests.support.talk_support import Hosts
 
 WORKLOAD: Final = "workload-access-MARKER"
@@ -87,9 +89,9 @@ def the_audio_of(run: Run) -> list[bytes]:
 
 def hear_through(
     run: Run, *frames: bytes, frames_back: int = 1
-) -> tuple[list[object], list[logging.LogRecord]]:
+) -> tuple[list[dict[str, object]], list[logging.LogRecord]]:
     """Open the browser's hearing socket; the JSON it received and every log record."""
-    received: list[object] = []
+    received: list[dict[str, object]] = []
     with (
         recording_every_logger() as logs,
         run.talk.websocket_connect(HEARING, headers={"origin": TALK_ORIGIN}) as socket,
@@ -127,7 +129,7 @@ _ANSWER_EVENTS: Final = ("text", "sentence", "audio", "done")
 _HEARD_WORDS: Final = (SAID, HEARD_AT_THE_END)
 
 
-def the_ask_beyond_its_answer(run: Run) -> str:
+def the_ask_beyond_its_answer(response: Response) -> str:
     """What the browser got of an ask, less the answer's sentences in its answer events.
 
     The answer is the product: its sentences travel in the `text` field of the
@@ -135,8 +137,8 @@ def the_ask_beyond_its_answer(run: Run) -> str:
     text as the final answer), and in no `error` event, other field, header or
     other byte. Every other marker stays visible, in those fields too.
     """
-    shown = [_without_the_answer(block) for block in run.response.text.split("\n\n")]
-    return "\n\n".join([str(run.response.headers), *shown])
+    shown = [_without_the_answer(block) for block in response.text.split("\n\n")]
+    return "\n\n".join([str(response.headers), *shown])
 
 
 def _without_the_answer(block: str) -> str:
@@ -148,7 +150,7 @@ def _without_the_answer(block: str) -> str:
     return f"event: {event}\ndata: {json.dumps(payload)}"
 
 
-def the_hearing_beyond_its_transcript(received: list[object]) -> str:
+def the_hearing_beyond_its_transcript(received: list[dict[str, object]]) -> str:
     """What the browser got of a hearing, less the heard words in transcript frames.
 
     A transcript frame is a final or partial frame without an `error`; every other
@@ -156,8 +158,8 @@ def the_hearing_beyond_its_transcript(received: list[object]) -> str:
     """
     return str(
         [
-            {**frame, "text": _without_words(frame["text"], _HEARD_WORDS)}
-            if isinstance(frame, dict) and "text" in frame and "error" not in frame
+            {**frame, "text": _without_words(text, _HEARD_WORDS)}
+            if isinstance(text := frame.get("text"), str) and "error" not in frame
             else frame
             for frame in received
         ]

@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from http import HTTPStatus
-from types import SimpleNamespace
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import httpx2
 import pytest
@@ -58,7 +57,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from tests.support.copresenter_support import Run
     from tests.support.talk_support import Hosts
 
 SECOND_SENTENCE = "Noch einer."
@@ -259,7 +257,7 @@ def test_an_access_refusal_on_the_speech_read_is_answered_before_the_stream(
 
 def _heard(
     tmp_path: Path, fake: FakeSpeech, frames_back: int = 1
-) -> tuple[list[object], list[logging.LogRecord]]:
+) -> tuple[list[dict[str, object]], list[logging.LogRecord]]:
     run = drive_through_speech(tmp_path, fake)
     return hear_through(run, b"\x01\x02", frames_back=frames_back)
 
@@ -401,7 +399,10 @@ def test_no_token_or_word_of_the_ask_reaches_a_log_an_error_or_the_browser(
     run = drive_through_speech(tmp_path, service(), scenario)
 
     assert (
-        leaks_of(run, records=run.logged, browser=the_ask_beyond_its_answer(run)) == []
+        leaks_of(
+            run, records=run.logged, browser=the_ask_beyond_its_answer(run.response)
+        )
+        == []
     )
     assert run.logged
 
@@ -481,35 +482,34 @@ def test_a_garbage_health_body_with_a_marker_shows_nothing_of_it(
 
 
 @pytest.mark.parametrize(
-    ("frame", "token_stays"),
+    "frame",
     [
+        pytest.param({"text": f"{SAID} {WORKLOAD}", "final": True}, id="transcript"),
         pytest.param(
-            {"text": f"{SAID} {WORKLOAD}", "final": True}, True, id="transcript"
-        ),
-        pytest.param(
-            {"text": f"{SAID} {WORKLOAD}", "final": True, "error": "x"},
-            True,
-            id="error",
+            {"text": f"{SAID} {WORKLOAD}", "final": True, "error": "x"}, id="error"
         ),
     ],
 )
 def test_the_hearing_filter_hides_only_heard_words_in_transcript_frames(
-    frame: dict[str, object], *, token_stays: bool
+    frame: dict[str, object],
 ) -> None:
     shown = the_hearing_beyond_its_transcript([frame])
 
-    assert (WORKLOAD in shown) is token_stays
+    assert WORKLOAD in shown
     assert (SAID in shown) is ("error" in frame)
 
 
-@pytest.mark.parametrize("event", ["text", "done"])
-def test_the_ask_filter_hides_only_the_answer_sentences(event: str) -> None:
+@pytest.mark.parametrize(
+    ("event", "answer_stays"),
+    [("text", False), ("done", False), ("error", True)],
+)
+def test_the_ask_filter_hides_only_the_answer_sentences(
+    event: str, *, answer_stays: bool
+) -> None:
     payload = json.dumps({"text": f"{THE_GOOD_ANSWER[0]} {WORKLOAD}"})
-    run = SimpleNamespace(
-        response=SimpleNamespace(text=f"event: {event}\ndata: {payload}", headers={})
-    )
+    response = httpx2.Response(200, text=f"event: {event}\ndata: {payload}")
 
-    shown = the_ask_beyond_its_answer(cast("Run", run))
+    shown = the_ask_beyond_its_answer(response)
 
     assert WORKLOAD in shown
-    assert THE_GOOD_ANSWER[0] not in shown
+    assert (THE_GOOD_ANSWER[0] in shown) is answer_stays
