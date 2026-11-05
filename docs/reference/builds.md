@@ -7,8 +7,10 @@ is [trust boundaries](../explanation/trust-boundaries.md).
 ## When a deck builds
 
 A refresh takes the source in and then builds every deck whose commit neither
-its talk was built from nor a build has already been attempted at. A push
-builds the deck it changed, leaves other talks alone, and a deck that cannot
+its talk was built from nor a build has already been attempted at. A standing
+talk whose run is gone from disk counts as built from nothing, so its deck is
+built again once. A push builds the deck it changed and leaves other talks
+alone. A build that fails is tried once for its commit, so a deck that cannot
 build costs one build rather than one per refresh until it is pushed again.
 Builds run inside that refresh, which runs one at a time beside the routes, so
 they follow one another and no page view waits for one.
@@ -70,11 +72,14 @@ A stored path that fits no run, or a listing of the root that did not finish,
 stops the sweep with a log line and deletes nothing, because every run
 would then look unreferenced. A removal that fails is logged and tried again by
 the next pass. An empty or older database is not guarded against: its pass
-deletes the runs only the right database names, and those decks answer 404
-until their next push. Removing a source takes the runs its decks deliver from
+deletes the runs only the right database names, and the next refresh builds
+those decks again. Removing a source takes the runs its decks deliver from
 the same way, and refuses (and deletes no row) over a build that fits no run.
 The directories above the root belong to the operator and are outside this
 rule's threat model.
+
+`builds/` and `mirrors/` are caches that the database rows rebuild, so a
+restore of the database alone is enough.
 
 ## The toolchain
 

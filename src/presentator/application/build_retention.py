@@ -6,6 +6,10 @@ stored path the build runner cannot place, or a listing that did not finish,
 refuses the whole decision, because every run would then look unreferenced. A
 row marked removed goes once its folder has been missing for the period the
 privacy section states, and that pass's sweep takes its runs.
+
+`builds/` is a cache the rows rebuild, as `mirrors/` is: a run a row names that
+is no longer on disk is built again by the next refresh, so a restore of the
+database alone is enough.
 """
 
 import logging
@@ -15,7 +19,7 @@ from operator import attrgetter
 from pathlib import PurePosixPath
 from typing import Final
 
-from presentator.contracts.decks import Deck
+from presentator.contracts.decks import Build, Deck
 from presentator.ports.decks import BuildRun, BuildRunner, DeckStore, SourceStore
 
 _UNPLACED: Final = "build %s is not a run under the builds root"
@@ -45,6 +49,21 @@ def sweep(builder: BuildRunner, sources: SourceStore, store: DeckStore) -> None:
         return
     for run in on_disk - named:
         builder.remove(run)
+
+
+def standing_build(builder: BuildRunner, deck: Deck) -> Build | None:
+    """The build that row delivers, unless its talk or PDF lost its run on disk.
+
+    A listing that did not finish, or a stored path no run owns, proves nothing
+    is missing, as the sweep refuses to act on either.
+    """
+    build, on_disk = deck.build, builder.runs()
+    if build is None or on_disk is None:
+        return build
+    runs = (builder.run_of(path) for path in (build.directory, build.pdf))
+    return (
+        None if any(run is not None and run not in on_disk for run in runs) else build
+    )
 
 
 def delete_absent(
