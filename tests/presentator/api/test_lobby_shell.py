@@ -153,7 +153,9 @@ def test_a_post_to_a_retired_form_address_is_the_frameworks_not_found(
     )
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
-    assert signed_in_lobby.client.get("/api/account").json() == {"theme": None}
+    assert signed_in_lobby.client.get("/api/account").json() == {
+        "theme": ThemeChoice.FOLLOW_SYSTEM.value
+    }
 
 
 @pytest.mark.parametrize(

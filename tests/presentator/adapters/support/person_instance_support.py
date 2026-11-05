@@ -395,6 +395,14 @@ def still_there(database: Path, owned: dict[str, set[int]]) -> dict[str, int]:
         return rows_still_there(connection, owned)
 
 
+_INSTANCE_SETTINGS_BEFORE_THE_THEME_WENT = """
+CREATE TABLE instance_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    name TEXT NOT NULL,
+    language_tag TEXT NOT NULL,
+    theme TEXT NOT NULL
+)
+"""
 _PERSON_PREFERENCES_BEFORE_THE_LANGUAGE_WENT = """
 CREATE TABLE person_preferences (
     user_id TEXT PRIMARY KEY REFERENCES users(id),
@@ -405,12 +413,25 @@ CREATE TABLE person_preferences (
 
 
 def a_file_where_people_chose_a_language(
-    directory: Path, chosen: Sequence[tuple[str, str | None, str | None]]
+    directory: Path,
+    chosen: Sequence[tuple[str, str | None, str | None]],
+    *,
+    instance: tuple[str, str, str] = ("Heim", "en", "dark"),
 ) -> Path:
-    """A file as the release before made it; a row is (user id, language, theme)."""
+    """A file as the release before made it.
+
+    A person's row is (user id, language, theme); the instance row is (name,
+    language, theme) and the file has it, as every file does once an admin saved.
+    """
     database = directory / "presentator.sqlite3"
     create_identity_tables(database)
     with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute(_INSTANCE_SETTINGS_BEFORE_THE_THEME_WENT)
+        connection.execute(
+            "INSERT INTO instance_settings (id, name, language_tag, theme)"
+            " VALUES (1, ?, ?, ?)",
+            instance,
+        )
         connection.execute(_PERSON_PREFERENCES_BEFORE_THE_LANGUAGE_WENT)
         connection.executemany(
             "INSERT INTO person_preferences (user_id, language_tag, theme)"

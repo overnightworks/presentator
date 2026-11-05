@@ -162,9 +162,6 @@ LobbyText.source_remove_confirm
 # any field of `LobbyText`; that a page renders them is proven by the drive.
 LobbyText.section_decks
 LobbyText.section_settings
-LobbyText.theme_follow_system
-LobbyText.theme_light
-LobbyText.theme_dark
 LobbyText.legal_impressum
 LobbyText.legal_datenschutz
 # The Svelte lobby's not-found board, for-admins board and Settings page read
@@ -178,7 +175,6 @@ LobbyText.settings_title
 LobbyText.settings_instance_name
 LobbyText.settings_default_language
 LobbyText.settings_language_hint
-LobbyText.settings_default_theme
 LobbyText.settings_save
 LobbyText.sources_back
 LobbyText.source_remove_cancel

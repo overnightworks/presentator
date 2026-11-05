@@ -254,12 +254,12 @@ export interface components {
         };
         /**
          * AccountView
-         * @description One person's theme override, read and written; `None` leaves it to the instance.
+         * @description One person's own theme, read and written.
          *
          *     No default: one schema serves the body and the answer.
          */
         AccountView: {
-            theme: components["schemas"]["ThemeChoice"] | null;
+            theme: components["schemas"]["ThemeChoice"];
         };
         /**
          * AttemptView
@@ -516,8 +516,6 @@ export interface components {
             section_settings: string;
             /** Settings Default Language */
             settings_default_language: string;
-            /** Settings Default Theme */
-            settings_default_theme: string;
             /** Settings Instance Name */
             settings_instance_name: string;
             /** Settings Language Hint */
@@ -704,12 +702,6 @@ export interface components {
             sources_empty_title: string;
             /** Sources Fetch Now */
             sources_fetch_now: string;
-            /** Theme Dark */
-            theme_dark: string;
-            /** Theme Follow System */
-            theme_follow_system: string;
-            /** Theme Light */
-            theme_light: string;
             /** Wordmark */
             wordmark: string;
         };
@@ -771,7 +763,7 @@ export interface components {
         };
         /**
          * SettingsView
-         * @description The instance defaults and the languages an admin may choose from.
+         * @description The instance settings and the languages an admin may choose from.
          */
         SettingsView: {
             /** Language Tag */
@@ -780,18 +772,16 @@ export interface components {
             languages: components["schemas"]["LanguageView"][];
             /** Name */
             name: string;
-            theme: components["schemas"]["ThemeChoice"];
         };
         /**
          * SettingsWrite
-         * @description The instance defaults an admin sets for everyone without an override.
+         * @description The instance name and language an admin sets for everyone.
          */
         SettingsWrite: {
             /** Language Tag */
             language_tag: string;
             /** Name */
             name: string;
-            theme: components["schemas"]["ThemeChoice"];
         };
         /**
          * SourceDeckView

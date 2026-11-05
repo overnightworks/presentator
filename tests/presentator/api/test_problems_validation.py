@@ -11,6 +11,7 @@ from fastapi.openapi.utils import (
 )
 from httpx2 import Response
 
+from presentator.contracts.preferences import ThemeChoice
 from tests.support.lobby import NEIGHBOUR, Lobby, a_lobby
 from tests.support.sign_in_support import ADMIN, Scene, a_scene
 
@@ -66,7 +67,9 @@ def test_a_theme_outside_the_set_is_answered_without_the_value_and_stores_nothin
     answer = lobby.client.put(_ACCOUNT, json={"theme": _MARKER}, headers=_JSON)
 
     is_the_frameworks_validation_answer(answer, marker=_MARKER)
-    assert lobby.client.get(_ACCOUNT, headers=_JSON).json()["theme"] is None
+    assert lobby.client.get(_ACCOUNT, headers=_JSON).json()["theme"] == (
+        ThemeChoice.FOLLOW_SYSTEM.value
+    )
 
 
 def test_a_language_of_the_wrong_json_type_is_answered_without_the_value() -> None:
@@ -74,7 +77,7 @@ def test_a_language_of_the_wrong_json_type_is_answered_without_the_value() -> No
 
     answer = lobby.client.put(
         _SETTINGS,
-        json={"name": "", "language_tag": _NUMBER_MARKER, "theme": "dark"},
+        json={"name": "", "language_tag": _NUMBER_MARKER},
         headers=_JSON,
     )
 

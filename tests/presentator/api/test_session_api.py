@@ -90,11 +90,7 @@ def test_a_persons_own_theme_wins_and_the_instances_language_is_german() -> None
     admin.sign_in()
     admin.client.put(
         "/api/settings",
-        json={
-            "name": "Heim",
-            "language_tag": "de",
-            "theme": ThemeChoice.FOLLOW_SYSTEM.value,
-        },
+        json={"name": "Heim", "language_tag": "de"},
     )
     member = admin.another_browser()
     member.sign_in(username=NEIGHBOUR)

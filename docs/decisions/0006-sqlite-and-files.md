@@ -40,11 +40,7 @@ replaceable if this decision's assumption ever stops holding.
 
 - Backup is a file copy, and inspection is one `sqlite3` command.
 - There is no separate service to start, upgrade, or monitor beside the app.
-- A column the code no longer reads is dropped in place by `create_tables`
-  (`adapters/schema.py`), one way: `person_preferences.language_tag` went this
-  way. The release before selects that column on every session read, so it
-  cannot read the migrated file, and the way back is the backup taken before
-  the start, then the earlier release.
+- A column the code no longer needs goes in two releases. The first stops reading it, still writes what an earlier release needs to read it (a `NOT NULL` column forces a placeholder on the first insert), and on every start folds what must be folded (a person row that held no theme says `follow-system`). The second drops it in place through `create_tables` (`adapters/schema.py`), gated on `pragma_table_info`, in one transaction and losing no row, and only once a release carrying the first step has been live: hal deploys only the newest tag, so a drop tagged at once leaves the first release never run. So the way back from either release is a newer tag that reverts it, and that code reads the file as it is. One gap stays: after the drop, the first release's code, brought back by a revert, fails every insert that still names the dropped column, so a tag that reverts the drop keeps the drop's own schema and insert. The backup taken before the start is the backstop for damaged data, never the way back from a release. Source: the head's proposal on [#785](https://github.com/overnightworks/presentator/issues/785), 2026-11-05, not the operator's wording. `person_preferences.language_tag` went in one step, before this rule, so the release before F4a cannot read the migrated file.
 - A column an operated file lacks is added in place by `create_tables`
   (`adapters/schema.py`), additive and in one transaction, losing no row; every
   statement names its columns, so the release before still reads the file. On
