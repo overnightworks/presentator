@@ -11,24 +11,23 @@ from typing import TYPE_CHECKING, Final
 
 from presentator.adapters.speech import SpeechHearing, SpeechSpeaking
 from tests.support.copresenter_support import (
-    EVERY_ANSWER_SENTENCE,
     HEARING,
     REFRESH,
     ROTATED,
     TALK_ORIGIN,
+    THE_GOOD_ANSWER,
     Run,
     Scenario,
     accounts_of,
     drive,
     what_the_ask_must_not_show,
 )
-from tests.support.leak_support import recording_every_logger
+from tests.support.leak_support import everything_shown, recording_every_logger
 from tests.support.speech_service import (
     A_SPEECH_ORIGIN,
     A_SPEECH_VOICE,
     FakeSpeech,
 )
-from tests.support.talk_support import A
 
 if TYPE_CHECKING:
     import logging
@@ -43,7 +42,7 @@ THE_SPEECH_MARKERS: Final = (
     "Bearer ",
     "eyJ",
     SAID,
-    *EVERY_ANSWER_SENTENCE,
+    *THE_GOOD_ANSWER,
 )
 
 
@@ -101,13 +100,12 @@ def hear_through(
 def stored_session_markers(run: Run, markers: tuple[str, ...]) -> list[str]:
     """The markers in a stored session row, column by column.
 
-    The refresh token's own column holds the refresh tokens and the user column the
-    account by design; the talk host keeps no id token, so its id token column is
-    exempt from nothing.
+    Only the refresh token's own column may hold the refresh tokens, and the user
+    column the row id of the account it belongs to.
     """
     own_markers = {
         "refresh_token": {REFRESH, ROTATED},
-        "user_id": {A.id, *accounts_of(run.hosts)},
+        "user_id": set(accounts_of(run.hosts)),
     }
     with closing(sqlite3.connect(run.hosts.database)) as connection:
         cursor = connection.execute("SELECT * FROM sessions")
@@ -119,4 +117,37 @@ def stored_session_markers(run: Run, markers: tuple[str, ...]) -> list[str]:
         for column, value in zip(columns, row, strict=True)
         for marker in markers
         if marker in str(value) and marker not in own_markers.get(column, set())
+    ]
+
+
+def the_ask_beyond_its_answer(run: Run) -> str:
+    """What the browser got of an ask, less the answer's own words in its answer events.
+
+    The answer is the product: its sentences travel in every event of the answer,
+    and in no `error` event, header or other byte of the response.
+    """
+    shown = [
+        block if block.startswith("event: error\n") else _without_the_answer(block)
+        for block in run.response.text.split("\n\n")
+    ]
+    return "\n\n".join([str(run.response.headers), *shown])
+
+
+def _without_the_answer(block: str) -> str:
+    for sentence in THE_GOOD_ANSWER:
+        block = block.replace(sentence, "")
+    return block
+
+
+def leaks_of(run: Run, *, records: list[logging.LogRecord], browser: str) -> list[str]:
+    """Every L1 marker found on a surface it must not reach, with the surface."""
+    markers = what_speech_must_not_show(run)
+    logged = everything_shown(records, run.errors)
+    return [
+        *[f"{marker!r} in a log or an error" for marker in markers if marker in logged],
+        *[f"{marker!r} in the browser" for marker in markers if marker in browser],
+        *[
+            f"{marker!r} in a stored session"
+            for marker in stored_session_markers(run, markers)
+        ],
     ]

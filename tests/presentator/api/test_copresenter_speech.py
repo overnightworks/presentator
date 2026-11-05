@@ -6,14 +6,15 @@ import logging
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
+import httpx2
 import pytest
 from agent_runtime_client.backend.fake_gateway import FakeGateway, completion
+from fastapi.responses import Response
 from speech_runtime_client import wire
 
 from tests.support.copresenter_support import (
     ACCESS,
     ADMIN_GROUPS,
-    EVERY_ANSWER_SENTENCE,
     HEARING,
     ROTATED,
     TALK_ORIGIN,
@@ -23,27 +24,30 @@ from tests.support.copresenter_support import (
     the_ticket_was_released,
     the_token_endpoint_goes_down,
     the_token_thread_fails,
+    who,
 )
-from tests.support.leak_support import everything_shown
+from tests.support.leak_support import recording_every_logger
 from tests.support.speech_drive import (
     SAID,
     WORKLOAD,
     drive_through_speech,
     hear_through,
-    stored_session_markers,
+    leaks_of,
+    the_ask_beyond_its_answer,
     the_audio_of,
-    what_speech_must_not_show,
 )
 from tests.support.speech_service import (
     A_MARKED_WAV,
     A_SPEECH_SCOPE,
     DELTA,
+    BreakingTransport,
     FakeSpeech,
     a_refusal,
     completed,
     delta,
     error_event,
 )
+from tests.support.talk_support import A_DECK
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -109,7 +113,6 @@ def test_a_speak_refusal_ends_the_answer_in_a_plain_error_after_what_was_spoken(
 
     assert run.events == ["text", "sentence", "error"]
     assert "reason" not in run.error_payload()
-    assert SAID not in run.response.text
     assert the_ticket_was_released(run)
 
 
@@ -122,27 +125,32 @@ def test_the_workload_grant_asks_for_exactly_the_configured_scope(
     assert run.hosts.issuer.workload_scopes == [A_SPEECH_SCOPE]
 
 
-@pytest.mark.parametrize(
-    "refusal", ["workload_is_refused", "workload_scope_is_invalid"]
-)
-def test_an_issuer_that_refuses_the_workload_grant_ends_the_ask_before_the_stream(
-    tmp_path: Path, refusal: str, caplog: pytest.LogCaptureFixture
-) -> None:
-    """G2: the ruled 503, the closed reason logged, none of the issuer's words."""
+WORKLOAD_REFUSALS = ("workload_is_refused", "workload_scope_is_invalid")
 
+
+def _the_issuer_refuses_the_workload(refusal: str) -> Callable[[Hosts], None]:
     def refuse(hosts: Hosts) -> None:
         setattr(hosts.issuer, refusal, True)
         hosts.issuer.refusal_description = SAID
 
+    return refuse
+
+
+@pytest.mark.parametrize("refusal", WORKLOAD_REFUSALS)
+def test_an_issuer_that_refuses_the_workload_grant_ends_the_ask_before_the_stream(
+    tmp_path: Path, refusal: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """G2: the ruled 503 and the closed reason logged; L1 holds the issuer's words."""
     caplog.set_level(logging.DEBUG)
 
     fake = FakeSpeech()
-    run = drive_through_speech(tmp_path, fake, Scenario(arrange=refuse))
+    run = drive_through_speech(
+        tmp_path, fake, Scenario(arrange=_the_issuer_refuses_the_workload(refusal))
+    )
 
     assert run.response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert run.gateway.requests == []
     assert fake.speaks == []
-    assert SAID not in everything_shown(run.logged, run.errors)
     assert "issuer gave nothing" in caplog.text
     assert the_ticket_was_released(run)
 
@@ -311,6 +319,19 @@ def _hearing_error_with_a_marker() -> FakeSpeech:
     return FakeSpeech(after_audio=[error_event(SAID)])
 
 
+class _SpeechWhoseBodyIsCutOff(FakeSpeech):
+    def transports(self) -> httpx2.AsyncBaseTransport:
+        return BreakingTransport(httpx2.RemoteProtocolError(SAID))
+
+
+class _SpeechNobodyAnswers(FakeSpeech):
+    def transports(self) -> httpx2.AsyncBaseTransport:
+        def refuse(request: httpx2.Request) -> httpx2.Response:
+            raise httpx2.ConnectError(SAID, request=request)
+
+        return httpx2.MockTransport(refuse)
+
+
 LEAKY_ASKS: dict[str, tuple[Scenario, Callable[[], FakeSpeech]]] = {
     "good-ask": (Scenario(), FakeSpeech),
     "busy-with-a-wait": (
@@ -323,12 +344,32 @@ LEAKY_ASKS: dict[str, tuple[Scenario, Callable[[], FakeSpeech]]] = {
         Scenario(),
         lambda: FakeSpeech(speak_refusal=a_refusal(wire.RefusalCode.BUSY)),
     ),
-    "refusal-echoing-the-marker": (
+    **{
+        f"refusal-{code.value}-echoing-the-marker": (
+            Scenario(),
+            lambda code=code: FakeSpeech(
+                speak_refusal=a_refusal(code, "voice", message=SAID)
+            ),
+        )
+        for code in wire.RefusalCode
+    },
+    "not-json-500": (
         Scenario(),
-        lambda: FakeSpeech(
-            speak_refusal=a_refusal(wire.RefusalCode.FORBIDDEN, message=SAID)
-        ),
+        lambda: FakeSpeech(speak_refusal=Response(f"not json {SAID}", status_code=500)),
     ),
+    "empty-body": (
+        Scenario(),
+        lambda: FakeSpeech(speak_refusal=Response(b"", media_type="audio/wav")),
+    ),
+    "truncated-body": (Scenario(), _SpeechWhoseBodyIsCutOff),
+    "refused-connection": (Scenario(), _SpeechNobodyAnswers),
+    **{
+        f"issuer-{refusal}": (
+            Scenario(arrange=_the_issuer_refuses_the_workload(refusal)),
+            FakeSpeech,
+        )
+        for refusal in WORKLOAD_REFUSALS
+    },
     "revoked-refresh-token": (
         Scenario(before_ask=the_refresh_token_is_revoked),
         FakeSpeech,
@@ -353,33 +394,32 @@ def test_no_token_or_word_of_the_ask_reaches_a_log_an_error_or_the_browser(
     """L1: every logger at DEBUG, the quietened libraries included."""
     run = drive_through_speech(tmp_path, service(), scenario)
 
-    logged = everything_shown(run.logged, run.errors)
-    browser = f"{run.response.headers}\n{run.response.text}"
-    markers = what_speech_must_not_show(run)
-    for marker in markers:
-        assert marker not in logged
-        if marker not in EVERY_ANSWER_SENTENCE:
-            assert marker not in browser
-    assert stored_session_markers(run, markers) == []
+    assert (
+        leaks_of(run, records=run.logged, browser=the_ask_beyond_its_answer(run)) == []
+    )
     assert run.logged
 
 
 @pytest.mark.parametrize(
-    ("service", "browser_hears_the_word"),
+    ("service", "frames_back", "browser_hears_the_word"),
     [
         pytest.param(
             FakeSpeech(after_audio=[delta(SAID), completed("ok")]),
+            2,
             True,
             id="good-hearing",
         ),
-        pytest.param(_hearing_error_with_a_marker(), False, id="error-with-a-marker"),
+        pytest.param(
+            _hearing_error_with_a_marker(), 1, False, id="error-with-a-marker"
+        ),
         pytest.param(
             FakeSpeech(after_audio=[{"type": DELTA, "delta": SAID}]),
+            1,
             False,
             id="malformed-event",
         ),
         pytest.param(
-            FakeSpeech(after_audio=[f"not json {SAID}"]), False, id="non-json"
+            FakeSpeech(after_audio=[f"not json {SAID}"]), 1, False, id="non-json"
         ),
         pytest.param(
             FakeSpeech(
@@ -387,41 +427,42 @@ def test_no_token_or_word_of_the_ask_reaches_a_log_an_error_or_the_browser(
                     wire.RefusalCode.BUSY, retry_after="3", message=SAID
                 )
             ),
+            1,
             False,
             id="busy-at-the-upgrade",
         ),
     ],
 )
 def test_no_token_or_heard_word_of_a_hearing_reaches_a_log_an_error_or_a_row(
-    tmp_path: Path, service: FakeSpeech, *, browser_hears_the_word: bool
+    tmp_path: Path,
+    service: FakeSpeech,
+    frames_back: int,
+    *,
+    browser_hears_the_word: bool,
 ) -> None:
     """L1: records, errors and stored rows; the heard word only to the browser."""
     run = drive_through_speech(tmp_path, service)
 
-    received, records = hear_through(run, b"\x01\x02")
+    received, records = hear_through(run, b"\x01\x02", frames_back=frames_back)
 
-    logged = everything_shown(records, run.errors)
     browser = str(received)
-    markers = what_speech_must_not_show(run)
-    assert stored_session_markers(run, markers) == []
-    for marker in markers:
-        assert marker not in logged
-        if marker != SAID:
-            assert marker not in browser
+    assert leaks_of(run, records=records, browser=browser.replace(SAID, "")) == []
     assert (SAID in browser) is browser_hears_the_word
     assert records
 
 
 def test_a_garbage_health_body_with_a_marker_shows_nothing_of_it(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path,
 ) -> None:
     """L1: the readiness read."""
     fake = FakeSpeech(
         health_answer=a_refusal(wire.RefusalCode.UNAVAILABLE, message=SAID)
     )
     run = drive_through_speech(tmp_path, fake)
-    caplog.set_level(logging.DEBUG)
 
-    answer = run.talk.get("/copresenter/who?deck=kern")
+    with recording_every_logger() as logs:
+        answer = who(run.talk, A_DECK)
 
-    assert SAID not in answer.text + caplog.text
+    browser = f"{answer.headers}\n{answer.text}"
+    assert leaks_of(run, records=logs.records, browser=browser) == []
+    assert logs.records

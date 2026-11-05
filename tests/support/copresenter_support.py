@@ -419,12 +419,6 @@ API_MEMBER_GROUPS: Final = [*ADMIN_GROUPS, AN_API_GROUP]
 THE_ASKED_DECK: Final = {**SPOKEN_QUESTION, "deck": A_TALKED_DECK}
 TWO_SENTENCES: Final = "Erster Satz. Zweiter Satz."
 THE_GOOD_ANSWER: Final = ("Ein Satz.", "Noch einer.")
-EVERY_ANSWER_SENTENCE: Final = (
-    *THE_GOOD_ANSWER,
-    "Erster Satz.",
-    "Zweiter Satz.",
-    "Dritter.",
-)
 
 
 def a_good_gateway() -> Gateway:
