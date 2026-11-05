@@ -10,7 +10,7 @@ export function readSettings(fetcher: typeof fetch, here: URL): Promise<Settings
 	return getJson<SettingsView>(fetcher, SETTINGS_PATH, here);
 }
 
-/** Replaces all three defaults and answers what is stored. */
+/** Replaces both defaults and answers what is stored. */
 export function writeSettings(fetcher: typeof fetch, write: SettingsWrite): Promise<SettingsView> {
 	return putJson<SettingsView, SettingsWrite>(fetcher, SETTINGS_PATH, write);
 }

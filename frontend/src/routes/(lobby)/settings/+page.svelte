@@ -1,36 +1,27 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { invalidate } from '$app/navigation';
-	import type { ThemeChoice } from '#lib/api/account.ts';
 	import { SESSION_PATH } from '#lib/api/session.ts';
 	import { writeSettings } from '#lib/api/settings.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const words = $derived(data.session.words);
-	const themes = $derived<{ value: ThemeChoice; label: string }[]>([
-		{ value: 'follow-system', label: words.theme_follow_system },
-		{ value: 'light', label: words.theme_light },
-		{ value: 'dark', label: words.theme_dark }
-	]);
 
 	// What is typed, from the stored values at first. The session re-read after a
 	// save makes `data` new again, and that must not put the old values back.
 	let name = $state(untrack(() => data.settings.name));
 	let language = $state(untrack(() => data.settings.language_tag));
-	let theme = $state(untrack(() => data.settings.theme));
 	let saving = $state(false);
 
-	// The effective look belongs to the server (a person's own choice outranks
-	// the default), so the repaint reads the session again instead of setting a theme.
+	// The words belong to the server, so the repaint reads the session again.
 	async function save(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
 		saving = true;
 		try {
-			const stored = await writeSettings(fetch, { name, language_tag: language, theme });
+			const stored = await writeSettings(fetch, { name, language_tag: language });
 			name = stored.name;
 			language = stored.language_tag;
-			theme = stored.theme;
 			await invalidate(SESSION_PATH);
 		} finally {
 			saving = false;
@@ -71,14 +62,6 @@
 			{/each}
 		</select>
 		<span id="language-hint" class="hint" popover="auto">{words.settings_language_hint}</span>
-	</div>
-	<div class="fld">
-		<label for="default-theme">{words.settings_default_theme}</label>
-		<select class="control" id="default-theme" name="theme" bind:value={theme}>
-			{#each themes as option (option.value)}
-				<option {...{ value: option.value }}>{option.label}</option>
-			{/each}
-		</select>
 	</div>
 	<div class="actions">
 		<button class="btn primary" type="submit" disabled={saving}>{words.settings_save}</button>

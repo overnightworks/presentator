@@ -21,15 +21,6 @@ msgstr "Settings"
 msgid "menu_account"
 msgstr "Account"
 
-msgid "theme_follow_system"
-msgstr "Follow system"
-
-msgid "theme_light"
-msgstr "Light"
-
-msgid "theme_dark"
-msgstr "Dark"
-
 msgid "log_out"
 msgstr "Log out"
 
@@ -181,9 +172,6 @@ msgstr "Default language"
 
 msgid "settings_language_hint"
 msgstr "Add a catalog file to add a language."
-
-msgid "settings_default_theme"
-msgstr "Default theme"
 
 msgid "settings_save"
 msgstr "Save"

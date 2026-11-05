@@ -18,9 +18,6 @@ class LobbyText:
     section_decks: str
     section_settings: str
     menu_account: str
-    theme_follow_system: str
-    theme_light: str
-    theme_dark: str
     legal_impressum: str
     legal_datenschutz: str
     decks_title: str
@@ -65,7 +62,6 @@ class LobbyText:
     settings_instance_name: str
     settings_default_language: str
     settings_language_hint: str
-    settings_default_theme: str
     settings_save: str
     sources_column_source: str
     sources_column_fetched: str

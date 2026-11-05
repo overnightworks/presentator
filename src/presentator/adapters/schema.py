@@ -8,12 +8,16 @@ from presentator.adapters.identity import create_identity_tables
 from presentator.adapters.preferences import create_preference_tables
 from presentator.adapters.sqlite import immediate_transaction
 from presentator.contracts.decks import BuildFailureReason
+from presentator.contracts.preferences import ThemeChoice
 
 _DECK_COLUMNS: Final = "SELECT name FROM pragma_table_info('decks')"
 _PERSON_PREFERENCE_COLUMNS: Final = (
     "SELECT name FROM pragma_table_info('person_preferences')"
 )
 _THE_PERSONAL_LANGUAGE: Final = "language_tag"
+_UNCHOSEN_THEME_FOLLOWS_THE_SYSTEM: Final = (
+    "UPDATE person_preferences SET theme = ? WHERE theme IS NULL"
+)
 _ADD_COLUMNS: Final = {
     "attempt_reason": "ALTER TABLE decks ADD COLUMN attempt_reason TEXT",
     "attempt_written_megabytes": (
@@ -63,6 +67,7 @@ def create_tables(database: Path) -> None:
     create_deck_tables(database)
     _keep_the_failure_reason(database)
     _drop_the_personal_language(database)
+    _unchosen_theme_follows_the_system(database)
 
 
 def _keep_the_failure_reason(database: Path) -> None:
@@ -102,3 +107,17 @@ def _drop_the_personal_language(database: Path) -> None:
             cursor.execute(
                 f"ALTER TABLE person_preferences DROP COLUMN {_THE_PERSONAL_LANGUAGE}"
             )
+
+
+def _unchosen_theme_follows_the_system(database: Path) -> None:
+    """Give a person row that held no theme the value that means none, on every start.
+
+    No row goes and no stored choice changes. The release before still reads the
+    file; what is lost is which people had no choice. A `NULL` that release
+    writes afterwards is folded again at the next start, so going forward after
+    a rollback reads every row.
+    """
+    with immediate_transaction(database) as cursor:
+        cursor.execute(
+            _UNCHOSEN_THEME_FOLLOWS_THE_SYSTEM, (ThemeChoice.FOLLOW_SYSTEM.value,)
+        )
