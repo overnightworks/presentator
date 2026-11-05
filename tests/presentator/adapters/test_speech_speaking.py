@@ -1,132 +1,191 @@
-"""Speaking one sentence over speech's private socket, against a fake of speech."""
+"""Speaking one sentence through the shared service, against the in-process fake."""
 
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+import logging
 
+import httpx2
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import Response
+from speech_runtime_client import wire
 
-from presentator.adapters.speech import UdsSpeaking
-from presentator.contracts.copresenter import CoPresenterUnavailableError
-from tests.presentator.adapters.support.serving import Serving, unix_listener
+from presentator.adapters.speech import SpeechSpeaking
+from presentator.contracts.copresenter import CoPresenterUnavailableError, SpeechTokens
+from tests.support.speech_service import (
+    A_MARKED_WAV,
+    A_SPEECH_ORIGIN,
+    A_SPEECH_VOICE,
+    BreakingTransport,
+    FakeSpeech,
+    a_refusal,
+)
 
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
-    from pathlib import Path
-
-WAV_CHUNKS = (b"RIFF", b"-first-", b"-second-")
-
-
-class FakeSpeech:
-    """A fake /speak that records requests and notices its connection closing."""
-
-    def __init__(self) -> None:
-        """Build the app with its one /speak route."""
-        self.requests: list[dict[str, str]] = []
-        self.connection_closed = asyncio.Event()
-        self.first_chunk_sent = asyncio.Event()
-        self.app = FastAPI()
-        self.app.add_api_route("/speak", self._speak, methods=["POST"])
-        self.body = self._whole_wav
-
-    async def _speak(self, request: Request) -> Response:
-        self.requests.append(await request.json())
-        return self.body()
-
-    def _whole_wav(self) -> Response:
-        return StreamingResponse(self._chunks(WAV_CHUNKS), media_type="audio/wav")
-
-    def stalling(self) -> Response:
-        return StreamingResponse(self._stall(), media_type="audio/wav")
-
-    async def _chunks(self, chunks: tuple[bytes, ...]) -> AsyncIterator[bytes]:
-        for chunk in chunks:
-            yield chunk
-            await asyncio.sleep(0)
-
-    async def _stall(self) -> AsyncIterator[bytes]:
-        try:
-            yield b"RIFF"
-            self.first_chunk_sent.set()
-            await asyncio.sleep(30)
-        finally:
-            self.connection_closed.set()
+TOKENS = SpeechTokens(person="person-MARKER", workload="workload-MARKER")
+MARKER = "echoed-MARKER"
 
 
-async def speak_against(tmp_path: Path, fake: FakeSpeech, **speaking: float) -> bytes:
-    socket_path = tmp_path / "speech.sock"
-    async with Serving(fake.app, unix_listener(socket_path)):
-        return await UdsSpeaking(socket_path, **speaking).speak("Eins.", "de")
+def speaking_through(fake: FakeSpeech) -> SpeechSpeaking:
+    return SpeechSpeaking(A_SPEECH_ORIGIN, A_SPEECH_VOICE, transports=fake.transports)
 
 
-def test_speaking_returns_the_whole_wav_and_sends_text_and_language(
-    tmp_path: Path,
-) -> None:
+def speak(fake: FakeSpeech, text: str = "Eins.") -> bytes:
+    return asyncio.run(speaking_through(fake).speak(text, "de", TOKENS))
+
+
+def test_a_speak_request_carries_the_persons_token_and_the_apps_own() -> None:
+    """T1."""
     fake = FakeSpeech()
 
-    wav = asyncio.run(speak_against(tmp_path, fake))
+    speak(fake)
 
-    assert wav == b"".join(WAV_CHUNKS)
-    assert fake.requests == [{"text": "Eins.", "language": "de"}]
+    (received,) = fake.speaks
+    assert received.headers["authorization"] == f"Bearer {TOKENS.person}"
+    assert received.headers[wire.WORKLOAD_TOKEN_HEADER.lower()] == TOKENS.workload
+
+
+def test_the_body_names_the_configured_voice_and_the_sentence_and_no_language() -> None:
+    """T2: `SpeechRequest` forbids any other field, so parsing it proves the body."""
+    fake = FakeSpeech()
+
+    speak(fake, "Ein Satz.")
+
+    request = wire.SpeechRequest.model_validate_json(fake.speaks[0].body)
+    assert (request.voice, request.input) == (A_SPEECH_VOICE, "Ein Satz.")
+
+
+def test_the_wav_passes_through_unchanged_with_its_ai_mark() -> None:
+    """T4."""
+    assert speak(FakeSpeech()) == A_MARKED_WAV
+
+
+def test_a_sentence_without_a_letter_or_digit_is_unavailable_and_sent_nowhere() -> None:
+    """T5: the client refuses to build the body."""
+    fake = FakeSpeech()
+
+    with pytest.raises(CoPresenterUnavailableError) as failed:
+        speak(fake, "…")
+
+    assert (failed.value.__cause__, failed.value.__context__) == (None, None)
+
+    assert fake.speaks == []
+
+
+@pytest.mark.parametrize("code", list(wire.RefusalCode))
+def test_every_refusal_of_the_wire_is_unavailable_and_logs_only_closed_values(
+    code: wire.RefusalCode, caplog: pytest.LogCaptureFixture
+) -> None:
+    """T5."""
+    fake = FakeSpeech(speak_refusal=a_refusal(code, "voice", message=MARKER))
+    caplog.set_level(logging.DEBUG)
+
+    with pytest.raises(CoPresenterUnavailableError):
+        speak(fake)
+
+    assert MARKER not in caplog.text
+    assert code.value in caplog.text
+
+
+@pytest.mark.parametrize("retry_after", [None, "3", "soon"])
+def test_a_busy_answer_ends_the_speak_whatever_it_says_about_the_wait(
+    retry_after: str | None, caplog: pytest.LogCaptureFixture
+) -> None:
+    """T5."""
+    refusal = a_refusal(wire.RefusalCode.BUSY, retry_after=retry_after)
+    caplog.set_level(logging.DEBUG)
+
+    fake = FakeSpeech(speak_refusal=refusal)
+
+    with pytest.raises(CoPresenterUnavailableError):
+        speak(fake)
+
+    if retry_after is not None:
+        assert f"wait={retry_after if retry_after.isdigit() else 'malformed'}" in (
+            caplog.text
+        )
 
 
 @pytest.mark.parametrize(
-    "refusal",
+    "answer",
     [
-        pytest.param(
-            lambda: JSONResponse({"detail": "not ready"}, status_code=503), id="503"
-        ),
-        pytest.param(lambda: Response(b"", media_type="audio/wav"), id="empty-body"),
+        pytest.param(Response(MARKER, status_code=500), id="not-json"),
+        pytest.param(Response(b"", media_type="audio/wav"), id="empty-body"),
     ],
 )
-def test_a_refusal_or_an_empty_body_is_unavailable(
-    tmp_path: Path, refusal: Callable[[], Response]
+def test_an_answer_that_is_no_wav_and_no_refusal_is_unavailable(
+    answer: Response, caplog: pytest.LogCaptureFixture
 ) -> None:
-    fake = FakeSpeech()
-    fake.body = refusal
+    """T5."""
+    caplog.set_level(logging.DEBUG)
 
-    speaking = speak_against(tmp_path, fake)
+    fake = FakeSpeech(speak_refusal=answer)
 
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(speaking)
+        speak(fake)
+
+    assert MARKER not in caplog.text
 
 
-def test_a_missing_socket_is_unavailable(tmp_path: Path) -> None:
-    speech = UdsSpeaking(tmp_path / "absent.sock").speak("Eins.", "de")
-
-    with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(speech)
-
-
-def test_a_stalled_body_is_unavailable_and_closes_the_connection(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(httpx2.RemoteProtocolError("cut off"), id="truncated-body"),
+        pytest.param(httpx2.ReadTimeout("stalled"), id="stalled-body"),
+    ],
+)
+def test_a_body_that_breaks_is_unavailable_and_the_connection_is_closed(
+    error: httpx2.TransportError,
 ) -> None:
-    fake = FakeSpeech()
-    fake.body = fake.stalling
+    """T5, T6: a missing end of the chunked body is a failed request."""
+    broken = BreakingTransport(error)
+    speaking = SpeechSpeaking(
+        A_SPEECH_ORIGIN, A_SPEECH_VOICE, transports=lambda: broken
+    )
+
+    spoken = speaking.speak("Eins.", "de", TOKENS)
+
+    with pytest.raises(CoPresenterUnavailableError) as failed:
+        asyncio.run(spoken)
+
+    assert (failed.value.__cause__, failed.value.__context__) == (None, None)
+    assert broken.body.closed.is_set()
+
+
+def test_a_refused_connection_is_unavailable() -> None:
+    """T5."""
+
+    def refusing() -> httpx2.AsyncBaseTransport:
+        return httpx2.MockTransport(_refuse)
+
+    speaking = SpeechSpeaking(A_SPEECH_ORIGIN, A_SPEECH_VOICE, transports=refusing)
+
+    spoken = speaking.speak("Eins.", "de", TOKENS)
+
+    with pytest.raises(CoPresenterUnavailableError) as failed:
+        asyncio.run(spoken)
+
+    assert (failed.value.__cause__, failed.value.__context__) == (None, None)
+
+
+def _refuse(request: httpx2.Request) -> httpx2.Response:
+    message = "refused"
+    raise httpx2.ConnectError(message, request=request)
+
+
+def test_a_cancelled_speak_closes_the_connection() -> None:
+    """T6: a browser that leaves mid-answer cancels the speak."""
+    stalled = BreakingTransport(None)
+    speaking = SpeechSpeaking(
+        A_SPEECH_ORIGIN, A_SPEECH_VOICE, transports=lambda: stalled
+    )
 
     async def scenario() -> None:
-        with pytest.raises(CoPresenterUnavailableError):
-            await speak_against(tmp_path, fake, read_timeout=0.2)
-        await asyncio.wait_for(fake.connection_closed.wait(), timeout=5)
-
-    asyncio.run(scenario())
-
-
-def test_a_cancelled_speak_closes_the_connection_and_raises_nothing_unavailable(
-    tmp_path: Path,
-) -> None:
-    fake = FakeSpeech()
-    fake.body = fake.stalling
-
-    async def scenario() -> None:
-        task = asyncio.create_task(speak_against(tmp_path, fake))
-        await asyncio.wait_for(fake.first_chunk_sent.wait(), timeout=5)
+        task = asyncio.create_task(speaking.speak("Eins.", "de", TOKENS))
+        await stalled.body.started.wait()
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
-        await asyncio.wait_for(fake.connection_closed.wait(), timeout=5)
 
     asyncio.run(scenario())
+
+    assert stalled.body.closed.is_set()

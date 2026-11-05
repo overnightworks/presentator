@@ -365,7 +365,7 @@ async def _hearing_lease(
         if first_frame is None:
             return
         try:
-            async with use.hear(language) as hearing:
+            async with use.hear(language, session_id=session_id) as hearing:
                 await hearing.send_pcm(first_frame)
                 private_ended = await _pipe_hearing(
                     socket,

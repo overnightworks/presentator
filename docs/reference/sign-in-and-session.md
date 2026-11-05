@@ -14,8 +14,11 @@ sign-in, and no password is stored.
   logged out." in the kit's own words, with one Log in button and the legal
   links. The button leaves the app for `/login/oidc`, which answers 303 to
   the issuer with PKCE, `state` and `nonce`. The scopes are `openid`,
-  `profile` and `groups`; the co-presenter reads the person's groups from a
-  refresh grant, so no further scope is asked.
+  `profile`, `groups` and the configured speech scope
+  (`PRESENTATOR_SPEECH_SERVICE_SCOPE`), so the person's access token names the
+  speech service. A session opened before that scope was asked has no speech
+  audience on refresh: it hears "No hearing" and its answers end in "No answer"
+  until it ends or the person signs out and in.
 - The return at `/auth/callback` admits only members of the Keycloak group
   `/apps/presentator` (admins: `/apps/presentator/admin`), opens one session,
   sets the cookies once and lands on the requested path or `/`. The groups

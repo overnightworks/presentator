@@ -22,6 +22,7 @@ A_BACKCHANNEL_EVENT = "http://schemas.openid.net/event/backchannel-logout"
 _TOKEN_LIFETIME_SECONDS = 300
 _AUTHORIZATION_CODE = "authorization_code"
 _REFRESH_TOKEN = "refresh_token"  # noqa: S105
+_CLIENT_CREDENTIALS = "client_credentials"
 
 
 def _base64url(data: bytes) -> str:
@@ -44,8 +45,13 @@ def _signed(
     return f"{signing_input}.{_base64url(signature)}"
 
 
-def _refusal(error: str, status: HTTPStatus) -> TokenEndpointAnswer:
-    return TokenEndpointAnswer(status, json.dumps({"error": error}).encode())
+def _refusal(
+    error: str, status: HTTPStatus, description: str | None = None
+) -> TokenEndpointAnswer:
+    document = {"error": error}
+    if description is not None:
+        document["error_description"] = description
+    return TokenEndpointAnswer(status, json.dumps(document).encode())
 
 
 def _access_document(access_token: str) -> dict[str, str]:
@@ -64,9 +70,14 @@ class FakeIssuer:
         self._tokens_by_code: dict[str, str] = {}
         self._refresh_token: str | None = None
         self._person_access_token = secrets.token_urlsafe(8)
+        self._workload_access_token = secrets.token_urlsafe(8)
         self._rotated_refresh_token: str | None = None
         self._revoked_refresh_tokens: set[str] = set()
         self.grant_types: list[str] = []
+        self.workload_is_refused = False
+        self.workload_scope_is_invalid = False
+        self.workload_scopes: list[str] = []
+        self.refusal_description: str | None = None
         self._holding: tuple[str, list[str], str | None] | None = None
         self.issued_id_tokens: list[str] = []
         self.during_token_request: Callable[[], None] = lambda: None
@@ -81,6 +92,10 @@ class FakeIssuer:
     def issue_person_access_token(self, token: str) -> None:
         """Answer every later refresh grant with this access token."""
         self._person_access_token = token
+
+    def issue_workload_access_token(self, token: str) -> None:
+        """Answer every later client-credentials grant with this access token."""
+        self._workload_access_token = token
 
     def hold_groups(self, groups: list[str]) -> None:
         """Answer every later refresh grant with an ID token naming these groups."""
@@ -216,6 +231,8 @@ class FakeIssuer:
             return self._code_exchange(request.form["code"])
         if grant_type == _REFRESH_TOKEN:
             return self._refresh(request.form[_REFRESH_TOKEN])
+        if grant_type == _CLIENT_CREDENTIALS:
+            return self._client_credentials(request.form["scope"])
         return _refusal("unsupported_grant_type", HTTPStatus.BAD_REQUEST)
 
     def _code_exchange(self, code: str) -> TokenEndpointAnswer:
@@ -238,6 +255,21 @@ class FakeIssuer:
         if self._rotated_refresh_token is not None:
             document[_REFRESH_TOKEN] = self._rotated_refresh_token
         return TokenEndpointAnswer(HTTPStatus.OK, json.dumps(document).encode())
+
+    def _client_credentials(self, scope: str) -> TokenEndpointAnswer:
+        self.workload_scopes.append(scope)
+        if self.workload_is_refused:
+            return _refusal(
+                "invalid_client", HTTPStatus.UNAUTHORIZED, self.refusal_description
+            )
+        if self.workload_scope_is_invalid:
+            return _refusal(
+                "invalid_scope", HTTPStatus.BAD_REQUEST, self.refusal_description
+            )
+        return TokenEndpointAnswer(
+            HTTPStatus.OK,
+            json.dumps(_access_document(self._workload_access_token)).encode(),
+        )
 
     def fetch_key_set(self, url: str) -> bytes:
         """The key set endpoint: the one public key, or a failed fetch."""

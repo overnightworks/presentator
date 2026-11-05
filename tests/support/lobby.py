@@ -100,6 +100,11 @@ from tests.presentator.application.support.fakes import (
     FakeWebhookSecrets,
     FrozenClock,
 )
+from tests.support.speech_service import (
+    A_SPEECH_ORIGIN,
+    A_SPEECH_SCOPE,
+    A_SPEECH_VOICE,
+)
 
 
 def _write_throwaway_file(content: str) -> Path:
@@ -293,6 +298,9 @@ def a_settings() -> Settings:
         public_origin=A_BROWSERS_ADDRESS,
         talk_origin=A_TALK_ADDRESS,
         agent=an_agent_config(),
+        speech_service=A_SPEECH_ORIGIN,
+        speech_service_scope=A_SPEECH_SCOPE,
+        speech_voice=A_SPEECH_VOICE,
         oidc_issuer=AN_ISSUER,
         oidc_client_id=A_CLIENT_ID,
         oidc_client_secret_file=Path("/run/oidc-client-secret"),

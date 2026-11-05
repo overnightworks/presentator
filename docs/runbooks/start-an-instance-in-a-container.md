@@ -29,9 +29,12 @@ port is published; the edge's proxy is the only way in.
    start.
 2. Open the public origin and sign in.
 
-A deployed instance has no voice: the speech process is not part of the
-release, so speaking and hearing report "not yet available"
-([co-presenter and voice](../reference/co-presenter-and-voice.md)).
+The instance speaks and hears through the shared speech service on the
+network `hal_speech_presentator`, which the edge creates with the service's
+unit. Without the service the overlay says "Voice offline"
+([co-presenter and voice](../reference/co-presenter-and-voice.md)). The
+sign-in client in Keycloak must be allowed the optional scope
+`speech-service-audience`, which hal's `hal apply` sets.
 
 ## Check
 

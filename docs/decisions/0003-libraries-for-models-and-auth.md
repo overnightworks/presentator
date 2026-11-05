@@ -484,6 +484,16 @@ through webauth's `current_groups`. The adapters-only rule now names
 `presentator.agent` as the one place that imports `agent_runtime_client`. The
 older amendments above keep their history.
 
+### Amendment 2026-11-05 — speech-runtime's client v0.2.0 owns the speech wire
+
+`overnightworks-speech-runtime-client` v0.2.0 owns the speech wire: the paths,
+the request, the refusals and the Realtime events. Only `adapters/speech.py`
+imports it, and the contract `speech-runtime-client-library` and an AST test
+keep it so. The workload grant is back, for the speech service's audience, and
+`adapters/session_access.py` (`SessionAccess`) is the one owner of what the
+issuer grants a signed-in session: its groups and the speech tokens. It imports
+nothing from `agent_runtime_client`, which `agent/` alone names.
+
 ## Consequences
 
 - Which model presents becomes configuration, not code, and the phase M1 work is

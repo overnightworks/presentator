@@ -8,8 +8,10 @@ import pytest
 
 from presentator.application.copresenter import CoPresenterUse, PreparedAsk
 from presentator.contracts.copresenter import (
+    AccessRefusal,
     AnswerText,
     CoPresenterReadiness,
+    CoPresenterUnavailableError,
     Question,
 )
 from presentator.contracts.models import Role
@@ -62,7 +64,7 @@ async def _end_hearing() -> None:
     fakes = PrivateFakes()
     use = a_use(fakes, FakeDeckStore())
 
-    async with use.hear("de") as hearing:
+    async with use.hear("de", session_id="a-session") as hearing:
         await hearing.send_pcm(b"pcm")
 
     assert fakes.speech.hearing.frames == [b"pcm"]
@@ -111,3 +113,30 @@ def test_an_answer_without_audio_logs_no_first_audio(
     asyncio.run(_read_until_done(use, a_prepared_ask(use)))
 
     assert caplog.records == []
+
+
+def test_the_tokens_show_in_no_repr_of_the_ask_that_holds_them() -> None:
+    """K3."""
+    prepared = a_prepared_ask(a_use(PrivateFakes(), FakeDeckStore()))
+
+    assert repr(prepared.speech) == "SpeechTokens()"
+    assert "a-person" not in repr(prepared)
+    assert "an-app" not in repr(prepared)
+
+
+def test_a_session_without_speech_tokens_gets_no_hearing_and_opens_none() -> None:
+    """The overlay has no "Sign in again" for hearing, so any refusal is unavailable."""
+    fakes = PrivateFakes()
+    fakes.person_access.refusal = AccessRefusal.SIGN_IN_AGAIN
+    use = a_use(fakes, FakeDeckStore())
+
+    async def hear() -> None:
+        async with use.hear("de", session_id="a-session"):
+            pytest.fail("a refused session was given a hearing")
+
+    hearing = hear()
+
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(hearing)
+
+    assert fakes.speech.hearing_opens == 0

@@ -16,6 +16,7 @@ from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
 from tests.presentator.host.test_worker_serving_loop import clients_closed_with_the_test
 from tests.presentator.host.test_worker_settings import no_worker_variables
 from tests.support.lobby_drive import DeckRecord
+from tests.support.speech_service import BreakingTransport
 
 # `BaseHTTPRequestHandler`'s own request dispatch calls this by name; nothing
 # in the test that stands the server up ever calls it itself.
@@ -206,3 +207,6 @@ ValidationFault.msg
 
 # Pydantic calls the drive's deck-record validator when a request is parsed.
 DeckRecord.builds_fit_the_state
+
+# httpx2 calls the transport's request handler when the adapter sends a request.
+BreakingTransport.handle_async_request

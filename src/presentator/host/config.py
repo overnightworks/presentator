@@ -1,5 +1,6 @@
 """What varies by deployment; everything else is a constant beside its owner."""
 
+import re
 import threading
 from enum import StrEnum
 from functools import cached_property
@@ -27,6 +28,10 @@ SECRET_LENGTH: Final = 32
 _INVALID_PORT: Final = "has an invalid port"
 _REFUSED: Final = "this environment cannot start an instance"
 _EMPTY_CLIENT_ID: Final = "token_clients: names an empty client id"
+_SCOPE_RULE: Final = (
+    "is one scope token of printable characters without a space, quote or backslash"
+)
+_SCOPE_SHAPE: Final = re.compile(r"[\x21\x23-\x5B\x5D-\x7E]+")
 _ONE_HOSTNAME: Final = "talk_origin: is another hostname than public_origin"
 
 ENVIRONMENT_PREFIX: Final = "PRESENTATOR_"
@@ -75,6 +80,18 @@ def _split_client_ids(given: str) -> list[str]:
 def _one_public_origin(given: str) -> str:
     """Require one canonical https origin, without any address suffix."""
     return _one_origin(given, schemes=("https",))
+
+
+def _one_service_origin(given: str) -> str:
+    """Require one canonical http or https origin, as the network inside gives."""
+    return _one_origin(given, schemes=("http", "https"))
+
+
+def _one_scope_token(given: str) -> str:
+    """Require one RFC 6749 scope-token: 1*( %x21 / %x23-5B / %x5D-7E )."""
+    if not _SCOPE_SHAPE.fullmatch(given):
+        raise ValueError(_SCOPE_RULE)
+    return given
 
 
 def _one_origin(given: str, *, schemes: tuple[str, ...]) -> str:
@@ -196,9 +213,13 @@ class Settings(
     # Which backend answers, where its gateway is, the file holding this app's
     # key there and the group that may ask. They are deployment facts: no default.
     agent: AgentSettings
-    speech_socket: Annotated[Path, AfterValidator(_an_absolute_path)] = Path(
-        "/run/presentator-speech/speech.sock"
-    )
+    # Where the shared speech service answers: its origin on the network it
+    # shares with this instance, the scope that names it as the audience of both
+    # tokens, and the one voice this instance speaks with. They are deployment
+    # facts: no default.
+    speech_service: Annotated[str, AfterValidator(_one_service_origin)]
+    speech_service_scope: Annotated[str, AfterValidator(_one_scope_token)]
+    speech_voice: str = Field(min_length=1)
     # Empty: the client address is the ASGI peer. A list is the peers whose
     # X-Forwarded-For this instance believes.
     trusted_proxies: Annotated[str, AfterValidator(_a_proxy_list)] = ""

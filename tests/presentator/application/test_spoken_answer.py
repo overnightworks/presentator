@@ -19,6 +19,7 @@ from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     Done,
     Sentence,
+    SpeechTokens,
 )
 from presentator.contracts.voice import SampleLanguage
 
@@ -89,7 +90,7 @@ class RecordingSpeaking:
         self.calls: list[tuple[str, str]] = []
         self._fail_on = fail_on
 
-    async def speak(self, text: str, language: str) -> bytes:
+    async def speak(self, text: str, language: str, tokens: SpeechTokens) -> bytes:
         self.calls.append((text, language))
         if self._fail_on == len(self.calls):
             raise CoPresenterUnavailableError
@@ -105,7 +106,11 @@ async def _events(
     deltas: tuple[str, ...], speaking: RecordingSpeaking, events: list[AnswerEvent]
 ) -> None:
     async for event in spoken_events(
-        _deltas(*deltas), split_after_terminators, speaking, "de"
+        _deltas(*deltas),
+        split_after_terminators,
+        speaking,
+        "de",
+        SpeechTokens(person="p", workload="w"),
     ):
         # Events must land one by one so a failing stream keeps the earlier ones.
         events.append(event)  # noqa: PERF401

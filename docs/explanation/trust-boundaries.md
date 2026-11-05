@@ -41,9 +41,12 @@ only because of that. The question and the asked deck's words cross with it, and
 the model gets no tools. The person crosses as a fingerprint of their issuer and
 account id; no token of theirs and no name does. Whom the gateway admits is
 hal's; Presentator answers only members of its API group, read from the issuer
-for every question. Speech stays a private Unix socket under the shared UID:
-readiness, PCM, transcript and spoken sentences cross it, and browser identity
-and credentials do not.
+for every question. Speech is a shared service on the internal network
+`hal_speech_presentator`, with no connection to the internet. Both tokens cross
+to it, the person's access token and Presentator's own, on every speak request
+and Realtime upgrade; so do the sentences, the person's audio and the
+transcripts. Nothing of the browser's identity does, and the service keeps
+neither tokens, audio nor text.
 
 ## Keycloak reaches the logout route from inside
 

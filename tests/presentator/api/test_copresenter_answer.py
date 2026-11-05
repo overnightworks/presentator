@@ -27,9 +27,6 @@ from presentator.adapters.deck_texts import MirroredDeckTexts
 from presentator.api.copresenter import (
     NOT_ENABLED_REASON,
 )
-from presentator.application.copresenter import (
-    AskTicket,
-)
 from presentator.contracts.decks import Build, Deck
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
 from tests.support.copresenter_support import (
@@ -49,6 +46,7 @@ from tests.support.copresenter_support import (
     drive,
     the_refresh_token_is_revoked,
     the_session_ends_during_the_grant,
+    the_ticket_was_released,
     the_token_endpoint_goes_down,
     the_token_thread_fails,
     what_the_ask_must_not_show,
@@ -154,17 +152,6 @@ def test_a_signed_in_admins_ask_reaches_the_gateway_with_only_that_decks_words(
     assert the_ticket_was_released(run)
 
 
-def the_ticket_was_released(run: Run) -> bool:
-    """Whether every ticket the ask took is free again, so its session may ask."""
-    assert run.limiter.session_ids
-    for session_id in set(run.limiter.session_ids):
-        ticket = run.limiter.admit(session_id)
-        if not isinstance(ticket, AskTicket):
-            return False
-        ticket.release()
-    return True
-
-
 @pytest.mark.parametrize(
     ("setup", "status", "detail"),
     [
@@ -245,16 +232,6 @@ def test_a_doubled_session_cookie_is_refused_before_any_grant(tmp_path: Path) ->
     assert refused.json() == {"detail": "Invalid session"}
     assert len(run.gateway.requests) == 1
     assert len(run.hosts.issuer.grant_types) == grants
-
-
-def test_one_question_makes_one_refresh_grant_and_no_client_credentials_grant(
-    tmp_path: Path,
-) -> None:
-    """C4: the groups come from one refresh grant; no workload grant exists."""
-    run = drive(tmp_path)
-
-    assert run.response.status_code == HTTPStatus.OK
-    assert run.grants_since_sign_in == ["refresh_token"]
 
 
 def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made(

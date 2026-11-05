@@ -8,7 +8,11 @@ import logging
 import re
 import sqlite3
 import threading
-from contextlib import AbstractAsyncContextManager, asynccontextmanager, closing
+from contextlib import (
+    AbstractAsyncContextManager,
+    asynccontextmanager,
+    closing,
+)
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Final
 
@@ -16,7 +20,8 @@ import anyio
 from agent_runtime_client.backend.fake_gateway import FakeGateway, Reply, completion
 
 from presentator.adapters.sentences import split_sentences
-from presentator.agent.backend import SessionGroups, gateway_answerer
+from presentator.adapters.session_access import SessionAccess
+from presentator.agent.backend import gateway_answerer
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import (
     AskLimiter,
@@ -33,6 +38,7 @@ from presentator.contracts.copresenter import (
     DeckText,
     HearingTranscript,
     SlideText,
+    SpeechTokens,
 )
 from presentator.contracts.decks import Deck, Source
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
@@ -43,6 +49,7 @@ from tests.presentator.application.support.fakes import (
     FrozenClock,
 )
 from tests.support.deck_page_support import a_build, a_deck_store
+from tests.support.leak_support import recording_every_logger
 from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     A_GATEWAY_KEY,
@@ -58,6 +65,7 @@ from tests.support.lobby import (
     a_talk_app,
     an_agent_config,
 )
+from tests.support.speech_service import A_SPEECH_SCOPE
 from tests.support.talk_support import A_DECK as A_TALKED_DECK
 from tests.support.talk_support import A, Hosts, two_hosts
 
@@ -81,6 +89,8 @@ if TYPE_CHECKING:
         DeckTexts,
         PersonAccess,
         PrivateHearing,
+        Speaking,
+        SpeechHearing,
     )
 
 TALK_ORIGIN = A_TALK_ADDRESS
@@ -169,6 +179,7 @@ class RecordingSpeech:
     hearing_unavailable: bool = False
     grouped_hearing_context: bool = False
     local_hearing_ready: bool = True
+    tokens: list[SpeechTokens] = field(default_factory=list[SpeechTokens])
 
     async def readiness(self) -> CoPresenterReadiness:
         self.readiness_calls += 1
@@ -179,10 +190,13 @@ class RecordingSpeech:
             local_hearing_ready=self.local_hearing_ready,
         )
 
-    def hear(self, language: str) -> AbstractAsyncContextManager[PrivateHearing]:
+    def hear(
+        self, language: str, tokens: SpeechTokens
+    ) -> AbstractAsyncContextManager[PrivateHearing]:
         @asynccontextmanager
         async def operation() -> AsyncGenerator[PrivateHearing]:
             assert language == "de"
+            self.tokens.append(tokens)
             self.hearing_opens += 1
             if self.hearing_unavailable:
                 raise CoPresenterUnavailableError
@@ -252,12 +266,14 @@ class FakeSpeaking:
     """Speaks every sentence as the same WAV header, and remembers what it spoke."""
 
     spoken: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
+    tokens: list[SpeechTokens] = field(default_factory=list[SpeechTokens])
     fails_at: int | None = None
 
-    async def speak(self, text: str, language: str) -> bytes:
+    async def speak(self, text: str, language: str, tokens: SpeechTokens) -> bytes:
         if self.fails_at == len(self.spoken):
             raise CoPresenterUnavailableError
         self.spoken.append((text, language))
+        self.tokens.append(tokens)
         return b"RIFF"
 
 
@@ -274,6 +290,12 @@ class FakePersonAccess:
         if self.unavailable:
             raise CoPresenterUnavailableError
         return self.refusal or frozenset({AN_API_GROUP})
+
+    async def speech_tokens_of(self, session_id: str) -> SpeechTokens | AccessRefusal:
+        self.sessions.append(session_id)
+        if self.unavailable:
+            raise CoPresenterUnavailableError
+        return self.refusal or SpeechTokens(person="a-person", workload="an-app")
 
 
 @dataclass
@@ -396,10 +418,11 @@ ADMIN_GROUPS: Final = ["/apps/presentator", "/apps/presentator/admin"]
 API_MEMBER_GROUPS: Final = [*ADMIN_GROUPS, AN_API_GROUP]
 THE_ASKED_DECK: Final = {**SPOKEN_QUESTION, "deck": A_TALKED_DECK}
 TWO_SENTENCES: Final = "Erster Satz. Zweiter Satz."
+THE_GOOD_ANSWER: Final = ("Ein Satz.", "Noch einer.")
 
 
 def a_good_gateway() -> Gateway:
-    return FakeGateway(completion("Ein Satz. Noch einer."))
+    return FakeGateway(completion(" ".join(THE_GOOD_ANSWER)))
 
 
 @dataclass
@@ -411,18 +434,6 @@ class RecordingLimiter(AskLimiter):
     def admit(self, session_id: str) -> AskTicket | RetryAfter:
         self.session_ids.append(session_id)
         return super().admit(session_id)
-
-
-class RecordingLogs(logging.Handler):
-    """Every record any logger raises while an ask runs."""
-
-    def __init__(self) -> None:
-        """Start with nothing recorded."""
-        super().__init__(logging.NOTSET)
-        self.records: list[logging.LogRecord] = []
-
-    def emit(self, record: logging.LogRecord) -> None:
-        self.records.append(record)
 
 
 class WitnessedAnswers:
@@ -445,6 +456,33 @@ class WitnessedAnswers:
             raise
 
 
+class WitnessedHearing:
+    """The real hearing port, keeping every error it lets out for the leak check."""
+
+    def __init__(self, hearing: SpeechHearing, errors: list[BaseException]) -> None:
+        """Wrap this hearing."""
+        self._hearing = hearing
+        self._errors = errors
+
+    async def readiness(self) -> CoPresenterReadiness:
+        try:
+            return await self._hearing.readiness()
+        except BaseException as error:
+            self._errors.append(error)
+            raise
+
+    @asynccontextmanager
+    async def hear(
+        self, language: str, tokens: SpeechTokens
+    ) -> AsyncGenerator[PrivateHearing]:
+        try:
+            async with self._hearing.hear(language, tokens) as hearing:
+                yield hearing
+        except BaseException as error:
+            self._errors.append(error)
+            raise
+
+
 class WitnessedAccess:
     """The real group read, keeping every error it lets out for the leak check."""
 
@@ -456,6 +494,13 @@ class WitnessedAccess:
     async def groups_of(self, session_id: str) -> frozenset[str] | AccessRefusal:
         try:
             return await self._access.groups_of(session_id)
+        except BaseException as error:
+            self._errors.append(error)
+            raise
+
+    async def speech_tokens_of(self, session_id: str) -> SpeechTokens | AccessRefusal:
+        try:
+            return await self._access.speech_tokens_of(session_id)
         except BaseException as error:
             self._errors.append(error)
             raise
@@ -488,6 +533,16 @@ class Run:
             r"^event: error\ndata: (.*)$", self.response.text, re.MULTILINE
         )
         return json.loads(payload)
+
+
+def the_ticket_was_released(run: Run) -> bool:
+    assert run.limiter.session_ids
+    for session_id in set(run.limiter.session_ids):
+        ticket = run.limiter.admit(session_id)
+        if not isinstance(ticket, AskTicket):
+            return False
+        ticket.release()
+    return True
 
 
 def delete_the_sessions(hosts: Hosts) -> None:
@@ -550,13 +605,42 @@ def arrange_the_issuer(hosts: Hosts, scenario: Scenario) -> None:
     scenario.arrange(hosts)
 
 
-def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
+def witnessed_answers(
+    auth: InstalledAuth, gateway: Gateway, errors: list[BaseException]
+) -> WitnessedAnswers:
+    answerer = gateway_answerer(
+        an_agent_config(), auth.relying_party, transport=gateway
+    )
+    return WitnessedAnswers(answerer, errors)
+
+
+def witnessed_access(
+    auth: InstalledAuth,
+    sessions: SqliteSessionRecordStore,
+    errors: list[BaseException],
+) -> WitnessedAccess:
+    access = SessionAccess(
+        auth.relying_party,
+        sessions,
+        auth.config,
+        speech_scope=A_SPEECH_SCOPE,
+    )
+    return WitnessedAccess(access, errors)
+
+
+def drive(
+    tmp_path: Path,
+    scenario: Scenario = Scenario(),  # noqa: B008
+    *,
+    speech: tuple[SpeechHearing, Speaking] | None = None,
+) -> Run:
     """Sign an admin in at the talk host, then ask once."""
     gateway = scenario.gateway()
     limiter = RecordingLimiter(clock=FrozenClock(instant=NOW))
     fakes = the_fakes_of(scenario)
     hosts_made: list[Hosts] = []
     errors: list[BaseException] = []
+    hearing, speaking = speech or (fakes.speech, fakes.speaking)
 
     async def wait(seconds: float) -> None:
         if scenario.delay is None:
@@ -569,21 +653,14 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
     ) -> CoPresenterSurface:
         return CoPresenterSurface(
             use=CoPresenterUse(
-                answers=WitnessedAnswers(
-                    gateway_answerer(
-                        an_agent_config(), auth.relying_party, transport=gateway
-                    ),
-                    errors,
-                ),
-                speech=fakes.speech,
+                answers=witnessed_answers(auth, gateway, errors),
+                speech=WitnessedHearing(hearing, errors),
                 decks=store,
                 sources=FakeSourceStore(sources=scenario.sources or [A_SOURCE]),
                 texts=scenario.texts or fakes.texts,
                 boundaries=split_sentences,
-                speaking=fakes.speaking,
-                person_access=WitnessedAccess(
-                    SessionGroups(auth.relying_party, sessions, auth.config), errors
-                ),
+                speaking=speaking,
+                person_access=witnessed_access(auth, sessions, errors),
             ),
             limiter=limiter,
             browser_origin=A_TALK_ADDRESS,
@@ -615,16 +692,8 @@ def ask_recording_logs(
     talk: TestClient, scenario: Scenario
 ) -> tuple[Response, list[logging.LogRecord]]:
     """One ask with every logger at DEBUG; the response and each record raised."""
-    logs = RecordingLogs()
-    root = logging.getLogger()
-    level = root.level
-    root.addHandler(logs)
-    root.setLevel(logging.DEBUG)
-    try:
+    with recording_every_logger() as logs:
         response = ask_as_asked(talk, scenario.body, scenario.headers)
-    finally:
-        root.removeHandler(logs)
-        root.setLevel(level)
     return response, logs.records
 
 

@@ -1,6 +1,7 @@
 """The relying party is built from settings; an instance without them cannot start."""
 
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from pydantic import SecretStr
@@ -28,6 +29,7 @@ from tests.support.lobby import (
     LOBBY_SHELL,
     a_settings,
 )
+from tests.support.talk_support import two_hosts
 
 _UNDECODABLE: bytes = b"fake-secret-bytes-\xff\xfe"
 
@@ -49,11 +51,37 @@ def test_the_client_is_derived_from_the_issuer_and_the_public_origin() -> None:
     assert "groups" in config.scopes
 
 
-def test_the_sign_in_asks_for_no_agent_service_scope_and_the_settings_name_none() -> (
-    None
-):
-    """C13: the model call needs no audience, so the sign-in asks for none."""
-    assert not [name for name in Settings.model_fields if "scope" in name]
+@pytest.mark.parametrize("scope", ["one-audience", "another-audience"])
+def test_the_sign_in_asks_for_the_person_scopes_and_the_one_speech_scope(
+    scope: str,
+) -> None:
+    """G1: the model call asks no audience, the speech service its one."""
+    settings = a_settings().model_copy(update={"speech_service_scope": scope})
+
+    config = oidc_client_config(
+        settings, SecretStr(A_CLIENT_CREDENTIAL), origin=A_BROWSERS_ADDRESS
+    )
+
+    assert config.scopes == ("openid", "profile", "groups", scope)
+    assert not [name for name in Settings.model_fields if "agent_service" in name]
+
+
+@pytest.mark.parametrize("address", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])
+def test_both_hosts_start_the_sign_in_asking_for_the_speech_scope(
+    tmp_path: Path, address: str
+) -> None:
+    """G1: the lobby's and the talk host's real `/login/oidc` name the scope."""
+    hosts = two_hosts(tmp_path)
+
+    started = hosts.browser(address).get(f"{address}/login/oidc")
+
+    asked = parse_qs(urlsplit(started.headers["location"]).query)["scope"][0]
+    assert asked.split() == [
+        "openid",
+        "profile",
+        "groups",
+        a_settings().speech_service_scope,
+    ]
 
 
 # T3.
