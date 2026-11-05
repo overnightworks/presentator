@@ -110,10 +110,9 @@ Playwright through the declared `playwright-chromium` of `slidev/`, so run
 | `m0-lobby/not-found-address.png`, `not-found-address-dark.png` | Unknown address, inside the lobby | E6, sentence 5, new words |
 | `m0-lobby/for-admins.png`, `for-admins-dark.png` | Admin address opened by a non-admin | E6, sentence 5, new words |
 
-Every signed-in board keeps the footer with Impressum and Datenschutz as #196
-ruled; the sign-in boards carry the same two links below the card. The person menu
-additionally carries the legal row, as family §4 has it: that row is an addition,
-and whether the footer stays beside it is the operator's choice. Both link to the
+No board draws a footer: the lobby no longer ends with legal links (#784). The person
+menu carries the quiet legal row with Impressum and Datenschutz, as family §4 has it,
+and the sign-in boards carry the same two links below the card. Both link to the
 central pages on `hallucinai.de` (Datenschutz at its `#presentator` section); the
 Datenschutz page itself is edge's, with presentator's words in
 `legal/datenschutz.html`, so no board draws it (issue #593).

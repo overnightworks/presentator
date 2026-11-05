@@ -51,8 +51,8 @@ async function showsTheRefusalBoard(
 	refusal: (typeof refusals)[number]
 ): Promise<void> {
 	await expect(page.locator('.signin .wordmark')).toHaveText(session.words.wordmark);
-	await expect(page.getByRole('link', { name: session.words.footer_impressum })).toBeVisible();
-	await expect(page.getByRole('link', { name: session.words.footer_datenschutz })).toBeVisible();
+	await expect(page.getByRole('link', { name: session.words.legal_impressum })).toBeVisible();
+	await expect(page.getByRole('link', { name: session.words.legal_datenschutz })).toBeVisible();
 	if (refusal.action === 'log-out') {
 		await expect(page.locator('form.log-out')).toHaveAttribute('action', session.sign_in.logout);
 		await expect(page.locator('form.log-out')).toHaveAttribute('method', /post/i);

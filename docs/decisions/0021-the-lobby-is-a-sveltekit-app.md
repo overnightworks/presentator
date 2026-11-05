@@ -51,7 +51,7 @@ interaction became a template, a fragment and a form route.
   redirect: a page load there gets the shell, and the router settles on
   `/deck/{slug}`.
 - The root load reads the session once; the `(lobby)` route group holds the
-  header and footer, so `/login` and the refusals stay headerless. Home, at
+  header, so `/login` and the refusals stay headerless. Home, at
   `/`, is the first page in the group; the deck page at `/deck/{slug}` is the
   second, and it draws its own unknown-deck board for a 404. Settings General,
   the Sources list (`/settings/sources`), Add source (`/settings/sources/new`)

@@ -609,14 +609,6 @@
             "title": "Decks Title",
             "type": "string"
           },
-          "footer_datenschutz": {
-            "title": "Footer Datenschutz",
-            "type": "string"
-          },
-          "footer_impressum": {
-            "title": "Footer Impressum",
-            "type": "string"
-          },
           "for_admins_explanation": {
             "title": "For Admins Explanation",
             "type": "string"
@@ -631,6 +623,14 @@
           },
           "language_tag": {
             "title": "Language Tag",
+            "type": "string"
+          },
+          "legal_datenschutz": {
+            "title": "Legal Datenschutz",
+            "type": "string"
+          },
+          "legal_impressum": {
+            "title": "Legal Impressum",
             "type": "string"
           },
           "log_out": {
@@ -1057,8 +1057,8 @@
           "theme_follow_system",
           "theme_light",
           "theme_dark",
-          "footer_impressum",
-          "footer_datenschutz",
+          "legal_impressum",
+          "legal_datenschutz",
           "decks_title",
           "decks_column_state",
           "decks_column_deck",

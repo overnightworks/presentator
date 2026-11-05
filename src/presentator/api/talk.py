@@ -120,7 +120,7 @@ def create_talk(
         refused=refused,
         keeps_id_token=False,
         max_sessions=None,
-        logout_button_label=None,
+        logout_page_text=None,
     )
     add_talk_mount(talk, decks=decks)
     if copresenter is not None:
