@@ -455,6 +455,33 @@ class WitnessedAnswers:
             raise
 
 
+class WitnessedHearing:
+    """The real hearing port, keeping every error it lets out for the leak check."""
+
+    def __init__(self, hearing: SpeechHearing, errors: list[BaseException]) -> None:
+        """Wrap this hearing."""
+        self._hearing = hearing
+        self._errors = errors
+
+    async def readiness(self) -> CoPresenterReadiness:
+        try:
+            return await self._hearing.readiness()
+        except BaseException as error:
+            self._errors.append(error)
+            raise
+
+    @asynccontextmanager
+    async def hear(
+        self, language: str, tokens: SpeechTokens
+    ) -> AsyncGenerator[PrivateHearing]:
+        try:
+            async with self._hearing.hear(language, tokens) as hearing:
+                yield hearing
+        except BaseException as error:
+            self._errors.append(error)
+            raise
+
+
 class WitnessedAccess:
     """The real group read, keeping every error it lets out for the leak check."""
 
@@ -626,7 +653,7 @@ def drive(
         return CoPresenterSurface(
             use=CoPresenterUse(
                 answers=witnessed_answers(auth, gateway, errors),
-                speech=hearing,
+                speech=WitnessedHearing(hearing, errors),
                 decks=store,
                 sources=FakeSourceStore(sources=scenario.sources or [A_SOURCE]),
                 texts=scenario.texts or fakes.texts,
