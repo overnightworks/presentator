@@ -11,10 +11,7 @@ from typing import TYPE_CHECKING, Final
 
 from presentator.adapters.speech import SpeechHearing, SpeechSpeaking
 from tests.support.copresenter_support import (
-    ACCESS,
     HEARING,
-    REFRESH,
-    ROTATED,
     TALK_ORIGIN,
     Run,
     Scenario,
@@ -91,14 +88,16 @@ def hear_through(
 
 
 def stored_session_rows_but_the_refresh_token(run: Run) -> str:
-    """Every stored session column the refresh token does not own, as text."""
+    """Every stored session column the refresh token and the account own, as text.
+
+    The id token column holds the issued id tokens by design, so only those are
+    cut out of it: anything else stored there is shown.
+    """
     with closing(sqlite3.connect(run.hosts.database)) as connection:
         rows = connection.execute(
-            "SELECT id, user_id, created_at, expires_at, id_token FROM sessions"
+            "SELECT id, created_at, expires_at, id_token FROM sessions"
         ).fetchall()
-    return repr(rows)
-
-
-def what_a_stored_session_must_not_hold() -> tuple[str, ...]:
-    """The tokens and words of a speech call; the refresh token has its own column."""
-    return (ACCESS, REFRESH, ROTATED, WORKLOAD, SAID)
+    text = repr(rows)
+    for issued in run.hosts.issuer.issued_id_tokens:
+        text = text.replace(issued, "")
+    return text

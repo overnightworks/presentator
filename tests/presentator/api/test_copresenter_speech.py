@@ -31,7 +31,6 @@ from tests.support.speech_drive import (
     hear_through,
     stored_session_rows_but_the_refresh_token,
     the_audio_of,
-    what_a_stored_session_must_not_hold,
     what_speech_must_not_show,
 )
 from tests.support.speech_service import (
@@ -355,9 +354,11 @@ def test_no_token_or_word_of_the_ask_reaches_a_log_an_error_or_the_browser(
 
     logged = everything_shown(run.logged, run.errors)
     browser = f"{run.response.headers}\n{run.response.text}"
+    stored = stored_session_rows_but_the_refresh_token(run)
     for marker in what_speech_must_not_show(run):
         assert marker not in logged
         assert marker not in browser
+        assert marker not in stored
     assert run.logged
 
 
@@ -400,10 +401,9 @@ def test_no_token_or_heard_word_of_a_hearing_reaches_a_log_an_error_or_a_row(
     logged = everything_shown(records, run.errors)
     stored = stored_session_rows_but_the_refresh_token(run)
     browser = str(received)
-    for marker in what_a_stored_session_must_not_hold():
-        assert marker not in stored
     for marker in what_speech_must_not_show(run):
         assert marker not in logged
+        assert marker not in stored
         if marker != SAID:
             assert marker not in browser
     assert (SAID in browser) is browser_hears_the_word
