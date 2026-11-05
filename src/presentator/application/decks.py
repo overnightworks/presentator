@@ -838,13 +838,11 @@ class Decks:
     def _build_what_changed(self, source: Source) -> None:
         """Build that source's decks whose commit nothing has tried yet.
 
-        The commit is the whole change check: a push moves one folder's commit,
-        so only that deck is built again. A folder at the commit of a standing
-        talk whose run is still on disk needs no build. A commit already tried
-        is not tried again, so a deck that cannot build costs one build, not one
-        per refresh. A vanished run is rebuilt: `builds/` and `mirrors/` are
-        caches the rows rebuild, and a gone mirror is cloned again at the next
-        take-in.
+        The commit is the change check: a push moves one folder's commit, so only that
+        deck is rebuilt. A folder at a standing talk's commit whose run is on disk needs
+        no build. A tried commit is not retried, so a deck that cannot build costs one
+        build, not one per refresh. A vanished run is rebuilt: `builds/` and `mirrors/`
+        are caches the rows rebuild; a gone mirror is cloned again at the next take-in.
         """
         for deck in self.store.all():
             if deck.source_id != source.id:
