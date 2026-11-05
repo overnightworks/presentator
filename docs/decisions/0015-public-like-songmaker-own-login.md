@@ -39,7 +39,8 @@ The instance is a public site like Songmaker. Its own login is the only door;
 Cloudflare Access does not stand in front of it, and the tunnel stays the way
 the home server is reached without an inbound port.
 
-Every lobby page, signed in or out, ends with two links. "Impressum" points straight
+The legal links stand in the person menu and on the sign-in pages, not at the foot of
+every lobby page (see the amendment below). "Impressum" points straight
 at the operator's one Impressum on `hallucinai.de`, so the same operator's
 details have one text and no copy here. "Datenschutz" opens the instance's own
 Datenschutzerklärung at `/datenschutz`, which names what this instance stores
