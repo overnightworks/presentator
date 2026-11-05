@@ -842,7 +842,9 @@ class Decks:
         so only that deck is built again. A folder at the commit of a standing
         talk whose run is still on disk needs no build. A commit already tried
         is not tried again, so a deck that cannot build costs one build, not one
-        per refresh. A vanished run is rebuilt: `builds/` and `mirrors/` are caches.
+        per refresh. A vanished run is rebuilt: `builds/` and `mirrors/` are
+        caches the rows rebuild, and a gone mirror is cloned again at the next
+        take-in.
         """
         for deck in self.store.all():
             if deck.source_id != source.id:
