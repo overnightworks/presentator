@@ -196,8 +196,10 @@ def test_a_failure_the_service_reports_is_no_hearing_and_shows_nothing_it_said(
     """H4."""
     caplog.set_level(logging.DEBUG)
 
+    fake = FakeSpeech(after_audio=ending)
+
     with pytest.raises(CoPresenterUnavailableError):
-        heard(FakeSpeech(after_audio=ending))
+        heard(fake)
 
     assert MARKER not in caplog.text
 
@@ -218,8 +220,10 @@ def test_a_refused_upgrade_is_no_hearing(
     """H5."""
     caplog.set_level(logging.DEBUG)
 
+    fake = FakeSpeech(upgrade_refusal=refusal)
+
     with pytest.raises(CoPresenterUnavailableError):
-        heard(FakeSpeech(upgrade_refusal=refusal))
+        heard(fake)
 
     assert MARKER not in caplog.text
 
@@ -240,9 +244,10 @@ def test_an_upgrade_a_plain_transport_refuses_is_no_hearing_and_logs_the_wait(
         A_SPEECH_ORIGIN, A_SPEECH_VOICE, transports=lambda: httpx2.MockTransport(answer)
     )
     caplog.set_level(logging.DEBUG)
+    hearing = hear_everything(service)
 
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(hear_everything(service))
+        asyncio.run(hearing)
 
     assert "wait=3" in caplog.text
     assert MARKER not in caplog.text
@@ -252,8 +257,10 @@ def test_a_refused_connection_is_no_hearing() -> None:
     """H5."""
     unreachable = SpeechHearing("http://127.0.0.1:1", A_SPEECH_VOICE)
 
+    hearing = hear_everything(unreachable)
+
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(hear_everything(unreachable))
+        asyncio.run(hearing)
 
 
 @pytest.mark.parametrize("code", [1000, 1009, 1011, 1013])
@@ -287,8 +294,10 @@ def test_a_frame_that_is_not_a_modelled_event_is_no_hearing(
     """H7."""
     caplog.set_level(logging.DEBUG)
 
+    fake = FakeSpeech(after_audio=[frame])
+
     with pytest.raises(CoPresenterUnavailableError):
-        heard(FakeSpeech(after_audio=[frame]))
+        heard(fake)
 
     assert MARKER not in caplog.text
 
@@ -331,8 +340,10 @@ def test_a_failed_hearing_keeps_no_exception_that_saw_the_input(
     service: Callable[[], SpeechHearing],
 ) -> None:
     """G4, L1: neither `__cause__` nor `__context__`, and no word in the error."""
+    hearing = hear_everything(service())
+
     with pytest.raises(CoPresenterUnavailableError) as failed:
-        asyncio.run(hear_everything(service()))
+        asyncio.run(hearing)
 
     assert (failed.value.__cause__, failed.value.__context__) == (None, None)
     assert MARKER not in everything_shown(errors=[failed.value])

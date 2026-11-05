@@ -61,8 +61,10 @@ def test_hearing_that_is_still_loading_is_not_ready_whatever_the_voice_does(
 )
 def test_an_answer_that_is_no_health_is_unavailable(answer: Response) -> None:
     """R3, G4: no exception of the unreadable body is kept."""
+    fake = FakeSpeech(health_answer=answer)
+
     with pytest.raises(CoPresenterUnavailableError) as failed:
-        readiness_of(FakeSpeech(health_answer=answer))
+        readiness_of(fake)
 
     assert (failed.value.__cause__, failed.value.__context__) == (None, None)
 
@@ -71,8 +73,10 @@ def test_an_unreachable_origin_is_unavailable() -> None:
     """R3."""
     hearing = SpeechHearing("http://127.0.0.1:1", A_SPEECH_VOICE)
 
+    readiness = hearing.readiness()
+
     with pytest.raises(CoPresenterUnavailableError) as failed:
-        asyncio.run(hearing.readiness())
+        asyncio.run(readiness)
 
     assert (failed.value.__cause__, failed.value.__context__) == (None, None)
 
@@ -88,8 +92,10 @@ def test_a_voice_that_is_not_there_or_not_ready_is_unavailable(
     health: dict[str, object],
 ) -> None:
     """R4: the asked voice decides, not another one."""
+    fake = FakeSpeech(health_answer=JSONResponse(health))
+
     with pytest.raises(CoPresenterUnavailableError):
-        readiness_of(FakeSpeech(health_answer=JSONResponse(health)))
+        readiness_of(fake)
 
 
 def test_a_service_of_the_older_shape_is_unavailable() -> None:
@@ -101,8 +107,10 @@ def test_a_service_of_the_older_shape_is_unavailable() -> None:
         "card_memory_mb": 1_200,
     }
 
+    fake = FakeSpeech(health_answer=JSONResponse(older))
+
     with pytest.raises(CoPresenterUnavailableError):
-        readiness_of(FakeSpeech(health_answer=JSONResponse(older)))
+        readiness_of(fake)
 
 
 def test_the_health_request_carries_no_credential() -> None:

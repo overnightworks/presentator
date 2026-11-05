@@ -134,7 +134,9 @@ def test_a_session_without_speech_tokens_gets_no_hearing_and_opens_none() -> Non
         async with use.hear("de", session_id="a-session"):
             pytest.fail("a refused session was given a hearing")
 
+    hearing = hear()
+
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(hear())
+        asyncio.run(hearing)
 
     assert fakes.speech.hearing_opens == 0

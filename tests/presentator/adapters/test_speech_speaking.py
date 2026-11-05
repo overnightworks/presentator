@@ -94,8 +94,10 @@ def test_a_busy_answer_ends_the_speak_whatever_it_says_about_the_wait(
     refusal = a_refusal(wire.RefusalCode.BUSY, retry_after=retry_after)
     caplog.set_level(logging.DEBUG)
 
+    fake = FakeSpeech(speak_refusal=refusal)
+
     with pytest.raises(CoPresenterUnavailableError):
-        speak(FakeSpeech(speak_refusal=refusal))
+        speak(fake)
 
     if retry_after is not None:
         assert f"wait={retry_after if retry_after.isdigit() else 'malformed'}" in (
@@ -116,8 +118,10 @@ def test_an_answer_that_is_no_wav_and_no_refusal_is_unavailable(
     """T5."""
     caplog.set_level(logging.DEBUG)
 
+    fake = FakeSpeech(speak_refusal=answer)
+
     with pytest.raises(CoPresenterUnavailableError):
-        speak(FakeSpeech(speak_refusal=answer))
+        speak(fake)
 
     assert MARKER not in caplog.text
 
@@ -138,8 +142,10 @@ def test_a_body_that_breaks_is_unavailable_and_the_connection_is_closed(
         A_SPEECH_ORIGIN, A_SPEECH_VOICE, transports=lambda: broken
     )
 
+    spoken = speaking.speak("Eins.", "de", TOKENS)
+
     with pytest.raises(CoPresenterUnavailableError) as failed:
-        asyncio.run(speaking.speak("Eins.", "de", TOKENS))
+        asyncio.run(spoken)
 
     assert (failed.value.__cause__, failed.value.__context__) == (None, None)
     assert broken.body.closed.is_set()
@@ -153,8 +159,10 @@ def test_a_refused_connection_is_unavailable() -> None:
 
     speaking = SpeechSpeaking(A_SPEECH_ORIGIN, A_SPEECH_VOICE, transports=refusing)
 
+    spoken = speaking.speak("Eins.", "de", TOKENS)
+
     with pytest.raises(CoPresenterUnavailableError) as failed:
-        asyncio.run(speaking.speak("Eins.", "de", TOKENS))
+        asyncio.run(spoken)
 
     assert (failed.value.__cause__, failed.value.__context__) == (None, None)
 
