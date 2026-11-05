@@ -508,7 +508,7 @@ test.describe('the account menu', () => {
 		const textTransformOf = (link: Locator) =>
 			link.evaluate((element) => getComputedStyle(element).textTransform);
 		const headerTransform = await textTransformOf(
-			page.getByRole('banner').getByRole('link', { name: 'Decks' })
+			page.getByRole('banner').getByRole('link', { name: words.section_decks })
 		);
 		await opensTheMenu(page);
 		for (const { label } of legalLinks(words)) {
