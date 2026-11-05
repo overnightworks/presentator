@@ -164,8 +164,8 @@ LobbyText.section_settings
 LobbyText.theme_follow_system
 LobbyText.theme_light
 LobbyText.theme_dark
-LobbyText.footer_impressum
-LobbyText.footer_datenschutz
+LobbyText.legal_impressum
+LobbyText.legal_datenschutz
 # The Svelte lobby's not-found board, for-admins board and Settings page read
 # these from `/api/session`, and the person menu its round button.
 LobbyText.address_unknown_title

@@ -65,7 +65,7 @@ provider receives data is the section `legal/datenschutz.html` of this
 repository, which edge assembles into `https://hallucinai.de/datenschutz`
 beside its general part, the sign-in and the agent service. `GET /datenschutz`
 is no route here (signed in it is 404, signed out it is sent to sign-in like
-any other non-public path), and the footer links the central `#presentator`.
+any other non-public path), and the person menu and the sign-in pages link the central `#presentator`.
 A test holds the numbers of the section equal to the code that keeps them. The words above
 about a page "reachable without a session" now hold for the central page, and
 `presentator.api.legal` no longer exists.

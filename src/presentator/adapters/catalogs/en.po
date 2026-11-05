@@ -33,10 +33,10 @@ msgstr "Dark"
 msgid "log_out"
 msgstr "Log out"
 
-msgid "footer_impressum"
+msgid "legal_impressum"
 msgstr "Impressum"
 
-msgid "footer_datenschutz"
+msgid "legal_datenschutz"
 msgstr "Datenschutz"
 
 msgid "decks_title"
