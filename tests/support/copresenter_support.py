@@ -508,7 +508,6 @@ class Run:
 
 
 def the_ticket_was_released(run: Run) -> bool:
-    """Whether every ticket the ask took is free again, so its session may ask."""
     assert run.limiter.session_ids
     for session_id in set(run.limiter.session_ids):
         ticket = run.limiter.admit(session_id)
@@ -581,7 +580,6 @@ def arrange_the_issuer(hosts: Hosts, scenario: Scenario) -> None:
 def witnessed_answers(
     auth: InstalledAuth, gateway: Gateway, errors: list[BaseException]
 ) -> WitnessedAnswers:
-    """The real gateway answerer, keeping the errors it lets out."""
     answerer = gateway_answerer(
         an_agent_config(), auth.relying_party, transport=gateway
     )
@@ -593,7 +591,6 @@ def witnessed_access(
     sessions: SqliteSessionRecordStore,
     errors: list[BaseException],
 ) -> WitnessedAccess:
-    """The real access to the issuer's grants, keeping the errors it lets out."""
     access = SessionAccess(
         auth.relying_party,
         sessions,
@@ -609,7 +606,7 @@ def drive(
     *,
     speech: tuple[SpeechHearing, Speaking] | None = None,
 ) -> Run:
-    """Sign an admin in at the talk host, then ask once, speaking by the fakes."""
+    """Sign an admin in at the talk host, then ask once."""
     gateway = scenario.gateway()
     limiter = RecordingLimiter(clock=FrozenClock(instant=NOW))
     fakes = the_fakes_of(scenario)
