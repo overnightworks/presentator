@@ -1,7 +1,7 @@
-"""The instance's defaults, a person's overrides, and how a page resolves them.
+"""The instance's settings, a person's choices, and how a page resolves them.
 
-The language is the instance's alone; the theme is the person's own, with the
-instance default behind it (ADR 0012).
+The language is the instance's alone; the theme is the person's own and, with
+none chosen, follows the device (ADR 0012).
 """
 
 from dataclasses import dataclass
@@ -40,10 +40,10 @@ class Preferences:
         return self.instance.read() or InstanceSettings()
 
     def save_instance_settings(self, settings: InstanceSettings) -> None:
-        """Keep the defaults every person without an override reads.
+        """Keep the settings every person reads.
 
         Raises `UnspokenLanguageError` for a language newly chosen that no catalog
-        speaks; the one already stored stays, so a theme change survives a
+        speaks; the one already stored stays, so a name change survives a
         removed catalog.
         """
         self._require_newly_chosen_spoken(
@@ -52,22 +52,22 @@ class Preferences:
         self.instance.write(settings)
 
     def preferences_of(self, user_id: str) -> PersonPreferences:
-        """What that person chose, with an unset field meaning the instance."""
+        """What that person chose, or follow-system while they chose nothing."""
         return self.people.read(user_id) or PersonPreferences()
 
     def save_preferences_of(self, user_id: str, chosen: PersonPreferences) -> None:
-        """Keep that person's override; the instance default stays untouched."""
+        """Keep that person's choice; the instance settings stay untouched."""
         self.people.write(user_id, chosen)
 
     def appearance_for(self, user_id: str | None) -> Appearance:
-        """The instance's words, and the person's theme or else the instance's."""
+        """The instance's words, and the person's own theme."""
         settings = self.instance_settings()
         chosen = (
             PersonPreferences() if user_id is None else self.preferences_of(user_id)
         )
         return Appearance(
             text=self.catalogs.text(settings.language_tag),
-            theme=chosen.theme or settings.theme,
+            theme=chosen.theme,
         )
 
     def languages(self) -> tuple[Language, ...]:

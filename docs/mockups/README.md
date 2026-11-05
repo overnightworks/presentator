@@ -118,7 +118,7 @@ Datenschutz page itself is edge's, with presentator's words in
 `legal/datenschutz.html`, so no board draws it (issue #593).
 
 M0 has no Start: the deck page offers presenter view, projector view, and the PDF.
-Start belongs to the co-presenter run in M1. Instance language and theme live under
+Start belongs to the co-presenter run in M1. Instance name and language live under
 Settings (admin); a person's theme lives in the person menu.
 
 ### Presenter Home (proposal · issue #139)

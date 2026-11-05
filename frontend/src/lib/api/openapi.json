@@ -35,17 +35,10 @@
         "type": "object"
       },
       "AccountView": {
-        "description": "One person's theme override, read and written; `None` leaves it to the instance.\n\nNo default: one schema serves the body and the answer.",
+        "description": "One person's own theme, read and written.\n\nNo default: one schema serves the body and the answer.",
         "properties": {
           "theme": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ThemeChoice"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/ThemeChoice"
           }
         },
         "required": [
@@ -653,10 +646,6 @@
             "title": "Settings Default Language",
             "type": "string"
           },
-          "settings_default_theme": {
-            "title": "Settings Default Theme",
-            "type": "string"
-          },
           "settings_instance_name": {
             "title": "Settings Instance Name",
             "type": "string"
@@ -1029,18 +1018,6 @@
             "title": "Sources Fetch Now",
             "type": "string"
           },
-          "theme_dark": {
-            "title": "Theme Dark",
-            "type": "string"
-          },
-          "theme_follow_system": {
-            "title": "Theme Follow System",
-            "type": "string"
-          },
-          "theme_light": {
-            "title": "Theme Light",
-            "type": "string"
-          },
           "wordmark": {
             "title": "Wordmark",
             "type": "string"
@@ -1054,9 +1031,6 @@
           "section_decks",
           "section_settings",
           "menu_account",
-          "theme_follow_system",
-          "theme_light",
-          "theme_dark",
           "legal_impressum",
           "legal_datenschutz",
           "decks_title",
@@ -1101,7 +1075,6 @@
           "settings_instance_name",
           "settings_default_language",
           "settings_language_hint",
-          "settings_default_theme",
           "settings_save",
           "sources_column_source",
           "sources_column_fetched",
@@ -1338,7 +1311,7 @@
         "type": "object"
       },
       "SettingsView": {
-        "description": "The instance defaults and the languages an admin may choose from.",
+        "description": "The instance settings and the languages an admin may choose from.",
         "properties": {
           "language_tag": {
             "title": "Language Tag",
@@ -1354,22 +1327,18 @@
           "name": {
             "title": "Name",
             "type": "string"
-          },
-          "theme": {
-            "$ref": "#/components/schemas/ThemeChoice"
           }
         },
         "required": [
           "name",
           "language_tag",
-          "theme",
           "languages"
         ],
         "title": "SettingsView",
         "type": "object"
       },
       "SettingsWrite": {
-        "description": "The instance defaults an admin sets for everyone without an override.",
+        "description": "The instance name and language an admin sets for everyone.",
         "properties": {
           "language_tag": {
             "title": "Language Tag",
@@ -1378,15 +1347,11 @@
           "name": {
             "title": "Name",
             "type": "string"
-          },
-          "theme": {
-            "$ref": "#/components/schemas/ThemeChoice"
           }
         },
         "required": [
           "name",
-          "language_tag",
-          "theme"
+          "language_tag"
         ],
         "title": "SettingsWrite",
         "type": "object"

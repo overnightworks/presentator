@@ -1,4 +1,4 @@
-"""How a page's language and theme resolve out of two levels of choice."""
+"""How a page's language and theme resolve: the instance's words, the person's theme."""
 
 import pytest
 
@@ -43,20 +43,20 @@ def test_an_instance_nobody_configured_speaks_english_and_follows_the_system() -
     assert appearance.theme is ThemeChoice.FOLLOW_SYSTEM
 
 
-def test_a_person_without_a_choice_of_their_own_reads_the_instance_default() -> None:
-    lobby = a_lobby(
-        instance=InstanceSettings(language_tag="de", theme=ThemeChoice.DARK),
-    )
+def test_a_person_without_a_choice_reads_follow_system_in_the_instances_language() -> (
+    None
+):
+    lobby = a_lobby(instance=InstanceSettings(language_tag="de"))
 
     appearance = lobby.appearance_for(_PERSON)
 
     assert appearance.text == _GERMAN
-    assert appearance.theme is ThemeChoice.DARK
+    assert appearance.theme is ThemeChoice.FOLLOW_SYSTEM
 
 
-def test_a_persons_own_choice_wins_over_the_instance_default() -> None:
+def test_a_persons_own_choice_is_their_theme_in_the_instances_language() -> None:
     lobby = a_lobby(
-        instance=InstanceSettings(language_tag="de", theme=ThemeChoice.DARK),
+        instance=InstanceSettings(language_tag="de"),
         chosen=PersonPreferences(theme=ThemeChoice.LIGHT),
     )
 
@@ -66,28 +66,16 @@ def test_a_persons_own_choice_wins_over_the_instance_default() -> None:
     assert appearance.theme is ThemeChoice.LIGHT
 
 
-def test_a_person_who_follows_the_system_reads_follow_system() -> None:
-    lobby = a_lobby(
-        instance=InstanceSettings(theme=ThemeChoice.DARK),
-        chosen=PersonPreferences(theme=ThemeChoice.FOLLOW_SYSTEM),
-    )
-
-    assert lobby.appearance_for(_PERSON).theme is ThemeChoice.FOLLOW_SYSTEM
-
-
-def test_one_persons_choice_leaves_everybody_else_at_the_instance_default() -> None:
-    lobby = a_lobby(
-        instance=InstanceSettings(theme=ThemeChoice.LIGHT),
-        chosen=PersonPreferences(theme=ThemeChoice.DARK),
-    )
+def test_one_persons_choice_leaves_everybody_else_following_the_system() -> None:
+    lobby = a_lobby(chosen=PersonPreferences(theme=ThemeChoice.DARK))
 
     neighbour = lobby.appearance_for(_NEIGHBOUR)
 
     assert neighbour.text == _ENGLISH
-    assert neighbour.theme is ThemeChoice.LIGHT
+    assert neighbour.theme is ThemeChoice.FOLLOW_SYSTEM
 
 
-def test_nobody_signed_in_reads_the_instance_default() -> None:
+def test_nobody_signed_in_reads_the_instances_language_and_follows_the_system() -> None:
     lobby = a_lobby(
         instance=InstanceSettings(language_tag="de"),
         chosen=PersonPreferences(theme=ThemeChoice.DARK),
@@ -103,28 +91,13 @@ def test_an_instance_whose_catalog_file_is_gone_reads_english_again() -> None:
     assert lobby.appearance_for(_PERSON).text == _ENGLISH
 
 
-def test_saving_the_instance_defaults_leaves_a_persons_own_choice_alone() -> None:
+def test_saving_the_instance_settings_leaves_a_persons_own_choice_alone() -> None:
     lobby = a_lobby(chosen=PersonPreferences(theme=ThemeChoice.LIGHT))
 
-    lobby.save_instance_settings(
-        InstanceSettings(name="Heim", language_tag="de", theme=ThemeChoice.DARK),
-    )
+    lobby.save_instance_settings(InstanceSettings(name="Heim", language_tag="de"))
 
     assert lobby.instance_settings().name == "Heim"
     assert lobby.appearance_for(_PERSON).theme is ThemeChoice.LIGHT
-    assert lobby.appearance_for(_NEIGHBOUR).theme is ThemeChoice.DARK
-
-
-def test_a_person_can_hand_their_choice_back_to_the_instance() -> None:
-    lobby = a_lobby(
-        instance=InstanceSettings(language_tag="de", theme=ThemeChoice.DARK),
-        chosen=PersonPreferences(theme=ThemeChoice.LIGHT),
-    )
-
-    lobby.save_preferences_of(_PERSON, PersonPreferences())
-
-    assert lobby.preferences_of(_PERSON) == PersonPreferences()
-    assert lobby.appearance_for(_PERSON).theme is ThemeChoice.DARK
 
 
 def test_every_installed_catalog_is_offered_as_a_language() -> None:
@@ -134,14 +107,12 @@ def test_every_installed_catalog_is_offered_as_a_language() -> None:
     )
 
 
-def test_an_instance_with_a_vanished_catalog_can_still_change_the_theme() -> None:
+def test_an_instance_with_a_vanished_catalog_can_still_change_the_name() -> None:
     lobby = a_lobby(instance=InstanceSettings(language_tag="xx"))
 
-    lobby.save_instance_settings(
-        InstanceSettings(language_tag="xx", theme=ThemeChoice.DARK)
-    )
+    lobby.save_instance_settings(InstanceSettings(name="Heim", language_tag="xx"))
 
-    assert lobby.instance_settings().theme is ThemeChoice.DARK
+    assert lobby.instance_settings().name == "Heim"
 
 
 def test_saving_an_unspoken_instance_language_is_refused_and_writes_nothing() -> None:

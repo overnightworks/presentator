@@ -1,7 +1,7 @@
 """`/api/account` and `/api/settings`: the choices a page reads and writes as data.
 
-Account is the person's own theme override; Settings is the admin's instance
-defaults and carries the language list, so a select needs no third address.
+Account is the person's own theme; Settings is the admin's instance name and
+language and carries the language list, so a select needs no third address.
 """
 
 from collections.abc import Callable, Generator
@@ -39,28 +39,27 @@ class LanguageView(BaseModel):
 
 
 class AccountView(BaseModel):
-    """One person's theme override, read and written; `None` leaves it to the instance.
+    """One person's own theme, read and written.
 
     No default: one schema serves the body and the answer.
     """
 
     model_config = ConfigDict(frozen=True)
 
-    theme: ThemeChoice | None
+    theme: ThemeChoice
 
 
 class SettingsWrite(BaseModel):
-    """The instance defaults an admin sets for everyone without an override."""
+    """The instance name and language an admin sets for everyone."""
 
     model_config = ConfigDict(frozen=True)
 
     name: str
     language_tag: str
-    theme: ThemeChoice
 
 
 class SettingsView(SettingsWrite):
-    """The instance defaults and the languages an admin may choose from."""
+    """The instance settings and the languages an admin may choose from."""
 
     languages: list[LanguageView]
 
@@ -107,7 +106,7 @@ def _mounted(
 
 
 def preference_api_routes(*, preferences: Preferences) -> APIRouter:
-    """The router that reads and writes overrides and instance defaults."""
+    """The router that reads and writes a person's theme and the instance settings."""
 
     def languages() -> list[LanguageView]:
         return [
@@ -124,7 +123,6 @@ def preference_api_routes(*, preferences: Preferences) -> APIRouter:
         return SettingsView(
             name=stored.name,
             language_tag=stored.language_tag,
-            theme=stored.theme,
             languages=languages(),
         )
 
@@ -142,9 +140,7 @@ def preference_api_routes(*, preferences: Preferences) -> APIRouter:
     def write_settings(body: SettingsWrite) -> SettingsView:
         with _unspoken_as_problem():
             preferences.save_instance_settings(
-                InstanceSettings(
-                    name=body.name, language_tag=body.language_tag, theme=body.theme
-                )
+                InstanceSettings(name=body.name, language_tag=body.language_tag)
             )
         return settings()
 

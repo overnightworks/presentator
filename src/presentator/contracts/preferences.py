@@ -1,4 +1,4 @@
-"""What an instance and a person choose about words and colours (ADR 0012)."""
+"""What an instance chooses about words and a person about colours (ADR 0012)."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -20,14 +20,13 @@ class InstanceSettings:
 
     name: str = ""
     language_tag: str = DEFAULT_LANGUAGE_TAG
-    theme: ThemeChoice = ThemeChoice.FOLLOW_SYSTEM
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PersonPreferences:
-    """One person's override; an unset one leaves the choice to the instance."""
+    """One person's own choice; with none, the theme follows the device."""
 
-    theme: ThemeChoice | None = None
+    theme: ThemeChoice = ThemeChoice.FOLLOW_SYSTEM
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

@@ -115,7 +115,6 @@ def a_settings_write(padding: int) -> str:
         {
             "name": _A_NAME + "x" * padding,
             "language_tag": DEFAULT_LANGUAGE_TAG,
-            "theme": "dark",
         }
     )
 
