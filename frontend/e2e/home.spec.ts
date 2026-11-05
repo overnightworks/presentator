@@ -1,4 +1,5 @@
 import { legalLinks } from '../src/lib/legal.ts';
+import type { Locator } from '@playwright/test';
 import { addDeck, type DeckRecord, expect, type Person, test } from './person.ts';
 import {
 	chooseTheme,
@@ -506,6 +507,22 @@ test.describe('the account menu', () => {
 			const row = page.locator(MENU).getByRole('link', { name: label });
 			await expect(row).toBeVisible();
 			await expect(row).toHaveAttribute('href', href);
+		}
+	});
+
+	test('keeps the header link type off the menu legal links', async ({ page }) => {
+		const { words } = await sessionOf(page);
+		await page.goto('/');
+		const textTransformOf = (link: Locator) =>
+			link.evaluate((element) => getComputedStyle(element).textTransform);
+		const headerTransform = await textTransformOf(
+			page.getByRole('banner').getByRole('link', { name: words.section_decks })
+		);
+		await opensTheMenu(page);
+		for (const { label } of legalLinks(words)) {
+			expect(await textTransformOf(page.locator(MENU).getByRole('link', { name: label }))).not.toBe(
+				headerTransform
+			);
 		}
 	});
 });
