@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "105e300f296bc20016230850602cfe3c1bf72139"
 branch = "claude/issue-778-presentator-on-webauth-0-30-0"
-scope = ["pyproject.toml", "src/presentator/api/auth.py", "src/presentator/api/talk.py", "tests/presentator/api/test_auth_logout.py", "uv.lock"]
+scope = ["pyproject.toml", "src/presentator/api/auth.py", "src/presentator/api/talk.py", "tests/presentator/api/test_auth_logout.py", "tests/support/sign_in_support.py", "uv.lock"]
 opened_commit = "f55c4d6a4e5631dbe07f385133b47aef106f9bb3"
 whole_reason = "The pin, its lock, both sign-in calls and the test of the logout page change together: the breaking keyword leaves no call site behind, and the lang sentence needs its test."
