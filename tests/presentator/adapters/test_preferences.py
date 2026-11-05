@@ -178,10 +178,11 @@ def test_a_second_start_changes_nothing(tmp_path: Path) -> None:
 
     create_tables(database)
 
-    assert [
+    after_the_second = [
         everything_in(database, "SELECT * FROM person_preferences"),
         everything_in(database, _THE_INSTANCE_ROW),
-    ] == after_the_first
+    ]
+    assert after_the_second == after_the_first
 
 
 def test_a_theme_the_release_before_wrote_as_nothing_is_folded_at_the_next_start(
