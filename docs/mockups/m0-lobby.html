@@ -193,7 +193,6 @@ a.r.hover { background: var(--surface-hover); }
 .mrow.out { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
 .radio { width: 16px; height: 16px; flex: none; border-radius: 50%; border: 2px solid var(--text-muted); }
 .radio.on { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 3.5px, transparent 4.5px); }
-.app-foot { padding: 14px 16px; border-top: 1px solid var(--border); }
 .mlegal { display: flex; flex-wrap: wrap; gap: 2px 12px; padding: 8px 14px 6px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-muted); }
 
 /* ---------- sign-in ---------- */
@@ -506,7 +505,7 @@ a.r.hover { background: var(--surface-hover); }
   <template><div class="pg-head"><h1>Decks</h1><span class="lnk">3 sources</span></div><div class="rows"><div class="r deck hrow"><span>State</span><span>Deck</span><span style="text-align:right">Changed</span></div><a class="r deck"><span><span class="st busy live"><i></i>building</span></span><span class="nm"><b>Kundenfeedback Q3</b><span class="sl">kundenfeedback</span></span><span class="ag"><span class="age-l">2 minutes ago</span><span class="age-s">2 min. ago</span></span></a><a class="r deck"><span><span class="st fail"><i></i>failed</span></span><span class="nm"><b>Knowledge Fabric</b><span class="sl">knowledge-fabric</span></span><span class="ag"><span class="age-l">26 minutes ago</span><span class="age-s">26 min. ago</span></span></a><a class="r deck"><span><span class="st ok"><i></i>ready</span></span><span class="nm"><b>Agenten-Fabrik</b><span class="sl">agenten-fabrik</span></span><span class="ag"><span class="age-l">3 hours ago</span><span class="age-s">3 hr. ago</span></span></a><a class="r deck"><span><span class="st ok"><i></i>ready</span></span><span class="nm"><b>Onboarding Handwerk</b><span class="sl">onboarding-handwerk</span></span><span class="ag"><span class="age-l">yesterday</span><span class="age-s">yesterday</span></span></a><a class="r deck"><span><span class="st ok"><i></i>ready</span></span><span class="nm"><b>Jahresrückblick 2025</b><span class="sl">jahresrueckblick-2025</span></span><span class="ag"><span class="age-l">6 days ago</span><span class="age-s">6 days ago</span></span></a></div></template>
 </figure>
 <figure class="board" id="person-menu" data-addr="presentator.local/" data-tab="decks" data-menu>
-  <figcaption class="board-cap"><div class="board-title">Person menu open <span class="ref">Picture · family §4</span></div><p class="board-note">The round account button opens one menu: the person’s name first, which opens the central Keycloak account in a new tab (the arrow marks it), then Theme (Follow system, Light, Dark; the dot marks the choice), Log out and the quiet legal row (Impressum, Datenschutz), as family §4 and appkit K7 (overnightworks/appkit#39) draw it and as appkit’s <code>LegalLinks</code> (overnightworks/appkit#44) renders the row. The name row comes from appkit and is new here; the rest are catalog words. Choosing a theme changes the whole lobby at once (E5, sentence 3). Settings sits in the header only for admins. The legal row in the menu is an addition; the footer on every page stays as #196 ruled.</p></figcaption>
+  <figcaption class="board-cap"><div class="board-title">Person menu open <span class="ref">Picture · family §4</span></div><p class="board-note">The round account button opens one menu: the person’s name first, which opens the central Keycloak account in a new tab (the arrow marks it), then Theme (Follow system, Light, Dark; the dot marks the choice), Log out and the quiet legal row (Impressum, Datenschutz), as family §4 and appkit K7 (overnightworks/appkit#39) draw it and as appkit’s <code>LegalLinks</code> (overnightworks/appkit#44) renders the row. The name row comes from appkit and is new here; the rest are catalog words. Choosing a theme changes the whole lobby at once (E5, sentence 3). Settings sits in the header only for admins. The legal row in the menu replaces the footer, which no page draws.</p></figcaption>
   <div class="pair"><div class="vp"></div><div class="vp phone"></div></div>
   <template><div class="pg-head"><h1>Decks</h1><span class="lnk">3 sources</span></div><div class="rows"><div class="r deck hrow"><span>State</span><span>Deck</span><span style="text-align:right">Changed</span></div><a class="r deck"><span><span class="st busy live"><i></i>building</span></span><span class="nm"><b>Kundenfeedback Q3</b><span class="sl">kundenfeedback</span></span><span class="ag"><span class="age-l">2 minutes ago</span><span class="age-s">2 min. ago</span></span></a><a class="r deck"><span><span class="st fail"><i></i>failed</span></span><span class="nm"><b>Knowledge Fabric</b><span class="sl">knowledge-fabric</span></span><span class="ag"><span class="age-l">26 minutes ago</span><span class="age-s">26 min. ago</span></span></a><a class="r deck"><span><span class="st ok"><i></i>ready</span></span><span class="nm"><b>Agenten-Fabrik</b><span class="sl">agenten-fabrik</span></span><span class="ag"><span class="age-l">3 hours ago</span><span class="age-s">3 hr. ago</span></span></a><a class="r deck"><span><span class="st ok"><i></i>ready</span></span><span class="nm"><b>Onboarding Handwerk</b><span class="sl">onboarding-handwerk</span></span><span class="ag"><span class="age-l">yesterday</span><span class="age-s">yesterday</span></span></a><a class="r deck"><span><span class="st ok"><i></i>ready</span></span><span class="nm"><b>Jahresrückblick 2025</b><span class="sl">jahresrueckblick-2025</span></span><span class="ag"><span class="age-l">6 days ago</span><span class="age-s">6 days ago</span></span></a></div></template>
 </figure>
@@ -1046,9 +1045,6 @@ function pageBar(figure, isMenuOpen) {
 		<span class="tabs"><span class="tab${now('decks')}">Decks</span>${settings}</span>
 		<span class="spacer"></span><span class="av${isMenuOpen ? ' ring' : ''}">F</span></div>`;
 }
-function appFooter() {
-	return '<div class="app-foot"><div class="legal"><span>Impressum</span><span>Datenschutz</span></div></div>';
-}
 function personMenu() {
 	return `<div class="menu">
 		<div class="mrow name"><span class="grow">felix</span>${svg('out')}</div>
@@ -1066,7 +1062,7 @@ function drawBoard(figure) {
 	const isMenuOpen = 'menu' in figure.dataset;
 	const page = 'bare' in figure.dataset
 		? body
-		: `<div class="app">${pageBar(figure, isMenuOpen)}<div class="pg">${sub ? subTabs(sub) : ''}${body}</div>${appFooter()}${isMenuOpen ? personMenu() : ''}</div>`;
+		: `<div class="app">${pageBar(figure, isMenuOpen)}<div class="pg">${sub ? subTabs(sub) : ''}${body}</div>${isMenuOpen ? personMenu() : ''}</div>`;
 	for (const viewport of figure.querySelectorAll('.vp')) {
 		viewport.innerHTML = `<div class="addr">${addr}</div>${page}`;
 	}

@@ -147,7 +147,8 @@ one gets 404, so a healthcheck sends the lobby's or the talk host's own name.
 
 ## Legal links
 
-Every lobby page, signed in or out, ends with two links: Impressum goes to the
+No lobby page ends with legal links. They stand in the person menu (signed in)
+and on the sign-in pages (signed out): Impressum goes to the
 operator's one Impressum at `https://hallucinai.de/impressum`, Datenschutz to
 `https://hallucinai.de/datenschutz#presentator`. Presentator serves no privacy
 page: `/datenschutz` is no route on either host, so a signed-in page load on

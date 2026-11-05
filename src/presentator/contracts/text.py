@@ -21,8 +21,8 @@ class LobbyText:
     theme_follow_system: str
     theme_light: str
     theme_dark: str
-    footer_impressum: str
-    footer_datenschutz: str
+    legal_impressum: str
+    legal_datenschutz: str
     decks_title: str
     decks_column_state: str
     decks_column_deck: str

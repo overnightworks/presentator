@@ -38,6 +38,7 @@ from webauth.policies import (
 )
 from webauth.ports import SessionRecordStore, SignInTransaction
 from webauth.sign_in_routes import (
+    LogoutPageText,
     RefusalPage,
     SignInPaths,
     install_sign_in_routes,
@@ -286,6 +287,11 @@ def _install_lobby_app(lobby: FastAPI, surfaces: _Surfaces) -> None:
     lobby.router.default = lobby_app_or_not_found
 
 
+def _logout_page_text(request: Request, surfaces: _Surfaces) -> LogoutPageText:
+    text = appearance_of(request, surfaces.preferences).text
+    return LogoutPageText(language=text.language_tag, button_label=text.log_out)
+
+
 def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
     """The library's sign-in routes, and the 403 shell at every refusal address."""
     auth = surfaces.auth
@@ -300,9 +306,7 @@ def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
         ),
         keeps_id_token=True,
         max_sessions=None,
-        logout_button_label=lambda request: (
-            appearance_of(request, surfaces.preferences).text.log_out
-        ),
+        logout_page_text=lambda request: _logout_page_text(request, surfaces),
     )
     for path in _REFUSAL_PATHS:
         lobby.add_api_route(path, surfaces.refusal_page, methods=["GET"])
