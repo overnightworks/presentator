@@ -17,10 +17,14 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.ports import SessionRecord, SessionRecordStore
 
 from presentator.api.auth import LOGIN_PATH, LOGOUT_PATH
+from presentator.contracts.preferences import InstanceSettings
+from presentator.contracts.text import Catalogs
 from presentator.host.oidc import oidc_client_config
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_CLIENT_CREDENTIAL,
+    ENGLISH,
+    a_preferences,
     a_settings,
 )
 from tests.support.sign_in_support import Scene, TransactionDouble, a_scene
@@ -192,6 +196,22 @@ def test_the_fallback_button_reads_the_catalogs_log_out(scene: Scene) -> None:
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
 
     assert '<button type="submit">Log out</button>' in answer.text
+
+
+def test_the_logout_page_carries_the_instance_language_as_its_lang(
+    tmp_path: Path,
+) -> None:
+    german = replace(ENGLISH, language_tag="de", language_name="Deutsch")
+    preferences = a_preferences(
+        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": german})
+    )
+    preferences.instance.write(InstanceSettings(language_tag="de"))
+    scene = a_scene(tmp_path, preferences=preferences)
+    scene.sign_in()
+
+    answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
+
+    assert re.search(r"<html[^>]*\blang=\"de\"", answer.text)
 
 
 def test_the_session_cookie_of_a_logged_out_browser_cannot_come_back(
