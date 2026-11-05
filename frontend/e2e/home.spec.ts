@@ -1,3 +1,4 @@
+import { legalLinks } from '../src/lib/legal.ts';
 import { addDeck, type DeckRecord, expect, type Person, test } from './person.ts';
 import {
 	chooseTheme,
@@ -492,9 +493,11 @@ test.describe('the account menu', () => {
 		await expect(page.locator(MENU)).toBeHidden();
 		await opensTheMenu(page);
 		await expect(page.locator(MENU).locator('a[href="/account"]')).toHaveCount(0);
-		for (const label of [words.legal_impressum, words.legal_datenschutz]) {
+		for (const { label, href } of legalLinks(words)) {
 			await expect(page.getByRole('link', { name: label })).toHaveCount(1);
-			await expect(page.locator(MENU).getByRole('link', { name: label })).toBeVisible();
+			const row = page.locator(MENU).getByRole('link', { name: label });
+			await expect(row).toBeVisible();
+			await expect(row).toHaveAttribute('href', href);
 		}
 	});
 });
