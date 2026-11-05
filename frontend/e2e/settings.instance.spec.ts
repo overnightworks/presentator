@@ -42,8 +42,7 @@ const test = base.extend<{
 			const { first } = (await languages.json()) as { first: string };
 			const baseline: SettingsWrite = {
 				name,
-				language_tag: first,
-				theme: 'follow-system'
+				language_tag: first
 			};
 			const answer = await page.request.put(SETTINGS_API, {
 				headers: SAME_ORIGIN,
@@ -95,9 +94,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(language.locator('option:checked')).toHaveText(
 					settings.languages.find((offered) => offered.tag === settings.language_tag)?.name ?? ''
 				);
-				await expect(
-					page.getByLabel(words.settings_default_theme).locator('option')
-				).toHaveText([words.theme_follow_system, words.theme_light, words.theme_dark]);
 				await expect(page.getByRole('button', { name: words.settings_save })).toBeEnabled();
 				const hint = page.getByRole('button', { name: words.settings_language_hint });
 				await hint.click();
@@ -119,7 +115,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
 						words.settings_instance_name,
 						settings.languages.map((offered) => offered.name).join(''),
 						'info',
-						[words.theme_follow_system, words.theme_light, words.theme_dark].join(''),
 						words.settings_save
 					])
 				);
@@ -206,12 +201,8 @@ test.describe('as an admin', () => {
 
 		await page.getByLabel(before.words.settings_instance_name).fill('Hafen');
 		await page.getByLabel(before.words.settings_default_language).selectOption(second.tag);
-		await page.getByLabel(before.words.settings_default_theme).selectOption({
-			label: before.words.theme_dark
-		});
 		await page.getByRole('button', { name: before.words.settings_save }).click();
 
-		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 		await expect(page.locator('html')).toHaveAttribute('lang', second.tag);
 		const after = await sessionOf(page);
 		expect(after.words.language_tag).toBe(second.tag);
@@ -220,7 +211,6 @@ test.describe('as an admin', () => {
 		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 		expect(await entriesOf(page)).toBe(entries);
 		await page.reload();
-		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 		await expect(page.getByLabel(after.words.settings_instance_name)).toHaveValue('Hafen');
 
 		const neighbour = await browser.newContext({ baseURL: testInfo.project.use.baseURL });
@@ -228,14 +218,13 @@ test.describe('as an admin', () => {
 			await signIn(neighbour, { role: 'user' });
 			const seen = await neighbour.newPage();
 			await seen.goto('/');
-			await expect(seen.locator('html')).toHaveAttribute('data-theme', 'dark');
 			await expect(seen.locator('html')).toHaveAttribute('lang', second.tag);
 		} finally {
 			await neighbour.close();
 		}
 	});
 
-	test('Save leaves an admin whose own theme is Light on Light', async ({
+	test('Saving the name leaves an admin whose own theme is Light on Light', async ({
 		page,
 		arrangeBaseline
 	}) => {
@@ -246,14 +235,14 @@ test.describe('as an admin', () => {
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 		await page.keyboard.press('Escape');
 
-		await page.getByLabel(words.settings_default_theme).selectOption({ label: words.theme_dark });
+		await page.getByLabel(words.settings_instance_name).fill('Hafen');
 		const sessionRead = page.waitForResponse(
 			(received) =>
 				new URL(received.url()).pathname === '/api/session' && received.request().method() === 'GET'
 		);
 		await page.getByRole('button', { name: words.settings_save }).click();
 
-		await expect.poll(async () => (await storedSettings(page)).theme).toBe('dark');
+		await expect.poll(async () => (await storedSettings(page)).name).toBe('Hafen');
 		await sessionRead;
 		await expect(page.getByRole('button', { name: words.settings_save })).toBeEnabled();
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
@@ -285,17 +274,13 @@ test.describe('as an admin', () => {
 		);
 		await page.goto(SETTINGS_ADDRESS);
 		await page.getByLabel(words.settings_instance_name).fill('Hafen');
-		await page.getByLabel(words.settings_default_theme).selectOption({ label: words.theme_dark });
 
 		await page.getByRole('button', { name: words.settings_save }).click();
 
 		await expect.poll(() => errors.length).toBe(1);
 		await expect(page.getByRole('button', { name: words.settings_save })).toBeEnabled();
 		await expect(page.getByLabel(words.settings_instance_name)).toHaveValue('Hafen');
-		await expect(page.getByLabel(words.settings_default_theme).locator('option:checked')).toHaveText(
-			words.theme_dark
-		);
-		await expect(page.locator('html')).toHaveAttribute('data-theme', baseline.theme);
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'follow-system');
 		await page.unroute(`**${SETTINGS_API}`);
 		expect(await storedSettings(page)).toEqual(baseline);
 	});
@@ -444,8 +429,7 @@ test.describe('an instance in the second language', () => {
 			headers: SAME_ORIGIN,
 			data: {
 				name: settings.name,
-				language_tag: second.tag,
-				theme: settings.theme
+				language_tag: second.tag
 			}
 		});
 		expect(put.status()).toBe(200);

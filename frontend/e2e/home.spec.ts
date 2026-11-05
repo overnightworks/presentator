@@ -248,6 +248,14 @@ test.describe('the theme', () => {
 		const backgroundOf = () =>
 			page.locator('body').evaluate((body) => getComputedStyle(body).backgroundColor);
 		await page.goto('/');
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'follow-system');
+		await opensTheMenu(page);
+		await expect(page.getByRole('radio', { name: 'Follow system' })).toBeChecked();
+		await page.keyboard.press('Escape');
+		await page.emulateMedia({ colorScheme: 'dark' });
+		const deviceDark = await backgroundOf();
+		await page.emulateMedia({ colorScheme: 'light' });
+		expect(await backgroundOf()).not.toBe(deviceDark);
 		await chooseTheme(page, 'Light');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 		const lightBackground = await backgroundOf();

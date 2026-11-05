@@ -97,7 +97,7 @@ rules. Which theme is active follows the preference levels below.
 controls in `CoPresenter.vue` use literal colours. The room notice is the
 stated exception: it takes its colours from the frozen `room-*` boards in
 `docs/mockups/m0-lobby.html`, the newer blessed picture, and follows the
-slide's brightness (Slidev's dark mode), not the instance theme. Its palette
+slide's brightness (Slidev's dark mode), not the lobby theme. Its palette
 stands once, in `slidev/global-top.vue`.
 
 Decks themselves are untouched. Slidev's per-deck theme mechanism stays exactly
@@ -128,25 +128,25 @@ Amendment 2026-10-29: the reader's resolved catalog is also served as data by
 `GET /api/session`, so a page holds no strings of its own
 ([ADR 0020](0020-the-lobby-is-a-json-api.md)).
 
+Amendment 2026-11-05: the instance has no default theme (operator ruling,
+[#785](https://github.com/overnightworks/presentator/issues/785)); the person
+menu alone sets a theme, as in the other apps.
+
 ### Preference levels (amendment 2026-09-06)
 
 [#8](https://github.com/overnightworks/presentator/issues/8) line 22,
 operator ruling 2026-09-06: a per-user preference is no longer deferred, and
 there is no standalone theme toggle in the header bar.
 
-The language is the instance default alone, set by an admin under Settings.
-The theme resolves in this order; the first set value wins:
-
-1. The signed-in person's own theme, written by the person menu, which
-   overrides the instance default for that person alone.
-2. The instance default, set by an admin under Settings.
-
-An unset person's theme falls through to the instance default.
+The language is the instance's alone, set by an admin under Settings. The
+theme is the signed-in person's own, set only in the person menu; a person who
+chose nothing follows the device. The instance has no default theme
+(amendment 2026-11-05).
 
 The lobby header follows the app convention: product name and sections on the
 left (Decks, and Settings for admins); one person control on the right, opening
 the central account, Theme (follow system / light / dark), and Log out. The
-Theme entry in that person menu writes the person's theme override.
+Theme entry in that person menu writes the person's theme.
 
 Presenter and projector views use Slidev's own `d` key for dark mode. That is
 the deck's own dark mode, not the lobby theme.
@@ -187,17 +187,17 @@ Amendment 2026-10-29: the addon overlay is the stated exception.
   cheap check reads intent from a string.
 - The first slice pays for a catalog and a token file that serve one language
   and one theme. That is the deliberate cost of the two retrofits it avoids.
-- The presenter controls follow neither the instance nor the deck yet; that is
+- The presenter controls follow neither the person's theme nor the deck yet; that is
   the gap named above, not a defect to be found later. The room notice follows
   the deck's brightness on purpose, with the `room-*` boards' palette and its
   pulse in the dot's own colour in both modes.
 - English-only at start means the operator's own German talks run under an
   English interface until a German catalog is added. Adding it is a file.
-- Settings owns the instance defaults
+- Settings owns the instance's name and language
   ([#8](https://github.com/overnightworks/presentator/issues/8) line 22,
-  operator ruling 2026-09-06): instance defaults live under Settings for admins
-  (General, alongside Sources and Users); the theme is the person's own, in the
-  person menu. There is no Account page and no personal language; a personal
+  operator ruling 2026-09-06): they live under Settings for admins (General,
+  alongside Sources and Users); the theme is the person's own, in the person
+  menu. There is no Account page and no personal language; a personal
   language waits for the central account, as its own item at webauth and edge
   once someone asks (ruling C of #185, 2026-11-04). There is no standalone
   theme toggle in the header bar. The

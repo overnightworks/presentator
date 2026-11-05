@@ -15,7 +15,7 @@ class InstanceSettingsStore(Protocol):
 
     @abstractmethod
     def write(self, settings: InstanceSettings) -> None:
-        """Keep the instance defaults, replacing whatever stood there."""
+        """Keep the instance settings, replacing whatever stood there."""
 
 
 class PersonPreferencesStore(Protocol):
