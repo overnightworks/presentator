@@ -151,6 +151,35 @@ def test_the_instance_answers_the_backchannel_under_the_host_of_its_public_origi
     assert compose["networks"]["backchannel"]["external"] is True
 
 
+def test_the_instance_joins_the_external_speech_network_and_the_probe_creates_it() -> (
+    None
+):
+    """The shared speech service is reached over a network the edge owns.
+
+    Owner: docs/explanation/trust-boundaries.md
+    """
+    compose = _parsed_compose()
+    instance = compose["services"]["presentator"]
+    network = compose["networks"]["speech"]
+    workflow = (_COMPOSE.parent / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "speech" in instance["networks"]
+    assert network["external"] is True
+    assert network["name"] in workflow
+    assert "networks" not in compose["services"]["build-worker"]
+    environment = _environment_of(instance)
+    assert all(
+        environment[name]
+        for name in (
+            "PRESENTATOR_SPEECH_SERVICE",
+            "PRESENTATOR_SPEECH_SERVICE_SCOPE",
+            "PRESENTATOR_SPEECH_VOICE",
+        )
+    )
+
+
 @pytest.mark.parametrize(
     "hardening_line",
     [

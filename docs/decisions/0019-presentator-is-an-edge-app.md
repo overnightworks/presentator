@@ -45,6 +45,14 @@ publishes a port, reads an `env_file`, binds a host path or restarts `always`.
 - The host speech process is not part of the release. A deployed instance has
   no voice and reports it as not yet available.
 
+### Amendment 2026-11-05 — the instance joins the shared speech service's network
+
+The instance also joins the external network `hal_speech_presentator`, which the
+edge creates with the shared speech service's unit, and reaches the service
+there. This supersedes the host speech process above: speaking and hearing go
+to the service, and without it the overlay says "Voice offline". The worker
+joins no network.
+
 ## Consequences
 
 - Upgrading is a new tag through `hal apply`. The runbooks for upgrading, for

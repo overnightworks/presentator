@@ -1,9 +1,8 @@
 # Co-presenter and voice reference
 
 Audience: an engineer or operator looking up what answers beside a talk, who
-may use it, and what bounds it. Running it is
-[run the speech service](../runbooks/run-the-speech-service-on-the-host.md);
-the authority it shares is [trust boundaries](../explanation/trust-boundaries.md).
+may use it, and what bounds it. The authority it shares is
+[trust boundaries](../explanation/trust-boundaries.md).
 
 ## Processes
 
@@ -20,14 +19,21 @@ and speaks them. The person reaches the gateway as a fingerprint of their
 issuer and account id (`fp-` and a SHA-256), never a name, a mail or a token,
 and no token of theirs leaves Presentator.
 
-A host process can sit beside a checkout run; it is not part of a deployed
-instance, which reports the voice as not yet available. The speech service
-([`speech/`](../../speech/README.md)) holds a local speaking model and a local
-hearing model, binds no TCP port, and offers hearing and its readiness to
-Presentator directly through its private same-UID Unix socket `speech.sock`
-(`/health`, `/hear`); against an older speech,
-`/copresenter/who` answers 503 and hearing reports its failure. Which speech
-models run and what they cost on the card is owned by the speech README.
+The shared speech service is reached at `PRESENTATOR_SPEECH_SERVICE` over the
+`hal_speech_presentator` network. Presentator speaks and hears through its
+published client, `overnightworks-speech-runtime-client`, which owns the paths,
+the request and the refusals. Every speak request and every Realtime upgrade
+carries two tokens in headers: the person's access token and Presentator's own,
+each naming the service as its audience; `/health` carries none. The service
+owns its models, its device and the AI mark, keeps neither tokens, audio nor
+text, and has no connection to the internet. Presentator names the one voice in
+`PRESENTATOR_SPEECH_VOICE` for each sentence and sends no language: the service
+speaks German only.
+
+Hearing is the service's Realtime transcription: the browser's PCM frames
+become audio events and the service's partial and final texts come back
+unchanged for the overlay. Switching hearing off sends the service no final
+turn; the open turn is dropped.
 
 ## Routes and access
 
@@ -38,11 +44,15 @@ cookie and its own Origin; the lobby answers 404 on them to a call and gives a p
 whose router shows not-found. Any signed-in person
 may use them, through the existing active session; membership of the group in
 `PRESENTATOR_AGENT__API_GROUP`, read from the issuer for every question, decides
-who is answered, and deck ownership limits which deck. Without a session `/who` and `/ask` get 401 and `/hear` a refused
+who is answered, and deck ownership limits which deck. The person's access
+token and Presentator's own for the speech service are read from the issuer
+with the groups, before the stream, and once more when a hearing opens. Without a session `/who` and `/ask` get 401 and `/hear` a refused
 handshake (HTTP 403, before accept); an accepted hearing ends with a 1008 close
 when the session goes. Presentator checks the session and, for the WebSocket, the exact
 Origin before opening the socket.
-`/who` takes the deck's slug as `deck` and checks it after the session, as
+`/who` answers 503 when the service does not answer or its configured voice
+cannot speak ("Voice offline"), and 200 with `hearing.ready: false` while its
+hearing model loads ("Local hearing not ready"). `/who` takes the deck's slug as `deck` and checks it after the session, as
 `/ask` does: a deck its asker does not own built, or a missing or malformed
 slug, gets the same 404 `/ask` gives. It answers the deck's `language`, `de` or
 `en` as the deck's `deck.toml` names it and `de` for anything else, beside the
@@ -57,7 +67,8 @@ every half second; generation, capture and queued or playing audio stop.
 Before the answer starts, `/ask` reads the session's groups through a refresh
 grant. A session whose refresh token is missing or refused gets 401
 `{"detail": "Sign in again"}`; an ended session gets 401
-`{"detail": "Not authenticated"}`; an unreachable issuer gets 503
+`{"detail": "Not authenticated"}`; an unreachable issuer, or one that refuses
+Presentator's own token, gets 503
 `{"detail": "Co-presenter unavailable"}`. The gateway is not called in any
 of these cases, and the question is counted. Once the answer streams, the
 events are `text`, `sentence`, `audio` and `done`, each carrying
@@ -110,23 +121,7 @@ before the limiter, so it spends no question.
 
 ## Voices
 
-Speech runs selected Chatterbox, Qwen, VoxCPM2 and Magpie voices through one
-isolated-provider process owner and one binary worker loop; each provider has
-its own locked SDK environment. The Chatterbox provider is a separate closed
-virtual environment under `SPEECH_PROVIDER_ROOT/chatterbox`, whose
-`.venv/bin/presentator-chatterbox-worker` speech executes directly and never
-resolves through PATH. An admitted response keeps its captured voice until it
-closes; switching then reaps a deselected provider process before Load
-succeeds, while Piper stays resident.
-
-- Qwen speaks German or English through its configured built-in preset and
-  returns a completed 24 kHz waveform in bounded PCM frames.
-- VoxCPM2 streams text-only German or English at 48 kHz from its exact cached
-  snapshot.
-- Magpie restores its exact cached model and NanoCodec archives with one
-  configured fixed voice and produces completed 22,050 Hz WAV speech.
-
-Every WAV the speech service writes, from `/speak` and from a voice sample,
-carries the machine-readable AI mark: a RIFF `LIST`/`INFO` `ICMT` comment
-between `fmt ` and `data` holding the IPTC term
-`DigitalSourceType=…/trainedAlgorithmicMedia`. It has no switch.
+Presentator names one voice, German only; the service owns the voices it has,
+its models and loading them. Every WAV the service writes carries the
+machine-readable AI mark, a RIFF `LIST`/`INFO` `ICMT` comment between `fmt `
+and `data`, and Presentator passes the WAV on unchanged. The mark has no switch.

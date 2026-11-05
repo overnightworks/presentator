@@ -11,7 +11,7 @@ from presentator.contracts.voice import SampleLanguage
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from presentator.contracts.copresenter import AnswerEvent
+    from presentator.contracts.copresenter import AnswerEvent, SpeechTokens
     from presentator.ports.copresenter import SentenceBoundaries, Speaking
 
 DEFAULT_LANGUAGE: Final = "de"
@@ -84,6 +84,7 @@ async def spoken_events(
     boundaries: SentenceBoundaries,
     speaking: Speaking,
     language: str,
+    tokens: SpeechTokens,
 ) -> AsyncIterator[AnswerEvent]:
     """Yield the text, each sentence once and in order with its audio, then Done."""
     answer = SpokenAnswer(boundaries)
@@ -92,20 +93,20 @@ async def spoken_events(
         yield AnswerText(text=delta)
         for sentence in answer.feed(delta):
             spoken.append(sentence)
-            async for event in _speak(sentence, speaking, language):
+            async for event in _speak(sentence, speaking, language, tokens):
                 yield event
     for sentence in answer.flush():
         spoken.append(sentence)
-        async for event in _speak(sentence, speaking, language):
+        async for event in _speak(sentence, speaking, language, tokens):
             yield event
     yield Done(text=" ".join(spoken))
 
 
 async def _speak(
-    sentence: str, speaking: Speaking, language: str
+    sentence: str, speaking: Speaking, language: str, tokens: SpeechTokens
 ) -> AsyncIterator[AnswerEvent]:
     yield Sentence(text=sentence)
-    yield Audio(text=sentence, wav=await speaking.speak(sentence, language))
+    yield Audio(text=sentence, wav=await speaking.speak(sentence, language, tokens))
 
 
 def _last_word_start(text: str, not_before: int) -> int:

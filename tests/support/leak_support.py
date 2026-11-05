@@ -2,8 +2,11 @@
 
 import logging
 import traceback
-from collections.abc import Callable, Iterable, Mapping
-from typing import cast
+from collections.abc import Callable, Generator, Iterable, Mapping
+from contextlib import contextmanager
+from typing import Final, cast
+
+QUIETENED_LIBRARIES: Final = ("httpx2", "httpcore2", "wsproto")
 
 
 def everything_shown(
@@ -82,3 +85,32 @@ def _parts_of_error(error: BaseException) -> list[object]:
 
 def _formatted(error: BaseException) -> str:
     return "".join(traceback.format_exception(error))
+
+
+class RecordingLogs(logging.Handler):
+    """Every record any logger raises while an ask runs."""
+
+    def __init__(self) -> None:
+        """Start with nothing recorded."""
+        super().__init__(logging.NOTSET)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+@contextmanager
+def recording_every_logger() -> Generator[RecordingLogs]:
+    """Every logger at DEBUG, the libraries the host quietens included."""
+    logs = RecordingLogs()
+    loggers = [logging.getLogger(name) for name in ("", *QUIETENED_LIBRARIES)]
+    levels = [logger.level for logger in loggers]
+    loggers[0].addHandler(logs)
+    for logger in loggers:
+        logger.setLevel(logging.DEBUG)
+    try:
+        yield logs
+    finally:
+        loggers[0].removeHandler(logs)
+        for logger, level in zip(loggers, levels, strict=True):
+            logger.setLevel(level)

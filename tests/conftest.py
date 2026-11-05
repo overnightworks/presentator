@@ -19,6 +19,11 @@ from tests.support.lobby import (
     configure_oidc,
     configure_secret_key,
 )
+from tests.support.speech_service import (
+    A_SPEECH_ORIGIN,
+    A_SPEECH_SCOPE,
+    A_SPEECH_VOICE,
+)
 from tests.support.worker_support import WAIT_SECONDS, listening_socket
 
 
@@ -104,6 +109,9 @@ def bare_environment(
     monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__ORIGIN", A_GATEWAY_ORIGIN)
     monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__KEY_FILE", str(A_GATEWAY_KEY_FILE))
     monkeypatch.setenv("PRESENTATOR_AGENT__API_GROUP", AN_API_GROUP)
+    monkeypatch.setenv("PRESENTATOR_SPEECH_SERVICE", A_SPEECH_ORIGIN)
+    monkeypatch.setenv("PRESENTATOR_SPEECH_SERVICE_SCOPE", A_SPEECH_SCOPE)
+    monkeypatch.setenv("PRESENTATOR_SPEECH_VOICE", A_SPEECH_VOICE)
     return monkeypatch
 
 

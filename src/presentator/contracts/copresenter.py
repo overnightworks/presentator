@@ -1,6 +1,6 @@
 """Provider-neutral values carried by the authenticated co-presenter path."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 
 from presentator.contracts.decks import Deck, Source
@@ -25,6 +25,17 @@ class AccessRefusal(Enum):
     SIGN_IN_AGAIN = auto()
     SESSION_ENDED = auto()
     ISSUER_UNAVAILABLE = auto()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SpeechTokens:
+    """The two access tokens the speech service takes: the person's and the app's.
+
+    Neither shows in a repr, so a record of the object cannot leak one.
+    """
+
+    person: str = field(repr=False)
+    workload: str = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

@@ -469,6 +469,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx2", extra = ["ws"] },
     { name = "overnightworks-agent-runtime-client", extra = ["backend"] },
+    { name = "overnightworks-speech-runtime-client" },
     { name = "overnightworks-webauth" },
     { name = "pydantic-settings" },
     { name = "syntok" },
@@ -493,6 +494,7 @@ requires-dist = [
     { name = "fastapi", specifier = "==0.162.0" },
     { name = "httpx2", extras = ["ws"], specifier = "==2.16.0" },
     { name = "overnightworks-agent-runtime-client", extras = ["backend"], git = "https://github.com/overnightworks/agent-runtime?subdirectory=packages%2Fclient&rev=v0.20.0" },
+    { name = "overnightworks-speech-runtime-client", git = "https://github.com/overnightworks/speech-runtime?subdirectory=packages%2Fclient&rev=v0.2.0" },
     { name = "overnightworks-webauth", git = "https://github.com/overnightworks/webauth?rev=v0.29.0" },
     { name = "pydantic-settings", specifier = "==2.16.2" },
     { name = "syntok", specifier = "==1.4.4" },
@@ -508,6 +510,14 @@ dev = [
     { name = "ruamel-yaml", specifier = "==0.19.1" },
     { name = "ruff", specifier = "==0.17.3" },
     { name = "vulture", specifier = "==2.16" },
+]
+
+[[package]]
+name = "overnightworks-speech-runtime-client"
+version = "0.2.0"
+source = { git = "https://github.com/overnightworks/speech-runtime?subdirectory=packages%2Fclient&rev=v0.2.0#cf6084e0880c04e30544331fe1739b393c3169f9" }
+dependencies = [
+    { name = "pydantic" },
 ]
 
 [[package]]
