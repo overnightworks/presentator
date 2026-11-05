@@ -19,7 +19,7 @@ from pathlib import Path, PurePosixPath
 from threading import RLock
 from typing import BinaryIO, Final
 
-from presentator.application.build_retention import builds_removed, delete_absent, sweep
+from presentator.application import build_retention
 from presentator.application.source_state import source_state_of
 from presentator.contracts.decks import (
     SLIDES_FILE,
@@ -399,7 +399,7 @@ class Decks:
             left = SourceRemovalRefused(
                 reason=SourceRemovalRefusal.DISK_LEFTOVER,
                 mirror=self.folders.forget(source),
-                builds=builds_removed(self.builder, carried),
+                builds=build_retention.builds_removed(self.builder, carried),
             )
             if left.mirror is not None or left.builds != ():
                 return left
@@ -744,7 +744,7 @@ class Decks:
             return
         try:
             work()
-            sweep(self.builder, self.sources, self.store)
+            build_retention.sweep(self.builder, self.sources, self.store)
         finally:
             self.one_at_a_time.release()
 
@@ -831,24 +831,24 @@ class Decks:
             if not taken_in:
                 _log.warning(_NAME_BELONGS_TO_ANOTHER_SOURCE, folder.name, source.name)
         present = frozenset(folder.name for folder in poll.folders)
-        delete_absent(self.store, present=present, source_id=source.id, at=at)
+        build_retention.delete_absent(
+            self.store, present=present, source_id=source.id, at=at
+        )
 
     def _build_what_changed(self, source: Source) -> None:
         """Build that source's decks whose commit nothing has tried yet.
 
         The commit is the whole change check: a push moves one folder's commit,
-        so only that deck is built again and the other talks are left alone. A
-        folder standing at the commit its talk was built from needs no build at
-        all, and a commit that was already tried is not tried again, so a deck
-        that cannot build costs one build and not one per refresh until it is
-        pushed again. A deck is built out of the mirror of its own source, so a
-        source's walk passes over the decks another source carried.
+        so only that deck is built again. A folder at the commit of a standing
+        talk whose run is still on disk needs no build. A commit already tried
+        is not tried again, so a deck that cannot build costs one build, not one
+        per refresh; a vanished run is rebuilt too, `builds/` being a cache.
         """
         for deck in self.store.all():
             if deck.source_id != source.id:
                 continue
             self._give_up_on_a_build_that_never_returned(deck)
-            standing = deck.build
+            standing = build_retention.standing_build(self.builder, deck)
             if standing is not None and standing.commit == deck.commit:
                 self._deliver_the_standing_talk_again(deck, standing)
                 continue
