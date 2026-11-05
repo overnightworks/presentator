@@ -13,6 +13,7 @@ from speech_runtime_client import wire
 from tests.support.copresenter_support import (
     ACCESS,
     ADMIN_GROUPS,
+    EVERY_ANSWER_SENTENCE,
     HEARING,
     ROTATED,
     TALK_ORIGIN,
@@ -29,7 +30,7 @@ from tests.support.speech_drive import (
     WORKLOAD,
     drive_through_speech,
     hear_through,
-    stored_session_rows_but_the_refresh_token,
+    stored_session_markers,
     the_audio_of,
     what_speech_must_not_show,
 )
@@ -354,11 +355,12 @@ def test_no_token_or_word_of_the_ask_reaches_a_log_an_error_or_the_browser(
 
     logged = everything_shown(run.logged, run.errors)
     browser = f"{run.response.headers}\n{run.response.text}"
-    stored = stored_session_rows_but_the_refresh_token(run)
-    for marker in what_speech_must_not_show(run):
+    markers = what_speech_must_not_show(run)
+    for marker in markers:
         assert marker not in logged
-        assert marker not in browser
-        assert marker not in stored
+        if marker not in EVERY_ANSWER_SENTENCE:
+            assert marker not in browser
+    assert stored_session_markers(run, markers) == []
     assert run.logged
 
 
@@ -399,11 +401,11 @@ def test_no_token_or_heard_word_of_a_hearing_reaches_a_log_an_error_or_a_row(
     received, records = hear_through(run, b"\x01\x02")
 
     logged = everything_shown(records, run.errors)
-    stored = stored_session_rows_but_the_refresh_token(run)
     browser = str(received)
-    for marker in what_speech_must_not_show(run):
+    markers = what_speech_must_not_show(run)
+    assert stored_session_markers(run, markers) == []
+    for marker in markers:
         assert marker not in logged
-        assert marker not in stored
         if marker != SAID:
             assert marker not in browser
     assert (SAID in browser) is browser_hears_the_word

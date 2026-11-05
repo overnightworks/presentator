@@ -11,10 +11,14 @@ from typing import TYPE_CHECKING, Final
 
 from presentator.adapters.speech import SpeechHearing, SpeechSpeaking
 from tests.support.copresenter_support import (
+    EVERY_ANSWER_SENTENCE,
     HEARING,
+    REFRESH,
+    ROTATED,
     TALK_ORIGIN,
     Run,
     Scenario,
+    accounts_of,
     drive,
     what_the_ask_must_not_show,
 )
@@ -24,6 +28,7 @@ from tests.support.speech_service import (
     A_SPEECH_VOICE,
     FakeSpeech,
 )
+from tests.support.talk_support import A
 
 if TYPE_CHECKING:
     import logging
@@ -33,7 +38,13 @@ if TYPE_CHECKING:
 
 WORKLOAD: Final = "workload-access-MARKER"
 SAID: Final = "heard-word-MARKER"
-THE_SPEECH_MARKERS: Final = (WORKLOAD, "Bearer ", "eyJ", SAID)
+THE_SPEECH_MARKERS: Final = (
+    WORKLOAD,
+    "Bearer ",
+    "eyJ",
+    SAID,
+    *EVERY_ANSWER_SENTENCE,
+)
 
 
 def an_issuer_with_a_workload_token(hosts: Hosts) -> None:
@@ -87,17 +98,25 @@ def hear_through(
     return received, logs.records
 
 
-def stored_session_rows_but_the_refresh_token(run: Run) -> str:
-    """Every stored session column the refresh token and the account own, as text.
+def stored_session_markers(run: Run, markers: tuple[str, ...]) -> list[str]:
+    """The markers in a stored session row, column by column.
 
-    The id token column holds the issued id tokens by design, so only those are
-    cut out of it: anything else stored there is shown.
+    The refresh token's own column holds the refresh tokens and the user column the
+    account by design; the talk host keeps no id token, so its id token column is
+    exempt from nothing.
     """
+    own_markers = {
+        "refresh_token": {REFRESH, ROTATED},
+        "user_id": {A.id, *accounts_of(run.hosts)},
+    }
     with closing(sqlite3.connect(run.hosts.database)) as connection:
-        rows = connection.execute(
-            "SELECT id, created_at, expires_at, id_token FROM sessions"
-        ).fetchall()
-    text = repr(rows)
-    for issued in run.hosts.issuer.issued_id_tokens:
-        text = text.replace(issued, "")
-    return text
+        cursor = connection.execute("SELECT * FROM sessions")
+        columns = [column[0] for column in cursor.description]
+        rows = cursor.fetchall()
+    return [
+        marker
+        for row in rows
+        for column, value in zip(columns, row, strict=True)
+        for marker in markers
+        if marker in str(value) and marker not in own_markers.get(column, set())
+    ]
