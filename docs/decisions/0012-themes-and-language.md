@@ -34,6 +34,8 @@ Audience: humans and agents writing any user-facing string or any colour.
   the instance's alone, the theme stays the person's own, written by the person
   menu (ruling C of [#185](https://github.com/overnightworks/presentator/issues/185),
   item #769).
+  Amended 2026-11-05: the instance has no default theme; a person's theme is the
+  person menu's alone (item #785).
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06, including
   [#8](https://github.com/overnightworks/presentator/issues/8) line 22
