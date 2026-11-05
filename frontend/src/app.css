@@ -63,14 +63,14 @@ code {
 	font-size: 18px;
 	color: var(--accent);
 }
-.top nav {
+.top > nav {
 	display: flex;
 	flex: 1;
 	align-items: stretch;
 	align-self: stretch;
 	gap: 16px;
 }
-.top nav a {
+.top > nav > a {
 	display: inline-flex;
 	align-items: center;
 	border-bottom: 3px solid transparent;
@@ -81,7 +81,7 @@ code {
 	text-decoration: none;
 	text-transform: uppercase;
 }
-.top nav a[aria-current='page'] {
+.top > nav > a[aria-current='page'] {
 	border-bottom-color: var(--accent);
 }
 .account {
@@ -366,7 +366,7 @@ main {
 		gap: 8px 12px;
 		padding: 0 12px;
 	}
-	.top nav {
+	.top > nav {
 		gap: 12px;
 	}
 	.wordmark {
