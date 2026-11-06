@@ -1,4 +1,4 @@
-# Architecture
+# presentator architecture
 
 Audience: an engineer or agent about to change presentator who needs the mental
 model first: what the parts are, which way they depend, and what the design
