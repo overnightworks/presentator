@@ -127,11 +127,11 @@ def _unchosen_theme_follows_the_system(database: Path) -> None:
 
 
 def _retire_the_instance_theme(database: Path) -> None:
-    """Drop the theme the instance once had, on every start; it is one-way.
+    """Drop the instance's unread theme column, on every start; it is one-way.
 
     One immediate transaction, so two starts on one file cannot both drop. No row
-    goes. The release before this still reads the file and saves over an existing
-    row; its first-ever insert, on a file no admin saved, fails until a newer tag.
+    goes. Code that still names the column reads the file and updates its row, but
+    cannot insert a first settings row into it.
     """
     with immediate_transaction(database) as cursor:
         present = {name for (name,) in cursor.execute(_INSTANCE_COLUMNS)}
