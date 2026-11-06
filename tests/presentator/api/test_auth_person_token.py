@@ -69,7 +69,7 @@ def kinds(scene: Scene) -> list[AccountEventKind]:
 def test_a_members_token_is_admitted_as_that_person_without_a_session(
     scene: Scene,
 ) -> None:
-    """P1: the first call makes the account, a second makes nothing new."""
+    """PE26: the first call makes the account, a second makes nothing new."""
     program = a_token_client(scene)
 
     first = program.get(_UNSERVED, headers=bearer(scene))
@@ -84,7 +84,7 @@ def test_a_members_token_is_admitted_as_that_person_without_a_session(
 
 
 def test_an_expired_token_is_refused_and_writes_nothing(scene: Scene) -> None:
-    """P2: past `exp` plus leeway the token is invalid, and no account is made."""
+    """PE27: past `exp` plus leeway the token is invalid, and no account is made."""
     headers = bearer(scene)
     scene.clock.advance(timedelta(hours=1))
 
@@ -103,7 +103,7 @@ def test_an_expired_token_is_refused_and_writes_nothing(scene: Scene) -> None:
 def test_a_token_for_another_audience_or_client_is_refused(
     scene: Scene, audience: str | None, authorized_party: str
 ) -> None:
-    """P3: audience and `azp` both decide, and nothing is written."""
+    """PE25: audience and `azp` both decide, and nothing is written."""
     answer = a_token_client(scene).get(
         _UNSERVED,
         headers=bearer(scene, audience=audience, authorized_party=authorized_party),
@@ -115,7 +115,7 @@ def test_a_token_for_another_audience_or_client_is_refused(
 
 
 def test_a_subject_outside_the_app_has_no_access_and_no_account(scene: Scene) -> None:
-    """P4: another app's person is refused, and no account is made."""
+    """PE26: another app's person is refused, and no account is made."""
     answer = a_token_client(scene).get(
         _UNSERVED, headers=bearer(scene, groups=["/apps/another-app"])
     )
@@ -129,7 +129,7 @@ def test_a_subject_outside_the_app_has_no_access_and_no_account(scene: Scene) ->
 def test_without_a_credential_a_program_gets_a_challenge_and_a_browser_the_login(
     scene: Scene,
 ) -> None:
-    """P5: a program is told to bring a bearer; a browser is sent to sign in."""
+    """A program is told to bring a bearer; a browser is sent to sign in."""
     program = a_token_client(scene).get(
         _UNSERVED, headers={"accept": "application/json"}
     )
@@ -142,7 +142,7 @@ def test_without_a_credential_a_program_gets_a_challenge_and_a_browser_the_login
 
 
 def test_a_cookie_alone_is_still_a_signed_in_person_on_api(scene: Scene) -> None:
-    """P6: the cookie decides when no token is sent."""
+    """The cookie decides when no token is sent."""
     browser = scene.browser()
     scene.sign_in(browser)
 
@@ -169,7 +169,7 @@ def test_the_admin_prefix_stays_a_machine_path_and_provisions_no_caller(
     expected_status: HTTPStatus,
     expected_challenge: str | None,
 ) -> None:
-    """P7: a path both rules select is a machine path; the caller gets no account."""
+    """PE25: a path both rules select is a machine path; the caller gets no account."""
     answer = a_token_client(scene).delete(
         "/api/admin/people/someone", headers=bearer(scene, groups=groups)
     )
@@ -182,7 +182,7 @@ def test_the_admin_prefix_stays_a_machine_path_and_provisions_no_caller(
 def test_the_webhook_secret_as_a_bearer_is_no_token_when_clients_are_named(
     scene: Scene,
 ) -> None:
-    """P12: a path neither rule selects is left to the hook, whatever it carries."""
+    """A path neither rule selects is left to the hook, whatever it carries."""
     answer = a_token_client(scene).post(
         "/sources/alpha/fetch", headers={"authorization": "Bearer a-webhook-secret"}
     )
@@ -192,7 +192,7 @@ def test_the_webhook_secret_as_a_bearer_is_no_token_when_clients_are_named(
 
 
 def test_a_token_is_its_own_person_beside_another_persons_cookie(scene: Scene) -> None:
-    """P8a: the token's account is admitted; the cookie's session is untouched."""
+    """PE26: the token's account is admitted; the cookie's session is untouched."""
     browser = scene.browser()
     scene.sign_in(browser, subject="the-cookies-person")
     expiries = stored_expiries(scene)
@@ -218,7 +218,7 @@ def test_the_role_follows_the_token_and_no_session_is_made(
     then: list[str],
     role_change: tuple[str, str],
 ) -> None:
-    """P8b: a known account's role is the token's groups, recorded as a change."""
+    """PE26: a known account's role is the token's groups, recorded as a change."""
     program = a_token_client(scene)
     program.get(_UNSERVED, headers=bearer(scene, groups=first))
 
@@ -237,7 +237,7 @@ def test_the_role_follows_the_token_and_no_session_is_made(
 def test_an_invalid_token_beside_a_valid_cookie_does_not_fall_back_to_the_cookie(
     scene: Scene,
 ) -> None:
-    """P8: the bad bearer is refused and the session is not renewed."""
+    """PE26: the bad bearer is refused and the session is not renewed."""
     browser = scene.browser()
     scene.sign_in(browser)
     expiries = stored_expiries(scene)
@@ -253,7 +253,7 @@ def test_an_invalid_token_beside_a_valid_cookie_does_not_fall_back_to_the_cookie
 def test_a_token_post_needs_no_provenance_header_but_a_cookie_post_does(
     scene: Scene,
 ) -> None:
-    """P9: a program sends no Origin; a browser cookie without one is refused."""
+    """A program sends no Origin; a browser cookie without one is refused."""
     by_token = a_token_client(scene).post(_UNSERVED, headers=bearer(scene))
     signed_in = scene.browser()
     scene.sign_in(signed_in)
@@ -267,7 +267,7 @@ def test_a_token_post_needs_no_provenance_header_but_a_cookie_post_does(
 
 
 def test_a_page_is_not_reachable_by_token(scene: Scene) -> None:
-    """P10: only `/api/` takes the bearer; a page sends the browser to sign in."""
+    """Only `/api/` takes the bearer; a page sends the browser to sign in."""
     answer = scene.browser().get("/", headers=bearer(scene) | {"accept": "text/html"})
 
     assert answer.status_code == HTTPStatus.FOUND
@@ -276,7 +276,7 @@ def test_a_page_is_not_reachable_by_token(scene: Scene) -> None:
 
 
 def test_without_a_named_client_a_token_is_a_signed_out_call(tmp_path: Path) -> None:
-    """P13: no gate stands, so the answer is a signed-out 401 with no challenge."""
+    """PE28: no gate stands, so the answer is a signed-out 401 with no challenge."""
     bare = a_scene(tmp_path)
 
     answer = a_token_client(bare).get(_UNSERVED, headers=bearer(bare))

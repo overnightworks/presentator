@@ -41,7 +41,7 @@ def database(tmp_path: Path) -> Path:
 def test_deleting_an_account_takes_its_sessions_and_leaves_another_account(
     database: Path,
 ) -> None:
-    """S9 (#293): the account goes with its sessions; no other account is touched."""
+    """PE1: the account goes with its sessions; no other account is touched."""
     sessions = SqliteSessionRecordStore(database)
     accounts = SqliteIdentityWrites(database, ProcessWriteLock(), LoggingAuditSink())
     for person in (_THE_PERSON, _ANOTHER):
@@ -62,7 +62,7 @@ def test_deleting_an_account_takes_its_sessions_and_leaves_another_account(
 
 
 def test_asking_for_an_unknown_account_creates_none(database: Path) -> None:
-    """S9 (#293): an unknown subject creates no `users` row."""
+    """PE3, PE10: an unknown subject creates no `users` row."""
     accounts = SqliteIdentityWrites(database, ProcessWriteLock(), LoggingAuditSink())
 
     assert accounts.get("nobody-at-all") is None
@@ -76,7 +76,7 @@ def test_asking_for_an_unknown_account_creates_none(database: Path) -> None:
 def test_the_sessions_of_a_person_carry_their_times_and_no_secret(
     database: Path,
 ) -> None:
-    """S9 (#293): sessions are counted by their times and never show the token."""
+    """PE21: sessions are counted by their times and never show the token."""
     sessions = SqliteSessionRecordStore(database)
     sessions.create(
         _THE_PERSON.id,
@@ -97,7 +97,7 @@ def test_the_sessions_of_a_person_carry_their_times_and_no_secret(
 def test_only_sessions_holding_a_refresh_token_are_counted_as_holding_one(
     database: Path,
 ) -> None:
-    """D5 (#419): a session without a refresh token is not counted as holding one."""
+    """PE21: a session without a refresh token is not counted as holding one."""
     sessions = SqliteSessionRecordStore(database)
     for token in (SecretStr(_A_REFRESH_WORD), None):
         sessions.create(
@@ -113,7 +113,7 @@ def test_only_sessions_holding_a_refresh_token_are_counted_as_holding_one(
 
 
 def test_deleting_preferences_removes_only_that_persons_row(database: Path) -> None:
-    """S9 (#293): preferences go per person and a repeat deletes zero."""
+    """PE1: preferences go per person and a repeat deletes zero."""
     preferences = SqlitePersonPreferencesStore(database)
     for person in (_THE_PERSON, _ANOTHER):
         preferences.write(person.id, PersonPreferences(theme=ThemeChoice.DARK))
@@ -128,7 +128,7 @@ def test_deleting_preferences_removes_only_that_persons_row(database: Path) -> N
 def test_a_draft_is_counted_and_removed_whether_or_not_its_key_still_opens(
     database: Path,
 ) -> None:
-    """S9 (#293): key drafts are counted and removed though their key is gone."""
+    """PE1: key drafts are counted and removed though their key is gone."""
     minted = a_key_drafts_store(database, instance_key="the key another instance had")
     minted.mint(_THE_PERSON.id, at=_NOW)
     minted.mint(_ANOTHER.id, at=_NOW)
@@ -161,7 +161,7 @@ class _LockThatSaysWhenAnotherThreadHasToWait:
 def test_deleting_an_account_cannot_split_a_sign_in_that_has_read_the_account(
     database: Path,
 ) -> None:
-    """#418 matrix: an in-flight code exchange leaves no session of a gone account."""
+    """PE1: an in-flight code exchange leaves no session of a gone account."""
     watched = _LockThatSaysWhenAnotherThreadHasToWait()
     lock = ProcessWriteLock(primitive=watched)
     accounts = SqliteIdentityWrites(database, lock, LoggingAuditSink())

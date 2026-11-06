@@ -79,15 +79,8 @@ signed `SameSite=Lax` session cookie.
   and answers a signed-out caller with the instance's defaults and no person;
   its sign-in addresses include `account_console_url`, the configured issuer
   with `/account`, served signed in and out alike.
-- `BearerGate` takes `/api/admin/` by an access token alone and never by the
-  cookie (see [people](people.md)). On the rest of `/api/` a person's hal
-  access token is the account behind it: admitted as a sign-in admits, in one
-  `SignInTransaction` entry (an unknown member gets an account, a known one
-  the role of the token's groups), with no session. A token beside a cookie
-  decides, and an invalid one is refused without falling back to the cookie.
-  Sign-out, back-channel logout and a Keycloak block do not end a token: it
-  stays valid until `exp` plus leeway. The gate exists only while
-  `PRESENTATOR_TOKEN_CLIENTS` names a client.
+- `BearerGate` admits a hal access token to `/api/admin/` and, as the account
+  behind it, to the rest of `/api/`; its rules are in [people](../people.md).
 - A request that carries the session cookie twice is treated as signed out
   rather than letting either copy decide whose account it runs in.
 - The public origin is https, so the session cookie is `Secure` and carries the
