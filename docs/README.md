@@ -13,7 +13,6 @@ this map and an owner disagree, the owner is right.
 | Why does this tool exist, and what does the operator want from it? | Vision | [`VISION.md`](VISION.md) |
 | What does the instance do, exactly? | Reference | the documents under [Reference](#reference) |
 | How is it built, and what does the design rest on? | Architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
-| Why was it built this way? | Decisions | Records indexed by [`decisions/README.md`](decisions/README.md) |
 | How do I run, change or repair this installation? | Runbooks | the documents under [Runbooks](#runbooks) |
 
 Agent policy lives in [`AGENTS.md`](../AGENTS.md) at the repository root, not

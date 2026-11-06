@@ -31,7 +31,7 @@ Checked and not chosen:
 - **Nemotron 3.5 ASR Streaming 0.6B** (`nvidia/nemotron-3.5-asr-streaming-0.6b`). The completed compiled fp16 direct-model experiment on this RTX 3090 missed the partial-transcript target: across five runs, German first/stable-partial median and final WER were 0.949 s / 17.24% at lookahead 0 and 0.879 s / 15.52% at lookahead 6; English was 0.892 s / 6.78% and 1.054 s / 5.08%, respectively. [The durable result](https://github.com/overnightworks/presentator/issues/77#issuecomment-5592496732) is not a `/hear` measurement, socket integration, or joint-residency proof, so faster-whisper remains selected.
 - **Voxtral Mini 4B Realtime** (Apache-2.0, documented German, native streaming, sub-500 ms in the paper). Not cached here, wants vLLM, and ships no server that matches this contract.
 
-The listener is not a streaming-native model. Kyutai STT has no German checkpoint. Voxtral is the current streaming-native candidate and was left for that spike.
+The listener is not a streaming-native model. Kyutai STT has no German checkpoint. Voxtral is the current streaming-native candidate.
 
 ## Card
 
