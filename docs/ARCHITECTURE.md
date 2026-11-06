@@ -29,7 +29,7 @@ flowchart LR
   agent-runtime client at the tag `pyproject.toml` pins.
 - Git remotes hold the decks; presentator only reads them.
 - hal and edge deploy the instance from `compose.yaml` and host the legal
-  pages that presentator's section (`legal/datenschutz.html`) joins.
+  pages that its sections in `legal/` join.
 - The speech service speaks and hears over a private Unix socket.
 
 ## 2. Building blocks
@@ -41,12 +41,14 @@ flowchart TD
     host --> agent
     api --> application
     adapters --> ports
-    agent --> ports
+    agent --> contracts
     application --> ports
     ports --> contracts
     adapters --> gitmirror
     agent --> arc[agent_runtime_client]
     host --> webauth
+    api --> webauth
+    agent --> webauth
     adapters --> webauth
 ```
 
@@ -56,7 +58,9 @@ flowchart TD
   `application`, `api` or `host`, and only the host names an adapter. The import-linter
   contracts in `pyproject.toml` enforce this, run by the quality gate's
   `import-contract` rule. A third-party or format library lives only in the
-  adapter that owns it, and its contract is written with its first import.
+  adapter that owns it, except webauth, which `api`, `agent` and `host` also
+  import directly. Each library has its own import contract in `pyproject.toml`,
+  written with its first import.
 - **`src/gitmirror`** sits beside the layers: it mirrors any remote read-only
   through `git`, does not import `presentator`, and only adapters name it.
 - **`presentator.agent`** is the only package that imports
@@ -104,8 +108,8 @@ host and tells them apart by the `Host` header (`served_by_host` in
 ## 5. Crosscutting concepts
 
 **Persistence.** SQLite holds accounts, sessions, preferences, sources, runs,
-decks and key drafts; files hold mirrors and builds. A row names a path and
-the database holds no blob. `builds/` and `mirrors/` are caches the rows
+decks and key drafts; files hold mirrors and builds. The database holds no file
+content: a mirror or build lives on disk and its row names the path. `builds/` and `mirrors/` are caches the rows
 rebuild. One process writes the database, and the identity lock depends on
 that; a second writer would need a unit of work. A column goes in two
 releases, the second dropping it in `create_tables`, gated on
