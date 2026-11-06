@@ -286,8 +286,8 @@ def _attempt(columns: _AttemptColumns) -> BuildAttempt | None:
     if commit is None or started_at is None or outcome is None:
         return None
     if reason is None:
-        # A failed attempt always carries a reason; a row without one is not
-        # a state any writer or the upgrade leaves.
+        # A failed attempt always carries a reason; no writer leaves a row
+        # without one.
         failure = None
     else:
         failure = BuildFailure(
