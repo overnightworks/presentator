@@ -9,16 +9,11 @@ import pytest
 from fastapi.testclient import TestClient
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
-from presentator.adapters.preferences import SqlitePersonPreferencesStore
-from presentator.adapters.schema import create_tables
 from presentator.api.auth import LOGOUT_PATH, START_SIGN_IN_PATH
 from presentator.api.session_api import SessionView
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.preferences import PersonPreferences, ThemeChoice
 from presentator.contracts.text import Catalogs
-from tests.presentator.adapters.support.person_instance_support import (
-    a_file_where_people_chose_a_language,
-)
 from tests.presentator.application.support.fakes import FakePersonPreferencesStore
 from tests.support.lobby import (
     A_TALK_ADDRESS,
@@ -101,26 +96,6 @@ def test_a_persons_own_theme_wins_and_the_instances_language_is_german() -> None
     assert body["person"] == {"username": NEIGHBOUR, "role": "user"}
     assert body["theme"] == "dark"
     assert body["words"]["language_tag"] == "de"
-
-
-def test_a_person_whose_row_held_a_language_before_the_drop_reads_the_session(
-    tmp_path: Path,
-) -> None:
-    database = a_file_where_people_chose_a_language(
-        tmp_path, [(f"id-of-{NEIGHBOUR}", "de", ThemeChoice.DARK.value)]
-    )
-    create_tables(database)
-    catalogs = Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN})
-    lobby = a_lobby(
-        catalogs=catalogs, person_preferences=SqlitePersonPreferencesStore(database)
-    )
-    lobby.sign_in(username=NEIGHBOUR)
-
-    answer = lobby.client.get(_SESSION)
-
-    assert answer.status_code == HTTPStatus.OK
-    assert answer.json()["words"]["language_tag"] == ENGLISH.language_tag
-    assert answer.json()["theme"] == "dark"
 
 
 def test_an_admin_is_told_apart_by_role() -> None:

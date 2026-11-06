@@ -7,109 +7,22 @@ from presentator.adapters.decks import create_deck_tables
 from presentator.adapters.identity import create_identity_tables
 from presentator.adapters.preferences import create_preference_tables
 from presentator.adapters.sqlite import immediate_transaction
-from presentator.contracts.decks import BuildFailureReason
 from presentator.contracts.preferences import ThemeChoice
 
-_DECK_COLUMNS: Final = "SELECT name FROM pragma_table_info('decks')"
-_PERSON_PREFERENCE_COLUMNS: Final = (
-    "SELECT name FROM pragma_table_info('person_preferences')"
-)
-_THE_PERSONAL_LANGUAGE: Final = "language_tag"
 _INSTANCE_COLUMNS: Final = "SELECT name FROM pragma_table_info('instance_settings')"
 _THE_INSTANCE_THEME: Final = "theme"
 _UNCHOSEN_THEME_FOLLOWS_THE_SYSTEM: Final = (
     "UPDATE person_preferences SET theme = ? WHERE theme IS NULL"
 )
-_ADD_COLUMNS: Final = {
-    "attempt_reason": "ALTER TABLE decks ADD COLUMN attempt_reason TEXT",
-    "attempt_written_megabytes": (
-        "ALTER TABLE decks ADD COLUMN attempt_written_megabytes INTEGER"
-    ),
-    "attempt_allowed_megabytes": (
-        "ALTER TABLE decks ADD COLUMN attempt_allowed_megabytes INTEGER"
-    ),
-    "attempt_allowed_entries": (
-        "ALTER TABLE decks ADD COLUMN attempt_allowed_entries INTEGER"
-    ),
-}
-# What a release from before the reason, or one that does not know it, leaves
-# beside the reason: whether a failure carries words is `BuildFailure.said`'s
-# rule, so an empty text is no text and a reason follows from the text.
-_EMPTY_TEXT_IS_NONE: Final = """
-UPDATE decks SET attempt_failure = NULL WHERE attempt_failure = ''
-"""
-_ONLY_A_FAILURE_HAS_A_REASON: Final = """
-UPDATE decks
-SET attempt_reason = NULL, attempt_written_megabytes = NULL,
-    attempt_allowed_megabytes = NULL, attempt_allowed_entries = NULL
-WHERE attempt_outcome IS NOT 'failed' AND (
-    attempt_reason IS NOT NULL OR attempt_written_megabytes IS NOT NULL
-    OR attempt_allowed_megabytes IS NOT NULL OR attempt_allowed_entries IS NOT NULL
-)
-"""
-# A server reason never has text, and `toolchain` always has; a failed row that
-# disagrees, or has no reason, is given the reason its text names and no counts.
-_THE_REASON_FOLLOWS_THE_TEXT: Final = """
-UPDATE decks
-SET attempt_reason = CASE WHEN attempt_failure IS NULL THEN ? ELSE ? END,
-    attempt_written_megabytes = NULL, attempt_allowed_megabytes = NULL,
-    attempt_allowed_entries = NULL
-WHERE attempt_outcome = 'failed' AND (
-    attempt_reason IS NULL
-    OR (attempt_failure IS NOT NULL AND attempt_reason != ?)
-    OR (attempt_failure IS NULL AND attempt_reason = ?)
-)
-"""
 
 
 def create_tables(database: Path) -> None:
-    """Make every table exist; the identity step refuses an old database first."""
+    """Make every table exist, then run the two theme upgrades."""
     create_identity_tables(database)
     create_preference_tables(database)
     create_deck_tables(database)
-    _keep_the_failure_reason(database)
-    _drop_the_personal_language(database)
     _unchosen_theme_follows_the_system(database)
     _retire_the_instance_theme(database)
-
-
-def _keep_the_failure_reason(database: Path) -> None:
-    """Give the deck table the reason's columns and make its rows agree, on every start.
-
-    One immediate transaction. Nothing is lost and no old column changes, bar an
-    empty failure text becoming none; every deck statement names its columns, so
-    a release from before this still reads the file. What such a release writes
-    into it afterwards is made to agree again here, so going forward after a
-    rollback reads every row.
-    """
-    toolchain = BuildFailureReason.TOOLCHAIN.value
-    with immediate_transaction(database) as cursor:
-        present = {name for (name,) in cursor.execute(_DECK_COLUMNS)}
-        for name, statement in _ADD_COLUMNS.items():
-            if name not in present:
-                cursor.execute(statement)
-        cursor.execute(_EMPTY_TEXT_IS_NONE)
-        cursor.execute(_ONLY_A_FAILURE_HAS_A_REASON)
-        cursor.execute(
-            _THE_REASON_FOLLOWS_THE_TEXT,
-            (BuildFailureReason.NO_WORDS.value, toolchain, toolchain, toolchain),
-        )
-
-
-def _drop_the_personal_language(database: Path) -> None:
-    """Drop the language a person once chose, on every start; it is one-way.
-
-    One immediate transaction, so two starts on one file cannot both drop, and a
-    failed statement rolls back whole. No row goes and no theme changes. A release
-    from before this selects the column on every session read, so it cannot read
-    the migrated file: the way back is the backup taken before the start (ADR 0006).
-    """
-    with immediate_transaction(database) as cursor:
-        present = {name for (name,) in cursor.execute(_PERSON_PREFERENCE_COLUMNS)}
-        if _THE_PERSONAL_LANGUAGE in present:
-            cursor.execute(
-                f"ALTER TABLE person_preferences DROP COLUMN {_THE_PERSONAL_LANGUAGE}"
-            )
 
 
 def _unchosen_theme_follows_the_system(database: Path) -> None:

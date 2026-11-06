@@ -147,14 +147,13 @@ def the_old_release_forgets_the_theme_of(database: Path, user_id: str) -> None:
         )
 
 
-def test_the_start_drops_the_personal_language_and_folds_only_the_missing_theme(
+def test_the_start_folds_only_the_missing_theme(
     tmp_path: Path,
 ) -> None:
     database = an_old_file(tmp_path)
 
     create_tables(database)
 
-    assert columns_of(database, "person_preferences") == ["user_id", "theme"]
     assert everything_in(database, _THEMES_OF_EVERYONE) == [
         (_WHO_CHOSE_ONLY_A_LANGUAGE, ThemeChoice.FOLLOW_SYSTEM.value),
         (_WHO_CHOSE_ONLY_A_THEME, ThemeChoice.LIGHT.value),
@@ -205,9 +204,8 @@ def test_the_start_drops_the_instance_theme_and_keeps_the_instance_words(
     assert everything_in(database, _THE_INSTANCE_ROW) == [(1, "Heim", "en")]
 
 
-@pytest.mark.parametrize("table", ["person_preferences", "instance_settings"])
-def test_a_fresh_file_and_a_migrated_one_have_the_same_columns(
-    tmp_path: Path, table: str
+def test_a_fresh_file_and_a_migrated_one_have_the_same_instance_columns(
+    tmp_path: Path,
 ) -> None:
     migrated = an_old_file(tmp_path)
     create_tables(migrated)
@@ -215,7 +213,9 @@ def test_a_fresh_file_and_a_migrated_one_have_the_same_columns(
 
     create_tables(fresh)
 
-    assert columns_of(fresh, table) == columns_of(migrated, table)
+    assert columns_of(fresh, "instance_settings") == columns_of(
+        migrated, "instance_settings"
+    )
 
 
 def test_a_save_over_the_instance_row_changes_its_words(tmp_path: Path) -> None:
@@ -271,6 +271,52 @@ def test_everybody_reads_the_instances_words_and_their_own_theme_after_the_start
 def test_an_admin_saves_the_settings_over_the_migrated_file(tmp_path: Path) -> None:
     database = an_old_file(tmp_path)
     create_tables(database)
+    lobby = a_lobby_over(database)
+    lobby.sign_in()
+
+    saved = lobby.client.put(
+        "/api/settings", json={"name": "Werkstatt", "language_tag": "en"}
+    )
+
+    assert saved.status_code == HTTPStatus.OK
+    assert lobby.client.get("/api/settings").json()["name"] == "Werkstatt"
+
+
+def test_everybody_reads_the_instances_words_and_their_own_theme(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "fresh.sqlite3"
+    create_tables(database)
+    SqliteInstanceSettingsStore(database).write(
+        InstanceSettings(name="Heim", language_tag=ENGLISH.language_tag)
+    )
+    chosen = {
+        "felix": ThemeChoice.DARK,
+        "berta": ThemeChoice.LIGHT,
+        "carl": ThemeChoice.FOLLOW_SYSTEM,
+    }
+    people = SqlitePersonPreferencesStore(database)
+    for username, theme in chosen.items():
+        people.write(f"id-of-{username}", PersonPreferences(theme=theme))
+    lobby = a_lobby_over(database)
+
+    themes = {}
+    for username in [*chosen, "dora"]:
+        browser = lobby.another_browser()
+        browser.sign_in(username=username)
+        body = browser.client.get("/api/session").json()
+        themes[username] = ThemeChoice(body["theme"])
+        assert body["words"]["language_tag"] == ENGLISH.language_tag
+
+    assert themes == {**chosen, "dora": ThemeChoice.FOLLOW_SYSTEM}
+
+
+def test_an_admin_saves_the_settings_over_the_created_file(tmp_path: Path) -> None:
+    database = tmp_path / "fresh.sqlite3"
+    create_tables(database)
+    SqliteInstanceSettingsStore(database).write(
+        InstanceSettings(name="Heim", language_tag="en")
+    )
     lobby = a_lobby_over(database)
     lobby.sign_in()
 

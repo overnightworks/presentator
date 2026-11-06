@@ -45,7 +45,6 @@ from presentator.adapters.decks import (
     SqliteSourceStore,
 )
 from presentator.adapters.identity import (
-    OldDatabaseError,
     ProcessWriteLock,
     SqliteIdentityWrites,
     SqliteSessionRecordStore,
@@ -125,7 +124,7 @@ def build_instance(
     relying_party_for: RelyingPartyFor = relying_party,
 ) -> Instance:
     """Choose the adapter behind every port and hand the routes their use cases."""
-    _create_tables(settings)
+    create_tables(settings.database)
     shell = _lobby_shell(settings)
     # One box for both directions: what the store writes down is what the
     # resolver opens at the pull, and neither picks its own key.
@@ -185,14 +184,6 @@ def build_instance(
         ),
         session_sweep=_session_sweep(sessions, SystemClock()),
     )
-
-
-def _create_tables(settings: Settings) -> None:
-    """Bring the database to this release's tables, or refuse to start on it."""
-    try:
-        create_tables(settings.database)
-    except OldDatabaseError as refused:
-        raise cannot_start(str(refused)) from None
 
 
 def _lobby_shell(settings: Settings) -> LobbyShell:

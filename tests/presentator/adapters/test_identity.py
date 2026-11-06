@@ -14,7 +14,6 @@ from webauth.dependencies import ConnectionRefusal, admit_session
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (
-    OldDatabaseError,
     ProcessWriteLock,
     SqliteIdentityWrites,
     SqliteSessionRecordStore,
@@ -26,30 +25,11 @@ from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host.main import web_auth_config_for
 from tests.support.people import (
-    copy_of_a_crashed_database,
     seed_user,
-    write_password_schema,
 )
 
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _ID_MARKER = "id-MARKER-4f7c1e"
-_A_FIRST_SESSIONS_TABLE_WITH_ITS_ROWS = (
-    "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL"
-    " UNIQUE, role TEXT NOT NULL);"
-    "CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL"
-    " REFERENCES users(id), created_at TEXT NOT NULL, expires_at TEXT NOT NULL);"
-    "CREATE TABLE decks (slug TEXT PRIMARY KEY);"
-    "INSERT INTO users VALUES ('user-1', 'felix', 'admin');"
-    "INSERT INTO sessions VALUES ('s-1', 'user-1', 'then', 'later');"
-    "INSERT INTO decks VALUES ('talk');"
-)
-_A_SESSIONS_TABLE_OF_THE_PREVIOUS_VERSION = (
-    "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL"
-    " UNIQUE, role TEXT NOT NULL);"
-    "CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL"
-    " REFERENCES users(id), created_at TEXT NOT NULL, last_seen TEXT NOT NULL,"
-    " ip_address TEXT NOT NULL DEFAULT '', user_agent TEXT NOT NULL DEFAULT '');"
-)
 
 
 @pytest.fixture
@@ -350,68 +330,6 @@ def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_add
 
 
 @pytest.mark.parametrize(
-    "older_version",
-    [
-        pytest.param(
-            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL,"
-            " role TEXT NOT NULL, password_hash TEXT NOT NULL);",
-            id="password-hash-column",
-        ),
-        pytest.param(
-            "CREATE TABLE login_attempts (username TEXT NOT NULL,"
-            " failed_at TEXT NOT NULL);",
-            id="login-attempts-table",
-        ),
-        pytest.param(
-            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL"
-            " UNIQUE, role TEXT NOT NULL);"
-            "CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL"
-            " REFERENCES users(id), last_seen TEXT NOT NULL);",
-            id="sessions-without-created-at",
-        ),
-        pytest.param(
-            _A_SESSIONS_TABLE_OF_THE_PREVIOUS_VERSION,
-            id="sessions-with-last-seen-and-a-client-address",
-        ),
-        pytest.param(
-            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL"
-            " UNIQUE, role TEXT NOT NULL);"
-            "CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL"
-            " REFERENCES users(id), created_at TEXT NOT NULL, expires_at TEXT NOT"
-            " NULL, refresh_token TEXT);",
-            id="sessions-before-the-id-token-column",
-        ),
-        pytest.param(
-            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL,"
-            " role TEXT NOT NULL, password_hash TEXT NOT NULL);"
-            "CREATE TABLE sources (id TEXT PRIMARY KEY, name TEXT NOT NULL,"
-            " url TEXT NOT NULL, credential_reference TEXT, encrypted_secret BLOB);"
-            "INSERT INTO sources (id, name, url, credential_reference)"
-            " VALUES ('s', 'talks', 'https://example.test/talks.git', 'TOKEN');",
-            id="before-encryption-a-source-seeded-from-the-environment",
-        ),
-    ],
-)
-def test_a_file_from_an_older_version_is_refused_and_left_untouched(
-    tmp_path: Path,
-    older_version: str,
-) -> None:
-    database = tmp_path / "identity.sqlite3"
-    with closing(sqlite3.connect(database)) as connection:
-        connection.executescript("PRAGMA journal_mode=WAL;" + older_version)
-    before = database.read_bytes()
-    folder_before = sorted(tmp_path.iterdir())
-
-    with pytest.raises(
-        OldDatabaseError, match=r"move the database and its -wal and -shm files aside"
-    ):
-        create_identity_tables(database)
-
-    assert database.read_bytes() == before
-    assert sorted(tmp_path.iterdir()) == folder_before
-
-
-@pytest.mark.parametrize(
     "started",
     [
         pytest.param("", id="file-with-no-tables"),
@@ -442,27 +360,6 @@ def test_a_file_this_version_started_is_completed_to_sessions_without_a_client_a
         "refresh_token",
         "id_token",
     ]
-
-
-def test_a_password_schema_only_in_the_write_ahead_log_is_refused_and_left_untouched(
-    tmp_path: Path,
-) -> None:
-    database = copy_of_a_crashed_database(
-        tmp_path / "crashed" / "identity.sqlite3", write_password_schema
-    )
-    companions = [database.with_name(database.name + "-wal"), database]
-    bytes_before = [path.read_bytes() for path in companions]
-    folder_before = set(database.parent.iterdir())
-
-    with pytest.raises(
-        OldDatabaseError, match=r"move the database and its -wal and -shm files aside"
-    ):
-        create_identity_tables(database)
-
-    assert [path.read_bytes() for path in companions] == bytes_before
-    assert set(database.parent.iterdir()) - folder_before <= {
-        database.with_name(database.name + "-shm")
-    }
 
 
 @pytest.mark.parametrize(
@@ -734,44 +631,3 @@ def test_a_session_created_without_an_id_token_stores_none(
     loaded = store.load(created.id)
     assert loaded is not None
     assert loaded.id_token is None
-
-
-def write_the_first_sessions_table_in_the_log(database: Path) -> None:
-    with closing(sqlite3.connect(database)) as connection:
-        connection.executescript(_A_FIRST_SESSIONS_TABLE_WITH_ITS_ROWS)
-
-
-def test_a_file_with_the_first_sessions_table_is_refused_and_left_byte_unchanged(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "identity.sqlite3"
-    with closing(sqlite3.connect(database)) as connection:
-        connection.executescript(
-            "PRAGMA journal_mode=WAL;" + _A_FIRST_SESSIONS_TABLE_WITH_ITS_ROWS
-        )
-    before = database.read_bytes()
-
-    with pytest.raises(
-        OldDatabaseError, match=r"move the database and its -wal and -shm files aside"
-    ):
-        create_identity_tables(database)
-
-    assert database.read_bytes() == before
-
-
-def test_the_first_sessions_table_committed_only_in_the_log_is_refused_untouched(
-    tmp_path: Path,
-) -> None:
-    database = copy_of_a_crashed_database(
-        tmp_path / "crashed" / "identity.sqlite3",
-        write_the_first_sessions_table_in_the_log,
-    )
-    companions = [database.with_name(database.name + "-wal"), database]
-    bytes_before = [path.read_bytes() for path in companions]
-
-    with pytest.raises(
-        OldDatabaseError, match=r"move the database and its -wal and -shm files aside"
-    ):
-        create_identity_tables(database)
-
-    assert [path.read_bytes() for path in companions] == bytes_before

@@ -2,8 +2,6 @@
 
 import asyncio
 import shutil
-import sqlite3
-from contextlib import closing
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
@@ -55,7 +53,6 @@ from tests.support.lobby_reads import deck_list, listed_titles, signed_in_userna
 from tests.support.people import (
     copy_of_a_crashed_database,
     seed_user,
-    write_password_schema,
 )
 
 _PERSON = "felix"
@@ -699,26 +696,6 @@ def test_two_sources_each_list_their_own_decks_and_reconcile_alone(
     assert after_the_delete == [_ANOTHER_SLUG]
 
 
-def test_an_instance_refuses_a_database_with_login_attempts_before_changing_it(
-    environment: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "presentator.sqlite3"
-    environment.setenv("PRESENTATOR_DATABASE", str(database))
-    with closing(sqlite3.connect(database)) as connection:
-        connection.execute("PRAGMA journal_mode=WAL")
-        connection.execute("CREATE TABLE login_attempts (username TEXT)")
-        connection.commit()
-    before = database.read_bytes()
-    folder_before = sorted(tmp_path.iterdir())
-
-    with pytest.raises(ConfigurationError, match="move the database"):
-        a_real_instance()
-
-    assert database.read_bytes() == before
-    assert sorted(tmp_path.iterdir()) == folder_before
-
-
 def test_an_instance_on_a_relative_database_path_starts_again_after_its_first_start(
     environment: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -730,25 +707,6 @@ def test_an_instance_on_a_relative_database_path_starts_again_after_its_first_st
     a_real_instance()
 
     assert (tmp_path / "presentator.sqlite3").is_file()
-
-
-def test_an_instance_refuses_a_password_schema_only_in_the_write_ahead_log(
-    environment: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    database = copy_of_a_crashed_database(
-        tmp_path / "crashed" / "presentator.sqlite3", write_password_schema
-    )
-    environment.setenv("PRESENTATOR_DATABASE", str(database))
-    log = database.with_name(database.name + "-wal")
-    main_file_before = database.read_bytes()
-    log_before = log.read_bytes()
-
-    with pytest.raises(ConfigurationError, match="move the database"):
-        a_real_instance()
-
-    assert database.read_bytes() == main_file_before
-    assert log.read_bytes() == log_before
 
 
 def test_an_instance_restarts_on_a_crash_that_left_only_current_frames_in_the_log(

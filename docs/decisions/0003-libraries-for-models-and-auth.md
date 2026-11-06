@@ -2,7 +2,7 @@
 
 Audience: humans and agents who need a model call or a logged-in user.
 
-- Status: ACCEPTED 2026-09-06 — amended 2026-09-07, 2026-09-08, 2026-10-04, 2026-10-20, 2026-10-21, 2026-10-23, 2026-10-26, 2026-10-28, 2026-10-29, 2026-10-30 and 2026-11-04, see below; `agent_providers` is retired (agent-runtime#697) and the model call is the client's gateway backend (amendment 2026-11-04)
+- Status: ACCEPTED 2026-09-06 — amended 2026-09-07, 2026-09-08, 2026-10-04, 2026-10-20, 2026-10-21, 2026-10-23, 2026-10-26, 2026-10-28, 2026-10-29, 2026-10-30, 2026-11-04 and 2026-11-06, see below; `agent_providers` is retired (agent-runtime#697) and the model call is the client's gateway backend (amendment 2026-11-04)
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06 recorded on
   [#2](https://github.com/overnightworks/presentator/issues/2)
@@ -483,6 +483,16 @@ sign-in are retired with them; the sign-in asks for `openid`, `profile` and
 through webauth's `current_groups`. The adapters-only rule now names
 `presentator.agent` as the one place that imports `agent_runtime_client`. The
 older amendments above keep their history.
+
+### Amendment 2026-11-06: the start refuses no older shape
+
+Authority: [#819](https://github.com/overnightworks/presentator/issues/819),
+[#508](https://github.com/overnightworks/presentator/issues/508).
+
+The start no longer refuses an older file shape, because no operated database
+has one. This overtakes the two sentences above that say a file with the earlier
+four-column or five-column `sessions` table "is refused untouched like every
+older shape".
 
 ## Consequences
 
