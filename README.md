@@ -18,7 +18,7 @@ does is listed in [docs/README.md](docs/README.md).
 | How an operator does a task: start, wire a source, renew a secret | [docs/README.md](docs/README.md) |
 | Why this tool exists and its latency targets | [docs/VISION.md](docs/VISION.md) |
 | What the instance does, exactly: settings, sign-in, sources, decks, builds | [docs/README.md](docs/README.md) |
-| Technical decisions | Records indexed by [docs/decisions/README.md](docs/decisions/README.md) |
+| How it is built | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | How a change is proven | [docs/TESTING.md](docs/TESTING.md) |
 | Reusable agent policy | [AGENTS.md](AGENTS.md); [CLAUDE.md](CLAUDE.md) only loads it for Claude |
 | Local speech process | [speech/README.md](speech/README.md) |
