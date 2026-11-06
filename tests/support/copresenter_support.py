@@ -197,7 +197,7 @@ class RecordingSpeech:
 
 @dataclass
 class RecordingAnswers:
-    """The agent service's text, behind the real application use case."""
+    """The gateway's text, behind the real application use case."""
 
     messages: list[str] = field(default_factory=list[str])
     persons: list[AskingPerson] = field(default_factory=list[AskingPerson])
