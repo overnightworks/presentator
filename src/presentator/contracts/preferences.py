@@ -1,4 +1,4 @@
-"""What an instance chooses about words and a person about colours (ADR 0012)."""
+"""What an instance chooses about words and a person about colours."""
 
 from dataclasses import dataclass
 from enum import StrEnum

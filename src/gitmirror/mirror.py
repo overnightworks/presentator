@@ -2,7 +2,7 @@
 
 git's own program already owns the transports, the credential helpers, and the
 prompt suppression an unattended server needs, so this package spawns it rather
-than binding a second git implementation (ADR 0010).
+than binding a second git implementation.
 """
 
 import logging
@@ -69,8 +69,8 @@ _UNATTENDED: Final = {
     "GIT_CONFIG_GLOBAL": os.devnull,
     "GIT_CONFIG_NOSYSTEM": "1",
 }
-# A deploy key's private half lives on disk only for the length of one fetch
-# (ADR 0013): a 0700 directory holding one 0600 file, removed in a `finally`
+# A deploy key's private half lives on disk only for the length of one fetch:
+# a 0700 directory holding one 0600 file, removed in a `finally`
 # whatever the fetch did.
 _SSH_KEY_DIRECTORY_MODE: Final = 0o700
 _SSH_KEY_FILE_MODE: Final = 0o600
@@ -390,7 +390,7 @@ def _credentials(
 
 @contextmanager
 def _ssh_key_file(secret: str) -> Generator[Path]:
-    """A deploy key's private half, written for the length of one fetch (ADR 0013).
+    """A deploy key's private half, written for the length of one fetch.
 
     A 0700 directory holding one 0600 file, both gone in the `finally`
     whatever the fetch did with them.

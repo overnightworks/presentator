@@ -13,8 +13,8 @@ from typing import Final, Protocol
 class CredentialReference:
     """Where the read-only secret is found, never the secret itself.
 
-    Vocabulary from atelier-2 ADR 0017: a source holds one credential anchor,
-    and the durable record stores a reference rather than a value.
+    A source holds one credential anchor, and the durable record stores a
+    reference rather than a value.
     """
 
     name: str

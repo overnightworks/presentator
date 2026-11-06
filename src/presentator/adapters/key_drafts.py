@@ -1,4 +1,4 @@
-"""Where an admin's unbound deploy key waits before it becomes a source (ADR 0010)."""
+"""Where an admin's unbound deploy key waits before it becomes a source."""
 
 from dataclasses import dataclass
 from datetime import datetime

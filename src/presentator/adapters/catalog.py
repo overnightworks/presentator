@@ -1,4 +1,4 @@
-"""Reads the gettext catalogs into the lobby's words (ADR 0012).
+"""Reads the gettext catalogs into the lobby's words.
 
 Babel owns the `.po` format, so adding a language stays adding a file.
 """

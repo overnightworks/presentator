@@ -1,4 +1,4 @@
-"""The lobby's built SvelteKit shell, read once when the host starts (ADR 0021).
+"""The lobby's built SvelteKit shell, read once when the host starts.
 
 The build writes one HTML shell whose one inline script boots the app. The
 host hashes that script for the security policy, because the hash changes with

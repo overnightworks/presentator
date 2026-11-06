@@ -1,7 +1,7 @@
 """Chores that run on a schedule, so no page view has to.
 
 Polling the deck sources is the guarantee that a push arrives; the fetch hook
-only makes it faster (ADR 0010). The use cases know nothing of it: a schedule is
+only makes it faster. The use cases know nothing of it: a schedule is
 handed a chore to call, and the server owns when it runs.
 """
 

@@ -1,6 +1,6 @@
 """The admin routes that erase or export one person, behind hal's access token alone.
 
-The path prefix takes a Keycloak access token and no cookie (ADR 0003); the
+The path prefix takes a Keycloak access token and no cookie; the
 bodies are the shared `people_erasure` and `people_export` shapes of edge's
 people contract.
 """

@@ -147,7 +147,7 @@ def test_the_talk_session_secret_is_long_and_shares_no_bytes_with_another_purpos
         fernet.decrypt(sealed_by_the_box)
 
 
-# ADR 0013: a webhook secret carries at least 32 random bytes.
+# A webhook secret carries at least 32 random bytes.
 _FEWEST_WEBHOOK_SECRET_BYTES = 32
 
 

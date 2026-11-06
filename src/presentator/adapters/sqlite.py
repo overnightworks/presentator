@@ -1,4 +1,4 @@
-"""The one way this product opens its SQLite file (ADR 0006)."""
+"""The one way this product opens its SQLite file."""
 
 import sqlite3
 from collections.abc import Generator

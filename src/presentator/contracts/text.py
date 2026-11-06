@@ -1,4 +1,4 @@
-"""The lobby's words, so no page and no route carries a literal (ADR 0012)."""
+"""The lobby's words, so no page and no route carries a literal."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
