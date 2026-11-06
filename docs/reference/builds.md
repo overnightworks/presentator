@@ -62,24 +62,19 @@ read as an absolute path without following links.
 Anything else under the root, such as a link, a file or a directory that holds
 something but no `out`, is left alone and logged.
 
-A run and everything in it are readable by others, so that edge's backup of the
-volume, which runs as another user, can read it. The exception is a
-`staged-<step>` directory: the web creates it closed to everyone but itself
-while a step runs, and a failed cleanup can leave it behind until its run is
-taken away. The backup skips `staged-*` by name.
+A run is readable by others, except a `staged-<step>` directory, which a failed
+cleanup can leave behind until its run is taken away
+([deployment view](../ARCHITECTURE.md#4-deployment-view)).
 
 A stored path that fits no run, or a listing of the root that did not finish,
 stops the sweep with a log line and deletes nothing, because every run
 would then look unreferenced. A removal that fails is logged and tried again by
-the next pass. An empty or older database is not guarded against: its pass
-deletes the runs only the right database names, and the next refresh builds
-those decks again. Removing a source takes the runs its decks deliver from
-the same way, and refuses (and deletes no row) over a build that fits no run.
+the next pass. An empty or older database is not guarded against
+([risks](../ARCHITECTURE.md#8-risks-and-technical-debt)); the next refresh
+builds the deleted decks again. Removing a source takes the runs its decks
+deliver from the same way, and refuses (and deletes no row) over a build that fits no run.
 The directories above the root belong to the operator and are outside this
 rule's threat model.
-
-`builds/` and `mirrors/` are caches that the database rows rebuild, so a
-restore of the database alone is enough.
 
 ## The toolchain
 

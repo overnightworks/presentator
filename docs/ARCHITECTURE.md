@@ -42,26 +42,21 @@ flowchart TD
     adapters --> webauth
 ```
 
-- **Layers.** `host` composes the instance and depends on `api`, `application`,
-  `ports`, `contracts` and the adapters (`adapters`, `agent`) that fill the
-  ports. Each depends only downward, and only the host names an adapter. The
-  import-linter contracts in `pyproject.toml` enforce this, run by the quality
-  gate's `import-contract` rule. A library an adapter owns behind a port is
-  forbidden above the adapters by its own contract, written with its first
-  import; webauth is forbidden only to `application`, `ports` and `contracts`,
-  because `api` and `host` import it directly; the web framework is exempt.
-- **`src/gitmirror`** sits beside the layers: it mirrors any remote read-only
-  through `git`, does not import `presentator`, and only adapters name it.
-- **`presentator.agent`** alone imports `agent_runtime_client`, at the tag
-  `pyproject.toml` pins.
+- **Layers.** Each depends only downward, and only `host` names an adapter; the
+  import-linter contracts in `pyproject.toml` enforce it (`import-contract`). A
+  library an adapter owns behind a port is forbidden above the adapters by its
+  own contract; webauth is forbidden only to `application`, `ports` and
+  `contracts`, as `api` and `host` import it; the web framework is exempt.
+- **`src/gitmirror`** mirrors any remote read-only through `git`, does not
+  import `presentator`, and only adapters name it. **`presentator.agent`** alone
+  imports `agent_runtime_client`, at the tag `pyproject.toml` pins.
 - **webauth** owns the sign-in routes, the gate, the origin check, the body caps
   and the cookies; presentator's SQLite stores fill its ports.
 - **`frontend/`** is a SvelteKit single-page shell (`adapter-static`, `ssr =
   false`), built in the image; FastAPI serves it and no Node service runs.
 - **`slidev/`** owns every theme and addon a deck may name, among them the
   overlay addon `slidev-addon-presentator`.
-- **The build worker** (`host/worker.py`) runs every step of a deck's build
-  sealed.
+- **The build worker** (`host/worker.py`) runs every build step sealed.
 
 ## 3. Runtime View
 
@@ -79,7 +74,7 @@ sequenceDiagram
     T->>T: serve the talk to its owner
 ```
 
-See [sources](reference/sources.md), [builds](reference/builds.md) and
+See [sources](reference/sources.md), [builds](reference/builds.md),
 [decks](reference/decks.md).
 
 ## 4. Deployment View
@@ -91,7 +86,9 @@ host and tells them apart by the `Host` header (`served_by_host` in
 Docker's default seccomp and AppArmor profiles in force and the image's glibc is
 2.36 or later, because the controller reaches `pidfd_open` through ctypes. See
 [start an instance](runbooks/start-an-instance-in-a-container.md) and
-[configuration](reference/configuration.md).
+[configuration](reference/configuration.md). The backup runs as another user, so
+build runs are readable by others; a `staged-<step>` directory is closed to
+everyone but the web, and the backup skips `staged-*` by name.
 
 ## 5. Crosscutting Concepts
 
@@ -99,9 +96,9 @@ Docker's default seccomp and AppArmor profiles in force and the image's glibc is
 decks and key drafts; files hold mirrors and builds. The database holds no file
 content: a build's row names its directory and PDF, and a mirror's directory is
 derived from its source's address. `builds/` and `mirrors/` are caches the rows
-rebuild. A column goes in two releases, the second dropping it in
-`create_tables`, gated on `pragma_table_info` (`adapters/schema.py`), so a
-restorable older backup still starts.
+rebuild, so a restore of the database alone is enough. A column goes in two
+releases, the second dropping it in `create_tables`, gated on
+`pragma_table_info` (`adapters/schema.py`), so a restorable older backup starts.
 
 **Authentication.** Keycloak groups decide who may enter
 ([sign-in](reference/sign-in-and-session.md)). There is no Redis: rate limits
@@ -117,29 +114,28 @@ type is a `tag:` URI, because an https address breaks when its page moves.
 
 **Words and look.** Every lobby word comes from the gettext catalogs through
 Babel (`adapters/catalog.py`), and `scripts/check_catalog_purity.py` holds the
-pages to it; a language is a file. The language is the instance's and the theme
-is the person's. The look comes from appkit, with presentator's teal in the app
-slot (`frontend/src/app.css`). The overlay's controls use English literals, and
-the room notice follows the deck's language.
+pages to it; a language is a file. The language is the instance's, the theme the
+person's. The look comes from appkit, with presentator's teal in the app slot
+(`frontend/src/app.css`). The overlay's controls use English literals, and the
+room notice follows the deck's language.
 
 **Trust.** A deck author's code, git remotes and people's input are untrusted.
 The operator's settings, his local sources folder and hal's token clients are
-trusted. A folder under the local-sources mount is read with the operator's
-trust: its repositories, their metadata (a `gitdir` file,
-`objects/info/alternates`, a symlink) and everyone who can write there. Across
-the speech service's private Unix socket go readiness, PCM, transcript and
-spoken sentences; browser identity and credentials do not. No operator blessing
-narrows this model yet, so an audit keeps the default trust model.
+trusted: a folder under the local-sources mount is read with his trust, with its
+repositories, their metadata (a `gitdir` file, `objects/info/alternates`, a
+symlink) and everyone who can write there. Across the speech service's private
+Unix socket go readiness, PCM, transcript and spoken sentences; browser identity
+and credentials do not. No operator blessing narrows this model yet, so an audit
+keeps the default trust model.
 
 **Proof.** A test sits at the layer that owns the behaviour; a lower layer
 never stands in for a higher one. Pure logic (`contracts`, `application`) is
 called directly with fakes at the ports. An adapter, `gitmirror` included, runs
 against a temporary real dependency (a tmp SQLite file, a tmp bare repository).
-Routes run through the real app in FastAPI's `TestClient`, the composition once
-with a test configuration. The lobby is driven by Playwright over in-memory
-stores (`tests/support/lobby_drive.py`); a person's flow at a surface is proven
-by a delegated agent driving it. A leak fails the run (`filterwarnings` in
-`pyproject.toml`).
+Routes run through the real app in `TestClient`, the composition once with a
+test configuration. Playwright drives the lobby over in-memory stores
+(`tests/support/lobby_drive.py`); a delegated agent proves a person's flow at a
+surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
 
 ## 6. Constraints and reasons
 
@@ -183,8 +179,10 @@ by a delegated agent driving it. A leak fails the run (`filterwarnings` in
   while the presenter has switched it on. Reopens with a self-hosted German one.
 - Required pull request approvals: agents review before the pull request opens.
   Reopens if review moves to GitHub.
-- A custom Sonar quality gate: the coverage floor (`fail_under`) is stricter than
-  any gate's and the other conditions match. Reopens if the floor drops below one.
+- A custom Sonar quality gate: the three coverage floors, all at 100 %
+  (`fail_under` in `pyproject.toml`, `slidev/vitest.config.ts`, the lobby's
+  check in `frontend/scripts/merge-coverage.ts`), are stricter than any gate's
+  and the other conditions match. Reopens if a floor drops below 100 %.
 
 ## 8. Risks and Technical Debt
 
@@ -198,3 +196,5 @@ by a delegated agent driving it. A leak fails the run (`filterwarnings` in
 - The hosts are same-site, so deck code on the talk host can set `Domain=`
   cookies for the shared domain.
 - Each presenter window mounts its own overlay; nothing enforces one speaker.
+- An empty or older database is not guarded against: its retention pass deletes
+  the runs only the right database names.
