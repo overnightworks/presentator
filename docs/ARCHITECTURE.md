@@ -85,7 +85,7 @@ sequenceDiagram
     participant M as mirror (files)
     participant B as build worker
     participant T as talk host
-    W->>G: fetch (polling, or the fetch-now hook; no payload read)
+    W->>G: fetch (polling or the fetch-now hook, no payload read)
     W->>M: update bare mirror
     W->>B: build deck (sealed)
     B-->>W: built talk and PDF
@@ -112,8 +112,8 @@ host and tells them apart by the `Host` header (`served_by_host` in
 decks and key drafts; files hold mirrors and builds. The database holds no file
 content: a build's row names its directory and PDF, and a mirror's directory
 is derived from its source's address. `builds/` and `mirrors/` are caches the
-rows rebuild. One process writes the database, and the identity lock depends on
-that; a second writer would need a unit of work. A column goes in two
+rows rebuild. One process writes the database, and the identity lock held inside
+that process relies on there being one writer. A column goes in two
 releases, the second dropping it in `create_tables`, gated on
 `pragma_table_info` (`adapters/schema.py`), so a restorable older backup still
 starts.
@@ -147,4 +147,5 @@ narrows this model yet, so an audit keeps the default trust model.
 ## 7. Risks
 
 - The overlay's palette can clash with a deck's palette.
-- A second writing process would need a second write lock.
+- A second writing process would break the one-writer guarantee the identity
+  lock relies on.
