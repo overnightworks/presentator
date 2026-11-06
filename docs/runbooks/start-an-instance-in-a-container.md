@@ -19,7 +19,9 @@ port is published; the edge's proxy is the only way in.
   secret at `~/.secrets/keycloak/clients/presentator`
   ([configure Keycloak](configure-keycloak.md)) and the gateway key at
   `~/.secrets/litellm/apps/presentator`, which `hal setup` writes.
-- A `v*` tag of this repository that holds the release.
+- A `v*` tag of this repository that holds the release. The Release workflow
+  makes it: the operator dispatches it with a `YYYY.MM.DD.N` version, and it
+  builds and attests the image, then tags the gated commit.
 
 ## Steps
 

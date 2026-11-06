@@ -8,6 +8,10 @@
 # (the engines field of slidev/package.json); uv brings the Python that .python-version names. Every
 # image named here is held by digest, because a tag is a name its owner may
 # move.
+#
+# The runtime user's uid is named by number in the final USER, because a pod
+# with runAsNonRoot can verify a number but not a name.
+ARG PRESENTATOR_RUNTIME_UID=1001
 FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS runtime-user
 
 # The two identities a build worker runs steps as: one builds, one only reads
@@ -20,7 +24,7 @@ RUN groupadd --gid 10001 presentator-build \
     && useradd --uid 10002 --gid 10002 --home-dir /nonexistent --no-create-home \
         --shell /usr/sbin/nologin presentator-wire
 
-ARG PRESENTATOR_RUNTIME_UID=1001
+ARG PRESENTATOR_RUNTIME_UID
 RUN case "$PRESENTATOR_RUNTIME_UID" in \
         ''|*[!0-9]*|0*|10001|10002) \
             echo "PRESENTATOR_RUNTIME_UID must be a positive integer without a leading zero, and neither 10001 nor 10002" >&2; \
@@ -79,6 +83,7 @@ COPY --chown=presentator slidev ./
 WORKDIR /app/slidev
 
 FROM toolchain AS instance
+ARG PRESENTATOR_RUNTIME_UID
 USER root
 
 # git mirrors a deck source and ssh reaches a private one. Their
@@ -120,7 +125,7 @@ ENV PRESENTATOR_DATABASE=/data/database/presentator.sqlite3 \
     PRESENTATOR_LOBBY_BUILD=/app/lobby \
     PRESENTATOR_HOST=0.0.0.0 \
     PRESENTATOR_LOCAL_SOURCES_MOUNT=/data/local-sources
-USER presentator
+USER ${PRESENTATOR_RUNTIME_UID}
 WORKDIR /app
 EXPOSE 8000
 CMD ["presentator"]
