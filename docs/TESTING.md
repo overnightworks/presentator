@@ -23,7 +23,7 @@ in for a higher one.
 | Slidev addon | That a deck staged outside the toolchain builds by the addon's name | Vitest building such a deck with `slidev build` from `slidev/`, as `slidev/tests/addon-package.test.ts` does. |
 | Lobby app | The app's own TypeScript and Svelte logic | Vitest beside the module in `frontend/src`. Its coverage has no threshold of its own. |
 | Lobby drive | The lobby's build served by FastAPI under its policy | Playwright in `frontend/e2e/`, in Chromium and Firefox, against the lobby that `tests/support/lobby_drive.py` composes over in-memory stores; never an issuer. A test that names a person (`test.use({ person })` from `frontend/e2e/person.ts`: a role, deck records with state, title, changed instant, build instant, a typed attempt with its failure and a PDF that is gone, and a source address their decks belong to) gets its own account from the harness's drive-only route, outside the lobby's gate; one that names none is signed out. The second language is reached through the instance default, on a stack of its own (`*.instance.spec.ts`). Any CSP violation fails it. The drive's CI job runs it against an instrumented build, which only that job makes (the image builds the production one), and each page reports its counters as it unloads. |
-| Surface | A person does X at the lobby | A delegated agent driving the real interface at the widths the dispatch brief names, taken from the picture at [mockups/README.md](mockups/README.md). One flow per ruled sentence. A unit test is not this proof. |
+| Surface | A person does X at the lobby | A delegated agent driving the real interface at the widths the dispatch brief names. One flow per ruled sentence. A unit test is not this proof. |
 
 A drive spec named `*.instance.spec.ts` writes instance-wide state, the
 instance defaults. It runs in its own Playwright projects, one per browser,
@@ -128,5 +128,4 @@ test than the one that leaked, because the collector runs when it runs.
 `PYTHONTRACEMALLOC=25` on a targeted run shows where that object was allocated.
 
 Targeted browser proofs and live probe stacks follow the global contract's
-probe-stack rules; the widths a surface proof drives are taken from the picture
-at [mockups/README.md](mockups/README.md).
+probe-stack rules; the dispatch brief names the widths a surface proof drives.
