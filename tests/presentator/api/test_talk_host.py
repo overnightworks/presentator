@@ -290,6 +290,7 @@ def test_the_talk_hosts_cookies_are_host_only_secure_and_its_session_is_lax(
 
 
 # T7a.
+# DK13
 @pytest.mark.parametrize("started_at", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])
 def test_a_session_cookie_of_one_host_is_no_session_at_the_other(
     hosts: Hosts, started_at: str

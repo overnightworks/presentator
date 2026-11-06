@@ -106,7 +106,7 @@ def test_a_post_from_another_site_is_refused_whatever_session_it_carries(
 
 # C5.
 def test_an_ask_carrying_only_the_talk_hosts_referer_is_refused() -> None:
-    """#474 cell 8: a Referer alone is no provenance, whichever host it names."""
+    """A Referer alone is no provenance, whichever host it names."""
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in()
     del talk.client.headers["sec-fetch-site"]
@@ -157,7 +157,7 @@ def test_hear_is_accepted_only_from_the_talk_origin(
 
 
 def test_hear_is_accepted_for_a_user_from_the_talk_origin() -> None:
-    """#537 sentence 2: a hearing is accepted for a signed-in user."""
+    """A hearing is accepted for a signed-in user."""
     talk, _private, _clock = a_copresenter_talk_host()
     talk.sign_in(role=Role.USER)
 
@@ -180,7 +180,7 @@ def test_the_lobbys_session_cookie_does_not_sign_in_at_the_talk_host() -> None:
 
 
 def test_a_sign_in_at_the_talk_host_sets_no_csrf_cookie(tmp_path: Path) -> None:
-    """#474 cell 25: the session cookie is set and no cookie named csrf is."""
+    """The session cookie is set and no cookie named csrf is."""
     hosts = two_hosts(tmp_path)
 
     returned = hosts.sign_in(hosts.browser(A_TALK_ADDRESS), A_TALK_ADDRESS)
@@ -193,7 +193,7 @@ def test_a_sign_in_at_the_talk_host_sets_no_csrf_cookie(tmp_path: Path) -> None:
 
 
 def test_an_admin_demoted_while_signed_in_is_still_answered() -> None:
-    """#537 sentence 3: a role change does not end the answer."""
+    """A role change does not end the answer."""
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in(role=Role.ADMIN)
     (admin,) = talk.people.users.users.values()
@@ -225,10 +225,11 @@ def _demote_at_the_lobby(hosts: Hosts) -> None:
     hosts.sign_in(lobby, A_BROWSERS_ADDRESS, subject=A.id, groups=MEMBER)
 
 
+# DK11
 def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_deck_and_who(
     tmp_path: Path,
 ) -> None:
-    """#537 sentence 3: a role change does not end the deck or who."""
+    """A role change does not end the deck or who."""
     hosts, talk, private = _talk_host_with_a_signed_in_admin(tmp_path)
     _demote_at_the_lobby(hosts)
 
@@ -243,7 +244,7 @@ def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_deck_and_who(
 def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_running_hearing(
     tmp_path: Path,
 ) -> None:
-    """#537 sentence 3: a role change does not end a running hearing."""
+    """A role change does not end a running hearing."""
     deadline = ManualDeadline()
     hosts, talk, private = _talk_host_with_a_signed_in_admin(tmp_path, deadline)
 

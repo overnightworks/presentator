@@ -25,4 +25,4 @@ toolchain every build fails and the deck pages say no talk has been built; the
 failure is in the server log. Without the browser a deck builds and its export
 fails, which leaves the previously delivered talk standing.
 
-Related: [what a deck may build with](../reference/builds.md).
+Related: [what a deck may build with](../decks.md).

@@ -248,6 +248,7 @@ def test_an_unknown_slug_is_a_bare_not_found_problem() -> None:
     assert an_unknown_slug_answer(lobby) == _NOT_FOUND
 
 
+# DK7
 @pytest.mark.parametrize("role", [Role.USER, Role.ADMIN])
 def test_another_persons_deck_answers_the_unknown_ones_bytes_for_any_role(
     role: Role,

@@ -10,6 +10,7 @@ import { addonRootDirectory, buildStagedDeck, stageAddonDeck } from './presenter
 const sha256 = (content: Buffer) => createHash('sha256').update(content).digest('hex')
 
 describe('the presentator addon package', () => {
+  // DK5
   it('serves the overlay to a deck staged outside the toolchain that names the addon', async () => {
     // Slidev refuses an addon whose `engines.slidev` the running CLI is outside
     // of, so a successful build also proves the declared range still holds.

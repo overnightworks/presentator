@@ -140,8 +140,8 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
 
 ## 6. Constraints and reasons
 
-- A deck is code: its Vue components run in its build. Only the sealed [build
-  worker](reference/builds.md) runs it; the web holds no Docker socket, group or
+- A deck is code: its Vue components run in its build. Only the sealed build
+  worker runs it; the web holds no Docker socket, group or
   client, drops every capability, takes no new privilege and has a read-only
   root, so deck code reaches neither the daemon nor the machine's root.
 - The talk has its own origin: one cookie across both hosts would put deck code
