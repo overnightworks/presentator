@@ -1,7 +1,0 @@
-claim_id = "23b247cba6e5464299ac08993743396c"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "9f56fc21c36ddae5ddb715a67bb34d1aacba67b7"
-branch = "claude/issue-783-presentator-brings-its-own-part-of-the-t"
-scope = ["legal/datenschutz.html", "legal/nutzungsbedingungen.html"]
-opened_commit = "129ab181d7d01c823d7a98ffc354aed62f0129bb"
