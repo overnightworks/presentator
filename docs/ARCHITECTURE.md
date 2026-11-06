@@ -54,7 +54,7 @@ flowchart TD
   framework (FastAPI, Starlette, Pydantic, uvicorn) is not under this rule.
 - **`src/gitmirror`** sits beside the layers: it mirrors any remote read-only
   through `git`, does not import `presentator`, and only adapters name it.
-  **`presentator.agent`** alone imports `agent_runtime_client`, at the tag
+- **`presentator.agent`** alone imports `agent_runtime_client`, at the tag
   `pyproject.toml` pins.
 - **webauth** owns the sign-in routes, the gate, the origin check, the body caps
   and the cookies; presentator's SQLite stores fill its ports.
