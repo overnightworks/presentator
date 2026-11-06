@@ -30,8 +30,10 @@ Do not copy an owner's facts into another document.
 CI on the pull request is the gate; the [workflow](.github/workflows/ci.yml)
 defines every check for the root, `slidev/`, `speech/` and the
 container image. Locally, run the checks the change touches: `pyproject.toml`
-configures the Python ones (`ruff`, `pyright`, `lint-imports`, `vulture`,
+configures the Python ones (`ruff`, `pyright`, `vulture`,
 `pytest`, plus `scripts/check_catalog_purity.py`), `slidev/package.json` the Slidev ones.
+The quality gate's `import-contract` rule checks the import contracts in
+`pyproject.toml`; run it locally with `quality hygiene .`.
 Which layer's test is the proof, and how to target a local run, is
 [docs/TESTING.md](docs/TESTING.md); what `main` requires is
 [docs/reference/ci-and-branch-protection.md](docs/reference/ci-and-branch-protection.md).
