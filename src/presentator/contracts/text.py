@@ -15,6 +15,17 @@ class LobbyText:
     language_name: str
     wordmark: str
     log_out: str
+    theme_title: str
+    theme_follow_system: str
+    theme_light: str
+    theme_dark: str
+    sign_in_logged_out: str
+    sign_in_log_in: str
+    sign_in_failed: str
+    sign_in_failed_banner: str
+    sign_in_try_again: str
+    sign_in_no_access: str
+    sign_in_no_access_sentence: str
     section_decks: str
     section_settings: str
     menu_account: str

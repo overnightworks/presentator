@@ -13,6 +13,7 @@ import {
 	NOW,
 	opensTheMenu,
 	sessionOf,
+	themeRow,
 	SIGN_IN_START,
 	startsSignIn,
 	tabbedControlWithRing
@@ -185,12 +186,12 @@ test.describe('sentence 9', () => {
 	});
 
 	test('shows a focus ring on every control of the open menu', async ({ page }) => {
-		const { person } = await sessionOf(page);
+		const { person, words } = await sessionOf(page);
 		await page.goto('/');
 		await opensTheMenu(page);
 
 		const focused: string[] = [];
-		for (let tab = 0; tab < 12 && !focused.includes('Log out'); tab++) {
+		for (let tab = 0; tab < 12 && !focused.includes(words.log_out); tab++) {
 			const control = await tabbedControlWithRing(page);
 			if (control) {
 				focused.push(control);
@@ -198,9 +199,9 @@ test.describe('sentence 9', () => {
 		}
 
 		expect(focused).toContain(person?.username);
-		expect(focused).toContain('Log out');
+		expect(focused).toContain(words.log_out);
 		expect(focused.length).toBeGreaterThanOrEqual(3);
-		expect(focused.some((control) => ['Follow system', 'Light', 'Dark'].includes(control))).toBe(true);
+		expect(focused.some((control) => [words.theme_follow_system, words.theme_light, words.theme_dark].includes(control))).toBe(true);
 	});
 
 	test('closes the menu on Escape and returns focus to its button; a click outside leaves focus where it landed', async ({
@@ -233,7 +234,7 @@ test.describe('the theme', () => {
 		// A document navigation would drop this mark.
 		await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
 
-		await chooseTheme(page, 'Dark');
+		await chooseTheme(page, 'dark');
 
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
@@ -251,17 +252,17 @@ test.describe('the theme', () => {
 		await page.goto('/');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'follow-system');
 		await opensTheMenu(page);
-		await expect(page.getByRole('radio', { name: 'Follow system' })).toBeChecked();
+		await expect((await themeRow(page, 'follow_system'))).toBeChecked();
 		await page.keyboard.press('Escape');
 		await page.emulateMedia({ colorScheme: 'dark' });
 		const deviceDark = await backgroundOf();
 		await page.emulateMedia({ colorScheme: 'light' });
 		expect(await backgroundOf()).not.toBe(deviceDark);
-		await chooseTheme(page, 'Light');
+		await chooseTheme(page, 'light');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 		const lightBackground = await backgroundOf();
 		await page.keyboard.press('Escape');
-		await chooseTheme(page, 'Dark');
+		await chooseTheme(page, 'dark');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 		const darkBackground = await backgroundOf();
 		expect(darkBackground).not.toBe(lightBackground);
@@ -275,7 +276,7 @@ test.describe('the theme', () => {
 		expect(((await account.json()) as { theme: string }).theme).toBe('dark');
 
 		await page.goto('/');
-		await chooseTheme(page, 'Follow system');
+		await chooseTheme(page, 'follow_system');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'follow-system');
 		await page.emulateMedia({ colorScheme: 'dark' });
 		await expect(page.locator('body')).toHaveCSS('background-color', darkBackground);
@@ -292,7 +293,7 @@ test.describe('the theme', () => {
 		});
 		await page.goto('/');
 
-		await chooseTheme(page, 'Dark');
+		await chooseTheme(page, 'dark');
 
 		await expect.poll(() => requests.length).toBe(1);
 		expect(requests[0]?.method).toBe('PUT');
@@ -305,10 +306,10 @@ test.describe('the theme', () => {
 		);
 		await page.goto('/');
 
-		await chooseTheme(page, 'Dark');
+		await chooseTheme(page, 'dark');
 
-		await expect(page.getByRole('radio', { name: 'Dark' })).not.toBeChecked();
-		await expect(page.getByRole('radio', { name: 'Follow system' })).toBeChecked();
+		await expect((await themeRow(page, 'dark'))).not.toBeChecked();
+		await expect((await themeRow(page, 'follow_system'))).toBeChecked();
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'follow-system');
 	});
 });
@@ -324,7 +325,7 @@ test.describe('sentence 6', () => {
 		await endsTheSession(context);
 		const started = startsSignIn(page);
 
-		await chooseTheme(page, 'Dark');
+		await chooseTheme(page, 'dark');
 
 		await leftForSignIn(page, started);
 	});
@@ -398,7 +399,7 @@ test.describe('sentence 4', () => {
 
 		await expect(page.locator('table.decks tbody tr')).toHaveCount(2);
 		await expect(page.getByRole('link', { name: 'Added meanwhile' })).toBeVisible();
-		await chooseTheme(page, 'Dark');
+		await chooseTheme(page, 'dark');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 		expect(await entriesOf(page)).toBe(entries);
 	});
@@ -430,12 +431,13 @@ test.describe('log out', () => {
 		violations,
 		browserName
 	}) => {
+		const { words } = await sessionOf(page);
 		await page.goto('/');
 		await opensTheMenu(page);
 
 		const [posted] = await Promise.all([
 			page.waitForRequest((sent) => new URL(sent.url()).pathname === '/logout'),
-			page.getByRole('button', { name: 'Log out' }).click()
+			page.getByRole('button', { name: words.log_out }).click()
 		]);
 		await posted.response();
 

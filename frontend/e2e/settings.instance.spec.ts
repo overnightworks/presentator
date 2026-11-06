@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 
 import type { SettingsView, SettingsWrite } from '../src/lib/api/settings.ts';
+import { fill } from '../src/lib/words.ts';
 import { type DeckRecord, expect, signIn, test as base } from './person.ts';
 import {
 	chooseTheme,
@@ -9,11 +10,14 @@ import {
 	expectsHeaderOnOneLine,
 	expectsNoHorizontalScroll,
 	leftForSignIn,
+	MENU,
 	minutesAgo,
 	NOW,
+	opensTheMenu,
 	sessionOf,
 	startsSignIn,
-	tabbedControlWithRing
+	tabbedControlWithRing,
+	themeRow
 } from './scenario.ts';
 import { answersWith, OWN_SOURCE, ownSourceName, sourceAddress } from './sources.ts';
 
@@ -224,6 +228,55 @@ test.describe('as an admin', () => {
 		}
 	});
 
+	test('The person menu and the sign-in pages speak the instance language', async ({
+		page,
+		browser,
+		arrangeBaseline
+	}, testInfo) => {
+		const settings = await arrangeBaseline();
+		const second = otherLanguage(settings);
+		const saved = await page.request.put(SETTINGS_API, {
+			headers: SAME_ORIGIN,
+			data: { name: settings.name, language_tag: second.tag } satisfies SettingsWrite
+		});
+		expect(saved.status()).toBe(200);
+		const { words } = await sessionOf(page);
+		expect(words.language_tag).toBe(second.tag);
+
+		await page.goto('/');
+		await opensTheMenu(page);
+		for (const row of ['follow_system', 'light', 'dark'] as const) {
+			await expect(await themeRow(page, row)).toBeVisible();
+		}
+		await expect(page.locator(MENU).getByText(words.theme_title, { exact: true })).toBeVisible();
+		await expect(page.locator(MENU).getByRole('button', { name: words.log_out })).toBeVisible();
+
+		const visitor = await browser.newContext({ baseURL: testInfo.project.use.baseURL });
+		try {
+			const seen = await visitor.newPage();
+			const noAccess = fill(words.sign_in_no_access_sentence, { app: words.wordmark });
+			const boards = [
+				{ path: '/login', shown: [words.sign_in_logged_out, words.sign_in_log_in] },
+				...['/login/login-failed', '/login/talk/login-failed'].map((path) => ({
+					path,
+					shown: [words.sign_in_failed, words.sign_in_failed_banner, words.sign_in_try_again]
+				})),
+				...['/login/no-access', '/login/talk/no-access'].map((path) => ({
+					path,
+					shown: [words.sign_in_no_access, noAccess, words.log_out]
+				}))
+			];
+			for (const board of boards) {
+				await seen.goto(board.path);
+				for (const word of board.shown) {
+					await expect(seen.locator('.signin')).toContainText(word);
+				}
+			}
+		} finally {
+			await visitor.close();
+		}
+	});
+
 	test('Saving the name leaves an admin whose own theme is Light on Light', async ({
 		page,
 		arrangeBaseline
@@ -231,7 +284,7 @@ test.describe('as an admin', () => {
 		await arrangeBaseline();
 		const { words } = await sessionOf(page);
 		await page.goto(SETTINGS_ADDRESS);
-		await chooseTheme(page, 'Light');
+		await chooseTheme(page, 'light');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 		await page.keyboard.press('Escape');
 

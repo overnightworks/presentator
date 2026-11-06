@@ -11,7 +11,8 @@ There is no password login and no `/setup`; accounts arrive with the Keycloak
 sign-in, and no password is stored.
 
 - `/login` is the lobby app's page: appkit's sign-in board says "You are
-  logged out." in the kit's own words, with one Log in button and the legal
+  logged out." in the instance language's words (the catalog's, given to the
+  kit whole), with one Log in button and the legal
   links. The button leaves the app for `/login/oidc`, which answers 303 to
   the issuer with PKCE, `state` and `nonce`. The scopes are `openid`,
   `profile` and `groups`; the co-presenter reads the person's groups from a

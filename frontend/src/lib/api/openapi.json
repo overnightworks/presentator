@@ -666,6 +666,34 @@
             "title": "Settings Title",
             "type": "string"
           },
+          "sign_in_failed": {
+            "title": "Sign In Failed",
+            "type": "string"
+          },
+          "sign_in_failed_banner": {
+            "title": "Sign In Failed Banner",
+            "type": "string"
+          },
+          "sign_in_log_in": {
+            "title": "Sign In Log In",
+            "type": "string"
+          },
+          "sign_in_logged_out": {
+            "title": "Sign In Logged Out",
+            "type": "string"
+          },
+          "sign_in_no_access": {
+            "title": "Sign In No Access",
+            "type": "string"
+          },
+          "sign_in_no_access_sentence": {
+            "title": "Sign In No Access Sentence",
+            "type": "string"
+          },
+          "sign_in_try_again": {
+            "title": "Sign In Try Again",
+            "type": "string"
+          },
           "source_access": {
             "title": "Source Access",
             "type": "string"
@@ -1018,6 +1046,22 @@
             "title": "Sources Fetch Now",
             "type": "string"
           },
+          "theme_dark": {
+            "title": "Theme Dark",
+            "type": "string"
+          },
+          "theme_follow_system": {
+            "title": "Theme Follow System",
+            "type": "string"
+          },
+          "theme_light": {
+            "title": "Theme Light",
+            "type": "string"
+          },
+          "theme_title": {
+            "title": "Theme Title",
+            "type": "string"
+          },
           "wordmark": {
             "title": "Wordmark",
             "type": "string"
@@ -1028,6 +1072,17 @@
           "language_name",
           "wordmark",
           "log_out",
+          "theme_title",
+          "theme_follow_system",
+          "theme_light",
+          "theme_dark",
+          "sign_in_logged_out",
+          "sign_in_log_in",
+          "sign_in_failed",
+          "sign_in_failed_banner",
+          "sign_in_try_again",
+          "sign_in_no_access",
+          "sign_in_no_access_sentence",
           "section_decks",
           "section_settings",
           "menu_account",

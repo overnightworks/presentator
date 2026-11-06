@@ -24,10 +24,10 @@ renders that literal and counts as text, a logic block (`{#if}`, `{:else}`,
 `{/if}`, `{@render}`) and every other expression render nothing the scan can
 see. What is left goes through one `html.parser.HTMLParser`, so the same text
 positions and attributes are flagged, on an element and on a component alike.
-A kit component's own words (appkit's `SignInPage`) are the kit's, not
-presentator's (ADR 0021): they ship inside the kit's package, which this scan
-never reads, and what a page hands such a component is held like any other
-markup. Named gap: a literal inside a larger expression (`{ok ? 'Saved' :
+A kit component's built-in words (appkit's `SignInPage` without `words`) ship
+inside the kit's package, which this scan never reads; presentator hands its
+catalog's words to the kit, and what a page hands such a component is held like
+any other markup. Named gap: a literal inside a larger expression (`{ok ? 'Saved' :
 x}`) is not followed, because telling a shown string from a class name or a
 key in JavaScript needs a JavaScript parser this check does not carry.
 

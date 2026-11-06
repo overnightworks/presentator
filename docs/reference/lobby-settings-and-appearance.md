@@ -61,7 +61,9 @@ already stored is accepted back. The Settings read carries the language list
 
 English is the only catalog the repository ships. Every catalog file the
 catalog directory holds is offered as a language, so a second language is a
-file and not a change to code, and each catalog names itself.
+file and not a change to code, and each catalog names itself. The person
+menu's theme rows and the sign-in pages speak the instance language too: the
+lobby hands appkit those words from the catalog, whole, through the session.
 
 ## Look
 

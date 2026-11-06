@@ -1,4 +1,4 @@
-import type { BrowserContext, Page } from '@playwright/test';
+import type { BrowserContext, Locator, Page } from '@playwright/test';
 
 import type { SessionView } from '../src/lib/api/session.ts';
 import { expect } from './person.ts';
@@ -40,9 +40,17 @@ export async function leftForSignIn(page: Page, started: ReturnType<typeof start
 
 export const entriesOf = (page: Page): Promise<number> => page.evaluate(() => history.length);
 
-export async function chooseTheme(page: Page, name: 'Follow system' | 'Light' | 'Dark'): Promise<void> {
+export type ThemeRow = 'follow_system' | 'light' | 'dark';
+
+// The menu's radio of a theme row, named by the session's words.
+export async function themeRow(page: Page, row: ThemeRow): Promise<Locator> {
+	const { words } = await sessionOf(page);
+	return page.getByRole('radio', { name: words[`theme_${row}`], exact: true });
+}
+
+export async function chooseTheme(page: Page, row: ThemeRow): Promise<void> {
 	await opensTheMenu(page);
-	await page.getByRole('radio', { name }).click();
+	await (await themeRow(page, row)).click();
 }
 
 // Presses Tab and returns the focused control's name after asserting it shows a ring.
