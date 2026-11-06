@@ -136,8 +136,7 @@ def test_the_most_recently_changed_deck_is_listed_first_and_equals_by_slug() -> 
     assert [deck.slug for deck in listed] == ["a-newer", "b-newer", "older"]
 
 
-# DK1
-@pytest.mark.parametrize(
+@pytest.mark.parametrize(  # DK1
     "folder",
     [
         a_folder("without-slides", file_names=frozenset({MANIFEST_FILE})),
@@ -166,8 +165,7 @@ def test_a_folder_that_is_no_folders_own_name_is_neither_listed_nor_built(
     assert builder.built == []
 
 
-# DK2
-def test_the_folder_name_stays_the_address_when_the_title_changes() -> None:
+def test_the_folder_name_stays_the_address_when_the_title_changes() -> None:  # DK2
     mirror = carrying(a_folder("knowledge-fabric", title="Fabric"))
     decks = decks_over(mirror=mirror)
     first = refreshed(decks)
@@ -681,8 +679,7 @@ def test_a_folder_deleted_in_one_source_leaves_the_other_sources_decks_listed() 
     assert [deck.slug for deck in after_the_delete] == ["knowledge-fabric"]
 
 
-# DK12
-def test_a_folder_name_another_source_carries_stays_with_the_source_that_had_it(
+def test_a_folder_name_another_source_carries_stays_with_the_source_that_had_it(  # DK12
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     store = FakeDeckStore()
