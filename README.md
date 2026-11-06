@@ -6,8 +6,8 @@ presentator is a tool for giving a talk. The Slidev deck lives on the operator's
 home server; he opens it from any browser and presents. Per talk he can switch
 on an AI co-presenter that listens to the room and answers questions about the
 shown deck with a spoken voice, through the operator's model gateway. Without
-the AI the talk still runs, and a static build plus a PDF export survives a dead
-tunnel. Why it exists is [docs/VISION.md](docs/VISION.md); what the instance
+the AI the talk still runs, and the PDF of the last good build always
+downloads. Why it exists is [docs/VISION.md](docs/VISION.md); what the instance
 does is listed in [docs/README.md](docs/README.md).
 
 ## Fact owners
