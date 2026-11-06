@@ -1,7 +1,0 @@
-claim_id = "0a4016d16719463d9d18aaa13919e92e"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "1374606acba8825de5ae2418a557719349e8fc1c"
-branch = "claude/issue-816-presentator-takes-agent-runtime-v0-21-0"
-scope = ["pyproject.toml", "uv.lock"]
-opened_commit = "e251d8f7726120fc72ad403be0e73e3a27655a43"
