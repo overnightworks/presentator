@@ -76,7 +76,7 @@ async function creates(page: Page, words: Words): Promise<CreatedSourceView> {
 }
 
 // A source that exists: the form filled, checked and created.
-async function createsASource(
+export async function createsASource(
 	page: Page,
 	words: Words,
 	values: { name: string; url: string; secret?: string }
