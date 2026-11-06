@@ -62,8 +62,9 @@ read as an absolute path without following links.
 Anything else under the root, such as a link, a file or a directory that holds
 something but no `out`, is left alone and logged.
 
-A run is readable by others, except a `staged-<step>` directory, which a failed
-cleanup can leave behind until its run is taken away
+A run is readable by others, except a `staged-<step>` directory, which exists
+while a step runs and which a failed cleanup can leave behind until its run is
+taken away
 ([deployment view](../ARCHITECTURE.md#4-deployment-view)).
 
 A stored path that fits no run, or a listing of the root that did not finish,
@@ -72,7 +73,8 @@ would then look unreferenced. A removal that fails is logged and tried again by
 the next pass. An empty or older database is not guarded against
 ([risks](../ARCHITECTURE.md#8-risks-and-technical-debt)); the next refresh
 builds the deleted decks again. Removing a source takes the runs its decks
-deliver from the same way, and refuses (and deletes no row) over a build that fits no run.
+deliver from the same way, and refuses (and deletes no row) over a build that
+fits no run.
 The directories above the root belong to the operator and are outside this
 rule's threat model.
 

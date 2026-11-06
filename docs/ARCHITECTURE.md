@@ -42,11 +42,11 @@ flowchart TD
     adapters --> webauth
 ```
 
-- **Layers.** Each depends only downward, and only `host` names an adapter; the
-  import-linter contracts in `pyproject.toml` enforce it (`import-contract`). A
-  library an adapter owns behind a port is forbidden above the adapters by its
-  own contract; webauth is forbidden only to `application`, `ports` and
-  `contracts`, as `api` and `host` import it; the web framework is exempt.
+- **Layers.** `host` composes the instance and alone names an adapter
+  (`adapters`, `agent` fill the ports); layers depend only downward
+  (import-linter, `pyproject.toml`). A library an adapter owns behind a port is
+  barred above the adapters by its own contract; webauth only to `application`,
+  `ports`, `contracts` (`api`, `host` import it); the web framework is exempt.
 - **`src/gitmirror`** mirrors any remote read-only through `git`, does not
   import `presentator`, and only adapters name it. **`presentator.agent`** alone
   imports `agent_runtime_client`, at the tag `pyproject.toml` pins.
@@ -86,9 +86,9 @@ host and tells them apart by the `Host` header (`served_by_host` in
 Docker's default seccomp and AppArmor profiles in force and the image's glibc is
 2.36 or later, because the controller reaches `pidfd_open` through ctypes. See
 [start an instance](runbooks/start-an-instance-in-a-container.md) and
-[configuration](reference/configuration.md). The backup runs as another user, so
-build runs are readable by others; a `staged-<step>` directory is closed to
-everyone but the web, and the backup skips `staged-*` by name.
+[configuration](reference/configuration.md). Edge's backup of the volume runs as
+another user, so build runs are readable by others; a `staged-<step>` directory
+is closed to everyone but the web, and that backup skips `staged-*` by name.
 
 ## 5. Crosscutting Concepts
 
