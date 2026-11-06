@@ -8,15 +8,16 @@ that a test cites.
 ## Erase a person
 
 `DELETE /api/admin/people/{subject}` erases the person whose Keycloak subject
-is `{subject}`. `?dry_run=true` counts and changes nothing. Both answer the
-`people_erasure` v1 body with `kinds`, counted by
-[kind](../src/presentator/contracts/people.py); `affects_others` is always empty.
+is `{subject}`. `?dry_run=true` counts and changes nothing.
 
 - **PE1** Erasure takes every row of the person: their account, sessions,
   preferences and key draft, and every source they own with its decks, runs,
   mirror and builds. It takes only the named person's rows.
 - **PE2** The counts of a real run are what was removed. A dry run changes
-  nothing and answers the real run's counts with `dry_run` true.
+  nothing and answers the real run's counts with `dry_run` true. Both answer
+  the `people_erasure` v1 body with `kinds`, counted by
+  [kind](../src/presentator/contracts/people.py); `affects_others` is always
+  empty.
 
 | ID | Answer | When |
 | --- | --- | --- |
@@ -35,8 +36,8 @@ is `{subject}`. `?dry_run=true` counts and changes nothing. Both answer the
 - **PE11** A real run tries every source the person owns, even after one could
   not be removed. A source whose mirror or build directory stays keeps its rows
   and the person keeps the account; every other source is still removed.
-- **PE12** The 500 carries `dry_run` `false`, `kinds`, `affects_others` `[]` and
-  `leftover`. `kinds` holds what this attempt removed: the account and a source
+- **PE12** The leftover 500 carries `dry_run` `false`, `kinds`,
+  `affects_others` `[]` and `leftover`. `kinds` holds what this attempt removed: the account and a source
   that stayed count zero. The `mirrors` count counts source rows, not mirror
   directories on disk.
 - **PE13** `leftover` names only directories, one entry per directory that
@@ -59,11 +60,10 @@ is `{subject}`. `?dry_run=true` counts and changes nothing. Both answer the
 
 ## Export a person
 
-`GET /api/admin/people/{subject}/export` answers the `people_export` v1 body as
-a ZIP.
+`GET /api/admin/people/{subject}/export` answers a ZIP.
 
-- **PE18** The ZIP is `application/zip`, its file name names no subject, and its
-  root holds `export.json` and nothing else. The body holds `app`, `subject`,
+- **PE18** The ZIP is `application/zip` holding the `people_export` v1 body, its
+  file name names no subject, and its root holds `export.json` and nothing else. The body holds `app`, `subject`,
   `exported_at` (UTC, `Z`, whole seconds), `data`, `files` and `withheld`.
 - **PE19** `data` holds every row keyed by the person (account, sessions,
   preferences, key draft, sources with their decks and runs) and only those, as

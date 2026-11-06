@@ -546,7 +546,7 @@ def test_the_server_logs_no_request_path(environment: pytest.MonkeyPatch) -> Non
 def test_the_admitted_token_clients_are_the_comma_separated_ids(
     environment: pytest.MonkeyPatch, given: str, admitted: frozenset[str]
 ) -> None:
-    """PE28: the setting keeps the environment's comma format."""
+    """The setting keeps the environment's comma format."""
     environment.setenv("PRESENTATOR_TOKEN_CLIENTS", given)
 
     assert load_settings().admitted_token_clients() == admitted
@@ -556,7 +556,7 @@ def test_the_admitted_token_clients_are_the_comma_separated_ids(
 def test_an_empty_entry_among_the_admitted_token_clients_refuses_to_start(
     environment: pytest.MonkeyPatch, given: str
 ) -> None:
-    """PE28: a list with an empty entry is a typo, not a decision."""
+    """A list with an empty entry is a typo, not a decision."""
     environment.setenv("PRESENTATOR_TOKEN_CLIENTS", given)
 
     with pytest.raises(ConfigurationError, match="token_clients"):
