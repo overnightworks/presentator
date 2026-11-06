@@ -3,8 +3,8 @@
 Audience: whoever writes a deck for this instance, or changes or operates the
 decks surface. This page holds the deck author's folder contract and the decks
 surface's ruled sentences, each with the ID its test cites. How a deck is
-listed, built and delivered is in the code; the sandbox's reason is in
-[constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons).
+listed, built and delivered is in the code; the reasons for the sandbox and the
+talk host's own origin are in [constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons).
 
 ## The deck folder
 
