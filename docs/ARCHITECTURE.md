@@ -44,8 +44,9 @@ flowchart TD
 
 - **Layers.** `host` composes the instance and alone names an adapter
   (`adapters`, `agent` fill the ports); layers depend only downward
-  (import-linter, `pyproject.toml`). A library an adapter owns behind a port is
-  barred above the adapters by its own contract; webauth only to `application`,
+  (import-linter in `pyproject.toml`, run by the quality gate's
+  `import-contract` rule). A library an adapter owns behind a port is barred
+  above the adapters by its own contract; webauth only to `application`,
   `ports`, `contracts` (`api`, `host` import it); the web framework is exempt.
 - **`src/gitmirror`** mirrors any remote read-only through `git`, does not
   import `presentator`, and only adapters name it. **`presentator.agent`** alone
@@ -187,7 +188,6 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
 ## 8. Risks and Technical Debt
 
 - The overlay's palette can clash with a deck's palette.
-- A second writing process would break the one-writer guarantee.
 - The git child's environment holds the credential and is readable by the same
   user; a Python `str` cannot be wiped.
 - A database copy plus the client secret renews a session until the SSO session
