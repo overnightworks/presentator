@@ -484,6 +484,16 @@ through webauth's `current_groups`. The adapters-only rule now names
 `presentator.agent` as the one place that imports `agent_runtime_client`. The
 older amendments above keep their history.
 
+### Amendment 2026-11-06: the start refuses no older shape
+
+Authority: [#819](https://github.com/overnightworks/presentator/issues/819),
+[#508](https://github.com/overnightworks/presentator/issues/508).
+
+The start no longer refuses an older file shape, because no operated database
+has one. This overtakes the two sentences above that say a file with the earlier
+four-column or five-column `sessions` table "is refused untouched like every
+older shape".
+
 ## Consequences
 
 - Which model presents becomes configuration, not code, and the phase M1 work is

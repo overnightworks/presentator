@@ -158,6 +158,15 @@ Residuals:
 - SQLite's freed pages, the `-wal` and every backup may keep an ended session's
   token.
 
+### Amendment 2026-11-06 — the start probe refuses no password-era file
+
+Authority: [#819](https://github.com/overnightworks/presentator/issues/819),
+[#508](https://github.com/overnightworks/presentator/issues/508).
+
+The start probe no longer refuses a file with the password-era `users` table,
+which the sentence on it above still says. The argument now rests on #508: no
+such file is operated.
+
 ## Rejected alternatives
 
 - **PyNaCl.** No OpenSSH private-key serialisation, so the deploy key would
