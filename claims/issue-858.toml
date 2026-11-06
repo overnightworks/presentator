@@ -1,8 +1,0 @@
-claim_id = "751cd757e8e84545b5c5de61e4968dc2"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "df0e78faafa121f9ff2143f0d0d234ce5265f096"
-branch = "claude/issue-858-the-deck-pages-become-the-author-s-contr"
-scope = ["docs/ARCHITECTURE.md", "docs/README.md", "docs/configuration.md", "docs/decks.md", "docs/people.md", "docs/reference/builds.md", "docs/reference/decks.md", "docs/runbooks/install-the-host-build-toolchain.md", "examples/copresenter-deck/README.md", "examples/hello-deck/README.md", "slidev/tests/addon-package.test.ts", "tests/presentator/adapters/test_decks.py", "tests/presentator/api/test_copresenter_talk_host.py", "tests/presentator/api/test_deck_api.py", "tests/presentator/api/test_decks_owner.py", "tests/presentator/api/test_talk_host.py", "tests/presentator/application/test_build_retention.py", "tests/presentator/application/test_decks.py", "tests/presentator/application/test_decks_owner.py", "tests/presentator/application/test_spoken_answer.py", "tests/presentator/host/test_worker.py", "tests/test_compose.py"]
-opened_commit = "3d201e5e47c8301a0020b4e3065451ceb19dda25"
-whole_reason = "Two reference pages become one contract page, so the tests that cite its IDs, the facts it moves out and every pin on the old paths change in the same landing to leave no dead link, lost fact or uncited ID."
