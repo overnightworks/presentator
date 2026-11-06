@@ -1,0 +1,8 @@
+claim_id = "9038b6bfb9454026b6948cd3d47393fa"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "d6670dd370fae74042c163b50f7e0c9d540d8c7c"
+branch = "claude/issue-854-the-people-page-becomes-hal-s-contract-d"
+scope = ["docs/ARCHITECTURE.md", "docs/README.md", "docs/configuration.md", "docs/people.md", "docs/reference/people.md", "docs/reference/sign-in-and-session.md", "tests/presentator/adapters/test_person_erasure_sqlite.py", "tests/presentator/adapters/test_person_export_sqlite.py", "tests/presentator/adapters/test_person_records.py", "tests/presentator/api/test_auth_person_token.py", "tests/presentator/api/test_people_erasure_route.py", "tests/presentator/api/test_people_export_route.py", "tests/presentator/application/test_people_erasure.py", "tests/presentator/application/test_people_export.py"]
+opened_commit = "8fd99bc53a7686dcbe015b94f858420dd32e8913"
+whole_reason = "One contract page moves to its path with its rule IDs, so the tests that cite them and the pins on its old path follow in the same landing to leave no dead link or uncited ID."
