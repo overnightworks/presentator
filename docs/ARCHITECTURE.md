@@ -46,8 +46,9 @@ flowchart TD
   (`adapters`, `agent` fill the ports); layers depend only downward
   (import-linter in `pyproject.toml`, run by the quality gate's
   `import-contract` rule). A library an adapter owns behind a port is barred
-  above the adapters by its own contract; webauth only to `application`,
-  `ports`, `contracts` (`api`, `host` import it); the web framework is exempt.
+  above the adapters by its own contract; webauth is barred only from
+  `application`, `ports`, `contracts`, because `api` and `host` import it; the
+  web framework is exempt.
 - **`src/gitmirror`** mirrors any remote read-only through `git`, does not
   import `presentator`, and only adapters name it. **`presentator.agent`** alone
   imports `agent_runtime_client`, at the tag `pyproject.toml` pins.
@@ -57,7 +58,6 @@ flowchart TD
   false`), built in the image; FastAPI serves it and no Node service runs.
 - **`slidev/`** owns every theme and addon a deck may name, among them the
   overlay addon `slidev-addon-presentator`.
-- **The build worker** (`host/worker.py`) runs every build step sealed.
 
 ## 3. Runtime View
 
@@ -74,9 +74,6 @@ sequenceDiagram
     B-->>W: built talk and PDF
     T->>T: serve the talk to its owner
 ```
-
-See [sources](reference/sources.md), [builds](reference/builds.md),
-[decks](reference/decks.md).
 
 ## 4. Deployment View
 
@@ -100,6 +97,9 @@ derived from its source's address. `builds/` and `mirrors/` are caches the rows
 rebuild, so a restore of the database alone is enough. A column goes in two
 releases, the second dropping it in `create_tables`, gated on
 `pragma_table_info` (`adapters/schema.py`), so a restorable older backup starts.
+The drop is tagged only once a release carrying the first step has been live,
+because hal deploys only the newest tag, so a drop tagged at once leaves the
+first release never run.
 
 **Authentication.** Keycloak groups decide who may enter
 ([sign-in](reference/sign-in-and-session.md)). There is no Redis: rate limits
@@ -122,28 +122,28 @@ room notice follows the deck's language.
 
 **Trust.** A deck author's code, git remotes and people's input are untrusted.
 The operator's settings, his local sources folder and hal's token clients are
-trusted: a folder under the local-sources mount is read with his trust, with its
-repositories, their metadata (a `gitdir` file, `objects/info/alternates`, a
-symlink) and everyone who can write there. Across the speech service's private
-Unix socket go readiness, PCM, transcript and spoken sentences; browser identity
-and credentials do not. No operator blessing narrows this model yet, so an audit
-keeps the default trust model.
+trusted. A folder under the local-sources mount is read with the operator's
+trust: its repositories, their metadata (a `gitdir` file,
+`objects/info/alternates`, a symlink) and everyone who can write there. Across
+the speech service's private Unix socket go readiness, PCM, transcript and
+spoken sentences; browser identity and credentials do not. No operator blessing
+narrows this model yet, so an audit keeps the default trust model.
 
-**Proof.** A test sits at the layer that owns the behaviour; a lower layer
-never stands in for a higher one. Pure logic (`contracts`, `application`) is
-called directly with fakes at the ports. An adapter, `gitmirror` included, runs
-against a temporary real dependency (a tmp SQLite file, a tmp bare repository).
-Routes run through the real app in `TestClient`, the composition once with a
-test configuration. Playwright drives the lobby over in-memory stores
+**Proof.** A test sits at the layer that owns the behaviour; a lower layer never
+stands in for a higher one. Pure logic (`contracts`, `application`) is called
+directly with fakes at the ports. An adapter, `gitmirror` included, runs against
+a temporary real dependency (a tmp SQLite file, a tmp bare repository). Routes
+run through the real app in `TestClient`, the composition once with a test
+configuration. Playwright drives the lobby over in-memory stores
 (`tests/support/lobby_drive.py`); a delegated agent proves a person's flow at a
 surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
 
 ## 6. Constraints and reasons
 
 - A deck is code: its Vue components run in its build. Only the sealed [build
-  worker](reference/builds.md) runs it; the web holds no Docker socket, group or
-  client, drops every capability, takes no new privilege and has a read-only
-  root, so deck code reaches neither the daemon nor the machine's root.
+  worker](reference/builds.md) (`host/worker.py`) runs it; the web holds no
+  Docker socket, group or client, drops every capability, takes no new privilege
+  and has a read-only root.
 - The talk has its own origin: one cookie across both hosts would put deck code
   beside the credential it must not reach.
 - One process writes the database: a second would need a second write lock over
