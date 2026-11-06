@@ -1894,7 +1894,7 @@ def test_a_url_whose_host_reads_two_ways_names_no_access(url: str) -> None:
     ],
 )
 def test_check_refuses_an_address_off_the_grammar(url: str, access: AccessKind) -> None:
-    """#439 U2: Check answers the refusal Add answers and probes nothing."""
+    """SR1: Check answers the refusal Add answers and probes nothing."""
     decks = decks_over(fakes=DecksFakes(checker=ConnectionCheckerThatMustNotRun()))
     draft = decks.source_key_draft(owner_id=OWNER)
 

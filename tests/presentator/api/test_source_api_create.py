@@ -155,6 +155,7 @@ def test_a_signed_out_caller_meets_webauths_answer_not_a_problem() -> None:
 
 # 2
 def test_a_member_is_refused_with_a_problem() -> None:
+    """SR5: only admins create sources."""
     lobby = a_member_over(decks_that_must_not_run())
 
     answer = create(lobby.client, fingerprint=_NO_PROOF)
@@ -283,6 +284,7 @@ def test_the_hook_takes_the_returned_secret_and_refuses_a_wrong_one() -> None:
 def test_no_get_carries_the_webhook_secret_or_the_token(
     reach: AdminReach, tmp_path: Path
 ) -> None:
+    """SR2: nothing keeps the webhook secret."""
     instance = reach(a_world(), tmp_path)
     created = create(instance.client, instance.headers)
 
@@ -657,6 +659,7 @@ def _proof_of(lobby: Lobby) -> str:
 
 
 def test_a_first_fetch_that_raises_leaves_the_source_and_renewal_recovers_it() -> None:
+    """SR2: a lost webhook secret is renewed."""
     world = a_world()
     decks = replace(world.decks, folders=_BreakingFoldersOnce())
     lobby = an_admin_over(decks)

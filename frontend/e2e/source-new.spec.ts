@@ -207,7 +207,7 @@ test.describe('as an admin', () => {
 		});
 	}
 
-	test('an address with a user part is refused by the real check with the access sentence', async ({
+	test('SR1: an address with a user part is refused by the real check with the access sentence', async ({
 		page
 	}, testInfo) => {
 		const { words } = await sessionOf(page);
@@ -282,7 +282,7 @@ test.describe('as an admin', () => {
 			test.describe(`the created-once view at ${width} px, ${colorScheme}`, () => {
 				test.use({ colorScheme });
 
-				test('shows the webhook once in the same document, and nothing keeps its secret', async ({
+				test('SR2: shows the webhook once in the same document, and nothing keeps its secret', async ({
 					page,
 					context
 				}, testInfo) => {

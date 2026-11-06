@@ -216,6 +216,7 @@ def test_an_ssh_source_page_gives_the_deploy_keys_public_half() -> None:
 
 
 def test_a_source_page_lists_only_the_admins_own_decks_by_title() -> None:
+    """SR4: a source's page lists only the viewing admin's own decks."""
     source = a_configured_source(_ADDRESS)
     store = FakeDeckStore()
     store.put(a_deck(source, owner_id=ADMIN, slug="mine", title="Mine"))

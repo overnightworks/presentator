@@ -26,7 +26,7 @@ is no Users tab.
   session is read again. The instance name is kept and shown back there and
   read nowhere else.
 - Sources lists each source with the state and age of its newest run and,
-  under a failing one, the reason ([sources](sources.md)). Removing a source
+  under a failing one, the reason ([sources](../sources.md)). Removing a source
   ends on the list with one notice. An instance with no source says what a
   source is and what you need for it.
 
