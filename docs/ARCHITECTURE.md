@@ -160,7 +160,7 @@ by a delegated agent driving it. A leak fails the run (`filterwarnings` in
   no browser ([sources](reference/sources.md)).
 - `/api/admin/` takes a Keycloak access token, not a session cookie, so a forged
   browser session cannot erase a person; the path carries the subject, so the
-  server keeps no access log ([people](reference/people.md)).
+  server keeps no access log ([people](people.md)).
 - The refresh token is stored in plain text because Keycloak renews it only with
   the client secret, which stays outside the database; the instance key belongs
   in the same backup.

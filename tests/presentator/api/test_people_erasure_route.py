@@ -1,4 +1,4 @@
-"""S9 (#293): `DELETE /api/admin/people/{subject}` takes hal's access token alone."""
+"""PE25: `DELETE /api/admin/people/{subject}` takes hal's access token alone."""
 
 import logging
 from collections.abc import Callable
@@ -161,7 +161,7 @@ def _no_authorization() -> dict[str, str]:
 def test_a_token_the_configuration_does_not_admit_deletes_nothing(
     cell: str, status: HTTPStatus
 ) -> None:
-    """E5, S9: 401 or 403 by the cell, and the person stays."""
+    """PE4, PE5: 401 or 403 by the cell, and the person stays."""
     scene = a_scene()
     before = scene.state()
     headers = {
@@ -189,7 +189,7 @@ def test_a_token_the_configuration_does_not_admit_deletes_nothing(
 def test_a_token_the_configuration_admits_erases_the_person(
     clients: frozenset[str], authorized_party: str, groups: list[str]
 ) -> None:
-    """E5, S9: an admitted client, a second one, or an admin subgroup erases."""
+    """PE25: an admitted client, a second one, or an admin subgroup erases."""
     scene = a_scene(clients=clients)
 
     answer = scene.erase(
@@ -201,7 +201,7 @@ def test_a_token_the_configuration_admits_erases_the_person(
 
 
 def test_an_admins_session_cookie_alone_gets_401_and_deletes_nothing() -> None:
-    """S9 (webauth#350 rule 2): a cookie counts for nothing on these routes."""
+    """PE25: a cookie counts for nothing on these routes."""
     scene = a_scene()
     scene.lobby.sign_in()
     before = scene.state()
@@ -213,7 +213,7 @@ def test_an_admins_session_cookie_alone_gets_401_and_deletes_nothing() -> None:
 
 
 def test_a_real_run_answers_the_envelope_with_what_it_removed() -> None:
-    """E5, edge people.md: one body, `dry_run` false, the counts what was removed."""
+    """PE2: one body, `dry_run` false, the counts what was removed."""
     scene = a_scene()
     expected_kinds = scene.erase(query="?dry_run=true").json()["kinds"]
 
@@ -233,7 +233,7 @@ def test_a_real_run_answers_the_envelope_with_what_it_removed() -> None:
 
 
 def test_a_dry_run_answers_the_same_body_and_changes_nothing() -> None:
-    """D12, edge people.md: the preview is the real run's body with `dry_run` true."""
+    """PE2: the preview is the real run's body with `dry_run` true."""
     scene = a_scene()
     before = scene.state()
 
@@ -247,7 +247,7 @@ def test_a_dry_run_answers_the_same_body_and_changes_nothing() -> None:
 
 
 def test_an_unparsable_dry_run_answers_422_and_deletes_nothing() -> None:
-    """D12: a flag that is not a boolean never turns into a real run."""
+    """PE7: a flag that is not a boolean never turns into a real run."""
     scene = a_scene()
     before = scene.state()
 
@@ -258,7 +258,7 @@ def test_an_unparsable_dry_run_answers_422_and_deletes_nothing() -> None:
 
 
 def test_an_unknown_subject_answers_zero_and_creates_no_row() -> None:
-    """S9: 200 with zero counts, and no `users` row for target or caller."""
+    """PE3, PE10: 200 with zero counts, and no `users` row for target or caller."""
     scene = a_scene()
     before = scene.state()
 
@@ -273,7 +273,7 @@ def test_an_unknown_subject_answers_zero_and_creates_no_row() -> None:
 
 
 def test_a_repeat_run_finds_nothing_left() -> None:
-    """S9, edge people.md: idempotent, the second run is at zero."""
+    """PE3: idempotent, the second run is at zero."""
     scene = a_scene()
     scene.erase()
 
@@ -286,7 +286,7 @@ def test_a_repeat_run_finds_nothing_left() -> None:
 
 
 def test_a_running_build_answers_409_with_the_wait_and_deletes_nothing() -> None:
-    """S9, D8: busy is 409, `Retry-After` the whole seconds of the wait, no deletion."""
+    """PE6: busy is 409, `Retry-After` the whole seconds of the wait, no deletion."""
     scene = a_scene(lock_wait=timedelta(milliseconds=50))
     before = scene.state()
     with scene.instance.decks.one_at_a_time:
@@ -305,7 +305,7 @@ def test_a_running_build_answers_409_with_the_wait_and_deletes_nothing() -> None
 
 
 def test_a_mirror_that_cannot_go_answers_500_listing_it_and_a_repeat_finishes() -> None:
-    """E1-E5 (#483), edge people.md Leftovers: the 200's body plus `leftover`."""
+    """PE8, PE11, PE12, PE13, PE17: the 200's body plus `leftover`."""
     stuck = FakeDeckFolders(stuck=frozenset({"talks-id"}))
     scene = a_scene(folders=stuck)
     preview = scene.erase(query="?dry_run=true")
@@ -361,7 +361,7 @@ _RECOGNISABLE_DECK = "kundengeheimnis"
 def test_a_leftover_answer_names_no_source_address_deck_or_person(
     recognisable: str,
 ) -> None:
-    """E2 (#483): a path may hold an internal id, never a name or an address."""
+    """PE14: a path may hold an internal id, never a name or an address."""
     source = replace(
         a_source(_RECOGNISABLE_NAME, identifier="a-source-of-the-person"),
         url=_RECOGNISABLE_ADDRESS,
@@ -388,7 +388,7 @@ def test_a_leftover_answer_names_no_source_address_deck_or_person(
 def test_a_leftover_writes_one_audit_line_of_kinds_and_counts(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """E6 (#483): the leftover line holds kinds and counts, no path and no name."""
+    """PE16: the leftover line holds kinds and counts, no path and no name."""
     stuck = FakeDeckFolders(stuck=frozenset({"talks-id"}))
     scene = a_scene(folders=stuck)
     caplog.set_level(logging.INFO)
@@ -407,7 +407,7 @@ def test_a_leftover_writes_one_audit_line_of_kinds_and_counts(
 
 
 def test_a_build_no_run_owns_answers_a_plain_500_without_a_leftover() -> None:
-    """D2b (#483): an unplaceable build is a failed step, never an invented path."""
+    """PE15: an unplaceable build is a failed step, never an invented path."""
     scene = a_scene()
     store = scene.instance.fakes.store
     (talk,) = store.for_source("talks-id")
@@ -428,7 +428,7 @@ def test_a_build_no_run_owns_answers_a_plain_500_without_a_leftover() -> None:
 
 
 def test_an_empty_setting_serves_no_such_route() -> None:
-    """D6: with no client named the prefix falls to the session gate like any path."""
+    """PE28: with no client named the prefix falls to the session gate like any path."""
     scene = a_scene(clients=None)
     before = scene.state()
 
@@ -441,7 +441,7 @@ def test_an_empty_setting_serves_no_such_route() -> None:
 
 
 def test_the_talk_host_serves_no_such_route() -> None:
-    """S9 (#293), matrix host axis: the talk host serves no such route."""
+    """The talk host serves no such route."""
     scene = a_scene()
     before = scene.state()
     talk = TestClient(
@@ -458,7 +458,7 @@ def test_the_talk_host_serves_no_such_route() -> None:
 
 @pytest.mark.parametrize("query", ["?dry_run=true", "", "?dry_run=maybe"])
 def test_every_answer_carries_no_store(query: str) -> None:
-    """S9, edge people.md: no answer of these routes may be cached."""
+    """PE9: no answer of these routes may be cached."""
     scene = a_scene()
 
     answer = scene.erase(query=query)
@@ -482,7 +482,7 @@ def test_one_call_writes_one_audit_line_naming_nobody(
     build_running: bool,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """D10: one INFO line on the route's logger; neither subject in any record."""
+    """PE29: one INFO line on the route's logger; neither subject in any record."""
     scene = a_scene(lock_wait=timedelta(milliseconds=50))
     caplog.set_level(logging.DEBUG)
 
@@ -505,7 +505,7 @@ def test_one_call_writes_one_audit_line_naming_nobody(
 
 
 def test_the_server_logs_no_request_path(environment: pytest.MonkeyPatch) -> None:
-    """Q4 (#293): a path under the admin prefix carries a subject; no log line may."""
+    """PE30: a path under the admin prefix carries a subject; no log line may."""
     configs: list[uvicorn.Config] = []
 
     class ServerThatOnlyRecordsItsConfig:
@@ -546,7 +546,7 @@ def test_the_server_logs_no_request_path(environment: pytest.MonkeyPatch) -> Non
 def test_the_admitted_token_clients_are_the_comma_separated_ids(
     environment: pytest.MonkeyPatch, given: str, admitted: frozenset[str]
 ) -> None:
-    """D6: the setting keeps the environment's comma format."""
+    """PE28: the setting keeps the environment's comma format."""
     environment.setenv("PRESENTATOR_TOKEN_CLIENTS", given)
 
     assert load_settings().admitted_token_clients() == admitted
@@ -556,7 +556,7 @@ def test_the_admitted_token_clients_are_the_comma_separated_ids(
 def test_an_empty_entry_among_the_admitted_token_clients_refuses_to_start(
     environment: pytest.MonkeyPatch, given: str
 ) -> None:
-    """D6: a list with an empty entry is a typo, not a decision."""
+    """PE28: a list with an empty entry is a typo, not a decision."""
     environment.setenv("PRESENTATOR_TOKEN_CLIENTS", given)
 
     with pytest.raises(ConfigurationError, match="token_clients"):
@@ -567,7 +567,7 @@ def test_an_empty_entry_among_the_admitted_token_clients_refuses_to_start(
 def test_the_retired_setting_in_an_env_file_refuses_to_start_and_is_named(
     tmp_path: Path,
 ) -> None:
-    """P14: a missed rename in the application's `.env` is loud."""
+    """A missed rename in the application's `.env` is loud."""
     (tmp_path / ".env").write_text("PRESENTATOR_ADMIN_TOKEN_CLIENTS=hal\n")
 
     with pytest.raises(ConfigurationError, match="admin_token_clients"):
@@ -592,7 +592,7 @@ def test_the_retired_setting_elsewhere_is_ignored_and_the_new_one_stays_empty(
     tmp_path: Path,
     arrange: Callable[[pytest.MonkeyPatch, Path], None],
 ) -> None:
-    """P14: the silent cases the release's migration step exists for."""
+    """The silent cases the release's migration step exists for."""
     arrange(environment, tmp_path)
 
     assert load_settings().admitted_token_clients() == frozenset()
@@ -601,7 +601,7 @@ def test_the_retired_setting_elsewhere_is_ignored_and_the_new_one_stays_empty(
 def test_without_a_named_client_the_admin_prefix_falls_to_the_session_gate(
     environment: pytest.MonkeyPatch,
 ) -> None:
-    """D6: the prefix answers like any unknown path until a client is named."""
+    """PE28: the prefix answers like any unknown path until a client is named."""
     path = "/api/admin/people/someone"
     browser = TestClient(
         main.build_instance(load_settings()).lobby,

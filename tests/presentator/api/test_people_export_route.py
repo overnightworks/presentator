@@ -1,4 +1,4 @@
-"""S10 (#293): the export route answers one ZIP and no secret is in it."""
+"""PE18: the export route answers one ZIP and no secret is in it."""
 
 import io
 import json
@@ -144,7 +144,7 @@ def _document(answer: Response) -> dict[str, object]:
 
 
 def test_the_zip_holds_export_json_alone_in_the_shared_shape() -> None:
-    """S10, edge people.md: `export.json` at the root, `files` empty, v1."""
+    """PE18, PE20: `export.json` at the root, `files` empty, v1."""
     answer = a_scene().export(THE_PERSON.id)
 
     assert answer.status_code == HTTPStatus.OK
@@ -160,14 +160,14 @@ def test_the_zip_holds_export_json_alone_in_the_shared_shape() -> None:
 
 
 def test_exported_at_is_utc_with_z_and_whole_seconds() -> None:
-    """S10, edge people.md: `exported_at` RFC 3339 in UTC with `Z`, whole seconds."""
+    """PE18: `exported_at` RFC 3339 in UTC with `Z`, whole seconds."""
     document = _document(a_scene().export(THE_PERSON.id))
 
     assert document["exported_at"] == "2026-01-15T09:00:00Z"
 
 
 def test_every_kind_of_row_is_exported_and_each_secret_kind_counted_withheld() -> None:
-    """S10: every row keyed by the person; each omitted kind in `withheld`."""
+    """PE19, PE21: every row keyed by the person; each omitted kind in `withheld`."""
     document = _document(a_scene().export(THE_PERSON.id))
 
     data = cast("dict[str, object]", document["data"])
@@ -221,14 +221,14 @@ def _every_object_has_sorted_keys(value: object) -> bool:
 
 
 def test_data_keys_are_sorted_at_every_depth() -> None:
-    """D14: `data` is the records as JSON with keys sorted."""
+    """`data` is the records as JSON with keys sorted."""
     document = _document(a_scene().export(THE_PERSON.id))
 
     assert _every_object_has_sorted_keys(document["data"])
 
 
 def test_no_secret_is_in_any_decompressed_member_or_member_name() -> None:
-    """S10, #428 cell 23: no secret, ID token, private key or hook hash, in any name."""
+    """PE21: no secret, ID token, private key or hook hash, in any name."""
     members = _members(a_scene().export(THE_PERSON.id))
 
     for name, content in members.items():
@@ -239,7 +239,7 @@ def test_no_secret_is_in_any_decompressed_member_or_member_name() -> None:
 
 
 def test_a_second_persons_rows_are_absent() -> None:
-    """S10: only rows keyed by the subject."""
+    """PE19: only rows keyed by the subject."""
     members = _members(a_scene().export(THE_PERSON.id))
 
     text = members["export.json"].decode()
@@ -249,7 +249,7 @@ def test_a_second_persons_rows_are_absent() -> None:
 
 
 def test_an_unknown_subject_answers_empty_and_creates_no_account() -> None:
-    """S10 Done when, edge people.md: 200, `data` `{}`, never a `users` row."""
+    """PE23: 200, `data` `{}`, never a `users` row."""
     scene = a_scene()
     accounts_before = dict(scene.instance.users.users)
 
@@ -264,7 +264,7 @@ def test_an_unknown_subject_answers_empty_and_creates_no_account() -> None:
 
 
 def test_no_token_gets_401_and_no_archive() -> None:
-    """S9b's gate covers the route: no bearer, no export."""
+    """PE4: the gate covers the route: no bearer, no export."""
     answer = a_scene().export(THE_PERSON.id, authorized=False)
 
     assert answer.status_code == HTTPStatus.UNAUTHORIZED
@@ -275,7 +275,7 @@ def test_no_token_gets_401_and_no_archive() -> None:
 def test_an_export_audit_line_names_nobody_and_no_secret(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """D10: one INFO line on the route's logger, counts only."""
+    """PE24: one INFO line on the route's logger, counts only."""
     scene = a_scene()
     caplog.set_level(logging.DEBUG)
 

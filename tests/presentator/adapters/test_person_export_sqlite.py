@@ -53,7 +53,7 @@ def _kinds_with_rows(export: PersonExport) -> set[PersonKind]:
 def test_every_table_reaching_accounts_is_in_the_data_of_a_person_with_rows(
     tmp_path: Path,
 ) -> None:
-    """S10 (#293) Done when: a table with a `user_id` or `owner_id` left out fails."""
+    """PE19: a table with a `user_id` or `owner_id` left out fails."""
     instance = an_instance_with_both_people(tmp_path)
     with closing(sqlite3.connect(instance.database)) as connection:
         reaching = tables_reaching_accounts(connection)
@@ -67,7 +67,7 @@ def test_every_table_reaching_accounts_is_in_the_data_of_a_person_with_rows(
 def test_the_secret_columns_are_counted_withheld_over_real_rows(
     tmp_path: Path,
 ) -> None:
-    """S10 (#293): the export holds no secret; each withheld kind has its count."""
+    """PE21: the export holds no secret; each withheld kind has its count."""
     instance = an_instance_with_both_people(tmp_path)
 
     export = instance.people.export_person(THE_PERSON.id)
@@ -103,7 +103,7 @@ def _another_session(instance: Instance, *, id_token: SecretStr | None) -> None:
 def test_two_sessions_holding_id_tokens_are_counted_two_over_real_rows(
     tmp_path: Path,
 ) -> None:
-    """#428 cell 22: two ID-token sessions give `id-token`, `secret`, count 2."""
+    """PE22: two ID-token sessions give `id-token`, `secret`, count 2."""
     instance = an_instance_with_both_people(tmp_path)
     _another_session(instance, id_token=SecretStr("a-second-id-token"))
 
@@ -118,7 +118,7 @@ def test_two_sessions_holding_id_tokens_are_counted_two_over_real_rows(
 def test_sessions_holding_no_id_token_leave_no_id_token_entry_over_real_rows(
     tmp_path: Path,
 ) -> None:
-    """#428 cell 24: the talk host's NULL-token sessions get no `id-token` entry."""
+    """PE22: the talk host's NULL-token sessions get no `id-token` entry."""
     instance = an_instance_with_both_people(tmp_path)
     with closing(sqlite3.connect(instance.database)) as connection, connection:
         connection.execute("UPDATE sessions SET id_token = NULL")
@@ -133,7 +133,7 @@ def test_sessions_holding_no_id_token_leave_no_id_token_entry_over_real_rows(
 def test_a_draft_that_no_longer_opens_is_shown_without_its_key_and_counted(
     tmp_path: Path,
 ) -> None:
-    """D5 (#419): an unreadable draft stays in the data, no key, one private key."""
+    """PE21: an unreadable draft stays in the data, no key, one private key."""
     instance = an_instance_with_both_people(tmp_path)
     store = a_key_drafts_store(instance.database)
     store.remove_for_owner(THE_PERSON.id)
@@ -152,7 +152,7 @@ def test_a_draft_that_no_longer_opens_is_shown_without_its_key_and_counted(
 def test_an_unknown_subject_exports_nothing_and_creates_no_account(
     tmp_path: Path,
 ) -> None:
-    """S10 (#293): an unknown subject creates no `users` row."""
+    """PE23: an unknown subject creates no `users` row."""
     instance = an_instance_with_both_people(tmp_path)
 
     export = instance.people.export_person("nobody-at-all")

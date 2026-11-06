@@ -36,9 +36,9 @@ One task each, in [`runbooks/`](runbooks/).
 
 ## Reference
 
-The deployment's contract is [configuration](configuration.md). In
+The deployment's contract is [configuration](configuration.md) and the
+people route's contract is [people](people.md). In
 [`reference/`](reference/): [sign-in and session](reference/sign-in-and-session.md),
-[people](reference/people.md),
 [lobby settings and appearance](reference/lobby-settings-and-appearance.md),
 [sources](reference/sources.md), [decks](reference/decks.md),
 [builds](reference/builds.md),

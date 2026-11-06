@@ -51,7 +51,7 @@ def _exported(subject: str = _THE_PERSON) -> PersonExport:
 
 
 def test_every_kind_of_row_is_in_the_data_and_each_secret_is_counted_withheld() -> None:
-    """S10 (#293): the export covers every row keyed by the person, secrets withheld."""
+    """PE19: the export covers every row keyed by the person, secrets withheld."""
     export = _exported()
 
     data = export.data
@@ -74,14 +74,14 @@ def test_every_kind_of_row_is_in_the_data_and_each_secret_is_counted_withheld() 
 
 
 def test_no_secret_value_appears_in_any_returned_field() -> None:
-    """S10 (#293): the export holds no secret, private key or hook hash."""
+    """PE21: the export holds no secret, private key or hook hash."""
     shown = str(asdict(_exported()))
 
     assert not [word for word in _SECRET_WORDS if word in shown]
 
 
 def test_a_second_persons_rows_are_absent() -> None:
-    """S10 (#293): the export covers only rows keyed by the named person."""
+    """PE19: the export covers only rows keyed by the named person."""
     shown = str(asdict(_exported()))
 
     assert _ANOTHER not in shown
@@ -89,7 +89,7 @@ def test_a_second_persons_rows_are_absent() -> None:
 
 
 def test_an_unknown_subject_answers_empty_and_creates_nothing() -> None:
-    """S10 (#293) Done when: an unknown subject answers empty and is never created."""
+    """PE23: an unknown subject answers empty and is never created."""
     instance = an_instance()
     accounts_before = dict(instance.users.users)
 
@@ -105,7 +105,7 @@ def test_an_unknown_subject_answers_empty_and_creates_nothing() -> None:
 
 
 def test_an_account_alone_is_exported_as_the_account_alone() -> None:
-    """S10 (#293): an in-flight exchange left an empty account; only it is shown."""
+    """PE19: an in-flight exchange left an empty account; only it is shown."""
     instance = an_instance()
     sourceless = User(id="sourceless", username="sam", role=Role.USER)
     instance.users.users[sourceless.id] = sourceless
@@ -123,7 +123,7 @@ def test_an_account_alone_is_exported_as_the_account_alone() -> None:
 
 
 def test_a_built_deck_names_its_built_commit() -> None:
-    """D5 (#419): the data names the person's built commits."""
+    """PE19: the data names the person's built commits."""
     decks = [deck for source in _exported().data.sources for deck in source.decks]
 
     assert [deck.built_commit for deck in decks] == [deck.commit for deck in decks]
