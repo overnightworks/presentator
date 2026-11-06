@@ -88,6 +88,13 @@ Docker's default seccomp and AppArmor profiles in force and the image's glibc is
 another user, so build runs are readable by others; a `staged-<step>` directory
 is closed to everyone but the web, and that backup skips `staged-*` by name.
 
+Both hosts answer `GET /health` to anyone with 200 and a fixed body, with no
+session, store read or cookie (`api/health.py`). The answer is static because
+the instance binds its port only after the database is opened and migrated and,
+under the worker runner, after the worker answers, so an answer already means
+the instance serves. The request must name a served host, so the container's
+health check and edge send the host's own name, and so must a direct run.
+
 ## 5. Crosscutting Concepts
 
 **Persistence.** SQLite holds accounts, sessions, preferences, sources, runs,
@@ -102,7 +109,7 @@ because hal deploys only the newest tag, so a drop tagged at once leaves the
 first release never run.
 
 **Authentication.** Keycloak groups decide who may enter
-([sign-in](reference/sign-in-and-session.md)). There is no Redis: rate limits
+([sign-in](sign-in.md)). There is no Redis: rate limits
 are single-process (`SingleProcessRateLimitBackend`) and there is no session
 cache. Identity writes run in one transaction under a process lock, with the
 audit line after COMMIT (`adapters/identity.py`).

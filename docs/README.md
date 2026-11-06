@@ -37,10 +37,10 @@ One task each, in [`runbooks/`](runbooks/).
 
 The deployment's contract is [configuration](configuration.md), the
 people route's contract is [people](people.md), the sources surface's ruled
-sentences are [sources](sources.md) and the deck author's folder contract with
-the decks surface's ruled sentences is [decks](decks.md). In
-[`reference/`](reference/): [sign-in and session](reference/sign-in-and-session.md),
-[lobby settings and appearance](reference/lobby-settings-and-appearance.md),
+sentences are [sources](sources.md), the deck author's folder contract with
+the decks surface's ruled sentences is [decks](decks.md) and the sign-in
+surface's ruled sentences are [sign-in](sign-in.md). In
+[`reference/`](reference/): [lobby settings and appearance](reference/lobby-settings-and-appearance.md),
 [co-presenter and voice](reference/co-presenter-and-voice.md).
 
 ## What this map does not do
