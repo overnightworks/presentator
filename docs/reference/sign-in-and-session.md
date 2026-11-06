@@ -151,7 +151,8 @@ one gets 404, so a healthcheck sends the lobby's or the talk host's own name.
 No lobby page ends with legal links. They stand in the person menu (signed in)
 and on the sign-in pages (signed out): Impressum goes to the
 operator's one Impressum at `https://hallucinai.de/impressum`, Datenschutz to
-`https://hallucinai.de/datenschutz#presentator`. Presentator serves no privacy
+`https://hallucinai.de/datenschutz#presentator`, Nutzungsbedingungen to
+`https://hallucinai.de/nutzungsbedingungen#presentator`. Presentator serves no privacy
 page: `/datenschutz` is no route on either host, so a signed-in page load on
 the lobby gets the lobby app, whose router shows not-found; any other
 signed-in caller, on either host, gets 404; a signed-out one is sent to
