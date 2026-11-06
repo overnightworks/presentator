@@ -17,7 +17,6 @@ this map and an owner disagree, the owner is right.
 | How do I run, change or repair this installation? | Runbooks | the documents under [Runbooks](#runbooks) |
 | Why are the guards what they are? | Explanation | [`explanation/trust-boundaries.md`](explanation/trust-boundaries.md) |
 | How is a change proven? | Testing | [`TESTING.md`](TESTING.md) |
-| What does the lobby look like? | Picture | [`mockups/README.md`](mockups/README.md) |
 
 Agent policy lives in [`AGENTS.md`](../AGENTS.md) at the repository root, not
 here. The human entry point is [`README.md`](../README.md).
