@@ -936,7 +936,7 @@ export interface components {
         };
         /**
          * ThemeChoice
-         * @description The three looks the picture's theme rows offer.
+         * @description The three looks a person can choose: follow the system, light or dark.
          * @enum {string}
          */
         ThemeChoice: "follow-system" | "light" | "dark";

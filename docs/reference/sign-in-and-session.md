@@ -41,7 +41,7 @@ sign-in, and no password is stored.
 - A valid Logout Token at `POST /auth/backchannel-logout` ends every session
   of its subject, on every device. A store failure answers 400 and ends none.
 
-The talk host signs in by itself ([ADR 0016](../decisions/0016-a-talk-host-signs-in-by-itself.md)):
+The talk host signs in by itself:
 the same client, the redirect URI `<PRESENTATOR_TALK_ORIGIN>/auth/callback`, and
 its own host-only `__Host-session_id`, signed under a key derived for it. It
 serves only the signed-in owner's talk under `/deck/<slug>/`, sends `/` to the
@@ -58,14 +58,11 @@ keeps the sign-in time and the expiry for that. The session row holds no
 client address and no user agent, and holds the session's ID token and refresh
 token in plain text: the refresh token is the one Keycloak returned at the last
 renewal, which is the sign-in's until the first co-presenter ask renews it. The
-talk host's rows hold no ID token, because that host has no logout route
-([ADR 0013](../decisions/0013-secrets-at-rest-and-credential-delivery.md)).
+talk host's rows hold no ID token, because that host has no logout route.
 A session past its expiry is refused, and a schedule of its own deletes
 expired rows every five minutes, apart from the deck refresh.
 
-The SQLite stores stay this repository's
-([ADR 0003](../decisions/0003-libraries-for-models-and-auth.md),
-[ADR 0011](../decisions/0011-instance-users.md)).
+The SQLite stores stay this repository's.
 
 ## What protects a request
 
@@ -81,8 +78,7 @@ signed `SameSite=Lax` session cookie.
   `GET /api/session` is the one exact optional path: it admits a live session
   and answers a signed-out caller with the instance's defaults and no person;
   its sign-in addresses include `account_console_url`, the configured issuer
-  with `/account`, served signed in and out alike
-  ([ADR 0020](../decisions/0020-the-lobby-is-a-json-api.md)).
+  with `/account`, served signed in and out alike.
 - `BearerGate` takes `/api/admin/` by an access token alone and never by the
   cookie (see [people](people.md)). On the rest of `/api/` a person's hal
   access token is the account behind it: admitted as a sign-in admits, in one
@@ -127,8 +123,7 @@ signed `SameSite=Lax` session cookie.
   `Content-Security-Policy` admitting only this origin's own scripts, styles
   and connections (the lobby admits one inline script, the app's bootstrap by
   its hash, and one style attribute, SvelteKit's accessibility announcer by its
-  hash under `'unsafe-hashes'`
-  ([ADR 0021](../decisions/0021-the-lobby-is-a-sveltekit-app.md)); the talk
+  hash under `'unsafe-hashes'`; the talk
   host admits inline styles, because a built Slidev talk inlines them; the
   logout page brings its own, with one hashed script and a form to Keycloak),
   and a `Permissions-Policy`
@@ -157,5 +152,4 @@ page: `/datenschutz` is no route on either host, so a signed-in page load on the
 gets the lobby app, whose router shows not-found; any other signed-in caller, on
 either host, gets 404; a signed-out one is sent to sign-in like any other non-public
 path. The German text is the section `legal/datenschutz.html`, which edge assembles
-into the central page; a test holds its numbers equal to the code constants
-([ADR 0015](../decisions/0015-public-like-songmaker-own-login.md)).
+into the central page; a test holds its numbers equal to the code constants.

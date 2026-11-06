@@ -5,8 +5,7 @@ instance.
 
 Adding a source creates `POST /sources/<name>/fetch` for it. No login stands in
 front of a `POST` under `/sources/`, because a git host has no browser to sign
-in with; the secret guards it instead
-([ADR 0015](../decisions/0015-public-like-songmaker-own-login.md)).
+in with; the secret guards it instead.
 
 ## Before you start
 
@@ -18,8 +17,7 @@ until [Renew](renew-a-webhook-secret.md) mints another.
 
 Send the secret as `Authorization: Bearer …` or as `X-Gitlab-Token`, and
 nothing else; no payload is read, which is what lets any host or a
-`post-receive` hook call it
-([ADR 0010](../decisions/0010-git-sources-mirror.md)):
+`post-receive` hook call it:
 
 ```sh
 curl -X POST -H "Authorization: Bearer <the-secret-shown-once>" \

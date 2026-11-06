@@ -38,7 +38,7 @@ admin adds one under Settings · Sources.
   succeeded.
 - The secret is stored encrypted in the source's row, the only place it stands,
   opened with a key derived from the master key (`PRESENTATOR_SECRET_KEY_FILE`) and read at every
-  pull ([ADR 0013](../decisions/0013-secrets-at-rest-and-credential-delivery.md)).
+  pull.
   Keep the master key with the data: an instance restored without it lists its
   decks and can pull none of them, and a source's secret is
   [renewed](../runbooks/renew-a-source-secret.md) if it is unreadable.
@@ -95,8 +95,7 @@ admin adds one under Settings · Sources.
 ## Keeping it current
 
 `gitmirror` keeps a bare mirror of each source's repository under
-`PRESENTATOR_MIRRORS` by driving `git` as a subprocess
-([ADR 0010](../decisions/0010-git-sources-mirror.md)); nothing is ever checked
+`PRESENTATOR_MIRRORS` by driving `git` as a subprocess; nothing is ever checked
 out, and the tree is read at one commit. A pull runs with a minimal
 environment: terminal prompting off, the global and system git configuration
 neutralised, any inherited credential helper cleared, and `ssh` in batch mode
