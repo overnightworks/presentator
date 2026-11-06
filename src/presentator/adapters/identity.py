@@ -46,74 +46,9 @@ _USERNAME_COLUMN: Final = "users.username"
 _SELECT_ACCOUNT: Final = "SELECT id, username, role FROM users WHERE id = ?"
 
 
-class OldDatabaseError(RuntimeError):
-    """The file was written before the current identity schema."""
-
-
-_OLD_VERSION_REFUSAL: Final = (
-    "%s was written by an older version (login_attempts, or a users or"
-    " sessions table with other columns than this version's). Keep a copy,"
-    " then move the database and its -wal and -shm files aside so the instance"
-    " starts a fresh one."
-)
-
-
 def create_identity_tables(database: Path) -> None:
-    """Make the accounts and sessions tables exist in a file no older version wrote."""
-    _refuse_an_old_database(database)
+    """Make the accounts and sessions tables exist."""
     apply_schema(database, _SCHEMA)
-
-
-def _refuse_an_old_database(database: Path) -> None:
-    """Look without writing: the main file and its -wal never change.
-
-    A -wal without frames is looked at immutable, so no side file appears. A
-    -wal with frames is looked at read-only only, because an immutable look
-    would miss a schema committed solely there; SQLite may then create -shm.
-    """
-    if not database.exists():
-        return
-    write_ahead_log = database.with_name(database.name + "-wal")
-    has_logged_frames = write_ahead_log.exists() and write_ahead_log.stat().st_size > 0
-    options = "mode=ro" if has_logged_frames else "mode=ro&immutable=1"
-    connection = sqlite3.connect(f"{database.absolute().as_uri()}?{options}", uri=True)
-    try:
-        cursor = connection.cursor()
-        tables = _table_names(cursor)
-        is_old = "login_attempts" in tables or any(
-            table in tables and _column_names(cursor, table) != columns
-            for table, columns in _fresh_columns().items()
-        )
-    finally:
-        connection.close()
-    if is_old:
-        raise OldDatabaseError(_OLD_VERSION_REFUSAL % database)
-
-
-def _fresh_columns() -> dict[str, set[str]]:
-    fresh = sqlite3.connect(":memory:")
-    try:
-        fresh.executescript(_SCHEMA)
-        cursor = fresh.cursor()
-        return {table: _column_names(cursor, table) for table in _table_names(cursor)}
-    finally:
-        fresh.close()
-
-
-def _table_names(cursor: sqlite3.Cursor) -> set[str]:
-    return {
-        str(table[0])
-        for table in cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table'",
-        ).fetchall()
-    }
-
-
-def _column_names(cursor: sqlite3.Cursor, table: str) -> set[str]:
-    return {
-        str(column[1])
-        for column in cursor.execute(f"PRAGMA table_info({table})").fetchall()
-    }
 
 
 @dataclass(frozen=True, slots=True)
