@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to release, YYYY.MM.DD.N
+        required: true
+        type: string
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  gate:
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+    # quality main 7715afe
+    uses: overnightworks/quality/.github/workflows/release-gate.yml@7715afe5c911a00ae3076057691e0b5d4e4a65f7
+    with:
+      version: ${{ inputs.version }}
+      form: YYYY.MM.DD.N
+
+  image:
+    needs: gate
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      packages: write
+    # quality main 7715afe
+    uses: overnightworks/quality/.github/workflows/image.yml@7715afe5c911a00ae3076057691e0b5d4e4a65f7
+    with:
+      version: ${{ inputs.version }}
+      push: true
+
+  tag:
+    needs: [gate, image]
+    permissions:
+      contents: write
+    # quality main 7715afe
+    uses: overnightworks/quality/.github/workflows/release-tag.yml@7715afe5c911a00ae3076057691e0b5d4e4a65f7
+    with:
+      version: ${{ inputs.version }}
+      commit: ${{ needs.gate.outputs.commit }}
