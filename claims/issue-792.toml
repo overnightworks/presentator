@@ -1,0 +1,7 @@
+claim_id = "ab63009d46844a28909ee7e8f3352d92"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "e827ff93d89c4b57db49e12dfd2fe15b4dfef659"
+branch = "claude/issue-792-the-unused-instance-theme-column-is-drop"
+scope = ["src/presentator/adapters/preferences.py", "src/presentator/adapters/schema.py", "tests/presentator/adapters/test_preferences.py"]
+opened_commit = "1dd0a28d52eaf8bca20ff921b4684a7631a053b8"
