@@ -161,6 +161,18 @@ LobbyText.source_remove_confirm
 # any field of `LobbyText`; that a page renders them is proven by the drive.
 LobbyText.section_decks
 LobbyText.section_settings
+# The kit's account menu and sign-in pages read these through `kitWords.ts`.
+LobbyText.theme_title
+LobbyText.theme_follow_system
+LobbyText.theme_light
+LobbyText.theme_dark
+LobbyText.sign_in_logged_out
+LobbyText.sign_in_log_in
+LobbyText.sign_in_failed
+LobbyText.sign_in_failed_banner
+LobbyText.sign_in_try_again
+LobbyText.sign_in_no_access
+LobbyText.sign_in_no_access_sentence
 LobbyText.legal_impressum
 LobbyText.legal_datenschutz
 # The Svelte lobby's not-found board, for-admins board and Settings page read

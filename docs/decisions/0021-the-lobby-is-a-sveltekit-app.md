@@ -166,8 +166,9 @@ The talk host's policy is not touched.
   them is named `*.instance.spec.ts` and runs on a stack of its own per browser;
   the other specs share one stack and never write them.
 - The catalog stays the server's: `/api/session` serves it as data, and the
-  catalog-purity check holds the Svelte pages to it. A kit component's own
-  words are the kit's.
+  catalog-purity check holds the Svelte pages to it. The kit's components speak
+  the catalog's words through their `words` prop; the kit's built-in English is
+  the fallback only when no words are passed.
 
 ## Rejected alternatives
 

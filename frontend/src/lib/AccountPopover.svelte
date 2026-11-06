@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { AccountMenu } from 'overnightworks-appkit';
+	import { accountMenuWords } from '#lib/kitWords.ts';
 	import { type ThemeChoice, writeTheme } from '#lib/api/account.ts';
 	import type { SessionPerson, SessionView } from '#lib/api/session.ts';
 	import { legalLinks } from '#lib/legal.ts';
@@ -37,6 +38,7 @@
 		appRows={[]}
 		theme={{ choice: currentTheme(), onChange: chooseTheme }}
 		legalLinks={legalLinks(session.words)}
+		words={accountMenuWords(session.words)}
 		logOutAction={session.sign_in.logout}
 	/>
 </div>

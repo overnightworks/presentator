@@ -526,6 +526,20 @@ export interface components {
             settings_sources: string;
             /** Settings Title */
             settings_title: string;
+            /** Sign In Failed */
+            sign_in_failed: string;
+            /** Sign In Failed Banner */
+            sign_in_failed_banner: string;
+            /** Sign In Log In */
+            sign_in_log_in: string;
+            /** Sign In Logged Out */
+            sign_in_logged_out: string;
+            /** Sign In No Access */
+            sign_in_no_access: string;
+            /** Sign In No Access Sentence */
+            sign_in_no_access_sentence: string;
+            /** Sign In Try Again */
+            sign_in_try_again: string;
             /** Source Access */
             source_access: string;
             /** Source Access Deploy Key */
@@ -702,6 +716,14 @@ export interface components {
             sources_empty_title: string;
             /** Sources Fetch Now */
             sources_fetch_now: string;
+            /** Theme Dark */
+            theme_dark: string;
+            /** Theme Follow System */
+            theme_follow_system: string;
+            /** Theme Light */
+            theme_light: string;
+            /** Theme Title */
+            theme_title: string;
             /** Wordmark */
             wordmark: string;
         };
