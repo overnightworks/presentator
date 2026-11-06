@@ -194,7 +194,7 @@ allow_indirect_imports = true
 id = "gitmirror-is-independent"
 name = "gitmirror never imports the product"
 type = "forbidden"
-# ADR 0010: the dependency runs one way, so the package can move to its own
+# The dependency runs one way, so the package can move to its own
 # repository and be consumed by tag when its second caller arrives.
 source_modules = ["gitmirror"]
 forbidden_modules = ["presentator"]
@@ -221,7 +221,7 @@ allow_indirect_imports = true
 id = "randomness-belongs-to-an-adapter"
 name = "Only adapters draw randomness"
 type = "forbidden"
-# ADR 0001, `ports/identity.py`: a layer above asks a port for a secret and
+# `ports/identity.py`: a layer above asks a port for a secret and
 # draws none. The host composes the adapters that draw, so the legal chain
 # runs through them; only a direct import above them is the violation.
 source_modules = [
@@ -239,7 +239,7 @@ allow_indirect_imports = true
 id = "manifest-and-wording-libraries"
 name = "Only adapters read the manifest format and word a language"
 type = "forbidden"
-# ADR 0001: a third-party or format library lives in the adapter that owns it.
+# A third-party or format library lives in the adapter that owns it.
 # `tomllib` reads the deck manifest and `babel` owns the catalog and the
 # wording of an age, so a layer above must ask a port or be handed the words.
 source_modules = [
@@ -257,7 +257,7 @@ allow_indirect_imports = true
 id = "sentence-library"
 name = "Only adapters find sentence boundaries"
 type = "forbidden"
-# ADR 0001: a third-party library lives in the adapter that owns it. `syntok`
+# A third-party library lives in the adapter that owns it. `syntok`
 # finds the boundaries, so a layer above is handed the function instead.
 source_modules = [
     "presentator.host",
@@ -274,7 +274,7 @@ allow_indirect_imports = true
 id = "process-spawning"
 name = "Only adapters spawn a process"
 type = "forbidden"
-# ADR 0001: the toolchain that builds a deck is an external process, and where
+# The toolchain that builds a deck is an external process, and where
 # it is spawned is the adapter that owns it. A layer above asks a port.
 source_modules = [
     "presentator.host",
@@ -291,7 +291,7 @@ allow_indirect_imports = true
 id = "database-library"
 name = "Only adapters import the database library"
 type = "forbidden"
-# ADR 0001: a third-party library lives in the adapter that owns it, and its
+# A third-party library lives in the adapter that owns it, and its
 # contract is written with its first import. `sqlite3` is the store, so a layer
 # above must ask a port instead.
 source_modules = [
@@ -311,7 +311,7 @@ allow_indirect_imports = true
 id = "webauth-library"
 name = "Only adapters and the host import webauth"
 type = "forbidden"
-# ADR 0003: the library owns the login mechanism. Adapters fill its ports;
+# The library owns the login mechanism. Adapters fill its ports;
 # the host composes WebAuthConfig. The api is not in this list because the
 # routes must read the installed config, sign and clear cookies, answer an
 # unauthenticated request, and read client identity, and install
@@ -330,7 +330,7 @@ allow_indirect_imports = true
 id = "encryption-library"
 name = "Only adapters import the encryption library"
 type = "forbidden"
-# ADR 0013: every parameter of the encryption stands in the adapter that owns
+# Every parameter of the encryption stands in the adapter that owns
 # it, so a layer above asks a port or is handed bytes it cannot read.
 source_modules = [
     "presentator.host",

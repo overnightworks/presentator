@@ -1,4 +1,4 @@
-"""What a deck and its source are, everywhere in this product (ADR 0005)."""
+"""What a deck and its source are, everywhere in this product."""
 
 import posixpath
 import re
@@ -227,9 +227,9 @@ class Source:
 class DeployKeyDraft:
     """An admin's own unbound SSH keypair: what the Add form shows and binds.
 
-    Server-held, keyed by the admin who owns it (ADR 0010's credential
-    vocabulary) rather than by session, so a reload still shows the key the
-    operator may already have pasted into the host. It is never a source.
+    Server-held, keyed by the admin who owns it rather than by session, so a reload
+    still shows the key the operator may already have pasted into the host. It is
+    never a source.
     """
 
     id: str
@@ -597,7 +597,7 @@ class DeckPage:
     built_at: datetime | None
     state: DeckState
     attempt: ShownAttempt | None
-    # The themes this instance's toolchain carries (ADR 0014), or nothing
+    # The themes this instance's toolchain carries, or nothing
     # while its project cannot be read: an empty set is never shown as if it
     # were the real one (R3).
     themes: tuple[str, ...] | None

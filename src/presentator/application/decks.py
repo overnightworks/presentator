@@ -2,7 +2,7 @@
 
 Which folder counts as a deck, which deck is out of date, when a build may
 become the talk that is delivered, and what a deck page says is decided here;
-git, TOML, SQL, and the build toolchain stay outside (ADR 0001, ADR 0005).
+git, TOML, SQL, and the build toolchain stay outside.
 """
 
 import hmac

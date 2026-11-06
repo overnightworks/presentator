@@ -1,4 +1,4 @@
-"""SQLite rows behind the settings and preference ports (ADR 0006)."""
+"""SQLite rows behind the settings and preference ports."""
 
 from dataclasses import dataclass
 from pathlib import Path

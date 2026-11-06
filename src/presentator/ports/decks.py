@@ -1,7 +1,7 @@
 """The capabilities the deck list calls out through; adapters fill them.
 
 Named for decks rather than for a catalogue, because the message catalog
-(ADR 0012) is a different thing entirely.
+is a different thing entirely.
 """
 
 from abc import abstractmethod
@@ -76,7 +76,7 @@ class SourceStore(Protocol):
 
 
 class DeployKeyDrafts(Protocol):
-    """One admin's own unbound SSH keypair, minted when Add opens (ADR 0010).
+    """One admin's own unbound SSH keypair, minted when Add opens.
 
     Not a source: a draft nobody creates a source from is swept after a day,
     never a half-written row.
@@ -323,7 +323,7 @@ class BuildRunner(Protocol):
     def holds(self, artefacts: Artefacts) -> bool:
         """Whether both artefacts really stand under the root builds are kept in.
 
-        A deck is code (ADR 0005), so where a build says it wrote is checked
+        A deck is code, so where a build says it wrote is checked
         rather than trusted before that place becomes an address.
         """
 
@@ -369,7 +369,7 @@ class BuildRunner(Protocol):
 
 
 class ToolchainThemes(Protocol):
-    """The theme names this instance's toolchain project carries (ADR 0014)."""
+    """The theme names this instance's toolchain project carries."""
 
     @abstractmethod
     def names(self) -> tuple[str, ...] | None:

@@ -1,7 +1,6 @@
 """SQLite rows behind the identity ports.
 
-The stores are this product's implementations of the `webauth` ports
-(ADR 0003).
+The stores are this product's implementations of the `webauth` ports.
 """
 
 import secrets
@@ -138,8 +137,7 @@ def _is_a_taken_username(refused: sqlite3.IntegrityError) -> bool:
 class StoredSession:
     """A stored sign-in: its account, its instants and its login's secrets.
 
-    Whether it still stands is `webauth`'s `admit_session`, not a method here
-    (ADR 0003).
+    Whether it still stands is `webauth`'s `admit_session`, not a method here.
     """
 
     id: str
@@ -158,7 +156,7 @@ class SqliteSessionRecordStore:
     instants. Every call commits on its own, except on a store that
     `SqliteIdentityWrites` bound to the cursor of its open transaction. The
     refresh token and the ID token sit in plain text in the session's row and
-    leave with it (ADR 0013).
+    leave with it.
     """
 
     database: Path

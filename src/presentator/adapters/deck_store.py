@@ -1,4 +1,4 @@
-"""The deck table (ADR 0006): a deck's row, its build and its last attempt."""
+"""The deck table: a deck's row, its build and its last attempt."""
 
 import json
 from dataclasses import dataclass

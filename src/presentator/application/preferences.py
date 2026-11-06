@@ -1,7 +1,7 @@
 """The instance's settings, a person's choices, and how a page resolves them.
 
 The language is the instance's alone; the theme is the person's own and, with
-none chosen, follows the device (ADR 0012).
+none chosen, follows the device.
 """
 
 from dataclasses import dataclass
