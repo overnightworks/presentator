@@ -266,6 +266,7 @@ def test_the_talk_origin_must_be_another_canonical_https_hostname(
     environment: pytest.MonkeyPatch,
     origin: str | None,
 ) -> None:
+    """CF2: the talk origin is configuration, on its own canonical https hostname."""
     if origin is None:
         environment.delenv("PRESENTATOR_TALK_ORIGIN")
     else:

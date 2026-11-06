@@ -36,8 +36,8 @@ One task each, in [`runbooks/`](runbooks/).
 
 ## Reference
 
-In [`reference/`](reference/): [configuration](reference/configuration.md),
-[sign-in and session](reference/sign-in-and-session.md),
+The deployment's contract is [configuration](configuration.md). In
+[`reference/`](reference/): [sign-in and session](reference/sign-in-and-session.md),
 [people](reference/people.md),
 [lobby settings and appearance](reference/lobby-settings-and-appearance.md),
 [sources](reference/sources.md), [decks](reference/decks.md),

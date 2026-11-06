@@ -3,7 +3,7 @@
 Audience: an engineer or operator looking up how a person gets in and what
 protects a request. Setup of the Keycloak client is
 [configure Keycloak](../runbooks/configure-keycloak.md); the settings are in
-[configuration](configuration.md).
+[configuration](../configuration.md).
 
 ## Sign-in
 
