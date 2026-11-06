@@ -1,0 +1,8 @@
+claim_id = "6453459881aa48a79a848cf801d966cf"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "86018d6a1c21896306e54cd574f33ae5a9f28860"
+branch = "claude/issue-831-presentator-has-one-architecture-overvie"
+scope = ["README.md", "docs/ARCHITECTURE.md", "docs/README.md", "docs/TESTING.md", "docs/VISION.md"]
+opened_commit = "9f5697e4bfaaa9cc0eecb94cb7f9f38c2434810a"
+whole_reason = "One new overview and the four pointers that lead to it: a pointer without the file, or the file without its row in the map, leaves the reader at a dead end."
