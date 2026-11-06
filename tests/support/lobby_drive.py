@@ -369,7 +369,7 @@ def json_route_document() -> dict[str, JsonNode]:
     """The lobby's OpenAPI document cut to its JSON routes and the schemas they use.
 
     The machine routes under `/api/admin/` are hal's, not the app's, and stay
-    out (ADR 0020).
+    out.
     """
     spec: dict[str, JsonNode] = a_lobby().app.openapi()
     all_paths = spec["paths"]

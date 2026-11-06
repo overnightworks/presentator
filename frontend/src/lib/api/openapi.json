@@ -1283,7 +1283,7 @@
         "type": "object"
       },
       "Role": {
-        "description": "An instance has only these two roles (ADR 0011).",
+        "description": "An instance has only these two roles.",
         "enum": [
           "admin",
           "user"

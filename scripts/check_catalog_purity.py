@@ -1,9 +1,8 @@
 """Catalog purity: no Svelte page carries a literal, user-facing string.
 
-Owner: [ADR 0012](../docs/decisions/0012-themes-and-language.md), "Language is
-an adapter", and [ADR 0021](../docs/decisions/0021-the-lobby-is-a-sveltekit-app.md).
+Owner: the catalog rule in `docs/reference/lobby-settings-and-appearance.md`.
 Every user-facing word on a lobby page must come from the message catalog;
-typing a sentence into a page is the retrofit ADR 0012 exists to avoid. This
+typing a sentence into a page would make a second language a code change. This
 script is a CI gate, not a package layer.
 
 The rule is narrow and mechanical: it flags a literal (non-catalog) piece of

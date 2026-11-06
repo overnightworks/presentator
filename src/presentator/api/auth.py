@@ -131,7 +131,7 @@ _PUBLIC_RULES: Final = (
 )
 # The lobby app's shell answers a page load on any lobby address no route
 # claims, but never on these: a missing asset, API or server route stays the
-# framework's 404 instead of becoming the app (ADR 0021).
+# framework's 404 instead of becoming the app.
 _NEVER_THE_SHELL: Final = PathRules(
     exact=frozenset({START_SIGN_IN_PATH, LOGOUT_PATH, HEALTH_PATH, _SETUP}),
     prefixes=(
@@ -165,7 +165,7 @@ LOGIN_REDIRECT: Final = LOBBY_SIGN_IN.login_redirect
 
 
 # SvelteKit writes its accessibility announcer with this one inline style
-# attribute, which `style-src 'self'` refuses; ADR 0021 admits exactly it by
+# attribute, which `style-src 'self'` refuses; the policy admits exactly it by
 # its hash under 'unsafe-hashes', since hiding it by a build step would patch
 # the framework. It is the sha256 of the attribute's value in @sveltejs/kit
 # 3.1.0's runtime/components/root.svelte, so a kit update that changes the
@@ -322,7 +322,7 @@ def _install_middleware(
 
     Every answer, including the gate's redirect and a refusal, carries the
     security headers. The gate's store calls commit on their own and `touch` is
-    one update-only statement (ADR 0003), so the gate's admission takes no lock.
+    one update-only statement, so the gate's admission takes no lock.
     The admin prefix, when it is served, takes a bearer token and no cookie.
     While the admin prefix is served, `/api/` takes a person's token as that
     person; a request without a token is decided by the session cookie.

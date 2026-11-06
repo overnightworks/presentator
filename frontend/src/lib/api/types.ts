@@ -748,7 +748,7 @@ export interface components {
         };
         /**
          * Role
-         * @description An instance has only these two roles (ADR 0011).
+         * @description An instance has only these two roles.
          * @enum {string}
          */
         Role: "admin" | "user";

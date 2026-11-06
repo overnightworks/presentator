@@ -81,7 +81,7 @@ WORKDIR /app/slidev
 FROM toolchain AS instance
 USER root
 
-# git mirrors a deck source and ssh reaches a private one (ADR 0010). Their
+# git mirrors a deck source and ssh reaches a private one. Their
 # versions are the ones this base image's archive carries: Debian keeps no
 # older build to fall back to, so a pinned version is a build that breaks the
 # day the archive moves, and the digest above is what makes the layer

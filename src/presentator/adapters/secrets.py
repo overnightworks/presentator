@@ -1,11 +1,11 @@
 """The one place this instance derives purpose-scoped keys from its own secret.
 
-Every parameter of the row's own encryption stands here and nowhere else
-(ADR 0013), so no caller picks a mode, a nonce or a key length; a caller hands
-in a secret and gets the bytes back, or hands in bytes and gets the secret
-back. A signature that never reaches disk, such as a Check-connection
-fingerprint's, still derives its key the same way: one instance secret, one
-purpose label apiece, so two purposes never share bytes.
+Every parameter of the row's own encryption stands here and nowhere else, so no
+caller picks a mode, a nonce or a key length; a caller hands in a secret and gets
+the bytes back, or hands in bytes and gets the secret back. A signature that
+never reaches disk, such as a Check-connection fingerprint's, still derives its
+key the same way: one instance secret, one purpose label apiece, so two purposes
+never share bytes.
 """
 
 import secrets
@@ -37,7 +37,7 @@ _KEY_LENGTH: Final = 32
 # The one comment every deploy key this instance mints carries, so the far
 # end's list of registered keys names which server it came from.
 _DEPLOY_KEY_COMMENT: Final = "presentator"
-# ADR 0013: a webhook secret is 32 random bytes, stored as its SHA-256 only.
+# A webhook secret is 32 random bytes, stored as its SHA-256 only.
 _WEBHOOK_SECRET_BYTES: Final = 32
 
 
@@ -50,7 +50,7 @@ class DeployKeyPair:
 
 
 def generate_deploy_key() -> DeployKeyPair:
-    """A new ed25519 deploy key (ADR 0013): an OpenSSH private and public half."""
+    """A new ed25519 deploy key: an OpenSSH private and public half."""
     private = Ed25519PrivateKey.generate()
     private_pem = private.private_bytes(
         encoding=Encoding.PEM,
@@ -140,5 +140,5 @@ class TokenWebhookSecrets:
     """Draws each webhook secret from the operating system's randomness."""
 
     def new_secret(self) -> str:
-        """A new URL-safe secret of 32 random bytes (ADR 0013)."""
+        """A new URL-safe secret of 32 random bytes."""
         return secrets.token_urlsafe(_WEBHOOK_SECRET_BYTES)

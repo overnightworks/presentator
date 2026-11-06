@@ -1,8 +1,8 @@
 """Where decks come from and where their sources are kept: git, TOML, and SQLite.
 
-`gitmirror` (ADR 0010) owns talking to the remote; this module translates
+`gitmirror` owns talking to the remote; this module translates
 between its vocabulary and the product's. It holds the source tables and their
-stores, and creates the deck table's schema (ADR 0006); the deck table's store
+stores, and creates the deck table's schema; the deck table's store
 is in `deck_store.py`.
 """
 
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS sources (
     owner_id TEXT NOT NULL REFERENCES users(id),
     ssh_public_key TEXT
 );
--- One admin's own unbound deploy key (ADR 0010): never a source, swept once a
+-- One admin's own unbound deploy key: never a source, swept once a
 -- day old, never read by anyone who did not mint it.
 CREATE TABLE IF NOT EXISTS source_key_drafts (
     id TEXT PRIMARY KEY,
