@@ -186,7 +186,6 @@ def test_a_sign_in_that_stores_the_id_token_leaks_it_to_neither_page_nor_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """Stored sign-in."""
     answer = scene.sign_in()
 
     (stored,) = scene.stored_id_tokens()
@@ -201,7 +200,6 @@ def test_a_store_failure_holding_the_id_token_leaks_it_to_no_error_and_no_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """Store failure."""
     with closing(sqlite3.connect(scene.database)) as connection:
         connection.execute("DROP TABLE sessions")
 
@@ -221,7 +219,6 @@ def test_a_refused_sign_in_leaks_the_id_token_to_neither_page_nor_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """Refused sign-in."""
     scene.issuer.issue_refresh_token(_MARKER + "é")
 
     answer = scene.sign_in()
@@ -253,7 +250,6 @@ def test_a_refused_logout_leaks_the_id_token_to_neither_page_nor_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """Refused logout."""
     scene.sign_in()
 
     refused = scene.lobby.client.post(
