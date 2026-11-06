@@ -19,7 +19,6 @@ does is listed in [docs/README.md](docs/README.md).
 | Why this tool exists and its latency targets | [docs/VISION.md](docs/VISION.md) |
 | What the instance does, exactly: settings, sign-in, sources, decks, builds | [docs/README.md](docs/README.md) |
 | How it is built | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| How a change is proven | [docs/TESTING.md](docs/TESTING.md) |
 | Reusable agent policy | [AGENTS.md](AGENTS.md); [CLAUDE.md](CLAUDE.md) only loads it for Claude |
 | Local speech process | [speech/README.md](speech/README.md) |
 
@@ -34,6 +33,5 @@ configures the Python ones (`ruff`, `pyright`, `vulture`,
 `pytest`, plus `scripts/check_catalog_purity.py`), `slidev/package.json` the Slidev ones.
 The quality gate's `import-contract` rule checks the import contracts in
 `pyproject.toml`; run it locally with `quality hygiene .`.
-Which layer's test is the proof, and how to target a local run, is
-[docs/TESTING.md](docs/TESTING.md); what `main` requires is
-[docs/reference/ci-and-branch-protection.md](docs/reference/ci-and-branch-protection.md).
+Which layer's test is the proof is in the proof strategy of
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#5-crosscutting-concepts).

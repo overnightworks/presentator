@@ -15,7 +15,6 @@ this map and an owner disagree, the owner is right.
 | How is it built, and what does the design rest on? | Architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Why was it built this way? | Decisions | Records indexed by [`decisions/README.md`](decisions/README.md) |
 | How do I run, change or repair this installation? | Runbooks | the documents under [Runbooks](#runbooks) |
-| How is a change proven? | Testing | [`TESTING.md`](TESTING.md) |
 
 Agent policy lives in [`AGENTS.md`](../AGENTS.md) at the repository root, not
 here. The human entry point is [`README.md`](../README.md).
@@ -43,8 +42,7 @@ In [`reference/`](reference/): [configuration](reference/configuration.md),
 [lobby settings and appearance](reference/lobby-settings-and-appearance.md),
 [sources](reference/sources.md), [decks](reference/decks.md),
 [builds](reference/builds.md),
-[co-presenter and voice](reference/co-presenter-and-voice.md),
-[CI and branch protection](reference/ci-and-branch-protection.md).
+[co-presenter and voice](reference/co-presenter-and-voice.md).
 
 ## What this map does not do
 
