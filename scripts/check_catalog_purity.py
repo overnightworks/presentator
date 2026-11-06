@@ -27,9 +27,10 @@ positions and attributes are flagged, on an element and on a component alike.
 A kit component's built-in words (appkit's `SignInPage` without `words`) ship
 inside the kit's package, which this scan never reads; presentator hands its
 catalog's words to the kit, and what a page hands such a component is held like
-any other markup. Named gap: a literal inside a larger expression (`{ok ? 'Saved' :
-x}`) is not followed, because telling a shown string from a class name or a
-key in JavaScript needs a JavaScript parser this check does not carry.
+any other markup. Named gap: a literal inside a larger expression
+(`{ok ? 'Saved' : x}`) is not followed, because telling a shown string from a
+class name or a key in JavaScript needs a JavaScript parser this check does
+not carry.
 
 Script and style bodies are excluded from the text-node scan: a `<script>` or
 `<style>` element's content is code, not something a person reads as prose,
