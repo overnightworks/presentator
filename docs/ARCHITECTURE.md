@@ -89,7 +89,7 @@ closed to everyone but the web, and that backup skips `staged-*` by name. Both
 hosts answer `GET /health` with a fixed 200 and no session, store read or cookie
 (`api/health.py`); the port opens only after the database is migrated and, under
 the worker runner, the worker answers, so an answer means it serves. The request
-must name a served host, as the check, edge and a direct run do.
+must name a served host: the container check and edge do, a direct run must.
 
 ## 5. Crosscutting Concepts
 
@@ -149,7 +149,7 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
   beside the credential it must not reach.
 - One process writes the database: a second would need a second write lock over
   the one SQLite file, and the identity lock relies on one writer.
-- The plain `http` hop to the model gateway is safe because
+- The plain `http` hop to the model gateway is safe only because
   `hal_agent_presentator` has no host address or published port; hal decides
   whom the gateway admits.
 - Back-channel logout comes from inside, not through the trusted proxy, so its
