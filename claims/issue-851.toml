@@ -1,8 +1,0 @@
-claim_id = "ef7495d6a7184a299dcd58fe01f37551"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "4c767c421db3261ddf30e202b6645ca20256a27f"
-branch = "claude/issue-851-build-presentator-s-release-image-with-q"
-scope = [".github/workflows/ci.yml", ".github/workflows/release.yml", "Dockerfile", "docs/runbooks/start-an-instance-in-a-container.md"]
-opened_commit = "4620462295e5eb82f7c3c1bf5d6ebf15c415f8a9"
-whole_reason = "The release workflow, the numeric user it needs, the CI job that pins that user and the runbook that names the tag change together."
