@@ -10,7 +10,7 @@ ownership, picture ownership, or how `main` is protected.
 ## Which layer proves what
 
 A test sits at the layer that owns the behaviour
-([architecture](ARCHITECTURE.md#2-building-blocks)). A lower layer does not stand
+([architecture](ARCHITECTURE.md#2-building-block-view)). A lower layer does not stand
 in for a higher one.
 
 | Layer | Proves | How |

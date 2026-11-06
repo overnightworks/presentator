@@ -10,8 +10,7 @@ socket the instance holds today, or on the worker's container.
   [#243](https://github.com/overnightworks/presentator/issues/243) (design B)
   and the slice [#431](https://github.com/overnightworks/presentator/issues/431)
 - Neighbours: [ADR 0014](0014-toolchain-owns-build-dependencies.md) owns what
-  the toolchain installs; [trust boundaries](../explanation/trust-boundaries.md)
-  owns why a deck is code
+  the toolchain installs
 
 ## Context
 

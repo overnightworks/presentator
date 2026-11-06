@@ -4,7 +4,7 @@ Reader: a developer on a machine whose decks are all their own.
 
 A deck is code, so an instance normally builds every deck in the sealed build
 worker and refuses to start where the worker does not answer
-([trust boundaries](../explanation/trust-boundaries.md)). A run from a checkout
+([constraints and reasons](../ARCHITECTURE.md#6-constraints-and-reasons)). A run from a checkout
 is the one place that says otherwise: `PRESENTATOR_BUILD_RUNNER=host` executes
 a deck's Vue components as the server process, with its rights over every file
 and the network. `compose.yaml` never sets it. Do not use it for a repository

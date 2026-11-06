@@ -139,7 +139,7 @@ def test_the_instance_answers_the_backchannel_under_the_host_of_its_public_origi
 ):
     """Logout: the identity provider reaches the lobby by Host.
 
-    Owner: docs/explanation/trust-boundaries.md
+    Owner: docs/ARCHITECTURE.md
     """
     compose = _parsed_compose()
     instance = compose["services"]["presentator"]
