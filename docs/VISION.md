@@ -8,21 +8,18 @@ technical choice; those live in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 The operator gives a talk from his company laptop with nothing but a browser.
 The Slidev deck lives on his home server. Per talk he can switch on an AI
-co-presenter — Claude, Codex, or Grok, through the instance host's own
-subscription — which speaks the slides with a streamed voice, navigates on its
-own, listens to the audience, and answers their questions.
+co-presenter — a model behind the operator's model gateway — which speaks the
+slides with a streamed voice, navigates on its own, listens to the audience,
+and answers their questions.
 
-Everything works without the AI too. A static build plus a PDF export survives
-a dead tunnel.
+Everything works without the AI too. The PDF of the last good build always
+downloads.
 
 The tool is an instance with accounts rather than a program for one person: the
 Keycloak groups `/apps/presentator` and `/apps/presentator/admin` govern who
-may enter and who is admin
-([ADR 0018](decisions/0018-keycloak-replaces-own-accounts.md)); decks and
-sources have owners, and someone else can host their own instance
-([ADR 0011](decisions/0011-instance-users.md)). How it looks
-and which language it speaks are configuration, not code
-([ADR 0012](decisions/0012-themes-and-language.md)).
+may enter and who is admin; decks and sources have owners, and someone else
+can host their own instance. How it looks and which language it speaks are
+configuration, not code.
 
 ## How the operator will notice it exists
 
@@ -32,6 +29,6 @@ laptop, presses start, and Claude presents.
 ## Latency targets
 
 - First audio after a slide change: under 1 s on a prefetch hit; a jump and a
-  cold start are budgeted exceptions ([ADR 0002](decisions/0002-server-owned-run.md)).
+  cold start are budgeted exceptions.
 - First audio of an answer: under 3 s.
 - Partial speech-to-text transcript: under 0.5 s.
