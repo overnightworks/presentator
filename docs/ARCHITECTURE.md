@@ -84,7 +84,7 @@ host and tells them apart by the `Host` header (`served_by_host` in
 Docker's default seccomp and AppArmor profiles in force and the image's glibc is
 2.36 or later, because the controller reaches `pidfd_open` through ctypes. See
 [start an instance](runbooks/start-an-instance-in-a-container.md) and
-[configuration](reference/configuration.md). Edge's backup of the volume runs as
+[configuration](configuration.md). Edge's backup of the volume runs as
 another user, so build runs are readable by others; a `staged-<step>` directory
 is closed to everyone but the web, and that backup skips `staged-*` by name.
 

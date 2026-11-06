@@ -21,7 +21,7 @@ _FOUR_SETTINGS = tuple(_FIELD_OF)
 def test_the_four_agent_values_start_the_instance_and_read_no_key(
     environment: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """C1: the key file is read per question, so an absent one starts."""
+    """The key file is read per question, so an absent one starts."""
     environment.setenv(
         "PRESENTATOR_AGENT__GATEWAY__KEY_FILE", str(tmp_path / "not-written-yet")
     )
@@ -36,7 +36,7 @@ def test_the_four_agent_values_start_the_instance_and_read_no_key(
 def test_a_missing_agent_value_refuses_the_start_naming_the_field(
     environment: pytest.MonkeyPatch, variable: str, field: str
 ) -> None:
-    """C1: none of the four has a default."""
+    """CF5: none of the four has a default."""
     environment.delenv(variable)
 
     with pytest.raises(ConfigurationError, match=re.escape(field)):
@@ -78,7 +78,7 @@ def test_a_missing_agent_value_refuses_the_start_naming_the_field(
 def test_a_bad_agent_value_refuses_the_start_without_echoing_it(
     environment: pytest.MonkeyPatch, variable: str, value: str, field: str
 ) -> None:
-    """C1: the field is named and the value is not quoted."""
+    """CF5 for the backend cases: a bad agent value names the field, not the value."""
     environment.setenv(variable, value)
 
     with pytest.raises(ConfigurationError, match=re.escape(field)) as refused:
@@ -90,7 +90,7 @@ def test_a_bad_agent_value_refuses_the_start_without_echoing_it(
 def test_a_dot_env_with_the_four_keys_starts_the_instance(
     environment: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """C1b: the four keys come from the file, not from the environment."""
+    """The four keys come from the file, not from the environment."""
     lines = [f"{variable}={os.environ[variable]}" for variable in _FOUR_SETTINGS]
     for variable in _FOUR_SETTINGS:
         environment.delenv(variable)
