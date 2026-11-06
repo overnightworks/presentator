@@ -1,8 +1,0 @@
-claim_id = "6286b760e60b48398201ce21d5d82e07"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "1374606acba8825de5ae2418a557719349e8fc1c"
-branch = "claude/issue-820-presentator-drops-a-one-off-sonar-workfl"
-scope = [".github/workflows/sonar-bootstrap.yml", "docs/README.md", "docs/reference/ci-and-branch-protection.md", "docs/runbooks/bootstrap-sonarcloud.md", "frontend/e2e/coverage.ts", "frontend/e2e/person.ts", "frontend/e2e/scenario.ts", "frontend/e2e/sources.ts", "frontend/src/lib/api/account.ts", "frontend/src/lib/api/decks.ts", "frontend/src/lib/api/settings.ts", "frontend/src/lib/source.ts", "sonar-project.properties"]
-opened_commit = "fdd238b962328a06b13ab21bd9f93f67628b53b8"
-whole_reason = "Three leftovers of one audit, each a few lines: one lane removes them together, as one review and one CI run."
