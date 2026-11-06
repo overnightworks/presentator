@@ -27,10 +27,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          enable-cache: true
-          version: "0.10.9"
+        uses: $/.github/actions/setup-uv
 
       - name: Verify the dependency lock
         run: uv lock --check
@@ -67,10 +64,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          enable-cache: true
-          version: "0.10.9"
+        uses: $/.github/actions/setup-uv
 
       - name: Verify the dependency lock
         run: uv lock --check
@@ -105,13 +99,11 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        uses: $/.github/actions/setup-uv
         with:
-          enable-cache: true
           cache-dependency-glob: |
             speech/uv.lock
             speech/providers/chatterbox/uv.lock
-          version: "0.10.9"
 
       - name: Verify the dependency lock
         run: uv lock --check
@@ -142,13 +134,11 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        uses: $/.github/actions/setup-uv
         with:
-          enable-cache: true
           cache-dependency-glob: |
             speech/uv.lock
             speech/providers/chatterbox/uv.lock
-          version: "0.10.9"
 
       - name: Verify the dependency lock
         run: uv lock --check
@@ -182,11 +172,9 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        uses: $/.github/actions/setup-uv
         with:
-          enable-cache: true
           cache-dependency-glob: speech/providers/qwen/uv.lock
-          version: "0.10.9"
 
       - name: Verify the dependency lock
         run: uv lock --check
@@ -220,11 +208,9 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        uses: $/.github/actions/setup-uv
         with:
-          enable-cache: true
           cache-dependency-glob: speech/providers/voxcpm/uv.lock
-          version: "0.10.9"
 
       - name: Verify the dependency lock
         run: uv lock --check
@@ -257,11 +243,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        uses: $/.github/actions/setup-uv
         with:
-          enable-cache: true
           cache-dependency-glob: speech/providers/magpie/uv.lock
-          version: "0.10.9"
       - name: Verify the dependency lock
         run: uv lock --check
       - name: Install locked dependencies
@@ -312,10 +296,7 @@ jobs:
       # the production security policy through this Python environment, so they
       # need this instance's own copy too — never a second, hand-copied value of it.
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          enable-cache: true
-          version: "0.10.9"
+        uses: $/.github/actions/setup-uv
 
       - name: Install locked Python dependencies
         working-directory: .
@@ -393,10 +374,7 @@ jobs:
       # serves the build from the lobby itself, so both need this instance's
       # Python environment.
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          enable-cache: true
-          version: "0.10.9"
+        uses: $/.github/actions/setup-uv
 
       - name: Install locked Python dependencies
         working-directory: .
@@ -564,10 +542,7 @@ jobs:
           (umask 0133 && printf '%s\n' "$gateway_key" > "$HOME/.secrets/litellm/apps/presentator")
 
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          enable-cache: true
-          version: "0.10.9"
+        uses: $/.github/actions/setup-uv
 
       - name: Install the probe's tools
         run: |

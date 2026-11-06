@@ -1,7 +1,10 @@
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: /
+    # `directories` accepts globs, so the repository's composite actions are read too
+    directories:
+      - /
+      - /.github/actions/*
     schedule:
       interval: weekly
     groups:
