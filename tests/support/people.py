@@ -22,13 +22,6 @@ def seed_user(database: Path, person: User) -> None:
         )
 
 
-def write_password_schema(database: Path) -> None:
-    with closing(sqlite3.connect(database)) as connection:
-        connection.execute("CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT)")
-        connection.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
-        connection.commit()
-
-
 def copy_of_a_crashed_database(
     destination: Path,
     committed_only_in_the_log: Callable[[Path], None],
