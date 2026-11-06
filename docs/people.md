@@ -110,6 +110,6 @@ part; a secret typed into a path or query is exported as typed.
 ## Known gap: builds that outlive an erasure
 
 The erasure removes every run its decks deliver from. Superseded builds and
-leftovers go at the end of the next refresh pass ([builds](reference/builds.md)),
+leftovers go at the end of the next refresh pass ([decks](decks.md), DK14),
 so a leftover can outlive an erasure by one pass, or longer while that pass
 refuses.

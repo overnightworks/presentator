@@ -151,6 +151,7 @@ _REQUESTS: Final = [
 ]
 
 
+# DK7
 @pytest.mark.parametrize(("origin", "method", "tail", "headers"), _REQUESTS)
 def test_a_deck_of_another_account_answers_like_an_unknown_slug(
     tmp_path: Path,
@@ -220,6 +221,7 @@ def test_the_owner_receives_every_shape_of_request_for_the_own_deck(
     assert admins.as_a.get("/deck/a-deck/pdf").status_code == HTTPStatus.OK
 
 
+# DK6
 def test_each_admin_lists_exactly_the_own_deck(tmp_path: Path) -> None:
     admins = _two_admins(tmp_path)
 
@@ -227,6 +229,7 @@ def test_each_admin_lists_exactly_the_own_deck(tmp_path: Path) -> None:
     assert listed_titles(admins.as_b) == ["Title of b-deck"]
 
 
+# DK8
 def test_an_admin_with_no_deck_gets_an_empty_list_that_names_no_address() -> None:
     store = _store_of_built_decks()
     del store.kept["a-deck"]
@@ -247,6 +250,7 @@ _AT_THE_LOBBY_OR_THE_TALK_HOST: Final = [
 ]
 
 
+# DK9
 def test_a_member_without_the_admin_role_has_no_deck_of_another_account(
     tmp_path: Path,
 ) -> None:
@@ -263,6 +267,7 @@ def test_a_member_without_the_admin_role_has_no_deck_of_another_account(
     _alike(member.get("/api/decks/b-deck"), member.get(f"/api/decks/{_THE_UNKNOWN}"))
 
 
+# DK11
 def test_the_owner_without_the_admin_role_has_the_own_deck_but_no_sources(
     tmp_path: Path,
 ) -> None:
@@ -284,6 +289,7 @@ def test_the_owner_without_the_admin_role_has_the_own_deck_but_no_sources(
     )
 
 
+# DK10
 def test_a_deck_of_a_removed_source_answers_like_an_unknown_slug_for_its_owner(
     tmp_path: Path,
 ) -> None:

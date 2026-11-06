@@ -66,6 +66,7 @@ def _pdf(decks: Decks, viewer: str) -> Path | None:
     return decks.exported_pdf("kundenfeedback", viewer=viewer)
 
 
+# DK6
 @pytest.mark.parametrize("read", [_page, _talk, _pdf], ids=["page", "talk", "pdf"])
 def test_a_deck_is_read_by_its_owner_and_by_nobody_else(
     read: Callable[[Decks, str], DeckPage | Path | None],

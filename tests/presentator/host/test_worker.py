@@ -217,6 +217,7 @@ def test_sealed_container_passes_the_self_check() -> None:
     assert worker.first_failing_predicate(sealed_snapshot()) is None
 
 
+# DK4
 @pytest.mark.parametrize(("change", "refused"), FAILURES.values(), ids=FAILURES.keys())
 def test_self_check_names_the_failing_predicate(
     change: Callable[[Snapshot], Snapshot], refused: Predicate
