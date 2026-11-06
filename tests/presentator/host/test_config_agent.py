@@ -100,13 +100,13 @@ def test_a_dot_env_with_the_four_keys_starts_the_instance(
 
 
 @pytest.mark.usefixtures("environment")
-def test_a_leftover_agent_service_key_in_a_dot_env_refuses_the_start(
+def test_an_unknown_presentator_key_in_a_dot_env_refuses_the_start(
     tmp_path: Path,
 ) -> None:
-    """C1b: the retired name is an unknown key like any other."""
+    """A `PRESENTATOR_` key no setting owns is refused, not ignored."""
     (tmp_path / ".env").write_text(
-        "PRESENTATOR_AGENT_SERVICE=http://agent-service:8080\n", encoding="utf-8"
+        "PRESENTATOR_UNKNOWN_KEY_FOR_TEST=1\n", encoding="utf-8"
     )
 
-    with pytest.raises(ConfigurationError, match="agent_service"):
+    with pytest.raises(ConfigurationError, match="unknown_key_for_test"):
         load_settings()

@@ -2,7 +2,7 @@
 
 Audience: humans and agents who need a model call or a logged-in user.
 
-- Status: ACCEPTED 2026-09-06 — amended 2026-09-07, 2026-09-08, 2026-10-04, 2026-10-20, 2026-10-21, 2026-10-23 and 2026-10-26, see below
+- Status: ACCEPTED 2026-09-06 — amended 2026-09-07, 2026-09-08, 2026-10-04, 2026-10-20, 2026-10-21, 2026-10-23, 2026-10-26, 2026-10-28, 2026-10-29, 2026-10-30 and 2026-11-04, see below; `agent_providers` is retired (agent-runtime#697) and the model call is the client's gateway backend (amendment 2026-11-04)
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06 recorded on
   [#2](https://github.com/overnightworks/presentator/issues/2)
