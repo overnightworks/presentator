@@ -1,0 +1,8 @@
+claim_id = "42d958a95e084083ad3f84f827ab291f"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "2e4ffa70e2e15dc3098a580bfd95afd2d2f4e008"
+branch = "claude/issue-843-the-architecture-overview-names-what-is"
+scope = ["AGENTS.md", "README.md", "docs/ARCHITECTURE.md", "docs/README.md", "docs/TESTING.md", "docs/reference/ci-and-branch-protection.md", "pyproject.toml"]
+opened_commit = "8cfa5e71f280cad9e20fb0ced22756f2df7895a3"
+whole_reason = "Deleting TESTING and the CI reference and moving their facts into ARCHITECTURE, AGENTS and pyproject must land together, or facts are lost or links go dead."
