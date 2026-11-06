@@ -64,7 +64,7 @@ replaceable if this decision's assumption ever stops holding.
   ([ADR 0008](0008-lobby-server-rendered.md)), and a TURN server for WebRTC
   ([ADR 0007](0007-browser-client-behind-tunnel.md)).
 
-### Amendment 2026-11-06 — the store carries no migration code
+### Amendment 2026-11-06 — the store no longer adds columns or reconciles failure reasons
 
 `create_tables` no longer adds columns in place or reconciles failure reasons, because every operated file is born with them ([#508](https://github.com/overnightworks/presentator/issues/508)). The Consequences bullet on adding a column in place records the earlier state; the dropping of the instance theme column stays until [#823](https://github.com/overnightworks/presentator/issues/823), so the bullet on two-release column removal still holds. Authority: [#819](https://github.com/overnightworks/presentator/issues/819), the fresh-volume ruling on #508 and the operator's ruling on #818.
 
