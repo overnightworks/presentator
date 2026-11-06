@@ -303,6 +303,8 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      # No --with-deps: the runner image ships the browsers' libraries,
+      # and apt on the runner's mirror can stall.
       - name: Install Chromium
         run: pnpm exec playwright install chromium
 
@@ -382,6 +384,8 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      # No --with-deps: the runner image ships the browsers' libraries,
+      # and apt on the runner's mirror can stall.
       - name: Install Chromium and Firefox
         run: pnpm exec playwright install chromium firefox
 
