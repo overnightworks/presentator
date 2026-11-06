@@ -1,8 +1,0 @@
-claim_id = "191eb92ab5ad4f5182cf7b8faa7542e8"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "330804de26a4d29c2823a8475cbfdbb05c44e4ec"
-branch = "claude/issue-795-every-legal-row-lists-impressum-datensch"
-scope = ["docs/mockups/README.md", "docs/mockups/m0-lobby-sheet.png", "docs/mockups/m0-lobby.html", "docs/mockups/m0-lobby/login-dark.png", "docs/mockups/m0-lobby/login-failed-dark.png", "docs/mockups/m0-lobby/login-failed.png", "docs/mockups/m0-lobby/login.png", "docs/mockups/m0-lobby/no-access-dark.png", "docs/mockups/m0-lobby/no-access.png", "docs/mockups/m0-lobby/person-menu-dark.png", "docs/mockups/m0-lobby/person-menu.png", "docs/reference/sign-in-and-session.md", "frontend/e2e/lobby.spec.ts", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "frontend/src/lib/legal.ts", "quality/baseline.toml", "quality/config.toml", "src/presentator/adapters/catalogs/en.po", "src/presentator/contracts/text.py", "tests/support/vulture_allowlist.py"]
-opened_commit = "31806ff2d18cbb26a4d65a66b26473ef94406aa3"
-whole_reason = "The word, the link, the generated client and its declared baseline land together: the link cannot name a word the contract does not serve, and the baseline cannot lag the client."
