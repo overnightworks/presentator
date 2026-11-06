@@ -1,0 +1,7 @@
+claim_id = "7a8d6484494e4887a71b21930802b19e"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "a086b667004656219e5abea13abf045974922b76"
+branch = "claude/issue-866-pin-aco-v8-0-0-in-the-pr-check-workflow"
+scope = [".github/workflows/pr-check.yml"]
+opened_commit = "525d0dca3ffa086f729a01a95f8575ea640d0176"
