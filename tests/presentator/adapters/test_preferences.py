@@ -1,7 +1,10 @@
 """The settings and preference rows against a temporary SQLite file."""
 
+import sqlite3
+from contextlib import closing
 from http import HTTPStatus
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -16,6 +19,9 @@ from presentator.contracts.preferences import (
     InstanceSettings,
     PersonPreferences,
     ThemeChoice,
+)
+from tests.presentator.adapters.support.person_instance_support import (
+    a_file_where_people_chose_a_language,
 )
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -102,6 +108,127 @@ def test_choosing_again_replaces_what_that_person_chose(database: Path) -> None:
     assert store.read(_PERSON) == PersonPreferences(theme=ThemeChoice.FOLLOW_SYSTEM)
 
 
+_WHO_CHOSE_A_LANGUAGE = "id-of-felix"
+_WHO_CHOSE_ONLY_A_LANGUAGE = "id-of-anna"
+_WHO_CHOSE_ONLY_A_THEME = "id-of-berta"
+_WHO_CHOSE_TO_FOLLOW = "id-of-carl"
+_WHO_NEVER_CHOSE = "id-of-dora"
+_THE_INSTANCE_BEFORE = ("Heim", "en", ThemeChoice.DARK.value)
+_BEFORE_THE_DROP = [
+    (_WHO_CHOSE_A_LANGUAGE, "de", ThemeChoice.DARK.value),
+    (_WHO_CHOSE_ONLY_A_LANGUAGE, "de", None),
+    (_WHO_CHOSE_ONLY_A_THEME, None, ThemeChoice.LIGHT.value),
+    (_WHO_CHOSE_TO_FOLLOW, None, ThemeChoice.FOLLOW_SYSTEM.value),
+]
+_THEMES_OF_EVERYONE = "SELECT user_id, theme FROM person_preferences ORDER BY user_id"
+_THE_INSTANCE_ROW = "SELECT * FROM instance_settings"
+_COLUMNS = "SELECT name FROM pragma_table_info('{table}')"
+
+
+def an_old_file(directory: Path) -> Path:
+    return a_file_where_people_chose_a_language(
+        directory, _BEFORE_THE_DROP, instance=_THE_INSTANCE_BEFORE
+    )
+
+
+def columns_of(database: Path, table: str) -> list[str]:
+    return [name for (name,) in everything_in(database, _COLUMNS.format(table=table))]
+
+
+def everything_in(database: Path, statement: str) -> list[tuple[Any, ...]]:
+    with closing(sqlite3.connect(database)) as connection, connection:
+        return connection.execute(statement).fetchall()
+
+
+def the_old_release_forgets_the_theme_of(database: Path, user_id: str) -> None:
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute(
+            "UPDATE person_preferences SET theme = NULL WHERE user_id = ?", (user_id,)
+        )
+
+
+def test_the_start_drops_the_personal_language_and_folds_only_the_missing_theme(
+    tmp_path: Path,
+) -> None:
+    database = an_old_file(tmp_path)
+
+    create_tables(database)
+
+    assert columns_of(database, "person_preferences") == ["user_id", "theme"]
+    assert everything_in(database, _THEMES_OF_EVERYONE) == [
+        (_WHO_CHOSE_ONLY_A_LANGUAGE, ThemeChoice.FOLLOW_SYSTEM.value),
+        (_WHO_CHOSE_ONLY_A_THEME, ThemeChoice.LIGHT.value),
+        (_WHO_CHOSE_TO_FOLLOW, ThemeChoice.FOLLOW_SYSTEM.value),
+        (_WHO_CHOSE_A_LANGUAGE, ThemeChoice.DARK.value),
+    ]
+
+
+def test_a_second_start_changes_nothing(tmp_path: Path) -> None:
+    database = an_old_file(tmp_path)
+    create_tables(database)
+    after_the_first = [
+        everything_in(database, "SELECT * FROM person_preferences"),
+        everything_in(database, _THE_INSTANCE_ROW),
+    ]
+
+    create_tables(database)
+
+    after_the_second = [
+        everything_in(database, "SELECT * FROM person_preferences"),
+        everything_in(database, _THE_INSTANCE_ROW),
+    ]
+    assert after_the_second == after_the_first
+    assert columns_of(database, "instance_settings") == ["id", "name", "language_tag"]
+
+
+def test_a_theme_the_release_before_wrote_as_nothing_is_folded_at_the_next_start(
+    tmp_path: Path,
+) -> None:
+    database = an_old_file(tmp_path)
+    create_tables(database)
+    the_old_release_forgets_the_theme_of(database, _WHO_CHOSE_ONLY_A_THEME)
+
+    create_tables(database)
+
+    themes = dict(everything_in(database, _THEMES_OF_EVERYONE))
+    assert themes[_WHO_CHOSE_ONLY_A_THEME] == ThemeChoice.FOLLOW_SYSTEM.value
+
+
+def test_the_start_drops_the_instance_theme_and_keeps_the_instance_words(
+    tmp_path: Path,
+) -> None:
+    database = an_old_file(tmp_path)
+
+    create_tables(database)
+
+    assert columns_of(database, "instance_settings") == ["id", "name", "language_tag"]
+    assert everything_in(database, _THE_INSTANCE_ROW) == [(1, "Heim", "en")]
+
+
+@pytest.mark.parametrize("table", ["person_preferences", "instance_settings"])
+def test_a_fresh_file_and_a_migrated_one_have_the_same_columns(
+    tmp_path: Path, table: str
+) -> None:
+    migrated = an_old_file(tmp_path)
+    create_tables(migrated)
+    fresh = tmp_path / "fresh.sqlite3"
+
+    create_tables(fresh)
+
+    assert columns_of(fresh, table) == columns_of(migrated, table)
+
+
+def test_a_save_over_the_instance_row_changes_its_words(tmp_path: Path) -> None:
+    database = an_old_file(tmp_path)
+    create_tables(database)
+    store = SqliteInstanceSettingsStore(database)
+    assert store.read() == InstanceSettings(name="Heim", language_tag="en")
+
+    store.write(InstanceSettings(name="Werkstatt", language_tag="de"))
+
+    assert store.read() == InstanceSettings(name="Werkstatt", language_tag="de")
+
+
 def test_the_first_save_without_a_row_inserts_it(tmp_path: Path) -> None:
     database = tmp_path / "fresh.sqlite3"
     create_tables(database)
@@ -113,44 +240,37 @@ def test_the_first_save_without_a_row_inserts_it(tmp_path: Path) -> None:
     assert store.read() == saved
 
 
-def test_everybody_reads_the_instances_words_and_their_own_theme(
+def test_everybody_reads_the_instances_words_and_their_own_theme_after_the_start(
     tmp_path: Path,
 ) -> None:
-    database = tmp_path / "fresh.sqlite3"
+    database = an_old_file(tmp_path)
     create_tables(database)
-    SqliteInstanceSettingsStore(database).write(
-        InstanceSettings(name="Heim", language_tag=ENGLISH.language_tag)
-    )
-    chosen = {
-        "felix": ThemeChoice.DARK,
-        "berta": ThemeChoice.LIGHT,
-        "carl": ThemeChoice.FOLLOW_SYSTEM,
-    }
-    people = SqlitePersonPreferencesStore(database)
-    for username, theme in chosen.items():
-        people.write(f"id-of-{username}", PersonPreferences(theme=theme))
     lobby = a_lobby_over(database)
+    sign_in_as = {
+        _WHO_CHOSE_A_LANGUAGE: ThemeChoice.DARK,
+        _WHO_CHOSE_ONLY_A_LANGUAGE: ThemeChoice.FOLLOW_SYSTEM,
+        _WHO_CHOSE_ONLY_A_THEME: ThemeChoice.LIGHT,
+        _WHO_CHOSE_TO_FOLLOW: ThemeChoice.FOLLOW_SYSTEM,
+        _WHO_NEVER_CHOSE: ThemeChoice.FOLLOW_SYSTEM,
+    }
 
     themes = {}
-    for username in [*chosen, "dora"]:
+    for user_id in sign_in_as:
         browser = lobby.another_browser()
-        browser.sign_in(username=username)
+        browser.sign_in(username=user_id.removeprefix("id-of-"))
         body = browser.client.get("/api/session").json()
-        themes[username] = ThemeChoice(body["theme"])
+        themes[user_id] = ThemeChoice(body["theme"])
         assert body["words"]["language_tag"] == ENGLISH.language_tag
 
-    assert themes == {**chosen, "dora": ThemeChoice.FOLLOW_SYSTEM}
+    assert themes == sign_in_as
     assert lobby.client.get("/api/session").json()["theme"] == (
         ThemeChoice.FOLLOW_SYSTEM.value
     )
 
 
-def test_an_admin_saves_the_settings_over_the_created_file(tmp_path: Path) -> None:
-    database = tmp_path / "fresh.sqlite3"
+def test_an_admin_saves_the_settings_over_the_migrated_file(tmp_path: Path) -> None:
+    database = an_old_file(tmp_path)
     create_tables(database)
-    SqliteInstanceSettingsStore(database).write(
-        InstanceSettings(name="Heim", language_tag="en")
-    )
     lobby = a_lobby_over(database)
     lobby.sign_in()
 
