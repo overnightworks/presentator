@@ -7,7 +7,7 @@ export type DeckView = components['schemas']['DeckView'];
 export type FailureView = components['schemas']['FailureView'];
 export type DeckState = components['schemas']['DeckState'];
 
-export const DECK_LIST_PATH = '/api/decks';
+const DECK_LIST_PATH = '/api/decks';
 
 export function readDecks(fetcher: typeof fetch, here: URL): Promise<DeckListView> {
 	return getJson<DeckListView>(fetcher, DECK_LIST_PATH, here);

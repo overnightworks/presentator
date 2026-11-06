@@ -43,5 +43,4 @@ token lacks the right to associate one and because a custom gate would buy
 nothing here: its coverage condition (90% of new code) is strictly weaker than
 this repository's own floor, and its other conditions are identical to the
 built-in gate's. The coverage floor and what meets it are owned by
-[TESTING.md](../TESTING.md). Setup and repair is
-[bootstrap SonarCloud](../runbooks/bootstrap-sonarcloud.md).
+[TESTING.md](../TESTING.md).

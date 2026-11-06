@@ -35,7 +35,6 @@ One task each, in [`runbooks/`](runbooks/).
   [call the fetch-now hook](runbooks/call-the-fetch-now-hook.md).
 - Decks: [prepare a talk for the build](runbooks/prepare-a-deck-for-the-build.md).
 - Speech: [run the speech service on the host](runbooks/run-the-speech-service-on-the-host.md).
-- Repository: [bootstrap SonarCloud](runbooks/bootstrap-sonarcloud.md).
 
 ## Reference
 
