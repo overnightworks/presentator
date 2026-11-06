@@ -302,7 +302,8 @@ def test_creating_the_tables_twice_leaves_the_people_as_they_were(
 
 def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_address(
     database: Path,
-) -> None:  # SI2, SI5
+) -> None:
+    """SI2, SI5: a fresh database stores no password, attempt or client address."""
     with closing(sqlite3.connect(database)) as connection, connection:
         user_columns = [
             column[1] for column in connection.execute("PRAGMA table_info(users)")
@@ -371,12 +372,13 @@ def test_a_file_this_version_started_is_completed_to_sessions_without_a_client_a
     ],
     ids=["before the sweep", "at the sweep", "after the sweep"],
 )
-def test_a_sweep_deletes_a_session_only_when_it_ended_before_the_sweep(  # SI5
+def test_a_sweep_deletes_a_session_only_when_it_ended_before_the_sweep(
     sessions: SqliteSessionRecordStore,
     expires_at: datetime,
     *,
     stays: bool,
 ) -> None:
+    """SI5: a sweep deletes a session only when it ended before the sweep."""
     session = open_session(
         sessions, "user-1", now=_NOW - SESSION_LIFETIME, expires_at=expires_at
     )
@@ -445,9 +447,10 @@ def occurrences_in_the_file(database: Path, text: str) -> int:
         return "\n".join(connection.iterdump()).count(text)
 
 
-def test_a_refresh_token_is_stored_in_the_row_and_read_back_as_a_secret(  # SI6
+def test_a_refresh_token_is_stored_in_the_row_and_read_back_as_a_secret(
     database: Path, sessions: SqliteSessionRecordStore
 ) -> None:
+    """SI6: a refresh token is stored in the row and read back as a secret."""
     created = open_session(sessions, "user-1", refresh_token=a_token())
 
     loaded = sessions.load(created.id)

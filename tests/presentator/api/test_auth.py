@@ -156,9 +156,8 @@ def test_a_seeded_session_opens_the_lobby(lobby: Lobby) -> None:
     assert signed_in_username(lobby.client) == USERNAME
 
 
-def test_an_ordinary_signed_in_answer_sets_no_cookie(
-    signed_in_lobby: Lobby,
-) -> None:  # SI4
+def test_an_ordinary_signed_in_answer_sets_no_cookie(signed_in_lobby: Lobby) -> None:
+    """SI4: an ordinary signed-in answer sets no cookie."""
     answer = signed_in_lobby.client.get("/")
 
     assert answer.headers.get_list("set-cookie") == []
@@ -197,10 +196,11 @@ def test_a_cookie_the_library_cannot_read_leads_to_the_login_without_a_store_rea
 
 
 @pytest.mark.parametrize("method", ["get", "post"])
-def test_there_is_no_first_start_page_to_set_up_an_admin(  # SI2
+def test_there_is_no_first_start_page_to_set_up_an_admin(
     signed_in_lobby: Lobby,
     method: str,
 ) -> None:
+    """SI2: there is no first start page to set up an admin."""
     answer = signed_in_lobby.client.request(method, "/setup")
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
@@ -216,7 +216,8 @@ def test_there_is_no_first_start_page_for_a_signed_out_reader_either(
     assert answer.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_a_password_posted_to_the_login_signs_nobody_in(lobby: Lobby) -> None:  # SI2
+def test_a_password_posted_to_the_login_signs_nobody_in(lobby: Lobby) -> None:
+    """SI2: a password posted to the login signs nobody in."""
     refused = lobby.client.post(
         "/login",
         data={"username": USERNAME, "password": "the words only this test types"},
@@ -263,9 +264,10 @@ def test_a_session_in_use_all_day_still_stands_at_the_cap(
     assert signed_in_lobby.client.get("/").status_code == HTTPStatus.OK
 
 
-def test_a_session_in_use_all_day_is_refused_and_not_renewed_just_past_the_cap(  # SI4
+def test_a_session_in_use_all_day_is_refused_and_not_renewed_just_past_the_cap(
     signed_in_lobby: Lobby,
 ) -> None:
+    """SI4: a session in use all day is refused and not renewed just past the cap."""
     use_every_quarter_hour_until(
         signed_in_lobby, SESSION_LIFETIME - timedelta(minutes=15)
     )

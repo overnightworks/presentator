@@ -163,9 +163,10 @@ def _untouched(world: World) -> None:
     assert world.transaction.log == []
 
 
-def test_a_valid_token_ends_every_session_of_its_subject_and_no_other(  # SI10
+def test_a_valid_token_ends_every_session_of_its_subject_and_no_other(
     world: World,
 ) -> None:
+    """SI10: a valid token ends every session of its subject and no other."""
     answer = world.logout_with(world.keycloak(), world.token())
 
     assert answer.status_code == HTTPStatus.OK
@@ -451,9 +452,10 @@ _NEIGHBOURS = [
 
 
 @pytest.mark.parametrize("path", _NEIGHBOURS)
-def test_no_neighbour_of_the_exact_path_is_exempt_or_public(  # SI11
+def test_no_neighbour_of_the_exact_path_is_exempt_or_public(
     world: World, path: str
 ) -> None:
+    """SI11: no neighbour of the exact path is exempt or public."""
     token = world.token()
     from_a_server = world.logout_with(world.keycloak(), token, path=path)
     from_the_lobbys_origin = world.keycloak().post(

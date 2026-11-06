@@ -140,9 +140,10 @@ def test_an_id_token_longer_than_a_cookie_could_hold_is_stored_whole(
         pytest.param(["/apps/presentator/admin"], "admin", id="admin group alone"),
     ],
 )
-def test_the_groups_the_issuer_names_decide_the_role_the_account_gets(  # SI1
+def test_the_groups_the_issuer_names_decide_the_role_the_account_gets(
     scene: Scene, groups: list[str], role: str
 ) -> None:
+    """SI1: the groups the issuer names decide the role the account gets."""
     scene.sign_in(groups=groups)
 
     account = scene.users.get("subject-1")
@@ -285,9 +286,10 @@ def test_every_refusal_redirects_to_the_login_failed_page(
 
 
 @pytest.mark.parametrize("drive", _NO_ACCESS)
-def test_a_person_outside_the_group_is_redirected_to_the_no_access_page(  # SI1
+def test_a_person_outside_the_group_is_redirected_to_the_no_access_page(
     scene: Scene, drive: Callable[[Scene], BrowserAnswer]
 ) -> None:
+    """SI1: a person outside the group is redirected to the no access page."""
     answer = drive(scene)
 
     assert answer.status_code == HTTPStatus.SEE_OTHER

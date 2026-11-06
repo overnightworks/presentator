@@ -40,9 +40,8 @@ def scene(tmp_path: Path, issued_id_tokens: list[str]) -> Scene:
     return a_scene(tmp_path, token_requests=recording)
 
 
-def test_the_sign_ins_refresh_token_is_stored_with_its_session(  # SI6
-    scene: Scene,
-) -> None:
+def test_the_sign_ins_refresh_token_is_stored_with_its_session(scene: Scene) -> None:
+    """SI6: the sign ins refresh token is stored with its session."""
     scene.issuer.issue_refresh_token(_MARKER)
 
     scene.sign_in()
