@@ -1,8 +1,0 @@
-claim_id = "c50324cbe03e45bb86858447fcf178e1"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "cc586f492cc5a5d81f77becb1b7d77422ffa312c"
-branch = "claude/issue-828-the-quality-gate-alone-checks-presentato"
-scope = [".github/workflows/ci.yml", "README.md", "docs/decisions/0001-enforced-layers.md", "pyproject.toml", "uv.lock"]
-opened_commit = "46b894903341e1ca5e4660cf4d7331dcb0b8015f"
-whole_reason = "One duplicate check: the step, the pin that serves only it, its lock entries and the two documents that name it leave together, or the docs or the lock lie."
