@@ -303,8 +303,10 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      # No --with-deps: the runner image ships the browsers' libraries,
+      # and apt on the runner's mirror can stall.
       - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install chromium
 
       # The overlay browser tests (through presenter-overlay-harness.ts) read
       # the production security policy through this Python environment, so they
@@ -382,8 +384,10 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      # No --with-deps: the runner image ships the browsers' libraries,
+      # and apt on the runner's mirror can stall.
       - name: Install Chromium and Firefox
-        run: pnpm exec playwright install --with-deps chromium firefox
+        run: pnpm exec playwright install chromium firefox
 
       # The OpenAPI document comes from the lobby's routes, and the drive
       # serves the build from the lobby itself, so both need this instance's
