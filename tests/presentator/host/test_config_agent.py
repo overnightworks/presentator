@@ -78,7 +78,7 @@ def test_a_missing_agent_value_refuses_the_start_naming_the_field(
 def test_a_bad_agent_value_refuses_the_start_without_echoing_it(
     environment: pytest.MonkeyPatch, variable: str, value: str, field: str
 ) -> None:
-    """CF5: a backend other than `litellm` refuses the start, unquoted."""
+    """CF5 for the backend cases: a bad agent value names the field, not the value."""
     environment.setenv(variable, value)
 
     with pytest.raises(ConfigurationError, match=re.escape(field)) as refused:
