@@ -7,8 +7,7 @@ delivered. How they are built is [builds](builds.md).
 
 A folder counts as a deck when it carries both `deck.toml` and `slides.md`. Its
 folder name is the slug and therefore its address, so changing `title` in the
-manifest changes no link. There is no upload and no editing
-([ADR 0005](../decisions/0005-deck-folder-and-slidev.md)). A deck belongs to
+manifest changes no link. There is no upload and no editing. A deck belongs to
 the account that owns the source it came from, and every deck names the source
 that carried it.
 
@@ -71,8 +70,7 @@ delivers was built from, and how long ago that build ran. Until a build has
 switched anything over, the commit shown is the one the source last carried
 under that folder. Beside the state, the page names the theme set this instance
 builds with, read from the toolchain project's own `package.json` and omitted
-rather than shown empty while that project cannot be read ([ADR
-0014](../decisions/0014-toolchain-owns-build-dependencies.md)).
+rather than shown empty while that project cannot be read.
 The same facts, with the instants of the build and of the attempt, are readable
 as JSON at `/api/decks/<folder>`; another person's deck and an unknown one
 answer the same bare 404 problem. A failed attempt carries its
@@ -125,10 +123,8 @@ away the PDF that already downloads.
   since gone from disk, answers a bare empty 404 with no templated page and no
   content type; on the lobby, an unknown deck is the deck page's own board and
   the PDF's 404 is the lobby app under 404.
-- The views stand behind the talk host's own session
-  ([ADR 0016](../decisions/0016-a-talk-host-signs-in-by-itself.md)), the deck
-  page and the PDF behind the lobby's
-  ([ADR 0007](../decisions/0007-browser-client-behind-tunnel.md)): a
+- The views stand behind the talk host's own session, the deck
+  page and the PDF behind the lobby's: a
   signed-out request answers the login redirect, never a file and never a hint
   that a folder exists, and a WebSocket upgrade into a talk is closed before
   anything is read. The address only chooses a row; the directory comes

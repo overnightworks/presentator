@@ -7,7 +7,7 @@ from presentator.contracts.text import DEFAULT_LANGUAGE_TAG, LobbyText
 
 
 class ThemeChoice(StrEnum):
-    """The three looks the picture's theme rows offer."""
+    """The three looks a person can choose: follow the system, light or dark."""
 
     FOLLOW_SYSTEM = "follow-system"
     LIGHT = "light"

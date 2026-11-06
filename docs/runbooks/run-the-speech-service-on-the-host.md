@@ -3,7 +3,7 @@
 Reader: the operator of the machine that holds the GPU.
 
 A deployed instance has no voice: the socket is not mounted, so speaking and
-hearing report "not yet available" ([ADR 0019](../decisions/0019-presentator-is-an-edge-app.md)).
+hearing report "not yet available".
 This runbook runs speech beside a checkout run only.
 
 The voice that answers beside a talk is the speech service (`speech/`), a host

@@ -36,8 +36,7 @@ The language is the instance's: everybody reads the default an admin sets in
 Settings. The theme is a person's own, set only in the person menu, and the
 instance has no default theme: a person who chose nothing reads `follow-system`,
 and the browser decides. "Follow system" writes the value `follow-system` on the page, which
-no theme rule matches
-([ADR 0012](../decisions/0012-themes-and-language.md)). A theme chosen in the
+no theme rule matches. A theme chosen in the
 menu paints at once, with no reload, and is written by one
 `PUT /api/account` with the theme alone, no `GET` first; if the write is
 refused the radio snaps back. The instance settings live in one SQLite row and
@@ -53,8 +52,7 @@ signed-in person, the theme alone; a person who chose nothing reads
 answers with what is now stored; on Settings a newly chosen language no
 catalog speaks is a 422 problem and nothing is written, and the language
 already stored is accepted back. The Settings read carries the language list
-(`tag` and the catalog's own `name`), so no page holds one of its own
-([ADR 0020](../decisions/0020-the-lobby-is-a-json-api.md)).
+(`tag` and the catalog's own `name`), so no page holds one of its own.
 
 ## Language
 
@@ -68,5 +66,5 @@ lobby hands appkit those words from the catalog, whole, through the session.
 
 The lobby's tokens, fonts and components come from appkit's npm tarball, pinned
 in `frontend/package.json`, and presentator fills only appkit's app slot with
-its teal ([ADR 0012](../decisions/0012-themes-and-language.md)). No stylesheet
+its teal. No stylesheet
 or script is vendored in this repository.

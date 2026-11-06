@@ -5,8 +5,7 @@ Reader: a deck author whose talk builds elsewhere but fails here.
 ## Before you start
 
 A deck folder carries no dependencies of its own; the toolchain project owns
-them ([ADR 0014](../decisions/0014-toolchain-owns-build-dependencies.md)). The
-deck's own page names the theme set this instance builds with.
+them. The deck's own page names the theme set this instance builds with.
 
 ## Steps
 
@@ -19,6 +18,9 @@ deck's own page names the theme set this instance builds with.
 3. Turn a remote asset named in the frontmatter, such as a background image
    fetched by URL, into a local file committed into the deck folder and named
    by a relative path: a container build never gets network.
+4. Set `fonts.provider: none` and `favicon: false` in the frontmatter: a talk
+   loads nothing from other hosts, and the content security policy admits only
+   its own origin. `examples/hello-deck/slides.md` shows both.
 
 ## Check
 

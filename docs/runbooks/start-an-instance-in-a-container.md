@@ -2,7 +2,7 @@
 
 Reader: the operator of this machine's deployment.
 
-The instance is an edge app ([ADR 0019](../decisions/0019-presentator-is-an-edge-app.md)):
+The instance is an edge app:
 `hal apply` deploys `compose.yaml` from a `v*` tag, and that file carries every
 value the deployment needs. Nothing is exported, no `.env` is written, and no
 port is published; the edge's proxy is the only way in.

@@ -231,6 +231,9 @@ async function startLocalHear(generation) {
   let context = null
   let node = null
   try {
+    // Echo cancellation and noise suppression stay on as a second layer and are
+    // not relied on: the room's speakers are not the browser's loopback. The
+    // transcript filter in isEcho is the first layer.
     stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
     })

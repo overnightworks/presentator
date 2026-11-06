@@ -87,8 +87,7 @@ restore of the database alone is enough.
 with `pnpm install --frozen-lockfile` under a Node version its `engines.node`
 allows. A deck may name a theme or an addon only from what that project already
 carries; widening the set is a change to `slidev/package.json`, not a
-decision a deck's push gets to make
-([ADR 0014](../decisions/0014-toolchain-owns-build-dependencies.md)). That
+decision a deck's push gets to make. That
 `package.json` is the set's one owner, and a deck's page names it. The PDF
 export drives a browser: `playwright-chromium` is one of that project's
 dependencies.
@@ -153,8 +152,8 @@ code from the catalog (`contracts/text.py`, `adapters/catalogs/en.po`):
 
 ## The build worker
 
-`compose.yaml` declares `build-worker`, the sealed service of
-[ADR 0017](../decisions/0017-a-build-worker-runs-each-step-sealed.md). The
+`compose.yaml` declares `build-worker`, the sealed service that
+runs each build step. The
 `presentator` service runs with `PRESENTATOR_BUILD_RUNNER=worker`, mounts the
 `build-socket` volume at `/run/presentator-build` and depends on the worker
 having started; the worker's socket is `worker.sock` in that volume. The web

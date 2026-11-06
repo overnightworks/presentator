@@ -11,9 +11,9 @@ output.
 
 | Setting | Meaning |
 | --- | --- |
-| `PRESENTATOR_SECRET_KEY_FILE` | Absolute path of a file holding the master key, read once at start, minus one trailing newline; at least 32 characters. `webauth` signs the lobby's session cookie with it, signs the talk host's through a derivation of its own, and, through another, encrypts what a source's row holds ([ADR 0013](../decisions/0013-secrets-at-rest-and-credential-delivery.md)). Without a readable key file the process refuses to start. |
+| `PRESENTATOR_SECRET_KEY_FILE` | Absolute path of a file holding the master key, read once at start, minus one trailing newline; at least 32 characters. `webauth` signs the lobby's session cookie with it, signs the talk host's through a derivation of its own, and, through another, encrypts what a source's row holds. Without a readable key file the process refuses to start. |
 | `PRESENTATOR_PUBLIC_ORIGIN` | The one canonical https origin. An `http://` origin refuses the start, because a browser does not send a `Secure` cookie back over plain http. |
-| `PRESENTATOR_TALK_ORIGIN` | The talk host's canonical https origin, on another hostname than `PRESENTATOR_PUBLIC_ORIGIN`; talks are served and signed in there ([ADR 0016](../decisions/0016-a-talk-host-signs-in-by-itself.md)). |
+| `PRESENTATOR_TALK_ORIGIN` | The talk host's canonical https origin, on another hostname than `PRESENTATOR_PUBLIC_ORIGIN`; talks are served and signed in there. |
 | `PRESENTATOR_AGENT__BACKEND` | Which backend answers the co-presenter: `litellm`, the one value; any other, `service` included, refuses the start. No default. |
 | `PRESENTATOR_AGENT__GATEWAY__ORIGIN` | Where the LiteLLM gateway answers: one `http` or `https` origin, scheme, host and optional port, without a path, credentials, query or fragment. Compose sets `http://litellm-front:4000`, the name it has on the `hal_agent_presentator` network. No default. |
 | `PRESENTATOR_AGENT__GATEWAY__KEY_FILE` | Absolute path of the file holding this app's gateway key. It is read for every question, not at start, so a missing file refuses the question and not the start. The file holds the key alone on one line of printable ASCII without a space, 1024 bytes at most; the client strips one trailing `\n`, so any other control character, a `\r` from a Windows editor included, refuses every question with only `key_unusable` logged. No default. |
@@ -76,8 +76,7 @@ Setting the list to that peer makes the library read `X-Forwarded-For` and
 `X-Forwarded-Proto`: the per-address rate limit counts the real client instead
 of the proxy, and the fetch-now hook address the Sources page shows names the
 https the proxy saw, not the plain http the app itself is served over. A
-deployed container has a network of its own and sees the edge's proxy
-([ADR 0019](../decisions/0019-presentator-is-an-edge-app.md)) as its gateway
+deployed container has a network of its own and sees the edge's proxy as its gateway
 (`172.31.251.1`, a subnet `compose.yaml` fixes). The guard against another site's form does not depend on this list
 ([sign-in and session](sign-in-and-session.md)).
 
