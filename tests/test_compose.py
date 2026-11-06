@@ -17,7 +17,7 @@ _COMPOSE = Path(__file__).parents[1] / "compose.yaml"
 
 
 def test_the_file_publishes_nothing_and_binds_nothing_outside_the_release() -> None:
-    """S9e (#527): no ports, no env_file, no bind outside the release."""
+    """CF4: no ports, no env_file, no bind outside the release."""
     compose = _parsed_compose()
 
     for service in compose["services"].values():
@@ -30,7 +30,7 @@ def test_the_file_publishes_nothing_and_binds_nothing_outside_the_release() -> N
 
 
 def test_no_environment_value_reads_the_callers_shell() -> None:
-    """S9e (#527): plain values are literals, no `$` in any environment value."""
+    """CF4: plain values are literals, no `$` in any environment value."""
     for service in _parsed_compose()["services"].values():
         assert all(
             "$" not in (value or "") for value in _environment_of(service).values()
@@ -39,7 +39,7 @@ def test_no_environment_value_reads_the_callers_shell() -> None:
 
 
 def test_no_healthcheck_reads_the_callers_shell() -> None:
-    """S9e (#527): no `$` in any part of a service's healthcheck command."""
+    """CF4: no `$` in any part of a service's healthcheck command."""
     for service in _parsed_compose()["services"].values():
         assert all(
             "$" not in part for part in service.get("healthcheck", {}).get("test", [])
@@ -61,12 +61,12 @@ def test_every_service_tmpfs_entry_is_nosuid_and_nodev() -> None:
 
 
 def test_the_worker_joins_no_network_of_the_file() -> None:
-    """S9e (#527): networks, only the instance is on one."""
+    """CF4: networks, only the instance is on one."""
     assert "networks" not in _parsed_compose()["services"]["build-worker"]
 
 
 def test_the_worker_carries_no_label_the_proxy_could_route_by() -> None:
-    """S9e (#527): labels, the proxy cannot route to the worker."""
+    """CF4: labels, the proxy cannot route to the worker."""
     assert "labels" not in _parsed_compose()["services"]["build-worker"]
 
 
@@ -197,7 +197,7 @@ def test_the_instance_holds_no_authority_over_this_machines_docker(
 def test_each_secret_is_a_file_secret_that_only_the_instance_mounts(
     name: str, setting: str
 ) -> None:
-    """edge#280: every app secret reaches the container as a mounted file."""
+    """CF1: every app secret reaches the container as a mounted file."""
     compose = _parsed_compose()
 
     assert set(compose["secrets"][name]) == {"file"}
