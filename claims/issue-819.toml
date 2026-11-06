@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "1374606acba8825de5ae2418a557719349e8fc1c"
 branch = "claude/issue-819-presentator-s-store-carries-no-migration"
-scope = ["src/presentator/adapters/identity.py", "src/presentator/adapters/schema.py", "src/presentator/host/main.py", "tests/presentator/adapters/test_deck_store_failures.py", "tests/presentator/adapters/test_identity.py", "tests/presentator/adapters/test_preferences.py", "tests/presentator/host/test_main.py"]
+scope = ["docs/decisions/0006-sqlite-and-files.md", "docs/reference/decks.md", "src/presentator/adapters/deck_store.py", "src/presentator/adapters/identity.py", "src/presentator/adapters/schema.py", "src/presentator/host/main.py", "tests/presentator/adapters/test_deck_store_failures.py", "tests/presentator/adapters/test_identity.py", "tests/presentator/adapters/test_preferences.py", "tests/presentator/host/test_main.py", "tests/support/people.py"]
 opened_commit = "0d2361af2de2b773a194e2de8e8aff9952e9cf3a"
 whole_reason = "One invariant, one owner: the start creates the final tables, so the upgrades, the old-database refusal and their tests go in one stroke, deletions only."
