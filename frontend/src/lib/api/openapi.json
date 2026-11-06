@@ -626,6 +626,10 @@
             "title": "Legal Impressum",
             "type": "string"
           },
+          "legal_nutzungsbedingungen": {
+            "title": "Legal Nutzungsbedingungen",
+            "type": "string"
+          },
           "log_out": {
             "title": "Log Out",
             "type": "string"
@@ -1088,6 +1092,7 @@
           "menu_account",
           "legal_impressum",
           "legal_datenschutz",
+          "legal_nutzungsbedingungen",
           "decks_title",
           "decks_column_state",
           "decks_column_deck",

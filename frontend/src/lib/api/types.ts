@@ -506,6 +506,8 @@ export interface components {
             legal_datenschutz: string;
             /** Legal Impressum */
             legal_impressum: string;
+            /** Legal Nutzungsbedingungen */
+            legal_nutzungsbedingungen: string;
             /** Log Out */
             log_out: string;
             /** Menu Account */

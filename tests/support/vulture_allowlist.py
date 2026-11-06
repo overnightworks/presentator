@@ -175,6 +175,7 @@ LobbyText.sign_in_no_access
 LobbyText.sign_in_no_access_sentence
 LobbyText.legal_impressum
 LobbyText.legal_datenschutz
+LobbyText.legal_nutzungsbedingungen
 # The Svelte lobby's not-found board, for-admins board and Settings page read
 # these from `/api/session`, and the person menu its round button.
 LobbyText.address_unknown_title

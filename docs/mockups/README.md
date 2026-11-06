@@ -111,11 +111,12 @@ Playwright through the declared `playwright-chromium` of `slidev/`, so run
 | `m0-lobby/for-admins.png`, `for-admins-dark.png` | Admin address opened by a non-admin | E6, sentence 5, new words |
 
 No board draws a footer: the lobby no longer ends with legal links (#784). The person
-menu carries the quiet legal row with Impressum and Datenschutz, as family §4 has it,
-and the sign-in boards carry the same two links below the card. Both link to the
-central pages on `hallucinai.de` (Datenschutz at its `#presentator` section); the
-Datenschutz page itself is edge's, with presentator's words in
-`legal/datenschutz.html`, so no board draws it (issue #593).
+menu carries the quiet legal row with Impressum, Datenschutz and Nutzungsbedingungen,
+as family §4 has it, and the sign-in boards carry the same three links below the card.
+All link to the central pages on `hallucinai.de` (Datenschutz and Nutzungsbedingungen
+each at its `#presentator` section); those pages are edge's, with presentator's words
+in `legal/datenschutz.html` and `legal/nutzungsbedingungen.html`, so no board draws
+them (issue #593).
 
 M0 has no Start: the deck page offers presenter view, projector view, and the PDF.
 Start belongs to the co-presenter run in M1. Instance name and language live under

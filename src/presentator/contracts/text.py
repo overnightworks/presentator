@@ -31,6 +31,7 @@ class LobbyText:
     menu_account: str
     legal_impressum: str
     legal_datenschutz: str
+    legal_nutzungsbedingungen: str
     decks_title: str
     decks_column_state: str
     decks_column_deck: str
