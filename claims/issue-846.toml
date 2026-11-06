@@ -1,8 +1,0 @@
-claim_id = "6cabd94f9e0c4e28ac561b1af0642d68"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "4c767c421db3261ddf30e202b6645ca20256a27f"
-branch = "claude/issue-846-presentator-carries-no-decision-records"
-scope = ["docs/README.md", "docs/decisions", "pyproject.toml", "speech/README.md", "src/presentator/adapters/__init__.py"]
-opened_commit = "2fd63905c76cc8974d7e52b5d9d2550dceb6af96"
-whole_reason = "The records, their one remaining citation and the follow-ups routed to this slice go together so no landing leaves a dead link or a lost fix."
