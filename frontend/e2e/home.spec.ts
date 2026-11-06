@@ -422,7 +422,6 @@ test.describe('the empty card of an admin', () => {
 	});
 });
 
-// Cell 9.
 test.describe('log out', () => {
 	test.use({ person: { role: 'user' } });
 
@@ -479,7 +478,6 @@ test.describe('a member', () => {
 	});
 });
 
-// Cell 11.
 test.describe('the account menu', () => {
 	test.use({ person: { role: 'admin' } });
 
@@ -531,7 +529,7 @@ test.describe('the account menu', () => {
 	});
 });
 
-// Cell 12; SI13.
+// SI13.
 test.describe('no footer', () => {
 	test.use({ person: { role: 'admin' } });
 
