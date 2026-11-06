@@ -66,7 +66,7 @@ replaceable if this decision's assumption ever stops holding.
 
 ### Amendment 2026-11-06 — the store carries no migration code
 
-`create_tables` no longer adds columns in place or reconciles failure reasons, because every operated file is born with the final tables. The Consequences bullet on adding a column in place records the earlier state. Authority: [#819](https://github.com/overnightworks/presentator/issues/819), the fresh-volume ruling on #508 and the operator's ruling on #818.
+`create_tables` no longer adds columns in place, drops them in place or reconciles failure reasons, because every operated file is born with the final tables. The Consequences bullets on adding and on dropping a column in place record the earlier state. Authority: [#819](https://github.com/overnightworks/presentator/issues/819), the fresh-volume ruling on #508 and the operator's ruling on #818.
 
 ## Rejected alternatives
 
