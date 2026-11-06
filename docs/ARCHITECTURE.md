@@ -154,7 +154,7 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
 - Back-channel logout comes from inside, not through the trusted proxy, so its
   `X-Forwarded-For` is ignored.
 - The fetch-now webhook holds a per-source secret, not a login: a git host has
-  no browser ([sources](reference/sources.md)).
+  no browser ([fetch-now hook](runbooks/call-the-fetch-now-hook.md)).
 - `/api/admin/` takes a Keycloak access token, not a session cookie, so a forged
   browser session cannot erase a person; the path carries the subject, so the
   server keeps no access log ([people](people.md)).

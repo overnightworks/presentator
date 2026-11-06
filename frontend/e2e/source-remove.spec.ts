@@ -179,8 +179,7 @@ test.describe('as an admin', () => {
 		await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
 	});
 
-	// Cells 16 and 17.
-	test('Remove sends one DELETE with the counts shown, replaces the page by the list and shows the notice once', async ({
+	test('SR3: Remove sends one DELETE with the counts shown, replaces the page by the list and shows the notice once', async ({
 		page
 	}, testInfo) => {
 		const { words } = await sessionOf(page);

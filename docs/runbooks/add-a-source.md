@@ -2,13 +2,17 @@
 
 Reader: an admin of the instance.
 
-An instance starts with no source. What a source is and which addresses are
-accepted is [sources](../reference/sources.md).
+An instance starts with no source. The ruled sentences about sources are
+[sources](../sources.md).
 
 ## Before you start
 
-- The Git URL, and for HTTPS a read-only token. An `https://` address has no
-  user part; the token belongs in the Secret field.
+- The Git URL. For HTTPS, a read-only token; an `https://` address has no user
+  part, so the token belongs in the Secret field. For SSH, the first contact
+  accepts the host's key and refuses the host if it ever changes.
+- A local folder is a bare repository under `/data/local-sources`. The mirror
+  runs as `presentator`, uid 1001, so git refuses the folder as "dubious
+  ownership" unless that uid owns it.
 
 ## Steps
 
