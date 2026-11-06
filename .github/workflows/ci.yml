@@ -47,9 +47,6 @@ jobs:
       - name: Check types
         run: uv run --locked pyright
 
-      - name: Check layer boundaries
-        run: uv run --locked lint-imports
-
       - name: Check for dead code
         run: uv run --locked vulture
 

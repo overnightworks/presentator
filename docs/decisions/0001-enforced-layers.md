@@ -3,7 +3,8 @@
 Audience: humans and agents who add a module and need to know where it belongs.
 
 - Status: ACCEPTED 2026-09-06 — the layer packages and the gate land with
-  [#3](https://github.com/overnightworks/presentator/issues/3)
+  [#3](https://github.com/overnightworks/presentator/issues/3); amended
+  2026-11-06 (see Amendment)
 - Date: 2026-09-06
 - Decision authority: the operator's ruling of 2026-09-06 recorded on
   [#2](https://github.com/overnightworks/presentator/issues/2)
@@ -86,3 +87,10 @@ library with no contract yet is one nothing imports; the first import writes it.
   [ADR 0004](0004-provider-neutral-speech.md)) is that implementations are
   interchangeable. Interchangeability needs a package that names the protocol
   and holds no implementation.
+
+## Amendment 2026-11-06
+
+The contracts in `pyproject.toml` no longer run through their own
+`lint-imports` step. The quality gate's `import-contract` rule runs every one of
+them on every pull request, and locally with `quality hygiene .`. The contracts
+themselves are unchanged.
