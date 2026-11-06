@@ -79,9 +79,8 @@ sequenceDiagram
     T->>T: serve the talk to its owner
 ```
 
-Polling runs in the host process (`host/polling.py`); the hook is
-`api/hooks.py`. See [sources](reference/sources.md),
-[builds](reference/builds.md) and [decks](reference/decks.md).
+See [sources](reference/sources.md), [builds](reference/builds.md) and
+[decks](reference/decks.md).
 
 ## 4. Deployment View
 
@@ -115,7 +114,6 @@ A signed-out path is one exact optional path (`GET /api/session`), never a
 prefix or a catch-all. A store failure while resolving a reader is a 500, never
 a signed-out answer. Problems follow RFC 9457 (`api/problems.py`), and a problem
 type is a `tag:` URI, because an https address breaks when its page moves.
-OpenAPI is generated, not served.
 
 **Words and look.** Every lobby word comes from the gettext catalogs through
 Babel (`adapters/catalog.py`), and `scripts/check_catalog_purity.py` holds the
@@ -172,7 +170,7 @@ by a delegated agent driving it. A leak fails the run (`filterwarnings` in
 ## 7. Not chosen
 
 - Redis or Postgres: one operator and no long job do not earn a second service.
-  Reopens with a second writing process or a job queue.
+  Reopens with a second writing process.
 - Cloudflare Access in front, or an own password login: Keycloak is the one door
   and owns accounts and groups. Reopens if Keycloak leaves the fleet.
 - A Docker socket in the web service: deck code runs only in the sealed worker.
@@ -183,8 +181,10 @@ by a delegated agent driving it. A leak fails the run (`filterwarnings` in
   is the one set. Reopens if the build gains a registry.
 - A wake word: the engines are proprietary or English-only; the AI hears only
   while the presenter has switched it on. Reopens with a self-hosted German one.
-- Required pull request approvals (agents review first) and a custom Sonar
-  quality gate (the built-in one is as strict). Reopen if review moves to GitHub.
+- Required pull request approvals: agents review before the pull request opens.
+  Reopens if review moves to GitHub.
+- A custom Sonar quality gate: the coverage floor (`fail_under`) is stricter than
+  any gate's and the other conditions match. Reopens if the floor drops below one.
 
 ## 8. Risks and Technical Debt
 
