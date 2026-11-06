@@ -15,8 +15,7 @@ _SCHEMA: Final = """
 CREATE TABLE IF NOT EXISTS instance_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     name TEXT NOT NULL,
-    language_tag TEXT NOT NULL,
-    theme TEXT NOT NULL
+    language_tag TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS person_preferences (
     user_id TEXT PRIMARY KEY REFERENCES users(id),
@@ -26,8 +25,6 @@ CREATE TABLE IF NOT EXISTS person_preferences (
 # An instance has one set of settings, so the table holds one row and the
 # schema refuses a second.
 _THE_ONLY_ROW: Final = 1
-# The column is NOT NULL, and the release before reads it as a ThemeChoice.
-_THE_UNREAD_THEME: Final = ThemeChoice.FOLLOW_SYSTEM.value
 
 
 def create_preference_tables(database: Path) -> None:
@@ -56,21 +53,13 @@ class SqliteInstanceSettingsStore:
     def write(self, settings: InstanceSettings) -> None:
         """Write the settings over whatever stood there."""
         with immediate_transaction(self.database) as cursor:
-            updated = cursor.execute(
-                "UPDATE instance_settings SET name = ?, language_tag = ? WHERE id = ?",
-                (settings.name, settings.language_tag, _THE_ONLY_ROW),
+            cursor.execute(
+                "INSERT INTO instance_settings (id, name, language_tag)"
+                " VALUES (?, ?, ?)"
+                " ON CONFLICT(id) DO UPDATE SET"
+                " name = excluded.name, language_tag = excluded.language_tag",
+                (_THE_ONLY_ROW, settings.name, settings.language_tag),
             )
-            if updated.rowcount == 0:
-                cursor.execute(
-                    "INSERT INTO instance_settings (id, name, language_tag, theme)"
-                    " VALUES (?, ?, ?, ?)",
-                    (
-                        _THE_ONLY_ROW,
-                        settings.name,
-                        settings.language_tag,
-                        _THE_UNREAD_THEME,
-                    ),
-                )
 
 
 @dataclass(frozen=True, slots=True)
