@@ -1,7 +1,0 @@
-claim_id = "afc601b4edb04f11bba983b5d68ecc54"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "5813a031f627410b27190965416b8fcd0967e8fc"
-branch = "dependabot/github_actions/actions-178afbd1eb"
-scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml"]
-opened_commit = "6ac280fb289f3c6c44bce6a8dada3cd0fad2a65c"
