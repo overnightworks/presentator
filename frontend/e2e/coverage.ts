@@ -10,7 +10,7 @@ declare global {
 	}
 }
 
-export const driveCoverageDirectory = fileURLToPath(
+const driveCoverageDirectory = fileURLToPath(
 	new URL('../../reports/lobby-coverage/drive', import.meta.url)
 );
 

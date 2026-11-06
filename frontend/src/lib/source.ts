@@ -83,7 +83,7 @@ export function stateWords(state: SourceState, words: LobbyText): string {
 	return sentences[state];
 }
 
-export interface RunRow {
+interface RunRow {
 	shape: 'ready' | 'never-built' | 'failed';
 	state: string;
 	// The short commit of a success, the failure sentence of a failure.
@@ -105,7 +105,7 @@ export function runRow(run: SourceRunView, words: LobbyText): RunRow {
 	};
 }
 
-export interface AccessView {
+interface AccessView {
 	// What the access section draws: the key and its renewal, the token form, or the tag alone.
 	control: 'deploy-key' | 'token' | 'none';
 	tag: string | null;

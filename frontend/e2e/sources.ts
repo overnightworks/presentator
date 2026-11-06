@@ -64,7 +64,7 @@ export async function checks(page: Page, words: Words): Promise<ConnectionCheckV
 	return (await (await answered).json()) as ConnectionCheckView;
 }
 
-export async function creates(page: Page, words: Words): Promise<CreatedSourceView> {
+async function creates(page: Page, words: Words): Promise<CreatedSourceView> {
 	const answered = page.waitForResponse(
 		(received) =>
 			new URL(received.url()).pathname === SOURCES_API && received.request().method() === 'POST'
@@ -76,7 +76,7 @@ export async function creates(page: Page, words: Words): Promise<CreatedSourceVi
 }
 
 // A source that exists: the form filled, checked and created.
-export async function createsASource(
+async function createsASource(
 	page: Page,
 	words: Words,
 	values: { name: string; url: string; secret?: string }

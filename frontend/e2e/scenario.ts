@@ -40,7 +40,7 @@ export async function leftForSignIn(page: Page, started: ReturnType<typeof start
 
 export const entriesOf = (page: Page): Promise<number> => page.evaluate(() => history.length);
 
-export type ThemeRow = 'follow_system' | 'light' | 'dark';
+type ThemeRow = 'follow_system' | 'light' | 'dark';
 
 // The menu's radio of a theme row, named by the session's words.
 export async function themeRow(page: Page, row: ThemeRow): Promise<Locator> {
