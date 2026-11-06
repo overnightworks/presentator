@@ -55,12 +55,13 @@ flowchart TD
 - **Layers.** `host` composes the instance and depends on `api`, `application`,
   `ports`, `contracts` and on the adapters, which fill the ports (`adapters`
   and `agent`). Each depends only downward; an adapter never reaches up into
-  `application`, `api` or `host`, and only the host names an adapter. The import-linter
-  contracts in `pyproject.toml` enforce this, run by the quality gate's
-  `import-contract` rule. A third-party or format library lives only in the
-  adapter that owns it, except webauth, which `api`, `agent` and `host` also
-  import directly. Each library has its own import contract in `pyproject.toml`,
-  written with its first import.
+  `application`, `api` or `host`, and only the host names an adapter. The
+  import-linter contracts in `pyproject.toml` enforce this, run by the quality
+  gate's `import-contract` rule. A library an adapter owns behind a port is
+  forbidden above the adapters by its own import contract in `pyproject.toml`,
+  written with its first import; webauth is forbidden only to `application`,
+  `ports` and `contracts`, because `api` and `host` import it directly. The web
+  framework (FastAPI, Starlette, Pydantic, uvicorn) is not under this rule.
 - **`src/gitmirror`** sits beside the layers: it mirrors any remote read-only
   through `git`, does not import `presentator`, and only adapters name it.
 - **`presentator.agent`** is the only package that imports
@@ -109,8 +110,9 @@ host and tells them apart by the `Host` header (`served_by_host` in
 
 **Persistence.** SQLite holds accounts, sessions, preferences, sources, runs,
 decks and key drafts; files hold mirrors and builds. The database holds no file
-content: a mirror or build lives on disk and its row names the path. `builds/` and `mirrors/` are caches the rows
-rebuild. One process writes the database, and the identity lock depends on
+content: a build's row names its directory and PDF, and a mirror's directory
+is derived from its source's address. `builds/` and `mirrors/` are caches the
+rows rebuild. One process writes the database, and the identity lock depends on
 that; a second writer would need a unit of work. A column goes in two
 releases, the second dropping it in `create_tables`, gated on
 `pragma_table_info` (`adapters/schema.py`), so a restorable older backup still
