@@ -1,0 +1,8 @@
+claim_id = "e4c34ce5240a47c6bf7f749a57cf4c28"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "af5a84b7f03ae2f608336bd59dae3bff3134b1f6"
+branch = "claude/issue-836-the-architecture-overview-takes-the-flee"
+scope = ["docs/ARCHITECTURE.md", "docs/README.md", "docs/TESTING.md", "docs/explanation/trust-boundaries.md", "docs/reference/builds.md", "docs/reference/co-presenter-and-voice.md", "docs/reference/configuration.md", "docs/runbooks/run-from-a-checkout.md", "docs/runbooks/run-the-speech-service-on-the-host.md", "tests/test_compose.py"]
+opened_commit = "23a46d14f7b0a3cc49dd3e1b48cdc8f06bd3bc4b"
+whole_reason = "Deleting the explanation and re-pointing every link to it must land together, or the tree holds dead links."
