@@ -163,7 +163,7 @@ def _untouched(world: World) -> None:
     assert world.transaction.log == []
 
 
-def test_a_valid_token_ends_every_session_of_its_subject_and_no_other(
+def test_a_valid_token_ends_every_session_of_its_subject_and_no_other(  # SI10
     world: World,
 ) -> None:
     answer = world.logout_with(world.keycloak(), world.token())
@@ -451,7 +451,7 @@ _NEIGHBOURS = [
 
 
 @pytest.mark.parametrize("path", _NEIGHBOURS)
-def test_no_neighbour_of_the_exact_path_is_exempt_or_public(
+def test_no_neighbour_of_the_exact_path_is_exempt_or_public(  # SI11
     world: World, path: str
 ) -> None:
     token = world.token()

@@ -40,7 +40,9 @@ def scene(tmp_path: Path, issued_id_tokens: list[str]) -> Scene:
     return a_scene(tmp_path, token_requests=recording)
 
 
-def test_the_sign_ins_refresh_token_is_stored_with_its_session(scene: Scene) -> None:
+def test_the_sign_ins_refresh_token_is_stored_with_its_session(  # SI6
+    scene: Scene,
+) -> None:
     scene.issuer.issue_refresh_token(_MARKER)
 
     scene.sign_in()
@@ -185,7 +187,7 @@ def test_a_sign_in_that_stores_the_id_token_leaks_it_to_neither_page_nor_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """#428 cell 11: stored sign-in."""
+    """Stored sign-in."""
     answer = scene.sign_in()
 
     (stored,) = scene.stored_id_tokens()
@@ -200,7 +202,7 @@ def test_a_store_failure_holding_the_id_token_leaks_it_to_no_error_and_no_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """#428 cell 11: store failure."""
+    """Store failure."""
     with closing(sqlite3.connect(scene.database)) as connection:
         connection.execute("DROP TABLE sessions")
 
@@ -220,7 +222,7 @@ def test_a_refused_sign_in_leaks_the_id_token_to_neither_page_nor_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """#428 cell 11: refused sign-in."""
+    """Refused sign-in."""
     scene.issuer.issue_refresh_token(_MARKER + "é")
 
     answer = scene.sign_in()
@@ -236,7 +238,7 @@ def test_a_logout_leaks_the_id_token_to_no_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """#428 cell 11: logout; its page posts the hint to the issuer by design."""
+    """Logout; its page posts the hint to the issuer by design."""
     scene.sign_in()
 
     logged_out = scene.lobby.client.post(LOGOUT_PATH)
@@ -252,7 +254,7 @@ def test_a_refused_logout_leaks_the_id_token_to_neither_page_nor_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """#428 cell 11: refused logout."""
+    """Refused logout."""
     scene.sign_in()
 
     refused = scene.lobby.client.post(

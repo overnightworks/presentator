@@ -44,7 +44,7 @@ def either_visitor(request: pytest.FixtureRequest, lobby: Lobby) -> Lobby:
     return lobby
 
 
-# T9b.
+# SI12.
 @pytest.mark.parametrize(
     "refusal_path",
     [
@@ -217,7 +217,7 @@ def test_the_talk_hosts_root_sends_the_browser_to_the_lobby(
 # ---- signing in at the talk host ---------------------------------------------
 
 
-# T6.
+# SI8.
 def test_asking_for_a_talk_signed_out_signs_in_at_the_talk_host_and_lands_on_it(
     hosts: Hosts,
 ) -> None:
@@ -423,7 +423,7 @@ def test_a_refused_talk_sign_in_clears_the_talk_hosts_pending_login(
     assert "max-age=0" in pending[0].lower()
 
 
-# T9c.
+# SI8.
 def test_trying_again_after_a_refusal_signs_in_and_the_talk_host_sends_on_to_the_lobby(
     tmp_path: Path,
 ) -> None:
@@ -440,7 +440,7 @@ def test_trying_again_after_a_refusal_signs_in_and_the_talk_host_sends_on_to_the
 # ---- ending sessions ---------------------------------------------------------
 
 
-# T10.
+# SI10.
 @pytest.mark.parametrize(
     "logout_address",
     [
@@ -476,7 +476,7 @@ def test_a_verified_logout_token_at_the_lobby_ends_both_hosts_sessions(
     assert lobby.get("/").status_code == HTTPStatus.FOUND
 
 
-# T11.
+# SI9.
 def test_a_lobby_logout_leaves_the_talk_session_standing(hosts: Hosts) -> None:
     browser = hosts.browser(A_BROWSERS_ADDRESS)
     hosts.sign_in(browser, A_BROWSERS_ADDRESS)

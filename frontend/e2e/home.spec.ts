@@ -426,6 +426,7 @@ test.describe('the empty card of an admin', () => {
 test.describe('log out', () => {
 	test.use({ person: { role: 'user' } });
 
+	// SI3.
 	test('posts to /logout and the next / is sent to the sign-in', async ({
 		page,
 		violations,
@@ -482,6 +483,7 @@ test.describe('a member', () => {
 test.describe('the account menu', () => {
 	test.use({ person: { role: 'admin' } });
 
+	// SI13.
 	test('opens the account address in a new tab and carries the legal rows', async ({
 		page,
 		context
@@ -529,7 +531,7 @@ test.describe('the account menu', () => {
 	});
 });
 
-// Cell 12.
+// Cell 12; SI13.
 test.describe('no footer', () => {
 	test.use({ person: { role: 'admin' } });
 
