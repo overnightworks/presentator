@@ -1,8 +1,0 @@
-claim_id = "d2009ea40f714f55b80848ae74d1f0a7"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "86018d6a1c21896306e54cd574f33ae5a9f28860"
-branch = "claude/issue-832-presentator-s-code-names-no-decision-rec"
-scope = ["Dockerfile", "compose.yaml", "frontend/e2e/csp.ts", "frontend/eslint.config.js", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "frontend/src/routes/+layout.ts", "frontend/vite.config.ts", "pyproject.toml", "scripts/check_catalog_purity.py", "src/gitmirror", "src/presentator", "tests/presentator/adapters/test_secrets.py", "tests/support/lobby_drive.py"]
-opened_commit = "c65454b7ebe6e38c13b61937e0b085f8691748a0"
-whole_reason = "Every citation of a record in code, configuration and tests goes in one mechanical pass; a part alone leaves pointers to records the last slice deletes."
