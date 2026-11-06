@@ -4,7 +4,7 @@ import type { components } from '#lib/api/types.ts';
 export type SettingsView = components['schemas']['SettingsView'];
 export type SettingsWrite = components['schemas']['SettingsWrite'];
 
-export const SETTINGS_PATH = '/api/settings';
+const SETTINGS_PATH = '/api/settings';
 
 export function readSettings(fetcher: typeof fetch, here: URL): Promise<SettingsView> {
 	return getJson<SettingsView>(fetcher, SETTINGS_PATH, here);

@@ -3,7 +3,7 @@ import type { BrowserContext } from '@playwright/test';
 import type { FailureView } from '../src/lib/api/decks.ts';
 import { expect, test as base } from './coverage.ts';
 
-export interface AttemptRecord {
+interface AttemptRecord {
 	commit?: string;
 	started_at?: string;
 	// The reason is the wire's own type; a reason names only the counts it needs.
