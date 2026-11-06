@@ -15,6 +15,8 @@ _PERSON_PREFERENCE_COLUMNS: Final = (
     "SELECT name FROM pragma_table_info('person_preferences')"
 )
 _THE_PERSONAL_LANGUAGE: Final = "language_tag"
+_INSTANCE_COLUMNS: Final = "SELECT name FROM pragma_table_info('instance_settings')"
+_THE_INSTANCE_THEME: Final = "theme"
 _UNCHOSEN_THEME_FOLLOWS_THE_SYSTEM: Final = (
     "UPDATE person_preferences SET theme = ? WHERE theme IS NULL"
 )
@@ -68,6 +70,7 @@ def create_tables(database: Path) -> None:
     _keep_the_failure_reason(database)
     _drop_the_personal_language(database)
     _unchosen_theme_follows_the_system(database)
+    _retire_the_instance_theme(database)
 
 
 def _keep_the_failure_reason(database: Path) -> None:
@@ -121,3 +124,18 @@ def _unchosen_theme_follows_the_system(database: Path) -> None:
         cursor.execute(
             _UNCHOSEN_THEME_FOLLOWS_THE_SYSTEM, (ThemeChoice.FOLLOW_SYSTEM.value,)
         )
+
+
+def _retire_the_instance_theme(database: Path) -> None:
+    """Drop the instance's unread theme column, on every start; it is one-way.
+
+    One immediate transaction, so two starts on one file cannot both drop. No row
+    goes. Code that still names the column reads the file and updates its row, but
+    cannot insert a first settings row into it.
+    """
+    with immediate_transaction(database) as cursor:
+        present = {name for (name,) in cursor.execute(_INSTANCE_COLUMNS)}
+        if _THE_INSTANCE_THEME in present:
+            cursor.execute(
+                f"ALTER TABLE instance_settings DROP COLUMN {_THE_INSTANCE_THEME}"
+            )

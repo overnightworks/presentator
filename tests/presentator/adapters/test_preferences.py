@@ -147,11 +147,6 @@ def the_old_release_forgets_the_theme_of(database: Path, user_id: str) -> None:
         )
 
 
-def the_stored_instance_theme(database: Path) -> str:
-    ((theme,),) = everything_in(database, "SELECT theme FROM instance_settings")
-    return str(theme)
-
-
 def test_the_start_drops_the_personal_language_and_folds_only_the_missing_theme(
     tmp_path: Path,
 ) -> None:
@@ -183,6 +178,7 @@ def test_a_second_start_changes_nothing(tmp_path: Path) -> None:
         everything_in(database, _THE_INSTANCE_ROW),
     ]
     assert after_the_second == after_the_first
+    assert columns_of(database, "instance_settings") == ["id", "name", "language_tag"]
 
 
 def test_a_theme_the_release_before_wrote_as_nothing_is_folded_at_the_next_start(
@@ -198,20 +194,15 @@ def test_a_theme_the_release_before_wrote_as_nothing_is_folded_at_the_next_start
     assert themes[_WHO_CHOSE_ONLY_A_THEME] == ThemeChoice.FOLLOW_SYSTEM.value
 
 
-def test_the_start_leaves_the_instance_row_as_the_release_before_reads_it(
+def test_the_start_drops_the_instance_theme_and_keeps_the_instance_words(
     tmp_path: Path,
 ) -> None:
     database = an_old_file(tmp_path)
 
     create_tables(database)
 
-    assert columns_of(database, "instance_settings") == [
-        "id",
-        "name",
-        "language_tag",
-        "theme",
-    ]
-    assert everything_in(database, _THE_INSTANCE_ROW) == [(1, *_THE_INSTANCE_BEFORE)]
+    assert columns_of(database, "instance_settings") == ["id", "name", "language_tag"]
+    assert everything_in(database, _THE_INSTANCE_ROW) == [(1, "Heim", "en")]
 
 
 @pytest.mark.parametrize("table", ["person_preferences", "instance_settings"])
@@ -227,9 +218,7 @@ def test_a_fresh_file_and_a_migrated_one_have_the_same_columns(
     assert columns_of(fresh, table) == columns_of(migrated, table)
 
 
-def test_a_save_over_the_instance_row_keeps_the_theme_the_release_before_reads(
-    tmp_path: Path,
-) -> None:
+def test_a_save_over_the_instance_row_changes_its_words(tmp_path: Path) -> None:
     database = an_old_file(tmp_path)
     create_tables(database)
     store = SqliteInstanceSettingsStore(database)
@@ -238,18 +227,17 @@ def test_a_save_over_the_instance_row_keeps_the_theme_the_release_before_reads(
     store.write(InstanceSettings(name="Werkstatt", language_tag="de"))
 
     assert store.read() == InstanceSettings(name="Werkstatt", language_tag="de")
-    assert the_stored_instance_theme(database) == ThemeChoice.DARK.value
 
 
-def test_the_first_save_without_a_row_stores_a_theme_the_release_before_parses(
-    tmp_path: Path,
-) -> None:
+def test_the_first_save_without_a_row_inserts_it(tmp_path: Path) -> None:
     database = tmp_path / "fresh.sqlite3"
     create_tables(database)
+    store = SqliteInstanceSettingsStore(database)
+    saved = InstanceSettings(name="Heim", language_tag="de")
 
-    SqliteInstanceSettingsStore(database).write(InstanceSettings(name="Heim"))
+    store.write(saved)
 
-    ThemeChoice(the_stored_instance_theme(database))
+    assert store.read() == saved
 
 
 def test_everybody_reads_the_instances_words_and_their_own_theme_after_the_start(
@@ -292,7 +280,6 @@ def test_an_admin_saves_the_settings_over_the_migrated_file(tmp_path: Path) -> N
 
     assert saved.status_code == HTTPStatus.OK
     assert lobby.client.get("/api/settings").json()["name"] == "Werkstatt"
-    assert the_stored_instance_theme(database) == ThemeChoice.DARK.value
 
 
 def a_lobby_over(database: Path) -> Lobby:
