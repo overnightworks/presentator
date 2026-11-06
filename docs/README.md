@@ -15,7 +15,6 @@ this map and an owner disagree, the owner is right.
 | How is it built, and what does the design rest on? | Architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Why was it built this way? | Decisions | Records indexed by [`decisions/README.md`](decisions/README.md) |
 | How do I run, change or repair this installation? | Runbooks | the documents under [Runbooks](#runbooks) |
-| Why are the guards what they are? | Explanation | [`explanation/trust-boundaries.md`](explanation/trust-boundaries.md) |
 | How is a change proven? | Testing | [`TESTING.md`](TESTING.md) |
 | What does the lobby look like? | Picture | [`mockups/README.md`](mockups/README.md) |
 

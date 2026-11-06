@@ -2,7 +2,7 @@
 
 Audience: an engineer or operator looking up how a deck is built, what one
 build may take, and when an instance refuses to start. Why a build is sandboxed
-is [trust boundaries](../explanation/trust-boundaries.md).
+is [constraints and reasons](../ARCHITECTURE.md#6-constraints-and-reasons).
 
 ## When a deck builds
 
