@@ -1,8 +1,0 @@
-claim_id = "8e4fca6fe3824145a7608421c6f481dd"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "a6a27fe731154f0ca6d48b420bca8cbc74eb55be"
-branch = "claude/issue-813-presentator-drops-its-last-words-of-the"
-scope = ["README.md", "docs/decisions/0003-libraries-for-models-and-auth.md", "tests/presentator/host/test_config_agent.py", "tests/support/copresenter_support.py"]
-opened_commit = "ad221ac403f5e89e38717a39982dc0aedc2a47cd"
-whole_reason = "One retirement, one sweep: the four places are the whole of presentator's agent-service wording, and splitting them would leave a half-retired picture."
