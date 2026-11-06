@@ -1,7 +1,0 @@
-claim_id = "30aaeb58a746485ab0ddb29874e9b22d"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "af5a84b7f03ae2f608336bd59dae3bff3134b1f6"
-branch = "claude/issue-837-the-vision-takes-the-two-ruled-sentences"
-scope = ["README.md", "docs/VISION.md"]
-opened_commit = "3df6261e4f17264e865a22a2dfd30e8b5c7e0a0b"
