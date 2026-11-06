@@ -196,8 +196,7 @@ allow_indirect_imports = true
 id = "gitmirror-is-independent"
 name = "gitmirror never imports the product"
 type = "forbidden"
-# The dependency runs one way, so the package can move to its own
-# repository and be consumed by tag when its second caller arrives.
+# The dependency runs one way: gitmirror knows nothing of the product.
 source_modules = ["gitmirror"]
 forbidden_modules = ["presentator"]
 as_packages = true
