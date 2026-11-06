@@ -37,9 +37,9 @@ is `{subject}`. `?dry_run=true` counts and changes nothing.
   not be removed. A source whose mirror or build directory stays keeps its rows
   and the person keeps the account; every other source is still removed.
 - **PE12** The leftover 500 carries `dry_run` `false`, `kinds`,
-  `affects_others` `[]` and `leftover`. `kinds` holds what this attempt removed: the account and a source
-  that stayed count zero. The `mirrors` count counts source rows, not mirror
-  directories on disk.
+  `affects_others` `[]` and `leftover`. `kinds` holds what this attempt
+  removed: the account and a source that stayed count zero. The `mirrors`
+  count counts source rows, not mirror directories on disk.
 - **PE13** `leftover` names only directories, one entry per directory that
   stayed: `{kind, count, path}` with `count` 1. `kind` is `mirrors` or
   `builds`.
@@ -63,8 +63,9 @@ is `{subject}`. `?dry_run=true` counts and changes nothing.
 `GET /api/admin/people/{subject}/export` answers a ZIP.
 
 - **PE18** The ZIP is `application/zip` holding the `people_export` v1 body, its
-  file name names no subject, and its root holds `export.json` and nothing else. The body holds `app`, `subject`,
-  `exported_at` (UTC, `Z`, whole seconds), `data`, `files` and `withheld`.
+  file name names no subject, and its root holds `export.json` and nothing
+  else. The body holds `app`, `subject`, `exported_at` (UTC, `Z`, whole
+  seconds), `data`, `files` and `withheld`.
 - **PE19** `data` holds every row keyed by the person (account, sessions,
   preferences, key draft, sources with their decks and runs) and only those, as
   the [export records](../src/presentator/contracts/people.py) show them.
