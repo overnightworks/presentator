@@ -1,0 +1,7 @@
+claim_id = "dc80fdb216b34502af1670d5f9270b6e"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "8a8c7f2128c90028d4a90c53295b3a9991bd2434"
+branch = "claude/issue-803-the-browser-jobs-in-ci-no-longer-hang-on"
+scope = [".github/workflows/ci.yml"]
+opened_commit = "786943dedd5e4b3bbcae94ac333173ba9d4e88ec"
