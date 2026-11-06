@@ -44,6 +44,8 @@ addopts = "--strict-config --strict-markers --import-mode=importlib"
 pythonpath = ["."]
 testpaths = ["tests"]
 tmp_path_retention_policy = "failed"
+# A leak surfaces on a later test than the one that leaked; PYTHONTRACEMALLOC=25
+# on a targeted run shows where the object was allocated.
 filterwarnings = [
   "error::ResourceWarning",
   "error::pytest.PytestUnraisableExceptionWarning",
