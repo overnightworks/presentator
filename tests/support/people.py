@@ -10,6 +10,8 @@ from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
 
+from webauth.ports import AccountKind
+
 from presentator.adapters.sqlite import rows
 from presentator.contracts.models import User
 
@@ -17,8 +19,14 @@ from presentator.contracts.models import User
 def seed_user(database: Path, person: User) -> None:
     with rows(database) as cursor:
         cursor.execute(
-            "INSERT OR IGNORE INTO users (id, username, role) VALUES (?, ?, ?)",
-            (person.id, person.username, person.role.value),
+            "INSERT OR IGNORE INTO users (id, username, role, kind)"
+            " VALUES (?, ?, ?, ?)",
+            (
+                person.id,
+                person.username,
+                person.role.value,
+                AccountKind.PERSON.value,
+            ),
         )
 
 
