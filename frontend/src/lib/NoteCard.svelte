@@ -6,6 +6,7 @@
 <div class="note-card">
 	<h1>{title}</h1>
 	<p>{explanation}</p>
+	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the callers pass an address `resolve` made -->
 	<a class="btn primary" {href}>{label}</a>
 </div>
 
