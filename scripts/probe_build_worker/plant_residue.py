@@ -64,6 +64,8 @@ def leave_a_sleeping_child(identity: tuple[int, int]) -> None:
             os.write(ready_write, b"1")
             os.close(ready_write)
             signal.pause()
+        except BaseException as error:  # noqa: BLE001 - the child reports and ends either way
+            sys.stderr.write(f"plant failed: {error!r}\n")
         finally:
             os._exit(1)
     os.close(ready_write)
