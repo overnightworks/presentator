@@ -17,9 +17,9 @@ On the source's page choose *Fetch now*: the source's state reads reachable.
    and shows the replacement public key. Register it at the Git host before the
    next fetch; renewal neither contacts that host nor keeps an old-key overlap.
 
-There is no rollback: the old value is overwritten. The way back is the Git
-host's credential, so keep the old token or key valid there until the Check
-passes.
+There is no rollback: the old value is overwritten. If the Check still fails,
+issue a new token or key at the Git host and renew again. Revoke a leaked
+credential there; do not keep it valid.
 
 ## Escalate
 
