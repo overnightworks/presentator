@@ -1,8 +1,0 @@
-claim_id = "bd129e87360344f69d2b8ecb461616b2"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "6bcf45e79f6bd6b86fa5c3385630f5f3b9e94de2"
-branch = "claude/issue-897-your-agent-reads-your-deck-s-text-and-it"
-scope = ["docs/runbooks/configure-keycloak.md", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "quality/baseline.toml", "quality/config.toml", "src/presentator/agent/mcp.py", "src/presentator/api/auth.py", "src/presentator/api/deck_api.py", "src/presentator/api/deck_text_api.py", "src/presentator/api/decks.py", "src/presentator/application/copresenter.py", "src/presentator/application/own_decks.py", "src/presentator/host/main.py", "tests"]
-opened_commit = "b0430f98222f2375000128a657f20f4bcee72e16"
-whole_reason = "The three marks, the text route and the one owner of the viewer's own built deck meet in one wiring from the host through AgentFront and create_lobby to the routers, and a split would grow the generated client twice."
