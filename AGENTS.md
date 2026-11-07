@@ -3,7 +3,7 @@ Audience: every agent that edits this repository.
 Code policy and coordination live once, in the global contract. This file adds
 only this repository's facts.
 
-Documentation starts at `docs/README.md`, which maps each layer to its owner.
+Documentation starts at `README.md`, which routes each reader to its owner.
 
 ## Checks
 
