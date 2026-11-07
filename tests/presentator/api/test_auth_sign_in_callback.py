@@ -21,8 +21,8 @@ import uvicorn
 from fastapi import FastAPI
 from httpx2 import Response as BrowserAnswer
 from pydantic import SecretStr
+from webauth.admission import AdmissionConfig
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
-from webauth.oidc_login import AdmissionConfig
 from webauth.ports import AccountEvent, AccountEventKind, AuditSink
 
 from presentator.adapters.audit import LoggingAuditSink

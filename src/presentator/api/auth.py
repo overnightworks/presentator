@@ -18,12 +18,12 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import RedirectResponse
 from starlette.types import Receive, Scope, Send
+from webauth.admission import AdmissionConfig
 from webauth.config import WebAuthConfig, install_web_auth_config
 from webauth.middleware.bearer_gate import BearerGate, MachinePaths, PersonPaths
 from webauth.middleware.session_gate import SessionGate
 from webauth.middleware.stack import install_web_auth_middleware
 from webauth.oidc import OidcRelyingParty
-from webauth.oidc_login import AdmissionConfig
 from webauth.policies import (
     AuthorizedParties,
     BodySizePolicy,

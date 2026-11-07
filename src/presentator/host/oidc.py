@@ -4,9 +4,9 @@ import time
 from typing import Final
 
 from pydantic import SecretStr
+from webauth.admission import AdmissionConfig
 from webauth.https_client import fetch_key_set_over_https
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
-from webauth.oidc_login import AdmissionConfig
 from webauth.oidc_transport import post_token_request_over_https
 
 from presentator.api.auth import LOGIN_PATH, SIGN_IN_CALLBACK_PATH
