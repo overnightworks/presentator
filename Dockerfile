@@ -63,7 +63,9 @@ RUN corepack enable pnpm
 WORKDIR /app
 COPY --chown=presentator slidev/package.json slidev/pnpm-lock.yaml slidev/pnpm-workspace.yaml ./slidev/
 WORKDIR /app/slidev
-RUN corepack install
+# pnpm 12 fetches its native binary on its first run into the root-owned
+# corepack home, so that run happens here as root, before the user switch.
+RUN corepack install && pnpm --version
 USER presentator
 RUN pnpm install --frozen-lockfile
 USER root
