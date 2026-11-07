@@ -18,11 +18,11 @@ from agent_runtime_client.mcp_wire import (
     PROTOCOL_VERSION_HEADER,
 )
 from fastapi.testclient import TestClient
-from presentator.api.deck_text_api import DECK_TEXT_PATH
 
 from presentator.agent.settings import McpSettings
 from presentator.api.deck_api import DECK_VIEW_PATH
 from presentator.api.deck_list_api import DECK_LIST_PATH
+from presentator.api.deck_text_api import DECK_TEXT_PATH
 from presentator.ports.copresenter import DeckTexts
 from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
 from tests.support.deck_text_support import FakeDeckTexts
