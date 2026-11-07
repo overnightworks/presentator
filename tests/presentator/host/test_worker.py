@@ -609,7 +609,7 @@ REFUSED_FACTS = {
 @pytest.mark.parametrize(
     ("arrange", "refused"), REFUSED_FACTS.values(), ids=REFUSED_FACTS.keys()
 )
-def test_unreadable_or_unparsable_fact_refuses_through_main_naming_its_predicate(
+def test_a_failing_or_unreadable_fact_refuses_through_main_naming_its_predicate(
     sealed_root: Path,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,

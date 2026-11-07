@@ -71,7 +71,6 @@ WIRE_IDENTITY = (10002, 10002)
 NO_CAPABILITIES = "0" * 16
 BIND_UMASK = 0o117
 LISTEN_BACKLOG = 4
-# Mount points below the root, so the self-check names no world-writable path.
 SOCKET_MOUNT_NAME = build_wire.SOCKET_DIRECTORY.lstrip("/")
 CGROUP_DIRECTORY = "sys/fs/cgroup"
 TMPFS_MOUNT_NAMES = (
