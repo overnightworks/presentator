@@ -11,13 +11,16 @@ in [the architecture](../ARCHITECTURE.md).
 
 ## Check
 
-A push shows a new run on the source's page. A wrong address, an unknown
-source, a wrong secret and a missing secret all answer `404` with an empty body.
+A push shows a new run on the source's page. A wrong address (a trailing slash
+or another path under `/sources/` included), an unknown source, a wrong secret
+and a missing secret all answer `404` with an empty body. Only `POST` is open on
+the hook address; every other method there leads to the login.
 
 ## Fix
 
 1. Have the source's webhook secret. It is shown once, when the source is
-   created or its secret renewed ([SR2](../sources.md)); a lost one is
+   created or its secret renewed ([SR2](../sources.md)), because presentator
+   keeps only its SHA-256 hash; a lost one is
    [renewed](renew-a-webhook-secret.md). Rollback: none, this step changes
    nothing.
 2. In the Git host's webhook settings, add a webhook with the hook address and

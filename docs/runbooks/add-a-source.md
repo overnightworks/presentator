@@ -22,17 +22,20 @@ on the source's page.
    ([`PRESENTATOR_LOCAL_SOURCES_MOUNT`](../configuration.md)) and let uid 1001
    (`presentator`) own it. Git refuses the folder as "dubious ownership"
    otherwise. Rollback: remove the folder.
-3. Open Settings · Sources, choose Add, and enter the name and the Git URL.
-   Rollback: leave the page; nothing is stored yet.
+3. Open Settings · Sources, choose *Add source*, and enter the name and the Git
+   URL. Pick the access kind: *HTTPS token* (the default), *SSH deploy key* or
+   *On this box*; a local folder takes no secret. Rollback: leave the page;
+   nothing is stored yet.
 4. HTTPS: enter the token in the Secret field, because an `https://` address has
    no user part. SSH: Add shows an owned ed25519 deploy-key draft; register its
    public half at the Git host. The first contact accepts the host's key and
-   refuses the host if it ever changes. Rollback: delete the key at the host.
+   refuses the host if it ever changes. Local folder: enter no secret.
+   Rollback: delete the key at the host.
 5. Choose *Check connection*. It probes that exact token or draft before
    anything is stored, and *Create* stays disabled until it answers reachable.
    Rollback: none needed, nothing is stored.
 6. Choose *Create*. The page shows the webhook secret once
-   ([SR2](../sources.md)); store it if a Git host will call the
+   ([SR2](../sources.md); leaving or reloading the page loses it); store it if a Git host will call the
    [fetch-now hook](call-the-fetch-now-hook.md). Rollback: remove the source as
    [SR3](../sources.md) describes.
 
