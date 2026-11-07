@@ -1,8 +1,0 @@
-claim_id = "395e1036e10849f9bb7eb38aa0cf0616"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "e5fcd106048550fe96cf4fe7ba7c846d5bbd9ad3"
-branch = "claude/issue-880-every-build-worker-start-proves-it-runs"
-scope = ["pyproject.toml", "scripts/probe_build_worker.py", "scripts/probe_build_worker/plant_residue.py", "scripts/probe_build_worker_refusals.py", "scripts/probe_build_worker_starts.py", "src/presentator/host/worker.py", "src/presentator/host/worker_scratch.py", "tests/presentator/adapters/test_worker_children.py", "tests/presentator/host/support/audit_recording.py", "tests/presentator/host/support/controller_life.py", "tests/presentator/host/support/sealed_snapshot.py", "tests/presentator/host/support/worker_life.py", "tests/presentator/host/test_worker.py", "tests/presentator/host/test_worker_scratch.py", "tests/presentator/host/test_worker_step.py", "tests/presentator/host/test_worker_upload.py", "tests/presentator/host/test_worker_wire.py", "tests/scripts/test_probe_build_worker_plant_residue.py"]
-opened_commit = "34a0474d9a7b57fc5d05a7df59b97c17d935e232"
-whole_reason = "The two start proofs, the scratch-place owner whose move makes room for them in worker.py, every test and probe that names a moved name, and the container cells that prove each refusal land together."
