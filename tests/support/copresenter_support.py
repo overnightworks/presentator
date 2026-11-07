@@ -34,7 +34,7 @@ from presentator.contracts.copresenter import (
     HearingTranscript,
     SlideText,
 )
-from presentator.contracts.decks import Deck, Source
+from presentator.contracts.decks import Source
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
 from tests.presentator.application.support.fakes import (
     FakeDeckStore,
@@ -43,6 +43,7 @@ from tests.presentator.application.support.fakes import (
     FrozenClock,
 )
 from tests.support.deck_page_support import a_build, a_deck_store
+from tests.support.deck_text_support import A_DECK_TEXT, FakeDeckTexts
 from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     A_GATEWAY_KEY,
@@ -93,16 +94,6 @@ A_SOURCE = Source(id=SOURCE_ID, name="s", url="u", ref="main", owner_id=ADMIN)
 
 def the_admins_decks() -> FakeDeckStore:
     return a_deck_store(slug=A_DECK, built=a_build())
-
-
-A_DECK_TEXT = DeckText(
-    title="Kundenfeedback",
-    language="de",
-    slides=(
-        SlideText(number=1, title="Start", body="Willkommen", notes=""),
-        SlideText(number=2, title="Wichtig", body="Der Kern", notes="Betonen"),
-    ),
-)
 
 
 def a_deck_text_over_the_clients_bound() -> DeckText:
@@ -274,21 +265,6 @@ class FakePersonAccess:
         if self.unavailable:
             raise CoPresenterUnavailableError
         return self.refusal or frozenset({AN_API_GROUP})
-
-
-@dataclass
-class FakeDeckTexts:
-    """Reads the same words for every deck, and remembers which it was asked for."""
-
-    text: DeckText | None = field(default_factory=lambda: A_DECK_TEXT)
-    unreadable: bool = False
-    asked: list[tuple[Deck, Source]] = field(default_factory=list[tuple[Deck, Source]])
-
-    def text_of(self, deck: Deck, source: Source) -> DeckText | None:
-        self.asked.append((deck, source))
-        if self.unreadable:
-            raise CoPresenterUnavailableError
-        return self.text
 
 
 @dataclass(kw_only=True)

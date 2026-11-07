@@ -45,11 +45,12 @@ only its two configured hostnames.
    `<PRESENTATOR_TALK_ORIGIN>/auth/callback` as valid redirect URIs: the talk
    host signs in at its own.
 
-## Let an agent list a person's decks
+## Let an agent read a person's decks
 
 Optional: skip it and the instance serves no `/mcp`. A person's agent reaches
-the person's decks through `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, as that person,
-and nothing else.
+the person's decks through `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, as that person:
+it lists them, sees whether each is built and why a build failed, and reads
+their text. It does nothing else.
 
 1. Use the shared `agents` client: one public client for every app, with
    client authentication off (no secret) and PKCE S256. Its id is

@@ -68,10 +68,16 @@ from presentator.adapters.secrets import (
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.speech import UdsSpeaking, UdsSpeechHearing
 from presentator.agent.backend import SessionGroups, gateway_answerer
-from presentator.agent.mcp import deck_list_mark, install_mcp_front
+from presentator.agent.mcp import (
+    deck_list_mark,
+    deck_text_mark,
+    deck_view_mark,
+    install_mcp_front,
+)
 from presentator.agent.settings import McpSettings
 from presentator.api.auth import (
     AgentFront,
+    DeckMarks,
     InstalledAuth,
     LobbyPrivate,
     content_security_policy,
@@ -84,6 +90,7 @@ from presentator.api.talk import create_talk, talk_content_security_policy
 from presentator.application.copresenter import AskLimiter, CoPresenterUse
 from presentator.application.decks import Decks
 from presentator.application.identity import SESSION_LIFETIME, SESSION_SWEEP_INTERVAL
+from presentator.application.own_decks import OwnDecks
 from presentator.application.people import People
 from presentator.application.preferences import Preferences
 from presentator.host.config import (
@@ -179,14 +186,20 @@ def build_instance(
             key_drafts=key_drafts,
             identity_writes=identity_writes,
             auth=lobby_auth,
+            mirrors=mirrors,
             shell=shell,
         ),
         talk=_talk(settings, decks, sessions, talk_auth, mirrors),
-        poller=Schedule(
-            chore=decks.refresh,
-            interval=timedelta(seconds=settings.source_poll_seconds),
-        ),
+        poller=_poller(settings, decks),
         session_sweep=_session_sweep(sessions, SystemClock()),
+    )
+
+
+def _poller(settings: Settings, decks: Decks) -> Schedule:
+    """The schedule that takes in what every source carries now."""
+    return Schedule(
+        chore=decks.refresh,
+        interval=timedelta(seconds=settings.source_poll_seconds),
     )
 
 
@@ -198,6 +211,7 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
     key_drafts: SqliteSourceKeyDrafts,
     identity_writes: SqliteIdentityWrites,
     auth: InstalledAuth,
+    mirrors: SourceMirrors,
     shell: LobbyShell,
 ) -> FastAPI:
     """The lobby over the use cases, the sign-in wiring and the agent's front."""
@@ -213,6 +227,11 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
             issuer=settings.oidc_issuer,
             transaction=auth.transaction,
         ),
+        own_decks=OwnDecks(
+            decks=decks.store,
+            sources=decks.sources,
+            texts=MirroredDeckTexts(mirrors=mirrors),
+        ),
         shell=shell,
     )
 
@@ -224,9 +243,13 @@ def agent_front(
     issuer: str,
     transaction: SignInTransaction,
 ) -> AgentFront:
-    """The deck list's mark, and the MCP front only when the block names one."""
+    """The deck routes' marks, and the MCP front only when the block names one."""
     return AgentFront(
-        deck_list_mark=deck_list_mark(),
+        marks=DeckMarks(
+            deck_list=deck_list_mark(),
+            deck_view=deck_view_mark(),
+            deck_text=deck_text_mark(),
+        ),
         install_resource=None
         if mcp is None
         else partial(

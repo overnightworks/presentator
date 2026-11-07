@@ -12,7 +12,13 @@ def test_the_lobby_offers_exactly_the_pinned_tools() -> None:
 
     assert {
         (tool.declaration.name, tool.declaration.effect) for tool in offered.tools
-    } == {("list_decks", ToolEffect.READ_ONLY)}
+    } == {
+        ("list_decks", ToolEffect.READ_ONLY),
+        ("get_deck", ToolEffect.READ_ONLY),
+        ("get_deck_text", ToolEffect.READ_ONLY),
+    }
     assert {(mark.method, mark.template) for mark in offered.marks} == {
-        ("GET", "/api/decks")
+        ("GET", "/api/decks"),
+        ("GET", "/api/decks/{slug}"),
+        ("GET", "/api/decks/{slug}/text"),
     }

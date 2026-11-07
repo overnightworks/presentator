@@ -40,7 +40,6 @@ from tests.support.copresenter_support import (
     SPOKEN_QUESTION,
     THE_ASKED_DECK,
     TWO_SENTENCES,
-    FakeDeckTexts,
     Gateway,
     Run,
     Scenario,
@@ -54,6 +53,7 @@ from tests.support.copresenter_support import (
     what_the_ask_must_not_show,
 )
 from tests.support.deck_source_support import a_source, folders_under, mirrors_under
+from tests.support.deck_text_support import FakeDeckTexts
 from tests.support.lobby import (
     A_GATEWAY_KEY,
     NOW,

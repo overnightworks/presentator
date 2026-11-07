@@ -23,12 +23,24 @@ from webauth.ports import SignInTransaction
 
 from presentator.agent.settings import McpSettings
 
-DECK_LIST_TOOL = "list_decks"
+
+def _read_only(name: str) -> dict[str, object]:
+    return agent_tool(name=name, effect=ToolEffect.READ_ONLY)
 
 
 def deck_list_mark() -> dict[str, object]:
     """The mark of the deck list route: the reader's own decks, read only."""
-    return agent_tool(name=DECK_LIST_TOOL, effect=ToolEffect.READ_ONLY)
+    return _read_only("list_decks")
+
+
+def deck_view_mark() -> dict[str, object]:
+    """The mark of the deck view route: one own deck and its build state, read only."""
+    return _read_only("get_deck")
+
+
+def deck_text_mark() -> dict[str, object]:
+    """The mark of the deck text route: one own deck's words, read only."""
+    return _read_only("get_deck_text")
 
 
 def marked_tools(lobby: FastAPI) -> RouteTools[MarkedRoute]:

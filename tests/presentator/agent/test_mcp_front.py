@@ -9,161 +9,47 @@ import json
 from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 import pytest
 from agent_runtime_client.mcp_wire import (
     LATEST_PROTOCOL_VERSION,
     MCP_ENDPOINT_PATH,
-    PROTOCOL_VERSION_HEADER,
 )
 from fastapi.testclient import TestClient
 from webauth.ports import AccountKind
 
-from presentator.agent.settings import McpSettings
 from presentator.api.deck_list_api import DECK_LIST_PATH
 from presentator.api.people import ADMIN_PREFIX
 from presentator.api.preference_api import ACCOUNT_PATH
 from presentator.contracts.preferences import ThemeChoice
 from presentator.host.main import Instance, served_by_host
 from presentator.host.polling import Schedule
-from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
+from tests.presentator.agent.support.mcp_world import (
+    MARKED_PATHS,
+    MarkedPath,
+    World,
+    a_world,
+    called_through_mcp,
+    listed_through_mcp,
+    nothing_was_made,
+    rpc,
+    slugs_of,
+)
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
     AN_ISSUER,
-    NOW,
-    GivenDecks,
     a_crowd,
-    a_decks,
     a_settings,
     a_talk_app,
-    put_a_built_deck,
 )
-from tests.support.sign_in_support import MEMBER, Scene, a_scene
-
-
-class World:
-    """A scene whose two people each own one deck, and the deck store behind it."""
-
-    HAL = "hal-client"
-    AGENTS = "agents-client"
-    GROUP = "/apps/presentator/agents"
-    SCOPE = "mcp:tools"
-    SIGNED_IN = 2
-    FELIX = "subject-of-felix"
-    ANNA = "subject-of-anna"
-    STRANGER = "subject-of-nobody-who-signed-in"
-    MCP_URL = f"{A_BROWSERS_ADDRESS}{MCP_ENDPOINT_PATH}"
-    METADATA_PATH = f"/.well-known/oauth-protected-resource{MCP_ENDPOINT_PATH}"
-    JSON: ClassVar[dict[str, str]] = {"accept": "application/json"}
-    PROTOCOL: ClassVar[dict[str, str]] = {
-        PROTOCOL_VERSION_HEADER: LATEST_PROTOCOL_VERSION.value
-    }
-    AGENT_GROUP = "/agents"
-    AGENT_BOT = "subject-of-a-service-account"
-    SETTINGS = McpSettings(
-        client_id=AGENTS, group=GROUP, scope=SCOPE, agent_group=AGENT_GROUP
-    )
-
-    def __init__(self, scene: Scene) -> None:
-        """Sign both people in through the real callback."""
-        self.scene = scene
-        self.felix = self._browser_of(self.FELIX, "felix")
-        self.anna = self._browser_of(self.ANNA, "anna")
-
-    def program(self, headers: dict[str, str] | None = None) -> TestClient:
-        """A program that is no browser: it sends only what it names."""
-        return TestClient(
-            self.scene.lobby.app,
-            base_url=A_BROWSERS_ADDRESS,
-            follow_redirects=False,
-            headers=headers or {},
-        )
-
-    def _browser_of(self, subject: str, username: str) -> TestClient:
-        """A browser that signed in through the real callback."""
-        browser = self.scene.browser()
-        assert self.scene.sign_in(browser, subject=subject, username=username)
-        return browser
-
-    def bearer(
-        self,
-        *,
-        subject: str = FELIX,
-        groups: list[str] | None = None,
-        authorized_party: str = AGENTS,
-        audience: str | None = MCP_URL,
-        scope: str | None = SCOPE,
-    ) -> dict[str, str]:
-        minted = self.scene.issuer.mint_access_token(
-            subject=subject,
-            groups=[*MEMBER, self.GROUP] if groups is None else groups,
-            authorized_party=authorized_party,
-            audience=audience,
-            scope=scope,
-        )
-        return {"authorization": f"Bearer {minted}"}
-
-    def own_agent(self, *, groups: list[str]) -> dict[str, str]:
-        """The token of a service account that signs in with its own client."""
-        minted = self.scene.issuer.mint_access_token(
-            subject=self.AGENT_BOT,
-            groups=groups,
-            authorized_party="a-service-account-client",
-            audience=self.MCP_URL,
-            scope=self.SCOPE,
-            agent=(self.FELIX, "notes-bot"),
-        )
-        return {"authorization": f"Bearer {minted}"}
-
-
-def a_world(tmp_path: Path, *, token_clients: frozenset[str] = frozenset()) -> World:
-    store = FakeDeckStore()
-    scene = a_scene(
-        tmp_path,
-        token_clients=token_clients,
-        decks=a_decks(GivenDecks(store=store), FrozenClock(instant=NOW)),
-        mcp=World.SETTINGS,
-    )
-    world = World(scene)
-    put_a_built_deck(store, slug="felix-deck", owner_id=World.FELIX)
-    put_a_built_deck(store, slug="anna-deck", owner_id=World.ANNA)
-    return world
+from tests.support.sign_in_support import MEMBER, a_scene
 
 
 @pytest.fixture
 def world(tmp_path: Path) -> World:
     return a_world(tmp_path)
-
-
-def rpc(method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}
-
-
-def slugs_of(listed: dict[str, Any]) -> list[str]:
-    return [deck["slug"] for deck in listed["decks"]]
-
-
-def listed_through_mcp(program: TestClient, headers: dict[str, str]) -> dict[str, Any]:
-    answer = program.post(
-        MCP_ENDPOINT_PATH,
-        json=rpc("tools/call", {"name": "list_decks", "arguments": {}}),
-        headers={**headers, **World.PROTOCOL},
-    )
-    assert answer.status_code == HTTPStatus.OK
-    result = answer.json()["result"]
-    assert not result.get("isError")
-    listed: dict[str, Any] = json.loads(result["content"][0]["text"])
-    return listed
-
-
-def nothing_was_made(world: World) -> None:
-    """No account beyond the two who signed in, and no session beyond theirs."""
-    assert (world.scene.count("users"), world.scene.count("sessions")) == (
-        World.SIGNED_IN,
-        World.SIGNED_IN,
-    )
 
 
 @pytest.mark.parametrize(
@@ -189,7 +75,7 @@ def test_an_agent_initializes_lists_and_calls_as_the_person_whose_token_it_holds
     )
 
     assert initialized.status_code == HTTPStatus.OK
-    assert [tool["name"] for tool in tools.json()["result"]["tools"]] == ["list_decks"]
+    assert "list_decks" in [tool["name"] for tool in tools.json()["result"]["tools"]]
     felix_listed = listed_through_mcp(program, headers)
     anna_listed = listed_through_mcp(program, world.bearer(subject=World.ANNA))
     assert slugs_of(felix_listed) == ["felix-deck"]
@@ -349,24 +235,32 @@ def test_an_expired_token_is_refused_and_makes_nothing(world: World) -> None:
     nothing_was_made(world)
 
 
+@pytest.mark.parametrize("marked", MARKED_PATHS)
 def test_one_persons_bearer_beside_another_persons_cookie_is_the_bearers_person(
-    world: World,
+    world: World, marked: MarkedPath
 ) -> None:
-    """The resource request never takes the cookie's person."""
-    through_route = world.anna.get(DECK_LIST_PATH, headers=world.bearer())
-    through_mcp = listed_through_mcp(world.anna, world.bearer())
+    """The resource request never takes the cookie's person, on every marked path."""
+    alone = world.program().get(marked.path, headers={**world.bearer(), **World.JSON})
+    through_route = world.anna.get(marked.path, headers=world.bearer())
+    through_mcp = called_through_mcp(
+        world.anna, world.bearer(), marked.tool, marked.arguments
+    )
 
-    assert slugs_of(through_route.json()) == ["felix-deck"]
-    assert slugs_of(through_mcp) == ["felix-deck"]
+    assert alone.status_code == HTTPStatus.OK
+    assert through_route.status_code == HTTPStatus.OK
+    assert through_route.json() == alone.json()
+    assert not through_mcp.is_error
+    assert json.loads(through_mcp.text) == alone.json()
 
 
+@pytest.mark.parametrize("marked", MARKED_PATHS)
 def test_an_invalid_resource_bearer_beside_a_valid_cookie_gets_no_cookie_fallback(
-    world: World,
+    world: World, marked: MarkedPath
 ) -> None:
     browser = world.felix
     invalid = world.bearer(scope=None)
 
-    through_route = browser.get(DECK_LIST_PATH, headers=invalid)
+    through_route = browser.get(marked.path, headers=invalid)
     through_mcp = browser.post(
         MCP_ENDPOINT_PATH, json=rpc("tools/list"), headers={**invalid, **World.PROTOCOL}
     )
