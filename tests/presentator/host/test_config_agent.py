@@ -116,6 +116,7 @@ _MCP_FIELD_OF = {
     "PRESENTATOR_AGENT__MCP__CLIENT_ID": "agent.mcp.client_id",
     "PRESENTATOR_AGENT__MCP__GROUP": "agent.mcp.group",
     "PRESENTATOR_AGENT__MCP__SCOPE": "agent.mcp.scope",
+    "PRESENTATOR_AGENT__MCP__AGENT_GROUP": "agent.mcp.agent_group",
 }
 
 
@@ -125,7 +126,7 @@ def mcp_block() -> dict[str, str]:
     return dict(
         zip(
             _MCP_FIELD_OF,
-            ("an-agents-client", "/apps/presentator/agents", "mcp:tools"),
+            ("an-agents-client", "/apps/presentator/agents", "mcp:tools", "/agents"),
             strict=True,
         )
     )
@@ -136,7 +137,7 @@ def test_without_the_mcp_variables_the_settings_name_no_mcp_block() -> None:
     assert load_settings().agent.mcp is None
 
 
-def test_a_whole_mcp_block_names_the_client_its_group_and_its_scope(
+def test_a_whole_mcp_block_names_the_client_its_groups_and_its_scope(
     environment: pytest.MonkeyPatch, mcp_block: dict[str, str]
 ) -> None:
     for variable, value in mcp_block.items():
@@ -145,7 +146,12 @@ def test_a_whole_mcp_block_names_the_client_its_group_and_its_scope(
     mcp = load_settings().agent.mcp
 
     assert mcp is not None
-    assert (mcp.client_id, mcp.group, mcp.scope) == tuple(mcp_block.values())
+    assert (mcp.client_id, mcp.group, mcp.scope, mcp.agent_group) == (
+        "an-agents-client",
+        "/apps/presentator/agents",
+        "mcp:tools",
+        "/agents",
+    )
 
 
 @pytest.mark.parametrize(("missing", "field"), _MCP_FIELD_OF.items())
@@ -177,6 +183,14 @@ def test_a_partial_mcp_block_refuses_the_start_naming_the_field(
             "PRESENTATOR_AGENT__MCP__SCOPE", "two MARKER", id="two scope tokens"
         ),
         pytest.param("PRESENTATOR_AGENT__MCP__SCOPE", "", id="no scope"),
+        pytest.param(
+            "PRESENTATOR_AGENT__MCP__AGENT_GROUP",
+            "no-slash-MARKER",
+            id="an agent group no path",
+        ),
+        pytest.param(
+            "PRESENTATOR_AGENT__MCP__AGENT_GROUP", "", id="an empty agent group"
+        ),
     ],
 )
 def test_a_malformed_mcp_block_refuses_the_start_without_echoing_it(

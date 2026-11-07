@@ -11,12 +11,14 @@ import pytest
 from pydantic import SecretStr
 from webauth.config import WebAuthConfig
 from webauth.dependencies import ConnectionRefusal, admit_session
+from webauth.ports import AccountKind
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (
     ProcessWriteLock,
     SqliteIdentityWrites,
     SqliteSessionRecordStore,
+    StoredAccount,
     StoredSession,
     SystemClock,
     create_identity_tables,
@@ -71,6 +73,15 @@ def an_admin(user_id: str = "user-1", username: str = "felix") -> User:
     return User(id=user_id, username=username, role=Role.ADMIN)
 
 
+def the_account_of(person: User) -> StoredAccount:
+    return StoredAccount(
+        id=person.id,
+        username=person.username,
+        role=person.role,
+        kind=AccountKind.PERSON,
+    )
+
+
 def stored_expiry(database: Path, session_id: str) -> str:
     with closing(sqlite3.connect(database)) as connection:
         (expires_at,) = connection.execute(
@@ -95,7 +106,7 @@ def test_a_session_is_read_back_with_the_account_joined_from_the_users(
 
     loaded = sessions.load(created.id)
     assert loaded is not None
-    assert loaded.user == an_admin()
+    assert loaded.user == the_account_of(an_admin())
     assert (loaded.created_at, loaded.expires_at) == (_NOW, expires_at)
 
 
@@ -297,7 +308,7 @@ def test_creating_the_tables_twice_leaves_the_people_as_they_were(
 
     loaded = SqliteSessionRecordStore(database).load(session.id)
     assert loaded is not None
-    assert loaded.user == an_admin()
+    assert loaded.user == the_account_of(an_admin())
 
 
 def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_address(
@@ -318,7 +329,7 @@ def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_add
             )
         }
 
-    assert user_columns == ["id", "username", "role"]
+    assert user_columns == ["id", "username", "role", "kind"]
     assert session_columns == [
         "id",
         "user_id",

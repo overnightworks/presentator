@@ -65,6 +65,7 @@ def install_mcp_front(
         url=f"{origin}{MCP_ENDPOINT_PATH}",
         scope=settings.scope,
         required_group=settings.group,
+        agent_group=settings.agent_group,
         authorized_parties=AuthorizedParties(frozenset({settings.client_id})),
         transaction=transaction,
         marked_routes=tools.marks,

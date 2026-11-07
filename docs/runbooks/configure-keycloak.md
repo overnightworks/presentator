@@ -65,7 +65,12 @@ nothing else.
 4. Create a group below `/apps/presentator` for the people whose agents may
    call; its path is `PRESENTATOR_AGENT__MCP__GROUP`. A token needs this group
    besides the app's own.
-5. Leave the realm's access token lifetime at 300 seconds: the app adds none.
+5. Name the realm's agent group, `/agents`, in
+   `PRESENTATOR_AGENT__MCP__AGENT_GROUP`. A service account in it, with the
+   app's groups and scope on its token, signs in at `/mcp` with its own client
+   as an agent; the app creates its account on that first call. It sees no
+   deck: decks belong to people.
+6. Leave the realm's access token lifetime at 300 seconds: the app adds none.
 
 A person must have signed in once in a browser: a token of a subject the app
 has no account for is refused, and no account is made from it.

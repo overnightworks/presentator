@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Final
 
 from pydantic import SecretStr
-from webauth.ports import AuditSink, SignInStores, UsernameTakenError
+from webauth.ports import AccountKind, AuditSink, SignInStores, UsernameTakenError
 
 from presentator.adapters.audit import BufferedAudit
 from presentator.adapters.sqlite import (
@@ -25,11 +25,17 @@ from presentator.adapters.sqlite import (
 from presentator.contracts.models import Role, User
 from presentator.contracts.people import SessionSecretsHeld, SessionTimes
 
-_SCHEMA: Final = """
+_KINDS: Final = ", ".join(f"'{kind.value}'" for kind in AccountKind)
+KIND_COLUMN: Final = (
+    f"kind TEXT NOT NULL DEFAULT '{AccountKind.PERSON.value}'"
+    f" CHECK (kind IN ({_KINDS}))"
+)
+_SCHEMA: Final = f"""
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
-    role TEXT NOT NULL
+    role TEXT NOT NULL,
+    {KIND_COLUMN}
 );
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
@@ -42,7 +48,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 """
 _IDENTIFIER_BYTES: Final = 32
 _USERNAME_COLUMN: Final = "users.username"
-_SELECT_ACCOUNT: Final = "SELECT id, username, role FROM users WHERE id = ?"
+_SELECT_ACCOUNT: Final = "SELECT id, username, role, kind FROM users WHERE id = ?"
 
 
 def create_identity_tables(database: Path) -> None:
@@ -78,6 +84,20 @@ class ProcessWriteLock:
             yield
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class StoredAccount:
+    """An account row as `webauth` reads it.
+
+    The kind is `webauth`'s own `AccountKind`, which `contracts` may not import,
+    so the row's record lives here and the lobby's `User` stays without it.
+    """
+
+    id: str
+    username: str
+    role: Role
+    kind: AccountKind
+
+
 @dataclass(frozen=True, slots=True)
 class SqliteSubjectUserStore:
     """The accounts table, keyed by the identity provider's subject.
@@ -94,28 +114,30 @@ class SqliteSubjectUserStore:
         """The open transaction's cursor, or a fresh one that commits on its way out."""
         return rows_or_inside(self.database, self.inside)
 
-    def get(self, user_id: str) -> User | None:
+    def get(self, user_id: str) -> StoredAccount | None:
         """The account whose id is `user_id` character for character."""
         with self.cursor() as cursor:
             row = cursor.execute(_SELECT_ACCOUNT, (user_id,)).fetchone()
-        return None if row is None else _user(row)
+        return None if row is None else _account(row)
 
-    def create_for_subject(self, subject: str, username: str, role: str) -> User:
+    def create_for_subject(
+        self, subject: str, username: str, role: str, kind: AccountKind
+    ) -> StoredAccount:
         """Add the account of `subject`; only a username another holds is 'taken'."""
         try:
             with self.cursor() as cursor:
                 cursor.execute(
-                    "INSERT INTO users (id, username, role) VALUES (?, ?, ?)",
-                    (subject, username, role),
+                    "INSERT INTO users (id, username, role, kind) VALUES (?, ?, ?, ?)",
+                    (subject, username, role, kind.value),
                 )
         except sqlite3.IntegrityError as refused:
             if _is_a_taken_username(refused) and self.get(subject) is None:
                 message = "the username is held by another account"
                 raise UsernameTakenError(message) from None
             raise
-        return User(id=subject, username=username, role=Role(role))
+        return StoredAccount(id=subject, username=username, role=Role(role), kind=kind)
 
-    def set_role(self, user_id: str, role: str) -> User:
+    def set_role(self, user_id: str, role: str) -> StoredAccount:
         """Change the role of one existing account; no such account raises."""
         with self.cursor() as cursor:
             cursor.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
@@ -123,7 +145,19 @@ class SqliteSubjectUserStore:
                 message = "no account to change the role of"
                 raise LookupError(message)
             row = cursor.execute(_SELECT_ACCOUNT, (user_id,)).fetchone()
-        return _user(row)
+        return _account(row)
+
+    def set_kind(self, user_id: str, kind: AccountKind) -> StoredAccount:
+        """Change the kind of one existing account; no such account raises."""
+        with self.cursor() as cursor:
+            cursor.execute(
+                "UPDATE users SET kind = ? WHERE id = ?", (kind.value, user_id)
+            )
+            if cursor.rowcount != 1:
+                message = "no account to change the kind of"
+                raise LookupError(message)
+            row = cursor.execute(_SELECT_ACCOUNT, (user_id,)).fetchone()
+        return _account(row)
 
 
 def _is_a_taken_username(refused: sqlite3.IntegrityError) -> bool:
@@ -141,7 +175,7 @@ class StoredSession:
     """
 
     id: str
-    user: User
+    user: StoredAccount
     created_at: datetime
     expires_at: datetime
     refresh_token: SecretStr | None
@@ -197,7 +231,7 @@ class SqliteSessionRecordStore:
             )
         return StoredSession(
             id=session_id,
-            user=_user(account),
+            user=_account(account),
             created_at=now,
             expires_at=expires_at,
             refresh_token=refresh_token,
@@ -210,7 +244,7 @@ class SqliteSessionRecordStore:
             row = cursor.execute(
                 "SELECT sessions.id, sessions.created_at, sessions.expires_at,"
                 " sessions.refresh_token, sessions.id_token,"
-                " users.id, users.username, users.role"
+                " users.id, users.username, users.role, users.kind"
                 " FROM sessions JOIN users ON users.id = sessions.user_id"
                 " WHERE sessions.id = ?",
                 (session_id,),
@@ -220,7 +254,7 @@ class SqliteSessionRecordStore:
         stored_id, created_at, expires_at, refresh_token, id_token, *account = row
         return StoredSession(
             id=stored_id,
-            user=_user(account),
+            user=_account(account),
             created_at=datetime.fromisoformat(created_at),
             expires_at=datetime.fromisoformat(expires_at),
             refresh_token=None if refresh_token is None else SecretStr(refresh_token),
@@ -344,7 +378,10 @@ class SqliteIdentityWrites:
 
     def get(self, user_id: str) -> User | None:
         """The account of that id; a read needs no entry."""
-        return SqliteSubjectUserStore(self.database).get(user_id)
+        account = SqliteSubjectUserStore(self.database).get(user_id)
+        if account is None:
+            return None
+        return User(id=account.id, username=account.username, role=account.role)
 
     def delete_account(self, user_id: str) -> None:
         """Delete the account and its sessions together."""
@@ -366,6 +403,8 @@ class TokenIdentifierFactory:
         return secrets.token_urlsafe(_IDENTIFIER_BYTES)
 
 
-def _user(row: Sequence[str]) -> User:
-    user_id, username, role = row
-    return User(id=user_id, username=username, role=Role(role))
+def _account(row: Sequence[str]) -> StoredAccount:
+    user_id, username, role, kind = row
+    return StoredAccount(
+        id=user_id, username=username, role=Role(role), kind=AccountKind(kind)
+    )

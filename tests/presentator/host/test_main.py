@@ -737,7 +737,7 @@ def test_an_instance_restarts_on_a_crash_that_left_only_current_frames_in_the_lo
 
     survivor = SqliteSessionRecordStore(database).load(session_ids[0])
     assert survivor is not None
-    assert survivor.user == _ADMIN
+    assert survivor.user.id == _ADMIN.id
     lobby = TestClient(
         instance.lobby,
         base_url=A_BROWSERS_ADDRESS,

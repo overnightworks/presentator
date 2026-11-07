@@ -23,7 +23,7 @@ from httpx2 import Response as BrowserAnswer
 from pydantic import SecretStr
 from webauth.admission import AdmissionConfig
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
-from webauth.ports import AccountEvent, AccountEventKind, AuditSink
+from webauth.ports import AccountEvent, AccountEventKind, AccountKind, AuditSink
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (
@@ -151,6 +151,14 @@ def test_the_groups_the_issuer_names_decide_the_role_the_account_gets(
     assert account.role == role
 
 
+def test_a_browser_sign_in_creates_its_account_as_a_person(scene: Scene) -> None:
+    scene.sign_in(groups=MEMBER)
+
+    account = scene.users.get("subject-1")
+    assert account is not None
+    assert account.kind is AccountKind.PERSON
+
+
 def test_a_changed_membership_changes_the_role_at_the_next_sign_in_and_is_audited(
     scene: Scene,
 ) -> None:
@@ -254,7 +262,7 @@ def _in_groups_named_without_a_path(scene: Scene) -> BrowserAnswer:
 
 
 def _a_username_another_subject_holds(scene: Scene) -> BrowserAnswer:
-    scene.users.create_for_subject("subject-0", "felix", "user")
+    scene.users.create_for_subject("subject-0", "felix", "user", AccountKind.PERSON)
     return scene.sign_in(subject="subject-1", username="felix")
 
 
@@ -485,7 +493,7 @@ def test_a_username_another_account_holds_writes_nothing_and_closes_the_transact
     assert refused.headers["location"] == "/login/login-failed"
     assert (scene.count("users"), scene.count("sessions")) == (1, 0)
     assert scene.audit.events == []
-    scene.users.create_for_subject("subject-2", "anna", "user")
+    scene.users.create_for_subject("subject-2", "anna", "user", AccountKind.PERSON)
     assert scene.users.get("subject-2") is not None
 
 

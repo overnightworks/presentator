@@ -18,6 +18,7 @@ from agent_runtime_client.mcp_wire import (
     PROTOCOL_VERSION_HEADER,
 )
 from fastapi.testclient import TestClient
+from webauth.ports import AccountKind
 
 from presentator.agent.settings import McpSettings
 from presentator.api.deck_list_api import DECK_LIST_PATH
@@ -59,7 +60,11 @@ class World:
     PROTOCOL: ClassVar[dict[str, str]] = {
         PROTOCOL_VERSION_HEADER: LATEST_PROTOCOL_VERSION.value
     }
-    SETTINGS = McpSettings(client_id=AGENTS, group=GROUP, scope=SCOPE)
+    AGENT_GROUP = "/agents"
+    AGENT_BOT = "subject-of-a-service-account"
+    SETTINGS = McpSettings(
+        client_id=AGENTS, group=GROUP, scope=SCOPE, agent_group=AGENT_GROUP
+    )
 
     def __init__(self, scene: Scene) -> None:
         """Sign both people in through the real callback."""
@@ -97,6 +102,18 @@ class World:
             authorized_party=authorized_party,
             audience=audience,
             scope=scope,
+        )
+        return {"authorization": f"Bearer {minted}"}
+
+    def own_agent(self, *, groups: list[str]) -> dict[str, str]:
+        """The token of a service account that signs in with its own client."""
+        minted = self.scene.issuer.mint_access_token(
+            subject=self.AGENT_BOT,
+            groups=groups,
+            authorized_party="a-service-account-client",
+            audience=self.MCP_URL,
+            scope=self.SCOPE,
+            agent=(self.FELIX, "notes-bot"),
         )
         return {"authorization": f"Bearer {minted}"}
 
@@ -179,6 +196,43 @@ def test_an_agent_initializes_lists_and_calls_as_the_person_whose_token_it_holds
     assert felix_listed == world.felix.get(DECK_LIST_PATH, headers=World.JSON).json()
     assert slugs_of(anna_listed) == ["anna-deck"]
     assert anna_listed == world.anna.get(DECK_LIST_PATH, headers=World.JSON).json()
+    nothing_was_made(world)
+
+
+def test_an_own_account_agent_in_presentators_groups_is_admitted_with_no_decks(
+    world: World,
+) -> None:
+    """Its account is created on that first admission, as an agent."""
+    headers = world.own_agent(groups=[*MEMBER, World.GROUP, World.AGENT_GROUP])
+
+    listed = listed_through_mcp(world.program(), headers)
+
+    assert listed["decks"] == []
+    account = world.scene.users.get(World.AGENT_BOT)
+    assert account is not None
+    assert account.kind is AccountKind.AGENT
+    assert world.scene.count("users") == World.SIGNED_IN + 1
+    assert world.scene.count("sessions") == World.SIGNED_IN
+
+
+@pytest.mark.parametrize(
+    "groups",
+    [
+        pytest.param([*MEMBER, World.AGENT_GROUP], id="no presentator group"),
+        pytest.param([World.AGENT_GROUP], id="the agent group alone"),
+    ],
+)
+def test_an_own_account_agent_outside_presentators_groups_is_refused_and_makes_nothing(
+    world: World, groups: list[str]
+) -> None:
+    headers = {**world.own_agent(groups=groups), **World.PROTOCOL}
+
+    answer = world.program().post(
+        MCP_ENDPOINT_PATH, json=rpc("tools/list"), headers=headers
+    )
+
+    assert answer.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}
+    assert world.scene.users.get(World.AGENT_BOT) is None
     nothing_was_made(world)
 
 

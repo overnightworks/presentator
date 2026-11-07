@@ -19,6 +19,7 @@ from starlette.types import Message, Receive, Scope, Send
 from webauth.ports import (
     AccountEvent,
     AccountEventKind,
+    AccountKind,
     AuditSink,
     SignInStores,
     SubjectUserStore,
@@ -66,11 +67,16 @@ class AccountsThatBreak:
             raise sqlite3.OperationalError(user_id)
         return self.real.get(user_id)
 
-    def create_for_subject(self, subject: str, username: str, role: str) -> UserRecord:
-        return self.real.create_for_subject(subject, username, role)
+    def create_for_subject(
+        self, subject: str, username: str, role: str, kind: AccountKind
+    ) -> UserRecord:
+        return self.real.create_for_subject(subject, username, role, kind)
 
     def set_role(self, user_id: str, role: str) -> UserRecord:
         return self.real.set_role(user_id, role)
+
+    def set_kind(self, user_id: str, kind: AccountKind) -> UserRecord:
+        return self.real.set_kind(user_id, kind)
 
 
 @dataclass(frozen=True)
@@ -202,7 +208,9 @@ def test_ending_sessions_writes_one_audit_event_naming_nobody_as_the_actor(
 def test_a_known_subject_with_no_open_session_changes_and_audits_nothing(
     world: World,
 ) -> None:
-    world.scene.users.create_for_subject("subject-3", "carl", "user")
+    world.scene.users.create_for_subject(
+        "subject-3", "carl", "user", AccountKind.PERSON
+    )
     users = world.scene.count("users")
 
     answer = world.logout_with(world.keycloak(), world.token("subject-3"))

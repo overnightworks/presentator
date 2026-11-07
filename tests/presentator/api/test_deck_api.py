@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from webauth.ports import AccountKind
 
 from presentator.api.deck_api import DeckView
 from presentator.contracts.decks import (
@@ -351,7 +352,7 @@ def test_a_persons_bearer_reads_that_persons_own_deck(tmp_path: Path) -> None:
             FrozenClock(instant=NOW),
         ),
     )
-    scene.users.create_for_subject(subject, "anna", Role.USER)
+    scene.users.create_for_subject(subject, "anna", Role.USER, AccountKind.PERSON)
     minted = scene.issuer.mint_access_token(
         subject=subject, groups=MEMBER, authorized_party=_HAL, audience=None
     )
