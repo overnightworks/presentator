@@ -23,7 +23,7 @@ from presentator.adapters.build_wire import (
 )
 from presentator.adapters.worker_children import ChildIdentity, ChildSurroundings
 from presentator.contracts.decks import StepKind
-from presentator.host import worker, worker_wire
+from presentator.host import worker, worker_scratch, worker_wire
 from presentator.host.config import WorkerSettings
 from presentator.host.worker import create_request_record
 from presentator.host.worker_wire import ReplyPlan, WireExit, WireRole
@@ -174,9 +174,9 @@ def test_production_carries_the_build_bound_of_the_settings() -> None:
 def test_production_hands_the_deck_effects_the_deck_it_carries() -> None:
     serving = worker.real_serving(WorkerSettings())
 
-    assert serving.open_deck is worker.make_open_directory
-    assert serving.close_deck is worker.close_deck
-    assert serving.work == Path(worker.WORK_MOUNT)
+    assert serving.open_deck is worker_scratch.make_open_directory
+    assert serving.close_deck is worker_scratch.close_deck
+    assert serving.work == Path(worker_scratch.WORK_MOUNT)
 
 
 def test_the_exit_status_is_outside_what_a_shell_returns_by_itself() -> None:

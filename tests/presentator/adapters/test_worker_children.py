@@ -24,7 +24,7 @@ from presentator.adapters.worker_children import (
     GatedChild,
     spawn_gated,
 )
-from presentator.host import worker, worker_serving
+from presentator.host import worker, worker_scratch, worker_serving
 from presentator.host.config import WorkerSettings
 from presentator.host.worker_serving import (
     HEADER_SECONDS,
@@ -64,7 +64,7 @@ STALLED_CONTROLLER = """
 import ctypes, os, sys, time
 from pathlib import Path
 from presentator.adapters.worker_children import readable_within
-from presentator.host import worker, worker_serving
+from presentator.host import worker, worker_scratch, worker_serving
 from presentator.host.worker_termination import FaultHandlerWatchdog
 
 def stall(*_arguments, **_keywords):
@@ -473,12 +473,12 @@ class RealServing:
             sweep=self.sweep,
             watchdog=self.watchdog,
             work=self.directory,
-            open_deck=worker.make_open_directory,
-            close_deck=worker.close_deck,
+            open_deck=worker_scratch.make_open_directory,
+            close_deck=worker_scratch.close_deck,
             step=StepEffects(
                 spawn=self.step_spawn,
                 gate_admits=lambda _status: True,
-                prepare=worker.prepare_step_paths,
+                prepare=worker_scratch.prepare_step_paths,
                 environment={"PATH": PATH},
                 project=self.directory,
             ),

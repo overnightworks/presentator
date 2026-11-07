@@ -24,16 +24,22 @@ from presentator.adapters.worker_children import (
     readable_within,
     spawn_gated,
 )
-from presentator.contracts.decks import (
-    DECK_DIRECTORY,
-    OUTPUT_DIRECTORY,
-    TOOLCHAIN_SCRATCH_DIRECTORY,
-)
 from presentator.host.config import (
     ConfigurationError,
     WorkerSettings,
     load_worker_settings,
     worker_settings_variables,
+)
+from presentator.host.worker_scratch import (
+    HOME_DIRECTORY,
+    ROOT_MODE,
+    SHARED_MEMORY_MOUNT,
+    TEMPORARY_MOUNT,
+    VITE_DIRECTORY,
+    WORK_MOUNT,
+    close_deck,
+    make_open_directory,
+    prepare_step_paths,
 )
 from presentator.host.worker_serving import (
     Serving,
@@ -47,7 +53,6 @@ from presentator.host.worker_termination import (
     reap_children,
     sweep,
 )
-from presentator.host.worker_wire import STEP_ERROR_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -60,16 +65,17 @@ WIRE_USER = "presentator-wire"
 BUILD_IDENTITY = (10001, 10001)
 WIRE_IDENTITY = (10002, 10002)
 NO_CAPABILITIES = "0" * 16
-ROOT_MODE = 0o755
-WORK_MOUNT = "/work"
 BIND_UMASK = 0o117
 LISTEN_BACKLOG = 4
-TEMPORARY_MOUNT_NAME = "tmp"
 # Mount points below the root, so the self-check names no world-writable path.
 SOCKET_MOUNT_NAME = build_wire.SOCKET_DIRECTORY.lstrip("/")
-SCRATCH_MOUNT_NAMES = (TEMPORARY_MOUNT_NAME, "dev/shm", SOCKET_MOUNT_NAME)
+TMPFS_MOUNT_NAMES = (
+    TEMPORARY_MOUNT.lstrip("/"),
+    SHARED_MEMORY_MOUNT.lstrip("/"),
+    SOCKET_MOUNT_NAME,
+)
 TMPFS_MOUNTS = tuple(
-    str(Path("/") / name) for name in (WORK_MOUNT.lstrip("/"), *SCRATCH_MOUNT_NAMES)
+    str(Path("/") / name) for name in (WORK_MOUNT.lstrip("/"), *TMPFS_MOUNT_NAMES)
 )
 NO_EXECUTION_MOUNTS = TMPFS_MOUNTS[:2]
 GROUP_AND_OTHERS_WRITE = stat.S_IWGRP | stat.S_IWOTH
@@ -85,10 +91,7 @@ HEADLESS_SHELL_PATTERN = (
     f"{PLAYWRIGHT_DIRECTORY}/chromium_headless_shell-*/"
     "chrome-headless-shell-linux64/chrome-headless-shell"
 )
-HOME_DIRECTORY = "home"
-VITE_DIRECTORY = "vite"
 VITE_CACHE_TARGET = f"{WORK_MOUNT}/{VITE_DIRECTORY}"
-STEP_TEMPORARY_DIRECTORY = str(Path("/") / TEMPORARY_MOUNT_NAME)
 # The image's and its base's keys, the runtime's HOSTNAME, Python's own LC_CTYPE.
 ALLOWED_ENVIRONMENT_KEYS = frozenset(
     {
@@ -655,47 +658,6 @@ def seal_record(descriptor: int) -> None:
     fcntl.fcntl(descriptor, F_ADD_SEALS, RECORD_SEALS)
 
 
-OPEN_DIRECTORY_MODE = 0o1777
-STEP_ERROR_MODE = 0o644
-STEP_ERROR_FLAGS = (
-    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_APPEND | os.O_CLOEXEC
-)
-
-
-def make_open_directory(path: Path) -> None:
-    """Make a world-writable directory for a child; never reuse one."""
-    path.mkdir()
-    path.chmod(OPEN_DIRECTORY_MODE)
-
-
-def prepare_step_paths(work: Path) -> int:
-    """Make the step's writable paths; return the descriptor of its new step.err.
-
-    An existing entry raises. The mode is set explicitly because the umask
-    would narrow it.
-    """
-    for directory in (
-        work / DECK_DIRECTORY / TOOLCHAIN_SCRATCH_DIRECTORY,
-        work / HOME_DIRECTORY,
-        work / OUTPUT_DIRECTORY,
-        work / VITE_DIRECTORY,
-    ):
-        make_open_directory(directory)
-    descriptor = os.open(work / STEP_ERROR_FILE, STEP_ERROR_FLAGS, STEP_ERROR_MODE)
-    try:
-        # The wire user (another uid) reads stderr; a shared group breaks sealing
-        os.fchmod(descriptor, STEP_ERROR_MODE)  # NOSONAR(S2612) see #381
-    except BaseException:
-        os.close(descriptor)
-        raise
-    return descriptor
-
-
-def close_deck(path: Path) -> None:
-    """Take the deck back to the root mode once the upload child is gone."""
-    path.chmod(ROOT_MODE)
-
-
 def real_serving(settings: WorkerSettings) -> Serving:
     """The effects of a serving life on this machine, bounded by the settings."""
     return Serving(
@@ -727,7 +689,7 @@ def real_serving(settings: WorkerSettings) -> Serving:
             environment={
                 "PATH": os.environ["PATH"],
                 "HOME": f"{WORK_MOUNT}/{HOME_DIRECTORY}",
-                "TMPDIR": STEP_TEMPORARY_DIRECTORY,
+                "TMPDIR": TEMPORARY_MOUNT,
                 "PLAYWRIGHT_BROWSERS_PATH": f"/{PLAYWRIGHT_DIRECTORY}",
                 "COREPACK_HOME": f"/{COREPACK_DIRECTORY}",
                 "COREPACK_ENABLE_NETWORK": "0",

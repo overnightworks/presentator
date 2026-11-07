@@ -26,7 +26,7 @@ from presentator.adapters.worker_children import (
     readable_within,
     spawn_gated,
 )
-from presentator.host import worker
+from presentator.host import worker, worker_scratch
 from presentator.host.worker_serving import Serving, StepEffects
 from presentator.host.worker_termination import FaultHandlerWatchdog
 
@@ -60,13 +60,13 @@ serving = Serving(
     sweep=lambda _deadline: True,
     create_record=worker.create_request_record,
     seal=worker.seal_record,
-    open_deck=worker.make_open_directory,
-    close_deck=worker.close_deck,
+    open_deck=worker_scratch.make_open_directory,
+    close_deck=worker_scratch.close_deck,
     work=work,
     step=StepEffects(
         spawn=step_spawn,
         gate_admits=lambda _status: True,
-        prepare=worker.prepare_step_paths,
+        prepare=worker_scratch.prepare_step_paths,
         environment={"PATH": os.environ["PATH"], "HOME": str(work / "home")},
         project=work,
     ),
