@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "84a57012473fb9de32326d912952be528a6136ad"
 branch = "claude/issue-889-take-webauth-0-33-0"
-scope = ["docs/configuration.md", "docs/runbooks/configure-keycloak.md", "pyproject.toml", "src/presentator/adapters/identity.py", "src/presentator/adapters/schema.py", "src/presentator/agent/mcp.py", "src/presentator/agent/settings.py", "src/presentator/api/admission.py", "src/presentator/contracts/models.py", "tests", "uv.lock"]
+scope = ["docs/ARCHITECTURE.md", "docs/configuration.md", "docs/runbooks/configure-keycloak.md", "pyproject.toml", "src/presentator/adapters/identity.py", "src/presentator/adapters/schema.py", "src/presentator/agent/mcp.py", "src/presentator/agent/settings.py", "src/presentator/api/admission.py", "src/presentator/contracts/models.py", "tests", "uv.lock"]
 opened_commit = "f9da8797517be8174c899df974a4a234db95678d"
 whole_reason = "One pin bump with the account-port adaptation, the column upgrade and the one setting it forces."
