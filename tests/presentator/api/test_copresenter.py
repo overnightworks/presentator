@@ -210,6 +210,7 @@ def test_ask_needs_the_browsers_provenance_and_streams_only_public_events() -> N
 
 
 def test_private_answer_events_preserve_the_public_stream_contract() -> None:
+    """CP12: the private answer ends with a done event marked AI generated."""
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
     private.answers.deltas = ["Der Anfang. ", "Der Satz."]
@@ -233,6 +234,7 @@ def test_private_answer_events_preserve_the_public_stream_contract() -> None:
 
 
 def test_private_answer_refusal_and_clean_end_do_not_invent_an_answer() -> None:
+    """CP12: a refusal or a clean end never invents a done answer."""
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
     lobby.sign_in()

@@ -203,7 +203,7 @@ def the_ticket_was_released(run: Run) -> bool:
 def test_an_access_refusal_is_answered_before_the_gateway_is_called(
     tmp_path: Path, setup: Scenario, status: HTTPStatus, detail: str
 ) -> None:
-    """The ruled 401 and 503 come before the stream, and the ticket is freed."""
+    """CP6: the ruled 401 and 503 come before the stream, and the ticket is freed."""
     run = drive(tmp_path, setup)
 
     assert run.response.status_code == status

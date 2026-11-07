@@ -7,9 +7,9 @@ hearing report "not yet available".
 This runbook runs speech beside a checkout run only.
 
 The voice that answers beside a talk is the speech service (`speech/`), a host
-process that binds no TCP port and is reached only through `speech.sock`. Who may use it and what crosses the boundary is
-[co-presenter](../co-presenter.md); the authority
-it shares is [crosscutting concepts](../ARCHITECTURE.md#5-crosscutting-concepts).
+process that binds no TCP port and is reached only through `speech.sock`. Who may use it is [co-presenter](../co-presenter.md); what crosses the
+boundary and the authority it shares is
+[crosscutting concepts](../ARCHITECTURE.md#5-crosscutting-concepts).
 
 ## Before you start
 
