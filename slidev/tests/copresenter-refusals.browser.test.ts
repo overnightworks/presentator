@@ -19,7 +19,7 @@ describe('co-presenter refusals', () => {
     ['an issuer that is down (503)', 'unavailable', 'No answer', [1024]],
     ['an error event with an unknown reason', 'unknown-reason', 'No answer', [1024]],
     ['a 401 whose body is not JSON', 'unreadable-401', 'No answer', [1024]],
-  ] as const)('Cells 1-8, 13: shows only its own words for %s', async (_situation, mode, line, widths) => {
+  ] as const)('CP6: shows only its own words for %s', async (_situation, mode, line, widths) => {
     for (const width of widths) {
       state.answerMode = mode
       const { browser, page } = await openPresenter(width)
@@ -49,7 +49,7 @@ describe('co-presenter refusals', () => {
     }
   })
 
-  it('Cell 12: clears the refusal line when the next ask is answered', async () => {
+  it('CP6: clears the refusal line when the next ask is answered', async () => {
     state.answerMode = 'refused-then-answered'
     const { browser, page } = await openPresenter(1024)
     try {

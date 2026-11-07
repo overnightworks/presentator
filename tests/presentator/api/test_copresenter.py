@@ -124,7 +124,7 @@ def test_the_admin_receives_the_decks_language_and_speech_readiness() -> None:
 
 
 def test_a_signed_in_user_is_answered_on_every_copresenter_route() -> None:
-    """#537 sentence 2: a signed-in user is answered by who, ask and hear."""
+    """A signed-in user is answered by who, ask and hear."""
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
     lobby.sign_in(role=Role.USER)
@@ -143,7 +143,7 @@ def test_a_signed_in_user_is_answered_on_every_copresenter_route() -> None:
 
 
 def test_a_running_hearing_keeps_going_when_its_person_changes_role() -> None:
-    """#537 sentence 3: a role change does not end a running hearing."""
+    """CP4: a role change does not end a running hearing."""
     users = RefusingUserStore()
     deadline = ManualDeadline()
     lobby, private, _clock = a_copresenter_talk_host(users=users, delay=deadline.wait)
@@ -168,7 +168,7 @@ def _demote(users: FakeUserStore) -> None:
 
 
 def test_an_answer_in_flight_finishes_when_its_person_changes_role() -> None:
-    """#537 sentence 3: a role change does not end an answer in flight."""
+    """CP4: a role change does not end an answer in flight."""
     users = RefusingUserStore()
     deadline = ManualDeadline()
     event_count = 40
@@ -710,7 +710,7 @@ def test_session_store_loss_cancels_an_accepted_answer_at_its_deadline() -> None
     assert private.answers.reader_closed_before_context_exit
 
 
-def test_busy_answer_stops_at_its_persistent_authorization_deadline() -> None:
+def test_busy_answer_stops_at_its_persistent_authorization_deadline() -> None:  # CP14
     users = RefusingUserStore()
     deadline = ManualDeadline()
     event_count = 40
@@ -735,7 +735,7 @@ def test_busy_answer_stops_at_its_persistent_authorization_deadline() -> None:
     assert private.answers.exits == 1
 
 
-@pytest.mark.parametrize("loss", ["account-gone", "store-error"])
+@pytest.mark.parametrize("loss", ["account-gone", "store-error"])  # CP14
 def test_busy_local_hearing_stops_before_more_pcm_after_authoritative_loss(
     loss: str,
 ) -> None:

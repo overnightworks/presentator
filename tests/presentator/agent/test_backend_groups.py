@@ -50,7 +50,7 @@ def arranged(tmp_path: Path) -> Arranged:
 def test_a_signed_in_session_gets_the_groups_the_issuer_holds_now(
     arranged: Arranged,
 ) -> None:
-    """C4: the groups of the refresh grant, not those of the sign-in."""
+    """CP3: the groups of the refresh grant, not those of the sign-in."""
     arranged.scene.issuer.hold_groups(["/changed"])
 
     groups = asyncio.run(arranged.reader.groups_of(arranged.session_id))
@@ -59,7 +59,7 @@ def test_a_signed_in_session_gets_the_groups_the_issuer_holds_now(
 
 
 def test_a_rotated_refresh_token_is_stored(arranged: Arranged) -> None:
-    """C4: the library stores the rotation, and the reader asks the issuer once."""
+    """The library stores the rotation, and the reader asks the issuer once."""
     arranged.scene.issuer.rotate_refresh_token_to(ROTATED)
     before = len(arranged.scene.issuer.grant_types)
 
@@ -72,7 +72,7 @@ def test_a_rotated_refresh_token_is_stored(arranged: Arranged) -> None:
 def test_a_revoked_refresh_token_asks_the_person_to_sign_in_again(
     arranged: Arranged,
 ) -> None:
-    """C5."""
+    """A revoked refresh token is a sign-in-again refusal."""
     arranged.scene.issuer.revoke_refresh_token(REFRESH)
 
     refusal = asyncio.run(arranged.reader.groups_of(arranged.session_id))
@@ -83,7 +83,7 @@ def test_a_revoked_refresh_token_asks_the_person_to_sign_in_again(
 def test_a_session_row_deleted_between_the_two_transactions_ends_the_session(
     arranged: Arranged,
 ) -> None:
-    """C5: a row deleted mid-rotation ends the session."""
+    """A row deleted mid-rotation ends the session."""
     arranged.scene.issuer.rotate_refresh_token_to(ROTATED)
     arranged.scene.issuer.during_token_request = lambda: arranged.scene.sessions.delete(
         arranged.session_id
@@ -98,7 +98,7 @@ def test_a_session_row_deleted_between_the_two_transactions_ends_the_session(
 def test_an_issuer_that_is_down_is_one_warning_naming_the_reason(
     arranged: Arranged, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """C5: an unavailable issuer is one warning, with a closed reason."""
+    """An unavailable issuer is one warning, with a closed reason."""
     arranged.scene.issuer.token_endpoint_is_down = True
 
     refusal = asyncio.run(arranged.reader.groups_of(arranged.session_id))
@@ -120,7 +120,7 @@ class _LoadFails(SqliteSessionRecordStore):
 def test_a_thread_that_raises_is_one_unavailable_error_naming_only_its_type(
     arranged: Arranged, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """C5: the error is foreign and may hold a token, so only its type is shown."""
+    """The error is foreign and may hold a token, so only its type is shown."""
     scene = arranged.scene
     reader = SessionGroups(
         scene.relying_party, _LoadFails(scene.database), scene.config
@@ -211,7 +211,7 @@ def test_a_cancelled_read_still_stores_the_rotation_and_leaves_no_chain(
     arranged: Arranged,
     cancel: Callable[[Arranged, RecordingExecutor], Awaitable[asyncio.CancelledError]],
 ) -> None:
-    """C11: cancelling the groups read leaves no chain; the rotation stands."""
+    """Cancelling the groups read leaves no chain; the rotation stands."""
     arranged.scene.issuer.rotate_refresh_token_to(ROTATED)
 
     @on_an_event_loop
@@ -235,7 +235,7 @@ def test_a_cancelled_read_still_stores_the_rotation_and_leaves_no_chain(
 def test_process_control_in_the_groups_thread_passes_through_without_a_chain(
     arranged: Arranged, interruption: BaseException
 ) -> None:
-    """C11: an interrupt is the caller's, not one more unavailable error."""
+    """An interrupt is the caller's, not one more unavailable error."""
     scene = arranged.scene
 
     class LoadInterrupts(SqliteSessionRecordStore):

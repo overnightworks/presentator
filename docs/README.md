@@ -39,9 +39,9 @@ The deployment's contract is [configuration](configuration.md), the
 people route's contract is [people](people.md), the sources surface's ruled
 sentences are [sources](sources.md), the deck author's folder contract with
 the decks surface's ruled sentences is [decks](decks.md), the sign-in
-surface's ruled sentences are [sign-in](sign-in.md) and the lobby's ruled
-sentences are [lobby](lobby.md). In
-[`reference/`](reference/): [co-presenter and voice](reference/co-presenter-and-voice.md).
+surface's ruled sentences are [sign-in](sign-in.md), the lobby's ruled
+sentences are [lobby](lobby.md) and the co-presenter's ruled sentences are
+[co-presenter](co-presenter.md).
 
 ## What this map does not do
 

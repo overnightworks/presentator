@@ -33,7 +33,7 @@ port is published; the edge's proxy is the only way in.
 
 A deployed instance has no voice: the speech process is not part of the
 release, so speaking and hearing report "not yet available"
-([co-presenter and voice](../reference/co-presenter-and-voice.md)).
+([co-presenter](../co-presenter.md)).
 
 ## Check
 

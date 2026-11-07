@@ -50,7 +50,7 @@ describe('presenter controls', () => {
     }
   })
 
-  it('Cell 9: counts only a voiced sentence as spoken when an answer fails midway', async () => {
+  it('Counts only a voiced sentence as spoken when an answer fails midway', async () => {
     state.answerMode = 'mid-answer-error'
     const { browser, page } = await openPresenterAt(state.origin, '/presenter/1', 1024, async (prepared) => {
       await prepared.addInitScript(() => {
@@ -159,12 +159,12 @@ describe('presenter controls', () => {
   })
 
   it.each([1024, 390].flatMap((width) => ([
-    ['#512 line 2: speech cannot be reached', 'unreachable', 'Voice offline'],
-    ['#512 line 2: the co-presenter fails without being offline', 'who-fails', 'Unreachable'],
-    ['#615 cell 21: the deck is not the asker\'s', 'who-not-found', 'Unreachable'],
+    ['speech cannot be reached', 'unreachable', 'Voice offline'],
+    ['the co-presenter fails without being offline', 'who-fails', 'Unreachable'],
+    ['the deck is not the asker\'s', 'who-not-found', 'Unreachable'],
     ['local hearing is not ready', 'not-ready', 'Local hearing not ready'],
     ['the hearing socket sends an error', 'socket-error', 'No hearing'],
-  ] as const).map((row) => [width, ...row] as const)))('says so and builds no browser speech recognition at %ipx when %s', async (width, _situation, mode, message) => {
+  ] as const).map((row) => [width, ...row] as const)))('CP7: says so and builds no browser speech recognition at %ipx when %s', async (width, _situation, mode, message) => {
     state.hearingMode = mode
     state.media = createMediaObservation()
     const hearingOpenedBefore = state.hearingOpened
@@ -203,7 +203,7 @@ describe('presenter controls', () => {
     }
   })
 
-  it.each(['de', 'en'] as const)('#615 cells 18, 19: the answered language %s reaches /hear and /ask', async (language) => {
+  it.each(['de', 'en'] as const)('CP10: the answered language %s reaches /hear and /ask', async (language) => {
     state.whoLanguage = language
     const { browser, page } = await openPresenter(1024)
     try {
@@ -235,7 +235,7 @@ describe('presenter controls', () => {
     }
   })
 
-  // #474 cell 35: the overlay sends no token; the browser's own Origin vouches for the ask.
+  // The overlay sends no token; the browser's own Origin vouches for the ask.
   it('reads no cookie: the browser vouches for the ask with its own Origin', async () => {
     const overlay = await readFile(join(addonRootDirectory, 'components/CoPresenter.vue'), 'utf8')
     expect(overlay).not.toContain('document.cookie')
