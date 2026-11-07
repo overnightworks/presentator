@@ -97,9 +97,10 @@ part; a secret typed into a path or query is exported as typed.
   cookie.
 - **PE27** Sign-out, back-channel logout and a Keycloak block do not end a
   token before `exp` plus leeway.
-- **PE28** The gate exists only while `PRESENTATOR_TOKEN_CLIENTS` names a
-  client. With the setting empty (the default) neither the gate nor the route
-  exists.
+- **PE28** The people route and the admission of a token client's token exist
+  only while `PRESENTATOR_TOKEN_CLIENTS` names a client; with the setting empty
+  (the default) neither exists. The agents MCP token is another audience and
+  never reaches the people route.
 
 ## What is logged
 
