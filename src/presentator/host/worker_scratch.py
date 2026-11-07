@@ -15,8 +15,8 @@ from presentator.host.worker_wire import STEP_ERROR_FILE
 ROOT_MODE = 0o755
 WORK_MOUNT = "/work"
 # Mount points inside the build life that the worker only lists, never writes.
-TEMPORARY_MOUNT = "/tmp"  # noqa: S108  # NOSONAR(S5443) only listed, never written
-SHARED_MEMORY_MOUNT = "/dev/shm"  # noqa: S108  # NOSONAR(S5443) only listed, never written
+TEMPORARY_MOUNT = "/tmp"  # NOSONAR(S5443) # noqa: S108 - a mount point only listed and never written
+SHARED_MEMORY_MOUNT = "/dev/shm"  # NOSONAR(S5443) # noqa: S108 - a mount point only listed and never written
 QUEUE_MOUNT = "/dev/mqueue"  # NOSONAR(S5443) only listed, never written
 HOME_DIRECTORY = "home"
 VITE_DIRECTORY = "vite"
