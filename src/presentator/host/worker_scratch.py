@@ -3,7 +3,7 @@
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
@@ -14,10 +14,10 @@ from presentator.host.worker_wire import STEP_ERROR_FILE
 
 ROOT_MODE = 0o755
 WORK_MOUNT = "/work"
-# Mount points inside the build life, never paths this host writes.
-TEMPORARY_MOUNT = str(PurePosixPath("/", "tmp"))
-SHARED_MEMORY_MOUNT = str(PurePosixPath("/", "dev", "shm"))
-QUEUE_MOUNT = str(PurePosixPath("/", "dev", "mqueue"))
+# Mount points inside the build life that the worker only lists, never writes.
+TEMPORARY_MOUNT = "/tmp"  # noqa: S108  # NOSONAR(S5443) only listed, never written
+SHARED_MEMORY_MOUNT = "/dev/shm"  # noqa: S108  # NOSONAR(S5443) only listed, never written
+QUEUE_MOUNT = "/dev/mqueue"  # NOSONAR(S5443) only listed, never written
 HOME_DIRECTORY = "home"
 VITE_DIRECTORY = "vite"
 SCRATCH_ROOTS = (WORK_MOUNT, TEMPORARY_MOUNT, SHARED_MEMORY_MOUNT, QUEUE_MOUNT)
