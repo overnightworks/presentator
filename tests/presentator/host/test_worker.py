@@ -754,7 +754,7 @@ def test_the_snapshot_reads_the_task_count_then_the_scratch_places_and_launches_
     try:
         worker.read_snapshot(sealed_root)
     finally:
-        audit_recording.on = False
+        audit_recording.stop()
     events = audit_recording.events
 
     def below_root(event: tuple[str, object]) -> bool:

@@ -41,5 +41,8 @@ class AuditRecording:
         self.thread = threading.get_ident()
         self.on = True
 
+    def stop(self) -> None:
+        self.on = False
+
 
 audit_recording = AuditRecording()
