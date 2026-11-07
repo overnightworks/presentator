@@ -29,6 +29,7 @@ from presentator.api.people import AdminPeople
 from presentator.application.decks import Decks
 from presentator.application.preferences import Preferences
 from presentator.host.main import agent_front
+from presentator.ports.copresenter import DeckTexts
 from tests.presentator.application.support.fakes import FrozenClock
 from tests.presentator.application.support.person_instance_support import an_instance
 from tests.support.fake_issuer import FakeIssuer
@@ -191,6 +192,7 @@ def a_scene(  # noqa: PLR0913
     decks: Decks | None = None,
     preferences: Preferences | None = None,
     mcp: McpSettings | None = None,
+    texts: DeckTexts | None = None,
 ) -> Scene:
     database = tmp_path / "identity.sqlite3"
     create_identity_tables(database)
@@ -210,6 +212,7 @@ def a_scene(  # noqa: PLR0913
     sessions = SqliteSessionRecordStore(database)
     app, _ = a_lobby_app(
         agent=_agent_of(mcp, auth),
+        texts=texts,
         people=people,
         preferences=preferences,
         signing_in=SigningIn(

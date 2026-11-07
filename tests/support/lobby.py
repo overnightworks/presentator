@@ -52,10 +52,11 @@ from presentator.adapters.catalog import (
 )
 from presentator.adapters.decks import SourceMirrors
 from presentator.adapters.secrets import talk_session_secret
-from presentator.agent.mcp import deck_list_mark
+from presentator.agent.mcp import deck_list_mark, deck_text_mark, deck_view_mark
 from presentator.agent.settings import AgentSettings
 from presentator.api.auth import (
     AgentFront,
+    DeckMarks,
     InstalledAuth,
     LobbyPrivate,
     content_security_policy,
@@ -66,6 +67,7 @@ from presentator.api.lobby_shell import LobbyShell
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_content_security_policy
 from presentator.application.decks import Decks
+from presentator.application.own_decks import OwnDecks
 from presentator.application.people import People
 from presentator.application.preferences import Preferences
 from presentator.contracts.decks import (
@@ -82,6 +84,7 @@ from presentator.contracts.text import DEFAULT_LANGUAGE_TAG, Catalogs
 from presentator.host.config import Settings
 from presentator.host.main import web_auth_config_for
 from presentator.host.oidc import admission_of, oidc_client_config
+from presentator.ports.copresenter import DeckTexts
 from presentator.ports.decks import BuildRunner
 from presentator.ports.preferences import PersonPreferencesStore
 from tests.presentator.application.support.fakes import (
@@ -104,6 +107,7 @@ from tests.presentator.application.support.fakes import (
     FakeWebhookSecrets,
     FrozenClock,
 )
+from tests.support.deck_text_support import FakeDeckTexts
 
 
 def _write_throwaway_file(content: str) -> Path:
@@ -544,6 +548,17 @@ def a_preferences(
     )
 
 
+def a_default_agent_front() -> AgentFront:
+    """The deck routes' marks with no MCP front behind them."""
+    return AgentFront(
+        marks=DeckMarks(
+            deck_list=deck_list_mark(),
+            deck_view=deck_view_mark(),
+            deck_text=deck_text_mark(),
+        )
+    )
+
+
 def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
     *,
     people: FakePeople | None = None,
@@ -552,6 +567,7 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
     signing_in: SigningIn | None = None,
     admin_people: AdminPeople | None = None,
     agent: AgentFront | None = None,
+    texts: DeckTexts | None = None,
     shell: LobbyShell = LOBBY_SHELL,
 ) -> tuple[FastAPI, FrozenClock]:
     """The whole lobby wiring, so a test that needs two clients shares one app."""
@@ -576,7 +592,12 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
         private=LobbyPrivate(
             admin_people=admin_people,
         ),
-        agent=AgentFront(deck_list_mark=deck_list_mark()) if agent is None else agent,
+        agent=a_default_agent_front() if agent is None else agent,
+        own_decks=OwnDecks(
+            decks=decks.store,
+            sources=decks.sources,
+            texts=FakeDeckTexts(text=None) if texts is None else texts,
+        ),
         shell=shell,
     )
     return lobby, clock

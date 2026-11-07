@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from threading import Lock
 
 from presentator.application.copresenter_prompt import user_message
+from presentator.application.own_decks import OwnDecks
 from presentator.application.spoken_answer import (
     deck_language_of,
     spoken_events,
@@ -27,7 +28,6 @@ from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     Question,
 )
-from presentator.contracts.decks import is_a_plain_folder_name
 from presentator.contracts.models import Role
 from presentator.contracts.voice import SampleLanguage
 from presentator.ports.clock import Clock
@@ -73,15 +73,9 @@ class CoPresenterUse:
 
     def asked_deck(self, slug: str, *, viewer: str) -> AskedDeck | None:
         """The viewer's own built deck and its source, or nothing for any other."""
-        if not is_a_plain_folder_name(slug):
-            return None
-        deck = self.decks.get(slug)
-        if deck is None or not deck.is_owned_by(viewer) or deck.build is None:
-            return None
-        source = next(
-            (item for item in self.sources.all() if item.id == deck.source_id), None
-        )
-        return None if source is None else AskedDeck(deck=deck, source=source)
+        return OwnDecks(
+            decks=self.decks, sources=self.sources, texts=self.texts
+        ).asked_deck(slug, viewer=viewer)
 
     async def deck_language(self, asked: AskedDeck) -> SampleLanguage:
         """The language the deck's manifest names, German when it names none.

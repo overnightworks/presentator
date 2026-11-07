@@ -11,7 +11,7 @@ front of the whole lobby covers the download.
 """
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from http import HTTPStatus
 from mimetypes import guess_type
@@ -183,16 +183,18 @@ def add_deck_pages(
     *,
     decks: Decks,
     talk_origin: str,
+    mark: Mapping[str, object],
     not_found: Callable[[Request], Response],
 ) -> None:
     """Give the lobby the deck's PDF download and its JSON facts.
 
     The page itself is the lobby app's; a download no deck stands under is
-    answered by `not_found`. The views are at `talk_origin`.
+    answered by `not_found`. The views are at `talk_origin`, and `mark` offers the
+    JSON facts to the reader's agent as a tool.
     """
     download = _DeckPdf(decks=decks, not_found=not_found)
     lobby.add_api_route(_DECK_PDF, download.pdf, methods=["GET"])
-    lobby.include_router(deck_routes(decks=decks, talk_origin=talk_origin))
+    lobby.include_router(deck_routes(decks=decks, talk_origin=talk_origin, mark=mark))
 
 
 def add_talk_mount(app: FastAPI, *, decks: Decks) -> None:

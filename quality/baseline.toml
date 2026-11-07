@@ -4,7 +4,7 @@
 "Runtime._activate_voice" = 18
 
 [file_lines]
-"frontend/src/lib/api/types.ts" = 1953
+"frontend/src/lib/api/types.ts" = 2075
 "speech/tests/test_control_voice_status.py" = 1473
 "src/presentator/application/decks.py" = 935
 "tests/gitmirror/test_mirror.py" = 1192
@@ -47,7 +47,7 @@
 "Decks.add_source" = 81
 
 [function_lines."src/presentator/host/main.py"]
-"build_instance" = 64
+"build_instance" = 62
 
 [function_lines."tests/presentator/adapters/test_decks.py"]
 "test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair" = 67

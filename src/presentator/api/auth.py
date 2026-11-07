@@ -52,6 +52,7 @@ from webauth.sign_in_routes import (
 )
 
 from presentator.api.deck_list_api import deck_list_routes
+from presentator.api.deck_text_api import deck_text_routes
 from presentator.api.decks import add_deck_pages
 from presentator.api.health import HEALTH_IS_PUBLIC, HEALTH_PATH, add_health_route
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
@@ -67,6 +68,7 @@ from presentator.api.session_api import (
 )
 from presentator.api.source_api import source_api_routes
 from presentator.application.decks import Decks
+from presentator.application.own_decks import OwnDecks
 from presentator.application.preferences import Preferences
 
 _APP_ASSETS: Final = "/_app"
@@ -236,16 +238,25 @@ type ResourceInstaller = Callable[[FastAPI], ProtectedResource]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class DeckMarks:
+    """The marks that make the deck routes tools: plain metadata, one per route."""
+
+    deck_list: Mapping[str, object]
+    deck_view: Mapping[str, object]
+    deck_text: Mapping[str, object]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class AgentFront:
     """What the host hands the lobby for the agent of a signed-in person.
 
-    The mark makes the deck list route a tool; it is plain metadata, since the
+    The marks make the deck routes tools; they are plain metadata, since the
     lobby names no agent library. The installer runs once every route that
     carries a schema is registered and answers the resource the bearer gate
     admits tokens for. Without an installer there is no front and no resource.
     """
 
-    deck_list_mark: Mapping[str, object]
+    marks: DeckMarks
     install_resource: ResourceInstaller | None = None
 
 
@@ -435,6 +446,7 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     auth: InstalledAuth,
     private: LobbyPrivate,
     agent: AgentFront,
+    own_decks: OwnDecks,
     shell: LobbyShell,
 ) -> FastAPI:
     """Build the lobby around the use cases and the adapters the host chose.
@@ -450,13 +462,17 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     _install_sign_in(lobby, surfaces)
     add_health_route(lobby)
     lobby.include_router(_session_routes(preferences, auth))
-    lobby.include_router(deck_list_routes(decks=decks, mark=agent.deck_list_mark))
+    lobby.include_router(deck_list_routes(decks=decks, mark=agent.marks.deck_list))
+    lobby.include_router(
+        deck_text_routes(own_decks=own_decks, mark=agent.marks.deck_text)
+    )
     lobby.include_router(preference_api_routes(preferences=preferences))
     lobby.include_router(source_api_routes(decks=decks))
     add_deck_pages(
         lobby,
         decks=decks,
         talk_origin=auth.talk_origin,
+        mark=agent.marks.deck_view,
         not_found=surfaces.not_found_page,
     )
     lobby.include_router(fetch_hook(decks=decks))
