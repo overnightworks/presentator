@@ -10,13 +10,13 @@ describes: the source's page shows a new run. The old secret answers `404`.
 
 ## Fix
 
-1. Open `/settings/sources/<name>` as an admin and choose the webhook's own
-   Renew. The new value is shown on the page that renewed it until you leave it.
-2. Set the new value at the Git host's webhook settings.
-
-There is no rollback: the old secret stops working at once ([SR2](../sources.md)),
-so the caller gets `404` until it holds the new value. Renew again to mint
-another.
+1. Open `/settings/sources/<name>` as an admin and choose *Renew secret* in the
+   Webhook section. The new value is shown on the page that renewed it until
+   you leave it. Rollback: none, the old secret stops working at once
+   ([SR2](../sources.md)) and the caller gets `404` until it holds the new
+   value; renew again to mint another.
+2. Set the new value at the Git host's webhook settings. Rollback: none, the old
+   secret no longer works; renew again to mint another.
 
 ## Escalate
 

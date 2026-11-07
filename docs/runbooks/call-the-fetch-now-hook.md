@@ -11,7 +11,7 @@ in [the architecture](../ARCHITECTURE.md).
 
 ## Check
 
-A push shows a new run on the source's page. A wrong address (a trailing slash
+A push shows a new run on the source's page, and the hook answers `204`. A wrong address (a trailing slash
 or another path under `/sources/` included), an unknown source, a wrong secret
 and a missing secret all answer `404` with an empty body. Only `POST` is open on
 the hook address; every other method there leads to the login.
@@ -25,9 +25,8 @@ the hook address; every other method there leads to the login.
    nothing.
 2. In the Git host's webhook settings, add a webhook with the hook address and
    the secret. Rollback: delete the webhook at the Git host.
-3. Push to the repository and run the Check. Rollback: none in this runbook;
-   the push moves the repository's own branch, and a mistaken push is undone
-   there with a revert commit.
+3. Push to the repository and run the Check. Rollback: none; the push is the
+   repository's own change and this step adds nothing else.
 
 ## Escalate
 

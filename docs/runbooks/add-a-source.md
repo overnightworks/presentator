@@ -19,8 +19,9 @@ on the source's page.
    For SSH, you register the deploy key in step 4. Rollback: delete the token at
    the host.
 2. For a local folder, make it a bare repository under the local-sources mount
-   ([`PRESENTATOR_LOCAL_SOURCES_MOUNT`](../configuration.md)) and let uid 1001
-   (`presentator`) own it. Git refuses the folder as "dubious ownership"
+   ([`PRESENTATOR_LOCAL_SOURCES_MOUNT`](../configuration.md)) and let the runtime user
+   (`presentator`, uid 1001 unless the image was built with another
+   `PRESENTATOR_RUNTIME_UID`) own it. Git refuses the folder as "dubious ownership"
    otherwise. Rollback: remove the folder.
 3. Open Settings · Sources, choose *Add source*, and enter the name and the Git
    URL. Pick the access kind: *HTTPS token* (the default), *SSH deploy key* or
@@ -41,6 +42,6 @@ on the source's page.
 
 ## Escalate
 
-When the source stays Refused or Failed after you renew its secret
+When the source stays Refused, Failed or Error after you renew its secret
 ([renew a source's secret](renew-a-source-secret.md)), ask the Git host's owner
 whether the token or key still has read access to the repository.
