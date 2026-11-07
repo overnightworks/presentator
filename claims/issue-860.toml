@@ -1,8 +1,0 @@
-claim_id = "13d0c91192a744519f6eb794e9b7528a"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "14da087b89b1eace86d3802fc3853bb1309d57d5"
-branch = "claude/issue-860-the-sign-in-page-becomes-its-ruled-sente"
-scope = ["docs/ARCHITECTURE.md", "docs/README.md", "docs/configuration.md", "docs/reference/co-presenter-and-voice.md", "docs/reference/sign-in-and-session.md", "docs/runbooks/configure-keycloak.md", "docs/sign-in.md", "frontend/e2e/home.spec.ts", "frontend/e2e/lobby.spec.ts", "tests/presentator/adapters/test_identity.py", "tests/presentator/api/test_auth.py", "tests/presentator/api/test_auth_backchannel_logout.py", "tests/presentator/api/test_auth_logout.py", "tests/presentator/api/test_auth_sign_in_callback.py", "tests/presentator/api/test_auth_sign_in_refresh_token.py", "tests/presentator/api/test_health.py", "tests/presentator/api/test_talk_host.py"]
-opened_commit = "ad30418facb9392c6a67aaca5570730cd4cef1bf"
-whole_reason = "One surface page becomes its ruled sentences, so the facts it moves out, the tests that cite its IDs and the pins on its old path change in the same landing to leave no dead link, lost fact or uncited ID."
