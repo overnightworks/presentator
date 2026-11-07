@@ -49,13 +49,14 @@ slug, gets the same 404 `/ask` gives. It answers the deck's `language`, `de` or
 speech readiness, so the overlay speaks and hears in the deck's language. A
 mirror that cannot be read, or a built commit without slides, answers 503.
 `/ask` is guarded by the origin check alone, like every mutating request
-([sign-in and session](sign-in-and-session.md)). Logout, expiry, loss of the account row
+(webauth's [host contract](https://github.com/overnightworks/webauth/blob/main/docs/host-contract.md)). Logout, expiry, loss of the account row
 or a session-store failure closes the hearing lease and an ongoing answer
 within one second, since Presentator rechecks the answer and hearing lease
 every half second; generation, capture and queued or playing audio stop.
 
 Before the answer starts, `/ask` reads the session's groups through a refresh
-grant. A session whose refresh token is missing or refused gets 401
+grant, so the sign-in asks for no scope beyond `openid`, `profile` and
+`groups`. A session whose refresh token is missing or refused gets 401
 `{"detail": "Sign in again"}`; an ended session gets 401
 `{"detail": "Not authenticated"}`; an unreachable issuer gets 503
 `{"detail": "Co-presenter unavailable"}`. The gateway is not called in any

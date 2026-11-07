@@ -101,7 +101,7 @@ def _claims_of(token: str | None) -> dict[str, object]:
 def test_a_stale_csrf_cookie_of_the_removed_token_layer_does_not_block_a_sign_in(
     scene: Scene,
 ) -> None:
-    """#474 cell 27: the removed second cookie is ignored at sign-in."""
+    """The removed second cookie is ignored at sign-in."""
     scene.lobby.client.cookies.set("__Host-csrf_token", "stale")
 
     answer = scene.sign_in()
@@ -113,7 +113,7 @@ def test_a_stale_csrf_cookie_of_the_removed_token_layer_does_not_block_a_sign_in
 def test_the_session_row_holds_the_id_token_the_sign_in_returned(
     scene: Scene,
 ) -> None:
-    """#428 cell 9: the row holds the ID token the issuer returned."""
+    """SI7: the row holds the ID token the issuer returned."""
     scene.sign_in(username="felix")
 
     (stored,) = scene.stored_id_tokens()
@@ -124,7 +124,7 @@ def test_the_session_row_holds_the_id_token_the_sign_in_returned(
 def test_an_id_token_longer_than_a_cookie_could_hold_is_stored_whole(
     scene: Scene,
 ) -> None:
-    """#428 cell 10: an ID token past the old cookie bound is stored whole."""
+    """An ID token past the old cookie bound is stored whole."""
     answer = scene.sign_in(username="x" * _TOO_LONG_FOR_A_COOKIE)
 
     assert answer.status_code == HTTPStatus.SEE_OTHER
@@ -143,6 +143,7 @@ def test_an_id_token_longer_than_a_cookie_could_hold_is_stored_whole(
 def test_the_groups_the_issuer_names_decide_the_role_the_account_gets(
     scene: Scene, groups: list[str], role: str
 ) -> None:
+    """SI1: the groups the issuer names decide the role the account gets."""
     scene.sign_in(groups=groups)
 
     account = scene.users.get("subject-1")
@@ -288,6 +289,7 @@ def test_every_refusal_redirects_to_the_login_failed_page(
 def test_a_person_outside_the_group_is_redirected_to_the_no_access_page(
     scene: Scene, drive: Callable[[Scene], BrowserAnswer]
 ) -> None:
+    """SI1: a person outside the group is redirected to the no access page."""
     answer = drive(scene)
 
     assert answer.status_code == HTTPStatus.SEE_OTHER
@@ -298,7 +300,7 @@ def test_a_person_outside_the_group_is_redirected_to_the_no_access_page(
 def test_log_out_on_the_no_access_page_asks_the_issuer_without_a_hint(
     scene: Scene,
 ) -> None:
-    """#428 cell 13: the no-access page logs out without a hint."""
+    """The no-access page logs out without a hint."""
     _in_another_group(scene)
 
     answer = scene.lobby.client.post(

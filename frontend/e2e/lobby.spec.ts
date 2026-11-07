@@ -21,6 +21,7 @@ async function showsALobbyPage(page: Page, session: SessionView): Promise<void> 
 	await expect(page.locator('.signin')).toHaveCount(0);
 }
 
+// SI2.
 test('the signed-out page renders the sign-in board from the kit', async ({ page }) => {
 	const session = await sessionOf(page);
 
@@ -128,6 +129,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 	for (const width of [390, 1280]) {
 		for (const board of boards) {
 			test.describe(`${board.path} at ${width} px, ${colorScheme}`, () => {
+				// SI12.
 				test('shows its board, answers 403 on a refusal address and saves a screenshot', async ({
 					page
 				}, testInfo) => {

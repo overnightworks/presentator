@@ -24,8 +24,7 @@ secret does not land in the startup output.
 | `PRESENTATOR_OIDC_CLIENT_ID` | The Keycloak client id. |
 | `PRESENTATOR_OIDC_CLIENT_SECRET_FILE` | Absolute path of a file holding the client secret, read once at start, minus one trailing newline. |
 
-There is no `/setup` and no first admin: accounts arrive with the Keycloak
-sign-in ([sign-in and session](reference/sign-in-and-session.md)).
+There is no `/setup` and no first admin ([sign-in](sign-in.md), SI2).
 
 ## Defaults
 
@@ -60,7 +59,7 @@ of the proxy, and the fetch-now hook address the Sources page shows names the
 https the proxy saw, not the plain http the app itself is served over. A
 deployed container has a network of its own and sees the edge's proxy as its gateway
 (`172.31.251.1`, a subnet `compose.yaml` fixes). The guard against another site's form does not depend on this list
-([sign-in and session](reference/sign-in-and-session.md)).
+(webauth's [host contract](https://github.com/overnightworks/webauth/blob/main/docs/host-contract.md)).
 
 ## In the container image
 

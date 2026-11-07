@@ -116,7 +116,7 @@ def test_a_signed_out_request_is_redirected_or_refused_by_what_it_accepts(
 def test_an_unlisted_mutating_route_refuses_a_request_without_own_provenance(
     method: str, claims: dict[str, str]
 ) -> None:
-    """#474 cell 4: a route added later is guarded for every mutating method."""
+    """A route added later is guarded for every mutating method."""
     lobby, _clock = a_lobby_app()
 
     def a_new_write() -> Response:
@@ -131,7 +131,7 @@ def test_an_unlisted_mutating_route_refuses_a_request_without_own_provenance(
 def test_a_path_only_resembling_the_hook_prefix_is_not_exempt_from_the_origin_check(
     signed_in_lobby: Lobby,
 ) -> None:
-    """#474 cell 14: only `/sources/` is a server call, never `/sourcesx/`."""
+    """SI11: only `/sources/` is a server call, never `/sourcesx/`."""
     del signed_in_lobby.client.headers["sec-fetch-site"]
 
     refused = signed_in_lobby.client.post("/sourcesx/talks/fetch")
@@ -157,6 +157,7 @@ def test_a_seeded_session_opens_the_lobby(lobby: Lobby) -> None:
 
 
 def test_an_ordinary_signed_in_answer_sets_no_cookie(signed_in_lobby: Lobby) -> None:
+    """SI4: an ordinary signed-in answer sets no cookie."""
     answer = signed_in_lobby.client.get("/")
 
     assert answer.headers.get_list("set-cookie") == []
@@ -199,6 +200,7 @@ def test_there_is_no_first_start_page_to_set_up_an_admin(
     signed_in_lobby: Lobby,
     method: str,
 ) -> None:
+    """SI2: there is no first start page to set up an admin."""
     answer = signed_in_lobby.client.request(method, "/setup")
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
@@ -215,6 +217,7 @@ def test_there_is_no_first_start_page_for_a_signed_out_reader_either(
 
 
 def test_a_password_posted_to_the_login_signs_nobody_in(lobby: Lobby) -> None:
+    """SI2: a password posted to the login signs nobody in."""
     refused = lobby.client.post(
         "/login",
         data={"username": USERNAME, "password": "the words only this test types"},
@@ -264,6 +267,7 @@ def test_a_session_in_use_all_day_still_stands_at_the_cap(
 def test_a_session_in_use_all_day_is_refused_and_not_renewed_just_past_the_cap(
     signed_in_lobby: Lobby,
 ) -> None:
+    """SI4: a session in use all day is refused and not renewed just past the cap."""
     use_every_quarter_hour_until(
         signed_in_lobby, SESSION_LIFETIME - timedelta(minutes=15)
     )

@@ -22,7 +22,7 @@ _HOSTS = [A_BROWSERS_ADDRESS, A_TALK_ADDRESS]
 def test_a_signed_out_reader_gets_the_fixed_ok_body_at_each_host(
     tmp_path: Path, address: str
 ) -> None:
-    """#513 acceptance 1, 2 and 3: signed out, each host answers 200 ok, fixed body."""
+    """A signed-out reader gets 200 and the fixed body at each host."""
     answer = two_hosts(tmp_path).browser(address).get("/health")
 
     assert answer.status_code == HTTPStatus.OK
@@ -32,7 +32,7 @@ def test_a_signed_out_reader_gets_the_fixed_ok_body_at_each_host(
 
 @pytest.mark.parametrize("address", _HOSTS)
 def test_the_answer_sets_no_cookie(tmp_path: Path, address: str) -> None:
-    """#513 acceptance 4: the answer sets no cookie."""
+    """The answer sets no cookie."""
     answer = two_hosts(tmp_path).browser(address).get("/health")
 
     assert "set-cookie" not in answer.headers
@@ -41,7 +41,7 @@ def test_the_answer_sets_no_cookie(tmp_path: Path, address: str) -> None:
 @pytest.mark.parametrize("address", _HOSTS)
 @pytest.mark.parametrize("method", ["HEAD", "POST"])
 def test_only_a_get_is_answered(tmp_path: Path, address: str, method: str) -> None:
-    """#513 acceptance 6: only GET is answered."""
+    """Only GET is answered."""
     client = two_hosts(tmp_path).browser(address)
 
     answer = client.request(
@@ -53,7 +53,7 @@ def test_only_a_get_is_answered(tmp_path: Path, address: str, method: str) -> No
 
 @pytest.mark.parametrize("address", _HOSTS)
 def test_an_address_below_health_is_still_gated(tmp_path: Path, address: str) -> None:
-    """#513 Done when: no web route other than /health became public."""
+    """No web route other than `/health` is public."""
     answer = two_hosts(tmp_path).browser(address).get("/health/more")
 
     assert answer.status_code == HTTPStatus.FOUND
@@ -61,14 +61,14 @@ def test_an_address_below_health_is_still_gated(tmp_path: Path, address: str) ->
 
 
 def test_an_unknown_host_gets_not_found(tmp_path: Path) -> None:
-    """#513 acceptance 7: an unknown host still gets 404."""
+    """An unknown host gets 404."""
     answer = two_hosts(tmp_path).browser("https://other.example").get("/health")
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_the_lobby_reads_no_session_store_to_answer() -> None:
-    """#513 acceptance 5: the route reads no session store."""
+    """The route reads no session store."""
     people = a_crowd()
     app, _clock = a_lobby_app(people=people)
     lobby = a_browser_at(

@@ -119,7 +119,7 @@ def _directives(policy: str) -> dict[str, str]:
 def test_logging_out_answers_the_page_that_posts_the_stored_hint_to_the_issuer(
     scene: Scene,
 ) -> None:
-    """#428 cell 12: the page posts the stored hint and the row is gone."""
+    """SI3: the page posts the stored hint and the row is gone."""
     scene.sign_in()
     (stored,) = scene.stored_id_tokens()
 
@@ -160,7 +160,7 @@ def _in_the_file(scene: Scene, statement: str) -> None:
 def test_a_logout_with_no_stored_hint_posts_only_the_client_and_the_return_address(
     scene: Scene, arrangement: str
 ) -> None:
-    """#428 cell 13: with no stored hint the page has no `id_token_hint`."""
+    """With no stored hint the page has no `id_token_hint`."""
     _arrange_no_hint(scene, arrangement)
 
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
@@ -176,7 +176,7 @@ def test_a_logout_with_no_stored_hint_posts_only_the_client_and_the_return_addre
 def test_the_logout_page_brings_its_own_policy_naming_the_issuer(
     scene: Scene,
 ) -> None:
-    """#428 cell 14: the page carries webauth's policy naming the issuer."""
+    """The page carries webauth's policy naming the issuer."""
     scene.sign_in()
 
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
@@ -190,7 +190,7 @@ def test_the_logout_page_brings_its_own_policy_naming_the_issuer(
 
 
 def test_the_fallback_button_reads_the_catalogs_log_out(scene: Scene) -> None:
-    """#428 cell 15: the fallback button reads the catalog's `log_out`."""
+    """The fallback button reads the catalog's `log_out`."""
     scene.sign_in()
 
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
@@ -243,7 +243,7 @@ def test_a_logout_form_without_a_token_from_this_origin_is_accepted(
 def test_a_stale_csrf_cookie_of_the_removed_token_layer_does_not_block_a_logout(
     scene: Scene,
 ) -> None:
-    """#474 cell 27: the removed second cookie is ignored at logout."""
+    """The removed second cookie is ignored at logout."""
     scene.sign_in()
     scene.lobby.client.cookies.set("__Host-csrf_token", "stale")
 
@@ -347,7 +347,7 @@ def test_a_store_failure_in_the_logout_answers_500_clears_no_cookie_and_keeps_th
 def test_every_other_answer_of_the_lobby_lets_a_form_go_to_this_origin_only(
     scene: Scene,
 ) -> None:
-    """#428 cell 21: every other answer's `form-action` is this origin only."""
+    """Every other answer's `form-action` is this origin only."""
     answer = scene.lobby.client.get("/login")
 
     directives = _directives(answer.headers["content-security-policy"])
@@ -355,7 +355,7 @@ def test_every_other_answer_of_the_lobby_lets_a_form_go_to_this_origin_only(
 
 
 def test_a_logout_by_get_is_no_logout(scene: Scene) -> None:
-    """#428 cell 18: `GET /logout` is no logout and the row stays."""
+    """`GET /logout` is no logout and the row stays."""
     scene.sign_in()
 
     answer = scene.lobby.client.get(LOGOUT_PATH)

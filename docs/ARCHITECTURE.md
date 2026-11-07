@@ -44,11 +44,10 @@ flowchart TD
 
 - **Layers.** `host` composes the instance and alone names an adapter
   (`adapters`, `agent` fill the ports); layers depend only downward
-  (import-linter in `pyproject.toml`, run by the quality gate's
-  `import-contract` rule). A library an adapter owns behind a port is barred
-  above the adapters by its own contract; webauth is barred only from
-  `application`, `ports`, `contracts`, because `api` and `host` import it; the
-  web framework is exempt.
+  (import-linter in `pyproject.toml`, run by the gate's `import-contract` rule).
+  A library an adapter owns behind a port is barred above the adapters by its
+  own contract; webauth is barred only from `application`, `ports`, `contracts`,
+  as `api` and `host` import it; the web framework is exempt.
 - **`src/gitmirror`** mirrors any remote read-only through `git`, does not
   import `presentator`, and only adapters name it. **`presentator.agent`** alone
   imports `agent_runtime_client`, at the tag `pyproject.toml` pins.
@@ -84,9 +83,13 @@ host and tells them apart by the `Host` header (`served_by_host` in
 Docker's default seccomp and AppArmor profiles in force and the image's glibc is
 2.36 or later, because the controller reaches `pidfd_open` through ctypes. See
 [start an instance](runbooks/start-an-instance-in-a-container.md) and
-[configuration](configuration.md). Edge's backup of the volume runs as
-another user, so build runs are readable by others; a `staged-<step>` directory
-is closed to everyone but the web, and that backup skips `staged-*` by name.
+[configuration](configuration.md). Edge's backup of the volume runs as another
+user, so build runs are readable by others; a `staged-<step>` directory is
+closed to everyone but the web, and that backup skips `staged-*` by name. Both
+hosts answer `GET /health` with a fixed 200 and no session, store read or cookie
+(`api/health.py`); the port opens only after the database is migrated and, under
+the worker runner, the worker answers, so an answer means it serves. The request
+must name a served host: the container check and edge do, a direct run must.
 
 ## 5. Crosscutting Concepts
 
@@ -97,15 +100,13 @@ derived from its source's address. `builds/` and `mirrors/` are caches the rows
 rebuild, so a restore of the database alone is enough. A column goes in two
 releases, the second dropping it in `create_tables`, gated on
 `pragma_table_info` (`adapters/schema.py`), so a restorable older backup starts.
-The drop is tagged only once a release carrying the first step has been live,
-because hal deploys only the newest tag, so a drop tagged at once leaves the
-first release never run.
+The drop is tagged once a release with the first step has been live, since hal
+deploys only the newest tag and an earlier drop skips the first release.
 
-**Authentication.** Keycloak groups decide who may enter
-([sign-in](reference/sign-in-and-session.md)). There is no Redis: rate limits
-are single-process (`SingleProcessRateLimitBackend`) and there is no session
-cache. Identity writes run in one transaction under a process lock, with the
-audit line after COMMIT (`adapters/identity.py`).
+**Authentication.** Keycloak groups admit people ([sign-in](sign-in.md)). There
+is no Redis or session cache: rate limits are single-process
+(`SingleProcessRateLimitBackend`). Identity writes run in one transaction under
+a process lock, with audit after COMMIT (`adapters/identity.py`).
 
 **Wire and errors.** JSON lives under `/api/` and every answer is a typed model.
 A signed-out path is one exact optional path (`GET /api/session`), never a
@@ -113,12 +114,12 @@ prefix or a catch-all. A store failure while resolving a reader is a 500, never
 a signed-out answer. Problems follow RFC 9457 (`api/problems.py`), and a problem
 type is a `tag:` URI, because an https address breaks when its page moves.
 
-**Words and look.** Every lobby word comes from the gettext catalogs through
-Babel (`adapters/catalog.py`), and `scripts/check_catalog_purity.py` holds the
-pages to it; a language is a file. The language is the instance's, the theme the
-person's. The look comes from appkit, with presentator's teal in the app slot
-(`frontend/src/app.css`). The overlay's controls use English literals, and the
-room notice follows the deck's language.
+**Words and look.** Every lobby word comes from gettext catalogs via Babel
+(`adapters/catalog.py`); `scripts/check_catalog_purity.py` holds the pages to
+it, and a language is a file. The language is the instance's, the theme the
+person's. The look is appkit's, with presentator's teal in the app slot
+(`frontend/src/app.css`). The overlay's controls use English literals; the room
+notice follows the deck's language.
 
 **Trust.** A deck author's code, git remotes and people's input are untrusted.
 The operator's settings, his local sources folder and hal's token clients are
@@ -141,16 +142,16 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
 ## 6. Constraints and reasons
 
 - A deck is code: its Vue components run in its build. Only the sealed build
-  worker runs it; the web holds no Docker socket, group or
-  client, drops every capability, takes no new privilege and has a read-only
-  root, so deck code reaches neither the daemon nor the machine's root.
+  worker runs it; the web holds no Docker socket, group or client, drops every
+  capability, takes no new privilege and has a read-only root, so deck code
+  reaches neither the daemon nor the machine's root.
 - The talk has its own origin: one cookie across both hosts would put deck code
   beside the credential it must not reach.
 - One process writes the database: a second would need a second write lock over
   the one SQLite file, and the identity lock relies on one writer.
 - The plain `http` hop to the model gateway is safe only because
-  `hal_agent_presentator` has no host address and no published port; whom the
-  gateway admits is hal's.
+  `hal_agent_presentator` has no host address or published port; hal decides
+  whom the gateway admits.
 - Back-channel logout comes from inside, not through the trusted proxy, so its
   `X-Forwarded-For` is ignored.
 - The fetch-now webhook holds a per-source secret, not a login: a git host has
@@ -158,9 +159,8 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
 - `/api/admin/` takes a Keycloak access token, not a session cookie, so a forged
   browser session cannot erase a person; the path carries the subject, so the
   server keeps no access log ([people](people.md)).
-- The refresh token is stored in plain text because Keycloak renews it only with
-  the client secret, which stays outside the database; the instance key belongs
-  in the same backup.
+- The refresh token is plain text because Keycloak renews it only with the
+  client secret, outside the database; the instance key goes in the same backup.
 - A change to what the instance stores or sends to a provider changes
   presentator's section in `legal/` in the same pull request.
 

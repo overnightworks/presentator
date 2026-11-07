@@ -2,9 +2,7 @@
 
 Reader: the administrator of the Keycloak realm.
 
-There is no password login and no `/setup`; accounts arrive with the Keycloak
-sign-in. What a sign-in does is
-[sign-in and session](../reference/sign-in-and-session.md).
+There is no password login and no `/setup`: [sign-in](../sign-in.md) (SI2).
 
 ## Before you start
 
