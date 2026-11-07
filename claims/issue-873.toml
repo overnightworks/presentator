@@ -1,0 +1,8 @@
+claim_id = "d52bdef46cf84c87a08dcbbeb3030f91"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "4392012ac8492d9d50c057e80f7de3119ab9ad25"
+branch = "claude/issue-873-readme-takes-its-skeleton-and-the-docs-i"
+scope = ["AGENTS.md", "README.md", "docs/ARCHITECTURE.md", "docs/README.md", "slidev/README.md", "sonar-project.properties"]
+opened_commit = "5468d1a414db39b91c8e9aa85680fd5a5e1ee1c1"
+whole_reason = "The root README takes over the routing docs/README.md does today, so the new entry, the deletions and every pin on the deleted paths land together and leave no reader without a route and no dead link."
