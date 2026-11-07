@@ -46,6 +46,7 @@ def test_an_instance_nobody_configured_speaks_english_and_follows_the_system() -
 def test_a_person_without_a_choice_reads_follow_system_in_the_instances_language() -> (
     None
 ):
+    """LB2."""
     lobby = a_lobby(instance=InstanceSettings(language_tag="de"))
 
     appearance = lobby.appearance_for(_PERSON)

@@ -207,6 +207,7 @@ def test_the_policy_admits_the_built_bootstrap_and_no_other_inline_script(
 def test_the_policy_admits_one_style_attribute_by_its_hash_and_no_inline_style(
     lobby: Lobby,
 ) -> None:
+    """LB6."""
     policy = lobby.client.get("/login").headers["content-security-policy"]
 
     self_keyword, unsafe_hashes, *hashes = _directives(policy)["style-src"]

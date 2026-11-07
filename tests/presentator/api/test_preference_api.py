@@ -104,6 +104,7 @@ def test_a_signed_out_browser_is_sent_to_sign_in() -> None:
 
 
 def test_a_member_without_a_choice_reads_follow_system() -> None:
+    """LB2."""
     lobby = a_member_lobby()
 
     answer = lobby.client.get(_ACCOUNT)
@@ -170,6 +171,7 @@ def test_a_malformed_account_body_keeps_the_frameworks_answer_and_writes_nothing
 
 @pytest.mark.parametrize("method", ["get", "put"])
 def test_a_member_is_turned_away_from_settings_with_a_problem(method: str) -> None:
+    """LB4."""
     lobby = a_member_lobby()
 
     answer = lobby.client.request(
@@ -212,6 +214,7 @@ def test_an_admin_reads_the_defaults_of_a_fresh_instance() -> None:
 
 
 def test_an_admins_instance_language_reaches_a_member_who_keeps_follow_system() -> None:
+    """LB1."""
     admin = an_admin_lobby()
     member = admin.another_browser()
     member.sign_in(username=NEIGHBOUR)
