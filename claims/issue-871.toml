@@ -1,0 +1,8 @@
+claim_id = "7c61059bc7924b8b90e12b50001a9c7a"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "46049b7b56041c2b85f92e6199a3e54f0847f15b"
+branch = "claude/issue-871-the-source-runbooks-take-the-runbook-ske"
+scope = ["docs/runbooks/add-a-source.md", "docs/runbooks/call-the-fetch-now-hook.md", "docs/runbooks/renew-a-source-secret.md", "docs/runbooks/renew-a-webhook-secret.md"]
+opened_commit = "47e6816f81755d6c064ae6897f94f9f868e25d56"
+whole_reason = "The four source runbooks share one lifecycle (add, wire the hook, renew either secret) and link each other, so they take the skeleton together and leave no runbook half in the old shape."
