@@ -51,12 +51,17 @@ Optional: skip it and the instance serves no `/mcp`. The agent reaches the
 person's decks through `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, as that person, and
 nothing else.
 
-1. Create the `agents` client. Its id is `PRESENTATOR_AGENT__MCP__CLIENT_ID`; it
-   is no entry of `PRESENTATOR_TOKEN_CLIENTS`.
-2. Make `<PRESENTATOR_PUBLIC_ORIGIN>/mcp` the sole audience of its access
-   tokens.
-3. Create one client scope for it and give it to the `agents` client; its name
-   is `PRESENTATOR_AGENT__MCP__SCOPE`.
+1. Use the shared `agents` client: one public client for every app, with
+   client authentication off (no secret) and PKCE S256. Its id is
+   `PRESENTATOR_AGENT__MCP__CLIENT_ID`; it is no entry of
+   `PRESENTATOR_TOKEN_CLIENTS`.
+2. Create one optional client scope for this app, in the style of
+   `mcp-presentator`; its name is `PRESENTATOR_AGENT__MCP__SCOPE`. Give it an
+   audience mapper whose included custom audience is
+   `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, so a token requested with this scope has
+   that as its only audience. Put no audience on the client itself: the other
+   apps' fronts use the same client.
+3. Assign the scope to the `agents` client as an optional scope.
 4. Create a group below `/apps/presentator` for the people whose agents may
    call; its path is `PRESENTATOR_AGENT__MCP__GROUP`. A token needs this group
    besides the app's own.
