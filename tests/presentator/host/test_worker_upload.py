@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from presentator.host import worker
+from presentator.host import worker_scratch
 from presentator.host.worker_serving import LifeEnd, hand_over
 from presentator.host.worker_wire import WireExit
 from tests.support.worker_support import (
@@ -44,15 +44,15 @@ def accepted_life(**changes: object) -> ScriptedLife:
 def test_the_deck_is_world_writable_and_sticky_despite_the_controllers_umask(
     deck_path: Path,
 ) -> None:
-    worker.make_open_directory(deck_path)
+    worker_scratch.make_open_directory(deck_path)
 
     assert mode_of(deck_path) == DECK_OPEN_MODE
 
 
 def test_closing_the_deck_takes_it_back_to_0755(deck_path: Path) -> None:
-    worker.make_open_directory(deck_path)
+    worker_scratch.make_open_directory(deck_path)
 
-    worker.close_deck(deck_path)
+    worker_scratch.close_deck(deck_path)
 
     assert mode_of(deck_path) == DECK_CLOSED_MODE
 
@@ -62,7 +62,7 @@ def test_an_existing_deck_is_never_reused_nor_changed(deck_path: Path) -> None:
     (deck_path / "leftover").write_text("kept")
 
     with pytest.raises(FileExistsError):
-        worker.make_open_directory(deck_path)
+        worker_scratch.make_open_directory(deck_path)
 
     assert mode_of(deck_path) == PRIVATE_MODE
     assert (deck_path / "leftover").read_text() == "kept"
@@ -76,12 +76,12 @@ def test_the_deck_is_1777_until_the_upload_run_ends_and_0755_afterwards(
 
     def close_noting_mode(closed: Path) -> None:
         modes_when_closing.append(mode_of(closed))
-        worker.close_deck(closed)
+        worker_scratch.close_deck(closed)
 
     serving = replace(
         life.serving(),
         work=deck_path.parent,
-        open_deck=worker.make_open_directory,
+        open_deck=worker_scratch.make_open_directory,
         close_deck=close_noting_mode,
     )
 

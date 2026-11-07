@@ -14,7 +14,7 @@ import pytest
 
 from presentator.adapters.build_wire import StepHeader, write_record
 from presentator.contracts.decks import StepKind
-from presentator.host import worker, worker_step
+from presentator.host import worker_scratch, worker_step
 from presentator.host.worker import create_request_record
 from tests.support.worker_support import (
     descriptors_left_open_since,
@@ -168,7 +168,7 @@ def snapshot(path: Path) -> tuple[int, list[str] | str]:
 def test_the_step_paths_are_open_directories_and_an_empty_append_only_step_err(
     work: Path,
 ) -> None:
-    descriptor = worker.prepare_step_paths(work)
+    descriptor = worker_scratch.prepare_step_paths(work)
     try:
         flags = fcntl.fcntl(descriptor, fcntl.F_GETFL)
         close_on_exec = fcntl.fcntl(descriptor, fcntl.F_GETFD) & fcntl.FD_CLOEXEC
@@ -197,7 +197,7 @@ def test_a_step_err_that_cannot_be_given_its_mode_is_closed_and_fails_the_paths(
     before = open_descriptor_targets()
 
     with pytest.raises(OSError, match="mode refused"):
-        worker.prepare_step_paths(work)
+        worker_scratch.prepare_step_paths(work)
 
     assert descriptors_left_open_since(before) == {}
 
@@ -245,6 +245,6 @@ def test_an_existing_entry_fails_the_paths_and_leaves_what_it_points_at_alone(
     before = snapshot(outside)
 
     with pytest.raises(OSError, match="exists"):
-        worker.prepare_step_paths(work)
+        worker_scratch.prepare_step_paths(work)
 
     assert snapshot(outside) == before
