@@ -18,6 +18,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				expect(answer?.status()).toBe(200);
 				await expect(page.locator('main h1')).toHaveText(words.address_unknown_title);
 				await expect(page.locator('main p')).toHaveText(words.address_unknown_explanation);
+				await expect(page.locator('main .note-card a.btn.primary')).toHaveText(words.decks_title);
+				await expect(page.locator('main .note-card a.btn.primary')).toHaveAttribute('href', '/');
 				await expect(page.locator('header.top .wordmark')).toHaveText(words.wordmark);
 				await expect(page.locator('header.top button.account')).toBeVisible();
 				const overflow = await page.evaluate(

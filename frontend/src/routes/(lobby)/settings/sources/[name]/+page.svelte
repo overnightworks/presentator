@@ -289,17 +289,19 @@
 	</section>
 {/if}
 
-<section class="sec">
-	<h2>{words.source_decks}</h2>
-	<div class="chips">
-		{#each source.decks as deck (deck.slug)}
-			<a class="chip" href={resolve('/(lobby)/deck/[slug]', { slug: deck.slug })}>
-				<b class="as-typed">{deck.title}</b>
-				<code>{deck.slug}</code>
-			</a>
-		{/each}
-	</div>
-</section>
+{#if source.decks.length > 0}
+	<section class="sec">
+		<h2>{words.source_decks}</h2>
+		<div class="chips">
+			{#each source.decks as deck (deck.slug)}
+				<a class="chip" href={resolve('/(lobby)/deck/[slug]', { slug: deck.slug })}>
+					<b class="as-typed">{deck.title}</b>
+					<code>{deck.slug}</code>
+				</a>
+			{/each}
+		</div>
+	</section>
+{/if}
 
 <section class="sec">
 	<h2>{words.source_reverse}</h2>

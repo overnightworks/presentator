@@ -103,6 +103,7 @@ test.describe('as an admin', () => {
 							await expect(access.locator('.tag')).toHaveText(words.source_access_token);
 							await expect(access.locator('input[type="password"]')).toHaveCount(1);
 							await expect(dots).toHaveCount(2);
+							await expect(page.getByRole('heading', { name: words.source_decks })).toHaveCount(0);
 						} else if (kind === 'ssh') {
 							await expect(access.locator('.tag')).toHaveText(words.source_access_deploy_key);
 							await expect(access.locator('input')).toHaveCount(0);

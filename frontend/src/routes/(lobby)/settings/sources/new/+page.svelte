@@ -198,15 +198,17 @@
 			/>
 			<span id="secret-hint" class="hint" popover="auto">{words.source_secret_info}</span>
 		</div>
-		<div class="fld">
-			<h2 class="lb" id="deploy-key-label">{words.source_deploy_key_heading}</h2>
-			<span class="muted">{words.source_deploy_key_hint}</span>
-			<CopyValue
-				value={draft.public_key}
-				label={words.source_copy}
-				labelledby="deploy-key-label"
-			/>
-		</div>
+		{#if access === 'ssh-deploy-key'}
+			<div class="fld">
+				<h2 class="lb" id="deploy-key-label">{words.source_deploy_key_heading}</h2>
+				<span class="muted">{words.source_deploy_key_hint}</span>
+				<CopyValue
+					value={draft.public_key}
+					label={words.source_copy}
+					labelledby="deploy-key-label"
+				/>
+			</div>
+		{/if}
 		<p class="muted">{words.source_webhook_later}</p>
 		{#if refusal !== null}
 			<div class="banner" data-banner="fail" role="alert">

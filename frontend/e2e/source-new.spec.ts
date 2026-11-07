@@ -97,9 +97,13 @@ test.describe('as an admin', () => {
 					await expect(page.getByRole('radio', { name: words.source_access_https })).toBeChecked();
 					await expect(secretField(page, words)).toHaveAttribute('type', 'password');
 					await expect(secretField(page, words)).toHaveValue('');
+					await expect(page.getByText(words.source_deploy_key_heading)).toHaveCount(0);
+					await expect(page.getByText(draft.public_key, { exact: true })).toHaveCount(0);
+					await page.getByRole('radio', { name: words.source_access_ssh }).check({ force: true });
 					await expect(page.getByText(words.source_deploy_key_heading)).toBeVisible();
 					await expect(page.getByText(words.source_deploy_key_hint)).toBeVisible();
 					await expect(page.getByText(draft.public_key, { exact: true })).toBeVisible();
+					await page.getByRole('radio', { name: words.source_access_https }).check({ force: true });
 					await expect(page.getByRole('button', { name: words.source_check })).toBeEnabled();
 					await expect(page.getByRole('button', { name: words.source_create })).toBeDisabled();
 					await expectsNoHorizontalScroll(page);
