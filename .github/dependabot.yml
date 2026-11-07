@@ -4,6 +4,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         update-types: [minor, patch]
@@ -11,6 +13,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       uv-root:
         update-types: [minor, patch]
@@ -21,6 +25,8 @@ updates:
     directory: /speech
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       uv-speech:
         update-types: [minor, patch]
@@ -34,6 +40,8 @@ updates:
     directory: /speech/providers/chatterbox
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       uv-chatterbox:
         update-types: [minor, patch]
@@ -48,6 +56,8 @@ updates:
     directory: /speech/providers/magpie
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       uv-magpie:
         update-types: [minor, patch]
@@ -59,6 +69,8 @@ updates:
     directory: /speech/providers/qwen
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       uv-qwen:
         update-types: [minor, patch]
@@ -69,6 +81,8 @@ updates:
     directory: /speech/providers/voxcpm
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       uv-voxcpm:
         update-types: [minor, patch]
@@ -79,6 +93,8 @@ updates:
     directory: /slidev
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       npm-slidev:
         update-types: [minor, patch]
@@ -86,6 +102,8 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       npm-frontend:
         update-types: [minor, patch]
@@ -93,6 +111,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       docker:
         update-types: [minor, patch]
