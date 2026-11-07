@@ -1,26 +1,29 @@
 # Runbook: renew a source's secret
 
-Reader: an admin of the instance. Use it when a Git access token or deploy key
-is leaked, expired, or unreadable (for example after a restore without
-the master key file). The webhook secret has its own
-[runbook](renew-a-webhook-secret.md).
-
-## Before you start
-
-Open `/settings/sources/<name>`. Ciphertext this instance's key cannot open is
-refused rather than handed to `git`: that source's fetch fails and its decks
-stay listed.
-
-## Steps
-
-- HTTPS token: choose Renew and enter the new value. Nothing is shown back.
-- SSH deploy key: choose Renew. It immediately replaces the local encrypted
-  pair and shows the replacement public key. Register it at the Git host
-  before the next fetch; renewal neither contacts that host nor keeps an
-  old-key overlap.
+Symptom: a source's Git access token or deploy key leaked or expired, or it is
+unreadable, for example after a restore without the master key file. Impact:
+that source's fetch fails and its decks stay listed but get no updates. The
+webhook secret has its own [runbook](renew-a-webhook-secret.md).
 
 ## Check
 
-Choose *Fetch now*: the source's state reads reachable.
+On the source's page choose *Fetch now*: the source's state reads reachable.
 
-Related: [add a Git source](add-a-source.md).
+## Fix
+
+1. Open `/settings/sources/<name>`.
+2. HTTPS token: choose Renew and enter the new value. Nothing is shown back.
+3. SSH deploy key: choose Renew. It replaces the local encrypted pair at once
+   and shows the replacement public key. Register it at the Git host before the
+   next fetch; renewal neither contacts that host nor keeps an old-key overlap.
+
+There is no rollback: the old value is overwritten. The way back is the Git
+host's credential, so keep the old token or key valid there until the Check
+passes.
+
+## Escalate
+
+When the source stays refused, check the key file setting
+([`PRESENTATOR_SECRET_KEY_FILE`](../configuration.md)), which also says what an
+unreadable secret means. Then ask the Git host's owner whether the credential
+has read access.

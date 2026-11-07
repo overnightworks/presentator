@@ -1,36 +1,43 @@
 # Runbook: add a Git source
 
-Reader: an admin of the instance.
-
-An instance starts with no source. The ruled sentences about sources are
-[sources](../sources.md).
-
-## Before you start
-
-- The Git URL. For HTTPS, a read-only token; an `https://` address has no user
-  part, so the token belongs in the Secret field. For SSH, the first contact
-  accepts the host's key and refuses the host if it ever changes.
-- A local folder is a bare repository under `/data/local-sources`. The mirror
-  runs as `presentator`, uid 1001, so git refuses the folder as "dubious
-  ownership" unless that uid owns it.
-
-## Steps
-
-1. Open Settings · Sources and choose Add. Enter the name and the Git URL.
-2. HTTPS: enter the token. SSH: Add shows an owned ed25519 deploy-key draft;
-   register its public half at the Git host.
-3. Choose *Check connection*. It probes that exact token or draft before
-   anything is stored; *Create* stays disabled until it answers reachable.
-4. Choose *Create*. The page shows the webhook secret exactly once, in this
-   page only: leaving it or reloading loses it. Store it if a Git host will call the
-   [fetch-now hook](call-the-fetch-now-hook.md).
+Symptom: a repository's decks should appear in presentator, and an instance
+starts with no source. Impact: until a source exists, the lobby lists none of
+that repository's decks.
 
 ## Check
 
-The source's row shows reachable. A token the host turns down shows as
-Refused, an answer of any other kind as Failed, and a host that never answers
-(or a credential that cannot be read) as Error, with the reason under the
-source's name. The next poll (`PRESENTATOR_SOURCE_POLL_SECONDS`) or
-*Fetch now* on the source's page brings its decks into the list.
+Settings · Sources lists the source as reachable. A token the host turns down
+shows as Refused, an answer of any other kind as Failed, and a host that never
+answers (or a credential that cannot be read) as Error, with the reason under
+the source's name. Its decks appear in the list after the first fetch: the next
+poll ([`PRESENTATOR_SOURCE_POLL_SECONDS`](../configuration.md)) or *Fetch now*
+on the source's page.
 
-Related: [renew a source's secret](renew-a-source-secret.md).
+## Fix
+
+1. At the Git host, prepare the credential. For HTTPS, create a read-only token.
+   For SSH, you register the deploy key in step 4. Rollback: delete the token at
+   the host.
+2. For a local folder, make it a bare repository under the local-sources mount
+   ([`PRESENTATOR_LOCAL_SOURCES_MOUNT`](../configuration.md)) and let uid 1001
+   (`presentator`) own it. Git refuses the folder as "dubious ownership"
+   otherwise. Rollback: remove the folder.
+3. Open Settings · Sources, choose Add, and enter the name and the Git URL.
+   Rollback: leave the page; nothing is stored yet.
+4. HTTPS: enter the token in the Secret field, because an `https://` address has
+   no user part. SSH: Add shows an owned ed25519 deploy-key draft; register its
+   public half at the Git host. The first contact accepts the host's key and
+   refuses the host if it ever changes. Rollback: delete the key at the host.
+5. Choose *Check connection*. It probes that exact token or draft before
+   anything is stored, and *Create* stays disabled until it answers reachable.
+   Rollback: none needed, nothing is stored.
+6. Choose *Create*. The page shows the webhook secret once
+   ([SR2](../sources.md)); store it if a Git host will call the
+   [fetch-now hook](call-the-fetch-now-hook.md). Rollback: remove the source as
+   [SR3](../sources.md) describes.
+
+## Escalate
+
+When the source stays Refused or Failed after you renew its secret
+([renew a source's secret](renew-a-source-secret.md)), ask the Git host's owner
+whether the token or key still has read access to the repository.
