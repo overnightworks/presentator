@@ -23,8 +23,12 @@ from presentator.adapters.identity import (
     SqliteSubjectUserStore,
     create_identity_tables,
 )
+from presentator.agent.settings import McpSettings
+from presentator.api.auth import AgentFront, InstalledAuth
+from presentator.api.people import AdminPeople
 from presentator.application.decks import Decks
 from presentator.application.preferences import Preferences
+from presentator.host.main import agent_front
 from tests.presentator.application.support.fakes import FrozenClock
 from tests.presentator.application.support.person_instance_support import an_instance
 from tests.support.fake_issuer import FakeIssuer
@@ -140,6 +144,39 @@ class Scene:
         return int(count)
 
 
+def _auth_through(
+    issuer: FakeIssuer,
+    clock: FrozenClock,
+    *,
+    token_requests: Callable[[TokenRequestPost], TokenRequestPost],
+    transaction: SignInTransaction,
+) -> InstalledAuth:
+    """The sign-in wiring whose relying party reaches the fake `issuer` alone."""
+    return an_installed_auth(
+        clock,
+        relying_party=a_relying_party(
+            clock,
+            post_token_request=token_requests(issuer.post_token_request),
+            fetch_key_set=issuer.fetch_key_set,
+        ),
+        transaction=transaction,
+    )
+
+
+def _agent_of(mcp: McpSettings | None, auth: InstalledAuth) -> AgentFront:
+    """The agent's front as the host composes it, at the test origin."""
+    return agent_front(
+        mcp, origin=A_BROWSERS_ADDRESS, issuer=AN_ISSUER, transaction=auth.transaction
+    )
+
+
+def _admin_of(token_clients: frozenset[str]) -> AdminPeople | None:
+    """The people route, served only while a token client is named."""
+    if not token_clients:
+        return None
+    return an_admin_people(an_instance().people, clients=token_clients)
+
+
 def a_scene(  # noqa: PLR0913
     tmp_path: Path,
     *,
@@ -153,6 +190,7 @@ def a_scene(  # noqa: PLR0913
     token_clients: frozenset[str] = frozenset(),
     decks: Decks | None = None,
     preferences: Preferences | None = None,
+    mcp: McpSettings | None = None,
 ) -> Scene:
     database = tmp_path / "identity.sqlite3"
     create_identity_tables(database)
@@ -163,17 +201,15 @@ def a_scene(  # noqa: PLR0913
     writes = SqliteIdentityWrites(
         database, ProcessWriteLock() if lock is None else lock, audit(recording)
     )
-    auth = an_installed_auth(
+    auth = _auth_through(
+        issuer,
         people.clock,
-        relying_party=a_relying_party(
-            people.clock,
-            post_token_request=token_requests(issuer.post_token_request),
-            fetch_key_set=issuer.fetch_key_set,
-        ),
+        token_requests=token_requests,
         transaction=transaction(writes),
     )
     sessions = SqliteSessionRecordStore(database)
     app, _ = a_lobby_app(
+        agent=_agent_of(mcp, auth),
         people=people,
         preferences=preferences,
         signing_in=SigningIn(
@@ -181,9 +217,7 @@ def a_scene(  # noqa: PLR0913
             auth=auth if admission is None else replace(auth, admission=admission),
             decks=decks,
         ),
-        admin_people=an_admin_people(an_instance().people, clients=token_clients)
-        if token_clients
-        else None,
+        admin_people=_admin_of(token_clients),
     )
     lobby = a_browser_at(
         app, people=people, base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS

@@ -1870,6 +1870,7 @@
     },
     "/api/decks": {
       "get": {
+        "description": "List the reader's own decks, newest change first, with their state.",
         "operationId": "deck_list_api_decks_get",
         "responses": {
           "200": {
@@ -1883,7 +1884,11 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Deck List"
+        "summary": "Deck List",
+        "x-agent-tool": {
+          "effect": "read_only",
+          "name": "list_decks"
+        }
       }
     },
     "/api/decks/{slug}": {

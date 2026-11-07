@@ -7,6 +7,7 @@ exceptions, a form another site submitted is refused, and no answer may be
 replayed from the browser cache (issue #8, lines 11 to 15).
 """
 
+from collections.abc import Callable, Mapping
 from contextlib import nullcontext
 from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
@@ -20,7 +21,13 @@ from starlette.responses import RedirectResponse
 from starlette.types import Receive, Scope, Send
 from webauth.admission import AdmissionConfig
 from webauth.config import WebAuthConfig, install_web_auth_config
-from webauth.middleware.bearer_gate import BearerGate, MachinePaths, PersonPaths
+from webauth.middleware.bearer_gate import (
+    BearerGate,
+    MachinePaths,
+    PersonPaths,
+    ProtectedResource,
+    install_resource_metadata,
+)
 from webauth.middleware.session_gate import SessionGate
 from webauth.middleware.stack import install_web_auth_middleware
 from webauth.oidc import OidcRelyingParty
@@ -221,8 +228,25 @@ class InstalledAuth:
 class LobbyPrivate:
     """Private capabilities the authenticated lobby may expose to an admin."""
 
-    # Absent: no token is admitted, so neither the gate nor the route exists.
+    # Absent: no token client is named, so the admin people route does not exist.
     admin_people: AdminPeople | None = None
+
+
+type ResourceInstaller = Callable[[FastAPI], ProtectedResource]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AgentFront:
+    """What the host hands the lobby for the agent of a signed-in person.
+
+    The mark makes the deck list route a tool; it is plain metadata, since the
+    lobby names no agent library. The installer runs once every route that
+    carries a schema is registered and answers the resource the bearer gate
+    admits tokens for. Without an installer there is no front and no resource.
+    """
+
+    deck_list_mark: Mapping[str, object]
+    install_resource: ResourceInstaller | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -317,6 +341,7 @@ def _install_middleware(
     auth: InstalledAuth,
     sessions: SessionRecordStore,
     admin: AdminPeople | None,
+    resource: ProtectedResource | None,
 ) -> None:
     """Install the library's stack once, in its own order.
 
@@ -325,7 +350,9 @@ def _install_middleware(
     one update-only statement, so the gate's admission takes no lock.
     The admin prefix, when it is served, takes a bearer token and no cookie.
     While the admin prefix is served, `/api/` takes a person's token as that
-    person; a request without a token is decided by the session cookie.
+    person; a request without a token is decided by the session cookie. The
+    resource, when it exists, takes the agents client's token at `/mcp` and on
+    the routes marked as tools; its discovery document is public.
     """
     install_error_answers(lobby)
     install_web_auth_middleware(
@@ -338,18 +365,33 @@ def _install_middleware(
             ),
         ),
         body_size=_BODY_SIZE,
-        bearer_gate=None if admin is None else _bearer_gate(auth, admin),
+        bearer_gate=_bearer_gate(auth, admin, resource),
         csrf_origin=_CSRF_POLICY,
         session_gate=SessionGate(
             session_transaction=lambda: nullcontext(sessions),
             login_redirect=LOGIN_REDIRECT,
-            public=_PUBLIC_RULES,
+            public=(
+                _PUBLIC_RULES
+                if resource is None
+                else (*_PUBLIC_RULES, resource.public_rule)
+            ),
             optional=PathRules(exact=frozenset({SESSION_PATH})),
         ),
     )
 
 
-def _bearer_gate(auth: InstalledAuth, admin: AdminPeople) -> BearerGate:
+def _bearer_gate(
+    auth: InstalledAuth, admin: AdminPeople | None, resource: ProtectedResource | None
+) -> BearerGate | None:
+    """The gate, or none while no token is admitted anywhere."""
+    if admin is None and resource is None:
+        return None
+    if admin is None:
+        return BearerGate(
+            relying_party=auth.relying_party,
+            admission=auth.admission,
+            resource=resource,
+        )
     parties = AuthorizedParties(admin.admitted_clients)
     return BearerGate(
         relying_party=auth.relying_party,
@@ -358,6 +400,7 @@ def _bearer_gate(auth: InstalledAuth, admin: AdminPeople) -> BearerGate:
         person_paths=PersonPaths(
             PathRules(prefixes=(_PERSON_API,)), parties, auth.transaction
         ),
+        resource=resource,
     )
 
 
@@ -373,6 +416,17 @@ def _session_routes(preferences: Preferences, auth: InstalledAuth) -> APIRouter:
     )
 
 
+def _install_resource(
+    lobby: FastAPI, agent: AgentFront, issuer: str
+) -> ProtectedResource | None:
+    """The resource and its public discovery document, once every route is in."""
+    if agent.install_resource is None:
+        return None
+    resource = agent.install_resource(lobby)
+    install_resource_metadata(lobby, resource, issuer=issuer)
+    return resource
+
+
 def create_lobby(  # noqa: PLR0913 - the composition root's one call names each owner
     *,
     sessions: SessionRecordStore,
@@ -380,6 +434,7 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     preferences: Preferences,
     auth: InstalledAuth,
     private: LobbyPrivate,
+    agent: AgentFront,
     shell: LobbyShell,
 ) -> FastAPI:
     """Build the lobby around the use cases and the adapters the host chose.
@@ -392,11 +447,10 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     surfaces = _Surfaces(preferences=preferences, auth=auth, shell=shell)
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(lobby, auth.config)
-    _install_middleware(lobby, auth, sessions, private.admin_people)
     _install_sign_in(lobby, surfaces)
     add_health_route(lobby)
     lobby.include_router(_session_routes(preferences, auth))
-    lobby.include_router(deck_list_routes(decks=decks))
+    lobby.include_router(deck_list_routes(decks=decks, mark=agent.deck_list_mark))
     lobby.include_router(preference_api_routes(preferences=preferences))
     lobby.include_router(source_api_routes(decks=decks))
     add_deck_pages(
@@ -414,5 +468,7 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
                 app=str(auth.admission.login_group).rsplit("/", 1)[-1],
             )
         )
+    resource = _install_resource(lobby, agent, auth.issuer)
+    _install_middleware(lobby, auth, sessions, private.admin_people, resource)
     _install_lobby_app(lobby, surfaces)
     return lobby

@@ -29,7 +29,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Deck List */
+        /**
+         * Deck List
+         * @description List the reader's own decks, newest change first, with their state.
+         */
         get: operations["deck_list_api_decks_get"];
         put?: never;
         post?: never;

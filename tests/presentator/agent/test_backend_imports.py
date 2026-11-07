@@ -9,8 +9,11 @@ SOURCE = Path(__file__).resolve().parents[3] / "src" / "presentator"
 CLIENT = "agent_runtime_client"
 SETTINGS_MODULE = SOURCE / "agent" / "settings.py"
 CONNECTOR = SOURCE / "agent" / "backend.py"
-# The wire, the run stream and the tool and MCP surfaces stay with the retiring service.
-UNUSED_PARTS = ("wire", "run_stream", "sse", "capability", "mcp_server", "mcp_wire")
+MCP_FRONT = SOURCE / "agent" / "mcp.py"
+# The wire, the run stream and the capability stay with the retiring service.
+UNUSED_PARTS = ("wire", "run_stream", "sse", "capability")
+# The MCP front is the one owner of the client's MCP server and its wire.
+MCP_PARTS = ("mcp_server", "mcp_wire")
 
 
 def imported_modules(path: Path) -> set[str]:
@@ -36,13 +39,17 @@ def names(module: str, library: str) -> bool:
 def test_only_the_agent_package_names_the_client_and_its_settings_only_the_config(
     path: Path,
 ) -> None:
-    """C14: the connector is the one place; settings name the config alone."""
+    """C14: the connector and the MCP front name the client; settings, its config."""
     client = {module for module in imported_modules(path) if names(module, CLIENT)}
 
     assert not any(
         names(module, f"{CLIENT}.{part}") for module in client for part in UNUSED_PARTS
     )
+    if path != MCP_FRONT:
+        assert not any(
+            names(module, f"{CLIENT}.{part}") for module in client for part in MCP_PARTS
+        )
     if path == SETTINGS_MODULE:
         assert client == {f"{CLIENT}.config", f"{CLIENT}.config.AgentConfig"}
-    elif path != CONNECTOR:
+    elif path not in {CONNECTOR, MCP_FRONT}:
         assert client == set()

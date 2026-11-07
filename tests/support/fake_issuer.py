@@ -122,7 +122,7 @@ class FakeIssuer:
             self._key, {"alg": "RS256", "typ": "JWT", "kid": A_KEY_ID}, claims
         )
 
-    def mint_access_token(
+    def mint_access_token(  # noqa: PLR0913 - each claim is one scenario knob
         self,
         *,
         subject: str,
@@ -130,11 +130,13 @@ class FakeIssuer:
         authorized_party: str,
         audience: str | None = None,
         media_type: str = "at+jwt",
+        scope: str | None = None,
     ) -> str:
         """An access token as a client other than this one's holds it.
 
         It names `audience` (this issuer's client by default), is issued to
-        `authorized_party` and carries `media_type` as its header `typ`.
+        `authorized_party`, carries `media_type` as its header `typ` and, when
+        given, `scope` as its scope claim.
         """
         issued_at = int(self._now.timestamp())
         claims: dict[str, object] = {
@@ -146,6 +148,8 @@ class FakeIssuer:
             "exp": issued_at + _TOKEN_LIFETIME_SECONDS,
             "groups": groups,
         }
+        if scope is not None:
+            claims["scope"] = scope
         return _signed(
             self._key, {"alg": "RS256", "typ": media_type, "kid": A_KEY_ID}, claims
         )

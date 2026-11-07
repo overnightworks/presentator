@@ -10,6 +10,7 @@ import os
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import timedelta
+from functools import partial
 from urllib.parse import urlsplit
 
 import uvicorn
@@ -18,6 +19,7 @@ from pydantic import SecretStr
 from starlette.routing import Host, Router
 from webauth.config import SessionLifetime, WebAuthConfig
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
+from webauth.ports import SignInTransaction
 from webauth.proxies import TrustedProxies
 from webauth.rate_limit import SingleProcessRateLimitBackend
 
@@ -66,7 +68,10 @@ from presentator.adapters.secrets import (
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.speech import UdsSpeaking, UdsSpeechHearing
 from presentator.agent.backend import SessionGroups, gateway_answerer
+from presentator.agent.mcp import deck_list_mark, install_mcp_front
+from presentator.agent.settings import McpSettings
 from presentator.api.auth import (
+    AgentFront,
     InstalledAuth,
     LobbyPrivate,
     content_security_policy,
@@ -167,14 +172,13 @@ def build_instance(
         settings, shell, identity_writes, relying_party_for
     )
     return Instance(
-        lobby=create_lobby(
-            sessions=sessions,
+        lobby=_lobby(
+            settings,
             decks=decks,
-            preferences=_preferences(settings),
+            sessions=sessions,
+            key_drafts=key_drafts,
+            identity_writes=identity_writes,
             auth=lobby_auth,
-            private=_lobby_private(
-                settings, decks, sessions, key_drafts, identity_writes
-            ),
             shell=shell,
         ),
         talk=_talk(settings, decks, sessions, talk_auth, mirrors),
@@ -183,6 +187,55 @@ def build_instance(
             interval=timedelta(seconds=settings.source_poll_seconds),
         ),
         session_sweep=_session_sweep(sessions, SystemClock()),
+    )
+
+
+def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
+    settings: Settings,
+    *,
+    decks: Decks,
+    sessions: SqliteSessionRecordStore,
+    key_drafts: SqliteSourceKeyDrafts,
+    identity_writes: SqliteIdentityWrites,
+    auth: InstalledAuth,
+    shell: LobbyShell,
+) -> FastAPI:
+    """The lobby over the use cases, the sign-in wiring and the agent's front."""
+    return create_lobby(
+        sessions=sessions,
+        decks=decks,
+        preferences=_preferences(settings),
+        auth=auth,
+        private=_lobby_private(settings, decks, sessions, key_drafts, identity_writes),
+        agent=agent_front(
+            settings.agent.mcp,
+            origin=settings.public_origin,
+            issuer=settings.oidc_issuer,
+            transaction=auth.transaction,
+        ),
+        shell=shell,
+    )
+
+
+def agent_front(
+    mcp: McpSettings | None,
+    *,
+    origin: str,
+    issuer: str,
+    transaction: SignInTransaction,
+) -> AgentFront:
+    """The deck list's mark, and the MCP front only when the block names one."""
+    return AgentFront(
+        deck_list_mark=deck_list_mark(),
+        install_resource=None
+        if mcp is None
+        else partial(
+            install_mcp_front,
+            settings=mcp,
+            origin=origin,
+            issuer=issuer,
+            transaction=transaction,
+        ),
     )
 
 

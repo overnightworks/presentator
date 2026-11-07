@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Final, Self
 
 import pytest
-from agent_runtime_client.config import AgentConfig, BackendKind, ChatGateway
+from agent_runtime_client.config import BackendKind, ChatGateway
 from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
 from httpx2 import Request as BrowserRequest
@@ -51,7 +51,10 @@ from presentator.adapters.catalog import (
 )
 from presentator.adapters.decks import SourceMirrors
 from presentator.adapters.secrets import talk_session_secret
+from presentator.agent.mcp import deck_list_mark
+from presentator.agent.settings import AgentSettings
 from presentator.api.auth import (
+    AgentFront,
     InstalledAuth,
     LobbyPrivate,
     content_security_policy,
@@ -277,9 +280,9 @@ def _no_key_set(url: str) -> bytes:
     raise AssertionError(url)
 
 
-def an_agent_config() -> AgentConfig:
+def an_agent_config() -> AgentSettings:
     """The `agent` section of an instance whose gateway key is a throwaway file."""
-    return AgentConfig(
+    return AgentSettings(
         backend=BackendKind.LITELLM,
         gateway=ChatGateway(origin=A_GATEWAY_ORIGIN, key_file=A_GATEWAY_KEY_FILE),
         api_group=AN_API_GROUP,
@@ -542,6 +545,7 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
     given: GivenDecks = NO_DECKS,
     signing_in: SigningIn | None = None,
     admin_people: AdminPeople | None = None,
+    agent: AgentFront | None = None,
     shell: LobbyShell = LOBBY_SHELL,
 ) -> tuple[FastAPI, FrozenClock]:
     """The whole lobby wiring, so a test that needs two clients shares one app."""
@@ -566,6 +570,7 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
         private=LobbyPrivate(
             admin_people=admin_people,
         ),
+        agent=AgentFront(deck_list_mark=deck_list_mark()) if agent is None else agent,
         shell=shell,
     )
     return lobby, clock

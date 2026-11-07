@@ -372,6 +372,9 @@ dependencies = [
 backend = [
     { name = "httpx2" },
 ]
+mcp-server = [
+    { name = "anyio" },
+]
 
 [[package]]
 name = "overnightworks-presentator"
@@ -382,7 +385,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx2", extra = ["ws"] },
-    { name = "overnightworks-agent-runtime-client", extra = ["backend"] },
+    { name = "overnightworks-agent-runtime-client", extra = ["backend", "mcp-server"] },
     { name = "overnightworks-webauth" },
     { name = "pydantic-settings" },
     { name = "syntok" },
@@ -405,7 +408,7 @@ requires-dist = [
     { name = "cryptography", specifier = "==50.0.2" },
     { name = "fastapi", specifier = "==0.162.0" },
     { name = "httpx2", extras = ["ws"], specifier = "==2.16.0" },
-    { name = "overnightworks-agent-runtime-client", extras = ["backend"], git = "https://github.com/overnightworks/agent-runtime?rev=v0.23.0" },
+    { name = "overnightworks-agent-runtime-client", extras = ["backend", "mcp-server"], git = "https://github.com/overnightworks/agent-runtime?rev=v0.23.0" },
     { name = "overnightworks-webauth", git = "https://github.com/overnightworks/webauth?rev=v0.31.0" },
     { name = "pydantic-settings", specifier = "==2.16.2" },
     { name = "syntok", specifier = "==1.4.4" },
