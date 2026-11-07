@@ -204,6 +204,13 @@ def test_the_policy_admits_the_built_bootstrap_and_no_other_inline_script(
     ]
 
 
+def test_the_policy_blocks_every_frame_in_and_of_the_lobby(lobby: Lobby) -> None:
+    policy = _directives(lobby.client.get("/login").headers["content-security-policy"])
+
+    assert policy["frame-src"] == ["'none'"]
+    assert policy["frame-ancestors"] == ["'none'"]
+
+
 def test_the_policy_admits_one_style_attribute_by_its_hash_and_no_inline_style(
     lobby: Lobby,
 ) -> None:

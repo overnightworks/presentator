@@ -131,12 +131,14 @@ class FakeIssuer:
         audience: str | None = None,
         media_type: str = "at+jwt",
         scope: str | None = None,
+        agent: tuple[str, str] | None = None,
     ) -> str:
         """An access token as a client other than this one's holds it.
 
         It names `audience` (this issuer's client by default), is issued to
         `authorized_party`, carries `media_type` as its header `typ` and, when
-        given, `scope` as its scope claim.
+        given, `scope` as its scope claim. `agent` is the owner's subject and
+        the name an own-account agent's token states about itself.
         """
         issued_at = int(self._now.timestamp())
         claims: dict[str, object] = {
@@ -150,6 +152,8 @@ class FakeIssuer:
         }
         if scope is not None:
             claims["scope"] = scope
+        if agent is not None:
+            claims["agent_owner"], claims["agent_name"] = agent
         return _signed(
             self._key, {"alg": "RS256", "typ": media_type, "kid": A_KEY_ID}, claims
         )

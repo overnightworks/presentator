@@ -27,16 +27,17 @@ def _one_scope_token(given: str) -> str:
 
 
 class McpSettings(BaseModel):
-    """The agents client that may reach `/mcp`, and what its token must hold."""
+    """The agents client of `/mcp` and the groups and scope its token holds."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     client_id: str = Field(min_length=1)
     group: Annotated[str, AfterValidator(_a_group_path)]
+    agent_group: Annotated[str, AfterValidator(_a_group_path)]
     scope: Annotated[str, AfterValidator(_one_scope_token)]
 
 
 class AgentSettings(AgentConfig):
-    """The client's own settings; the MCP block has all three values or none."""
+    """The client's own settings; the MCP block has all four values or none."""
 
     mcp: McpSettings | None = None

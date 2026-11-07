@@ -1,9 +1,9 @@
-"""The MCP front: the lobby's marked routes, offered as the tools of one person's agent.
+"""The MCP front: the lobby's marked routes, offered as the tools of an account's agent.
 
 The front is the exact route `/mcp` of the lobby app. The bearer gate has already
-admitted the agents client's token as that person by the time it runs, and every tool
-call goes through the whole lobby app again, so it meets the same middleware as any
-request.
+admitted the agents client's token as that person, or an agent-group token as its own
+account, by the time it runs, and every tool call goes through the whole lobby app
+again, so it meets the same middleware as any request.
 """
 
 from agent_runtime_client.mcp_server import McpPersonFront, RouteTools, route_tools
@@ -65,6 +65,7 @@ def install_mcp_front(
         url=f"{origin}{MCP_ENDPOINT_PATH}",
         scope=settings.scope,
         required_group=settings.group,
+        agent_group=settings.agent_group,
         authorized_parties=AuthorizedParties(frozenset({settings.client_id})),
         transaction=transaction,
         marked_routes=tools.marks,

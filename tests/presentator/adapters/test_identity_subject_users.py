@@ -10,6 +10,7 @@ import pytest
 from webauth.ports import (
     AccountEvent,
     AccountEventKind,
+    AccountKind,
     SignInStores,
     UsernameTakenError,
 )
@@ -39,7 +40,9 @@ def accounts(database: Path) -> SqliteSubjectUserStore:
 def test_an_account_created_for_a_subject_is_found_by_that_subject(
     accounts: SqliteSubjectUserStore,
 ) -> None:
-    created = accounts.create_for_subject("subject-1", "felix", "admin")
+    created = accounts.create_for_subject(
+        "subject-1", "felix", "admin", AccountKind.PERSON
+    )
 
     found = accounts.get("subject-1")
 
@@ -51,7 +54,7 @@ def test_an_account_created_for_a_subject_is_found_by_that_subject(
 def test_a_subject_that_differs_only_in_case_is_another_account(
     accounts: SqliteSubjectUserStore,
 ) -> None:
-    accounts.create_for_subject("Subject-1", "felix", "user")
+    accounts.create_for_subject("Subject-1", "felix", "user", AccountKind.PERSON)
 
     assert accounts.get("subject-1") is None
     assert accounts.get("Subject-1 ") is None
@@ -60,10 +63,10 @@ def test_a_subject_that_differs_only_in_case_is_another_account(
 def test_a_username_another_account_holds_is_refused_as_taken(
     accounts: SqliteSubjectUserStore,
 ) -> None:
-    accounts.create_for_subject("subject-1", "felix", "user")
+    accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
 
     with pytest.raises(UsernameTakenError):
-        accounts.create_for_subject("subject-2", "felix", "user")
+        accounts.create_for_subject("subject-2", "felix", "user", AccountKind.PERSON)
 
     assert accounts.get("subject-2") is None
 
@@ -73,10 +76,12 @@ def test_a_subject_that_already_has_an_account_is_not_a_taken_username(
     accounts: SqliteSubjectUserStore,
     second_username: str,
 ) -> None:
-    accounts.create_for_subject("subject-1", "felix", "user")
+    accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
 
     with pytest.raises(sqlite3.IntegrityError) as refused:
-        accounts.create_for_subject("subject-1", second_username, "user")
+        accounts.create_for_subject(
+            "subject-1", second_username, "user", AccountKind.PERSON
+        )
 
     assert not isinstance(refused.value, UsernameTakenError)
 
@@ -84,7 +89,7 @@ def test_a_subject_that_already_has_an_account_is_not_a_taken_username(
 def test_a_changed_role_is_stored_and_returned(
     accounts: SqliteSubjectUserStore,
 ) -> None:
-    accounts.create_for_subject("subject-1", "felix", "user")
+    accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
 
     changed = accounts.set_role("subject-1", Role.ADMIN.value)
 
@@ -105,6 +110,58 @@ def test_a_role_for_an_account_that_does_not_exist_raises_and_writes_nothing(
         assert connection.execute("SELECT count(*) FROM users").fetchone() == (0,)
 
 
+def test_a_changed_kind_is_stored_and_returned(
+    accounts: SqliteSubjectUserStore,
+) -> None:
+    accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
+
+    changed = accounts.set_kind("subject-1", AccountKind.AGENT)
+
+    assert changed.kind is AccountKind.AGENT
+    stored = accounts.get("subject-1")
+    assert stored is not None
+    assert stored.kind is AccountKind.AGENT
+
+
+def test_a_kind_for_an_account_that_does_not_exist_raises_and_writes_nothing(
+    accounts: SqliteSubjectUserStore,
+    database: Path,
+) -> None:
+    with pytest.raises(LookupError):
+        accounts.set_kind("nobody", AccountKind.AGENT)
+
+    with closing(sqlite3.connect(database)) as connection:
+        assert connection.execute("SELECT count(*) FROM users").fetchone() == (0,)
+
+
+def test_an_account_is_created_with_the_kind_it_is_given(
+    accounts: SqliteSubjectUserStore,
+) -> None:
+    created = accounts.create_for_subject("subject-1", "bot", "user", AccountKind.AGENT)
+
+    assert created.kind is AccountKind.AGENT
+    found = accounts.get("subject-1")
+    assert found is not None
+    assert found.kind is AccountKind.AGENT
+
+
+def test_a_kind_changed_in_an_entry_that_raises_is_rolled_back(
+    accounts: SqliteSubjectUserStore, database: Path
+) -> None:
+    accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
+    writes = SqliteIdentityWrites(database, ProcessWriteLock(), LoggingAuditSink())
+
+    with pytest.raises(RuntimeError):
+        _fail_after(
+            writes,
+            lambda stores: stores.accounts.set_kind("subject-1", AccountKind.AGENT),
+        )
+
+    stored = accounts.get("subject-1")
+    assert stored is not None
+    assert stored.kind is AccountKind.PERSON
+
+
 def _fail_after(
     writes: SqliteIdentityWrites, write: Callable[[SignInStores], object]
 ) -> None:
@@ -118,7 +175,7 @@ def _fail_after(
 def test_a_role_changed_in_an_entry_that_raises_is_rolled_back(
     accounts: SqliteSubjectUserStore, database: Path
 ) -> None:
-    accounts.create_for_subject("subject-1", "felix", "user")
+    accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
     writes = SqliteIdentityWrites(database, ProcessWriteLock(), LoggingAuditSink())
 
     with pytest.raises(RuntimeError):
@@ -134,7 +191,7 @@ def test_a_role_changed_in_an_entry_that_raises_is_rolled_back(
 def test_a_role_changed_in_an_entry_reads_back_only_after_the_entry_commits(
     accounts: SqliteSubjectUserStore, database: Path
 ) -> None:
-    accounts.create_for_subject("subject-1", "felix", "user")
+    accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
     writes = SqliteIdentityWrites(database, ProcessWriteLock(), LoggingAuditSink())
 
     with writes() as stores:

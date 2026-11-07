@@ -32,6 +32,7 @@ from webauth.oidc import (
     TokenRequestPost,
 )
 from webauth.ports import (
+    AccountKind,
     SessionRecordStore,
     SignInStores,
     SignInTransaction,
@@ -333,11 +334,16 @@ class NobodySignsIn:
     def get(self, user_id: str) -> UserRecord | None:
         raise AssertionError(user_id)
 
-    def create_for_subject(self, subject: str, username: str, role: str) -> UserRecord:
-        raise AssertionError((subject, username, role))
+    def create_for_subject(
+        self, subject: str, username: str, role: str, kind: AccountKind
+    ) -> UserRecord:
+        raise AssertionError((subject, username, role, kind))
 
     def set_role(self, user_id: str, role: str) -> UserRecord:
         raise AssertionError((user_id, role))
+
+    def set_kind(self, user_id: str, kind: AccountKind) -> UserRecord:
+        raise AssertionError((user_id, kind))
 
 
 class NoSignInTransaction:

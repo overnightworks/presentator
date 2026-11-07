@@ -130,11 +130,14 @@ the speech service's private Unix socket go readiness, PCM, transcript and
 spoken sentences; browser identity and credentials do not. No operator blessing
 narrows this model yet, so an audit keeps the default trust model.
 
-A bearer enters the lobby through one path besides hal's token clients: the
-`agents` client's token, whose only audience is the app's `/mcp`, takes `/mcp`
-and the routes marked as tools, as the person behind its subject, and nothing
-that deletes, shares, publishes, sends outward or is admin. Without a bearer the
-cookie session and its CSRF check decide as before.
+A bearer enters the lobby through two paths besides hal's token clients, and
+both take `/mcp` and the routes marked as tools, and nothing that deletes,
+shares, publishes, sends outward or is admin. The `agents` client's token, whose
+only audience is the app's `/mcp`, acts as the person behind its subject. A token
+of a service account in the realm's agent group, with the app's groups and `/mcp`
+audience, is admitted from any client the realm authorizes: its first call
+creates the agent's own account, which owns no deck and sees none. Without a
+bearer the cookie session and its CSRF check decide as before.
 
 **Proof.** A test sits at the layer that owns the behaviour; a lower layer never
 stands in for a higher one. Pure logic (`contracts`, `application`) is called

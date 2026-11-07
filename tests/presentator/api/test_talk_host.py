@@ -563,6 +563,7 @@ def test_every_answer_of_the_talk_host_carries_the_talk_policy_headers(
 
     assert answer.headers["content-security-policy"] == talk_content_security_policy()
     assert "frame-ancestors 'none'" in answer.headers["content-security-policy"]
+    assert "frame-src 'none'" in answer.headers["content-security-policy"]
     assert answer.headers["permissions-policy"] == TALK_PERMISSIONS_POLICY
     assert answer.headers["cache-control"] == "no-store"
     assert answer.headers["x-content-type-options"] == CONTENT_TYPE_OPTIONS
