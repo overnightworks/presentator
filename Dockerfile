@@ -61,7 +61,7 @@ RUN corepack enable pnpm
 # The project's dependencies are installed as that user, because a build writes
 # its caches beside the project; pnpm and the browser are installed as root.
 WORKDIR /app
-COPY --chown=presentator slidev/package.json slidev/pnpm-lock.yaml ./slidev/
+COPY --chown=presentator slidev/package.json slidev/pnpm-lock.yaml slidev/pnpm-workspace.yaml ./slidev/
 WORKDIR /app/slidev
 RUN corepack install
 USER presentator
