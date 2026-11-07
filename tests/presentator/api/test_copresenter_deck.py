@@ -1,4 +1,4 @@
-"""E11 (#355): the co-presenter answers only about a built deck its asker owns."""
+"""CP2: the co-presenter answers only about a built deck its asker owns."""
 
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ def the_answer_to_a_deck_that_does_not_exist() -> tuple[bytes, dict[str, str]]:
 
 
 def test_the_owner_asks_about_their_own_built_deck() -> None:
-    """E11 (#355) matrix, deck: the owner's own built deck is answered."""
+    """CP2: the owner's own built deck is answered."""
     lobby, private = an_instance()
 
     answer = ask(lobby.client)
@@ -94,7 +94,7 @@ def test_the_owner_asks_about_their_own_built_deck() -> None:
 def test_a_refused_deck_gets_one_answer_and_spends_no_question(
     others: tuple[Deck, ...], removed: tuple[str, ...], slug: str
 ) -> None:
-    """E11 (#355) matrix, deck: every unusable deck gets one 404, no port, no budget."""
+    """CP2: every unusable deck gets one 404, no port, no budget."""
     lobby, private = an_instance(*others, removed=removed)
 
     refused = ask_about(lobby, slug)
@@ -108,7 +108,7 @@ def test_a_refused_deck_gets_one_answer_and_spends_no_question(
 
 
 def test_a_question_without_a_deck_gets_the_same_refusal() -> None:
-    """E11 (#355) matrix, deck: a missing deck field gets the one 404."""
+    """CP2: a missing deck field gets the one 404."""
     lobby, private = an_instance()
     without_deck = {key: value for key, value in QUESTION.items() if key != "deck"}
 
@@ -123,7 +123,7 @@ def test_a_question_without_a_deck_gets_the_same_refusal() -> None:
 
 
 def test_a_name_over_the_length_bound_is_rejected_before_any_lookup() -> None:
-    """E11 (#355) matrix, deck: a name over 255 is 422 and spends no question."""
+    """A name over 255 is 422 and spends no question."""
     lobby, private = an_instance()
 
     refused = ask_about(lobby, "x" * 256)
@@ -136,7 +136,7 @@ def test_a_name_over_the_length_bound_is_rejected_before_any_lookup() -> None:
 def test_an_owner_with_the_user_role_is_answered_and_another_users_deck_is_not() -> (
     None
 ):
-    """E11 (#355), amended 27.10.2026: ownership decides, not the role."""
+    """CP2: ownership decides, not the role."""
     lobby, private = an_instance(ANOTHERS, role=Role.USER)
 
     refused = ask_about(lobby, TARGET)
@@ -148,7 +148,7 @@ def test_an_owner_with_the_user_role_is_answered_and_another_users_deck_is_not()
 
 
 def test_a_signed_out_asker_is_refused_and_spends_no_question() -> None:
-    """E11 (#355) matrix, asker: signed out is refused 401, no port, no budget."""
+    """A signed-out asker is refused 401, no port, no budget."""
     lobby, private, _clock = a_copresenter_talk_host(
         limiter=AskLimiter(clock=FrozenClock(instant=NOW), limits=ONE_QUESTION_ONLY),
     )
@@ -197,7 +197,7 @@ def who_refusals_match_the_asks_refusal(answer: Response) -> bool:
 def test_who_refuses_a_deck_the_asker_does_not_own_built_like_ask_does(
     others: tuple[Deck, ...], removed: tuple[str, ...], deck: str | None
 ) -> None:
-    """#615 cells 3-6: one 404, no deck read, no readiness call."""
+    """One 404, no deck read, no readiness call."""
     lobby, private = an_instance(*others, removed=removed)
 
     refused = who(lobby.client, deck)
@@ -210,7 +210,7 @@ def test_who_refuses_a_deck_the_asker_does_not_own_built_like_ask_does(
 @pytest.mark.parametrize("language", ["de", "en"])
 @pytest.mark.parametrize("role", [Role.ADMIN, Role.USER])
 def test_who_answers_the_decks_language_to_its_owner(language: str, role: Role) -> None:
-    """#615 cells 7, 8, 14: de or en as written, for every signed-in owner."""
+    """CP10: de or en as written, for every signed-in owner."""
     lobby, private = an_instance(role=role)
     private.texts.text = a_text_in(language)
 
@@ -221,7 +221,7 @@ def test_who_answers_the_decks_language_to_its_owner(language: str, role: Role) 
 
 
 def test_who_reports_hearing_not_ready_together_with_the_decks_language() -> None:
-    """#615 cell 13: an owned English deck while the speech service cannot hear."""
+    """An owned English deck while the speech service cannot hear."""
     lobby, private = an_instance()
     private.texts.text = a_text_in("en")
     private.speech.local_hearing_ready = False
@@ -239,7 +239,7 @@ def test_who_reports_hearing_not_ready_together_with_the_decks_language() -> Non
 def test_who_answers_german_for_a_language_it_does_not_know(
     written: str | None,
 ) -> None:
-    """#615 cell 9: no key, a manifest-less deck or another value is German."""
+    """CP10: no key, a manifest-less deck or another value is German."""
     lobby, private = an_instance()
     private.texts.text = a_text_in(written)
 
@@ -248,7 +248,7 @@ def test_who_answers_german_for_a_language_it_does_not_know(
 
 @pytest.mark.parametrize("failure", ["mirror", "no slides"])
 def test_who_is_unavailable_when_the_decks_words_cannot_be_read(failure: str) -> None:
-    """#615 cells 10, 11: never a German success that was not read."""
+    """Never a German success that was not read."""
     lobby, private = an_instance()
     private.texts.unreadable = failure == "mirror"
     private.texts.text = None
@@ -261,7 +261,7 @@ def test_who_is_unavailable_when_the_decks_words_cannot_be_read(failure: str) ->
 
 
 def test_who_is_unavailable_when_speech_is_unavailable() -> None:
-    """#615 cell 12: speech readiness still decides the 503."""
+    """Speech readiness still decides the 503."""
     lobby, private = an_instance()
     private.texts.text = a_text_in("en")
     private.speech.readiness_unavailable = True
@@ -271,7 +271,7 @@ def test_who_is_unavailable_when_speech_is_unavailable() -> None:
 
 @pytest.mark.parametrize("slug", ["50%off", "a&b c+d", "ü"])
 def test_who_names_the_owned_deck_whose_slug_needs_percent_encoding(slug: str) -> None:
-    """#615 cell 15: the slug reaches the server as the slug."""
+    """The slug reaches the server as the slug."""
     lobby, private = an_instance(replace(BUILT_TARGET, slug=slug))
     private.texts.text = a_text_in("en")
 
@@ -282,7 +282,7 @@ def test_who_names_the_owned_deck_whose_slug_needs_percent_encoding(slug: str) -
 
 
 def test_who_counts_no_question() -> None:
-    """#615 cell 16: after who, the one question of the window is still admitted."""
+    """After who, the one question of the window is still admitted."""
     lobby, _private = an_instance()
 
     assert who(lobby.client).status_code == HTTPStatus.OK
