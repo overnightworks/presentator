@@ -87,7 +87,7 @@ def body_of(gateway: FakeGateway) -> dict[str, object]:
 
 @on_an_event_loop
 async def test_the_request_names_the_agent_files_model_the_words_and_the_key() -> None:
-    """C2: model, bearer and messages, with no tools and no issuer or subject."""
+    """CP1, CP5: model, bearer and messages, with no tools and no issuer or subject."""
     gateway = FakeGateway(completion("Eine Antwort."))
 
     answered = await spoken(answerer_over(gateway))
@@ -109,7 +109,7 @@ async def test_the_request_names_the_agent_files_model_the_words_and_the_key() -
 
 @on_an_event_loop
 async def test_the_person_goes_out_as_the_wire_vector_with_the_issuer_as_held() -> None:
-    """C3: the vector of docs/wire.md, and another one for a trailing slash."""
+    """The vector of docs/wire.md, and another one for a trailing slash."""
     plain = FakeGateway(completion("Ja."))
     slashed = FakeGateway(completion("Ja."))
 
@@ -124,7 +124,7 @@ async def test_the_person_goes_out_as_the_wire_vector_with_the_issuer_as_held() 
 async def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made() -> (
     None
 ):
-    """C4: the client admits only a member of the API group."""
+    """CP3: the client admits only a member of the API group."""
     gateway = FakeGateway(completion("Nie."))
 
     answerer = answerer_over(gateway)
@@ -153,7 +153,7 @@ async def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made
 async def test_every_gateway_refusal_ends_as_the_plain_unavailable_error(
     reply: Reply,
 ) -> None:
-    """C7: no reason reaches the overlay, whatever the gateway said."""
+    """No reason reaches the overlay, whatever the gateway said."""
     answerer = answerer_over(FakeGateway(reply))
 
     with pytest.raises(CoPresenterUnavailableError) as stopped:
@@ -165,7 +165,7 @@ async def test_every_gateway_refusal_ends_as_the_plain_unavailable_error(
 
 @on_an_event_loop
 async def test_a_refused_connection_ends_as_the_plain_unavailable_error() -> None:
-    """C7: the refusing transport."""
+    """The refusing transport."""
     refusing = RefusingTransport()
 
     answerer = answerer_over(refusing)
@@ -193,7 +193,7 @@ class EchoingTransport(httpx2.MockTransport):
 async def test_what_the_gateway_echoes_reaches_no_exception_text_or_log_record(
     through: str, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """C10: the key, token, subject, groups and question stay out of errors."""
+    """The key, token, subject, groups and question stay out of errors."""
     caplog.set_level(logging.DEBUG)
     persons_bearer_marker = "person-token-MARKER"
     person = AskingPerson(
@@ -229,7 +229,7 @@ async def test_what_the_gateway_echoes_reaches_no_exception_text_or_log_record(
 
 @on_an_event_loop
 async def test_a_request_over_the_clients_bound_ends_unavailable() -> None:
-    """C7: the client sends nothing it judges too large."""
+    """The client sends nothing it judges too large."""
     gateway = FakeGateway(completion("Nie."))
 
     answering = answerer_over(gateway).answer(
@@ -245,7 +245,7 @@ async def test_a_request_over_the_clients_bound_ends_unavailable() -> None:
 
 @on_an_event_loop
 async def test_a_question_that_is_not_valid_unicode_ends_unavailable() -> None:
-    """C7: the request is refused before it is built."""
+    """The request is refused before it is built."""
     gateway = FakeGateway(completion("Nie."))
 
     answering = answerer_over(gateway).answer(message="\ud800", person=a_person())
@@ -289,7 +289,7 @@ ALL_STOPS = [
 async def test_only_a_not_enabled_refusal_is_not_enabled(
     kind: TurnStopKind, code: RejectionCode | FailureCode | None
 ) -> None:
-    """C7, C8: every kind and code of a stop has a mapping."""
+    """Every kind and code of a stop has a mapping."""
     answerer = GatewayAnswerer(
         ScriptedBackend(stop=TurnStopped(kind, code, retry_after_s=7, detail="closed")),
         a_relying_party(FrozenClock(instant=NOW)),
@@ -310,7 +310,7 @@ async def test_only_a_not_enabled_refusal_is_not_enabled(
 async def test_a_refusal_logs_its_closed_values_and_no_run_summary(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """C7: kind, code, detail and the wait, and nothing else."""
+    """Kind, code, detail and the wait, and nothing else."""
     caplog.set_level(logging.DEBUG)
 
     answerer = answerer_over(FakeGateway(Reply(429, {"retry-after": "7"})))
@@ -329,7 +329,7 @@ async def test_a_refusal_logs_its_closed_values_and_no_run_summary(
 async def test_a_run_logs_its_event_types_and_times_and_no_text(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """C7: the summary names what happened, never what was said."""
+    """The summary names what happened, never what was said."""
     caplog.set_level(logging.DEBUG)
 
     await spoken(answerer_over(FakeGateway(completion("Geheime Worte."))))
@@ -343,7 +343,7 @@ async def test_a_run_logs_its_event_types_and_times_and_no_text(
 
 @on_an_event_loop
 async def test_a_stream_that_ends_without_a_final_event_ends_the_answer() -> None:
-    """C8: what was streamed is the answer; the stream's end ends it."""
+    """What was streamed is the answer; the stream's end ends it."""
     answerer = GatewayAnswerer(
         ScriptedBackend((AssistantTextEvent(text="Hallo."),)),
         a_relying_party(FrozenClock(instant=NOW)),
@@ -354,7 +354,7 @@ async def test_a_stream_that_ends_without_a_final_event_ends_the_answer() -> Non
 
 @on_an_event_loop
 async def test_a_tool_step_in_the_stream_is_not_spoken() -> None:
-    """C8: only the assistant's words are the answer."""
+    """Only the assistant's words are the answer."""
     answerer = GatewayAnswerer(
         ScriptedBackend(
             (
@@ -371,7 +371,7 @@ async def test_a_tool_step_in_the_stream_is_not_spoken() -> None:
 
 @on_an_event_loop
 async def test_one_asks_end_leaves_another_intact() -> None:
-    """C9: closing one ask cancels only its own call, not an overlapping ask's."""
+    """Closing one ask cancels only its own call, not an overlapping ask's."""
     first_left = asyncio.Event()
     first_arrived = asyncio.Event()
     first_cancelled = False

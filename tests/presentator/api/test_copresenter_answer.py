@@ -138,7 +138,7 @@ def the_asked_decks_words_at_its_built_commit(
 def test_a_signed_in_admins_ask_reaches_the_gateway_with_only_that_decks_words(
     tmp_path: Path, remote: GitRemote, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The deck's words at its built commit, the key as bearer, one text's events."""
+    """CP1: the deck's words at its built commit, the key as bearer, one text."""
     run = the_asked_decks_words_at_its_built_commit(tmp_path, remote, caplog)
 
     (request,) = run.gateway.requests
@@ -203,7 +203,7 @@ def the_ticket_was_released(run: Run) -> bool:
 def test_an_access_refusal_is_answered_before_the_gateway_is_called(
     tmp_path: Path, setup: Scenario, status: HTTPStatus, detail: str
 ) -> None:
-    """C5: the ruled 401 and 503 come before the stream, and the ticket is freed."""
+    """CP6: the ruled 401 and 503 come before the stream, and the ticket is freed."""
     run = drive(tmp_path, setup)
 
     assert run.response.status_code == status
@@ -216,14 +216,14 @@ def test_an_access_refusal_is_answered_before_the_gateway_is_called(
 def test_a_session_that_ended_during_the_grant_asked_the_issuer_exactly_once(
     tmp_path: Path,
 ) -> None:
-    """C5: the grant ran, and nothing was spent after it."""
+    """The grant ran, and nothing was spent after it."""
     run = drive(tmp_path, Scenario(before_ask=the_session_ends_during_the_grant))
 
     assert run.grants_since_sign_in == ["refresh_token"]
 
 
 def test_a_doubled_session_cookie_is_refused_before_any_grant(tmp_path: Path) -> None:
-    """C5: webauth reads a doubled cookie as no session, so its gate refuses.
+    """Webauth reads a doubled cookie as no session, so its gate refuses.
 
     The refusal is the library's 401 before the route runs, as it answers the
     overlay's `fetch`, which sets no `Accept` (a page visit would be sent to
@@ -250,7 +250,7 @@ def test_a_doubled_session_cookie_is_refused_before_any_grant(tmp_path: Path) ->
 def test_one_question_makes_one_refresh_grant_and_no_client_credentials_grant(
     tmp_path: Path,
 ) -> None:
-    """C4: the groups come from one refresh grant; no workload grant exists."""
+    """The groups come from one refresh grant; no workload grant exists."""
     run = drive(tmp_path)
 
     assert run.response.status_code == HTTPStatus.OK
@@ -260,7 +260,7 @@ def test_one_question_makes_one_refresh_grant_and_no_client_credentials_grant(
 def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made(
     tmp_path: Path,
 ) -> None:
-    """C4: the overlay reads the literal `not-enabled`, so it is spelled out."""
+    """CP3, CP6: the overlay reads the literal `not-enabled`, so it is spelled out."""
     run = drive(tmp_path, Scenario(groups=ADMIN_GROUPS))
 
     assert run.events == ["error"]
@@ -276,7 +276,7 @@ def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made(
 def test_a_group_removed_at_the_issuer_between_two_questions_refuses_the_second(
     tmp_path: Path,
 ) -> None:
-    """C4: the groups are read anew for every question."""
+    """CP3: the groups are read anew for every question."""
     run = drive(tmp_path)
     run.hosts.issuer.hold_groups(ADMIN_GROUPS)
 
@@ -290,7 +290,7 @@ def test_a_group_removed_at_the_issuer_between_two_questions_refuses_the_second(
 def test_a_talk_session_that_keeps_no_id_token_asks_and_is_answered(
     tmp_path: Path,
 ) -> None:
-    """C6: the talk host stores no ID token, and the answer comes anyway."""
+    """The talk host stores no ID token, and the answer comes anyway."""
     run = drive(tmp_path)
 
     with closing(sqlite3.connect(run.hosts.database)) as connection:
@@ -314,7 +314,7 @@ def test_a_talk_session_that_keeps_no_id_token_asks_and_is_answered(
 def test_a_gateway_that_does_not_answer_ends_in_a_plain_error_and_never_in_done(
     tmp_path: Path, reply: Reply
 ) -> None:
-    """C7: no reason reaches the overlay, and no word was spoken."""
+    """No reason reaches the overlay, and no word was spoken."""
     run = drive(tmp_path, Scenario(gateway=lambda: FakeGateway(reply)))
 
     assert run.events == ["error"]
@@ -324,7 +324,7 @@ def test_a_gateway_that_does_not_answer_ends_in_a_plain_error_and_never_in_done(
 
 
 def test_a_refused_connection_ends_in_a_plain_error(tmp_path: Path) -> None:
-    """C7: the refusing transport."""
+    """The refusing transport."""
     run = drive(tmp_path, Scenario(gateway=RefusingTransport))
 
     assert run.events == ["error"]
@@ -335,7 +335,7 @@ def test_a_refused_connection_ends_in_a_plain_error(tmp_path: Path) -> None:
 def test_speech_failing_on_the_second_sentence_ends_after_the_first_in_error(
     tmp_path: Path,
 ) -> None:
-    """C8: the first sentence was spoken before the failure."""
+    """The first sentence was spoken before the failure."""
     scenario = Scenario(
         gateway=lambda: FakeGateway(completion(f"{TWO_SENTENCES} Dritter.")),
         speaking_fails_at=1,
@@ -365,7 +365,7 @@ class ChangeOnceTheAnswerHangs:
 def test_an_answer_ends_within_one_recheck_when_the_session_goes(
     tmp_path: Path,
 ) -> None:
-    """C9: no text was sent before the end, and the held call is cancelled."""
+    """CP14: no text was sent before the end, and the held call is cancelled."""
     recheck = ChangeOnceTheAnswerHangs(delete_the_sessions)
     scenario = Scenario(gateway=HeldTransport, delay=recheck)
 
@@ -389,7 +389,7 @@ def test_an_answer_ends_within_one_recheck_when_the_session_goes(
 def test_a_deck_without_readable_words_ends_in_error_and_never_calls_the_gateway(
     tmp_path: Path, texts: FakeDeckTexts
 ) -> None:
-    """A deck with no words has nothing to ask about."""
+    """CP1: a deck with no words has nothing to ask about."""
     run = drive(tmp_path, Scenario(texts=texts))
 
     assert run.events == ["error"]
@@ -400,7 +400,7 @@ def test_a_deck_without_readable_words_ends_in_error_and_never_calls_the_gateway
 def test_another_admins_deck_gets_the_ghosts_refusal_and_spends_no_grant(
     tmp_path: Path,
 ) -> None:
-    """E11 holds before any grant is made."""
+    """CP2: the ownership refusal comes before any grant is made."""
     (tmp_path / "ghost").mkdir()
     (tmp_path / "foreign").mkdir()
     ghost = drive(
@@ -420,7 +420,7 @@ def test_another_admins_deck_gets_the_ghosts_refusal_and_spends_no_grant(
 def test_no_secret_or_word_of_the_person_reaches_a_log_record_or_the_browser(
     tmp_path: Path, scenario: Scenario
 ) -> None:
-    """C10: every log record and error of the ask, and all the browser got."""
+    """Every log record and error of the ask, and all the browser got."""
     run = drive(tmp_path, scenario)
 
     logged = everything_shown(run.logged, run.errors)
@@ -434,7 +434,7 @@ def test_no_secret_or_word_of_the_person_reaches_a_log_record_or_the_browser(
 def test_every_generated_answer_event_says_ai_generated_and_error_does_not(
     tmp_path: Path,
 ) -> None:
-    """C8: text, sentence, audio and done say ai_generated; error does not."""
+    """CP12: text, sentence, audio and done say ai_generated; error does not."""
     (tmp_path / "answered").mkdir()
     (tmp_path / "refused").mkdir()
     answered = _payloads_by_event(drive(tmp_path / "answered").response.text)

@@ -54,7 +54,6 @@ def _is_the_talk_host(permissions_policy: str | None) -> bool:
     return permissions_policy == TALK_PERMISSIONS_POLICY
 
 
-# T4a.
 def test_the_router_gives_each_hostname_its_app_and_any_other_a_not_found(
     hosts: Hosts,
 ) -> None:
@@ -68,7 +67,6 @@ def test_the_router_gives_each_hostname_its_app_and_any_other_a_not_found(
     assert stranger.status_code == _NOT_FOUND
 
 
-# T4a.
 def test_a_socket_for_a_hostname_the_instance_does_not_serve_is_refused(
     hosts: Hosts,
 ) -> None:
@@ -81,14 +79,12 @@ def test_a_socket_for_a_hostname_the_instance_does_not_serve_is_refused(
         pytest.fail("a socket was accepted")
 
 
-# T4b.
 def test_a_scope_with_no_host_header_is_a_not_found(hosts: Hosts) -> None:
     answer = ask_at_the_door(hosts.router, hosts=(), path="/login")
 
     assert answer.status == _NOT_FOUND
 
 
-# T4c.
 @pytest.mark.parametrize(
     ("first", "second", "answered_by_talk"),
     [(_TALK_HOST, _LOBBY_HOST, True), (_LOBBY_HOST, _TALK_HOST, False)],
@@ -107,7 +103,6 @@ def test_with_two_host_headers_only_the_first_hosts_app_answers(
     )
 
 
-# T4d.
 def test_a_port_on_the_talk_host_never_reaches_the_lobbys_pages(hosts: Hosts) -> None:
     ported = hosts.browser(f"{A_TALK_ADDRESS}:8443")
 
@@ -117,7 +112,6 @@ def test_a_port_on_the_talk_host_never_reaches_the_lobbys_pages(hosts: Hosts) ->
     assert _is_the_talk_host(settings.headers["permissions-policy"])
 
 
-# T4d.
 def test_a_port_on_the_lobby_never_gets_a_talk_host_answer(hosts: Hosts) -> None:
     ported = hosts.browser_with_the_cookies_of(
         hosts.signed_in_at(A_BROWSERS_ADDRESS), f"{A_BROWSERS_ADDRESS}:8443"
@@ -129,7 +123,6 @@ def test_a_port_on_the_lobby_never_gets_a_talk_host_answer(hosts: Hosts) -> None
     assert not _is_the_talk_host(page.headers.get("permissions-policy"))
 
 
-# T4e.
 @pytest.mark.parametrize(
     "target",
     [f"{A_BROWSERS_ADDRESS}/settings", "/settings"],
@@ -149,7 +142,6 @@ def test_an_absolute_form_target_naming_the_lobby_is_the_talk_hosts_not_found(
     assert _is_the_talk_host(answer.headers["permissions-policy"])
 
 
-# T4f.
 @pytest.mark.parametrize("slug", [A_DECK, f"{B_DECK}/presenter"])
 @pytest.mark.parametrize("signed_in", [True, False], ids=["with a session", "none"])
 def test_a_socket_to_a_talk_is_closed_before_it_is_accepted(
@@ -170,7 +162,6 @@ def test_a_socket_to_a_talk_is_closed_before_it_is_accepted(
         pytest.fail("a socket was accepted")
 
 
-# T13, T14a and T5c, through the composition root's own wiring.
 @pytest.mark.usefixtures("environment")
 def test_the_composition_root_wires_the_talk_host_to_its_own_policy() -> None:
     settings = load_settings()
@@ -193,7 +184,7 @@ def test_the_composition_root_wires_the_talk_host_to_its_own_policy() -> None:
     assert from_the_talk_host.status_code != HTTPStatus.FORBIDDEN
 
 
-# C1, through the composition root's own wiring.
+# CP13
 @pytest.mark.usefixtures("environment")
 def test_the_composition_root_serves_the_copresenter_at_the_talk_host_only() -> None:
     settings = load_settings()
@@ -232,10 +223,9 @@ def test_the_composition_root_serves_the_copresenter_at_the_talk_host_only() -> 
     assert at_the_talk_host.json() != at_the_lobby.json()
 
 
-# T1, through the composition root's own wiring.
 @pytest.mark.usefixtures("environment")
 def test_the_talk_hosts_sign_in_stores_no_id_token_while_the_lobbys_does() -> None:
-    """#428 cell 29 (D4, T1): lobby row keeps the ID token, talk row none."""
+    """The lobby row keeps the ID token, talk row none."""
     settings = load_settings()
     now = datetime.now(UTC)
     issuer = FakeIssuer(

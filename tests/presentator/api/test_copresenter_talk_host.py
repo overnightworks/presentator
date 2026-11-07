@@ -59,7 +59,7 @@ def _hear_with_origin(browser: TestClient, origin: str | None) -> int | None:
         return refused.code
 
 
-# C4.
+# CP3
 @pytest.mark.parametrize("role", [Role.ADMIN, Role.USER])
 def test_who_answers_every_signed_in_person(role: Role) -> None:
     talk, private, _clock = a_copresenter_talk_host()
@@ -71,7 +71,6 @@ def test_who_answers_every_signed_in_person(role: Role) -> None:
     assert private.speech.readiness_calls == 1
 
 
-# C5.
 def test_ask_streams_for_a_signed_in_person_with_the_browsers_own_provenance() -> None:
     talk, _private, _clock = a_copresenter_talk_host()
     talk.sign_in()
@@ -81,7 +80,6 @@ def test_ask_streams_for_a_signed_in_person_with_the_browsers_own_provenance() -
     assert answer.status_code == HTTPStatus.OK
 
 
-# C5.
 @pytest.mark.parametrize(
     "claims",
     [
@@ -104,7 +102,6 @@ def test_a_post_from_another_site_is_refused_whatever_session_it_carries(
     assert private.answers.messages == []
 
 
-# C5.
 def test_an_ask_carrying_only_the_talk_hosts_referer_is_refused() -> None:
     """A Referer alone is no provenance, whichever host it names."""
     talk, private, _clock = a_copresenter_talk_host()
@@ -119,7 +116,6 @@ def test_an_ask_carrying_only_the_talk_hosts_referer_is_refused() -> None:
     assert private.answers.messages == []
 
 
-# C5.
 def test_an_ask_with_neither_provenance_header_is_refused_by_the_origin_check() -> None:
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in()
@@ -132,7 +128,7 @@ def test_an_ask_with_neither_provenance_header_is_refused_by_the_origin_check() 
     assert private.answers.messages == []
 
 
-# C6.
+# CP13
 @pytest.mark.parametrize(
     ("origin", "denied_with"),
     [
@@ -164,7 +160,6 @@ def test_hear_is_accepted_for_a_user_from_the_talk_origin() -> None:
     assert _hear_with_origin(talk.client, TALK_ORIGIN) is None
 
 
-# C7.
 def test_the_lobbys_session_cookie_does_not_sign_in_at_the_talk_host() -> None:
     talk, private, clock = a_copresenter_talk_host()
     session_id = talk.people.open_session_for(
@@ -193,7 +188,7 @@ def test_a_sign_in_at_the_talk_host_sets_no_csrf_cookie(tmp_path: Path) -> None:
 
 
 def test_an_admin_demoted_while_signed_in_is_still_answered() -> None:
-    """A role change does not end the answer."""
+    """CP4: a role change does not end the answer."""
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in(role=Role.ADMIN)
     (admin,) = talk.people.users.users.values()
@@ -244,7 +239,7 @@ def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_deck_and_who(
 def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_running_hearing(
     tmp_path: Path,
 ) -> None:
-    """A role change does not end a running hearing."""
+    """CP4: a role change does not end a running hearing."""
     deadline = ManualDeadline()
     hosts, talk, private = _talk_host_with_a_signed_in_admin(tmp_path, deadline)
 
@@ -258,7 +253,6 @@ def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_running_hearing(
     assert private.speech.hearing.frames == [b"after demotion"]
 
 
-# C9.
 @pytest.mark.parametrize(
     ("accept", "status"),
     [

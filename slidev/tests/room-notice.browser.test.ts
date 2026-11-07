@@ -20,7 +20,7 @@ import {
 registerOverlayHarness()
 vi.setConfig({ testTimeout: 60_000 })
 
-// The ruled sentences (#293 E8, line 5 A) and pill words, as scenario data.
+// CP11: the ruled sentences, and the pill words, as scenario data.
 const BANNER = {
   de: 'Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an einen KI-Dienst gesendet. Welcher, steht in der Datenschutzerklärung.',
   en: 'This talk uses an AI co-presenter. While it is switched on, speech is converted to text locally and sent with the slides to an AI service. The Datenschutzerklärung (privacy notice) says which one.',
@@ -123,7 +123,7 @@ async function clearanceOf(pages: Page[], label: string) {
 
 describe('the room notice', () => {
   it.each(['de', 'en'] as const)(
-    'Cells 1, 8, 20: the banner, then the answering pill, then the listening pill in %s',
+    'CP9, CP10: the banner, then the answering pill, then the listening pill in %s',
     async (language) => {
       state.whoLanguage = language
       state.heardOnConnect = false
@@ -151,7 +151,7 @@ describe('the room notice', () => {
     ['a pending microphone permission', { microphone: 'pending' }, false],
     ['a denied microphone', { microphone: 'denied' }, true],
     ['a worklet that fails to load', { worklet: 'failing' }, true],
-  ] as [string, Parameters<typeof setFakes>[1], boolean][])('Cells 2-4: shows nothing for 4 s with %s', async (_situation, fakes, failsLoudly) => {
+  ] as [string, Parameters<typeof setFakes>[1], boolean][])('CP8: shows nothing for 4 s with %s', async (_situation, fakes, failsLoudly) => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await setFakes(presenter, fakes)
@@ -164,7 +164,7 @@ describe('the room notice', () => {
     })
   })
 
-  it('Cell 2: shows the banner once the pending microphone is allowed', async () => {
+  it('CP9: shows the banner once the pending microphone is allowed', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await setFakes(presenter, { microphone: 'pending' })
@@ -183,7 +183,7 @@ describe('the room notice', () => {
     ['a /who that fails', 'who-fails', 'Unreachable'],
     ['a /who that finds no deck', 'who-not-found', 'Unreachable'],
     ['a hearing socket that errors before capture', 'error-on-open', 'No hearing'],
-  ] as const)('Cell 5: shows nothing for 4 s with %s', async (_situation, mode, failure) => {
+  ] as const)('CP8: shows nothing for 4 s with %s', async (_situation, mode, failure) => {
     state.hearingMode = mode
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
@@ -192,7 +192,7 @@ describe('the room notice', () => {
     })
   })
 
-  it('Cell 6: keeps the banner and shows no pill while the first answer cannot start', async () => {
+  it('CP9: keeps the banner and shows no pill while the first answer cannot start', async () => {
     await inRoom(async ({ presenter, projector }) => {
       await setFakes(presenter, { playback: 'pending' })
       await switchOn(presenter)
@@ -205,7 +205,7 @@ describe('the room notice', () => {
     })
   })
 
-  it('Cell 7: keeps the banner and shows no pill when the first answer is refused by the player', async () => {
+  it('CP9: keeps the banner and shows no pill when the first answer is refused by the player', async () => {
     await inRoom(async ({ presenter, projector }) => {
       await setFakes(presenter, { playback: 'rejected' })
       await switchOn(presenter)
@@ -218,7 +218,7 @@ describe('the room notice', () => {
     })
   })
 
-  it('Cell 8: shows the answering pill while audio plays and the listening pill after it ends', async () => {
+  it('CP9: shows the answering pill while audio plays and the listening pill after it ends', async () => {
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
       await showsPhase(projector, 'answering', PILL.de.answering)
@@ -228,7 +228,7 @@ describe('the room notice', () => {
     })
   })
 
-  it('Cell 9: never shows the answering pill for a later answer whose play is refused', async () => {
+  it('Never shows the answering pill for a later answer whose play is refused', async () => {
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
       await showsPhase(projector, 'answering', PILL.de.answering)
@@ -249,7 +249,7 @@ describe('the room notice', () => {
     ['not-enabled', 'Not enabled'],
     ['signed-out-refresh', 'Sign in again'],
     ['no-session', 'Sign in again'],
-  ] as const)('Cell 10: keeps the notice when the ask is refused (%s)', async (mode, line) => {
+  ] as const)('CP8: keeps the notice when the ask is refused (%s)', async (mode, line) => {
     await inRoom(async ({ presenter, projector }) => {
       state.answerMode = mode
       await switchOn(presenter)
@@ -276,35 +276,35 @@ describe('the room notice', () => {
     })
   })
 
-  it('Cell 11: clears both windows when the server ends the hearing lease', async () => {
+  it('Clears both windows when the server ends the hearing lease', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
       await showsPhase(projector, 'banner', BANNER.de)
       closeHearingLeases()
-      await clearanceOf([presenter, projector], 'Cell 11')
+      await clearanceOf([presenter, projector], 'the server ends the hearing lease')
       await presenter.getByText('No hearing', { exact: true }).waitFor({ state: 'visible' })
     })
   })
 
-  it('Cell 12: clears both windows when capture fails after the notice', async () => {
+  it('Clears both windows when capture fails after the notice', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
       await showsPhase(projector, 'banner', BANNER.de)
       sendHearingError()
-      await clearanceOf([presenter, projector], 'Cell 12')
+      await clearanceOf([presenter, projector], 'capture fails after the notice')
     })
   })
 
-  it('Cell 13: clears when the AI is switched off and starts with the banner when it is switched on again', async () => {
+  it('Clears when the AI is switched off and starts with the banner when it is switched on again', async () => {
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
       await showsPhase(projector, 'answering', PILL.de.answering)
       await callFake(presenter, 'endPlayback')
       await showsPhase(projector, 'listening', PILL.de.listening)
       await presenter.getByRole('switch', { name: 'AI' }).click()
-      await clearanceOf([presenter, projector], 'Cell 13 (switch-off)')
+      await clearanceOf([presenter, projector], 'the AI is switched off')
       state.heardOnConnect = false
       const marks = [await markTimeline(presenter), await markTimeline(projector)]
       await switchOn(presenter)
@@ -316,7 +316,7 @@ describe('the room notice', () => {
     })
   })
 
-  it('Cell 14: shows nothing when the AI is never switched on', async () => {
+  it('CP8: shows nothing when the AI is never switched on', async () => {
     await inRoom(async ({ presenter, projector }) => {
       await expectNothingFor([presenter, projector], 2_000)
       expect((await snapshot(presenter)).on).toBe(false)
@@ -324,7 +324,7 @@ describe('the room notice', () => {
     })
   })
 
-  it('Cell 15: a projector opened later shows the banner and then the pill within 2.5 s', async () => {
+  it('A projector opened later shows the banner and then the pill within 2.5 s', async () => {
     state.heardOnConnect = false
     const { browser, context } = await openRoomBrowser()
     try {
@@ -334,7 +334,7 @@ describe('the room notice', () => {
       let opened = Date.now()
       const lateProjector = await openPageIn(context, `${state.origin}/1`, 1024)
       await showsPhase(lateProjector, 'banner', BANNER.de, 2_500)
-      console.info(`Cell 15: banner on a late projector after ${Date.now() - opened} ms`)
+      console.info(`banner on a late projector after ${Date.now() - opened} ms`)
 
       sendHeard('First question')
       await showsPhase(presenter, 'answering', PILL.de.answering)
@@ -343,13 +343,13 @@ describe('the room notice', () => {
       opened = Date.now()
       const afterAnswerProjector = await openPageIn(context, `${state.origin}/1`, 1024)
       await showsPhase(afterAnswerProjector, 'listening', PILL.de.listening, 2_500)
-      console.info(`Cell 15: pill on a late projector after ${Date.now() - opened} ms`)
+      console.info(`pill on a late projector after ${Date.now() - opened} ms`)
     } finally {
       await browser.close()
     }
   })
 
-  it('Cell 16: clears the projector by the OFF post when the presenter page closes', async () => {
+  it('Clears the projector by the OFF post when the presenter page closes', async () => {
     state.heardOnConnect = false
     const { browser, context } = await openRoomBrowser()
     try {
@@ -374,7 +374,7 @@ describe('the room notice', () => {
       const closed = Date.now()
       await presenter.close()
       await isEmpty(projector, 2_500)
-      console.info(`Cell 16: projector empty ${Date.now() - closed} ms after the presenter page closed`)
+      console.info(`projector empty ${Date.now() - closed} ms after the presenter page closed`)
       const messages = await projector.evaluate(() => (window as unknown as Probed).__roomMessages)
       expect(messages.map((message) => message.phase)).toContain('off')
     } finally {
@@ -382,7 +382,7 @@ describe('the room notice', () => {
     }
   })
 
-  it('Cell 17: expires on a frozen presenter by itself and writes nothing back', async () => {
+  it('Expires on a frozen presenter by itself and writes nothing back', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
@@ -392,7 +392,7 @@ describe('the room notice', () => {
       const frozenAt = Date.now()
       await isEmpty(projector, 10_000)
       const expiredAfter = Date.now() - frozenAt
-      console.info(`Cell 17: projector empty ${expiredAfter} ms after the presenter froze`)
+      console.info(`projector empty ${expiredAfter} ms after the presenter froze`)
       expect(expiredAfter).toBeLessThan(4_000)
       await resume()
       await presenter.evaluate(() => true)
@@ -404,7 +404,7 @@ describe('the room notice', () => {
     })
   })
 
-  it('Cell 26: clears the projector by the teardown OFF when the presenter switches to Play Mode', async () => {
+  it('Clears the projector by the teardown OFF when the presenter switches to Play Mode', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
@@ -421,7 +421,7 @@ describe('the room notice', () => {
     ['/1?print', 'Hallo Co-Presenter'],
     ['/overview', 'Hallo Co-Presenter'],
     ['/notes', 'Begrüsse das Publikum'],
-  ])('Cell 18: shows no notice on %s', async (path, marker) => {
+  ])('Shows no notice on %s', async (path, marker) => {
     state.heardOnConnect = false
     await inRoom(async ({ context, presenter, projector }) => {
       await switchOn(presenter)
@@ -433,7 +433,7 @@ describe('the room notice', () => {
     })
   })
 
-  it('Cell 19: is no control and leaves the slide where it is', async () => {
+  it('CP9: is no control and leaves the slide where it is', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       const container = projector.locator('.slidev-slide-container').first()
@@ -465,7 +465,7 @@ describe('the room notice', () => {
     })
   })
 
-  it('Sentence 5: inverts the colours on a dark slide', async () => {
+  it('Inverts the colours on a dark slide', async () => {
     state.heardOnConnect = false
     const luminanceOf = (page: Page) => page.evaluate(() => {
       const style = getComputedStyle(document.querySelector('[data-room-notice]')!)
@@ -489,7 +489,7 @@ describe('the room notice', () => {
     expect(contrasts).toEqual({ light: false, dark: true })
   })
 
-  it('Cell 22: scales the banner and the pill whole inside the presenter preview at 390 px', async () => {
+  it('CP9: scales the banner and the pill whole inside the presenter preview at 390 px', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter }) => {
       await switchOn(presenter)
@@ -502,7 +502,7 @@ describe('the room notice', () => {
         await expect.poll(async () => (await readNotice(presenter))?.phase, { timeout: 5_000 }).toBe(phase)
         const previewBox = (await presenter.locator('.slidev-slide-container').first().boundingBox())!
         const noticeBox = (await presenter.locator('[data-room-notice]').boundingBox())!
-        console.info(`Cell 22 ${phase}: preview ${JSON.stringify(previewBox)}, notice ${JSON.stringify(noticeBox)}, viewport width 390`)
+        console.info(`${phase}: preview ${JSON.stringify(previewBox)}, notice ${JSON.stringify(noticeBox)}, viewport width 390`)
         expect(noticeBox.x).toBeGreaterThanOrEqual(previewBox.x - 1)
         expect(noticeBox.y).toBeGreaterThanOrEqual(previewBox.y - 1)
         expect(noticeBox.x + noticeBox.width).toBeLessThanOrEqual(previewBox.x + previewBox.width + 1)
@@ -512,7 +512,7 @@ describe('the room notice', () => {
     }, { presenterWidth: 390 })
   })
 
-  it('Cell 24: a second presenter page that was never on does not clear the room', async () => {
+  it('A second presenter page that was never on does not clear the room', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ context, presenter, projector }) => {
       await switchOn(presenter)
@@ -530,7 +530,7 @@ describe('the room notice', () => {
     })
   })
 
-  it('Cells 21, 23: two addon decks on one origin keep their notices apart', async () => {
+  it('Two addon decks on one origin keep their notices apart', async () => {
     const directories = [await buildAddonDeck('/deck/a/'), await buildAddonDeck('/deck/50%25off/')]
     const { server, origin, sockets } = await createOverlayDeckServer(directories[0]!, {
       basePath: '/deck/a',

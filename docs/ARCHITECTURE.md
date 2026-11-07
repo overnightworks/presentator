@@ -2,8 +2,8 @@
 
 Audience: an engineer or agent about to change presentator who needs the mental
 model first: what the parts are, which way they depend, and what the design
-rests on. Exact behaviour lives in the [reference](reference/), the wish in
-[VISION.md](VISION.md).
+rests on. Exact behaviour lives in the surface pages indexed in
+[README.md](README.md), the wish in [VISION.md](VISION.md).
 
 presentator is one web service that mirrors Slidev decks from git remotes,
 builds each one sealed in a second service, and serves the built talk on its own
