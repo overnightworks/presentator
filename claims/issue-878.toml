@@ -1,0 +1,8 @@
+claim_id = "2c66bc8bd3254873b02854366d4e34ef"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "e064ff19c0af65de2a729c217eac781d60f31fd7"
+branch = "claude/issue-878-take-webauth-0-31-0"
+scope = ["pyproject.toml", "src/presentator/api/auth.py", "src/presentator/host/oidc.py", "tests", "uv.lock"]
+opened_commit = "cbd7c47a97c579508f0a2f54358a2a3cb840259e"
+whole_reason = "One dependency upgrade: the pin and every import of the moved name change in one landing."
