@@ -14,11 +14,13 @@ from pydantic import SecretStr
 from starlette.routing import Router
 from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
+from webauth.ports import AccountKind
 
 from presentator.adapters.deck_store import SqliteDeckStore
 from presentator.adapters.decks import SqliteSourceStore
 from presentator.adapters.identity import (
     SqliteSessionRecordStore,
+    StoredAccount,
     TokenIdentifierFactory,
     create_identity_tables,
 )
@@ -737,7 +739,12 @@ def test_an_instance_restarts_on_a_crash_that_left_only_current_frames_in_the_lo
 
     survivor = SqliteSessionRecordStore(database).load(session_ids[0])
     assert survivor is not None
-    assert survivor.user.id == _ADMIN.id
+    assert survivor.user == StoredAccount(
+        id=_ADMIN.id,
+        username=_ADMIN.username,
+        role=_ADMIN.role,
+        kind=AccountKind.PERSON,
+    )
     lobby = TestClient(
         instance.lobby,
         base_url=A_BROWSERS_ADDRESS,

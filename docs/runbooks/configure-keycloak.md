@@ -47,9 +47,9 @@ only its two configured hostnames.
 
 ## Let an agent list a person's decks
 
-Optional: skip it and the instance serves no `/mcp`. The agent reaches the
-person's decks through `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, as that person, and
-nothing else.
+Optional: skip it and the instance serves no `/mcp`. A person's agent reaches
+the person's decks through `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, as that person,
+and nothing else.
 
 1. Use the shared `agents` client: one public client for every app, with
    client authentication off (no secret) and PKCE S256. Its id is
@@ -69,11 +69,13 @@ nothing else.
    `PRESENTATOR_AGENT__MCP__AGENT_GROUP`. A service account in it, with the
    app's groups and scope on its token, signs in at `/mcp` with its own client
    as an agent; the app creates its account on that first call. It sees no
-   deck: decks belong to people.
+   deck: decks belong to people. Its token carries the `agent_owner` and
+   `agent_name` claims, which the realm must set on it.
 6. Leave the realm's access token lifetime at 300 seconds: the app adds none.
 
-A person must have signed in once in a browser: a token of a subject the app
-has no account for is refused, and no account is made from it.
+For a person's agent, the person must have signed in once in a browser: a token
+of a person's subject the app has no account for is refused, and no account is
+made from it.
 
 ## Check
 
