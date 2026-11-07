@@ -1,4 +1,4 @@
-"""The sealed-container snapshot the worker self-check passes, and a way to alter it."""
+"""The sealed snapshot the self-check passes, its staged root and its alterations."""
 
 import os
 import stat
@@ -150,7 +150,7 @@ def stage_sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     file_at("app/slidev/node_modules/.bin/slidev", mode=0o755)
     package = modules / ".pnpm/@slidev+cli@1/node_modules/@slidev/cli"
     (package / "node_modules").mkdir(parents=True)
-    (package / "node_modules/.vite").symlink_to("/work/vite")
+    (package / "node_modules/.vite").symlink_to(worker.VITE_CACHE_TARGET)
     (modules / "@slidev").mkdir()
     (modules / "@slidev/cli").symlink_to(package)
     shell = (

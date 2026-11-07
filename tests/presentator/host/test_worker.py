@@ -3,7 +3,6 @@
 import os
 import stat
 import sys
-import threading
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -24,6 +23,11 @@ from presentator.host.worker import (
 )
 from presentator.host.worker_scratch import QUEUE_MOUNT, scratch_empty
 from presentator.host.worker_serving import Serving
+from tests.presentator.host.support.audit_recording import (
+    LAUNCH_EVENTS,
+    READ_EVENTS,
+    audit_recording,
+)
 from tests.presentator.host.support.sealed_snapshot import (
     HARDENED,
     LOOPBACK_ONLY,
@@ -743,38 +747,15 @@ def test_prctl_failure_raises() -> None:
         worker.libc_prctl(0x7FFFFFFF, 0)
 
 
-LAUNCH_EVENTS = frozenset(
-    {
-        "os.fork",
-        "os.forkpty",
-        "os.posix_spawn",
-        "os.spawn",
-        "os.exec",
-        "os.system",
-        "subprocess.Popen",
-    }
-)
-READ_EVENTS = frozenset({"open", "os.scandir", "os.listdir"})
-audit_recording: dict[str, object] = {"on": False, "thread": 0, "events": []}
-
-
-def record_audited_event(event: str, arguments: tuple[object, ...]) -> None:
-    if not audit_recording["on"] or audit_recording["thread"] != threading.get_ident():
-        return
-    if event in LAUNCH_EVENTS or (event in READ_EVENTS and arguments):
-        audit_recording["events"].append((event, arguments[0] if arguments else None))  # type: ignore[attr-defined]
-
-
 def test_the_snapshot_reads_the_task_count_then_the_scratch_places_and_launches_nothing(
     sealed_root: Path,
 ) -> None:
-    sys.addaudithook(record_audited_event)
-    audit_recording.update(on=True, thread=threading.get_ident(), events=[])
+    audit_recording.start()
     try:
         worker.read_snapshot(sealed_root)
     finally:
-        audit_recording["on"] = False
-    events: list[tuple[str, object]] = audit_recording["events"]  # type: ignore[assignment]
+        audit_recording.on = False
+    events = audit_recording.events
 
     def below_root(event: tuple[str, object]) -> bool:
         return event[0] in READ_EVENTS and Path(str(event[1])).is_relative_to(

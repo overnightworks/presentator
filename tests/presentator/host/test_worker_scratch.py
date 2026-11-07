@@ -7,6 +7,7 @@ import pytest
 from presentator.host.worker_scratch import (
     QUEUE_MOUNT,
     SHARED_MEMORY_MOUNT,
+    SYSV_READ_BYTES,
     TEMPORARY_MOUNT,
     WORK_MOUNT,
     read_scratch,
@@ -30,7 +31,6 @@ SYSV_OBJECT_ROWS = {
         "          0 1794049612\n"
     ),
 }
-TABLE_READ_BYTES = 4096
 
 
 @pytest.fixture
@@ -87,7 +87,7 @@ def test_an_object_row_in_a_table_is_not_empty(root: Path, table: str) -> None:
 
 @pytest.mark.parametrize("table", SYSV_OBJECT_ROWS)
 def test_a_table_longer_than_the_read_is_not_empty(root: Path, table: str) -> None:
-    rows = SYSV_OBJECT_ROWS[table] * (TABLE_READ_BYTES // 40)
+    rows = SYSV_OBJECT_ROWS[table] * (SYSV_READ_BYTES // 40)
     table_path(root, table).write_text(SYSV_HEADERS[table] + rows)
 
     assert not scratch_empty(read_scratch(root))
