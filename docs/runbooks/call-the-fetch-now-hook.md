@@ -22,7 +22,9 @@ source, a wrong secret and a missing secret all answer `404` with an empty body.
    nothing.
 2. In the Git host's webhook settings, add a webhook with the hook address and
    the secret. Rollback: delete the webhook at the Git host.
-3. Push to the repository and run the Check.
+3. Push to the repository and run the Check. Rollback: none in this runbook;
+   the push moves the repository's own branch, and a mistaken push is undone
+   there with a revert commit.
 
 ## Escalate
 
