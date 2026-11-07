@@ -1,6 +1,6 @@
 """Catalog purity: no Svelte page carries a literal, user-facing string.
 
-Owner: the catalog rule in `docs/reference/lobby-settings-and-appearance.md`.
+Owner: the catalog rule in `docs/ARCHITECTURE.md` §5, "Words and look".
 Every user-facing word on a lobby page must come from the message catalog;
 typing a sentence into a page would make a second language a code change. This
 script is a CI gate, not a package layer.

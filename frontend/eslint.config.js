@@ -3,7 +3,7 @@ import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import ts from 'typescript-eslint';
 
-// SvelteKit's own navigation state is the only thing the lobby
+// LB5: SvelteKit's own navigation state is the only thing the lobby
 // keeps in the browser, so no app code calls a storage API, and no page
 // exports or calls a `snapshot`, which would put form input into sessionStorage.
 const NO_STORAGE =

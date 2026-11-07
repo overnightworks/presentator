@@ -21,7 +21,7 @@ import {
 } from './scenario.ts';
 import { answersWith, OWN_SOURCE, ownSourceName, sourceAddress } from './sources.ts';
 
-// The instance defaults are one store per stack, so every cell that asserts a
+// The instance defaults are one store per stack, so every test that asserts a
 // stored value or a repaint first arranges its own baseline through the API.
 const JSON_ACCEPT = { Accept: 'application/json' };
 const SAME_ORIGIN = { ...JSON_ACCEPT, 'Sec-Fetch-Site': 'same-origin' };
@@ -36,7 +36,7 @@ async function storedSettings(page: Page): Promise<SettingsView> {
 }
 
 // The baseline speaks the language the driven lobby starts with; the harness
-// names it, so no cell restates a tag.
+// names it, so no test restates a tag.
 const test = base.extend<{
 	arrangeBaseline: (name?: string) => Promise<SettingsView>;
 }>({
@@ -65,7 +65,6 @@ function otherLanguage(settings: SettingsView): { tag: string; name: string } {
 	return other as { tag: string; name: string };
 }
 
-// Cell 1.
 for (const colorScheme of ['light', 'dark'] as const) {
 	for (const width of [390, 1280]) {
 		test.describe(`Settings General at ${width} px, ${colorScheme}`, () => {
@@ -135,7 +134,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
 test.describe('as an admin', () => {
 	test.use({ person: { role: 'admin' } });
 
-	// Cell 2.
 	test('Settings is a client navigation, current beside Decks, and back and forward land right', async ({
 		page
 	}) => {
@@ -170,7 +168,6 @@ test.describe('as an admin', () => {
 		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 	});
 
-	// Cell 3.
 	test('Sources is a client navigation to the list, and its General link comes back', async ({
 		page
 	}) => {
@@ -188,7 +185,7 @@ test.describe('as an admin', () => {
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_title);
 	});
 
-	// Cell 4.
+	// LB3.
 	test('Save repaints the same document with the stored answer and a reload keeps it', async ({
 		page,
 		browser,
@@ -228,6 +225,7 @@ test.describe('as an admin', () => {
 		}
 	});
 
+	// LB1.
 	test('The person menu and the sign-in pages speak the instance language', async ({
 		page,
 		browser,
@@ -301,7 +299,6 @@ test.describe('as an admin', () => {
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 	});
 
-	// Cell 5.
 	test('Enter in the name field saves', async ({ page, arrangeBaseline }) => {
 		await arrangeBaseline();
 		const { words } = await sessionOf(page);
@@ -313,7 +310,6 @@ test.describe('as an admin', () => {
 		await expect.poll(async () => (await storedSettings(page)).name).toBe('Hafen');
 	});
 
-	// Cell 6.
 	test('a failed write repaints nothing, enables Save again and keeps what was typed', async ({
 		page,
 		arrangeBaseline
@@ -338,7 +334,6 @@ test.describe('as an admin', () => {
 		expect(await storedSettings(page)).toEqual(baseline);
 	});
 
-	// Cell 7.
 	test('an ended session meets the sign-in when Save is pressed', async ({ page, context }) => {
 		const { words } = await sessionOf(page);
 		await page.goto(SETTINGS_ADDRESS);
@@ -366,7 +361,6 @@ test.describe('as an admin', () => {
 		await leftForSignIn(page, started);
 	});
 
-	// Cell 9, the unknown address and a failed read.
 	test('an unknown address keeps its words and title', async ({ page }) => {
 		const { words } = await sessionOf(page);
 
@@ -392,12 +386,12 @@ test.describe('as an admin', () => {
 	});
 });
 
-// Cell 8.
 for (const colorScheme of ['light', 'dark'] as const) {
 	for (const width of [390, 1280]) {
 		test.describe(`a member at Settings, ${width} px, ${colorScheme}`, () => {
 			test.use({ person: { role: 'user' }, colorScheme });
 
+			// LB4.
 			test('meets the for-admins board inside the lobby over a 200 shell', async ({
 				page
 			}, testInfo) => {
@@ -424,7 +418,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
 	}
 }
 
-// Cell 10.
 test('a signed-out /settings is sent to the sign-in with next set to /settings', async ({
 	page
 }) => {
@@ -435,7 +428,7 @@ test('a signed-out /settings is sent to the sign-in with next set to /settings',
 	await leftForSignIn(page, started);
 });
 
-// Cell 7: words and ages follow the language the server serves, not the browser's.
+// Words and ages follow the language the server serves, not the browser's.
 const secondsAgo = (seconds: number): string =>
 	new Date(Date.parse(NOW) - seconds * 1000).toISOString();
 const DAY = 24 * 60 * 60 * 1000;

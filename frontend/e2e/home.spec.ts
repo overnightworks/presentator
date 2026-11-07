@@ -27,7 +27,6 @@ const aDeck = (overrides: Partial<DeckRecord> = {}): DeckRecord => ({
 	...overrides
 });
 
-// Cell 1.
 test('a signed-out / is sent to the sign-in with next set to /', async ({ page }) => {
 	const started = startsSignIn(page);
 
@@ -59,7 +58,7 @@ const fourStates = [
 	})
 ];
 
-// Cell 2: the ages are worded in the instance's language.
+// The ages are worded in the instance's language.
 const englishAges = ['2 minutes ago', '26 minutes ago', '3 hours ago', '6 days ago'];
 
 for (const colorScheme of ['light', 'dark'] as const) {
@@ -115,7 +114,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
 	}
 }
 
-// Cell 3.
 const emptyCards: { role: Person['role']; source: string | undefined }[] = [
 	{ role: 'admin', source: undefined },
 	{ role: 'admin', source: SOURCE_ADDRESS },
@@ -152,10 +150,9 @@ for (const { role, source } of emptyCards) {
 	});
 }
 
-test.describe('sentence 9', () => {
+test.describe('the header on a narrow screen and its focus', () => {
 	test.use({ person: { role: 'admin', decks: [aDeck()] } });
 
-	// Cell 4.
 	test('keeps the header on one line at 390 px with no horizontal scroll', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 });
 
@@ -222,10 +219,10 @@ test.describe('sentence 9', () => {
 	});
 });
 
-// Cell 5.
 test.describe('the theme', () => {
 	test.use({ person: { role: 'admin' } });
 
+	// LB3.
 	test('turns dark with no navigation and no history entry, and a reload keeps it', async ({
 		page
 	}) => {
@@ -314,8 +311,7 @@ test.describe('the theme', () => {
 	});
 });
 
-// Cell 6.
-test.describe('sentence 6', () => {
+test.describe('an ended session', () => {
 	test.use({ person: { role: 'admin', decks: [aDeck()] } });
 
 	test('an ended session meets the sign-in when the theme changes', async ({ page, context }) => {
@@ -346,8 +342,7 @@ test.describe('sentence 6', () => {
 	});
 });
 
-// Cell 7.
-test.describe('sentence 4', () => {
+test.describe('history across lobby pages', () => {
 	test.use({ person: { role: 'admin', decks: [aDeck()] } });
 
 	test('walks back and forward across lobby pages and a refusal board', async ({
@@ -464,7 +459,6 @@ test.describe('log out', () => {
 	});
 });
 
-// Cell 10.
 test.describe('a member', () => {
 	test.use({ person: { role: 'user' } });
 
