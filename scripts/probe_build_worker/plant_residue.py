@@ -1,8 +1,10 @@
 """Plant one residue, then become the worker (`python -I - RESIDUE UID:GID COMMAND...`).
 
 The source arrives on stdin. The residue is planted as root or as the build
-identity, any child of the plant is reaped, and the command replaces this
-process, so the worker is PID 1 of the container. A plant that fails exits 1.
+identity, and the command replaces this process, so the worker is PID 1 of the
+container. A plant that runs as the build identity is reaped and exits 1 when
+it fails. The `process` child stays alive on purpose; if it fails to drop, it
+ends as a zombie, which is still a task, and the start still refuses.
 """
 
 import ctypes

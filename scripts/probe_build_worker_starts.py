@@ -1,7 +1,7 @@
 """Cells 61 to 65: every start proves the worker alone and its scratch places empty.
 
 Each start is a one-off container of the worker service, as cell 52's sealed
-check is. `probe_build_worker/residue.py` runs in it first, on stdin, plants one
+check is. `probe_build_worker/plant_residue.py` runs in it first, on stdin, plants one
 residue and replaces itself with the service's own command, so the worker is
 PID 1 of a container that holds the residue. The refusals run the full start,
 and the control passes `--check`. The service itself stays up beside them.
@@ -24,7 +24,7 @@ from probe_build_worker_harness import (
 
 from presentator.host.worker import BUILD_IDENTITY, REFUSAL_EXIT_STATUS, Predicate
 
-RESIDUE_SOURCE = PROBE_SOURCES / "residue.py"
+RESIDUE_SOURCE = PROBE_SOURCES / "plant_residue.py"
 START_SECONDS = 120
 PLANT_FAILED_STATUS = 1
 CHECK_ARGUMENT = "--check"

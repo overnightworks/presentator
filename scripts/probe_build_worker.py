@@ -21,7 +21,7 @@ watcher (`probe_build_worker/upload_watcher.py`, through `sudo -n`) records ever
 create in the worker's writable mounts.
 
 The start cells (`probe_build_worker_starts.py`) stage one residue in a one-off
-container of the service (`probe_build_worker/residue.py` on stdin) and drive the
+container of the service (`probe_build_worker/plant_residue.py` on stdin) and drive the
 start proofs against it: cells 61 to 64 each refuse, cell 65 is the clean control.
 
 The isolation cells run one life attacked from two sides at once, by the attack
