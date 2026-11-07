@@ -24,7 +24,7 @@ class AuditRecording:
 
     on: bool = False
     thread: int = 0
-    events: list[tuple[str, object]] = field(default_factory=list)
+    events: list[tuple[str, object]] = field(default_factory=list[tuple[str, object]])
     hooked: bool = False
 
     def record(self, event: str, arguments: tuple[object, ...]) -> None:
