@@ -117,37 +117,45 @@ _MCP_FIELD_OF = {
     "PRESENTATOR_AGENT__MCP__GROUP": "agent.mcp.group",
     "PRESENTATOR_AGENT__MCP__SCOPE": "agent.mcp.scope",
 }
-_MCP_BLOCK = dict(
-    zip(
-        _MCP_FIELD_OF,
-        ("an-agents-client", "/apps/presentator/agents", "mcp:tools"),
-        strict=True,
+
+
+@pytest.fixture
+def mcp_block() -> dict[str, str]:
+    """A whole MCP block: each variable, by name, with a value that is valid."""
+    return dict(
+        zip(
+            _MCP_FIELD_OF,
+            ("an-agents-client", "/apps/presentator/agents", "mcp:tools"),
+            strict=True,
+        )
     )
-)
 
 
 @pytest.mark.usefixtures("environment")
-def test_without_the_mcp_block_there_is_no_front() -> None:
+def test_without_the_mcp_variables_the_settings_name_no_mcp_block() -> None:
     assert load_settings().agent.mcp is None
 
 
 def test_a_whole_mcp_block_names_the_client_its_group_and_its_scope(
-    environment: pytest.MonkeyPatch,
+    environment: pytest.MonkeyPatch, mcp_block: dict[str, str]
 ) -> None:
-    for variable, value in _MCP_BLOCK.items():
+    for variable, value in mcp_block.items():
         environment.setenv(variable, value)
 
     mcp = load_settings().agent.mcp
 
     assert mcp is not None
-    assert (mcp.client_id, mcp.group, mcp.scope) == tuple(_MCP_BLOCK.values())
+    assert (mcp.client_id, mcp.group, mcp.scope) == tuple(mcp_block.values())
 
 
 @pytest.mark.parametrize(("missing", "field"), _MCP_FIELD_OF.items())
 def test_a_partial_mcp_block_refuses_the_start_naming_the_field(
-    environment: pytest.MonkeyPatch, missing: str, field: str
+    environment: pytest.MonkeyPatch,
+    mcp_block: dict[str, str],
+    missing: str,
+    field: str,
 ) -> None:
-    for variable, value in _MCP_BLOCK.items():
+    for variable, value in mcp_block.items():
         if variable != missing:
             environment.setenv(variable, value)
 
@@ -172,9 +180,12 @@ def test_a_partial_mcp_block_refuses_the_start_naming_the_field(
     ],
 )
 def test_a_malformed_mcp_block_refuses_the_start_without_echoing_it(
-    environment: pytest.MonkeyPatch, variable: str, value: str
+    environment: pytest.MonkeyPatch,
+    mcp_block: dict[str, str],
+    variable: str,
+    value: str,
 ) -> None:
-    for name, given in _MCP_BLOCK.items():
+    for name, given in mcp_block.items():
         environment.setenv(name, given)
     environment.setenv(variable, value)
 
