@@ -15,9 +15,9 @@ from httpx2 import Response
 from pydantic import SecretStr
 from starlette.routing import Router
 from starlette.types import ASGIApp, Message, Scope
+from webauth.admission import AdmissionConfig
 from webauth.config import WebAuthConfig
 from webauth.oidc import OidcRelyingParty
-from webauth.oidc_login import AdmissionConfig
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (

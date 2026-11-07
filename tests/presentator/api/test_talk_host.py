@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, quote, urlencode, urlsplit
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from webauth.admission import AdmissionConfig
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.middleware.security_headers import (
     CONTENT_TYPE_OPTIONS,
@@ -14,7 +15,6 @@ from webauth.middleware.security_headers import (
     REFERRER_POLICY,
     STRICT_TRANSPORT_SECURITY,
 )
-from webauth.oidc_login import AdmissionConfig
 
 from presentator.api.talk import TALK_PERMISSIONS_POLICY, talk_content_security_policy
 from tests.support.lobby import (

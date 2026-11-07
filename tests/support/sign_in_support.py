@@ -11,9 +11,9 @@ from typing import Literal
 
 from fastapi.testclient import TestClient
 from httpx2 import Response as BrowserAnswer
+from webauth.admission import AdmissionConfig
 from webauth.config import WebAuthConfig
 from webauth.oidc import OidcRelyingParty, TokenRequestPost
-from webauth.oidc_login import AdmissionConfig
 from webauth.ports import AccountEvent, AuditSink, SignInStores, SignInTransaction
 
 from presentator.adapters.identity import (
