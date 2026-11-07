@@ -1,0 +1,18 @@
+# Security pins for transitive dependencies; pnpm reads overrides only from here.
+overrides:
+  dompurify: 3.4.17
+  image-size: ^2.0.3
+  '@hono/node-server': ^2.1.3
+  '@modelcontextprotocol/node': 2.1.0
+  katex: ^0.18.2
+  minimatch: ^11.0.1
+  '@comark/markdown-it>markdown-it': ^14.1.0
+
+# The image installs the browser itself with `playwright install`, and Slidev's
+# agent skills are not part of building the deck.
+allowBuilds:
+  playwright-chromium: false
+
+permissions:
+  '@slidev/cli':
+    skills: false
