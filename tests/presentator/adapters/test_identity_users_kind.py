@@ -4,6 +4,7 @@ import sqlite3
 import threading
 from contextlib import closing
 from pathlib import Path
+from typing import Literal
 
 import pytest
 from webauth.ports import AccountKind
@@ -74,7 +75,9 @@ def test_a_start_waiting_on_another_start_adds_no_second_kind_column(
     reached_the_lock = threading.Event()
     connect = sqlite3.connect
 
-    def watching_connect(database: Path, isolation_level: None) -> sqlite3.Connection:
+    def watching_connect(
+        database: Path, isolation_level: Literal["DEFERRED"] | None = "DEFERRED"
+    ) -> sqlite3.Connection:
         connection = connect(database, isolation_level=isolation_level)
         if threading.current_thread().name == _THE_WAITING_START:
             connection.set_trace_callback(
