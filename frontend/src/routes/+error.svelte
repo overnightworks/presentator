@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import LobbyHeader from '#lib/LobbyHeader.svelte';
+	import NoteCard from '#lib/NoteCard.svelte';
 	import type { SessionPerson } from '#lib/api/session.ts';
 
 	const session = $derived(page.data.session);
@@ -23,8 +25,14 @@
 
 <LobbyHeader {session} {person} />
 <main>
-	<h1>{board ? board.title : page.status}</h1>
 	{#if board}
-		<p>{board.explanation}</p>
+		<NoteCard
+			title={board.title}
+			explanation={board.explanation}
+			href={resolve('/(lobby)')}
+			label={words.decks_title}
+		/>
+	{:else}
+		<h1>{page.status}</h1>
 	{/if}
 </main>

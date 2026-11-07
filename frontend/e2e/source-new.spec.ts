@@ -97,9 +97,13 @@ test.describe('as an admin', () => {
 					await expect(page.getByRole('radio', { name: words.source_access_https })).toBeChecked();
 					await expect(secretField(page, words)).toHaveAttribute('type', 'password');
 					await expect(secretField(page, words)).toHaveValue('');
+					await expect(page.getByText(words.source_deploy_key_heading)).toHaveCount(0);
+					await expect(page.getByText(draft.public_key, { exact: true })).toHaveCount(0);
+					await page.getByRole('radio', { name: words.source_access_ssh }).check({ force: true });
 					await expect(page.getByText(words.source_deploy_key_heading)).toBeVisible();
 					await expect(page.getByText(words.source_deploy_key_hint)).toBeVisible();
 					await expect(page.getByText(draft.public_key, { exact: true })).toBeVisible();
+					await page.getByRole('radio', { name: words.source_access_https }).check({ force: true });
 					await expect(page.getByRole('button', { name: words.source_check })).toBeEnabled();
 					await expect(page.getByRole('button', { name: words.source_create })).toBeDisabled();
 					await expectsNoHorizontalScroll(page);
@@ -263,8 +267,8 @@ test.describe('as an admin', () => {
 		});
 		await opensTheForm(page);
 		const before = await keyDraftOf(page);
-		await expect(page.getByText(before.public_key, { exact: true })).toBeVisible();
 		await choosesAccess(page, words.source_access_ssh);
+		await expect(page.getByText(before.public_key, { exact: true })).toBeVisible();
 		await fillsTheForm(page, words, { name, url: anSshAddress(name), secret: '' });
 		await checks(page, words);
 
@@ -666,7 +670,6 @@ test.describe('as an admin', () => {
 				words.source_access_https,
 				'info',
 				words.source_secret,
-				words.source_copy,
 				words.source_check
 			];
 			const positions = controlsInOrder.map((control) => focused.indexOf(control));
@@ -692,6 +695,7 @@ test.describe('as an admin', () => {
 		}
 		await opensTheForm(page);
 		const draft = await keyDraftOf(page);
+		await choosesAccess(page, words.source_access_ssh);
 
 		await page.getByRole('button', { name: words.source_copy }).click();
 
