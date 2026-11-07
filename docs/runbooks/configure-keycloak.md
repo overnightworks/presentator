@@ -45,6 +45,31 @@ only its two configured hostnames.
    `<PRESENTATOR_TALK_ORIGIN>/auth/callback` as valid redirect URIs: the talk
    host signs in at its own.
 
+## Let an agent list a person's decks
+
+Optional: skip it and the instance serves no `/mcp`. The agent reaches the
+person's decks through `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, as that person, and
+nothing else.
+
+1. Use the shared `agents` client: one public client for every app, with
+   client authentication off (no secret) and PKCE S256. Its id is
+   `PRESENTATOR_AGENT__MCP__CLIENT_ID`; it is no entry of
+   `PRESENTATOR_TOKEN_CLIENTS`.
+2. Create one optional client scope for this app, in the style of
+   `mcp-presentator`; its name is `PRESENTATOR_AGENT__MCP__SCOPE`. Give it an
+   audience mapper whose included custom audience is
+   `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, so a token requested with this scope has
+   that as its only audience. Put no audience on the client itself: the other
+   apps' fronts use the same client.
+3. Assign the scope to the `agents` client as an optional scope.
+4. Create a group below `/apps/presentator` for the people whose agents may
+   call; its path is `PRESENTATOR_AGENT__MCP__GROUP`. A token needs this group
+   besides the app's own.
+5. Leave the realm's access token lifetime at 300 seconds: the app adds none.
+
+A person must have signed in once in a browser: a token of a subject the app
+has no account for is refused, and no account is made from it.
+
 ## Check
 
 Sign in: a member of the group lands on the lobby, a non-member sees "No

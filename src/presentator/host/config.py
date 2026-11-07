@@ -204,7 +204,8 @@ class Settings(
     trusted_proxies: Annotated[str, AfterValidator(_a_proxy_list)] = ""
     # The `azp` of the access tokens `/api/` takes, hal's client ids: a token
     # opens `/api/` as the person and `/api/admin/` for an admin. Empty: no
-    # token is admitted and the admin routes do not exist.
+    # token client is admitted and the admin routes do not exist; the agents
+    # client of `agent.mcp` is no token client and never opens them.
     token_clients: Annotated[str, AfterValidator(_client_ids)] = ""
 
     @cached_property

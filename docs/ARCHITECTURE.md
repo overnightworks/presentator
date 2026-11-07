@@ -130,6 +130,12 @@ the speech service's private Unix socket go readiness, PCM, transcript and
 spoken sentences; browser identity and credentials do not. No operator blessing
 narrows this model yet, so an audit keeps the default trust model.
 
+A bearer enters the lobby through one path besides hal's token clients: the
+`agents` client's token, whose only audience is the app's `/mcp`, takes `/mcp`
+and the routes marked as tools, as the person behind its subject, and nothing
+that deletes, shares, publishes, sends outward or is admin. Without a bearer the
+cookie session and its CSRF check decide as before.
+
 **Proof.** A test sits at the layer that owns the behaviour; a lower layer never
 stands in for a higher one. Pure logic (`contracts`, `application`) is called
 directly with fakes at the ports. An adapter, `gitmirror` included, runs against
