@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "fef02b4604fb65e7b6e041cf1715557367ead189"
 branch = "claude/issue-887-the-lobby-s-error-boards-add-form-and-so"
-scope = ["frontend/e2e/not-found.spec.ts", "frontend/e2e/source-new.spec.ts", "frontend/e2e/source.spec.ts", "frontend/src/routes/(lobby)/settings/sources/[name]/+page.svelte", "frontend/src/routes/(lobby)/settings/sources/[name]/page.test.ts", "frontend/src/routes/(lobby)/settings/sources/new/+page.svelte", "frontend/src/routes/(lobby)/settings/sources/new/page.test.ts", "frontend/src/routes/+error.svelte"]
+scope = ["frontend/e2e/not-found.spec.ts", "frontend/e2e/source-new.spec.ts", "frontend/e2e/source.spec.ts", "frontend/src/lib/NoteCard.svelte", "frontend/src/routes/(lobby)/deck/[slug]/+page.svelte", "frontend/src/routes/(lobby)/settings/sources/[name]/+page.svelte", "frontend/src/routes/(lobby)/settings/sources/[name]/page.test.ts", "frontend/src/routes/(lobby)/settings/sources/new/+page.svelte", "frontend/src/routes/(lobby)/settings/sources/new/page.test.ts", "frontend/src/routes/+error.svelte"]
 opened_commit = "5f718db7a39f63a4d3bdd88cf54a2a9cec8ab04e"
 whole_reason = "Three small corrections one closing drive found, each a few lines in one lobby page, proven by one drive."
