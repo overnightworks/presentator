@@ -1,7 +1,8 @@
-"""The MCP front: the lobby's marked routes, offered as the tools of one person's agent.
+"""The MCP front: the lobby's marked routes, offered as the tools of one account's agent.
 
 The front is the exact route `/mcp` of the lobby app. The bearer gate has already
-admitted the agents client's token as that person by the time it runs, and every tool
+admitted the agents client's token as that person, or an agent-group token as its own
+account, by the time it runs, and every tool
 call goes through the whole lobby app again, so it meets the same middleware as any
 request.
 """
