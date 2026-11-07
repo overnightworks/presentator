@@ -29,7 +29,7 @@ from tests.presentator.agent.support.mcp_world import (
     a_world,
     called_through_mcp,
 )
-from tests.support.deck_text_support import A_DECK_TEXT, FakeDeckTexts
+from tests.support.deck_text_support import A_DECK_TEXT, A_MIRROR_PATH, FakeDeckTexts
 from tests.support.lobby import NOW
 from tests.support.sign_in_support import MEMBER
 
@@ -135,18 +135,27 @@ def test_a_deck_with_no_build_shows_its_state_and_has_no_text(
     text = called_through_mcp(
         world.program(), world.bearer(), "get_deck_text", {"slug": World.FELIX_DECK}
     )
+    view_by_cookie = felix_by_cookie(world, view_address)
+    text_by_cookie = felix_by_cookie(world, text_address)
 
     assert not view.is_error
-    assert json.loads(view.text) == felix_by_cookie(world, view_address).json()
+    assert json.loads(view.text) == view_by_cookie.json()
+    assert felix_by_bearer(world, view_address).json() == view_by_cookie.json()
     assert json.loads(view.text)["state"] == state
+    assert text_by_cookie.status_code == _NOT_FOUND
+    assert felix_by_bearer(world, text_address).content == text_by_cookie.content
     assert text.is_error
-    assert text.text == felix_by_cookie(world, text_address).text
+    assert text.text == text_by_cookie.text
 
 
 def test_after_a_failed_rebuild_the_view_shows_the_failure_and_the_text_the_last_build(
-    world: World,
+    tmp_path: Path,
 ) -> None:
     failed = an_attempt(BuildOutcome.FAILED, failure=BuildFailure.said("it broke"))
+    texts = FakeDeckTexts(
+        by_commit={failed.commit: replace(A_DECK_TEXT, title="Failed commit")}
+    )
+    world = a_world(tmp_path, texts=texts)
     the_deck_has(world, attempt=failed, built=True)
 
     view = called_through_mcp(
@@ -180,11 +189,22 @@ def test_a_deck_without_slides_is_not_found_and_one_with_none_is_an_empty_list(
     world = a_world(tmp_path, texts=FakeDeckTexts(text=text))
     address = DECK_TEXT_PATH.format(slug=World.FELIX_DECK)
 
-    answer = felix_by_bearer(world, address)
+    by_cookie = felix_by_cookie(world, address)
+    by_bearer = felix_by_bearer(world, address)
+    by_tool = called_through_mcp(
+        world.program(), world.bearer(), "get_deck_text", {"slug": World.FELIX_DECK}
+    )
 
-    assert answer.status_code == answers
-    if text is not None:
-        assert answer.json()["slides"] == []
+    assert by_cookie.status_code == answers
+    assert by_bearer.status_code == answers
+    assert by_bearer.content == by_cookie.content
+    if text is None:
+        assert by_tool.is_error
+        assert by_tool.text.encode() == by_cookie.content
+    else:
+        assert not by_tool.is_error
+        assert json.loads(by_tool.text) == by_cookie.json()
+        assert by_cookie.json()["slides"] == []
 
 
 @_DECK_AND_TEXT
@@ -223,7 +243,7 @@ def test_an_unreadable_mirror_is_a_503_problem_and_no_usable_answer_to_the_agent
     assert by_bearer.headers["content-type"].startswith("application/problem+json")
     assert by_tool.is_error
     assert "usable answer" in by_tool.text
-    for leaked in (A_DECK_TEXT.slides[0].body, A_DECK_TEXT.title):
+    for leaked in (A_DECK_TEXT.slides[0].body, A_DECK_TEXT.title, A_MIRROR_PATH):
         assert leaked not in by_tool.text
         assert leaked not in caplog.text
 
@@ -298,15 +318,18 @@ def test_cookie_only_the_owner_reads_the_deck_and_another_person_gets_not_found(
 def test_an_own_account_agent_finds_no_deck_of_a_person(
     world: World, path: str, tool: str
 ) -> None:
-    del path
     headers = world.own_agent(groups=[*MEMBER, World.GROUP, World.AGENT_GROUP])
 
-    answer = called_through_mcp(
+    by_tool = called_through_mcp(
         world.program(), headers, tool, {"slug": World.FELIX_DECK}
     )
+    by_bearer = world.program().get(
+        path.format(slug=World.FELIX_DECK), headers={**headers, **_JSON}
+    )
 
-    assert answer.is_error
-    assert json.loads(answer.text)["status"] == _NOT_FOUND
+    assert by_tool.is_error
+    assert json.loads(by_tool.text)["status"] == _NOT_FOUND
+    assert by_bearer.status_code == _NOT_FOUND
 
 
 @_DECK_AND_TEXT
