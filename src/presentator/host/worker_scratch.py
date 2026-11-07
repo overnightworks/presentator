@@ -1,6 +1,8 @@
 """The build worker's scratch places: where a step writes and a start looks."""
 
 import os
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 from presentator.contracts.decks import (
@@ -14,8 +16,14 @@ ROOT_MODE = 0o755
 WORK_MOUNT = "/work"
 TEMPORARY_MOUNT = "/tmp"  # noqa: S108 - a mount point inside the build life
 SHARED_MEMORY_MOUNT = "/dev/shm"  # noqa: S108 - a mount point inside the build life
+QUEUE_MOUNT = "/dev/mqueue"
 HOME_DIRECTORY = "home"
 VITE_DIRECTORY = "vite"
+SCRATCH_ROOTS = (WORK_MOUNT, TEMPORARY_MOUNT, SHARED_MEMORY_MOUNT, QUEUE_MOUNT)
+# The kernel's SysV tables and the name of the id column its header line holds.
+SYSV_ID_COLUMNS = {"shm": "shmid", "msg": "msqid", "sem": "semid"}
+# Longer than the headers (85 to 170 bytes), so a row is read whenever one exists.
+SYSV_READ_BYTES = 4096
 OPEN_DIRECTORY_MODE = 0o1777
 STEP_ERROR_MODE = 0o644
 STEP_ERROR_FLAGS = (
@@ -55,3 +63,54 @@ def prepare_step_paths(work: Path) -> int:
 def close_deck(path: Path) -> None:
     """Take the deck back to the root mode once the upload child is gone."""
     path.chmod(ROOT_MODE)
+
+
+@dataclass(frozen=True)
+class Scratch:
+    """What a start finds in the scratch places."""
+
+    occupied_roots: frozenset[str]
+    sysv_tables: Mapping[str, str]
+
+
+def _holds_an_entry(directory: Path) -> bool:
+    with os.scandir(directory) as entries:
+        return next(entries, None) is not None
+
+
+def _read_sysv_table(root: Path, table: str) -> str:
+    with (root / "proc/sysvipc" / table).open("rb") as listing:
+        return listing.read(SYSV_READ_BYTES).decode()
+
+
+def read_scratch(root: Path) -> Scratch:
+    """List each scratch root up to its first entry and read each SysV table.
+
+    Nothing below a root is opened, so a closed directory is refused by its name.
+    Raises OSError or UnicodeDecodeError on a failed read.
+    """
+    return Scratch(
+        occupied_roots=frozenset(
+            mount
+            for mount in SCRATCH_ROOTS
+            if _holds_an_entry(root / mount.lstrip("/"))
+        ),
+        sysv_tables={table: _read_sysv_table(root, table) for table in SYSV_ID_COLUMNS},
+    )
+
+
+def _is_header_line(table: str, text: str) -> bool:
+    lines = text.splitlines()
+    return (
+        text.endswith("\n")
+        and len(lines) == 1
+        and lines[0].split()[:2] == ["key", SYSV_ID_COLUMNS[table]]
+    )
+
+
+def scratch_empty(scratch: Scratch) -> bool:
+    """Whether no root holds an entry and each SysV table is only its header."""
+    return not scratch.occupied_roots and all(
+        _is_header_line(table, scratch.sysv_tables.get(table, ""))
+        for table in SYSV_ID_COLUMNS
+    )

@@ -32,14 +32,18 @@ from presentator.host.config import (
 )
 from presentator.host.worker_scratch import (
     HOME_DIRECTORY,
+    QUEUE_MOUNT,
     ROOT_MODE,
     SHARED_MEMORY_MOUNT,
     TEMPORARY_MOUNT,
     VITE_DIRECTORY,
     WORK_MOUNT,
+    Scratch,
     close_deck,
     make_open_directory,
     prepare_step_paths,
+    read_scratch,
+    scratch_empty,
 )
 from presentator.host.worker_serving import (
     Serving,
@@ -69,6 +73,7 @@ BIND_UMASK = 0o117
 LISTEN_BACKLOG = 4
 # Mount points below the root, so the self-check names no world-writable path.
 SOCKET_MOUNT_NAME = build_wire.SOCKET_DIRECTORY.lstrip("/")
+CGROUP_DIRECTORY = "sys/fs/cgroup"
 TMPFS_MOUNT_NAMES = (
     TEMPORARY_MOUNT.lstrip("/"),
     SHARED_MEMORY_MOUNT.lstrip("/"),
@@ -131,6 +136,8 @@ class Predicate(StrEnum):
     IDENTITIES = "identities"
     ENVIRONMENT = "environment"
     PID_ONE = "pid-one"
+    ALONE = "alone"
+    SCRATCH = "scratch"
     TOOLCHAIN = "toolchain"
 
 
@@ -193,6 +200,8 @@ class Snapshot:
     identity: Identity
     environment_keys: frozenset[str]
     pid: int
+    cgroup_tasks: str
+    scratch: Scratch
     toolchain: Toolchain
     unreadable: frozenset[Predicate] = frozenset()
 
@@ -246,12 +255,15 @@ def _mount_table(mountinfo: str) -> dict[str, tuple[str, frozenset[str]]]:
     return table
 
 
-def _tmpfs_mounts_sealed(mountinfo: str) -> bool:
+def _mount_table_sealed(mountinfo: str) -> bool:
     table = _mount_table(mountinfo)
-    return all(
-        mount in table and table[mount][0] == "tmpfs" for mount in TMPFS_MOUNTS
-    ) and all(
-        table[mount][1] >= HARDENED_MOUNT_OPTIONS for mount in NO_EXECUTION_MOUNTS
+    return (
+        all(mount in table and table[mount][0] == "tmpfs" for mount in TMPFS_MOUNTS)
+        and QUEUE_MOUNT in table
+        and table[QUEUE_MOUNT][0] == "mqueue"
+        and all(
+            table[mount][1] >= HARDENED_MOUNT_OPTIONS for mount in NO_EXECUTION_MOUNTS
+        )
     )
 
 
@@ -262,7 +274,7 @@ def _mounts_sealed(snapshot: Snapshot) -> bool:
     }
     return (
         snapshot.root_read_only
-        and _tmpfs_mounts_sealed(snapshot.mountinfo)
+        and _mount_table_sealed(snapshot.mountinfo)
         and snapshot.work_mode == ROOT_MODE
         and snapshot.work_owner_uid == 0
         and interfaces == {"lo"}
@@ -302,6 +314,10 @@ def _is_pid_one(snapshot: Snapshot) -> bool:
     return snapshot.pid == 1
 
 
+def _is_alone(snapshot: Snapshot) -> bool:
+    return snapshot.cgroup_tasks == "1"
+
+
 def _toolchain_present(snapshot: Snapshot) -> bool:
     toolchain = snapshot.toolchain
     entries = (
@@ -329,6 +345,8 @@ SELF_CHECK: tuple[tuple[Predicate, Callable[[Snapshot], bool]], ...] = (
     (Predicate.IDENTITIES, _identities_sealed),
     (Predicate.ENVIRONMENT, _environment_allowed),
     (Predicate.PID_ONE, _is_pid_one),
+    (Predicate.ALONE, _is_alone),
+    (Predicate.SCRATCH, lambda snapshot: scratch_empty(snapshot.scratch)),
     (Predicate.TOOLCHAIN, _toolchain_present),
 )
 
@@ -441,16 +459,33 @@ def _read_mount_facts(root: Path) -> tuple[bool, str, int, int, str, bool]:
     )
 
 
+def _read_cgroup_file(root: Path, name: str) -> str:
+    return (root / CGROUP_DIRECTORY / name).read_text().strip()
+
+
 def _read_resource_bounds(root: Path) -> tuple[str, str]:
-    cgroup = root / "sys/fs/cgroup"
-    return (
-        (cgroup / "pids.max").read_text().strip(),
-        (cgroup / "memory.max").read_text().strip(),
-    )
+    return _read_cgroup_file(root, "pids.max"), _read_cgroup_file(root, "memory.max")
 
 
 UNREAD_IDENTITY = Identity(-1, -1, -1, (), -1, -1, {})
 UNREAD_TOOLCHAIN = Toolchain(None, None, (), None)
+UNREAD_SCRATCH = Scratch(frozenset(), {})
+
+
+class _FactReader:
+    """Reads facts, remembering the predicate of each one that failed to read."""
+
+    def __init__(self) -> None:
+        self.unreadable: set[Predicate] = set()
+
+    def read[Fact](
+        self, predicate: Predicate, reading: Callable[[], Fact], placeholder: Fact
+    ) -> Fact:
+        try:
+            return reading()
+        except OSError, KeyError, UnicodeDecodeError:
+            self.unreadable.add(predicate)
+            return placeholder
 
 
 def read_snapshot(root: Path) -> Snapshot:
@@ -458,19 +493,16 @@ def read_snapshot(root: Path) -> Snapshot:
 
     A fact that cannot be read or decoded marks its predicate unreadable, so the
     self-check judges every predicate in order instead of stopping at the first
-    read.
+    read. The container's task count is read first and the scratch places right
+    after it: no other fact is read and no child is launched in between.
     """
-    unreadable: set[Predicate] = set()
+    facts = _FactReader()
+    read = facts.read
 
-    def read[Fact](
-        predicate: Predicate, reading: Callable[[], Fact], placeholder: Fact
-    ) -> Fact:
-        try:
-            return reading()
-        except OSError, KeyError, UnicodeDecodeError:
-            unreadable.add(predicate)
-            return placeholder
-
+    cgroup_tasks = read(
+        Predicate.ALONE, partial(_read_cgroup_file, root, "pids.current"), ""
+    )
+    scratch = read(Predicate.SCRATCH, partial(read_scratch, root), UNREAD_SCRATCH)
     dumpable = read(Predicate.NON_DUMPABLE, partial(libc_prctl, PR_GET_DUMPABLE, 0), -1)
     process_status = read(
         Predicate.CAPABILITIES, (root / "proc/self/status").read_text, ""
@@ -504,10 +536,12 @@ def read_snapshot(root: Path) -> Snapshot:
         identity=read(Predicate.IDENTITIES, _read_identity, UNREAD_IDENTITY),
         environment_keys=frozenset(os.environ),
         pid=os.getpid(),
+        cgroup_tasks=cgroup_tasks,
+        scratch=scratch,
         toolchain=read(
             Predicate.TOOLCHAIN, partial(_read_toolchain, root), UNREAD_TOOLCHAIN
         ),
-        unreadable=frozenset(unreadable),
+        unreadable=frozenset(facts.unreadable),
     )
 
 

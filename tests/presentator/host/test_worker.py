@@ -3,11 +3,10 @@
 import os
 import stat
 import sys
+import threading
 from collections.abc import Callable
 from dataclasses import replace
-from functools import partial
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -23,13 +22,15 @@ from presentator.host.worker import (
     Predicate,
     Snapshot,
 )
+from presentator.host.worker_scratch import QUEUE_MOUNT, scratch_empty
 from presentator.host.worker_serving import Serving
 from tests.presentator.host.support.sealed_snapshot import (
     HARDENED,
     LOOPBACK_ONLY,
-    SEALED_MOUNTINFO,
     SEALED_STATUS,
+    SYSV_HEADERS,
     sealed_snapshot,
+    stage_sealed_root,
     with_fields,
 )
 
@@ -67,6 +68,12 @@ def with_toolchain(**changes: object) -> Callable[[Snapshot], Snapshot]:
 def with_mountinfo(old: str, new: str) -> Callable[[Snapshot], Snapshot]:
     return lambda snapshot: replace(
         snapshot, mountinfo=snapshot.mountinfo.replace(old, new)
+    )
+
+
+def with_occupied_roots(*roots: str) -> Callable[[Snapshot], Snapshot]:
+    return lambda snapshot: replace(
+        snapshot, scratch=replace(snapshot.scratch, occupied_roots=frozenset(roots))
     )
 
 
@@ -152,6 +159,20 @@ FAILURES = {
         Predicate.ENVIRONMENT,
     ),
     "not pid one": (with_fields(pid=7), Predicate.PID_ONE),
+    "another task in the container": (with_fields(cgroup_tasks="2"), Predicate.ALONE),
+    "entry in work": (with_occupied_roots(WORK_MOUNT), Predicate.SCRATCH),
+    "entry in the message queue directory": (
+        with_occupied_roots(QUEUE_MOUNT),
+        Predicate.SCRATCH,
+    ),
+    "message queue directory missing": (
+        with_mountinfo(QUEUE_MOUNT, "/dev/other"),
+        Predicate.MOUNTS,
+    ),
+    "message queue directory not an mqueue": (
+        with_mountinfo(" - mqueue mqueue", " - tmpfs mqueue"),
+        Predicate.MOUNTS,
+    ),
     "slidev missing": (with_toolchain(slidev_mode=None), Predicate.TOOLCHAIN),
     "corepack missing": (with_toolchain(corepack_mode=None), Predicate.TOOLCHAIN),
     "headless shell missing": (
@@ -300,6 +321,19 @@ def test_a_refused_self_check_never_loads_the_settings() -> None:
 
 
 @pytest.mark.parametrize(
+    "occupied", [with_fields(cgroup_tasks="2"), with_occupied_roots(WORK_MOUNT)]
+)
+def test_a_start_refused_for_alone_or_scratch_never_loads_settings_or_serves(
+    occupied: Callable[[Snapshot], Snapshot],
+) -> None:
+    events: list[str] = []
+
+    status = worker.main([], boundary_over(occupied(sealed_snapshot()), events))
+
+    assert (status, events) == (worker.REFUSAL_EXIT_STATUS, ["prctl", "umask", "read"])
+
+
+@pytest.mark.parametrize(
     "variable",
     ["PRESENTATOR_BUILD_TIMEOUT_SECONDS", "PRESENTATOR_BUILD_OUTPUT_MEGABYTES"],
 )
@@ -374,65 +408,9 @@ def test_failing_prctl_refuses_before_reading_anything() -> None:
     assert events == []
 
 
-def stand_in_users(monkeypatch: pytest.MonkeyPatch) -> None:
-    users = {
-        "presentator": (1000, 1000),
-        "presentator-build": (10001, 10001),
-        "presentator-wire": (10002, 10002),
-    }
-
-    def password_entry(name: str) -> SimpleNamespace:
-        uid, gid = users[name]
-        return SimpleNamespace(pw_name=name, pw_uid=uid, pw_gid=gid)
-
-    def group_entry(name: str) -> SimpleNamespace:
-        return SimpleNamespace(gr_gid=users[name][1])
-
-    monkeypatch.setattr(worker.pwd, "getpwnam", password_entry)
-    monkeypatch.setattr(worker.grp, "getgrnam", group_entry)
-
-
 @pytest.fixture
 def sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    stand_in_users(monkeypatch)
-
-    def read_only_root(_root: Path) -> SimpleNamespace:
-        return SimpleNamespace(f_flag=os.ST_RDONLY)
-
-    def dumpable_zero(_option: int, _value: int) -> int:
-        return 0
-
-    monkeypatch.setattr(worker.os, "statvfs", read_only_root)
-    monkeypatch.setattr(worker, "libc_prctl", dumpable_zero)
-
-    def file_at(relative: str, content: str = "", mode: int = 0o644) -> Path:
-        path = tmp_path / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
-        path.chmod(mode)
-        return path
-
-    file_at("proc/self/status", SEALED_STATUS)
-    file_at("proc/self/mountinfo", SEALED_MOUNTINFO)
-    file_at("proc/net/dev", LOOPBACK_ONLY)
-    file_at("sys/fs/cgroup/pids.max", "512\n")
-    file_at("sys/fs/cgroup/memory.max", "1073741824\n")
-    (tmp_path / "work").mkdir()
-    (tmp_path / "work").chmod(0o755)
-    (tmp_path / "opt/corepack").mkdir(parents=True)
-    (tmp_path / "opt/corepack").chmod(0o755)
-    modules = tmp_path / "app/slidev/node_modules"
-    file_at("app/slidev/node_modules/.bin/slidev", mode=0o755)
-    package = modules / ".pnpm/@slidev+cli@1/node_modules/@slidev/cli"
-    (package / "node_modules").mkdir(parents=True)
-    (package / "node_modules/.vite").symlink_to(WORK_MOUNT + "/vite")
-    (modules / "@slidev").mkdir()
-    (modules / "@slidev/cli").symlink_to(package)
-    shell = (
-        "opt/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64"
-    )
-    file_at(f"{shell}/chrome-headless-shell", mode=0o755)
-    return tmp_path
+    return stage_sealed_root(tmp_path, monkeypatch)
 
 
 def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
@@ -450,6 +428,8 @@ def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
     assert snapshot.toolchain.vite_link_target == "/work/vite"
     assert len(snapshot.toolchain.headless_shell_modes) == 1
     assert snapshot.toolchain.corepack_mode is not None
+    assert snapshot.cgroup_tasks == "1"
+    assert scratch_empty(snapshot.scratch)
     assert snapshot.unreadable == frozenset()
 
 
@@ -554,6 +534,35 @@ def fail_dumpable_read(_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(worker, "libc_prctl", failing)
 
 
+def set_task_count(count: str) -> Callable[[Path, pytest.MonkeyPatch], None]:
+    def arrange(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
+        (root / "sys/fs/cgroup/pids.current").write_text(count)
+
+    return arrange
+
+
+def remove_task_count(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
+    (root / "sys/fs/cgroup/pids.current").unlink()
+
+
+def remove_temporary_directory(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
+    (root / "tmp").rmdir()
+
+
+def fill_work(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
+    (root / "work/deck").mkdir()
+
+
+def replace_table(
+    table: str, content: str | None
+) -> Callable[[Path, pytest.MonkeyPatch], None]:
+    def arrange(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
+        path = root / "proc/sysvipc" / table
+        path.unlink() if content is None else path.write_text(content)
+
+    return arrange
+
+
 REFUSED_FACTS = {
     "capability bounding set not hexadecimal": (
         break_capability_bounding_set,
@@ -581,6 +590,15 @@ REFUSED_FACTS = {
         Predicate.CAPABILITIES,
     ),
     "dumpable unreadable": (fail_dumpable_read, Predicate.NON_DUMPABLE),
+    "task count missing": (remove_task_count, Predicate.ALONE),
+    "task count empty": (set_task_count(""), Predicate.ALONE),
+    "task count not decimal": (set_task_count("one\n"), Predicate.ALONE),
+    "task count two": (set_task_count("2\n"), Predicate.ALONE),
+    "entry in work": (fill_work, Predicate.SCRATCH),
+    "temporary directory missing": (remove_temporary_directory, Predicate.SCRATCH),
+    "shared memory table missing": (replace_table("shm", None), Predicate.SCRATCH),
+    "message table empty": (replace_table("msg", ""), Predicate.SCRATCH),
+    "semaphore table foreign": (replace_table("sem", "foreign\n"), Predicate.SCRATCH),
 }
 
 
@@ -595,9 +613,19 @@ def test_unreadable_or_unparsable_fact_refuses_through_main_naming_its_predicate
     refused: Predicate,
 ) -> None:
     arrange(sealed_root, monkeypatch)
+    sealed = sealed_snapshot()
+
+    def read_with_sealed_process_facts() -> Snapshot:
+        return replace(
+            worker.read_snapshot(sealed_root),
+            environment_keys=sealed.environment_keys,
+            pid=sealed.pid,
+            work_owner_uid=sealed.work_owner_uid,
+            identity=sealed.identity,
+        )
+
     boundary = replace(
-        boundary_over(sealed_snapshot(), []),
-        read_snapshot=partial(worker.read_snapshot, sealed_root),
+        boundary_over(sealed, []), read_snapshot=read_with_sealed_process_facts
     )
 
     assert worker.main(["--check"], boundary) == worker.REFUSAL_EXIT_STATUS
@@ -694,7 +722,7 @@ def test_unreadable_later_fact_does_not_mask_an_earlier_failing_predicate(
     snapshot = worker.read_snapshot(sealed_root)
 
     assert worker.first_failing_predicate(snapshot) == Predicate.CAPABILITIES
-    assert snapshot.unreadable == {Predicate.MOUNTS}
+    assert snapshot.unreadable == {Predicate.MOUNTS, Predicate.SCRATCH}
 
 
 def test_real_process_effects_make_it_non_dumpable_and_set_the_umask() -> None:
@@ -713,3 +741,57 @@ def test_real_process_effects_make_it_non_dumpable_and_set_the_umask() -> None:
 def test_prctl_failure_raises() -> None:
     with pytest.raises(OSError, match="prctl"):
         worker.libc_prctl(0x7FFFFFFF, 0)
+
+
+LAUNCH_EVENTS = frozenset(
+    {
+        "os.fork",
+        "os.forkpty",
+        "os.posix_spawn",
+        "os.spawn",
+        "os.exec",
+        "os.system",
+        "subprocess.Popen",
+    }
+)
+READ_EVENTS = frozenset({"open", "os.scandir", "os.listdir"})
+audit_recording: dict[str, object] = {"on": False, "thread": 0, "events": []}
+
+
+def record_audited_event(event: str, arguments: tuple[object, ...]) -> None:
+    if not audit_recording["on"] or audit_recording["thread"] != threading.get_ident():
+        return
+    if event in LAUNCH_EVENTS or (event in READ_EVENTS and arguments):
+        audit_recording["events"].append((event, arguments[0] if arguments else None))  # type: ignore[attr-defined]
+
+
+def test_the_snapshot_reads_the_task_count_then_the_scratch_places_and_launches_nothing(
+    sealed_root: Path,
+) -> None:
+    sys.addaudithook(record_audited_event)
+    audit_recording.update(on=True, thread=threading.get_ident(), events=[])
+    try:
+        worker.read_snapshot(sealed_root)
+    finally:
+        audit_recording["on"] = False
+    events: list[tuple[str, object]] = audit_recording["events"]  # type: ignore[assignment]
+
+    def below_root(event: tuple[str, object]) -> bool:
+        return event[0] in READ_EVENTS and Path(str(event[1])).is_relative_to(
+            sealed_root
+        )
+
+    reads = [
+        (event, Path(str(path)).relative_to(sealed_root))
+        for event, path in events
+        if below_root((event, path))
+    ]
+    assert not [event for event, _ in events if event in LAUNCH_EVENTS]
+    assert reads[0] == ("open", Path("sys/fs/cgroup/pids.current"))
+    assert sorted(reads[1:8]) == sorted(
+        [
+            ("os.scandir", Path(root))
+            for root in ("work", "tmp", "dev/shm", "dev/mqueue")
+        ]
+        + [("open", Path("proc/sysvipc") / table) for table in SYSV_HEADERS]
+    )
