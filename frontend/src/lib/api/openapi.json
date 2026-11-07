@@ -258,6 +258,40 @@
         "title": "DeckSummary",
         "type": "object"
       },
+      "DeckTextView": {
+        "description": "The words of a deck at its built commit.",
+        "properties": {
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "slides": {
+            "items": {
+              "$ref": "#/components/schemas/SlideTextView"
+            },
+            "title": "Slides",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "language",
+          "slides"
+        ],
+        "title": "DeckTextView",
+        "type": "object"
+      },
       "DeckView": {
         "description": "What a deck page says about one deck, as data.",
         "properties": {
@@ -1416,6 +1450,35 @@
         "title": "SettingsWrite",
         "type": "object"
       },
+      "SlideTextView": {
+        "description": "One slide's words: its number, title, body and speaker notes.",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "title",
+          "body",
+          "notes"
+        ],
+        "title": "SlideTextView",
+        "type": "object"
+      },
       "SourceDeckView": {
         "description": "A deck the source carries.",
         "properties": {
@@ -1893,6 +1956,7 @@
     },
     "/api/decks/{slug}": {
       "get": {
+        "description": "Show one of your decks, how its build stands and why a build failed.",
         "operationId": "deck_api_decks__slug__get",
         "parameters": [
           {
@@ -1970,7 +2034,141 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Deck"
+        "summary": "Deck",
+        "x-agent-tool": {
+          "effect": "read_only",
+          "name": "get_deck"
+        }
+      }
+    },
+    "/api/decks/{slug}/text": {
+      "get": {
+        "description": "Read the text of one of the reader's own built decks, notes included.",
+        "operationId": "deck_text_api_decks__slug__text_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeckTextView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Deck Text",
+        "x-agent-tool": {
+          "effect": "read_only",
+          "name": "get_deck_text"
+        }
       }
     },
     "/api/session": {

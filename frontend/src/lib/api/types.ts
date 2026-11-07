@@ -49,8 +49,31 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Deck */
+        /**
+         * Deck
+         * @description Show one of your decks, how its build stands and why a build failed.
+         */
         get: operations["deck_api_decks__slug__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/decks/{slug}/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deck Text
+         * @description Read the text of one of the reader's own built decks, notes included.
+         */
+        get: operations["deck_text_api_decks__slug__text_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -352,6 +375,18 @@ export interface components {
             /** Slug */
             slug: string;
             state: components["schemas"]["DeckState"];
+            /** Title */
+            title: string;
+        };
+        /**
+         * DeckTextView
+         * @description The words of a deck at its built commit.
+         */
+        DeckTextView: {
+            /** Language */
+            language: string | null;
+            /** Slides */
+            slides: components["schemas"]["SlideTextView"][];
             /** Title */
             title: string;
         };
@@ -811,6 +846,20 @@ export interface components {
             name: string;
         };
         /**
+         * SlideTextView
+         * @description One slide's words: its number, title, body and speaker notes.
+         */
+        SlideTextView: {
+            /** Body */
+            body: string;
+            /** Notes */
+            notes: string;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+        };
+        /**
          * SourceDeckView
          * @description A deck the source carries.
          */
@@ -1094,6 +1143,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deck_text_api_decks__slug__text_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeckTextView"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Detail */
+                        detail?: string | null;
+                        /** Status */
+                        status: number;
+                        /** Title */
+                        title: string;
+                        /**
+                         * Type
+                         * @default about:blank
+                         */
+                        type: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Detail */
+                        detail?: string | null;
+                        /** Status */
+                        status: number;
+                        /** Title */
+                        title: string;
+                        /**
+                         * Type
+                         * @default about:blank
+                         */
+                        type: string;
+                    };
                 };
             };
         };
