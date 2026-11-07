@@ -3,8 +3,8 @@
 The source arrives on stdin. The residue is planted as root or as the build
 identity, and the command replaces this process, so the worker is PID 1 of the
 container. A plant that runs as the build identity is reaped and exits 1 when
-it fails. The `process` child stays alive on purpose; if it fails to drop, it
-ends as a zombie, which is still a task, and the start still refuses.
+it fails. The `process` child stays alive on purpose; the parent waits until it
+has dropped to the identity and exits 1 when it could not.
 """
 
 import ctypes
@@ -55,13 +55,22 @@ def as_build_user(identity: tuple[int, int], plant: Callable[[], object]) -> Non
 
 
 def leave_a_sleeping_child(identity: tuple[int, int]) -> None:
-    """Fork a child of the identity that outlives the exec."""
+    """Fork a child of the identity that outlives the exec; exit 1 unless it dropped."""
+    ready_read, ready_write = os.pipe()
     if os.fork() == 0:
         try:
+            os.close(ready_read)
             become(identity)
+            os.write(ready_write, b"1")
+            os.close(ready_write)
             signal.pause()
         finally:
             os._exit(1)
+    os.close(ready_write)
+    dropped = os.read(ready_read, 1)
+    os.close(ready_read)
+    if not dropped:
+        sys.exit(1)
 
 
 def closed_directory() -> None:
