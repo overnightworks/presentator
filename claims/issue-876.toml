@@ -1,7 +1,0 @@
-claim_id = "65213ee5fc544e2f9d6b63b9869b1827"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "76fed6ee365673eaec61cf5fd4e2b23c973d7d41"
-branch = "claude/issue-876-the-vision-takes-the-text-the-operator-b"
-scope = ["docs/VISION.md"]
-opened_commit = "d5b048ced9259e59fb849adf6f891c53129a268b"
