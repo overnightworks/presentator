@@ -9,7 +9,7 @@ import pytest
 from webauth.ports import AccountKind
 
 from presentator.adapters.identity import create_identity_tables
-from presentator.adapters.schema import create_tables
+from presentator.adapters.schema import _every_account_has_a_kind, create_tables
 
 _THE_RELEASE_BEFORE = """
 CREATE TABLE users (
@@ -21,6 +21,7 @@ INSERT INTO users (id, username, role) VALUES
     ('subject-1', 'felix', 'admin'),
     ('subject-2', 'anna', 'user');
 """
+_LONG_ENOUGH_TO_REACH_THE_LOCK = 0.5
 _KINDS = "SELECT id, kind FROM users ORDER BY id"
 
 
@@ -60,22 +61,28 @@ def test_a_second_start_changes_nothing(before_the_upgrade: Path) -> None:
     assert kinds(before_the_upgrade) == first
 
 
-def test_two_starts_on_one_file_do_not_both_alter_it(before_the_upgrade: Path) -> None:
+def test_a_start_waiting_on_another_start_adds_no_second_kind_column(
+    before_the_upgrade: Path,
+) -> None:
     refusals: list[BaseException] = []
-    both_ready = threading.Barrier(2)
 
     def start() -> None:
-        both_ready.wait()
         try:
-            create_tables(before_the_upgrade)
+            _every_account_has_a_kind(before_the_upgrade)
         except BaseException as refused:  # noqa: BLE001 - the test reports whatever a start raised
             refusals.append(refused)
 
-    starts = [threading.Thread(target=start) for _ in range(2)]
-    for each in starts:
-        each.start()
-    for each in starts:
-        each.join()
+    with closing(sqlite3.connect(before_the_upgrade, isolation_level=None)) as holder:
+        holder.execute("BEGIN IMMEDIATE")
+        waiting = threading.Thread(target=start)
+        waiting.start()
+        waiting.join(timeout=_LONG_ENOUGH_TO_REACH_THE_LOCK)
+        assert waiting.is_alive()
+        holder.execute(
+            "ALTER TABLE users ADD COLUMN kind TEXT NOT NULL DEFAULT 'person'"
+        )
+        holder.execute("COMMIT")
+    waiting.join()
 
     assert refusals == []
     assert {kind for _, kind in kinds(before_the_upgrade)} == {AccountKind.PERSON.value}

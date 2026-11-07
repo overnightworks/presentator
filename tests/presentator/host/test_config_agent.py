@@ -146,11 +146,8 @@ def test_a_whole_mcp_block_names_the_client_its_groups_and_its_scope(
     mcp = load_settings().agent.mcp
 
     assert mcp is not None
-    assert (mcp.client_id, mcp.group, mcp.scope, mcp.agent_group) == (
-        "an-agents-client",
-        "/apps/presentator/agents",
-        "mcp:tools",
-        "/agents",
+    assert (mcp.client_id, mcp.group, mcp.scope, mcp.agent_group) == tuple(
+        mcp_block.values()
     )
 
 
