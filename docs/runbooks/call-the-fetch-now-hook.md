@@ -1,32 +1,36 @@
 # Runbook: call the fetch-now hook from a Git host
 
-Reader: an admin wiring a Git host's webhook or `post-receive` hook to an
-instance.
+Symptom: a push should start a fetch at once instead of at the next poll.
+Impact: until the Git host calls the hook, new decks wait for the poll.
 
-Adding a source creates `POST /sources/<name>/fetch` for it. No login stands in
-front of a `POST` under `/sources/`, because a git host has no browser to sign
-in with; the secret guards it instead.
-
-## Before you start
-
-The source's webhook secret. It is generated, shown exactly once on the page
-that created the source, stored only as a SHA-256 hash, and never shown again
-until [Renew](renew-a-webhook-secret.md) mints another.
-
-## Steps
-
-Send the secret as `Authorization: Bearer …` or as `X-Gitlab-Token`, and
-nothing else; no payload is read, which is what lets any host or a
-`post-receive` hook call it:
-
-```sh
-curl -X POST -H "Authorization: Bearer <the-secret-shown-once>" \
-  https://<your-address>/sources/decks/fetch
-```
+The Git host's webhook (or a `post-receive` hook) sends `POST` to the hook
+address the Sources page shows for the source, with the source's webhook
+secret as `Authorization: Bearer <secret>` or `X-Gitlab-Token: <secret>`. No
+payload is read, so any host can call it. Why no login stands in front of it is
+in [the architecture](../ARCHITECTURE.md).
 
 ## Check
 
-The source's page shows a new run. A wrong secret, a missing one, an unknown
-source, a trailing slash, and any other path under `/sources/` all answer
-`404` with an empty body. Only that `POST` is open: every other method there
-leads to the login like any other address.
+A push shows a new run on the source's page, and the hook answers `204`. A wrong address (a trailing slash
+or another path under `/sources/` included), an unknown source, a wrong secret
+and a missing secret all answer `404` with an empty body. Only `POST` is open on
+the hook address; every other method there leads to the login.
+
+## Fix
+
+1. Have the source's webhook secret. It is shown once, when the source is
+   created or its secret renewed ([SR2](../sources.md)), because presentator
+   keeps only its SHA-256 hash; a lost one is
+   [renewed](renew-a-webhook-secret.md). Rollback: none, this step changes
+   nothing.
+2. In the Git host's webhook settings, add a webhook with the hook address and
+   the secret. Rollback: delete the webhook at the Git host.
+3. Push to the repository and run the Check. Rollback: none; the push is the
+   repository's own change and this step adds nothing else.
+
+## Escalate
+
+When a push still starts no run and the address answers `404` with the right
+secret, [renew the webhook secret](renew-a-webhook-secret.md) and set it again.
+If that fails, ask the Git host's owner whether the webhook can reach the
+instance's address.
