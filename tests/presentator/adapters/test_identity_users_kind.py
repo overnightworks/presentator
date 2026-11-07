@@ -8,8 +8,10 @@ from pathlib import Path
 import pytest
 from webauth.ports import AccountKind
 
+from presentator.adapters.decks import create_deck_tables
 from presentator.adapters.identity import create_identity_tables
-from presentator.adapters.schema import _every_account_has_a_kind, create_tables
+from presentator.adapters.preferences import create_preference_tables
+from presentator.adapters.schema import create_tables
 
 _THE_RELEASE_BEFORE = """
 CREATE TABLE users (
@@ -21,7 +23,8 @@ INSERT INTO users (id, username, role) VALUES
     ('subject-1', 'felix', 'admin'),
     ('subject-2', 'anna', 'user');
 """
-_LONG_ENOUGH_TO_REACH_THE_LOCK = 0.5
+_LONG_ENOUGH_TO_REACH_THE_LOCK = 10
+_THE_WAITING_START = "the-waiting-start"
 _KINDS = "SELECT id, kind FROM users ORDER BY id"
 
 
@@ -62,22 +65,37 @@ def test_a_second_start_changes_nothing(before_the_upgrade: Path) -> None:
 
 
 def test_a_start_waiting_on_another_start_adds_no_second_kind_column(
-    before_the_upgrade: Path,
+    before_the_upgrade: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    create_identity_tables(before_the_upgrade)
+    create_preference_tables(before_the_upgrade)
+    create_deck_tables(before_the_upgrade)
     refusals: list[BaseException] = []
+    reached_the_lock = threading.Event()
+    connect = sqlite3.connect
+
+    def watching_connect(database: Path, isolation_level: None) -> sqlite3.Connection:
+        connection = connect(database, isolation_level=isolation_level)
+        if threading.current_thread().name == _THE_WAITING_START:
+            connection.set_trace_callback(
+                lambda statement: (
+                    reached_the_lock.set() if statement == "BEGIN IMMEDIATE" else None
+                )
+            )
+        return connection
 
     def start() -> None:
         try:
-            _every_account_has_a_kind(before_the_upgrade)
+            create_tables(before_the_upgrade)
         except BaseException as refused:  # noqa: BLE001 - the test reports whatever a start raised
             refusals.append(refused)
 
-    with closing(sqlite3.connect(before_the_upgrade, isolation_level=None)) as holder:
+    with closing(connect(before_the_upgrade, isolation_level=None)) as holder:
         holder.execute("BEGIN IMMEDIATE")
-        waiting = threading.Thread(target=start)
+        monkeypatch.setattr(sqlite3, "connect", watching_connect)
+        waiting = threading.Thread(target=start, name=_THE_WAITING_START)
         waiting.start()
-        waiting.join(timeout=_LONG_ENOUGH_TO_REACH_THE_LOCK)
-        assert waiting.is_alive()
+        assert reached_the_lock.wait(timeout=_LONG_ENOUGH_TO_REACH_THE_LOCK)
         holder.execute(
             "ALTER TABLE users ADD COLUMN kind TEXT NOT NULL DEFAULT 'person'"
         )
