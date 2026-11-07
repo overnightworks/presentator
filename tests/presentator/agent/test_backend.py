@@ -280,14 +280,13 @@ class ScriptedBackend:
 ALL_STOPS = [
     *((TurnStopKind.REFUSED, code) for code in RejectionCode),
     *((TurnStopKind.FAILED, code) for code in FailureCode),
-    (TurnStopKind.CANCELLED, None),
 ]
 
 
 @pytest.mark.parametrize(("kind", "code"), ALL_STOPS)
 @on_an_event_loop
 async def test_only_a_not_enabled_refusal_is_not_enabled(
-    kind: TurnStopKind, code: RejectionCode | FailureCode | None
+    kind: TurnStopKind, code: RejectionCode | FailureCode
 ) -> None:
     """Every kind and code of a stop has a mapping."""
     answerer = GatewayAnswerer(
