@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import NoteCard from '#lib/NoteCard.svelte';
 	import { ageInWords, durationInWords } from '#lib/age.ts';
 	import { buildsWith, failureWords, stateWords } from '#lib/deck.ts';
 	import { languageTag } from '#lib/session.svelte.ts';
@@ -19,11 +20,12 @@
 </svelte:head>
 
 {#if data.deck === null}
-	<div class="note-card">
-		<h1>{words.deck_unknown_title}</h1>
-		<p>{words.deck_unknown_explanation}</p>
-		<a class="btn primary" href={home}>{words.decks_title}</a>
-	</div>
+	<NoteCard
+		title={words.deck_unknown_title}
+		explanation={words.deck_unknown_explanation}
+		href={home}
+		label={words.decks_title}
+	/>
 {:else}
 	{@const deck = data.deck}
 	{@const attempt = deck.attempt}
@@ -147,28 +149,5 @@
 	}
 	.btn.off {
 		opacity: 0.5;
-	}
-	.note-card {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 12px;
-		max-width: 520px;
-		padding: 28px 22px;
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		background: var(--surface);
-	}
-	.note-card h1 {
-		margin: 0;
-		font-size: 20px;
-		font-weight: 400;
-		letter-spacing: 0.03em;
-		text-transform: none;
-	}
-	.note-card p {
-		margin: 0;
-		color: var(--text-muted);
-		font-size: 14px;
 	}
 </style>
