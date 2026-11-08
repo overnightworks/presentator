@@ -22,8 +22,8 @@ import pytest
 
 from presentator.adapters import builds as builds_module
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
-from presentator.adapters.builds import DeckToolchain, HostToolchain, SlidevBuilds
-from presentator.adapters.decks import FilesystemLocalMount, SourceMirrors
+from presentator.adapters.builds import SlidevBuilds
+from presentator.adapters.decks import FilesystemLocalMount
 from presentator.contracts.decks import (
     FAILURE_TEXT_LIMIT,
     OUTPUT_DIRECTORY,
@@ -35,7 +35,25 @@ from presentator.contracts.decks import (
     talk_address,
 )
 from presentator.ports.decks import BuildRun
-from tests.presentator.adapters.support.credentials_support import OpenCredentials
+from tests.presentator.adapters.support.build_support import (
+    A_GENEROUS_BOUND as _A_GENEROUS_BOUND,
+)
+from tests.presentator.adapters.support.build_support import (
+    A_TOOLCHAIN_THAT_BUILDS as _A_TOOLCHAIN_THAT_BUILDS,
+)
+from tests.presentator.adapters.support.build_support import (
+    FINDS_ITS_OUTPUT as _FINDS_ITS_OUTPUT,
+)
+from tests.presentator.adapters.support.build_support import (
+    TOOLCHAIN_PROGRAM as _TOOLCHAIN_PROGRAM,
+)
+from tests.presentator.adapters.support.build_support import (
+    builds_ready_for,
+    builds_under,
+    on_this_machine,
+    what_it_built,
+    with_the_toolchain,
+)
 from tests.support.git_remote import (
     EXAMPLE_SLUG,
     MAIN_BRANCH,
@@ -45,10 +63,6 @@ from tests.support.git_remote import (
 )
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
-_A_GENEROUS_BOUND = timedelta(seconds=30)
-# Bigger than the few bytes a stand-in writes, so only the test about the bound
-# ever meets it.
-_A_TALK_THIS_BIG_IS_FINE = 64
 _ONLY_A_MEGABYTE_MAY_BE_LEFT = 1
 _MEGABYTES_A_GREEDY_BUILD_WRITES = 3
 _WATCHED_OFTEN = timedelta(milliseconds=50)
@@ -74,30 +88,9 @@ _WHAT_THE_SERVER_HOLDS = "the words only this test set in the environment"
 _RECORDED_COMMAND = "command"
 _RECORDED_ENVIRONMENT = "environment"
 _A_BUILT_PAGE = "index.html"
-_TOOLCHAIN_PROGRAM = "pnpm"
 _WHAT_A_TALK_SAYS = "a talk"
 
 
-_FINDS_ITS_OUTPUT = """#!/bin/sh
-set -eu
-out=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --out|--output) out="$2"; shift 2;;
-        *) shift;;
-    esac
-done
-"""
-
-
-_A_TOOLCHAIN_THAT_BUILDS = (
-    _FINDS_ITS_OUTPUT
-    + """case "$out" in
-    *.pdf) printf '%%PDF-1.7' > "$out";;
-    *) mkdir -p "$out"; printf 'a talk' > "$out/index.html";;
-esac
-"""
-)
 # Builds as above, then its export step turns one name of what was written
 # into a link, the way a deck's own `vite.config.ts` could.
 _A_TOOLCHAIN_THAT_PLANTS_A_LINK = (
@@ -315,80 +308,11 @@ def a_deck(remote: GitRemote, *, slug: str = EXAMPLE_SLUG) -> Deck:
     )
 
 
-def on_this_machine(
-    tmp_path: Path,
-    *,
-    bound: timedelta = _A_GENEROUS_BOUND,
-) -> HostToolchain:
-    """The toolchain a development run builds with: a project on this machine."""
-    project = tmp_path / "slidev"
-    project.mkdir(exist_ok=True)
-    return HostToolchain(project=project, bound=bound)
-
-
-def builds_under(
-    tmp_path: Path,
-    *,
-    toolchain: DeckToolchain,
-    output_megabytes: int = _A_TALK_THIS_BIG_IS_FINE,
-    local_mount: FilesystemLocalMount | None = None,
-) -> SlidevBuilds:
-    return SlidevBuilds(
-        builds=tmp_path / "builds",
-        toolchain=toolchain,
-        mirrors=SourceMirrors(
-            directory=tmp_path / "mirrors",
-            credentials=OpenCredentials(),
-            pull_timeout=_A_GENEROUS_BOUND,
-            local_mount=(
-                FilesystemLocalMount(mount=tmp_path)
-                if local_mount is None
-                else local_mount
-            ),
-        ),
-        output_megabytes=output_megabytes,
-    )
-
-
-def builds_ready_for(
-    tmp_path: Path,
-    source: Source,
-    *,
-    toolchain: DeckToolchain | None = None,
-    output_megabytes: int = _A_TALK_THIS_BIG_IS_FINE,
-) -> SlidevBuilds:
-    """The adapter with the source already mirrored, as a take-in leaves it."""
-    builds = builds_under(
-        tmp_path,
-        toolchain=toolchain if toolchain is not None else on_this_machine(tmp_path),
-        output_megabytes=output_megabytes,
-    )
-    mirror = builds.mirrors.of(source)
-    assert mirror is not None
-    assert mirror.connect().revision is not None
-    return builds
-
-
-def what_it_built(built: Artefacts | BuildFailure) -> Artefacts:
-    """What the build left, for a test that has already said it expects a talk."""
-    assert isinstance(built, Artefacts)
-    return built
-
-
 @pytest.fixture
 def machine(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
     """A machine whose environment holds a secret no build may ever see."""
     monkeypatch.setenv(_A_SERVER_SECRET, _WHAT_THE_SERVER_HOLDS)
     return monkeypatch
-
-
-def with_the_toolchain(
-    machine: pytest.MonkeyPatch,
-    tmp_path: Path,
-    script: str,
-) -> None:
-    """Put a `pnpm` this test wrote on PATH, for a build on this machine."""
-    with_the_program(machine, tmp_path, _TOOLCHAIN_PROGRAM, script)
 
 
 def recording(

@@ -10,11 +10,14 @@ import pytest
 
 from presentator.adapters.deck_texts import MirroredDeckTexts
 from presentator.contracts.copresenter import CoPresenterUnavailableError, DeckText
-from presentator.contracts.decks import Build, Deck
+from presentator.contracts.decks import Build, Deck, Source
 from tests.support.deck_source_support import (
     a_build,
     a_deck,
     a_source,
+    a_source_database,
+    a_source_store,
+    a_source_write,
     folders_under,
     mirrors_under,
 )
@@ -33,8 +36,13 @@ def built(deck: Deck, build: Build) -> Deck:
     return replace(deck, build=build)
 
 
-def read_deck(tmp_path: Path, remote: GitRemote, slug: str) -> DeckText | None:
-    source = a_source(remote.url)
+def read_deck(
+    tmp_path: Path,
+    remote: GitRemote,
+    slug: str,
+    source: Source | None = None,
+) -> DeckText | None:
+    source = a_source(remote.url) if source is None else source
     folders_under(tmp_path).folders(source)
     deck = built(a_deck(slug), a_build(tmp_path, commit=remote.head))
     texts: DeckTexts = MirroredDeckTexts(mirrors=mirrors_under(tmp_path))
@@ -292,3 +300,29 @@ def test_a_lone_hash_does_not_borrow_a_heading_from_a_later_line(
     assert text is not None
     assert text.slides[0].title == "Found"
     assert elapsed < _QUICK_SECONDS
+
+
+def test_a_deck_under_its_sources_folder_is_read_from_there(
+    remote: GitRemote,
+    tmp_path: Path,
+) -> None:
+    remote.commit(
+        {
+            f"examples/{_TALK}/slides.md": _SLIDES,
+            f"examples/{_TALK}/deck.toml": 'title = "The Nested Talk"\n',
+            f"{_TALK}/slides.md": "# Top level\n",
+        },
+        at=_PUSHED_AT,
+    )
+    store = a_source_store(a_source_database(tmp_path))
+    store.add(a_source_write(remote.url, folder="examples"))
+    (stored,) = store.all()
+
+    text = read_deck(tmp_path, remote, _TALK, stored)
+
+    assert text is not None
+    assert text.title == "The Nested Talk"
+    assert [(slide.number, slide.notes) for slide in text.slides] == [
+        (1, ""),
+        (2, "notes for two"),
+    ]
