@@ -362,9 +362,10 @@ def test_a_request_the_gate_admits_outside_a_running_front_fails_loud(
 ) -> None:
     with a_world(tmp_path, entering_the_lifespan=False) as world:
         program = world.program()
+        headers = world.bearer()
 
         with pytest.raises(RuntimeError):
-            post_mcp(program, world.bearer(), "tools/list")
+            post_mcp(program, headers, "tools/list")
         challenge = post_mcp(program, {}, "tools/list")
 
         assert challenge.status_code == HTTPStatus.UNAUTHORIZED

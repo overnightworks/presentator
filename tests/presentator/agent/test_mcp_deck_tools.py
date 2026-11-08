@@ -233,13 +233,15 @@ def test_an_unreadable_mirror_is_a_503_problem_and_no_usable_answer_to_the_agent
 ) -> None:
     with a_world(tmp_path, texts=FakeDeckTexts(unreadable=True)) as world:
         address = DECK_TEXT_PATH.format(slug=World.FELIX_DECK)
+        bearer = world.bearer()
+        token = bearer["authorization"].removeprefix("Bearer ")
 
         with caplog.at_level(logging.DEBUG):
             by_cookie = felix_by_cookie(world, address)
             by_bearer = felix_by_bearer(world, address)
             by_tool = called_through_mcp(
                 world.program(),
-                world.bearer(),
+                bearer,
                 "get_deck_text",
                 {"slug": World.FELIX_DECK},
             )
@@ -249,7 +251,12 @@ def test_an_unreadable_mirror_is_a_503_problem_and_no_usable_answer_to_the_agent
         assert by_bearer.headers["content-type"].startswith("application/problem+json")
         assert by_tool.is_error
         assert "usable answer" in by_tool.text
-        for leaked in (A_DECK_TEXT.slides[0].body, A_DECK_TEXT.title, A_MIRROR_PATH):
+        for leaked in (
+            A_DECK_TEXT.slides[0].body,
+            A_DECK_TEXT.title,
+            A_MIRROR_PATH,
+            token,
+        ):
             assert leaked not in by_tool.text
             assert leaked not in caplog.text
 
