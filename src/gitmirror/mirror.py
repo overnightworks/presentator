@@ -171,7 +171,9 @@ class GitMirror:
 
     def _every_entry(self, revision: Revision, path: str) -> tuple[TreeEntry, ...]:
         """Every entry at any depth under that path, each name checked."""
-        listing = self._run("ls-tree", "-r", "-t", "-z", revision.commit, "--", f"{path}/")
+        listing = self._run(
+            "ls-tree", "-r", "-t", "-z", revision.commit, "--", f"{path}/"
+        )
         return tuple(
             _tree_entry(record) for record in os.fsdecode(listing).split("\0") if record
         )
