@@ -1,0 +1,8 @@
+claim_id = "f9ab3244e16344cdaa93cfb11c45a85e"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "96e8cb37c190415ed362fd769632ed839a1cf224"
+branch = "claude/issue-928-presentator-takes-agent-runtime-v0-26-0"
+scope = ["pyproject.toml", "src/presentator/agent/mcp.py", "src/presentator/host/main.py", "tests/presentator/agent/support/mcp_world.py", "tests/presentator/agent/test_mcp_deck_tools.py", "tests/presentator/agent/test_mcp_front.py", "uv.lock"]
+opened_commit = "7c8a25723e2dfd9119557a1a42a16103cbdf2a35"
+whole_reason = "One library upgrade: the pin, the lifespan it requires and the tests that speak the old revision."
