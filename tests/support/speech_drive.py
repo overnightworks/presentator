@@ -138,6 +138,7 @@ class SpeechScenario:
     arrange: Callable[[Hosts], None] = nothing_happens
     peer: Served | None = None
     bounded_calls_stall: bool = False
+    speech_scope: str = A_SPEECH_SCOPE
 
 
 @dataclass(kw_only=True)
@@ -255,13 +256,14 @@ def _real_speech_adapters(
     )
 
 
-def a_surface_over(
+def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varies or keeps
     adapters: tuple[SpeechHearing, SpeechSpeaking],
     *,
     gateway: Gateway,
     limiter: RecordingLimiter,
     deadline: ManualDeadline,
     errors: list[BaseException],
+    speech_scope: str,
 ) -> Callable[
     [FakeDeckStore, SqliteSessionRecordStore, InstalledAuth], CoPresenterSurface
 ]:
@@ -290,7 +292,7 @@ def a_surface_over(
                         auth.relying_party,
                         sessions,
                         auth.config,
-                        speech_scope=A_SPEECH_SCOPE,
+                        speech_scope=speech_scope,
                     ),
                     errors,
                 ),
@@ -325,7 +327,9 @@ def a_speech_instance(
                 limiter=limiter,
                 deadline=deadline,
                 errors=errors,
+                speech_scope=scenario.speech_scope,
             ),
+            speech_scope=scenario.speech_scope,
         )
         hosts.issuer.issue_person_access_token(ACCESS)
         hosts.issuer.rotate_refresh_token_to(ROTATED)

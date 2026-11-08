@@ -38,6 +38,7 @@ from tests.support.fake_issuer import FakeIssuer
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_CLIENT_ID,
+    A_SPEECH_SCOPE,
     A_TALK_ADDRESS,
     ADMIN,
     AN_ISSUER,
@@ -183,7 +184,7 @@ type SurfaceFactory = Callable[
 
 
 def _relying_party_at(
-    issuer: FakeIssuer, clock: FrozenClock, origin: str, realm: str
+    issuer: FakeIssuer, clock: FrozenClock, origin: str, realm: str, speech_scope: str
 ) -> OidcRelyingParty:
     return a_relying_party(
         clock,
@@ -191,6 +192,7 @@ def _relying_party_at(
         fetch_key_set=issuer.fetch_key_set,
         origin=origin,
         issuer=realm,
+        speech_scope=speech_scope,
     )
 
 
@@ -199,11 +201,14 @@ def _both_auths(
     issuer: FakeIssuer,
     clock: FrozenClock,
     realm: str,
+    speech_scope: str,
 ) -> tuple[InstalledAuth, InstalledAuth]:
     """The lobby's and the talk host's sign-in wiring over one issuer."""
     lobby_auth = an_installed_auth(
         clock,
-        relying_party=_relying_party_at(issuer, clock, A_BROWSERS_ADDRESS, realm),
+        relying_party=_relying_party_at(
+            issuer, clock, A_BROWSERS_ADDRESS, realm, speech_scope
+        ),
         transaction=SqliteIdentityWrites(
             database, ProcessWriteLock(), LoggingAuditSink()
         ),
@@ -212,7 +217,9 @@ def _both_auths(
     talk_auth = replace(
         lobby_auth,
         config=a_talk_web_auth(clock),
-        relying_party=_relying_party_at(issuer, clock, A_TALK_ADDRESS, realm),
+        relying_party=_relying_party_at(
+            issuer, clock, A_TALK_ADDRESS, realm, speech_scope
+        ),
         content_security_policy=talk_content_security_policy(),
     )
     return lobby_auth, talk_auth
@@ -245,6 +252,7 @@ def two_hosts(
     realm: str = AN_ISSUER,
     given: GivenDecks | None = None,
     copresenter: SurfaceFactory | None = None,
+    speech_scope: str = A_SPEECH_SCOPE,
 ) -> Hosts:
     """Both hosts over real identity tables, a fake issuer and one set of decks.
 
@@ -268,7 +276,7 @@ def two_hosts(
     )
     sessions = SqliteSessionRecordStore(database)
     issuer = FakeIssuer(issuer=AN_ISSUER, client_id=A_CLIENT_ID, now=clock.now())
-    lobby_auth, talk_auth = _both_auths(database, issuer, clock, realm)
+    lobby_auth, talk_auth = _both_auths(database, issuer, clock, realm, speech_scope)
     talk_config = talk_auth.config
     lobby, _ = a_lobby_app(
         people=people,

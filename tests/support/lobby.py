@@ -317,16 +317,19 @@ def a_content_security_policy() -> str:
     return content_security_policy(LOBBY_SHELL)
 
 
-def a_relying_party(
+def a_relying_party(  # noqa: PLR0913 - each part is the seam one test replaces
     clock: FrozenClock,
     *,
     post_token_request: TokenRequestPost = _no_token_endpoint,
     fetch_key_set: KeySetFetch = _no_key_set,
     origin: str = A_BROWSERS_ADDRESS,
     issuer: str = AN_ISSUER,
+    speech_scope: str = A_SPEECH_SCOPE,
 ) -> OidcRelyingParty:
     """The issuer's client, whose transports reach nobody unless a test gives some."""
-    settings = a_settings().model_copy(update={"oidc_issuer": issuer})
+    settings = a_settings().model_copy(
+        update={"oidc_issuer": issuer, "speech_service_scope": speech_scope}
+    )
     return OidcRelyingParty(
         oidc_client_config(settings, SecretStr(A_CLIENT_CREDENTIAL), origin=origin),
         post_token_request=post_token_request,

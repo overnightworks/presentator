@@ -347,10 +347,9 @@ def test_a_refusal_at_the_speech_read_answers_before_the_stream_and_frees_the_ti
 
 @pytest.mark.parametrize("scope", ["speech-scope-one", "another-speech-audience"])
 def test_both_hosts_sign_in_naming_exactly_the_configured_speech_scope(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scope: str
+    tmp_path: Path, scope: str
 ) -> None:
-    monkeypatch.setattr("tests.support.lobby.A_SPEECH_SCOPE", scope)
-    with a_speech_instance(tmp_path) as instance:
+    with a_speech_instance(tmp_path, SpeechScenario(speech_scope=scope)) as instance:
         lobby = instance.hosts.browser(A_BROWSERS_ADDRESS)
         talk = instance.hosts.browser(A_TALK_ADDRESS, headers=A_BROWSERS_HEADERS)
         locations = [
