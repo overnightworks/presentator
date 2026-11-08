@@ -30,17 +30,6 @@ def create(client: TestClient, **changes: object) -> Response:
     return client.post(LIST, json=body)
 
 
-def test_a_folder_checked_without_and_created_with_is_stored() -> None:
-    world = a_world()
-    client = an_admin_over(world.decks).client
-
-    answer = create(client, folder="examples")
-
-    (stored,) = world.store.sources
-    assert answer.status_code == HTTPStatus.CREATED
-    assert stored.folder == "examples"
-
-
 def test_a_check_gives_one_proof_whether_or_not_the_request_names_a_folder() -> None:
     client = an_admin_over(a_world().decks).client
 
@@ -50,15 +39,21 @@ def test_a_check_gives_one_proof_whether_or_not_the_request_names_a_folder() -> 
     assert plain["fingerprint"] == with_folder["fingerprint"]
 
 
-def test_a_create_without_a_folder_stores_the_top_of_the_repository() -> None:
+@pytest.mark.parametrize(
+    ("changes", "stored_folder"),
+    [({"folder": "examples"}, "examples"), ({}, "")],
+    ids=["a folder", "no folder"],
+)
+def test_a_create_stores_the_folder_it_names_or_the_top_of_the_repository(
+    changes: dict[str, object], stored_folder: str
+) -> None:
     world = a_world()
     client = an_admin_over(world.decks).client
 
-    answer = create(client)
+    answer = create(client, **changes)
 
-    (stored,) = world.store.sources
     assert answer.status_code == HTTPStatus.CREATED
-    assert stored.folder == ""
+    assert [source.folder for source in world.store.sources] == [stored_folder]
 
 
 def test_a_null_folder_is_the_validation_answer() -> None:
