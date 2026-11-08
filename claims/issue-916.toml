@@ -1,0 +1,8 @@
+claim_id = "10cfb69d6f3546509a59173eaab15667"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "4275a10288358b1f06866e7119c68b166043079d"
+branch = "claude/issue-916-an-https-source-may-carry-no-secret"
+scope = ["docs/runbooks/add-a-source.md", "docs/sources.md", "frontend/e2e/source-new.spec.ts", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "frontend/src/lib/source.test.ts", "frontend/src/lib/source.ts", "src/gitmirror/mirror.py", "src/presentator/adapters/catalogs/en.po", "src/presentator/application/decks.py", "src/presentator/contracts/decks.py", "tests/gitmirror/test_mirror.py", "tests/gitmirror/test_mirror_connection_states.py", "tests/presentator/api/test_source_api_create.py", "tests/presentator/application/test_decks.py"]
+opened_commit = "6bbdaee8aaeb43ccf3ada6f19d1c43d289144479"
+whole_reason = "An https source with no secret is one rule across the server's refusal, the mirror's classifier and the page's refusal map, so these paths land together or main keeps a server that refuses what the form offers or a removed wire value the page still names."
