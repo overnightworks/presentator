@@ -16,3 +16,6 @@ about sources stand in [configuration](configuration.md) and the runbook to
 - **SR5** Only admins create sources.
 - **SR6** An https address may carry no secret, and a private repository
   without one fails Check connection as unreachable.
+- **SR7** The address decides how a source is read: one parser on the server
+  names the access, and the Add form shows only what that address needs. The
+  token is for https only, and a key or folder address never sends one.

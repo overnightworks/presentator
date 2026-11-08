@@ -271,18 +271,6 @@ msgstr "Name"
 msgid "source_url"
 msgstr "Git URL"
 
-msgid "source_access"
-msgstr "Access"
-
-msgid "source_access_ssh"
-msgstr "SSH deploy key"
-
-msgid "source_access_https"
-msgstr "HTTPS token"
-
-msgid "source_access_file"
-msgstr "On this box"
-
 msgid "source_access_token"
 msgstr "Token"
 
@@ -297,8 +285,18 @@ msgstr "Secret"
 
 msgid "source_secret_info"
 msgstr ""
-"Stored encrypted and never shown again after creation. It only needs read "
-"access — the server never writes back to Git."
+"Only a private repository needs a token. It is stored encrypted, never shown "
+"again after creation, and needs read access only — the server never writes "
+"back to Git."
+
+msgid "source_kind_pending"
+msgstr "Reading the address."
+
+msgid "source_kind_failed"
+msgstr "The address could not be read. Try again."
+
+msgid "source_kind_retry"
+msgstr "Read again"
 
 msgid "source_webhook_later"
 msgstr ""
@@ -356,12 +354,10 @@ msgstr "A source with this name is already here."
 msgid "source_refused_duplicate_url"
 msgstr "A source with this Git URL is already here."
 
-msgid "source_refused_access"
+msgid "source_refused_unknown_access"
 msgstr ""
-"Use an address with one host and no credentials that fits the access kind: "
-"https://host/path for HTTPS, with the token in the Secret field; "
-"user@host:path or ssh://user@host/path for SSH, or a folder for a local "
-"folder."
+"Use https://host/path, user@host:path or ssh://user@host/path, or a folder "
+"on this box, with no user name or password in it."
 
 msgid "source_refused_secret"
 msgstr "Enter the new secret first."
@@ -373,7 +369,7 @@ msgid "source_check_reachable"
 msgstr "Repository read, head {commit}."
 
 msgid "source_refused_secret_not_allowed"
-msgstr "A source on this box needs no secret — leave it blank."
+msgstr "A key or a folder on this box needs no token — leave it blank."
 
 msgid "source_refused_outside_mount"
 msgstr ""

@@ -25,11 +25,11 @@ on the source's page.
    `PRESENTATOR_RUNTIME_UID`) own it. Git refuses the folder as "dubious ownership"
    otherwise. Rollback: remove the folder.
 3. Open Settings · Sources, choose *Add source*, and enter the name and the Git
-   URL. Pick the access kind: *HTTPS token* (the default), *SSH deploy key* or
-   *On this box*; a local folder takes no secret. Rollback: leave the page;
-   nothing is stored yet.
-4. HTTPS: enter the token of a private repository in the Secret field, because an
-   `https://` address has no user part; leave it empty for a public one. SSH: Add shows an owned ed25519 deploy-key draft; register its
+   URL. The form shows what that address needs; there is no access to pick
+   ([SR7](../sources.md)). Rollback: leave the page; nothing is stored yet.
+4. HTTPS: the Secret field appears for an `https://` address; enter the token of a
+   private repository there, because the address has no user part, and leave it empty
+   for a public one. SSH: Add shows an owned ed25519 deploy-key draft; register its
    public half at the Git host. The first contact accepts the host's key and
    refuses the host if it ever changes. Local folder: enter no secret.
    Rollback: delete the key at the host.

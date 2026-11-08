@@ -19,6 +19,7 @@ export const NEW_ADDRESS = '/settings/sources/new';
 export const SOURCES_LIST = '/settings/sources';
 export const SOURCES_API = '/api/sources';
 export const CHECK_API = `${SOURCES_API}/new/check`;
+export const KIND_API = `${SOURCES_API}/new/kind`;
 export const KEY_DRAFT_API = `${SOURCES_API}/new/key-draft`;
 export const JSON_ACCEPT = { Accept: 'application/json' };
 export const SAME_ORIGIN = { ...JSON_ACCEPT, 'Sec-Fetch-Site': 'same-origin' };
@@ -33,10 +34,14 @@ let counter = 0;
 export const aName = (testInfo: TestInfo, label = 'talks'): string =>
 	`${label}-${testInfo.project.name}-${startedAt}-${counter++}`;
 export const anHttpsAddress = (name: string): string => `https://git.example.invalid/${name}.git`;
+// The folder the drive's lobby accepts local sources under is the harness's to say.
+export const aLocalAddress = async (page: Page, name: string): Promise<string> => {
+	const mount = (await (await page.request.get(LOCAL_MOUNT_ROUTE)).json()) as {
+		path: string;
+	};
+	return `${mount.path}/${name}`;
+};
 export const anSshAddress = (name: string): string => `${SSH_ADDRESS}:${name}.git`;
-
-// A segment is chosen the way a person does it: by its words.
-export const choosesAccess = (page: Page, label: string) => page.getByText(label, { exact: true }).click();
 
 export const secretField = (page: Page, words: Words) =>
 	page.getByLabel(words.source_secret, { exact: true });
@@ -46,14 +51,27 @@ export async function opensTheForm(page: Page): Promise<void> {
 	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 }
 
+// The address is typed and the page has the server's answer for it: only then
+// does the form show what the address needs.
+export async function typesTheAddress(page: Page, words: Words, url: string): Promise<void> {
+	const answered = page.waitForResponse(
+		(received) => new URL(received.url()).pathname === KIND_API
+	);
+	await page.getByLabel(words.source_url, { exact: true }).fill(url);
+	await answered;
+}
+
+// A token is typed only when asked for, and only an https address has its field.
 export async function fillsTheForm(
 	page: Page,
 	words: Words,
 	values: { name: string; url: string; secret?: string }
 ): Promise<void> {
 	await page.getByLabel(words.source_name, { exact: true }).fill(values.name);
-	await page.getByLabel(words.source_url, { exact: true }).fill(values.url);
-	await secretField(page, words).fill(values.secret ?? ACCESS_TOKEN);
+	await typesTheAddress(page, words, values.url);
+	if (values.secret !== undefined) {
+		await secretField(page, words).fill(values.secret);
+	}
 }
 
 export async function checks(page: Page, words: Words): Promise<ConnectionCheckView> {
@@ -142,7 +160,10 @@ export async function opensAnHttpsSource(
 ): Promise<{ name: string; created: CreatedSourceView }> {
 	const name = aName(testInfo);
 	await opensTheForm(page);
-	const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
+	const created = await createsASource(page, words, {
+		name,
+		url: anHttpsAddress(name)
+	});
 	await page.goto(sourceAddress(name));
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
 	return { name, created };
@@ -160,9 +181,7 @@ export async function opensALocalSource(
 		path: string;
 	};
 	await opensTheForm(page);
-	await choosesAccess(page, words.source_access_file);
-	await page.getByLabel(words.source_name, { exact: true }).fill(name);
-	await page.getByLabel(words.source_url, { exact: true }).fill(`${mount.path}/${name}`);
+	await fillsTheForm(page, words, { name, url: `${mount.path}/${name}` });
 	await checks(page, words);
 	await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
 	const created = await creates(page, words);

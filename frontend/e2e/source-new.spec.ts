@@ -18,9 +18,7 @@ import {
 	aName,
 	anHttpsAddress,
 	anSshAddress,
-	type AccessKind,
 	checks,
-	choosesAccess,
 	CHECK_API,
 	createsASource,
 	fillsTheForm,
@@ -36,6 +34,7 @@ import {
 	SOURCES_API,
 	SOURCES_LIST,
 	tabsOf,
+	typesTheAddress,
 	type Words
 } from './sources.ts';
 
@@ -54,7 +53,9 @@ const showsTheEmptyForm = async (page: Page): Promise<void> => {
 
 // Playwright turns Chromium's back/forward cache off; this spec turns it on, so
 // a page left by a document navigation is restored the way a person's is.
-test.use({ launchOptions: { ignoreDefaultArgs: ['--disable-back-forward-cache'] } });
+test.use({
+	launchOptions: { ignoreDefaultArgs: ['--disable-back-forward-cache'] }
+});
 
 test.describe('as an admin', () => {
 	test.use({ person: { role: 'admin' } });
@@ -65,7 +66,7 @@ test.describe('as an admin', () => {
 			test.describe(`the empty Add source form at ${width} px, ${colorScheme}`, () => {
 				test.use({ colorScheme });
 
-				test('shows the fields, the three segments, the key and the tab strip, and saves a screenshot', async ({
+				test('shows the name and address alone, then the token field for an https address, and saves a screenshot', async ({
 					page
 				}, testInfo) => {
 					const { words } = await sessionOf(page);
@@ -87,25 +88,25 @@ test.describe('as an admin', () => {
 					);
 					await expect(page.getByLabel(words.source_name, { exact: true })).toHaveValue('');
 					await expect(page.getByLabel(words.source_url, { exact: true })).toHaveValue('');
-					await expect(page.getByRole('group', { name: words.source_access })).toBeVisible();
-					await expect(page.getByRole('radio')).toHaveCount(3);
-					await expect(page.locator('.seg label')).toHaveText([
-						words.source_access_ssh,
-						words.source_access_https,
-						words.source_access_file
-					]);
-					await expect(page.getByRole('radio', { name: words.source_access_https })).toBeChecked();
-					await expect(secretField(page, words)).toHaveAttribute('type', 'password');
-					await expect(secretField(page, words)).toHaveValue('');
+					await expect(page.getByRole('radio')).toHaveCount(0);
+					await expect(secretField(page, words)).toHaveCount(0);
 					await expect(page.getByText(words.source_deploy_key_heading)).toHaveCount(0);
 					await expect(page.getByText(draft.public_key, { exact: true })).toHaveCount(0);
-					await page.getByRole('radio', { name: words.source_access_ssh }).check({ force: true });
-					await expect(page.getByText(words.source_deploy_key_heading)).toBeVisible();
-					await expect(page.getByText(words.source_deploy_key_hint)).toBeVisible();
-					await expect(page.getByText(draft.public_key, { exact: true })).toBeVisible();
-					await page.getByRole('radio', { name: words.source_access_https }).check({ force: true });
-					await expect(page.getByRole('button', { name: words.source_check })).toBeEnabled();
+					await expect(page.getByRole('button', { name: words.source_check })).toBeDisabled();
 					await expect(page.getByRole('button', { name: words.source_create })).toBeDisabled();
+					await expect(page.getByLabel(words.source_name, { exact: true })).toHaveAttribute(
+						'autocomplete',
+						'off'
+					);
+					await expect(page.getByLabel(words.source_url, { exact: true })).toHaveAttribute(
+						'autocomplete',
+						'off'
+					);
+					await typesTheAddress(page, words, anHttpsAddress(aName(testInfo)));
+					await expect(secretField(page, words)).toHaveAttribute('type', 'password');
+					await expect(secretField(page, words)).toHaveAttribute('autocomplete', 'new-password');
+					await expect(secretField(page, words)).toHaveValue('');
+					await expect(page.getByRole('button', { name: words.source_check })).toBeEnabled();
 					await expectsNoHorizontalScroll(page);
 					if (width === 390) {
 						await expectsHeaderOnOneLine(page);
@@ -151,7 +152,7 @@ test.describe('as an admin', () => {
 	});
 
 	// Cell 2.
-	test('a reachable check shows the commit it read and leaves Create enabled when the access changes', async ({
+	test('a reachable check shows the commit it read and leaves Create enabled', async ({
 		page
 	}, testInfo) => {
 		const { words } = await sessionOf(page);
@@ -166,8 +167,6 @@ test.describe('as an admin', () => {
 			`${words.source_state_reachable} ${words.source_check_reachable.replace('{commit}', found.commit ?? '')}`
 		);
 		await expect(banner).toHaveAttribute('data-banner', 'ok');
-		await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
-		await choosesAccess(page, words.source_access_ssh);
 		await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
 	});
 
@@ -190,7 +189,13 @@ test.describe('as an admin', () => {
 			const { words } = await sessionOf(page);
 			const name = aName(testInfo);
 			await opensTheForm(page);
-			const answer: ConnectionCheckView = { commit: null, detail, failure, fingerprint: null, state };
+			const answer: ConnectionCheckView = {
+				commit: null,
+				detail,
+				failure,
+				fingerprint: null,
+				state
+			};
 			await page.route(`**${CHECK_API}`, (route) => route.fulfill({ json: answer }));
 			await fillsTheForm(page, words, { name, url: anHttpsAddress(name) });
 
@@ -211,7 +216,7 @@ test.describe('as an admin', () => {
 		});
 	}
 
-	test('SR1: an address with a user part is refused by the real check with the access sentence', async ({
+	test('SR1: an address with a user part is refused by the real check with the unknown-access sentence', async ({
 		page
 	}, testInfo) => {
 		const { words } = await sessionOf(page);
@@ -224,7 +229,7 @@ test.describe('as an admin', () => {
 
 		await checks(page, words).catch(() => undefined);
 
-		await expect(page.getByRole('alert')).toHaveText(words.source_refused_access);
+		await expect(page.getByRole('alert')).toHaveText(words.source_refused_unknown_access);
 		await expect(page.getByRole('button', { name: words.source_create })).toBeDisabled();
 	});
 
@@ -236,7 +241,10 @@ test.describe('as an admin', () => {
 	}, testInfo) => {
 		const { words } = await sessionOf(page);
 		const name = aName(testInfo);
-		const newerKey = { id: 'a-newer-draft', public_key: 'ssh-ed25519 AAAAnewer a-newer-key' };
+		const newerKey = {
+			id: 'a-newer-draft',
+			public_key: 'ssh-ed25519 AAAAnewer a-newer-key'
+		};
 		let createRefused = false;
 		await page.route(`**${KEY_DRAFT_API}`, (route) =>
 			createRefused ? route.fulfill({ json: newerKey }) : route.continue()
@@ -246,7 +254,6 @@ test.describe('as an admin', () => {
 			data: {
 				name: 'Not A Name',
 				url: anHttpsAddress(name),
-				access: 'https-token',
 				secret: 's',
 				fingerprint: 'f',
 				key_draft_id: null
@@ -267,9 +274,8 @@ test.describe('as an admin', () => {
 		});
 		await opensTheForm(page);
 		const before = await keyDraftOf(page);
-		await choosesAccess(page, words.source_access_ssh);
+		await fillsTheForm(page, words, { name, url: anSshAddress(name) });
 		await expect(page.getByText(before.public_key, { exact: true })).toBeVisible();
-		await fillsTheForm(page, words, { name, url: anSshAddress(name), secret: '' });
 		await checks(page, words);
 
 		await page.getByRole('button', { name: words.source_create }).click();
@@ -301,7 +307,11 @@ test.describe('as an admin', () => {
 					const entries = await entriesOf(page);
 					await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
 
-					const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
+					const created = await createsASource(page, words, {
+						name,
+						url: anHttpsAddress(name),
+						secret: ACCESS_TOKEN
+					});
 
 					await expect(page.getByRole('heading', { level: 1 })).toHaveText(
 						`${name} ${words.source_created}`
@@ -333,7 +343,9 @@ test.describe('as an admin', () => {
 						headers: { Authorization: `Bearer ${created.webhook_secret}` }
 					});
 					expect(called.status()).toBe(204);
-					const wire = await page.request.get(`${SOURCES_API}/${name}`, { headers: JSON_ACCEPT });
+					const wire = await page.request.get(`${SOURCES_API}/${name}`, {
+						headers: JSON_ACCEPT
+					});
 					expect(wire.status()).toBe(200);
 					expect(await wire.text()).not.toContain(created.webhook_secret);
 					const shell = await shellAt(page, `${SOURCES_LIST}/${name}`);
@@ -368,7 +380,10 @@ test.describe('as an admin', () => {
 		const { words } = await sessionOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
-		const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
+		const created = await createsASource(page, words, {
+			name,
+			url: anHttpsAddress(name)
+		});
 
 		await tabsOf(page, words).getByRole('link', { name: words.settings_title }).click();
 		await expect(page).toHaveURL('/settings');
@@ -392,7 +407,10 @@ test.describe('as an admin', () => {
 		const { words } = await sessionOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
-		const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
+		const created = await createsASource(page, words, {
+			name,
+			url: anHttpsAddress(name)
+		});
 		await expect(page).toHaveURL(`${SOURCES_LIST}/${name}`);
 		await page.reload();
 		await showsTheSourcePage(page, words);
@@ -414,7 +432,10 @@ test.describe('as an admin', () => {
 		const name = aName(testInfo);
 		await page.goto(SOURCES_LIST);
 		await opensTheForm(page);
-		const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
+		const created = await createsASource(page, words, {
+			name,
+			url: anHttpsAddress(name)
+		});
 		const entries = await entriesOf(page);
 
 		const left = page.waitForResponse(
@@ -445,13 +466,16 @@ test.describe('as an admin', () => {
 		const { words } = await sessionOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
-		const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
+		const created = await createsASource(page, words, {
+			name,
+			url: anHttpsAddress(name)
+		});
 		await expect(page.locator('.once')).toBeVisible();
 
 		await page.evaluate(() => dispatchEvent(new Event('pagehide')));
 
 		await expect(page.locator('main form')).toBeVisible();
-		await expect(secretField(page, words)).toHaveValue('');
+		await expect(secretField(page, words)).toHaveCount(0);
 		await expect(page.locator('body')).not.toContainText(created.webhook_secret);
 	});
 
@@ -471,7 +495,7 @@ test.describe('as an admin', () => {
 		await page.evaluate(() => dispatchEvent(new Event('pagehide')));
 
 		await showsTheEmptyForm(page);
-		await expect(secretField(page, words)).toHaveValue('');
+		await expect(secretField(page, words)).toHaveCount(0);
 	});
 
 	// Cell 5, the back-forward cache, which this spec enables in Chromium.
@@ -520,7 +544,10 @@ test.describe('as an admin', () => {
 			const name = aName(testInfo);
 			await page.reload();
 			expect(await restoredFromTheCache(page)).toBe(false);
-			const created = await createsASource(page, words, { name, url: anHttpsAddress(name) });
+			const created = await createsASource(page, words, {
+				name,
+				url: anHttpsAddress(name)
+			});
 			await page.goto(SOURCES_LIST);
 			await expect(page).toHaveURL(SOURCES_LIST);
 			await page.goBack();
@@ -548,7 +575,11 @@ test.describe('as an admin', () => {
 		const name = page.getByLabel(words.source_name, { exact: true });
 		const url = page.getByLabel(words.source_url, { exact: true });
 
-		await fillsTheForm(page, words, { name: taken, url: anHttpsAddress(other) });
+		await fillsTheForm(page, words, {
+			name: taken,
+			url: anHttpsAddress(other),
+			secret: ACCESS_TOKEN
+		});
 		await checks(page, words);
 		await page.getByRole('button', { name: words.source_create }).click();
 		await expect(refusal).toHaveText(words.source_refused_duplicate_name);
@@ -594,7 +625,11 @@ test.describe('as an admin', () => {
 				? route.fulfill({ status: 500, json: {} })
 				: route.continue()
 		);
-		await fillsTheForm(page, words, { name, url: anHttpsAddress(name) });
+		await fillsTheForm(page, words, {
+			name,
+			url: anHttpsAddress(name),
+			secret: ACCESS_TOKEN
+		});
 		await checks(page, words);
 
 		await page.getByRole('button', { name: words.source_create }).click();
@@ -632,29 +667,18 @@ test.describe('as an admin', () => {
 		expect(signInRequests).toEqual([`?next=${NEXT}`]);
 	});
 
-	// Cell 11.
-	test('the segments are reachable and keyboard-operable, On this box included', async ({
-		page
-	}) => {
-		const { words } = await sessionOf(page);
-		await opensTheForm(page);
-
-		await page.getByText(words.source_access_file, { exact: true }).click();
-		await expect(page.getByRole('radio', { name: words.source_access_file })).toBeChecked();
-
-		await page.getByRole('radio', { name: words.source_access_file }).focus();
-		await page.keyboard.press('ArrowLeft');
-		await expect(page.getByRole('radio', { name: words.source_access_https })).toBeChecked();
-		await page.keyboard.press('ArrowLeft');
-		await expect(page.getByRole('radio', { name: words.source_access_ssh })).toBeChecked();
-	});
-
 	// Cell 12.
 	test.describe('at 390 px', () => {
-		test('every control shows a focus ring, in the order of the page', async ({ page }) => {
+		test('every control shows a focus ring, in the order of the page', async ({
+			page
+		}, testInfo) => {
 			const { words } = await sessionOf(page);
 			await page.setViewportSize({ width: 390, height: 900 });
 			await opensTheForm(page);
+			await fillsTheForm(page, words, {
+				name: aName(testInfo),
+				url: anHttpsAddress(aName(testInfo))
+			});
 			await page.locator('body').click({ position: { x: 1, y: 1 } });
 
 			const focused: (string | null)[] = [];
@@ -667,7 +691,6 @@ test.describe('as an admin', () => {
 				words.sources_back,
 				words.source_name,
 				words.source_url,
-				words.source_access_https,
 				'info',
 				words.source_secret,
 				words.source_check
@@ -686,7 +709,7 @@ test.describe('as an admin', () => {
 		page,
 		context,
 		browserName
-	}) => {
+	}, testInfo) => {
 		const { words } = await sessionOf(page);
 		const failures: Error[] = [];
 		page.on('pageerror', (failure) => failures.push(failure));
@@ -695,7 +718,7 @@ test.describe('as an admin', () => {
 		}
 		await opensTheForm(page);
 		const draft = await keyDraftOf(page);
-		await choosesAccess(page, words.source_access_ssh);
+		await typesTheAddress(page, words, anSshAddress(aName(testInfo)));
 
 		await page.getByRole('button', { name: words.source_copy }).click();
 
@@ -705,20 +728,6 @@ test.describe('as an admin', () => {
 				.toBe(draft.public_key);
 		}
 		expect(failures).toEqual([]);
-	});
-
-	// Cell 11 (wire): the radio values are the generated ones.
-	test('each access segment carries the generated access kind as its value', async ({ page }) => {
-		const { words } = await sessionOf(page);
-		const kinds: Record<string, AccessKind> = {
-			[words.source_access_ssh]: 'ssh-deploy-key',
-			[words.source_access_https]: 'https-token',
-			[words.source_access_file]: 'local-folder'
-		};
-		await opensTheForm(page);
-		for (const [label, kind] of Object.entries(kinds)) {
-			await expect(page.getByRole('radio', { name: label })).toHaveAttribute('value', kind);
-		}
 	});
 });
 

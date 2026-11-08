@@ -2,7 +2,7 @@
   "components": {
     "schemas": {
       "AccessKind": {
-        "description": "How a source is read, derived from its URL's scheme and nothing else.\n\nHTTPS may carry a token; SSH and the scp form are a deploy key; a `file://`\naddress or a bare absolute path is this box's own mount, and carries no\nsecret at all. The radio on the form has to match this, and a mismatch is\nrefused rather than stored as a fourth kind.",
+        "description": "How a source is read, derived from its URL's scheme and nothing else.\n\nHTTPS may carry a token; SSH and the scp form are a deploy key; a `file://`\naddress or a bare absolute path is this box's own mount, and carries no\nsecret at all. An address naming none of them is refused rather than stored\nas a fourth kind.",
         "enum": [
           "https-token",
           "ssh-deploy-key",
@@ -45,6 +45,26 @@
           "theme"
         ],
         "title": "AccountView",
+        "type": "object"
+      },
+      "AddressAccessView": {
+        "description": "The access the address names, or null when it names none.",
+        "properties": {
+          "access": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccessKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "access"
+        ],
+        "title": "AddressAccessView",
         "type": "object"
       },
       "AttemptView": {
@@ -732,24 +752,12 @@
             "title": "Sign In Try Again",
             "type": "string"
           },
-          "source_access": {
-            "title": "Source Access",
-            "type": "string"
-          },
           "source_access_deploy_key": {
             "title": "Source Access Deploy Key",
             "type": "string"
           },
-          "source_access_file": {
-            "title": "Source Access File",
-            "type": "string"
-          },
           "source_access_heading": {
             "title": "Source Access Heading",
-            "type": "string"
-          },
-          "source_access_https": {
-            "title": "Source Access Https",
             "type": "string"
           },
           "source_access_local": {
@@ -758,10 +766,6 @@
           },
           "source_access_renew_info": {
             "title": "Source Access Renew Info",
-            "type": "string"
-          },
-          "source_access_ssh": {
-            "title": "Source Access Ssh",
             "type": "string"
           },
           "source_access_token": {
@@ -816,6 +820,18 @@
             "title": "Source Deploy Key Renew",
             "type": "string"
           },
+          "source_kind_failed": {
+            "title": "Source Kind Failed",
+            "type": "string"
+          },
+          "source_kind_pending": {
+            "title": "Source Kind Pending",
+            "type": "string"
+          },
+          "source_kind_retry": {
+            "title": "Source Kind Retry",
+            "type": "string"
+          },
           "source_later": {
             "title": "Source Later",
             "type": "string"
@@ -834,10 +850,6 @@
           },
           "source_recent_runs": {
             "title": "Source Recent Runs",
-            "type": "string"
-          },
-          "source_refused_access": {
-            "title": "Source Refused Access",
             "type": "string"
           },
           "source_refused_deploy_key": {
@@ -870,6 +882,10 @@
           },
           "source_refused_secret_not_allowed": {
             "title": "Source Refused Secret Not Allowed",
+            "type": "string"
+          },
+          "source_refused_unknown_access": {
+            "title": "Source Refused Unknown Access",
             "type": "string"
           },
           "source_remove_button": {
@@ -1189,15 +1205,14 @@
           "sources_column_access",
           "source_name",
           "source_url",
-          "source_access",
-          "source_access_ssh",
-          "source_access_https",
-          "source_access_file",
           "source_access_token",
           "source_access_deploy_key",
           "source_access_local",
           "source_secret",
           "source_secret_info",
+          "source_kind_pending",
+          "source_kind_failed",
+          "source_kind_retry",
           "source_webhook_later",
           "source_deploy_key_heading",
           "source_deploy_key_hint",
@@ -1215,7 +1230,7 @@
           "source_refused_name",
           "source_refused_duplicate_name",
           "source_refused_duplicate_url",
-          "source_refused_access",
+          "source_refused_unknown_access",
           "source_refused_secret",
           "source_refused_not_checked",
           "source_check_reachable",
@@ -1265,9 +1280,6 @@
       "NewSource": {
         "description": "A checked source to store: the probe, its name and the check's fingerprint.",
         "properties": {
-          "access": {
-            "$ref": "#/components/schemas/AccessKind"
-          },
           "fingerprint": {
             "title": "Fingerprint",
             "type": "string"
@@ -1307,7 +1319,6 @@
         },
         "required": [
           "url",
-          "access",
           "secret",
           "key_draft_id",
           "name",
@@ -1479,6 +1490,20 @@
         "title": "SlideTextView",
         "type": "object"
       },
+      "SourceAddress": {
+        "description": "An address as typed, before anything decides what it needs.",
+        "properties": {
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "SourceAddress",
+        "type": "object"
+      },
       "SourceDeckView": {
         "description": "A deck the source carries.",
         "properties": {
@@ -1516,11 +1541,8 @@
         "type": "object"
       },
       "SourceProbe": {
-        "description": "The address, access and credential of a source that is not stored yet.",
+        "description": "The address and credential of a source that is not stored yet.",
         "properties": {
-          "access": {
-            "$ref": "#/components/schemas/AccessKind"
-          },
           "key_draft_id": {
             "anyOf": [
               {
@@ -1552,7 +1574,6 @@
         },
         "required": [
           "url",
-          "access",
           "secret",
           "key_draft_id"
         ],
@@ -2520,7 +2541,7 @@
                         "malformed-name",
                         "duplicate-name",
                         "duplicate-url",
-                        "access-mismatch",
+                        "unknown-access",
                         "not-checked",
                         "credential-not-allowed",
                         "outside-local-mount",
@@ -2654,7 +2675,7 @@
                         "malformed-name",
                         "duplicate-name",
                         "duplicate-url",
-                        "access-mismatch",
+                        "unknown-access",
                         "not-checked",
                         "credential-not-allowed",
                         "outside-local-mount",
@@ -2753,6 +2774,87 @@
           }
         },
         "summary": "Key Draft"
+      }
+    },
+    "/api/sources/new/kind": {
+      "post": {
+        "operationId": "address_access_api_sources_new_kind_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceAddress"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddressAccessView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
+                  "properties": {
+                    "detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Detail"
+                    },
+                    "status": {
+                      "title": "Status",
+                      "type": "integer"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "type": {
+                      "default": "about:blank",
+                      "title": "Type",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "title": "ProblemDetails",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Address Access"
       }
     },
     "/api/sources/{name}": {

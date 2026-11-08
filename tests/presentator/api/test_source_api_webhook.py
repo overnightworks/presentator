@@ -55,8 +55,8 @@ _OWN_ORIGIN = {"sec-fetch-site": "same-site", "origin": "https://testserver"}
 _MALFORMED_JSON = '{"webhook_secret": '
 _NOT_FOUND_NAMES = ("unknown", RESERVED_SOURCE_NAME)
 _SOURCES_BY_KIND = {
-    AccessKind.SSH: {"url": _SSH, "access": AccessKind.SSH, "secret": None},
-    AccessKind.FILE: {"url": _FOLDER, "access": AccessKind.FILE, "secret": None},
+    AccessKind.SSH: {"url": _SSH, "secret": None},
+    AccessKind.FILE: {"url": _FOLDER, "secret": None},
 }
 _CHOSEN = "a-value-the-caller-chose-for-the-secret"
 _ANSWERS_THAT_HAND_A_SECRET_OUT = (HTTPStatus.OK, HTTPStatus.CREATED)

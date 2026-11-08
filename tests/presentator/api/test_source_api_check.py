@@ -25,6 +25,7 @@ from tests.presentator.api.support.source_api_support import (
     CHECK,
     HTTPS,
     KEY_DRAFT,
+    KIND,
     LIST,
     NEW,
     SAME_ORIGIN,
@@ -47,6 +48,7 @@ from tests.presentator.api.support.source_api_support import (
     checked_body,
     decks_that_must_not_run,
     draft,
+    kind,
     without_raising,
 )
 from tests.presentator.application.support.fakes import A_REACHABLE_CHECK
@@ -71,7 +73,9 @@ def scene(tmp_path: Path) -> Scene:
     return a_scene_that_must_not_run(tmp_path)
 
 
-_ROUTES = pytest.mark.parametrize("send", [draft, check], ids=["key-draft", "check"])
+_ROUTES = pytest.mark.parametrize(
+    "send", [draft, check, kind], ids=["key-draft", "check", "kind"]
+)
 _NOT_SENT_BY_THE_SAME_ORIGIN = pytest.mark.parametrize(
     "headers",
     [
@@ -320,9 +324,7 @@ def test_an_ssh_check_probes_with_the_admins_own_draft_and_never_shows_it() -> N
 
     answer = client.post(
         CHECK,
-        json=checked_body(
-            url=_SSH, access="ssh-deploy-key", secret=None, key_draft_id=drafted["id"]
-        ),
+        json=checked_body(url=_SSH, secret=None, key_draft_id=drafted["id"]),
     )
 
     assert answer.json()["failure"] is None
@@ -347,9 +349,7 @@ def test_an_ssh_check_with_a_foreign_or_stale_draft_is_refused_unprobed(
 
     answer = client.post(
         CHECK,
-        json=checked_body(
-            url=_SSH, access="ssh-deploy-key", secret=None, key_draft_id=sent
-        ),
+        json=checked_body(url=_SSH, secret=None, key_draft_id=sent),
     )
 
     assert answer.status_code == HTTPStatus.OK
@@ -363,13 +363,14 @@ def test_an_ssh_check_with_a_foreign_or_stale_draft_is_refused_unprobed(
 @pytest.mark.parametrize(
     "body",
     [
-        checked_body(access="ssh-deploy-key", secret=None),
         checked_body(url=_USER_PART),
-        checked_body(access="local-folder", secret=None),
+        checked_body(url="http://git.example.invalid/talks.git"),
+        checked_body(url="ftp://git.example.invalid/talks.git"),
+        checked_body(url="   "),
     ],
-    ids=["ssh-for-https", "user-part", "folder-for-https"],
+    ids=["user-part", "plain-http", "ftp", "blank"],
 )
-def test_an_access_that_does_not_match_the_url_is_a_typed_source_refused_problem(
+def test_an_address_naming_no_access_is_a_typed_source_refused_problem(
     body: dict[str, object],
 ) -> None:
     world = a_world()
@@ -378,7 +379,7 @@ def test_an_access_that_does_not_match_the_url_is_a_typed_source_refused_problem
 
     assert_problem(answer, HTTPStatus.UNPROCESSABLE_ENTITY, SENT, "pw")
     problem = answer.json()
-    assert problem["reason"] == SourceRefusal.ACCESS_MISMATCH
+    assert problem["reason"] == SourceRefusal.UNKNOWN_ACCESS
     assert problem["title"] == HTTPStatus.UNPROCESSABLE_ENTITY.phrase
     assert problem["status"] == answer.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     assert problem["type"] == _REFUSED_TYPE
@@ -389,11 +390,10 @@ def test_an_access_that_does_not_match_the_url_is_a_typed_source_refused_problem
 @pytest.mark.parametrize(
     "body",
     [
-        checked_body(access="https"),
-        {"access": "https-token", "secret": SENT},
+        {"secret": SENT},
         checked_body(secret=12345),
     ],
-    ids=["radio-token", "url-missing", "secret-a-number"],
+    ids=["url-missing", "secret-a-number"],
 )
 def test_a_malformed_check_is_the_validation_answer_without_what_was_sent(
     body: dict[str, object],
@@ -406,7 +406,7 @@ def test_a_malformed_check_is_the_validation_answer_without_what_was_sent(
 
 
 # 18
-@pytest.mark.parametrize("path", [KEY_DRAFT, CHECK])
+@pytest.mark.parametrize("path", [KEY_DRAFT, CHECK, KIND])
 def test_a_method_the_routes_do_not_offer_is_the_frameworks_405(path: str) -> None:
     lobby = an_admin_over(decks_that_must_not_run())
 
@@ -424,6 +424,68 @@ def test_the_reserved_name_is_no_source_page() -> None:
     assert_problem(answer, HTTPStatus.NOT_FOUND)
 
 
+# 22
+@pytest.mark.parametrize(
+    ("url", "access"),
+    [
+        (HTTPS, "https-token"),
+        (f"  {HTTPS}  ", "https-token"),
+        (_SSH, "ssh-deploy-key"),
+        ("ssh://git@git.example.invalid/talks.git", "ssh-deploy-key"),
+        ("/srv/decks", "local-folder"),
+        ("http://git.example.invalid/talks.git", None),
+        ("ftp://git.example.invalid/talks.git", None),
+        (_USER_PART, None),
+        ("https://git.example.invalid/a\nb", None),
+        ("", None),
+        ("   ", None),
+    ],
+    ids=[
+        "https",
+        "padded-https",
+        "scp",
+        "ssh-scheme",
+        "folder",
+        "plain-http",
+        "ftp",
+        "user-part",
+        "control-character",
+        "empty",
+        "blank",
+    ],
+)
+def test_the_kind_route_answers_the_access_the_address_names_without_an_error(
+    url: str, access: str | None
+) -> None:
+    lobby = an_admin_over(decks_that_must_not_run())
+
+    answer = kind(lobby.client, url=url)
+
+    assert answer.status_code == HTTPStatus.OK
+    assert answer.json() == {"access": access}
+    assert_no_store(answer)
+
+
+def test_the_kind_route_ignores_what_else_the_request_carries() -> None:
+    lobby = an_admin_over(decks_that_must_not_run())
+
+    answer = lobby.client.post(
+        KIND, json={"url": _SSH, "access": "https-token", "secret": SENT}
+    )
+
+    assert answer.json() == {"access": "ssh-deploy-key"}
+    assert_nothing_returned(answer, SENT)
+
+
+def test_the_kind_route_never_echoes_the_address_it_was_given() -> None:
+    lobby = an_admin_over(decks_that_must_not_run())
+
+    answer = kind(lobby.client, url=_USER_PART)
+
+    assert answer.json() == {"access": None}
+    assert_nothing_returned(answer, "user:pw", "pw")
+
+
 # 19
 _SECRET_NUMBER = 7391825
 
@@ -436,9 +498,7 @@ class _Logged:
 
 
 def _ssh_body(draft_id: str) -> dict[str, object]:
-    return checked_body(
-        url=_SSH, access="ssh-deploy-key", secret=None, key_draft_id=draft_id
-    )
+    return checked_body(url=_SSH, secret=None, key_draft_id=draft_id)
 
 
 def _own_draft_check(_world: World, lobby: Lobby) -> Response:
@@ -484,6 +544,7 @@ _LOGGED = {
     "11 expired": _Logged(_expired_draft, HTTPStatus.OK),
     "12 two admins": _Logged(_second_admins_draft, HTTPStatus.OK),
     "13 reachable": _Logged(_posting(), HTTPStatus.OK),
+    "22 kind of https": _Logged(lambda _w, lobby: kind(lobby.client), HTTPStatus.OK),
     **{
         f"14 {failure.value}": _Logged(
             _posting(),
@@ -495,21 +556,17 @@ _LOGGED = {
     "15 own draft": _Logged(_own_draft_check, HTTPStatus.OK),
     "15 foreign draft": _Logged(_foreign_draft_check, HTTPStatus.OK),
     "15 stale draft": _Logged(_stale_draft_check, HTTPStatus.OK),
-    "16 ssh for https": _Logged(
-        _posting(access="ssh-deploy-key", secret=None), HTTPStatus.UNPROCESSABLE_ENTITY
-    ),
     "16 user part": _Logged(_posting(url=_USER_PART), HTTPStatus.UNPROCESSABLE_ENTITY),
-    "16 folder for https": _Logged(
-        _posting(access="local-folder", secret=None), HTTPStatus.UNPROCESSABLE_ENTITY
-    ),
-    "17 radio token": _Logged(
-        _posting(access="https"), HTTPStatus.UNPROCESSABLE_ENTITY
-    ),
     "17 missing url": _Logged(
-        lambda _w, lobby: lobby.client.post(
-            CHECK, json={"access": "https-token", "secret": SENT}
-        ),
+        lambda _w, lobby: lobby.client.post(CHECK, json={"secret": SENT}),
         HTTPStatus.UNPROCESSABLE_ENTITY,
+    ),
+    "22 kind without an address": _Logged(
+        lambda _w, lobby: lobby.client.post(KIND, json={"url": 7}),
+        HTTPStatus.UNPROCESSABLE_ENTITY,
+    ),
+    "22 kind of a user part": _Logged(
+        lambda _w, lobby: kind(lobby.client, url=_USER_PART), HTTPStatus.OK
     ),
     "17 number": _Logged(
         _posting(secret=_SECRET_NUMBER), HTTPStatus.UNPROCESSABLE_ENTITY
@@ -560,6 +617,6 @@ def test_the_generated_spec_types_the_refusal_and_both_forbidden_answers() -> No
     assert refused["properties"]["reason"]["enum"] == [r.value for r in SourceRefusal]
     assert refused["properties"]["type"]["const"] == _REFUSED_TYPE
     assert {"type", "title", "status", "reason"} <= set(refused["required"])
-    for path in (KEY_DRAFT, CHECK):
+    for path in (KEY_DRAFT, CHECK, KIND):
         forbidden = spec["paths"][path]["post"]["responses"]["403"]
         assert set(forbidden["content"]) == {PROBLEM_MEDIA_TYPE}

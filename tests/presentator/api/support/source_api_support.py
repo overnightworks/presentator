@@ -62,6 +62,7 @@ HAL = "hal-client"
 NEW = f"/api/sources/{RESERVED_SOURCE_NAME}"
 KEY_DRAFT = f"{NEW}/key-draft"
 CHECK = f"{NEW}/check"
+KIND = f"{NEW}/kind"
 A_SOURCE_NAME = "talks"
 SENT = "the-token-this-scenario-sends"
 HTTPS = "https://git.example.invalid/talks.git"
@@ -359,7 +360,6 @@ def checked_body(**changes: object) -> dict[str, object]:
     """A check or create request for an HTTPS source, with these fields changed."""
     return {
         "url": HTTPS,
-        "access": "https-token",
         "secret": SENT,
         "key_draft_id": None,
     } | changes
@@ -367,6 +367,15 @@ def checked_body(**changes: object) -> dict[str, object]:
 
 def draft(client: TestClient, headers: dict[str, str] | None = None) -> Response:
     return client.post(KEY_DRAFT, headers=headers)
+
+
+def kind(
+    client: TestClient,
+    headers: dict[str, str] | None = None,
+    *,
+    url: str = HTTPS,
+) -> Response:
+    return client.post(KIND, json={"url": url}, headers=headers)
 
 
 def check(client: TestClient, headers: dict[str, str] | None = None) -> Response:

@@ -9,12 +9,14 @@ import {
 } from '#lib/api/client.ts';
 import type { components } from '#lib/api/types.ts';
 
+export type AddressAccessView = components['schemas']['AddressAccessView'];
 export type AccessRenewal = components['schemas']['AccessRenewal'];
 export type AccessKind = components['schemas']['AccessKind'];
 export type ConnectionCheckView = components['schemas']['ConnectionCheckView'];
 export type CreatedSourceView = components['schemas']['CreatedSourceView'];
 export type KeyDraftView = components['schemas']['KeyDraftView'];
 export type NewSource = components['schemas']['NewSource'];
+export type SourceAddress = components['schemas']['SourceAddress'];
 export type SourceProbe = components['schemas']['SourceProbe'];
 export type SourceRemovalPreview = components['schemas']['SourceRemovalPreview'];
 export type SourceRunFailure = components['schemas']['SourceRunFailure'];
@@ -34,6 +36,16 @@ type Here = Pick<Location, 'pathname' | 'search'>;
 /** The admin's draft deploy key; asking again before it is used answers the same one. */
 export function openKeyDraft(fetcher: typeof fetch, here: Here): Promise<KeyDraftView> {
 	return postJson<KeyDraftView>(fetcher, `${NEW_SOURCE_PATH}/key-draft`, undefined, here);
+}
+
+/** The access the address names, or null when it names none; the server alone parses it. */
+export async function readAccess(fetcher: typeof fetch, url: string): Promise<AccessKind | null> {
+	const answer = await postJson<AddressAccessView, SourceAddress>(
+		fetcher,
+		`${NEW_SOURCE_PATH}/kind`,
+		{ url }
+	);
+	return answer.access;
 }
 
 /** Probes the address; a reachable answer carries the fingerprint a create needs. */

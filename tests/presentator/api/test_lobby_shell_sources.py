@@ -6,7 +6,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from presentator.application.decks import RESERVED_SOURCE_NAME
-from presentator.contracts.decks import AccessKind
 from presentator.contracts.models import Role
 from tests.presentator.api.support import source_api_support
 from tests.presentator.api.support.source_api_support import (
@@ -32,7 +31,6 @@ SOURCES_PAGE = "/settings/sources"
 _ADDRESS = "git@heimserver:decks.git"
 _A_BOX_FOLDER: dict[str, object] = {
     "url": f"{LOCAL_MOUNT_EXAMPLE}/talks.git",
-    "access": AccessKind.FILE,
     "secret": None,
 }
 

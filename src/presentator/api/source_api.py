@@ -38,6 +38,7 @@ from presentator.contracts.decks import (
     SourceRunFailure,
     SourceRunOutcome,
     SourceState,
+    access_kind_of,
 )
 from presentator.contracts.models import User
 
@@ -49,6 +50,7 @@ _WEBHOOK_SECRET: Final = f"{_SOURCE}/webhook-secret"
 _REMOVAL: Final = f"{_SOURCE}/removal"
 _KEY_DRAFT: Final = f"{_SOURCES}/{RESERVED_SOURCE_NAME}/key-draft"
 _CHECK: Final = f"{_SOURCES}/{RESERVED_SOURCE_NAME}/check"
+_KIND: Final = f"{_SOURCES}/{RESERVED_SOURCE_NAME}/kind"
 _REFUSED: Final = HTTPStatus.UNPROCESSABLE_ENTITY
 _REFUSED_TYPE: Final = (
     "tag:hallucinai.de,2026-09-08:presentator/problems/source-refused"
@@ -127,13 +129,28 @@ class KeyDraftView(BaseModel):
     public_key: str
 
 
-class SourceProbe(BaseModel):
-    """The address, access and credential of a source that is not stored yet."""
+class SourceAddress(BaseModel):
+    """An address as typed, before anything decides what it needs."""
 
     model_config = ConfigDict(frozen=True)
 
     url: str
-    access: AccessKind
+
+
+class AddressAccessView(BaseModel):
+    """The access the address names, or null when it names none."""
+
+    model_config = ConfigDict(frozen=True)
+
+    access: AccessKind | None
+
+
+class SourceProbe(BaseModel):
+    """The address and credential of a source that is not stored yet."""
+
+    model_config = ConfigDict(frozen=True)
+
+    url: str
     secret: SecretStr | None
     key_draft_id: str | None
 
@@ -354,13 +371,15 @@ class _SourceData:
         draft = self.decks.source_key_draft(owner_id=admin.id)
         return KeyDraftView(id=draft.id, public_key=draft.public_key)
 
+    def address_access(self, address: SourceAddress) -> AddressAccessView:
+        return AddressAccessView(access=access_kind_of(address.url.strip()))
+
     def check_connection(
         self, probe: SourceProbe, admin: Annotated[User, Depends(gated_admin)]
     ) -> ConnectionCheckView:
         secret, key_draft_id = probe.in_the_owners_form()
         checked = self.decks.check_connection(
             url=probe.url,
-            access=probe.access,
             secret=secret,
             owner_id=admin.id,
             key_draft_id=key_draft_id,
@@ -381,7 +400,6 @@ class _SourceData:
             NewSourceDraft(
                 name=new.name,
                 url=new.url,
-                access=new.access,
                 secret=secret,
                 fingerprint=new.fingerprint,
                 key_draft_id=key_draft_id,
@@ -464,5 +482,8 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         methods=["POST"],
         responses=forbidden,
         openapi_extra=problem_beside_validation(SourceRefusedProblem),
+    )
+    router.add_api_route(
+        _KIND, data.address_access, methods=["POST"], responses=forbidden
     )
     return router

@@ -94,15 +94,14 @@ class LobbyText:
     sources_column_access: str
     source_name: str
     source_url: str
-    source_access: str
-    source_access_ssh: str
-    source_access_https: str
-    source_access_file: str
     source_access_token: str
     source_access_deploy_key: str
     source_access_local: str
     source_secret: str
     source_secret_info: str
+    source_kind_pending: str
+    source_kind_failed: str
+    source_kind_retry: str
     source_webhook_later: str
     source_deploy_key_heading: str
     source_deploy_key_hint: str
@@ -120,7 +119,7 @@ class LobbyText:
     source_refused_name: str
     source_refused_duplicate_name: str
     source_refused_duplicate_url: str
-    source_refused_access: str
+    source_refused_unknown_access: str
     source_refused_secret: str
     source_refused_not_checked: str
     source_check_reachable: str

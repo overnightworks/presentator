@@ -5,12 +5,12 @@
 
 [file_lines]
 "speech/tests/test_control_voice_status.py" = 1473
-"src/presentator/application/decks.py" = 935
+"src/presentator/application/decks.py" = 920
 "tests/gitmirror/test_mirror.py" = 1112
 "tests/presentator/adapters/test_builds.py" = 1182
 "tests/presentator/adapters/test_decks.py" = 1340
 "tests/presentator/api/test_copresenter.py" = 800
-"tests/presentator/application/test_decks.py" = 1957
+"tests/presentator/application/test_decks.py" = 1902
 
 [function_lines."speech/providers/chatterbox/src/presentator_chatterbox/model.py"]
 "speech_token_chunks" = 84
