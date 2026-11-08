@@ -3,6 +3,7 @@
 import base64
 import functools
 import logging
+import os
 import shlex
 import shutil
 import socket
@@ -375,6 +376,105 @@ def test_a_folder_the_commit_does_not_carry_is_refused_rather_than_empty(
 
     with pytest.raises(MirrorError, match="never-pushed"):
         mirror.export(revision, "never-pushed", into=tmp_path / "work")
+
+
+def _plant_tree(remote: GitRemote, entries: list[tuple[str, str, str]]) -> str:
+    """Write one tree object into the remote, whatever names it carries.
+
+    `git mktree` refuses the names a crafted tree needs, so the raw object is
+    written by hand: each entry is a mode, a name and the hex id it points at.
+    """
+
+    def write(object_type: str, content: bytes) -> str:
+        written = subprocess.run(
+            ["git", "hash-object", "-w", "--literally", "-t", object_type, "--stdin"],
+            capture_output=True,
+            check=True,
+            cwd=remote.bare,
+            input=content,
+        )
+        return written.stdout.decode().strip()
+
+    raw = b"".join(
+        f"{mode} {name}".encode() + b"\0" + bytes.fromhex(target)
+        for mode, name, target in entries
+    )
+    return write("tree", raw)
+
+
+def _push_crafted_deck(remote: GitRemote, name: str) -> None:
+    blob = (
+        subprocess.run(
+            ["git", "hash-object", "-w", "--stdin"],
+            capture_output=True,
+            check=True,
+            cwd=remote.bare,
+            input=b"payload\n",
+        )
+        .stdout.decode()
+        .strip()
+    )
+    below = _plant_tree(remote, [("100644", "payload.txt", blob)])
+    deck = _plant_tree(remote, [("40000", name, below)])
+    root = _plant_tree(remote, [("40000", "deck", deck)])
+    commit = (
+        subprocess.run(
+            ["git", "commit-tree", root, "-m", "a push"],
+            capture_output=True,
+            check=True,
+            cwd=remote.bare,
+            env={
+                **os.environ,
+                "GIT_AUTHOR_NAME": "a test",
+                "GIT_AUTHOR_EMAIL": "test@example.invalid",
+                "GIT_COMMITTER_NAME": "a test",
+                "GIT_COMMITTER_EMAIL": "test@example.invalid",
+            },
+        )
+        .stdout.decode()
+        .strip()
+    )
+    subprocess.run(
+        ["git", "update-ref", f"refs/heads/{MAIN_BRANCH}", commit],
+        check=True,
+        cwd=remote.bare,
+    )
+
+
+@pytest.mark.parametrize("name", [".", "..", ".git"])
+def test_a_tree_entry_that_names_a_directory_of_its_own_ends_the_read_before_any_write(
+    remote: GitRemote,
+    tmp_path: Path,
+    name: str,
+) -> None:
+    _push_crafted_deck(remote, name)
+    mirror = a_mirror(remote.url, directory=tmp_path)
+    revision = mirror.connect().revision
+    assert revision is not None
+    work = tmp_path / "work"
+
+    with pytest.raises(MirrorError):
+        mirror.export(revision, "deck", into=work / "deck")
+
+    assert not work.exists()
+    assert not (tmp_path / "payload.txt").exists()
+
+
+@pytest.mark.parametrize("name", [".github", ".env", "..hidden", "a.b"])
+def test_a_tree_whose_names_merely_start_with_a_dot_is_written_out_as_it_stands(
+    remote: GitRemote,
+    tmp_path: Path,
+    name: str,
+) -> None:
+    _push_crafted_deck(remote, name)
+    mirror = a_mirror(remote.url, directory=tmp_path)
+    revision = mirror.connect().revision
+    assert revision is not None
+    written = tmp_path / "work" / "deck"
+
+    mirror.export(revision, "deck", into=written)
+
+    assert (written / name / "payload.txt").read_bytes() == b"payload\n"
 
 
 def test_pulling_again_brings_what_was_pushed_since(

@@ -15,7 +15,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Final
 
 from gitmirror.model import (
@@ -33,6 +33,9 @@ from gitmirror.model import (
 )
 
 _CREDENTIAL_VARIABLE: Final = "GITMIRROR_CREDENTIAL"
+# A remote's tree is data nobody here wrote; an entry with one of these names
+# cannot be a file or folder of a deck, and writing it would leave the target.
+_UNWRITABLE_ENTRY_NAMES: Final = frozenset({"", ".", "..", ".git"})
 # GitHub, GitLab, and every other host that hands out a read-only token accept
 # any user name beside it, so an operator whose URL names none still reaches a
 # host that insists on one. The caller hands an https URL without a user part,
@@ -459,4 +462,10 @@ def _sanitized(stderr: str, *, secret: str | None) -> str:
 def _tree_entry(record: str) -> TreeEntry:
     attributes, _, path = record.partition("\t")
     _mode, kind, _object = attributes.split()
-    return TreeEntry(name=PurePosixPath(path).name, is_directory=kind == "tree")
+    # The raw last element, because a path type drops a `.` element and would
+    # hide the name that makes a write land in, or above, its own directory.
+    name = path.rpartition("/")[2]
+    if name in _UNWRITABLE_ENTRY_NAMES:
+        message = f"the tree carries an entry named {name!r}"
+        raise MirrorError(message)
+    return TreeEntry(name=name, is_directory=kind == "tree")
