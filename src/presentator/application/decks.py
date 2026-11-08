@@ -162,6 +162,10 @@ def hash_webhook_secret(secret: str) -> bytes:
     return sha256(secret.encode()).digest()
 
 
+def _credential_of(posted: str, deploy_key: DeployKeyDraft | None) -> str:
+    return posted.strip() if deploy_key is None else deploy_key.private_key
+
+
 def _access_matches_url(access: AccessKind | None, url: str) -> bool:
     """Whether the posted access names the kind this URL unambiguously is.
 
@@ -189,10 +193,8 @@ def _refusal_for(
             name == RESERVED_SOURCE_NAME or _SOURCE_NAME.fullmatch(name) is None,
             SourceRefusal.MALFORMED_NAME,
         ),
-        # A wrong radio for this URL is refused here, ahead of what that radio
-        # would otherwise say about the posted secret — a person who picked
-        # the wrong kind reads that, not a sentence about a field its real
-        # kind does not even show.
+        # A wrong radio is refused ahead of what it would say about the secret:
+        # a person who picked the wrong kind reads that first.
         (
             not _access_matches_url(access, url),
             SourceRefusal.ACCESS_MISMATCH,
@@ -450,7 +452,7 @@ class Decks:
                     commit=None,
                     detail=None,
                 )
-        credential = secret.strip() if deploy_key is None else deploy_key.private_key
+        credential = _credential_of(secret, deploy_key)
         probed = self.checker.check(url=address, ref=_ADDED_REF, secret=credential)
         if probed.failure is not None:
             return probed.as_answered()
@@ -525,9 +527,7 @@ class Decks:
         if ssh and deploy_key is None:
             self.key_drafts.mint(owner_id, at=self.clock.now())
             return SourceRefusal.DEPLOY_KEY_UNAVAILABLE
-        credential = (
-            draft.secret.strip() if deploy_key is None else deploy_key.private_key
-        )
+        credential = _credential_of(draft.secret, deploy_key)
         proven = compare_digest(
             draft.fingerprint,
             _connection_fingerprint(

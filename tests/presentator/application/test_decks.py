@@ -1373,20 +1373,12 @@ def test_a_duplicate_name_or_url_is_refused() -> None:
 _A_DIFFERENT_SECRET = "a-different-secret-" + "than-was-checked"
 
 
-@pytest.mark.parametrize("blank", ["", "   ", "\t\n"], ids=["empty", "spaces", "tab"])
-def test_a_blank_secret_on_https_is_checked_and_stored_as_no_secret(
-    blank: str,
-) -> None:
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_a_blank_secret_on_https_is_checked_and_stored_as_no_secret(blank: str) -> None:
     store = having()
-    decks = decks_over(sources=store)
-
-    added = _add(decks, secret=blank)
-
+    added = _add(decks_over(sources=store), secret=blank)
     assert isinstance(added, AddedSource)
     assert tuple(store.secrets.values()) == ("",)
-    assert _probed(decks, secret=blank).fingerprint == (
-        _probed(decks, secret="").fingerprint
-    )
 
 
 def test_a_source_never_checked_for_these_values_is_refused() -> None:

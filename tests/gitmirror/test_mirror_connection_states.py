@@ -1,31 +1,70 @@
 """What a pull or a check says when a source offers no credential, or a wrong one."""
 
+import functools
+import socket
+import threading
+from collections.abc import Generator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from socketserver import BaseServer
 
 import pytest
 
 from gitmirror.mirror import check_connection, connection_state_for_failure
 from gitmirror.model import ConnectionState, CredentialReference
-from tests.gitmirror.test_mirror import (
-    RespondingHandler,
-    UnchallengedHandler,
-    responding_remote,
-)
 from tests.support.git_remote import MAIN_BRANCH, GitRemote
 from tests.support.mirror_support import A_GENEROUS_BOUND, FixedSecret, a_mirror
 
 _A_STORED_REFERENCE = CredentialReference(name="a-stored-secret")
 _DEMANDING_HOSTS = pytest.mark.parametrize(
-    "handler_class",
-    [RespondingHandler, UnchallengedHandler],
+    "challenge",
+    ['Basic realm="git"', None],
     ids=["basic-challenge", "bare"],
 )
 _NO_CREDENTIAL_WORDS = (
     "fatal: could not read Username for 'https://host.example': "
     "terminal prompts disabled"
 )
+
+
+class _DemandsALogin(BaseHTTPRequestHandler):
+    def __init__(
+        self,
+        request: socket.socket,
+        client_address: tuple[str, int],
+        server: BaseServer,
+        *,
+        challenge: str | None,
+    ) -> None:
+        self._challenge = challenge
+        super().__init__(request, client_address, server)
+
+    def do_GET(self) -> None:
+        self.send_response(HTTPStatus.UNAUTHORIZED)
+        if self._challenge is not None:
+            self.send_header("WWW-Authenticate", self._challenge)
+        self.end_headers()
+
+    def log_message(self, *_args: object, **_kwargs: object) -> None:
+        """Silence; the assertion is what a test reports."""
+
+
+@contextmanager
+def a_host_demanding_a_login(challenge: str | None) -> Generator[str]:
+    """A local server answering every request 401, with the challenge if given."""
+    handler = functools.partial(_DemandsALogin, challenge=challenge)
+    server = HTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/repo.git"
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
 
 
 @pytest.mark.parametrize(
@@ -148,11 +187,9 @@ def test_a_stored_empty_credential_pulls_a_public_repository(
 @_DEMANDING_HOSTS
 def test_a_stored_empty_credential_meets_a_demanded_login_as_unreachable(
     tmp_path: Path,
-    handler_class: type[RespondingHandler],
+    challenge: str | None,
 ) -> None:
-    with responding_remote(
-        status=HTTPStatus.UNAUTHORIZED, handler_class=handler_class
-    ) as url:
+    with a_host_demanding_a_login(challenge) as url:
         mirror = a_mirror(
             url,
             directory=tmp_path,
@@ -167,11 +204,9 @@ def test_a_stored_empty_credential_meets_a_demanded_login_as_unreachable(
 
 @_DEMANDING_HOSTS
 def test_a_check_without_a_secret_meets_a_demanded_login_as_unreachable(
-    handler_class: type[RespondingHandler],
+    challenge: str | None,
 ) -> None:
-    with responding_remote(
-        status=HTTPStatus.UNAUTHORIZED, handler_class=handler_class
-    ) as url:
+    with a_host_demanding_a_login(challenge) as url:
         checked = check_connection(
             url=url,
             ref=MAIN_BRANCH,

@@ -260,8 +260,6 @@ def _dumb_http_remote(
 class RespondingHandler(BaseHTTPRequestHandler):
     """Every request meets one canned status and body, whatever git asks for."""
 
-    challenges = True
-
     def __init__(
         self,
         request: socket.socket,
@@ -278,7 +276,7 @@ class RespondingHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         self.send_response(self._status)
-        if self._status is HTTPStatus.UNAUTHORIZED and self.challenges:
+        if self._status is HTTPStatus.UNAUTHORIZED:
             self.send_header("WWW-Authenticate", 'Basic realm="git"')
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
@@ -288,25 +286,10 @@ class RespondingHandler(BaseHTTPRequestHandler):
         """Silence; the assertion is what a test reports, not the socket chatter."""
 
 
-class UnchallengedHandler(RespondingHandler):
-    """A 401 that names no scheme, as a proxy in front of a private host does."""
-
-    challenges = False
-
-
 @contextmanager
-def responding_remote(
-    *,
-    status: HTTPStatus,
-    body: bytes = b"",
-    handler_class: type[RespondingHandler] = RespondingHandler,
-) -> Generator[str]:
+def _responding_remote(*, status: HTTPStatus, body: bytes = b"") -> Generator[str]:
     """A local HTTP server that answers one status and body to every request."""
-    handler = functools.partial(
-        handler_class,
-        status=status,
-        body=body,
-    )
+    handler = functools.partial(RespondingHandler, status=status, body=body)
     server = HTTPServer((_LOOPBACK, 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -871,7 +854,7 @@ def test_a_wrong_secret_is_refused(
 def test_a_host_that_answers_something_other_than_the_repository_is_named_failed(
     tmp_path: Path,
 ) -> None:
-    with responding_remote(
+    with _responding_remote(
         status=HTTPStatus.NOT_FOUND,
         body=b"Repository not found.\n",
     ) as url:
@@ -896,7 +879,7 @@ def test_a_failed_pull_logs_gits_words_with_the_urls_userinfo_hidden(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     caplog.set_level(logging.WARNING, logger="gitmirror.mirror")
-    with responding_remote(status=HTTPStatus.UNAUTHORIZED) as remote_url:
+    with _responding_remote(status=HTTPStatus.UNAUTHORIZED) as remote_url:
         leaking_url = remote_url.replace("//", f"//{_LEAKED_USERINFO}@")
         refused = a_mirror(
             leaking_url,
@@ -924,7 +907,7 @@ def test_a_failed_pull_hides_userinfo_the_remote_reflects_back(
     reflected = (
         "retry at https://mirror-user:mirror-secret@mirror.example.invalid/repo.git"
     )
-    with responding_remote(
+    with _responding_remote(
         status=HTTPStatus.FORBIDDEN,
         body=reflected.encode(),
     ) as remote_url:
@@ -942,7 +925,7 @@ def test_a_failed_pull_hides_the_secret_the_remote_reflects_back(
 ) -> None:
     caplog.set_level(logging.WARNING, logger="gitmirror.mirror")
     resolved = f"{WHAT_THE_RESOLVER_ANSWERS} for {_TOKEN_REFERENCE.name}"
-    with responding_remote(
+    with _responding_remote(
         status=HTTPStatus.FORBIDDEN,
         body=f"token rejected: {resolved}".encode(),
     ) as remote_url:
@@ -1015,7 +998,7 @@ def test_a_checks_wrong_secret_is_refused(remote: GitRemote) -> None:
 
 
 def test_a_check_of_a_host_that_answers_something_else_is_named_failed() -> None:
-    with responding_remote(
+    with _responding_remote(
         status=HTTPStatus.NOT_FOUND,
         body=b"Repository not found.\n",
     ) as url:
@@ -1036,7 +1019,7 @@ def test_a_failed_checks_detail_hides_userinfo_the_remote_reflects_back() -> Non
     reflected = (
         "retry at https://mirror-user:mirror-secret@mirror.example.invalid/repo.git"
     )
-    with responding_remote(
+    with _responding_remote(
         status=HTTPStatus.FORBIDDEN,
         body=reflected.encode(),
     ) as url:
@@ -1053,7 +1036,7 @@ def test_a_failed_checks_detail_hides_userinfo_the_remote_reflects_back() -> Non
 
 
 def test_a_failed_checks_detail_hides_the_secret_the_remote_reflects_back() -> None:
-    with responding_remote(
+    with _responding_remote(
         status=HTTPStatus.FORBIDDEN,
         body=f"token rejected: {WHAT_THE_RESOLVER_ANSWERS}".encode(),
     ) as url:
