@@ -1,8 +1,0 @@
-claim_id = "7e8953f236df4658920803347124a983"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "414d528b5577e9076c58e13ffdf212d13391901f"
-branch = "claude/issue-724-dependabot-moves-uv-the-image-takes-it-f"
-scope = [".github/actions/setup-uv/action.yml", ".github/dependabot.yml", ".github/workflows/ci.yml", ".github/workflows/pr-check.yml", "Dockerfile"]
-opened_commit = "35164303cbd2f1cf7b671b75305096db543106cd"
-whole_reason = "The FROM line, the action that reads it and every step that calls that action are one owner: a part alone leaves two uv versions or a red CI."
