@@ -1,8 +1,0 @@
-claim_id = "420486576b604579be3429b666439351"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "18549c216c07a45c2f83f770996fce4bf6597f78"
-branch = "claude/issue-902-presentator-holds-its-mcp-realm-names-as"
-scope = ["docs/configuration.md", "docs/runbooks/configure-keycloak.md", "src/presentator/agent/mcp.py", "src/presentator/agent/settings.py", "src/presentator/api/auth.py", "src/presentator/host/config.py", "src/presentator/host/main.py", "tests"]
-opened_commit = "3e77be150e25f99179be16cbef82eeac10a4d94e"
-whole_reason = "The four names, the settings block they leave and the switch it carried are one configuration owner from settings through the host to the front."
