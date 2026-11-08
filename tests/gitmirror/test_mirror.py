@@ -26,7 +26,6 @@ from gitmirror.mirror import (
     CREDENTIAL_USER_NAME,
     GitMirror,
     check_connection,
-    connection_state_for_failure,
     credential_arguments,
     is_ssh_remote,
     unattended_environment,
@@ -269,15 +268,17 @@ class RespondingHandler(BaseHTTPRequestHandler):
         *,
         status: HTTPStatus,
         body: bytes,
+        challenge: bool = True,
     ) -> None:
         """Remember the canned answer before the base class starts serving it."""
         self._status = status
         self._body = body
+        self._challenge = challenge
         super().__init__(request, client_address, server)
 
     def do_GET(self) -> None:
         self.send_response(self._status)
-        if self._status is HTTPStatus.UNAUTHORIZED:
+        if self._status is HTTPStatus.UNAUTHORIZED and self._challenge:
             self.send_header("WWW-Authenticate", 'Basic realm="git"')
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
@@ -288,9 +289,19 @@ class RespondingHandler(BaseHTTPRequestHandler):
 
 
 @contextmanager
-def _responding_remote(*, status: HTTPStatus, body: bytes = b"") -> Generator[str]:
+def responding_remote(
+    *,
+    status: HTTPStatus,
+    body: bytes = b"",
+    challenge: bool = True,
+) -> Generator[str]:
     """A local HTTP server that answers one status and body to every request."""
-    handler = functools.partial(RespondingHandler, status=status, body=body)
+    handler = functools.partial(
+        RespondingHandler,
+        status=status,
+        body=body,
+        challenge=challenge,
+    )
     server = HTTPServer((_LOOPBACK, 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -776,85 +787,6 @@ def test_a_pull_that_runs_past_its_bound_is_named_unreachable(
     assert connection.revision is None
 
 
-@pytest.mark.parametrize(
-    ("stderr", "expected"),
-    [
-        pytest.param(
-            "fatal: Authentication failed for 'https://host.example/repo.git/'",
-            ConnectionState.REFUSED,
-            id="authentication-failed-footer",
-        ),
-        pytest.param(
-            "remote: Invalid username or token.\n"
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "The requested URL returned error: 403",
-            ConnectionState.REFUSED,
-            id="invalid-username-or-token-body",
-        ),
-        pytest.param(
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "The requested URL returned error: 401",
-            ConnectionState.REFUSED,
-            id="bare-401-status",
-        ),
-        pytest.param(
-            "git@host.example: Permission denied (publickey).\n"
-            "fatal: Could not read from remote repository.",
-            ConnectionState.REFUSED,
-            id="ssh-deploy-key-no-longer-registered",
-        ),
-        pytest.param(
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "Could not resolve host: host.example",
-            ConnectionState.UNREACHABLE,
-            id="could-not-resolve-host",
-        ),
-        pytest.param(
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "SSL certificate problem: unable to get local issuer certificate",
-            ConnectionState.FAILED,
-            id="a-tls-certificate-failure-is-not-proof-the-host-never-answered",
-        ),
-        pytest.param(
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "Failed to connect to host.example port 443: Couldn't connect to server",
-            ConnectionState.UNREACHABLE,
-            id="failed-to-connect",
-        ),
-        pytest.param(
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "Connection timed out",
-            ConnectionState.UNREACHABLE,
-            id="connection-timed-out",
-        ),
-        pytest.param(
-            "remote: Repository not found.\n"
-            "fatal: repository 'https://host.example/repo.git/' not found",
-            ConnectionState.FAILED,
-            id="repository-not-found",
-        ),
-        pytest.param(
-            "remote: Forbidden by WAF\n"
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "The requested URL returned error: 403",
-            ConnectionState.FAILED,
-            id="bare-403-without-auth-wording",
-        ),
-        pytest.param(
-            "fatal: could not read Username for 'https://host.example': "
-            "terminal prompts disabled",
-            ConnectionState.FAILED,
-            id="no-credential-configured-at-all",
-        ),
-    ],
-)
-def test_a_failed_pulls_own_words_choose_the_reason(
-    stderr: str,
-    expected: ConnectionState,
-) -> None:
-    assert connection_state_for_failure(stderr) is expected
-
-
 def test_a_url_without_a_user_name_authenticates_as_the_constant_user(
     remote: GitRemote,
     tmp_path: Path,
@@ -934,7 +866,7 @@ def test_a_wrong_secret_is_refused(
 def test_a_host_that_answers_something_other_than_the_repository_is_named_failed(
     tmp_path: Path,
 ) -> None:
-    with _responding_remote(
+    with responding_remote(
         status=HTTPStatus.NOT_FOUND,
         body=b"Repository not found.\n",
     ) as url:
@@ -959,7 +891,7 @@ def test_a_failed_pull_logs_gits_words_with_the_urls_userinfo_hidden(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     caplog.set_level(logging.WARNING, logger="gitmirror.mirror")
-    with _responding_remote(status=HTTPStatus.UNAUTHORIZED) as remote_url:
+    with responding_remote(status=HTTPStatus.UNAUTHORIZED) as remote_url:
         leaking_url = remote_url.replace("//", f"//{_LEAKED_USERINFO}@")
         refused = a_mirror(
             leaking_url,
@@ -987,7 +919,7 @@ def test_a_failed_pull_hides_userinfo_the_remote_reflects_back(
     reflected = (
         "retry at https://mirror-user:mirror-secret@mirror.example.invalid/repo.git"
     )
-    with _responding_remote(
+    with responding_remote(
         status=HTTPStatus.FORBIDDEN,
         body=reflected.encode(),
     ) as remote_url:
@@ -1005,7 +937,7 @@ def test_a_failed_pull_hides_the_secret_the_remote_reflects_back(
 ) -> None:
     caplog.set_level(logging.WARNING, logger="gitmirror.mirror")
     resolved = f"{WHAT_THE_RESOLVER_ANSWERS} for {_TOKEN_REFERENCE.name}"
-    with _responding_remote(
+    with responding_remote(
         status=HTTPStatus.FORBIDDEN,
         body=f"token rejected: {resolved}".encode(),
     ) as remote_url:
@@ -1078,7 +1010,7 @@ def test_a_checks_wrong_secret_is_refused(remote: GitRemote) -> None:
 
 
 def test_a_check_of_a_host_that_answers_something_else_is_named_failed() -> None:
-    with _responding_remote(
+    with responding_remote(
         status=HTTPStatus.NOT_FOUND,
         body=b"Repository not found.\n",
     ) as url:
@@ -1099,7 +1031,7 @@ def test_a_failed_checks_detail_hides_userinfo_the_remote_reflects_back() -> Non
     reflected = (
         "retry at https://mirror-user:mirror-secret@mirror.example.invalid/repo.git"
     )
-    with _responding_remote(
+    with responding_remote(
         status=HTTPStatus.FORBIDDEN,
         body=reflected.encode(),
     ) as url:
@@ -1116,7 +1048,7 @@ def test_a_failed_checks_detail_hides_userinfo_the_remote_reflects_back() -> Non
 
 
 def test_a_failed_checks_detail_hides_the_secret_the_remote_reflects_back() -> None:
-    with _responding_remote(
+    with responding_remote(
         status=HTTPStatus.FORBIDDEN,
         body=f"token rejected: {WHAT_THE_RESOLVER_ANSWERS}".encode(),
     ) as url:
