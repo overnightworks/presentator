@@ -260,6 +260,8 @@ def _dumb_http_remote(
 class RespondingHandler(BaseHTTPRequestHandler):
     """Every request meets one canned status and body, whatever git asks for."""
 
+    challenges = True
+
     def __init__(
         self,
         request: socket.socket,
@@ -268,17 +270,15 @@ class RespondingHandler(BaseHTTPRequestHandler):
         *,
         status: HTTPStatus,
         body: bytes,
-        challenge: bool = True,
     ) -> None:
         """Remember the canned answer before the base class starts serving it."""
         self._status = status
         self._body = body
-        self._challenge = challenge
         super().__init__(request, client_address, server)
 
     def do_GET(self) -> None:
         self.send_response(self._status)
-        if self._status is HTTPStatus.UNAUTHORIZED and self._challenge:
+        if self._status is HTTPStatus.UNAUTHORIZED and self.challenges:
             self.send_header("WWW-Authenticate", 'Basic realm="git"')
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
@@ -288,19 +288,24 @@ class RespondingHandler(BaseHTTPRequestHandler):
         """Silence; the assertion is what a test reports, not the socket chatter."""
 
 
+class UnchallengedHandler(RespondingHandler):
+    """A 401 that names no scheme, as a proxy in front of a private host does."""
+
+    challenges = False
+
+
 @contextmanager
 def responding_remote(
     *,
     status: HTTPStatus,
     body: bytes = b"",
-    challenge: bool = True,
+    handler_class: type[RespondingHandler] = RespondingHandler,
 ) -> Generator[str]:
     """A local HTTP server that answers one status and body to every request."""
     handler = functools.partial(
-        RespondingHandler,
+        handler_class,
         status=status,
         body=body,
-        challenge=challenge,
     )
     server = HTTPServer((_LOOPBACK, 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

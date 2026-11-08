@@ -313,7 +313,6 @@ _REFUSALS = {
     "access mismatch": _Refused(
         SourceRefusal.ACCESS_MISMATCH, {"access": "ssh-deploy-key", "secret": None}
     ),
-    "missing secret": _Refused(SourceRefusal.BLANK_ACCESS, {"secret": None}),
     "not checked": _Refused(
         SourceRefusal.NOT_CHECKED, {"fingerprint": "a-proof-for-nothing"}
     ),
@@ -457,6 +456,17 @@ def test_a_local_folder_under_the_mount_is_stored_by_its_canonical_address() -> 
     (stored,) = world.store.sources
     assert answer.status_code == HTTPStatus.CREATED
     assert stored.url == str(FakeLocalMount().canonical_repository(_FOLDER))
+    assert_no_store(answer)
+
+
+def test_an_https_source_without_a_secret_is_created() -> None:
+    world = a_world()
+    client = an_admin_over(world.decks).client
+
+    answer = create(client, secret=None)
+
+    assert answer.status_code == HTTPStatus.CREATED
+    assert len(world.store.sources) == 1
     assert_no_store(answer)
 
 

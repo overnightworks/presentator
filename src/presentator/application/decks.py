@@ -94,7 +94,6 @@ class SourceRefusal(StrEnum):
     DUPLICATE_NAME = "duplicate-name"
     DUPLICATE_URL = "duplicate-url"
     ACCESS_MISMATCH = "access-mismatch"
-    BLANK_ACCESS = "missing-secret"
     NOT_CHECKED = "not-checked"
     CREDENTIAL_NOT_ALLOWED = "credential-not-allowed"
     OUTSIDE_MOUNT = "outside-local-mount"
@@ -198,7 +197,6 @@ def _refusal_for(
             not _access_matches_url(access, url),
             SourceRefusal.ACCESS_MISMATCH,
         ),
-        (access is AccessKind.HTTPS and not secret.strip(), SourceRefusal.BLANK_ACCESS),
         (
             access in (AccessKind.FILE, AccessKind.SSH) and bool(secret.strip()),
             SourceRefusal.CREDENTIAL_NOT_ALLOWED,
@@ -452,7 +450,7 @@ class Decks:
                     commit=None,
                     detail=None,
                 )
-        credential = secret if deploy_key is None else deploy_key.private_key
+        credential = secret.strip() if deploy_key is None else deploy_key.private_key
         probed = self.checker.check(url=address, ref=_ADDED_REF, secret=credential)
         if probed.failure is not None:
             return probed.as_answered()
@@ -527,7 +525,9 @@ class Decks:
         if ssh and deploy_key is None:
             self.key_drafts.mint(owner_id, at=self.clock.now())
             return SourceRefusal.DEPLOY_KEY_UNAVAILABLE
-        credential = draft.secret if deploy_key is None else deploy_key.private_key
+        credential = (
+            draft.secret.strip() if deploy_key is None else deploy_key.private_key
+        )
         proven = compare_digest(
             draft.fingerprint,
             _connection_fingerprint(

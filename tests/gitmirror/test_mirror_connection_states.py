@@ -1,5 +1,6 @@
 """What a pull or a check says when a source offers no credential, or a wrong one."""
 
+from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 
@@ -7,11 +8,20 @@ import pytest
 
 from gitmirror.mirror import check_connection, connection_state_for_failure
 from gitmirror.model import ConnectionState, CredentialReference
-from tests.gitmirror.test_mirror import _A_DECK, _PUSHED_AT, responding_remote
+from tests.gitmirror.test_mirror import (
+    RespondingHandler,
+    UnchallengedHandler,
+    responding_remote,
+)
 from tests.support.git_remote import MAIN_BRANCH, GitRemote
 from tests.support.mirror_support import A_GENEROUS_BOUND, FixedSecret, a_mirror
 
 _A_STORED_REFERENCE = CredentialReference(name="a-stored-secret")
+_DEMANDING_HOSTS = pytest.mark.parametrize(
+    "handler_class",
+    [RespondingHandler, UnchallengedHandler],
+    ids=["basic-challenge", "bare"],
+)
 _NO_CREDENTIAL_WORDS = (
     "fatal: could not read Username for 'https://host.example': "
     "terminal prompts disabled"
@@ -118,7 +128,10 @@ def test_a_stored_empty_credential_pulls_a_public_repository(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit(_A_DECK, at=_PUSHED_AT)
+    remote.commit(
+        {"a-deck/slides.md": "# Hello\n"},
+        at=datetime(2026, 1, 15, 9, tzinfo=UTC),
+    )
     mirror = a_mirror(
         remote.url,
         directory=tmp_path,
@@ -132,13 +145,14 @@ def test_a_stored_empty_credential_pulls_a_public_repository(
     assert connection.revision is not None
 
 
-@pytest.mark.parametrize("challenge", [True, False], ids=["basic-challenge", "bare"])
+@_DEMANDING_HOSTS
 def test_a_stored_empty_credential_meets_a_demanded_login_as_unreachable(
     tmp_path: Path,
-    *,
-    challenge: bool,
+    handler_class: type[RespondingHandler],
 ) -> None:
-    with responding_remote(status=HTTPStatus.UNAUTHORIZED, challenge=challenge) as url:
+    with responding_remote(
+        status=HTTPStatus.UNAUTHORIZED, handler_class=handler_class
+    ) as url:
         mirror = a_mirror(
             url,
             directory=tmp_path,
@@ -151,12 +165,13 @@ def test_a_stored_empty_credential_meets_a_demanded_login_as_unreachable(
     assert connection.revision is None
 
 
-@pytest.mark.parametrize("challenge", [True, False], ids=["basic-challenge", "bare"])
+@_DEMANDING_HOSTS
 def test_a_check_without_a_secret_meets_a_demanded_login_as_unreachable(
-    *,
-    challenge: bool,
+    handler_class: type[RespondingHandler],
 ) -> None:
-    with responding_remote(status=HTTPStatus.UNAUTHORIZED, challenge=challenge) as url:
+    with responding_remote(
+        status=HTTPStatus.UNAUTHORIZED, handler_class=handler_class
+    ) as url:
         checked = check_connection(
             url=url,
             ref=MAIN_BRANCH,

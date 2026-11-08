@@ -83,7 +83,7 @@ RECENT_SOURCE_RUNS: Final = 3
 class AccessKind(StrEnum):
     """How a source is read, derived from its URL's scheme and nothing else.
 
-    HTTPS is a token; SSH and the scp form are a deploy key; a `file://`
+    HTTPS may carry a token; SSH and the scp form are a deploy key; a `file://`
     address or a bare absolute path is this box's own mount, and carries no
     secret at all. The radio on the form has to match this, and a mismatch is
     refused rather than stored as a fourth kind.
@@ -183,9 +183,9 @@ def _remote_access_kind_of(url: str) -> AccessKind | None:
 def access_kind_of(url: str) -> AccessKind | None:
     """The access the URL's scheme names, or nothing when it names none.
 
-    HTTPS is a token; SSH and the scp form (`git@host:path`) are a deploy
-    key; `file://` or a bare absolute path is this box's own mount. Anything
-    else is not an access this product has, and that includes a remote
+    HTTPS may carry a token; SSH and the scp form (`git@host:path`) are a
+    deploy key; `file://` or a bare absolute path is this box's own mount.
+    Anything else is not an access this product has, and that includes a remote
     address whose host could be read two ways and any address holding a
     control character.
     """

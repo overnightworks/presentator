@@ -58,7 +58,6 @@ describe('refusalWords', () => {
 		{ reason: 'duplicate-name', worded: 'that name is taken' },
 		{ reason: 'duplicate-url', worded: 'that address is taken' },
 		{ reason: 'access-mismatch', worded: 'the access does not fit the address' },
-		{ reason: 'missing-secret', worded: 'a secret is missing' },
 		{ reason: 'not-checked', worded: 'check first' },
 		{ reason: 'credential-not-allowed', worded: 'no secret here' },
 		{ reason: 'outside-local-mount', worded: 'outside the mount' },

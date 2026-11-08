@@ -263,7 +263,7 @@ export interface components {
          * AccessKind
          * @description How a source is read, derived from its URL's scheme and nothing else.
          *
-         *     HTTPS is a token; SSH and the scp form are a deploy key; a `file://`
+         *     HTTPS may carry a token; SSH and the scp form are a deploy key; a `file://`
          *     address or a bare absolute path is this box's own mount, and carries no
          *     secret at all. The radio on the form has to match this, and a mismatch is
          *     refused rather than stored as a fourth kind.
@@ -1443,7 +1443,7 @@ export interface operations {
                         /** Detail */
                         detail?: string | null;
                         /** @enum {string} */
-                        reason: "malformed-name" | "duplicate-name" | "duplicate-url" | "access-mismatch" | "missing-secret" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
+                        reason: "malformed-name" | "duplicate-name" | "duplicate-url" | "access-mismatch" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
                         /** Status */
                         status: number;
                         /** Title */
@@ -1513,7 +1513,7 @@ export interface operations {
                         /** Detail */
                         detail?: string | null;
                         /** @enum {string} */
-                        reason: "malformed-name" | "duplicate-name" | "duplicate-url" | "access-mismatch" | "missing-secret" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
+                        reason: "malformed-name" | "duplicate-name" | "duplicate-url" | "access-mismatch" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
                         /** Status */
                         status: number;
                         /** Title */

@@ -14,3 +14,5 @@ about sources stand in [configuration](configuration.md) and the runbook to
 - **SR4** Sources stay shared among admins, and a source's page lists only the
   viewing admin's own decks.
 - **SR5** Only admins create sources.
+- **SR6** An https address may carry no secret, and a private repository
+  without one fails Check connection as unreachable.

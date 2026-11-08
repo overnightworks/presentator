@@ -2,7 +2,7 @@
   "components": {
     "schemas": {
       "AccessKind": {
-        "description": "How a source is read, derived from its URL's scheme and nothing else.\n\nHTTPS is a token; SSH and the scp form are a deploy key; a `file://`\naddress or a bare absolute path is this box's own mount, and carries no\nsecret at all. The radio on the form has to match this, and a mismatch is\nrefused rather than stored as a fourth kind.",
+        "description": "How a source is read, derived from its URL's scheme and nothing else.\n\nHTTPS may carry a token; SSH and the scp form are a deploy key; a `file://`\naddress or a bare absolute path is this box's own mount, and carries no\nsecret at all. The radio on the form has to match this, and a mismatch is\nrefused rather than stored as a fourth kind.",
         "enum": [
           "https-token",
           "ssh-deploy-key",
@@ -2521,7 +2521,6 @@
                         "duplicate-name",
                         "duplicate-url",
                         "access-mismatch",
-                        "missing-secret",
                         "not-checked",
                         "credential-not-allowed",
                         "outside-local-mount",
@@ -2656,7 +2655,6 @@
                         "duplicate-name",
                         "duplicate-url",
                         "access-mismatch",
-                        "missing-secret",
                         "not-checked",
                         "credential-not-allowed",
                         "outside-local-mount",
