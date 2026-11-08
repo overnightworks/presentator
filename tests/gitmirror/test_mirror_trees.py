@@ -116,3 +116,18 @@ def test_a_tree_whose_names_merely_start_with_a_dot_is_written_out_as_it_stands(
 
     assert (written / name / "payload.txt").read_bytes() == b"payload\n"
 
+
+def test_a_listing_record_with_an_empty_name_is_rejected(
+    remote: GitRemote,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _push_crafted_deck(remote, "sub")
+    mirror = a_mirror(remote.url, directory=tmp_path)
+    revision = mirror.connect().revision
+    assert revision is not None
+    listing = b"100644 blob " + b"0" * 40 + b"\t\0"
+    monkeypatch.setattr(type(mirror), "_run", lambda *_a, **_k: listing)
+
+    with pytest.raises(MirrorError):
+        mirror.entries(revision, inside="deck")
