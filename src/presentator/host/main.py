@@ -7,7 +7,8 @@ adapter satisfies which port.
 import asyncio
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import timedelta
 from functools import partial
@@ -532,14 +533,20 @@ def served_by_host(instance: Instance, settings: Settings) -> Router:
     not serve, with a port or without, gets the router's 404 and a socket is
     refused, so neither app ever answers under the other's name.
     """
-    # Starlette runs only this router's lifespan, never a `Host` sub-app's, so the
-    # lobby's own is entered here.
+
+    @asynccontextmanager
+    async def lifespan(_: Router) -> AsyncGenerator[None]:
+        # Starlette runs only this router's lifespan, never a `Host` sub-app's, so
+        # the lobby's own is entered here.
+        async with instance.lobby.router.lifespan_context(instance.lobby):
+            yield
+
     return Router(
         routes=[
             Host(str(urlsplit(settings.public_origin).hostname), instance.lobby),
             Host(str(urlsplit(settings.talk_origin).hostname), instance.talk),
         ],
-        lifespan=lambda _: instance.lobby.router.lifespan_context(instance.lobby),
+        lifespan=lifespan,
     )
 
 

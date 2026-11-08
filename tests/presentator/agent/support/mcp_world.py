@@ -6,7 +6,7 @@ calls with a bearer alone.
 """
 
 import json
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -53,7 +53,6 @@ class World:
     MCP_URL = f"{A_BROWSERS_ADDRESS}{MCP_ENDPOINT_PATH}"
     METADATA_PATH = f"/.well-known/oauth-protected-resource{MCP_ENDPOINT_PATH}"
     JSON: ClassVar[dict[str, str]] = {"accept": "application/json"}
-    PROTOCOL: ClassVar[dict[str, str]] = {PROTOCOL_VERSION_HEADER: PROTOCOL_VERSION}
     FELIX_DECK = "felix-deck"
     ANNA_DECK = "anna-deck"
     AGENT_BOT = "subject-of-a-service-account"
@@ -130,7 +129,7 @@ def a_world(
     token_clients: frozenset[str] = frozenset(),
     texts: DeckTexts | None = None,
     entering_the_lifespan: bool = True,
-) -> Iterator[World]:
+) -> Generator[World]:
     """A world whose app runs its lifespan for as long as the block lasts.
 
     A test that serves the app through its own lifespan asks for a world that
@@ -177,7 +176,7 @@ def _a_world_over(
 
 def rpc(method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     """A request of the served revision: its `_meta` names the revision."""
-    meta = {
+    meta: dict[str, object] = {
         PROTOCOL_VERSION_META_KEY: PROTOCOL_VERSION,
         CLIENT_CAPABILITIES_META_KEY: {},
     }

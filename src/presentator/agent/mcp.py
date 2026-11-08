@@ -6,7 +6,7 @@ account, by the time it runs, and every tool call goes through the whole lobby a
 again, so it meets the same middleware as any request.
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from agent_runtime_client.mcp_server import McpPersonFront, RouteTools, route_tools
@@ -68,7 +68,7 @@ def _run_front_with_the_lobby(lobby: FastAPI, front: McpPersonFront) -> None:
     enclosed = lobby.router.lifespan_context
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         async with enclosed(app), front.running():
             yield
 
