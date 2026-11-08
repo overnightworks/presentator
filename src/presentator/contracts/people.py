@@ -151,6 +151,7 @@ class SourceExport:
     name: str
     url: str
     ref: str
+    folder: str
     public_key: str | None
     decks: tuple[DeckExport, ...]
     runs: tuple[RunExport, ...]

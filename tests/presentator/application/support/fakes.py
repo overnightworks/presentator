@@ -282,6 +282,7 @@ class FakeSourceStore:
             ref=write.ref,
             owner_id=write.owner_id,
             public_key=write.public_key,
+            folder=write.folder,
         )
         self.sources.append(stored)
         self.hashes[write.name] = write.hook_secret_hash

@@ -49,13 +49,14 @@ class MirroredDeckTexts:
         if mirror is None:
             raise CoPresenterUnavailableError
         revision = Revision(ref=source.ref, commit=deck.build.commit)
+        path = source.deck_path(deck.slug)
         try:
-            names = {entry.name for entry in mirror.entries(revision, inside=deck.slug)}
+            names = {entry.name for entry in mirror.entries(revision, inside=path)}
             if SLIDES_FILE not in names:
                 return None
-            markdown = mirror.read(revision, f"{deck.slug}/{SLIDES_FILE}").decode()
+            markdown = mirror.read(revision, f"{path}/{SLIDES_FILE}").decode()
             manifest_bytes = (
-                mirror.read(revision, f"{deck.slug}/{MANIFEST_FILE}")
+                mirror.read(revision, f"{path}/{MANIFEST_FILE}")
                 if MANIFEST_FILE in names
                 else None
             )

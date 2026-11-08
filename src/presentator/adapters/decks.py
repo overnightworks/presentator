@@ -51,7 +51,8 @@ from presentator.contracts.decks import (
 from presentator.ports.decks import LocalMount
 from presentator.ports.identity import IdentifierFactory
 
-_SCHEMA: Final = """
+FOLDER_COLUMN: Final = "folder TEXT NOT NULL DEFAULT ''"
+_SCHEMA: Final = f"""
 CREATE TABLE IF NOT EXISTS sources (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
@@ -60,7 +61,8 @@ CREATE TABLE IF NOT EXISTS sources (
     encrypted_secret BLOB NOT NULL,
     hook_secret_hash BLOB,
     owner_id TEXT NOT NULL REFERENCES users(id),
-    ssh_public_key TEXT
+    ssh_public_key TEXT,
+    {FOLDER_COLUMN}
 );
 -- One admin's own unbound deploy key: never a source, swept once a
 -- day old, never read by anyone who did not mint it.
@@ -103,12 +105,13 @@ CREATE TABLE IF NOT EXISTS source_runs (
 """
 _ADD_SOURCE: Final = """
 INSERT INTO sources
-    (id, name, url, ref, encrypted_secret, hook_secret_hash, owner_id, ssh_public_key)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    (id, name, url, ref, encrypted_secret, hook_secret_hash, owner_id, ssh_public_key,
+     folder)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 _HOOK_HASH_BY_NAME: Final = "SELECT hook_secret_hash FROM sources WHERE name = ?"
 _ALL_SOURCES: Final = """
-SELECT id, name, url, ref, owner_id, ssh_public_key
+SELECT id, name, url, ref, owner_id, ssh_public_key, folder
 FROM sources
 """
 _REMOVE_SOURCE: Final = "DELETE FROM sources WHERE id = ?"
@@ -128,7 +131,7 @@ _PUT_HOOK_HASH: Final = "UPDATE sources SET hook_secret_hash = ? WHERE name = ?"
 _ONE_ROW: Final = 1
 # What a pull needs and nothing else: the ciphertext this instance can open.
 _SOURCE_ANCHOR: Final = "SELECT encrypted_secret FROM sources WHERE id = ?"
-_SourceRow = tuple[str, str, str, str, str, str | None]
+_SourceRow = tuple[str, str, str, str, str, str | None, str]
 _UNREADABLE_SOURCE: Final = "source %s cannot be read: %s"
 _UNREADABLE_MANIFEST: Final = "folder %s has no readable title, keeps its listing: %s"
 _OUTSIDE_MOUNT: Final = (
@@ -212,6 +215,7 @@ class SqliteSourceStore:
                         write.hook_secret_hash,
                         write.owner_id,
                         write.public_key,
+                        write.folder,
                     ),
                 )
         except sqlite3.IntegrityError:
@@ -223,6 +227,7 @@ class SqliteSourceStore:
             ref=write.ref,
             owner_id=write.owner_id,
             public_key=write.public_key,
+            folder=write.folder,
         )
 
     def add_from_draft(self, write: SourceWrite, *, draft_id: str) -> Source | None:
@@ -253,6 +258,7 @@ class SqliteSourceStore:
                         write.hook_secret_hash,
                         write.owner_id,
                         draft.public_key,
+                        write.folder,
                     ),
                 )
                 cursor.execute(REMOVE_DRAFT, (draft_id,))
@@ -266,6 +272,7 @@ class SqliteSourceStore:
             ref=write.ref,
             owner_id=write.owner_id,
             public_key=draft.public_key,
+            folder=write.folder,
         )
 
     def hook_secret_hash(self, name: str) -> bytes | None:
@@ -544,8 +551,8 @@ class MirroredDeckFolders:
             )
         return SourcePoll(
             folders=tuple(
-                self._folder(mirror, revision, entry.name)
-                for entry in mirror.entries(revision)
+                self._folder(mirror, revision, source, entry.name)
+                for entry in mirror.entries(revision, inside=source.folder)
                 if entry.is_directory
             ),
             commit=revision.commit,
@@ -556,6 +563,7 @@ class MirroredDeckFolders:
         self,
         mirror: GitMirror,
         revision: Revision,
+        source: Source,
         name: str,
     ) -> DeckFolder:
         """The folder as it stands, without a title when its manifest is unreadable.
@@ -564,18 +572,19 @@ class MirroredDeckFolders:
         so it must not be reported as gone; the row that says why it carries no
         title belongs to the build states.
         """
+        path = source.deck_path(name)
         file_names = frozenset(
             entry.name
-            for entry in mirror.entries(revision, inside=name)
+            for entry in mirror.entries(revision, inside=path)
             if not entry.is_directory
         )
         # The folder's own last commit, not the source's: a push that touched
         # another folder must leave this deck where it stands (line 19).
-        changed = mirror.last_change(revision, name)
+        changed = mirror.last_change(revision, path)
         return DeckFolder(
             name=name,
             file_names=file_names,
-            title=self._read_title(mirror, revision, name, file_names),
+            title=self._read_title(mirror, revision, source, name, file_names),
             changed_at=changed.at,
             commit=changed.commit,
         )
@@ -584,6 +593,7 @@ class MirroredDeckFolders:
         self,
         mirror: GitMirror,
         revision: Revision,
+        source: Source,
         name: str,
         file_names: frozenset[str],
     ) -> str | None:
@@ -592,7 +602,7 @@ class MirroredDeckFolders:
             return None
         try:
             return titled_by(
-                mirror.read(revision, f"{name}/{MANIFEST_FILE}"),
+                mirror.read(revision, f"{source.deck_path(name)}/{MANIFEST_FILE}"),
                 folder=name,
             )
         except (MalformedManifestError, MirrorError) as unreadable:
@@ -646,7 +656,7 @@ class SqliteSourceRunStore:
 
 
 def _source(row: _SourceRow) -> Source:
-    identifier, name, url, ref, owner_id, public_key = row
+    identifier, name, url, ref, owner_id, public_key, folder = row
     return Source(
         id=identifier,
         name=name,
@@ -654,6 +664,7 @@ def _source(row: _SourceRow) -> Source:
         ref=ref,
         owner_id=owner_id,
         public_key=public_key,
+        folder=folder,
     )
 
 

@@ -106,6 +106,13 @@ class GitRemote:
         _git(self.work, "commit", "--quiet", "--message", "a push", at=at)
         _git(self.work, "push", "--quiet", "origin", MAIN_BRANCH)
 
+    def commit_symlink(self, *, path: str, target: str, at: datetime) -> None:
+        """Commit a symbolic link at that path, pointing at the target, and push."""
+        link = self.work / path
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(target)
+        self._push(at=at)
+
     def commit_stamped(self, files: Mapping[str, str], *, stamp: str) -> None:
         """Push a commit whose author and committer stamp is exactly that.
 

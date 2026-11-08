@@ -864,6 +864,10 @@
             "title": "Source Refused Duplicate Url",
             "type": "string"
           },
+          "source_refused_folder": {
+            "title": "Source Refused Folder",
+            "type": "string"
+          },
           "source_refused_name": {
             "title": "Source Refused Name",
             "type": "string"
@@ -1228,6 +1232,7 @@
           "source_created_done",
           "source_created_toast",
           "source_refused_name",
+          "source_refused_folder",
           "source_refused_duplicate_name",
           "source_refused_duplicate_url",
           "source_refused_unknown_access",
@@ -1282,6 +1287,11 @@
         "properties": {
           "fingerprint": {
             "title": "Fingerprint",
+            "type": "string"
+          },
+          "folder": {
+            "default": "",
+            "title": "Folder",
             "type": "string"
           },
           "key_draft_id": {
@@ -1767,6 +1777,10 @@
             ],
             "title": "Fetched At"
           },
+          "folder": {
+            "title": "Folder",
+            "type": "string"
+          },
           "hook_url": {
             "title": "Hook Url",
             "type": "string"
@@ -1819,6 +1833,7 @@
           "reason",
           "fetched_at",
           "hook_url",
+          "folder",
           "public_key",
           "runs",
           "decks"
@@ -2539,6 +2554,7 @@
                     "reason": {
                       "enum": [
                         "malformed-name",
+                        "malformed-folder",
                         "duplicate-name",
                         "duplicate-url",
                         "unknown-access",
@@ -2673,6 +2689,7 @@
                     "reason": {
                       "enum": [
                         "malformed-name",
+                        "malformed-folder",
                         "duplicate-name",
                         "duplicate-url",
                         "unknown-access",

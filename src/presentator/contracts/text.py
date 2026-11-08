@@ -117,6 +117,7 @@ class LobbyText:
     source_created_done: str
     source_created_toast: str
     source_refused_name: str
+    source_refused_folder: str
     source_refused_duplicate_name: str
     source_refused_duplicate_url: str
     source_refused_unknown_access: str

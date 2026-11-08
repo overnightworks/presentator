@@ -8,11 +8,17 @@ from presentator.adapters.decks import (
     FilesystemLocalMount,
     MirroredDeckFolders,
     SourceMirrors,
+    SqliteSourceStore,
+    create_deck_tables,
 )
-from presentator.contracts.decks import Build, Deck, Source
+from presentator.adapters.identity import TokenIdentifierFactory, create_identity_tables
+from presentator.adapters.secrets import secret_box
+from presentator.contracts.decks import Build, Deck, Source, SourceWrite
 from presentator.contracts.models import Role, User
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
+from tests.presentator.adapters.support.key_draft_support import INSTANCE_KEY
 from tests.support.git_remote import MAIN_BRANCH
+from tests.support.people import seed_user
 
 PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 OWNER = User(id="the-admin", username="felix", role=Role.ADMIN)
@@ -23,7 +29,7 @@ BUILT_AT = datetime(2026, 1, 15, 9, 30, tzinfo=UTC)
 COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 
 
-def a_source(url: str) -> Source:
+def a_source(url: str, folder: str = "") -> Source:
     """A source whose secret, if it had one, no test that uses it resolves."""
     return Source(
         id=SOURCE_ID,
@@ -31,6 +37,38 @@ def a_source(url: str) -> Source:
         url=url,
         ref=MAIN_BRANCH,
         owner_id=OWNER.id,
+        folder=folder,
+    )
+
+
+def a_source_database(tmp_path: Path) -> Path:
+    """A file with the identity and deck tables and the admin who owns sources."""
+    database = tmp_path / "presentator.sqlite3"
+    create_identity_tables(database)
+    create_deck_tables(database)
+    seed_user(database, OWNER)
+    return database
+
+
+def a_source_store(database: Path) -> SqliteSourceStore:
+    return SqliteSourceStore(
+        database=database,
+        identifiers=TokenIdentifierFactory(),
+        box=secret_box(INSTANCE_KEY),
+    )
+
+
+def a_source_write(
+    url: str, *, name: str = SOURCE_NAME, folder: str = ""
+) -> SourceWrite:
+    return SourceWrite(
+        name=name,
+        url=url,
+        ref=MAIN_BRANCH,
+        owner_id=OWNER.id,
+        access_secret="",
+        hook_secret_hash=b"\x11" * 32,
+        folder=folder,
     )
 
 

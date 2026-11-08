@@ -348,6 +348,11 @@ msgstr ""
 "A name is lowercase letters, digits and hyphens, starts with a letter or "
 "digit, and is at most 64 characters."
 
+msgid "source_refused_folder"
+msgstr ""
+"A folder is a path inside the repository, like examples or talks/2026, with "
+"no leading slash and no .. in it."
+
 msgid "source_refused_duplicate_name"
 msgstr "A source with this name is already here."
 

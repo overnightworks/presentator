@@ -19,6 +19,7 @@ import {
 // A scenario's own templates: none of them is the catalog's sentence.
 const words = {
 	source_refused_name: 'a name that cannot be',
+	source_refused_folder: 'a folder that cannot be',
 	source_refused_duplicate_name: 'that name is taken',
 	source_refused_duplicate_url: 'that address is taken',
 	source_refused_unknown_access: 'the access does not fit the address',
@@ -55,6 +56,7 @@ const words = {
 describe('refusalWords', () => {
 	it.each<{ reason: SourceRefusalReason; worded: string }>([
 		{ reason: 'malformed-name', worded: 'a name that cannot be' },
+		{ reason: 'malformed-folder', worded: 'a folder that cannot be' },
 		{ reason: 'duplicate-name', worded: 'that name is taken' },
 		{ reason: 'duplicate-url', worded: 'that address is taken' },
 		{ reason: 'unknown-access', worded: 'the access does not fit the address' },

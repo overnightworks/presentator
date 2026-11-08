@@ -66,6 +66,22 @@ def is_a_plain_folder_name(candidate: str) -> bool:
     )
 
 
+def normalized_folder(typed: str) -> str:
+    """The folder as it is kept: no surrounding space, no one trailing slash."""
+    stripped = typed.strip()
+    if len(stripped) > 1 and stripped.endswith("/"):
+        return stripped[:-1]
+    return stripped
+
+
+def is_a_folder_path(folder: str) -> bool:
+    """Whether the folder is empty, or a `/` path of plain names within their limit."""
+    return folder == "" or all(
+        is_a_plain_folder_name(element) and len(element.encode()) <= MAXIMUM_NAME_BYTES
+        for element in folder.split("/")
+    )
+
+
 def talk_address(slug: str) -> str:
     """Where a deck's built talk stands, and what it is built against.
 
@@ -206,6 +222,7 @@ class SourceWrite:
     owner_id: str
     access_secret: str
     hook_secret_hash: bytes
+    folder: str = ""
     # The public half of a deploy key, in clear beside the encrypted private
     # half; nothing while the source carries an HTTPS token or no secret.
     public_key: str | None = None
@@ -221,6 +238,13 @@ class Source:
     ref: str
     owner_id: str
     public_key: str | None = None
+    # The repository-relative folder this source's decks stand directly under;
+    # empty means the top of the repository.
+    folder: str = ""
+
+    def deck_path(self, name: str) -> str:
+        """Where the deck folder of that name stands in the repository."""
+        return f"{self.folder}/{name}" if self.folder else name
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -553,6 +577,7 @@ class SourcePage:
 
     name: str
     url: str
+    folder: str
     access: AccessKind | None
     state: SourceState
     reason: SourceRunFailure | None
