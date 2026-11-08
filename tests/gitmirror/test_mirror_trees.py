@@ -1,13 +1,14 @@
 """The mirror's tree read against crafted tree objects in a real bare repository."""
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
 from gitmirror.model import MirrorError
-from tests.support.git_remote import MAIN_BRANCH, GitRemote
+from tests.support.git_remote import MAIN_BRANCH, GitRemote, with_the_program
 from tests.support.mirror_support import a_mirror
 
 
@@ -126,8 +127,21 @@ def test_a_listing_record_with_an_empty_name_is_rejected(
     mirror = a_mirror(remote.url, directory=tmp_path)
     revision = mirror.connect().revision
     assert revision is not None
-    listing = b"100644 blob " + b"0" * 40 + b"\t\0"
-    monkeypatch.setattr(type(mirror), "_run", lambda *_a, **_k: listing)
+    real_git = shutil.which("git")
+    assert real_git is not None
+    with_the_program(
+        monkeypatch,
+        tmp_path,
+        "git",
+        "#!/bin/sh\n"
+        'for argument in "$@"; do\n'
+        '  if [ "$argument" = ls-tree ]; then\n'
+        "    printf '100644 blob 0000000000000000000000000000000000000000\\t\\0'\n"
+        "    exit 0\n"
+        "  fi\n"
+        "done\n"
+        f'exec {real_git} "$@"\n',
+    )
 
     with pytest.raises(MirrorError):
         mirror.entries(revision, inside="deck")
