@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
 import sqlite3
+import threading
 from contextlib import asynccontextmanager, closing, contextmanager, suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
+from urllib.parse import urlsplit
 
 from agent_runtime_client.backend.fake_gateway import FakeGateway, completion
+from speech_runtime_client import wire
 from speech_runtime_client.outcomes import PastDeadline
 from starlette.websockets import WebSocketDisconnect
 
@@ -57,6 +61,7 @@ from tests.support.lobby import (
     an_agent_config,
 )
 from tests.support.speech_service import (
+    AN_ITEM,
     HEALTH_FAILURES,
     MALFORMED_PEERS,
     PLANTED,
@@ -68,12 +73,15 @@ from tests.support.speech_service import (
     Served,
     a_completed,
     a_delta,
+    a_failed_item,
     a_loopback_server,
     a_marked_error_event,
     a_marked_failed_item,
     a_served_origin,
     after_the_first_audio,
+    an_error_event,
     busy_at_the_upgrade,
+    crashing_after_the_first_audio,
     denying,
     nobody_listens,
 )
@@ -85,6 +93,7 @@ if TYPE_CHECKING:
 
     from fastapi.testclient import TestClient
     from httpx2 import Response
+    from starlette.types import Message, Scope
 
     from presentator.adapters.identity import SqliteSessionRecordStore
     from presentator.api.auth import InstalledAuth
@@ -104,6 +113,7 @@ _WIDE_OPEN_LOGGERS = (
     "wsproto",
 )
 WORKLOAD = "workload-token-MARKER"
+THREAD_WAIT_SECONDS: Final = 10
 ORIGIN: Final = {"origin": A_TALK_ADDRESS}
 ANSWER_SENTENCES: Final = ("Antwort-MARKER eins.", "Antwort-MARKER zwei.")
 HEARD_WORDS: Final = ("gehoert-MARKER-eins", "gehoert-MARKER-zwei")
@@ -578,3 +588,136 @@ def who_over(instance: SpeechInstance) -> tuple[Response, list[logging.LogRecord
     with recorded_logs() as logged:
         response = instance.talk.get("/copresenter/who", params={"deck": "a-deck"})
     return response, list(logged)
+
+
+def _cookie_header(instance: SpeechInstance) -> bytes:
+    return "; ".join(
+        f"{cookie.name}={cookie.value}" for cookie in instance.talk.cookies.jar
+    ).encode()
+
+
+def _asked_scope(instance: SpeechInstance) -> Scope:
+    return {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": urlsplit(A_TALK_ADDRESS).scheme,
+        "path": "/copresenter/ask",
+        "raw_path": b"/copresenter/ask",
+        "query_string": b"",
+        "headers": [
+            (b"host", urlsplit(A_TALK_ADDRESS).netloc.encode()),
+            (b"content-type", b"application/json"),
+            *(
+                (name.lower().encode(), value.encode())
+                for name, value in A_BROWSERS_HEADERS.items()
+            ),
+            (b"cookie", _cookie_header(instance)),
+        ],
+        "client": ("testclient", 50000),
+        "server": ("testserver", 443),
+        "state": {},
+    }
+
+
+async def ask_and_leave_at_the_first_speak(
+    instance: SpeechInstance, arrived: threading.Event, release: threading.Event
+) -> None:
+    messages: list[Message] = [
+        {"type": "http.request", "body": json.dumps(THE_ASKED_DECK).encode()}
+    ]
+
+    async def receive() -> Message:
+        if messages:
+            return messages.pop(0)
+        await asyncio.to_thread(arrived.wait, THREAD_WAIT_SECONDS)
+        return {"type": "http.disconnect"}
+
+    async def send(message: Message) -> None:
+        del message
+
+    await asyncio.wait_for(
+        instance.hosts.router(_asked_scope(instance), receive, send),
+        timeout=THREAD_WAIT_SECONDS,
+    )
+    release.set()
+
+
+def _transcripts(*shown: tuple[str, bool]) -> list[dict[str, object]]:
+    return [{"text": text, "final": final} for text, final in shown]
+
+
+BROWSER_FRAMES: dict[str, tuple[Hear, list[dict[str, object]]]] = {
+    "deltas-grow-and-completed-replaces": (
+        after_the_first_audio(
+            a_delta("Gu"),
+            a_delta("Ha", item="item-2"),
+            a_delta("ten"),
+            a_completed("Guten Tag."),
+        ),
+        _transcripts(
+            ("Gu", False), ("Ha", False), ("Guten", False), ("Guten Tag.", True)
+        ),
+    ),
+    "empty-completed-sends-nothing-and-clears-the-item": (
+        after_the_first_audio(
+            a_delta("Ha", item="item-2"),
+            a_completed("", item="item-2"),
+            a_delta("Neu", item="item-2"),
+            a_completed("Neu.", item="item-2"),
+        ),
+        _transcripts(("Ha", False), ("Neu", False), ("Neu.", True)),
+    ),
+    "session-and-turn-events-skipped": (
+        after_the_first_audio(
+            wire.SessionCreated(
+                session=wire.TranscriptionSession(type="transcription")
+            ),
+            wire.SessionUpdated(
+                session=wire.TranscriptionSession(type="transcription")
+            ),
+            wire.SpeechStarted(audio_start_ms=0, item_id=AN_ITEM),
+            wire.SpeechStopped(audio_end_ms=1, item_id=AN_ITEM),
+            wire.AudioCommitted(item_id=AN_ITEM, previous_item_id=None),
+            wire.ItemCreated(
+                previous_item_id=None,
+                item=wire.UserMessageItem(id=AN_ITEM),
+            ),
+            a_completed("Ein Wort."),
+        ),
+        _transcripts(("Ein Wort.", True)),
+    ),
+    "failed-then-error": (
+        after_the_first_audio(a_failed_item(), an_error_event()),
+        [],
+    ),
+    "error-alone": (after_the_first_audio(an_error_event()), []),
+    **{
+        f"closes-{code}": (after_the_first_audio(close_code=code), [])
+        for code in (1000, 1009, 1011, 1013)
+    },
+    "peer-crashes-mid-session": (crashing_after_the_first_audio(), []),
+    "unknown-event": (
+        after_the_first_audio(json.dumps({"type": "unknown.event", "event_id": "e"})),
+        [],
+    ),
+    "invalid-payload": (
+        after_the_first_audio(
+            json.dumps(
+                {
+                    "type": "conversation.item.input_audio_transcription.delta",
+                    "event_id": "e",
+                    "item_id": AN_ITEM,
+                    "delta": ["not", "text"],
+                }
+            )
+        ),
+        [],
+    ),
+    "non-json-frame": (after_the_first_audio("not json at all"), []),
+    "busy-at-the-upgrade": (busy_at_the_upgrade(), []),
+    "refused-401": (denying(401), []),
+    "refused-403": (denying(403), []),
+    "refused-503": (denying(503), []),
+}

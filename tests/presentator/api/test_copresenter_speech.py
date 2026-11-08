@@ -25,7 +25,6 @@ from tests.support.copresenter_support import (
     ACCESS,
     HEARING,
     ROTATED,
-    THE_ASKED_DECK,
     delete_the_sessions,
     the_refresh_token_is_revoked,
     the_session_ends_during_the_grant,
@@ -40,14 +39,17 @@ from tests.support.lobby import (
     A_TALK_ADDRESS,
 )
 from tests.support.speech_drive import (
+    BROWSER_FRAMES,
     LEAK_ASKS,
     LEAK_HEALTH,
     LEAK_HEARINGS,
     ORIGIN,
+    THREAD_WAIT_SECONDS,
     WORKLOAD,
     SpeechInstance,
     SpeechScenario,
     a_speech_instance,
+    ask_and_leave_at_the_first_speak,
     ask_over,
     assert_nothing_shows,
     hear_and_record,
@@ -57,26 +59,16 @@ from tests.support.speech_drive import (
 )
 from tests.support.speech_service import (
     A_WAV,
-    AN_ITEM,
     HEALTH_FAILURES,
     MALFORMED_PEERS,
     PLANTED,
     SPEAK_FAILURES,
     FakeSpeechService,
-    Hear,
     RawPeer,
     Served,
     a_chunked_wav,
-    a_completed,
-    a_delta,
-    a_failed_item,
     a_health_document,
     a_held_wav,
-    after_the_first_audio,
-    an_error_event,
-    busy_at_the_upgrade,
-    crashing_after_the_first_audio,
-    denying,
     nobody_listens,
     reading,
 )
@@ -86,9 +78,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from starlette.types import Message, Scope
 
-_THREAD_WAIT_SECONDS: Final = 10
 _POLICY_VIOLATION: Final = 1008
 THREE_SENTENCES: Final = 3
 SECOND: Final = 2
@@ -373,7 +363,7 @@ def test_both_hosts_sign_in_naming_exactly_the_configured_speech_scope(
 
 
 def _release_the_recheck(instance: SpeechInstance) -> None:
-    assert instance.deadline.started.wait(_THREAD_WAIT_SECONDS)
+    assert instance.deadline.started.wait(THREAD_WAIT_SECONDS)
     instance.deadline.release_first()
 
 
@@ -387,7 +377,7 @@ def _held_at_the_workload_grant(
     def hold() -> None:
         entered.set()
         then()
-        release.wait(_THREAD_WAIT_SECONDS)
+        release.wait(THREAD_WAIT_SECONDS)
 
     hosts.issuer.during_workload_grant = hold
     return entered, release
@@ -402,7 +392,7 @@ def test_a_logout_during_the_grant_closes_the_lease_with_no_upgrade_and_no_audio
         entered, release = _held_at_the_workload_grant(instance.hosts)
         with instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket:
             socket.send_bytes(b"first")
-            assert entered.wait(_THREAD_WAIT_SECONDS)
+            assert entered.wait(THREAD_WAIT_SECONDS)
             delete_the_sessions(instance.hosts)
             _release_the_recheck(instance)
             with pytest.raises(WebSocketDisconnect) as closed:
@@ -421,7 +411,7 @@ def test_a_browser_that_leaves_during_the_grant_ends_the_lease_with_no_upgrade(
         entered, release = _held_at_the_workload_grant(instance.hosts)
         with instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket:
             socket.send_bytes(b"first")
-            assert entered.wait(_THREAD_WAIT_SECONDS)
+            assert entered.wait(THREAD_WAIT_SECONDS)
         release.set()
         with closing(sqlite3.connect(instance.hosts.database)) as connection:
             stored = connection.execute("SELECT * FROM sessions").fetchone()
@@ -438,12 +428,12 @@ def test_frames_sent_during_the_grant_reach_the_service_in_order_once_it_opens(
         entered, release = _held_at_the_workload_grant(instance.hosts)
         with instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket:
             socket.send_bytes(b"first")
-            assert entered.wait(_THREAD_WAIT_SECONDS)
+            assert entered.wait(THREAD_WAIT_SECONDS)
             socket.send_bytes(b"second")
             socket.send_bytes(b"third")
             release.set()
             for _ in range(4):
-                assert service.arrived.acquire(timeout=_THREAD_WAIT_SECONDS)
+                assert service.arrived.acquire(timeout=THREAD_WAIT_SECONDS)
 
     appended = [
         event["audio"]
@@ -460,7 +450,7 @@ def test_a_hold_past_the_bound_ends_the_hearing_in_no_hearing(tmp_path: Path) ->
         entered, release = _held_at_the_workload_grant(instance.hosts)
         with instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket:
             socket.send_bytes(b"first")
-            assert entered.wait(_THREAD_WAIT_SECONDS)
+            assert entered.wait(THREAD_WAIT_SECONDS)
             socket.send_bytes(b"\0" * (3 * 1024 * 1024))
             frame = socket.receive_json()
             release.set()
@@ -476,12 +466,12 @@ def test_session_end_closes_the_lease_and_the_service_socket_within_one_recheck(
     with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
         with instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket:
             socket.send_bytes(b"first")
-            assert service.connected.wait(_THREAD_WAIT_SECONDS)
+            assert service.connected.wait(THREAD_WAIT_SECONDS)
             delete_the_sessions(instance.hosts)
             _release_the_recheck(instance)
             with pytest.raises(WebSocketDisconnect) as closed:
                 socket.receive_json()
-        assert service.closed.wait(_THREAD_WAIT_SECONDS)
+        assert service.closed.wait(THREAD_WAIT_SECONDS)
     assert closed.value.code == _POLICY_VIOLATION
     assert service.closes == ["closed"]
 
@@ -508,7 +498,7 @@ def test_a_second_lease_the_service_refuses_shows_no_hearing_on_the_second_only(
             second_browser.websocket_connect(HEARING, headers=ORIGIN) as two,
         ):
             one.send_bytes(b"first")
-            assert service.connected.wait(_THREAD_WAIT_SECONDS)
+            assert service.connected.wait(THREAD_WAIT_SECONDS)
             two.send_bytes(b"second")
             assert two.receive_json() == {
                 "text": "",
@@ -531,7 +521,7 @@ def test_the_upgrade_carries_the_issued_tokens_and_names_the_language_before_aud
     ):
         socket.send_bytes(b"first")
         for _ in range(2):
-            assert service.arrived.acquire(timeout=_THREAD_WAIT_SECONDS)
+            assert service.arrived.acquire(timeout=THREAD_WAIT_SECONDS)
 
     (upgrade,) = service.upgrades
     issued = wire.token_headers(
@@ -597,85 +587,6 @@ def test_any_refused_token_read_ends_the_hearing_with_no_upgrade(
     assert not instance.service.upgrades
 
 
-def _transcripts(*shown: tuple[str, bool]) -> list[dict[str, object]]:
-    return [{"text": text, "final": final} for text, final in shown]
-
-
-BROWSER_FRAMES: dict[str, tuple[Hear, list[dict[str, object]]]] = {
-    "deltas-grow-and-completed-replaces": (
-        after_the_first_audio(
-            a_delta("Gu"),
-            a_delta("Ha", item="item-2"),
-            a_delta("ten"),
-            a_completed("Guten Tag."),
-        ),
-        _transcripts(
-            ("Gu", False), ("Ha", False), ("Guten", False), ("Guten Tag.", True)
-        ),
-    ),
-    "empty-completed-sends-nothing-and-clears-the-item": (
-        after_the_first_audio(
-            a_delta("Ha", item="item-2"),
-            a_completed("", item="item-2"),
-            a_delta("Neu", item="item-2"),
-            a_completed("Neu.", item="item-2"),
-        ),
-        _transcripts(("Ha", False), ("Neu", False), ("Neu.", True)),
-    ),
-    "session-and-turn-events-skipped": (
-        after_the_first_audio(
-            wire.SessionCreated(
-                session=wire.TranscriptionSession(type="transcription")
-            ),
-            wire.SessionUpdated(
-                session=wire.TranscriptionSession(type="transcription")
-            ),
-            wire.SpeechStarted(audio_start_ms=0, item_id=AN_ITEM),
-            wire.SpeechStopped(audio_end_ms=1, item_id=AN_ITEM),
-            wire.AudioCommitted(item_id=AN_ITEM, previous_item_id=None),
-            wire.ItemCreated(
-                previous_item_id=None,
-                item=wire.UserMessageItem(id=AN_ITEM),
-            ),
-            a_completed("Ein Wort."),
-        ),
-        _transcripts(("Ein Wort.", True)),
-    ),
-    "failed-then-error": (
-        after_the_first_audio(a_failed_item(), an_error_event()),
-        [],
-    ),
-    "error-alone": (after_the_first_audio(an_error_event()), []),
-    **{
-        f"closes-{code}": (after_the_first_audio(close_code=code), [])
-        for code in (1000, 1009, 1011, 1013)
-    },
-    "peer-crashes-mid-session": (crashing_after_the_first_audio(), []),
-    "unknown-event": (
-        after_the_first_audio(json.dumps({"type": "unknown.event", "event_id": "e"})),
-        [],
-    ),
-    "invalid-payload": (
-        after_the_first_audio(
-            json.dumps(
-                {
-                    "type": "conversation.item.input_audio_transcription.delta",
-                    "event_id": "e",
-                    "item_id": AN_ITEM,
-                    "delta": ["not", "text"],
-                }
-            )
-        ),
-        [],
-    ),
-    "non-json-frame": (after_the_first_audio("not json at all"), []),
-    "busy-at-the-upgrade": (busy_at_the_upgrade(), []),
-    "refused-401": (denying(401), []),
-    "refused-403": (denying(403), []),
-    "refused-503": (denying(503), []),
-}
-
-
 @pytest.mark.parametrize("case", BROWSER_FRAMES)
 def test_the_browser_gets_each_transcript_then_one_generic_no_hearing_frame(
     tmp_path: Path, case: str
@@ -711,60 +622,6 @@ def test_a_service_that_answers_the_upgrade_no_useful_way_shows_no_hearing(
     assert frames == [_NO_HEARING]
 
 
-def _cookie_header(instance: SpeechInstance) -> bytes:
-    return "; ".join(
-        f"{cookie.name}={cookie.value}" for cookie in instance.talk.cookies.jar
-    ).encode()
-
-
-def _asked_scope(instance: SpeechInstance) -> Scope:
-    return {
-        "type": "http",
-        "asgi": {"version": "3.0", "spec_version": "2.3"},
-        "http_version": "1.1",
-        "method": "POST",
-        "scheme": urlsplit(A_TALK_ADDRESS).scheme,
-        "path": "/copresenter/ask",
-        "raw_path": b"/copresenter/ask",
-        "query_string": b"",
-        "headers": [
-            (b"host", urlsplit(A_TALK_ADDRESS).netloc.encode()),
-            (b"content-type", b"application/json"),
-            *(
-                (name.lower().encode(), value.encode())
-                for name, value in A_BROWSERS_HEADERS.items()
-            ),
-            (b"cookie", _cookie_header(instance)),
-        ],
-        "client": ("testclient", 50000),
-        "server": ("testserver", 443),
-        "state": {},
-    }
-
-
-async def _ask_and_leave_at_the_first_speak(
-    instance: SpeechInstance, arrived: threading.Event, release: threading.Event
-) -> None:
-    messages: list[Message] = [
-        {"type": "http.request", "body": json.dumps(THE_ASKED_DECK).encode()}
-    ]
-
-    async def receive() -> Message:
-        if messages:
-            return messages.pop(0)
-        await asyncio.to_thread(arrived.wait, _THREAD_WAIT_SECONDS)
-        return {"type": "http.disconnect"}
-
-    async def send(message: Message) -> None:
-        del message
-
-    await asyncio.wait_for(
-        instance.hosts.router(_asked_scope(instance), receive, send),
-        timeout=_THREAD_WAIT_SECONDS,
-    )
-    release.set()
-
-
 def test_a_browser_that_leaves_mid_answer_starts_no_later_speak_and_frees_the_ticket(
     tmp_path: Path,
 ) -> None:
@@ -775,7 +632,7 @@ def test_a_browser_that_leaves_mid_answer_starts_no_later_speak_and_frees_the_ti
         gateway=_say("Erster Satz. Zweiter Satz. Dritter."), service=service
     )
     with a_speech_instance(tmp_path, scenario) as instance:
-        asyncio.run(_ask_and_leave_at_the_first_speak(instance, arrived, release))
+        asyncio.run(ask_and_leave_at_the_first_speak(instance, arrived, release))
         spoken_when_it_left = len(service.speak_requests)
         again = ask_over(instance)
 
@@ -819,7 +676,7 @@ def test_a_stalled_grant_ended_by_logout_shows_no_marker(tmp_path: Path) -> None
             instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
         ):
             socket.send_bytes(b"first")
-            assert entered.wait(_THREAD_WAIT_SECONDS)
+            assert entered.wait(THREAD_WAIT_SECONDS)
             delete_the_sessions(instance.hosts)
             _release_the_recheck(instance)
             with pytest.raises(WebSocketDisconnect):
