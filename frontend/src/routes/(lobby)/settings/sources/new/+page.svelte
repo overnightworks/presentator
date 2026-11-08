@@ -208,31 +208,31 @@
 			</div>
 		{/if}
 		{#if known === 'https-token'}
-		<div class="fld">
-			<span class="lb">
-				<label for="source-secret">{words.source_secret}</label>
-				<button
-					class="info"
-					type="button"
-					popovertarget="secret-hint"
-					aria-label={words.source_secret_info}
-				>
-					<svg viewBox="0 0 24 24" aria-hidden="true">
-						<circle cx="12" cy="12" r="9" />
-						<path d="M12 11v5M12 7.5v.01" />
-					</svg>
-				</button>
-			</span>
-			<input
-				class="control"
-				id="source-secret"
-				name="secret"
-				type="password"
-				autocomplete="new-password"
-				bind:value={secret}
-			/>
-			<span id="secret-hint" class="hint" popover="auto">{words.source_secret_info}</span>
-		</div>
+			<div class="fld">
+				<span class="lb">
+					<label for="source-secret">{words.source_secret}</label>
+					<button
+						class="info"
+						type="button"
+						popovertarget="secret-hint"
+						aria-label={words.source_secret_info}
+					>
+						<svg viewBox="0 0 24 24" aria-hidden="true">
+							<circle cx="12" cy="12" r="9" />
+							<path d="M12 11v5M12 7.5v.01" />
+						</svg>
+					</button>
+				</span>
+				<input
+					class="control"
+					id="source-secret"
+					name="secret"
+					type="password"
+					autocomplete="new-password"
+					bind:value={secret}
+				/>
+				<span id="secret-hint" class="hint" popover="auto">{words.source_secret_info}</span>
+			</div>
 		{:else if known === 'ssh-deploy-key'}
 			<div class="fld">
 				<h2 class="lb" id="deploy-key-label">{words.source_deploy_key_heading}</h2>
@@ -263,7 +263,11 @@
 			</div>
 		{/if}
 		<div class="actions">
-			<button class="btn secondary" type="button" disabled={pending || known === undefined} onclick={check}
+			<button
+				class="btn secondary"
+				type="button"
+				disabled={pending || known === undefined}
+				onclick={check}
 				>{words.source_check}</button
 			>
 			<button class="btn primary" type="submit" disabled={pending || fingerprint === null}

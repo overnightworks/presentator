@@ -137,6 +137,26 @@ describe('the lookup is latest wins', () => {
 		expect(secretField()).toBeNull();
 	});
 
+	it('ignores the failure of a lookup a newer address replaced', async () => {
+		let breakFirst: (reason: Error) => void = () => undefined;
+		const first = new Promise<Response>((_, reject) => {
+			breakFirst = reject;
+		});
+		const second = deferred();
+		const lookups = [first, second.answer];
+		open(() => lookups.shift() as Promise<Response>);
+		type(URL_FIELD, addresses.https.url);
+		type(URL_FIELD, addresses.ssh.url);
+
+		breakFirst(new Error('network down'));
+		await new Promise((resolve) => setTimeout(resolve));
+		flushSync();
+
+		expect(alert()).toBeNull();
+		second.answerWith('ssh-deploy-key');
+		await vi.waitFor(() => expect(keyBlock()).not.toBeNull());
+	});
+
 	it('shows no token field while the lookup for a key address is pending', async () => {
 		const pending = deferred();
 		let first = true;

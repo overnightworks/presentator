@@ -42,13 +42,11 @@ const answeredByAddress: KindAnswer = (url) =>
 		access: Object.values(addresses).find((each) => each.url === url)?.access ?? null
 	});
 
-let mounted: ReturnType<typeof mount> | undefined;
+const mounted = new Set<ReturnType<typeof mount>>();
 
 export function close(): void {
-	if (mounted) {
-		void unmount(mounted);
-	}
-	mounted = undefined;
+	mounted.forEach((each) => void unmount(each));
+	mounted.clear();
 	document.body.replaceChildren();
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
@@ -70,19 +68,18 @@ export function open(kind: KindAnswer = answeredByAddress) {
 		return Response.json(draft);
 	});
 	vi.stubGlobal('fetch', fetched);
-	mounted = mount(Page, {
-		target: document.body,
-		props: { data: { session: { words }, draft } } as never
-	});
+	mounted.add(
+		mount(Page, {
+			target: document.body,
+			props: { data: { session: { words }, draft } } as never
+		})
+	);
 	flushSync();
 	return fetched;
 }
 
 export function type(label: string, text: string): void {
-	const field = document.querySelector<HTMLInputElement>(`input[id="${label}"]`);
-	if (!field) {
-		throw new Error(`no field ${label}`);
-	}
+	const field = document.querySelector(`input[id="${label}"]`) as HTMLInputElement;
 	field.value = text;
 	field.dispatchEvent(new Event('input', { bubbles: true }));
 }
@@ -90,8 +87,8 @@ export function type(label: string, text: string): void {
 export function press(label: string): void {
 	const button = [...document.querySelectorAll('button')].find(
 		(each) => each.textContent === label
-	);
-	button?.click();
+	) as HTMLButtonElement;
+	button.click();
 }
 
 /** The body of each request the page sent to this path. */
