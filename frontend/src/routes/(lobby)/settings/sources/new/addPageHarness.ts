@@ -103,6 +103,8 @@ export const secretField = (): HTMLInputElement | null =>
 export const keyBlock = (): Element | null => document.getElementById('deploy-key-label');
 export const checkButton = (): HTMLButtonElement | undefined =>
 	[...document.querySelectorAll('button')].find((each) => each.textContent === words.source_check);
+export const createButton = (): HTMLButtonElement | undefined =>
+	[...document.querySelectorAll('button')].find((each) => each.textContent === words.source_create);
 
 /** A lookup whose answer the scenario gives when it chooses. */
 export function deferred() {

@@ -82,6 +82,14 @@
 		}
 	}
 
+	// What a check found was for the address it read; an edit leaves nothing of it.
+	function editAddress(address: string): Promise<void> {
+		banner = null;
+		fingerprint = null;
+		refusal = null;
+		return lookUp(address);
+	}
+
 	// A refusal is the person's to fix; anything else is a failure to show loudly.
 	function refused(failure: unknown): void {
 		if (!(failure instanceof Refused)) {
@@ -191,7 +199,7 @@
 				spellcheck="false"
 				required
 				bind:value={url}
-				oninput={(event) => lookUp(event.currentTarget.value)}
+				oninput={(event) => editAddress(event.currentTarget.value)}
 			/>
 		</div>
 		{#if lookup.state === 'pending'}

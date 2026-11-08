@@ -5,6 +5,7 @@ import {
 	addresses,
 	checkButton,
 	close,
+	createButton,
 	deferred,
 	keyBlock,
 	open,
@@ -224,6 +225,50 @@ describe('the lookup is latest wins', () => {
 		expect(secretField()).toBeNull();
 		expect(document.querySelector<HTMLInputElement>('#source-name')?.value).toBe('');
 		expect(document.querySelector<HTMLInputElement>(`#${URL_FIELD}`)?.value).toBe('');
+	});
+});
+
+describe('a check result belongs to the address it was for', () => {
+	it('forgets the token a hidden page held when the same https address is typed again', async () => {
+		open();
+		type(URL_FIELD, addresses.https.url);
+		await vi.waitFor(() => expect(secretField()).not.toBeNull());
+		type('source-secret', 'a-typed-token');
+
+		window.dispatchEvent(new Event('pagehide'));
+		type(URL_FIELD, addresses.https.url);
+
+		await vi.waitFor(() => expect(secretField()).not.toBeNull());
+		expect(secretField()?.value).toBe('');
+	});
+
+	it('takes the reachable banner and the enabled Create away when the address is edited', async () => {
+		open();
+		type(URL_FIELD, addresses.https.url);
+		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
+		press(words.source_check);
+		await vi.waitFor(() => expect(createButton()?.disabled).toBe(false));
+		expect(status()?.textContent).toContain('c0ffee1');
+
+		type(URL_FIELD, addresses.ssh.url);
+		flushSync();
+
+		expect(status()?.textContent).toBe(words.source_kind_pending);
+		expect(createButton()?.disabled).toBe(true);
+	});
+
+	it('keeps the reachable banner and Create when only the token is edited', async () => {
+		open();
+		type(URL_FIELD, addresses.https.url);
+		await vi.waitFor(() => expect(secretField()).not.toBeNull());
+		press(words.source_check);
+		await vi.waitFor(() => expect(createButton()?.disabled).toBe(false));
+
+		type('source-secret', 'a-typed-token');
+		flushSync();
+
+		expect(status()?.textContent).toContain('c0ffee1');
+		expect(createButton()?.disabled).toBe(false);
 	});
 });
 
