@@ -278,7 +278,7 @@ def sending(*events: wire.ServerEvent) -> Hear:
 
 
 def after_the_first_audio(
-    *events: wire.ServerEvent | str, close_code: int = 1000
+    *events: wire.ServerEvent | str, close_code: int = 1000, close_reason: str = ""
 ) -> Hear:
     """Accept, take the `session.update` and one append, send the events, close."""
 
@@ -288,7 +288,7 @@ def after_the_first_audio(
         await socket_to_browser.receive()
         for event in events:
             await socket_to_browser.send_text(_encoded(event))
-        await socket_to_browser.close(code=close_code)
+        await socket_to_browser.close(code=close_code, reason=close_reason)
 
     return realtime
 

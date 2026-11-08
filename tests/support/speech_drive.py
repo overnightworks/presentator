@@ -574,12 +574,43 @@ LEAK_ASKS: Final[dict[str, Callable[[], SpeechScenario]]] = {
     **_ended_before_any_service_is_asked(),
 }
 
+
+def _marked_frames_the_parser_refuses() -> dict[str, Hear]:
+    return {
+        "unknown-event": after_the_first_audio(
+            json.dumps({"type": "unknown.event", "event_id": PLANTED})
+        ),
+        "invalid-payload": after_the_first_audio(
+            json.dumps(
+                {
+                    "type": "conversation.item.input_audio_transcription.delta",
+                    "event_id": PLANTED,
+                    "item_id": AN_ITEM,
+                    "delta": [PLANTED],
+                }
+            )
+        ),
+        "non-json-frame": after_the_first_audio(f"not json at all {PLANTED}"),
+    }
+
+
+_HEARING_ENDS: Final[dict[str, Hear]] = {
+    **{
+        f"closes-{code}": after_the_first_audio(close_code=code, close_reason=PLANTED)
+        for code in (1000, 1009, 1011, 1013)
+    },
+    "peer-crashes-mid-session": crashing_after_the_first_audio(),
+    **_marked_frames_the_parser_refuses(),
+}
+
+
 LEAK_HEARINGS: Final[dict[str, Callable[[], SpeechScenario]]] = {
     "good": _with_realtime(_hearing_the_words()),
     "marked-error-event": _with_realtime(after_the_first_audio(a_marked_error_event())),
     "marked-failed-then-error": _with_realtime(
         after_the_first_audio(a_marked_failed_item(), a_marked_error_event())
     ),
+    **{name: _with_realtime(hear) for name, hear in _HEARING_ENDS.items()},
     "busy-marked": _with_realtime(busy_at_the_upgrade(marked=True)),
     **{
         f"denied-{status}": _with_realtime(denying(status, marked=True))
@@ -711,29 +742,7 @@ BROWSER_FRAMES: dict[str, tuple[Hear, list[dict[str, object]]]] = {
         [],
     ),
     "error-alone": (after_the_first_audio(an_error_event()), []),
-    **{
-        f"closes-{code}": (after_the_first_audio(close_code=code), [])
-        for code in (1000, 1009, 1011, 1013)
-    },
-    "peer-crashes-mid-session": (crashing_after_the_first_audio(), []),
-    "unknown-event": (
-        after_the_first_audio(json.dumps({"type": "unknown.event", "event_id": "e"})),
-        [],
-    ),
-    "invalid-payload": (
-        after_the_first_audio(
-            json.dumps(
-                {
-                    "type": "conversation.item.input_audio_transcription.delta",
-                    "event_id": "e",
-                    "item_id": AN_ITEM,
-                    "delta": ["not", "text"],
-                }
-            )
-        ),
-        [],
-    ),
-    "non-json-frame": (after_the_first_audio("not json at all"), []),
+    **{name: (hear, []) for name, hear in _HEARING_ENDS.items()},
     "busy-at-the-upgrade": (busy_at_the_upgrade(), []),
     "refused-401": (denying(401), []),
     "refused-403": (denying(403), []),
