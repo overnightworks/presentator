@@ -207,12 +207,14 @@ class FakeIssuer:
         parameters = parse_qs(urlsplit(authorization_url).query)
         self._holding = (subject, groups, username)
         code = secrets.token_urlsafe(16)
-        self._tokens_by_code[code] = self.mint(
+        id_token = self.mint(
             nonce=parameters["nonce"][0],
             subject=subject,
             groups=groups,
             username=username,
         )
+        self.issued_id_tokens.append(id_token)
+        self._tokens_by_code[code] = id_token
         return f"code={code}&state={parameters['state'][0]}"
 
     def post_token_request(self, request: TokenRequest) -> TokenEndpointAnswer:
