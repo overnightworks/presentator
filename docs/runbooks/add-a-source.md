@@ -9,14 +9,15 @@ that repository's decks.
 Settings · Sources lists the source as reachable. A token the host turns down
 shows as Refused, an answer of any other kind as Failed, and a host that never
 answers (or a credential that cannot be read) as Error, with the reason under
-the source's name. Its decks appear in the list after the first fetch: the next
+the source's name. A private repository checked without a token also reads as
+unreachable ([SR6](../sources.md)). Its decks appear in the list after the first fetch: the next
 poll ([`PRESENTATOR_SOURCE_POLL_SECONDS`](../configuration.md)) or *Fetch now*
 on the source's page.
 
 ## Fix
 
-1. At the Git host, prepare the credential. For HTTPS, create a read-only token.
-   For SSH, you register the deploy key in step 4. Rollback: delete the token at
+1. At the Git host, prepare the credential. For HTTPS, a public repository needs none; for a private one, create a
+   read-only token. For SSH, you register the deploy key in step 4. Rollback: delete the token at
    the host.
 2. For a local folder, make it a bare repository under the local-sources mount
    ([`PRESENTATOR_LOCAL_SOURCES_MOUNT`](../configuration.md)) and let the runtime user
@@ -27,12 +28,12 @@ on the source's page.
    URL. Pick the access kind: *HTTPS token* (the default), *SSH deploy key* or
    *On this box*; a local folder takes no secret. Rollback: leave the page;
    nothing is stored yet.
-4. HTTPS: enter the token in the Secret field, because an `https://` address has
-   no user part. SSH: Add shows an owned ed25519 deploy-key draft; register its
+4. HTTPS: enter the token of a private repository in the Secret field, because an
+   `https://` address has no user part; leave it empty for a public one. SSH: Add shows an owned ed25519 deploy-key draft; register its
    public half at the Git host. The first contact accepts the host's key and
    refuses the host if it ever changes. Local folder: enter no secret.
    Rollback: delete the key at the host.
-5. Choose *Check connection*. It probes that exact token or draft before
+5. Choose *Check connection*. It probes that exact token (or none) or draft before
    anything is stored, and *Create* stays disabled until it answers reachable.
    Rollback: none needed, nothing is stored.
 6. Choose *Create*. The page shows the webhook secret once

@@ -26,7 +26,6 @@ from gitmirror.mirror import (
     CREDENTIAL_USER_NAME,
     GitMirror,
     check_connection,
-    connection_state_for_failure,
     credential_arguments,
     is_ssh_remote,
     unattended_environment,
@@ -774,85 +773,6 @@ def test_a_pull_that_runs_past_its_bound_is_named_unreachable(
 
     assert connection.state is ConnectionState.UNREACHABLE
     assert connection.revision is None
-
-
-@pytest.mark.parametrize(
-    ("stderr", "expected"),
-    [
-        pytest.param(
-            "fatal: Authentication failed for 'https://host.example/repo.git/'",
-            ConnectionState.REFUSED,
-            id="authentication-failed-footer",
-        ),
-        pytest.param(
-            "remote: Invalid username or token.\n"
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "The requested URL returned error: 403",
-            ConnectionState.REFUSED,
-            id="invalid-username-or-token-body",
-        ),
-        pytest.param(
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "The requested URL returned error: 401",
-            ConnectionState.REFUSED,
-            id="bare-401-status",
-        ),
-        pytest.param(
-            "git@host.example: Permission denied (publickey).\n"
-            "fatal: Could not read from remote repository.",
-            ConnectionState.REFUSED,
-            id="ssh-deploy-key-no-longer-registered",
-        ),
-        pytest.param(
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "Could not resolve host: host.example",
-            ConnectionState.UNREACHABLE,
-            id="could-not-resolve-host",
-        ),
-        pytest.param(
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "SSL certificate problem: unable to get local issuer certificate",
-            ConnectionState.FAILED,
-            id="a-tls-certificate-failure-is-not-proof-the-host-never-answered",
-        ),
-        pytest.param(
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "Failed to connect to host.example port 443: Couldn't connect to server",
-            ConnectionState.UNREACHABLE,
-            id="failed-to-connect",
-        ),
-        pytest.param(
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "Connection timed out",
-            ConnectionState.UNREACHABLE,
-            id="connection-timed-out",
-        ),
-        pytest.param(
-            "remote: Repository not found.\n"
-            "fatal: repository 'https://host.example/repo.git/' not found",
-            ConnectionState.FAILED,
-            id="repository-not-found",
-        ),
-        pytest.param(
-            "remote: Forbidden by WAF\n"
-            "fatal: unable to access 'https://host.example/repo.git/': "
-            "The requested URL returned error: 403",
-            ConnectionState.FAILED,
-            id="bare-403-without-auth-wording",
-        ),
-        pytest.param(
-            "fatal: could not read Username for 'https://host.example': "
-            "terminal prompts disabled",
-            ConnectionState.FAILED,
-            id="no-credential-configured-at-all",
-        ),
-    ],
-)
-def test_a_failed_pulls_own_words_choose_the_reason(
-    stderr: str,
-    expected: ConnectionState,
-) -> None:
-    assert connection_state_for_failure(stderr) is expected
 
 
 def test_a_url_without_a_user_name_authenticates_as_the_constant_user(

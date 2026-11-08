@@ -364,7 +364,7 @@ msgstr ""
 "folder."
 
 msgid "source_refused_secret"
-msgstr "A source needs a secret."
+msgstr "Enter the new secret first."
 
 msgid "source_refused_not_checked"
 msgstr "Check connection again — the URL or secret changed since the last check."
@@ -430,7 +430,9 @@ msgid "source_run_fetched"
 msgstr "fetched"
 
 msgid "source_run_unreachable"
-msgstr "Host unreachable"
+msgstr ""
+"Not reachable: the host does not answer, or the repository is private and "
+"needs a token."
 
 msgid "source_run_secret"
 msgstr "Secret not stored"

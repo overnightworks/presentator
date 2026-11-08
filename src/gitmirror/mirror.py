@@ -99,11 +99,13 @@ _UNREACHABLE_CHECK: Final = ConnectionCheck(
     commit=None,
     detail=None,
 )
-# git's own words for a login the far end named and turned down, lowercased so
-# a case git happens to pick never hides the match. A bare 403 is deliberately
-# absent: a proxy or a WAF answers that status for reasons that have nothing
-# to do with the token, so only a message git itself ties to a login counts.
+# git's own words for a login the far end asked for or turned down, lowercased
+# so a case git happens to pick never hides the match. A bare 403 is
+# deliberately absent: a proxy or a WAF answers that status for reasons that
+# have nothing to do with the token, so only a message git itself ties to a
+# login counts.
 _REFUSED_WORDS: Final = (
+    "terminal prompts disabled",
     "authentication failed",
     "invalid username or token",
     "returned error: 401",
@@ -142,6 +144,9 @@ class GitMirror:
         secret = self.credentials.resolve(self.source.credential)
         if secret is None:
             return _CREDENTIAL_UNRESOLVABLE
+        if not secret:
+            # A source stored with no secret offers git no login.
+            return self._pull(secret=None)
         if not is_ssh_remote(self.source.url):
             _reject_unsafe_credential(secret)
         return self._pull(secret=secret)
@@ -246,7 +251,12 @@ class GitMirror:
                 _without_userinfo(self.source.url),
                 _sanitized(stderr, secret=secret),
             )
-            return Connection(state=connection_state_for_failure(stderr), revision=None)
+            return Connection(
+                state=connection_state_for_failure(
+                    stderr, credential_offered=secret is not None
+                ),
+                revision=None,
+            )
         return Connection(
             state=ConnectionState.READY,
             revision=Revision(
@@ -324,7 +334,10 @@ def check_connection(
         stderr = probed.stderr.decode(errors="replace").strip()
         sanitized = _sanitized(stderr, secret=secret)
         return ConnectionCheck(
-            state=connection_state_for_failure(stderr),
+            state=connection_state_for_failure(
+                stderr,
+                credential_offered=secret is not None,
+            ),
             commit=None,
             detail=sanitized.splitlines()[0] if sanitized else None,
         )
@@ -438,8 +451,16 @@ def _reject_unsafe_credential(secret: str) -> None:
         raise InvalidCredentialError(_UNSAFE_CREDENTIAL)
 
 
-def connection_state_for_failure(stderr: str) -> ConnectionState:
+def connection_state_for_failure(
+    stderr: str,
+    *,
+    credential_offered: bool,
+) -> ConnectionState:
     """Which of the three failure states a failed pull's own words say happened.
+
+    A login demanded of a request that offered none is `unreachable`: the
+    far end answers a private repository like a missing one, so the address
+    is not reachable without a token. Only an offered credential can be refused.
 
     Unreachable is only ever one of `_UNREACHABLE_WORDS` or the timeout above;
     an answer git phrases in words this function does not recognise — a TLS
@@ -448,7 +469,11 @@ def connection_state_for_failure(stderr: str) -> ConnectionState:
     """
     lowered = stderr.lower()
     if any(word in lowered for word in _REFUSED_WORDS):
-        return ConnectionState.REFUSED
+        return (
+            ConnectionState.REFUSED
+            if credential_offered
+            else ConnectionState.UNREACHABLE
+        )
     if any(word in lowered for word in _UNREACHABLE_WORDS):
         return ConnectionState.UNREACHABLE
     return ConnectionState.FAILED

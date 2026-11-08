@@ -1234,14 +1234,6 @@ def test_a_refresh_sweeps_drafts_a_day_old() -> None:
         ),
         pytest.param(
             "talks",
-            _HTTPS_URL,
-            AccessKind.HTTPS,
-            "",
-            SourceRefusal.BLANK_ACCESS,
-            id="blank secret",
-        ),
-        pytest.param(
-            "talks",
             "https://user:token@git.example.invalid/talks.git",
             AccessKind.HTTPS,
             _READ_ONLY,
@@ -1379,6 +1371,14 @@ def test_a_duplicate_name_or_url_is_refused() -> None:
 
 
 _A_DIFFERENT_SECRET = "a-different-secret-" + "than-was-checked"
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_a_blank_secret_on_https_is_checked_and_stored_as_no_secret(blank: str) -> None:
+    store = having()
+    added = _add(decks_over(sources=store), secret=blank)
+    assert isinstance(added, AddedSource)
+    assert tuple(store.secrets.values()) == ("",)
 
 
 def test_a_source_never_checked_for_these_values_is_refused() -> None:

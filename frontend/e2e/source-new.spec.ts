@@ -572,7 +572,7 @@ test.describe('as an admin', () => {
 		await name.fill(other);
 		await secretField(page, words).fill('');
 		await page.getByRole('button', { name: words.source_create }).click();
-		await expect(refusal).toHaveText(words.source_refused_secret);
+		await expect(refusal).toHaveText(words.source_refused_not_checked);
 
 		const names = await sourceNames(page);
 		expect(names).toContain(taken);

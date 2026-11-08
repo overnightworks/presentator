@@ -16,7 +16,6 @@ export function refusalWords(reason: SourceRefusalReason, words: LobbyText): str
 		'duplicate-name': words.source_refused_duplicate_name,
 		'duplicate-url': words.source_refused_duplicate_url,
 		'access-mismatch': words.source_refused_access,
-		'missing-secret': words.source_refused_secret,
 		'not-checked': words.source_refused_not_checked,
 		'credential-not-allowed': words.source_refused_secret_not_allowed,
 		'outside-local-mount': words.source_refused_outside_mount,
