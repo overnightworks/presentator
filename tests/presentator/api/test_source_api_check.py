@@ -466,19 +466,6 @@ def test_the_kind_route_answers_the_access_the_address_names_without_an_error(
     assert_no_store(answer)
 
 
-@pytest.mark.parametrize(
-    "body", [{}, {"url": 7}, {"url": None}], ids=["missing", "number", "null"]
-)
-def test_the_kind_route_refuses_a_missing_or_non_text_address_as_validation(
-    body: dict[str, object],
-) -> None:
-    lobby = an_admin_over(decks_that_must_not_run())
-
-    answer = lobby.client.post(KIND, json=body)
-
-    assert_validation_answer(answer)
-
-
 def test_the_kind_route_ignores_what_else_the_request_carries() -> None:
     lobby = an_admin_over(decks_that_must_not_run())
 
@@ -572,6 +559,10 @@ _LOGGED = {
     "16 user part": _Logged(_posting(url=_USER_PART), HTTPStatus.UNPROCESSABLE_ENTITY),
     "17 missing url": _Logged(
         lambda _w, lobby: lobby.client.post(CHECK, json={"secret": SENT}),
+        HTTPStatus.UNPROCESSABLE_ENTITY,
+    ),
+    "22 kind without an address": _Logged(
+        lambda _w, lobby: lobby.client.post(KIND, json={"url": 7}),
         HTTPStatus.UNPROCESSABLE_ENTITY,
     ),
     "22 kind of a user part": _Logged(
