@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 import pytest
 from pydantic import ValidationError
 
 from presentator.host.config import ConfigurationError, Settings, load_settings
+from presentator.host.main import build_instance
 from tests.support.lobby import (
     A_SPEECH_SCOPE,
     A_SPEECH_SERVICE,
@@ -105,3 +107,21 @@ def test_an_env_file_with_the_three_keys_starts_and_a_leftover_socket_key_refuse
     with pytest.raises(ConfigurationError) as refused:
         load_settings()
     assert leftover.lower() in str(refused.value).lower()
+
+
+@pytest.mark.usefixtures("environment")
+@pytest.mark.parametrize("transport", ["httpx2", "httpcore2.http11"])
+def test_the_composed_instance_drops_the_transports_traces_below_a_warning(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    transport: str,
+) -> None:
+    logger = logging.getLogger(transport)
+    monkeypatch.setattr(logger, "filters", [])
+
+    build_instance(load_settings())
+    with caplog.at_level(logging.DEBUG, logger=transport):
+        logger.debug("a-debug-trace-MARKER")
+        logger.info("an-info-trace-MARKER")
+
+    assert "MARKER" not in caplog.text

@@ -64,6 +64,17 @@ class _WarningsOnly(logging.Filter):
 _TRANSPORT_TRACES: Final = _WarningsOnly()
 
 
+def silence_transport_traces() -> None:
+    """Keep the transports' traces of an upgrade out of every log, for the process.
+
+    httpcore2 traces the upgrade's response headers at DEBUG and httpx2 the
+    response line at INFO, whatever level an operator set; those carry what the
+    speech service answered.
+    """
+    for name in ("httpx2", "httpcore2.http11"):
+        logging.getLogger(name).addFilter(_TRANSPORT_TRACES)
+
+
 class SpeechSpeaking:
     """Speak one sentence at the shared speech service."""
 
@@ -139,11 +150,6 @@ class SpeechHearing:
         self._origin = origin
         self._voice = voice
         self._bounded_health_fetch = bounded_health_fetch
-        # httpcore2 traces the upgrade's response headers at DEBUG and httpx2 the
-        # response line at INFO, whatever level an operator set; those carry
-        # what the speech service answered.
-        for name in ("httpx2", "httpcore2.http11"):
-            logging.getLogger(name).addFilter(_TRANSPORT_TRACES)
 
     async def readiness(self) -> CoPresenterReadiness:
         """Say whether the service hears, or that its voice is missing."""

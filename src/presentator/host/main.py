@@ -67,7 +67,11 @@ from presentator.adapters.secrets import (
 )
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.session_access import SessionAccess
-from presentator.adapters.speech import SpeechHearing, SpeechSpeaking
+from presentator.adapters.speech import (
+    SpeechHearing,
+    SpeechSpeaking,
+    silence_transport_traces,
+)
 from presentator.agent.backend import gateway_answerer
 from presentator.agent.mcp import (
     deck_list_mark,
@@ -337,6 +341,7 @@ def _copresenter_surface(
     mirrors: SourceMirrors,
 ) -> CoPresenterSurface:
     """What only a signed-in admin may reach at the talk host: the gateway's answers."""
+    silence_transport_traces()
     return CoPresenterSurface(
         use=CoPresenterUse(
             answers=gateway_answerer(settings.agent, auth.relying_party),

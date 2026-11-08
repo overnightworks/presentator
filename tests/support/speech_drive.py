@@ -20,7 +20,11 @@ from starlette.websockets import WebSocketDisconnect
 
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.session_access import SessionAccess
-from presentator.adapters.speech import SpeechHearing, SpeechSpeaking
+from presentator.adapters.speech import (
+    SpeechHearing,
+    SpeechSpeaking,
+    silence_transport_traces,
+)
 from presentator.agent.backend import gateway_answerer
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import CoPresenterUse
@@ -243,6 +247,7 @@ class WitnessedSpeech:
 def _real_speech_adapters(
     origin: str, *, bounded_calls_stall: bool
 ) -> tuple[SpeechHearing, SpeechSpeaking]:
+    silence_transport_traces()
     if bounded_calls_stall:
         return (
             SpeechHearing(
