@@ -5,13 +5,12 @@ import sqlite3
 import threading
 from collections.abc import Callable, Generator
 from contextlib import closing, contextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
 from fastapi.testclient import TestClient
 from httpx2 import Response as BrowserAnswer
-from webauth.admission import AdmissionConfig
 from webauth.config import WebAuthConfig
 from webauth.oidc import OidcRelyingParty, TokenRequestPost
 from webauth.ports import AccountEvent, AuditSink, SignInStores, SignInTransaction
@@ -23,12 +22,10 @@ from presentator.adapters.identity import (
     SqliteSubjectUserStore,
     create_identity_tables,
 )
-from presentator.agent.settings import McpSettings
-from presentator.api.auth import AgentFront, InstalledAuth
+from presentator.api.auth import InstalledAuth
 from presentator.api.people import AdminPeople
 from presentator.application.decks import Decks
 from presentator.application.preferences import Preferences
-from presentator.host.main import agent_front
 from presentator.ports.copresenter import DeckTexts
 from tests.presentator.application.support.fakes import FrozenClock
 from tests.presentator.application.support.person_instance_support import an_instance
@@ -46,6 +43,7 @@ from tests.support.lobby import (
     a_lobby_app,
     a_relying_party,
     an_admin_people,
+    an_agent_front,
     an_installed_auth,
 )
 
@@ -151,6 +149,7 @@ def _auth_through(
     *,
     token_requests: Callable[[TokenRequestPost], TokenRequestPost],
     transaction: SignInTransaction,
+    realm: str,
 ) -> InstalledAuth:
     """The sign-in wiring whose relying party reaches the fake `issuer` alone."""
     return an_installed_auth(
@@ -159,15 +158,10 @@ def _auth_through(
             clock,
             post_token_request=token_requests(issuer.post_token_request),
             fetch_key_set=issuer.fetch_key_set,
+            issuer=realm,
         ),
         transaction=transaction,
-    )
-
-
-def _agent_of(mcp: McpSettings | None, auth: InstalledAuth) -> AgentFront:
-    """The agent's front as the host composes it, at the test origin."""
-    return agent_front(
-        mcp, origin=A_BROWSERS_ADDRESS, issuer=AN_ISSUER, transaction=auth.transaction
+        realm=realm,
     )
 
 
@@ -186,12 +180,11 @@ def a_scene(  # noqa: PLR0913
     ),
     lock: ProcessWriteLock | None = None,
     audit: Callable[[RecordingAudit], AuditSink] = lambda recording: recording,
-    admission: AdmissionConfig | None = None,
+    realm: str = AN_ISSUER,
     token_requests: Callable[[TokenRequestPost], TokenRequestPost] = lambda real: real,
     token_clients: frozenset[str] = frozenset(),
     decks: Decks | None = None,
     preferences: Preferences | None = None,
-    mcp: McpSettings | None = None,
     texts: DeckTexts | None = None,
 ) -> Scene:
     database = tmp_path / "identity.sqlite3"
@@ -208,16 +201,17 @@ def a_scene(  # noqa: PLR0913
         people.clock,
         token_requests=token_requests,
         transaction=transaction(writes),
+        realm=realm,
     )
     sessions = SqliteSessionRecordStore(database)
     app, _ = a_lobby_app(
-        agent=_agent_of(mcp, auth),
+        agent=an_agent_front(auth),
         texts=texts,
         people=people,
         preferences=preferences,
         signing_in=SigningIn(
             sessions=sessions,
-            auth=auth if admission is None else replace(auth, admission=admission),
+            auth=auth,
             decks=decks,
         ),
         admin_people=_admin_of(token_clients),

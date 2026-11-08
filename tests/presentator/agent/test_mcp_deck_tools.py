@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from httpx2 import Response
 
+from presentator.agent.mcp import AGENT_GROUP, MCP_GROUP
 from presentator.api.deck_api import DECK_VIEW_PATH
 from presentator.api.deck_text_api import DECK_TEXT_PATH
 from presentator.contracts.copresenter import DeckText
@@ -318,7 +319,7 @@ def test_cookie_only_the_owner_reads_the_deck_and_another_person_gets_not_found(
 def test_an_own_account_agent_finds_no_deck_of_a_person(
     world: World, path: str, tool: str
 ) -> None:
-    headers = world.own_agent(groups=[*MEMBER, World.GROUP, World.AGENT_GROUP])
+    headers = world.own_agent(groups=[*MEMBER, MCP_GROUP, AGENT_GROUP])
 
     by_tool = called_through_mcp(
         world.program(), headers, tool, {"slug": World.FELIX_DECK}
@@ -333,14 +334,13 @@ def test_an_own_account_agent_finds_no_deck_of_a_person(
 
 
 @_DECK_AND_TEXT
-def test_with_mcp_off_the_cookie_and_a_configured_person_bearer_still_read(
+def test_the_cookie_and_a_configured_person_bearer_read_beside_the_resource(
     tmp_path: Path, path: str, tool: str
 ) -> None:
     del tool
     world = a_world(
         tmp_path,
         token_clients=frozenset({World.HAL}),
-        mcp_on=False,
     )
     address = path.format(slug=World.FELIX_DECK)
     token = world.bearer(authorized_party=World.HAL, audience=None, groups=MEMBER)

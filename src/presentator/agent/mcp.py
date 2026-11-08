@@ -21,7 +21,15 @@ from webauth.middleware.bearer_gate import (
 from webauth.policies import AuthorizedParties
 from webauth.ports import SignInTransaction
 
-from presentator.agent.settings import McpSettings
+# The realm names the front is built on; no deployment varies them.
+# The scope is the one the realm's `mcp-presentator` client scope grants.
+MCP_SCOPE = "mcp-presentator"
+# The group of people who may use the front, below presentator's login group.
+MCP_GROUP = "/apps/presentator/mcp"
+# The group of the service accounts that sign in with their own client.
+AGENT_GROUP = "/agents"
+# The one public client whose tokens act as the person who signed in.
+MCP_CLIENT_ID = "agents"
 
 
 def _read_only(name: str) -> dict[str, object]:
@@ -51,7 +59,6 @@ def marked_tools(lobby: FastAPI) -> RouteTools[MarkedRoute]:
 def install_mcp_front(
     lobby: FastAPI,
     *,
-    settings: McpSettings,
     origin: str,
     issuer: str,
     transaction: SignInTransaction,
@@ -75,10 +82,10 @@ def install_mcp_front(
     )
     return ProtectedResource(
         url=f"{origin}{MCP_ENDPOINT_PATH}",
-        scope=settings.scope,
-        required_group=settings.group,
-        agent_group=settings.agent_group,
-        authorized_parties=AuthorizedParties(frozenset({settings.client_id})),
+        scope=MCP_SCOPE,
+        required_group=MCP_GROUP,
+        agent_group=AGENT_GROUP,
+        authorized_parties=AuthorizedParties(frozenset({MCP_CLIENT_ID})),
         transaction=transaction,
         marked_routes=tools.marks,
     )

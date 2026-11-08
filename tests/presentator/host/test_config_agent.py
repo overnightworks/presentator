@@ -1,13 +1,22 @@
-"""The `agent` section: four required values, read from the environment or a `.env`."""
+"""The `agent` section: own settings, a stale MCP variable refused, no MCP setting."""
 
 import os
 import re
+from http import HTTPStatus
 from pathlib import Path
 
 import pytest
+from agent_runtime_client.mcp_wire import MCP_ENDPOINT_PATH
+from fastapi.testclient import TestClient
 
 from presentator.host.config import ConfigurationError, load_settings
-from tests.support.lobby import A_GATEWAY_ORIGIN, AN_API_GROUP
+from presentator.host.main import build_instance
+from tests.support.lobby import (
+    A_BROWSERS_ADDRESS,
+    A_BROWSERS_HEADERS,
+    A_GATEWAY_ORIGIN,
+    AN_API_GROUP,
+)
 
 _FIELD_OF = {
     "PRESENTATOR_AGENT__BACKEND": "agent.backend",
@@ -112,97 +121,23 @@ def test_an_unknown_presentator_key_in_a_dot_env_refuses_the_start(
         load_settings()
 
 
-_MCP_FIELD_OF = {
-    "PRESENTATOR_AGENT__MCP__CLIENT_ID": "agent.mcp.client_id",
-    "PRESENTATOR_AGENT__MCP__GROUP": "agent.mcp.group",
-    "PRESENTATOR_AGENT__MCP__SCOPE": "agent.mcp.scope",
-    "PRESENTATOR_AGENT__MCP__AGENT_GROUP": "agent.mcp.agent_group",
-}
-
-
-@pytest.fixture
-def mcp_block() -> dict[str, str]:
-    """A whole MCP block: each variable, by name, with a value that is valid."""
-    return dict(
-        zip(
-            _MCP_FIELD_OF,
-            ("an-agents-client", "/apps/presentator/agents", "mcp:tools", "/agents"),
-            strict=True,
-        )
-    )
-
-
 @pytest.mark.usefixtures("environment")
-def test_without_the_mcp_variables_the_settings_name_no_mcp_block() -> None:
-    assert load_settings().agent.mcp is None
+def test_the_lobby_starts_with_no_mcp_setting_and_serves_the_front() -> None:
+    instance = build_instance(load_settings())
+
+    metadata = TestClient(
+        instance.lobby, base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS
+    ).get(f"/.well-known/oauth-protected-resource{MCP_ENDPOINT_PATH}")
+
+    assert metadata.status_code == HTTPStatus.OK
 
 
-def test_a_whole_mcp_block_names_the_client_its_groups_and_its_scope(
-    environment: pytest.MonkeyPatch, mcp_block: dict[str, str]
-) -> None:
-    for variable, value in mcp_block.items():
-        environment.setenv(variable, value)
-
-    mcp = load_settings().agent.mcp
-
-    assert mcp is not None
-    assert (mcp.client_id, mcp.group, mcp.scope, mcp.agent_group) == tuple(
-        mcp_block.values()
-    )
-
-
-@pytest.mark.parametrize(("missing", "field"), _MCP_FIELD_OF.items())
-def test_a_partial_mcp_block_refuses_the_start_naming_the_field(
+def test_a_stale_mcp_variable_refuses_the_start_naming_the_key_not_the_value(
     environment: pytest.MonkeyPatch,
-    mcp_block: dict[str, str],
-    missing: str,
-    field: str,
 ) -> None:
-    for variable, value in mcp_block.items():
-        if variable != missing:
-            environment.setenv(variable, value)
+    environment.setenv("PRESENTATOR_AGENT__MCP__GROUP", "a-stale-MARKER")
 
-    with pytest.raises(ConfigurationError, match=re.escape(field)):
-        load_settings()
-
-
-@pytest.mark.parametrize(
-    ("variable", "value"),
-    [
-        pytest.param("PRESENTATOR_AGENT__MCP__CLIENT_ID", "", id="empty client id"),
-        pytest.param(
-            "PRESENTATOR_AGENT__MCP__GROUP", "no-slash-MARKER", id="a group no path"
-        ),
-        pytest.param(
-            "PRESENTATOR_AGENT__MCP__GROUP", "/apps//MARKER", id="an empty segment"
-        ),
-        pytest.param(
-            "PRESENTATOR_AGENT__MCP__SCOPE", "two MARKER", id="two scope tokens"
-        ),
-        pytest.param("PRESENTATOR_AGENT__MCP__SCOPE", "", id="no scope"),
-        pytest.param(
-            "PRESENTATOR_AGENT__MCP__AGENT_GROUP",
-            "no-slash-MARKER",
-            id="an agent group no path",
-        ),
-        pytest.param(
-            "PRESENTATOR_AGENT__MCP__AGENT_GROUP", "", id="an empty agent group"
-        ),
-    ],
-)
-def test_a_malformed_mcp_block_refuses_the_start_without_echoing_it(
-    environment: pytest.MonkeyPatch,
-    mcp_block: dict[str, str],
-    variable: str,
-    value: str,
-) -> None:
-    for name, given in mcp_block.items():
-        environment.setenv(name, given)
-    environment.setenv(variable, value)
-
-    with pytest.raises(
-        ConfigurationError, match=re.escape(_MCP_FIELD_OF[variable])
-    ) as refused:
+    with pytest.raises(ConfigurationError, match=re.escape("agent.mcp")) as refused:
         load_settings()
 
     assert "MARKER" not in str(refused.value)

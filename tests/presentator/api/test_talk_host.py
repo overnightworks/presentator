@@ -7,7 +7,6 @@ from urllib.parse import parse_qs, quote, urlencode, urlsplit
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
-from webauth.admission import AdmissionConfig
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.middleware.security_headers import (
     CONTENT_TYPE_OPTIONS,
@@ -22,6 +21,7 @@ from tests.support.lobby import (
     A_LOBBY_ASSET,
     A_TALK_ADDRESS,
     AN_ASSET,
+    AN_ISSUER,
     BUILT_TALK,
     Lobby,
 )
@@ -374,12 +374,12 @@ def test_two_sign_ins_in_one_browser_complete_each_on_its_own_host(
 
 def _refused(tmp_path: Path, reason: str) -> tuple[Hosts, TestClient, Response]:
     """A talk sign-in that fails for this reason, and the answer it got."""
-    foreign = AdmissionConfig(
-        bound_issuer="https://another-issuer.example.test/realms/test",
-        login_group=MEMBER[0],
-        admin_group=f"{MEMBER[0]}/admin",
+    realm = (
+        "https://another-issuer.example.test/realms/test"
+        if reason == "foreign"
+        else AN_ISSUER
     )
-    hosts = two_hosts(tmp_path, admission=foreign if reason == "foreign" else None)
+    hosts = two_hosts(tmp_path, realm=realm)
     browser = hosts.browser(A_TALK_ADDRESS)
     groups = [] if reason == "not a member" else MEMBER
     if reason == "no issuer":
