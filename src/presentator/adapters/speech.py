@@ -36,7 +36,7 @@ from presentator.contracts.copresenter import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Callable
 
     from speech_runtime_client.health import HealthOutcome
 
@@ -66,10 +66,17 @@ _TRANSPORT_TRACES: Final = _WarningsOnly()
 class SpeechSpeaking:
     """Speak one sentence at the shared speech service."""
 
-    def __init__(self, origin: str, *, voice: str) -> None:
+    def __init__(
+        self,
+        origin: str,
+        *,
+        voice: str,
+        bounded_speak: Callable[..., SpeakOutcome] = speak,
+    ) -> None:
         """Keep the service's origin and the voice this instance speaks in."""
         self._origin = origin
         self._voice = voice
+        self._bounded_speak = bounded_speak
 
     async def speak(self, text: str, language: str, tokens: SpeechTokens) -> bytes:
         """The sentence as one whole WAV, exactly as the service sent it."""
@@ -77,7 +84,7 @@ class SpeechSpeaking:
         del language
         try:
             outcome: SpeakOutcome | None = await asyncio.to_thread(
-                speak,
+                self._bounded_speak,
                 self._origin,
                 text,
                 self._voice,
@@ -120,10 +127,17 @@ def _audio_of(outcome: SpeakOutcome) -> bytes:
 class SpeechHearing:
     """Read the shared speech service's readiness and hear through it."""
 
-    def __init__(self, origin: str, *, voice: str) -> None:
+    def __init__(
+        self,
+        origin: str,
+        *,
+        voice: str,
+        bounded_health_fetch: Callable[..., HealthOutcome] = fetch_health,
+    ) -> None:
         """Keep the service's origin and the voice readiness asks after."""
         self._origin = origin
         self._voice = voice
+        self._bounded_health_fetch = bounded_health_fetch
         # httpcore2 traces the upgrade's response headers at DEBUG and httpx2 the
         # response line at INFO, whatever level an operator set; those carry
         # what the speech service answered.
@@ -133,7 +147,7 @@ class SpeechHearing:
     async def readiness(self) -> CoPresenterReadiness:
         """Say whether the service hears, or that its voice is missing."""
         outcome = await asyncio.to_thread(
-            fetch_health,
+            self._bounded_health_fetch,
             self._origin,
             deadline_seconds=_HEALTH_DEADLINE_SECONDS,
             cap_bytes=_HEALTH_CAP_BYTES,

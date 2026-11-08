@@ -8,8 +8,8 @@ import logging
 from typing import TYPE_CHECKING
 
 import pytest
-from fastapi.responses import JSONResponse, Response, StreamingResponse
 from speech_runtime_client import wire
+from speech_runtime_client.outcomes import OverCap, PastDeadline
 
 from presentator.adapters.speech import SpeechSpeaking
 from presentator.contracts.copresenter import (
@@ -19,21 +19,20 @@ from presentator.contracts.copresenter import (
 from tests.support.lobby import A_SPEECH_VOICE
 from tests.support.speech_service import (
     A_WAV,
+    MALFORMED_PEERS,
+    PLANTED,
+    SPEAK_FAILURES,
     FakeSpeechService,
     RawPeer,
     a_closed_port_origin,
     a_loopback_server,
-    a_refusal,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
-    from tests.support.speech_service import Answer
+    from speech_runtime_client.speak import SpeakOutcome
 
 TOKENS = SpeechTokens(person="person-token-MARKER", workload="workload-token-MARKER")
 SENTENCE = "Ein Satz, bitte."
-MARKER = "planted-MARKER"
 
 
 def speak_against(fake: FakeSpeechService) -> bytes:
@@ -77,47 +76,11 @@ def test_the_request_carries_both_tokens_in_the_clients_headers() -> None:
         assert request.headers[name.lower()] == value
 
 
-def _a_cut_body() -> Response:
-    async def chunks() -> AsyncIterator[bytes]:
-        yield A_WAV
-        message = "cut"
-        raise RuntimeError(message)
-
-    return StreamingResponse(chunks(), media_type="audio/wav")
-
-
-def _a_voice_that_cannot_speak() -> Answer:
-    return a_refusal(wire.RefusalCode.UNAVAILABLE, "voice")
-
-
-def _busy_with_a_wait() -> Response:
-    refusal = wire.refusal(wire.RefusalCode.BUSY)
-    return JSONResponse(
-        refusal.model_dump(mode="json", exclude={"status"}),
-        status_code=refusal.status,
-        headers={wire.RETRY_AFTER_HEADER: "3"},
-    )
-
-
-REFUSALS: dict[str, Answer] = {
-    **{
-        code.value: a_refusal(code)
-        for code in wire.RefusalCode
-        if code is not wire.RefusalCode.BUSY
-    },
-    "unavailable-voice": _a_voice_that_cannot_speak(),
-    "busy": _busy_with_a_wait,
-    "non-json-500": lambda: Response(b"not json", status_code=500),
-    "empty-body": lambda: StreamingResponse(iter(()), media_type="audio/wav"),
-    "cut-body": _a_cut_body,
-}
-
-
-@pytest.mark.parametrize("case", REFUSALS)
+@pytest.mark.parametrize("case", SPEAK_FAILURES)
 def test_every_refusal_or_broken_answer_is_unavailable(
     case: str, caplog: pytest.LogCaptureFixture
 ) -> None:
-    fake = FakeSpeechService(speak_answers=[REFUSALS[case]])
+    fake = FakeSpeechService(speak_answers=[SPEAK_FAILURES[case]])
     caplog.set_level(logging.DEBUG)
 
     with pytest.raises(CoPresenterUnavailableError):
@@ -126,6 +89,7 @@ def test_every_refusal_or_broken_answer_is_unavailable(
     assert TOKENS.person not in caplog.text
     assert TOKENS.workload not in caplog.text
     assert SENTENCE not in caplog.text
+    assert PLANTED not in caplog.text
 
 
 def test_a_refused_connection_is_unavailable() -> None:
@@ -135,20 +99,31 @@ def test_a_refused_connection_is_unavailable() -> None:
         asyncio.run(speaking.speak(SENTENCE, "de", TOKENS))
 
 
-@pytest.mark.parametrize(
-    "answer",
-    [b"HTTP/9 marker not a status line\r\n\r\n", b"HTTP/1.1 200 OK\r\nX-Cut: "],
-    ids=["status-line-not-http", "cut-header-block"],
-)
-def test_a_malformed_answer_is_unavailable(answer: bytes) -> None:
+@pytest.mark.parametrize("case", MALFORMED_PEERS)
+def test_a_malformed_answer_is_unavailable(case: str) -> None:
     async def scenario() -> None:
-        async with RawPeer(answer).serving() as origin:
+        async with RawPeer(MALFORMED_PEERS[case]).serving() as origin:
             await SpeechSpeaking(origin, voice=A_SPEECH_VOICE).speak(
                 SENTENCE, "de", TOKENS
             )
 
     with pytest.raises(CoPresenterUnavailableError):
         asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("outcome", [PastDeadline(), OverCap()], ids=repr)
+def test_a_speak_the_client_ended_at_its_own_bound_is_unavailable(
+    outcome: SpeakOutcome,
+) -> None:
+    def bounded_speak(*_args: object, **_kwargs: object) -> SpeakOutcome:
+        return outcome
+
+    speaking = SpeechSpeaking(
+        "http://speech.test", voice=A_SPEECH_VOICE, bounded_speak=bounded_speak
+    )
+
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(speaking.speak(SENTENCE, "de", TOKENS))
 
 
 def test_a_sentence_the_wire_cannot_carry_is_one_chain_free_unavailable_error(

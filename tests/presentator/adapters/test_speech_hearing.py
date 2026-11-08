@@ -23,11 +23,17 @@ from tests.presentator.application.support.fakes import FakeDeckStore
 from tests.support.copresenter_support import PrivateFakes, a_use
 from tests.support.lobby import A_SPEECH_VOICE
 from tests.support.speech_service import (
+    AN_ITEM,
     FakeSpeechService,
     Hear,
     RawPeer,
     a_closed_port_origin,
+    a_completed,
+    a_delta,
+    a_failed_item,
     a_loopback_server,
+    an_error_event,
+    sending,
 )
 
 if TYPE_CHECKING:
@@ -36,7 +42,7 @@ if TYPE_CHECKING:
     from presentator.ports.copresenter import PrivateHearing
 
 TOKENS = SpeechTokens(person="person-token-MARKER", workload="workload-token-MARKER")
-ITEM = "item-1"
+ITEM = AN_ITEM
 _CLOSE_WAIT_SECONDS = 10
 
 
@@ -49,36 +55,6 @@ async def hearing_against(
         SpeechHearing(origin, voice=A_SPEECH_VOICE).hear(language, TOKENS) as hearing,
     ):
         yield hearing
-
-
-def _sending(*events: wire.ServerEvent) -> Hear:
-    async def realtime(socket: WebSocket) -> None:
-        await socket.accept()
-        for event in events:
-            await socket.send_text(event.model_dump_json())
-        await socket.close()
-
-    return realtime
-
-
-def _delta(text: str, item: str = ITEM) -> wire.TranscriptDelta:
-    return wire.TranscriptDelta(item_id=item, delta=text)
-
-
-def _completed(text: str, item: str = ITEM) -> wire.TranscriptCompleted:
-    return wire.TranscriptCompleted(
-        item_id=item, transcript=text, usage=wire.DurationUsage(seconds=1.0)
-    )
-
-
-def _an_error_event() -> wire.ErrorEvent:
-    return wire.error_event(wire.RefusalCode.UNAVAILABLE)
-
-
-def _a_failed_item() -> wire.TranscriptFailed:
-    return wire.TranscriptFailed(
-        item_id=ITEM, error=wire.item_failure(wire.RefusalCode.UNAVAILABLE)
-    )
 
 
 def _heard_all(fake: FakeSpeechService) -> list[HearingTranscript | str | None]:
@@ -171,12 +147,11 @@ def test_each_frame_is_appended_in_order_and_closing_sends_no_commit() -> None:
 
 def test_deltas_grow_per_item_and_the_completed_text_replaces_them() -> None:
     fake = FakeSpeechService(
-        realtime=_sending(
-            _delta("Gu"),
-            _delta("Ha", item="item-2"),
-            _delta("ten"),
-            _completed("Guten Tag."),
-            _completed("", item="item-2"),
+        realtime=sending(
+            a_delta("Gu"),
+            a_delta("Ha", item="item-2"),
+            a_delta("ten"),
+            a_completed("Guten Tag."),
         )
     )
 
@@ -191,16 +166,38 @@ def test_deltas_grow_per_item_and_the_completed_text_replaces_them() -> None:
     ]
 
 
+def test_an_empty_completed_sends_nothing_and_clears_the_item_for_its_next_delta() -> (
+    None
+):
+    fake = FakeSpeechService(
+        realtime=sending(
+            a_delta("Ha", item="item-2"),
+            a_completed("", item="item-2"),
+            a_delta("Neu", item="item-2"),
+        )
+    )
+
+    assert _heard_all(fake) == [
+        HearingTranscript(text="Ha", final=False),
+        HearingTranscript(text="Neu", final=False),
+        None,
+    ]
+
+
 def test_session_and_turn_events_are_skipped() -> None:
     fake = FakeSpeechService(
-        realtime=_sending(
+        realtime=sending(
             wire.SessionCreated(
                 session=wire.TranscriptionSession(type="transcription")
             ),
+            wire.SessionUpdated(
+                session=wire.TranscriptionSession(type="transcription")
+            ),
+            wire.ItemCreated(previous_item_id=None, item=wire.UserMessageItem(id=ITEM)),
             wire.SpeechStarted(audio_start_ms=0, item_id=ITEM),
             wire.SpeechStopped(audio_end_ms=1, item_id=ITEM),
             wire.AudioCommitted(item_id=ITEM, previous_item_id=None),
-            _completed("Ein Wort."),
+            a_completed("Ein Wort."),
         )
     )
 
@@ -214,15 +211,15 @@ def test_session_and_turn_events_are_skipped() -> None:
     "events",
     [
         pytest.param(
-            lambda: (_a_failed_item(), _an_error_event()), id="failed-then-error"
+            lambda: (a_failed_item(), an_error_event()), id="failed-then-error"
         ),
-        pytest.param(lambda: (_an_error_event(),), id="error-alone"),
+        pytest.param(lambda: (an_error_event(),), id="error-alone"),
     ],
 )
 def test_a_failed_item_or_error_event_is_unavailable(
     events: Callable[[], tuple[wire.ServerEvent, ...]],
 ) -> None:
-    fake = FakeSpeechService(realtime=_sending(*events()))
+    fake = FakeSpeechService(realtime=sending(*events()))
 
     with pytest.raises(CoPresenterUnavailableError):
         _heard_all(fake)

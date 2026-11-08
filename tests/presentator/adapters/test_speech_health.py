@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Callable
 
 import pytest
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse
 from speech_runtime_client import wire
+from speech_runtime_client.outcomes import PastDeadline
 
 from presentator.adapters.speech import SpeechHearing
 from presentator.contracts.copresenter import (
@@ -16,14 +16,14 @@ from presentator.contracts.copresenter import (
 )
 from tests.support.lobby import A_SPEECH_VOICE
 from tests.support.speech_service import (
+    HEALTH_FAILURES,
+    MALFORMED_PEERS,
     FakeSpeechService,
     RawPeer,
     a_closed_port_origin,
     a_health_document,
     a_loopback_server,
 )
-
-_HEALTH_BODY_CAP_BYTES = 70_000
 
 
 def readiness_of(fake: FakeSpeechService) -> CoPresenterReadiness:
@@ -32,19 +32,6 @@ def readiness_of(fake: FakeSpeechService) -> CoPresenterReadiness:
             return await SpeechHearing(origin, voice=A_SPEECH_VOICE).readiness()
 
     return asyncio.run(scenario())
-
-
-def _health(**changes: object) -> Callable[[], Response]:
-    return lambda: JSONResponse({**a_health_document(), **changes})
-
-
-def _a_cut_body() -> Response:
-    async def chunks() -> AsyncIterator[bytes]:
-        yield b'{"speaking":'
-        message = "cut"
-        raise RuntimeError(message)
-
-    return StreamingResponse(chunks(), media_type="application/json")
 
 
 def test_a_ready_service_hears_at_the_clients_fixed_rate() -> None:
@@ -76,53 +63,26 @@ def test_the_health_request_carries_no_credential() -> None:
     )
 
 
-def _v0_1_shape() -> Response:
-    return JSONResponse(
-        {
-            "speaking": {"model": "m", "ready": True, "sample_rate": 22050},
-            "hearing": {"model": "m", "ready": True},
-            "sample_rate": 16000,
-            "card_memory_mb": 1,
-        }
-    )
-
-
-def _absent_voice() -> Response:
-    return JSONResponse(a_health_document(voice="another-voice"))
-
-
-def _its_voice_not_ready() -> Response:
-    return JSONResponse(a_health_document(voice_ready=False))
-
-
-NOT_READY: dict[str, Callable[[], Response]] = {
-    "non-200": lambda: JSONResponse({}, status_code=503),
-    "non-json": lambda: Response(b"not json", media_type="application/json"),
-    "missing-section": _health(hearing=None),
-    "ready-as-text": _health(hearing={"model": "m", "ready": "true"}),
-    "ready-as-number": _health(hearing={"model": "m", "ready": 1}),
-    "sample-rate-as-text": _health(
-        speaking={
-            "ready": True,
-            "voices": {
-                A_SPEECH_VOICE: {"model": "m", "ready": True, "sample_rate": "1"}
-            },
-        }
-    ),
-    "past-the-cap": lambda: Response(b"x" * _HEALTH_BODY_CAP_BYTES),
-    "cut-body": _a_cut_body,
-    "v0.1-shape": _v0_1_shape,
-    "voice-absent": _absent_voice,
-    "its-voice-not-ready": _its_voice_not_ready,
-}
-
-
-@pytest.mark.parametrize("case", NOT_READY)
+@pytest.mark.parametrize("case", HEALTH_FAILURES)
 def test_every_answer_but_a_ready_health_is_unavailable(case: str) -> None:
-    fake = FakeSpeechService(health_answer=NOT_READY[case])
+    fake = FakeSpeechService(health_answer=HEALTH_FAILURES[case])
 
     with pytest.raises(CoPresenterUnavailableError):
         readiness_of(fake)
+
+
+def test_a_health_read_past_its_deadline_is_unavailable() -> None:
+    def bounded_health_fetch(*_args: object, **_kwargs: object) -> PastDeadline:
+        return PastDeadline()
+
+    hearing = SpeechHearing(
+        "http://speech.test",
+        voice=A_SPEECH_VOICE,
+        bounded_health_fetch=bounded_health_fetch,
+    )
+
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(hearing.readiness())
 
 
 def test_a_refused_connection_is_unavailable() -> None:
@@ -134,8 +94,11 @@ def test_a_refused_connection_is_unavailable() -> None:
 
 @pytest.mark.parametrize(
     "answer",
-    [b"NOT HTTP\r\n\r\n", b"HTTP/1.1 200 OK\r\nContent-Length: 9\r\n\r\nshort"],
-    ids=["status-line-not-http", "body-cut-midway"],
+    [
+        *MALFORMED_PEERS.values(),
+        b"HTTP/1.1 200 OK\r\nContent-Length: 9\r\n\r\nshort",
+    ],
+    ids=[*MALFORMED_PEERS, "body-cut-midway"],
 )
 def test_a_malformed_or_cut_answer_is_unavailable(answer: bytes) -> None:
     async def scenario() -> None:

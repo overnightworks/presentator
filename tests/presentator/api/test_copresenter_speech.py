@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import json
+import re
 import sqlite3
 import threading
-from contextlib import closing, suppress
+from contextlib import closing
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Final
 from urllib.parse import parse_qs, urlsplit
@@ -16,16 +19,18 @@ from fastapi import Response, WebSocket
 from fastapi.responses import JSONResponse
 from speech_runtime_client import wire
 from starlette.websockets import WebSocketDisconnect
+from webauth.oidc import OidcRefusalReason
 
 from tests.support.copresenter_support import (
     ACCESS,
-    API_MEMBER_GROUPS,
     HEARING,
-    REFRESH,
     ROTATED,
-    SPOKEN_QUESTION,
+    THE_ASKED_DECK,
     delete_the_sessions,
     the_refresh_token_is_revoked,
+    the_session_ends_during_the_grant,
+    the_token_endpoint_goes_down,
+    the_token_thread_fails,
 )
 from tests.support.leak_support import everything_shown
 from tests.support.lobby import (
@@ -35,21 +40,44 @@ from tests.support.lobby import (
     A_TALK_ADDRESS,
 )
 from tests.support.speech_drive import (
+    LEAK_ASKS,
+    LEAK_HEALTH,
+    LEAK_HEARINGS,
+    ORIGIN,
     WORKLOAD,
     SpeechInstance,
     SpeechScenario,
     a_speech_instance,
     ask_over,
+    assert_nothing_shows,
+    hear_and_record,
     recorded_logs,
-    session_columns,
+    refusing_every_workload_grant,
+    who_over,
 )
 from tests.support.speech_service import (
     A_WAV,
+    AN_ITEM,
+    HEALTH_FAILURES,
+    MALFORMED_PEERS,
+    PLANTED,
+    SPEAK_FAILURES,
     FakeSpeechService,
     Hear,
+    RawPeer,
+    Served,
     a_chunked_wav,
+    a_completed,
+    a_delta,
+    a_failed_item,
     a_health_document,
-    a_refusal,
+    a_held_wav,
+    after_the_first_audio,
+    an_error_event,
+    busy_at_the_upgrade,
+    crashing_after_the_first_audio,
+    denying,
+    nobody_listens,
     reading,
 )
 from tests.support.talk_support import A, Hosts
@@ -58,17 +86,25 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-ORIGIN: Final = {"origin": A_TALK_ADDRESS}
-HEARD: Final = "die gehörten Worte MARKER"
-PLANTED: Final = "planted-MARKER"
+    from starlette.types import Message, Scope
+
 _THREAD_WAIT_SECONDS: Final = 10
 _POLICY_VIOLATION: Final = 1008
 THREE_SENTENCES: Final = 3
 SECOND: Final = 2
+_NO_HEARING: Final = {"text": "", "final": True, "error": "hearing unavailable"}
+_THE_PLAIN_ERROR: Final = {"message": "the answer could not be spoken"}
 
 
 def _say(text: str) -> Callable[[], FakeGateway]:
     return lambda: FakeGateway(completion(text))
+
+
+def _spoken_wavs(body: str) -> list[bytes]:
+    return [
+        base64.b64decode(json.loads(data)["wav_b64"])
+        for data in re.findall(r"^event: audio\ndata: (.*)$", body, re.MULTILINE)
+    ]
 
 
 def test_sentences_are_spoken_in_order_with_both_issued_tokens_and_the_wav_unchanged(
@@ -92,29 +128,53 @@ def test_sentences_are_spoken_in_order_with_both_issued_tokens_and_the_wav_uncha
     for request in service.speak_requests:
         assert request.headers["authorization"] == f"Bearer {ACCESS}"
         assert request.headers[wire.WORKLOAD_TOKEN_HEADER.lower()] == WORKLOAD
-    assert run.events.count("audio") == THREE_SENTENCES
-    assert A_WAV.hex() not in run.response.text
+    assert _spoken_wavs(run.response.text) == [A_WAV] * THREE_SENTENCES
     assert run.events[-1] == "done"
 
 
-@pytest.mark.parametrize(
-    "answer",
-    [a_refusal(wire.RefusalCode.UNAUTHORIZED), a_refusal(wire.RefusalCode.FORBIDDEN)],
-    ids=["unauthorized", "forbidden"],
-)
-def test_a_refused_sentence_keeps_what_was_spoken_and_ends_with_a_plain_error(
-    tmp_path: Path, answer: Callable[[], Response]
+@pytest.mark.parametrize("case", SPEAK_FAILURES)
+def test_every_speak_failure_keeps_what_was_spoken_and_ends_with_the_plain_error(
+    tmp_path: Path, case: str
 ) -> None:
-    service = FakeSpeechService(speak_answers=[a_chunked_wav, answer])
+    service = FakeSpeechService(speak_answers=[a_chunked_wav, SPEAK_FAILURES[case]])
     scenario = SpeechScenario(
         gateway=_say("Erster Satz. Zweiter Satz."), service=service
     )
     with a_speech_instance(tmp_path, scenario) as instance:
         run = ask_over(instance)
 
-    assert run.events.count("audio") == 1
+    assert run.response.status_code == HTTPStatus.OK
+    assert _spoken_wavs(run.response.text) == [A_WAV]
     assert run.events[-1] == "error"
-    assert run.error_payload() == {"message": "the answer could not be spoken"}
+    assert run.error_payload() == _THE_PLAIN_ERROR
+
+
+@pytest.mark.parametrize(
+    "peer",
+    [
+        pytest.param(RawPeer(MALFORMED_PEERS[name]).serving, id=name)
+        for name in MALFORMED_PEERS
+    ]
+    + [pytest.param(nobody_listens, id="nobody-listens")],
+)
+def test_a_service_answering_nothing_the_client_can_read_ends_with_the_plain_error(
+    tmp_path: Path, peer: Served
+) -> None:
+    with a_speech_instance(tmp_path, SpeechScenario(peer=peer)) as instance:
+        run = ask_over(instance)
+
+    assert run.response.status_code == HTTPStatus.OK
+    assert run.events[-1] == "error"
+    assert run.error_payload() == _THE_PLAIN_ERROR
+
+
+def test_a_speak_past_its_deadline_ends_with_the_plain_error(tmp_path: Path) -> None:
+    scenario = SpeechScenario(bounded_calls_stall=True)
+    with a_speech_instance(tmp_path, scenario) as instance:
+        run = ask_over(instance)
+
+    assert run.events[-1] == "error"
+    assert run.error_payload() == _THE_PLAIN_ERROR
 
 
 def test_an_answer_ending_in_only_punctuation_speaks_the_rest_and_ends_in_a_plain_error(
@@ -131,52 +191,74 @@ def test_an_answer_ending_in_only_punctuation_speaks_the_rest_and_ends_in_a_plai
     assert "…" not in everything_shown(run.logged, instance.errors)
 
 
-def test_the_who_route_reads_the_real_service(tmp_path: Path) -> None:
-    def who_is(answer: Callable[[], Response], folder: str) -> tuple[int, object]:
-        service = FakeSpeechService(health_answer=answer)
-        subdirectory = tmp_path / folder
-        subdirectory.mkdir()
-        with a_speech_instance(
-            subdirectory, SpeechScenario(service=service)
-        ) as instance:
-            response = instance.talk.get("/copresenter/who", params={"deck": "a-deck"})
-        body = response.json() if response.status_code == HTTPStatus.OK else None
-        return response.status_code, body
+def _who_status(instance: SpeechInstance) -> HTTPStatus:
+    response, _logged = who_over(instance)
+    return HTTPStatus(response.status_code)
 
-    def good() -> Response:
-        return JSONResponse(a_health_document())
 
-    def voice_missing() -> Response:
-        return JSONResponse(a_health_document(voice="another-voice"))
+def test_who_says_a_ready_service_hears_at_the_clients_rate(tmp_path: Path) -> None:
+    with a_speech_instance(tmp_path) as instance:
+        response, _logged = who_over(instance)
 
-    def loading() -> Response:
-        return JSONResponse(a_health_document(hearing_ready=False, voice_ready=False))
+    assert response.status_code == HTTPStatus.OK
+    speech = response.json()["speech"]
+    assert speech["hearing"]["ready"] is True
+    assert speech["sample_rate"] == wire.SessionInput().format.rate
 
-    ok, ready = who_is(good, "ready")
-    assert ok == HTTPStatus.OK
-    assert ready["speech"]["hearing"]["ready"] is True  # type: ignore[index]
-    assert ready["speech"]["sample_rate"] == wire.SessionInput().format.rate  # type: ignore[index]
 
-    status, _ = who_is(voice_missing, "voice-missing")
+def test_who_says_hearing_still_loading_even_when_the_voice_is_not_ready(
+    tmp_path: Path,
+) -> None:
+    body = a_health_document(hearing_ready=False, voice_ready=False)
+    service = FakeSpeechService(health_answer=lambda: JSONResponse(body))
+    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+        response, _logged = who_over(instance)
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["speech"]["hearing"]["ready"] is False
+
+
+@pytest.mark.parametrize("case", HEALTH_FAILURES)
+def test_who_answers_503_for_every_health_that_cannot_say_ready(
+    tmp_path: Path, case: str
+) -> None:
+    service = FakeSpeechService(health_answer=HEALTH_FAILURES[case])
+    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+        status = _who_status(instance)
+
     assert status == HTTPStatus.SERVICE_UNAVAILABLE
 
-    loading_status, still = who_is(loading, "loading")
-    assert loading_status == HTTPStatus.OK
-    assert still["speech"]["hearing"]["ready"] is False  # type: ignore[index]
+
+@pytest.mark.parametrize(
+    "peer",
+    [
+        pytest.param(RawPeer(MALFORMED_PEERS[name]).serving, id=name)
+        for name in MALFORMED_PEERS
+    ]
+    + [pytest.param(nobody_listens, id="nobody-listens")],
+)
+def test_who_answers_503_for_a_service_it_cannot_read(
+    tmp_path: Path, peer: Served
+) -> None:
+    with a_speech_instance(tmp_path, SpeechScenario(peer=peer)) as instance:
+        status = _who_status(instance)
+
+    assert status == HTTPStatus.SERVICE_UNAVAILABLE
 
 
-def _refuse_all_workload_grants(error: str) -> Callable[[Hosts], None]:
-    def arrange(hosts: Hosts) -> None:
-        hosts.issuer.workload_refusal = (error, PLANTED)
+def test_who_answers_503_for_a_health_past_its_deadline(tmp_path: Path) -> None:
+    scenario = SpeechScenario(bounded_calls_stall=True)
+    with a_speech_instance(tmp_path, scenario) as instance:
+        status = _who_status(instance)
 
-    return arrange
+    assert status == HTTPStatus.SERVICE_UNAVAILABLE
 
 
 @pytest.mark.parametrize("error", ["invalid_scope", "invalid_client"])
 def test_a_refused_workload_grant_ends_the_ask_in_503_before_any_stream(
     tmp_path: Path, error: str
 ) -> None:
-    scenario = SpeechScenario(arrange=_refuse_all_workload_grants(error))
+    scenario = SpeechScenario(arrange=refusing_every_workload_grant(error))
     with a_speech_instance(tmp_path, scenario) as instance:
         run = ask_over(instance)
 
@@ -273,17 +355,21 @@ def test_a_refusal_at_the_speech_read_answers_before_the_stream_and_frees_the_ti
     assert again.response.status_code != HTTPStatus.TOO_MANY_REQUESTS
 
 
+@pytest.mark.parametrize("scope", ["speech-scope-one", "another-speech-audience"])
 def test_both_hosts_sign_in_naming_exactly_the_configured_speech_scope(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scope: str
 ) -> None:
+    monkeypatch.setattr("tests.support.lobby.A_SPEECH_SCOPE", scope)
     with a_speech_instance(tmp_path) as instance:
-        expected = {"openid", "profile", "groups", A_SPEECH_SCOPE}
         lobby = instance.hosts.browser(A_BROWSERS_ADDRESS)
         talk = instance.hosts.browser(A_TALK_ADDRESS, headers=A_BROWSERS_HEADERS)
-        for browser in (lobby, talk):
-            location = browser.get("/login/oidc").headers["location"]
-            scope = parse_qs(urlsplit(location).query)["scope"][0]
-            assert set(scope.split()) == expected
+        locations = [
+            browser.get("/login/oidc").headers["location"] for browser in (lobby, talk)
+        ]
+
+    for location in locations:
+        requested = parse_qs(urlsplit(location).query)["scope"][0].split()
+        assert sorted(requested) == sorted(["openid", "profile", "groups", scope])
 
 
 def _release_the_recheck(instance: SpeechInstance) -> None:
@@ -431,120 +517,312 @@ def test_a_second_lease_the_service_refuses_shows_no_hearing_on_the_second_only(
             }
 
 
-def _a_marked_refusal() -> Response:
-    return Response(
-        content=json.dumps({"error": {"message": PLANTED, "type": "server_error"}}),
-        status_code=500,
-        headers={"X-Marker": PLANTED},
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_the_upgrade_carries_the_issued_tokens_and_names_the_language_before_audio(
+    tmp_path: Path, language: str
+) -> None:
+    service = FakeSpeechService()
+    service.realtime = reading(service)
+    with (
+        a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance,
+        instance.talk.websocket_connect(
+            HEARING.replace("language=de", f"language={language}"), headers=ORIGIN
+        ) as socket,
+    ):
+        socket.send_bytes(b"first")
+        for _ in range(2):
+            assert service.arrived.acquire(timeout=_THREAD_WAIT_SECONDS)
+
+    (upgrade,) = service.upgrades
+    issued = wire.token_headers(
+        workload_token=instance.hosts.issuer.workload_token, person_token=ACCESS
     )
+    for name, value in issued.items():
+        assert upgrade.headers[name.lower()] == value
+    assert service.upgrade_paths == [
+        f"{wire.REALTIME_INTENT_PARAM}={wire.REALTIME_INTENT}"
+    ]
+    setup, append = service.events
+    assert setup["type"] == "session.update"
+    session_input = setup["session"]["audio"]["input"]  # type: ignore[index]
+    assert session_input["transcription"]["language"] == language  # type: ignore[index]
+    assert append["type"] == "input_audio_buffer.append"
 
 
-def _an_error_carrying_the_marker() -> Hear:
-    async def realtime(connection: WebSocket) -> None:
-        await connection.accept()
-        await connection.receive()
-        event = wire.ErrorEvent(
-            error=wire.RealtimeError(
-                message=PLANTED,
-                type="server_error",
-                code=wire.RefusalCode.UNAVAILABLE,
-                param=None,
-                event_id=None,
+def test_one_lease_makes_one_refresh_grant_and_one_workload_grant(
+    tmp_path: Path,
+) -> None:
+    with a_speech_instance(tmp_path) as instance:
+        before = len(instance.hosts.issuer.grant_types)
+        frames, _logged = hear_and_record(instance)
+        grants = instance.hosts.issuer.grant_types[before:]
+
+    assert grants == ["refresh_token", "client_credentials"]
+    assert instance.hosts.issuer.workload_scopes == [A_SPEECH_SCOPE]
+    assert frames[-1] == _NO_HEARING
+
+
+@pytest.mark.parametrize("error", ["invalid_scope", "invalid_client"])
+def test_a_refused_workload_grant_ends_the_hearing_in_no_hearing_and_logs_its_reason(
+    tmp_path: Path, error: str
+) -> None:
+    scenario = SpeechScenario(arrange=refusing_every_workload_grant(error))
+    with a_speech_instance(tmp_path, scenario) as instance:
+        frames, logged = hear_and_record(instance)
+
+    assert frames == [_NO_HEARING]
+    assert not instance.service.upgrades
+    shown = everything_shown(logged)
+    assert OidcRefusalReason.TOKEN_REQUEST_REFUSED.value in shown
+    assert error not in shown
+
+
+@pytest.mark.parametrize(
+    "arrange",
+    [
+        the_refresh_token_is_revoked,
+        the_session_ends_during_the_grant,
+        the_token_endpoint_goes_down,
+        the_token_thread_fails,
+    ],
+    ids=["revoked", "session-ended", "issuer-down", "thread-raises"],
+)
+def test_any_refused_token_read_ends_the_hearing_with_no_upgrade(
+    tmp_path: Path, arrange: Callable[[Hosts], None]
+) -> None:
+    with a_speech_instance(tmp_path, SpeechScenario(arrange=arrange)) as instance:
+        frames, _logged = hear_and_record(instance)
+
+    assert frames == [_NO_HEARING]
+    assert not instance.service.upgrades
+
+
+def _transcripts(*shown: tuple[str, bool]) -> list[dict[str, object]]:
+    return [{"text": text, "final": final} for text, final in shown]
+
+
+BROWSER_FRAMES: dict[str, tuple[Hear, list[dict[str, object]]]] = {
+    "deltas-grow-and-completed-replaces": (
+        after_the_first_audio(
+            a_delta("Gu"),
+            a_delta("Ha", item="item-2"),
+            a_delta("ten"),
+            a_completed("Guten Tag."),
+        ),
+        _transcripts(
+            ("Gu", False), ("Ha", False), ("Guten", False), ("Guten Tag.", True)
+        ),
+    ),
+    "empty-completed-sends-nothing-and-clears-the-item": (
+        after_the_first_audio(
+            a_delta("Ha", item="item-2"),
+            a_completed("", item="item-2"),
+            a_delta("Neu", item="item-2"),
+            a_completed("Neu.", item="item-2"),
+        ),
+        _transcripts(("Ha", False), ("Neu", False), ("Neu.", True)),
+    ),
+    "session-and-turn-events-skipped": (
+        after_the_first_audio(
+            wire.SessionCreated(
+                session=wire.TranscriptionSession(type="transcription")
+            ),
+            wire.SessionUpdated(
+                session=wire.TranscriptionSession(type="transcription")
+            ),
+            wire.SpeechStarted(audio_start_ms=0, item_id=AN_ITEM),
+            wire.SpeechStopped(audio_end_ms=1, item_id=AN_ITEM),
+            wire.AudioCommitted(item_id=AN_ITEM, previous_item_id=None),
+            wire.ItemCreated(
+                previous_item_id=None,
+                item=wire.UserMessageItem(id=AN_ITEM),
+            ),
+            a_completed("Ein Wort."),
+        ),
+        _transcripts(("Ein Wort.", True)),
+    ),
+    "failed-then-error": (
+        after_the_first_audio(a_failed_item(), an_error_event()),
+        [],
+    ),
+    "error-alone": (after_the_first_audio(an_error_event()), []),
+    **{
+        f"closes-{code}": (after_the_first_audio(close_code=code), [])
+        for code in (1000, 1009, 1011, 1013)
+    },
+    "peer-crashes-mid-session": (crashing_after_the_first_audio(), []),
+    "unknown-event": (
+        after_the_first_audio(json.dumps({"type": "unknown.event", "event_id": "e"})),
+        [],
+    ),
+    "invalid-payload": (
+        after_the_first_audio(
+            json.dumps(
+                {
+                    "type": "conversation.item.input_audio_transcription.delta",
+                    "event_id": "e",
+                    "item_id": AN_ITEM,
+                    "delta": ["not", "text"],
+                }
             )
-        )
-        await connection.send_text(event.model_dump_json())
-        await connection.receive()
-
-    return realtime
-
-
-def _refused_upgrade_with_the_marker() -> Hear:
-    async def realtime(connection: WebSocket) -> None:
-        await connection.send_denial_response(
-            Response(content=PLANTED, status_code=429, headers={"X-Marker": PLANTED})
-        )
-
-    return realtime
-
-
-LEAK_ASKS: dict[str, Callable[[], SpeechScenario]] = {
-    "good": SpeechScenario,
-    "marked-refusal": lambda: SpeechScenario(
-        service=FakeSpeechService(speak_answers=[_a_marked_refusal])
+        ),
+        [],
     ),
-    "marked-issuer-refusal": lambda: SpeechScenario(
-        arrange=_refuse_all_workload_grants(PLANTED)
-    ),
-    "punctuation-only": lambda: SpeechScenario(gateway=_say("Erster Satz. …")),
-}
-
-LEAK_HEARINGS: dict[str, Callable[[], FakeSpeechService]] = {
-    "good": FakeSpeechService,
-    "error-event": lambda: FakeSpeechService(realtime=_an_error_carrying_the_marker()),
-    "marked-upgrade-refusal": lambda: FakeSpeechService(
-        realtime=_refused_upgrade_with_the_marker()
-    ),
+    "non-json-frame": (after_the_first_audio("not json at all"), []),
+    "busy-at-the-upgrade": (busy_at_the_upgrade(), []),
+    "refused-401": (denying(401), []),
+    "refused-403": (denying(403), []),
+    "refused-503": (denying(503), []),
 }
 
 
-def _shown_markers(instance: SpeechInstance) -> tuple[str, ...]:
-    return (
-        ACCESS,
-        WORKLOAD,
-        REFRESH,
-        ROTATED,
-        *instance.hosts.issuer.issued_id_tokens,
-        "Bearer ",
-        "eyJ",
-        A.id,
-        *API_MEMBER_GROUPS,
-        str(SPOKEN_QUESTION["said"]),
-        PLANTED,
+@pytest.mark.parametrize("case", BROWSER_FRAMES)
+def test_the_browser_gets_each_transcript_then_one_generic_no_hearing_frame(
+    tmp_path: Path, case: str
+) -> None:
+    realtime, transcripts = BROWSER_FRAMES[case]
+    service = FakeSpeechService(realtime=realtime)
+    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+        frames, _logged = hear_and_record(instance)
+
+    assert frames == [*transcripts, _NO_HEARING]
+
+
+@pytest.mark.parametrize(
+    "peer",
+    [
+        pytest.param(RawPeer(MALFORMED_PEERS[name]).serving, id=name)
+        for name in MALFORMED_PEERS
+    ]
+    + [
+        pytest.param(
+            RawPeer(b"HTTP/1.1 204 No Content\r\n\r\n").serving,
+            id="no-upgrade-204",
+        ),
+        pytest.param(nobody_listens, id="nobody-listens"),
+    ],
+)
+def test_a_service_that_answers_the_upgrade_no_useful_way_shows_no_hearing(
+    tmp_path: Path, peer: Served
+) -> None:
+    with a_speech_instance(tmp_path, SpeechScenario(peer=peer)) as instance:
+        frames, _logged = hear_and_record(instance)
+
+    assert frames == [_NO_HEARING]
+
+
+def _cookie_header(instance: SpeechInstance) -> bytes:
+    return "; ".join(
+        f"{cookie.name}={cookie.value}" for cookie in instance.talk.cookies.jar
+    ).encode()
+
+
+def _asked_scope(instance: SpeechInstance) -> Scope:
+    return {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": urlsplit(A_TALK_ADDRESS).scheme,
+        "path": "/copresenter/ask",
+        "raw_path": b"/copresenter/ask",
+        "query_string": b"",
+        "headers": [
+            (b"host", urlsplit(A_TALK_ADDRESS).netloc.encode()),
+            (b"content-type", b"application/json"),
+            *(
+                (name.lower().encode(), value.encode())
+                for name, value in A_BROWSERS_HEADERS.items()
+            ),
+            (b"cookie", _cookie_header(instance)),
+        ],
+        "client": ("testclient", 50000),
+        "server": ("testserver", 443),
+        "state": {},
+    }
+
+
+async def _ask_and_leave_at_the_first_speak(
+    instance: SpeechInstance, arrived: threading.Event, release: threading.Event
+) -> None:
+    messages: list[Message] = [
+        {"type": "http.request", "body": json.dumps(THE_ASKED_DECK).encode()}
+    ]
+
+    async def receive() -> Message:
+        if messages:
+            return messages.pop(0)
+        await asyncio.to_thread(arrived.wait, _THREAD_WAIT_SECONDS)
+        return {"type": "http.disconnect"}
+
+    async def send(message: Message) -> None:
+        del message
+
+    await asyncio.wait_for(
+        instance.hosts.router(_asked_scope(instance), receive, send),
+        timeout=_THREAD_WAIT_SECONDS,
     )
+    release.set()
+
+
+def test_a_browser_that_leaves_mid_answer_starts_no_later_speak_and_frees_the_ticket(
+    tmp_path: Path,
+) -> None:
+    arrived = threading.Event()
+    release = threading.Event()
+    service = FakeSpeechService(speak_answers=[a_held_wav(arrived, release)])
+    scenario = SpeechScenario(
+        gateway=_say("Erster Satz. Zweiter Satz. Dritter."), service=service
+    )
+    with a_speech_instance(tmp_path, scenario) as instance:
+        asyncio.run(_ask_and_leave_at_the_first_speak(instance, arrived, release))
+        spoken_when_it_left = len(service.speak_requests)
+        again = ask_over(instance)
+
+    assert spoken_when_it_left == 1
+    assert again.response.status_code == HTTPStatus.OK
 
 
 @pytest.mark.parametrize("case", LEAK_ASKS)
-def test_an_ask_shows_no_secret_or_personal_word_in_any_log_error_or_sse(
+def test_an_ask_shows_no_marker_in_any_log_error_answer_or_stored_row(
     tmp_path: Path, case: str
 ) -> None:
     with a_speech_instance(tmp_path, LEAK_ASKS[case]()) as instance:
         run = ask_over(instance)
-        shown = everything_shown(run.logged, instance.errors)
-        markers = _shown_markers(instance)
-        rows = session_columns(instance.hosts)
-
-    for marker in markers:
-        assert marker not in shown
-        assert marker not in run.response.text
-        assert all(
-            marker not in str(value) for column in rows.values() for value in column
-        )
-
-
-def _hear_recording(
-    instance: SpeechInstance,
-) -> tuple[list[dict[str, object]], list[object]]:
-    frames: list[dict[str, object]] = []
-    with (
-        recorded_logs() as logged,
-        instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
-    ):
-        socket.send_bytes(b"first")
-        with suppress(WebSocketDisconnect):
-            frames.append(socket.receive_json())
-    return frames, list(logged)
+        assert_nothing_shows(instance, run.logged, response=run.response)
 
 
 @pytest.mark.parametrize("case", LEAK_HEARINGS)
-def test_a_hearing_shows_no_secret_or_personal_word_in_any_log_error_or_frame(
+def test_a_hearing_shows_no_marker_in_any_log_error_frame_or_stored_row(
     tmp_path: Path, case: str
 ) -> None:
-    service = LEAK_HEARINGS[case]()
-    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
-        frames, logged = _hear_recording(instance)
-        shown = everything_shown(logged, instance.errors)  # type: ignore[arg-type]
-        markers = _shown_markers(instance)
+    with a_speech_instance(tmp_path, LEAK_HEARINGS[case]()) as instance:
+        frames, logged = hear_and_record(instance)
+        assert_nothing_shows(instance, logged, frames=frames)
 
-    for marker in markers:
-        assert marker not in shown
-        assert all(marker not in json.dumps(frame) for frame in frames)
+
+@pytest.mark.parametrize("case", LEAK_HEALTH)
+def test_a_health_read_shows_no_marker_in_any_log_error_or_answer(
+    tmp_path: Path, case: str
+) -> None:
+    with a_speech_instance(tmp_path, LEAK_HEALTH[case]()) as instance:
+        response, logged = who_over(instance)
+        assert_nothing_shows(instance, logged, response=response)
+
+
+def test_a_stalled_grant_ended_by_logout_shows_no_marker(tmp_path: Path) -> None:
+    scenario = SpeechScenario(arrange=refusing_every_workload_grant(PLANTED))
+    with a_speech_instance(tmp_path, scenario) as instance:
+        entered, release = _held_at_the_workload_grant(instance.hosts)
+        with (
+            recorded_logs() as logged,
+            instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
+        ):
+            socket.send_bytes(b"first")
+            assert entered.wait(_THREAD_WAIT_SECONDS)
+            delete_the_sessions(instance.hosts)
+            _release_the_recheck(instance)
+            with pytest.raises(WebSocketDisconnect):
+                socket.receive_json()
+            release.set()
+        assert_nothing_shows(instance, list(logged))
