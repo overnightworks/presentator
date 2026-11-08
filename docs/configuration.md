@@ -19,7 +19,9 @@ secret does not land in the startup output.
 | `PRESENTATOR_AGENT__GATEWAY__KEY_FILE` | Absolute path of the file holding this app's gateway key. It is read for every question, not at start, so a missing file refuses the question and not the start. The file holds the key alone on one line of printable ASCII without a space, 1024 bytes at most; the client strips one trailing `\n`, so any other control character, a `\r` from a Windows editor included, refuses every question with only `key_unusable` logged. No default. |
 | `PRESENTATOR_AGENT__API_GROUP` | The Keycloak group path whose members the co-presenter answers; any other person is answered "not enabled". No default. |
 | `PRESENTATOR_AGENT__GATEWAY__CA_FILE` | Optional absolute path of the CA file an `https` gateway origin needs; an `http` origin forbids it. |
-| `PRESENTATOR_SPEECH_SOCKET` | Absolute private Unix socket path of the speech service. |
+| `PRESENTATOR_SPEECH_SERVICE` | The one plain `http` origin of the shared speech service, without a path; `compose.yaml` sets it. No default. |
+| `PRESENTATOR_SPEECH_SERVICE_SCOPE` | The one scope token that names the service at the issuer; both sign-ins and the workload grant ask for it. No default. |
+| `PRESENTATOR_SPEECH_VOICE` | The voice this instance speaks in, one the service offers. No default. |
 | `PRESENTATOR_OIDC_ISSUER` | The https URL of the Keycloak realm, without a trailing slash; exactly the `issuer` of its discovery document. |
 | `PRESENTATOR_OIDC_CLIENT_ID` | The Keycloak client id. |
 | `PRESENTATOR_OIDC_CLIENT_SECRET_FILE` | Absolute path of a file holding the client secret, read once at start, minus one trailing newline. |
@@ -76,7 +78,6 @@ image sets them and the defaults above do not apply; compose sets the rest.
 | `PRESENTATOR_LOBBY_BUILD` | `/app/lobby` |
 | `PRESENTATOR_HOST` | `0.0.0.0`, reached through the edge's proxy |
 | `PRESENTATOR_BUILD_RUNNER` | `worker`, set by `compose.yaml` |
-| `PRESENTATOR_SPEECH_SOCKET` | `/run/presentator-speech/speech.sock`, not mounted in a deployed instance |
 
 The compose file needs no value from the operator: its plain values are
 literals, and `COMPOSE_PROJECT_NAME` is only a probe's.

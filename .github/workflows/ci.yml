@@ -624,7 +624,7 @@ jobs:
           EOF
           echo "WEB_PROBE_OVERRIDE=$RUNNER_TEMP/web-probe.yaml" >> "$GITHUB_ENV"
           # Internal like the edge's, so the web's gateway is its own network's.
-          for network in hal_agent_presentator hal_backchannel_presentator; do
+          for network in hal_agent_presentator hal_backchannel_presentator hal_speech_presentator; do
             docker network create --internal "$network" > /dev/null 2>&1 \
               || { echo "could not create the network $network"; exit 1; }
           done

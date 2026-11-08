@@ -1,11 +1,11 @@
-"""The talk host's co-presenter routes with the real speech adapters and fake service."""
+"""The talk host's co-presenter routes over the real speech adapters."""
 
 from __future__ import annotations
 
 import json
 import sqlite3
 import threading
-from contextlib import closing
+from contextlib import closing, suppress
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Final
 from urllib.parse import parse_qs, urlsplit
@@ -63,6 +63,9 @@ ORIGIN: Final = {"origin": A_TALK_ADDRESS}
 HEARD: Final = "die gehörten Worte MARKER"
 PLANTED: Final = "planted-MARKER"
 _THREAD_WAIT_SECONDS: Final = 10
+_POLICY_VIOLATION: Final = 1008
+THREE_SENTENCES: Final = 3
+SECOND: Final = 2
 
 
 def _say(text: str) -> Callable[[], FakeGateway]:
@@ -90,7 +93,7 @@ def test_sentences_are_spoken_in_order_with_both_issued_tokens_and_the_wav_uncha
     for request in service.speak_requests:
         assert request.headers["authorization"] == f"Bearer {ACCESS}"
         assert request.headers[wire.WORKLOAD_TOKEN_HEADER.lower()] == WORKLOAD
-    assert run.events.count("audio") == 3
+    assert run.events.count("audio") == THREE_SENTENCES
     assert A_WAV.hex() not in run.response.text
     assert run.events[-1] == "done"
 
@@ -216,7 +219,7 @@ def _at_the_second_refresh(hosts: Hosts, act: Callable[[Hosts], None]) -> None:
     def hook() -> None:
         if hosts.issuer.grant_types[-1] == "refresh_token":
             seen.append(1)
-            if len(seen) == 2:
+            if len(seen) == SECOND:
                 act(hosts)
 
     hosts.issuer.during_token_request = hook
@@ -324,7 +327,7 @@ def test_a_logout_during_the_grant_closes_the_lease_with_no_upgrade_and_no_audio
             with pytest.raises(WebSocketDisconnect) as closed:
                 socket.receive_json()
             release.set()
-    assert closed.value.code == 1008
+    assert closed.value.code == _POLICY_VIOLATION
     assert not service.upgrades
 
 
@@ -398,7 +401,7 @@ def test_session_end_closes_the_lease_and_the_service_socket_within_one_recheck(
             with pytest.raises(WebSocketDisconnect) as closed:
                 socket.receive_json()
         assert service.arrived.acquire(timeout=_THREAD_WAIT_SECONDS)
-    assert closed.value.code == 1008
+    assert closed.value.code == _POLICY_VIOLATION
     assert service.closes == ["closed"]
 
 
@@ -485,7 +488,7 @@ LEAK_ASKS: dict[str, SpeechScenario] = {
 }
 
 LEAK_HEARINGS: dict[str, Callable[[], FakeSpeechService]] = {
-    "good": lambda: FakeSpeechService(),
+    "good": FakeSpeechService,
     "error-event": lambda: FakeSpeechService(realtime=_an_error_carrying_the_marker()),
     "marked-upgrade-refusal": lambda: FakeSpeechService(
         realtime=_refused_upgrade_with_the_marker()
@@ -531,13 +534,13 @@ def _hear_recording(
     instance: SpeechInstance,
 ) -> tuple[list[dict[str, object]], list[object]]:
     frames: list[dict[str, object]] = []
-    with recorded_logs() as logged:
-        with instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket:
-            socket.send_bytes(b"first")
-            try:
-                frames.append(socket.receive_json())
-            except WebSocketDisconnect:
-                pass
+    with (
+        recorded_logs() as logged,
+        instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
+    ):
+        socket.send_bytes(b"first")
+        with suppress(WebSocketDisconnect):
+            frames.append(socket.receive_json())
     return frames, list(logged)
 
 
