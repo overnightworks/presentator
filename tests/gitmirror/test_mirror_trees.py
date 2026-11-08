@@ -35,7 +35,7 @@ def _plant_tree(remote: GitRemote, entries: list[tuple[str, str, str]]) -> str:
     return write("tree", raw)
 
 
-def _push_crafted_deck(remote: GitRemote, name: str) -> None:
+def _push_crafted_deck(remote: GitRemote, name: str, *, deeper: bool = False) -> None:
     blob = (
         subprocess.run(
             ["git", "hash-object", "-w", "--stdin"],  # noqa: S607 - git from PATH
@@ -48,7 +48,11 @@ def _push_crafted_deck(remote: GitRemote, name: str) -> None:
         .strip()
     )
     below = _plant_tree(remote, [("100644", "payload.txt", blob)])
-    deck = _plant_tree(remote, [("40000", name, below)])
+    if deeper:
+        sub = _plant_tree(remote, [("40000", name, below)])
+        deck = _plant_tree(remote, [("100644", "a.txt", blob), ("40000", "sub", sub)])
+    else:
+        deck = _plant_tree(remote, [("40000", name, below)])
     root = _plant_tree(remote, [("40000", "deck", deck)])
     commit = (
         subprocess.run(  # noqa: S603 - fixed git argv in a test
@@ -74,13 +78,16 @@ def _push_crafted_deck(remote: GitRemote, name: str) -> None:
     )
 
 
+@pytest.mark.parametrize("deeper", [False, True])
 @pytest.mark.parametrize("name", [".", "..", ".git"])
 def test_a_tree_entry_that_names_a_directory_of_its_own_ends_the_read_before_any_write(
     remote: GitRemote,
     tmp_path: Path,
     name: str,
+    *,
+    deeper: bool,
 ) -> None:
-    _push_crafted_deck(remote, name)
+    _push_crafted_deck(remote, name, deeper=deeper)
     mirror = a_mirror(remote.url, directory=tmp_path)
     revision = mirror.connect().revision
     assert revision is not None
@@ -108,3 +115,4 @@ def test_a_tree_whose_names_merely_start_with_a_dot_is_written_out_as_it_stands(
     mirror.export(revision, "deck", into=written)
 
     assert (written / name / "payload.txt").read_bytes() == b"payload\n"
+

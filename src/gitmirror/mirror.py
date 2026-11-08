@@ -166,6 +166,17 @@ class GitMirror:
         checked out into it. Git carries no empty directory, so a path with
         nothing under it is a path this commit does not carry.
         """
+        self._every_entry(revision, path)
+        self._write_tree(revision, path, into=into)
+
+    def _every_entry(self, revision: Revision, path: str) -> tuple[TreeEntry, ...]:
+        """Every entry at any depth under that path, each name checked."""
+        listing = self._run("ls-tree", "-r", "-t", "-z", revision.commit, "--", f"{path}/")
+        return tuple(
+            _tree_entry(record) for record in os.fsdecode(listing).split("\0") if record
+        )
+
+    def _write_tree(self, revision: Revision, path: str, *, into: Path) -> None:
         entries = self.entries(revision, inside=path)
         if not entries:
             message = f"{revision.commit} carries no {path}"
@@ -174,7 +185,7 @@ class GitMirror:
         for entry in entries:
             below = f"{path}/{entry.name}"
             if entry.is_directory:
-                self.export(revision, below, into=into / entry.name)
+                self._write_tree(revision, below, into=into / entry.name)
             else:
                 (into / entry.name).write_bytes(self.read(revision, below))
 
