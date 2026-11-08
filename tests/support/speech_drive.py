@@ -118,6 +118,9 @@ ORIGIN: Final = {"origin": A_TALK_ADDRESS}
 ANSWER_SENTENCES: Final = ("Antwort-MARKER eins.", "Antwort-MARKER zwei.")
 HEARD_WORDS: Final = ("gehoert-MARKER-eins", "gehoert-MARKER-zwei")
 _ANSWER_EVENTS: Final = frozenset({"text", "sentence", "audio", "done"})
+_SSE_EVENT: Final = re.compile(
+    r"^event: (?P<name>\w+)\ndata: (?P<data>.*)$", re.MULTILINE
+)
 _NO_HEARING_ERROR_KEY: Final = "error"
 _REFRESH_COLUMN: Final = "refresh_token"
 _USER_ID_COLUMN: Final = "user_id"
@@ -416,9 +419,30 @@ def _absent(text: str, markers: Sequence[str]) -> None:
 
 def _sse_events(text: str) -> list[tuple[str, str]]:
     return [
-        (name, json.dumps(json.loads(data), ensure_ascii=False))
-        for name, data in re.findall(r"^event: (\w+)\ndata: (.*)$", text, re.MULTILINE)
+        (event["name"], json.dumps(json.loads(event["data"]), ensure_ascii=False))
+        for event in _SSE_EVENT.finditer(text)
     ]
+
+
+def _assert_the_body_keeps_the_answer_to_its_events(
+    body: str, markers: Sequence[str]
+) -> None:
+    """The whole body shows no marker; only answer events may carry the sentences."""
+    never_exempt = (*markers, *HEARD_WORDS)
+    _absent(body, never_exempt)
+    _absent(
+        _SSE_EVENT.sub(
+            lambda event: "" if event["name"] in _ANSWER_EVENTS else event[0], body
+        ),
+        ANSWER_SENTENCES,
+    )
+    for name, data in _sse_events(body):
+        _absent(
+            data,
+            never_exempt
+            if name in _ANSWER_EVENTS
+            else (*never_exempt, *ANSWER_SENTENCES),
+        )
 
 
 def stored_session_rows(hosts: Hosts) -> list[dict[str, object]]:
@@ -461,13 +485,7 @@ def assert_nothing_shows(
     _assert_rows_keep_only_their_own_values(instance.hosts, (*markers, *words))
     if response is not None:
         _absent("\n".join(response.headers.values()), (*markers, *words))
-        events = _sse_events(response.text)
-        if events:
-            for name, data in events:
-                exempt = ANSWER_SENTENCES if name in _ANSWER_EVENTS else ()
-                _absent(data, (*markers, *(w for w in words if w not in exempt)))
-        else:
-            _absent(response.text, (*markers, *words))
+        _assert_the_body_keeps_the_answer_to_its_events(response.text, markers)
     for frame in frames:
         exempt = () if _NO_HEARING_ERROR_KEY in frame else HEARD_WORDS
         text = json.dumps(frame, ensure_ascii=False)
