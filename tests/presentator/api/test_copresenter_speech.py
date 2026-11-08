@@ -177,7 +177,7 @@ def test_an_answer_ending_in_only_punctuation_speaks_the_rest_and_ends_in_a_plai
 
     assert run.events.count("audio") == 1
     assert len(service.speak_requests) == 1
-    assert run.error_payload() == {"message": "the answer could not be spoken"}
+    assert run.error_payload() == _THE_PLAIN_ERROR
     assert "…" not in everything_shown(run.logged, instance.errors)
 
 
@@ -454,7 +454,7 @@ def test_a_hold_past_the_bound_ends_the_hearing_in_no_hearing(tmp_path: Path) ->
             socket.send_bytes(b"\0" * (3 * 1024 * 1024))
             frame = socket.receive_json()
             release.set()
-    assert frame == {"text": "", "final": True, "error": "hearing unavailable"}
+    assert frame == _NO_HEARING
     assert not service.upgrades
 
 
@@ -512,11 +512,7 @@ def test_a_second_lease_the_service_refuses_shows_no_hearing_on_the_second_only(
             one.send_bytes(b"first")
             assert service.connected.wait(THREAD_WAIT_SECONDS)
             two.send_bytes(b"second")
-            assert two.receive_json() == {
-                "text": "",
-                "final": True,
-                "error": "hearing unavailable",
-            }
+            assert two.receive_json() == _NO_HEARING
 
 
 @pytest.mark.parametrize("language", ["de", "en"])
