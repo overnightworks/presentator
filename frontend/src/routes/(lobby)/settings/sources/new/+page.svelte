@@ -9,6 +9,7 @@
 		createSource,
 		type CreatedSourceView,
 		openKeyDraft,
+		readAccess,
 		type SourceProbe
 	} from '#lib/api/sources.ts';
 	import CopyValue from '#lib/CopyValue.svelte';
@@ -18,17 +19,23 @@
 
 	let { data }: PageProps = $props();
 	const words = $derived(data.session.words);
-	const accesses = $derived<{ kind: AccessKind; label: string }[]>([
-		{ kind: 'ssh-deploy-key', label: words.source_access_ssh },
-		{ kind: 'https-token', label: words.source_access_https },
-		{ kind: 'local-folder', label: words.source_access_file }
-	]);
 
 	let name = $state('');
 	let url = $state('');
-	let access = $state<AccessKind>('https-token');
 	let secret = $state('');
 	let draft = $state(untrack(() => data.draft));
+	// What the server said the typed address needs. Only the latest lookup may write it.
+	type Lookup =
+		| { state: 'idle' }
+		| { state: 'pending' }
+		| { state: 'failed' }
+		| { state: 'answered'; url: string; access: AccessKind | null };
+	let lookup = $state<Lookup>({ state: 'idle' });
+	let generation = 0;
+	// Undefined: no usable answer for the current text. Null: answered, no access.
+	const known = $derived(
+		lookup.state === 'answered' && lookup.url === url ? lookup.access : undefined
+	);
 	// What the last check found, and the proof a create needs from it.
 	let banner = $state<CheckBanner | null>(null);
 	let fingerprint = $state<string | null>(null);
@@ -47,10 +54,33 @@
 
 	const probe = (): SourceProbe => ({
 		url,
-		access,
-		secret: secret === '' ? null : secret,
+		secret: known === 'https-token' && secret !== '' ? secret : null,
 		key_draft_id: draft.id
 	});
+
+	async function lookUp(address: string): Promise<void> {
+		generation += 1;
+		const mine = generation;
+		if (address.trim() === '') {
+			lookup = { state: 'idle' };
+			return;
+		}
+		lookup = { state: 'pending' };
+		try {
+			const access = await readAccess(fetch, address);
+			if (mine !== generation) {
+				return;
+			}
+			lookup = { state: 'answered', url: address, access };
+			if (access !== 'https-token') {
+				secret = '';
+			}
+		} catch {
+			if (mine === generation) {
+				lookup = { state: 'failed' };
+			}
+		}
+	}
 
 	// A refusal is the person's to fix; anything else is a failure to show loudly.
 	function refused(failure: unknown): void {
@@ -120,7 +150,8 @@
 		created = null;
 		name = '';
 		url = '';
-		access = 'https-token';
+		generation += 1;
+		lookup = { state: 'idle' };
 		secret = '';
 		banner = null;
 		fingerprint = null;
@@ -160,19 +191,23 @@
 				spellcheck="false"
 				required
 				bind:value={url}
+				oninput={(event) => lookUp(event.currentTarget.value)}
 			/>
 		</div>
-		<fieldset class="fld access">
-			<legend class="lb">{words.source_access}</legend>
-			<div class="seg">
-				{#each accesses as option (option.kind)}
-					<label>
-						<input type="radio" name="access" {...{ value: option.kind }} bind:group={access} />
-						<span>{option.label}</span>
-					</label>
-				{/each}
+		{#if lookup.state === 'pending'}
+			<p class="muted" role="status">{words.source_kind_pending}</p>
+		{:else if lookup.state === 'failed'}
+			<div class="banner" data-banner="fail" role="alert">
+				<span class="state" data-state="failed"><i></i></span>
+				<div>
+					<p>{words.source_kind_failed}</p>
+					<button class="btn secondary" type="button" onclick={() => lookUp(url)}
+						>{words.source_kind_retry}</button
+					>
+				</div>
 			</div>
-		</fieldset>
+		{/if}
+		{#if known === 'https-token'}
 		<div class="fld">
 			<span class="lb">
 				<label for="source-secret">{words.source_secret}</label>
@@ -193,12 +228,12 @@
 				id="source-secret"
 				name="secret"
 				type="password"
-				autocomplete="off"
+				autocomplete="new-password"
 				bind:value={secret}
 			/>
 			<span id="secret-hint" class="hint" popover="auto">{words.source_secret_info}</span>
 		</div>
-		{#if access === 'ssh-deploy-key'}
+		{:else if known === 'ssh-deploy-key'}
 			<div class="fld">
 				<h2 class="lb" id="deploy-key-label">{words.source_deploy_key_heading}</h2>
 				<span class="muted">{words.source_deploy_key_hint}</span>
@@ -228,7 +263,7 @@
 			</div>
 		{/if}
 		<div class="actions">
-			<button class="btn secondary" type="button" disabled={pending} onclick={check}
+			<button class="btn secondary" type="button" disabled={pending || known === undefined} onclick={check}
 				>{words.source_check}</button
 			>
 			<button class="btn primary" type="submit" disabled={pending || fingerprint === null}
@@ -286,52 +321,9 @@
 		gap: 14px;
 		max-width: 520px;
 	}
-	.access {
-		margin: 0;
-		padding: 0;
-		border: none;
-	}
-	.access legend {
-		padding: 0;
-	}
 	h2.lb {
 		margin: 0;
 		font-weight: 400;
-	}
-	.seg {
-		display: inline-flex;
-		flex-wrap: wrap;
-		align-self: flex-start;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		background: var(--surface);
-	}
-	.seg label {
-		position: relative;
-		display: inline-flex;
-		align-items: center;
-		min-height: 36px;
-		padding: 0 14px;
-		color: var(--text-muted);
-		font-size: 14px;
-		cursor: pointer;
-	}
-	.seg label + label {
-		border-left: 1px solid var(--border);
-	}
-	.seg label:has(input:checked) {
-		background: color-mix(in srgb, var(--accent) 12%, var(--surface));
-		color: var(--text);
-		font-weight: 600;
-	}
-	.seg label:has(input:focus-visible) {
-		outline: 2px solid var(--accent);
-		outline-offset: 2px;
-	}
-	.seg input {
-		position: absolute;
-		opacity: 0;
-		pointer-events: none;
 	}
 	.banner {
 		margin-bottom: 0;
