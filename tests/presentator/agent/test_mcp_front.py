@@ -19,6 +19,7 @@ from agent_runtime_client.mcp_wire import (
 from fastapi.testclient import TestClient
 from webauth.ports import AccountKind
 
+from presentator.agent.mcp import AGENT_GROUP, MCP_GROUP, MCP_SCOPE
 from presentator.api.deck_list_api import DECK_LIST_PATH
 from presentator.api.people import ADMIN_PREFIX
 from presentator.api.preference_api import ACCOUNT_PATH
@@ -89,7 +90,7 @@ def test_an_own_account_agent_in_presentators_groups_is_admitted_with_no_decks(
     world: World,
 ) -> None:
     """Its account is created on that first admission, as an agent."""
-    headers = world.own_agent(groups=[*MEMBER, World.GROUP, World.AGENT_GROUP])
+    headers = world.own_agent(groups=[*MEMBER, MCP_GROUP, AGENT_GROUP])
 
     listed = listed_through_mcp(world.program(), headers)
 
@@ -104,8 +105,8 @@ def test_an_own_account_agent_in_presentators_groups_is_admitted_with_no_decks(
 @pytest.mark.parametrize(
     "groups",
     [
-        pytest.param([*MEMBER, World.AGENT_GROUP], id="no presentator group"),
-        pytest.param([World.AGENT_GROUP], id="the agent group alone"),
+        pytest.param([*MEMBER, AGENT_GROUP], id="no presentator group"),
+        pytest.param([AGENT_GROUP], id="the agent group alone"),
     ],
 )
 def test_an_own_account_agent_outside_presentators_groups_is_refused_and_makes_nothing(
@@ -301,14 +302,14 @@ def test_unauthenticated_discovery_is_public_and_the_front_challenges_for_a_bear
 
     assert metadata.status_code == HTTPStatus.OK
     assert metadata.json()["resource"] == World.MCP_URL
-    assert metadata.json()["scopes_supported"] == [World.SCOPE]
+    assert metadata.json()["scopes_supported"] == [MCP_SCOPE]
     assert metadata.json()["authorization_servers"] == [AN_ISSUER]
     assert challenge.status_code == HTTPStatus.UNAUTHORIZED
     assert (
         f'resource_metadata="{A_BROWSERS_ADDRESS}{World.METADATA_PATH}"'
         in (challenge.headers["www-authenticate"])
     )
-    assert f'scope="{World.SCOPE}"' in challenge.headers["www-authenticate"]
+    assert f'scope="{MCP_SCOPE}"' in challenge.headers["www-authenticate"]
 
 
 def test_a_lobby_with_no_mcp_setting_serves_the_front_and_a_cookie_does_not_open_it(

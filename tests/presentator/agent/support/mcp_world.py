@@ -19,7 +19,7 @@ from agent_runtime_client.mcp_wire import (
 )
 from fastapi.testclient import TestClient
 
-from presentator.agent.mcp import AGENT_GROUP, MCP_CLIENT_ID, MCP_GROUP, MCP_SCOPE
+from presentator.agent.mcp import MCP_CLIENT_ID, MCP_GROUP, MCP_SCOPE
 from presentator.api.deck_api import DECK_VIEW_PATH
 from presentator.api.deck_list_api import DECK_LIST_PATH
 from presentator.api.deck_text_api import DECK_TEXT_PATH
@@ -41,9 +41,6 @@ class World:
     """A scene whose two people each own one deck, and the deck store behind it."""
 
     HAL = "hal-client"
-    AGENTS = MCP_CLIENT_ID
-    GROUP = MCP_GROUP
-    SCOPE = MCP_SCOPE
     SIGNED_IN = 2
     FELIX = "subject-of-felix"
     ANNA = "subject-of-anna"
@@ -56,7 +53,6 @@ class World:
     }
     FELIX_DECK = "felix-deck"
     ANNA_DECK = "anna-deck"
-    AGENT_GROUP = AGENT_GROUP
     AGENT_BOT = "subject-of-a-service-account"
 
     def __init__(self, scene: Scene, store: FakeDeckStore) -> None:
@@ -86,13 +82,13 @@ class World:
         *,
         subject: str = FELIX,
         groups: list[str] | None = None,
-        authorized_party: str = AGENTS,
+        authorized_party: str = MCP_CLIENT_ID,
         audience: str | None = MCP_URL,
-        scope: str | None = SCOPE,
+        scope: str | None = MCP_SCOPE,
     ) -> dict[str, str]:
         minted = self.scene.issuer.mint_access_token(
             subject=subject,
-            groups=[*MEMBER, self.GROUP] if groups is None else groups,
+            groups=[*MEMBER, MCP_GROUP] if groups is None else groups,
             authorized_party=authorized_party,
             audience=audience,
             scope=scope,
@@ -106,7 +102,7 @@ class World:
             groups=groups,
             authorized_party="a-service-account-client",
             audience=self.MCP_URL,
-            scope=self.SCOPE,
+            scope=MCP_SCOPE,
             agent=(self.FELIX, "notes-bot"),
         )
         return {"authorization": f"Bearer {minted}"}

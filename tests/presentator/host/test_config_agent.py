@@ -1,4 +1,4 @@
-"""The `agent` section: four required values, read from the environment or a `.env`."""
+"""The `agent` section: own settings, a stale MCP variable refused, no MCP setting."""
 
 import os
 import re
