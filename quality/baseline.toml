@@ -1,10 +1,9 @@
-# Measured by `quality baseline write`. Entries only ever go down.
+# Measured by `quality check --fix`. Entries only ever go down.
 
 [ccn."speech/src/presentator_speech/service.py"]
 "Runtime._activate_voice" = 18
 
 [file_lines]
-"frontend/src/lib/api/types.ts" = 2075
 "speech/tests/test_control_voice_status.py" = 1473
 "src/presentator/application/decks.py" = 935
 "tests/gitmirror/test_mirror.py" = 1192
@@ -28,12 +27,6 @@
 [function_lines."speech/src/presentator_speech/speaking.py"]
 "speaking_for_voice" = 77
 
-[function_lines."speech/tests/test_main.py"]
-"test_shutdown_closes_a_pending_real_adapter_before_awaiting_tasks" = 94
-
-[function_lines."speech/tests/test_provider_process.py"]
-"test_direct_closed_entrypoint_streams_after_transient_loader_exits" = 80
-
 [function_lines."speech/tests/test_control_sample.py"]
 "test_sample_keeps_its_engine_and_rate_when_the_selection_changes" = 73
 "test_sample_waits_for_an_actual_public_speak_stream_then_succeeds" = 68
@@ -43,6 +36,12 @@
 "test_voxcpm_catalogue_and_factory_import_no_provider_packages" = 66
 "test_voxcpm_load_restore_samples_and_public_disconnect_cancel_the_child" = 67
 
+[function_lines."speech/tests/test_main.py"]
+"test_shutdown_closes_a_pending_real_adapter_before_awaiting_tasks" = 94
+
+[function_lines."speech/tests/test_provider_process.py"]
+"test_direct_closed_entrypoint_streams_after_transient_loader_exits" = 80
+
 [function_lines."src/presentator/application/decks.py"]
 "Decks.add_source" = 81
 
@@ -51,3 +50,65 @@
 
 [function_lines."tests/presentator/adapters/test_decks.py"]
 "test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair" = 67
+
+[clones."speech/providers/chatterbox/src/presentator_chatterbox/__main__.py"]
+_arguments = [["speech/providers/magpie/src/presentator_magpie/__main__.py", "_arguments"], ["speech/providers/qwen/src/presentator_qwen/__main__.py", "_arguments"], ["speech/providers/voxcpm/src/presentator_voxcpm/__main__.py", "_arguments"]]
+install_parent_death_signal = [["speech/providers/magpie/src/presentator_magpie/__main__.py", "install_parent_death_signal"], ["speech/providers/qwen/src/presentator_qwen/__main__.py", "install_parent_death_signal"], ["speech/providers/voxcpm/src/presentator_voxcpm/__main__.py", "install_parent_death_signal"]]
+main = [["speech/providers/magpie/src/presentator_magpie/__main__.py", "main"], ["speech/providers/qwen/src/presentator_qwen/__main__.py", "main"], ["speech/providers/voxcpm/src/presentator_voxcpm/__main__.py", "main"]]
+
+[clones."speech/providers/chatterbox/src/presentator_chatterbox/model.py"]
+float_to_pcm = [["speech/providers/magpie/src/presentator_magpie/model.py", "_float_to_pcm"], ["speech/providers/qwen/src/presentator_qwen/model.py", "_float_to_pcm"]]
+
+[clones."speech/providers/magpie/src/presentator_magpie/__main__.py"]
+_arguments = [["speech/providers/qwen/src/presentator_qwen/__main__.py", "_arguments"], ["speech/providers/voxcpm/src/presentator_voxcpm/__main__.py", "_arguments"]]
+install_parent_death_signal = [["speech/providers/qwen/src/presentator_qwen/__main__.py", "install_parent_death_signal"], ["speech/providers/voxcpm/src/presentator_voxcpm/__main__.py", "install_parent_death_signal"]]
+main = [["speech/providers/qwen/src/presentator_qwen/__main__.py", "main"], ["speech/providers/voxcpm/src/presentator_voxcpm/__main__.py", "main"]]
+
+[clones."speech/providers/magpie/src/presentator_magpie/model.py"]
+_float_to_pcm = [["speech/providers/qwen/src/presentator_qwen/model.py", "_float_to_pcm"]]
+
+[clones."speech/providers/magpie/tests/test_main.py"]
+test_entrypoint_reserves_stdout_before_importing_the_provider = [["speech/providers/voxcpm/tests/test_main.py", "test_entrypoint_reserves_stdout_before_importing_the_provider"]]
+"test_entrypoint_reserves_stdout_before_importing_the_provider.RecordingModule.__getattribute__" = [["speech/providers/voxcpm/tests/test_main.py", "test_entrypoint_reserves_stdout_before_importing_the_provider.RecordingModule.__getattribute__"]]
+
+[clones."speech/providers/qwen/src/presentator_qwen/__main__.py"]
+_arguments = [["speech/providers/voxcpm/src/presentator_voxcpm/__main__.py", "_arguments"]]
+install_parent_death_signal = [["speech/providers/voxcpm/src/presentator_voxcpm/__main__.py", "install_parent_death_signal"]]
+main = [["speech/providers/voxcpm/src/presentator_voxcpm/__main__.py", "main"]]
+
+[clones."speech/scripts/contract_client.py"]
+_pcm_from_wav = [["speech/scripts/prove_speech.py", "_pcm_from_wav"]]
+_resample = [["speech/scripts/prove_speech.py", "_resample"]]
+_rms = [["speech/scripts/prove_speech.py", "_rms"]]
+
+[clones."src/presentator/adapters/deck_store.py"]
+"SqliteDeckStore.all" = [["src/presentator/adapters/decks.py", "SqliteSourceStore.all"]]
+"SqliteDeckStore.get" = [["src/presentator/adapters/decks.py", "SqliteSourceRunStore.newest"]]
+
+[clones."tests/presentator/adapters/support/build_worker_support.py"]
+tree_of = [["tests/presentator/adapters/test_build_wire_walk.py", "tree_of"]]
+
+[clones."tests/presentator/api/support/source_api_support.py"]
+a_bearer = [["tests/presentator/api/test_preference_api.py", "a_bearer"], ["tests/presentator/api/test_session_api.py", "a_bearer"]]
+
+[clones."tests/presentator/api/test_preference_api.py"]
+a_bearer = [["tests/presentator/api/test_session_api.py", "a_bearer"]]
+
+[clones."tests/presentator/api/test_source_api_check.py"]
+test_a_malformed_check_is_the_validation_answer_without_what_was_sent = [["tests/presentator/api/test_source_api_create.py", "test_a_malformed_create_is_the_validation_answer_without_what_was_sent"]]
+
+[clones."tests/presentator/api/test_source_api_create.py"]
+test_a_members_bearer_beside_an_admin_cookie_carries_the_members_rights = [["tests/presentator/api/test_source_api_removal.py", "test_a_members_bearer_beside_an_admin_cookie_carries_the_members_rights"], ["tests/presentator/api/test_source_api_webhook.py", "test_a_members_bearer_beside_an_admin_cookie_carries_the_members_rights"]]
+
+[clones."tests/presentator/api/test_source_api_removal.py"]
+test_a_members_bearer_beside_an_admin_cookie_carries_the_members_rights = [["tests/presentator/api/test_source_api_webhook.py", "test_a_members_bearer_beside_an_admin_cookie_carries_the_members_rights"]]
+
+[clones."tests/presentator/application/support/fakes.py"]
+"HeldDeckFolders._enter" = [["tests/presentator/host/test_polling.py", "HeldRefresh._enter"]]
+
+[clones."tests/presentator/host/test_worker_entries_chain.py"]
+sandbox = [["tests/presentator/host/test_worker_upload_chain.py", "sandbox"]]
+test_a_nested_upload_over_a_controller_gets_status_built_talk_entries_end_and_eof = [["tests/presentator/host/test_worker_reply_chain.py", "test_a_valid_upload_over_a_controller_gets_status_built_talk_entries_end_and_eof"]]
+
+[clones."tests/presentator/host/test_worker_record_life.py"]
+test_the_upload_wait_is_what_remains_of_the_budget_taken_at_the_accepted_exit = [["tests/presentator/host/test_worker_reply.py", "test_the_sender_wait_is_what_remains_of_the_reply_budget"]]
