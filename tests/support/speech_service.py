@@ -65,12 +65,12 @@ def a_health_document(
     hearing_ready: bool = True,
     voice_ready: bool = True,
     voice: str = A_SPEECH_VOICE,
-    another_ready_voice: bool = False,
+    another_ready_voice: str | None = None,
 ) -> dict[str, object]:
     """A `/health` body; `voice` names what the service offers."""
     voices = {voice: {"model": "m", "ready": voice_ready, "sample_rate": 1}}
-    if another_ready_voice:
-        voices["another-voice"] = {"model": "m", "ready": True, "sample_rate": 1}
+    if another_ready_voice is not None:
+        voices[another_ready_voice] = {"model": "m", "ready": True, "sample_rate": 1}
     return {
         "speaking": {"ready": True, "voices": voices},
         "hearing": {"model": "m", "ready": hearing_ready},
@@ -78,18 +78,28 @@ def a_health_document(
     }
 
 
-def a_marked_refusal(
+def a_refusal(
     code: wire.RefusalCode,
     param: wire.RequestField | None = None,
     *,
     headers: dict[str, str] | None = None,
 ) -> Answer:
-    """A speak refusal whose `message` and one response header carry the marker."""
+    """A speak refusal in the wire's own form, as the service builds it."""
     refusal = wire.refusal(code, param)
+    return lambda: JSONResponse(
+        refusal.model_dump(mode="json", exclude={"status"}),
+        status_code=refusal.status,
+        headers=headers,
+    )
+
+
+def a_marked_refusal(code: wire.RefusalCode) -> Answer:
+    """A refusal with the marker as its `message` and in a response header."""
+    refusal = wire.refusal(code)
     body = refusal.model_dump(mode="json", exclude={"status"})
     body["error"]["message"] = PLANTED
     return lambda: JSONResponse(
-        body, status_code=refusal.status, headers={**_MARKED_HEADERS, **(headers or {})}
+        body, status_code=refusal.status, headers=_MARKED_HEADERS
     )
 
 
@@ -124,7 +134,7 @@ def _a_cut_wav() -> Response:
 
 
 def _past_the_speak_cap() -> Response:
-    return a_chunked_wav(bytes(_PAST_THE_SPEAK_CAP))
+    return a_chunked_wav(A_WAV + bytes(_PAST_THE_SPEAK_CAP))
 
 
 def _a_marked_non_json_500() -> Response:
@@ -133,14 +143,15 @@ def _a_marked_non_json_500() -> Response:
 
 SPEAK_FAILURES: Final[dict[str, Answer]] = {
     **{
-        code.value: a_marked_refusal(code)
+        code.value: a_refusal(code)
         for code in wire.RefusalCode
         if code is not wire.RefusalCode.BUSY
     },
-    "unavailable-voice": a_marked_refusal(wire.RefusalCode.UNAVAILABLE, "voice"),
-    "busy-with-a-wait": a_marked_refusal(
+    "unavailable-voice": a_refusal(wire.RefusalCode.UNAVAILABLE, "voice"),
+    "busy-with-a-wait": a_refusal(
         wire.RefusalCode.BUSY, headers={wire.RETRY_AFTER_HEADER: _SECONDS_TO_RETRY}
     ),
+    "marked-refusal": a_marked_refusal(wire.RefusalCode.FORBIDDEN),
     "non-json-500": _a_marked_non_json_500,
     "empty-body": lambda: StreamingResponse(iter(()), media_type="audio/wav"),
     "cut-body": _a_cut_wav,
@@ -173,7 +184,9 @@ def _the_v0_1_shape() -> Response:
 
 
 def _a_voice_not_ready() -> Response:
-    return JSONResponse(a_health_document(voice_ready=False, another_ready_voice=True))
+    return JSONResponse(
+        a_health_document(voice_ready=False, another_ready_voice="another-voice")
+    )
 
 
 def _sample_rate_as_text() -> Response:
@@ -192,7 +205,9 @@ HEALTH_FAILURES: Final[dict[str, Answer]] = {
     "ready-as-text": _a_health_body(hearing={"model": "m", "ready": "true"}),
     "ready-as-number": _a_health_body(hearing={"model": "m", "ready": 1}),
     "sample-rate-as-text": _sample_rate_as_text,
-    "past-the-cap": lambda: Response(b"x" * _PAST_THE_HEALTH_CAP),
+    "past-the-cap": lambda: JSONResponse(
+        a_health_document(another_ready_voice="v" * _PAST_THE_HEALTH_CAP)
+    ),
     "cut-body": _a_cut_health_body,
     "v0.1-shape": _the_v0_1_shape,
     "voice-absent": lambda: JSONResponse(a_health_document(voice="another-voice")),
