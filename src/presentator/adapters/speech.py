@@ -52,6 +52,16 @@ _HEALTH_CAP_BYTES: Final = 64 * 1024
 _UPGRADE_STEP_SECONDS: Final = 5.0
 
 
+class _WarningsOnly(logging.Filter):
+    """Drops the transports' DEBUG and INFO lines, which hold upgrade headers."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno >= logging.WARNING
+
+
+_TRANSPORT_TRACES: Final = _WarningsOnly()
+
+
 class SpeechSpeaking:
     """Speak one sentence at the shared speech service."""
 
@@ -113,6 +123,11 @@ class SpeechHearing:
         """Keep the service's origin and the voice readiness asks after."""
         self._origin = origin
         self._voice = voice
+        # httpcore2 traces the upgrade's response headers at DEBUG and httpx2 the
+        # response line at INFO, whatever level an operator set; those carry
+        # what the speech service answered.
+        for name in ("httpx2", "httpcore2.http11"):
+            logging.getLogger(name).addFilter(_TRANSPORT_TRACES)
 
     async def readiness(self) -> CoPresenterReadiness:
         """Say whether the service hears, or that its voice is missing."""
