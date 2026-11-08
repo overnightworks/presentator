@@ -93,7 +93,7 @@ class SourceRefusal(StrEnum):
     MALFORMED_NAME = "malformed-name"
     DUPLICATE_NAME = "duplicate-name"
     DUPLICATE_URL = "duplicate-url"
-    ACCESS_MISMATCH = "access-mismatch"
+    UNKNOWN_ACCESS = "unknown-access"
     NOT_CHECKED = "not-checked"
     CREDENTIAL_NOT_ALLOWED = "credential-not-allowed"
     OUTSIDE_MOUNT = "outside-local-mount"
@@ -138,7 +138,6 @@ class NewSourceDraft:
 
     name: str
     url: str
-    access: AccessKind | None
     secret: str
     fingerprint: str
     # The draft key the Add form was shown; blank unless SSH was posted.
@@ -166,15 +165,6 @@ def _credential_of(posted: str, deploy_key: DeployKeyDraft | None) -> str:
     return posted.strip() if deploy_key is None else deploy_key.private_key
 
 
-def _access_matches_url(access: AccessKind | None, url: str) -> bool:
-    """Whether the posted access names the kind this URL unambiguously is.
-
-    An unknown access or a URL naming no kind never match, so two "nothing"s
-    cannot agree and let an ambiguous address through.
-    """
-    return access is not None and access is access_kind_of(url)
-
-
 def _refusal_for(
     draft: NewSourceDraft,
     *,
@@ -187,20 +177,15 @@ def _refusal_for(
     SSH checks with the account-owned draft key; every access kind needs that
     Check proof before it can create a source.
     """
-    access, secret = draft.access, draft.secret
+    kind, secret = access_kind_of(url), draft.secret
     checks = (
         (
             name == RESERVED_SOURCE_NAME or _SOURCE_NAME.fullmatch(name) is None,
             SourceRefusal.MALFORMED_NAME,
         ),
-        # A wrong radio is refused ahead of what it would say about the secret:
-        # a person who picked the wrong kind reads that first.
+        (kind is None, SourceRefusal.UNKNOWN_ACCESS),
         (
-            not _access_matches_url(access, url),
-            SourceRefusal.ACCESS_MISMATCH,
-        ),
-        (
-            access in (AccessKind.FILE, AccessKind.SSH) and bool(secret.strip()),
+            kind in (AccessKind.FILE, AccessKind.SSH) and bool(secret.strip()),
             SourceRefusal.CREDENTIAL_NOT_ALLOWED,
         ),
         (any(source.name == name for source in existing), SourceRefusal.DUPLICATE_NAME),
@@ -425,7 +410,6 @@ class Decks:
         self,
         *,
         url: str,
-        access: AccessKind | None,
         secret: str,
         owner_id: str,
         key_draft_id: str,
@@ -438,10 +422,11 @@ class Decks:
         one, so a reachable check and a stored source read alike.
         """
         address = url.strip()
-        if not _access_matches_url(access, address):
-            return SourceRefusal.ACCESS_MISMATCH
+        kind = access_kind_of(address)
+        if kind is None:
+            return SourceRefusal.UNKNOWN_ACCESS
         deploy_key = None
-        if access is AccessKind.SSH:
+        if kind is AccessKind.SSH:
             deploy_key = self.key_drafts.unconsumed_for(
                 owner_id,
                 newer_than=self.clock.now() - DRAFT_MAX_AGE,

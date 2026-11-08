@@ -85,8 +85,8 @@ class AccessKind(StrEnum):
 
     HTTPS may carry a token; SSH and the scp form are a deploy key; a `file://`
     address or a bare absolute path is this box's own mount, and carries no
-    secret at all. The radio on the form has to match this, and a mismatch is
-    refused rather than stored as a fourth kind.
+    secret at all. An address naming none of them is refused rather than stored
+    as a fourth kind.
     """
 
     HTTPS = "https-token"

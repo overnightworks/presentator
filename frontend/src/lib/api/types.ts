@@ -169,6 +169,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sources/new/kind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Address Access */
+        post: operations["address_access_api_sources_new_kind_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sources/{name}": {
         parameters: {
             query?: never;
@@ -265,8 +282,8 @@ export interface components {
          *
          *     HTTPS may carry a token; SSH and the scp form are a deploy key; a `file://`
          *     address or a bare absolute path is this box's own mount, and carries no
-         *     secret at all. The radio on the form has to match this, and a mismatch is
-         *     refused rather than stored as a fourth kind.
+         *     secret at all. An address naming none of them is refused rather than stored
+         *     as a fourth kind.
          * @enum {string}
          */
         AccessKind: "https-token" | "ssh-deploy-key" | "local-folder";
@@ -286,6 +303,13 @@ export interface components {
          */
         AccountView: {
             theme: components["schemas"]["ThemeChoice"];
+        };
+        /**
+         * AddressAccessView
+         * @description The access the address names, or null when it names none.
+         */
+        AddressAccessView: {
+            access: components["schemas"]["AccessKind"] | null;
         };
         /**
          * AttemptView
@@ -580,22 +604,14 @@ export interface components {
             sign_in_no_access_sentence: string;
             /** Sign In Try Again */
             sign_in_try_again: string;
-            /** Source Access */
-            source_access: string;
             /** Source Access Deploy Key */
             source_access_deploy_key: string;
-            /** Source Access File */
-            source_access_file: string;
             /** Source Access Heading */
             source_access_heading: string;
-            /** Source Access Https */
-            source_access_https: string;
             /** Source Access Local */
             source_access_local: string;
             /** Source Access Renew Info */
             source_access_renew_info: string;
-            /** Source Access Ssh */
-            source_access_ssh: string;
             /** Source Access Token */
             source_access_token: string;
             /** Source Check */
@@ -622,6 +638,12 @@ export interface components {
             source_deploy_key_info: string;
             /** Source Deploy Key Renew */
             source_deploy_key_renew: string;
+            /** Source Kind Failed */
+            source_kind_failed: string;
+            /** Source Kind Pending */
+            source_kind_pending: string;
+            /** Source Kind Retry */
+            source_kind_retry: string;
             /** Source Later */
             source_later: string;
             /** Source Name */
@@ -632,8 +654,6 @@ export interface components {
             source_push_inbox: string;
             /** Source Recent Runs */
             source_recent_runs: string;
-            /** Source Refused Access */
-            source_refused_access: string;
             /** Source Refused Deploy Key */
             source_refused_deploy_key: string;
             /** Source Refused Duplicate Name */
@@ -650,6 +670,8 @@ export interface components {
             source_refused_secret: string;
             /** Source Refused Secret Not Allowed */
             source_refused_secret_not_allowed: string;
+            /** Source Refused Unknown Access */
+            source_refused_unknown_access: string;
             /** Source Remove Button */
             source_remove_button: string;
             /** Source Remove Cancel */
@@ -772,7 +794,6 @@ export interface components {
          * @description A checked source to store: the probe, its name and the check's fingerprint.
          */
         NewSource: {
-            access: components["schemas"]["AccessKind"];
             /** Fingerprint */
             fingerprint: string;
             /** Key Draft Id */
@@ -860,6 +881,14 @@ export interface components {
             title: string;
         };
         /**
+         * SourceAddress
+         * @description An address as typed, before anything decides what it needs.
+         */
+        SourceAddress: {
+            /** Url */
+            url: string;
+        };
+        /**
          * SourceDeckView
          * @description A deck the source carries.
          */
@@ -879,10 +908,9 @@ export interface components {
         };
         /**
          * SourceProbe
-         * @description The address, access and credential of a source that is not stored yet.
+         * @description The address and credential of a source that is not stored yet.
          */
         SourceProbe: {
-            access: components["schemas"]["AccessKind"];
             /** Key Draft Id */
             key_draft_id: string | null;
             /** Secret */
@@ -1443,7 +1471,7 @@ export interface operations {
                         /** Detail */
                         detail?: string | null;
                         /** @enum {string} */
-                        reason: "malformed-name" | "duplicate-name" | "duplicate-url" | "access-mismatch" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
+                        reason: "malformed-name" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
                         /** Status */
                         status: number;
                         /** Title */
@@ -1513,7 +1541,7 @@ export interface operations {
                         /** Detail */
                         detail?: string | null;
                         /** @enum {string} */
-                        reason: "malformed-name" | "duplicate-name" | "duplicate-url" | "access-mismatch" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
+                        reason: "malformed-name" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
                         /** Status */
                         status: number;
                         /** Title */
@@ -1566,6 +1594,60 @@ export interface operations {
                          */
                         type: string;
                     };
+                };
+            };
+        };
+    };
+    address_access_api_sources_new_kind_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceAddress"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddressAccessView"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Detail */
+                        detail?: string | null;
+                        /** Status */
+                        status: number;
+                        /** Title */
+                        title: string;
+                        /**
+                         * Type
+                         * @default about:blank
+                         */
+                        type: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -310,22 +310,25 @@ _REFUSALS = {
     "reserved name": _Refused(
         SourceRefusal.MALFORMED_NAME, {"name": RESERVED_SOURCE_NAME}
     ),
-    "access mismatch": _Refused(
-        SourceRefusal.ACCESS_MISMATCH, {"access": "ssh-deploy-key", "secret": None}
+    "unknown access": _Refused(
+        SourceRefusal.UNKNOWN_ACCESS, {"url": "http://git.example.invalid/talks.git"}
     ),
     "not checked": _Refused(
         SourceRefusal.NOT_CHECKED, {"fingerprint": "a-proof-for-nothing"}
     ),
     "credential not allowed": _Refused(
-        SourceRefusal.CREDENTIAL_NOT_ALLOWED, {"url": _FOLDER, "access": "local-folder"}
+        SourceRefusal.CREDENTIAL_NOT_ALLOWED, {"url": _FOLDER}
+    ),
+    "credential for a key": _Refused(
+        SourceRefusal.CREDENTIAL_NOT_ALLOWED, {"url": _SSH}
     ),
     "outside the mount": _Refused(
         SourceRefusal.OUTSIDE_MOUNT,
-        {"url": _NOT_THE_MOUNT, "access": "local-folder", "secret": None},
+        {"url": _NOT_THE_MOUNT, "secret": None},
     ),
     "deploy key unavailable": _Refused(
         SourceRefusal.DEPLOY_KEY_UNAVAILABLE,
-        {"url": _SSH, "access": "ssh-deploy-key", "secret": None, "key_draft_id": "x"},
+        {"url": _SSH, "secret": None, "key_draft_id": "x"},
     ),
 }
 
@@ -413,7 +416,6 @@ def test_a_foreign_or_stale_draft_is_refused_and_the_next_draft_is_fresh(
         admin.client,
         fingerprint=_NO_PROOF,
         url=_SSH,
-        access="ssh-deploy-key",
         secret=None,
         key_draft_id=offered,
     )
@@ -433,7 +435,6 @@ def test_an_ssh_create_binds_the_own_draft_and_the_next_draft_is_new() -> None:
     answer = create(
         client,
         url=_SSH,
-        access="ssh-deploy-key",
         secret=None,
         key_draft_id=drafted["id"],
     )
@@ -451,12 +452,23 @@ def test_a_local_folder_under_the_mount_is_stored_by_its_canonical_address() -> 
     world = a_world()
     client = an_admin_over(world.decks).client
 
-    answer = create(client, url=_FOLDER, access="local-folder", secret=None)
+    answer = create(client, url=_FOLDER, secret=None)
 
     (stored,) = world.store.sources
     assert answer.status_code == HTTPStatus.CREATED
     assert stored.url == str(FakeLocalMount().canonical_repository(_FOLDER))
     assert_no_store(answer)
+
+
+def test_a_leftover_access_in_the_request_is_ignored_and_the_address_decides() -> None:
+    world = a_world()
+    client = an_admin_over(world.decks).client
+
+    answer = create(client, access="ssh-deploy-key")
+
+    (stored,) = world.store.sources
+    assert answer.status_code == HTTPStatus.CREATED
+    assert stored.url == HTTPS
 
 
 def test_an_https_source_without_a_secret_is_created() -> None:
@@ -495,12 +507,11 @@ def test_a_store_that_rejects_the_row_makes_no_source_and_keeps_no_secret() -> N
 @pytest.mark.parametrize(
     "body",
     [
-        checked_body(name=_NAME, fingerprint=_NO_PROOF, access="https"),
-        {"name": _NAME, "access": "https-token", "secret": SENT, "fingerprint": "x"},
-        {"name": _NAME, "url": HTTPS, "access": "https-token", "secret": SENT},
+        {"name": _NAME, "secret": SENT, "fingerprint": "x"},
+        {"name": _NAME, "url": HTTPS, "secret": SENT},
         checked_body(name=_NAME, fingerprint=_NO_PROOF, secret=12345),
     ],
-    ids=["radio-token", "url-missing", "fingerprint-missing", "secret-a-number"],
+    ids=["url-missing", "fingerprint-missing", "secret-a-number"],
 )
 def test_a_malformed_create_is_the_validation_answer_without_what_was_sent(
     body: dict[str, object],
@@ -559,7 +570,6 @@ def _ssh_in_the_log(_world: World, lobby: Lobby) -> Response:
     return create(
         lobby.client,
         url=_SSH,
-        access="ssh-deploy-key",
         secret=None,
         key_draft_id=drafted["id"],
     )
