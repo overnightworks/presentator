@@ -4,14 +4,17 @@
 # output. `instance` is the toolchain layer plus the packaged server and the
 # lobby's output; the web and the build worker run from it.
 #
-# Node is the base because the toolchain's version is the narrow one
-# (the engines field of slidev/package.json); uv brings the Python that .python-version names. Every
-# image named here is held by digest, because a tag is a name its owner may
-# move.
+# Node is the base because the toolchain's version is the narrow one (the
+# engines field of slidev/package.json); uv brings the Python that
+# .python-version names. Every image named here is held by digest, because a
+# tag is a name its owner may move. uv's tag is read from the `uv` stage by CI
+# (.github/actions/setup-uv), so the image and CI run one uv.
 #
 # The runtime user's uid is named by number in the final USER, because a pod
 # with runAsNonRoot can verify a number but not a name.
 ARG PRESENTATOR_RUNTIME_UID=1001
+FROM ghcr.io/astral-sh/uv:0.10.9@sha256:10902f58a1606787602f303954cea099626a4adb02acbac4c69920fe9d278f82 AS uv
+
 FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS runtime-user
 
 # The two identities a build worker runs steps as: one builds, one only reads
@@ -97,7 +100,7 @@ RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates git openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:0.10.9@sha256:10902f58a1606787602f303954cea099626a4adb02acbac4c69920fe9d278f82 /uv /usr/local/bin/uv
+COPY --from=uv /uv /usr/local/bin/uv
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON_INSTALL_DIR=/opt/python \

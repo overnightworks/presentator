@@ -1,0 +1,28 @@
+name: Install uv
+description: Installs the uv version the Dockerfile pins, so the image and CI run one uv.
+
+inputs:
+  cache-dependency-glob:
+    description: Lock files whose content keys uv's cache.
+    default: uv.lock
+
+runs:
+  using: composite
+  steps:
+    - name: Read uv's version from the Dockerfile
+      id: version
+      shell: bash
+      run: |
+        tag=$(sed -n 's|^FROM ghcr\.io/astral-sh/uv:\([^@ ]*\).* AS uv$|\1|p' "$GITHUB_WORKSPACE/Dockerfile")
+        if [ -z "$tag" ]; then
+          echo "::error::Dockerfile has no 'FROM ghcr.io/astral-sh/uv:<tag> AS uv' line" >&2
+          exit 1
+        fi
+        printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      with:
+        enable-cache: true
+        version: ${{ steps.version.outputs.tag }}
+        cache-dependency-glob: ${{ inputs.cache-dependency-glob }}
