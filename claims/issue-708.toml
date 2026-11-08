@@ -1,0 +1,8 @@
+claim_id = "0f2fb9ba4f3d45d8835bf012a0213b6f"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "a2af178c5295a7c291bb93ff95f4c2a961a7f1b7"
+branch = "claude/issue-708-presentator-pins-quality-v0-10-0"
+scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "quality/baseline.toml", "quality/config.toml"]
+opened_commit = "291cbe59e50c46ed685f81da5e988b9a8f4d5522"
+whole_reason = "The gate pin, the release workflows' pins and the ceiling the new pin judges move in one pull request, or the gate refuses a mixed pin or a gone baseline entry."
