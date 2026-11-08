@@ -532,11 +532,14 @@ def served_by_host(instance: Instance, settings: Settings) -> Router:
     not serve, with a port or without, gets the router's 404 and a socket is
     refused, so neither app ever answers under the other's name.
     """
+    # Starlette runs only this router's lifespan, never a `Host` sub-app's, so the
+    # lobby's own is entered here.
     return Router(
         routes=[
             Host(str(urlsplit(settings.public_origin).hostname), instance.lobby),
             Host(str(urlsplit(settings.talk_origin).hostname), instance.talk),
         ],
+        lifespan=lambda _: instance.lobby.router.lifespan_context(instance.lobby),
     )
 
 
