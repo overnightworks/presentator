@@ -46,6 +46,7 @@ from tests.support.speech_drive import (
 from tests.support.speech_service import (
     A_WAV,
     FakeSpeechService,
+    Hear,
     a_chunked_wav,
     a_health_document,
     a_refusal,
@@ -56,8 +57,6 @@ from tests.support.talk_support import A, Hosts
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
-
-    from fastapi.testclient import TestClient
 
 ORIGIN: Final = {"origin": A_TALK_ADDRESS}
 HEARD: Final = "die gehörten Worte MARKER"
@@ -287,10 +286,6 @@ def test_both_hosts_sign_in_naming_exactly_the_configured_speech_scope(
             assert set(scope.split()) == expected
 
 
-def _open_a_lease(talk: TestClient) -> object:
-    return talk.websocket_connect(HEARING, headers=ORIGIN)
-
-
 def _release_the_recheck(instance: SpeechInstance) -> None:
     assert instance.deadline.started.wait(_THREAD_WAIT_SECONDS)
     instance.deadline.release_first()
@@ -444,11 +439,7 @@ def _a_marked_refusal() -> Response:
     )
 
 
-def _a_marked_health() -> Response:
-    return Response(content=PLANTED, status_code=200, headers={"X-Marker": PLANTED})
-
-
-def _an_error_carrying_the_marker() -> Callable[[WebSocket], object]:
+def _an_error_carrying_the_marker() -> Hear:
     async def realtime(connection: WebSocket) -> None:
         await connection.accept()
         await connection.receive()
@@ -467,7 +458,7 @@ def _an_error_carrying_the_marker() -> Callable[[WebSocket], object]:
     return realtime
 
 
-def _refused_upgrade_with_the_marker() -> Callable[[WebSocket], object]:
+def _refused_upgrade_with_the_marker() -> Hear:
     async def realtime(connection: WebSocket) -> None:
         await connection.send_denial_response(
             Response(content=PLANTED, status_code=429, headers={"X-Marker": PLANTED})
