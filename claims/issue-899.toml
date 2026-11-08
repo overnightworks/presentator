@@ -1,0 +1,8 @@
+claim_id = "ad7f4447fc624c4eb0387ebd8f5a21e9"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "a2af178c5295a7c291bb93ff95f4c2a961a7f1b7"
+branch = "claude/issue-899-the-privacy-text-names-your-own-ai-agent"
+scope = ["legal/datenschutz.html", "legal/nutzungsbedingungen.html", "tests"]
+opened_commit = "0341662cd1c9975d54a469413fa4320e1336bbee"
+whole_reason = "The privacy section, its terms sentence and the tests that pin the section are one released wording."
