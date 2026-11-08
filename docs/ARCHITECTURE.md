@@ -18,7 +18,7 @@ flowchart LR
     presentator -- sign-in --> keycloak[Keycloak]
     presentator -- questions --> gateway[Model gateway<br/>via agent-runtime client]
     presentator -- read-only fetch --> git[(git remotes)]
-    presentator -- speak / hear --> speech[Speech service]
+    presentator -- speak / hear --> speech[Speech service<br/>via speech client]
     hal[hal and edge] -- deploy, legal pages --> presentator
 ```
 
@@ -36,6 +36,7 @@ flowchart TD
     ports --> contracts
     adapters --> gitmirror
     agent --> arc[agent_runtime_client]
+    adapters --> src[speech_runtime_client]
     host --> webauth
     api --> webauth
     agent --> webauth
@@ -50,7 +51,10 @@ flowchart TD
   as `api` and `host` import it; the web framework is exempt.
 - **`src/gitmirror`** mirrors any remote read-only through `git`, does not
   import `presentator`, and only adapters name it. **`presentator.agent`** alone
-  imports `agent_runtime_client`, at the tag `pyproject.toml` pins.
+  imports `agent_runtime_client`, at the tag `pyproject.toml` pins. Only adapters
+  import `speech_runtime_client`, the pinned client that owns the speech wire, its
+  upgrade headers, server events and health fetch; `adapters/session_access.py` is
+  the one read of what the issuer grants a signed-in session.
 - **webauth** owns the sign-in routes, the gate, the origin check, the body caps
   and the cookies; presentator's SQLite stores fill its ports.
 - **`frontend/`** is a SvelteKit single-page shell (`adapter-static`, `ssr =
@@ -90,6 +94,8 @@ hosts answer `GET /health` with a fixed 200 and no session, store read or cookie
 (`api/health.py`); the port opens only after the database is migrated and, under
 the worker runner, the worker answers, so an answer means it serves. The request
 must name a served host: the container check and edge do, a direct run must.
+The instance joins the internal network `hal_speech_presentator` to reach the
+shared speech service; no host speech process runs.
 
 ## 5. Crosscutting Concepts
 
@@ -126,8 +132,11 @@ The operator's settings, his local sources folder and hal's token clients are
 trusted. A folder under the local-sources mount is read with the operator's
 trust: its repositories, their metadata (a `gitdir` file,
 `objects/info/alternates`, a symlink) and everyone who can write there. Across
-the speech service's private Unix socket go readiness, PCM, transcript and
-spoken sentences; browser identity and credentials do not. No operator blessing
+the shared speech service, over an internal network with no egress, go readiness,
+PCM, transcripts, spoken sentences and two tokens: the person's access token, which
+carries the account's subject and group memberships, and presentator's workload
+token beside it. Browser cookies and session credentials are not forwarded; what the
+service keeps, logs and admits is the shared section `#sprachdienst`. No operator blessing
 narrows this model yet, so an audit keeps the default trust model.
 
 A bearer enters the lobby through two paths besides hal's token clients, and
@@ -158,6 +167,8 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
   beside the credential it must not reach.
 - One process writes the database: a second would need a second write lock over
   the one SQLite file, and the identity lock relies on one writer.
+- The plain `http` hop to the speech service is safe only because
+  `hal_speech_presentator` is internal.
 - The plain `http` hop to the model gateway is safe only because
   `hal_agent_presentator` has no host address or published port; hal decides
   whom the gateway admits.

@@ -22,6 +22,7 @@ A_BACKCHANNEL_EVENT = "http://schemas.openid.net/event/backchannel-logout"
 _TOKEN_LIFETIME_SECONDS = 300
 _AUTHORIZATION_CODE = "authorization_code"
 _REFRESH_TOKEN = "refresh_token"  # noqa: S105
+_CLIENT_CREDENTIALS = "client_credentials"
 
 
 def _base64url(data: bytes) -> str:
@@ -73,6 +74,10 @@ class FakeIssuer:
         self.redirect_uris: list[str] = []
         self.token_endpoint_is_down = False
         self.key_set_is_down = False
+        self.workload_token = secrets.token_urlsafe(8)
+        self.workload_scopes: list[str] = []
+        self.workload_refusal: tuple[str, str] | None = None
+        self.during_workload_grant: Callable[[], None] = lambda: None
 
     def issue_refresh_token(self, token: str) -> None:
         """Answer every later code exchange with this refresh token too."""
@@ -202,12 +207,14 @@ class FakeIssuer:
         parameters = parse_qs(urlsplit(authorization_url).query)
         self._holding = (subject, groups, username)
         code = secrets.token_urlsafe(16)
-        self._tokens_by_code[code] = self.mint(
+        id_token = self.mint(
             nonce=parameters["nonce"][0],
             subject=subject,
             groups=groups,
             username=username,
         )
+        self.issued_id_tokens.append(id_token)
+        self._tokens_by_code[code] = id_token
         return f"code={code}&state={parameters['state'][0]}"
 
     def post_token_request(self, request: TokenRequest) -> TokenEndpointAnswer:
@@ -224,6 +231,8 @@ class FakeIssuer:
             return self._code_exchange(request.form["code"])
         if grant_type == _REFRESH_TOKEN:
             return self._refresh(request.form[_REFRESH_TOKEN])
+        if grant_type == _CLIENT_CREDENTIALS:
+            return self._workload_grant(request.form["scope"])
         return _refusal("unsupported_grant_type", HTTPStatus.BAD_REQUEST)
 
     def _code_exchange(self, code: str) -> TokenEndpointAnswer:
@@ -246,6 +255,19 @@ class FakeIssuer:
         if self._rotated_refresh_token is not None:
             document[_REFRESH_TOKEN] = self._rotated_refresh_token
         return TokenEndpointAnswer(HTTPStatus.OK, json.dumps(document).encode())
+
+    def _workload_grant(self, scope: str) -> TokenEndpointAnswer:
+        self.workload_scopes.append(scope)
+        self.during_workload_grant()
+        if self.workload_refusal is not None:
+            error, description = self.workload_refusal
+            document = {"error": error, "error_description": description}
+            return TokenEndpointAnswer(
+                HTTPStatus.BAD_REQUEST, json.dumps(document).encode()
+            )
+        return TokenEndpointAnswer(
+            HTTPStatus.OK, json.dumps(_access_document(self.workload_token)).encode()
+        )
 
     def fetch_key_set(self, url: str) -> bytes:
         """The key set endpoint: the one public key, or a failed fetch."""

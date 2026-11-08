@@ -18,12 +18,13 @@ services:
       edge.alias: presentator-talk
       traefik.http.services.presentator.loadbalancer.server.port: "8000"
       traefik.docker.network: presentator_default
-    # `agent` is the one the gateway answers on and `backchannel` the one
-    # the identity provider reaches the logout route on; the edge owns and
-    # creates both.
+    # `agent` is the one the gateway answers on, `speech` the shared speech
+    # service's and `backchannel` the one the identity provider reaches the
+    # logout route on; the edge owns and creates all three.
     networks:
       default: {}
       agent: {}
+      speech: {}
       backchannel:
         aliases:
           - presentator.hallucinai.de
@@ -40,6 +41,9 @@ services:
       PRESENTATOR_TRUSTED_PROXIES: 172.31.251.1
       PRESENTATOR_AGENT__BACKEND: litellm
       PRESENTATOR_AGENT__GATEWAY__ORIGIN: http://litellm-front:4000
+      PRESENTATOR_SPEECH_SERVICE: http://speech-runtime:8080
+      PRESENTATOR_SPEECH_SERVICE_SCOPE: speech-service-audience
+      PRESENTATOR_SPEECH_VOICE: piper
       PRESENTATOR_AGENT__GATEWAY__KEY_FILE: /run/secrets/litellm_key
       PRESENTATOR_AGENT__API_GROUP: /services/agent-service/api
       PRESENTATOR_BUILD_RUNNER: worker
@@ -149,6 +153,9 @@ networks:
   agent:
     external: true
     name: hal_agent_presentator
+  speech:
+    external: true
+    name: hal_speech_presentator
   backchannel:
     external: true
     name: hal_backchannel_presentator

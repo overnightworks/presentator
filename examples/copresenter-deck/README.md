@@ -22,7 +22,7 @@ The presenter toolbar uses the signed-in Presentator origin's relative
 `deck` field (the slug in the deck's address); Presentator answers only for a
 built deck its asker owns. Presentator checks the existing session before
 readiness, answers, or microphone capture and keeps the hearing lease open only
-while local hearing is active. How to run the private speech service is
-[the speech runbook](../../docs/runbooks/run-the-speech-service-on-the-host.md).
+while local hearing is active. The instance speaks and hears through the shared
+speech service that `compose.yaml` joins it to.
 
 The folder contract is [decks](../../docs/decks.md).

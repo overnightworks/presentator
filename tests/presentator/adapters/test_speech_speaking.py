@@ -1,132 +1,156 @@
-"""Speaking one sentence over speech's private socket, against a fake of speech."""
+"""Speaking one sentence at the shared speech service, through the client."""
 
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 from typing import TYPE_CHECKING
 
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from speech_runtime_client import wire
+from speech_runtime_client.outcomes import OverCap, PastDeadline
 
-from presentator.adapters.speech import UdsSpeaking
-from presentator.contracts.copresenter import CoPresenterUnavailableError
-from tests.presentator.adapters.support.serving import Serving, unix_listener
+from presentator.adapters.speech import SpeechSpeaking
+from presentator.contracts.copresenter import (
+    CoPresenterUnavailableError,
+    SpeechTokens,
+)
+from tests.support.lobby import A_SPEECH_VOICE
+from tests.support.speech_service import (
+    A_WAV,
+    MALFORMED_PEERS,
+    PLANTED,
+    SPEAK_FAILURES,
+    FakeSpeechService,
+    RawPeer,
+    a_closed_port_origin,
+    a_loopback_server,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
-    from pathlib import Path
+    from speech_runtime_client.speak import SpeakOutcome
 
-WAV_CHUNKS = (b"RIFF", b"-first-", b"-second-")
-
-
-class FakeSpeech:
-    """A fake /speak that records requests and notices its connection closing."""
-
-    def __init__(self) -> None:
-        """Build the app with its one /speak route."""
-        self.requests: list[dict[str, str]] = []
-        self.connection_closed = asyncio.Event()
-        self.first_chunk_sent = asyncio.Event()
-        self.app = FastAPI()
-        self.app.add_api_route("/speak", self._speak, methods=["POST"])
-        self.body = self._whole_wav
-
-    async def _speak(self, request: Request) -> Response:
-        self.requests.append(await request.json())
-        return self.body()
-
-    def _whole_wav(self) -> Response:
-        return StreamingResponse(self._chunks(WAV_CHUNKS), media_type="audio/wav")
-
-    def stalling(self) -> Response:
-        return StreamingResponse(self._stall(), media_type="audio/wav")
-
-    async def _chunks(self, chunks: tuple[bytes, ...]) -> AsyncIterator[bytes]:
-        for chunk in chunks:
-            yield chunk
-            await asyncio.sleep(0)
-
-    async def _stall(self) -> AsyncIterator[bytes]:
-        try:
-            yield b"RIFF"
-            self.first_chunk_sent.set()
-            await asyncio.sleep(30)
-        finally:
-            self.connection_closed.set()
+TOKENS = SpeechTokens(person="person-token-MARKER", workload="workload-token-MARKER")
+SENTENCE = "Ein Satz, bitte."
 
 
-async def speak_against(tmp_path: Path, fake: FakeSpeech, **speaking: float) -> bytes:
-    socket_path = tmp_path / "speech.sock"
-    async with Serving(fake.app, unix_listener(socket_path)):
-        return await UdsSpeaking(socket_path, **speaking).speak("Eins.", "de")
+def speak_against(fake: FakeSpeechService) -> bytes:
+    async def scenario() -> bytes:
+        async with a_loopback_server(fake.app()) as origin:
+            return await SpeechSpeaking(origin, voice=A_SPEECH_VOICE).speak(
+                SENTENCE, "de", TOKENS
+            )
+
+    return asyncio.run(scenario())
 
 
-def test_speaking_returns_the_whole_wav_and_sends_text_and_language(
-    tmp_path: Path,
+def test_the_audio_passes_through_unchanged() -> None:
+    assert speak_against(FakeSpeechService()) == A_WAV
+
+
+def test_the_request_names_the_configured_voice_format_and_exactly_the_sentence() -> (
+    None
+):
+    fake = FakeSpeechService()
+
+    speak_against(fake)
+
+    (request,) = fake.speak_requests
+    body = json.loads(request.body)
+    assert body["voice"] == A_SPEECH_VOICE
+    assert body["response_format"] == wire.ResponseFormat.WAV.value
+    assert body["input"] == SENTENCE
+
+
+def test_the_request_carries_both_tokens_in_the_clients_headers() -> None:
+    fake = FakeSpeechService()
+
+    speak_against(fake)
+
+    (request,) = fake.speak_requests
+    sent = wire.token_headers(
+        workload_token=TOKENS.workload, person_token=TOKENS.person
+    )
+    for name, value in sent.items():
+        assert request.headers[name.lower()] == value
+
+
+@pytest.mark.parametrize("case", SPEAK_FAILURES)
+def test_every_refusal_or_broken_answer_is_unavailable(
+    case: str, caplog: pytest.LogCaptureFixture
 ) -> None:
-    fake = FakeSpeech()
-
-    wav = asyncio.run(speak_against(tmp_path, fake))
-
-    assert wav == b"".join(WAV_CHUNKS)
-    assert fake.requests == [{"text": "Eins.", "language": "de"}]
-
-
-@pytest.mark.parametrize(
-    "refusal",
-    [
-        pytest.param(
-            lambda: JSONResponse({"detail": "not ready"}, status_code=503), id="503"
-        ),
-        pytest.param(lambda: Response(b"", media_type="audio/wav"), id="empty-body"),
-    ],
-)
-def test_a_refusal_or_an_empty_body_is_unavailable(
-    tmp_path: Path, refusal: Callable[[], Response]
-) -> None:
-    fake = FakeSpeech()
-    fake.body = refusal
-
-    speaking = speak_against(tmp_path, fake)
+    fake = FakeSpeechService(speak_answers=[SPEAK_FAILURES[case]])
+    caplog.set_level(logging.DEBUG)
 
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(speaking)
+        speak_against(fake)
+
+    assert TOKENS.person not in caplog.text
+    assert TOKENS.workload not in caplog.text
+    assert SENTENCE not in caplog.text
+    assert PLANTED not in caplog.text
 
 
-def test_a_missing_socket_is_unavailable(tmp_path: Path) -> None:
-    speech = UdsSpeaking(tmp_path / "absent.sock").speak("Eins.", "de")
+def test_a_refused_connection_is_unavailable() -> None:
+    speaking = SpeechSpeaking(a_closed_port_origin(), voice=A_SPEECH_VOICE)
 
+    running = speaking.speak(SENTENCE, "de", TOKENS)
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(speech)
+        asyncio.run(running)
 
 
-def test_a_stalled_body_is_unavailable_and_closes_the_connection(
-    tmp_path: Path,
+@pytest.mark.parametrize("case", MALFORMED_PEERS)
+def test_a_malformed_answer_is_unavailable(case: str) -> None:
+    async def scenario() -> None:
+        async with RawPeer(MALFORMED_PEERS[case]).serving() as origin:
+            await SpeechSpeaking(origin, voice=A_SPEECH_VOICE).speak(
+                SENTENCE, "de", TOKENS
+            )
+
+    running = scenario()
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(running)
+
+
+@pytest.mark.parametrize("outcome", [PastDeadline(), OverCap()], ids=repr)
+def test_a_speak_the_client_ended_at_its_own_bound_is_unavailable(
+    outcome: SpeakOutcome,
 ) -> None:
-    fake = FakeSpeech()
-    fake.body = fake.stalling
+    def bounded_speak(*_args: object, **_kwargs: object) -> SpeakOutcome:
+        return outcome
+
+    speaking = SpeechSpeaking(
+        "http://speech.test", voice=A_SPEECH_VOICE, bounded_speak=bounded_speak
+    )
+
+    running = speaking.speak(SENTENCE, "de", TOKENS)
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(running)
+
+
+def test_a_sentence_the_wire_cannot_carry_is_one_chain_free_unavailable_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake = FakeSpeechService()
+    caplog.set_level(logging.DEBUG)
 
     async def scenario() -> None:
-        with pytest.raises(CoPresenterUnavailableError):
-            await speak_against(tmp_path, fake, read_timeout=0.2)
-        await asyncio.wait_for(fake.connection_closed.wait(), timeout=5)
+        async with a_loopback_server(fake.app()) as origin:
+            await SpeechSpeaking(origin, voice=A_SPEECH_VOICE).speak("…", "de", TOKENS)
 
-    asyncio.run(scenario())
+    running = scenario()
+    with pytest.raises(CoPresenterUnavailableError) as refused:
+        asyncio.run(running)
+
+    assert (refused.value.__cause__, refused.value.__context__) == (None, None)
+    assert not fake.speak_requests
+    assert "…" not in caplog.text
 
 
-def test_a_cancelled_speak_closes_the_connection_and_raises_nothing_unavailable(
-    tmp_path: Path,
-) -> None:
-    fake = FakeSpeech()
-    fake.body = fake.stalling
+def test_a_startup_defect_is_not_mapped() -> None:
+    speaking = SpeechSpeaking("https://not-plain-http.test", voice=A_SPEECH_VOICE)
 
-    async def scenario() -> None:
-        task = asyncio.create_task(speak_against(tmp_path, fake))
-        await asyncio.wait_for(fake.first_chunk_sent.wait(), timeout=5)
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-        await asyncio.wait_for(fake.connection_closed.wait(), timeout=5)
-
-    asyncio.run(scenario())
+    running = speaking.speak(SENTENCE, "de", TOKENS)
+    with pytest.raises(ValueError, match="http"):
+        asyncio.run(running)

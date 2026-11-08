@@ -16,7 +16,8 @@ import anyio
 from agent_runtime_client.backend.fake_gateway import FakeGateway, Reply, completion
 
 from presentator.adapters.sentences import split_sentences
-from presentator.agent.backend import SessionGroups, gateway_answerer
+from presentator.adapters.session_access import SessionAccess
+from presentator.agent.backend import gateway_answerer
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import (
     AskLimiter,
@@ -33,6 +34,7 @@ from presentator.contracts.copresenter import (
     DeckText,
     HearingTranscript,
     SlideText,
+    SpeechTokens,
 )
 from presentator.contracts.decks import Source
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
@@ -47,6 +49,7 @@ from tests.support.deck_text_support import A_DECK_TEXT, FakeDeckTexts
 from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     A_GATEWAY_KEY,
+    A_SPEECH_SCOPE,
     A_TALK_ADDRESS,
     A_TALK_SOCKET_ADDRESS,
     ADMIN,
@@ -160,6 +163,7 @@ class RecordingSpeech:
     hearing_unavailable: bool = False
     grouped_hearing_context: bool = False
     local_hearing_ready: bool = True
+    heard_with: list[SpeechTokens] = field(default_factory=list[SpeechTokens])
 
     async def readiness(self) -> CoPresenterReadiness:
         self.readiness_calls += 1
@@ -170,10 +174,13 @@ class RecordingSpeech:
             local_hearing_ready=self.local_hearing_ready,
         )
 
-    def hear(self, language: str) -> AbstractAsyncContextManager[PrivateHearing]:
+    def hear(
+        self, language: str, tokens: SpeechTokens
+    ) -> AbstractAsyncContextManager[PrivateHearing]:
         @asynccontextmanager
         async def operation() -> AsyncGenerator[PrivateHearing]:
             assert language == "de"
+            self.heard_with.append(tokens)
             self.hearing_opens += 1
             if self.hearing_unavailable:
                 raise CoPresenterUnavailableError
@@ -244,8 +251,10 @@ class FakeSpeaking:
 
     spoken: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
     fails_at: int | None = None
+    spoken_with: list[SpeechTokens] = field(default_factory=list[SpeechTokens])
 
-    async def speak(self, text: str, language: str) -> bytes:
+    async def speak(self, text: str, language: str, tokens: SpeechTokens) -> bytes:
+        self.spoken_with.append(tokens)
         if self.fails_at == len(self.spoken):
             raise CoPresenterUnavailableError
         self.spoken.append((text, language))
@@ -265,6 +274,12 @@ class FakePersonAccess:
         if self.unavailable:
             raise CoPresenterUnavailableError
         return self.refusal or frozenset({AN_API_GROUP})
+
+    async def speech_tokens_of(self, session_id: str) -> SpeechTokens | AccessRefusal:
+        self.sessions.append(session_id)
+        if self.unavailable:
+            raise CoPresenterUnavailableError
+        return self.refusal or SpeechTokens(person="a-person", workload="a-workload")
 
 
 @dataclass(kw_only=True)
@@ -436,6 +451,13 @@ class WitnessedAccess:
             self._errors.append(error)
             raise
 
+    async def speech_tokens_of(self, session_id: str) -> SpeechTokens | AccessRefusal:
+        try:
+            return await self._access.speech_tokens_of(session_id)
+        except BaseException as error:
+            self._errors.append(error)
+            raise
+
 
 @dataclass
 class Run:
@@ -512,6 +534,17 @@ class Scenario:
     headers: Mapping[str, str] = field(default_factory=dict[str, str])
 
 
+def _access_over(
+    auth: InstalledAuth, sessions: SqliteSessionRecordStore
+) -> SessionAccess:
+    return SessionAccess(
+        auth.relying_party,
+        sessions,
+        auth.config,
+        speech_scope=A_SPEECH_SCOPE,
+    )
+
+
 def the_fakes_of(scenario: Scenario) -> PrivateFakes:
     fakes = PrivateFakes()
     fakes.speaking.fails_at = scenario.speaking_fails_at
@@ -557,9 +590,7 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
                 texts=scenario.texts or fakes.texts,
                 boundaries=split_sentences,
                 speaking=fakes.speaking,
-                person_access=WitnessedAccess(
-                    SessionGroups(auth.relying_party, sessions, auth.config), errors
-                ),
+                person_access=WitnessedAccess(_access_over(auth, sessions), errors),
             ),
             limiter=limiter,
             browser_origin=A_TALK_ADDRESS,

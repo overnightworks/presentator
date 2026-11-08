@@ -3,9 +3,8 @@
 Audience: whoever changes or operates the co-presenter, the AI that answers
 beside a talk. This page holds the co-presenter's ruled sentences, each with the
 ID its test cites. How a question is asked, bounded and answered is in the code;
-running the speech service is the runbook
-[run the speech service](runbooks/run-the-speech-service-on-the-host.md), and
-the speech socket's trust sentence is in
+the instance speaks and hears through the shared speech service over the internal
+network `hal_speech_presentator`, and that hop's trust sentence is in
 [Trust](ARCHITECTURE.md#5-crosscutting-concepts).
 
 ## What it knows and whom it answers
@@ -27,7 +26,9 @@ the speech socket's trust sentence is in
 - **CP6** The overlay shows "Not enabled", "Sign in again" or "No answer", only
   its own words. It never navigates, and a refusal line clears at the next
   question.
-- **CP7** The overlay's speech words are "Voice offline" and "No hearing". A new
+- **CP7** The overlay's speech words are "Voice offline" (the service does not
+  answer, or the configured voice cannot speak), "Local hearing not ready" (hearing
+  still loads) and "No hearing" (a hearing that fails or cannot open). A new
   word needs a ruling.
 
 ## What the room sees

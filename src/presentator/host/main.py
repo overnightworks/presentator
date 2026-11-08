@@ -66,8 +66,13 @@ from presentator.adapters.secrets import (
     talk_session_secret,
 )
 from presentator.adapters.sentences import split_sentences
-from presentator.adapters.speech import UdsSpeaking, UdsSpeechHearing
-from presentator.agent.backend import SessionGroups, gateway_answerer
+from presentator.adapters.session_access import SessionAccess
+from presentator.adapters.speech import (
+    SpeechHearing,
+    SpeechSpeaking,
+    silence_transport_traces,
+)
+from presentator.agent.backend import gateway_answerer
 from presentator.agent.mcp import (
     deck_list_mark,
     deck_text_mark,
@@ -336,16 +341,24 @@ def _copresenter_surface(
     mirrors: SourceMirrors,
 ) -> CoPresenterSurface:
     """What only a signed-in admin may reach at the talk host: the gateway's answers."""
+    silence_transport_traces()
     return CoPresenterSurface(
         use=CoPresenterUse(
             answers=gateway_answerer(settings.agent, auth.relying_party),
-            speech=UdsSpeechHearing(settings.speech_socket),
+            speech=SpeechHearing(settings.speech_service, voice=settings.speech_voice),
             decks=decks.store,
             sources=decks.sources,
             texts=MirroredDeckTexts(mirrors=mirrors),
             boundaries=split_sentences,
-            speaking=UdsSpeaking(settings.speech_socket),
-            person_access=SessionGroups(auth.relying_party, sessions, auth.config),
+            speaking=SpeechSpeaking(
+                settings.speech_service, voice=settings.speech_voice
+            ),
+            person_access=SessionAccess(
+                auth.relying_party,
+                sessions,
+                auth.config,
+                speech_scope=settings.speech_service_scope,
+            ),
         ),
         limiter=AskLimiter(clock=SystemClock()),
         browser_origin=settings.talk_origin,

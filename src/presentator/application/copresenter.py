@@ -27,6 +27,7 @@ from presentator.contracts.copresenter import (
     CoPresenterReadiness,
     CoPresenterUnavailableError,
     Question,
+    SpeechTokens,
 )
 from presentator.contracts.models import Role
 from presentator.contracts.voice import SampleLanguage
@@ -50,10 +51,11 @@ _MILLISECONDS = 1000
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PreparedAsk:
-    """An ask whose person's groups are in hand, and when it began."""
+    """An ask whose person's groups and speech tokens are in hand, and when it began."""
 
     asked: AskedDeck
     person: AskingPerson
+    speech: SpeechTokens
     started: float
 
 
@@ -96,16 +98,19 @@ class CoPresenterUse:
     async def prepare(
         self, asked: AskedDeck, *, session_id: str, subject: str, role: Role
     ) -> PreparedAsk | AccessRefusal:
-        """Read the asking person's groups now, before anything is streamed.
+        """Read the asking person's groups and speech tokens before anything streams.
 
-        Raises CoPresenterUnavailableError when the groups cannot be read.
+        Raises CoPresenterUnavailableError when either cannot be read.
         """
         started = self.monotonic()
         groups = await self.person_access.groups_of(session_id)
         if isinstance(groups, AccessRefusal):
             return groups
+        speech = await self.person_access.speech_tokens_of(session_id)
+        if isinstance(speech, AccessRefusal):
+            return speech
         person = AskingPerson(subject=subject, role=role, groups=groups)
-        return PreparedAsk(asked=asked, person=person, started=started)
+        return PreparedAsk(asked=asked, person=person, speech=speech, started=started)
 
     @asynccontextmanager
     async def answer(
@@ -122,7 +127,9 @@ class CoPresenterUse:
         async with self.answers.answer(
             message=user_message(question, deck_text), person=prepared.person
         ) as texts:
-            events = spoken_events(texts, self.boundaries, self.speaking, language)
+            events = spoken_events(
+                texts, self.boundaries, self.speaking, language, prepared.speech
+            )
             async with aclosing(self._timed(events, prepared.started)) as timed:
                 yield timed
 
@@ -138,9 +145,17 @@ class CoPresenterUse:
             yield event
 
     @asynccontextmanager
-    async def hear(self, language: str) -> AsyncGenerator[PrivateHearing]:
-        """Close and await the single private hearing child on every exit."""
-        async with self.speech.hear(language) as hearing:
+    async def hear(
+        self, language: str, *, session_id: str
+    ) -> AsyncGenerator[PrivateHearing]:
+        """Read the session's speech tokens, then close the child on every exit.
+
+        Raises CoPresenterUnavailableError when the tokens cannot be had.
+        """
+        tokens = await self.person_access.speech_tokens_of(session_id)
+        if isinstance(tokens, AccessRefusal):
+            raise CoPresenterUnavailableError
+        async with self.speech.hear(language, tokens) as hearing:
             try:
                 yield hearing
             finally:

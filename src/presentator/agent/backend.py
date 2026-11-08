@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
-from contextlib import aclosing, asynccontextmanager, nullcontext
+from contextlib import aclosing, asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, NoReturn, assert_never
 
@@ -32,14 +31,8 @@ from agent_runtime_client.turn_events import (
     ToolCallEvent,
     ToolResultEvent,
 )
-from webauth.oidc_login import (
-    AccessTokenRefusal,
-    AccessTokenRefusalReason,
-    current_groups,
-)
 
 from presentator.contracts.copresenter import (
-    AccessRefusal,
     AskingPerson,
     CoPresenterUnavailableError,
     NotEnabledError,
@@ -50,9 +43,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Callable
 
     import httpx2
-    from webauth.config import WebAuthConfig
     from webauth.oidc import OidcRelyingParty
-    from webauth.ports import SessionRecordStore
 
     from presentator.agent.settings import AgentSettings
 
@@ -195,57 +186,3 @@ def gateway_answerer(
 ) -> GatewayAnswerer:
     """The answerer over the gateway the configuration names."""
     return GatewayAnswerer(GatewayBackend(config, transport=transport), relying_party)
-
-
-class SessionGroups:
-    """The groups the issuer holds for a signed-in person, read by one refresh grant."""
-
-    def __init__(
-        self,
-        relying_party: OidcRelyingParty,
-        sessions: SessionRecordStore,
-        config: WebAuthConfig,
-    ) -> None:
-        """Renew through this client, read and rotate in these sessions."""
-        self._relying_party = relying_party
-        self._sessions = sessions
-        self._config = config
-
-    async def groups_of(self, session_id: str) -> frozenset[str] | AccessRefusal:
-        """The session's person's groups, or why it has none."""
-        try:
-            # A cancelled ask cancels the await, not the worker: it still stores
-            # the rotated refresh token, and no later step runs.
-            groups = await asyncio.to_thread(self._read, session_id)
-        # Every thread failure is one unavailable error; its text may hold a token.
-        except Exception as error:  # noqa: BLE001
-            _LOGGER.warning("reading the groups failed: %s", type(error).__name__)
-            _unavailable()
-        if isinstance(groups, AccessTokenRefusal):
-            return self._refusal_of(groups)
-        return frozenset(groups)
-
-    def _read(self, session_id: str) -> tuple[str, ...] | AccessTokenRefusal:
-        return current_groups(
-            self._relying_party,
-            session_id,
-            session_transaction=lambda: nullcontext(self._sessions),
-            config=self._config,
-        )
-
-    @staticmethod
-    def _refusal_of(refusal: AccessTokenRefusal) -> AccessRefusal:
-        match refusal.reason:
-            case AccessTokenRefusalReason.SIGN_IN_AGAIN:
-                return AccessRefusal.SIGN_IN_AGAIN
-            case AccessTokenRefusalReason.SESSION_ENDED:
-                return AccessRefusal.SESSION_ENDED
-            case AccessTokenRefusalReason.ISSUER_UNAVAILABLE:
-                issuer = refusal.issuer_refusal
-                _LOGGER.warning(
-                    "issuer gave no groups: %s",
-                    None if issuer is None else issuer.reason.value,
-                )
-                return AccessRefusal.ISSUER_UNAVAILABLE
-            case _:
-                assert_never(refusal.reason)

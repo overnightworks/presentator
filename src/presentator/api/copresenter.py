@@ -5,7 +5,13 @@ from __future__ import annotations
 import asyncio
 import json
 from base64 import b64encode
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+from collections.abc import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Coroutine,
+    Iterable,
+)
 from contextlib import suppress
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -55,6 +61,9 @@ _GENERIC_ANSWER_FAILURE: Final = "the answer could not be spoken"
 NOT_ENABLED_REASON: Final = "not-enabled"
 _GENERIC_HEARING_FAILURE: Final = "hearing unavailable"
 _BROWSER_DISCONNECT: Final = "websocket.disconnect"
+# About 43 s of the 24 kHz PCM16 input: the lease's own memory bound while the
+# token read and the upgrade run, and against a service that stops taking audio.
+_MAX_HELD_AUDIO_BYTES: Final = 2 * 1024 * 1024
 MAX_SAID_LENGTH: Final = 2_000
 
 
@@ -364,16 +373,14 @@ async def _hearing_lease(
         )
         if first_frame is None:
             return
-        try:
-            async with use.hear(language) as hearing:
-                await hearing.send_pcm(first_frame)
-                private_ended = await _pipe_hearing(
-                    socket,
-                    hearing=hearing,
-                    session_watch=session_watch,
-                )
-        except CoPresenterUnavailableError:
-            private_ended = True
+        private_ended = await _hearing_from(
+            socket,
+            first_frame=first_frame,
+            hear=lambda audio: _hear(
+                socket, audio, language=language, session_id=session_id, use=use
+            ),
+            session_watch=session_watch,
+        )
         if private_ended:
             await socket.send_json(
                 {"text": "", "final": True, "error": _GENERIC_HEARING_FAILURE},
@@ -389,6 +396,107 @@ async def _hearing_lease(
             await socket.close(code=_INTERNAL_ERROR)
     finally:
         await _finish_tasks((session_watch,))
+
+
+class _HeldAudio:
+    """The browser's frames in arrival order, until the hearing has taken them."""
+
+    def __init__(self) -> None:
+        self._frames: asyncio.Queue[bytes] = asyncio.Queue()
+        self._held = 0
+
+    def hold(self, frame: bytes) -> bool:
+        """Keep this frame, or say False once more than the bound is held."""
+        self._held += len(frame)
+        self._frames.put_nowait(frame)
+        return self._held <= _MAX_HELD_AUDIO_BYTES
+
+    async def next(self) -> bytes:
+        frame = await self._frames.get()
+        self._held -= len(frame)
+        return frame
+
+
+async def _hearing_from(
+    socket: WebSocket,
+    *,
+    first_frame: bytes,
+    hear: Callable[[_HeldAudio], Coroutine[object, object, bool]],
+    session_watch: asyncio.Task[None],
+) -> bool:
+    """Race one whole hearing against the session and the browser's next message.
+
+    The hearing is one task, because its connection's context must be entered
+    and left in one task; the token read and the upgrade happen inside it, so
+    a logout or a departure stops them too. Returns whether the private end
+    closed while the browser stayed.
+    """
+    audio = _HeldAudio()
+    if not audio.hold(first_frame):
+        return True
+    hearing = asyncio.create_task(hear(audio))
+    receive = asyncio.create_task(socket.receive())
+    try:
+        while True:
+            done, _pending = await asyncio.wait(
+                {hearing, receive, session_watch},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if session_watch in done:
+                _observe_session_end(session_watch)
+                await socket.close(code=_POLICY_VIOLATION)
+                return False
+            if hearing in done:
+                return hearing.result()
+            frame = await _pcm_or_end(socket, receive.result())
+            if frame is None:
+                return False
+            if not audio.hold(frame):
+                return True
+            receive = asyncio.create_task(socket.receive())
+    finally:
+        await _finish_tasks((hearing, receive))
+
+
+async def _hear(
+    socket: WebSocket,
+    audio: _HeldAudio,
+    *,
+    language: str,
+    session_id: str,
+    use: CoPresenterUse,
+) -> bool:
+    try:
+        async with use.hear(language, session_id=session_id) as hearing:
+            return await _relay(socket, audio, hearing)
+    except CoPresenterUnavailableError:
+        return True
+
+
+async def _relay(
+    socket: WebSocket, audio: _HeldAudio, hearing: CoPresenterHearing
+) -> bool:
+    next_frame = asyncio.create_task(audio.next())
+    transcript = asyncio.create_task(hearing.receive())
+    try:
+        while True:
+            done, _pending = await asyncio.wait(
+                {next_frame, transcript},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if next_frame in done:
+                await hearing.send_pcm(next_frame.result())
+                next_frame = asyncio.create_task(audio.next())
+            if transcript in done:
+                event = transcript.result()
+                if event is None:
+                    return True
+                await socket.send_json({"text": event.text, "final": event.final})
+                transcript = asyncio.create_task(hearing.receive())
+    except WebSocketDisconnect:
+        return False
+    finally:
+        await _finish_tasks((next_frame, transcript))
 
 
 async def _next_pcm_or_end(
@@ -417,42 +525,6 @@ async def _pcm_or_end(socket: WebSocket, message: Message) -> bytes | None:
         await socket.close(code=_UNSUPPORTED_DATA)
         return None
     return message["bytes"]
-
-
-async def _pipe_hearing(
-    socket: WebSocket,
-    *,
-    hearing: CoPresenterHearing,
-    session_watch: asyncio.Task[None],
-) -> bool:
-    receive = asyncio.create_task(socket.receive())
-    transcript = asyncio.create_task(hearing.receive())
-    try:
-        while True:
-            done, _pending = await asyncio.wait(
-                {receive, transcript, session_watch},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if session_watch in done:
-                _observe_session_end(session_watch)
-                await socket.close(code=_POLICY_VIOLATION)
-                return False
-            if receive in done:
-                frame = await _pcm_or_end(socket, receive.result())
-                if frame is None:
-                    return False
-                await hearing.send_pcm(frame)
-                receive = asyncio.create_task(socket.receive())
-            if transcript in done:
-                event = transcript.result()
-                if event is None:
-                    return True
-                await socket.send_json({"text": event.text, "final": event.final})
-                transcript = asyncio.create_task(hearing.receive())
-    except WebSocketDisconnect:
-        return False
-    finally:
-        await _finish_tasks((receive, transcript))
 
 
 async def _hold_authenticated_lease(

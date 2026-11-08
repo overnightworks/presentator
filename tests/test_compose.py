@@ -13,6 +13,9 @@ from urllib.parse import urlsplit
 import pytest
 from ruamel.yaml import YAML
 
+from presentator.host.config import Settings
+from tests.support.lobby import a_settings
+
 _COMPOSE = Path(__file__).parents[1] / "compose.yaml"
 
 
@@ -274,3 +277,22 @@ def _environment_of(service: dict[str, Any]) -> dict[str, str | None]:
         name: value or None
         for name, _, value in (entry.partition("=") for entry in environment)
     }
+
+
+def test_the_speech_values_compose_sets_construct_valid_settings() -> None:
+    """The values Compose carries are ones the settings accept, whatever they are."""
+    compose = _parsed_compose()
+    instance = compose["services"]["presentator"]
+    environment = _environment_of(instance)
+
+    settings = a_settings().model_copy(
+        update={
+            "speech_service": environment["PRESENTATOR_SPEECH_SERVICE"],
+            "speech_service_scope": environment["PRESENTATOR_SPEECH_SERVICE_SCOPE"],
+            "speech_voice": environment["PRESENTATOR_SPEECH_VOICE"],
+        }
+    )
+
+    Settings.model_validate(settings.model_dump())
+    assert "speech" in instance["networks"]
+    assert compose["networks"]["speech"]["external"] is True

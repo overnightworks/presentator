@@ -10,7 +10,8 @@ port is published; the edge's proxy is the only way in.
 ## Before you start
 
 - A Keycloak client ([configure Keycloak](configure-keycloak.md)).
-- The networks `hal_agent_presentator` and `hal_backchannel_presentator`, which
+- The networks `hal_agent_presentator`, `hal_speech_presentator` and
+  `hal_backchannel_presentator`, which
   the edge creates. While one is missing, `hal apply` fails on the missing
   external network and starts nothing.
 - The three secret files compose mounts into the instance alone, read-only, at
@@ -31,8 +32,10 @@ port is published; the edge's proxy is the only way in.
    start.
 2. Open the public origin and sign in.
 
-A deployed instance has no voice: the speech process is not part of the
-release, so speaking and hearing report "not yet available".
+A deployed instance speaks and hears through the shared speech service once the
+service runs on `hal_speech_presentator` and the sign-in's scope is applied; while it
+does not answer, the overlay says "Voice offline". A session signed in before the
+scope was applied hears "No hearing" until the person signs out and in.
 
 ## Check
 

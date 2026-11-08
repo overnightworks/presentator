@@ -40,9 +40,15 @@ export PRESENTATOR_AGENT__BACKEND=litellm
 export PRESENTATOR_AGENT__GATEWAY__ORIGIN=http://litellm-front:4000
 export PRESENTATOR_AGENT__GATEWAY__KEY_FILE=/run/user/"$(id -u)"/presentator/litellm-key
 export PRESENTATOR_AGENT__API_GROUP=/services/agent-service/api
+export PRESENTATOR_SPEECH_SERVICE=http://speech-runtime:8080
+export PRESENTATOR_SPEECH_SERVICE_SCOPE=speech-service-audience
+export PRESENTATOR_SPEECH_VOICE=piper
 export PRESENTATOR_BUILD_RUNNER=host
 uv run presentator
 ```
+
+A checkout has no route to the speech network, so its speaking and hearing report
+the service as unreachable.
 
 The co-presenter cannot answer from a checkout: the gateway sits on the
 `hal_agent_presentator` network, which has no host address and publishes no port, so every

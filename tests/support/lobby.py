@@ -162,6 +162,9 @@ A_BROWSERS_SOCKET_ADDRESS: Final = "wss://testserver"
 A_TALK_ADDRESS: Final = "https://talk.testserver"
 A_TALK_SOCKET_ADDRESS: Final = "wss://talk.testserver"
 A_GATEWAY_ORIGIN: Final = "http://gateway.test:4000"
+A_SPEECH_SERVICE: Final = "http://speech.test:8080"
+A_SPEECH_SCOPE: Final = "speech-scope-of-this-test"
+A_SPEECH_VOICE: Final = "voice-of-this-test"
 AN_API_GROUP: Final = "/services/agent-service/api"
 AN_ISSUER: Final = "https://auth.example.test/realms/test"
 A_CLIENT_ID: Final = "presentator-test"
@@ -302,6 +305,9 @@ def a_settings() -> Settings:
         oidc_issuer=AN_ISSUER,
         oidc_client_id=A_CLIENT_ID,
         oidc_client_secret_file=Path("/run/oidc-client-secret"),
+        speech_service=A_SPEECH_SERVICE,
+        speech_service_scope=A_SPEECH_SCOPE,
+        speech_voice=A_SPEECH_VOICE,
         lobby_build=LOBBY_BUILD,
     )
 
@@ -311,16 +317,19 @@ def a_content_security_policy() -> str:
     return content_security_policy(LOBBY_SHELL)
 
 
-def a_relying_party(
+def a_relying_party(  # noqa: PLR0913 - each part is the seam one test replaces
     clock: FrozenClock,
     *,
     post_token_request: TokenRequestPost = _no_token_endpoint,
     fetch_key_set: KeySetFetch = _no_key_set,
     origin: str = A_BROWSERS_ADDRESS,
     issuer: str = AN_ISSUER,
+    speech_scope: str = A_SPEECH_SCOPE,
 ) -> OidcRelyingParty:
     """The issuer's client, whose transports reach nobody unless a test gives some."""
-    settings = a_settings().model_copy(update={"oidc_issuer": issuer})
+    settings = a_settings().model_copy(
+        update={"oidc_issuer": issuer, "speech_service_scope": speech_scope}
+    )
     return OidcRelyingParty(
         oidc_client_config(settings, SecretStr(A_CLIENT_CREDENTIAL), origin=origin),
         post_token_request=post_token_request,

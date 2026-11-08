@@ -13,6 +13,9 @@ from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_GATEWAY_KEY_FILE,
     A_GATEWAY_ORIGIN,
+    A_SPEECH_SCOPE,
+    A_SPEECH_SERVICE,
+    A_SPEECH_VOICE,
     AN_API_GROUP,
     INSTANCE_KEY,
     LOBBY_BUILD,
@@ -104,6 +107,9 @@ def bare_environment(
     monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__ORIGIN", A_GATEWAY_ORIGIN)
     monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__KEY_FILE", str(A_GATEWAY_KEY_FILE))
     monkeypatch.setenv("PRESENTATOR_AGENT__API_GROUP", AN_API_GROUP)
+    monkeypatch.setenv("PRESENTATOR_SPEECH_SERVICE", A_SPEECH_SERVICE)
+    monkeypatch.setenv("PRESENTATOR_SPEECH_SERVICE_SCOPE", A_SPEECH_SCOPE)
+    monkeypatch.setenv("PRESENTATOR_SPEECH_VOICE", A_SPEECH_VOICE)
     return monkeypatch
 
 
