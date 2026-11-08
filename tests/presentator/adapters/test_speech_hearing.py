@@ -1,291 +1,389 @@
-"""Hearing and its readiness over speech's private socket, against a fake of speech."""
+"""Hearing over the shared speech service's Realtime connection."""
 
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import pytest
-from fastapi import FastAPI, Request, WebSocket
-from fastapi.responses import JSONResponse
-from httpcore2._backends.auto import AutoBackend
+from fastapi import Response, WebSocket
+from speech_runtime_client import wire
 
-from presentator.adapters.speech import UdsSpeechHearing
+from presentator.adapters.speech import SpeechHearing
 from presentator.contracts.copresenter import (
-    CoPresenterReadiness,
     CoPresenterUnavailableError,
     HearingTranscript,
+    SpeechTokens,
 )
-from tests.presentator.adapters.support.serving import Serving, unix_listener
 from tests.presentator.application.support.fakes import FakeDeckStore
 from tests.support.copresenter_support import PrivateFakes, a_use
+from tests.support.lobby import A_SPEECH_VOICE
+from tests.support.speech_service import (
+    FakeSpeechService,
+    Hear,
+    RawPeer,
+    a_closed_port_origin,
+    a_loopback_server,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-    from pathlib import Path
+    from collections.abc import AsyncGenerator, Callable
 
-type Hear = Callable[[WebSocket], Awaitable[None]]
+    from presentator.ports.copresenter import PrivateHearing
 
-
-def speech_health(*, ready: bool = True) -> dict[str, object]:
-    """The body speech's /health answers; the speaking rate differs from hearing's."""
-    return {
-        "speaking": {"model": "voice", "ready": True, "sample_rate": 22_050},
-        "hearing": {"model": "whisper", "ready": ready},
-        "sample_rate": 16_000,
-        "card_memory_mb": 1_200,
-    }
+TOKENS = SpeechTokens(person="person-token-MARKER", workload="workload-token-MARKER")
+ITEM = "item-1"
 
 
-def speech_app(
-    *, health: Callable[[], JSONResponse] | None = None, hear: Hear | None = None
-) -> FastAPI:
-    app = FastAPI()
-
-    async def _health() -> JSONResponse:
-        return health() if health else JSONResponse(speech_health())
-
-    app.add_api_route("/health", _health, methods=["GET"])
-    if hear is not None:
-        app.add_api_websocket_route("/hear", hear)
-    return app
+@asynccontextmanager
+async def hearing_against(
+    fake: FakeSpeechService, language: str = "de"
+) -> AsyncGenerator[PrivateHearing]:
+    async with (
+        a_loopback_server(fake.app()) as origin,
+        SpeechHearing(origin, voice=A_SPEECH_VOICE).hear(language, TOKENS) as hearing,
+    ):
+        yield hearing
 
 
-def test_readiness_is_speechs_hearing_rate_and_state_without_credentials(
-    tmp_path: Path,
-) -> None:
-    seen_headers: dict[str, str] = {}
-    seen_paths: list[str] = []
-    app = FastAPI()
-
-    async def _health(request: Request) -> JSONResponse:
-        seen_headers.update(request.headers)
-        seen_paths.append(request.url.path)
-        return JSONResponse(speech_health())
-
-    app.add_api_route("/health", _health, methods=["GET"])
-
-    readiness = asyncio.run(_readiness(tmp_path, app))
-
-    assert readiness == CoPresenterReadiness(
-        hearing_sample_rate=16_000, local_hearing_ready=True
-    )
-    assert seen_paths == ["/health"]
-    assert not {"cookie", "authorization"} & seen_headers.keys()
-
-
-async def _readiness(tmp_path: Path, app: FastAPI) -> CoPresenterReadiness:
-    socket_path = tmp_path / "speech.sock"
-    async with Serving(app, unix_listener(socket_path)):
-        return await UdsSpeechHearing(socket_path).readiness()
-
-
-def test_hearing_that_is_still_loading_is_not_ready(tmp_path: Path) -> None:
-    app = speech_app(health=lambda: JSONResponse(speech_health(ready=False)))
-
-    readiness = asyncio.run(_readiness(tmp_path, app))
-
-    assert readiness.local_hearing_ready is False
-
-
-def _health_with(**changes: object) -> Callable[[], JSONResponse]:
-    return lambda: JSONResponse({**speech_health(), **changes})
-
-
-@pytest.mark.parametrize(
-    "health",
-    [
-        pytest.param(
-            lambda: JSONResponse({"detail": "private"}, status_code=503), id="refused"
-        ),
-        pytest.param(
-            lambda: JSONResponse({"sample_rate": 16_000}), id="no-hearing-section"
-        ),
-        pytest.param(_health_with(sample_rate="16000"), id="rate-as-text"),
-        pytest.param(_health_with(hearing={"ready": "true"}), id="ready-as-text"),
-        pytest.param(_health_with(hearing={"ready": 1}), id="ready-as-number"),
-    ],
-)
-def test_a_refused_or_malformed_health_is_unavailable(
-    tmp_path: Path, health: Callable[[], JSONResponse]
-) -> None:
-    readiness = _readiness(tmp_path, speech_app(health=health))
-
-    with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(readiness)
-
-
-def test_a_missing_socket_is_unavailable_without_a_tcp_retry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    attempted_tcp: list[dict[str, object]] = []
-
-    async def refuse_tcp(_backend: AutoBackend, **connection: object) -> None:
-        attempted_tcp.append(connection)
-        raise AssertionError
-
-    monkeypatch.setattr(AutoBackend, "connect_tcp", refuse_tcp)
-
-    asyncio.run(_refuse_missing_socket(tmp_path))
-
-    assert attempted_tcp == []
-
-
-async def _refuse_missing_socket(tmp_path: Path) -> None:
-    speech = UdsSpeechHearing(tmp_path / "missing.sock")
-    with pytest.raises(CoPresenterUnavailableError):
-        await speech.readiness()
-    with pytest.raises(CoPresenterUnavailableError):
-        await _enter_hearing(speech)
-
-
-async def _enter_hearing(speech: UdsSpeechHearing) -> None:
-    async with speech.hear("de"):
-        pytest.fail("missing speech socket yielded a hearing")
-
-
-def test_hearing_passes_pcm_up_and_transcripts_down(tmp_path: Path) -> None:
-    received: list[bytes] = []
-    queries: list[dict[str, str]] = []
-
-    async def _hear(socket: WebSocket) -> None:
-        queries.append(dict(socket.query_params))
+def _sending(*events: wire.ServerEvent) -> Hear:
+    async def realtime(socket: WebSocket) -> None:
         await socket.accept()
-        received.append(await socket.receive_bytes())
-        await socket.send_json({"text": "geh", "final": False})
-        await socket.send_json({"text": "gehört", "final": True})
+        for event in events:
+            await socket.send_text(event.model_dump_json())
+        await socket.close()
 
-    async def _use() -> list[HearingTranscript | None]:
-        socket_path = tmp_path / "speech.sock"
-        async with (
-            Serving(speech_app(hear=_hear), unix_listener(socket_path)),
-            UdsSpeechHearing(socket_path).hear("en") as hearing,
-        ):
+    return realtime
+
+
+def _delta(text: str, item: str = ITEM) -> wire.TranscriptDelta:
+    return wire.TranscriptDelta(item_id=item, delta=text)
+
+
+def _completed(text: str, item: str = ITEM) -> wire.TranscriptCompleted:
+    return wire.TranscriptCompleted(
+        item_id=item, transcript=text, usage=wire.DurationUsage(seconds=1.0)
+    )
+
+
+def _an_error_event() -> wire.ErrorEvent:
+    return wire.error_event(wire.RefusalCode.UNAVAILABLE)
+
+
+def _a_failed_item() -> wire.TranscriptFailed:
+    return wire.TranscriptFailed(
+        item_id=ITEM, error=wire.item_failure(wire.RefusalCode.UNAVAILABLE)
+    )
+
+
+def _heard_all(fake: FakeSpeechService) -> list[HearingTranscript | str | None]:
+    async def scenario() -> list[HearingTranscript | str | None]:
+        heard: list[HearingTranscript | str | None] = []
+        async with hearing_against(fake) as hearing:
+            while True:
+                event = await hearing.receive()
+                heard.append(event)
+                if event is None:
+                    return heard
+
+    return asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_the_upgrade_carries_the_tokens_and_the_intent_then_names_the_language(
+    language: str,
+) -> None:
+    fake = FakeSpeechService()
+
+    async def realtime(socket: WebSocket) -> None:
+        await socket.accept()
+        await fake.read_events(socket)
+
+    fake.realtime = realtime
+
+    async def scenario() -> None:
+        async with hearing_against(fake, language) as hearing:
             await hearing.send_pcm(b"pcm")
-            return [await hearing.receive(), await hearing.receive()]
 
-    transcripts = asyncio.run(_use())
+    asyncio.run(scenario())
 
-    assert received == [b"pcm"]
-    assert queries == [{"language": "en"}]
-    assert transcripts == [
-        HearingTranscript(text="geh", final=False),
-        HearingTranscript(text="gehört", final=True),
+    (upgrade,) = fake.upgrades
+    sent = wire.token_headers(
+        workload_token=TOKENS.workload, person_token=TOKENS.person
+    )
+    for name, value in sent.items():
+        assert upgrade.headers[name.lower()] == value
+    assert fake.upgrade_paths == [
+        f"{wire.REALTIME_INTENT_PARAM}={wire.REALTIME_INTENT}"
+    ]
+    setup, append = fake.events
+    assert setup["type"] == "session.update"
+    session_input = setup["session"]["audio"]["input"]  # type: ignore[index]
+    assert session_input["transcription"]["language"] == language  # type: ignore[index]
+    assert append["type"] == "input_audio_buffer.append"
+
+
+def test_another_language_is_unavailable_with_no_upgrade() -> None:
+    fake = FakeSpeechService()
+
+    async def scenario() -> None:
+        async with hearing_against(fake, "fr"):
+            pass
+
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(scenario())
+
+    assert not fake.upgrades
+
+
+def test_each_frame_is_appended_in_order_and_closing_sends_no_commit() -> None:
+    fake = FakeSpeechService()
+
+    async def realtime(socket: WebSocket) -> None:
+        await socket.accept()
+        await fake.read_events(socket)
+
+    fake.realtime = realtime
+    frames = (b"first", b"second", b"third")
+
+    async def scenario() -> None:
+        async with hearing_against(fake) as hearing:
+            for frame in frames:
+                await hearing.send_pcm(frame)
+
+    asyncio.run(scenario())
+
+    appended = [event for event in fake.events if event["type"] != "session.update"]
+    assert appended == [
+        {
+            "type": "input_audio_buffer.append",
+            "audio": base64.b64encode(frame).decode("ascii"),
+        }
+        for frame in frames
+    ]
+    assert fake.closes == ["closed"]
+
+
+def test_deltas_grow_per_item_and_the_completed_text_replaces_them() -> None:
+    fake = FakeSpeechService(
+        realtime=_sending(
+            _delta("Gu"),
+            _delta("Ha", item="item-2"),
+            _delta("ten"),
+            _completed("Guten Tag."),
+            _completed("", item="item-2"),
+        )
+    )
+
+    heard = _heard_all(fake)
+
+    assert heard == [
+        HearingTranscript(text="Gu", final=False),
+        HearingTranscript(text="Ha", final=False),
+        HearingTranscript(text="Guten", final=False),
+        HearingTranscript(text="Guten Tag.", final=True),
+        None,
+    ]
+
+
+def test_session_and_turn_events_are_skipped() -> None:
+    fake = FakeSpeechService(
+        realtime=_sending(
+            wire.SessionCreated(
+                session=wire.TranscriptionSession(type="transcription")
+            ),
+            wire.SpeechStarted(audio_start_ms=0, item_id=ITEM),
+            wire.SpeechStopped(audio_end_ms=1, item_id=ITEM),
+            wire.AudioCommitted(item_id=ITEM, previous_item_id=None),
+            _completed("Ein Wort."),
+        )
+    )
+
+    assert _heard_all(fake) == [
+        HearingTranscript(text="Ein Wort.", final=True),
+        None,
     ]
 
 
 @pytest.mark.parametrize(
-    ("code", "after_frame"),
-    [(1013, False), (1009, True), (1011, False), (1000, False)],
+    "events",
+    [
+        pytest.param(
+            lambda: (_a_failed_item(), _an_error_event()), id="failed-then-error"
+        ),
+        pytest.param(lambda: (_an_error_event(),), id="error-alone"),
+    ],
 )
-def test_every_close_speech_sends_ends_the_hearing_quietly(
-    tmp_path: Path, code: int, *, after_frame: bool
+def test_a_failed_item_or_error_event_is_unavailable(
+    events: Callable[[], tuple[wire.ServerEvent, ...]],
 ) -> None:
-    async def _hear(socket: WebSocket) -> None:
+    fake = FakeSpeechService(realtime=_sending(*events()))
+
+    with pytest.raises(CoPresenterUnavailableError):
+        _heard_all(fake)
+
+
+@pytest.mark.parametrize(
+    "frame",
+    [
+        pytest.param(
+            json.dumps({"type": "unknown.event", "event_id": "e1"}), id="unknown-type"
+        ),
+        pytest.param(
+            json.dumps(
+                {
+                    "type": "conversation.item.input_audio_transcription.delta",
+                    "event_id": "e2",
+                    "item_id": ITEM,
+                    "delta": ["not", "text"],
+                }
+            ),
+            id="invalid-payload",
+        ),
+        pytest.param("not json at all", id="non-json"),
+    ],
+)
+def test_a_frame_the_parser_refuses_is_unavailable(frame: str) -> None:
+    async def realtime(socket: WebSocket) -> None:
         await socket.accept()
-        if after_frame:
-            await socket.receive_bytes()
+        await socket.send_text(frame)
+
+    fake = FakeSpeechService(realtime=realtime)
+
+    async def scenario() -> None:
+        async with hearing_against(fake) as hearing:
+            await hearing.receive()
+
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("code", [1000, 1009, 1011, 1013])
+def test_every_close_without_a_terminal_event_ends_the_hearing_quietly(
+    code: int,
+) -> None:
+    async def realtime(socket: WebSocket) -> None:
+        await socket.accept()
         await socket.close(code=code)
 
-    async def _use() -> HearingTranscript | None:
-        socket_path = tmp_path / "speech.sock"
-        async with (
-            Serving(speech_app(hear=_hear), unix_listener(socket_path)),
-            UdsSpeechHearing(socket_path).hear("de") as hearing,
-        ):
-            await hearing.send_pcm(b"pcm")
-            return await hearing.receive()
+    assert _heard_all(FakeSpeechService(realtime=realtime)) == [None]
 
-    assert asyncio.run(_use()) is None
+
+def test_a_peer_that_crashes_mid_session_ends_the_hearing() -> None:
+    async def realtime(socket: WebSocket) -> None:
+        await socket.accept()
+        message = "the service crashed"
+        raise RuntimeError(message)
+
+    async def scenario() -> HearingTranscript | str | None:
+        async with hearing_against(FakeSpeechService(realtime=realtime)) as hearing:
+            try:
+                await hearing.send_pcm(b"pcm")
+            except CoPresenterUnavailableError:
+                return "unavailable"
+            try:
+                return await hearing.receive()
+            except CoPresenterUnavailableError:
+                return "unavailable"
+
+    assert asyncio.run(scenario()) in (None, "unavailable")
+
+
+async def _refuse_with(socket: WebSocket, answer: Response) -> None:
+    await socket.send_denial_response(answer)
+
+
+def _denying(status: int, headers: dict[str, str] | None = None) -> Hear:
+    async def realtime(socket: WebSocket) -> None:
+        await _refuse_with(socket, Response(status_code=status, headers=headers))
+
+    return realtime
+
+
+@pytest.mark.parametrize(
+    ("status", "headers"),
+    [
+        pytest.param(429, {"Retry-After": "3"}, id="busy"),
+        pytest.param(401, None, id="unauthorized"),
+        pytest.param(403, None, id="forbidden"),
+        pytest.param(503, None, id="unavailable"),
+    ],
+)
+def test_an_upgrade_refused_by_the_service_is_unavailable(
+    status: int, headers: dict[str, str] | None
+) -> None:
+    fake = FakeSpeechService(realtime=_denying(status, headers))
+
+    async def scenario() -> None:
+        async with hearing_against(fake):
+            pass
+
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(scenario())
+
+
+def test_a_malformed_upgrade_response_is_unavailable() -> None:
+    async def scenario() -> None:
+        async with (
+            RawPeer(b"HTTP/1.1 204 No Content\r\n\r\n").serving() as origin,
+            SpeechHearing(origin, voice=A_SPEECH_VOICE).hear("de", TOKENS),
+        ):
+            pass
+
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(scenario())
+
+
+def test_a_refused_connection_is_unavailable() -> None:
+    hearing = SpeechHearing(a_closed_port_origin(), voice=A_SPEECH_VOICE)
+
+    async def scenario() -> None:
+        async with hearing.hear("de", TOKENS):
+            pass
+
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(scenario())
 
 
 class _CallerFaultError(Exception):
     pass
 
 
-def test_a_malformed_transcript_is_unavailable(tmp_path: Path) -> None:
-    async def _hear(socket: WebSocket) -> None:
-        await socket.accept()
-        await socket.send_json({"text": ["not", "text"], "final": True})
-        await socket.close()
+def test_a_fault_of_the_caller_is_not_mapped() -> None:
+    fake = FakeSpeechService()
 
-    async def _use() -> None:
-        socket_path = tmp_path / "speech.sock"
-        async with (
-            Serving(speech_app(hear=_hear), unix_listener(socket_path)),
-            UdsSpeechHearing(socket_path).hear("de") as hearing,
-        ):
-            await hearing.receive()
-
-    use = _use()
-
-    with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(use)
-
-
-def test_a_peer_that_crashes_during_send_is_unavailable(tmp_path: Path) -> None:
-    async def _hear(socket: WebSocket) -> None:
-        await socket.accept()
-        message = "speech crashed"
-        raise RuntimeError(message)
-
-    async def _use() -> None:
-        socket_path = tmp_path / "speech.sock"
-        async with (
-            Serving(speech_app(hear=_hear), unix_listener(socket_path)),
-            UdsSpeechHearing(socket_path).hear("de") as hearing,
-        ):
-            await hearing.send_pcm(b"pcm")
-
-    use = _use()
-
-    with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(use)
-
-
-def test_a_fault_of_the_caller_is_not_mapped(tmp_path: Path) -> None:
-    async def _hear(socket: WebSocket) -> None:
-        await socket.accept()
-        await socket.send_json({"text": "opened", "final": True})
-        await socket.close()
-
-    async def _use() -> None:
-        socket_path = tmp_path / "speech.sock"
-        async with (
-            Serving(speech_app(hear=_hear), unix_listener(socket_path)),
-            UdsSpeechHearing(socket_path).hear("de") as hearing,
-        ):
-            assert await hearing.receive() == HearingTranscript(
-                text="opened", final=True
-            )
+    async def scenario() -> None:
+        async with hearing_against(fake):
             raise _CallerFaultError
 
-    use = _use()
-
     with pytest.raises(ExceptionGroup) as propagated:
-        asyncio.run(use)
+        asyncio.run(scenario())
 
     assert propagated.value.subgroup(_CallerFaultError) is not None
 
 
-def test_ending_the_hearing_closes_speechs_side(tmp_path: Path) -> None:
-    async def _use() -> str:
-        peer_saw: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+def test_ending_the_hearing_closes_the_service_side() -> None:
+    async def scenario() -> list[str]:
+        fake = FakeSpeechService()
 
-        async def _hear(socket: WebSocket) -> None:
+        async def realtime(socket: WebSocket) -> None:
             await socket.accept()
-            message = await socket.receive()
-            peer_saw.set_result(message["type"])
+            await fake.read_events(socket)
 
-        socket_path = tmp_path / "speech.sock"
-        use = replace(
-            a_use(PrivateFakes(), FakeDeckStore()),
-            speech=UdsSpeechHearing(socket_path),
-        )
-        async with Serving(speech_app(hear=_hear), unix_listener(socket_path)):
-            async with use.hear("de"):
+        fake.realtime = realtime
+        use = a_use(PrivateFakes(), FakeDeckStore())
+        async with a_loopback_server(fake.app()) as origin:
+            use = replace(use, speech=SpeechHearing(origin, voice=A_SPEECH_VOICE))
+            async with use.hear("de", session_id="a-session"):
                 pass
-            return await asyncio.wait_for(peer_saw, timeout=1)
+            for _attempt in range(1000):
+                if fake.closes:
+                    break
+                await asyncio.sleep(0)
+            return fake.closes
 
-    assert asyncio.run(_use()) == "websocket.disconnect"
+    assert asyncio.run(scenario()) == ["closed"]

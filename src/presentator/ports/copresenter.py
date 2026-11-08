@@ -15,6 +15,7 @@ if TYPE_CHECKING:
         CoPresenterReadiness,
         DeckText,
         HearingTranscript,
+        SpeechTokens,
     )
     from presentator.contracts.decks import Deck, Source
 
@@ -47,14 +48,16 @@ class AgentAnswers(Protocol):
 
 
 class SpeechHearing(Protocol):
-    """The hearing speech offers Presentator over its private socket."""
+    """The hearing the shared speech service offers Presentator."""
 
     async def readiness(self) -> CoPresenterReadiness:
         """Read the readiness facts the browser consumes."""
         ...
 
-    def hear(self, language: str) -> AbstractAsyncContextManager[PrivateHearing]:
-        """Open one hearing connection."""
+    def hear(
+        self, language: str, tokens: SpeechTokens
+    ) -> AbstractAsyncContextManager[PrivateHearing]:
+        """Open one hearing connection for the person these tokens name."""
         ...
 
 
@@ -74,9 +77,9 @@ SentenceBoundaries = Callable[[str], tuple[str, ...]]
 
 
 class Speaking(Protocol):
-    """Speaks one sentence through the private speech service."""
+    """Speaks one sentence through the shared speech service."""
 
-    async def speak(self, text: str, language: str) -> bytes:
+    async def speak(self, text: str, language: str, tokens: SpeechTokens) -> bytes:
         """The sentence as one whole WAV.
 
         Raises CoPresenterUnavailableError when speech cannot speak it.
@@ -85,10 +88,18 @@ class Speaking(Protocol):
 
 
 class PersonAccess(Protocol):
-    """Gives the groups the issuer holds for a signed-in person now."""
+    """Gives what the issuer grants a signed-in person now."""
 
     async def groups_of(self, session_id: str) -> frozenset[str] | AccessRefusal:
         """The session's person's groups, or why it has none.
+
+        Raises CoPresenterUnavailableError when the session store or a worker
+        thread fails.
+        """
+        ...
+
+    async def speech_tokens_of(self, session_id: str) -> SpeechTokens | AccessRefusal:
+        """The two tokens the speech service takes, or why there are none.
 
         Raises CoPresenterUnavailableError when the session store or a worker
         thread fails.

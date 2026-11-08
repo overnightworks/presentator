@@ -1,4 +1,4 @@
-"""The groups reader: one refresh grant, its rotation, its refusals and cancellation."""
+"""The groups read: one refresh grant, its rotation, its refusals and cancellation."""
 
 from __future__ import annotations
 
@@ -11,9 +11,10 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from presentator.adapters.identity import SqliteSessionRecordStore
-from presentator.agent.backend import SessionGroups
+from presentator.adapters.session_access import SessionAccess
 from presentator.contracts.copresenter import AccessRefusal, CoPresenterUnavailableError
 from tests.presentator.agent.support.driving import on_an_event_loop
+from tests.support.lobby import A_SPEECH_SCOPE
 from tests.support.sign_in_support import Scene, a_scene
 
 if TYPE_CHECKING:
@@ -26,7 +27,7 @@ REFRESH = "refresh-MARKER"
 ROTATED = "rotated-MARKER"
 THREAD_ERROR = "thread-error-MARKER"
 GROUPS = ["/apps/presentator", "/other"]
-LOGGER = "presentator.agent.backend"
+LOGGER = "presentator.adapters.session_access"
 _THREAD_WAIT_SECONDS = 10
 
 
@@ -39,12 +40,29 @@ class Arranged:
         scene.sign_in(groups=GROUPS)
         (self.session_id,) = scene.stored_sessions()
         self.scene = scene
-        self.reader = SessionGroups(scene.relying_party, scene.sessions, scene.config)
+        self.reader = SessionAccess(
+            scene.relying_party,
+            scene.sessions,
+            scene.config,
+            speech_scope=A_SPEECH_SCOPE,
+        )
+        self.read = self.reader.groups_of
 
 
 @pytest.fixture
 def arranged(tmp_path: Path) -> Arranged:
     return Arranged(a_scene(tmp_path))
+
+
+@pytest.fixture(params=["groups", "speech-tokens"])
+def arranged_read(request: pytest.FixtureRequest, arranged: Arranged) -> Arranged:
+    """Either read of the session, for the behaviour both share."""
+    arranged.read = (
+        arranged.reader.groups_of
+        if request.param == "groups"
+        else arranged.reader.speech_tokens_of
+    )
+    return arranged
 
 
 def test_a_signed_in_session_gets_the_groups_the_issuer_holds_now(
@@ -122,8 +140,11 @@ def test_a_thread_that_raises_is_one_unavailable_error_naming_only_its_type(
 ) -> None:
     """The error is foreign and may hold a token, so only its type is shown."""
     scene = arranged.scene
-    reader = SessionGroups(
-        scene.relying_party, _LoadFails(scene.database), scene.config
+    reader = SessionAccess(
+        scene.relying_party,
+        _LoadFails(scene.database),
+        scene.config,
+        speech_scope=A_SPEECH_SCOPE,
     )
     caplog.set_level(logging.DEBUG)
 
@@ -175,7 +196,7 @@ async def _cancel_while_the_thread_runs(
     arranged: Arranged, executor: RecordingExecutor
 ) -> asyncio.CancelledError:
     entered, release = _hold_the_thread(arranged)
-    task = asyncio.create_task(arranged.reader.groups_of(arranged.session_id))
+    task = asyncio.create_task(arranged.read(arranged.session_id))
     await entered.wait()
     task.cancel()
     release.set()
@@ -189,7 +210,7 @@ async def _cancel_as_the_thread_returns(
     arranged: Arranged, executor: RecordingExecutor
 ) -> asyncio.CancelledError:
     entered, release = _hold_the_thread(arranged)
-    task = asyncio.create_task(arranged.reader.groups_of(arranged.session_id))
+    task = asyncio.create_task(arranged.read(arranged.session_id))
     await entered.wait()
     release.set()
     # Blocking the loop here keeps the returned thread's result undelivered, so
@@ -208,10 +229,11 @@ async def _cancel_as_the_thread_returns(
     ids=["inside-the-thread", "after-the-thread-returned"],
 )
 def test_a_cancelled_read_still_stores_the_rotation_and_leaves_no_chain(
-    arranged: Arranged,
+    arranged_read: Arranged,
     cancel: Callable[[Arranged, RecordingExecutor], Awaitable[asyncio.CancelledError]],
 ) -> None:
-    """Cancelling the groups read leaves no chain; the rotation stands."""
+    """Cancelling either read leaves no chain; the rotation stands."""
+    arranged = arranged_read
     arranged.scene.issuer.rotate_refresh_token_to(ROTATED)
 
     @on_an_event_loop
@@ -232,7 +254,7 @@ def test_a_cancelled_read_still_stores_the_rotation_and_leaves_no_chain(
 @pytest.mark.parametrize(
     "interruption", [KeyboardInterrupt(), SystemExit(1)], ids=["keyboard", "exit"]
 )
-def test_process_control_in_the_groups_thread_passes_through_without_a_chain(
+def test_process_control_in_the_thread_passes_through_without_a_chain(
     arranged: Arranged, interruption: BaseException
 ) -> None:
     """An interrupt is the caller's, not one more unavailable error."""
@@ -242,8 +264,11 @@ def test_process_control_in_the_groups_thread_passes_through_without_a_chain(
         def load(self, session_id: str) -> StoredSession | None:
             raise interruption
 
-    reader = SessionGroups(
-        scene.relying_party, LoadInterrupts(scene.database), scene.config
+    reader = SessionAccess(
+        scene.relying_party,
+        LoadInterrupts(scene.database),
+        scene.config,
+        speech_scope=A_SPEECH_SCOPE,
     )
 
     reading = reader.groups_of(arranged.session_id)

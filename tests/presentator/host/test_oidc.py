@@ -10,7 +10,6 @@ from presentator.adapters.identity import ProcessWriteLock, SqliteIdentityWrites
 from presentator.host import main
 from presentator.host.config import (
     ConfigurationError,
-    Settings,
     load_settings,
     read_secret_file,
 )
@@ -23,6 +22,7 @@ from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_CLIENT_CREDENTIAL,
     A_CLIENT_ID,
+    A_SPEECH_SCOPE,
     A_TALK_ADDRESS,
     AN_ISSUER,
     LOBBY_SHELL,
@@ -49,11 +49,17 @@ def test_the_client_is_derived_from_the_issuer_and_the_public_origin() -> None:
     assert "groups" in config.scopes
 
 
-def test_the_sign_in_asks_for_no_agent_service_scope_and_the_settings_name_none() -> (
-    None
-):
-    """C13: the model call needs no audience, so the sign-in asks for none."""
-    assert not [name for name in Settings.model_fields if "scope" in name]
+@pytest.mark.parametrize("scope", [A_SPEECH_SCOPE, "another-speech-scope"])
+@pytest.mark.parametrize("origin", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])
+def test_the_sign_in_asks_exactly_for_the_person_scopes_and_the_speech_scope(
+    scope: str, origin: str
+) -> None:
+    """The speech audience is the only audience the sign-in asks for."""
+    settings = a_settings().model_copy(update={"speech_service_scope": scope})
+
+    config = oidc_client_config(settings, SecretStr(A_CLIENT_CREDENTIAL), origin=origin)
+
+    assert set(config.scopes) == {"openid", "profile", "groups", scope}
 
 
 # T3.

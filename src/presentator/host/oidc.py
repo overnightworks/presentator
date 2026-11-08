@@ -41,7 +41,7 @@ def oidc_client_config(
             client_secret=client_secret,
             redirect_uri=f"{origin}{SIGN_IN_CALLBACK_PATH}",
             post_logout_redirect_uri=f"{settings.public_origin}{LOGIN_PATH}",
-            scopes=_PERSON_SCOPES,
+            scopes=(*_PERSON_SCOPES, settings.speech_service_scope),
             leeway_seconds=_CLOCK_LEEWAY_SECONDS,
         )
     except ValueError as refused:

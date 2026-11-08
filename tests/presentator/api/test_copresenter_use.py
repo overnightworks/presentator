@@ -62,7 +62,7 @@ async def _end_hearing() -> None:
     fakes = PrivateFakes()
     use = a_use(fakes, FakeDeckStore())
 
-    async with use.hear("de") as hearing:
+    async with use.hear("de", session_id="a-session") as hearing:
         await hearing.send_pcm(b"pcm")
 
     assert fakes.speech.hearing.frames == [b"pcm"]

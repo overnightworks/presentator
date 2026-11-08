@@ -1,6 +1,6 @@
 """Provider-neutral values carried by the authenticated co-presenter path."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 
 from presentator.contracts.decks import Deck, Source
@@ -34,6 +34,14 @@ class AskingPerson:
     subject: str
     role: Role
     groups: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SpeechTokens:
+    """The two tokens one use of the speech service carries; never shown."""
+
+    person: str = field(repr=False)
+    workload: str = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

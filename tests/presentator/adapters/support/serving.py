@@ -8,18 +8,23 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, override
 
 import uvicorn
+from wsproto.utilities import LocalProtocolError
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from fastapi import FastAPI
 
 
-def unix_listener(path: Path) -> socket.socket:
-    """Bind a Unix socket at ``path``."""
-    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    listener.bind(str(path))
+def loopback_listener() -> socket.socket:
+    """Bind a loopback TCP socket on a port the system picks."""
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(("127.0.0.1", 0))
     return listener
+
+
+def origin_of(listener: socket.socket) -> str:
+    """The origin a client reaches this listener at."""
+    host, port = listener.getsockname()
+    return f"http://{host}:{port}"
 
 
 class _AnnouncingServer(uvicorn.Server):
@@ -62,7 +67,9 @@ class Serving:
         """Stop serving."""
         assert self._server is not None
         assert self._task is not None
-        await self._server.shutdown(sockets=[self._listener])
+        # Uvicorn closes a connection whose peer already left, which wsproto refuses.
+        with suppress(LocalProtocolError):
+            await self._server.shutdown(sockets=[self._listener])
         self._task.cancel()
         with suppress(asyncio.CancelledError):
             await self._task

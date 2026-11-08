@@ -247,16 +247,6 @@ def test_a_doubled_session_cookie_is_refused_before_any_grant(tmp_path: Path) ->
     assert len(run.hosts.issuer.grant_types) == grants
 
 
-def test_one_question_makes_one_refresh_grant_and_no_client_credentials_grant(
-    tmp_path: Path,
-) -> None:
-    """The groups come from one refresh grant; no workload grant exists."""
-    run = drive(tmp_path)
-
-    assert run.response.status_code == HTTPStatus.OK
-    assert run.grants_since_sign_in == ["refresh_token"]
-
-
 def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made(
     tmp_path: Path,
 ) -> None:
