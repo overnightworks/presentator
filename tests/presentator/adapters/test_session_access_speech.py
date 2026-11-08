@@ -8,25 +8,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from presentator.adapters.identity import SqliteSessionRecordStore
 from presentator.adapters.session_access import SessionAccess
-from presentator.contracts.copresenter import (
-    AccessRefusal,
-    CoPresenterUnavailableError,
-    SpeechTokens,
-)
+from presentator.contracts.copresenter import AccessRefusal, SpeechTokens
 from tests.support.lobby import A_SPEECH_SCOPE
 from tests.support.sign_in_support import Scene, a_scene
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from presentator.adapters.identity import StoredSession
-
 REFRESH = "refresh-MARKER"
 ROTATED = "rotated-MARKER"
 ACCESS = "access-MARKER"
-THREAD_ERROR = "thread-error-MARKER"
 LOGGER = "presentator.adapters.session_access"
 
 
@@ -105,30 +97,3 @@ def test_a_refused_refresh_makes_no_workload_grant(arranged: Arranged) -> None:
 
     assert arranged.scene.issuer.grant_types[before:] == ["refresh_token"]
     assert arranged.scene.issuer.workload_scopes == []
-
-
-class _LoadFails(SqliteSessionRecordStore):
-    def load(self, session_id: str) -> StoredSession | None:
-        error = RuntimeError(THREAD_ERROR)
-        error.__context__ = RuntimeError(THREAD_ERROR)
-        raise error
-
-
-def test_a_thread_that_raises_is_one_chain_free_unavailable_error(
-    arranged: Arranged, caplog: pytest.LogCaptureFixture
-) -> None:
-    scene = arranged.scene
-    reader = SessionAccess(
-        scene.relying_party,
-        _LoadFails(scene.database),
-        scene.config,
-        speech_scope=A_SPEECH_SCOPE,
-    )
-    caplog.set_level(logging.DEBUG)
-
-    with pytest.raises(CoPresenterUnavailableError) as failed:
-        asyncio.run(reader.speech_tokens_of(arranged.session_id))
-
-    assert (failed.value.__cause__, failed.value.__context__) == (None, None)
-    assert THREAD_ERROR not in caplog.text
-    assert "the speech tokens failed: RuntimeError" in caplog.text

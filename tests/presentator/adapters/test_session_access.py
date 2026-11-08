@@ -18,7 +18,7 @@ from tests.support.lobby import A_SPEECH_SCOPE
 from tests.support.sign_in_support import Scene, a_scene
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Coroutine
     from pathlib import Path
 
     from presentator.adapters.identity import StoredSession
@@ -46,7 +46,9 @@ class Arranged:
             scene.config,
             speech_scope=A_SPEECH_SCOPE,
         )
-        self.read = self.reader.groups_of
+        self.read: Callable[[str], Coroutine[object, object, object]] = (
+            self.reader.groups_of
+        )
 
 
 @pytest.fixture
@@ -135,8 +137,13 @@ class _LoadFails(SqliteSessionRecordStore):
         raise error
 
 
+@pytest.mark.parametrize(
+    ("read", "reading"),
+    [("groups_of", "the groups"), ("speech_tokens_of", "the speech tokens")],
+    ids=["groups", "speech-tokens"],
+)
 def test_a_thread_that_raises_is_one_unavailable_error_naming_only_its_type(
-    arranged: Arranged, caplog: pytest.LogCaptureFixture
+    arranged: Arranged, caplog: pytest.LogCaptureFixture, read: str, reading: str
 ) -> None:
     """The error is foreign and may hold a token, so only its type is shown."""
     scene = arranged.scene
@@ -148,14 +155,14 @@ def test_a_thread_that_raises_is_one_unavailable_error_naming_only_its_type(
     )
     caplog.set_level(logging.DEBUG)
 
-    reading = reader.groups_of(arranged.session_id)
+    running = getattr(reader, read)(arranged.session_id)
 
     with pytest.raises(CoPresenterUnavailableError) as failed:
-        asyncio.run(reading)
+        asyncio.run(running)
 
     assert (failed.value.__cause__, failed.value.__context__) == (None, None)
     assert THREAD_ERROR not in caplog.text
-    assert "reading the groups failed: RuntimeError" in caplog.text
+    assert f"reading {reading} failed: RuntimeError" in caplog.text
 
 
 class RecordingExecutor(ThreadPoolExecutor):

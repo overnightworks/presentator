@@ -534,6 +534,17 @@ class Scenario:
     headers: Mapping[str, str] = field(default_factory=dict[str, str])
 
 
+def _access_over(
+    auth: InstalledAuth, sessions: SqliteSessionRecordStore
+) -> SessionAccess:
+    return SessionAccess(
+        auth.relying_party,
+        sessions,
+        auth.config,
+        speech_scope=A_SPEECH_SCOPE,
+    )
+
+
 def the_fakes_of(scenario: Scenario) -> PrivateFakes:
     fakes = PrivateFakes()
     fakes.speaking.fails_at = scenario.speaking_fails_at
@@ -579,15 +590,7 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
                 texts=scenario.texts or fakes.texts,
                 boundaries=split_sentences,
                 speaking=fakes.speaking,
-                person_access=WitnessedAccess(
-                    SessionAccess(
-                        auth.relying_party,
-                        sessions,
-                        auth.config,
-                        speech_scope=A_SPEECH_SCOPE,
-                    ),
-                    errors,
-                ),
+                person_access=WitnessedAccess(_access_over(auth, sessions), errors),
             ),
             limiter=limiter,
             browser_origin=A_TALK_ADDRESS,
