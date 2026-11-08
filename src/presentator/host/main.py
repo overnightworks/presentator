@@ -74,7 +74,6 @@ from presentator.agent.mcp import (
     deck_view_mark,
     install_mcp_front,
 )
-from presentator.agent.settings import McpSettings
 from presentator.api.auth import (
     AgentFront,
     DeckMarks,
@@ -222,7 +221,6 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
         auth=auth,
         private=_lobby_private(settings, decks, sessions, key_drafts, identity_writes),
         agent=agent_front(
-            settings.agent.mcp,
             origin=settings.public_origin,
             issuer=settings.oidc_issuer,
             transaction=auth.transaction,
@@ -237,24 +235,20 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
 
 
 def agent_front(
-    mcp: McpSettings | None,
     *,
     origin: str,
     issuer: str,
     transaction: SignInTransaction,
 ) -> AgentFront:
-    """The deck routes' marks, and the MCP front only when the block names one."""
+    """The deck routes' marks, and the MCP front installed over them."""
     return AgentFront(
         marks=DeckMarks(
             deck_list=deck_list_mark(),
             deck_view=deck_view_mark(),
             deck_text=deck_text_mark(),
         ),
-        install_resource=None
-        if mcp is None
-        else partial(
+        install_resource=partial(
             install_mcp_front,
-            settings=mcp,
             origin=origin,
             issuer=issuer,
             transaction=transaction,

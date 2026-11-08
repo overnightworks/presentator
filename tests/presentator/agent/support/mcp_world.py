@@ -19,7 +19,7 @@ from agent_runtime_client.mcp_wire import (
 )
 from fastapi.testclient import TestClient
 
-from presentator.agent.settings import McpSettings
+from presentator.agent.mcp import AGENT_GROUP, MCP_CLIENT_ID, MCP_GROUP, MCP_SCOPE
 from presentator.api.deck_api import DECK_VIEW_PATH
 from presentator.api.deck_list_api import DECK_LIST_PATH
 from presentator.api.deck_text_api import DECK_TEXT_PATH
@@ -41,9 +41,9 @@ class World:
     """A scene whose two people each own one deck, and the deck store behind it."""
 
     HAL = "hal-client"
-    AGENTS = "agents-client"
-    GROUP = "/apps/presentator/agents"
-    SCOPE = "mcp:tools"
+    AGENTS = MCP_CLIENT_ID
+    GROUP = MCP_GROUP
+    SCOPE = MCP_SCOPE
     SIGNED_IN = 2
     FELIX = "subject-of-felix"
     ANNA = "subject-of-anna"
@@ -56,11 +56,8 @@ class World:
     }
     FELIX_DECK = "felix-deck"
     ANNA_DECK = "anna-deck"
-    AGENT_GROUP = "/agents"
+    AGENT_GROUP = AGENT_GROUP
     AGENT_BOT = "subject-of-a-service-account"
-    SETTINGS = McpSettings(
-        client_id=AGENTS, group=GROUP, scope=SCOPE, agent_group=AGENT_GROUP
-    )
 
     def __init__(self, scene: Scene, store: FakeDeckStore) -> None:
         """Sign both people in through the real callback."""
@@ -120,7 +117,6 @@ def a_world(
     *,
     token_clients: frozenset[str] = frozenset(),
     texts: DeckTexts | None = None,
-    mcp_on: bool = True,
 ) -> World:
     store = FakeDeckStore()
     scene = a_scene(
@@ -130,7 +126,6 @@ def a_world(
             GivenDecks(store=store, source=a_configured_source("an-address")),
             FrozenClock(instant=NOW),
         ),
-        mcp=World.SETTINGS if mcp_on else None,
         texts=FakeDeckTexts() if texts is None else texts,
     )
     world = World(scene, store)

@@ -47,27 +47,26 @@ only its two configured hostnames.
 
 ## Let an agent read a person's decks
 
-Optional: skip it and the instance serves no `/mcp`. A person's agent reaches
-the person's decks through `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, as that person:
-it lists them, sees whether each is built and why a build failed, and reads
-their text. It does nothing else.
+The lobby always serves `/mcp` and its discovery document; the edge's `/mcp`
+line decides whether the internet reaches them. A person's agent reaches the
+person's decks through `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, as that person: it
+lists them, sees whether each is built and why a build failed, and reads their
+text. It does nothing else. The realm names below are fixed in the app; no
+setting changes them.
 
 1. Use the shared `agents` client: one public client for every app, with
    client authentication off (no secret) and PKCE S256. Its id is
-   `PRESENTATOR_AGENT__MCP__CLIENT_ID`; it is no entry of
-   `PRESENTATOR_TOKEN_CLIENTS`.
-2. Create one optional client scope for this app, in the style of
-   `mcp-presentator`; its name is `PRESENTATOR_AGENT__MCP__SCOPE`. Give it an
-   audience mapper whose included custom audience is
+   `agents`; it is no entry of `PRESENTATOR_TOKEN_CLIENTS`.
+2. Create one optional client scope for this app, named `mcp-presentator`.
+   Give it an audience mapper whose included custom audience is
    `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, so a token requested with this scope has
    that as its only audience. Put no audience on the client itself: the other
    apps' fronts use the same client.
 3. Assign the scope to the `agents` client as an optional scope.
-4. Create a group below `/apps/presentator` for the people whose agents may
-   call; its path is `PRESENTATOR_AGENT__MCP__GROUP`. A token needs this group
+4. Create the group `/apps/presentator/mcp` for the people whose agents may
+   call. A token needs this group
    besides the app's own.
-5. Name the realm's agent group, `/agents`, in
-   `PRESENTATOR_AGENT__MCP__AGENT_GROUP`. A service account in it, with the
+5. Keep the realm's agent group `/agents`. A service account in it, with the
    app's groups and scope on its token, signs in at `/mcp` with its own client
    as an agent; the app creates its account on that first call. It sees no
    deck: decks belong to people. Its token carries the `agent_owner` and

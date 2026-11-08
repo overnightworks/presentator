@@ -333,14 +333,13 @@ def test_an_own_account_agent_finds_no_deck_of_a_person(
 
 
 @_DECK_AND_TEXT
-def test_with_mcp_off_the_cookie_and_a_configured_person_bearer_still_read(
+def test_the_cookie_and_a_configured_person_bearer_read_beside_the_resource(
     tmp_path: Path, path: str, tool: str
 ) -> None:
     del tool
     world = a_world(
         tmp_path,
         token_clients=frozenset({World.HAL}),
-        mcp_on=False,
     )
     address = path.format(slug=World.FELIX_DECK)
     token = world.bearer(authorized_party=World.HAL, audience=None, groups=MEMBER)

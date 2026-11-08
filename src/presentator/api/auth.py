@@ -253,11 +253,11 @@ class AgentFront:
     The marks make the deck routes tools; they are plain metadata, since the
     lobby names no agent library. The installer runs once every route that
     carries a schema is registered and answers the resource the bearer gate
-    admits tokens for. Without an installer there is no front and no resource.
+    admits tokens for.
     """
 
     marks: DeckMarks
-    install_resource: ResourceInstaller | None = None
+    install_resource: ResourceInstaller
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -352,7 +352,7 @@ def _install_middleware(
     auth: InstalledAuth,
     sessions: SessionRecordStore,
     admin: AdminPeople | None,
-    resource: ProtectedResource | None,
+    resource: ProtectedResource,
 ) -> None:
     """Install the library's stack once, in its own order.
 
@@ -362,7 +362,7 @@ def _install_middleware(
     The admin prefix, when it is served, takes a bearer token and no cookie.
     While the admin prefix is served, `/api/` takes a person's token as that
     person; a request without a token is decided by the session cookie. The
-    resource, when it exists, takes the agents client's token at `/mcp` and on
+    resource takes the agents client's token at `/mcp` and on
     the routes marked as tools; its discovery document is public.
     """
     install_error_answers(lobby)
@@ -381,22 +381,16 @@ def _install_middleware(
         session_gate=SessionGate(
             session_transaction=lambda: nullcontext(sessions),
             login_redirect=LOGIN_REDIRECT,
-            public=(
-                _PUBLIC_RULES
-                if resource is None
-                else (*_PUBLIC_RULES, resource.public_rule)
-            ),
+            public=(*_PUBLIC_RULES, resource.public_rule),
             optional=PathRules(exact=frozenset({SESSION_PATH})),
         ),
     )
 
 
 def _bearer_gate(
-    auth: InstalledAuth, admin: AdminPeople | None, resource: ProtectedResource | None
-) -> BearerGate | None:
-    """The gate, or none while no token is admitted anywhere."""
-    if admin is None and resource is None:
-        return None
+    auth: InstalledAuth, admin: AdminPeople | None, resource: ProtectedResource
+) -> BearerGate:
+    """The gate: the resource's token always, the people's only with token clients."""
     if admin is None:
         return BearerGate(
             relying_party=auth.relying_party,
@@ -429,10 +423,8 @@ def _session_routes(preferences: Preferences, auth: InstalledAuth) -> APIRouter:
 
 def _install_resource(
     lobby: FastAPI, agent: AgentFront, issuer: str
-) -> ProtectedResource | None:
+) -> ProtectedResource:
     """The resource and its public discovery document, once every route is in."""
-    if agent.install_resource is None:
-        return None
     resource = agent.install_resource(lobby)
     install_resource_metadata(lobby, resource, issuer=issuer)
     return resource

@@ -52,11 +52,9 @@ from presentator.adapters.catalog import (
 )
 from presentator.adapters.decks import SourceMirrors
 from presentator.adapters.secrets import talk_session_secret
-from presentator.agent.mcp import deck_list_mark, deck_text_mark, deck_view_mark
 from presentator.agent.settings import AgentSettings
 from presentator.api.auth import (
     AgentFront,
-    DeckMarks,
     InstalledAuth,
     LobbyPrivate,
     content_security_policy,
@@ -82,7 +80,7 @@ from presentator.contracts.decks import (
 from presentator.contracts.models import Role, User
 from presentator.contracts.text import DEFAULT_LANGUAGE_TAG, Catalogs
 from presentator.host.config import Settings
-from presentator.host.main import web_auth_config_for
+from presentator.host.main import agent_front, web_auth_config_for
 from presentator.host.oidc import admission_of, oidc_client_config
 from presentator.ports.copresenter import DeckTexts
 from presentator.ports.decks import BuildRunner
@@ -380,14 +378,18 @@ def an_installed_auth(
     relying_party: OidcRelyingParty | None = None,
     transaction: SignInTransaction | None = None,
     shell: LobbyShell = LOBBY_SHELL,
+    realm: str = AN_ISSUER,
 ) -> InstalledAuth:
-    """The host's sign-in wiring, each part replaceable by the test that proves it."""
+    """The host's sign-in wiring, each part replaceable by the test that proves it.
+
+    `realm` is the issuer the app is configured to trust; admission is bound to it.
+    """
     return InstalledAuth(
         config=a_web_auth(clock),
         relying_party=a_relying_party(clock)
         if relying_party is None
         else relying_party,
-        admission=admission_of(a_settings()),
+        admission=admission_of(a_settings().model_copy(update={"oidc_issuer": realm})),
         transaction=NoSignInTransaction() if transaction is None else transaction,
         content_security_policy=content_security_policy(shell),
         talk_origin=A_TALK_ADDRESS,
@@ -548,14 +550,10 @@ def a_preferences(
     )
 
 
-def a_default_agent_front() -> AgentFront:
-    """The deck routes' marks with no MCP front behind them."""
-    return AgentFront(
-        marks=DeckMarks(
-            deck_list=deck_list_mark(),
-            deck_view=deck_view_mark(),
-            deck_text=deck_text_mark(),
-        )
+def an_agent_front(auth: InstalledAuth) -> AgentFront:
+    """The agent's front as the host composes it, at the test origin."""
+    return agent_front(
+        origin=A_BROWSERS_ADDRESS, issuer=AN_ISSUER, transaction=auth.transaction
     )
 
 
@@ -578,21 +576,20 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
         if signing_in is None or signing_in.decks is None
         else signing_in.decks
     )
+    auth = (
+        an_installed_auth(clock, transaction=SessionsOnly(crowd.sessions), shell=shell)
+        if signing_in is None
+        else signing_in.auth
+    )
     lobby = create_lobby(
         sessions=crowd.sessions if signing_in is None else signing_in.sessions,
         decks=decks,
         preferences=a_preferences() if preferences is None else preferences,
-        auth=(
-            an_installed_auth(
-                clock, transaction=SessionsOnly(crowd.sessions), shell=shell
-            )
-            if signing_in is None
-            else signing_in.auth
-        ),
+        auth=auth,
         private=LobbyPrivate(
             admin_people=admin_people,
         ),
-        agent=a_default_agent_front() if agent is None else agent,
+        agent=an_agent_front(auth) if agent is None else agent,
         own_decks=OwnDecks(
             decks=decks.store,
             sources=decks.sources,

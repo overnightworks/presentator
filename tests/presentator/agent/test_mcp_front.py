@@ -311,10 +311,10 @@ def test_unauthenticated_discovery_is_public_and_the_front_challenges_for_a_bear
     assert f'scope="{World.SCOPE}"' in challenge.headers["www-authenticate"]
 
 
-def test_without_the_mcp_block_there_is_no_front_and_no_resource(
+def test_a_lobby_with_no_mcp_setting_serves_the_front_and_a_cookie_does_not_open_it(
     tmp_path: Path,
 ) -> None:
-    """A signed-in browser finds neither route: the answers are the framework's 404."""
+    """A signed-in browser reads the public discovery; the front wants a bearer."""
     scene = a_scene(tmp_path)
     browser = scene.browser()
     scene.sign_in(browser, subject=World.FELIX, username="felix")
@@ -323,8 +323,8 @@ def test_without_the_mcp_block_there_is_no_front_and_no_resource(
     front = browser.post(MCP_ENDPOINT_PATH, json=rpc("tools/list"), headers=World.JSON)
 
     assert (metadata.status_code, front.status_code) == (
-        HTTPStatus.NOT_FOUND,
-        HTTPStatus.NOT_FOUND,
+        HTTPStatus.OK,
+        HTTPStatus.UNAUTHORIZED,
     )
 
 

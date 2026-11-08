@@ -21,7 +21,6 @@ import uvicorn
 from fastapi import FastAPI
 from httpx2 import Response as BrowserAnswer
 from pydantic import SecretStr
-from webauth.admission import AdmissionConfig
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.ports import AccountEvent, AccountEventKind, AccountKind, AuditSink
 
@@ -368,12 +367,7 @@ def test_a_refusal_writes_no_session_and_no_account(
 def test_an_issuer_that_differs_in_case_from_the_bound_one_is_a_foreign_issuer(
     tmp_path: Path,
 ) -> None:
-    admission = AdmissionConfig(
-        bound_issuer=AN_ISSUER.replace("auth.", "AUTH."),
-        login_group="/apps/presentator",
-        admin_group="/apps/presentator/admin",
-    )
-    scene = a_scene(tmp_path, admission=admission)
+    scene = a_scene(tmp_path, realm=AN_ISSUER.replace("auth.", "AUTH."))
 
     page = scene.sign_in()
 
