@@ -50,6 +50,13 @@ from tests.presentator.application.support.decks_support import (
     carrying,
     decks_over,
     having,
+    probed,
+)
+from tests.presentator.application.support.decks_support import (
+    HTTPS_URL as _HTTPS_URL,
+)
+from tests.presentator.application.support.decks_support import (
+    READ_ONLY as _READ_ONLY,
 )
 from tests.presentator.application.support.fakes import (
     BUILDS_ROOT,
@@ -969,10 +976,6 @@ def test_each_sources_run_is_recorded_under_its_own_id() -> None:
     assert second_run.outcome is SourceRunOutcome.FAILURE
 
 
-_READ_ONLY = "a-read-only-token"
-_HTTPS_URL = "https://git.example.invalid/talks.git"
-
-
 def _add(
     decks: Decks,
     *,
@@ -1000,29 +1003,12 @@ def _add(
     )
 
 
-def _probed(
-    decks: Decks,
-    *,
-    url: str = _HTTPS_URL,
-    secret: str = _READ_ONLY,
-    key_draft_id: str = "",
-) -> ConnectionCheckResult:
-    found = decks.check_connection(
-        url=url,
-        secret=secret,
-        owner_id=OWNER,
-        key_draft_id=key_draft_id,
-    )
-    assert isinstance(found, ConnectionCheckResult)
-    return found
-
-
 def test_a_reachable_check_carries_a_fingerprint_a_refused_one_does_not() -> None:
-    reachable = _probed(decks_over())
+    reachable = probed(decks_over())
     refused_answer = ConnectionCheckResult(
         failure=SourceRunFailure.REFUSED, commit=None, detail=None
     )
-    refused = _probed(
+    refused = probed(
         decks_over(
             fakes=DecksFakes(checker=FakeConnectionChecker(answer=refused_answer))
         )
@@ -1084,7 +1070,7 @@ def test_an_ssh_create_binds_the_shown_draft_and_deletes_it() -> None:
     decks = decks_over(sources=store)
     draft = decks.source_key_draft(owner_id=OWNER)
 
-    checked = _probed(decks, url=_SSH_URL, secret="", key_draft_id=draft.id)
+    checked = probed(decks, url=_SSH_URL, secret="", key_draft_id=draft.id)
     added = decks.add_source(
         NewSourceDraft(
             name="talks",
@@ -1123,7 +1109,7 @@ def test_an_ssh_create_without_its_own_check_proof_is_refused() -> None:
 def test_an_ssh_check_proof_cannot_create_for_another_account() -> None:
     decks = decks_over(sources=having())
     owned = decks.source_key_draft(owner_id=OWNER)
-    checked = _probed(decks, url=_SSH_URL, secret="", key_draft_id=owned.id)
+    checked = probed(decks, url=_SSH_URL, secret="", key_draft_id=owned.id)
     another_owner = "another admin entirely"
     other_draft = decks.source_key_draft(owner_id=another_owner)
 
@@ -1352,7 +1338,7 @@ def test_a_source_never_checked_for_these_values_is_refused() -> None:
 def test_a_fingerprint_from_a_different_secret_is_refused() -> None:
     store = having()
     decks = decks_over(sources=store)
-    checked = _probed(decks)
+    checked = probed(decks)
     assert checked.fingerprint is not None
 
     refused = decks.add_source(
@@ -1883,7 +1869,7 @@ def test_an_address_naming_no_access_is_refused_whatever_an_earlier_check_proved
         earlier_instance.setattr(
             "presentator.application.decks.access_kind_of", read_as_https
         )
-        earlier_fingerprint = _probed(
+        earlier_fingerprint = probed(
             decks_over(fakes=DecksFakes(checker=FakeConnectionChecker())), url=url
         ).fingerprint
     created = decks.add_source(

@@ -68,3 +68,6 @@ Authors outside this repository rely on these rules. Local assets,
   other source. After that, another source with the same folder name takes the
   address at its next refresh at the latest, even another person's source, and
   old links then show its deck.
+- **DK18** A source's decks are the folders directly under its folder, or
+  directly under the repository's top when it names none. The folder's own name
+  stays the deck's address.

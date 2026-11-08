@@ -28,6 +28,7 @@ _REFUSALS = [
 _KEPT = ["", "examples", "talks/2026", _FITS_IN_BYTES, f"a/{_FITS_IN_BYTES}"]
 
 
+# SR8
 @pytest.mark.parametrize("folder", _REFUSALS)
 def test_a_malformed_folder_is_not_a_folder_path(folder: str) -> None:
     assert not is_a_folder_path(normalized_folder(folder))
@@ -38,6 +39,7 @@ def test_a_well_formed_folder_is_a_folder_path(folder: str) -> None:
     assert is_a_folder_path(normalized_folder(folder))
 
 
+# SR8
 @pytest.mark.parametrize(
     ("typed", "kept"),
     [

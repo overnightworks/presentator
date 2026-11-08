@@ -4,7 +4,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from presentator.application.decks import Decks
-from presentator.contracts.decks import MANIFEST_FILE, SLIDES_FILE, DeckFolder, Source
+from presentator.contracts.decks import (
+    MANIFEST_FILE,
+    SLIDES_FILE,
+    ConnectionCheckResult,
+    DeckFolder,
+    Source,
+)
 from presentator.ports.decks import DeckFolders
 from tests.presentator.application.support.fakes import (
     FakeBuildRunner,
@@ -41,6 +47,8 @@ COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 # only ever given up on where a test says so.
 BUILD_BOUND = timedelta(minutes=5)
 FINGERPRINT_KEY = b"what only this test's instance signs a fingerprint with"
+READ_ONLY = "a-read-only-token"
+HTTPS_URL = "https://git.example.invalid/talks.git"
 
 
 def a_folder(
@@ -114,3 +122,20 @@ def decks_over(
         local_mount=resolved.local_mount,
         webhook_secrets=resolved.webhook_secrets,
     )
+
+
+def probed(
+    decks: Decks,
+    *,
+    url: str = HTTPS_URL,
+    secret: str = READ_ONLY,
+    key_draft_id: str = "",
+) -> ConnectionCheckResult:
+    found = decks.check_connection(
+        url=url,
+        secret=secret,
+        owner_id=OWNER,
+        key_draft_id=key_draft_id,
+    )
+    assert isinstance(found, ConnectionCheckResult)
+    return found

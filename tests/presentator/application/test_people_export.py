@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 from pydantic import SecretStr
 
+from presentator.contracts.decks import Source
 from presentator.contracts.models import Role, User
 from presentator.contracts.people import (
     PersonData,
@@ -28,6 +29,17 @@ _SECRET_WORDS = (
     "OPENSSH PRIVATE KEY",
     "an-id-token",
 )
+
+
+def _a_source_with_a_folder(folder: str) -> Source:
+    return Source(
+        id="the-folder-source",
+        name="folder-source",
+        url="https://example.invalid/folder.git",
+        ref="main",
+        owner_id=_THE_PERSON,
+        folder=folder,
+    )
 
 
 def _secret(kind: PersonKind, count: int) -> Withheld:
@@ -128,3 +140,15 @@ def test_a_built_deck_names_its_built_commit() -> None:
 
     assert [deck.built_commit for deck in decks] == [deck.commit for deck in decks]
     assert all(deck.built_commit for deck in decks)
+
+
+def test_a_sources_folder_is_in_the_export() -> None:
+    instance = an_instance(
+        source_store=FakeSourceStore(sources=[_a_source_with_a_folder("talks/2026")]),
+    )
+
+    exported = instance.people.export_person(_THE_PERSON).data.sources
+
+    folders = {source.name: source.folder for source in exported}
+    assert folders["folder-source"] == "talks/2026"
+    assert folders["decks"] == ""
