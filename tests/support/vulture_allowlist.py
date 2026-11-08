@@ -1,33 +1,21 @@
 """Names that something other than a Python call site reaches.
 
-A Jinja template is not Python, so a field only a template renders looks
-unused; a standard-library base class's own dispatch is invisible the same
+A Svelte page is not Python, so a field only a page reads looks unused; a
+standard-library base class's own dispatch is invisible the same
 way. Every entry names the site that reaches it; an entry without one is an
 excuse.
 """
 
-from presentator.api.auth import DeckRow
 from presentator.api.copresenter import AskRequest
-from presentator.api.decks import Banner, TalkFiles
+from presentator.api.decks import TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
 from presentator.api.problems import ValidationFault
-from presentator.api.sources import (
-    SourceDeckRow,
-    SourceRemovalView,
-    SourceRow,
-    SourceRunRow,
-    SourceView,
-)
 from presentator.contracts.text import LobbyText
-from presentator.contracts.voice import (
-    VoiceDownloadOutcome,
-    VoiceLoadOutcome,
-    VoiceState,
-)
 from presentator.host.config import Settings, WorkerSettings
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
 from tests.presentator.host.test_worker_serving_loop import clients_closed_with_the_test
 from tests.presentator.host.test_worker_settings import no_worker_variables
+from tests.support.lobby_drive import DeckRecord
 
 # `BaseHTTPRequestHandler`'s own request dispatch calls this by name; nothing
 # in the test that stands the server up ever calls it itself.
@@ -39,92 +27,75 @@ _InlineScripts.handle_starttag
 _InlineScripts.handle_data
 _InlineScripts.handle_endtag
 
-# `presentator/api/templates/home.html` renders it in the "Changed" column.
-DeckRow.changed
-
-# `presentator/api/templates/sources.html` renders each row of the Sources list.
-SourceRow.name
-SourceRow.url
-SourceRow.access
-SourceRow.state
-SourceRow.state_word
-SourceRow.fetched
-
-# `presentator/api/templates/source.html` renders the source page.
-SourceView.name
-SourceView.url
-SourceView.access
-SourceView.state
-SourceView.state_word
-SourceView.fetched
-SourceView.address
-SourceView.webhook_secret
-SourceView.webhook_secret_held_elsewhere
-SourceView.carries_no_secret
-SourceView.renews_deploy_key
-SourceView.public_key
-SourceView.runs
-SourceView.decks
-SourceRunRow.state
-SourceRunRow.state_word
-SourceRunRow.fetched
-SourceRunRow.commit
-SourceRunRow.reason
-SourceDeckRow.slug
-SourceDeckRow.title
-
-# `presentator/api/templates/source_remove.html` renders the confirm page.
-SourceRemovalView.name
-SourceRemovalView.title
-SourceRemovalView.body
-
-# `presentator/api/templates/deck.html` renders the build block out of these.
-Banner.lead
-Banner.when
-Banner.sentences
-
-# The words below reach a person through a Jinja template alone. That a catalog
-# carries each of them is proven by `load_lobby_text`, which refuses a catalog
-# missing any field of `LobbyText`; that a page renders them is proven by the
-# route tests.
-LobbyText.section_decks
-LobbyText.login_failed_title
-LobbyText.login_failed_explanation
-LobbyText.login_failed_retry
-LobbyText.no_access_title
-LobbyText.no_access_explanation
-LobbyText.no_access_back
-LobbyText.decks_title
-LobbyText.decks_column_deck
+# The words below reach a person through the Svelte Home page and deck page
+# alone, which read them from `/api/session`; the drive proves the pages show
+# them.
+LobbyText.decks_column_changed
+LobbyText.decks_empty_title
+LobbyText.decks_empty_explanation
 LobbyText.deck_back
 LobbyText.deck_status
+LobbyText.deck_state_ready
+LobbyText.deck_state_building
+LobbyText.deck_state_failed
+LobbyText.deck_state_never_built
+LobbyText.deck_built
+LobbyText.deck_builds_with
+LobbyText.deck_theme_separator
+LobbyText.deck_not_built_explanation
+LobbyText.deck_building_explanation
+LobbyText.deck_building_label
+LobbyText.deck_building_for
+LobbyText.deck_failed_title
+LobbyText.deck_attempt_label
+LobbyText.deck_failed_without_a_message
+LobbyText.deck_failed_output_megabytes
+LobbyText.deck_failed_output_entries
+LobbyText.deck_failed_output_shape
+LobbyText.deck_failed_deck_megabytes
+LobbyText.deck_failed_deck_paths
+LobbyText.deck_failed_last_talk_stands
 LobbyText.deck_presenter_view
 LobbyText.deck_projector_view
+LobbyText.deck_pdf
 LobbyText.deck_unknown_explanation
-LobbyText.settings_title
-LobbyText.settings_instance_name
-LobbyText.settings_default_language
-LobbyText.settings_language_hint
-LobbyText.settings_default_theme
-LobbyText.settings_save
-LobbyText.account_preferences
-LobbyText.account_language
-LobbyText.account_theme
-LobbyText.sources_back
+LobbyText.decks_title
+LobbyText.decks_column_deck
+
+# The words below reach a person through the Svelte Sources list, Add source
+# page, source page and removal dialog alone, which read them from
+# `/api/session`; the drive proves the pages show them.
 LobbyText.source_access
-LobbyText.source_secret
-LobbyText.source_secret_info_mark
 LobbyText.source_secret_info
 LobbyText.source_webhook_later
 LobbyText.source_deploy_key_hint
 LobbyText.source_webhook
 LobbyText.source_webhook_address
-LobbyText.source_webhook_secret
-LobbyText.source_webhook_held_elsewhere
-LobbyText.source_copy
 LobbyText.source_webhook_payload
 LobbyText.source_created_done
 LobbyText.source_created
+LobbyText.source_name
+LobbyText.source_url
+LobbyText.source_check
+LobbyText.source_create
+LobbyText.source_access_ssh
+LobbyText.source_access_https
+LobbyText.source_access_file
+LobbyText.source_deploy_key_heading
+LobbyText.source_webhook_once
+LobbyText.source_created_toast
+LobbyText.source_check_reachable
+LobbyText.source_refused_name
+LobbyText.source_refused_duplicate_name
+LobbyText.source_refused_duplicate_url
+LobbyText.source_refused_access
+LobbyText.source_refused_not_checked
+LobbyText.source_refused_secret_not_allowed
+LobbyText.source_refused_outside_mount
+LobbyText.source_refused_deploy_key
+LobbyText.source_secret
+LobbyText.source_webhook_secret
+LobbyText.source_copy
 LobbyText.source_access_heading
 LobbyText.source_webhook_heading
 LobbyText.source_recent_runs
@@ -144,51 +115,82 @@ LobbyText.source_run_secret
 LobbyText.source_remove_heading
 LobbyText.source_remove_hint
 LobbyText.source_remove_button
+LobbyText.source_refused_secret
+LobbyText.source_run_refused
+LobbyText.source_run_failed
+LobbyText.source_run_column_state
+LobbyText.source_run_column_fetched
+LobbyText.source_run_column_detail
+LobbyText.decks_column_state
+LobbyText.settings_sources
+LobbyText.sources_column_source
+LobbyText.sources_column_fetched
+LobbyText.sources_fetch_now
+LobbyText.source_state_reachable
+LobbyText.source_state_error
+LobbyText.source_state_refused
+LobbyText.source_state_failed
+LobbyText.source_state_never_fetched
+LobbyText.sources_empty_title
+LobbyText.sources_empty_explanation
+LobbyText.sources_empty_need
+LobbyText.sources_empty_ssh
+LobbyText.sources_empty_or
+LobbyText.sources_empty_https
+LobbyText.sources_add
+LobbyText.sources_column_access
+LobbyText.source_access_token
+LobbyText.source_access_deploy_key
+LobbyText.source_access_local
+LobbyText.source_remove_confirm_title
+LobbyText.source_remove_confirm_body
+LobbyText.source_remove_deck_singular
+LobbyText.source_remove_deck_plural
+LobbyText.source_remove_talk_singular
+LobbyText.source_remove_talk_plural
+LobbyText.source_remove_run_singular
+LobbyText.source_remove_run_plural
+LobbyText.source_remove_refused
+LobbyText.source_removed
+LobbyText.sources_back
 LobbyText.source_remove_cancel
 LobbyText.source_remove_confirm
 
-# `presentator/api/templates/voice.html` renders these Voice-tab words.
-LobbyText.settings_voice
-LobbyText.voice_model
-LobbyText.voice_language
-LobbyText.voice_state
-LobbyText.voice_state_active
-LobbyText.voice_state_loading
-LobbyText.voice_state_failed
-LobbyText.voice_state_downloaded
-LobbyText.voice_state_not_downloaded
-LobbyText.voice_state_downloading
-LobbyText.voice_state_download_failed
-LobbyText.voice_state_unavailable
-LobbyText.voice_unknown_title
-LobbyText.voice_unknown_explanation
-LobbyText.voice_check_again
-LobbyText.voice_load
-LobbyText.voice_download
-LobbyText.voice_recovery_failed
-LobbyText.voice_recovery_invalid_selection
-LobbyText.voice_recovery_durability
-LobbyText.voice_sample
-LobbyText.voice_sample_active
-LobbyText.voice_sample_language
-LobbyText.voice_sample_german
-LobbyText.voice_sample_english
-LobbyText.voice_sample_play
-LobbyText.voice_sample_stop
-LobbyText.voice_sample_loading
-LobbyText.voice_sample_waiting
-LobbyText.voice_sample_failed_title
-LobbyText.voice_sample_failed_explanation
-
-# Pydantic constructs these private-wire values; `voice.html` renders states by value.
-VoiceState.LOADING
-VoiceState.DOWNLOADED
-VoiceState.NOT_DOWNLOADED
-VoiceState.DOWNLOAD_FAILED
-VoiceLoadOutcome.NOT_ACTIVATED
-
-# `UdsSpeech` decodes this private-wire outcome through `_DownloadPayload`.
-VoiceDownloadOutcome.ALREADY_COMPLETE
+# The words below reach a person through a Svelte page. That a catalog carries
+# each of them is proven by `load_lobby_text`, which refuses a catalog missing
+# any field of `LobbyText`; that a page renders them is proven by the drive.
+LobbyText.section_decks
+LobbyText.section_settings
+# The kit's account menu and sign-in pages read these through `kitWords.ts`.
+LobbyText.theme_title
+LobbyText.theme_follow_system
+LobbyText.theme_light
+LobbyText.theme_dark
+LobbyText.sign_in_logged_out
+LobbyText.sign_in_log_in
+LobbyText.sign_in_failed
+LobbyText.sign_in_failed_banner
+LobbyText.sign_in_try_again
+LobbyText.sign_in_no_access
+LobbyText.sign_in_no_access_sentence
+LobbyText.legal_impressum
+LobbyText.legal_datenschutz
+LobbyText.legal_nutzungsbedingungen
+# The Svelte lobby's not-found board, for-admins board and Settings page read
+# these from `/api/session`, and the person menu its round button.
+LobbyText.address_unknown_title
+LobbyText.address_unknown_explanation
+LobbyText.for_admins_title
+LobbyText.for_admins_explanation
+LobbyText.menu_account
+LobbyText.settings_title
+LobbyText.settings_instance_name
+LobbyText.settings_default_language
+LobbyText.settings_language_hint
+LobbyText.settings_save
+LobbyText.sources_back
+LobbyText.source_remove_cancel
+LobbyText.source_remove_confirm
 
 # `StaticFiles.__call__` dispatches to this override for every talk request.
 TalkFiles.get_response
@@ -214,3 +216,6 @@ clients_closed_with_the_test  # pyright: ignore[reportUnusedExpression]
 # Pydantic reads these fields when it writes a validation answer.
 ValidationFault.loc
 ValidationFault.msg
+
+# Pydantic calls the drive's deck-record validator when a request is parsed.
+DeckRecord.builds_fit_the_state

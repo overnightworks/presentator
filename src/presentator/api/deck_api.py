@@ -4,6 +4,7 @@ The owner answers whose deck it is: another person's deck and an unknown one
 raise the same bare problem.
 """
 
+from collections.abc import Mapping
 from datetime import datetime
 from http import HTTPStatus
 from typing import Final
@@ -22,7 +23,7 @@ from presentator.contracts.decks import (
     talk_address,
 )
 
-_DECK: Final = "/api/decks/{slug}"
+DECK_VIEW_PATH: Final = "/api/decks/{slug}"
 
 
 class FailureView(BaseModel):
@@ -80,12 +81,22 @@ class DeckView(BaseModel):
     views_open: bool
 
 
-def deck_routes(*, decks: Decks, talk_origin: str) -> APIRouter:
-    """The router that answers one deck's view."""
+def deck_routes(
+    *, decks: Decks, talk_origin: str, mark: Mapping[str, object]
+) -> APIRouter:
+    """The router that answers one deck's view.
+
+    `mark` is the metadata that offers this route to the reader's agent as a tool.
+    """
     router = APIRouter()
 
-    @router.get(_DECK, responses=problem_response(HTTPStatus.NOT_FOUND))
+    @router.get(
+        DECK_VIEW_PATH,
+        responses=problem_response(HTTPStatus.NOT_FOUND),
+        openapi_extra=dict(mark),
+    )
     def deck(request: Request, slug: str) -> DeckView:
+        """Show one of your decks, how its build stands and why a build failed."""
         page = decks.page(slug, viewer=gated_person(request).id)
         if page is None:
             raise ProblemError(HTTPStatus.NOT_FOUND)

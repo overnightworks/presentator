@@ -1,8 +1,3 @@
-# This pin makes `aco` read work-item bodies as one typed `aco` TOML
-# block instead of prose headings. From now on every hand-created issue must
-# carry the four-line block skeleton (version, now, next, done_when).
-body_contract = "block"
-
 # A `No-Item: deps` pull request may change only these paths: the manifests and
 # lockfiles `.github/dependabot.yml` writes. Review still judges workflow changes.
 dependency_paths = [
@@ -20,6 +15,8 @@ dependency_paths = [
   "speech/providers/voxcpm/uv.lock",
   "slidev/package.json",
   "slidev/pnpm-lock.yaml",
+  "frontend/package.json",
+  "frontend/pnpm-lock.yaml",
   "Dockerfile",
   ".github/workflows/",
 ]

@@ -7,24 +7,30 @@ exceptions, a form another site submitted is refused, and no answer may be
 replayed from the browser cache (issue #8, lines 11 to 15).
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import nullcontext
 from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
-from pathlib import Path
-from typing import Final, cast
+from typing import Final
 
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import RedirectResponse
 from starlette.types import Receive, Scope, Send
+from webauth.admission import AdmissionConfig
 from webauth.config import WebAuthConfig, install_web_auth_config
-from webauth.middleware.bearer_gate import BearerGate, MachinePaths, PersonPaths
+from webauth.middleware.bearer_gate import (
+    BearerGate,
+    MachinePaths,
+    PersonPaths,
+    ProtectedResource,
+    install_resource_metadata,
+)
 from webauth.middleware.session_gate import SessionGate
 from webauth.middleware.stack import install_web_auth_middleware
 from webauth.oidc import OidcRelyingParty
-from webauth.oidc_login import AdmissionConfig
 from webauth.policies import (
     AuthorizedParties,
     BodySizePolicy,
@@ -39,34 +45,32 @@ from webauth.policies import (
 )
 from webauth.ports import SessionRecordStore, SignInTransaction
 from webauth.sign_in_routes import (
+    LogoutPageText,
     RefusalPage,
     SignInPaths,
     install_sign_in_routes,
 )
 
-from presentator.api.admission import gated_person
 from presentator.api.deck_list_api import deck_list_routes
+from presentator.api.deck_text_api import deck_text_routes
 from presentator.api.decks import add_deck_pages
 from presentator.api.health import HEALTH_IS_PUBLIC, HEALTH_PATH, add_health_route
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
 from presentator.api.lobby_shell import LobbyShell
-from presentator.api.pages import TEMPLATES, Pages, state_word
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
 from presentator.api.preference_api import preference_api_routes
-from presentator.api.preferences import preference_routes
 from presentator.api.problems import install_error_answers
-from presentator.api.session_api import SESSION_PATH, SessionAddresses, session_routes
+from presentator.api.session_api import (
+    SESSION_PATH,
+    SessionAddresses,
+    appearance_of,
+    session_routes,
+)
 from presentator.api.source_api import source_api_routes
-from presentator.api.sources import source_routes
-from presentator.api.voice_api import voice_api_routes
 from presentator.application.decks import Decks
-from presentator.application.voice import VoiceStatusUse
-from presentator.contracts.text import LobbyText
+from presentator.application.own_decks import OwnDecks
+from presentator.application.preferences import Preferences
 
-_STATIC_DIR: Final = Path(__file__).parent / "static"
-_STATIC_PATH: Final = "/static"
-_INSIDE_STATIC: Final = f"{_STATIC_PATH}/"
-_LOBBY: Final = "/"
 _APP_ASSETS: Final = "/_app"
 _INSIDE_APP_ASSETS: Final = f"{_APP_ASSETS}/"
 _HTML: Final = "text/html"
@@ -89,24 +93,29 @@ TALK_SIGN_IN: Final = SignInPaths(
 _SETUP: Final = "/setup"
 
 
-_REFUSAL_PAGES: Final = {
-    RefusalPage.NO_ACCESS: "no_access.html",
-    RefusalPage.LOGIN_FAILED: "login_failed.html",
-}
+def sign_in_refusal_path(refusal: RefusalPage) -> str:
+    """The lobby's address that shows a refused lobby sign-in."""
+    return f"{LOGIN_PATH}/{refusal.value}"
 
 
 def talk_sign_in_refusal_path(refusal: RefusalPage) -> str:
     """The lobby's address that shows a talk sign-in refusal."""
-    return f"/login/talk/{refusal.value}"
+    return f"{LOGIN_PATH}/talk/{refusal.value}"
 
 
 _PERSON_API: Final = "/api/"
 
+_REFUSAL_PATHS: Final = frozenset(
+    path
+    for refusal in RefusalPage
+    for path in (sign_in_refusal_path(refusal), talk_sign_in_refusal_path(refusal))
+)
+
 # Signing in (its start and the issuer's return) and signing out are the
 # addresses the gate leaves alone, and the library derives them from the
-# sign-in paths; logging out ends a session rather than using one. The theme
-# stylesheet and the lobby app's built assets have to render the open pages
-# themselves, so they are public too, and so is the address another server
+# sign-in paths; logging out ends a session rather than using one. The lobby
+# app's built assets have to render the open pages themselves, so they are
+# public too, and so is the address another server
 # posts to: a source host's POST under the hook prefix. Keycloak's back-channel
 # logout is open and exempt from the origin check through the sign-in paths.
 # `/setup` is a retired address: it answers 404 to everyone, so a signed-out
@@ -119,19 +128,19 @@ _PUBLIC_RULES: Final = (
                 {
                     LOGIN_PATH,
                     _SETUP,
-                    *(talk_sign_in_refusal_path(refusal) for refusal in RefusalPage),
+                    *_REFUSAL_PATHS,
                 }
             )
         )
     ),
-    PublicRule(PathRules(prefixes=(_INSIDE_STATIC, _INSIDE_APP_ASSETS))),
+    PublicRule(PathRules(prefixes=(_INSIDE_APP_ASSETS,))),
     HEALTH_IS_PUBLIC,
     PublicRule(_SERVER_CALLS, methods=frozenset({HTTPMethod.POST})),
     *LOBBY_SIGN_IN.public_rules,
 )
 # The lobby app's shell answers a page load on any lobby address no route
 # claims, but never on these: a missing asset, API or server route stays the
-# framework's 404 instead of becoming the app (ADR 0021).
+# framework's 404 instead of becoming the app.
 _NEVER_THE_SHELL: Final = PathRules(
     exact=frozenset({START_SIGN_IN_PATH, LOGOUT_PATH, HEALTH_PATH, _SETUP}),
     prefixes=(
@@ -139,7 +148,6 @@ _NEVER_THE_SHELL: Final = PathRules(
         _INSIDE_APP_ASSETS,
         HOOK_CALLS,
         _INSIDE_AUTH,
-        _INSIDE_STATIC,
     ),
 )
 PERMISSIONS_POLICY: Final = "camera=(), microphone=(), geolocation=()"
@@ -163,16 +171,10 @@ _BODY_SIZE: Final = BodySizePolicy(
     ),
 )
 LOGIN_REDIRECT: Final = LOBBY_SIGN_IN.login_redirect
-# Jinja's stubs type the globals as its own defaults only, so the dict is
-# named as the mixed bag it is.
-cast("dict[str, object]", TEMPLATES.env.globals).update(
-    login_path=LOGIN_PATH,
-    logout_path=LOGOUT_PATH,
-)
 
 
 # SvelteKit writes its accessibility announcer with this one inline style
-# attribute, which `style-src 'self'` refuses; ADR 0021 admits exactly it by
+# attribute, which `style-src 'self'` refuses; the policy admits exactly it by
 # its hash under 'unsafe-hashes', since hiding it by a build step would patch
 # the framework. It is the sha256 of the attribute's value in @sveltejs/kit
 # 3.1.0's runtime/components/root.svelte, so a kit update that changes the
@@ -185,7 +187,7 @@ def content_security_policy(shell: LobbyShell) -> str:
     """The one policy every answer of the lobby carries, except the logout page.
 
     Nothing in the lobby needs an external host or a frame: every asset ships
-    under `/static` or `/_app`, served from this origin. The one inline script
+    under `/_app`, served from this origin. The one inline script
     is the app's bootstrap, admitted by its hash, and the one inline style is
     SvelteKit's announcer. The logout page brings its own policy, which
     webauth's security headers leave in place.
@@ -210,96 +212,78 @@ class InstalledAuth:
     # The talk host signs in through its own installation of the same wiring;
     # the lobby sends a refused talk sign-in's retry there.
     talk_origin: str
+    # The realm that signs people in, which also serves their central account.
+    issuer: str
 
     @property
     def talk_sign_in_address(self) -> str:
         """Where a sign-in starts at the talk host."""
         return f"{self.talk_origin}{START_SIGN_IN_PATH}"
 
+    @property
+    def account_console_url(self) -> str:
+        """Where the person manages their central account."""
+        return f"{self.issuer}/account"
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class LobbyPrivate:
     """Private capabilities the authenticated lobby may expose to an admin."""
 
-    voice: VoiceStatusUse
-    # Absent: no token is admitted, so neither the gate nor the route exists.
+    # Absent: no token client is named, so the admin people route does not exist.
     admin_people: AdminPeople | None = None
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DeckRow:
-    """One deck as the list renders it: its state, name, folder, and age."""
+type ResourceInstaller = Callable[[FastAPI], ProtectedResource]
 
-    title: str
-    slug: str
-    state: str
-    state_word: str
-    changed: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DeckMarks:
+    """The marks that make the deck routes tools: plain metadata, one per route."""
+
+    deck_list: Mapping[str, object]
+    deck_view: Mapping[str, object]
+    deck_text: Mapping[str, object]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AgentFront:
+    """What the host hands the lobby for the agent of a signed-in person.
+
+    The marks make the deck routes tools; they are plain metadata, since the
+    lobby names no agent library. The installer runs once every route that
+    carries a schema is registered and answers the resource the bearer gate
+    admits tokens for.
+    """
+
+    marks: DeckMarks
+    install_resource: ResourceInstaller
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class _Surfaces:
     """The lobby's HTML answers, each one asking the use cases what is true."""
 
-    decks: Decks
-    pages: Pages
+    preferences: Preferences
     auth: InstalledAuth
     shell: LobbyShell
 
-    def home(self, request: Request) -> Response:
-        """List the signed-in person's decks, newest first."""
-        viewer = gated_person(request).id
-        return self.pages.page(
-            request,
-            "home.html",
-            source_address=self.decks.source_address(viewer=viewer),
-            decks=self._rows(self.pages.appearance(request).text, viewer),
-        )
-
-    def _rows(self, text: LobbyText, viewer: str) -> tuple[DeckRow, ...]:
-        return tuple(
-            DeckRow(
-                title=deck.title,
-                slug=deck.slug,
-                state=deck.state.value,
-                state_word=state_word(deck.state, text),
-                changed=self.pages.age_in_words(deck.age, text.language_tag),
-            )
-            for deck in self.decks.listed(viewer=viewer)
-        )
-
-    def lobby_app(self, request: Request) -> Response:
-        """The lobby app's shell, in the reader's language and theme."""
-        return HTMLResponse(self.shell.filled(self.pages.appearance(request)))
-
-    def talk_sign_in_refusal_page(
-        self, refusal: RefusalPage
-    ) -> Callable[[Request], Response]:
-        """The route that shows why the talk host refused a sign-in.
-
-        Its retry restarts the sign-in at the talk host, and the page is one
-        address per refusal so no request chooses what it says.
-        """
-
-        def show(request: Request) -> Response:
-            return self.refused_page(
-                request,
-                refusal,
-                retry=self.auth.talk_sign_in_address,
-            )
-
-        return show
-
-    def refused_page(
-        self, request: Request, refusal: RefusalPage, *, retry: str
+    def lobby_app(
+        self, request: Request, *, status: HTTPStatus = HTTPStatus.OK
     ) -> Response:
-        """A refusal's page and where to retry; the library adds the cookie deletion."""
-        return self.pages.page(
-            request,
-            _REFUSAL_PAGES[refusal],
-            status=HTTPStatus.FORBIDDEN,
-            start_sign_in=retry,
+        """The lobby app's shell, in the reader's language and theme."""
+        return HTMLResponse(
+            self.shell.filled(appearance_of(request, self.preferences)),
+            status_code=status,
         )
+
+    def not_found_page(self, request: Request) -> Response:
+        """The app's shell under 404; the router shows the not-found board."""
+        return self.lobby_app(request, status=HTTPStatus.NOT_FOUND)
+
+    def refusal_page(self, request: Request) -> Response:
+        """The app's shell under 403; the router shows why from the address."""
+        return self.lobby_app(request, status=HTTPStatus.FORBIDDEN)
 
 
 def _loads_the_lobby_app(request: Request) -> bool:
@@ -338,8 +322,13 @@ def _install_lobby_app(lobby: FastAPI, surfaces: _Surfaces) -> None:
     lobby.router.default = lobby_app_or_not_found
 
 
+def _logout_page_text(request: Request, surfaces: _Surfaces) -> LogoutPageText:
+    text = appearance_of(request, surfaces.preferences).text
+    return LogoutPageText(language=text.language_tag, button_label=text.log_out)
+
+
 def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
-    """The library's sign-in routes, and the pages of the talk host's refusals."""
+    """The library's sign-in routes, and the 403 shell at every refusal address."""
     auth = surfaces.auth
     install_sign_in_routes(
         lobby,
@@ -347,21 +336,15 @@ def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
         relying_party=lambda _request: auth.relying_party,
         admission=auth.admission,
         transaction=auth.transaction,
-        refused=lambda request, refusal: surfaces.refused_page(
-            request, refusal.page, retry=START_SIGN_IN_PATH
+        refused=lambda _request, refusal: RedirectResponse(
+            sign_in_refusal_path(refusal.page), status_code=HTTPStatus.SEE_OTHER
         ),
         keeps_id_token=True,
         max_sessions=None,
-        logout_button_label=lambda request: (
-            surfaces.pages.appearance(request).text.log_out
-        ),
+        logout_page_text=lambda request: _logout_page_text(request, surfaces),
     )
-    for refusal in RefusalPage:
-        lobby.add_api_route(
-            talk_sign_in_refusal_path(refusal),
-            surfaces.talk_sign_in_refusal_page(refusal),
-            methods=["GET"],
-        )
+    for path in _REFUSAL_PATHS:
+        lobby.add_api_route(path, surfaces.refusal_page, methods=["GET"])
 
 
 def _install_middleware(
@@ -369,15 +352,18 @@ def _install_middleware(
     auth: InstalledAuth,
     sessions: SessionRecordStore,
     admin: AdminPeople | None,
+    resource: ProtectedResource,
 ) -> None:
     """Install the library's stack once, in its own order.
 
     Every answer, including the gate's redirect and a refusal, carries the
     security headers. The gate's store calls commit on their own and `touch` is
-    one update-only statement (ADR 0003), so the gate's admission takes no lock.
+    one update-only statement, so the gate's admission takes no lock.
     The admin prefix, when it is served, takes a bearer token and no cookie.
     While the admin prefix is served, `/api/` takes a person's token as that
-    person; a request without a token is decided by the session cookie.
+    person; a request without a token is decided by the session cookie. The
+    resource takes the agents client's token at `/mcp` and on
+    the routes marked as tools; its discovery document is public.
     """
     install_error_answers(lobby)
     install_web_auth_middleware(
@@ -390,18 +376,27 @@ def _install_middleware(
             ),
         ),
         body_size=_BODY_SIZE,
-        bearer_gate=None if admin is None else _bearer_gate(auth, admin),
+        bearer_gate=_bearer_gate(auth, admin, resource),
         csrf_origin=_CSRF_POLICY,
         session_gate=SessionGate(
             session_transaction=lambda: nullcontext(sessions),
             login_redirect=LOGIN_REDIRECT,
-            public=_PUBLIC_RULES,
+            public=(*_PUBLIC_RULES, resource.public_rule),
             optional=PathRules(exact=frozenset({SESSION_PATH})),
         ),
     )
 
 
-def _bearer_gate(auth: InstalledAuth, admin: AdminPeople) -> BearerGate:
+def _bearer_gate(
+    auth: InstalledAuth, admin: AdminPeople | None, resource: ProtectedResource
+) -> BearerGate:
+    """The gate: the resource's token always, the people's only with token clients."""
+    if admin is None:
+        return BearerGate(
+            relying_party=auth.relying_party,
+            admission=auth.admission,
+            resource=resource,
+        )
     parties = AuthorizedParties(admin.admitted_clients)
     return BearerGate(
         relying_party=auth.relying_party,
@@ -410,51 +405,68 @@ def _bearer_gate(auth: InstalledAuth, admin: AdminPeople) -> BearerGate:
         person_paths=PersonPaths(
             PathRules(prefixes=(_PERSON_API,)), parties, auth.transaction
         ),
+        resource=resource,
     )
 
 
-def _session_routes(pages: Pages, auth: InstalledAuth) -> APIRouter:
+def _session_routes(preferences: Preferences, auth: InstalledAuth) -> APIRouter:
     return session_routes(
-        preferences=pages.preferences,
+        preferences=preferences,
         addresses=SessionAddresses(
             start=START_SIGN_IN_PATH,
             logout=LOGOUT_PATH,
             talk_start=auth.talk_sign_in_address,
+            account_console_url=auth.account_console_url,
         ),
     )
+
+
+def _install_resource(
+    lobby: FastAPI, agent: AgentFront, issuer: str
+) -> ProtectedResource:
+    """The resource and its public discovery document, once every route is in."""
+    resource = agent.install_resource(lobby)
+    install_resource_metadata(lobby, resource, issuer=issuer)
+    return resource
 
 
 def create_lobby(  # noqa: PLR0913 - the composition root's one call names each owner
     *,
     sessions: SessionRecordStore,
     decks: Decks,
-    pages: Pages,
+    preferences: Preferences,
     auth: InstalledAuth,
     private: LobbyPrivate,
+    agent: AgentFront,
+    own_decks: OwnDecks,
     shell: LobbyShell,
 ) -> FastAPI:
     """Build the lobby around the use cases and the adapters the host chose.
 
     The fetch hook always stands under `/sources/`; a call that cannot name a
     stored source and its secret is answered alike, and GET stays behind the
-    session. The app's shell answers only what no route claims.
+    session. The app's shell answers what no route claims, and the refusal
+    addresses under 403.
     """
-    surfaces = _Surfaces(decks=decks, pages=pages, auth=auth, shell=shell)
+    surfaces = _Surfaces(preferences=preferences, auth=auth, shell=shell)
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(lobby, auth.config)
-    _install_middleware(lobby, auth, sessions, private.admin_people)
-    lobby.add_api_route(_LOBBY, surfaces.home, methods=["GET"])
     _install_sign_in(lobby, surfaces)
     add_health_route(lobby)
-    lobby.include_router(_session_routes(pages, auth))
-    lobby.include_router(deck_list_routes(decks=decks))
-    lobby.include_router(preference_api_routes(preferences=pages.preferences))
-    lobby.include_router(preference_routes(pages=pages, voice=private.voice))
-    lobby.include_router(voice_api_routes(voice=private.voice))
-    lobby.include_router(source_routes(pages=pages, decks=decks))
+    lobby.include_router(_session_routes(preferences, auth))
+    lobby.include_router(deck_list_routes(decks=decks, mark=agent.marks.deck_list))
+    lobby.include_router(
+        deck_text_routes(own_decks=own_decks, mark=agent.marks.deck_text)
+    )
+    lobby.include_router(preference_api_routes(preferences=preferences))
     lobby.include_router(source_api_routes(decks=decks))
-    add_deck_pages(lobby, decks=decks, pages=pages, talk_origin=auth.talk_origin)
-    lobby.mount(_STATIC_PATH, StaticFiles(directory=_STATIC_DIR), name="static")
+    add_deck_pages(
+        lobby,
+        decks=decks,
+        talk_origin=auth.talk_origin,
+        mark=agent.marks.deck_view,
+        not_found=surfaces.not_found_page,
+    )
     lobby.include_router(fetch_hook(decks=decks))
     if private.admin_people is not None:
         lobby.include_router(
@@ -464,5 +476,7 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
                 app=str(auth.admission.login_group).rsplit("/", 1)[-1],
             )
         )
+    resource = _install_resource(lobby, agent, auth.issuer)
+    _install_middleware(lobby, auth, sessions, private.admin_people, resource)
     _install_lobby_app(lobby, surfaces)
     return lobby

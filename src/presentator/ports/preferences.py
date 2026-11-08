@@ -1,4 +1,4 @@
-"""The stores Settings and Account read and write; adapters fill them."""
+"""The stores Settings and the person menu's theme read and write."""
 
 from abc import abstractmethod
 from typing import Protocol
@@ -15,20 +15,20 @@ class InstanceSettingsStore(Protocol):
 
     @abstractmethod
     def write(self, settings: InstanceSettings) -> None:
-        """Keep the instance defaults, replacing whatever stood there."""
+        """Keep the instance settings, replacing whatever stood there."""
 
 
 class PersonPreferencesStore(Protocol):
-    """The overrides that belong beside one account."""
+    """The choices that belong beside one account."""
 
     @abstractmethod
     def read(self, user_id: str) -> PersonPreferences | None:
-        """Return that person's overrides, or nothing while they chose none."""
+        """Return that person's choices, or nothing while they have no row."""
 
     @abstractmethod
     def write(self, user_id: str, preferences: PersonPreferences) -> None:
-        """Keep that person's overrides, replacing whatever stood there."""
+        """Keep that person's choices, replacing whatever stood there."""
 
     @abstractmethod
     def delete(self, user_id: str) -> int:
-        """Delete that person's overrides; how many rows went."""
+        """Delete that person's choices; how many rows went."""

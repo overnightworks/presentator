@@ -1,4 +1,4 @@
-"""The lobby's words, so no template and no route carries a literal (ADR 0012)."""
+"""The lobby's words, so no page and no route carries a literal."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -15,23 +15,23 @@ class LobbyText:
     language_name: str
     wordmark: str
     log_out: str
-    section_decks: str
-    section_settings: str
-    menu_account: str
-    menu_theme: str
+    theme_title: str
     theme_follow_system: str
     theme_light: str
     theme_dark: str
-    role_admin: str
-    role_user: str
-    login_failed_title: str
-    login_failed_explanation: str
-    login_failed_retry: str
-    no_access_title: str
-    no_access_explanation: str
-    no_access_back: str
-    footer_impressum: str
-    footer_datenschutz: str
+    sign_in_logged_out: str
+    sign_in_log_in: str
+    sign_in_failed: str
+    sign_in_failed_banner: str
+    sign_in_try_again: str
+    sign_in_no_access: str
+    sign_in_no_access_sentence: str
+    section_decks: str
+    section_settings: str
+    menu_account: str
+    legal_impressum: str
+    legal_datenschutz: str
+    legal_nutzungsbedingungen: str
     decks_title: str
     decks_column_state: str
     decks_column_deck: str
@@ -65,49 +65,16 @@ class LobbyText:
     deck_pdf: str
     deck_unknown_title: str
     deck_unknown_explanation: str
+    address_unknown_title: str
+    address_unknown_explanation: str
+    for_admins_title: str
+    for_admins_explanation: str
     settings_title: str
     settings_sources: str
-    settings_voice: str
     settings_instance_name: str
     settings_default_language: str
     settings_language_hint: str
-    settings_default_theme: str
     settings_save: str
-    voice_model: str
-    voice_language: str
-    voice_state: str
-    voice_state_active: str
-    voice_state_loading: str
-    voice_state_failed: str
-    voice_state_downloaded: str
-    voice_state_not_downloaded: str
-    voice_state_downloading: str
-    voice_state_download_failed: str
-    voice_state_unavailable: str
-    voice_unknown_title: str
-    voice_unknown_explanation: str
-    voice_check_again: str
-    voice_load: str
-    voice_download: str
-    voice_recovery_failed: str
-    voice_recovery_invalid_selection: str
-    voice_recovery_durability: str
-    voice_sample: str
-    voice_sample_active: str
-    voice_sample_language: str
-    voice_sample_german: str
-    voice_sample_english: str
-    voice_sample_play: str
-    voice_sample_stop: str
-    voice_sample_loading: str
-    voice_sample_waiting: str
-    voice_sample_failed_title: str
-    voice_sample_failed_explanation: str
-    account_title: str
-    account_preferences: str
-    account_language: str
-    account_theme: str
-    account_instance_default: str
     sources_column_source: str
     sources_column_fetched: str
     sources_fetch_now: str
@@ -135,7 +102,6 @@ class LobbyText:
     source_access_deploy_key: str
     source_access_local: str
     source_secret: str
-    source_secret_info_mark: str
     source_secret_info: str
     source_webhook_later: str
     source_deploy_key_heading: str
@@ -147,7 +113,6 @@ class LobbyText:
     source_webhook_address: str
     source_webhook_secret: str
     source_webhook_once: str
-    source_webhook_held_elsewhere: str
     source_copy: str
     source_webhook_payload: str
     source_created_done: str

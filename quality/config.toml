@@ -7,11 +7,12 @@ item = "#477"
 date = 2026-10-24
 reason = "the host co-presenter package is deleted (D1 of #355, operator ruling 21.10.2026); its job checks code that no longer exists"
 
-[[gate.loosened]]
-what = 'size baseline adds file_lines frontend/src/lib/api/types.ts 2482'
-item = "#683"
-date = 2026-11-02
-reason = "the generated typed client stays a baseline entry until #708 declares it as [[size.generated]] at quality R (operator ruling 2.11.2026)"
+[[size.generated]]
+path = "frontend/src/lib/api/types.ts"
+job = "Lobby: lint, types, tests, drive"
+item = "#708"
+date = 2026-11-08
+reason = "written by pnpm generate:types, proven by the job's git diff --exit-code on src/lib/api"
 
 [[root.allow]]
 entry = "examples/"
@@ -72,11 +73,6 @@ reason = "it exercises the addon's overlay in a browser through a built deck, wh
 path = "slidev/tests/pcm-capture-processor.test.ts"
 rule = "test-layout"
 reason = "its subject is slidev/worklets/pcm-capture-processor.js, which Sonar and the addon package keep apart from the test folder"
-
-[[layout.allow]]
-path = "slidev/tests/lobby-static-scripts.test.ts"
-rule = "test-layout"
-reason = "its subject is the lobby scripts under src/presentator/api/static, outside the Slidev project"
 
 [[layout.allow]]
 path = "slidev/tests/presenter-controls.browser.test.ts"

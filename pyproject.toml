@@ -12,11 +12,9 @@ dependencies = [
     "cryptography==50.0.2",
     "fastapi==0.162.0",
     "httpx2[ws]==2.16.0",
-    "jinja2==3.1.6",
-    "overnightworks-agent-runtime-client @ git+https://github.com/overnightworks/agent-runtime@v0.13.0#subdirectory=packages/client",
-    "overnightworks-webauth @ git+https://github.com/overnightworks/webauth@v0.29.0",
+    "overnightworks-agent-runtime-client[backend,mcp-server] @ git+https://github.com/overnightworks/agent-runtime@v0.25.0",
+    "overnightworks-webauth @ git+https://github.com/overnightworks/webauth@v0.33.0",
     "pydantic-settings==2.16.2",
-    "python-multipart==0.0.32",
     "syntok==1.4.4",
     "uvicorn==0.54.0",
 ]
@@ -27,7 +25,6 @@ presentator-worker = "presentator.host.worker:main"
 
 [dependency-groups]
 dev = [
-    "import-linter==2.15",
     "pytest==9.2.0",
     "pytest-cov==7.1.0",
     "pyright==1.1.414",
@@ -47,6 +44,8 @@ addopts = "--strict-config --strict-markers --import-mode=importlib"
 pythonpath = ["."]
 testpaths = ["tests"]
 tmp_path_retention_policy = "failed"
+# A leak surfaces on a later test than the one that leaked; PYTHONTRACEMALLOC=25
+# on a targeted run shows where the object was allocated.
 filterwarnings = [
   "error::ResourceWarning",
   "error::pytest.PytestUnraisableExceptionWarning",
@@ -115,6 +114,7 @@ convention = "google"
 "scripts/probe_build_worker_isolation.py" = ["INP001"]
 "scripts/probe_build_worker_lives.py" = ["INP001"]
 "scripts/probe_build_worker_refusals.py" = ["INP001"]
+"scripts/probe_build_worker_starts.py" = ["INP001"]
 "scripts/probe_build_worker_uploads.py" = ["INP001"]
 "scripts/probe_build_worker_web.py" = ["INP001"]
 # Standalone one-time command, not a package.
@@ -122,13 +122,14 @@ convention = "google"
 # The attack deck's ctypes child and the programs sent to the worker on stdin.
 "scripts/probe_build_worker/attack/kernel_attacks.py" = ["INP001"]
 "scripts/probe_build_worker/next_life.py" = ["INP001"]
+"scripts/probe_build_worker/plant_residue.py" = ["INP001"]
 "scripts/probe_build_worker/web_client.py" = ["INP001"]
 "scripts/probe_build_worker/flood/flood_actions.py" = ["INP001"]
 # The root watcher run on the host beside the worker's container.
 "scripts/probe_build_worker/upload_watcher.py" = ["INP001"]
 # Standalone gate, not a package.
 "scripts/check_catalog_purity.py" = ["INP001"]
-# Drives the check script as a subprocess against temporary and real templates.
+# Drives the check script as a subprocess against temporary and real pages.
 "tests/scripts/test_check_catalog_purity.py" = ["S603"]
 # `vulture` reads a whitelist as bare attribute expressions; naming a field
 # there is the entry, and assigning it would only move the dead name.
@@ -161,7 +162,7 @@ layers = ["host", "api", "application", "ports", "contracts"]
 id = "adapters-reach-down-only"
 name = "Adapters never reach up into application, api, or host"
 type = "forbidden"
-source_modules = ["presentator.adapters"]
+source_modules = ["presentator.adapters", "presentator.agent"]
 forbidden_modules = [
     "presentator.application",
     "presentator.api",
@@ -179,7 +180,7 @@ source_modules = [
     "presentator.ports",
     "presentator.contracts",
 ]
-forbidden_modules = ["presentator.adapters"]
+forbidden_modules = ["presentator.adapters", "presentator.agent"]
 as_packages = true
 
 [[tool.importlinter.contracts]]
@@ -197,8 +198,7 @@ allow_indirect_imports = true
 id = "gitmirror-is-independent"
 name = "gitmirror never imports the product"
 type = "forbidden"
-# ADR 0010: the dependency runs one way, so the package can move to its own
-# repository and be consumed by tag when its second caller arrives.
+# gitmirror mirrors any remote, so it carries none of the product's vocabulary.
 source_modules = ["gitmirror"]
 forbidden_modules = ["presentator"]
 as_packages = true
@@ -224,7 +224,7 @@ allow_indirect_imports = true
 id = "randomness-belongs-to-an-adapter"
 name = "Only adapters draw randomness"
 type = "forbidden"
-# ADR 0001, `ports/identity.py`: a layer above asks a port for a secret and
+# `ports/identity.py`: a layer above asks a port for a secret and
 # draws none. The host composes the adapters that draw, so the legal chain
 # runs through them; only a direct import above them is the violation.
 source_modules = [
@@ -242,7 +242,7 @@ allow_indirect_imports = true
 id = "manifest-and-wording-libraries"
 name = "Only adapters read the manifest format and word a language"
 type = "forbidden"
-# ADR 0001: a third-party or format library lives in the adapter that owns it.
+# A third-party or format library lives in the adapter that owns it.
 # `tomllib` reads the deck manifest and `babel` owns the catalog and the
 # wording of an age, so a layer above must ask a port or be handed the words.
 source_modules = [
@@ -260,7 +260,7 @@ allow_indirect_imports = true
 id = "sentence-library"
 name = "Only adapters find sentence boundaries"
 type = "forbidden"
-# ADR 0001: a third-party library lives in the adapter that owns it. `syntok`
+# A third-party library lives in the adapter that owns it. `syntok`
 # finds the boundaries, so a layer above is handed the function instead.
 source_modules = [
     "presentator.host",
@@ -277,7 +277,7 @@ allow_indirect_imports = true
 id = "process-spawning"
 name = "Only adapters spawn a process"
 type = "forbidden"
-# ADR 0001: the toolchain that builds a deck is an external process, and where
+# The toolchain that builds a deck is an external process, and where
 # it is spawned is the adapter that owns it. A layer above asks a port.
 source_modules = [
     "presentator.host",
@@ -294,7 +294,7 @@ allow_indirect_imports = true
 id = "database-library"
 name = "Only adapters import the database library"
 type = "forbidden"
-# ADR 0001: a third-party library lives in the adapter that owns it, and its
+# A third-party library lives in the adapter that owns it, and its
 # contract is written with its first import. `sqlite3` is the store, so a layer
 # above must ask a port instead.
 source_modules = [
@@ -314,7 +314,7 @@ allow_indirect_imports = true
 id = "webauth-library"
 name = "Only adapters and the host import webauth"
 type = "forbidden"
-# ADR 0003: the library owns the login mechanism. Adapters fill its ports;
+# The library owns the login mechanism. Adapters fill its ports;
 # the host composes WebAuthConfig. The api is not in this list because the
 # routes must read the installed config, sign and clear cookies, answer an
 # unauthenticated request, and read client identity, and install
@@ -333,7 +333,7 @@ allow_indirect_imports = true
 id = "encryption-library"
 name = "Only adapters import the encryption library"
 type = "forbidden"
-# ADR 0013: every parameter of the encryption stands in the adapter that owns
+# Every parameter of the encryption stands in the adapter that owns
 # it, so a layer above asks a port or is handed bytes it cannot read.
 source_modules = [
     "presentator.host",

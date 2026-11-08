@@ -1,6 +1,6 @@
 """The address a source's host calls to say that a push happened.
 
-It reads no payload (ADR 0010), so a hosted service, a self-hosted one, and a
+It reads no payload, so a hosted service, a self-hosted one, and a
 `post-receive` hook on a bare repository are the same caller; the secret the
 call carries is what authenticates it. The address is `POST /sources/{name}/fetch`
 for a stored source, and every call it does not recognise — a wrong secret, no
@@ -51,7 +51,7 @@ class _FetchHook:
 
 
 def hook_address(name: str) -> str:
-    """The path a host posts to for that source, as the created screen prints it."""
+    """The path a host posts to for that source, as the Add page shows it."""
     return f"{HOOK_CALLS}{name}/{_FETCH}"
 
 

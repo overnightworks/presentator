@@ -7,7 +7,6 @@ the sessions are the real SQLite stores on a temporary file.
 import base64
 import json
 import logging
-import re
 import sqlite3
 import threading
 from collections.abc import Callable
@@ -23,8 +22,7 @@ from fastapi import FastAPI
 from httpx2 import Response as BrowserAnswer
 from pydantic import SecretStr
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
-from webauth.oidc_login import AdmissionConfig
-from webauth.ports import AccountEvent, AccountEventKind, AuditSink
+from webauth.ports import AccountEvent, AccountEventKind, AccountKind, AuditSink
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (
@@ -39,6 +37,7 @@ from tests.support.lobby import (
     AN_ISSUER,
     a_settings,
 )
+from tests.support.lobby_reads import signed_in_username
 from tests.support.sign_in_support import (
     ADMIN,
     MEMBER,
@@ -101,7 +100,7 @@ def _claims_of(token: str | None) -> dict[str, object]:
 def test_a_stale_csrf_cookie_of_the_removed_token_layer_does_not_block_a_sign_in(
     scene: Scene,
 ) -> None:
-    """#474 cell 27: the removed second cookie is ignored at sign-in."""
+    """The removed second cookie is ignored at sign-in."""
     scene.lobby.client.cookies.set("__Host-csrf_token", "stale")
 
     answer = scene.sign_in()
@@ -113,7 +112,7 @@ def test_a_stale_csrf_cookie_of_the_removed_token_layer_does_not_block_a_sign_in
 def test_the_session_row_holds_the_id_token_the_sign_in_returned(
     scene: Scene,
 ) -> None:
-    """#428 cell 9: the row holds the ID token the issuer returned."""
+    """SI7: the row holds the ID token the issuer returned."""
     scene.sign_in(username="felix")
 
     (stored,) = scene.stored_id_tokens()
@@ -124,7 +123,7 @@ def test_the_session_row_holds_the_id_token_the_sign_in_returned(
 def test_an_id_token_longer_than_a_cookie_could_hold_is_stored_whole(
     scene: Scene,
 ) -> None:
-    """#428 cell 10: an ID token past the old cookie bound is stored whole."""
+    """An ID token past the old cookie bound is stored whole."""
     answer = scene.sign_in(username="x" * _TOO_LONG_FOR_A_COOKIE)
 
     assert answer.status_code == HTTPStatus.SEE_OTHER
@@ -143,11 +142,20 @@ def test_an_id_token_longer_than_a_cookie_could_hold_is_stored_whole(
 def test_the_groups_the_issuer_names_decide_the_role_the_account_gets(
     scene: Scene, groups: list[str], role: str
 ) -> None:
+    """SI1: the groups the issuer names decide the role the account gets."""
     scene.sign_in(groups=groups)
 
     account = scene.users.get("subject-1")
     assert account is not None
     assert account.role == role
+
+
+def test_a_browser_sign_in_creates_its_account_as_a_person(scene: Scene) -> None:
+    scene.sign_in(groups=MEMBER)
+
+    account = scene.users.get("subject-1")
+    assert account is not None
+    assert account.kind is AccountKind.PERSON
 
 
 def test_a_changed_membership_changes_the_role_at_the_next_sign_in_and_is_audited(
@@ -173,10 +181,7 @@ def test_the_request_after_sign_in_is_signed_in_through_the_session_decider(
 ) -> None:
     scene.sign_in(username="anna")
 
-    opened = scene.lobby.client.get("/")
-
-    assert opened.status_code == HTTPStatus.OK
-    assert "anna" in opened.text
+    assert signed_in_username(scene.lobby.client) == "anna"
     assert scene.count("sessions") == 1
 
 
@@ -256,7 +261,7 @@ def _in_groups_named_without_a_path(scene: Scene) -> BrowserAnswer:
 
 
 def _a_username_another_subject_holds(scene: Scene) -> BrowserAnswer:
-    scene.users.create_for_subject("subject-0", "felix", "user")
+    scene.users.create_for_subject("subject-0", "felix", "user", AccountKind.PERSON)
     return scene.sign_in(subject="subject-1", username="felix")
 
 
@@ -274,73 +279,35 @@ _NO_ACCESS = [
     pytest.param(_in_groups_named_without_a_path, id="bare group names"),
 ]
 _ALL_REFUSALS = [*_REFUSALS, *_NO_ACCESS]
-_LEGAL_LINKS = (
-    'href="https://hallucinai.de/impressum"',
-    'href="https://hallucinai.de/datenschutz#presentator"',
-)
 
 
 @pytest.mark.parametrize("drive", _REFUSALS)
-def test_every_refusal_shows_the_one_login_failed_page_without_an_identity(
+def test_every_refusal_redirects_to_the_login_failed_page(
     scene: Scene, drive: Callable[[Scene], BrowserAnswer]
 ) -> None:
-    page = drive(scene)
+    answer = drive(scene)
 
-    assert page.status_code == HTTPStatus.FORBIDDEN
-    assert "<h1>Login failed</h1>" in page.text
-    assert "Sign-in did not work. Please try again." in page.text
-    assert (
-        page.text.count('data-action data-wide href="/login/oidc">Try again</a>') == 1
-    )
-    assert "No access" not in page.text
-    assert all(link in page.text for link in _LEGAL_LINKS)
-    assert "felix" not in page.text
-    assert int(page.headers["content-length"]) == len(page.content)
+    assert answer.status_code == HTTPStatus.SEE_OTHER
+    assert answer.headers["location"] == "/login/login-failed"
+    assert answer.content == b""
 
 
 @pytest.mark.parametrize("drive", _NO_ACCESS)
-def test_a_person_outside_the_group_gets_the_no_access_page_without_an_identity(
+def test_a_person_outside_the_group_is_redirected_to_the_no_access_page(
     scene: Scene, drive: Callable[[Scene], BrowserAnswer]
 ) -> None:
-    page = drive(scene)
+    """SI1: a person outside the group is redirected to the no access page."""
+    answer = drive(scene)
 
-    assert page.status_code == HTTPStatus.FORBIDDEN
-    assert "<h1>No access</h1>" in page.text
-    assert (
-        "You are signed in, but this account has no access to presentator." in page.text
-    )
-    assert "Login failed" not in page.text
-    assert all(link in page.text for link in _LEGAL_LINKS)
-    for identity in ("felix", "subject-1", "/apps/another"):
-        assert identity not in page.text
-    assert int(page.headers["content-length"]) == len(page.content)
-
-
-def test_the_no_access_page_offers_log_out_and_a_back_that_needs_no_script(
-    scene: Scene,
-) -> None:
-    page = _in_another_group(scene).text
-
-    assert page.count('<form method="post" action="/logout">') == 1
-    assert page.count('type="submit"') == 1
-    assert "Log out" in page
-    assert 'data-action data-quiet data-history-back href="/login"' in page
-    assert '<script src="/static/history-back.js" defer></script>' in page
-    assert re.search(r"\son[a-z]+=", page) is None
-    assert page.count("<script") == page.count('<script src="')
-
-
-def test_the_back_script_is_served_without_a_session(scene: Scene) -> None:
-    script = scene.lobby.client.get("/static/history-back.js")
-
-    assert script.status_code == HTTPStatus.OK
-    assert "history.back()" in script.text
+    assert answer.status_code == HTTPStatus.SEE_OTHER
+    assert answer.headers["location"] == "/login/no-access"
+    assert answer.content == b""
 
 
 def test_log_out_on_the_no_access_page_asks_the_issuer_without_a_hint(
     scene: Scene,
 ) -> None:
-    """#428 cell 13: the no-access page logs out without a hint."""
+    """The no-access page logs out without a hint."""
     _in_another_group(scene)
 
     answer = scene.lobby.client.post(
@@ -362,7 +329,7 @@ def test_a_member_who_left_the_group_is_refused_and_returns_to_the_same_account(
 
     refused = scene.sign_in(groups=["/apps/another"])
 
-    assert "<h1>No access</h1>" in refused.text
+    assert refused.headers["location"] == "/login/no-access"
     assert (scene.count("users"), scene.count("sessions")) == (1, 1)
     assert [event.kind for event in scene.audit.events] == [
         AccountEventKind.USER_CREATED
@@ -400,17 +367,11 @@ def test_a_refusal_writes_no_session_and_no_account(
 def test_an_issuer_that_differs_in_case_from_the_bound_one_is_a_foreign_issuer(
     tmp_path: Path,
 ) -> None:
-    admission = AdmissionConfig(
-        bound_issuer=AN_ISSUER.replace("auth.", "AUTH."),
-        login_group="/apps/presentator",
-        admin_group="/apps/presentator/admin",
-    )
-    scene = a_scene(tmp_path, admission=admission)
+    scene = a_scene(tmp_path, realm=AN_ISSUER.replace("auth.", "AUTH."))
 
     page = scene.sign_in()
 
-    assert page.status_code == HTTPStatus.FORBIDDEN
-    assert "<h1>Login failed</h1>" in page.text
+    assert page.headers["location"] == "/login/login-failed"
     assert (scene.count("users"), scene.count("sessions")) == (0, 0)
 
 
@@ -523,10 +484,10 @@ def test_a_username_another_account_holds_writes_nothing_and_closes_the_transact
 ) -> None:
     refused = _a_username_another_subject_holds(scene)
 
-    assert refused.status_code == HTTPStatus.FORBIDDEN
+    assert refused.headers["location"] == "/login/login-failed"
     assert (scene.count("users"), scene.count("sessions")) == (1, 0)
     assert scene.audit.events == []
-    scene.users.create_for_subject("subject-2", "anna", "user")
+    scene.users.create_for_subject("subject-2", "anna", "user", AccountKind.PERSON)
     assert scene.users.get("subject-2") is not None
 
 

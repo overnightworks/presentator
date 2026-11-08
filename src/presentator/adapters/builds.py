@@ -1,4 +1,4 @@
-"""Turning a deck's folder into the talk it delivers, with Slidev (ADR 0005).
+"""Turning a deck's folder into the talk it delivers, with Slidev.
 
 Slidev's own command line owns the build and the PDF export, so this adapter
 spawns it rather than binding a second renderer. The deck's tree is written out
@@ -63,7 +63,7 @@ from presentator.ports.decks import BuildRun
 _TOOLCHAIN: Final = "pnpm"
 _SLIDEV: Final = "slidev"
 _PACKAGE_JSON: Final = "package.json"
-# A deck names only what the toolchain project carries (ADR 0014): a package
+# A deck names only what the toolchain project carries: a package
 # under this prefix is a Slidev theme, named on a deck page by what follows
 # the prefix. `default` ships with Slidev itself, so it counts whether or not
 # the project's own manifest lists it — package.json's own shape, not this
@@ -237,7 +237,7 @@ def theme_names_of_manifest(manifest_text: str) -> tuple[str, ...]:
 
     Every `@slidev/theme-*` package `dependencies` or `devDependencies` name
     counts, stripped of that prefix; widening the set is one change to
-    `package.json` (ADR 0014), and this is its only reader. JSON this is not,
+    `package.json`, and this is its only reader. JSON this is not,
     an object this is not, or a dependency section that is not a mapping of
     package name to version string, is not a set to derive a guess from, so
     each of them raises rather than answering with one.
@@ -283,7 +283,7 @@ def _dependency_names(manifest: dict[str, object], section: str) -> tuple[str, .
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PackageJsonThemes:
-    """The theme names read off the toolchain project's `package.json` (ADR 0014).
+    """The theme names read off the toolchain project's `package.json`.
 
     Read at every call rather than cached at start: the file is small, on this
     machine's own disk, and read is far cheaper than the toolchain step it

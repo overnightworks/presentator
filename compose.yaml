@@ -10,7 +10,7 @@ services:
     image: presentator
     user: presentator
     restart: unless-stopped
-    # The edge's proxy routes by these labels (ADR 0019); the talk host is the
+    # The edge's proxy routes by these labels; the talk host is the
     # same service under its own name.
     labels:
       traefik.enable: "true"
@@ -18,7 +18,7 @@ services:
       edge.alias: presentator-talk
       traefik.http.services.presentator.loadbalancer.server.port: "8000"
       traefik.docker.network: presentator_default
-    # `agent` is the one the agent service answers on and `backchannel` the one
+    # `agent` is the one the gateway answers on and `backchannel` the one
     # the identity provider reaches the logout route on; the edge owns and
     # creates both.
     networks:
@@ -38,16 +38,19 @@ services:
       PRESENTATOR_OIDC_ISSUER: https://auth.hallucinai.de/realms/hallucinai
       PRESENTATOR_OIDC_CLIENT_ID: presentator
       PRESENTATOR_TRUSTED_PROXIES: 172.31.251.1
-      PRESENTATOR_AGENT_SERVICE: http://agent-service:8080
-      PRESENTATOR_AGENT_SERVICE_SCOPE: agent-service-audience
+      PRESENTATOR_AGENT__BACKEND: litellm
+      PRESENTATOR_AGENT__GATEWAY__ORIGIN: http://litellm-front:4000
+      PRESENTATOR_AGENT__GATEWAY__KEY_FILE: /run/secrets/litellm_key
+      PRESENTATOR_AGENT__API_GROUP: /services/agent-service/api
       PRESENTATOR_BUILD_RUNNER: worker
       PRESENTATOR_SECRET_KEY_FILE: /run/secrets/presentator_secret_key
       PRESENTATOR_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
-    # The instance's two secrets, mounted read-only at /run/secrets/<name>;
-    # the build worker gets neither.
+    # The instance's three secrets, mounted read-only at /run/secrets/<name>;
+    # the build worker gets none.
     secrets:
       - presentator_secret_key
       - oidc_client_secret
+      - litellm_key
     cap_drop:
       - ALL
     security_opt:
@@ -82,12 +85,12 @@ services:
         volume:
           nocopy: true
 
-  # The sealed build worker (ADR 0017). It runs the instance image and starts
+  # The sealed build worker. It runs the instance image and starts
   # no step of its own accord; the instance hands it each one. It never pulls:
   # `docker compose build presentator` has to make the image first, and a
   # missing one is an error rather than a pull of some registry's
   # `presentator`. Every key below is a boundary the worker's
-  # self-check or ADR 0017 relies on, and `tests/test_compose.py` pins them.
+  # self-check or the seal relies on, and `tests/test_compose.py` pins them.
   build-worker:
     image: presentator
     pull_policy: never
@@ -156,6 +159,8 @@ secrets:
     file: ${HOME}/.secrets/presentator/secret-key
   oidc_client_secret:
     file: ${HOME}/.secrets/keycloak/clients/presentator
+  litellm_key:
+    file: ${HOME}/.secrets/litellm/apps/presentator
 
 volumes:
   database:

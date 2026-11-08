@@ -19,6 +19,7 @@ from starlette.types import Message, Receive, Scope, Send
 from webauth.ports import (
     AccountEvent,
     AccountEventKind,
+    AccountKind,
     AuditSink,
     SignInStores,
     SubjectUserStore,
@@ -66,11 +67,16 @@ class AccountsThatBreak:
             raise sqlite3.OperationalError(user_id)
         return self.real.get(user_id)
 
-    def create_for_subject(self, subject: str, username: str, role: str) -> UserRecord:
-        return self.real.create_for_subject(subject, username, role)
+    def create_for_subject(
+        self, subject: str, username: str, role: str, kind: AccountKind
+    ) -> UserRecord:
+        return self.real.create_for_subject(subject, username, role, kind)
 
     def set_role(self, user_id: str, role: str) -> UserRecord:
         return self.real.set_role(user_id, role)
+
+    def set_kind(self, user_id: str, kind: AccountKind) -> UserRecord:
+        return self.real.set_kind(user_id, kind)
 
 
 @dataclass(frozen=True)
@@ -166,6 +172,7 @@ def _untouched(world: World) -> None:
 def test_a_valid_token_ends_every_session_of_its_subject_and_no_other(
     world: World,
 ) -> None:
+    """SI10: a valid token ends every session of its subject and no other."""
     answer = world.logout_with(world.keycloak(), world.token())
 
     assert answer.status_code == HTTPStatus.OK
@@ -201,7 +208,9 @@ def test_ending_sessions_writes_one_audit_event_naming_nobody_as_the_actor(
 def test_a_known_subject_with_no_open_session_changes_and_audits_nothing(
     world: World,
 ) -> None:
-    world.scene.users.create_for_subject("subject-3", "carl", "user")
+    world.scene.users.create_for_subject(
+        "subject-3", "carl", "user", AccountKind.PERSON
+    )
     users = world.scene.count("users")
 
     answer = world.logout_with(world.keycloak(), world.token("subject-3"))
@@ -454,6 +463,7 @@ _NEIGHBOURS = [
 def test_no_neighbour_of_the_exact_path_is_exempt_or_public(
     world: World, path: str
 ) -> None:
+    """SI11: no neighbour of the exact path is exempt or public."""
     token = world.token()
     from_a_server = world.logout_with(world.keycloak(), token, path=path)
     from_the_lobbys_origin = world.keycloak().post(

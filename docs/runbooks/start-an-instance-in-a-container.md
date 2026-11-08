@@ -2,7 +2,7 @@
 
 Reader: the operator of this machine's deployment.
 
-The instance is an edge app ([ADR 0019](../decisions/0019-presentator-is-an-edge-app.md)):
+The instance is an edge app:
 `hal apply` deploys `compose.yaml` from a `v*` tag, and that file carries every
 value the deployment needs. Nothing is exported, no `.env` is written, and no
 port is published; the edge's proxy is the only way in.
@@ -13,12 +13,15 @@ port is published; the edge's proxy is the only way in.
 - The networks `hal_agent_presentator` and `hal_backchannel_presentator`, which
   the edge creates. While one is missing, `hal apply` fails on the missing
   external network and starts nothing.
-- The two secret files compose mounts into the instance alone, read-only, at
+- The three secret files compose mounts into the instance alone, read-only, at
   `/run/secrets`: the master key at `~/.secrets/presentator/secret-key` (a
-  fresh random value of at least 32 characters) and the Keycloak client's
+  fresh random value of at least 32 characters), the Keycloak client's
   secret at `~/.secrets/keycloak/clients/presentator`
-  ([configure Keycloak](configure-keycloak.md)).
-- A `v*` tag of this repository that holds the release.
+  ([configure Keycloak](configure-keycloak.md)) and the gateway key at
+  `~/.secrets/litellm/apps/presentator`, which `hal setup` writes.
+- A `v*` tag of this repository that holds the release. The Release workflow
+  makes it: the operator dispatches it with a `YYYY.MM.DD.N` version, and it
+  builds and attests the image, then tags the gated commit.
 
 ## Steps
 
@@ -29,8 +32,7 @@ port is published; the edge's proxy is the only way in.
 2. Open the public origin and sign in.
 
 A deployed instance has no voice: the speech process is not part of the
-release, so speaking and hearing report "not yet available"
-([co-presenter and voice](../reference/co-presenter-and-voice.md)).
+release, so speaking and hearing report "not yet available".
 
 ## Check
 

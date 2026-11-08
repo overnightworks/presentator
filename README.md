@@ -1,37 +1,48 @@
 # presentator
 
-Audience: a human opening this repository for the first time.
+presentator is a self-hosted web service for giving a Slidev talk from any browser, with an optional AI co-presenter that speaks the slides and answers the room's questions.
 
-presentator is a tool for giving a talk. The Slidev deck lives on the operator's
-home server; he opens it from any browser and presents. Per talk he can switch
-on an AI co-presenter that listens to the room and answers questions about the
-shown deck with a spoken voice, through the operator's agent service. Without
-the AI the talk still runs, and a static build plus a PDF export survives a dead
-tunnel. Why it exists is [docs/VISION.md](docs/VISION.md); what the instance
-does is listed in [docs/README.md](docs/README.md).
+## Quick start
 
-## Fact owners
+- Run it from a checkout: [run-from-a-checkout](docs/runbooks/run-from-a-checkout.md).
+- Run it in a container: [start-an-instance-in-a-container](docs/runbooks/start-an-instance-in-a-container.md).
 
-| Durable fact | Authoritative owner |
-| --- | --- |
-| Which documentation layer answers which question | [docs/README.md](docs/README.md) |
-| How an operator does a task: start, wire a source, renew a secret | [docs/README.md](docs/README.md) |
-| Why this tool exists and its latency targets | [docs/VISION.md](docs/VISION.md) |
-| What the instance does, exactly: settings, sign-in, sources, decks, builds | [docs/README.md](docs/README.md) |
-| Technical decisions | Records indexed by [docs/decisions/README.md](docs/decisions/README.md) |
-| How a change is proven | [docs/TESTING.md](docs/TESTING.md) |
-| Reusable agent policy | [AGENTS.md](AGENTS.md); [CLAUDE.md](CLAUDE.md) only loads it for Claude |
-| Local speech process | [speech/README.md](speech/README.md) |
+## Documentation
 
-Do not copy an owner's facts into another document.
+**Using the lobby and giving talks**
 
-## Verifying a change
+- [Lobby](docs/lobby.md), [sign-in](docs/sign-in.md), [co-presenter](docs/co-presenter.md), [people](docs/people.md).
 
-CI on the pull request is the gate; the [workflow](.github/workflows/ci.yml)
-defines every check for the root, `slidev/`, `speech/` and the
-container image. Locally, run the checks the change touches: `pyproject.toml`
-configures the Python ones (`ruff`, `pyright`, `lint-imports`, `vulture`,
-`pytest`, plus `scripts/check_catalog_purity.py`), `slidev/package.json` the Slidev ones.
-Which layer's test is the proof, and how to target a local run, is
-[docs/TESTING.md](docs/TESTING.md); what `main` requires is
-[docs/reference/ci-and-branch-protection.md](docs/reference/ci-and-branch-protection.md).
+**Writing decks**
+
+- [Decks](docs/decks.md): the deck folder contract and the build.
+- [Prepare a deck for the build](docs/runbooks/prepare-a-deck-for-the-build.md).
+- [`examples/`](examples/): decks to start from.
+
+**Operating an instance**
+
+- [Configuration](docs/configuration.md) and [sources](docs/sources.md).
+- Run: [from a checkout](docs/runbooks/run-from-a-checkout.md),
+  [in a container](docs/runbooks/start-an-instance-in-a-container.md),
+  [install the host build toolchain](docs/runbooks/install-the-host-build-toolchain.md).
+- Sign-in: [configure Keycloak](docs/runbooks/configure-keycloak.md).
+- Sources: [add a Git source](docs/runbooks/add-a-source.md),
+  [renew a secret](docs/runbooks/renew-a-source-secret.md),
+  [renew a webhook secret](docs/runbooks/renew-a-webhook-secret.md),
+  [call the fetch-now hook](docs/runbooks/call-the-fetch-now-hook.md).
+
+**Engineers and agents**
+
+- [Vision](docs/VISION.md), [architecture](docs/ARCHITECTURE.md), [AGENTS.md](AGENTS.md).
+
+**Speech**
+
+- [Run the speech service on the host](docs/runbooks/run-the-speech-service-on-the-host.md) and [`speech/README.md`](speech/README.md).
+
+## Contributing
+
+CI on the pull request is the gate; the [workflow](.github/workflows/ci.yml) defines every check. How a change is proven is stated in [Crosscutting Concepts](docs/ARCHITECTURE.md#5-crosscutting-concepts).
+
+## License
+
+MIT, see [LICENSE](LICENSE).

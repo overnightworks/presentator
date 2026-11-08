@@ -26,20 +26,21 @@ from presentator.application.identity import (
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
-    ENGLISH,
+    A_LOBBY_ASSET,
     USERNAME,
     Lobby,
     a_content_security_policy,
     a_lobby_app,
     a_lobby_that_claims_no_origin_of_its_own,
 )
+from tests.support.lobby_reads import signed_in_username
 
 _HEX_COLOUR = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 # The lobby's own policy (`presentator.api.auth`): no camera, no microphone,
 # never a page's own location.
 _NO_DEVICE_PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=()"
 # Every one of these answers the same way whatever carried the request: a
-# page, a static file, a 404 nothing names, or an exception nothing caught.
+# page, an app asset, a 404 nothing names, or an exception nothing caught.
 _EVERY_SECURITY_HEADER = {
     "cache-control": "no-store",
     "x-content-type-options": CONTENT_TYPE_OPTIONS,
@@ -115,7 +116,7 @@ def test_a_signed_out_request_is_redirected_or_refused_by_what_it_accepts(
 def test_an_unlisted_mutating_route_refuses_a_request_without_own_provenance(
     method: str, claims: dict[str, str]
 ) -> None:
-    """#474 cell 4: a route added later is guarded for every mutating method."""
+    """A route added later is guarded for every mutating method."""
     lobby, _clock = a_lobby_app()
 
     def a_new_write() -> Response:
@@ -130,24 +131,12 @@ def test_an_unlisted_mutating_route_refuses_a_request_without_own_provenance(
 def test_a_path_only_resembling_the_hook_prefix_is_not_exempt_from_the_origin_check(
     signed_in_lobby: Lobby,
 ) -> None:
-    """#474 cell 14: only `/sources/` is a server call, never `/sourcesx/`."""
+    """SI11: only `/sources/` is a server call, never `/sourcesx/`."""
     del signed_in_lobby.client.headers["sec-fetch-site"]
 
     refused = signed_in_lobby.client.post("/sourcesx/talks/fetch")
 
     assert refused.status_code == HTTPStatus.FORBIDDEN
-
-
-def test_a_json_post_with_a_session_and_no_provenance_is_refused(
-    signed_in_lobby: Lobby,
-) -> None:
-    """#474 cell 2: a JSON POST with a session and neither header is refused."""
-    del signed_in_lobby.client.headers["sec-fetch-site"]
-
-    refused = signed_in_lobby.client.post("/theme", json={"theme": "dark"})
-
-    assert refused.status_code == HTTPStatus.FORBIDDEN
-    assert refused.json() == {"detail": "Missing Origin header"}
 
 
 def submit_the_logout_form(
@@ -164,13 +153,11 @@ def submit_the_logout_form(
 def test_a_seeded_session_opens_the_lobby(lobby: Lobby) -> None:
     lobby.sign_in()
 
-    opened = lobby.client.get("/")
-
-    assert opened.status_code == HTTPStatus.OK
-    assert USERNAME in opened.text
+    assert signed_in_username(lobby.client) == USERNAME
 
 
 def test_an_ordinary_signed_in_answer_sets_no_cookie(signed_in_lobby: Lobby) -> None:
+    """SI4: an ordinary signed-in answer sets no cookie."""
     answer = signed_in_lobby.client.get("/")
 
     assert answer.headers.get_list("set-cookie") == []
@@ -213,6 +200,7 @@ def test_there_is_no_first_start_page_to_set_up_an_admin(
     signed_in_lobby: Lobby,
     method: str,
 ) -> None:
+    """SI2: there is no first start page to set up an admin."""
     answer = signed_in_lobby.client.request(method, "/setup")
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
@@ -229,6 +217,7 @@ def test_there_is_no_first_start_page_for_a_signed_out_reader_either(
 
 
 def test_a_password_posted_to_the_login_signs_nobody_in(lobby: Lobby) -> None:
+    """SI2: a password posted to the login signs nobody in."""
     refused = lobby.client.post(
         "/login",
         data={"username": USERNAME, "password": "the words only this test types"},
@@ -278,6 +267,7 @@ def test_a_session_in_use_all_day_still_stands_at_the_cap(
 def test_a_session_in_use_all_day_is_refused_and_not_renewed_just_past_the_cap(
     signed_in_lobby: Lobby,
 ) -> None:
+    """SI4: a session in use all day is refused and not renewed just past the cap."""
     use_every_quarter_hour_until(
         signed_in_lobby, SESSION_LIFETIME - timedelta(minutes=15)
     )
@@ -313,8 +303,8 @@ def test_the_lobbys_permissions_policy_admits_no_device(
 
 @pytest.mark.parametrize(
     "path",
-    ["/", "/static/lobby.css", "/an/address/nothing/names"],
-    ids=["a signed-in page", "a static file", "a handled 404"],
+    ["/", A_LOBBY_ASSET, "/an/address/nothing/names"],
+    ids=["a signed-in page", "an app asset", "a handled 404"],
 )
 def test_every_real_answer_carries_the_full_set_of_security_headers(
     signed_in_lobby: Lobby,
@@ -396,81 +386,19 @@ def test_a_same_site_or_schemeless_form_post_is_refused(
     assert signed_in_lobby.client.get("/").status_code == HTTPStatus.OK
 
 
-def test_the_three_stylesheets_are_linked_on_the_signed_in_home_page(
-    signed_in_lobby: Lobby,
-) -> None:
-    page = signed_in_lobby.client.get("/").text
-
-    assert '<link rel="stylesheet" href="/static/pico.classless.min.css">' in page
-    assert '<link rel="stylesheet" href="/static/ui-console.css">' in page
-    assert '<link rel="stylesheet" href="/static/lobby.css">' in page
-
-
-def test_the_theme_files_are_served_without_signing_in(lobby: Lobby) -> None:
-    console = lobby.client.get("/static/ui-console.css")
-    leftover = lobby.client.get("/static/lobby.css")
-    pico = lobby.client.get("/static/pico.classless.min.css")
-
-    assert console.status_code == HTTPStatus.OK
-    assert "--canvas:" in console.text
-    assert "@media (prefers-color-scheme: dark)" in console.text
-    assert leftover.status_code == HTTPStatus.OK
-    assert "--pico-background-color:" in leftover.text
-    assert pico.status_code == HTTPStatus.OK
-    assert "Pico CSS" in pico.text
-
-
-def test_an_address_that_only_starts_like_a_stylesheet_still_asks_for_the_login(
+def test_a_dot_segment_beside_the_app_assets_still_asks_for_the_login(
     lobby: Lobby,
 ) -> None:
-    walked_out = lobby.client.get("/static/%2e%2e/deck/a-deck/")
+    walked_out = lobby.client.get("/_app/%2e%2e/deck/a-deck/")
 
     assert walked_out.status_code == HTTPStatus.FOUND
     assert walked_out.headers["location"] == "/login/oidc?next=%2F"
 
 
-def test_the_signed_in_home_page_carries_no_hex_colour_and_no_inline_style(
+def test_a_signed_in_page_carries_no_hex_colour_and_no_inline_style(
     signed_in_lobby: Lobby,
 ) -> None:
-    page = signed_in_lobby.client.get("/").text
+    page = signed_in_lobby.client.get("/settings/sources").text
 
     assert not _HEX_COLOUR.search(page)
     assert "style=" not in page
-
-
-def test_the_signed_in_header_offers_the_person_and_log_out(
-    signed_in_lobby: Lobby,
-) -> None:
-    page = signed_in_lobby.client.get("/").text
-
-    assert USERNAME in page
-    assert ENGLISH.log_out in page
-
-
-def _links_the_impressum_and_the_datenschutz(page: str) -> bool:
-    """Both footer links, the Impressum pointing at the operator's one page."""
-    return (
-        f'<a href="https://hallucinai.de/impressum">{ENGLISH.footer_impressum}</a>'
-        in page
-        and f'<a href="https://hallucinai.de/datenschutz#presentator">{ENGLISH.footer_datenschutz}</a>'
-        in page
-    )
-
-
-def test_a_signed_out_page_links_the_impressum_and_the_datenschutz(
-    lobby: Lobby,
-) -> None:
-    page = lobby.client.get("/login/talk/no-access").text
-
-    assert _links_the_impressum_and_the_datenschutz(page)
-
-
-@pytest.mark.parametrize("path", ["/", "/account"])
-def test_a_signed_in_page_links_the_impressum_and_the_datenschutz(
-    signed_in_lobby: Lobby,
-    path: str,
-) -> None:
-    page = signed_in_lobby.client.get(path).text
-
-    assert ENGLISH.log_out in page
-    assert _links_the_impressum_and_the_datenschutz(page)

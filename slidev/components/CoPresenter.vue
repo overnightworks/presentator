@@ -101,7 +101,7 @@ function snapshot() {
     hearing: hearing.value,
     audioSeconds: audioSeconds.value,
     error: error.value,
-    hearOpen: Boolean(hearSocket && hearSocket.readyState === WebSocket.OPEN),
+    hearOpen: hearSocket?.readyState === WebSocket.OPEN,
     speaking: speaking.value,
     micLive: tracks.some((track) => track.readyState === 'live'),
     capturing: capturing.value,
@@ -116,18 +116,18 @@ function stillActive(generation) {
 }
 
 function setOn(value) {
-  if (value) turnOn()
+  if (value) void turnOn()
   else turnOff()
 }
 
 function say(text) {
   if (!on.value) return
   heard.value = text
-  ask(text)
+  void ask(text)
 }
 
 async function sendPcm(bytes) {
-  if (!hearSocket || hearSocket.readyState !== WebSocket.OPEN) return false
+  if (hearSocket?.readyState !== WebSocket.OPEN) return false
   hearSocket.send(bytes)
   return true
 }
@@ -231,6 +231,9 @@ async function startLocalHear(generation) {
   let context = null
   let node = null
   try {
+    // Echo cancellation and noise suppression stay on as a second layer and are
+    // not relied on: the room's speakers are not the browser's loopback. The
+    // transcript filter in isEcho is the first layer.
     stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
     })
@@ -258,7 +261,7 @@ async function startLocalHear(generation) {
       while (pending.length >= needed) {
         const frame = pending.subarray(0, needed)
         pending = pending.subarray(needed)
-        if (hearSocket && hearSocket.readyState === WebSocket.OPEN) {
+        if (hearSocket?.readyState === WebSocket.OPEN) {
           hearSocket.send(toPcm16(frame, fromRate, sampleRate).buffer)
         }
       }
@@ -353,7 +356,7 @@ function releaseMicrophone() {
 function onFinal(text) {
   if (!on.value || speaking.value) return
   if (isEcho(text, spokenText)) return
-  ask(text)
+  void ask(text)
 }
 
 function isEcho(text, spoken) {
@@ -368,7 +371,7 @@ function isEcho(text, spoken) {
 }
 
 async function ask(text) {
-  if (!hearSocket || hearSocket.readyState !== WebSocket.OPEN) return
+  if (hearSocket?.readyState !== WebSocket.OPEN) return
   invalidatePlayback()
   if (askAbort) askAbort.abort()
   const controller = new AbortController()

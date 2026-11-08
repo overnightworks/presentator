@@ -10,6 +10,7 @@ import os
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import timedelta
+from functools import partial
 from urllib.parse import urlsplit
 
 import uvicorn
@@ -18,11 +19,10 @@ from pydantic import SecretStr
 from starlette.routing import Host, Router
 from webauth.config import SessionLifetime, WebAuthConfig
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
+from webauth.ports import SignInTransaction
 from webauth.proxies import TrustedProxies
 from webauth.rate_limit import SingleProcessRateLimitBackend
 
-from presentator.adapters.agent_service import ServiceAnswerer
-from presentator.adapters.agent_tokens import PersonAccessTokens, WorkloadToken
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.build_worker import WorkerToolchain
 from presentator.adapters.builds import (
@@ -33,8 +33,6 @@ from presentator.adapters.builds import (
 )
 from presentator.adapters.catalog import (
     CATALOG_DIRECTORY,
-    age_in_words,
-    duration_in_words,
     load_catalogs,
 )
 from presentator.adapters.deck_store import SqliteDeckStore
@@ -49,7 +47,6 @@ from presentator.adapters.decks import (
     SqliteSourceStore,
 )
 from presentator.adapters.identity import (
-    OldDatabaseError,
     ProcessWriteLock,
     SqliteIdentityWrites,
     SqliteSessionRecordStore,
@@ -69,8 +66,17 @@ from presentator.adapters.secrets import (
     talk_session_secret,
 )
 from presentator.adapters.sentences import split_sentences
-from presentator.adapters.speech import UdsSpeaking, UdsSpeech, UdsSpeechHearing
+from presentator.adapters.speech import UdsSpeaking, UdsSpeechHearing
+from presentator.agent.backend import SessionGroups, gateway_answerer
+from presentator.agent.mcp import (
+    deck_list_mark,
+    deck_text_mark,
+    deck_view_mark,
+    install_mcp_front,
+)
 from presentator.api.auth import (
+    AgentFront,
+    DeckMarks,
     InstalledAuth,
     LobbyPrivate,
     content_security_policy,
@@ -78,15 +84,14 @@ from presentator.api.auth import (
 )
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.api.lobby_shell import LobbyBuildError, LobbyShell
-from presentator.api.pages import Pages
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_content_security_policy
 from presentator.application.copresenter import AskLimiter, CoPresenterUse
 from presentator.application.decks import Decks
 from presentator.application.identity import SESSION_LIFETIME, SESSION_SWEEP_INTERVAL
+from presentator.application.own_decks import OwnDecks
 from presentator.application.people import People
 from presentator.application.preferences import Preferences
-from presentator.application.voice import VoiceStatusUse
 from presentator.host.config import (
     Settings,
     WhereBuildsRun,
@@ -130,7 +135,7 @@ def build_instance(
     relying_party_for: RelyingPartyFor = relying_party,
 ) -> Instance:
     """Choose the adapter behind every port and hand the routes their use cases."""
-    _create_tables(settings)
+    create_tables(settings.database)
     shell = _lobby_shell(settings)
     # One box for both directions: what the store writes down is what the
     # resolver opens at the pull, and neither picks its own key.
@@ -173,31 +178,82 @@ def build_instance(
         settings, shell, identity_writes, relying_party_for
     )
     return Instance(
-        lobby=create_lobby(
-            sessions=sessions,
+        lobby=_lobby(
+            settings,
             decks=decks,
-            pages=_pages(settings),
+            sessions=sessions,
+            key_drafts=key_drafts,
+            identity_writes=identity_writes,
             auth=lobby_auth,
-            private=_lobby_private(
-                settings, decks, sessions, key_drafts, identity_writes
-            ),
+            mirrors=mirrors,
             shell=shell,
         ),
         talk=_talk(settings, decks, sessions, talk_auth, mirrors),
-        poller=Schedule(
-            chore=decks.refresh,
-            interval=timedelta(seconds=settings.source_poll_seconds),
-        ),
+        poller=_poller(settings, decks),
         session_sweep=_session_sweep(sessions, SystemClock()),
     )
 
 
-def _create_tables(settings: Settings) -> None:
-    """Bring the database to this release's tables, or refuse to start on it."""
-    try:
-        create_tables(settings.database)
-    except OldDatabaseError as refused:
-        raise cannot_start(str(refused)) from None
+def _poller(settings: Settings, decks: Decks) -> Schedule:
+    """The schedule that takes in what every source carries now."""
+    return Schedule(
+        chore=decks.refresh,
+        interval=timedelta(seconds=settings.source_poll_seconds),
+    )
+
+
+def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
+    settings: Settings,
+    *,
+    decks: Decks,
+    sessions: SqliteSessionRecordStore,
+    key_drafts: SqliteSourceKeyDrafts,
+    identity_writes: SqliteIdentityWrites,
+    auth: InstalledAuth,
+    mirrors: SourceMirrors,
+    shell: LobbyShell,
+) -> FastAPI:
+    """The lobby over the use cases, the sign-in wiring and the agent's front."""
+    return create_lobby(
+        sessions=sessions,
+        decks=decks,
+        preferences=_preferences(settings),
+        auth=auth,
+        private=_lobby_private(settings, decks, sessions, key_drafts, identity_writes),
+        agent=agent_front(
+            origin=settings.public_origin,
+            issuer=settings.oidc_issuer,
+            transaction=auth.transaction,
+        ),
+        own_decks=OwnDecks(
+            decks=decks.store,
+            sources=decks.sources,
+            texts=MirroredDeckTexts(mirrors=mirrors),
+        ),
+        shell=shell,
+    )
+
+
+def agent_front(
+    *,
+    origin: str,
+    issuer: str,
+    transaction: SignInTransaction,
+) -> AgentFront:
+    """The deck routes' marks, and the MCP front installed over them."""
+    return AgentFront(
+        marks=DeckMarks(
+            deck_list=deck_list_mark(),
+            deck_view=deck_view_mark(),
+            deck_text=deck_text_mark(),
+        ),
+        install_resource=partial(
+            install_mcp_front,
+            origin=origin,
+            issuer=issuer,
+            transaction=transaction,
+        ),
+    )
 
 
 def _lobby_shell(settings: Settings) -> LobbyShell:
@@ -279,22 +335,17 @@ def _copresenter_surface(
     auth: InstalledAuth,
     mirrors: SourceMirrors,
 ) -> CoPresenterSurface:
-    """What only a signed-in admin may reach at the talk host: the agent service."""
+    """What only a signed-in admin may reach at the talk host: the gateway's answers."""
     return CoPresenterSurface(
         use=CoPresenterUse(
-            answers=ServiceAnswerer(
-                origin=settings.agent_service,
-                workload_token=WorkloadToken(
-                    auth.relying_party, (settings.agent_service_scope,)
-                ),
-            ),
+            answers=gateway_answerer(settings.agent, auth.relying_party),
             speech=UdsSpeechHearing(settings.speech_socket),
             decks=decks.store,
             sources=decks.sources,
             texts=MirroredDeckTexts(mirrors=mirrors),
             boundaries=split_sentences,
             speaking=UdsSpeaking(settings.speech_socket),
-            person_access=PersonAccessTokens(auth.relying_party, sessions, auth.config),
+            person_access=SessionGroups(auth.relying_party, sessions, auth.config),
         ),
         limiter=AskLimiter(clock=SystemClock()),
         browser_origin=settings.talk_origin,
@@ -308,14 +359,13 @@ def _lobby_private(
     key_drafts: SqliteSourceKeyDrafts,
     identity_writes: SqliteIdentityWrites,
 ) -> LobbyPrivate:
-    """What only an admin of the lobby may reach: the host's socket, the people route.
+    """What only an admin of the lobby may reach: the people route.
 
     The people route exists only while a client is named to call it. Its
     accounts delete over the lock the sign-in holds.
     """
     clients = settings.admitted_token_clients()
     return LobbyPrivate(
-        voice=VoiceStatusUse(private=UdsSpeech(settings.speech_socket)),
         admin_people=AdminPeople(
             people=People(
                 decks=decks,
@@ -357,6 +407,7 @@ def installed_auths(
         transaction=identity_writes,
         content_security_policy=content_security_policy(shell),
         talk_origin=settings.talk_origin,
+        issuer=settings.oidc_issuer,
     )
     talk = replace(
         lobby,
@@ -371,15 +422,11 @@ def installed_auths(
     return lobby, talk
 
 
-def _pages(settings: Settings) -> Pages:
-    return Pages(
-        preferences=Preferences(
-            instance=SqliteInstanceSettingsStore(settings.database),
-            people=SqlitePersonPreferencesStore(settings.database),
-            catalogs=load_catalogs(CATALOG_DIRECTORY),
-        ),
-        age_in_words=age_in_words,
-        duration_in_words=duration_in_words,
+def _preferences(settings: Settings) -> Preferences:
+    return Preferences(
+        instance=SqliteInstanceSettingsStore(settings.database),
+        people=SqlitePersonPreferencesStore(settings.database),
+        catalogs=load_catalogs(CATALOG_DIRECTORY),
     )
 
 

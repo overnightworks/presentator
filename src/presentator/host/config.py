@@ -1,6 +1,5 @@
 """What varies by deployment; everything else is a constant beside its owner."""
 
-import re
 import threading
 from enum import StrEnum
 from functools import cached_property
@@ -19,6 +18,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from webauth.proxies import TrustedProxies
 
 from presentator.adapters.build_wire import SOCKET_DIRECTORY, SOCKET_NAME
+from presentator.agent.settings import AgentSettings
 
 # Every secret this instance is handed is at least this many characters, so no
 # guard of it rests on a value somebody could type.
@@ -27,10 +27,6 @@ SECRET_LENGTH: Final = 32
 _INVALID_PORT: Final = "has an invalid port"
 _REFUSED: Final = "this environment cannot start an instance"
 _EMPTY_CLIENT_ID: Final = "token_clients: names an empty client id"
-_SCOPE_RULE: Final = (
-    "is one scope token of printable characters without a space, quote or backslash"
-)
-_SCOPE_SHAPE: Final = re.compile(r"[\x21\x23-\x5B\x5D-\x7E]+")
 _ONE_HOSTNAME: Final = "talk_origin: is another hostname than public_origin"
 
 ENVIRONMENT_PREFIX: Final = "PRESENTATOR_"
@@ -81,11 +77,6 @@ def _one_public_origin(given: str) -> str:
     return _one_origin(given, schemes=("https",))
 
 
-def _one_service_origin(given: str) -> str:
-    """Require one canonical http or https origin, as the network inside gives."""
-    return _one_origin(given, schemes=("http", "https"))
-
-
 def _one_origin(given: str, *, schemes: tuple[str, ...]) -> str:
     parsed = urlsplit(given)
     if (
@@ -108,13 +99,6 @@ def _one_origin(given: str, *, schemes: tuple[str, ...]) -> str:
     except ValueError as refused:
         message = _INVALID_PORT
         raise ValueError(message) from refused
-    return given
-
-
-def _one_scope_token(given: str) -> str:
-    """Require one RFC 6749 scope-token: 1*( %x21 / %x23-5B / %x5D-7E )."""
-    if not _SCOPE_SHAPE.fullmatch(given):
-        raise ValueError(_SCOPE_RULE)
     return given
 
 
@@ -156,7 +140,12 @@ def _an_absolute_path(given: Path) -> Path:
     return given
 
 
-class Settings(BaseSettings, env_prefix=ENVIRONMENT_PREFIX, env_file=".env"):
+class Settings(
+    BaseSettings,
+    env_prefix=ENVIRONMENT_PREFIX,
+    env_file=".env",
+    env_nested_delimiter="__",
+):
     """Read from `PRESENTATOR_*` in the environment, or from a local `.env`."""
 
     # Where the master key is read from once at start, so it never rides the
@@ -204,12 +193,9 @@ class Settings(BaseSettings, env_prefix=ENVIRONMENT_PREFIX, env_file=".env"):
     oidc_issuer: Annotated[str, AfterValidator(_an_https_realm_url)]
     oidc_client_id: str = Field(min_length=1)
     oidc_client_secret_file: Annotated[Path, AfterValidator(_an_absolute_path)]
-    # Where the agent service answers: its origin on the network it shares with
-    # this instance. It is a deployment fact: no default.
-    agent_service: Annotated[str, AfterValidator(_one_service_origin)]
-    # The scope the workload grant asks for, so the token it gets names the agent
-    # service as its audience. It is a deployment fact: no default.
-    agent_service_scope: Annotated[str, AfterValidator(_one_scope_token)]
+    # Which backend answers, where its gateway is, the file holding this app's
+    # key there and the group that may ask. They are deployment facts: no default.
+    agent: AgentSettings
     speech_socket: Annotated[Path, AfterValidator(_an_absolute_path)] = Path(
         "/run/presentator-speech/speech.sock"
     )
@@ -218,7 +204,8 @@ class Settings(BaseSettings, env_prefix=ENVIRONMENT_PREFIX, env_file=".env"):
     trusted_proxies: Annotated[str, AfterValidator(_a_proxy_list)] = ""
     # The `azp` of the access tokens `/api/` takes, hal's client ids: a token
     # opens `/api/` as the person and `/api/admin/` for an admin. Empty: no
-    # token is admitted and the admin routes do not exist.
+    # token client is admitted and the admin routes do not exist; the agents
+    # client of `/mcp` is no token client and never opens them.
     token_clients: Annotated[str, AfterValidator(_client_ids)] = ""
 
     @cached_property

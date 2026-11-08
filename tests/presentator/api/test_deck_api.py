@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from webauth.ports import AccountKind
 
 from presentator.api.deck_api import DeckView
 from presentator.contracts.decks import (
@@ -248,6 +249,7 @@ def test_an_unknown_slug_is_a_bare_not_found_problem() -> None:
     assert an_unknown_slug_answer(lobby) == _NOT_FOUND
 
 
+# DK7
 @pytest.mark.parametrize("role", [Role.USER, Role.ADMIN])
 def test_another_persons_deck_answers_the_unknown_ones_bytes_for_any_role(
     role: Role,
@@ -350,7 +352,7 @@ def test_a_persons_bearer_reads_that_persons_own_deck(tmp_path: Path) -> None:
             FrozenClock(instant=NOW),
         ),
     )
-    scene.users.create_for_subject(subject, "anna", Role.USER)
+    scene.users.create_for_subject(subject, "anna", Role.USER, AccountKind.PERSON)
     minted = scene.issuer.mint_access_token(
         subject=subject, groups=MEMBER, authorized_party=_HAL, audience=None
     )

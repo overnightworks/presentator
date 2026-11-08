@@ -1,7 +1,7 @@
-"""The instance's defaults, a person's overrides, and how a page resolves them.
+"""The instance's settings, a person's choices, and how a page resolves them.
 
-The order is the operator's ruling of 06.09.2026 on issue #8, line 22: the
-person's Account preference first, the instance default behind it.
+The language is the instance's alone; the theme is the person's own and, with
+none chosen, follows the device.
 """
 
 from dataclasses import dataclass
@@ -40,10 +40,10 @@ class Preferences:
         return self.instance.read() or InstanceSettings()
 
     def save_instance_settings(self, settings: InstanceSettings) -> None:
-        """Keep the defaults every person without an override reads.
+        """Keep the settings every person reads.
 
         Raises `UnspokenLanguageError` for a language newly chosen that no catalog
-        speaks; the one already stored stays, so a theme change survives a
+        speaks; the one already stored stays, so a name change survives a
         removed catalog.
         """
         self._require_newly_chosen_spoken(
@@ -52,44 +52,28 @@ class Preferences:
         self.instance.write(settings)
 
     def preferences_of(self, user_id: str) -> PersonPreferences:
-        """What that person chose, with an unset field meaning the instance."""
+        """What that person chose, or follow-system while they chose nothing."""
         return self.people.read(user_id) or PersonPreferences()
 
     def save_preferences_of(self, user_id: str, chosen: PersonPreferences) -> None:
-        """Keep that person's overrides; the instance default stays untouched.
-
-        Raises `UnspokenLanguageError` for a language newly chosen that no catalog
-        speaks; the one already stored stays, so a theme change survives a
-        removed catalog.
-        """
-        self._require_newly_chosen_spoken(
-            chosen.language_tag, stored=self.preferences_of(user_id).language_tag
-        )
+        """Keep that person's choice; the instance settings stay untouched."""
         self.people.write(user_id, chosen)
 
     def appearance_for(self, user_id: str | None) -> Appearance:
-        """The words and the look, the person's choice first, the instance's next."""
+        """The instance's words, and the person's own theme."""
         settings = self.instance_settings()
         chosen = (
             PersonPreferences() if user_id is None else self.preferences_of(user_id)
         )
         return Appearance(
-            text=self.catalogs.text(chosen.language_tag or settings.language_tag),
-            theme=chosen.theme or settings.theme,
+            text=self.catalogs.text(settings.language_tag),
+            theme=chosen.theme,
         )
 
     def languages(self) -> tuple[Language, ...]:
         """Every language a select may offer."""
         return self.catalogs.languages()
 
-    def _require_newly_chosen_spoken(
-        self, language_tag: str | None, *, stored: str | None
-    ) -> None:
-        if language_tag == stored:
-            return
-        if language_tag is not None and not self.speaks(language_tag):
+    def _require_newly_chosen_spoken(self, language_tag: str, *, stored: str) -> None:
+        if language_tag != stored and not self.catalogs.speaks(language_tag):
             raise UnspokenLanguageError(language_tag)
-
-    def speaks(self, language_tag: str) -> bool:
-        """Say whether this instance has a catalog for a submitted language."""
-        return self.catalogs.speaks(language_tag)

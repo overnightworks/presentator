@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from http import HTTPStatus
+from pathlib import PurePosixPath
 
 import httpx2
 import pytest
@@ -17,7 +18,7 @@ from webauth.middleware.security_headers import (
     STRICT_TRANSPORT_SECURITY,
 )
 
-from presentator.api.admission import gated_person, gated_session_id
+from presentator.api.admission import gated_person
 from presentator.api.auth import PERMISSIONS_POLICY
 from presentator.api.hooks import hook_address
 from tests.presentator.application.support.fakes import (
@@ -28,6 +29,7 @@ from tests.presentator.application.support.fakes import (
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
+    A_LOBBY_ASSET,
     ENGLISH,
     Lobby,
     a_browser_at,
@@ -149,7 +151,7 @@ def test_a_route_added_after_the_lobby_was_built_still_needs_a_session(
         ("GET", "/setup", HTTPStatus.NOT_FOUND),
         ("POST", "/setup", HTTPStatus.NOT_FOUND),
         ("POST", "/logout", HTTPStatus.OK),
-        ("GET", "/static/ui-console.css", HTTPStatus.OK),
+        ("GET", A_LOBBY_ASSET, HTTPStatus.OK),
     ],
 )
 def test_a_public_path_answers_a_signed_out_browser_without_a_store_read(
@@ -164,7 +166,7 @@ def test_a_public_path_answers_a_signed_out_browser_without_a_store_read(
     assert _counts(lobby) == (0, 0)
 
 
-@pytest.mark.parametrize("path", ["/setup", "/static/ui-console.css", "/login/oidc"])
+@pytest.mark.parametrize("path", ["/setup", A_LOBBY_ASSET, "/login/oidc"])
 def test_a_signed_in_browser_on_a_public_path_costs_no_store_read(
     signed_in_lobby: Lobby,
     path: str,
@@ -184,7 +186,12 @@ def test_the_sign_in_callback_is_not_turned_to_the_login_by_the_gate(
 
 
 @pytest.mark.parametrize(
-    "path", ["/login/extra", "/staticity/x", "/static/%2e/lobby.css"]
+    "path",
+    [
+        "/login/extra",
+        "/_appx/x",
+        f"/_app/%2e/{PurePosixPath(A_LOBBY_ASSET).name}",
+    ],
 )
 def test_an_address_beside_a_public_one_is_gated(lobby: Lobby, path: str) -> None:
     answer = lobby.client.get(path)
@@ -259,17 +266,15 @@ def test_an_unreadable_session_store_runs_no_route_and_keeps_the_headers() -> No
     _assert_carries_the_security_headers(answer)
 
 
-@pytest.mark.parametrize("reader", [gated_person, gated_session_id])
 @pytest.mark.parametrize("fixture", ["lobby", "signed_in_lobby"])
 def test_a_gated_reader_fails_loud_on_a_path_the_gate_let_past(
     request: pytest.FixtureRequest,
     fixture: str,
-    reader: Callable[[Request], object],
 ) -> None:
     lobby: Lobby = request.getfixturevalue(fixture)
 
     def probe(incoming: Request) -> Response:
-        reader(incoming)
+        gated_person(incoming)
         return Response()
 
     lobby.app.add_api_route(_PUBLIC_PROBE, probe, methods=["POST"])

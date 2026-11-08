@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.api.auth import LOGOUT_PATH, START_SIGN_IN_PATH
-from presentator.api.preferences import ACCOUNT
 from presentator.api.session_api import SessionView
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.preferences import PersonPreferences, ThemeChoice
@@ -18,6 +17,7 @@ from presentator.contracts.text import Catalogs
 from tests.presentator.application.support.fakes import FakePersonPreferencesStore
 from tests.support.lobby import (
     A_TALK_ADDRESS,
+    AN_ISSUER,
     ENGLISH,
     NEIGHBOUR,
     USERNAME,
@@ -41,8 +41,8 @@ def a_german_lobby() -> Lobby:
     return a_lobby(catalogs=catalogs)
 
 
-def choose(lobby: Lobby, *, language: str, theme: ThemeChoice) -> None:
-    lobby.client.post(ACCOUNT, data={"language": language, "theme": theme.value})
+def choose(lobby: Lobby, *, theme: ThemeChoice) -> None:
+    lobby.client.put("/api/account", json={"theme": theme.value})
 
 
 def test_a_signed_out_caller_gets_the_instances_words_and_theme_and_no_person() -> None:
@@ -61,16 +61,41 @@ def test_a_signed_out_caller_gets_the_instances_words_and_theme_and_no_person() 
     assert view.sign_in.talk_start == f"{A_TALK_ADDRESS}{START_SIGN_IN_PATH}"
 
 
-def test_a_users_own_language_and_theme_win_over_the_instances() -> None:
-    lobby = a_german_lobby()
-    lobby.sign_in(username=NEIGHBOUR)
-    choose(lobby, language="de", theme=ThemeChoice.DARK)
+@pytest.mark.parametrize("signed_in", [False, True])
+def test_the_session_names_the_central_account_at_the_configured_issuer(
+    *, signed_in: bool
+) -> None:
+    lobby = a_lobby()
+    if signed_in:
+        lobby.sign_in()
 
     body = lobby.client.get(_SESSION).json()
 
+    assert body["sign_in"] == {
+        "start": START_SIGN_IN_PATH,
+        "logout": LOGOUT_PATH,
+        "talk_start": f"{A_TALK_ADDRESS}{START_SIGN_IN_PATH}",
+        "account_console_url": f"{AN_ISSUER}/account",
+    }
+    assert set(body) == {"person", "theme", "words", "sign_in"}
+
+
+def test_a_persons_own_theme_wins_and_the_instances_language_is_german() -> None:
+    admin = a_german_lobby()
+    admin.sign_in()
+    admin.client.put(
+        "/api/settings",
+        json={"name": "Heim", "language_tag": "de"},
+    )
+    member = admin.another_browser()
+    member.sign_in(username=NEIGHBOUR)
+    choose(member, theme=ThemeChoice.DARK)
+
+    body = member.client.get(_SESSION).json()
+
     assert body["person"] == {"username": NEIGHBOUR, "role": "user"}
     assert body["theme"] == "dark"
-    assert body["words"]["log_out"] == _GERMAN.log_out
+    assert body["words"]["language_tag"] == "de"
 
 
 def test_an_admin_is_told_apart_by_role() -> None:
@@ -168,7 +193,7 @@ def test_a_bearer_wins_over_another_persons_cookie_and_keeps_its_own_overrides(
     scene.sign_in(browser, subject="the-cookies-person", username="cookie-person")
     owner = scene.browser()
     scene.sign_in(owner, subject=_SUBJECT, username="token-person")
-    owner.post(ACCOUNT, data={"language": "en", "theme": "dark"})
+    owner.put("/api/account", json={"theme": "dark"})
 
     answer = browser.get(
         _SESSION, headers=a_bearer(scene, subject=_SUBJECT, groups=MEMBER)

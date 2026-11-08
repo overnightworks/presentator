@@ -29,7 +29,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Deck List */
+        /**
+         * Deck List
+         * @description List the reader's own decks, newest change first, with their state.
+         */
         get: operations["deck_list_api_decks_get"];
         put?: never;
         post?: never;
@@ -46,8 +49,31 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Deck */
+        /**
+         * Deck
+         * @description Show one of your decks, how its build stands and why a build failed.
+         */
         get: operations["deck_api_decks__slug__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/decks/{slug}/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deck Text
+         * @description Read the text of one of the reader's own built decks, notes included.
+         */
+        get: operations["deck_text_api_decks__slug__text_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -229,74 +255,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/voice": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Status */
-        get: operations["status_api_voice_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/voice/qwen3-tts-0.6b/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Download */
-        post: operations["download_api_voice_qwen3_tts_0_6b_download_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/voice/{voice_id}/load": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Load */
-        post: operations["load_api_voice__voice_id__load_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/voice/{voice_id}/sample/{language}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Sample */
-        post: operations["sample_api_voice__voice_id__sample__language__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -322,23 +280,12 @@ export interface components {
         };
         /**
          * AccountView
-         * @description One person's overrides and the languages they may choose from.
+         * @description One person's own theme, read and written.
+         *
+         *     No default: one schema serves the body and the answer.
          */
         AccountView: {
-            /** Language Tag */
-            language_tag: string | null;
-            /** Languages */
-            languages: components["schemas"]["LanguageView"][];
-            theme: components["schemas"]["ThemeChoice"] | null;
-        };
-        /**
-         * AccountWrite
-         * @description Both overrides of one person; `None` leaves the choice to the instance.
-         */
-        AccountWrite: {
-            /** Language Tag */
-            language_tag: string | null;
-            theme: components["schemas"]["ThemeChoice"] | null;
+            theme: components["schemas"]["ThemeChoice"];
         };
         /**
          * AttemptView
@@ -381,6 +328,7 @@ export interface components {
             failure: components["schemas"]["SourceRunFailure"] | null;
             /** Fingerprint */
             fingerprint: string | null;
+            state: components["schemas"]["SourceState"];
         };
         /**
          * CreatedSourceView
@@ -431,6 +379,18 @@ export interface components {
             title: string;
         };
         /**
+         * DeckTextView
+         * @description The words of a deck at its built commit.
+         */
+        DeckTextView: {
+            /** Language */
+            language: string | null;
+            /** Slides */
+            slides: components["schemas"]["SlideTextView"][];
+            /** Title */
+            title: string;
+        };
+        /**
          * DeckView
          * @description What a deck page says about one deck, as data.
          */
@@ -453,13 +413,6 @@ export interface components {
             title: string;
             /** Views Open */
             views_open: boolean;
-        };
-        /**
-         * DownloadView
-         * @description What the private service did with the Qwen download.
-         */
-        DownloadView: {
-            outcome: components["schemas"]["VoiceDownloadOutcome"];
         };
         /**
          * FailureView
@@ -505,27 +458,14 @@ export interface components {
             tag: string;
         };
         /**
-         * LoadView
-         * @description What the private service did with a load.
-         */
-        LoadView: {
-            outcome: components["schemas"]["VoiceLoadOutcome"];
-        };
-        /**
          * LobbyText
          * @description One field per message a catalog file has to fill.
          */
         LobbyText: {
-            /** Account Instance Default */
-            account_instance_default: string;
-            /** Account Language */
-            account_language: string;
-            /** Account Preferences */
-            account_preferences: string;
-            /** Account Theme */
-            account_theme: string;
-            /** Account Title */
-            account_title: string;
+            /** Address Unknown Explanation */
+            address_unknown_explanation: string;
+            /** Address Unknown Title */
+            address_unknown_title: string;
             /** Deck Attempt Label */
             deck_attempt_label: string;
             /** Deck Back */
@@ -592,44 +532,30 @@ export interface components {
             decks_empty_title: string;
             /** Decks Title */
             decks_title: string;
-            /** Footer Datenschutz */
-            footer_datenschutz: string;
-            /** Footer Impressum */
-            footer_impressum: string;
+            /** For Admins Explanation */
+            for_admins_explanation: string;
+            /** For Admins Title */
+            for_admins_title: string;
             /** Language Name */
             language_name: string;
             /** Language Tag */
             language_tag: string;
+            /** Legal Datenschutz */
+            legal_datenschutz: string;
+            /** Legal Impressum */
+            legal_impressum: string;
+            /** Legal Nutzungsbedingungen */
+            legal_nutzungsbedingungen: string;
             /** Log Out */
             log_out: string;
-            /** Login Failed Explanation */
-            login_failed_explanation: string;
-            /** Login Failed Retry */
-            login_failed_retry: string;
-            /** Login Failed Title */
-            login_failed_title: string;
             /** Menu Account */
             menu_account: string;
-            /** Menu Theme */
-            menu_theme: string;
-            /** No Access Back */
-            no_access_back: string;
-            /** No Access Explanation */
-            no_access_explanation: string;
-            /** No Access Title */
-            no_access_title: string;
-            /** Role Admin */
-            role_admin: string;
-            /** Role User */
-            role_user: string;
             /** Section Decks */
             section_decks: string;
             /** Section Settings */
             section_settings: string;
             /** Settings Default Language */
             settings_default_language: string;
-            /** Settings Default Theme */
-            settings_default_theme: string;
             /** Settings Instance Name */
             settings_instance_name: string;
             /** Settings Language Hint */
@@ -640,8 +566,20 @@ export interface components {
             settings_sources: string;
             /** Settings Title */
             settings_title: string;
-            /** Settings Voice */
-            settings_voice: string;
+            /** Sign In Failed */
+            sign_in_failed: string;
+            /** Sign In Failed Banner */
+            sign_in_failed_banner: string;
+            /** Sign In Log In */
+            sign_in_log_in: string;
+            /** Sign In Logged Out */
+            sign_in_logged_out: string;
+            /** Sign In No Access */
+            sign_in_no_access: string;
+            /** Sign In No Access Sentence */
+            sign_in_no_access_sentence: string;
+            /** Sign In Try Again */
+            sign_in_try_again: string;
             /** Source Access */
             source_access: string;
             /** Source Access Deploy Key */
@@ -768,8 +706,6 @@ export interface components {
             source_secret_dots: string;
             /** Source Secret Info */
             source_secret_info: string;
-            /** Source Secret Info Mark */
-            source_secret_info_mark: string;
             /** Source State Error */
             source_state_error: string;
             /** Source State Failed */
@@ -788,8 +724,6 @@ export interface components {
             source_webhook_address: string;
             /** Source Webhook Heading */
             source_webhook_heading: string;
-            /** Source Webhook Held Elsewhere */
-            source_webhook_held_elsewhere: string;
             /** Source Webhook Later */
             source_webhook_later: string;
             /** Source Webhook Once */
@@ -828,66 +762,8 @@ export interface components {
             theme_follow_system: string;
             /** Theme Light */
             theme_light: string;
-            /** Voice Check Again */
-            voice_check_again: string;
-            /** Voice Download */
-            voice_download: string;
-            /** Voice Language */
-            voice_language: string;
-            /** Voice Load */
-            voice_load: string;
-            /** Voice Model */
-            voice_model: string;
-            /** Voice Recovery Durability */
-            voice_recovery_durability: string;
-            /** Voice Recovery Failed */
-            voice_recovery_failed: string;
-            /** Voice Recovery Invalid Selection */
-            voice_recovery_invalid_selection: string;
-            /** Voice Sample */
-            voice_sample: string;
-            /** Voice Sample Active */
-            voice_sample_active: string;
-            /** Voice Sample English */
-            voice_sample_english: string;
-            /** Voice Sample Failed Explanation */
-            voice_sample_failed_explanation: string;
-            /** Voice Sample Failed Title */
-            voice_sample_failed_title: string;
-            /** Voice Sample German */
-            voice_sample_german: string;
-            /** Voice Sample Language */
-            voice_sample_language: string;
-            /** Voice Sample Loading */
-            voice_sample_loading: string;
-            /** Voice Sample Play */
-            voice_sample_play: string;
-            /** Voice Sample Stop */
-            voice_sample_stop: string;
-            /** Voice Sample Waiting */
-            voice_sample_waiting: string;
-            /** Voice State */
-            voice_state: string;
-            /** Voice State Active */
-            voice_state_active: string;
-            /** Voice State Download Failed */
-            voice_state_download_failed: string;
-            /** Voice State Downloaded */
-            voice_state_downloaded: string;
-            /** Voice State Downloading */
-            voice_state_downloading: string;
-            /** Voice State Failed */
-            voice_state_failed: string;
-            /** Voice State Loading */
-            voice_state_loading: string;
-            /** Voice State Not Downloaded */
-            voice_state_not_downloaded: string;
-            /** Voice State Unavailable */
-            voice_state_unavailable: string;
-            /** Voice Unknown Explanation */
-            voice_unknown_explanation: string;
-            /** Voice Unknown Title */
-            voice_unknown_title: string;
+            /** Theme Title */
+            theme_title: string;
             /** Wordmark */
             wordmark: string;
         };
@@ -910,21 +786,17 @@ export interface components {
         };
         /**
          * Role
-         * @description An instance has only these two roles (ADR 0011).
+         * @description An instance has only these two roles.
          * @enum {string}
          */
         Role: "admin" | "user";
         /**
-         * SampleLanguage
-         * @description The closed browser-to-speech language token for a fixed voice sample.
-         * @enum {string}
-         */
-        SampleLanguage: "de" | "en";
-        /**
          * SessionAddresses
-         * @description Where a page sends a person to sign in or out.
+         * @description Where a page sends a person to sign in or out, or to the central account.
          */
         SessionAddresses: {
+            /** Account Console Url */
+            account_console_url: string;
             /** Logout */
             logout: string;
             /** Start */
@@ -953,7 +825,7 @@ export interface components {
         };
         /**
          * SettingsView
-         * @description The instance defaults and the languages an admin may choose from.
+         * @description The instance settings and the languages an admin may choose from.
          */
         SettingsView: {
             /** Language Tag */
@@ -962,18 +834,30 @@ export interface components {
             languages: components["schemas"]["LanguageView"][];
             /** Name */
             name: string;
-            theme: components["schemas"]["ThemeChoice"];
         };
         /**
          * SettingsWrite
-         * @description The instance defaults an admin sets for everyone without an override.
+         * @description The instance name and language an admin sets for everyone.
          */
         SettingsWrite: {
             /** Language Tag */
             language_tag: string;
             /** Name */
             name: string;
-            theme: components["schemas"]["ThemeChoice"];
+        };
+        /**
+         * SlideTextView
+         * @description One slide's words: its number, title, body and speaker notes.
+         */
+        SlideTextView: {
+            /** Body */
+            body: string;
+            /** Notes */
+            notes: string;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
         };
         /**
          * SourceDeckView
@@ -1057,12 +941,10 @@ export interface components {
          * SourceState
          * @description What the sources list says a source is, read off its newest run.
          *
-         *     No run is never-fetched, a successful run is reachable, and the reason a
-         *     credential the instance could not resolve never becomes a word on the
-         *     board: it folds into error. A refused login and a host that answered with
-         *     something else each keep their own word instead, because a wrong token, a
-         *     dead host, and a host that answered but not with the repository are three
-         *     different things an operator needs told apart.
+         *     No run is never-fetched and a successful run is reachable. A host that
+         *     never answers and a credential the instance could not resolve share one
+         *     word, error; the run's reason tells them apart. A refused login and a host
+         *     that answered with something else keep their own words.
          * @enum {string}
          */
         SourceState: "reachable" | "error" | "refused" | "failed" | "never-fetched";
@@ -1076,6 +958,7 @@ export interface components {
             fetched_at: string | null;
             /** Name */
             name: string;
+            reason: components["schemas"]["SourceRunFailure"] | null;
             state: components["schemas"]["SourceState"];
             /** Url */
             url: string;
@@ -1096,6 +979,7 @@ export interface components {
             name: string;
             /** Public Key */
             public_key: string | null;
+            reason: components["schemas"]["SourceRunFailure"] | null;
             /** Runs */
             runs: components["schemas"]["SourceRunView"][];
             state: components["schemas"]["SourceState"];
@@ -1104,7 +988,7 @@ export interface components {
         };
         /**
          * ThemeChoice
-         * @description The three looks the picture's theme rows offer.
+         * @description The three looks a person can choose: follow the system, light or dark.
          * @enum {string}
          */
         ThemeChoice: "follow-system" | "light" | "dark";
@@ -1120,65 +1004,6 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
-        };
-        /**
-         * VoiceDownloadOutcome
-         * @description The bounded result of starting the fixed Qwen download.
-         * @enum {string}
-         */
-        VoiceDownloadOutcome: "started" | "already_complete";
-        /**
-         * VoiceId
-         * @description The closed, ordered administration catalogue.
-         * @enum {string}
-         */
-        VoiceId: "piper" | "chatterbox" | "qwen3-tts-0.6b" | "voxcpm2" | "nvidia-magpie";
-        /**
-         * VoiceLoadOutcome
-         * @description The private Load result an authenticated caller may act on.
-         * @enum {string}
-         */
-        VoiceLoadOutcome: "activated" | "activated_durability_unconfirmed" | "not_activated";
-        /**
-         * VoiceRecoveryKind
-         * @description The private explanation for a recoverable unavailable voice.
-         * @enum {string}
-         */
-        VoiceRecoveryKind: "invalid_selection" | "load_failed" | "durability_unconfirmed";
-        /**
-         * VoiceRecoveryView
-         * @description Why a selection needs the admin's attention, and which voice it names.
-         */
-        VoiceRecoveryView: {
-            kind: components["schemas"]["VoiceRecoveryKind"];
-            voice: components["schemas"]["VoiceId"] | null;
-        };
-        /**
-         * VoiceRowView
-         * @description One voice of the closed catalogue and where it stands.
-         */
-        VoiceRowView: {
-            id: components["schemas"]["VoiceId"];
-            /** Language */
-            language: string;
-            /** Name */
-            name: string;
-            state: components["schemas"]["VoiceState"];
-        };
-        /**
-         * VoiceState
-         * @description A state whose source is the private speech process.
-         * @enum {string}
-         */
-        VoiceState: "active" | "loading" | "failed" | "downloaded" | "not_downloaded" | "downloading" | "download_failed" | "unavailable";
-        /**
-         * VoiceView
-         * @description The verified catalogue in the owner's order and its recovery, if any.
-         */
-        VoiceView: {
-            recovery: components["schemas"]["VoiceRecoveryView"] | null;
-            /** Voices */
-            voices: components["schemas"]["VoiceRowView"][];
         };
         /**
          * WebhookSecretView
@@ -1226,7 +1051,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AccountWrite"];
+                "application/json": components["schemas"]["AccountView"];
             };
         };
         responses: {
@@ -1246,19 +1071,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
                 };
             };
         };
@@ -1331,6 +1143,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deck_text_api_decks__slug__text_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeckTextView"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Detail */
+                        detail?: string | null;
+                        /** Status */
+                        status: number;
+                        /** Title */
+                        title: string;
+                        /**
+                         * Type
+                         * @default about:blank
+                         */
+                        type: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Detail */
+                        detail?: string | null;
+                        /** Status */
+                        status: number;
+                        /** Title */
+                        title: string;
+                        /**
+                         * Type
+                         * @default about:blank
+                         */
+                        type: string;
+                    };
                 };
             };
         };
@@ -2183,298 +2068,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    status_api_voice_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VoiceView"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-        };
-    };
-    download_api_voice_qwen3_tts_0_6b_download_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DownloadView"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-        };
-    };
-    load_api_voice__voice_id__load_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                voice_id: components["schemas"]["VoiceId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoadView"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-        };
-    };
-    sample_api_voice__voice_id__sample__language__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                voice_id: components["schemas"]["VoiceId"];
-                language: components["schemas"]["SampleLanguage"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "audio/wav": unknown;
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
                 };
             };
         };

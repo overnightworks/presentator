@@ -56,14 +56,12 @@ def a_member_lobby() -> Lobby:
     return lobby
 
 
-def an_account(language: str | None, theme: str | None) -> dict[str, str | None]:
-    return {"language_tag": language, "theme": theme}
+def an_account(theme: str | None) -> dict[str, str | None]:
+    return {"theme": theme}
 
 
-def some_settings(
-    language: str = "de", theme: str = ThemeChoice.DARK.value, name: str = "Heim"
-) -> dict[str, str]:
-    return {"name": name, "language_tag": language, "theme": theme}
+def some_settings(language: str = "de", name: str = "Heim") -> dict[str, str]:
+    return {"name": name, "language_tag": language}
 
 
 def the_session(lobby: Lobby) -> dict[str, object]:
@@ -71,8 +69,9 @@ def the_session(lobby: Lobby) -> dict[str, object]:
 
 
 def without_a_stored_choice(lobby: Lobby) -> None:
-    assert lobby.client.get(_ACCOUNT).json()["theme"] is None
-    assert lobby.client.get(_ACCOUNT).json()["language_tag"] is None
+    assert lobby.client.get(_ACCOUNT).json()["theme"] == (
+        ThemeChoice.FOLLOW_SYSTEM.value
+    )
 
 
 def is_a_problem(answer: Response, status: HTTPStatus) -> None:
@@ -104,67 +103,59 @@ def test_a_signed_out_browser_is_sent_to_sign_in() -> None:
     assert answer.status_code == HTTPStatus.FOUND
 
 
-def test_a_member_without_overrides_reads_nothing_chosen_and_the_language_list() -> (
-    None
-):
+def test_a_member_without_a_choice_reads_follow_system() -> None:
+    """LB2."""
     lobby = a_member_lobby()
 
     answer = lobby.client.get(_ACCOUNT)
 
     assert answer.status_code == HTTPStatus.OK
     assert answer.headers["cache-control"] == "no-store"
-    assert answer.json() == {
-        "language_tag": None,
-        "theme": None,
-        "languages": _LANGUAGES,
-    }
+    assert answer.json() == {"theme": ThemeChoice.FOLLOW_SYSTEM.value}
 
 
-def test_a_member_keeps_a_language_and_theme_that_the_session_then_serves() -> None:
+def test_a_member_keeps_a_theme_that_the_session_then_serves() -> None:
     lobby = a_member_lobby()
 
-    answer = lobby.client.put(_ACCOUNT, json=an_account("de", ThemeChoice.DARK.value))
+    answer = lobby.client.put(_ACCOUNT, json=an_account(ThemeChoice.DARK.value))
 
     assert answer.status_code == HTTPStatus.OK
     assert answer.headers["cache-control"] == "no-store"
-    assert answer.json() == {
-        "language_tag": "de",
-        "theme": ThemeChoice.DARK.value,
-        "languages": _LANGUAGES,
-    }
+    assert answer.json() == {"theme": ThemeChoice.DARK.value}
     assert lobby.client.get(_ACCOUNT).json() == answer.json()
     assert the_session(lobby)["theme"] == ThemeChoice.DARK.value
 
 
-def test_a_member_who_clears_both_overrides_gets_the_instance_defaults_again() -> None:
+def test_a_theme_chosen_in_the_menu_leaves_the_neighbours_pages_alone() -> None:
+    admin = an_admin_lobby()
+    admin.client.put(_ACCOUNT, json=an_account(ThemeChoice.DARK.value))
+    neighbour = admin.another_browser()
+    neighbour.sign_in(username=NEIGHBOUR)
+
+    assert the_session(neighbour)["theme"] == ThemeChoice.FOLLOW_SYSTEM.value
+
+
+def test_following_the_system_again_stores_follow_system() -> None:
     lobby = a_member_lobby()
-    lobby.client.put(_ACCOUNT, json=an_account("de", ThemeChoice.DARK.value))
+    lobby.client.put(_ACCOUNT, json=an_account(ThemeChoice.DARK.value))
 
-    answer = lobby.client.put(_ACCOUNT, json=an_account(None, None))
+    lobby.client.put(_ACCOUNT, json=an_account(ThemeChoice.FOLLOW_SYSTEM.value))
 
-    assert answer.status_code == HTTPStatus.OK
-    assert answer.json()["language_tag"] is None
     assert the_session(lobby)["theme"] == ThemeChoice.FOLLOW_SYSTEM.value
-
-
-def test_an_unspoken_language_on_account_is_a_problem_and_writes_nothing() -> None:
-    lobby = a_member_lobby()
-
-    answer = lobby.client.put(_ACCOUNT, json=an_account("xx", ThemeChoice.DARK.value))
-
-    is_a_problem(answer, HTTPStatus.UNPROCESSABLE_ENTITY)
-    without_a_stored_choice(lobby)
+    assert lobby.client.get(_ACCOUNT).json() == an_account(
+        ThemeChoice.FOLLOW_SYSTEM.value
+    )
 
 
 @pytest.mark.parametrize(
     "body",
     [
-        an_account("en", "purple"),
+        an_account("purple"),
+        an_account(None),
         {"language_tag": "en"},
-        {"theme": ThemeChoice.DARK.value},
         {},
     ],
-    ids=["unknown theme", "theme missing", "language missing", "empty"],
+    ids=["unknown theme", "no theme", "theme missing", "empty"],
 )
 def test_a_malformed_account_body_keeps_the_frameworks_answer_and_writes_nothing(
     body: dict[str, str | None],
@@ -180,6 +171,7 @@ def test_a_malformed_account_body_keeps_the_frameworks_answer_and_writes_nothing
 
 @pytest.mark.parametrize("method", ["get", "put"])
 def test_a_member_is_turned_away_from_settings_with_a_problem(method: str) -> None:
+    """LB4."""
     lobby = a_member_lobby()
 
     answer = lobby.client.request(
@@ -204,9 +196,7 @@ def test_a_refused_member_wrote_nothing_to_the_instance() -> None:
 
     member.client.put(_SETTINGS, json=some_settings())
 
-    assert (
-        admin.client.get(_SETTINGS).json()["theme"] == ThemeChoice.FOLLOW_SYSTEM.value
-    )
+    assert admin.client.get(_SETTINGS).json()["name"] == InstanceSettings().name
 
 
 def test_an_admin_reads_the_defaults_of_a_fresh_instance() -> None:
@@ -219,12 +209,12 @@ def test_an_admin_reads_the_defaults_of_a_fresh_instance() -> None:
     assert answer.json() == {
         "name": InstanceSettings().name,
         "language_tag": ENGLISH.language_tag,
-        "theme": ThemeChoice.FOLLOW_SYSTEM.value,
         "languages": _LANGUAGES,
     }
 
 
-def test_an_admins_instance_defaults_reach_a_member_without_overrides() -> None:
+def test_an_admins_instance_language_reaches_a_member_who_keeps_follow_system() -> None:
+    """LB1."""
     admin = an_admin_lobby()
     member = admin.another_browser()
     member.sign_in(username=NEIGHBOUR)
@@ -234,7 +224,19 @@ def test_an_admins_instance_defaults_reach_a_member_without_overrides() -> None:
     assert answer.status_code == HTTPStatus.OK
     assert answer.json() == {**some_settings(), "languages": _LANGUAGES}
     assert admin.client.get(_SETTINGS).json() == answer.json()
-    assert member.client.get(_SESSION).json()["theme"] == ThemeChoice.DARK.value
+    session = member.client.get(_SESSION).json()
+    assert session["theme"] == ThemeChoice.FOLLOW_SYSTEM.value
+    assert session["words"]["language_tag"] == some_settings()["language_tag"]
+
+
+def test_an_admin_saves_an_empty_instance_name_and_reads_it_back_empty() -> None:
+    lobby = an_admin_lobby()
+
+    answer = lobby.client.put(_SETTINGS, json=some_settings(name=""))
+
+    assert answer.status_code == HTTPStatus.OK
+    assert answer.json()["name"] == ""
+    assert lobby.client.get(_SETTINGS).json()["name"] == ""
 
 
 def test_an_unspoken_language_on_settings_is_a_problem_and_writes_nothing() -> None:
@@ -249,10 +251,10 @@ def test_an_unspoken_language_on_settings_is_a_problem_and_writes_nothing() -> N
 def test_an_admin_writing_account_changes_only_their_own_overrides() -> None:
     lobby = an_admin_lobby()
 
-    lobby.client.put(_ACCOUNT, json=an_account("de", ThemeChoice.LIGHT.value))
+    lobby.client.put(_ACCOUNT, json=an_account(ThemeChoice.LIGHT.value))
 
     settings = lobby.client.get(_SETTINGS).json()
-    assert settings["theme"] == ThemeChoice.FOLLOW_SYSTEM.value
+    assert settings["name"] == InstanceSettings().name
     assert settings["language_tag"] == ENGLISH.language_tag
     assert lobby.client.get(_ACCOUNT).json()["theme"] == ThemeChoice.LIGHT.value
 
@@ -305,9 +307,9 @@ def a_write(lobby: Lobby, headers: dict[str, str]) -> Response:
 def settings_stayed_fresh(lobby: Lobby) -> None:
     assert (
         lobby.client.get(_SETTINGS, headers={"sec-fetch-site": "same-origin"}).json()[
-            "theme"
+            "name"
         ]
-        == ThemeChoice.FOLLOW_SYSTEM.value
+        == InstanceSettings().name
     )
 
 
@@ -355,7 +357,7 @@ def test_a_cross_site_account_write_is_refused_too() -> None:
 
     answer = lobby.client.put(
         _ACCOUNT,
-        json=an_account("de", ThemeChoice.DARK.value),
+        json=an_account(ThemeChoice.DARK.value),
         headers={
             **_JSON,
             "sec-fetch-site": "cross-site",
@@ -365,7 +367,9 @@ def test_a_cross_site_account_write_is_refused_too() -> None:
 
     assert answer.status_code == HTTPStatus.FORBIDDEN
     lobby.client.headers["sec-fetch-site"] = "same-origin"
-    assert lobby.client.get(_ACCOUNT).json()["theme"] is None
+    assert lobby.client.get(_ACCOUNT).json()["theme"] == (
+        ThemeChoice.FOLLOW_SYSTEM.value
+    )
 
 
 @pytest.fixture
@@ -392,13 +396,12 @@ def test_a_members_bearer_reads_and_writes_the_members_own_account_without_origi
     bearer = a_bearer(scene, subject="member-subject", groups=MEMBER)
 
     written = program.put(
-        _ACCOUNT, json=an_account("en", ThemeChoice.DARK.value), headers=bearer
+        _ACCOUNT, json=an_account(ThemeChoice.DARK.value), headers=bearer
     )
     read = program.get(_ACCOUNT, headers=bearer)
 
     assert written.status_code == HTTPStatus.OK
     assert read.json()["theme"] == ThemeChoice.DARK.value
-    assert read.json()["language_tag"] == "en"
 
 
 @pytest.mark.parametrize("method", ["get", "put"])
@@ -426,7 +429,8 @@ def test_an_admins_bearer_writes_the_instance_defaults(scene: Scene) -> None:
 
     assert answer.status_code == HTTPStatus.OK
     assert (
-        program.get(_SETTINGS, headers=bearer).json()["theme"] == ThemeChoice.DARK.value
+        program.get(_SETTINGS, headers=bearer).json()["name"]
+        == (some_settings()["name"])
     )
 
 
@@ -445,16 +449,14 @@ def test_an_invalid_bearer_beside_an_admin_cookie_writes_nothing(
     assert answer.status_code == HTTPStatus.UNAUTHORIZED
     assert 'error="invalid_token"' in answer.headers["www-authenticate"]
     assert (
-        browser.get(_SETTINGS, headers=_JSON).json()["theme"]
-        == ThemeChoice.FOLLOW_SYSTEM.value
+        browser.get(_SETTINGS, headers=_JSON).json()["name"] == InstanceSettings().name
     )
 
 
-@pytest.mark.parametrize("path", [_ACCOUNT, _SETTINGS])
-def test_the_generated_spec_declares_the_put_422_as_a_problem_and_as_validation(
-    path: str,
-) -> None:
-    responses = an_admin_lobby().app.openapi()["paths"][path]["put"]["responses"]
+def test_the_generated_spec_declares_the_put_422_as_a_problem_and_as_validation() -> (
+    None
+):
+    responses = an_admin_lobby().app.openapi()["paths"][_SETTINGS]["put"]["responses"]
 
     assert set(responses["422"]["content"]) == {
         PROBLEM_MEDIA_TYPE,

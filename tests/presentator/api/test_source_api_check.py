@@ -12,7 +12,12 @@ from httpx2 import Response
 
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
 from presentator.application.decks import DRAFT_MAX_AGE, SourceRefusal
-from presentator.contracts.decks import ConnectionCheckResult, SourceRunFailure
+from presentator.contracts.decks import (
+    ConnectionCheckResult,
+    SourceRun,
+    SourceRunFailure,
+    SourceRunOutcome,
+)
 from presentator.contracts.models import Role
 from tests.presentator.api.support.source_api_support import (
     AN_ADMIN_BY_COOKIE_AND_BEARER,
@@ -20,6 +25,7 @@ from tests.presentator.api.support.source_api_support import (
     CHECK,
     HTTPS,
     KEY_DRAFT,
+    LIST,
     NEW,
     SAME_ORIGIN,
     SENT,
@@ -44,7 +50,7 @@ from tests.presentator.api.support.source_api_support import (
     without_raising,
 )
 from tests.presentator.application.support.fakes import A_REACHABLE_CHECK
-from tests.support.lobby import ADMIN, Lobby
+from tests.support.lobby import ADMIN, SOURCE_ID, Lobby, a_configured_source
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import MEMBER, Scene
 
@@ -52,6 +58,7 @@ _SSH = "git@git.example.invalid:talks.git"
 _USER_PART = "https://user:pw@git.example.invalid/talks.git"
 _REFUSED_TYPE = "tag:hallucinai.de,2026-09-08:presentator/problems/source-refused"
 _GIT_SAID = "git said something of its own"
+_COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 
 
 class _CheckerThatBreaks(RecordingChecker):
@@ -258,7 +265,10 @@ def test_an_unreachable_check_answers_its_failure_and_no_fingerprint(
     answer = check(an_admin_over(world.decks).client)
 
     assert answer.status_code == HTTPStatus.OK
-    assert answer.json() == {
+    assert {
+        key: answer.json()[key]
+        for key in ("failure", "commit", "detail", "fingerprint")
+    } == {
         "failure": failure,
         "commit": None,
         "detail": _GIT_SAID if failure is SourceRunFailure.FAILED else None,
@@ -266,6 +276,39 @@ def test_an_unreachable_check_answers_its_failure_and_no_fingerprint(
     }
     assert_no_store(answer)
     assert_nothing_returned(answer, SENT)
+
+
+@pytest.mark.parametrize("failure", [None, *SourceRunFailure])
+def test_a_check_says_the_state_a_run_with_the_same_failure_lists_as(
+    failure: SourceRunFailure | None,
+) -> None:
+    found = ConnectionCheckResult(
+        failure=failure,
+        commit=None if failure else _COMMIT,
+        detail=None,
+        fingerprint=None if failure else "proof",
+    )
+    world = a_world(RecordingChecker(answer=found))
+    world.store.sources.append(a_configured_source(HTTPS))
+    world.decks.source_runs.record(
+        SourceRun(
+            source_id=SOURCE_ID,
+            at=world.clock.now(),
+            outcome=SourceRunOutcome.SUCCESS
+            if failure is None
+            else SourceRunOutcome.FAILURE,
+            commit=_COMMIT if failure is None else None,
+            reason=failure,
+        )
+    )
+    client = an_admin_over(world.decks).client
+
+    listed_state = client.get(LIST, headers=ASKING_FOR_JSON).json()["sources"][0][
+        "state"
+    ]
+    checked_state = check(client).json()["state"]
+
+    assert checked_state == listed_state
 
 
 # 15

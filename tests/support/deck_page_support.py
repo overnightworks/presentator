@@ -26,7 +26,7 @@ BUILT_AGO: Final = timedelta(minutes=12)
 
 
 def a_build(*, talk: Path = BUILT_TALK, pdf: Path = EXPORTED_PDF) -> Build:
-    """A build that switched over a while ago, as the picture's board shows it."""
+    """A build that switched over a while ago."""
     return Build(directory=talk, pdf=pdf, commit=COMMIT, built_at=NOW - BUILT_AGO)
 
 

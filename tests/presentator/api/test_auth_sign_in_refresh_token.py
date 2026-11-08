@@ -41,6 +41,7 @@ def scene(tmp_path: Path, issued_id_tokens: list[str]) -> Scene:
 
 
 def test_the_sign_ins_refresh_token_is_stored_with_its_session(scene: Scene) -> None:
+    """SI6: the sign ins refresh token is stored with its session."""
     scene.issuer.issue_refresh_token(_MARKER)
 
     scene.sign_in()
@@ -71,8 +72,8 @@ def test_a_refresh_token_outside_printable_ascii_fails_the_login_with_no_session
 
     page = scene.sign_in()
 
-    assert page.status_code == HTTPStatus.FORBIDDEN
-    assert "<h1>Login failed</h1>" in page.text
+    assert page.status_code == HTTPStatus.SEE_OTHER
+    assert page.headers["location"] == "/login/login-failed"
     assert scene.count("sessions") == 0
     assert DEFAULT_SESSION_COOKIE_NAME not in " ".join(cookie_names(page))
 
@@ -142,8 +143,8 @@ def test_a_refused_refresh_token_leaks_to_neither_page_nor_log(
 
     answer = scene.sign_in()
 
-    assert answer.status_code == HTTPStatus.FORBIDDEN
-    assert "<h1>Login failed</h1>" in answer.text
+    assert answer.status_code == HTTPStatus.SEE_OTHER
+    assert answer.headers["location"] == "/login/login-failed"
     assert _MARKER not in answer.text + str(answer.headers)
     assert _MARKER not in everything_shown(log.records)
 
@@ -185,7 +186,6 @@ def test_a_sign_in_that_stores_the_id_token_leaks_it_to_neither_page_nor_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """#428 cell 11: stored sign-in."""
     answer = scene.sign_in()
 
     (stored,) = scene.stored_id_tokens()
@@ -200,7 +200,6 @@ def test_a_store_failure_holding_the_id_token_leaks_it_to_no_error_and_no_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """#428 cell 11: store failure."""
     with closing(sqlite3.connect(scene.database)) as connection:
         connection.execute("DROP TABLE sessions")
 
@@ -220,12 +219,11 @@ def test_a_refused_sign_in_leaks_the_id_token_to_neither_page_nor_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """#428 cell 11: refused sign-in."""
     scene.issuer.issue_refresh_token(_MARKER + "é")
 
     answer = scene.sign_in()
 
-    assert answer.status_code == HTTPStatus.FORBIDDEN
+    assert answer.status_code == HTTPStatus.SEE_OTHER
     for secret in _the_id_tokens_and_their_claims(issued_id_tokens):
         assert secret not in answer.text + str(answer.headers)
         assert secret not in everything_shown(log.records)
@@ -236,7 +234,7 @@ def test_a_logout_leaks_the_id_token_to_no_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """#428 cell 11: logout; its page posts the hint to the issuer by design."""
+    """Logout; its page posts the hint to the issuer by design."""
     scene.sign_in()
 
     logged_out = scene.lobby.client.post(LOGOUT_PATH)
@@ -252,7 +250,6 @@ def test_a_refused_logout_leaks_the_id_token_to_neither_page_nor_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    """#428 cell 11: refused logout."""
     scene.sign_in()
 
     refused = scene.lobby.client.post(

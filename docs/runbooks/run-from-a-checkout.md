@@ -4,7 +4,7 @@ Reader: a developer on a machine whose decks are all their own.
 
 A deck is code, so an instance normally builds every deck in the sealed build
 worker and refuses to start where the worker does not answer
-([trust boundaries](../explanation/trust-boundaries.md)). A run from a checkout
+([constraints and reasons](../ARCHITECTURE.md#6-constraints-and-reasons)). A run from a checkout
 is the one place that says otherwise: `PRESENTATOR_BUILD_RUNNER=host` executes
 a deck's Vue components as the server process, with its rights over every file
 and the network. `compose.yaml` never sets it. Do not use it for a repository
@@ -36,13 +36,15 @@ export PRESENTATOR_TALK_ORIGIN=https://presentator-talk.example.test
 export PRESENTATOR_OIDC_ISSUER=https://auth.example.test/realms/example
 export PRESENTATOR_OIDC_CLIENT_ID=presentator
 export PRESENTATOR_OIDC_CLIENT_SECRET_FILE=/run/user/"$(id -u)"/presentator/oidc-client-secret
-export PRESENTATOR_AGENT_SERVICE=http://agent-service:8080
-export PRESENTATOR_AGENT_SERVICE_SCOPE=agent-service-audience
+export PRESENTATOR_AGENT__BACKEND=litellm
+export PRESENTATOR_AGENT__GATEWAY__ORIGIN=http://litellm-front:4000
+export PRESENTATOR_AGENT__GATEWAY__KEY_FILE=/run/user/"$(id -u)"/presentator/litellm-key
+export PRESENTATOR_AGENT__API_GROUP=/services/agent-service/api
 export PRESENTATOR_BUILD_RUNNER=host
 uv run presentator
 ```
 
-The co-presenter cannot answer from a checkout: the agent service sits on the
+The co-presenter cannot answer from a checkout: the gateway sits on the
 `hal_agent_presentator` network, which has no host address and publishes no port, so every
 ask ends in an `error` event.
 
@@ -52,4 +54,4 @@ Open the public origin, under its hostname: any other Host, 127.0.0.1
 included, gets 404. A signed-out visitor sees `/login`. A refusal at start
 names the setting and what is wrong with it, never the value.
 
-Related: [settings](../reference/configuration.md).
+Related: [settings](../configuration.md).

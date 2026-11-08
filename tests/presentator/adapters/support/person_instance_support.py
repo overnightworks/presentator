@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -25,6 +26,7 @@ from presentator.adapters.identity import (
     SqliteIdentityWrites,
     SqliteSessionRecordStore,
     TokenIdentifierFactory,
+    create_identity_tables,
 )
 from presentator.adapters.key_drafts import SqliteSourceKeyDrafts
 from presentator.adapters.preferences import SqlitePersonPreferencesStore
@@ -41,7 +43,7 @@ from presentator.contracts.decks import (
     SourceWrite,
 )
 from presentator.contracts.models import Role, User
-from presentator.contracts.preferences import PersonPreferences
+from presentator.contracts.preferences import PersonPreferences, ThemeChoice
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
 from tests.presentator.adapters.support.key_draft_support import (
     INSTANCE_KEY,
@@ -124,7 +126,7 @@ def _seed_person(
         refresh_token=SecretStr("a-refresh-token"),
         id_token=SecretStr("an-id-token"),
     )
-    stores.preferences.write(person.id, PersonPreferences(language_tag="de"))
+    stores.preferences.write(person.id, PersonPreferences(theme=ThemeChoice.DARK))
     stores.key_drafts.mint(person.id, at=_NOW)
     source = stores.sources.add(
         SourceWrite(
@@ -391,3 +393,49 @@ def owned_by(database: Path, person: User) -> dict[str, set[int]]:
 def still_there(database: Path, owned: dict[str, set[int]]) -> dict[str, int]:
     with closing(sqlite3.connect(database)) as connection:
         return rows_still_there(connection, owned)
+
+
+_INSTANCE_SETTINGS_BEFORE_THE_THEME_WENT = """
+CREATE TABLE instance_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    name TEXT NOT NULL,
+    language_tag TEXT NOT NULL,
+    theme TEXT NOT NULL
+)
+"""
+_PERSON_PREFERENCES_BEFORE_THE_LANGUAGE_WENT = """
+CREATE TABLE person_preferences (
+    user_id TEXT PRIMARY KEY REFERENCES users(id),
+    language_tag TEXT,
+    theme TEXT
+)
+"""
+
+
+def a_file_where_people_chose_a_language(
+    directory: Path,
+    chosen: Sequence[tuple[str, str | None, str | None]],
+    *,
+    instance: tuple[str, str, str] = ("Heim", "en", "dark"),
+) -> Path:
+    """A file as the release before made it.
+
+    A person's row is (user id, language, theme); the instance row is (name,
+    language, theme) and the file has it, as every file does once an admin saved.
+    """
+    database = directory / "presentator.sqlite3"
+    create_identity_tables(database)
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute(_INSTANCE_SETTINGS_BEFORE_THE_THEME_WENT)
+        connection.execute(
+            "INSERT INTO instance_settings (id, name, language_tag, theme)"
+            " VALUES (1, ?, ?, ?)",
+            instance,
+        )
+        connection.execute(_PERSON_PREFERENCES_BEFORE_THE_LANGUAGE_WENT)
+        connection.executemany(
+            "INSERT INTO person_preferences (user_id, language_tag, theme)"
+            " VALUES (?, ?, ?)",
+            chosen,
+        )
+    return database

@@ -12,7 +12,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from presentator.adapters.worker_children import GatedChild, readable_within
-from presentator.host import worker
+from presentator.host import worker, worker_scratch
 from presentator.host.worker_serving import LifeEnd, Serving, StepEffects, hand_over
 from presentator.host.worker_wire import WireExit
 from tests.support.worker_chain import WAIT_SECONDS, ChainSpawn, await_absence
@@ -68,7 +68,7 @@ def chain_environment(work: Path) -> dict[str, str]:
     """The six-key step environment, with test values below the work root."""
     return {
         "PATH": os.environ["PATH"],
-        "HOME": str(work / worker.HOME_DIRECTORY),
+        "HOME": str(work / worker_scratch.HOME_DIRECTORY),
         "TMPDIR": str(work),
         "PLAYWRIGHT_BROWSERS_PATH": str(work / "playwright"),
         "COREPACK_HOME": str(work / "corepack"),
@@ -126,13 +126,13 @@ def _run_life_at(
         sweep=lambda _deadline: True,
         create_record=scenario.create_record,
         seal=scenario.seal,
-        open_deck=worker.make_open_directory,
-        close_deck=worker.close_deck,
+        open_deck=worker_scratch.make_open_directory,
+        close_deck=worker_scratch.close_deck,
         work=work,
         step=StepEffects(
             spawn=spawn.step,
             gate_admits=lambda _status: True,
-            prepare=worker.prepare_step_paths,
+            prepare=worker_scratch.prepare_step_paths,
             environment=chain_environment(work),
             project=project,
         ),

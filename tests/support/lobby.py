@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Final, Self
 
 import pytest
+from agent_runtime_client.config import BackendKind, ChatGateway
 from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
 from httpx2 import Request as BrowserRequest
@@ -31,6 +32,7 @@ from webauth.oidc import (
     TokenRequestPost,
 )
 from webauth.ports import (
+    AccountKind,
     SessionRecordStore,
     SignInStores,
     SignInTransaction,
@@ -46,13 +48,13 @@ from presentator.adapters.builds import (
 )
 from presentator.adapters.catalog import (
     CATALOG_DIRECTORY,
-    age_in_words,
-    duration_in_words,
     load_catalogs,
 )
 from presentator.adapters.decks import SourceMirrors
 from presentator.adapters.secrets import talk_session_secret
+from presentator.agent.settings import AgentSettings
 from presentator.api.auth import (
+    AgentFront,
     InstalledAuth,
     LobbyPrivate,
     content_security_policy,
@@ -60,13 +62,12 @@ from presentator.api.auth import (
 )
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.api.lobby_shell import LobbyShell
-from presentator.api.pages import Pages
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_content_security_policy
 from presentator.application.decks import Decks
+from presentator.application.own_decks import OwnDecks
 from presentator.application.people import People
 from presentator.application.preferences import Preferences
-from presentator.application.voice import VoiceStatusUse
 from presentator.contracts.decks import (
     Build,
     ConnectionCheckResult,
@@ -78,17 +79,10 @@ from presentator.contracts.decks import (
 )
 from presentator.contracts.models import Role, User
 from presentator.contracts.text import DEFAULT_LANGUAGE_TAG, Catalogs
-from presentator.contracts.voice import (
-    SampleLanguage,
-    VoiceDownloadOutcome,
-    VoiceId,
-    VoiceLoadOutcome,
-    VoiceSnapshot,
-    VoiceUnavailableError,
-)
 from presentator.host.config import Settings
-from presentator.host.main import web_auth_config_for
+from presentator.host.main import agent_front, web_auth_config_for
 from presentator.host.oidc import admission_of, oidc_client_config
+from presentator.ports.copresenter import DeckTexts
 from presentator.ports.decks import BuildRunner
 from presentator.ports.preferences import PersonPreferencesStore
 from tests.presentator.application.support.fakes import (
@@ -111,16 +105,17 @@ from tests.presentator.application.support.fakes import (
     FakeWebhookSecrets,
     FrozenClock,
 )
+from tests.support.deck_text_support import FakeDeckTexts
 
 
-def _write_test_key_file() -> Path:
-    """Write the key every test lobby signs with to a file removed at exit."""
+def _write_throwaway_file(content: str) -> Path:
+    """Write a file only a test reads, removed at exit."""
     with tempfile.NamedTemporaryFile(
-        "w", prefix="presentator-test-key-", encoding="utf-8", delete=False
-    ) as key_file:
-        key_file.write("k3Tq9xVb2LmZ7wRc5NdH8sYa4PfJ6uEg\n")
-    atexit.register(Path(key_file.name).unlink, missing_ok=True)
-    return Path(key_file.name)
+        "w", prefix="presentator-test-", encoding="utf-8", delete=False
+    ) as written:
+        written.write(content)
+    atexit.register(Path(written.name).unlink, missing_ok=True)
+    return Path(written.name)
 
 
 NOW: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
@@ -134,7 +129,9 @@ EXPORTED_PDF: Final = _FIXTURES / "exported_deck.pdf"
 LOBBY_BUILD: Final = _FIXTURES / "lobby_build"
 A_LOBBY_ASSET: Final = "/_app/immutable/entry/start.js"
 LOBBY_SHELL: Final = LobbyShell.read(LOBBY_BUILD)
-_KEY_FILE: Final = _write_test_key_file()
+_KEY_FILE: Final = _write_throwaway_file("k3Tq9xVb2LmZ7wRc5NdH8sYa4PfJ6uEg\n")
+A_GATEWAY_KEY: Final = "gateway-key-MARKER"
+A_GATEWAY_KEY_FILE: Final = _write_throwaway_file(f"{A_GATEWAY_KEY}\n")
 _BUILT_DECK_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 # No route test waits for a build, so the bound only has to be longer than the
 # ages the tests arrange.
@@ -164,33 +161,11 @@ A_BROWSERS_SOCKET_ADDRESS: Final = "wss://testserver"
 # The talk host is a second hostname of the same instance.
 A_TALK_ADDRESS: Final = "https://talk.testserver"
 A_TALK_SOCKET_ADDRESS: Final = "wss://talk.testserver"
-AN_AGENT_SERVICE: Final = "http://agent-service.test:8080"
-AN_AGENT_SERVICE_SCOPE: Final = "an-agent-service-audience"
+A_GATEWAY_ORIGIN: Final = "http://gateway.test:4000"
+AN_API_GROUP: Final = "/services/agent-service/api"
 AN_ISSUER: Final = "https://auth.example.test/realms/test"
 A_CLIENT_ID: Final = "presentator-test"
 A_CLIENT_CREDENTIAL: Final = "the-secret-only-this-test-has"
-
-
-class UnavailableSpeech:
-    """The omitted test arrangement's private speech port."""
-
-    async def snapshot(self) -> VoiceSnapshot:
-        """Make the real use case surface the recoverable service failure."""
-        raise VoiceUnavailableError
-
-    async def load(self, voice: VoiceId) -> VoiceLoadOutcome:
-        """Make the private mutation unavailable in the default test arrangement."""
-        del voice
-        raise VoiceUnavailableError
-
-    async def download_qwen(self) -> VoiceDownloadOutcome:
-        """Make the omitted test arrangement's download capability unavailable."""
-        raise VoiceUnavailableError
-
-    async def sample(self, voice: VoiceId, language: SampleLanguage) -> bytes:
-        """Make the omitted test arrangement's sample capability unavailable."""
-        del voice, language
-        raise VoiceUnavailableError
 
 
 def hand_over_session_cookies(
@@ -308,14 +283,22 @@ def _no_key_set(url: str) -> bytes:
     raise AssertionError(url)
 
 
+def an_agent_config() -> AgentSettings:
+    """The `agent` section of an instance whose gateway key is a throwaway file."""
+    return AgentSettings(
+        backend=BackendKind.LITELLM,
+        gateway=ChatGateway(origin=A_GATEWAY_ORIGIN, key_file=A_GATEWAY_KEY_FILE),
+        api_group=AN_API_GROUP,
+    )
+
+
 def a_settings() -> Settings:
     """The settings of an instance at the test origin, signing in at a fake issuer."""
     return Settings(
         secret_key_file=_KEY_FILE,
         public_origin=A_BROWSERS_ADDRESS,
         talk_origin=A_TALK_ADDRESS,
-        agent_service=AN_AGENT_SERVICE,
-        agent_service_scope=AN_AGENT_SERVICE_SCOPE,
+        agent=an_agent_config(),
         oidc_issuer=AN_ISSUER,
         oidc_client_id=A_CLIENT_ID,
         oidc_client_secret_file=Path("/run/oidc-client-secret"),
@@ -334,10 +317,12 @@ def a_relying_party(
     post_token_request: TokenRequestPost = _no_token_endpoint,
     fetch_key_set: KeySetFetch = _no_key_set,
     origin: str = A_BROWSERS_ADDRESS,
+    issuer: str = AN_ISSUER,
 ) -> OidcRelyingParty:
     """The issuer's client, whose transports reach nobody unless a test gives some."""
+    settings = a_settings().model_copy(update={"oidc_issuer": issuer})
     return OidcRelyingParty(
-        oidc_client_config(a_settings(), SecretStr(A_CLIENT_CREDENTIAL), origin=origin),
+        oidc_client_config(settings, SecretStr(A_CLIENT_CREDENTIAL), origin=origin),
         post_token_request=post_token_request,
         fetch_key_set=fetch_key_set,
         wall_clock=lambda: clock.now().timestamp(),
@@ -351,11 +336,16 @@ class NobodySignsIn:
     def get(self, user_id: str) -> UserRecord | None:
         raise AssertionError(user_id)
 
-    def create_for_subject(self, subject: str, username: str, role: str) -> UserRecord:
-        raise AssertionError((subject, username, role))
+    def create_for_subject(
+        self, subject: str, username: str, role: str, kind: AccountKind
+    ) -> UserRecord:
+        raise AssertionError((subject, username, role, kind))
 
     def set_role(self, user_id: str, role: str) -> UserRecord:
         raise AssertionError((user_id, role))
+
+    def set_kind(self, user_id: str, kind: AccountKind) -> UserRecord:
+        raise AssertionError((user_id, kind))
 
 
 class NoSignInTransaction:
@@ -388,17 +378,22 @@ def an_installed_auth(
     relying_party: OidcRelyingParty | None = None,
     transaction: SignInTransaction | None = None,
     shell: LobbyShell = LOBBY_SHELL,
+    realm: str = AN_ISSUER,
 ) -> InstalledAuth:
-    """The host's sign-in wiring, each part replaceable by the test that proves it."""
+    """The host's sign-in wiring, each part replaceable by the test that proves it.
+
+    `realm` is the issuer the app is configured to trust; admission is bound to it.
+    """
     return InstalledAuth(
         config=a_web_auth(clock),
         relying_party=a_relying_party(clock)
         if relying_party is None
         else relying_party,
-        admission=admission_of(a_settings()),
+        admission=admission_of(a_settings().model_copy(update={"oidc_issuer": realm})),
         transaction=NoSignInTransaction() if transaction is None else transaction,
         content_security_policy=content_security_policy(shell),
         talk_origin=A_TALK_ADDRESS,
+        issuer=AN_ISSUER,
     )
 
 
@@ -421,6 +416,7 @@ class GivenDecks:
     source: Source | None = None
     sources: tuple[Source, ...] = ()
     store: FakeDeckStore | None = None
+    source_store: FakeSourceStore | None = None
     runs: tuple[SourceRun, ...] = ()
     carried: dict[str, tuple[DeckFolder, ...] | None] | None = None
     failures: dict[str, SourceRunFailure] | None = None
@@ -434,7 +430,6 @@ class GivenDecks:
     # names `themes` and gets the fake above instead.
     toolchain_project: Path | None = None
     key_drafts: FakeDeployKeyDrafts = field(default_factory=FakeDeployKeyDrafts)
-    voice: VoiceStatusUse | None = None
     # Set only by a test proving what the real adapter lets a request read.
     builder: BuildRunner | None = None
 
@@ -501,7 +496,8 @@ def a_decks(given: GivenDecks, clock: FrozenClock) -> Decks:
         minted=given.key_drafts.minted,
     )
     decks = Decks(
-        sources=FakeSourceStore(
+        sources=given.source_store
+        or FakeSourceStore(
             sources=stored,
             hashes=dict(given.hook_hashes),
             key_drafts=key_drafts,
@@ -554,6 +550,13 @@ def a_preferences(
     )
 
 
+def an_agent_front(auth: InstalledAuth) -> AgentFront:
+    """The agent's front as the host composes it, at the test origin."""
+    return agent_front(
+        origin=A_BROWSERS_ADDRESS, issuer=AN_ISSUER, transaction=auth.transaction
+    )
+
+
 def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
     *,
     people: FakePeople | None = None,
@@ -561,6 +564,8 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
     given: GivenDecks = NO_DECKS,
     signing_in: SigningIn | None = None,
     admin_people: AdminPeople | None = None,
+    agent: AgentFront | None = None,
+    texts: DeckTexts | None = None,
     shell: LobbyShell = LOBBY_SHELL,
 ) -> tuple[FastAPI, FrozenClock]:
     """The whole lobby wiring, so a test that needs two clients shares one app."""
@@ -571,28 +576,24 @@ def a_lobby_app(  # noqa: PLR0913 - each part is the seam one test replaces
         if signing_in is None or signing_in.decks is None
         else signing_in.decks
     )
+    auth = (
+        an_installed_auth(clock, transaction=SessionsOnly(crowd.sessions), shell=shell)
+        if signing_in is None
+        else signing_in.auth
+    )
     lobby = create_lobby(
         sessions=crowd.sessions if signing_in is None else signing_in.sessions,
         decks=decks,
-        pages=Pages(
-            preferences=a_preferences() if preferences is None else preferences,
-            age_in_words=age_in_words,
-            duration_in_words=duration_in_words,
-        ),
-        auth=(
-            an_installed_auth(
-                clock, transaction=SessionsOnly(crowd.sessions), shell=shell
-            )
-            if signing_in is None
-            else signing_in.auth
-        ),
+        preferences=a_preferences() if preferences is None else preferences,
+        auth=auth,
         private=LobbyPrivate(
-            voice=(
-                given.voice
-                if given.voice is not None
-                else VoiceStatusUse(private=UnavailableSpeech())
-            ),
             admin_people=admin_people,
+        ),
+        agent=an_agent_front(auth) if agent is None else agent,
+        own_decks=OwnDecks(
+            decks=decks.store,
+            sources=decks.sources,
+            texts=FakeDeckTexts(text=None) if texts is None else texts,
         ),
         shell=shell,
     )
@@ -646,7 +647,6 @@ def a_lobby(
     users: FakeUserStore | None = None,
     catalogs: Catalogs = CATALOGS,
     given: GivenDecks = NO_DECKS,
-    voice: VoiceStatusUse | None = None,
     person_preferences: PersonPreferencesStore | None = None,
 ) -> Lobby:
     """The whole lobby, with in-memory stores behind every port."""
@@ -654,7 +654,7 @@ def a_lobby(
     app, _ = a_lobby_app(
         people=people,
         preferences=a_preferences(catalogs=catalogs, people=person_preferences),
-        given=replace(given, voice=voice),
+        given=given,
     )
     return a_browser_at(
         app,
@@ -746,13 +746,20 @@ def a_signed_in_lobby(given: GivenDecks = NO_DECKS) -> TestClient:
     return lobby.client
 
 
-def put_a_built_deck(store: FakeDeckStore, *, slug: str, owner_id: str) -> None:
+def put_a_built_deck(
+    store: FakeDeckStore,
+    *,
+    slug: str,
+    owner_id: str,
+    title: str = "Hello Co-Presenter",
+    changed_at: datetime = NOW,
+) -> None:
     """A deck of this owner whose built talk is the example talk's real build."""
     store.put(
         Deck(
             slug=slug,
-            title="Hello Co-Presenter",
-            changed_at=NOW,
+            title=title,
+            changed_at=changed_at,
             owner_id=owner_id,
             source_id=SOURCE_ID,
             commit=_BUILT_DECK_COMMIT,

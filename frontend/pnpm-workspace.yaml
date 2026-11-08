@@ -1,31 +1,21 @@
 packages:
   - .
 
-# Registry packages resolve only to releases at least two weeks old (minutes).
-minimumReleaseAge: 20160
+# Registry packages resolve only to releases at least seven days old (minutes).
+minimumReleaseAge: 10080
 
-# Stopgap for minimatch below 11.0.1 (GHSA-g3hv-75wg-m249, medium denial of
-# service), which the eslint toolchain and one more parent pin; the resolved
-# minimatch 11.0.3 and its new dependency @isaacs/nonrecursive-glob-match 1.0.3
-# were published 2026-10-28, younger than the age gate above.
-# Risk: these two exact versions skip the age gate; any other version still
-# waits. Drop the exclude on 2026-11-11, when both are two weeks old, and the
-# override together with it once every parent itself depends on minimatch >= 11.0.1.
+# Security pins for transitive dependencies, each kept until its parents depend
+# on the fixed range themselves:
+# - minimatch below 11.0.1 (GHSA-g3hv-75wg-m249, medium denial of service) is
+#   still required by @eslint/config-array, @typescript-eslint/typescript-estree
+#   and eslint (^10) and by @redocly/openapi-core (5.1.9).
+# - glob below 14.0.2 (GHSA-3g3m-2fjr-6pw4) is still required by test-exclude
+#   (^13), through vite-plugin-istanbul.
 # minimatch 11 breaks one call of @redocly/openapi-core: lib/utils.js calls
 # require('minimatch') as a function, which only happens for remote specs with
 # header matching. The lobby's type generation reads a local file and never
 # reaches it; keep that in mind before pointing it at a remote spec or removing
-# this stopgap.
-#
-# Same stopgap for glob below 14.0.2 (GHSA-3g3m-2fjr-6pw4), pinned by test-exclude
-# through vite-plugin-istanbul: glob 14.0.2 (2026-10-27) and its path-scurry 3.0.0
-# are younger than the age gate. Drop both excludes on 2026-11-11 and the glob
-# override once test-exclude itself depends on glob >= 14.0.2.
-minimumReleaseAgeExclude:
-  - minimatch@11.0.3
-  - "@isaacs/nonrecursive-glob-match@1.0.3"
-  - glob@14.0.2
-  - path-scurry@3.0.0
+# the minimatch override.
 
 # deepmerge 4.3.1 has an unfixed prototype-poisoning advisory (GHSA-gcqx-w48m-w2h4).
 # vite-plugin-svelte's one call site is patched to merge itself, as appkit and

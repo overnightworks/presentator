@@ -1,10 +1,10 @@
-"""What a deck and its source are, everywhere in this product (ADR 0005)."""
+"""What a deck and its source are, everywhere in this product."""
 
 import posixpath
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import StrEnum
 from ipaddress import IPv6Address
 from pathlib import Path, PurePosixPath
@@ -227,9 +227,9 @@ class Source:
 class DeployKeyDraft:
     """An admin's own unbound SSH keypair: what the Add form shows and binds.
 
-    Server-held, keyed by the admin who owns it (ADR 0010's credential
-    vocabulary) rather than by session, so a reload still shows the key the
-    operator may already have pasted into the host. It is never a source.
+    Server-held, keyed by the admin who owns it rather than by session, so a reload
+    still shows the key the operator may already have pasted into the host. It is
+    never a source.
     """
 
     id: str
@@ -492,24 +492,21 @@ class Deck:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ListedDeck:
-    """One row of the deck list, with the state and the age the row shows."""
+    """One row of the deck list, with the state the row shows."""
 
     slug: str
     title: str
     state: DeckState
     changed_at: datetime
-    age: timedelta
 
 
 class SourceState(StrEnum):
     """What the sources list says a source is, read off its newest run.
 
-    No run is never-fetched, a successful run is reachable, and the reason a
-    credential the instance could not resolve never becomes a word on the
-    board: it folds into error. A refused login and a host that answered with
-    something else each keep their own word instead, because a wrong token, a
-    dead host, and a host that answered but not with the repository are three
-    different things an operator needs told apart.
+    No run is never-fetched and a successful run is reachable. A host that
+    never answers and a credential the instance could not resolve share one
+    word, error; the run's reason tells them apart. A refused login and a host
+    that answered with something else keep their own words.
     """
 
     REACHABLE = "reachable"
@@ -521,13 +518,13 @@ class SourceState(StrEnum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ListedSource:
-    """One row of the sources list, with the state and the age the row shows."""
+    """One row of the sources list: where it is, how it stands and its newest run."""
 
     name: str
     url: str
     access: AccessKind | None
     state: SourceState
-    age: timedelta | None
+    reason: SourceRunFailure | None
     fetched_at: datetime | None
 
 
@@ -537,7 +534,6 @@ class ShownSourceRun:
 
     outcome: SourceRunOutcome
     state: SourceState
-    age: timedelta
     at: datetime
     commit: str | None
     reason: SourceRunFailure | None
@@ -559,7 +555,7 @@ class SourcePage:
     url: str
     access: AccessKind | None
     state: SourceState
-    age: timedelta | None
+    reason: SourceRunFailure | None
     fetched_at: datetime | None
     public_key: str | None
     runs: tuple[ShownSourceRun, ...]
@@ -582,10 +578,9 @@ class SourceRemoval:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ShownAttempt:
-    """The build a deck page reports on: its commit, its age, and what broke."""
+    """The build a deck page reports on: its commit, when it started, and what broke."""
 
     commit: str
-    ago: timedelta
     started_at: datetime
     outcome: BuildOutcome
     failure: BuildFailure | None
@@ -599,11 +594,10 @@ class DeckPage:
     title: str
     source: str | None
     commit: str
-    built_ago: timedelta | None
     built_at: datetime | None
     state: DeckState
     attempt: ShownAttempt | None
-    # The themes this instance's toolchain carries (ADR 0014), or nothing
+    # The themes this instance's toolchain carries, or nothing
     # while its project cannot be read: an empty set is never shown as if it
     # were the real one (R3).
     themes: tuple[str, ...] | None

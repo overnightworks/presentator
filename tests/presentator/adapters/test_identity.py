@@ -11,13 +11,14 @@ import pytest
 from pydantic import SecretStr
 from webauth.config import WebAuthConfig
 from webauth.dependencies import ConnectionRefusal, admit_session
+from webauth.ports import AccountKind
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (
-    OldDatabaseError,
     ProcessWriteLock,
     SqliteIdentityWrites,
     SqliteSessionRecordStore,
+    StoredAccount,
     StoredSession,
     SystemClock,
     create_identity_tables,
@@ -26,30 +27,11 @@ from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host.main import web_auth_config_for
 from tests.support.people import (
-    copy_of_a_crashed_database,
     seed_user,
-    write_password_schema,
 )
 
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _ID_MARKER = "id-MARKER-4f7c1e"
-_A_FIRST_SESSIONS_TABLE_WITH_ITS_ROWS = (
-    "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL"
-    " UNIQUE, role TEXT NOT NULL);"
-    "CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL"
-    " REFERENCES users(id), created_at TEXT NOT NULL, expires_at TEXT NOT NULL);"
-    "CREATE TABLE decks (slug TEXT PRIMARY KEY);"
-    "INSERT INTO users VALUES ('user-1', 'felix', 'admin');"
-    "INSERT INTO sessions VALUES ('s-1', 'user-1', 'then', 'later');"
-    "INSERT INTO decks VALUES ('talk');"
-)
-_A_SESSIONS_TABLE_OF_THE_PREVIOUS_VERSION = (
-    "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL"
-    " UNIQUE, role TEXT NOT NULL);"
-    "CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL"
-    " REFERENCES users(id), created_at TEXT NOT NULL, last_seen TEXT NOT NULL,"
-    " ip_address TEXT NOT NULL DEFAULT '', user_agent TEXT NOT NULL DEFAULT '');"
-)
 
 
 @pytest.fixture
@@ -91,6 +73,15 @@ def an_admin(user_id: str = "user-1", username: str = "felix") -> User:
     return User(id=user_id, username=username, role=Role.ADMIN)
 
 
+def the_account_of(person: User) -> StoredAccount:
+    return StoredAccount(
+        id=person.id,
+        username=person.username,
+        role=person.role,
+        kind=AccountKind.PERSON,
+    )
+
+
 def stored_expiry(database: Path, session_id: str) -> str:
     with closing(sqlite3.connect(database)) as connection:
         (expires_at,) = connection.execute(
@@ -115,7 +106,7 @@ def test_a_session_is_read_back_with_the_account_joined_from_the_users(
 
     loaded = sessions.load(created.id)
     assert loaded is not None
-    assert loaded.user == an_admin()
+    assert loaded.user == the_account_of(an_admin())
     assert (loaded.created_at, loaded.expires_at) == (_NOW, expires_at)
 
 
@@ -317,12 +308,13 @@ def test_creating_the_tables_twice_leaves_the_people_as_they_were(
 
     loaded = SqliteSessionRecordStore(database).load(session.id)
     assert loaded is not None
-    assert loaded.user == an_admin()
+    assert loaded.user == the_account_of(an_admin())
 
 
 def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_address(
     database: Path,
 ) -> None:
+    """SI2, SI5: a fresh database stores no password, attempt or client address."""
     with closing(sqlite3.connect(database)) as connection, connection:
         user_columns = [
             column[1] for column in connection.execute("PRAGMA table_info(users)")
@@ -337,7 +329,7 @@ def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_add
             )
         }
 
-    assert user_columns == ["id", "username", "role"]
+    assert user_columns == ["id", "username", "role", "kind"]
     assert session_columns == [
         "id",
         "user_id",
@@ -347,68 +339,6 @@ def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_add
         "id_token",
     ]
     assert "login_attempts" not in tables
-
-
-@pytest.mark.parametrize(
-    "older_version",
-    [
-        pytest.param(
-            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL,"
-            " role TEXT NOT NULL, password_hash TEXT NOT NULL);",
-            id="password-hash-column",
-        ),
-        pytest.param(
-            "CREATE TABLE login_attempts (username TEXT NOT NULL,"
-            " failed_at TEXT NOT NULL);",
-            id="login-attempts-table",
-        ),
-        pytest.param(
-            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL"
-            " UNIQUE, role TEXT NOT NULL);"
-            "CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL"
-            " REFERENCES users(id), last_seen TEXT NOT NULL);",
-            id="sessions-without-created-at",
-        ),
-        pytest.param(
-            _A_SESSIONS_TABLE_OF_THE_PREVIOUS_VERSION,
-            id="sessions-with-last-seen-and-a-client-address",
-        ),
-        pytest.param(
-            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL"
-            " UNIQUE, role TEXT NOT NULL);"
-            "CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL"
-            " REFERENCES users(id), created_at TEXT NOT NULL, expires_at TEXT NOT"
-            " NULL, refresh_token TEXT);",
-            id="sessions-before-the-id-token-column",
-        ),
-        pytest.param(
-            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL,"
-            " role TEXT NOT NULL, password_hash TEXT NOT NULL);"
-            "CREATE TABLE sources (id TEXT PRIMARY KEY, name TEXT NOT NULL,"
-            " url TEXT NOT NULL, credential_reference TEXT, encrypted_secret BLOB);"
-            "INSERT INTO sources (id, name, url, credential_reference)"
-            " VALUES ('s', 'talks', 'https://example.test/talks.git', 'TOKEN');",
-            id="before-encryption-a-source-seeded-from-the-environment",
-        ),
-    ],
-)
-def test_a_file_from_an_older_version_is_refused_and_left_untouched(
-    tmp_path: Path,
-    older_version: str,
-) -> None:
-    database = tmp_path / "identity.sqlite3"
-    with closing(sqlite3.connect(database)) as connection:
-        connection.executescript("PRAGMA journal_mode=WAL;" + older_version)
-    before = database.read_bytes()
-    folder_before = sorted(tmp_path.iterdir())
-
-    with pytest.raises(
-        OldDatabaseError, match=r"move the database and its -wal and -shm files aside"
-    ):
-        create_identity_tables(database)
-
-    assert database.read_bytes() == before
-    assert sorted(tmp_path.iterdir()) == folder_before
 
 
 @pytest.mark.parametrize(
@@ -444,27 +374,6 @@ def test_a_file_this_version_started_is_completed_to_sessions_without_a_client_a
     ]
 
 
-def test_a_password_schema_only_in_the_write_ahead_log_is_refused_and_left_untouched(
-    tmp_path: Path,
-) -> None:
-    database = copy_of_a_crashed_database(
-        tmp_path / "crashed" / "identity.sqlite3", write_password_schema
-    )
-    companions = [database.with_name(database.name + "-wal"), database]
-    bytes_before = [path.read_bytes() for path in companions]
-    folder_before = set(database.parent.iterdir())
-
-    with pytest.raises(
-        OldDatabaseError, match=r"move the database and its -wal and -shm files aside"
-    ):
-        create_identity_tables(database)
-
-    assert [path.read_bytes() for path in companions] == bytes_before
-    assert set(database.parent.iterdir()) - folder_before <= {
-        database.with_name(database.name + "-shm")
-    }
-
-
 @pytest.mark.parametrize(
     ("expires_at", "stays"),
     [
@@ -480,6 +389,7 @@ def test_a_sweep_deletes_a_session_only_when_it_ended_before_the_sweep(
     *,
     stays: bool,
 ) -> None:
+    """SI5: a sweep deletes a session only when it ended before the sweep."""
     session = open_session(
         sessions, "user-1", now=_NOW - SESSION_LIFETIME, expires_at=expires_at
     )
@@ -551,6 +461,7 @@ def occurrences_in_the_file(database: Path, text: str) -> int:
 def test_a_refresh_token_is_stored_in_the_row_and_read_back_as_a_secret(
     database: Path, sessions: SqliteSessionRecordStore
 ) -> None:
+    """SI6: a refresh token is stored in the row and read back as a secret."""
     created = open_session(sessions, "user-1", refresh_token=a_token())
 
     loaded = sessions.load(created.id)
@@ -682,7 +593,7 @@ def test_every_way_of_ending_a_session_removes_its_token_with_the_row(
 def test_a_session_never_shows_its_tokens_in_repr_or_str(
     sessions: SqliteSessionRecordStore,
 ) -> None:
-    """#428 cell 4: neither `repr` nor `str` shows a token."""
+    """Neither `repr` nor `str` shows a token."""
     created = sessions.create(
         "user-1",
         now=_NOW,
@@ -699,7 +610,7 @@ def test_a_session_never_shows_its_tokens_in_repr_or_str(
 def test_the_id_token_is_read_back_and_survives_a_touch_and_a_refresh_token_swap(
     sessions: SqliteSessionRecordStore,
 ) -> None:
-    """#428 cells 1-3: the ID token reads back and outlives a touch and a swap."""
+    """The ID token reads back and outlives a touch and a swap."""
     created = sessions.create(
         "user-1",
         now=_NOW,
@@ -720,7 +631,7 @@ def test_the_id_token_is_read_back_and_survives_a_touch_and_a_refresh_token_swap
 def test_a_session_created_without_an_id_token_stores_none(
     database: Path,
 ) -> None:
-    """#474 cell 28: the caller states the ID token; NULL is stored for none."""
+    """SI7: the caller states the ID token; NULL is stored for none."""
     store = SqliteSessionRecordStore(database)
     created = store.create(
         "user-1",
@@ -734,44 +645,3 @@ def test_a_session_created_without_an_id_token_stores_none(
     loaded = store.load(created.id)
     assert loaded is not None
     assert loaded.id_token is None
-
-
-def write_the_first_sessions_table_in_the_log(database: Path) -> None:
-    with closing(sqlite3.connect(database)) as connection:
-        connection.executescript(_A_FIRST_SESSIONS_TABLE_WITH_ITS_ROWS)
-
-
-def test_a_file_with_the_first_sessions_table_is_refused_and_left_byte_unchanged(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "identity.sqlite3"
-    with closing(sqlite3.connect(database)) as connection:
-        connection.executescript(
-            "PRAGMA journal_mode=WAL;" + _A_FIRST_SESSIONS_TABLE_WITH_ITS_ROWS
-        )
-    before = database.read_bytes()
-
-    with pytest.raises(
-        OldDatabaseError, match=r"move the database and its -wal and -shm files aside"
-    ):
-        create_identity_tables(database)
-
-    assert database.read_bytes() == before
-
-
-def test_the_first_sessions_table_committed_only_in_the_log_is_refused_untouched(
-    tmp_path: Path,
-) -> None:
-    database = copy_of_a_crashed_database(
-        tmp_path / "crashed" / "identity.sqlite3",
-        write_the_first_sessions_table_in_the_log,
-    )
-    companions = [database.with_name(database.name + "-wal"), database]
-    bytes_before = [path.read_bytes() for path in companions]
-
-    with pytest.raises(
-        OldDatabaseError, match=r"move the database and its -wal and -shm files aside"
-    ):
-        create_identity_tables(database)
-
-    assert [path.read_bytes() for path in companions] == bytes_before

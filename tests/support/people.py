@@ -10,6 +10,8 @@ from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
 
+from webauth.ports import AccountKind
+
 from presentator.adapters.sqlite import rows
 from presentator.contracts.models import User
 
@@ -17,16 +19,15 @@ from presentator.contracts.models import User
 def seed_user(database: Path, person: User) -> None:
     with rows(database) as cursor:
         cursor.execute(
-            "INSERT OR IGNORE INTO users (id, username, role) VALUES (?, ?, ?)",
-            (person.id, person.username, person.role.value),
+            "INSERT OR IGNORE INTO users (id, username, role, kind)"
+            " VALUES (?, ?, ?, ?)",
+            (
+                person.id,
+                person.username,
+                person.role.value,
+                AccountKind.PERSON.value,
+            ),
         )
-
-
-def write_password_schema(database: Path) -> None:
-    with closing(sqlite3.connect(database)) as connection:
-        connection.execute("CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT)")
-        connection.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
-        connection.commit()
 
 
 def copy_of_a_crashed_database(

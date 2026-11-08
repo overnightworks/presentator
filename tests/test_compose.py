@@ -17,7 +17,7 @@ _COMPOSE = Path(__file__).parents[1] / "compose.yaml"
 
 
 def test_the_file_publishes_nothing_and_binds_nothing_outside_the_release() -> None:
-    """S9e (#527): no ports, no env_file, no bind outside the release."""
+    """CF4: no ports, no env_file, no bind outside the release."""
     compose = _parsed_compose()
 
     for service in compose["services"].values():
@@ -30,7 +30,7 @@ def test_the_file_publishes_nothing_and_binds_nothing_outside_the_release() -> N
 
 
 def test_no_environment_value_reads_the_callers_shell() -> None:
-    """S9e (#527): plain values are literals, no `$` in any environment value."""
+    """CF4: plain values are literals, no `$` in any environment value."""
     for service in _parsed_compose()["services"].values():
         assert all(
             "$" not in (value or "") for value in _environment_of(service).values()
@@ -39,7 +39,7 @@ def test_no_environment_value_reads_the_callers_shell() -> None:
 
 
 def test_no_healthcheck_reads_the_callers_shell() -> None:
-    """S9e (#527): no `$` in any part of a service's healthcheck command."""
+    """CF4: no `$` in any part of a service's healthcheck command."""
     for service in _parsed_compose()["services"].values():
         assert all(
             "$" not in part for part in service.get("healthcheck", {}).get("test", [])
@@ -61,12 +61,12 @@ def test_every_service_tmpfs_entry_is_nosuid_and_nodev() -> None:
 
 
 def test_the_worker_joins_no_network_of_the_file() -> None:
-    """S9e (#527): networks, only the instance is on one."""
+    """CF4: networks, only the instance is on one."""
     assert "networks" not in _parsed_compose()["services"]["build-worker"]
 
 
 def test_the_worker_carries_no_label_the_proxy_could_route_by() -> None:
-    """S9e (#527): labels, the proxy cannot route to the worker."""
+    """CF4: labels, the proxy cannot route to the worker."""
     assert "labels" not in _parsed_compose()["services"]["build-worker"]
 
 
@@ -85,6 +85,7 @@ def _service_lines(name: str) -> list[str]:
     return [line for line in lines[start:end] if not line.strip().startswith("#")]
 
 
+# DK4
 @pytest.mark.parametrize(
     "sealing_line",
     [
@@ -100,12 +101,12 @@ def _service_lines(name: str) -> list[str]:
     ],
 )
 def test_the_worker_service_carries_each_key_that_seals_it(sealing_line: str) -> None:
-    """53 (#431): the sealed worker service in compose."""
+    """The sealed worker service in compose."""
     assert sealing_line in "\n".join(_service_lines("build-worker"))
 
 
 def test_the_worker_swap_equals_its_memory_so_swap_cannot_double_the_bound() -> None:
-    """53 (#431): the sealed worker service in compose."""
+    """The sealed worker service in compose."""
     keys = {
         key: value
         for key, _, value in (
@@ -120,14 +121,14 @@ def test_the_worker_swap_equals_its_memory_so_swap_cannot_double_the_bound() -> 
 def test_the_worker_service_has_no_key_that_would_unseal_or_rebuild_it(
     absent_key: str,
 ) -> None:
-    """53 (#431): the sealed worker service in compose."""
+    """The sealed worker service in compose."""
     keys = {line.strip().partition(":")[0] for line in _service_lines("build-worker")}
 
     assert absent_key not in keys
 
 
 def test_the_socket_volume_starts_as_a_private_root_directory() -> None:
-    """53 (#431): the sealed worker service in compose."""
+    """The sealed worker service in compose."""
     options = _socket_volume_options()
 
     assert options["uid"] == "0"
@@ -139,7 +140,7 @@ def test_the_instance_answers_the_backchannel_under_the_host_of_its_public_origi
 ):
     """Logout: the identity provider reaches the lobby by Host.
 
-    Owner: docs/explanation/trust-boundaries.md
+    Owner: docs/ARCHITECTURE.md
     """
     compose = _parsed_compose()
     instance = compose["services"]["presentator"]
@@ -187,13 +188,17 @@ def test_the_instance_holds_no_authority_over_this_machines_docker(
             "oidc_client_secret",
             "PRESENTATOR_OIDC_CLIENT_SECRET_FILE",
         ),
+        (
+            "litellm_key",
+            "PRESENTATOR_AGENT__GATEWAY__KEY_FILE",
+        ),
     ],
-    ids=["master key", "client secret"],
+    ids=["master key", "client secret", "gateway key"],
 )
 def test_each_secret_is_a_file_secret_that_only_the_instance_mounts(
     name: str, setting: str
 ) -> None:
-    """edge#280: every app secret reaches the container as a mounted file."""
+    """CF1: every app secret reaches the container as a mounted file."""
     compose = _parsed_compose()
 
     assert set(compose["secrets"][name]) == {"file"}
@@ -213,7 +218,7 @@ def test_each_secret_is_a_file_secret_that_only_the_instance_mounts(
 def test_a_secret_granted_to_the_worker_in_either_form_is_caught(
     grant: str | dict[str, str],
 ) -> None:
-    """#509 acceptance 2: a worker secret is caught in short and long form."""
+    """A worker secret is caught in short and long form."""
     compose = _parsed_compose()
     compose["services"]["build-worker"]["secrets"] = [grant]
 
@@ -224,7 +229,7 @@ def test_a_secret_granted_to_the_worker_in_either_form_is_caught(
 
 
 def test_no_service_carries_the_master_key_in_its_environment() -> None:
-    """#509: no PRESENTATOR_SECRET_KEY environment entry remains, in either form."""
+    """No PRESENTATOR_SECRET_KEY environment entry remains, in either form."""
     for service in _parsed_compose()["services"].values():
         assert "PRESENTATOR_SECRET_KEY" not in _environment_of(service)
         assert "args" not in service.get("build", {})

@@ -17,10 +17,14 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.ports import SessionRecord, SessionRecordStore
 
 from presentator.api.auth import LOGIN_PATH, LOGOUT_PATH
+from presentator.contracts.preferences import InstanceSettings
+from presentator.contracts.text import Catalogs
 from presentator.host.oidc import oidc_client_config
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_CLIENT_CREDENTIAL,
+    ENGLISH,
+    a_preferences,
     a_settings,
 )
 from tests.support.sign_in_support import Scene, TransactionDouble, a_scene
@@ -115,7 +119,7 @@ def _directives(policy: str) -> dict[str, str]:
 def test_logging_out_answers_the_page_that_posts_the_stored_hint_to_the_issuer(
     scene: Scene,
 ) -> None:
-    """#428 cell 12: the page posts the stored hint and the row is gone."""
+    """SI3: the page posts the stored hint and the row is gone."""
     scene.sign_in()
     (stored,) = scene.stored_id_tokens()
 
@@ -156,7 +160,7 @@ def _in_the_file(scene: Scene, statement: str) -> None:
 def test_a_logout_with_no_stored_hint_posts_only_the_client_and_the_return_address(
     scene: Scene, arrangement: str
 ) -> None:
-    """#428 cell 13: with no stored hint the page has no `id_token_hint`."""
+    """With no stored hint the page has no `id_token_hint`."""
     _arrange_no_hint(scene, arrangement)
 
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
@@ -172,7 +176,7 @@ def test_a_logout_with_no_stored_hint_posts_only_the_client_and_the_return_addre
 def test_the_logout_page_brings_its_own_policy_naming_the_issuer(
     scene: Scene,
 ) -> None:
-    """#428 cell 14: the page carries webauth's policy naming the issuer."""
+    """The page carries webauth's policy naming the issuer."""
     scene.sign_in()
 
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
@@ -186,12 +190,28 @@ def test_the_logout_page_brings_its_own_policy_naming_the_issuer(
 
 
 def test_the_fallback_button_reads_the_catalogs_log_out(scene: Scene) -> None:
-    """#428 cell 15: the fallback button reads the catalog's `log_out`."""
+    """The fallback button reads the catalog's `log_out`."""
     scene.sign_in()
 
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
 
     assert '<button type="submit">Log out</button>' in answer.text
+
+
+def test_the_logout_page_carries_the_instance_language_as_its_lang(
+    tmp_path: Path,
+) -> None:
+    german = replace(ENGLISH, language_tag="de", language_name="Deutsch")
+    preferences = a_preferences(
+        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": german})
+    )
+    preferences.instance.write(InstanceSettings(language_tag="de"))
+    scene = a_scene(tmp_path, preferences=preferences)
+    scene.sign_in()
+
+    answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
+
+    assert re.search(r"<html[^>]*\blang=\"de\"", answer.text)
 
 
 def test_the_session_cookie_of_a_logged_out_browser_cannot_come_back(
@@ -223,7 +243,7 @@ def test_a_logout_form_without_a_token_from_this_origin_is_accepted(
 def test_a_stale_csrf_cookie_of_the_removed_token_layer_does_not_block_a_logout(
     scene: Scene,
 ) -> None:
-    """#474 cell 27: the removed second cookie is ignored at logout."""
+    """The removed second cookie is ignored at logout."""
     scene.sign_in()
     scene.lobby.client.cookies.set("__Host-csrf_token", "stale")
 
@@ -327,7 +347,7 @@ def test_a_store_failure_in_the_logout_answers_500_clears_no_cookie_and_keeps_th
 def test_every_other_answer_of_the_lobby_lets_a_form_go_to_this_origin_only(
     scene: Scene,
 ) -> None:
-    """#428 cell 21: every other answer's `form-action` is this origin only."""
+    """Every other answer's `form-action` is this origin only."""
     answer = scene.lobby.client.get("/login")
 
     directives = _directives(answer.headers["content-security-policy"])
@@ -335,19 +355,10 @@ def test_every_other_answer_of_the_lobby_lets_a_form_go_to_this_origin_only(
 
 
 def test_a_logout_by_get_is_no_logout(scene: Scene) -> None:
-    """#428 cell 18: `GET /logout` is no logout and the row stays."""
+    """`GET /logout` is no logout and the row stays."""
     scene.sign_in()
 
     answer = scene.lobby.client.get(LOGOUT_PATH)
 
     assert answer.status_code == HTTPStatus.METHOD_NOT_ALLOWED
     assert scene.count("sessions") == 1
-
-
-def test_the_header_form_names_the_path_of_the_logout_route(
-    scene: Scene,
-) -> None:
-    scene.sign_in()
-    signed_in_page = scene.lobby.client.get("/").text
-
-    assert f'action="{LOGOUT_PATH}"' in signed_in_page

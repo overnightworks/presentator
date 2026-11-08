@@ -134,13 +134,36 @@ def test_an_address_no_route_claims_loads_the_lobby_app_for_a_signed_in_reader(
     assert _is_the_lobby_app(answer.text)
 
 
+def test_account_is_an_address_no_route_claims_and_loads_the_lobby_app(
+    signed_in_lobby: Lobby,
+) -> None:
+    answer = signed_in_lobby.client.get("/account")
+
+    assert answer.status_code == HTTPStatus.OK
+    assert _is_the_lobby_app(answer.text)
+    assert "<form" not in answer.text
+
+
+@pytest.mark.parametrize("path", ["/account", "/theme"])
+def test_a_post_to_a_retired_form_address_is_the_frameworks_not_found(
+    signed_in_lobby: Lobby, path: str
+) -> None:
+    answer = signed_in_lobby.client.post(
+        path, data={"language": "de", "theme": ThemeChoice.DARK.value}
+    )
+
+    assert answer.status_code == HTTPStatus.NOT_FOUND
+    assert signed_in_lobby.client.get("/api/account").json() == {
+        "theme": ThemeChoice.FOLLOW_SYSTEM.value
+    }
+
+
 @pytest.mark.parametrize(
     "path",
     [
         "/api/no-such-route",
         "/_app/no-such-asset.js",
         "/auth/no-such-step",
-        "/static/no-such-sheet.css",
         "/setup",
     ],
 )
@@ -181,9 +204,17 @@ def test_the_policy_admits_the_built_bootstrap_and_no_other_inline_script(
     ]
 
 
+def test_the_policy_blocks_every_frame_in_and_of_the_lobby(lobby: Lobby) -> None:
+    policy = _directives(lobby.client.get("/login").headers["content-security-policy"])
+
+    assert policy["frame-src"] == ["'none'"]
+    assert policy["frame-ancestors"] == ["'none'"]
+
+
 def test_the_policy_admits_one_style_attribute_by_its_hash_and_no_inline_style(
     lobby: Lobby,
 ) -> None:
+    """LB6."""
     policy = lobby.client.get("/login").headers["content-security-policy"]
 
     self_keyword, unsafe_hashes, *hashes = _directives(policy)["style-src"]

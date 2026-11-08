@@ -2,7 +2,7 @@
 
 Which folder counts as a deck, which deck is out of date, when a build may
 become the talk that is delivered, and what a deck page says is decided here;
-git, TOML, SQL, and the build toolchain stay outside (ADR 0001, ADR 0005).
+git, TOML, SQL, and the build toolchain stay outside.
 """
 
 import hmac
@@ -10,7 +10,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta
+from datetime import timedelta
 from enum import StrEnum
 from functools import partial
 from hashlib import sha256
@@ -19,7 +19,8 @@ from pathlib import Path, PurePosixPath
 from threading import RLock
 from typing import BinaryIO, Final
 
-from presentator.application.build_retention import builds_removed, delete_absent, sweep
+from presentator.application import build_retention
+from presentator.application.source_state import source_state_of
 from presentator.contracts.decks import (
     SLIDES_FILE,
     AccessKind,
@@ -228,23 +229,6 @@ def _connection_fingerprint(key: bytes, proof: _ConnectionProof) -> str:
     return hmac.new(key, message, sha256).hexdigest()
 
 
-def _source_state_of(run: SourceRun) -> SourceState:
-    """The one word the sources list says, read off a run and its reason.
-
-    A refused login and a host that answered with something else each keep
-    their own word, so a valid token, a dead host, and a host that answered
-    but not with the repository no longer all read the same; a credential the
-    instance could not resolve still folds into error.
-    """
-    if run.outcome is SourceRunOutcome.SUCCESS:
-        return SourceState.REACHABLE
-    if run.reason is SourceRunFailure.REFUSED:
-        return SourceState.REFUSED
-    if run.reason is SourceRunFailure.FAILED:
-        return SourceState.FAILED
-    return SourceState.ERROR
-
-
 def _state_of(deck: Deck) -> DeckState:
     """The one word for what this deck is, read off its talk and its attempt.
 
@@ -311,21 +295,19 @@ class Decks:
         source = self._named(name)
         if source is None:
             return None
-        now = self.clock.now()
-        listed = self._listed_source(source, now)
+        listed = self._listed_source(source)
         return SourcePage(
             name=listed.name,
             url=listed.url,
             access=listed.access,
             state=listed.state,
-            age=listed.age,
+            reason=listed.reason,
             fetched_at=listed.fetched_at,
             public_key=source.public_key,
             runs=tuple(
                 ShownSourceRun(
                     outcome=run.outcome,
-                    state=_source_state_of(run),
-                    age=now - run.at,
+                    state=source_state_of(run),
                     at=run.at,
                     commit=None if run.commit is None else run.commit[:_SHORT_COMMIT],
                     reason=run.reason,
@@ -417,7 +399,7 @@ class Decks:
             left = SourceRemovalRefused(
                 reason=SourceRemovalRefusal.DISK_LEFTOVER,
                 mirror=self.folders.forget(source),
-                builds=builds_removed(self.builder, carried),
+                builds=build_retention.builds_removed(self.builder, carried),
             )
             if left.mirror is not None or left.builds != ():
                 return left
@@ -513,7 +495,7 @@ class Decks:
         """Store a source with its secrets, fetch it once, return the webhook secret.
 
         The webhook secret is generated here and returned in the clear so the
-        created screen can show it once; only its hash is stored. The access
+        Add page's created view can show it once; only its hash is stored. The access
         secret is handed to the store and never returned. A source is stored
         only for the exact URL and secret a Check connection already proved
         reachable, never on the fingerprint of a different pair — SSH proves
@@ -634,11 +616,11 @@ class Decks:
     def listed_sources(self) -> tuple[ListedSource, ...]:
         """Each source as the list shows it, reading the newest run only.
 
-        No run is never-fetched; a successful newest run is reachable; a failed
-        one is error, including a credential the instance could not resolve.
+        No run is never-fetched and a successful newest run is reachable; a
+        failed one carries its state, reason and instant, worded by
+        `source_state_of`.
         """
-        now = self.clock.now()
-        return tuple(self._listed_source(source, now) for source in self.sources.all())
+        return tuple(self._listed_source(source) for source in self.sources.all())
 
     def listed(self, *, viewer: str) -> tuple[ListedDeck, ...]:
         """The viewer's own decks, newest changed first, reading no source.
@@ -646,7 +628,6 @@ class Decks:
         A page view costs a read, never a pull: what the source carries is the
         refresh's business.
         """
-        now = self.clock.now()
         newest_first = sorted(
             (deck for deck in self.store.all() if deck.is_owned_by(viewer)),
             key=lambda deck: (-deck.changed_at.timestamp(), deck.slug),
@@ -657,7 +638,6 @@ class Decks:
                 title=deck.title,
                 state=_state_of(deck),
                 changed_at=deck.changed_at,
-                age=now - deck.changed_at,
             )
             for deck in newest_first
         )
@@ -684,7 +664,6 @@ class Decks:
             title=deck.title,
             source=self._address_of(deck),
             commit=(deck.commit if built is None else built.commit)[:_SHORT_COMMIT],
-            built_ago=None if built is None else self.clock.now() - built.built_at,
             built_at=None if built is None else built.built_at,
             state=_state_of(deck),
             attempt=self._shown(deck.attempt),
@@ -701,7 +680,6 @@ class Decks:
             return None
         return ShownAttempt(
             commit=attempt.commit[:_SHORT_COMMIT],
-            ago=self.clock.now() - attempt.started_at,
             started_at=attempt.started_at,
             outcome=attempt.outcome,
             failure=attempt.failure,
@@ -748,15 +726,15 @@ class Decks:
         sources = [source for source in self.sources.all() if source.owner_id == viewer]
         return sources[0].url if len(sources) == 1 else None
 
-    def _listed_source(self, source: Source, now: datetime) -> ListedSource:
+    def _listed_source(self, source: Source) -> ListedSource:
         """The row for that source, derived from its newest run and nothing else."""
         run = self.source_runs.newest(source.id)
         return ListedSource(
             name=source.name,
             url=source.url,
             access=access_kind_of(source.url),
-            state=SourceState.NEVER_FETCHED if run is None else _source_state_of(run),
-            age=None if run is None else now - run.at,
+            state=SourceState.NEVER_FETCHED if run is None else source_state_of(run),
+            reason=None if run is None else run.reason,
             fetched_at=None if run is None else run.at,
         )
 
@@ -766,7 +744,7 @@ class Decks:
             return
         try:
             work()
-            sweep(self.builder, self.sources, self.store)
+            build_retention.sweep(self.builder, self.sources, self.store)
         finally:
             self.one_at_a_time.release()
 
@@ -853,24 +831,24 @@ class Decks:
             if not taken_in:
                 _log.warning(_NAME_BELONGS_TO_ANOTHER_SOURCE, folder.name, source.name)
         present = frozenset(folder.name for folder in poll.folders)
-        delete_absent(self.store, present=present, source_id=source.id, at=at)
+        build_retention.delete_absent(
+            self.store, present=present, source_id=source.id, at=at
+        )
 
     def _build_what_changed(self, source: Source) -> None:
         """Build that source's decks whose commit nothing has tried yet.
 
-        The commit is the whole change check: a push moves one folder's commit,
-        so only that deck is built again and the other talks are left alone. A
-        folder standing at the commit its talk was built from needs no build at
-        all, and a commit that was already tried is not tried again, so a deck
-        that cannot build costs one build and not one per refresh until it is
-        pushed again. A deck is built out of the mirror of its own source, so a
-        source's walk passes over the decks another source carried.
+        The commit is the change check: a push moves one folder's commit, so only that
+        deck is rebuilt. A folder at a standing talk's commit whose run is on disk needs
+        no build. A tried commit is not retried, so a deck that cannot build costs one
+        build, not one per refresh. A vanished run is rebuilt: `builds/` and `mirrors/`
+        are caches the rows rebuild; a gone mirror is cloned again at the next take-in.
         """
         for deck in self.store.all():
             if deck.source_id != source.id:
                 continue
             self._give_up_on_a_build_that_never_returned(deck)
-            standing = deck.build
+            standing = build_retention.standing_build(self.builder, deck)
             if standing is not None and standing.commit == deck.commit:
                 self._deliver_the_standing_talk_again(deck, standing)
                 continue

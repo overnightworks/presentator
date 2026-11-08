@@ -1,18 +1,18 @@
-"""The page one deck stands on, its PDF download, and the talk the talk host delivers.
+"""One deck's PDF download and the talk the talk host delivers.
 
-The lobby serves the page and the download; the talk host serves the talk, and
-the page links there. The address names a deck; what that deck's row points at
-is what the talk is served from and what the download hands over. Nothing a
-request carries ever becomes part of a path: Starlette's static files resolve
-every asset below the build directory and refuse whatever would leave it, a
-path that is not a file is the application's `index.html`, and the export is
-the file the row names. The session guard in front of the whole lobby covers
-the page and the download.
+The lobby app is the deck's page and the lobby serves the download; the talk
+host serves the talk, and the page links there. The address names a deck; what
+that deck's row points at is what the talk is served from and what the
+download hands over. Nothing a request carries ever becomes part of a path:
+Starlette's static files resolve every asset below the build directory and
+refuse whatever would leave it, a path that is not a file is the application's
+`index.html`, and the export is the file the row names. The session guard in
+front of the whole lobby covers the download.
 """
 
 import os
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import timedelta
 from http import HTTPStatus
 from mimetypes import guess_type
 from pathlib import Path
@@ -29,24 +29,11 @@ from starlette.types import Receive, Scope, Send
 
 from presentator.api.admission import gated_person
 from presentator.api.deck_api import deck_routes
-from presentator.api.pages import Pages, state_word
 from presentator.application.decks import Decks
-from presentator.contracts.decks import (
-    DECK_PATH,
-    TALK_PAGE,
-    BuildFailure,
-    BuildFailureReason,
-    DeckPage,
-    DeckState,
-    ShownAttempt,
-    talk_address,
-)
-from presentator.contracts.text import LobbyText
+from presentator.contracts.decks import DECK_PATH, TALK_PAGE
 
 _DECK_PAGE: Final = f"{DECK_PATH}/{{slug}}"
 _DECK_PDF: Final = f"{_DECK_PAGE}/pdf"
-_DECK_TEMPLATE: Final = "deck.html"
-_UNKNOWN_DECK_TEMPLATE: Final = "deck_unknown.html"
 _PDF_TYPE: Final = "application/pdf"
 _SAVED_AS: Final = "{slug}.pdf"
 _UNKNOWN_TYPE: Final = "application/octet-stream"
@@ -54,119 +41,12 @@ _READS: Final = frozenset({"GET", "HEAD"})
 _THE_OPEN_FILE: Final = "/proc/self/fd/{descriptor}"
 
 
-def _worded(failure: BuildFailure, text: LobbyText) -> str | None:
-    """The words a failure is shown in: the toolchain's own, or the catalog's."""
-    counts = {
-        "written": failure.written_megabytes,
-        "allowed": failure.allowed_megabytes,
-        "megabytes": failure.allowed_megabytes,
-        "entries": failure.allowed_entries,
-    }
-    sentence = {
-        BuildFailureReason.TOOLCHAIN: failure.text,
-        BuildFailureReason.NO_WORDS: None,
-        BuildFailureReason.OUTPUT_MEGABYTES: text.deck_failed_output_megabytes,
-        BuildFailureReason.OUTPUT_ENTRIES: text.deck_failed_output_entries,
-        BuildFailureReason.OUTPUT_SHAPE: text.deck_failed_output_shape,
-        BuildFailureReason.DECK_MEGABYTES: text.deck_failed_deck_megabytes,
-        BuildFailureReason.DECK_PATHS: text.deck_failed_deck_paths,
-    }[failure.reason]
-    if failure.reason is BuildFailureReason.TOOLCHAIN or sentence is None:
-        return sentence
-    return sentence.format(**counts)
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Banner:
-    """What a deck page says about the build that ran last, above the ways in.
-
-    Every word of it is already in the reader's language: the template places
-    them, it does not choose them.
-    """
-
-    lead: str
-    label: str
-    commit: str
-    when: str
-    failure: str | None
-    sentences: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _DeckPage:
-    """The page that says what a deck is and offers the ways into it."""
+class _DeckPdf:
+    """The download of a deck's exported PDF."""
 
     decks: Decks
-    pages: Pages
-    talk_origin: str
-
-    def deck(self, request: Request, slug: str) -> Response:
-        """Show the deck's title, its state, where it came from, and the ways in."""
-        page = self.decks.page(slug, viewer=gated_person(request).id)
-        if page is None:
-            return self._no_such_deck(request)
-        text = self.pages.appearance(request).text
-        return self.pages.page(
-            request,
-            _DECK_TEMPLATE,
-            title=page.title,
-            slug=page.slug,
-            talk=f"{self.talk_origin}{talk_address(page.slug)}",
-            built=self._when_it_was_built(page.built_ago, text),
-            source=page.source,
-            commit=page.commit,
-            state=page.state.value,
-            state_word=state_word(page.state, text),
-            views_open=page.views_open,
-            banner=self._banner(page, text),
-            builds_with=self._builds_with(page.themes, text),
-        )
-
-    def _banner(self, page: DeckPage, text: LobbyText) -> Banner | None:
-        """The building or the failure block, while there is one to show."""
-        attempt = page.attempt
-        if attempt is None:
-            return None
-        if page.state is DeckState.BUILDING:
-            return self._it_is_building(attempt, text)
-        return self._it_failed(page, attempt, text)
-
-    def _it_is_building(self, attempt: ShownAttempt, text: LobbyText) -> Banner:
-        """That a build is running, on which commit, and for how long (line 10)."""
-        running_for = self.pages.duration_in_words(attempt.ago, text.language_tag)
-        return Banner(
-            lead=text.deck_building_explanation,
-            label=text.deck_building_label,
-            commit=attempt.commit,
-            when=text.deck_building_for.format(age=running_for),
-            failure=None,
-            sentences=(),
-        )
-
-    def _it_failed(
-        self,
-        page: DeckPage,
-        attempt: ShownAttempt,
-        text: LobbyText,
-    ) -> Banner:
-        """What broke, when it was tried, and what still stands (lines 9, 16)."""
-        failure = attempt.failure
-        no_words = (
-            (text.deck_failed_without_a_message,)
-            if failure is None or failure.reason is BuildFailureReason.NO_WORDS
-            else ()
-        )
-        still_standing = (
-            (text.deck_failed_last_talk_stands,) if page.built_ago is not None else ()
-        )
-        return Banner(
-            lead=text.deck_failed_title,
-            label=text.deck_attempt_label,
-            commit=attempt.commit,
-            when=self.pages.age_in_words(attempt.ago, text.language_tag),
-            failure=None if failure is None else _worded(failure, text),
-            sentences=(*no_words, *still_standing),
-        )
+    not_found: Callable[[Request], Response]
 
     def pdf(self, request: Request, slug: str) -> Response:
         """Hand over the file this deck's row names, saved under the deck's name.
@@ -178,50 +58,12 @@ class _DeckPage:
         export = self.decks.exported_pdf(slug, viewer=gated_person(request).id)
         file = None if export is None else self.decks.open_build_file(export)
         if file is None:
-            return self._no_such_deck(request)
+            return self.not_found(request)
         return _OpenedFile(
             file,
             media_type=_PDF_TYPE,
             filename=_SAVED_AS.format(slug=slug),
         )
-
-    def _no_such_deck(self, request: Request) -> Response:
-        """The lobby's own page for an address no deck stands under."""
-        return self.pages.page(
-            request,
-            _UNKNOWN_DECK_TEMPLATE,
-            status=HTTPStatus.NOT_FOUND,
-        )
-
-    def _builds_with(
-        self,
-        themes: tuple[str, ...] | None,
-        text: LobbyText,
-    ) -> str | None:
-        """What this instance's toolchain carries, or nothing while unreadable (R3).
-
-        Names only, never a path or a version (R4): the toolchain project's
-        `package.json` is read no further than its theme package names.
-        """
-        if themes is None:
-            return None
-        separator = text.deck_theme_separator
-        return text.deck_builds_with.format(themes=separator.join(themes))
-
-    def _when_it_was_built(
-        self,
-        built_ago: timedelta | None,
-        text: LobbyText,
-    ) -> str | None:
-        """How long ago the delivered talk was built, once one is delivered.
-
-        The one value says both that a talk stands and how old it is, so the
-        page cannot offer a view of a build whose time it cannot name.
-        """
-        if built_ago is None:
-            return None
-        age = self.pages.age_in_words(built_ago, text.language_tag)
-        return text.deck_built.format(age=age)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -337,16 +179,22 @@ def _leaves_the_talk(directory: Path, path: str) -> bool:
 
 
 def add_deck_pages(
-    lobby: FastAPI, *, decks: Decks, pages: Pages, talk_origin: str
+    lobby: FastAPI,
+    *,
+    decks: Decks,
+    talk_origin: str,
+    mark: Mapping[str, object],
+    not_found: Callable[[Request], Response],
 ) -> None:
-    """Give the lobby the deck page, its download and its JSON facts.
+    """Give the lobby the deck's PDF download and its JSON facts.
 
-    The views are at `talk_origin`.
+    The page itself is the lobby app's; a download no deck stands under is
+    answered by `not_found`. The views are at `talk_origin`, and `mark` offers the
+    JSON facts to the reader's agent as a tool.
     """
-    page = _DeckPage(decks=decks, pages=pages, talk_origin=talk_origin)
-    lobby.add_api_route(_DECK_PAGE, page.deck, methods=["GET"])
-    lobby.add_api_route(_DECK_PDF, page.pdf, methods=["GET"])
-    lobby.include_router(deck_routes(decks=decks, talk_origin=talk_origin))
+    download = _DeckPdf(decks=decks, not_found=not_found)
+    lobby.add_api_route(_DECK_PDF, download.pdf, methods=["GET"])
+    lobby.include_router(deck_routes(decks=decks, talk_origin=talk_origin, mark=mark))
 
 
 def add_talk_mount(app: FastAPI, *, decks: Decks) -> None:

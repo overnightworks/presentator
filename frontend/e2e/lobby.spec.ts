@@ -1,35 +1,72 @@
 import type { Page } from '@playwright/test';
 
 import type { SessionView } from '../src/lib/api/session.ts';
-import { expect, test } from './coverage.ts';
+import { expect, test } from './person.ts';
+import { sessionOf } from './scenario.ts';
 
-async function sessionOf(page: Page): Promise<SessionView> {
-	const answer = await page.request.get('/api/session', { headers: { Accept: 'application/json' } });
-	return (await answer.json()) as SessionView;
-}
+const SOURCES_PAGE = '/settings/sources';
 
 async function showsTheSignInBoard(page: Page, session: SessionView): Promise<void> {
 	await expect(page.locator('.signin .wordmark')).toHaveText(session.words.wordmark);
-	await expect(page.locator('.signin a[href]').first()).toHaveAttribute('href', session.sign_in.start);
+	await expect(page.locator('.signin a[href]').first()).toHaveAttribute(
+		'href',
+		session.sign_in.start
+	);
 }
 
-async function showsAServerRenderedPage(page: Page, session: SessionView): Promise<void> {
-	await expect(page.getByRole('link', { name: session.words.section_decks, exact: true })).toBeVisible();
+async function showsALobbyPage(page: Page, session: SessionView): Promise<void> {
+	await expect(
+		page.getByRole('link', { name: session.words.section_decks, exact: true })
+	).toBeVisible();
 	await expect(page.locator('.signin')).toHaveCount(0);
 }
 
-test.describe('signed out', () => {
-	test.use({ storageState: { cookies: [], origins: [] } });
+// SI2.
+test('the signed-out page renders the sign-in board from the kit', async ({ page }) => {
+	const session = await sessionOf(page);
 
-	test('the signed-out page renders the sign-in board from the kit', async ({ page }) => {
-		const session = await sessionOf(page);
+	await page.goto('/login');
 
-		await page.goto('/login');
-
-		await showsTheSignInBoard(page, session);
-		await expect(page).toHaveTitle(session.words.wordmark);
-	});
+	await showsTheSignInBoard(page, session);
+	await expect(page).toHaveTitle(session.words.wordmark);
 });
+
+const refusals = [
+	{ path: '/login/no-access', action: 'log-out', retry: undefined },
+	{ path: '/login/talk/no-access', action: 'log-out', retry: undefined },
+	{
+		path: '/login/login-failed',
+		action: 'retry',
+		retry: (session: SessionView) => session.sign_in.start
+	},
+	{
+		path: '/login/talk/login-failed',
+		action: 'retry',
+		retry: (session: SessionView) => session.sign_in.talk_start
+	}
+] as const;
+
+async function showsTheRefusalBoard(
+	page: Page,
+	session: SessionView,
+	refusal: (typeof refusals)[number]
+): Promise<void> {
+	await expect(page.locator('.signin .wordmark')).toHaveText(session.words.wordmark);
+	await expect(page.getByRole('link', { name: session.words.legal_impressum })).toBeVisible();
+	await expect(page.getByRole('link', { name: session.words.legal_datenschutz })).toBeVisible();
+	await expect(page.getByRole('link', { name: session.words.legal_nutzungsbedingungen })).toBeVisible();
+	if (refusal.action === 'log-out') {
+		await expect(page.locator('form.log-out')).toHaveAttribute('action', session.sign_in.logout);
+		await expect(page.locator('form.log-out')).toHaveAttribute('method', /post/i);
+		await expect(page.getByRole('link', { name: 'Back' })).toHaveCount(0);
+	} else {
+		await expect(page.locator('.signin [role=alert]')).toBeVisible();
+		await expect(page.locator('.signin a[href]').first()).toHaveAttribute(
+			'href',
+			refusal.retry(session)
+		);
+	}
+}
 
 test("SvelteKit's announcer is there and visually hidden", async ({ page }) => {
 	await page.goto('/login');
@@ -41,24 +78,26 @@ test("SvelteKit's announcer is there and visually hidden", async ({ page }) => {
 	expect(box?.height).toBeLessThanOrEqual(1);
 });
 
-test('Svelte, Jinja and Svelte again, then back and forward across them', async ({ page }) => {
-	const session = await sessionOf(page);
+test.describe('signed in as an admin', () => {
+	test.use({ person: { role: 'admin' } });
 
-	await page.goto('/login');
-	await showsTheSignInBoard(page, session);
-	await page.goto('/');
-	await showsAServerRenderedPage(page, session);
-	await page.goto('/login');
-	await showsTheSignInBoard(page, session);
+	test('back and forward across a lobby page and a refusal land on the right page', async ({
+		page
+	}) => {
+		const session = await sessionOf(page);
 
-	await page.goBack();
-	await showsAServerRenderedPage(page, session);
-	await page.goBack();
-	await showsTheSignInBoard(page, session);
-	await page.goForward();
-	await showsAServerRenderedPage(page, session);
-	await page.goForward();
-	await showsTheSignInBoard(page, session);
+		await page.goto(SOURCES_PAGE);
+		await showsALobbyPage(page, session);
+		await page.goto('/login/login-failed');
+		await expect(page).toHaveURL(/\/login\/login-failed$/);
+		await expect(page.locator('.signin [role=alert]')).toBeVisible();
+
+		await page.goBack();
+		await showsALobbyPage(page, session);
+		await page.goForward();
+		await expect(page).toHaveURL(/\/login\/login-failed$/);
+		await expect(page.locator('.signin [role=alert]')).toBeVisible();
+	});
 });
 
 test('a link to a page the app does not own leaves the app by a page load', async ({ page }) => {
@@ -77,21 +116,42 @@ test('a link to a page the app does not own leaves the app by a page load', asyn
 	await expect(page.locator('body')).toHaveText('the sign-in start');
 });
 
+const boards = [
+	{ path: '/login', name: 'login' },
+	...refusals.map((refusal) => ({
+		path: refusal.path,
+		name: refusal.path.slice(1).replaceAll('/', '-'),
+		refusal
+	}))
+];
+
 for (const colorScheme of ['light', 'dark'] as const) {
 	for (const width of [390, 1280]) {
-		test(`the sign-in board at ${width} px, ${colorScheme}`, async ({ page }, testInfo) => {
-			const session = await sessionOf(page);
-			await page.setViewportSize({ width, height: 844 });
-			await page.emulateMedia({ colorScheme });
+		for (const board of boards) {
+			test.describe(`${board.path} at ${width} px, ${colorScheme}`, () => {
+				// SI12.
+				test('shows its board, answers 403 on a refusal address and saves a screenshot', async ({
+					page
+				}, testInfo) => {
+					const session = await sessionOf(page);
+					await page.setViewportSize({ width, height: 844 });
+					await page.emulateMedia({ colorScheme });
 
-			await page.goto('/login');
-			await showsTheSignInBoard(page, session);
-			await page.evaluate(() => document.fonts.ready);
+					const answer = await page.goto(board.path);
+					if ('refusal' in board) {
+						expect(answer?.status()).toBe(403);
+						await showsTheRefusalBoard(page, session, board.refusal);
+					} else {
+						await showsTheSignInBoard(page, session);
+					}
+					await page.evaluate(() => document.fonts.ready);
 
-			await page.screenshot({
-				path: testInfo.outputPath(`login-${width}-${colorScheme}.png`),
-				fullPage: true
+					await page.screenshot({
+						path: testInfo.outputPath(`${board.name}-${width}-${colorScheme}.png`),
+						fullPage: true
+					});
+				});
 			});
-		});
+		}
 	}
 }

@@ -31,6 +31,7 @@ from presentator.application.decks import (
     SourceRemovalRefused,
     SourceRemovalStale,
 )
+from presentator.application.source_state import connection_state_of
 from presentator.contracts.decks import (
     AccessKind,
     ConnectionCheckResult,
@@ -69,6 +70,7 @@ class SourceSummary(BaseModel):
     url: str
     access: AccessKind | None
     state: SourceState
+    reason: SourceRunFailure | None
     fetched_at: datetime | None
 
 
@@ -181,6 +183,7 @@ class ConnectionCheckView(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    state: SourceState
     failure: SourceRunFailure | None
     commit: str | None
     detail: str | None
@@ -190,6 +193,7 @@ class ConnectionCheckView(BaseModel):
     def of(cls, checked: ConnectionCheckResult) -> ConnectionCheckView:
         """The wire form of the owner's result."""
         return cls(
+            state=connection_state_of(checked),
             failure=checked.failure,
             commit=checked.commit,
             detail=checked.detail,
@@ -252,6 +256,7 @@ class _SourceData:
                     url=source.url,
                     access=source.access,
                     state=source.state,
+                    reason=source.reason,
                     fetched_at=source.fetched_at,
                 )
                 for source in self.decks.listed_sources()
@@ -269,6 +274,7 @@ class _SourceData:
             url=page.url,
             access=page.access,
             state=page.state,
+            reason=page.reason,
             fetched_at=page.fetched_at,
             hook_url=hook_url(request, page.name),
             public_key=page.public_key,

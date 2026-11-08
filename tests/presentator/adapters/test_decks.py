@@ -1135,7 +1135,7 @@ def test_an_instance_with_no_source_row_stores_none(tmp_path: Path) -> None:
     assert a_source_store(database).all() == ()
 
 
-def test_a_folder_name_another_source_carries_is_not_taken_over(
+def test_a_folder_name_another_source_carries_is_not_taken_over(  # DK12
     tmp_path: Path,
 ) -> None:
     store = a_deck_store(tmp_path)

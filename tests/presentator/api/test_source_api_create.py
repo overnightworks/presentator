@@ -15,7 +15,6 @@ from pydantic import JsonValue
 
 from presentator.api.hooks import hook_address
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
-from presentator.api.sources import SOURCES
 from presentator.application.decks import (
     DRAFT_MAX_AGE,
     RESERVED_SOURCE_NAME,
@@ -61,7 +60,7 @@ from tests.presentator.application.support.fakes import (
     FakeLocalMount,
     FakeSourceStore,
 )
-from tests.support.lobby import ENGLISH, Lobby
+from tests.support.lobby import Lobby
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
 from tests.support.sign_in_support import MEMBER, Scene
 
@@ -156,6 +155,7 @@ def test_a_signed_out_caller_meets_webauths_answer_not_a_problem() -> None:
 
 # 2
 def test_a_member_is_refused_with_a_problem() -> None:
+    """SR5: only admins create sources."""
     lobby = a_member_over(decks_that_must_not_run())
 
     answer = create(lobby.client, fingerprint=_NO_PROOF)
@@ -284,6 +284,7 @@ def test_the_hook_takes_the_returned_secret_and_refuses_a_wrong_one() -> None:
 def test_no_get_carries_the_webhook_secret_or_the_token(
     reach: AdminReach, tmp_path: Path
 ) -> None:
+    """SR2: nothing keeps the webhook secret."""
     instance = reach(a_world(), tmp_path)
     created = create(instance.client, instance.headers)
 
@@ -296,21 +297,6 @@ def test_no_get_carries_the_webhook_secret_or_the_token(
         instance.client.get(LIST, headers=instance.headers).json()["sources"][0]["name"]
         == _NAME
     )
-
-
-# 12
-def test_the_jinja_page_of_an_api_created_source_has_no_one_time_secret() -> None:
-    lobby = an_admin_over(a_world().decks)
-    webhook_secret = a_created_source(lobby.client)
-
-    answer = lobby.client.get(f"{SOURCES}/{_NAME}")
-    page = answer.text
-
-    assert_no_store(answer)
-    assert webhook_secret not in page
-    assert "data-hook-secret" not in page
-    assert ENGLISH.source_webhook_once not in page
-    assert ENGLISH.source_webhook_held_elsewhere not in page
 
 
 @dataclass(frozen=True, slots=True)
@@ -673,6 +659,7 @@ def _proof_of(lobby: Lobby) -> str:
 
 
 def test_a_first_fetch_that_raises_leaves_the_source_and_renewal_recovers_it() -> None:
+    """SR2: a lost webhook secret is renewed."""
     world = a_world()
     decks = replace(world.decks, folders=_BreakingFoldersOnce())
     lobby = an_admin_over(decks)

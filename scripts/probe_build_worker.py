@@ -20,6 +20,10 @@ upload of `probe_build_worker_uploads.py` in a life of its own while a root
 watcher (`probe_build_worker/upload_watcher.py`, through `sudo -n`) records every
 create in the worker's writable mounts.
 
+The start cells (`probe_build_worker_starts.py`) stage one residue in a one-off
+container of the service (`probe_build_worker/plant_residue.py` on stdin) and drive the
+start proofs against it: cells 61 to 64 each refuse, cell 65 is the clean control.
+
 The isolation cells run one life attacked from two sides at once, by the attack
 deck (`probe_build_worker/attack`, build code as the build user) and by the 10002
 probe (`attack/kernel_attacks.py` on stdin); `probe_build_worker_isolation.py`
@@ -64,6 +68,7 @@ from probe_build_worker_lives import (
     prove_lives_that_end_badly,
 )
 from probe_build_worker_refusals import prove_refused_uploads
+from probe_build_worker_starts import prove_refused_starts
 from probe_build_worker_uploads import (
     ABSOLUTE_PATH_CLASS,
     UPLOAD_CLASSES,
@@ -136,6 +141,7 @@ CELLS = (
     *("5", "6", "48", "49", "51", "52", "54", "A8", "D1", "D2", "D4", "D5", "D6"),
     *("36", "37", "38", "39", "41", "42", "43", "44", "59", "60"),
     *("25", "40", "45", "46", "56", "50"),
+    *("61", "62", "63", "64", "65"),
 )
 # The kept-life connections of cell 56 C: each ends in a sweep, none in a restart.
 KEPT_LIFE_CONNECTIONS = {
@@ -700,6 +706,7 @@ def drive() -> None:
         prove_inspect_sealing(report)
         prove_wire_user(report)
         prove_unsealed_refusal_and_sealed_check(report)
+        prove_refused_starts(report)
         prove_refused_at_accept(report)
         prove_header_classes(report)
         prove_builds(report)

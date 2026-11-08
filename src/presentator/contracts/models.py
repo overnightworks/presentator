@@ -5,7 +5,7 @@ from enum import StrEnum
 
 
 class Role(StrEnum):
-    """An instance has only these two roles (ADR 0011)."""
+    """An instance has only these two roles."""
 
     ADMIN = "admin"
     USER = "user"
@@ -21,5 +21,5 @@ class User:
 
     @property
     def is_admin(self) -> bool:
-        """Only an admin reaches Settings and the instance defaults (ADR 0011)."""
+        """Only an admin reaches Settings and the instance defaults."""
         return self.role is Role.ADMIN

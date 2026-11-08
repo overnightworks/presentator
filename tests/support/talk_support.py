@@ -17,7 +17,6 @@ from starlette.routing import Router
 from starlette.types import ASGIApp, Message, Scope
 from webauth.config import WebAuthConfig
 from webauth.oidc import OidcRelyingParty
-from webauth.oidc_login import AdmissionConfig
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (
@@ -184,13 +183,14 @@ type SurfaceFactory = Callable[
 
 
 def _relying_party_at(
-    issuer: FakeIssuer, clock: FrozenClock, origin: str
+    issuer: FakeIssuer, clock: FrozenClock, origin: str, realm: str
 ) -> OidcRelyingParty:
     return a_relying_party(
         clock,
         post_token_request=issuer.post_token_request,
         fetch_key_set=issuer.fetch_key_set,
         origin=origin,
+        issuer=realm,
     )
 
 
@@ -198,22 +198,21 @@ def _both_auths(
     database: Path,
     issuer: FakeIssuer,
     clock: FrozenClock,
-    admission: AdmissionConfig | None,
+    realm: str,
 ) -> tuple[InstalledAuth, InstalledAuth]:
     """The lobby's and the talk host's sign-in wiring over one issuer."""
     lobby_auth = an_installed_auth(
         clock,
-        relying_party=_relying_party_at(issuer, clock, A_BROWSERS_ADDRESS),
+        relying_party=_relying_party_at(issuer, clock, A_BROWSERS_ADDRESS, realm),
         transaction=SqliteIdentityWrites(
             database, ProcessWriteLock(), LoggingAuditSink()
         ),
+        realm=realm,
     )
-    if admission is not None:
-        lobby_auth = replace(lobby_auth, admission=admission)
     talk_auth = replace(
         lobby_auth,
         config=a_talk_web_auth(clock),
-        relying_party=_relying_party_at(issuer, clock, A_TALK_ADDRESS),
+        relying_party=_relying_party_at(issuer, clock, A_TALK_ADDRESS, realm),
         content_security_policy=talk_content_security_policy(),
     )
     return lobby_auth, talk_auth
@@ -243,7 +242,7 @@ def _talk_over(
 def two_hosts(
     tmp_path: Path,
     *,
-    admission: AdmissionConfig | None = None,
+    realm: str = AN_ISSUER,
     given: GivenDecks | None = None,
     copresenter: SurfaceFactory | None = None,
 ) -> Hosts:
@@ -269,7 +268,7 @@ def two_hosts(
     )
     sessions = SqliteSessionRecordStore(database)
     issuer = FakeIssuer(issuer=AN_ISSUER, client_id=A_CLIENT_ID, now=clock.now())
-    lobby_auth, talk_auth = _both_auths(database, issuer, clock, admission)
+    lobby_auth, talk_auth = _both_auths(database, issuer, clock, realm)
     talk_config = talk_auth.config
     lobby, _ = a_lobby_app(
         people=people,

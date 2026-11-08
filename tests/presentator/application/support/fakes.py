@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 
 from pydantic import SecretStr
+from webauth.ports import AccountKind
 
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.decks import (
@@ -66,12 +67,26 @@ class FakeUserStore:
         self.users.pop(user_id, None)
 
 
+@dataclass(frozen=True, slots=True)
+class FakeAccount:
+    """A person's account as `webauth` reads it: the lobby's `User` plus a kind."""
+
+    id: str
+    username: str
+    role: str
+    kind: AccountKind = AccountKind.PERSON
+
+    @classmethod
+    def of(cls, user: User) -> FakeAccount:
+        return cls(id=user.id, username=user.username, role=user.role.value)
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FakeSession:
     """One session row, as the fake store keeps it."""
 
     id: str
-    user: User
+    user: FakeAccount
     created_at: datetime
     expires_at: datetime
     refresh_token: SecretStr | None
@@ -100,7 +115,7 @@ class FakeSessionRecordStore:
         self.minted += 1
         session = FakeSession(
             id=f"session-{self.minted}",
-            user=self.users.users[user_id],
+            user=FakeAccount.of(self.users.users[user_id]),
             created_at=now,
             expires_at=expires_at,
             refresh_token=refresh_token,
@@ -116,7 +131,7 @@ class FakeSessionRecordStore:
         return (
             None
             if session is None or account is None
-            else replace(session, user=account)
+            else replace(session, user=FakeAccount.of(account))
         )
 
     def touch(self, session_id: str, *, expires_at: datetime) -> bool:

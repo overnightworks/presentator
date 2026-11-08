@@ -124,7 +124,7 @@ def test_the_admin_receives_the_decks_language_and_speech_readiness() -> None:
 
 
 def test_a_signed_in_user_is_answered_on_every_copresenter_route() -> None:
-    """#537 sentence 2: a signed-in user is answered by who, ask and hear."""
+    """A signed-in user is answered by who, ask and hear."""
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
     lobby.sign_in(role=Role.USER)
@@ -143,7 +143,7 @@ def test_a_signed_in_user_is_answered_on_every_copresenter_route() -> None:
 
 
 def test_a_running_hearing_keeps_going_when_its_person_changes_role() -> None:
-    """#537 sentence 3: a role change does not end a running hearing."""
+    """CP4: a role change does not end a running hearing."""
     users = RefusingUserStore()
     deadline = ManualDeadline()
     lobby, private, _clock = a_copresenter_talk_host(users=users, delay=deadline.wait)
@@ -168,7 +168,7 @@ def _demote(users: FakeUserStore) -> None:
 
 
 def test_an_answer_in_flight_finishes_when_its_person_changes_role() -> None:
-    """#537 sentence 3: a role change does not end an answer in flight."""
+    """CP4: a role change does not end an answer in flight."""
     users = RefusingUserStore()
     deadline = ManualDeadline()
     event_count = 40
@@ -210,12 +210,12 @@ def test_ask_needs_the_browsers_provenance_and_streams_only_public_events() -> N
 
 
 def test_private_answer_events_preserve_the_public_stream_contract() -> None:
+    """CP12: the private answer ends with a done event marked AI generated."""
     lobby, private, _clock = a_copresenter_talk_host()
-    client = lobby.client
     private.answers.deltas = ["Der Anfang. ", "Der Satz."]
     lobby.sign_in()
 
-    response = ask(client)
+    response = ask(lobby.client)
 
     assert re.findall(r"^event: (\w+)$", response.text, re.MULTILINE) == [
         "text",
@@ -233,15 +233,15 @@ def test_private_answer_events_preserve_the_public_stream_contract() -> None:
 
 
 def test_private_answer_refusal_and_clean_end_do_not_invent_an_answer() -> None:
+    """CP12: a refusal or a clean end never invents a done answer."""
     lobby, private, _clock = a_copresenter_talk_host()
-    client = lobby.client
     lobby.sign_in()
 
     private.answers.unavailable = CoPresenterUnavailableError()
-    refused = ask(client)
+    refused = ask(lobby.client)
     private.answers.unavailable = None
     private.answers.deltas = []
-    ended = ask(client)
+    ended = ask(lobby.client)
 
     assert refused.text == (
         'event: error\ndata: {"message": "the answer could not be spoken"}\n\n'
@@ -710,7 +710,7 @@ def test_session_store_loss_cancels_an_accepted_answer_at_its_deadline() -> None
     assert private.answers.reader_closed_before_context_exit
 
 
-def test_busy_answer_stops_at_its_persistent_authorization_deadline() -> None:
+def test_busy_answer_stops_at_its_persistent_authorization_deadline() -> None:  # CP14
     users = RefusingUserStore()
     deadline = ManualDeadline()
     event_count = 40
@@ -735,7 +735,7 @@ def test_busy_answer_stops_at_its_persistent_authorization_deadline() -> None:
     assert private.answers.exits == 1
 
 
-@pytest.mark.parametrize("loss", ["account-gone", "store-error"])
+@pytest.mark.parametrize("loss", ["account-gone", "store-error"])  # CP14
 def test_busy_local_hearing_stops_before_more_pcm_after_authoritative_loss(
     loss: str,
 ) -> None:

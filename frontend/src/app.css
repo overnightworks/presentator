@@ -1,4 +1,4 @@
-/* presentator's colour in appkit's app slot (docs/mockups/m0-lobby.html). */
+/* presentator's colour in appkit's app slot. */
 :root {
 	--app-l: #0c6c77;
 	--on-app-l: #ffffff;
@@ -24,4 +24,521 @@ body {
 	margin: 0;
 	background: var(--bg);
 	color: var(--text);
+}
+
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+html {
+	font-family: var(--font-body);
+}
+h1,
+h2,
+.wordmark,
+th {
+	font-family: var(--font-display);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+a {
+	color: var(--accent);
+}
+code {
+	font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+	font-size: 0.85em;
+	color: var(--text-muted);
+}
+
+.top {
+	display: flex;
+	align-items: center;
+	gap: 8px 20px;
+	padding: 0 16px;
+	min-height: 56px;
+	background: var(--header-bg);
+	border-bottom: 1px solid var(--border);
+}
+.wordmark {
+	font-size: 18px;
+	color: var(--accent);
+}
+.top > nav {
+	display: flex;
+	flex: 1;
+	align-items: stretch;
+	align-self: stretch;
+	gap: 16px;
+}
+.top > nav > a {
+	display: inline-flex;
+	align-items: center;
+	border-bottom: 3px solid transparent;
+	color: var(--text);
+	font-family: var(--font-display);
+	font-size: 13px;
+	letter-spacing: 0.08em;
+	text-decoration: none;
+	text-transform: uppercase;
+}
+.top > nav > a[aria-current='page'] {
+	border-bottom-color: var(--accent);
+}
+.account {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	background: var(--accent);
+	color: var(--on-accent);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+.account-menu {
+	inset: auto;
+	top: 52px;
+	right: 12px;
+	margin: 0;
+	padding: 0;
+	border: none;
+	background: transparent;
+	overflow: visible;
+}
+main {
+	box-sizing: border-box;
+	max-width: 1100px;
+	margin: 0 auto;
+	padding: 24px 16px;
+}
+
+.decks {
+	width: 100%;
+	border-collapse: collapse;
+	background: var(--surface);
+	border: 1px solid var(--border);
+}
+.decks th,
+.decks td {
+	padding: 12px 16px;
+	text-align: left;
+	vertical-align: middle;
+	border-bottom: 1px solid var(--border);
+}
+.decks th {
+	background: var(--bg-deep);
+	font-size: 13px;
+	font-weight: 400;
+	color: var(--text-muted);
+}
+.decks code {
+	display: block;
+}
+.decks .changed {
+	text-align: right;
+	color: var(--text-muted);
+}
+.state {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	font-size: 13px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+.state i {
+	flex: none;
+	display: inline-block;
+	box-sizing: border-box;
+	width: 12px;
+	height: 12px;
+}
+.state[data-state='ready'] {
+	color: var(--ok);
+}
+.state[data-state='ready'] i {
+	border-radius: 50%;
+	background: var(--ok);
+}
+.state[data-state='building'] {
+	color: var(--busy);
+}
+.state[data-state='building'] i {
+	border-radius: 50%;
+	border: 2px solid var(--busy);
+	border-top-color: transparent;
+}
+.state[data-state='failed'] {
+	color: var(--fail);
+}
+.state[data-state='failed'] i {
+	background: var(--fail);
+	clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+}
+.state[data-state='never-built'] {
+	color: var(--text-muted);
+}
+.state[data-state='never-built'] i {
+	border: 2px dashed var(--text-muted);
+	border-radius: 1px;
+}
+.empty {
+	padding: 24px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+.empty h2 {
+	margin-top: 0;
+	font-size: 18px;
+}
+
+/* Controls shared by the lobby's pages: a field, its label, the hint behind an
+   info button, the buttons, the banner and the value to copy. */
+.fld {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+.fld > label,
+.fld > .lb {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-family: var(--font-display);
+	font-size: 12px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+.control {
+	box-sizing: border-box;
+	min-height: 40px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+	font-size: 14px;
+}
+.info {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--accent);
+	cursor: pointer;
+}
+.info svg {
+	width: 20px;
+	height: 20px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.75;
+	stroke-linecap: round;
+}
+.hint {
+	inset: auto;
+	max-width: 520px;
+	margin: 2px 0 0;
+	padding: 8px 10px;
+	border: none;
+	border-left: 2px solid var(--accent);
+	background: var(--surface);
+	color: var(--text-muted);
+	font-size: 13px;
+}
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 36px;
+	padding: 0 14px;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--text);
+	font-family: var(--font-display);
+	font-size: 14px;
+	letter-spacing: 0.05em;
+	text-decoration: none;
+	text-transform: uppercase;
+	white-space: nowrap;
+	cursor: pointer;
+}
+.btn.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--on-accent);
+}
+.btn.secondary {
+	border-color: var(--border);
+	color: var(--text);
+}
+.btn.sm {
+	min-height: 28px;
+	padding: 0 10px;
+	font-size: 13px;
+}
+.btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.back {
+	font-size: 14px;
+	text-underline-offset: 3px;
+}
+
+/* A finding the page makes: ok, fail or a build under way, beside its shape. */
+.banner {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	margin-bottom: 16px;
+	padding: 10px 12px;
+	border: 1px solid var(--fail);
+	border-left-width: 3px;
+	border-radius: 4px;
+	background: var(--fail-soft);
+	font-size: 13.5px;
+}
+.banner[data-banner='ok'] {
+	border-color: var(--ok);
+	background: var(--ok-soft);
+}
+.banner[data-banner='building'] {
+	border-color: var(--busy);
+	background: var(--busy-soft);
+}
+
+/* A value to copy: the value, then its button. */
+.code {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: var(--bg-deep);
+}
+.code code {
+	flex: 1 1 220px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.once {
+	display: inline-flex;
+	align-items: center;
+	height: 20px;
+	padding: 0 8px;
+	border: 1px solid var(--busy);
+	border-radius: 999px;
+	color: var(--busy);
+	font-family: var(--font-display);
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.toast {
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 14px;
+	border: 1px solid var(--ok);
+	border-radius: 4px;
+	background: var(--ok-soft);
+	font-size: 14px;
+}
+
+@media (max-width: 480px) {
+	.top {
+		gap: 8px 12px;
+		padding: 0 12px;
+	}
+	.top > nav {
+		gap: 12px;
+	}
+	.wordmark {
+		font-size: 16px;
+	}
+}
+@media (max-width: 640px) {
+	.decks thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+	.decks,
+	.decks tbody {
+		display: block;
+	}
+	.decks tr {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 4px 12px;
+		padding: 12px 16px;
+		border-bottom: 1px solid var(--border);
+	}
+	.decks td {
+		padding: 0;
+		border: none;
+	}
+	.decks td:nth-child(2) {
+		grid-column: 1 / -1;
+		grid-row: 2;
+	}
+}
+@media (prefers-reduced-motion: no-preference) {
+	.account {
+		transition: filter 0.15s;
+	}
+	.account:hover {
+		filter: brightness(1.1);
+	}
+}
+
+/* A section of a page: a rule above, then its parts. */
+.sec {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 16px;
+	padding-top: 16px;
+	border-top: 1px solid var(--border);
+}
+.sec > h2 {
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: 13px;
+	font-weight: 400;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+.sec p {
+	margin: 0;
+}
+.muted {
+	margin: 0;
+	font-size: 14px;
+	color: var(--text-muted);
+}
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 16px 0;
+}
+.sec .actions {
+	margin: 0;
+}
+
+/* What a page is: its address, its state, when it was fetched. */
+.meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 16px;
+	font-size: 14px;
+	color: var(--text-muted);
+}
+.meta b {
+	margin-right: 4px;
+	font-family: var(--font-display);
+	font-size: 12px;
+	font-weight: 400;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.meta code {
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+.ctrl {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px 14px;
+}
+.tag {
+	display: inline-flex;
+	align-items: center;
+	padding: 1px 8px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	color: var(--text-muted);
+	font-family: var(--font-display);
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+.runs {
+	width: 100%;
+	border-collapse: collapse;
+	background: var(--surface);
+	border: 1px solid var(--border);
+}
+.runs th,
+.runs td {
+	padding: 8px 12px;
+	text-align: left;
+	vertical-align: middle;
+	border-bottom: 1px solid var(--border);
+	font-size: 14px;
+	overflow-wrap: anywhere;
+}
+.runs th {
+	background: var(--bg-deep);
+	font-size: 11px;
+	font-weight: 400;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+.runs .age {
+	color: var(--text-muted);
+}
+.chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.chip {
+	display: inline-flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 6px 12px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: var(--surface);
+	color: inherit;
+	font-size: 14px;
+	text-decoration: none;
+	overflow-wrap: anywhere;
+}
+.chip code {
+	font-size: 12px;
+	color: var(--text-muted);
+}
+.later {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	color: var(--text-muted);
+	font-size: 14px;
 }

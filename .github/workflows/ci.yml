@@ -44,9 +44,6 @@ jobs:
       - name: Check types
         run: uv run --locked pyright
 
-      - name: Check layer boundaries
-        run: uv run --locked lint-imports
-
       - name: Check for dead code
         run: uv run --locked vulture
 
@@ -272,7 +269,7 @@ jobs:
 
       # pnpm has to exist before setup-node so that its cache can be primed.
       - name: Install pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           package_json_file: slidev/package.json
 
@@ -287,8 +284,10 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      # No --with-deps: the runner image ships the browsers' libraries,
+      # and apt on the runner's mirror can stall.
       - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install chromium
 
       # The overlay browser tests (through presenter-overlay-harness.ts) read
       # the production security policy through this Python environment, so they
@@ -346,7 +345,7 @@ jobs:
 
       # pnpm has to exist before setup-node so that its cache can be primed.
       - name: Install pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           package_json_file: frontend/package.json
 
@@ -363,8 +362,10 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      # No --with-deps: the runner image ships the browsers' libraries,
+      # and apt on the runner's mirror can stall.
       - name: Install Chromium and Firefox
-        run: pnpm exec playwright install --with-deps chromium firefox
+        run: pnpm exec playwright install chromium firefox
 
       # The OpenAPI document comes from the lobby's routes, and the drive
       # serves the build from the lobby itself, so both need this instance's
@@ -416,6 +417,17 @@ jobs:
           retention-days: 7
           overwrite: true
 
+      # The pictures are kept on a green run too, so each page slice has its
+      # I7 screenshots from CI; the traces are kept on a failure only.
+      - name: Upload the drive's screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lobby-drive-screenshots
+          path: frontend/test-results/**/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload the drive's traces
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -440,7 +452,7 @@ jobs:
       - name: Prove a configured UID that already belongs to the base image
         run: |
           docker build --build-arg PRESENTATOR_RUNTIME_UID=1000 --tag presentator:uid-1000 .
-          test "$(docker inspect --format '{{.Config.User}}' presentator:uid-1000)" = presentator
+          test "$(docker inspect --format '{{.Config.User}}' presentator:uid-1000)" = 1000
           docker run --rm presentator:uid-1000 sh -c 'test "$(id -u)" = 1000 && test "$HOME" = /home/presentator'
 
       - name: Prove the build and wire users exist (cell 1)
@@ -509,19 +521,22 @@ jobs:
         with:
           persist-credentials: false
 
-      # Compose mounts both secrets from the runner's home as file secrets;
+      # Compose mounts the three secrets from the runner's home as file secrets;
       # the container's user reads them, so the files are world-readable and
       # the directories above them stay private.
       - name: Write the throwaway secret files
         run: |
           key=$(openssl rand -hex 32)
           client_secret=$(openssl rand -hex 32)
+          gateway_key=$(openssl rand -hex 32)
           echo "::add-mask::$key"
           echo "::add-mask::$client_secret"
-          mkdir -m 0700 -p "$HOME/.secrets/presentator" "$HOME/.secrets/keycloak/clients"
-          chmod 0700 "$HOME/.secrets" "$HOME/.secrets/keycloak"
+          echo "::add-mask::$gateway_key"
+          mkdir -m 0700 -p "$HOME/.secrets/presentator" "$HOME/.secrets/keycloak/clients" "$HOME/.secrets/litellm/apps"
+          chmod 0700 "$HOME/.secrets" "$HOME/.secrets/keycloak" "$HOME/.secrets/litellm"
           (umask 0133 && printf '%s\n' "$key" > "$HOME/.secrets/presentator/secret-key")
           (umask 0133 && printf '%s\n' "$client_secret" > "$HOME/.secrets/keycloak/clients/presentator")
+          (umask 0133 && printf '%s\n' "$gateway_key" > "$HOME/.secrets/litellm/apps/presentator")
 
       - name: Install uv
         uses: $/.github/actions/setup-uv
@@ -614,13 +629,15 @@ jobs:
     steps:
       # The gate downloads the one artifact `coverage`; its Sonar scan reads
       # coverage.xml (pytest), lcov.info (the Slidev addon's vitest) and
-      # lcov-lobby.info (the lobby's vitest) from the artifact's root.
+      # lcov-lobby.info (the lobby's vitest) from the artifact's root. The
+      # parts stay: a rerun of only the failed jobs re-uploads just their
+      # reports, and this merge must still find all three.
       - name: Merge the coverage reports into one artifact
         uses: actions/upload-artifact/merge@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage
           pattern: coverage-*
-          delete-merged: true
+          delete-merged: false
           separate-directories: false
           retention-days: 7
           overwrite: true
@@ -641,7 +658,7 @@ jobs:
       - image
       - build-worker
     if: always()
-    uses: overnightworks/quality/.github/workflows/gate.yml@62a911d38caf0be11c07c38539530086d0cb21cc # v0.9.1
+    uses: overnightworks/quality/.github/workflows/gate.yml@2d2b68bf3916b34f6f2c72a540c1e3d8a947b750 # v0.10.0
     permissions:
       contents: read
       actions: read

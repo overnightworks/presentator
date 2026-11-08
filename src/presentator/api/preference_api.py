@@ -1,8 +1,7 @@
 """`/api/account` and `/api/settings`: the choices a page reads and writes as data.
 
-Account is every signed-in person's own language and theme override; Settings
-is the admin's instance defaults. Both answer with the languages an instance
-has a catalog for, so a select needs no third address.
+Account is the person's own theme; Settings is the admin's instance name and
+language and carries the language list, so a select needs no third address.
 """
 
 from collections.abc import Callable, Generator
@@ -39,33 +38,28 @@ class LanguageView(BaseModel):
     name: str
 
 
-class AccountWrite(BaseModel):
-    """Both overrides of one person; `None` leaves the choice to the instance."""
+class AccountView(BaseModel):
+    """One person's own theme, read and written.
+
+    No default: one schema serves the body and the answer.
+    """
 
     model_config = ConfigDict(frozen=True)
 
-    language_tag: str | None
-    theme: ThemeChoice | None
-
-
-class AccountView(AccountWrite):
-    """One person's overrides and the languages they may choose from."""
-
-    languages: list[LanguageView]
+    theme: ThemeChoice
 
 
 class SettingsWrite(BaseModel):
-    """The instance defaults an admin sets for everyone without an override."""
+    """The instance name and language an admin sets for everyone."""
 
     model_config = ConfigDict(frozen=True)
 
     name: str
     language_tag: str
-    theme: ThemeChoice
 
 
 class SettingsView(SettingsWrite):
-    """The instance defaults and the languages an admin may choose from."""
+    """The instance settings and the languages an admin may choose from."""
 
     languages: list[LanguageView]
 
@@ -91,9 +85,7 @@ def _mounted(
     unspoken = problem_beside_validation()
     admin_only = problem_response(HTTPStatus.FORBIDDEN)
     router.add_api_route(ACCOUNT_PATH, read_account, methods=["GET"])
-    router.add_api_route(
-        ACCOUNT_PATH, write_account, methods=["PUT"], openapi_extra=unspoken
-    )
+    router.add_api_route(ACCOUNT_PATH, write_account, methods=["PUT"])
     admin = [Depends(gated_admin)]
     router.add_api_route(
         SETTINGS_PATH,
@@ -114,7 +106,7 @@ def _mounted(
 
 
 def preference_api_routes(*, preferences: Preferences) -> APIRouter:
-    """The router that reads and writes overrides and instance defaults."""
+    """The router that reads and writes a person's theme and the instance settings."""
 
     def languages() -> list[LanguageView]:
         return [
@@ -124,31 +116,22 @@ def preference_api_routes(*, preferences: Preferences) -> APIRouter:
 
     def account_of(person_id: str) -> AccountView:
         chosen = preferences.preferences_of(person_id)
-        return AccountView(
-            language_tag=chosen.language_tag,
-            theme=chosen.theme,
-            languages=languages(),
-        )
+        return AccountView(theme=chosen.theme)
 
     def settings() -> SettingsView:
         stored = preferences.instance_settings()
         return SettingsView(
             name=stored.name,
             language_tag=stored.language_tag,
-            theme=stored.theme,
             languages=languages(),
         )
 
     def read_account(request: Request) -> AccountView:
         return account_of(gated_person(request).id)
 
-    def write_account(request: Request, body: AccountWrite) -> AccountView:
+    def write_account(request: Request, body: AccountView) -> AccountView:
         person_id = gated_person(request).id
-        with _unspoken_as_problem():
-            preferences.save_preferences_of(
-                person_id,
-                PersonPreferences(language_tag=body.language_tag, theme=body.theme),
-            )
+        preferences.save_preferences_of(person_id, PersonPreferences(theme=body.theme))
         return account_of(person_id)
 
     def read_settings() -> SettingsView:
@@ -157,9 +140,7 @@ def preference_api_routes(*, preferences: Preferences) -> APIRouter:
     def write_settings(body: SettingsWrite) -> SettingsView:
         with _unspoken_as_problem():
             preferences.save_instance_settings(
-                InstanceSettings(
-                    name=body.name, language_tag=body.language_tag, theme=body.theme
-                )
+                InstanceSettings(name=body.name, language_tag=body.language_tag)
             )
         return settings()
 

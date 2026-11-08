@@ -76,20 +76,13 @@ def test_a_talk_address_on_the_lobby_loads_the_lobby_app_alike_for_every_slug(
 
 # C11.
 @pytest.mark.parametrize("method", ["get", "head"])
-def test_the_slash_address_of_a_deck_on_the_lobby_redirects_alike_for_every_slug(
+def test_the_slash_address_of_a_deck_loads_the_lobby_app_alike_for_every_slug(
     lobby: TestClient, method: str
 ) -> None:
-    answers = {slug: getattr(lobby, method)(f"/deck/{slug}/") for slug in _THE_THREE}
+    answers = [getattr(lobby, method)(f"/deck/{slug}/") for slug in _THE_THREE]
 
-    assert {answer.status_code for answer in answers.values()} == {
-        HTTPStatus.TEMPORARY_REDIRECT
-    }
-    for slug, answer in answers.items():
-        assert answer.headers["location"] == f"{A_BROWSERS_ADDRESS}/deck/{slug}"
-    assert (
-        len({_unvarying(a, besides=frozenset({"location"})) for a in answers.values()})
-        == 1
-    )
+    assert {answer.status_code for answer in answers} == {HTTPStatus.OK}
+    assert len({_unvarying(answer) for answer in answers}) == 1
 
 
 # C12.
@@ -118,7 +111,7 @@ def test_a_websocket_into_a_deck_address_on_the_lobby_is_never_accepted(
     "address",
     [
         *(f"/deck/{A_DECK}/{shape}" for shape in _SHAPES_AROUND_A_TALK),
-        "/static/%2e%2e/deck/a-deck/",
+        "/_app/%2e%2e/deck/a-deck/",
         f"/deck/{A_DECK}",
     ],
 )

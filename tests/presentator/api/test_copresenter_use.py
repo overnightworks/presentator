@@ -8,14 +8,11 @@ import pytest
 
 from presentator.application.copresenter import CoPresenterUse, PreparedAsk
 from presentator.contracts.copresenter import (
-    AccessRefusal,
     AnswerText,
     CoPresenterReadiness,
-    CoPresenterUnavailableError,
-    Done,
-    PersonToken,
     Question,
 )
+from presentator.contracts.models import Role
 from tests.presentator.application.support.fakes import FakeDeckStore
 from tests.support.copresenter_support import ASKED, PrivateFakes, a_use
 
@@ -24,80 +21,16 @@ FIRST_AUDIO = "presentator.application.copresenter"
 
 
 def a_prepared_ask(use: CoPresenterUse) -> PreparedAsk:
-    prepared = asyncio.run(use.prepare(ASKED, "session"))
+    prepared = asyncio.run(
+        use.prepare(ASKED, session_id="session", subject="subject", role=Role.ADMIN)
+    )
     assert isinstance(prepared, PreparedAsk)
     return prepared
-
-
-def test_preparing_an_ask_holds_the_sessions_fresh_person_token() -> None:
-    """Decision 3: prepare fetches the session's token once and calls no service."""
-    fakes = PrivateFakes()
-    use = a_use(fakes, FakeDeckStore())
-
-    prepared = a_prepared_ask(use)
-
-    assert prepared.person == PersonToken("person-token")
-    assert prepared.asked == ASKED
-    assert fakes.person_access.sessions == ["session"]
-    assert fakes.answers.messages == []
-
-
-def test_a_refused_person_token_is_returned_before_any_answer() -> None:
-    """Decision 3, cells 2 and 3: a refusal is returned before the service."""
-    fakes = PrivateFakes()
-    fakes.person_access.refusal = AccessRefusal.SIGN_IN_AGAIN
-    use = a_use(fakes, FakeDeckStore())
-
-    refused = asyncio.run(use.prepare(ASKED, "session"))
-
-    assert refused is AccessRefusal.SIGN_IN_AGAIN
-    assert fakes.answers.messages == []
-
-
-def test_a_failing_token_source_is_unavailable() -> None:
-    """Decision 3, cells 4 and 5: a failing token source is unavailable."""
-    fakes = PrivateFakes()
-    fakes.person_access.unavailable = True
-    use = a_use(fakes, FakeDeckStore())
-    preparing = use.prepare(ASKED, "session")
-
-    with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(preparing)
 
 
 async def _read_until_done(use: CoPresenterUse, prepared: PreparedAsk) -> list[object]:
     async with use.answer(prepared, A_QUESTION) as events:
         return [event async for event in events]
-
-
-def test_the_service_gets_the_asked_decks_words_and_the_persons_token() -> None:
-    """Decision 3, cell 1: the message holds the asked deck's words."""
-    fakes = PrivateFakes()
-    use = a_use(fakes, FakeDeckStore())
-
-    events = asyncio.run(_read_until_done(use, a_prepared_ask(use)))
-
-    assert events[-1] == Done(text="Eine Antwort.")
-    assert fakes.texts.asked == [(ASKED.deck, ASKED.source)]
-    assert fakes.answers.person_tokens == ["person-token"]
-    (message,) = fakes.answers.messages
-    assert message.startswith("Deck: Kundenfeedback\nYou are on slide 1.")
-    assert "The person said: Frage" in message
-
-
-@pytest.mark.parametrize("unreadable", [False, True], ids=["no-slides", "no-mirror"])
-def test_a_deck_without_words_never_reaches_the_service(*, unreadable: bool) -> None:
-    """Decision 3, cells 20 and 21."""
-    fakes = PrivateFakes()
-    fakes.texts.text = None
-    fakes.texts.unreadable = unreadable
-    use = a_use(fakes, FakeDeckStore())
-    reading = _read_until_done(use, a_prepared_ask(use))
-
-    with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(reading)
-
-    assert fakes.answers.messages == []
 
 
 def test_cancelling_an_answer_awaits_the_private_operation() -> None:
@@ -109,7 +42,9 @@ async def _cancel_answer() -> None:
     fakes = PrivateFakes()
     fakes.answers.hold = True
     use = a_use(fakes, FakeDeckStore())
-    prepared = await use.prepare(ASKED, "session")
+    prepared = await use.prepare(
+        ASKED, session_id="session", subject="subject", role=Role.ADMIN
+    )
     assert isinstance(prepared, PreparedAsk)
 
     async with use.answer(prepared, A_QUESTION) as events:

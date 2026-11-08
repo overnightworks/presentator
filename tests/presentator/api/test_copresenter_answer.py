@@ -1,8 +1,9 @@
-"""The co-presenter answers through the agent service, from sign-in to the voice.
+"""The co-presenter answers through the gateway, from sign-in to the voice.
 
 Every test asks as a signed-in admin of the talk host over real identity tables
-and a fake issuer: the real token sources, the real service answerer over a fake
-wire, the real sentence splitter and a fake voice.
+and a fake issuer: the real groups reader, the real answerer and its backend over
+the client's fake gateway or a held or refusing transport, the real sentence
+splitter and a fake voice.
 """
 
 from __future__ import annotations
@@ -13,249 +14,62 @@ import logging
 import re
 import sqlite3
 from contextlib import closing
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Final
 
-import httpx2
 import pytest
-from agent_runtime_client.wire import FailureCode, RejectionCode, RunRequest
+from agent_runtime_client.backend.fake_gateway import FakeGateway, Reply, completion
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
-from presentator.adapters.agent_service import ServiceAnswerer
-from presentator.adapters.agent_tokens import PersonAccessTokens, WorkloadToken
 from presentator.adapters.deck_texts import MirroredDeckTexts
-from presentator.adapters.sentences import split_sentences
 from presentator.api.copresenter import (
     NOT_ENABLED_REASON,
-    CoPresenterSurface,
 )
 from presentator.application.copresenter import (
-    AskLimiter,
     AskTicket,
-    CoPresenterUse,
-    RetryAfter,
 )
-from presentator.contracts.decks import Build, Deck, Source
-from tests.presentator.adapters.support.agent_service_support import (
-    GOOD_ANSWER,
-    SERVICE_MESSAGE,
-    Reply,
-    Wire,
-    assistant_text,
-    cancelled,
-    event_frames,
-    failed,
-    refusal_reply,
-    reply_with,
-    run_started,
-    succeeded,
-    violating_frame,
-    whole,
-)
-from tests.presentator.application.support.fakes import (
-    FakeDeckStore,
-    FakeSourceStore,
-    FrozenClock,
-)
+from presentator.contracts.decks import Build, Deck
+from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
 from tests.support.copresenter_support import (
     A_SOURCE,
+    ADMIN_GROUPS,
     ASK,
-    HANGING_AFTER_THE_FIRST_WORDS,
+    LEAK_SCENARIOS,
     SPOKEN_QUESTION,
-    WORKLOAD,
-    FakeDeckTexts,
-    PrivateFakes,
+    THE_ASKED_DECK,
+    TWO_SENTENCES,
+    Gateway,
+    Run,
+    Scenario,
+    ask_as_asked,
+    delete_the_sessions,
+    drive,
+    the_refresh_token_is_revoked,
+    the_session_ends_during_the_grant,
+    the_token_endpoint_goes_down,
+    the_token_thread_fails,
+    what_the_ask_must_not_show,
 )
 from tests.support.deck_source_support import a_source, folders_under, mirrors_under
+from tests.support.deck_text_support import FakeDeckTexts
 from tests.support.lobby import (
-    A_BROWSERS_HEADERS,
-    A_TALK_ADDRESS,
-    AN_AGENT_SERVICE,
-    AN_AGENT_SERVICE_SCOPE,
+    A_GATEWAY_KEY,
     NOW,
 )
-from tests.support.talk_support import A_DECK, B_DECK, A, Hosts, two_hosts
+from tests.support.talk_support import B_DECK, A, Hosts
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Mapping
+    from collections.abc import (
+        Callable,
+    )
     from pathlib import Path
 
-    from fastapi.testclient import TestClient
-    from httpx2 import Response
-
-    from presentator.adapters.identity import SqliteSessionRecordStore
-    from presentator.api.auth import InstalledAuth
-    from presentator.ports.copresenter import DeckTexts
     from tests.support.git_remote import GitRemote
 from tests.support.leak_support import everything_shown
 
-PERSON: Final = "person-access-MARKER"
-REFRESH: Final = "refresh-MARKER"
-ROTATED: Final = "rotated-MARKER"
-TOKENS: Final = (PERSON, WORKLOAD, REFRESH, ROTATED)
-ADMIN_GROUPS: Final = ["/apps/presentator", "/apps/presentator/admin"]
-THE_ASKED_DECK: Final = {**SPOKEN_QUESTION, "deck": A_DECK}
 FIRST_AUDIO: Final = "presentator.application.copresenter"
-SERVICE_LOG: Final = "presentator.adapters.agent_service"
-
-
-def a_stalled_transport() -> httpx2.AsyncBaseTransport:
-    def stall(request: httpx2.Request) -> httpx2.Response:
-        raise httpx2.ReadTimeout(PERSON, request=request)
-
-    return httpx2.MockTransport(stall)
-
-
-@dataclass
-class RecordingLimiter(AskLimiter):
-    """The real limiter, remembering which sessions asked it for a ticket."""
-
-    session_ids: list[str] = field(default_factory=list[str])
-
-    def admit(self, session_id: str) -> AskTicket | RetryAfter:
-        self.session_ids.append(session_id)
-        return super().admit(session_id)
-
-
-@dataclass
-class Run:
-    """One ask by a signed-in admin, and everything that could have seen it."""
-
-    response: Response
-    hosts: Hosts
-    wire: Wire
-    fakes: PrivateFakes
-    talk: TestClient
-    limiter: RecordingLimiter
-    grants_before: list[str] = field(default_factory=list[str])
-
-    @property
-    def events(self) -> list[str]:
-        return re.findall(r"^event: (\w+)$", self.response.text, re.MULTILINE)
-
-    @property
-    def grants_since_sign_in(self) -> list[str]:
-        return self.hosts.issuer.grant_types[len(self.grants_before) :]
-
-    def error_payload(self) -> dict[str, str]:
-        (payload,) = re.findall(
-            r"^event: error\ndata: (.*)$", self.response.text, re.MULTILINE
-        )
-        return json.loads(payload)
-
-
-def delete_the_sessions(hosts: Hosts) -> None:
-    with closing(sqlite3.connect(hosts.database)) as connection:
-        connection.execute("DELETE FROM sessions")
-        connection.commit()
-
-
-def the_session_ends_during_the_grant(hosts: Hosts) -> None:
-    hosts.issuer.during_token_request = lambda: delete_the_sessions(hosts)
-
-
-def the_token_endpoint_goes_down(hosts: Hosts) -> None:
-    hosts.issuer.token_endpoint_is_down = True
-
-
-def the_token_thread_fails(hosts: Hosts) -> None:
-    def fail() -> None:
-        raise RuntimeError(PERSON)
-
-    hosts.issuer.during_token_request = fail
-
-
-def the_refresh_token_is_revoked(hosts: Hosts) -> None:
-    hosts.issuer.revoke_refresh_token(REFRESH)
-
-
-def the_workload_is_refused(hosts: Hosts) -> None:
-    hosts.issuer.workload_is_refused = True
-
-
-def nothing_happens(_hosts: Hosts) -> None:
-    return None
-
-
-@dataclass(frozen=True, kw_only=True)
-class Scenario:
-    """What differs from the happy path: one factor at a time."""
-
-    reply: Reply = field(
-        default_factory=lambda: reply_with(*whole(event_frames(*GOOD_ANSWER)))
-    )
-    refresh_token: str | None = REFRESH
-    before_ask: Callable[[Hosts], None] = nothing_happens
-    texts: DeckTexts | None = None
-    delay: Callable[[Wire, Hosts, float], Awaitable[None]] | None = None
-    transport: Callable[[], httpx2.AsyncBaseTransport] | None = None
-    body: Mapping[str, object] = field(default_factory=lambda: dict(THE_ASKED_DECK))
-    sources: list[Source] | None = None
-    arrange: Callable[[Hosts], None] = nothing_happens
-    speaking_fails_at: int | None = None
-
-
-def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
-    """Sign an admin in at the talk host, then ask once."""
-    wire = Wire(scenario.reply)
-    limiter = RecordingLimiter(clock=FrozenClock(instant=NOW))
-    fakes = PrivateFakes()
-    fakes.speaking.fails_at = scenario.speaking_fails_at
-    hosts_made: list[Hosts] = []
-
-    async def wait(seconds: float) -> None:
-        if scenario.delay is None:
-            await asyncio.sleep(seconds)
-        else:
-            await scenario.delay(wire, hosts_made[0], seconds)
-
-    def surface(
-        store: FakeDeckStore, sessions: SqliteSessionRecordStore, auth: InstalledAuth
-    ) -> CoPresenterSurface:
-        return CoPresenterSurface(
-            use=CoPresenterUse(
-                answers=ServiceAnswerer(
-                    origin=AN_AGENT_SERVICE,
-                    workload_token=WorkloadToken(
-                        auth.relying_party, (AN_AGENT_SERVICE_SCOPE,)
-                    ),
-                    transport=scenario.transport or wire.transport,
-                ),
-                speech=fakes.speech,
-                decks=store,
-                sources=FakeSourceStore(sources=scenario.sources or [A_SOURCE]),
-                texts=scenario.texts or fakes.texts,
-                boundaries=split_sentences,
-                speaking=fakes.speaking,
-                person_access=PersonAccessTokens(
-                    auth.relying_party, sessions, auth.config
-                ),
-            ),
-            limiter=limiter,
-            browser_origin=A_TALK_ADDRESS,
-            delay=wait,
-        )
-
-    hosts = two_hosts(tmp_path, copresenter=surface)
-    hosts_made.append(hosts)
-    hosts.issuer.issue_person_access_token(PERSON)
-    hosts.issuer.issue_workload_access_token(WORKLOAD)
-    hosts.issuer.rotate_refresh_token_to(ROTATED)
-    if scenario.refresh_token is not None:
-        hosts.issuer.issue_refresh_token(scenario.refresh_token)
-    scenario.arrange(hosts)
-    talk = hosts.browser(A_TALK_ADDRESS, headers=A_BROWSERS_HEADERS)
-    hosts.sign_in(talk, A_TALK_ADDRESS, subject=A.id, groups=ADMIN_GROUPS)
-    grants_before = list(hosts.issuer.grant_types)
-    scenario.before_ask(hosts)
-    response = ask(talk, scenario.body)
-    return Run(response, hosts, wire, fakes, talk, limiter, grants_before)
-
-
-def ask(talk: TestClient, body: Mapping[str, object] = THE_ASKED_DECK) -> Response:
-    return talk.post(ASK, json=body)
 
 
 A_PUSH: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
@@ -321,23 +135,20 @@ def the_asked_decks_words_at_its_built_commit(
     return drive(tmp_path, scenario)
 
 
-def test_a_signed_in_admins_ask_reaches_the_service_with_both_tokens_and_only_that_decks_words(  # noqa: E501
+def test_a_signed_in_admins_ask_reaches_the_gateway_with_only_that_decks_words(
     tmp_path: Path, remote: GitRemote, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Cell 1."""
+    """CP1: the deck's words at its built commit, the key as bearer, one text."""
     run = the_asked_decks_words_at_its_built_commit(tmp_path, remote, caplog)
 
-    (request,) = run.wire.requests
-    sent = RunRequest.model_validate_json(request.content)
-    (message,) = sent.turn.messages
-    assert request.headers["authorization"] == f"Bearer {PERSON}"
-    assert request.headers["agent-workload-token"] == WORKLOAD
-    assert sent.tools == {}
-    assert ASKED_MARKER in message.text
-    assert OTHER_MARKER not in message.text
-    assert LATER_MARKER not in message.text
+    (request,) = run.gateway.requests
+    sent = json.dumps(json.loads(request.content)["messages"])
+    assert request.headers["authorization"] == f"Bearer {A_GATEWAY_KEY}"
+    assert ASKED_MARKER in sent
+    assert OTHER_MARKER not in sent
+    assert LATER_MARKER not in sent
     assert run.response.status_code == HTTPStatus.OK
-    assert run.events == ["text", "text", "sentence", "audio", "done"]
+    assert run.events == ["text", "sentence", "audio", "sentence", "audio", "done"]
     (line,) = [r.getMessage() for r in caplog.records if r.name == FIRST_AUDIO]
     assert re.fullmatch(r"co-presenter first audio: ms=\d+", line)
     assert the_ticket_was_released(run)
@@ -385,19 +196,19 @@ def the_ticket_was_released(run: Run) -> bool:
             Scenario(before_ask=the_token_thread_fails),
             HTTPStatus.SERVICE_UNAVAILABLE,
             "Co-presenter unavailable",
-            id="token-thread-fails",
+            id="groups-thread-fails",
         ),
     ],
 )
-def test_a_person_token_refusal_is_answered_before_the_service_is_called(
+def test_an_access_refusal_is_answered_before_the_gateway_is_called(
     tmp_path: Path, setup: Scenario, status: HTTPStatus, detail: str
 ) -> None:
-    """Cells 2 to 5."""
+    """CP6: the ruled 401 and 503 come before the stream, and the ticket is freed."""
     run = drive(tmp_path, setup)
 
     assert run.response.status_code == status
     assert run.response.json() == {"detail": detail}
-    assert run.wire.requests == []
+    assert run.gateway.requests == []
     assert run.fakes.speaking.spoken == []
     assert the_ticket_was_released(run)
 
@@ -405,36 +216,14 @@ def test_a_person_token_refusal_is_answered_before_the_service_is_called(
 def test_a_session_that_ended_during_the_grant_asked_the_issuer_exactly_once(
     tmp_path: Path,
 ) -> None:
-    """Cell 3: the grant ran, and nothing was spent after it."""
+    """The grant ran, and nothing was spent after it."""
     run = drive(tmp_path, Scenario(before_ask=the_session_ends_during_the_grant))
 
     assert run.grants_since_sign_in == ["refresh_token"]
 
 
-@pytest.mark.parametrize(
-    "before_ask",
-    [
-        pytest.param(the_refresh_token_is_revoked, id="invalid-grant"),
-        pytest.param(the_token_endpoint_goes_down, id="issuer-unavailable"),
-        pytest.param(the_token_thread_fails, id="token-thread-fails"),
-        pytest.param(the_session_ends_during_the_grant, id="session-ended"),
-    ],
-)
-def test_the_limiter_ticket_is_released_after_each_person_token_refusal(
-    tmp_path: Path, before_ask: Callable[[Hosts], None]
-) -> None:
-    """Cells 2 to 5: the ticket the ask took is free again."""
-    run = drive(tmp_path, Scenario(before_ask=before_ask))
-    run.hosts.issuer.token_endpoint_is_down = False
-
-    assert run.response.status_code != HTTPStatus.OK
-    assert the_ticket_was_released(run)
-
-
-def test_a_doubled_session_cookie_is_refused_before_any_token_is_fetched(
-    tmp_path: Path,
-) -> None:
-    """Cell 6: webauth reads a doubled cookie as no session, so its gate refuses.
+def test_a_doubled_session_cookie_is_refused_before_any_grant(tmp_path: Path) -> None:
+    """Webauth reads a doubled cookie as no session, so its gate refuses.
 
     The refusal is the library's 401 before the route runs, as it answers the
     overlay's `fetch`, which sets no `Accept` (a page visit would be sent to
@@ -454,33 +243,25 @@ def test_a_doubled_session_cookie_is_refused_before_any_token_is_fetched(
 
     assert refused.status_code == HTTPStatus.UNAUTHORIZED
     assert refused.json() == {"detail": "Invalid session"}
-    assert the_browser_saw_no_token(refused)
-    assert len(run.wire.requests) == 1
+    assert len(run.gateway.requests) == 1
     assert len(run.hosts.issuer.grant_types) == grants
 
 
-def test_a_refused_workload_token_ends_in_a_plain_error_and_never_posts(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+def test_one_question_makes_one_refresh_grant_and_no_client_credentials_grant(
+    tmp_path: Path,
 ) -> None:
-    """Cell 7."""
-    caplog.set_level(logging.INFO, logger=FIRST_AUDIO)
+    """The groups come from one refresh grant; no workload grant exists."""
+    run = drive(tmp_path)
 
-    run = drive(tmp_path, Scenario(before_ask=the_workload_is_refused))
-
-    assert run.events == ["error"]
-    assert "reason" not in run.error_payload()
-    assert run.wire.requests == []
-    assert not [r for r in caplog.records if r.name == FIRST_AUDIO]
-    assert the_ticket_was_released(run)
+    assert run.response.status_code == HTTPStatus.OK
+    assert run.grants_since_sign_in == ["refresh_token"]
 
 
-def test_a_service_that_does_not_enable_the_person_ends_in_error_with_its_reason(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made(
+    tmp_path: Path,
 ) -> None:
-    """Cell 8: F2's overlay reads the literal `not-enabled`, so it is spelled out."""
-    caplog.set_level(logging.WARNING, logger=SERVICE_LOG)
-
-    run = drive(tmp_path, Scenario(reply=refusal_reply(RejectionCode.NOT_ENABLED, 403)))
+    """CP3, CP6: the overlay reads the literal `not-enabled`, so it is spelled out."""
+    run = drive(tmp_path, Scenario(groups=ADMIN_GROUPS))
 
     assert run.events == ["error"]
     assert run.error_payload() == {
@@ -488,110 +269,79 @@ def test_a_service_that_does_not_enable_the_person_ends_in_error_with_its_reason
         "reason": "not-enabled",
     }
     assert NOT_ENABLED_REASON == "not-enabled"
-    assert any("not_enabled" in r.getMessage() for r in caplog.records)
+    assert run.gateway.requests == []
     assert the_ticket_was_released(run)
 
 
-def test_a_busy_service_ends_in_error_without_a_reason_and_logs_the_wait(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Cell 9."""
-    caplog.set_level(logging.WARNING, logger=SERVICE_LOG)
-
-    busy = refusal_reply(RejectionCode.BUSY, 429, **{"retry-after": "7"})
-
-    run = drive(tmp_path, Scenario(reply=busy))
-
-    assert run.events == ["error"]
-    assert "reason" not in run.error_payload()
-    assert any(
-        "busy" in r.getMessage() and "retry_after=7" in r.getMessage()
-        for r in caplog.records
-    )
-    assert the_ticket_was_released(run)
-
-
-def test_a_service_that_refuses_the_token_ends_in_error_without_a_reason(
+def test_a_group_removed_at_the_issuer_between_two_questions_refuses_the_second(
     tmp_path: Path,
 ) -> None:
-    """Cell 10."""
-    run = drive(
-        tmp_path, Scenario(reply=refusal_reply(RejectionCode.UNAUTHORIZED, 401))
-    )
+    """CP3: the groups are read anew for every question."""
+    run = drive(tmp_path)
+    run.hosts.issuer.hold_groups(ADMIN_GROUPS)
 
-    assert run.events == ["error"]
-    assert "reason" not in run.error_payload()
-    assert the_ticket_was_released(run)
+    second = ask_as_asked(run.talk)
+
+    assert run.events[-1] == "done"
+    assert re.findall(r"^event: (\w+)$", second.text, re.MULTILINE) == ["error"]
+    assert len(run.gateway.requests) == 1
+
+
+def test_a_talk_session_that_keeps_no_id_token_asks_and_is_answered(
+    tmp_path: Path,
+) -> None:
+    """The talk host stores no ID token, and the answer comes anyway."""
+    run = drive(tmp_path)
+
+    with closing(sqlite3.connect(run.hosts.database)) as connection:
+        stored = [row[0] for row in connection.execute("SELECT id_token FROM sessions")]
+    assert stored == [None]
+    assert run.events[-1] == "done"
 
 
 @pytest.mark.parametrize(
-    ("setup", "events"),
+    "reply",
     [
-        pytest.param(
-            Scenario(
-                reply=reply_with(
-                    *whole(
-                        event_frames(
-                            run_started(),
-                            assistant_text("Ein Satz. Noch einer"),
-                            failed(FailureCode.PROVIDER_ERROR),
-                        )
-                    )
-                )
-            ),
-            ["text", "sentence", "audio", "error"],
-            id="failed-after-text",
-        ),
-        pytest.param(
-            Scenario(
-                reply=reply_with(*whole(event_frames(run_started(), cancelled())))
-            ),
-            ["error"],
-            id="cancelled",
-        ),
-        pytest.param(
-            Scenario(reply=reply_with(violating_frame())),
-            ["error"],
-            id="stream-violation",
-        ),
-        pytest.param(
-            Scenario(transport=a_stalled_transport),
-            ["error"],
-            id="stall",
-        ),
-        pytest.param(
-            Scenario(reply=Reply(refuses_connection=True)),
-            ["error"],
-            id="refused-connection",
-        ),
+        pytest.param(Reply(429, {"retry-after": "7"}), id="busy"),
+        pytest.param(Reply(401), id="unauthorized"),
+        pytest.param(Reply(403), id="forbidden"),
+        pytest.param(Reply(422), id="budget"),
+        pytest.param(Reply(500), id="gateway-down"),
+        pytest.param(Reply(200, body=b"not json"), id="malformed"),
+        pytest.param(completion(""), id="no-words"),
     ],
 )
-def test_every_other_service_failure_ends_in_a_plain_error_and_never_in_done(
-    tmp_path: Path, setup: Scenario, events: list[str]
+def test_a_gateway_that_does_not_answer_ends_in_a_plain_error_and_never_in_done(
+    tmp_path: Path, reply: Reply
 ) -> None:
-    """Cells 11 to 15."""
-    run = drive(tmp_path, setup)
+    """No reason reaches the overlay, and no word was spoken."""
+    run = drive(tmp_path, Scenario(gateway=lambda: FakeGateway(reply)))
 
-    assert run.events == events
+    assert run.events == ["error"]
     assert "reason" not in run.error_payload()
+    assert run.fakes.speaking.spoken == []
     assert the_ticket_was_released(run)
+
+
+def test_a_refused_connection_ends_in_a_plain_error(tmp_path: Path) -> None:
+    """The refusing transport."""
+    run = drive(tmp_path, Scenario(gateway=RefusingTransport))
+
+    assert run.events == ["error"]
+    assert "reason" not in run.error_payload()
+    assert len(run.gateway.requests) == 1
 
 
 def test_speech_failing_on_the_second_sentence_ends_after_the_first_in_error(
     tmp_path: Path,
 ) -> None:
-    """Cell 16."""
-    reply = reply_with(
-        *whole(
-            event_frames(
-                run_started(),
-                assistant_text("Erster Satz. Zweiter Satz. Dritter."),
-                succeeded(),
-            )
-        )
+    """The first sentence was spoken before the failure."""
+    scenario = Scenario(
+        gateway=lambda: FakeGateway(completion(f"{TWO_SENTENCES} Dritter.")),
+        speaking_fails_at=1,
     )
 
-    run = drive(tmp_path, Scenario(reply=reply, speaking_fails_at=1))
+    run = drive(tmp_path, scenario)
 
     assert run.events == ["text", "sentence", "audio", "sentence", "error"]
     assert "reason" not in run.error_payload()
@@ -600,30 +350,32 @@ def test_speech_failing_on_the_second_sentence_ends_after_the_first_in_error(
 
 @dataclass
 class ChangeOnceTheAnswerHangs:
-    """A session re-check that changes the world once the service has hung."""
+    """A session re-check that changes the world once the gateway holds the request."""
 
     change: Callable[[Hosts], None]
     waits: int = 0
 
-    async def __call__(self, wire: Wire, hosts: Hosts, _seconds: float) -> None:
+    async def __call__(self, gateway: Gateway, hosts: Hosts, _seconds: float) -> None:
+        assert isinstance(gateway, HeldTransport)
         self.waits += 1
-        await asyncio.wait_for(wire.response_stream.hung.wait(), timeout=5)
+        await asyncio.wait_for(gateway.arrived.wait(), timeout=5)
         self.change(hosts)
 
 
 def test_an_answer_ends_within_one_recheck_when_the_session_goes(
     tmp_path: Path,
 ) -> None:
-    """Cell 17: the service's connection is closed behind it."""
+    """CP14: no text was sent before the end, and the held call is cancelled."""
     recheck = ChangeOnceTheAnswerHangs(delete_the_sessions)
-    scenario = Scenario(reply=HANGING_AFTER_THE_FIRST_WORDS, delay=recheck)
+    scenario = Scenario(gateway=HeldTransport, delay=recheck)
 
     run = drive(tmp_path, scenario)
 
+    assert isinstance(run.gateway, HeldTransport)
     assert run.response.status_code == HTTPStatus.OK
-    assert run.events == ["text"]
+    assert run.events == []
     assert recheck.waits == 1
-    assert run.wire.response_stream.closed.is_set()
+    assert run.gateway.cancelled
     assert the_ticket_was_released(run)
 
 
@@ -634,21 +386,21 @@ def test_an_answer_ends_within_one_recheck_when_the_session_goes(
         pytest.param(FakeDeckTexts(text=None), id="no-slides"),
     ],
 )
-def test_a_deck_without_readable_words_ends_in_error_and_never_calls_the_service(
+def test_a_deck_without_readable_words_ends_in_error_and_never_calls_the_gateway(
     tmp_path: Path, texts: FakeDeckTexts
 ) -> None:
-    """Cells 20 and 21."""
+    """CP1: a deck with no words has nothing to ask about."""
     run = drive(tmp_path, Scenario(texts=texts))
 
     assert run.events == ["error"]
-    assert run.wire.requests == []
+    assert run.gateway.requests == []
     assert the_ticket_was_released(run)
 
 
-def test_another_admins_deck_gets_the_ghosts_refusal_and_spends_no_token(
+def test_another_admins_deck_gets_the_ghosts_refusal_and_spends_no_grant(
     tmp_path: Path,
 ) -> None:
-    """Cell 22: E11 holds before any token is fetched."""
+    """CP2: the ownership refusal comes before any grant is made."""
     (tmp_path / "ghost").mkdir()
     (tmp_path / "foreign").mkdir()
     ghost = drive(
@@ -661,110 +413,33 @@ def test_another_admins_deck_gets_the_ghosts_refusal_and_spends_no_token(
     assert foreign.response.status_code == HTTPStatus.NOT_FOUND
     assert foreign.response.content == ghost.response.content
     assert foreign.grants_since_sign_in == []
-    assert foreign.wire.requests == []
-
-
-def test_an_answer_without_any_text_is_done_with_no_audio_and_logs_no_first_audio(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Cell 27."""
-    caplog.set_level(logging.INFO, logger=FIRST_AUDIO)
-    nothing = reply_with(*whole(event_frames(run_started(), succeeded())))
-
-    run = drive(tmp_path, Scenario(reply=nothing))
-
-    assert run.events == ["done"]
-    assert run.response.text == (
-        'event: done\ndata: {"text": "", "ai_generated": true}\n\n'
-    )
-    assert not [r for r in caplog.records if r.name == FIRST_AUDIO]
-    assert the_ticket_was_released(run)
-
-
-def _echoing_the_token() -> Reply:
-    body = json.dumps({"detail": f"bad token {PERSON} {WORKLOAD}"}).encode()
-    return Reply(
-        status=401, headers={"content-type": "application/json"}, chunks=[body]
-    )
-
-
-LEAK_SCENARIOS: Final = {
-    "happy": Scenario(),
-    "sign-in-again": Scenario(refresh_token=None),
-    "invalid-grant": Scenario(before_ask=the_refresh_token_is_revoked),
-    "session-ended": Scenario(before_ask=the_session_ends_during_the_grant),
-    "issuer-unavailable": Scenario(before_ask=the_token_endpoint_goes_down),
-    "token-thread-fails": Scenario(before_ask=the_token_thread_fails),
-    "workload-refused": Scenario(before_ask=the_workload_is_refused),
-    "not-enabled": Scenario(reply=refusal_reply(RejectionCode.NOT_ENABLED, 403)),
-    "busy": Scenario(
-        reply=refusal_reply(RejectionCode.BUSY, 429, **{"retry-after": "7"})
-    ),
-    "service-echoes-the-tokens": Scenario(reply=_echoing_the_token()),
-    "failed-after-text": Scenario(
-        reply=reply_with(
-            *whole(
-                event_frames(
-                    run_started(),
-                    assistant_text("Ein Satz."),
-                    failed(FailureCode.PROVIDER_ERROR),
-                )
-            )
-        )
-    ),
-    "cancelled": Scenario(
-        reply=reply_with(*whole(event_frames(run_started(), cancelled())))
-    ),
-    "stream-violation": Scenario(reply=reply_with(violating_frame())),
-    "speech-fails-on-the-second-sentence": Scenario(
-        reply=reply_with(
-            *whole(
-                event_frames(
-                    run_started(),
-                    assistant_text("Erster Satz. Zweiter Satz. Dritter."),
-                    succeeded(),
-                )
-            )
-        ),
-        speaking_fails_at=1,
-    ),
-    "stall": Scenario(transport=a_stalled_transport),
-    "refused-connection": Scenario(reply=Reply(refuses_connection=True)),
-}
-
-
-def the_browser_saw_no_token(response: Response) -> bool:
-    shown = f"{response.headers}\n{response.text}"
-    return not any(marker in shown for marker in (*TOKENS, SERVICE_MESSAGE))
+    assert foreign.gateway.requests == []
 
 
 @pytest.mark.parametrize("scenario", LEAK_SCENARIOS.values(), ids=LEAK_SCENARIOS)
-def test_no_token_reaches_a_log_record_or_the_browser(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture, scenario: Scenario
+def test_no_secret_or_word_of_the_person_reaches_a_log_record_or_the_browser(
+    tmp_path: Path, scenario: Scenario
 ) -> None:
-    """Cells 23 and 24: every logger at DEBUG, and the whole of what the browser got."""
-    caplog.set_level(logging.DEBUG)
-    caplog.set_level(logging.DEBUG, logger="httpcore2")
-
+    """Every log record and error of the ask, and all the browser got."""
     run = drive(tmp_path, scenario)
 
-    logged = everything_shown(caplog.records)
-    assert the_browser_saw_no_token(run.response)
-    for marker in TOKENS:
+    logged = everything_shown(run.logged, run.errors)
+    browser = f"{run.response.headers}\n{run.response.text}"
+    for marker in what_the_ask_must_not_show(run):
         assert marker not in logged
+        assert marker not in browser
+    assert run.logged
 
 
 def test_every_generated_answer_event_says_ai_generated_and_error_does_not(
     tmp_path: Path,
 ) -> None:
-    """#293 E9 (a): text, sentence, audio and done say ai_generated; error does not."""
+    """CP12: text, sentence, audio and done say ai_generated; error does not."""
     (tmp_path / "answered").mkdir()
     (tmp_path / "refused").mkdir()
     answered = _payloads_by_event(drive(tmp_path / "answered").response.text)
     refused = _payloads_by_event(
-        drive(
-            tmp_path / "refused", Scenario(before_ask=the_workload_is_refused)
-        ).response.text
+        drive(tmp_path / "refused", Scenario(groups=ADMIN_GROUPS)).response.text
     )
 
     assert {"text", "sentence", "audio", "done"} <= answered.keys()

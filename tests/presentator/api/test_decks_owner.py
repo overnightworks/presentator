@@ -10,10 +10,9 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
-from presentator.api.sources import ACCESS, SOURCES
 from presentator.contracts.decks import Build, Deck, Source
 from presentator.contracts.models import Role, User
-from tests.presentator.api.support.removal_support import ask_removal, confirm_removal
+from tests.presentator.api.support import source_api_support
 from tests.presentator.application.support.fakes import FakeBuildRunner, FakeDeckStore
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -22,7 +21,6 @@ from tests.support.lobby import (
     ADMIN,
     AN_ASSET,
     BUILT_TALK,
-    ENGLISH,
     EXPORTED_PDF,
     NEIGHBOUR,
     NOW,
@@ -31,6 +29,7 @@ from tests.support.lobby import (
     a_configured_source,
     a_lobby,
 )
+from tests.support.lobby_reads import deck_list, listed_titles
 from tests.support.talk_support import cookies_without_values, two_hosts
 
 _COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
@@ -134,7 +133,6 @@ def _alike(answer: Response, unknown: Response) -> None:
 
 _NO_HEADERS: Final[dict[str, str]] = {}
 _REQUESTS: Final = [
-    pytest.param(A_BROWSERS_ADDRESS, "get", "", _NO_HEADERS, id="the-deck-page"),
     pytest.param(A_TALK_ADDRESS, "get", "/", _NO_HEADERS, id="the-projector"),
     pytest.param(A_TALK_ADDRESS, "get", "/presenter/", _NO_HEADERS, id="the-presenter"),
     pytest.param(A_TALK_ADDRESS, "get", f"/{AN_ASSET}", _NO_HEADERS, id="an-asset"),
@@ -153,6 +151,7 @@ _REQUESTS: Final = [
 ]
 
 
+# DK7
 @pytest.mark.parametrize(("origin", "method", "tail", "headers"), _REQUESTS)
 def test_a_deck_of_another_account_answers_like_an_unknown_slug(
     tmp_path: Path,
@@ -222,54 +221,53 @@ def test_the_owner_receives_every_shape_of_request_for_the_own_deck(
     assert admins.as_a.get("/deck/a-deck/pdf").status_code == HTTPStatus.OK
 
 
+# DK6
 def test_each_admin_lists_exactly_the_own_deck(tmp_path: Path) -> None:
     admins = _two_admins(tmp_path)
 
-    listed_for_a = admins.as_a.get("/").text
-    listed_for_b = admins.as_b.get("/").text
-
-    assert "Title of a-deck" in listed_for_a
-    assert "Title of b-deck" not in listed_for_a
-    assert "Title of b-deck" in listed_for_b
-    assert "Title of a-deck" not in listed_for_b
+    assert listed_titles(admins.as_a) == ["Title of a-deck"]
+    assert listed_titles(admins.as_b) == ["Title of b-deck"]
 
 
+# DK8
 def test_an_admin_with_no_deck_gets_an_empty_list_that_names_no_address() -> None:
     store = _store_of_built_decks()
     del store.kept["a-deck"]
     lobby = a_lobby(given=GivenDecks(store=store, source=_b_source()))
     lobby.sign_in()
 
-    home = lobby.client.get("/").text
+    listed = deck_list(lobby.client)
 
-    assert "Title of" not in home
-    assert _B_SOURCE_URL not in home
+    assert listed.decks == []
+    assert listed.source_address is None
+    assert _B_SOURCE_URL not in lobby.client.get("/api/decks").text
 
 
 _WALTER: Final = User(id="id-of-walter", username="walter", role=Role.USER)
 _AT_THE_LOBBY_OR_THE_TALK_HOST: Final = [
-    (A_BROWSERS_ADDRESS, ""),
     (A_TALK_ADDRESS, "/presenter/"),
     (A_BROWSERS_ADDRESS, "/pdf"),
 ]
 
 
+# DK9
 def test_a_member_without_the_admin_role_has_no_deck_of_another_account(
     tmp_path: Path,
 ) -> None:
     hosts = two_hosts(tmp_path, given=GivenDecks(store=_store_of_built_decks()))
 
-    assert (
-        "Title of" not in hosts.signed_in_at(A_BROWSERS_ADDRESS, _WALTER).get("/").text
-    )
+    assert listed_titles(hosts.signed_in_at(A_BROWSERS_ADDRESS, _WALTER)) == []
     for origin, tail in _AT_THE_LOBBY_OR_THE_TALK_HOST:
         member = hosts.signed_in_at(origin, _WALTER)
         _alike(
             member.get(f"/deck/b-deck{tail}"),
             member.get(f"/deck/{_THE_UNKNOWN}{tail}"),
         )
+    member = hosts.signed_in_at(A_BROWSERS_ADDRESS, _WALTER)
+    _alike(member.get("/api/decks/b-deck"), member.get(f"/api/decks/{_THE_UNKNOWN}"))
 
 
+# DK11
 def test_the_owner_without_the_admin_role_has_the_own_deck_but_no_sources(
     tmp_path: Path,
 ) -> None:
@@ -278,81 +276,60 @@ def test_the_owner_without_the_admin_role_has_the_own_deck_but_no_sources(
     hosts = two_hosts(tmp_path, given=GivenDecks(store=store))
     client = hosts.signed_in_at(A_BROWSERS_ADDRESS, _WALTER)
 
-    assert "Title of a-deck" in client.get("/").text
+    assert listed_titles(client) == ["Title of a-deck"]
     for origin, tail in _AT_THE_LOBBY_OR_THE_TALK_HOST:
         member = hosts.signed_in_at(origin, _WALTER)
         assert member.get(f"/deck/a-deck{tail}").status_code == HTTPStatus.OK
-    assert client.get(SOURCES).status_code == HTTPStatus.FORBIDDEN
+    assert client.get("/api/decks/a-deck").status_code == HTTPStatus.OK
+    assert (
+        client.get(
+            source_api_support.LIST, headers=source_api_support.ASKING_FOR_JSON
+        ).status_code
+        == HTTPStatus.FORBIDDEN
+    )
 
 
+# DK10
 def test_a_deck_of_a_removed_source_answers_like_an_unknown_slug_for_its_owner(
     tmp_path: Path,
 ) -> None:
     admins = _two_admins(tmp_path)
     own_source = a_configured_source(_A_SOURCE_URL)
 
-    removed = confirm_removal(admins.as_a, own_source.name)
+    counts = source_api_support.preview_removal(admins.as_a, own_source.name).json()
+    removed = source_api_support.remove(
+        admins.as_a,
+        own_source.name,
+        deck_count=counts["deck_count"],
+        run_count=counts["run_count"],
+    )
 
-    assert removed.status_code == HTTPStatus.SEE_OTHER
+    assert removed.status_code == HTTPStatus.NO_CONTENT
     for talk_host in (admins.talk_as_a, admins.talk_as_b):
         _alike(
             talk_host.get("/deck/a-deck/presenter/"),
             talk_host.get(f"/deck/{_THE_UNKNOWN}/presenter/"),
         )
     for client in (admins.as_a, admins.as_b):
-        _alike(client.get("/deck/a-deck"), client.get(f"/deck/{_THE_UNKNOWN}"))
+        _alike(
+            client.get("/api/decks/a-deck"),
+            client.get(f"/api/decks/{_THE_UNKNOWN}"),
+        )
+        _alike(client.get("/deck/a-deck/pdf"), client.get(f"/deck/{_THE_UNKNOWN}/pdf"))
 
 
-def test_an_admin_opens_the_source_of_another_without_its_deck_chips(
-    tmp_path: Path,
-) -> None:
-    admins = _two_admins(tmp_path)
-
-    page = admins.as_a.get(f"{SOURCES}/b-talks")
-
-    assert page.status_code == HTTPStatus.OK
-    assert _B_SOURCE_URL in page.text
-    assert "b-deck" not in page.text
-
-
-def test_a_refused_renewal_of_anothers_source_shows_no_deck_chips(
-    tmp_path: Path,
-) -> None:
-    admins = _two_admins(tmp_path)
-
-    refused = admins.as_a.post(ACCESS.format(name="b-talks"), data={"secret": "  "})
-
-    assert ENGLISH.source_refused_secret in refused.text
-    assert "b-deck" not in refused.text
-
-
-def test_a_refused_removal_of_anothers_source_shows_no_deck_chips(
+def test_a_refused_removal_of_anothers_source_shows_no_deck_titles(
     tmp_path: Path,
 ) -> None:
     admins = _two_admins(tmp_path, stuck_mirror=True)
+    counts = source_api_support.preview_removal(admins.as_a, "b-talks").json()
 
-    refused = confirm_removal(admins.as_a, "b-talks")
-
-    assert ENGLISH.source_remove_refused in refused.text
-    assert "b-deck" not in refused.text
-
-
-def test_the_removal_of_anothers_source_asks_with_its_deck_count_but_no_title(
-    tmp_path: Path,
-) -> None:
-    admins = _two_admins(tmp_path)
-
-    asked = ask_removal(admins.as_a, "b-talks")
-
-    assert (
-        ENGLISH.source_remove_confirm_body.format(
-            decks=1,
-            deck_word=ENGLISH.source_remove_deck_singular,
-            talk_word=ENGLISH.source_remove_talk_singular,
-            runs=0,
-            run_word=ENGLISH.source_remove_run_plural,
-        )
-        in asked.text
+    refused = source_api_support.remove(
+        admins.as_a,
+        "b-talks",
+        deck_count=counts["deck_count"],
+        run_count=counts["run_count"],
     )
-    assert "b-deck" not in asked.text
-    assert "Title of b-deck" not in asked.text
+
+    assert refused.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert "b-deck" not in refused.text

@@ -3,13 +3,13 @@
 Reader: the operator of the machine that holds the GPU.
 
 A deployed instance has no voice: the socket is not mounted, so speaking and
-hearing report "not yet available" ([ADR 0019](../decisions/0019-presentator-is-an-edge-app.md)).
+hearing report "not yet available".
 This runbook runs speech beside a checkout run only.
 
 The voice that answers beside a talk is the speech service (`speech/`), a host
-process that binds no TCP port and is reached only through `speech.sock`. Who may use it and what crosses the boundary is
-[co-presenter and voice](../reference/co-presenter-and-voice.md); the authority
-it shares is [trust boundaries](../explanation/trust-boundaries.md).
+process that binds no TCP port and is reached only through `speech.sock`. Who may use it is [co-presenter](../co-presenter.md); what crosses the
+boundary and the authority it shares is
+[crosscutting concepts](../ARCHITECTURE.md#5-crosscutting-concepts).
 
 ## Before you start
 
@@ -33,8 +33,7 @@ SPEECH_PRIVATE_DIRECTORY=/run/presentator-speech PRESENTATOR_RUNTIME_UID=<uid> \
 
 Speech owns `SPEECH_STATE_DIRECTORY` (by default
 `~/.local/state/presentator-speech`) as a mode-0700 directory. Its mode-0600
-`selected-voice` file records the downloaded baseline chosen through
-Settings · Voice, so keep it with the host state when moving an instance.
+`selected-voice` file records the downloaded baseline, so keep it with the host state when moving an instance.
 
 ## Check
 

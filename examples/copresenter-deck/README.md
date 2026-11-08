@@ -24,3 +24,5 @@ built deck its asker owns. Presentator checks the existing session before
 readiness, answers, or microphone capture and keeps the hearing lease open only
 while local hearing is active. How to run the private speech service is
 [the speech runbook](../../docs/runbooks/run-the-speech-service-on-the-host.md).
+
+The folder contract is [decks](../../docs/decks.md).

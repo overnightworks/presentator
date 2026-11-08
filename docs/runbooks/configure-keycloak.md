@@ -2,9 +2,7 @@
 
 Reader: the administrator of the Keycloak realm.
 
-There is no password login and no `/setup`; accounts arrive with the Keycloak
-sign-in. What a sign-in does is
-[sign-in and session](../reference/sign-in-and-session.md).
+There is no password login and no `/setup`: [sign-in](../sign-in.md) (SI2).
 
 ## Before you start
 
@@ -46,6 +44,38 @@ only its two configured hostnames.
 6. Register both `<PRESENTATOR_PUBLIC_ORIGIN>/auth/callback` and
    `<PRESENTATOR_TALK_ORIGIN>/auth/callback` as valid redirect URIs: the talk
    host signs in at its own.
+
+## Let an agent read a person's decks
+
+The lobby always serves `/mcp` and its discovery document; the edge's `/mcp`
+line decides whether the internet reaches them. A person's agent reaches the
+person's decks through `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, as that person: it
+lists them, sees whether each is built and why a build failed, and reads their
+text. It does nothing else. The realm names below are fixed in the app; no
+setting changes them.
+
+1. Use the shared `agents` client: one public client for every app, with
+   client authentication off (no secret) and PKCE S256. Its id is
+   `agents`; it is no entry of `PRESENTATOR_TOKEN_CLIENTS`.
+2. Create one optional client scope for this app, named `mcp-presentator`.
+   Give it an audience mapper whose included custom audience is
+   `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, so a token requested with this scope has
+   that as its only audience. Put no audience on the client itself: the other
+   apps' fronts use the same client.
+3. Assign the scope to the `agents` client as an optional scope.
+4. Create the group `/apps/presentator/mcp` for the people whose agents may
+   call. A token needs this group
+   besides the app's own.
+5. Keep the realm's agent group `/agents`. A service account in it, with the
+   app's groups and scope on its token, signs in at `/mcp` with its own client
+   as an agent; the app creates its account on that first call. It sees no
+   deck: decks belong to people. Its token carries the `agent_owner` and
+   `agent_name` claims, which the realm must set on it.
+6. Leave the realm's access token lifetime at 300 seconds: the app adds none.
+
+For a person's agent, the person must have signed in once in a browser: a token
+of a person's subject the app has no account for is refused, and no account is
+made from it.
 
 ## Check
 

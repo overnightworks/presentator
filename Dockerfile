@@ -9,9 +9,13 @@
 # .python-version names. Every image named here is held by digest, because a
 # tag is a name its owner may move. uv's tag is read from the `uv` stage by CI
 # (.github/actions/setup-uv), so the image and CI run one uv.
+#
+# The runtime user's uid is named by number in the final USER, because a pod
+# with runAsNonRoot can verify a number but not a name.
+ARG PRESENTATOR_RUNTIME_UID=1001
 FROM ghcr.io/astral-sh/uv:0.10.9@sha256:10902f58a1606787602f303954cea099626a4adb02acbac4c69920fe9d278f82 AS uv
 
-FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS runtime-user
+FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS runtime-user
 
 # The two identities a build worker runs steps as: one builds, one only reads
 # what the build wrote. They are made before the runtime user so that a runtime
@@ -23,7 +27,7 @@ RUN groupadd --gid 10001 presentator-build \
     && useradd --uid 10002 --gid 10002 --home-dir /nonexistent --no-create-home \
         --shell /usr/sbin/nologin presentator-wire
 
-ARG PRESENTATOR_RUNTIME_UID=1001
+ARG PRESENTATOR_RUNTIME_UID
 RUN case "$PRESENTATOR_RUNTIME_UID" in \
         ''|*[!0-9]*|0*|10001|10002) \
             echo "PRESENTATOR_RUNTIME_UID must be a positive integer without a leading zero, and neither 10001 nor 10002" >&2; \
@@ -60,9 +64,11 @@ RUN corepack enable pnpm
 # The project's dependencies are installed as that user, because a build writes
 # its caches beside the project; pnpm and the browser are installed as root.
 WORKDIR /app
-COPY --chown=presentator slidev/package.json slidev/pnpm-lock.yaml ./slidev/
+COPY --chown=presentator slidev/package.json slidev/pnpm-lock.yaml slidev/pnpm-workspace.yaml ./slidev/
 WORKDIR /app/slidev
-RUN corepack install
+# pnpm 12 fetches its native binary on its first run into the root-owned
+# corepack home, so that run happens here as root, before the user switch.
+RUN corepack install && pnpm --version
 USER presentator
 RUN pnpm install --frozen-lockfile
 USER root
@@ -82,9 +88,10 @@ COPY --chown=presentator slidev ./
 WORKDIR /app/slidev
 
 FROM toolchain AS instance
+ARG PRESENTATOR_RUNTIME_UID
 USER root
 
-# git mirrors a deck source and ssh reaches a private one (ADR 0010). Their
+# git mirrors a deck source and ssh reaches a private one. Their
 # versions are the ones this base image's archive carries: Debian keeps no
 # older build to fall back to, so a pinned version is a build that breaks the
 # day the archive moves, and the digest above is what makes the layer
@@ -123,7 +130,7 @@ ENV PRESENTATOR_DATABASE=/data/database/presentator.sqlite3 \
     PRESENTATOR_LOBBY_BUILD=/app/lobby \
     PRESENTATOR_HOST=0.0.0.0 \
     PRESENTATOR_LOCAL_SOURCES_MOUNT=/data/local-sources
-USER presentator
+USER ${PRESENTATOR_RUNTIME_UID}
 WORKDIR /app
 EXPOSE 8000
 CMD ["presentator"]

@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from collections.abc import Callable, Generator
 from contextlib import closing, contextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -13,7 +13,6 @@ from fastapi.testclient import TestClient
 from httpx2 import Response as BrowserAnswer
 from webauth.config import WebAuthConfig
 from webauth.oidc import OidcRelyingParty, TokenRequestPost
-from webauth.oidc_login import AdmissionConfig
 from webauth.ports import AccountEvent, AuditSink, SignInStores, SignInTransaction
 
 from presentator.adapters.identity import (
@@ -23,7 +22,11 @@ from presentator.adapters.identity import (
     SqliteSubjectUserStore,
     create_identity_tables,
 )
+from presentator.api.auth import InstalledAuth
+from presentator.api.people import AdminPeople
 from presentator.application.decks import Decks
+from presentator.application.preferences import Preferences
+from presentator.ports.copresenter import DeckTexts
 from tests.presentator.application.support.fakes import FrozenClock
 from tests.presentator.application.support.person_instance_support import an_instance
 from tests.support.fake_issuer import FakeIssuer
@@ -40,6 +43,7 @@ from tests.support.lobby import (
     a_lobby_app,
     a_relying_party,
     an_admin_people,
+    an_agent_front,
     an_installed_auth,
 )
 
@@ -139,6 +143,35 @@ class Scene:
         return int(count)
 
 
+def _auth_through(
+    issuer: FakeIssuer,
+    clock: FrozenClock,
+    *,
+    token_requests: Callable[[TokenRequestPost], TokenRequestPost],
+    transaction: SignInTransaction,
+    realm: str,
+) -> InstalledAuth:
+    """The sign-in wiring whose relying party reaches the fake `issuer` alone."""
+    return an_installed_auth(
+        clock,
+        relying_party=a_relying_party(
+            clock,
+            post_token_request=token_requests(issuer.post_token_request),
+            fetch_key_set=issuer.fetch_key_set,
+            issuer=realm,
+        ),
+        transaction=transaction,
+        realm=realm,
+    )
+
+
+def _admin_of(token_clients: frozenset[str]) -> AdminPeople | None:
+    """The people route, served only while a token client is named."""
+    if not token_clients:
+        return None
+    return an_admin_people(an_instance().people, clients=token_clients)
+
+
 def a_scene(  # noqa: PLR0913
     tmp_path: Path,
     *,
@@ -147,10 +180,12 @@ def a_scene(  # noqa: PLR0913
     ),
     lock: ProcessWriteLock | None = None,
     audit: Callable[[RecordingAudit], AuditSink] = lambda recording: recording,
-    admission: AdmissionConfig | None = None,
+    realm: str = AN_ISSUER,
     token_requests: Callable[[TokenRequestPost], TokenRequestPost] = lambda real: real,
     token_clients: frozenset[str] = frozenset(),
     decks: Decks | None = None,
+    preferences: Preferences | None = None,
+    texts: DeckTexts | None = None,
 ) -> Scene:
     database = tmp_path / "identity.sqlite3"
     create_identity_tables(database)
@@ -161,26 +196,25 @@ def a_scene(  # noqa: PLR0913
     writes = SqliteIdentityWrites(
         database, ProcessWriteLock() if lock is None else lock, audit(recording)
     )
-    auth = an_installed_auth(
+    auth = _auth_through(
+        issuer,
         people.clock,
-        relying_party=a_relying_party(
-            people.clock,
-            post_token_request=token_requests(issuer.post_token_request),
-            fetch_key_set=issuer.fetch_key_set,
-        ),
+        token_requests=token_requests,
         transaction=transaction(writes),
+        realm=realm,
     )
     sessions = SqliteSessionRecordStore(database)
     app, _ = a_lobby_app(
+        agent=an_agent_front(auth),
+        texts=texts,
         people=people,
+        preferences=preferences,
         signing_in=SigningIn(
             sessions=sessions,
-            auth=auth if admission is None else replace(auth, admission=admission),
+            auth=auth,
             decks=decks,
         ),
-        admin_people=an_admin_people(an_instance().people, clients=token_clients)
-        if token_clients
-        else None,
+        admin_people=_admin_of(token_clients),
     )
     lobby = a_browser_at(
         app, people=people, base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS

@@ -1,6 +1,5 @@
 """The Sources list, a source's page and Fetch now as data, for an admin only."""
 
-import re
 from dataclasses import replace
 from datetime import timedelta
 from http import HTTPStatus
@@ -11,7 +10,6 @@ from fastapi.testclient import TestClient
 
 from presentator.api.hooks import hook_address
 from presentator.api.source_api import SourceListView, SourceView
-from presentator.api.sources import CHECK, NEW
 from presentator.contracts.decks import (
     MANIFEST_FILE,
     SLIDES_FILE,
@@ -48,8 +46,6 @@ _SSH_ADDRESS = "git@git.example.invalid:talks.git"
 _COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _HAL = "hal-client"
 _PROBLEM = "application/problem+json"
-_FINGERPRINT = re.compile(r'name="fingerprint"\s+value="([^"]*)"')
-_HOOK_SECRET = re.compile(r"data-hook-secret>([^<]+)<")
 _JSON = {"accept": "application/json"}
 _SAME_ORIGIN = {"sec-fetch-site": "same-origin"}
 _OTHER_ID = "the-other-source"
@@ -128,9 +124,10 @@ def test_a_list_of_no_sources_is_empty() -> None:
             SourceRunFailure.CREDENTIAL_UNRESOLVABLE,
             SourceState.ERROR,
         ),
+        (SourceRunOutcome.FAILURE, SourceRunFailure.UNREACHABLE, SourceState.ERROR),
     ],
 )
-def test_a_listed_source_says_its_newest_runs_state_and_stored_instant(
+def test_a_listed_source_says_its_newest_runs_state_reason_and_stored_instant(
     outcome: SourceRunOutcome, reason: SourceRunFailure | None, state: SourceState
 ) -> None:
     source = a_configured_source(_ADDRESS)
@@ -144,6 +141,8 @@ def test_a_listed_source_says_its_newest_runs_state_and_stored_instant(
 
     assert (row.name, row.url, row.access) == ("decks", _ADDRESS, AccessKind.SSH)
     assert row.state is state
+    assert row.reason is reason
+    assert shown(client).reason is reason
     assert row.fetched_at == NOW - timedelta(minutes=3)
     assert row.fetched_at is not None
     assert row.fetched_at.utcoffset() is not None
@@ -153,6 +152,7 @@ def test_a_never_fetched_source_has_no_instant() -> None:
     row = listed(a_lobby_of(a_configured_source(_ADDRESS))).sources[0]
 
     assert row.state is SourceState.NEVER_FETCHED
+    assert row.reason is None
     assert row.fetched_at is None
 
 
@@ -216,6 +216,7 @@ def test_an_ssh_source_page_gives_the_deploy_keys_public_half() -> None:
 
 
 def test_a_source_page_lists_only_the_admins_own_decks_by_title() -> None:
+    """SR4: a source's page lists only the viewing admin's own decks."""
     source = a_configured_source(_ADDRESS)
     store = FakeDeckStore()
     store.put(a_deck(source, owner_id=ADMIN, slug="mine", title="Mine"))
@@ -246,29 +247,6 @@ def test_the_hook_url_takes_the_scheme_of_the_requests_own_url() -> None:
     assert SourceView.model_validate(answer.json()).hook_url == (
         f"https://{lobby.client.base_url.netloc.decode()}{hook_address('decks')}"
     )
-
-
-def test_the_page_carries_no_one_time_secret_the_jinja_page_still_shows_once() -> None:
-    client = a_signed_in_lobby()
-    form = {
-        "name": "talks",
-        "url": "https://git.example.invalid/talks.git",
-        "access": "https",
-        "secret": "a-read-only-token",
-    }
-    checked = client.post(CHECK, data=form)
-    fingerprint = _FINGERPRINT.search(checked.text)
-    assert fingerprint is not None
-    created = client.post(NEW, data={**form, "fingerprint": fingerprint.group(1)})
-
-    api_answer = client.get(_PAGE.format(name="talks"), headers=_JSON)
-    jinja_page = client.get(created.headers["location"]).text
-
-    secret = _HOOK_SECRET.search(jinja_page)
-    assert secret is not None
-    assert secret.group(1) not in api_answer.text
-    assert secret.group(1) not in client.get(_LIST, headers=_JSON).text
-    assert "a-read-only-token" not in api_answer.text
 
 
 @pytest.mark.parametrize("name", ["no-such-source"])

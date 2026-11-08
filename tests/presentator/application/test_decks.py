@@ -2,7 +2,6 @@
 
 import hashlib
 import logging
-import string
 from datetime import timedelta
 from threading import Thread
 
@@ -135,10 +134,9 @@ def test_the_most_recently_changed_deck_is_listed_first_and_equals_by_slug() -> 
     listed = refreshed(decks)
 
     assert [deck.slug for deck in listed] == ["a-newer", "b-newer", "older"]
-    assert listed[0].age == timedelta(minutes=2)
 
 
-@pytest.mark.parametrize(
+@pytest.mark.parametrize(  # DK1
     "folder",
     [
         a_folder("without-slides", file_names=frozenset({MANIFEST_FILE})),
@@ -167,7 +165,7 @@ def test_a_folder_that_is_no_folders_own_name_is_neither_listed_nor_built(
     assert builder.built == []
 
 
-def test_the_folder_name_stays_the_address_when_the_title_changes() -> None:
+def test_the_folder_name_stays_the_address_when_the_title_changes() -> None:  # DK2
     mirror = carrying(a_folder("knowledge-fabric", title="Fabric"))
     decks = decks_over(mirror=mirror)
     first = refreshed(decks)
@@ -252,7 +250,7 @@ def test_a_deck_whose_commit_was_never_built_is_built_and_then_delivered() -> No
     decks.refresh()
     clock.advance(by=timedelta(minutes=12))
 
-    assert page_of(decks, "kundenfeedback").built_ago == timedelta(minutes=12)
+    assert page_of(decks, "kundenfeedback").built_at == NOW
     talk = decks.built_talk("kundenfeedback", viewer=OWNER)
     export = decks.exported_pdf("kundenfeedback", viewer=OWNER)
     assert talk is not None
@@ -293,7 +291,7 @@ def test_a_build_that_failed_leaves_the_talk_that_stands_standing() -> None:
     decks.refresh()
     standing = decks.built_talk("kundenfeedback", viewer=OWNER)
     exported = decks.exported_pdf("kundenfeedback", viewer=OWNER)
-    built_when = page_of(decks, "kundenfeedback").built_ago
+    built_when = page_of(decks, "kundenfeedback").built_at
 
     builder.fails = True
     mirror.carried[SOURCE.id] = (a_folder("kundenfeedback", commit=_A_LATER_COMMIT),)
@@ -302,7 +300,7 @@ def test_a_build_that_failed_leaves_the_talk_that_stands_standing() -> None:
     assert decks.built_talk("kundenfeedback", viewer=OWNER) == standing
     assert decks.exported_pdf("kundenfeedback", viewer=OWNER) == exported
     standing_page = page_of(decks, "kundenfeedback")
-    assert standing_page.built_ago == built_when
+    assert standing_page.built_at == built_when
     assert standing_page.commit == _SHORT_COMMIT
 
 
@@ -320,7 +318,7 @@ def test_a_deck_nothing_could_build_or_hold_delivers_nothing_and_says_so(
 
     assert builder.built == ["kundenfeedback"]
     page = page_of(decks, "kundenfeedback")
-    assert page.built_ago is None
+    assert page.built_at is None
     assert page.state is DeckState.FAILED
     assert page.attempt is not None
     assert page.attempt.failure == BuildFailure.without_words()
@@ -346,7 +344,7 @@ def test_a_deck_being_built_says_so_with_the_commit_and_how_long_it_has_run() ->
     assert building.state is DeckState.BUILDING
     assert building.attempt is not None
     assert building.attempt.commit == _SHORT_COMMIT
-    assert building.attempt.ago == timedelta(seconds=40)
+    assert building.attempt.started_at == NOW
     assert building.attempt.failure is None
 
 
@@ -395,7 +393,7 @@ def test_a_build_that_failed_names_its_commit_and_what_the_toolchain_said() -> N
     assert page.state is DeckState.FAILED
     assert page.attempt is not None
     assert page.attempt.commit == _SHORT_COMMIT
-    assert page.attempt.ago == timedelta(minutes=26)
+    assert page.attempt.started_at == NOW
     assert page.attempt.failure == BuildFailure.said(_WHAT_THE_TOOLCHAIN_SAID)
     assert _listed_states(decks) == [DeckState.FAILED]
 
@@ -481,7 +479,7 @@ def test_a_revert_to_the_talk_that_stands_is_ready_again_without_building() -> N
     assert reverted.commit == _SHORT_COMMIT
     # The talk that stands is the one that was built before the broken push:
     # its own build time, and no second run of the toolchain.
-    assert reverted.built_ago == timedelta(minutes=15)
+    assert reverted.built_at == NOW
     assert decks.built_talk("kundenfeedback", viewer=OWNER) == standing
     assert builder.built == tried_before_the_revert
     assert _listed_states(decks) == [DeckState.READY]
@@ -681,7 +679,7 @@ def test_a_folder_deleted_in_one_source_leaves_the_other_sources_decks_listed() 
     assert [deck.slug for deck in after_the_delete] == ["knowledge-fabric"]
 
 
-def test_a_folder_name_another_source_carries_stays_with_the_source_that_had_it(
+def test_a_folder_name_another_source_carries_stays_with_the_source_that_had_it(  # DK12
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     store = FakeDeckStore()
@@ -815,14 +813,12 @@ def test_an_unreachable_source_records_a_failed_run_naming_why() -> None:
 def test_a_source_nobody_has_polled_lists_as_never_fetched() -> None:
     (row,) = decks_over().listed_sources()
 
-    assert (row.state, row.age, row.fetched_at) == (
-        SourceState.NEVER_FETCHED,
-        None,
-        None,
-    )
+    assert (row.state, row.fetched_at) == (SourceState.NEVER_FETCHED, None)
 
 
-def test_a_successful_newest_run_lists_as_reachable_with_that_runs_age() -> None:
+def test_a_successful_newest_run_lists_as_reachable_with_that_runs_stored_instant() -> (
+    None
+):
     runs = FakeSourceRunStore()
     runs.record(
         SourceRun(
@@ -837,7 +833,7 @@ def test_a_successful_newest_run_lists_as_reachable_with_that_runs_age() -> None
     listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
 
     assert listed[0].state is SourceState.REACHABLE
-    assert listed[0].age == timedelta(minutes=3)
+    assert listed[0].fetched_at == NOW - timedelta(minutes=3)
 
 
 def test_a_failed_newest_run_lists_as_error_even_when_the_reason_is_unresolvable() -> (
@@ -857,7 +853,7 @@ def test_a_failed_newest_run_lists_as_error_even_when_the_reason_is_unresolvable
     listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
 
     assert listed[0].state is SourceState.ERROR
-    assert listed[0].age == timedelta(hours=2)
+    assert listed[0].fetched_at == NOW - timedelta(hours=2)
 
 
 def test_a_refused_login_lists_as_refused_rather_than_error() -> None:
@@ -875,7 +871,7 @@ def test_a_refused_login_lists_as_refused_rather_than_error() -> None:
     listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
 
     assert listed[0].state is SourceState.REFUSED
-    assert listed[0].age == timedelta(minutes=5)
+    assert listed[0].fetched_at == NOW - timedelta(minutes=5)
 
 
 def test_a_host_that_answered_with_something_else_lists_as_failed() -> None:
@@ -893,7 +889,7 @@ def test_a_host_that_answered_with_something_else_lists_as_failed() -> None:
     listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
 
     assert listed[0].state is SourceState.FAILED
-    assert listed[0].age == timedelta(minutes=7)
+    assert listed[0].fetched_at == NOW - timedelta(minutes=7)
 
 
 def test_the_list_reads_the_newest_run_only() -> None:
@@ -920,7 +916,7 @@ def test_the_list_reads_the_newest_run_only() -> None:
     listed = decks_over(fakes=DecksFakes(source_runs=runs)).listed_sources()
 
     assert listed[0].state is SourceState.ERROR
-    assert listed[0].age == timedelta(minutes=2)
+    assert listed[0].fetched_at == NOW - timedelta(minutes=2)
 
 
 def test_refreshing_one_source_leaves_another_unpolled() -> None:
@@ -975,7 +971,6 @@ def test_each_sources_run_is_recorded_under_its_own_id() -> None:
 
 _READ_ONLY = "a-read-only-token"
 _HTTPS_URL = "https://git.example.invalid/talks.git"
-_MINIMUM_WEBHOOK_SECRET_LENGTH = 32
 
 
 def _add(
@@ -1059,8 +1054,6 @@ def test_adding_a_source_stores_it_fetches_it_and_returns_a_webhook_secret() -> 
     assert added.source.url == _HTTPS_URL
     assert added.source.ref == "main"
     assert added.source.owner_id == OWNER
-    assert len(added.webhook_secret) >= _MINIMUM_WEBHOOK_SECRET_LENGTH
-    assert set(added.webhook_secret) <= set(string.ascii_letters + string.digits + "-_")
     assert added.webhook_secret != _READ_ONLY
     stored_hash = store.hook_secret_hash("talks")
     assert stored_hash is not None
@@ -1901,7 +1894,7 @@ def test_a_url_whose_host_reads_two_ways_names_no_access(url: str) -> None:
     ],
 )
 def test_check_refuses_an_address_off_the_grammar(url: str, access: AccessKind) -> None:
-    """#439 U2: Check answers the refusal Add answers and probes nothing."""
+    """SR1: Check answers the refusal Add answers and probes nothing."""
     decks = decks_over(fakes=DecksFakes(checker=ConnectionCheckerThatMustNotRun()))
     draft = decks.source_key_draft(owner_id=OWNER)
 

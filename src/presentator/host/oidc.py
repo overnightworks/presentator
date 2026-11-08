@@ -4,9 +4,9 @@ import time
 from typing import Final
 
 from pydantic import SecretStr
+from webauth.admission import AdmissionConfig
 from webauth.https_client import fetch_key_set_over_https
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
-from webauth.oidc_login import AdmissionConfig
 from webauth.oidc_transport import post_token_request_over_https
 
 from presentator.api.auth import LOGIN_PATH, SIGN_IN_CALLBACK_PATH
@@ -28,8 +28,6 @@ def oidc_client_config(
 
     The lobby and the talk host sign in through the one client, each as its own
     relying party with its own redirect URI; signing out returns to the lobby.
-    The sign-in also asks for the agent service's scope, so the person's token
-    names the agent service as an audience.
     """
     realm = f"{settings.oidc_issuer}/{_PROTOCOL_PATH}"
     try:
@@ -43,7 +41,7 @@ def oidc_client_config(
             client_secret=client_secret,
             redirect_uri=f"{origin}{SIGN_IN_CALLBACK_PATH}",
             post_logout_redirect_uri=f"{settings.public_origin}{LOGIN_PATH}",
-            scopes=(*_PERSON_SCOPES, settings.agent_service_scope),
+            scopes=_PERSON_SCOPES,
             leeway_seconds=_CLOCK_LEEWAY_SECONDS,
         )
     except ValueError as refused:

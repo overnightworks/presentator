@@ -12,20 +12,21 @@ from pydantic import BaseModel, ConfigDict
 from presentator.api.admission import signed_in_person
 from presentator.application.preferences import Preferences
 from presentator.contracts.models import Role
-from presentator.contracts.preferences import ThemeChoice
+from presentator.contracts.preferences import Appearance, ThemeChoice
 from presentator.contracts.text import LobbyText
 
 SESSION_PATH: Final = "/api/session"
 
 
 class SessionAddresses(BaseModel):
-    """Where a page sends a person to sign in or out."""
+    """Where a page sends a person to sign in or out, or to the central account."""
 
     model_config = ConfigDict(frozen=True)
 
     start: str
     logout: str
     talk_start: str
+    account_console_url: str
 
 
 class SessionPerson(BaseModel):
@@ -46,6 +47,12 @@ class SessionView(BaseModel):
     sign_in: SessionAddresses
 
 
+def appearance_of(request: Request, preferences: Preferences) -> Appearance:
+    """The words and the look the person behind this request reads in."""
+    person = signed_in_person(request)
+    return preferences.appearance_for(None if person is None else person.id)
+
+
 def session_routes(
     *, preferences: Preferences, addresses: SessionAddresses
 ) -> APIRouter:
@@ -55,7 +62,7 @@ def session_routes(
     @router.get(SESSION_PATH)
     def session(request: Request) -> SessionView:
         person = signed_in_person(request)
-        appearance = preferences.appearance_for(None if person is None else person.id)
+        appearance = appearance_of(request, preferences)
         return SessionView(
             person=None
             if person is None

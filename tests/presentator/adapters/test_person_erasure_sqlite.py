@@ -17,7 +17,7 @@ from tests.presentator.adapters.support.person_instance_support import (
 def test_a_person_with_every_kind_of_row_leaves_none_and_no_mirror_or_build(
     tmp_path: Path,
 ) -> None:
-    """S9 (#293) Done when: no table holds a row of the person, nor mirror or build."""
+    """PE1: no table holds a row of the person, nor mirror or build."""
     instance = an_instance_with_both_people(tmp_path)
     owned = owned_by(instance.database, THE_PERSON)
     assert all(owned.values())
@@ -32,7 +32,7 @@ def test_a_person_with_every_kind_of_row_leaves_none_and_no_mirror_or_build(
 
 
 def test_a_second_person_keeps_every_row_mirror_and_build(tmp_path: Path) -> None:
-    """E5 (#418): the erasure takes only the named person's rows."""
+    """PE1: the erasure takes only the named person's rows."""
     instance = an_instance_with_both_people(tmp_path)
     before = owned_by(instance.database, ANOTHER)
 
@@ -44,7 +44,7 @@ def test_a_second_person_keeps_every_row_mirror_and_build(tmp_path: Path) -> Non
 
 
 def test_a_dry_run_changes_no_row_and_no_directory(tmp_path: Path) -> None:
-    """S9 (#293): the dry run changes nothing."""
+    """PE2: the dry run changes nothing."""
     instance = an_instance_with_both_people(tmp_path)
     before = owned_by(instance.database, THE_PERSON)
 
@@ -56,7 +56,7 @@ def test_a_dry_run_changes_no_row_and_no_directory(tmp_path: Path) -> None:
 
 
 def test_an_unknown_subject_creates_no_account(tmp_path: Path) -> None:
-    """S9 (#293): an unknown subject creates no `users` row."""
+    """PE3, PE10: an unknown subject creates no `users` row."""
     instance = an_instance_with_both_people(tmp_path)
 
     instance.people.erase_person("nobody-at-all", dry_run=False)
@@ -70,7 +70,7 @@ def test_an_unknown_subject_creates_no_account(tmp_path: Path) -> None:
 def test_the_sole_admin_is_erased_like_anyone_and_a_repeat_is_at_zero(
     tmp_path: Path,
 ) -> None:
-    """people.md: the sole admin goes like anyone; a repeat is idempotent."""
+    """PE1, PE3: the sole admin goes like anyone; a repeat is idempotent."""
     instance = an_instance_with_both_people(tmp_path)
 
     first = instance.people.erase_person(THE_PERSON.id, dry_run=False)
