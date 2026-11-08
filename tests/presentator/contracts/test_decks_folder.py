@@ -4,10 +4,10 @@ import pytest
 
 from presentator.contracts.decks import (
     MAXIMUM_NAME_BYTES,
+    Source,
     is_a_folder_path,
     normalized_folder,
 )
-from tests.support.deck_source_support import a_source
 
 _FITS_IN_BYTES = "é" * (MAXIMUM_NAME_BYTES // 2)
 _ONE_BYTE_OVER = "é" * (MAXIMUM_NAME_BYTES // 2 + 1)
@@ -25,7 +25,14 @@ _REFUSALS = [
     _ONE_BYTE_OVER,
     f"examples/{_ONE_BYTE_OVER}",
 ]
-_KEPT = ["", "examples", "talks/2026", _FITS_IN_BYTES, f"a/{_FITS_IN_BYTES}"]
+_KEPT = [
+    "",
+    "examples",
+    "talks/2026",
+    "a" * MAXIMUM_NAME_BYTES,
+    _FITS_IN_BYTES,
+    f"a/{_FITS_IN_BYTES}",
+]
 
 
 # SR8
@@ -57,8 +64,19 @@ def test_a_typed_folder_loses_its_surrounding_space_and_one_trailing_slash(
 
 
 def test_a_decks_path_stands_under_its_sources_folder() -> None:
-    nested = a_source("https://example.invalid/r.git", folder="examples/talks")
-    top = a_source("https://example.invalid/r.git")
+    nested = _source(folder="examples/talks")
+    top = _source()
 
     assert nested.deck_path("intro") == "examples/talks/intro"
     assert top.deck_path("intro") == "intro"
+
+
+def _source(folder: str = "") -> Source:
+    return Source(
+        id="s",
+        name="decks",
+        url="https://example.invalid/r.git",
+        ref="main",
+        owner_id="o",
+        folder=folder,
+    )
