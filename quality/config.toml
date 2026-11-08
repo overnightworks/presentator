@@ -28,7 +28,7 @@ reason = "the lobby's SvelteKit app and its pnpm toolchain, built apart from the
 
 [[root.allow]]
 entry = "legal/"
-reason = "the privacy section edge assembles into its central Datenschutz page (edge section contract v1); hal legal reads it from this path"
+reason = "the privacy section of this app: platform's legal:check reads it from this path under its section contract (docs/legal-sections.md in platform), and hal legal reads it here too"
 
 [[root.allow]]
 entry = "speech/"
