@@ -1,0 +1,8 @@
+claim_id = "5e53d4a26d8f4aff83a747c26abdc2a3"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "63d2cfe775ed6b45a5ab8bb765e57e6f2ae02c98"
+branch = "claude/issue-920-the-address-decides-what-the-add-form-sh"
+scope = ["docs/runbooks/add-a-source.md", "docs/sources.md", "frontend/e2e/source-new-address.spec.ts", "frontend/e2e/source-new.spec.ts", "frontend/e2e/sources.ts", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/sources.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/source.test.ts", "frontend/src/lib/source.ts", "frontend/src/routes/(lobby)/settings/sources/new", "src/presentator/adapters/catalogs/en.po", "src/presentator/api/source_api.py", "src/presentator/application/decks.py", "src/presentator/contracts/decks.py", "src/presentator/contracts/text.py", "tests/presentator/api/support/source_api_support.py", "tests/presentator/api/test_lobby_shell_sources.py", "tests/presentator/api/test_source_api_check.py", "tests/presentator/api/test_source_api_create.py", "tests/presentator/api/test_source_api_webhook.py", "tests/presentator/application/test_decks.py", "tests/support/vulture_allowlist.py"]
+opened_commit = "f62ed48e115b5226deddd7e3a42b45f844475cb0"
+whole_reason = "The wire value, the route and the page land together: without the route the form has no answer, and without the page a radio would decide nothing."
