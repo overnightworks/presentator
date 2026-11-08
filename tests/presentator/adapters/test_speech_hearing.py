@@ -293,6 +293,20 @@ def test_a_peer_that_crashes_mid_session_ends_the_hearing() -> None:
     assert asyncio.run(scenario()) in (None, "unavailable")
 
 
+def test_audio_sent_after_the_service_closed_is_unavailable() -> None:
+    async def realtime(socket: WebSocket) -> None:
+        await socket.accept()
+        await socket.close()
+
+    async def scenario() -> None:
+        async with hearing_against(FakeSpeechService(realtime=realtime)) as hearing:
+            assert await hearing.receive() is None
+            await hearing.send_pcm(b"pcm")
+
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(scenario())
+
+
 async def _refuse_with(socket: WebSocket, answer: Response) -> None:
     await socket.send_denial_response(answer)
 

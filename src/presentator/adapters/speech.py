@@ -26,6 +26,7 @@ from speech_runtime_client.outcomes import (
     Unreachable,
 )
 from speech_runtime_client.speak import Busy, Refused, SpeakOutcome, Spoken, speak
+from wsproto.utilities import LocalProtocolError
 
 from presentator.contracts.copresenter import (
     CoPresenterReadiness,
@@ -242,7 +243,8 @@ class _RealtimeHearing:
         failure: str | None = None
         try:
             await self._socket.send_text(event.model_dump_json(exclude_none=True))
-        except HTTPXWSException as refused:
+        # A service that already closed its side makes the library refuse the send.
+        except (HTTPXWSException, LocalProtocolError) as refused:
             failure = type(refused).__name__
         if failure is not None:
             _LOGGER.warning("hearing failed: %s", failure)
