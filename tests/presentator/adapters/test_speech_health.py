@@ -81,15 +81,17 @@ def test_a_health_read_past_its_deadline_is_unavailable() -> None:
         bounded_health_fetch=bounded_health_fetch,
     )
 
+    running = hearing.readiness()
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(hearing.readiness())
+        asyncio.run(running)
 
 
 def test_a_refused_connection_is_unavailable() -> None:
     hearing = SpeechHearing(a_closed_port_origin(), voice=A_SPEECH_VOICE)
 
+    running = hearing.readiness()
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(hearing.readiness())
+        asyncio.run(running)
 
 
 @pytest.mark.parametrize(
@@ -105,5 +107,6 @@ def test_a_malformed_or_cut_answer_is_unavailable(answer: bytes) -> None:
         async with RawPeer(answer).serving() as origin:
             await SpeechHearing(origin, voice=A_SPEECH_VOICE).readiness()
 
+    running = scenario()
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(scenario())
+        asyncio.run(running)

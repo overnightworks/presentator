@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from presentator.ports.copresenter import PrivateHearing
 
 _LOGGER = logging.getLogger(__name__)
+_HEARING_FAILED_LOG: Final = "hearing failed: %s"
 
 # These bound presentator's own resources and its patience in a live talk: a
 # worker thread's life, one sentence's memory. They vary by no deployment.
@@ -195,7 +196,7 @@ class SpeechHearing:
         except (httpx2.HTTPError, HTTPXWSException) as refused:
             failure = type(refused).__name__
         if failure is not None:
-            _LOGGER.warning("hearing failed: %s", failure)
+            _LOGGER.warning(_HEARING_FAILED_LOG, failure)
             raise CoPresenterUnavailableError
 
 
@@ -261,7 +262,7 @@ class _RealtimeHearing:
         except (HTTPXWSException, LocalProtocolError) as refused:
             failure = type(refused).__name__
         if failure is not None:
-            _LOGGER.warning("hearing failed: %s", failure)
+            _LOGGER.warning(_HEARING_FAILED_LOG, failure)
             raise CoPresenterUnavailableError
 
     async def send_pcm(self, frame: bytes) -> None:
@@ -287,7 +288,7 @@ class _RealtimeHearing:
                     if event.transcript:
                         return HearingTranscript(text=event.transcript, final=True)
                 case wire.TranscriptFailed() | wire.ErrorEvent():
-                    _LOGGER.warning("hearing failed: %s", type(event).__name__)
+                    _LOGGER.warning(_HEARING_FAILED_LOG, type(event).__name__)
                     raise CoPresenterUnavailableError
                 case _:
                     continue
@@ -300,7 +301,7 @@ class _RealtimeHearing:
             return None
         except (HTTPXWSException, wire.ServerEventError) as refused:
             failure = type(refused).__name__
-        _LOGGER.warning("hearing failed: %s", failure)
+        _LOGGER.warning(_HEARING_FAILED_LOG, failure)
         raise CoPresenterUnavailableError
 
     async def aclose(self) -> None:

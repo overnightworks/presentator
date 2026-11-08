@@ -95,8 +95,9 @@ def test_every_refusal_or_broken_answer_is_unavailable(
 def test_a_refused_connection_is_unavailable() -> None:
     speaking = SpeechSpeaking(a_closed_port_origin(), voice=A_SPEECH_VOICE)
 
+    running = speaking.speak(SENTENCE, "de", TOKENS)
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(speaking.speak(SENTENCE, "de", TOKENS))
+        asyncio.run(running)
 
 
 @pytest.mark.parametrize("case", MALFORMED_PEERS)
@@ -107,8 +108,9 @@ def test_a_malformed_answer_is_unavailable(case: str) -> None:
                 SENTENCE, "de", TOKENS
             )
 
+    running = scenario()
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(scenario())
+        asyncio.run(running)
 
 
 @pytest.mark.parametrize("outcome", [PastDeadline(), OverCap()], ids=repr)
@@ -122,8 +124,9 @@ def test_a_speak_the_client_ended_at_its_own_bound_is_unavailable(
         "http://speech.test", voice=A_SPEECH_VOICE, bounded_speak=bounded_speak
     )
 
+    running = speaking.speak(SENTENCE, "de", TOKENS)
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(speaking.speak(SENTENCE, "de", TOKENS))
+        asyncio.run(running)
 
 
 def test_a_sentence_the_wire_cannot_carry_is_one_chain_free_unavailable_error(
@@ -136,8 +139,9 @@ def test_a_sentence_the_wire_cannot_carry_is_one_chain_free_unavailable_error(
         async with a_loopback_server(fake.app()) as origin:
             await SpeechSpeaking(origin, voice=A_SPEECH_VOICE).speak("…", "de", TOKENS)
 
+    running = scenario()
     with pytest.raises(CoPresenterUnavailableError) as refused:
-        asyncio.run(scenario())
+        asyncio.run(running)
 
     assert (refused.value.__cause__, refused.value.__context__) == (None, None)
     assert not fake.speak_requests
@@ -147,5 +151,6 @@ def test_a_sentence_the_wire_cannot_carry_is_one_chain_free_unavailable_error(
 def test_a_startup_defect_is_not_mapped() -> None:
     speaking = SpeechSpeaking("https://not-plain-http.test", voice=A_SPEECH_VOICE)
 
+    running = speaking.speak(SENTENCE, "de", TOKENS)
     with pytest.raises(ValueError, match="http"):
-        asyncio.run(speaking.speak(SENTENCE, "de", TOKENS))
+        asyncio.run(running)

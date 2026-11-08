@@ -111,8 +111,9 @@ def test_another_language_is_unavailable_with_no_upgrade() -> None:
         async with hearing_against(fake, "fr"):
             pass
 
+    running = scenario()
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(scenario())
+        asyncio.run(running)
 
     assert not fake.upgrades
 
@@ -256,8 +257,9 @@ def test_a_frame_the_parser_refuses_is_unavailable(frame: str) -> None:
         async with hearing_against(fake) as hearing:
             await hearing.receive()
 
+    running = scenario()
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(scenario())
+        asyncio.run(running)
 
 
 @pytest.mark.parametrize("code", [1000, 1009, 1011, 1013])
@@ -301,8 +303,9 @@ def test_audio_sent_after_the_service_closed_is_unavailable() -> None:
             assert await hearing.receive() is None
             await hearing.send_pcm(b"pcm")
 
+    running = scenario()
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(scenario())
+        asyncio.run(running)
 
 
 async def _refuse_with(socket: WebSocket, answer: Response) -> None:
@@ -334,8 +337,9 @@ def test_an_upgrade_refused_by_the_service_is_unavailable(
         async with hearing_against(fake):
             pass
 
+    running = scenario()
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(scenario())
+        asyncio.run(running)
 
 
 def test_a_malformed_upgrade_response_is_unavailable() -> None:
@@ -346,8 +350,9 @@ def test_a_malformed_upgrade_response_is_unavailable() -> None:
         ):
             pass
 
+    running = scenario()
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(scenario())
+        asyncio.run(running)
 
 
 def test_a_refused_connection_is_unavailable() -> None:
@@ -357,8 +362,9 @@ def test_a_refused_connection_is_unavailable() -> None:
         async with hearing.hear("de", TOKENS):
             pass
 
+    running = scenario()
     with pytest.raises(CoPresenterUnavailableError):
-        asyncio.run(scenario())
+        asyncio.run(running)
 
 
 class _CallerFaultError(Exception):
@@ -372,8 +378,9 @@ def test_a_fault_of_the_caller_is_not_mapped() -> None:
         async with hearing_against(fake):
             raise _CallerFaultError
 
+    running = scenario()
     with pytest.raises(ExceptionGroup) as propagated:
-        asyncio.run(scenario())
+        asyncio.run(running)
 
     assert propagated.value.subgroup(_CallerFaultError) is not None
 
