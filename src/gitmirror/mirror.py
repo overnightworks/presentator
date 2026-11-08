@@ -15,7 +15,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Final
 
 from gitmirror.model import (
@@ -33,6 +33,9 @@ from gitmirror.model import (
 )
 
 _CREDENTIAL_VARIABLE: Final = "GITMIRROR_CREDENTIAL"
+# A remote's tree is data nobody here wrote; an entry with one of these names
+# cannot be a file or folder of a deck, and writing it would leave the target.
+_UNWRITABLE_ENTRY_NAMES: Final = frozenset({"", ".", "..", ".git"})
 # GitHub, GitLab, and every other host that hands out a read-only token accept
 # any user name beside it, so an operator whose URL names none still reaches a
 # host that insists on one. The caller hands an https URL without a user part,
@@ -163,6 +166,19 @@ class GitMirror:
         checked out into it. Git carries no empty directory, so a path with
         nothing under it is a path this commit does not carry.
         """
+        self._every_entry(revision, path)
+        self._write_tree(revision, path, into=into)
+
+    def _every_entry(self, revision: Revision, path: str) -> tuple[TreeEntry, ...]:
+        """Every entry at any depth under that path, each name checked."""
+        listing = self._run(
+            "ls-tree", "-r", "-t", "-z", revision.commit, "--", f"{path}/"
+        )
+        return tuple(
+            _tree_entry(record) for record in os.fsdecode(listing).split("\0") if record
+        )
+
+    def _write_tree(self, revision: Revision, path: str, *, into: Path) -> None:
         entries = self.entries(revision, inside=path)
         if not entries:
             message = f"{revision.commit} carries no {path}"
@@ -171,7 +187,7 @@ class GitMirror:
         for entry in entries:
             below = f"{path}/{entry.name}"
             if entry.is_directory:
-                self.export(revision, below, into=into / entry.name)
+                self._write_tree(revision, below, into=into / entry.name)
             else:
                 (into / entry.name).write_bytes(self.read(revision, below))
 
@@ -459,4 +475,10 @@ def _sanitized(stderr: str, *, secret: str | None) -> str:
 def _tree_entry(record: str) -> TreeEntry:
     attributes, _, path = record.partition("\t")
     _mode, kind, _object = attributes.split()
-    return TreeEntry(name=PurePosixPath(path).name, is_directory=kind == "tree")
+    # The raw last element, because a path type drops a `.` element and would
+    # hide the name that makes a write land in, or above, its own directory.
+    name = path.rpartition("/")[2]
+    if name in _UNWRITABLE_ENTRY_NAMES:
+        message = f"the tree carries an entry named {name!r}"
+        raise MirrorError(message)
+    return TreeEntry(name=name, is_directory=kind == "tree")
