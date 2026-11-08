@@ -395,7 +395,7 @@ def test_session_end_closes_the_lease_and_the_service_socket_within_one_recheck(
             _release_the_recheck(instance)
             with pytest.raises(WebSocketDisconnect) as closed:
                 socket.receive_json()
-        assert service.arrived.acquire(timeout=_THREAD_WAIT_SECONDS)
+        assert service.closed.wait(_THREAD_WAIT_SECONDS)
     assert closed.value.code == _POLICY_VIOLATION
     assert service.closes == ["closed"]
 

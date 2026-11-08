@@ -102,8 +102,11 @@ class FakeSpeechService:
     events: list[dict[str, object]] = field(default_factory=list[dict[str, object]])
     closes: list[str] = field(default_factory=list[str])
     upgrade_paths: list[str] = field(default_factory=list[str])
-    arrived: threading.Semaphore = field(default_factory=threading.Semaphore)
+    arrived: threading.Semaphore = field(
+        default_factory=lambda: threading.Semaphore(0)
+    )
     connected: threading.Event = field(default_factory=threading.Event)
+    closed: threading.Event = field(default_factory=threading.Event)
 
     def app(self) -> FastAPI:
         """The fake as an ASGI app."""
@@ -136,6 +139,7 @@ class FakeSpeechService:
             message = await connection.receive()
             if message["type"] == "websocket.disconnect":
                 self.closes.append("closed")
+                self.closed.set()
                 return
             self.events.append(json.loads(message["text"]))
             self.arrived.release()

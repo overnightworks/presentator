@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
 TOKENS = SpeechTokens(person="person-token-MARKER", workload="workload-token-MARKER")
 ITEM = "item-1"
+_CLOSE_WAIT_SECONDS = 10
 
 
 @asynccontextmanager
@@ -394,10 +395,7 @@ def test_ending_the_hearing_closes_the_service_side() -> None:
             use = replace(use, speech=SpeechHearing(origin, voice=A_SPEECH_VOICE))
             async with use.hear("de", session_id="a-session"):
                 pass
-            for _attempt in range(1000):
-                if fake.closes:
-                    break
-                await asyncio.sleep(0)
+            assert await asyncio.to_thread(fake.closed.wait, _CLOSE_WAIT_SECONDS)
             return fake.closes
 
     assert asyncio.run(scenario()) == ["closed"]
