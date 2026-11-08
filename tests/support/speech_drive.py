@@ -477,6 +477,7 @@ def assert_nothing_shows(
     *,
     response: Response | None = None,
     frames: Sequence[Mapping[str, object]] = (),
+    close_reasons: Sequence[str] = (),
 ) -> None:
     """No marker in a log, a caught error, the browser or a stored row."""
     markers = _every_marker(instance)
@@ -490,6 +491,8 @@ def assert_nothing_shows(
         exempt = () if _NO_HEARING_ERROR_KEY in frame else HEARD_WORDS
         text = json.dumps(frame, ensure_ascii=False)
         _absent(text, (*markers, *(w for w in words if w not in exempt)))
+    for reason in close_reasons:
+        _absent(reason, (*markers, *words))
 
 
 def the_marked_answer() -> Gateway:

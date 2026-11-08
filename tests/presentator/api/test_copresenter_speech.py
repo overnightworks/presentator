@@ -691,7 +691,9 @@ def test_a_stalled_grant_ended_by_logout_shows_no_marker(tmp_path: Path) -> None
             assert entered.wait(THREAD_WAIT_SECONDS)
             delete_the_sessions(instance.hosts)
             _release_the_recheck(instance)
-            with pytest.raises(WebSocketDisconnect):
+            with pytest.raises(WebSocketDisconnect) as closed:
                 socket.receive_json()
             release.set()
-        assert_nothing_shows(instance, list(logged))
+        assert_nothing_shows(
+            instance, list(logged), close_reasons=[closed.value.reason]
+        )
