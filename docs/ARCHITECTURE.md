@@ -94,6 +94,8 @@ hosts answer `GET /health` with a fixed 200 and no session, store read or cookie
 (`api/health.py`); the port opens only after the database is migrated and, under
 the worker runner, the worker answers, so an answer means it serves. The request
 must name a served host: the container check and edge do, a direct run must.
+The instance joins the internal network `hal_speech_presentator` to reach the
+shared speech service; no host speech process runs.
 
 ## 5. Crosscutting Concepts
 
