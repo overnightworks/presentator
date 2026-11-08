@@ -462,10 +462,12 @@ def test_a_first_frame_past_the_bound_ends_the_hearing_with_no_upgrade(
     tmp_path: Path,
 ) -> None:
     service = FakeSpeechService()
-    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
-        with instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket:
-            socket.send_bytes(b"\0" * (3 * 1024 * 1024))
-            frame = socket.receive_json()
+    with (
+        a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance,
+        instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
+    ):
+        socket.send_bytes(b"\0" * (3 * 1024 * 1024))
+        frame = socket.receive_json()
     assert frame == _NO_HEARING
     assert not service.upgrades
 
