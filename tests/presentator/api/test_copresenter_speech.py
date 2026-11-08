@@ -467,15 +467,15 @@ def _refused_upgrade_with_the_marker() -> Hear:
     return realtime
 
 
-LEAK_ASKS: dict[str, SpeechScenario] = {
-    "good": SpeechScenario(),
-    "marked-refusal": SpeechScenario(
+LEAK_ASKS: dict[str, Callable[[], SpeechScenario]] = {
+    "good": SpeechScenario,
+    "marked-refusal": lambda: SpeechScenario(
         service=FakeSpeechService(speak_answers=[_a_marked_refusal])
     ),
-    "marked-issuer-refusal": SpeechScenario(
+    "marked-issuer-refusal": lambda: SpeechScenario(
         arrange=_refuse_all_workload_grants(PLANTED)
     ),
-    "punctuation-only": SpeechScenario(gateway=_say("Erster Satz. …")),
+    "punctuation-only": lambda: SpeechScenario(gateway=_say("Erster Satz. …")),
 }
 
 LEAK_HEARINGS: dict[str, Callable[[], FakeSpeechService]] = {
@@ -507,7 +507,7 @@ def _shown_markers(instance: SpeechInstance) -> tuple[str, ...]:
 def test_an_ask_shows_no_secret_or_personal_word_in_any_log_error_or_sse(
     tmp_path: Path, case: str
 ) -> None:
-    with a_speech_instance(tmp_path, LEAK_ASKS[case]) as instance:
+    with a_speech_instance(tmp_path, LEAK_ASKS[case]()) as instance:
         run = ask_over(instance)
         shown = everything_shown(run.logged, instance.errors)
         markers = _shown_markers(instance)

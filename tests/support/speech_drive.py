@@ -146,10 +146,10 @@ def a_surface_over(
 
 @contextmanager
 def a_speech_instance(
-    tmp_path: Path,
-    scenario: SpeechScenario = SpeechScenario(),  # noqa: B008
+    tmp_path: Path, scenario: SpeechScenario | None = None
 ) -> Generator[SpeechInstance]:
     """Sign an admin in at the talk host, over the fake service, for the block."""
+    scenario = scenario or SpeechScenario()
     limiter = RecordingLimiter(clock=FrozenClock(instant=NOW))
     deadline = ManualDeadline()
     gateway = scenario.gateway()
