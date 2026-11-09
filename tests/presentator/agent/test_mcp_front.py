@@ -179,13 +179,14 @@ def test_the_resource_bearer_opens_no_admin_delete_or_excluded_route(
         assert world.scene.count("users") == World.SIGNED_IN
 
 
+@pytest.mark.parametrize("subject", [World.FELIX, World.ANNA])
 @pytest.mark.parametrize("token_clients", [frozenset[str](), frozenset({World.HAL})])
 def test_the_resource_bearer_never_authorizes_an_excluded_route(
-    tmp_path: Path, token_clients: frozenset[str]
+    tmp_path: Path, token_clients: frozenset[str], subject: str
 ) -> None:
     """Alone it is refused; beside a cookie it is ignored, never used."""
     with a_world(tmp_path, token_clients=token_clients) as world:
-        bearer = world.bearer(subject=World.ANNA)
+        bearer = world.bearer(subject=subject)
 
         alone = world.program().get(
             World.EXCLUDED_PATH, headers={**bearer, **World.JSON}
@@ -241,6 +242,11 @@ def test_one_persons_bearer_beside_another_persons_cookie_is_the_bearers_person(
     world: World, marked: MarkedPath
 ) -> None:
     """The resource request never takes the cookie's person, on every marked path."""
+    cookie_person_theme = {"theme": ThemeChoice.DARK.value}
+    assert (
+        world.anna.put(ACCOUNT_PATH, json=cookie_person_theme).status_code
+        == HTTPStatus.OK
+    )
     alone = world.program().get(marked.path, headers={**world.bearer(), **World.JSON})
     through_route = world.anna.get(marked.path, headers=world.bearer())
     through_mcp = called_through_mcp(
@@ -391,15 +397,6 @@ def test_an_admin_persons_bearer_beside_a_members_cookie_never_opens_an_admin_ro
         answer = world.felix.get(SETTINGS_PATH, headers={**bearer, **World.JSON})
 
         assert answer.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}
-
-
-def test_a_bearer_on_an_excluded_person_route_is_refused(world: World) -> None:
-    """The PDF is a person's route that no tool answers."""
-    answer = world.program().get(
-        World.EXCLUDED_PATH, headers={**world.bearer(), **World.JSON}
-    )
-
-    assert answer.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_cookie_only_reads_work_and_writes_still_need_their_provenance(
