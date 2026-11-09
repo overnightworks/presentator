@@ -13,6 +13,12 @@ item = "#935"
 date = 2026-11-09
 reason = "each route module declares its agent-tool decision beside the route with agent_runtime_client.tools, the one module import-linter cannot separate from the rest of the client; tests/presentator/agent/test_backend_imports.py (C14) holds api to that module alone, and host, application, ports and contracts stay forbidden"
 
+[[gate.loosened]]
+what = 'import contract "Only adapters import speech_runtime_client" removed'
+item = "#978"
+date = 2026-11-09
+reason = "the contract is renamed, not dropped: \"Only adapters import speech_client\" forbids the same source modules from importing the renamed client library"
+
 [[size.generated]]
 path = "frontend/src/lib/api/types.ts"
 job = "Lobby: lint, types, tests, drive"
