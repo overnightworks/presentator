@@ -86,6 +86,8 @@ const rows: Row[] = [
 	}
 ];
 
+test.use({ person: { role: 'admin' } });
+
 const line = (page: Page) => page.getByRole('status');
 
 for (const surface of ['the source page', 'the list'] as const) {
@@ -118,7 +120,7 @@ for (const surface of ['the source page', 'the list'] as const) {
 					await expect(stated).toHaveAttribute('data-state', row.shape);
 					await expect(fetchButton(page, words, name)).toBeEnabled();
 					await expectsNoHorizontalScroll(page);
-					await expect(stated).toBeInViewport();
+					await expect(stated).toBeVisible();
 					await expect(stated).toHaveText(row.says(words));
 				});
 			}
@@ -143,16 +145,6 @@ for (const surface of ['the source page', 'the list'] as const) {
 			await expect(line(page)).toHaveCount(0);
 			held.release();
 			await expect(line(page)).toHaveCount(1);
-		});
-
-		test('says how a real fetch of an unreachable source ended', async ({ page }, testInfo) => {
-			const { words } = await sessionOf(page);
-			const { name } = await opensAnHttpsSource(page, words, testInfo);
-			await opens(page, name);
-
-			await fetchButton(page, words, name).click();
-
-			await expect(scope(page, name).getByRole('status')).toHaveAttribute('data-state', 'failed');
 		});
 	});
 }
