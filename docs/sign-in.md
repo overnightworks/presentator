@@ -37,3 +37,10 @@ presentator holds only its own values here.
   the lobby draws no footer. Design's stylesheet contract owns the placement for
   every app. This row owns it for both of presentator's pages, and the lobby
   page links here.
+- **SI14** Each host counts HTTP requests per address, behind the trusted proxy
+  per forwarded client. The sign-in paths (start, return and, on the lobby,
+  `/logout`) share 40 requests in ten minutes. On the talk host the built deck
+  files under `/deck/` have 3000 a minute, because every load fetches each file
+  again. Every other path has 600 a minute. A refusal is `429` with
+  `Retry-After`. `/health` and the back-channel logout are exempt from every
+  budget, and the co-presenter's WebSocket is not counted.
