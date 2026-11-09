@@ -279,7 +279,7 @@ def _the_two_languages() -> dict[str, str]:
     return {"first": DEFAULT_LANGUAGE_TAG, "second": SECOND_LANGUAGE_TAG}
 
 
-class _AdmitAll:
+class AdmitEveryRequest:
     """A backend that counts nothing.
 
     Every browser test reaches one lobby from loopback and loads again each
@@ -298,7 +298,7 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
     shell = LobbyShell.read(build)
     config = replace(
         web_auth_config_for(_SECRET, trusted_proxies="", origin=origin),
-        rate_limits=_AdmitAll(),
+        rate_limits=AdmitEveryRequest(),
         wall_clock=lambda: clock.now().timestamp(),
     )
     auth = replace(

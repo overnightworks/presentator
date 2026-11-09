@@ -15,7 +15,7 @@ from presentator.host.config import Settings, WorkerSettings
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
 from tests.presentator.host.test_worker_serving_loop import clients_closed_with_the_test
 from tests.presentator.host.test_worker_settings import no_worker_variables
-from tests.support.lobby_drive import DeckRecord, _AdmitAll  # pyright: ignore[reportPrivateUsage] - webauth's IpRateLimitMiddleware, not Python code here, calls is_allowed
+from tests.support.lobby_drive import AdmitEveryRequest, DeckRecord
 
 # `BaseHTTPRequestHandler`'s own request dispatch calls this by name; nothing
 # in the test that stands the server up ever calls it itself.
@@ -23,7 +23,7 @@ DumbHttpHandler.log_message
 RespondingHandler.log_message
 
 # webauth's `IpRateLimitMiddleware` reaches the backend through `config.rate_limits`.
-_AdmitAll.is_allowed
+AdmitEveryRequest.is_allowed
 
 # `HTMLParser.feed` dispatches to these by name; nothing calls them directly.
 _InlineScripts.handle_starttag
