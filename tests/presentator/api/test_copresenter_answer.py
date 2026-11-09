@@ -344,6 +344,20 @@ def test_speech_failing_on_the_second_sentence_ends_after_the_first_in_error(
     assert the_ticket_was_released(run)
 
 
+def test_the_first_sentence_is_spoken_before_the_last_piece_is_read(
+    tmp_path: Path,
+) -> None:
+    """An answer streamed in pieces has its first sentence out before its last piece."""
+    scenario = Scenario(
+        gateway=lambda: FakeGateway(completion("Erster Satz. ", "Zweiter ", "Satz."))
+    )
+
+    events = drive(tmp_path, scenario).events
+
+    last_piece = max(at for at, name in enumerate(events) if name == "text")
+    assert events.index("sentence") < last_piece
+
+
 @dataclass
 class ChangeOnceTheAnswerHangs:
     """A session re-check that changes the world once the gateway holds the request."""

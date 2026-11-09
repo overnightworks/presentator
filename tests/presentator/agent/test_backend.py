@@ -449,6 +449,31 @@ async def test_a_slide_move_comes_before_the_words_that_follow_it() -> None:
 
 
 @on_an_event_loop
+async def test_a_round_streamed_in_pieces_reaches_the_caller_as_those_pieces() -> None:
+    """The pieces keep their order and are not joined into the round's text."""
+    gateway = FakeGateway(completion("Erster ", "Zweiter ", "Dritter."))
+
+    events = await answered(answerer_over(gateway))
+
+    assert events == ["Erster ", "Zweiter ", "Dritter."]
+
+
+@on_an_event_loop
+async def test_a_tool_rounds_pieces_come_before_its_slide_move() -> None:
+    """The words a tool round streams are out before the move it ends in."""
+    gateway = FakeGateway(
+        tool_round(
+            tool_call("call-1", "show_slide", {"number": 3}), content="Schau ein"
+        ),
+        completion("Gut."),
+    )
+
+    events = await answered(answerer_over(gateway))
+
+    assert events == ["Schau ein", ShowSlide(number=3), "Gut."]
+
+
+@on_an_event_loop
 async def test_every_slide_move_of_a_run_reaches_the_window_in_order() -> None:
     """A second move in one run is not dropped."""
     gateway = FakeGateway(
