@@ -263,7 +263,11 @@ def test_a_folder_whose_manifest_became_a_submodule_stays_present_and_unmarked(
 def test_a_new_folder_whose_manifest_is_a_submodule_takes_no_deck_and_stops_nothing(
     folder: str,
     instance: _Instance,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    # A captured record would carry the folder name into the report an xdist worker
+    # sends to its controller, and a name that is not text cannot be sent.
+    caplog.set_level(logging.CRITICAL + 1)
     instance.spoiled_remote.commit_gitlink(
         {f"{folder}/slides.md": "# Fresh\n", **_A_SIBLING_FOLDER},
         gitlink=f"{folder}/deck.toml",
