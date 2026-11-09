@@ -136,6 +136,26 @@ test.describe('as an admin', () => {
 		}
 	}
 
+	test('names a folder in the header when the source has one and nothing when it has none', async ({
+		page
+	}, testInfo) => {
+		const { words } = await sessionOf(page);
+		const { name } = await opensAnHttpsSource(page, words, testInfo);
+		for (const width of [390, 1280]) {
+			await page.setViewportSize({ width, height: 900 });
+			await answersWith(page, name, (view) => ({ ...view, folder: 'examples' }));
+			await page.goto(sourceAddress(name));
+			await expect(page.locator('.meta')).toContainText(`${words.source_folder}examples`);
+			await expectsNoHorizontalScroll(page);
+			await page.unroute(`**${SOURCES_API}/${name}`);
+
+			await answersWith(page, name, (view) => ({ ...view, folder: '' }));
+			await page.goto(sourceAddress(name));
+			await expect(page.locator('.meta')).not.toContainText(words.source_folder);
+			await page.unroute(`**${SOURCES_API}/${name}`);
+		}
+	});
+
 	// Cell 4.
 	test('words every state, run, commit and failure of the answer, the null access and the missing key', async ({
 		page

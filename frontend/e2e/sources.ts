@@ -61,16 +61,23 @@ export async function typesTheAddress(page: Page, words: Words, url: string): Pr
 	await answered;
 }
 
-// A token is typed only when asked for, and only an https address has its field.
+export const folderField = (page: Page, words: Words) =>
+	page.getByLabel(words.source_folder_optional, { exact: true });
+
+// A token is typed only when asked for, and only an https address has its field;
+// a folder likewise only for a key or web address.
 export async function fillsTheForm(
 	page: Page,
 	words: Words,
-	values: { name: string; url: string; secret?: string }
+	values: { name: string; url: string; secret?: string; folder?: string }
 ): Promise<void> {
 	await page.getByLabel(words.source_name, { exact: true }).fill(values.name);
 	await typesTheAddress(page, words, values.url);
 	if (values.secret !== undefined) {
 		await secretField(page, words).fill(values.secret);
+	}
+	if (values.folder !== undefined) {
+		await folderField(page, words).fill(values.folder);
 	}
 }
 
@@ -97,7 +104,7 @@ async function creates(page: Page, words: Words): Promise<CreatedSourceView> {
 export async function createsASource(
 	page: Page,
 	words: Words,
-	values: { name: string; url: string; secret?: string }
+	values: { name: string; url: string; secret?: string; folder?: string }
 ): Promise<CreatedSourceView> {
 	await fillsTheForm(page, words, values);
 	await checks(page, words);

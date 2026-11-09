@@ -33,6 +33,10 @@ on the source's page.
    public half at the Git host. The first contact accepts the host's key and
    refuses the host if it ever changes. Local folder: enter no secret.
    Rollback: delete the key at the host.
+
+   HTTPS and SSH also show an optional Folder field: enter the part of the
+   repository the decks live in, for example `examples`. It is set at Create and
+   cannot be changed later; a server folder has none.
 5. Choose *Check connection*. It probes that exact token (or none) or draft before
    anything is stored, and *Create* stays disabled until it answers reachable.
    Rollback: none needed, nothing is stored.
