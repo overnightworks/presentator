@@ -820,6 +820,14 @@
             "title": "Source Deploy Key Renew",
             "type": "string"
           },
+          "source_folder": {
+            "title": "Source Folder",
+            "type": "string"
+          },
+          "source_folder_optional": {
+            "title": "Source Folder Optional",
+            "type": "string"
+          },
           "source_kind_failed": {
             "title": "Source Kind Failed",
             "type": "string"
@@ -1209,6 +1217,8 @@
           "sources_column_access",
           "source_name",
           "source_url",
+          "source_folder_optional",
+          "source_folder",
           "source_access_token",
           "source_access_deploy_key",
           "source_access_local",

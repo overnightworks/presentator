@@ -146,6 +146,9 @@
 <h1 class="as-typed">{source.name}</h1>
 <div class="meta">
 	<code>{source.url}</code>
+	{#if source.folder !== ''}
+		<span><b>{words.source_folder}</b>{source.folder}</span>
+	{/if}
 	<span class="state" data-state={stateShape(source.state)}
 		><i></i>{stateWords(source.state, words)}</span
 	>

@@ -271,6 +271,12 @@ msgstr "Name"
 msgid "source_url"
 msgstr "Git URL"
 
+msgid "source_folder_optional"
+msgstr "Folder (optional)"
+
+msgid "source_folder"
+msgstr "Folder"
+
 msgid "source_access_token"
 msgstr "Token"
 
