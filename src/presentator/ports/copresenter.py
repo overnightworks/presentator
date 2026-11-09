@@ -15,6 +15,7 @@ if TYPE_CHECKING:
         CoPresenterReadiness,
         DeckText,
         HearingTranscript,
+        ShowSlide,
         SpeechTokens,
     )
     from presentator.contracts.decks import Deck, Source
@@ -38,8 +39,8 @@ class AgentAnswers(Protocol):
 
     def answer(
         self, *, message: str, person: AskingPerson
-    ) -> AbstractAsyncContextManager[AsyncIterator[str]]:
-        """Open one answer: the text deltas, until the model has finished.
+    ) -> AbstractAsyncContextManager[AsyncIterator[str | ShowSlide]]:
+        """Open one answer: the text deltas and the slides it shows, until it ends.
 
         Raises CoPresenterUnavailableError when the answer cannot be had, and
         NotEnabledError when the gateway does not answer this person.

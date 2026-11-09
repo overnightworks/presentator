@@ -98,7 +98,14 @@ class Done:
     text: str
 
 
-type AnswerEvent = AnswerText | Sentence | Audio | Done
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ShowSlide:
+    """The model moved the shown deck to this 1-based slide."""
+
+    number: int
+
+
+type AnswerEvent = AnswerText | Sentence | Audio | Done | ShowSlide
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

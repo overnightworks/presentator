@@ -5,7 +5,13 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Final
 
-from presentator.contracts.copresenter import AnswerText, Audio, Done, Sentence
+from presentator.contracts.copresenter import (
+    AnswerText,
+    Audio,
+    Done,
+    Sentence,
+    ShowSlide,
+)
 from presentator.contracts.voice import SampleLanguage
 
 if TYPE_CHECKING:
@@ -80,16 +86,22 @@ def deck_language_of(written: str | None) -> SampleLanguage:
 
 
 async def spoken_events(
-    texts: AsyncIterator[str],
+    texts: AsyncIterator[str | ShowSlide],
     boundaries: SentenceBoundaries,
     speaking: Speaking,
     language: str,
     tokens: SpeechTokens,
 ) -> AsyncIterator[AnswerEvent]:
-    """Yield the text, each sentence once and in order with its audio, then Done."""
+    """Yield the text, each sentence once and in order with its audio, then Done.
+
+    A slide the model shows passes through where it came.
+    """
     answer = SpokenAnswer(boundaries)
     spoken: list[str] = []
     async for delta in texts:
+        if isinstance(delta, ShowSlide):
+            yield delta
+            continue
         yield AnswerText(text=delta)
         for sentence in answer.feed(delta):
             spoken.append(sentence)

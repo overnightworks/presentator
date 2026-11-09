@@ -10,7 +10,8 @@ network `hal_speech_presentator`, and that hop's trust sentence is in
 ## What it knows and whom it answers
 
 - **CP1** The co-presenter knows only the deck being presented: only that deck's
-  words go to the model, and the model gets no tools.
+  words go to the model, and the model gets one tool, `show_slide`, and
+  nothing else.
 - **CP2** It answers only the person who owns the shown deck, and only about
   that deck. Any other deck gets the same 404 and spends no question.
 - **CP3** Only members of the agent service's API group are answered; any other
@@ -24,7 +25,8 @@ network `hal_speech_presentator`, and that hop's trust sentence is in
 ## What the presenter sees
 
 - **CP6** The overlay shows "Not enabled", "Sign in again" or "No answer", only
-  its own words. It never navigates, and a refusal line clears at the next
+  its own words. It navigates only by the model's `show_slide` call, inside the
+  deck's slides, and shows no word for it. A refusal line clears at the next
   question.
 - **CP7** The overlay's speech words are "Voice offline" (the service does not
   answer, or the configured voice cannot speak), "Local hearing not ready" (hearing
@@ -50,7 +52,8 @@ network `hal_speech_presentator`, and that hop's trust sentence is in
   sent with the slides to an AI service. The Datenschutzerklärung (privacy
   notice) says which one."
 - **CP12** Every answer event of text, sentence, audio and done carries
-  `"ai_generated": true`; `error` does not; and nothing switches it off.
+  `"ai_generated": true`; `error` and `slide`, the control events, do not; and
+  nothing switches it off.
 
 ## Where it runs and when it stops
 

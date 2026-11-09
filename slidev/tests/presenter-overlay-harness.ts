@@ -42,6 +42,7 @@ export type AnswerMode =
   | 'not-enabled'
   | 'unknown-reason'
   | 'mid-answer-error'
+  | 'moves-slide'
   | 'refused-then-answered'
   | keyof typeof REFUSED_REQUESTS
 
@@ -61,7 +62,9 @@ export const state = {
   pendingAnswerClosed: 0,
   askHeaderNames: [] as string[],
   answerMode: 'audio' as AnswerMode,
-  askBodies: [] as { said: string, deck: string, language: string }[],
+  // The slide the fake model shows in 'moves-slide' mode.
+  slideToShow: 1,
+  askBodies: [] as { said: string, deck: string, language: string, slide: number }[],
   whoLanguage: 'de' as 'de' | 'en',
   hearLanguages: [] as (string | null)[],
   hearingMode: 'ready' as 'ready' | 'not-ready' | 'socket-error' | 'error-on-open' | 'unreachable' | 'who-fails' | 'who-not-found',
@@ -327,6 +330,12 @@ async function startServer() {
         response.end()
         return
       }
+      if (state.answerMode === 'moves-slide') {
+        sendEvent(response, 'slide', { number: state.slideToShow })
+        sendEvent(response, 'done', { text: 'Answered.' })
+        response.end()
+        return
+      }
       if (state.answerMode === 'speech-refused') {
         const sentence = 'The handoff keeps this sentence.'
         sendEvent(response, 'text', { text: sentence })
@@ -399,7 +408,7 @@ function sendEvent(response: ServerResponse, event: string, data: object) {
 async function readAskBody(request: import('node:http').IncomingMessage) {
   const chunks: Buffer[] = []
   for await (const chunk of request) chunks.push(chunk as Buffer)
-  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as { said: string, deck: string, language: string }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as { said: string, deck: string, language: string, slide: number }
 }
 
 export function sendHeard(text: string) {
