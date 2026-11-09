@@ -33,6 +33,7 @@ from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     DeckText,
     HearingTranscript,
+    ShowSlide,
     SlideText,
     SpeechTokens,
 )
@@ -427,7 +428,7 @@ class WitnessedAnswers:
     @asynccontextmanager
     async def answer(
         self, *, message: str, person: AskingPerson
-    ) -> AsyncGenerator[AsyncIterator[str]]:
+    ) -> AsyncGenerator[AsyncIterator[str | ShowSlide]]:
         try:
             async with self._answers.answer(message=message, person=person) as events:
                 yield events
