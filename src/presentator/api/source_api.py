@@ -444,12 +444,8 @@ def _add_removal_routes(router: APIRouter, data: _SourceData) -> None:
     )
 
 
-def source_api_routes(*, decks: Decks) -> APIRouter:
-    """The router that answers the Sources data to an admin."""
-    data = _SourceData(decks=decks)
+def _add_collection_routes(router: APIRouter, data: _SourceData) -> None:
     forbidden = problem_response(HTTPStatus.FORBIDDEN)
-    not_found = forbidden | problem_response(HTTPStatus.NOT_FOUND)
-    router = APIRouter(dependencies=[Depends(gated_admin)])
     router.add_api_route(
         _SOURCES,
         data.source_list,
@@ -466,6 +462,15 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         openapi_extra=problem_beside_validation(SourceRefusedProblem)
         | administration_is_no_tool(),
     )
+
+
+def source_api_routes(*, decks: Decks) -> APIRouter:
+    """The router that answers the Sources data to an admin."""
+    data = _SourceData(decks=decks)
+    forbidden = problem_response(HTTPStatus.FORBIDDEN)
+    not_found = forbidden | problem_response(HTTPStatus.NOT_FOUND)
+    router = APIRouter(dependencies=[Depends(gated_admin)])
+    _add_collection_routes(router, data)
     router.add_api_route(
         _SOURCE,
         data.source,
