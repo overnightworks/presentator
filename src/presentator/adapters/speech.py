@@ -221,7 +221,7 @@ def _health_of(outcome: HealthOutcome) -> wire.Health:
 
 def _speaks(health: wire.Health, voice: str) -> bool:
     offered = health.speaking.voices.get(voice)
-    return offered is not None and offered.ready
+    return offered is not None and (offered.ready or health.speaking.ready)
 
 
 def _session_update(language: str) -> wire.SessionUpdate:
