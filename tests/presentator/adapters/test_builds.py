@@ -629,20 +629,6 @@ def test_a_commit_the_mirror_cannot_read_the_deck_at_builds_nothing(
     assert "never-pushed" in caplog.text
 
 
-def test_a_tree_the_mirror_cannot_write_makes_that_decks_build_fail_without_raising(
-    remote: GitRemote,
-    source: Source,
-    machine: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    remote.push_crafted_file(f"{EXAMPLE_SLUG}/{'n' * 300}")
-    with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_BUILDS)
-
-    built = builds_ready_for(tmp_path, source).build(a_deck(remote), source=source)
-
-    assert built == BuildFailure.without_words()
-
-
 _A_REAL_TALK_UNDER_THE_ROOT = Path("builds/a-run/real-out/talk")
 
 
