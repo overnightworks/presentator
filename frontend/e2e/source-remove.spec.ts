@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { Locator, Page, Route } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 import type { RemovalCounts } from '../src/lib/api/client.ts';
 import type { SourceSummary, SourceView, WebhookSecretView } from '../src/lib/api/sources.ts';
@@ -29,6 +29,7 @@ import {
 	sourceAddress,
 	sourceNames,
 	tabsOf,
+	holdsRequests,
 	type Words
 } from './sources.ts';
 
@@ -94,17 +95,7 @@ const isStillTheSameDocument = (page: Page): Promise<boolean> =>
 	page.evaluate(() => 'stillTheSameDocument' in window);
 
 // Holds the DELETE of a source on its route until released; answers how many it saw.
-async function holdsTheDelete(page: Page, name: string) {
-	let release!: () => void;
-	const gate = new Promise<void>((resolve) => (release = resolve));
-	const seen: string[] = [];
-	await page.route(deletePath(name), async (route: Route) => {
-		seen.push(route.request().url());
-		await gate;
-		await route.continue();
-	});
-	return { release, seen };
-}
+const holdsTheDelete = (page: Page, name: string) => holdsRequests(page, deletePath(name));
 
 test.describe('as an admin', () => {
 	test.use({ person: { role: 'admin' } });
@@ -466,12 +457,7 @@ test.describe('as an admin', () => {
 			const { words } = await sessionOf(page);
 			await page.setViewportSize({ width, height: 900 });
 			const { name } = await opensAnHttpsSource(page, words, testInfo);
-			let release!: () => void;
-			const gate = new Promise<void>((resolve) => (release = resolve));
-			await page.route(`**${SOURCES_API}/${name}/removal`, async (route) => {
-				await gate;
-				await route.continue();
-			});
+			const held = await holdsRequests(page, `**${SOURCES_API}/${name}/removal`);
 
 			await removeButton(page, words).click();
 
@@ -483,7 +469,7 @@ test.describe('as an admin', () => {
 				await expect(button).toBeDisabled();
 			}
 			await page.screenshot({ path: testInfo.outputPath(`count-busy-${width}.png`) });
-			release();
+			held.release();
 			await expect(dialogOf(page)).toBeVisible();
 			await expect(removeButton(page, words)).toBeEnabled();
 		});
@@ -521,20 +507,18 @@ test.describe('as an admin', () => {
 		const { words } = await sessionOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		await opensTheDialog(page, words);
-		let release!: () => void;
-		const gate = new Promise<void>((resolve) => (release = resolve));
-		await page.route(deletePath(name), async (route) => {
-			await gate;
-			await route.fulfill({
-				status: 500,
-				contentType: 'application/problem+json',
-				json: {
-					type: refusedRemovalType,
-					title: 'Internal Server Error',
+		const held = await holdsRequests(page, deletePath(name), {
+			answer: (route) =>
+				route.fulfill({
 					status: 500,
-					reason: 'disk-leftover'
-				}
-			});
+					contentType: 'application/problem+json',
+					json: {
+						type: refusedRemovalType,
+						title: 'Internal Server Error',
+						status: 500,
+						reason: 'disk-leftover'
+					}
+				})
 		});
 
 		await confirmOf(page, words).click();
@@ -543,7 +527,7 @@ test.describe('as an admin', () => {
 		).toBeDisabled();
 		await page.keyboard.press('Escape');
 		await page.keyboard.press('Escape');
-		release();
+		held.release();
 
 		await expect(dialogOf(page).getByRole('alert')).toHaveText(words.source_remove_refused);
 		await expect(confirmOf(page, words)).toBeEnabled();
@@ -590,24 +574,14 @@ test.describe('as an admin', () => {
 		const held = await holdsTheDelete(page, name);
 		await confirmOf(page, words).click();
 		await expect.poll(() => held.seen.length).toBe(1);
-		let releaseLoad!: () => void;
-		const loadGate = new Promise<void>((resolve) => (releaseLoad = resolve));
-		let loadHeld = false;
-		await page.route(
-			(url) => url.pathname === '/api/settings',
-			async (route: Route) => {
-				loadHeld = true;
-				await loadGate;
-				await route.continue();
-			}
-		);
+		const load = await holdsRequests(page, (url) => url.pathname === '/api/settings');
 		const entries = await entriesOf(page);
 
 		// The pending modal makes the page inert, so the link is followed from script.
 		await tabsOf(page, words)
 			.getByRole('link', { name: words.settings_title })
 			.evaluate((link: HTMLElement) => link.click());
-		await expect.poll(() => loadHeld).toBe(true);
+		await expect.poll(() => load.seen.length).toBe(1);
 		const removed = page.waitForResponse(
 			(received) => received.url().includes(`${SOURCES_API}/${name}?`) && received.status() === 204
 		);
@@ -617,7 +591,7 @@ test.describe('as an admin', () => {
 		await page.evaluate(
 			() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
 		);
-		releaseLoad();
+		load.release();
 
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_title);
 		await expect(page).toHaveURL(/\/settings$/);

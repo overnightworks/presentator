@@ -35,6 +35,7 @@ import {
 	SOURCES_LIST,
 	tabsOf,
 	typesTheAddress,
+	holdsRequests,
 	type Words
 } from './sources.ts';
 
@@ -619,19 +620,7 @@ test.describe('as an admin', () => {
 			await page.setViewportSize({ width, height: 900 });
 			const name = aName(testInfo);
 			await opensTheForm(page);
-			let release!: () => void;
-			let gate = new Promise<void>((resolve) => (release = resolve));
-			await page.route(`**${CHECK_API}`, async (route) => {
-				await gate;
-				await route.continue();
-			});
-			await page.route(`**${SOURCES_API}`, async (route) => {
-				if (route.request().method() !== 'POST') {
-					return route.continue();
-				}
-				await gate;
-				return route.continue();
-			});
+			const heldCheck = await holdsRequests(page, `**${CHECK_API}`);
 			await fillsTheForm(page, words, { name, url: anHttpsAddress(name), secret: ACCESS_TOKEN });
 
 			await page.getByRole('button', { name: words.source_check }).click();
@@ -642,11 +631,11 @@ test.describe('as an admin', () => {
 			await expect(busyCheck.locator('.state[data-state="building"]')).toBeVisible();
 			await expect(page.getByRole('button', { name: words.source_create })).toBeDisabled();
 			await page.screenshot({ path: testInfo.outputPath(`check-busy-${width}.png`) });
-			release();
+			heldCheck.release();
 			await expect(page.getByRole('button', { name: words.source_check })).toBeEnabled();
 			await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
 
-			gate = new Promise<void>((resolve) => (release = resolve));
+			const heldCreate = await holdsRequests(page, `**${SOURCES_API}`, { method: 'POST' });
 			await page.getByRole('button', { name: words.source_create }).click();
 
 			const busyCreate = page.getByRole('button', { name: words.source_busy_create });
@@ -654,7 +643,7 @@ test.describe('as an admin', () => {
 			await expect(busyCreate.locator('.state[data-state="building"]')).toBeVisible();
 			await expect(page.getByRole('button', { name: words.source_check })).toBeDisabled();
 			await page.screenshot({ path: testInfo.outputPath(`create-busy-${width}.png`) });
-			release();
+			heldCreate.release();
 			await expect(page.getByRole('heading', { level: 1 })).toContainText(words.source_created);
 		});
 	}

@@ -43,6 +43,27 @@ export const aLocalAddress = async (page: Page, name: string): Promise<string> =
 };
 export const anSshAddress = (name: string): string => `${SSH_ADDRESS}:${name}.git`;
 
+// Holds the matching requests on their route until released; `seen` lists their addresses.
+// `answer` replaces the continue once released.
+export async function holdsRequests(
+	page: Page,
+	url: string | ((address: URL) => boolean),
+	{ method, answer }: { method?: string; answer?: (route: Route) => Promise<void> } = {}
+) {
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => (release = resolve));
+	const seen: string[] = [];
+	await page.route(url, async (route) => {
+		if (method !== undefined && route.request().method() !== method) {
+			return route.continue();
+		}
+		seen.push(route.request().url());
+		await gate;
+		return answer ? answer(route) : route.continue();
+	});
+	return { release, seen };
+}
+
 export const secretField = (page: Page, words: Words) =>
 	page.getByLabel(words.source_secret, { exact: true });
 
