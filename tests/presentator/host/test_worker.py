@@ -390,6 +390,12 @@ def sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return stage_sealed_root(tmp_path, monkeypatch)
 
 
+def test_the_snapshot_carries_the_seal_it_is_read_under(sealed_root: Path) -> None:
+    assert read_sealed_snapshot(sealed_root, seal=Seal.KUBERNETES).seal is (
+        Seal.KUBERNETES
+    )
+
+
 def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
     snapshot = read_sealed_snapshot(sealed_root)
 

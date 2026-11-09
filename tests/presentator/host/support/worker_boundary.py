@@ -1,6 +1,7 @@
 """The build worker's start-up boundary made of fakes, and the settings it loads."""
 
 from collections.abc import Callable
+from dataclasses import replace
 
 from presentator.host.config import WorkerSettings
 from presentator.host.worker import Boundary
@@ -14,13 +15,12 @@ def boundary_over(
     events: list[str],
     served: dict[str, object] | None = None,
     load_settings: Callable[[], WorkerSettings] = lambda: LOADED_SETTINGS,
-    seal: Seal = Seal.COMPOSE,
 ) -> Boundary:
-    """A boundary whose reads give `seal` and `snapshot`, recording the steps run."""
+    """A compose-sealed boundary that reads `snapshot`, recording the steps run."""
 
-    def read_snapshot(_seal: Seal) -> Snapshot:
+    def read_snapshot(read_under: Seal) -> Snapshot:
         events.append("read")
-        return snapshot
+        return replace(snapshot, seal=read_under)
 
     def settings() -> WorkerSettings:
         events.append("settings")
@@ -35,7 +35,7 @@ def boundary_over(
     return Boundary(
         set_non_dumpable=lambda: events.append("prctl"),
         set_umask=lambda: events.append("umask"),
-        read_seal=lambda: seal,
+        read_seal=lambda: Seal.COMPOSE,
         read_snapshot=read_snapshot,
         load_settings=settings,
         serve=serve,

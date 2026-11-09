@@ -89,8 +89,12 @@ def test_under_kubernetes_an_earlier_failing_predicate_is_named_first() -> None:
 @pytest.mark.parametrize("arguments", [[], ["--check"]])
 def test_an_unset_seal_starts_the_compose_worker(arguments: list[str]) -> None:
     events: list[str] = []
+    boundary = replace(
+        boundary_over(sealed_snapshot(), events),
+        read_seal=partial(seal_from_environment, {}),
+    )
 
-    status = worker.main(arguments, boundary_over(sealed_snapshot(), events))
+    status = worker.main(arguments, boundary)
 
     assert status == 0
     assert ("serve" in events) is (not arguments)
@@ -131,11 +135,12 @@ def test_a_check_under_kubernetes_exits_two_naming_kubernetes_unproven(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     events: list[str] = []
-    snapshot = with_fields(seal=Seal.KUBERNETES)(sealed_snapshot())
-
-    status = worker.main(
-        ["--check"], boundary_over(snapshot, events, seal=Seal.KUBERNETES)
+    boundary = replace(
+        boundary_over(sealed_snapshot(), events),
+        read_seal=partial(seal_from_environment, {SEAL_VARIABLE: "kubernetes"}),
     )
+
+    status = worker.main(["--check"], boundary)
 
     assert status == worker.REFUSAL_EXIT_STATUS
     assert "start refused: kubernetes-unproven" in caplog.text
