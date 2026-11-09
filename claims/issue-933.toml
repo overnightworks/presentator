@@ -1,0 +1,8 @@
+claim_id = "3e2c5206568843d48650fdc46132e8e6"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "fa39acc23fc16e0520b9f5b40101b899fa92c79c"
+branch = "claude/issue-933-the-add-form-offers-an-optional-folder-a"
+scope = ["docs/runbooks/add-a-source.md", "docs/sources.md", "frontend/e2e/source-new-address.spec.ts", "frontend/e2e/source.spec.ts", "frontend/e2e/sources.ts", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "frontend/src/routes/(lobby)/settings/sources/[name]/+page.svelte", "frontend/src/routes/(lobby)/settings/sources/new/+page.svelte", "frontend/src/routes/(lobby)/settings/sources/new/addPageHarness.ts", "frontend/src/routes/(lobby)/settings/sources/new/pageAddress.test.ts", "frontend/src/routes/(lobby)/settings/sources/new/pageFolder.test.ts", "src/presentator/adapters/catalogs/en.po", "src/presentator/contracts/text.py", "tests/support/vulture_allowlist.py"]
+opened_commit = "05ff041a09d490c578886be53b84b8b57186a009"
+whole_reason = "The field, its words and the source page prove one ruled sentence, and a word cannot land without its LobbyText field."
