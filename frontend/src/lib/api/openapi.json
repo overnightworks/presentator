@@ -1573,6 +1573,41 @@
         "title": "SourceDeckView",
         "type": "object"
       },
+      "SourceFetchView": {
+        "description": "What a fetch changed; no run means another refresh held the lock.",
+        "properties": {
+          "builds_failed": {
+            "title": "Builds Failed",
+            "type": "integer"
+          },
+          "decks_built": {
+            "title": "Decks Built",
+            "type": "integer"
+          },
+          "decks_removed": {
+            "title": "Decks Removed",
+            "type": "integer"
+          },
+          "run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceRunView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "run",
+          "decks_built",
+          "builds_failed",
+          "decks_removed"
+        ],
+        "title": "SourceFetchView",
+        "type": "object"
+      },
       "SourceListView": {
         "description": "Every source of the instance, in the owner's order.",
         "properties": {
@@ -3506,7 +3541,14 @@
           }
         ],
         "responses": {
-          "204": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceFetchView"
+                }
+              }
+            },
             "description": "Successful Response"
           },
           "403": {

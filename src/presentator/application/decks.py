@@ -11,7 +11,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
-from enum import StrEnum
+from enum import Enum, StrEnum, auto
 from functools import partial
 from hashlib import sha256
 from hmac import compare_digest
@@ -40,6 +40,7 @@ from presentator.contracts.decks import (
     ShownSourceRun,
     Source,
     SourceDeck,
+    SourceFetch,
     SourcePage,
     SourceRemoval,
     SourceRun,
@@ -67,6 +68,35 @@ from presentator.ports.decks import (
 )
 
 _log = logging.getLogger(__name__)
+
+
+class _LockWasBusy(Enum):
+    """The answer of work dropped because another refresh held the lock."""
+
+    BUSY = auto()
+
+
+_LOCK_WAS_BUSY: Final = _LockWasBusy.BUSY
+
+
+@dataclass(frozen=True, slots=True)
+class _BuildsStarted:
+    """How the builds one pass started ended."""
+
+    succeeded: int = 0
+    failed: int = 0
+
+
+def _shown(run: SourceRun) -> ShownSourceRun:
+    """That run as a page shows it, its commit short."""
+    return ShownSourceRun(
+        outcome=run.outcome,
+        state=source_state_of(run),
+        at=run.at,
+        commit=None if run.commit is None else run.commit[:_SHORT_COMMIT],
+        reason=run.reason,
+    )
+
 
 # A person compares the commit on the page with the one their push wrote, and
 # reads it off the screen; the first characters are what git itself shows.
@@ -263,17 +293,22 @@ class Decks:
         """
         self._run_one_at_a_time(self._take_in_and_build)
 
-    def refresh_named(self, name: str) -> bool:
-        """Take that one source in and build what changed, if this instance has it.
+    def refresh_named(self, name: str) -> SourceFetch | None:
+        """Take that one source in, build what changed and say what that was.
 
         A name nobody stored is not a source to fetch, and one removed before the
-        lock is taken is not one either. A refresh already running serves the
-        same lock, so this call returns as if it ran.
+        lock is taken is not one either: both answer None. A refresh already
+        running holds the lock, so this call does nothing and answers a fetch
+        without a run, which is not "nothing new".
         """
         if self._named(name) is None:
-            return False
-        self._run_one_at_a_time(partial(self._take_in_and_build_named, name))
-        return True
+            return None
+        fetched = self._run_one_at_a_time(partial(self._take_in_and_build_named, name))
+        if fetched is _LOCK_WAS_BUSY:
+            return SourceFetch(
+                run=None, decks_built=0, builds_failed=0, decks_removed=0
+            )
+        return fetched
 
     def shown_source(self, name: str, *, viewer: str) -> SourcePage | None:
         """What that source's page says, its deck chips the viewer's own decks."""
@@ -290,16 +325,7 @@ class Decks:
             reason=listed.reason,
             fetched_at=listed.fetched_at,
             public_key=source.public_key,
-            runs=tuple(
-                ShownSourceRun(
-                    outcome=run.outcome,
-                    state=source_state_of(run),
-                    at=run.at,
-                    commit=None if run.commit is None else run.commit[:_SHORT_COMMIT],
-                    reason=run.reason,
-                )
-                for run in self.source_runs.recent(source.id)
-            ),
+            runs=tuple(_shown(run) for run in self.source_runs.recent(source.id)),
             decks=tuple(
                 SourceDeck(slug=deck.slug, title=deck.title)
                 for deck in sorted(
@@ -719,13 +745,16 @@ class Decks:
             fetched_at=None if run is None else run.at,
         )
 
-    def _run_one_at_a_time(self, work: Callable[[], None]) -> None:
+    def _run_one_at_a_time[Answer](
+        self, work: Callable[[], Answer]
+    ) -> Answer | _LockWasBusy:
         """Run that work, or drop it while another refresh already holds the lock."""
         if not self.one_at_a_time.acquire(blocking=False):
-            return
+            return _LOCK_WAS_BUSY
         try:
-            work()
+            answer = work()
             build_retention.sweep(self.builder, self.sources, self.store)
+            return answer
         finally:
             self.one_at_a_time.release()
 
@@ -747,17 +776,32 @@ class Decks:
         for source in self.sources.all():
             self._take_in_and_build_one(source)
 
-    def _take_in_and_build_named(self, name: str) -> None:
+    def _take_in_and_build_named(self, name: str) -> SourceFetch | None:
         """Take that source in, read again now that nobody can remove it."""
-        if (source := self._named(name)) is not None:
-            self._take_in_and_build_one(source)
+        if (source := self._named(name)) is None:
+            return None
+        carried_before = self._visible_slugs(source)
+        run = self._take_in(source)
+        builds = self._build_what_changed(source)
+        return SourceFetch(
+            run=_shown(run),
+            decks_built=builds.succeeded,
+            builds_failed=builds.failed,
+            decks_removed=len(carried_before - self._visible_slugs(source)),
+        )
 
     def _take_in_and_build_one(self, source: Source) -> None:
         """Take that source in and build the decks of it that changed."""
         self._take_in(source)
         self._build_what_changed(source)
 
-    def _take_in(self, source: Source) -> None:
+    def _visible_slugs(self, source: Source) -> frozenset[str]:
+        """The slugs of the decks that source carries and the lobby lists."""
+        return frozenset(
+            deck.slug for deck in self.store.all() if deck.source_id == source.id
+        )
+
+    def _take_in(self, source: Source) -> SourceRun:
         """Store every folder that carries both a manifest and slides.
 
         The folder name becomes the slug, so a changed title reaches no address.
@@ -776,21 +820,20 @@ class Decks:
         """
         at = self.clock.now()
         poll = self.folders.folders(source)
-        self.source_runs.record(
-            SourceRun(
-                source_id=source.id,
-                at=at,
-                outcome=(
-                    SourceRunOutcome.FAILURE
-                    if poll.folders is None
-                    else SourceRunOutcome.SUCCESS
-                ),
-                commit=poll.commit,
-                reason=poll.failure,
+        run = SourceRun(
+            source_id=source.id,
+            at=at,
+            outcome=(
+                SourceRunOutcome.FAILURE
+                if poll.folders is None
+                else SourceRunOutcome.SUCCESS
             ),
+            commit=poll.commit,
+            reason=poll.failure,
         )
+        self.source_runs.record(run)
         if poll.folders is None:
-            return
+            return run
         for folder in poll.folders:
             if not is_a_plain_folder_name(folder.name):
                 _log.warning(_NOT_A_FOLDERS_OWN_NAME, folder.name)
@@ -815,8 +858,9 @@ class Decks:
         build_retention.delete_absent(
             self.store, present=present, source_id=source.id, at=at
         )
+        return run
 
-    def _build_what_changed(self, source: Source) -> None:
+    def _build_what_changed(self, source: Source) -> _BuildsStarted:
         """Build that source's decks whose commit nothing has tried yet.
 
         The commit is the change check: a push moves one folder's commit, so only that
@@ -824,7 +868,9 @@ class Decks:
         no build. A tried commit is not retried, so a deck that cannot build costs one
         build, not one per refresh. A vanished run is rebuilt: `builds/` and `mirrors/`
         are caches the rows rebuild; a gone mirror is cloned again at the next take-in.
+        Only the builds this pass started are counted.
         """
+        succeeded = failed = 0
         for deck in self.store.all():
             if deck.source_id != source.id:
                 continue
@@ -835,7 +881,11 @@ class Decks:
                 continue
             if self._was_already_tried(deck):
                 continue
-            self._switch_over(deck, source)
+            if self._switch_over(deck, source):
+                succeeded += 1
+            else:
+                failed += 1
+        return _BuildsStarted(succeeded=succeeded, failed=failed)
 
     def _deliver_the_standing_talk_again(self, deck: Deck, standing: Build) -> None:
         """Make the talk that stands this commit's talk again, building nothing.
@@ -874,7 +924,7 @@ class Decks:
             return
         self._failed(deck, attempt, BuildFailure.without_words())
 
-    def _switch_over(self, deck: Deck, source: Source) -> None:
+    def _switch_over(self, deck: Deck, source: Source) -> bool:
         """Deliver this deck from its new build, once there really is one.
 
         The attempt is recorded before the toolchain starts, so a page opened
@@ -882,7 +932,8 @@ class Decks:
         record behind rather than nothing. A build that failed, and one that
         left artefacts anywhere but under the root they belong in, write no
         pointer at all: whatever the deck was delivering before keeps being
-        delivered, and the attempt says why it is still that one.
+        delivered, and the attempt says why it is still that one. It answers
+        whether the deck was delivered from the new build.
         """
         attempt = BuildAttempt(
             commit=deck.commit,
@@ -894,10 +945,10 @@ class Decks:
         built = self.builder.build(deck, source=source)
         if not isinstance(built, Artefacts):
             self._failed(deck, attempt, built)
-            return
+            return False
         if not self.builder.holds(built):
             self._failed(deck, attempt, BuildFailure.without_words())
-            return
+            return False
         self.store.put_build(
             deck.slug,
             Build(
@@ -907,6 +958,7 @@ class Decks:
                 built_at=self.clock.now(),
             ),
         )
+        return True
 
     def _failed(self, deck: Deck, attempt: BuildAttempt, failure: BuildFailure) -> None:
         """Close this attempt as failed, keeping the moment it started."""

@@ -35,6 +35,7 @@ from presentator.application.source_state import connection_state_of
 from presentator.contracts.decks import (
     AccessKind,
     ConnectionCheckResult,
+    ShownSourceRun,
     SourceRunFailure,
     SourceRunOutcome,
     SourceState,
@@ -92,6 +93,27 @@ class SourceRunView(BaseModel):
     at: datetime
     commit: str | None
     reason: SourceRunFailure | None
+
+
+class SourceFetchView(BaseModel):
+    """What a fetch changed; no run means another refresh held the lock."""
+
+    model_config = ConfigDict(frozen=True)
+
+    run: SourceRunView | None
+    decks_built: int
+    builds_failed: int
+    decks_removed: int
+
+
+def _run_view(run: ShownSourceRun) -> SourceRunView:
+    return SourceRunView(
+        outcome=run.outcome,
+        state=run.state,
+        at=run.at,
+        commit=run.commit,
+        reason=run.reason,
+    )
 
 
 class SourceDeckView(BaseModel):
@@ -298,16 +320,7 @@ class _SourceData:
             hook_url=hook_url(request, page.name),
             folder=page.folder,
             public_key=page.public_key,
-            runs=[
-                SourceRunView(
-                    outcome=run.outcome,
-                    state=run.state,
-                    at=run.at,
-                    commit=run.commit,
-                    reason=run.reason,
-                )
-                for run in page.runs
-            ],
+            runs=[_run_view(run) for run in page.runs],
             decks=[
                 SourceDeckView(slug=deck.slug, title=deck.title) for deck in page.decks
             ],
@@ -347,10 +360,16 @@ class _SourceData:
             )
         return Response(status_code=HTTPStatus.NO_CONTENT)
 
-    def fetch_now(self, name: str) -> Response:
-        if not self.decks.refresh_named(name):
+    def fetch_now(self, name: str) -> SourceFetchView:
+        fetched = self.decks.refresh_named(name)
+        if fetched is None:
             raise ProblemError(HTTPStatus.NOT_FOUND)
-        return Response(status_code=HTTPStatus.NO_CONTENT)
+        return SourceFetchView(
+            run=None if fetched.run is None else _run_view(fetched.run),
+            decks_built=fetched.decks_built,
+            builds_failed=fetched.builds_failed,
+            decks_removed=fetched.decks_removed,
+        )
 
     def renew_access(
         self,
@@ -509,7 +528,6 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         _FETCH,
         data.fetch_now,
         methods=["POST"],
-        status_code=HTTPStatus.NO_CONTENT,
         responses=not_found,
         openapi_extra=administration_is_no_tool(),
     )
