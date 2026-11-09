@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "70fe48a0e0cf742828688adb0644aefdad4f7fcb"
 branch = "claude/issue-987-the-lobby-and-the-talk-host-limit-reques"
-scope = ["docs/sign-in.md", "src/presentator/api/auth.py", "src/presentator/api/talk.py", "tests/presentator/api/test_auth_rate_limit.py", "tests/support/lobby_drive.py"]
+scope = ["docs/sign-in.md", "src/presentator/api/auth.py", "src/presentator/api/talk.py", "tests/presentator/api/test_auth_rate_limit.py", "tests/support/lobby_drive.py", "tests/support/vulture_allowlist.py"]
 opened_commit = "7f4997c257110301248855f8893fd3383c47d19b"
 whole_reason = "One policy wired into both hosts with its proof and its one document line; a half would leave one host unlimited."
