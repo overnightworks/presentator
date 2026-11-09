@@ -350,7 +350,7 @@ def test_a_source_removed_before_the_lock_is_taken_gets_no_rows_written() -> Non
         fakes=DecksFakes(store=store),
     )
 
-    assert decks.refresh_named(_SOURCE.name)
+    assert decks.refresh_named(_SOURCE.name) is None
 
     assert store.kept == {}
 

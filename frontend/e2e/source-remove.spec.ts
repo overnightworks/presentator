@@ -361,8 +361,8 @@ test.describe('as an admin', () => {
 		const before = await previewOf(page, name);
 		const textBefore = await dialogOf(page).innerText();
 
-		// A refresh already running on the shared stack drops a fetch silently and
-		// still answers 204, so the fetch repeats until the run count moves.
+		// A refresh already running on the shared stack drops a fetch and answers
+		// without a run, so the fetch repeats until the run count moves.
 		await expect
 			.poll(async () => {
 				await page.request.post(`${SOURCES_API}/${name}/fetch`, { headers: SAME_ORIGIN });

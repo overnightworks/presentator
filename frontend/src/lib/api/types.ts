@@ -939,6 +939,19 @@ export interface components {
             title: string;
         };
         /**
+         * SourceFetchView
+         * @description What a fetch changed; no run means another refresh held the lock.
+         */
+        SourceFetchView: {
+            /** Builds Failed */
+            builds_failed: number;
+            /** Decks Built */
+            decks_built: number;
+            /** Decks Removed */
+            decks_removed: number;
+            run: components["schemas"]["SourceRunView"] | null;
+        };
+        /**
          * SourceListView
          * @description Every source of the instance, in the owner's order.
          */
@@ -1991,11 +2004,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SourceFetchView"];
+                };
             };
             /** @description Forbidden */
             403: {

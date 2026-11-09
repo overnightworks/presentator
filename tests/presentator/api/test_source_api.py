@@ -4,12 +4,13 @@ from dataclasses import replace
 from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
+from threading import Event, Thread
 
 import pytest
 from fastapi.testclient import TestClient
 
 from presentator.api.hooks import hook_address
-from presentator.api.source_api import SourceListView, SourceView
+from presentator.api.source_api import SourceFetchView, SourceListView, SourceView
 from presentator.contracts.decks import (
     MANIFEST_FILE,
     SLIDES_FILE,
@@ -21,6 +22,11 @@ from presentator.contracts.decks import (
     SourceRunFailure,
     SourceRunOutcome,
     SourceState,
+)
+from tests.presentator.api.support.source_api_support import (
+    a_source_store,
+    an_admin_over,
+    decks_over,
 )
 from tests.presentator.application.support.fakes import (
     LOCAL_MOUNT_EXAMPLE,
@@ -270,7 +276,7 @@ def test_a_name_that_is_not_a_single_segment_is_the_frameworks_not_found() -> No
     assert answer.headers["content-type"] != _PROBLEM
 
 
-def test_fetch_now_answers_no_content_and_records_a_run_and_builds() -> None:
+def test_fetch_now_answers_what_it_changed_and_records_a_run_and_builds() -> None:
     source = a_configured_source(_ADDRESS)
     client = a_signed_in_lobby(
         GivenDecks(sources=(source,), carried={source.id: (a_folder(),)})
@@ -278,12 +284,45 @@ def test_fetch_now_answers_no_content_and_records_a_run_and_builds() -> None:
 
     answer = client.post(_FETCH.format(name="decks"), headers=_SAME_ORIGIN)
 
-    assert answer.status_code == HTTPStatus.NO_CONTENT
+    assert answer.status_code == HTTPStatus.OK
     assert answer.headers["cache-control"] == "no-store"
+    fetched = SourceFetchView.model_validate(answer.json())
+    assert fetched.run is not None
+    assert fetched.run.outcome is SourceRunOutcome.SUCCESS
+    assert fetched.decks_built == 1
     view = shown(client)
     assert view.state is SourceState.REACHABLE
     assert view.fetched_at == NOW
     assert [deck.slug for deck in view.decks] == ["kundenfeedback"]
+
+
+def test_fetch_now_while_another_refresh_runs_answers_no_run() -> None:
+    source = a_configured_source(_ADDRESS)
+    decks = decks_over(a_source_store(source))
+    holding, release = Event(), Event()
+
+    def hold_the_lock() -> None:
+        with decks.one_at_a_time:
+            holding.set()
+            release.wait(10)
+
+    holder = Thread(target=hold_the_lock)
+    holder.start()
+    assert holding.wait(10)
+
+    answer = an_admin_over(decks).client.post(
+        _FETCH.format(name=source.name), headers=_SAME_ORIGIN
+    )
+
+    release.set()
+    holder.join()
+    assert answer.status_code == HTTPStatus.OK
+    assert answer.json() == {
+        "run": None,
+        "decks_built": 0,
+        "builds_failed": 0,
+        "decks_removed": 0,
+    }
 
 
 def test_a_cross_site_fetch_is_refused_and_fetches_nothing() -> None:

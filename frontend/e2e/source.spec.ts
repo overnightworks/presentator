@@ -338,7 +338,7 @@ test.describe('as an admin', () => {
 	});
 
 	// Cell 12.
-	test('Fetch now answers 204, re-reads the page, disables the buttons meanwhile and adds no entry', async ({
+	test('Fetch now answers 200, re-reads the page, disables the buttons meanwhile and adds no entry', async ({
 		page
 	}, testInfo) => {
 		const { words } = await sessionOf(page);
@@ -347,7 +347,7 @@ test.describe('as an admin', () => {
 		await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
 		const held = await holdsRequests(page, `**${SOURCES_API}/${name}/fetch`);
 		const answered = page.waitForResponse(
-			(received) => received.url().endsWith(`${name}/fetch`) && received.status() === 204
+			(received) => received.url().endsWith(`${name}/fetch`) && received.status() === 200
 		);
 		const reread = page.waitForResponse(
 			(received) =>

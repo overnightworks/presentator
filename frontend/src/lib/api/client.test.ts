@@ -217,7 +217,7 @@ describe('postJson', () => {
 	it('answers nothing to a 204', async () => {
 		const fetcher: typeof fetch = async () => new Response(null, { status: 204 });
 
-		await expect(postJson<undefined>(fetcher, '/api/sources/talks/fetch', undefined)).resolves.toBe(
+		await expect(postJson<undefined>(fetcher, '/api/sources/talks/access', undefined)).resolves.toBe(
 			undefined
 		);
 	});

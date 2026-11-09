@@ -564,6 +564,20 @@ class ShownSourceRun:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class SourceFetch:
+    """What one fetch of a source changed.
+
+    The run is None exactly when another refresh held the lock, and then every
+    count is 0: the fetch did nothing, and says so rather than "nothing new".
+    """
+
+    run: ShownSourceRun | None
+    decks_built: int
+    builds_failed: int
+    decks_removed: int
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SourceDeck:
     """A deck this source carries, named the way the page's chips name it."""
 

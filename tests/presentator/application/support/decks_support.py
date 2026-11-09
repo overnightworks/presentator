@@ -43,6 +43,7 @@ def a_source(name: str, *, identifier: str) -> Source:
 SOURCE = a_source("decks", identifier="the-configured-source")
 A_DECK = frozenset({MANIFEST_FILE, SLIDES_FILE})
 COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
+SHORT_COMMIT = "a3f19c2"
 # Long enough that no test's build reaches it by accident, so an attempt is
 # only ever given up on where a test says so.
 BUILD_BOUND = timedelta(minutes=5)
