@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "7dc1c124402c161298ac4a7e87976743f6b4770a"
 branch = "claude/issue-951-the-co-presenter-has-no-per-session-ques"
-scope = ["legal/datenschutz.html", "src/presentator/application/copresenter.py", "tests/presentator/api/test_auth_privacy_section.py", "tests/presentator/api/test_copresenter_deck.py", "tests/presentator/application/test_copresenter.py"]
+scope = ["legal/datenschutz.html", "src/presentator/application/copresenter.py", "src/presentator/host/main.py", "tests/presentator/api/test_auth_privacy_section.py", "tests/presentator/api/test_copresenter.py", "tests/presentator/api/test_copresenter_deck.py", "tests/presentator/api/test_copresenter_limits.py", "tests/presentator/api/test_copresenter_talk_host.py", "tests/presentator/application/test_copresenter.py", "tests/support/copresenter_support.py"]
 opened_commit = "0349ea67d5bb5b2d7de6e0734f3d99f99fecc82c"
 whole_reason = "The limit and the sentence that describes it are one behaviour; apart, the privacy text would describe a processing that stopped, or the code a limit the text no longer names."
