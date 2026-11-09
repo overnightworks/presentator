@@ -11,11 +11,3 @@ favicon: false
 
 Staged outside the toolchain by `presenter-overlay-harness.ts`, to prove a deck
 gets the overlay from the addon's name alone.
-
----
-
-# Second slide
-
----
-
-# Third slide
