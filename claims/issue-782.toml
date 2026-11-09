@@ -1,8 +1,0 @@
-claim_id = "059022ef8e754f2697cbe1730dde4228"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "46bee06288fc4fe6b80b213d6903012be87af6fe"
-branch = "claude/issue-782-the-one-time-cutover-command-and-its-tes"
-scope = ["pyproject.toml", "quality/config.toml", "scripts/cutover.py", "tests/scripts/conftest.py", "tests/scripts/support/cutover_host.py", "tests/scripts/test_cutover.py", "tests/scripts/test_cutover_probes.py"]
-opened_commit = "33b06a743eb0c2ca2b6e2dd4c6ba88d378083ad4"
-whole_reason = "The command, its tests and fixtures, and the two gate entries that name it must go together, or the gate refuses an orphaned declaration or a missing file."
