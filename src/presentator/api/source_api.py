@@ -464,6 +464,32 @@ def _add_collection_routes(router: APIRouter, data: _SourceData) -> None:
     )
 
 
+def _add_draft_routes(router: APIRouter, data: _SourceData) -> None:
+    forbidden = problem_response(HTTPStatus.FORBIDDEN)
+    router.add_api_route(
+        _KEY_DRAFT,
+        data.key_draft,
+        methods=["POST"],
+        responses=forbidden,
+        openapi_extra=administration_is_no_tool(),
+    )
+    router.add_api_route(
+        _CHECK,
+        data.check_connection,
+        methods=["POST"],
+        responses=forbidden,
+        openapi_extra=problem_beside_validation(SourceRefusedProblem)
+        | administration_is_no_tool(),
+    )
+    router.add_api_route(
+        _KIND,
+        data.address_access,
+        methods=["POST"],
+        responses=forbidden,
+        openapi_extra=administration_is_no_tool(),
+    )
+
+
 def source_api_routes(*, decks: Decks) -> APIRouter:
     """The router that answers the Sources data to an admin."""
     data = _SourceData(decks=decks)
@@ -502,26 +528,5 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         responses=not_found,
         openapi_extra=administration_is_no_tool(),
     )
-    router.add_api_route(
-        _KEY_DRAFT,
-        data.key_draft,
-        methods=["POST"],
-        responses=forbidden,
-        openapi_extra=administration_is_no_tool(),
-    )
-    router.add_api_route(
-        _CHECK,
-        data.check_connection,
-        methods=["POST"],
-        responses=forbidden,
-        openapi_extra=problem_beside_validation(SourceRefusedProblem)
-        | administration_is_no_tool(),
-    )
-    router.add_api_route(
-        _KIND,
-        data.address_access,
-        methods=["POST"],
-        responses=forbidden,
-        openapi_extra=administration_is_no_tool(),
-    )
+    _add_draft_routes(router, data)
     return router
