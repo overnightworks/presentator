@@ -128,6 +128,12 @@ LobbyText.settings_sources
 LobbyText.sources_column_source
 LobbyText.sources_column_fetched
 LobbyText.sources_fetch_now
+LobbyText.source_busy_check
+LobbyText.source_busy_create
+LobbyText.source_busy_fetch
+LobbyText.source_busy_renew
+LobbyText.source_busy_count
+LobbyText.source_busy_remove
 LobbyText.source_state_reachable
 LobbyText.source_state_error
 LobbyText.source_state_refused

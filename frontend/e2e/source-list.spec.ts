@@ -23,7 +23,8 @@ import {
 	SOURCES_LIST,
 	sourceAddress,
 	sourceNames,
-	tabsOf
+	tabsOf,
+	holdsRequests
 } from './sources.ts';
 
 const NEXT = '%2Fsettings%2Fsources';
@@ -292,14 +293,7 @@ test.describe('as an admin', () => {
 		await stillTheSameDocument(page);
 		const entries = await entriesOf(page);
 		const otherBefore = await rowOf(page, second).innerText();
-		const posts: string[] = [];
-		let release!: () => void;
-		const gate = new Promise<void>((resolve) => (release = resolve));
-		await page.route('**/api/sources/*/fetch', async (route) => {
-			posts.push(new URL(route.request().url()).pathname);
-			await gate;
-			await route.continue();
-		});
+		const held = await holdsRequests(page, '**/api/sources/*/fetch');
 		const reread = page.waitForResponse(
 			(received) =>
 				new URL(received.url()).pathname === SOURCES_API && received.request().method() === 'GET'
@@ -308,13 +302,22 @@ test.describe('as an admin', () => {
 		const fetchNow = rowOf(page, first).getByRole('button', { name: words.sources_fetch_now });
 		await fetchNow.click();
 
+		const busy = rowOf(page, first).getByRole('button', { name: words.source_busy_fetch });
+		await expect(busy).toHaveAttribute('aria-busy', 'true');
+		await expect(busy.locator('.state[data-state="building"]')).toBeVisible();
+		await expect(
+			rowOf(page, second).getByRole('button', { name: words.sources_fetch_now })
+		).not.toHaveAttribute('aria-busy');
 		for (const button of await page.locator('table.sources button').all()) {
 			await expect(button).toBeDisabled();
 		}
-		release();
+		await page.screenshot({ path: testInfo.outputPath('list-fetch-busy.png') });
+		held.release();
 		await reread;
 		await expect(fetchNow).toBeEnabled();
-		expect(posts).toEqual([`/api/sources/${first}/fetch`]);
+		expect(held.seen.map((address) => new URL(address).pathname)).toEqual([
+			`/api/sources/${first}/fetch`
+		]);
 		expect(await rowOf(page, second).innerText()).toBe(otherBefore);
 		expect(await entriesOf(page)).toBe(entries);
 		expect(await isStillTheSameDocument(page)).toBe(true);

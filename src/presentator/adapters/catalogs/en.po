@@ -221,6 +221,24 @@ msgstr "Fetched"
 msgid "sources_fetch_now"
 msgstr "Fetch now"
 
+msgid "source_busy_check"
+msgstr "Checking…"
+
+msgid "source_busy_create"
+msgstr "Creating and building…"
+
+msgid "source_busy_fetch"
+msgstr "Fetching…"
+
+msgid "source_busy_renew"
+msgstr "Renewing…"
+
+msgid "source_busy_count"
+msgstr "Counting…"
+
+msgid "source_busy_remove"
+msgstr "Removing…"
+
 msgid "source_state_reachable"
 msgstr "reachable"
 

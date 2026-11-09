@@ -78,6 +78,12 @@ class LobbyText:
     sources_column_source: str
     sources_column_fetched: str
     sources_fetch_now: str
+    source_busy_check: str
+    source_busy_create: str
+    source_busy_fetch: str
+    source_busy_renew: str
+    source_busy_count: str
+    source_busy_remove: str
     source_state_reachable: str
     source_state_error: str
     source_state_refused: str

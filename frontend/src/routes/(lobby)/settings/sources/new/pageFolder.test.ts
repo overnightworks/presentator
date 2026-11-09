@@ -9,7 +9,6 @@ import {
 	deferredCheck,
 	folderField,
 	open,
-	press,
 	sentTo,
 	type,
 	words
@@ -26,7 +25,7 @@ const status = (): Element | null => document.querySelector('[role="status"]');
 async function checked(which: keyof typeof addresses, fetched = open()) {
 	type(URL_FIELD, addresses[which].url);
 	await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
-	press(words.source_check);
+	checkButton()?.click();
 	await vi.waitFor(() => expect(createButton()?.disabled).toBe(false));
 	return fetched;
 }
@@ -70,7 +69,7 @@ describe('the folder on the wire', () => {
 		type(URL_FIELD, addresses.ssh.url);
 		await vi.waitFor(() => expect(folderField()).not.toBeNull());
 		type('source-folder', 'examples');
-		press(words.source_check);
+		checkButton()?.click();
 		await vi.waitFor(() => expect(createButton()?.disabled).toBe(false));
 		type('source-name', 'talks');
 
@@ -110,7 +109,7 @@ describe('the folder on the wire', () => {
 		type(URL_FIELD, addresses.folder.url);
 		await vi.waitFor(() => expect(folderField()).toBeNull());
 		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
-		press(words.source_check);
+		checkButton()?.click();
 		await vi.waitFor(() => expect(createButton()?.disabled).toBe(false));
 		type('source-name', 'talks');
 		createButton()?.click();
@@ -173,7 +172,7 @@ describe('a Check in flight when the address is edited', () => {
 		open(undefined, () => inFlight.answer);
 		type(URL_FIELD, addresses.https.url);
 		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
-		press(words.source_check);
+		checkButton()?.click();
 
 		type(URL_FIELD, addresses.ssh.url);
 		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
@@ -190,7 +189,7 @@ describe('a Check in flight when the address is edited', () => {
 		open(undefined, () => inFlight.answer);
 		type(URL_FIELD, addresses.https.url);
 		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
-		press(words.source_check);
+		checkButton()?.click();
 
 		type(URL_FIELD, addresses.ssh.url);
 		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));

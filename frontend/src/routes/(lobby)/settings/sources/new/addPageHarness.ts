@@ -16,6 +16,8 @@ export const words = {
 	source_secret: 'Passphrase',
 	source_check: 'Probe',
 	source_create: 'Plant',
+	source_busy_check: 'Probing',
+	source_busy_create: 'Planting',
 	source_created: 'is planted',
 	source_webhook_once: 'seen this once',
 	source_check_reachable: 'head {commit}',
@@ -59,7 +61,11 @@ export function close(): void {
 }
 
 /** Mounts the page; the returned mock is every request it sent. */
-export function open(kind: KindAnswer = answeredByAddress, check: CheckAnswer = reachable) {
+export function open(
+	kind: KindAnswer = answeredByAddress,
+	check: CheckAnswer = reachable,
+	create: CheckAnswer = () => Response.json(created, { status: 201 })
+) {
 	vi.spyOn(navigation, 'goto').mockResolvedValue(undefined);
 	const fetched = vi.fn(async (path: string, init?: RequestInit) => {
 		if (path === '/api/sources/new/kind') {
@@ -69,7 +75,7 @@ export function open(kind: KindAnswer = answeredByAddress, check: CheckAnswer = 
 			return check();
 		}
 		if (path === '/api/sources') {
-			return Response.json(created, { status: 201 });
+			return create();
 		}
 		return Response.json(draft);
 	});
@@ -109,10 +115,11 @@ export const secretField = (): HTMLInputElement | null =>
 export const folderField = (): HTMLInputElement | null =>
 	document.querySelector<HTMLInputElement>('#source-folder');
 export const keyBlock = (): Element | null => document.getElementById('deploy-key-label');
-export const checkButton = (): HTMLButtonElement | undefined =>
-	[...document.querySelectorAll('button')].find((each) => each.textContent === words.source_check);
-export const createButton = (): HTMLButtonElement | undefined =>
-	[...document.querySelectorAll('button')].find((each) => each.textContent === words.source_create);
+// Found by role and place: a busy button carries another word than its idle one.
+export const checkButton = (): HTMLButtonElement | null =>
+	document.querySelector<HTMLButtonElement>('.actions button[type="button"]');
+export const createButton = (): HTMLButtonElement | null =>
+	document.querySelector<HTMLButtonElement>('.actions button[type="submit"]');
 
 /** A lookup whose answer the scenario gives when it chooses. */
 export function deferred() {
@@ -132,6 +139,7 @@ export function deferredCheck() {
 	return {
 		answer,
 		reachable: () => settle(reachable() as Response),
+		created: () => settle(Response.json(created, { status: 201 })),
 		refusedWith: (reason: string) =>
 			settle(
 				Response.json(

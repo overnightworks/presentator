@@ -623,6 +623,18 @@ export interface components {
             source_access_renew_info: string;
             /** Source Access Token */
             source_access_token: string;
+            /** Source Busy Check */
+            source_busy_check: string;
+            /** Source Busy Count */
+            source_busy_count: string;
+            /** Source Busy Create */
+            source_busy_create: string;
+            /** Source Busy Fetch */
+            source_busy_fetch: string;
+            /** Source Busy Remove */
+            source_busy_remove: string;
+            /** Source Busy Renew */
+            source_busy_renew: string;
             /** Source Check */
             source_check: string;
             /** Source Check Reachable */
