@@ -1,0 +1,8 @@
+claim_id = "513bf5023689470fafb179c0d8153247"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "5912e3a90633d694227dfc8a3425b398bd9e3536"
+branch = "claude/issue-991-the-worker-reads-its-seal-and-stays-clos"
+scope = ["src/presentator/host/worker.py", "src/presentator/host/worker_self_check.py", "tests/presentator/host/support/sealed_snapshot.py", "tests/presentator/host/support/worker_boundary.py", "tests/presentator/host/test_worker.py", "tests/presentator/host/test_worker_no_route.py", "tests/presentator/host/test_worker_seal.py"]
+opened_commit = "e6d9025aa6023e42eebc5969f9f3a87239f8cba1"
+whole_reason = "The seal enters the snapshot record, the boundary and every snapshot builder together, or the self-check does not import."
