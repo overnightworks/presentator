@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "404db53f13328ab49b9b283fbc9ec2856fde48c8"
 branch = "claude/issue-949-fetch-now-answers-what-it-changed"
-scope = ["frontend/e2e/source-remove.spec.ts", "frontend/e2e/source.spec.ts", "frontend/src/lib/api/client.test.ts", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "src/presentator/api/source_api.py", "src/presentator/application/decks.py", "src/presentator/application/source_state.py", "src/presentator/contracts/decks.py", "tests/presentator/api/test_source_api.py", "tests/presentator/application/test_build_retention.py", "tests/presentator/application/test_decks.py", "tests/presentator/application/test_source_fetch.py"]
+scope = ["frontend/e2e/source-remove.spec.ts", "frontend/e2e/source.spec.ts", "frontend/src/lib/api/client.test.ts", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "src/presentator/api/source_api.py", "src/presentator/application/decks.py", "src/presentator/application/source_state.py", "src/presentator/contracts/decks.py", "tests/presentator/api/test_source_api.py", "tests/presentator/application/support/decks_support.py", "tests/presentator/application/test_build_retention.py", "tests/presentator/application/test_decks.py", "tests/presentator/application/test_decks_source_fetch.py"]
 opened_commit = "6b4ab5d68d5c9b47470536bf410a621c0cca183e"
 whole_reason = "The contract, the use case that produces it and the route that answers it are one behaviour and cannot land apart."
