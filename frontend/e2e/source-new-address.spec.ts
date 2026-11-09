@@ -132,18 +132,6 @@ test.describe('the address decides what the Add source form shows', () => {
 		expect((await created).postDataJSON()).toMatchObject({ folder: 'examples' });
 	});
 
-	test('every field shown at 390 px leaves no horizontal scroll', async ({ page }, testInfo) => {
-		const { words } = await sessionOf(page);
-		await page.setViewportSize({ width: 390, height: 900 });
-		await opensTheForm(page);
-
-		await typesTheAddress(page, words, anHttpsAddress(aName(testInfo)));
-
-		await expect(folderField(page, words)).toBeVisible();
-		await expect(secretField(page, words)).toBeVisible();
-		await expectsNoHorizontalScroll(page);
-	});
-
 	test('the token field comes back empty when https follows a key address', async ({
 		page
 	}, testInfo) => {
@@ -213,6 +201,7 @@ test.describe('the address decides what the Add source form shows', () => {
 		await opensTheForm(page);
 
 		await typesTheAddress(page, words, anHttpsAddress(aName(testInfo)));
+		await expect(folderField(page, words)).toBeVisible();
 		await expect(secretField(page, words)).toBeVisible();
 		await expectsNoHorizontalScroll(page);
 
