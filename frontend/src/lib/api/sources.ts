@@ -19,6 +19,7 @@ export type NewSource = components['schemas']['NewSource'];
 export type SourceAddress = components['schemas']['SourceAddress'];
 export type SourceProbe = components['schemas']['SourceProbe'];
 export type SourceRemovalPreview = components['schemas']['SourceRemovalPreview'];
+export type SourceFetchView = components['schemas']['SourceFetchView'];
 export type SourceRunFailure = components['schemas']['SourceRunFailure'];
 export type SourceRunView = components['schemas']['SourceRunView'];
 export type SourceSummary = components['schemas']['SourceSummary'];
@@ -70,8 +71,8 @@ export function readSource(fetcher: typeof fetch, name: string, here: Here): Pro
 }
 
 /** Refreshes that one source now. */
-export function fetchNow(fetcher: typeof fetch, name: string): Promise<void> {
-	return postJson<undefined>(fetcher, `${sourcePath(name)}/fetch`, undefined);
+export function fetchNow(fetcher: typeof fetch, name: string): Promise<SourceFetchView> {
+	return postJson<SourceFetchView>(fetcher, `${sourcePath(name)}/fetch`, undefined);
 }
 
 /**

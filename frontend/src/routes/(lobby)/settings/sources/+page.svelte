@@ -3,11 +3,13 @@
 	import { resolve } from '$app/paths';
 	import { ageInWords } from '#lib/age.ts';
 	import ActionButton from '#lib/ActionButton.svelte';
+	import StatusLine from '#lib/StatusLine.svelte';
 	import { fetchNow, SOURCES_PATH } from '#lib/api/sources.ts';
 	import { noticeOf } from '#lib/notice.ts';
 	import { languageTag } from '#lib/session.svelte.ts';
 	import {
 		accessView,
+		fetchOutcome,
 		removedNotice,
 		runFailureWords,
 		stateShape,
@@ -40,10 +42,21 @@
 	// The row whose request runs; every other row is disabled meanwhile.
 	let fetching = $state<string | null>(null);
 
+	// How the last fetch ended, beside its source's button; any request of the page clears it.
+	let outcome = $state<{ name: string; shape: 'ready' | 'never-built' | 'failed'; text: string } | null>(
+		null
+	);
+
 	async function fetchSource(name: string): Promise<void> {
 		fetching = name;
+		outcome = null;
 		try {
-			await fetchNow(fetch, name);
+			try {
+				outcome = { name, ...fetchOutcome(await fetchNow(fetch, name), words) };
+			} catch (error) {
+				outcome = { name, shape: 'failed', text: words.source_request_failed };
+				throw error;
+			}
 			await invalidate(SOURCES_PATH);
 		} finally {
 			fetching = null;
@@ -107,6 +120,9 @@
 							disabled={fetching !== null}
 							onclick={() => fetchSource(source.name)}
 						/>
+						{#if outcome?.name === source.name}
+							<StatusLine shape={outcome.shape} text={outcome.text} />
+						{/if}
 					</td>
 				</tr>
 			{/each}
@@ -179,6 +195,11 @@
 	.row-action {
 		text-align: right;
 	}
+	.row-action :global(.line) {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: 8px;
+	}
 	@media (max-width: 640px) {
 		.sources thead {
 			position: absolute;
@@ -219,6 +240,9 @@
 			grid-column: 1 / -1;
 			grid-row: 3;
 			text-align: left;
+		}
+		.row-action :global(.line) {
+			justify-content: flex-start;
 		}
 	}
 </style>

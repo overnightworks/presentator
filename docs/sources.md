@@ -36,3 +36,5 @@ about sources stand in [configuration](configuration.md) and the runbook to
   again needs folder-aware code and issues a new webhook secret that must be
   entered at the git host again. A restored older backup is migrated at its next
   start.
+- **SR10** A source button shows that its request runs and, after it ends,
+  how it ended.
