@@ -90,7 +90,7 @@ class WatchReport:
 
 @dataclass(frozen=True)
 class Window:
-    """What the client's life showed: its lines, and the 10001 rows `docker top` saw."""
+    """What the client's life showed: its lines, and the build rows `docker top` saw."""
 
     lines: list[str]
     samples: int
@@ -253,7 +253,7 @@ def drive_life(client_arguments: tuple[str, ...], seconds: float) -> Life:
 
 
 def prove_control_life() -> str:
-    """A step reaches 10001: the watcher sees its creates and `docker top` its row."""
+    """A step reaches the build user: its creates and its `docker top` row show."""
     life = drive_life(("outcome", CONTROL_SLUG), CONTROL_STEP_SECONDS)
     created = life.watcher.finish().created
     if not set(created[WORK_MOUNT]).issuperset(CONTROL_CREATIONS):
@@ -265,7 +265,7 @@ def prove_control_life() -> str:
     mounts = json.dumps(life.watcher.armed.mounts, sort_keys=True)
     say(f"cell 50 mounts: {mounts}")
     rows = life.window.build_rows
-    return f"control life created {sorted(CONTROL_CREATIONS)}, {rows} 10001 rows"
+    return f"control life created {sorted(CONTROL_CREATIONS)}, {rows} build-user rows"
 
 
 def prove_refused_upload(name: str, row: UploadClass) -> str:
@@ -287,7 +287,7 @@ def prove_refused_upload(name: str, row: UploadClass) -> str:
         if created[root] != [CANARY]:
             refuse(f"{name}: {root} saw {created[root]}, not its canary")
     if life.window.samples < 1 or life.window.build_rows:
-        refuse(f"{name}: docker top {life.window} is not clean samples of no 10001")
+        refuse(f"{name}: docker top {life.window} is not clean samples of no build row")
     ended = report.ended_at_stdin_close, report.ended_at_boundary
     seconds = time.monotonic() - started
     return f"{name}: {line}; {row.life_end}; {seconds:.0f}s; ended {ended}"

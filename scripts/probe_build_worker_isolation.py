@@ -1,6 +1,6 @@
 """One attacked life and the next: cells 36-39, 41-44, 59 and 60 of the sealed worker.
 
-The attack deck (uid 10001, during `slidev build`) and the exec'd 10002 probe run
+The attack deck (the build user, during `slidev build`) and the exec'd wire-user probe
 in one life, joined by files in the life's `/tmp`, so each attacks the other, the
 running step and PID 1 while both are alive. The driver judges what each recorded
 in the received talk and on stdout, and then what the next life carries.
@@ -30,13 +30,15 @@ from probe_build_worker_harness import (
     worker,
 )
 
+from presentator.host import worker as worker_identity
+
 ATTACK_SLUG = "attack"
 ATTACKS_FILE = "attacks.txt"
 # The life's shared 1777 tmpfs, by design: the attackers' rendezvous.
 TEMPORARY = PurePosixPath("/tmp")  # noqa: S108 - the path is inside the build life and its shared tmpfs is the attackers' rendezvous
 PYTHON = "/opt/venv/bin/python"
-BUILD_IDENTITY = "10001"
-WIRE_IDENTITY = "10002"
+BUILD_IDENTITY = str(worker_identity.BUILD_IDENTITY[0])
+WIRE_IDENTITY = str(worker_identity.WIRE_IDENTITY[0])
 WIRE_USER = f"{WIRE_IDENTITY}:{WIRE_IDENTITY}"
 DECK_WAIT_SECONDS = 240
 PROBE_SECONDS = 150
@@ -273,7 +275,7 @@ def wait_for_deck(step: subprocess.Popen[str]) -> None:
 
 
 def run_probe() -> tuple[str, str]:
-    """Run the 10002 probe with its program on stdin; its stdout and stderr."""
+    """Run the wire-user probe with its program on stdin; its stdout and stderr."""
     program = (PROBE_SOURCES / "attack" / "kernel_attacks.py").read_text()
     try:
         done = subprocess.run(  # noqa: S603 - argv is the list exec_in_worker builds from the literal docker exec words and probe values and runs without a shell
@@ -282,7 +284,7 @@ def run_probe() -> tuple[str, str]:
             timeout=PROBE_SECONDS,
         )  # fmt: skip
     except subprocess.TimeoutExpired:
-        refuse(f"the 10002 probe not driven: no end within {PROBE_SECONDS} seconds")
+        refuse(f"the wire-user probe not driven: no end within {PROBE_SECONDS} seconds")
     return done.stdout, done.stderr
 
 
@@ -345,7 +347,7 @@ def left_in_next_life(markers: tuple[str, ...]) -> NextLife:
 def prove_nothing_reaches_the_next_life(
     report: Report, deck: Observations, probe: Observations
 ) -> None:
-    """Cells 39 and 41: no 10001 or 10002 process, marker or SysV object survives.
+    """Cells 39 and 41: no build or wire process, marker or SysV object survives.
 
     The restarted life's fresh PID, IPC and mount namespaces already void a
     surviving process or SysV object, so this listing alone does not prove the
@@ -364,7 +366,9 @@ def prove_nothing_reaches_the_next_life(
         refuse(f"the next life carries processes of {sorted(left.owners)}")
     if left.markers or left.sysv_objects:
         refuse(f"the next life carries {left}")
-    report.cell("39", "both double-forked children gone; no 10001 or 10002 process")
+    report.cell(
+        "39", "both double-forked children gone; no build-user or wire-user process"
+    )
     report.cell(
         "41", f"{len(markers)} markers and 3 SysV objects absent in the next life"
     )
@@ -383,7 +387,7 @@ def prove_attacked_life(report: Report) -> None:
     deck = read_attack_talk()
     if not probe.complete:
         refuse(f"the probe did not complete: {probe}\n{probe_errors}")
-    # `docker exec --user 10002:10002` lists the primary group, no other.
+    # `docker exec --user` as the wire user lists the primary group, no other.
     require_identity(probe, "probe", WIRE_IDENTITY, (WIRE_IDENTITY,))
     require_confinement(probe, "probe")
     for who in ("node", "python"):
