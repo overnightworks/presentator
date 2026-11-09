@@ -287,6 +287,7 @@ class _AdmitAll:
     """
 
     def is_allowed(self, key: str, *, limit: int, window_seconds: int) -> bool:
+        del key, limit, window_seconds
         return True
 
 
