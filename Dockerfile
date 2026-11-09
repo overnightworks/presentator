@@ -19,18 +19,20 @@ FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733
 
 # The two identities a build worker runs steps as: one builds, one only reads
 # what the build wrote. They are made before the runtime user so that a runtime
-# uid equal to either is refused rather than shared.
-RUN groupadd --gid 10001 presentator-build \
-    && useradd --uid 10001 --gid 10001 --home-dir /work/home --no-create-home \
+# uid equal to either is refused rather than shared. Their uids lie above the
+# system's `UID_MAX`, where `--no-log-init` keeps useradd from writing a sparse
+# lastlog entry into the layer.
+RUN groupadd --gid 61001 presentator-build \
+    && useradd --no-log-init --uid 61001 --gid 61001 --home-dir /work/home --no-create-home \
         --shell /usr/sbin/nologin presentator-build \
-    && groupadd --gid 10002 presentator-wire \
-    && useradd --uid 10002 --gid 10002 --home-dir /nonexistent --no-create-home \
+    && groupadd --gid 61002 presentator-wire \
+    && useradd --no-log-init --uid 61002 --gid 61002 --home-dir /nonexistent --no-create-home \
         --shell /usr/sbin/nologin presentator-wire
 
 ARG PRESENTATOR_RUNTIME_UID
 RUN case "$PRESENTATOR_RUNTIME_UID" in \
-        ''|*[!0-9]*|0*|10001|10002) \
-            echo "PRESENTATOR_RUNTIME_UID must be a positive integer without a leading zero, and neither 10001 nor 10002" >&2; \
+        ''|*[!0-9]*|0*|61001|61002) \
+            echo "PRESENTATOR_RUNTIME_UID must be a positive integer without a leading zero, and neither the build user's nor the wire user's uid" >&2; \
             exit 1 ;; \
     esac \
     && test "$PRESENTATOR_RUNTIME_UID" -gt 0 \

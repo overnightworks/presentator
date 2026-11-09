@@ -143,13 +143,16 @@ FAILURES = {
         Predicate.IDENTITIES,
     ),
     "build uid is runtime uid": (
-        with_identity(runtime_uid=10001),
+        with_identity(runtime_uid=worker.BUILD_IDENTITY[0]),
         Predicate.IDENTITIES,
     ),
     "wire uid root": (with_users(**{"presentator-wire": (0, 0)}), Predicate.IDENTITIES),
-    "wire uid is runtime uid": (with_identity(runtime_uid=10002), Predicate.IDENTITIES),
+    "wire uid is runtime uid": (
+        with_identity(runtime_uid=worker.WIRE_IDENTITY[0]),
+        Predicate.IDENTITIES,
+    ),
     "wire uid is build uid": (
-        with_users(**{"presentator-wire": (10001, 10001)}),
+        with_users(**{"presentator-wire": worker.BUILD_IDENTITY}),
         Predicate.IDENTITIES,
     ),
     "wrong controller gid": (with_identity(gid=0), Predicate.IDENTITIES),
@@ -428,7 +431,7 @@ def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
         sealed_root.stat().st_uid,
     )
     assert not snapshot.docker_socket_present
-    assert snapshot.identity.users["presentator-wire"] == (10002, 10002)
+    assert snapshot.identity.users["presentator-wire"] == worker.WIRE_IDENTITY
     assert snapshot.toolchain.vite_link_target == "/work/vite"
     assert len(snapshot.toolchain.headless_shell_modes) == 1
     assert snapshot.toolchain.corepack_mode is not None
