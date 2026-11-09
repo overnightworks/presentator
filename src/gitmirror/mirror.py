@@ -171,30 +171,42 @@ class GitMirror:
         checked out into it. Git carries no empty directory, so a path with
         nothing under it is a path this commit does not carry.
         """
-        self._every_entry(revision, path)
-        self._write_tree(revision, path, into=into)
+        listed = self._every_entry(revision, path)
+        if not listed:
+            message = f"{revision.commit} carries no {path}"
+            raise MirrorError(message)
+        try:
+            into.mkdir(parents=True, exist_ok=True)
+            for record in listed:
+                target = into / record.below
+                if record.entry.is_directory:
+                    target.mkdir(exist_ok=True)
+                else:
+                    target.write_bytes(self.read(revision, f"{path}/{record.below}"))
+        except OSError as fault:
+            message = f"{revision.commit} {path} cannot be written to {into}: {fault}"
+            raise MirrorError(message) from fault
 
-    def _every_entry(self, revision: Revision, path: str) -> tuple[TreeEntry, ...]:
-        """Every entry at any depth under that path, each name checked."""
+    def _every_entry(self, revision: Revision, path: str) -> tuple[_Listed, ...]:
+        """Every entry at any depth strictly inside that path, each name checked.
+
+        A tree is listed before what it holds. The listing also names the
+        folders on the way down to `path`, which are not part of what is
+        exported.
+        """
         listing = self._run(
             "ls-tree", "-r", "-t", "-z", revision.commit, "--", f"{path}/"
         )
+        inside = f"{path}/"
         return tuple(
-            _tree_entry(record) for record in os.fsdecode(listing).split("\0") if record
+            _Listed(below=record_path.removeprefix(inside), entry=entry)
+            for record_path, entry in (
+                _listed_record(record)
+                for record in os.fsdecode(listing).split("\0")
+                if record
+            )
+            if record_path.startswith(inside)
         )
-
-    def _write_tree(self, revision: Revision, path: str, *, into: Path) -> None:
-        entries = self.entries(revision, inside=path)
-        if not entries:
-            message = f"{revision.commit} carries no {path}"
-            raise MirrorError(message)
-        into.mkdir(parents=True, exist_ok=True)
-        for entry in entries:
-            below = f"{path}/{entry.name}"
-            if entry.is_directory:
-                self._write_tree(revision, below, into=into / entry.name)
-            else:
-                (into / entry.name).write_bytes(self.read(revision, below))
 
     def last_change(self, revision: Revision, path: str) -> Change:
         """The last commit up to this one that touched that path, and when.
@@ -497,13 +509,29 @@ def _sanitized(stderr: str, *, secret: str | None) -> str:
     return redacted
 
 
+@dataclass(frozen=True, slots=True)
+class _Listed:
+    """One entry of a recursive listing, and its path below the listed folder."""
+
+    below: str
+    entry: TreeEntry
+
+
 def _tree_entry(record: str) -> TreeEntry:
+    return _listed_record(record)[1]
+
+
+def _listed_record(record: str) -> tuple[str, TreeEntry]:
     attributes, _, path = record.partition("\t")
     _mode, kind, _object = attributes.split()
     # The raw last element, because a path type drops a `.` element and would
     # hide the name that makes a write land in, or above, its own directory.
-    name = path.rpartition("/")[2]
-    if name in _UNWRITABLE_ENTRY_NAMES:
-        message = f"the tree carries an entry named {name!r}"
-        raise MirrorError(message)
-    return TreeEntry(name=name, is_directory=kind == "tree")
+    parts = path.split("/")
+    name = parts[-1]
+    # Every part, because one entry whose own name holds slashes is listed as
+    # several parts, and a write follows all of them.
+    for part in parts:
+        if part in _UNWRITABLE_ENTRY_NAMES:
+            message = f"the tree carries an entry named {part!r}"
+            raise MirrorError(message)
+    return path, TreeEntry(name=name, is_directory=kind == "tree")
