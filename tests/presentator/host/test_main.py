@@ -112,10 +112,12 @@ def test_the_composition_root_serves_a_lobby_that_answers_the_login(
     environment: pytest.MonkeyPatch,
 ) -> None:
     served: list[Router] = []
+    configs: list[uvicorn.Config] = []
 
     class ServerThatOnlyRecordsWhatItGot:
         def __init__(self, config: uvicorn.Config) -> None:
             assert isinstance(config.app, Router)
+            configs.append(config)
             self.app = config.app
 
         async def serve(self) -> None:
@@ -126,6 +128,7 @@ def test_the_composition_root_serves_a_lobby_that_answers_the_login(
     main.main()
 
     assert len(served) == 1
+    assert configs[0].ws == "wsproto"
     browser = TestClient(
         served[0], base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS
     )
