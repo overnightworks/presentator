@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
 import type { RemovalCounts } from '../src/lib/api/client.ts';
 import type { SourceSummary, SourceView, WebhookSecretView } from '../src/lib/api/sources.ts';
@@ -19,6 +19,11 @@ import {
 } from './scenario.ts';
 import {
 	anHttpsAddress,
+	cancelOf,
+	confirmOf,
+	dialogOf,
+	opensTheDialog,
+	removeButton,
 	createsASource,
 	JSON_ACCEPT,
 	opensAnHttpsSource,
@@ -55,19 +60,6 @@ const refusedRemovalType =
 
 const NEXT_OF = (name: string): string => `%2Fsettings%2Fsources%2F${name}`;
 const GONE_ADDRESS = (name: string): string => `${sourceAddress(name)}/remove`;
-
-const removeButton = (page: Page, words: Words): Locator =>
-	page.getByRole('button', { name: words.source_remove_button });
-const dialogOf = (page: Page): Locator => page.getByRole('dialog');
-const cancelOf = (page: Page, words: Words): Locator =>
-	dialogOf(page).getByRole('button', { name: words.source_remove_cancel });
-const confirmOf = (page: Page, words: Words): Locator =>
-	dialogOf(page).getByRole('button', { name: words.source_remove_confirm, exact: true });
-
-async function opensTheDialog(page: Page, words: Words): Promise<void> {
-	await removeButton(page, words).click();
-	await expect(dialogOf(page)).toBeVisible();
-}
 
 const previewOf = async (page: Page, name: string): Promise<RemovalCounts> =>
 	(await (
@@ -697,70 +689,6 @@ test.describe('as an admin', () => {
 
 		expect(posted.status()).toBe(404);
 		expect(await sourceNames(page)).toContain(name);
-	});
-
-	// Cell 28.
-	test('Back to another source rebuilds its page: no secret, token, open dialog or counts of the first', async ({
-		page
-	}, testInfo) => {
-		const { words } = await sessionOf(page);
-		const second = await opensAnHttpsSource(page, words, testInfo);
-		const first = await opensAnHttpsSource(page, words, testInfo);
-		await page.goto(sourceAddress(second.name));
-		await page.getByRole('link', { name: words.sources_back }).click();
-		await expect(page).toHaveURL(SOURCES_LIST);
-		await page.getByRole('link', { name: first.name, exact: true }).click();
-		await expect(page).toHaveURL(sourceAddress(first.name));
-		const secret = (await (
-			await Promise.all([
-				page.waitForResponse((received) => received.url().endsWith('/webhook-secret')),
-				page.getByRole('button', { name: words.source_renew, exact: true }).last().click()
-			]).then(([answer]) => answer.json())
-		) as WebhookSecretView).webhook_secret;
-		await page.getByLabel(words.source_secret, { exact: true }).fill('typed-but-not-sent');
-		await expect(page.locator('body')).toContainText(secret);
-		await opensTheDialog(page, words);
-		await cancelOf(page, words).focus();
-
-		await page.evaluate(() => history.go(-2));
-
-		await expect(page).toHaveURL(sourceAddress(second.name));
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.name);
-		await expect(page.locator('body')).not.toContainText(secret);
-		await expect(page.getByLabel(words.source_secret, { exact: true })).toHaveValue('');
-		await expect(dialogOf(page)).toBeHidden();
-		const asked = page.waitForResponse((received) => received.url().endsWith('/removal'));
-		await removeButton(page, words).click();
-		expect((await asked).url()).toContain(`/${second.name}/removal`);
-		await expect(dialogOf(page).getByRole('heading', { level: 2 })).toContainText(second.name);
-	});
-
-	// Cell 28b.
-	test('Back to the same source in an earlier entry rebuilds its page too', async ({
-		page
-	}, testInfo) => {
-		const { words } = await sessionOf(page);
-		const { name } = await opensAnHttpsSource(page, words, testInfo);
-		await page.getByRole('link', { name: words.sources_back }).click();
-		await expect(page).toHaveURL(SOURCES_LIST);
-		await page.getByRole('link', { name, exact: true }).click();
-		await expect(page).toHaveURL(sourceAddress(name));
-		const [answer] = await Promise.all([
-			page.waitForResponse((received) => received.url().endsWith('/webhook-secret')),
-			page.getByRole('button', { name: words.source_renew, exact: true }).last().click()
-		]);
-		const { webhook_secret: secret } = (await answer.json()) as WebhookSecretView;
-		await page.getByLabel(words.source_secret, { exact: true }).fill('typed-but-not-sent');
-		await expect(page.locator('body')).toContainText(secret);
-		await opensTheDialog(page, words);
-
-		await page.evaluate(() => history.go(-2));
-
-		await expect(page).toHaveURL(sourceAddress(name));
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
-		await expect(page.locator('body')).not.toContainText(secret);
-		await expect(page.getByLabel(words.source_secret, { exact: true })).toHaveValue('');
-		await expect(dialogOf(page)).toBeHidden();
 	});
 
 	// Cell 29.

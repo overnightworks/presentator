@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { Page, Route, TestInfo } from '@playwright/test';
+import type { Locator, Page, Route, TestInfo } from '@playwright/test';
 
 import type { SessionView } from '../src/lib/api/session.ts';
 import type {
@@ -234,4 +234,17 @@ export async function answersWith(
 			json: change((await real.json()) as SourceView)
 		});
 	});
+}
+
+export const removeButton = (page: Page, words: Words): Locator =>
+	page.getByRole('button', { name: words.source_remove_button });
+export const dialogOf = (page: Page): Locator => page.getByRole('dialog');
+export const cancelOf = (page: Page, words: Words): Locator =>
+	dialogOf(page).getByRole('button', { name: words.source_remove_cancel });
+export const confirmOf = (page: Page, words: Words): Locator =>
+	dialogOf(page).getByRole('button', { name: words.source_remove_confirm, exact: true });
+
+export async function opensTheDialog(page: Page, words: Words): Promise<void> {
+	await removeButton(page, words).click();
+	await expect(dialogOf(page)).toBeVisible();
 }
