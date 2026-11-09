@@ -21,7 +21,8 @@ from webauth.ports import AccountKind
 from presentator.agent.mcp import AGENT_GROUP, MCP_GROUP, MCP_SCOPE
 from presentator.api.deck_list_api import DECK_LIST_PATH
 from presentator.api.people import ADMIN_PREFIX
-from presentator.api.preference_api import ACCOUNT_PATH
+from presentator.api.preference_api import ACCOUNT_PATH, SETTINGS_PATH
+from presentator.contracts.models import Role
 from presentator.contracts.preferences import ThemeChoice
 from presentator.host.main import Instance, served_by_host
 from presentator.host.polling import Schedule
@@ -44,7 +45,7 @@ from tests.support.lobby import (
     a_settings,
     a_talk_app,
 )
-from tests.support.sign_in_support import MEMBER, a_scene
+from tests.support.sign_in_support import ADMIN, MEMBER, a_scene
 
 
 @pytest.fixture
@@ -155,7 +156,7 @@ def test_an_ordinary_app_clients_bearer_on_the_marked_get_stays_a_person_token(
         assert slugs_of(answer.json()) == ["felix-deck"]
 
 
-def test_the_resource_bearer_opens_no_admin_delete_or_unmarked_route(
+def test_the_resource_bearer_opens_no_admin_delete_or_excluded_route(
     tmp_path: Path,
 ) -> None:
     """Only `/mcp` and the marked routes take it."""
@@ -168,37 +169,35 @@ def test_the_resource_bearer_opens_no_admin_delete_or_unmarked_route(
             f"{ADMIN_PREFIX}people/{World.ANNA}/export", headers=bearer
         )
         removed = program.delete("/api/sources/anything", headers=bearer)
-        unmarked = program.get(ACCOUNT_PATH, headers=bearer)
+        excluded = program.get(World.EXCLUDED_PATH, headers=bearer)
 
         assert {erased.status_code, exported.status_code, removed.status_code} <= {
             HTTPStatus.UNAUTHORIZED,
             HTTPStatus.FORBIDDEN,
         }
-        assert unmarked.status_code == HTTPStatus.UNAUTHORIZED
+        assert excluded.status_code == HTTPStatus.UNAUTHORIZED
         assert world.scene.count("users") == World.SIGNED_IN
 
 
-@pytest.mark.parametrize(
-    ("token_clients", "beside_cookie"),
-    [
-        pytest.param(frozenset[str](), HTTPStatus.OK, id="no token client: ignored"),
-        pytest.param(
-            frozenset({World.HAL}), HTTPStatus.UNAUTHORIZED, id="hal: refused"
-        ),
-    ],
-)
-def test_the_resource_bearer_never_authorizes_an_unmarked_route(
-    tmp_path: Path, token_clients: frozenset[str], beside_cookie: HTTPStatus
+@pytest.mark.parametrize("token_clients", [frozenset[str](), frozenset({World.HAL})])
+def test_the_resource_bearer_never_authorizes_an_excluded_route(
+    tmp_path: Path, token_clients: frozenset[str]
 ) -> None:
     """Alone it is refused; beside a cookie it is ignored or refused, never used."""
     with a_world(tmp_path, token_clients=token_clients) as world:
         bearer = world.bearer()
 
-        alone = world.program().get(ACCOUNT_PATH, headers={**bearer, **World.JSON})
-        with_cookie = world.felix.get(ACCOUNT_PATH, headers=bearer)
+        alone = world.program().get(
+            World.EXCLUDED_PATH, headers={**bearer, **World.JSON}
+        )
+        with_cookie = world.felix.get(World.EXCLUDED_PATH, headers=bearer)
+        cookie_alone = world.felix.get(World.EXCLUDED_PATH)
 
         assert alone.status_code == HTTPStatus.UNAUTHORIZED
-        assert with_cookie.status_code == beside_cookie
+        if token_clients:
+            assert with_cookie.status_code == HTTPStatus.UNAUTHORIZED
+        else:
+            assert with_cookie.status_code == cookie_alone.status_code
 
 
 @pytest.mark.parametrize(
@@ -272,6 +271,122 @@ def test_an_invalid_resource_bearer_beside_a_valid_cookie_gets_no_cookie_fallbac
 
     assert through_route.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}
     assert through_mcp.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}
+
+
+def test_get_account_and_get_session_answer_the_person_whose_token_the_agent_holds(
+    world: World,
+) -> None:
+    """T3: that person's theme and name, not the cookie's person's."""
+    chosen = {"theme": ThemeChoice.DARK.value}
+    assert world.felix.put(ACCOUNT_PATH, json=chosen).status_code == HTTPStatus.OK
+    program = world.program(as_browser=world.anna)
+
+    account = called_through_mcp(program, world.bearer(), "get_account")
+    anna_account = called_through_mcp(
+        program, world.bearer(subject=World.ANNA), "get_account"
+    )
+    session = called_through_mcp(program, world.bearer(), "get_session")
+
+    assert json.loads(account.text) == chosen
+    assert json.loads(anna_account.text) != chosen
+    assert json.loads(session.text)["person"]["username"] == "felix"
+
+
+def test_an_admin_persons_agents_client_bearer_never_reads_as_admin(
+    world: World,
+) -> None:
+    """T3: the role is the one the library caps for a bearer request."""
+    admin_browser = world.scene.browser()
+    assert world.scene.sign_in(
+        admin_browser, subject=World.ADMIN, username="root", groups=ADMIN
+    )
+    headers = world.bearer(subject=World.ADMIN, groups=[*ADMIN, MCP_GROUP])
+
+    session = called_through_mcp(world.program(), headers, "get_session")
+
+    assert session.is_error is False
+    person = json.loads(session.text)["person"]
+    assert person["username"] == "root"
+    assert person["role"] != Role.ADMIN.value
+
+
+def test_set_account_theme_changes_only_the_theme_of_the_person_whose_token_it_is(
+    world: World,
+) -> None:
+    """T4: admitted with the bearer alone and no Origin."""
+    changed = ThemeChoice.DARK.value
+    before_felix = world.felix.get(ACCOUNT_PATH, headers=World.JSON).json()
+    before_anna = world.anna.get(ACCOUNT_PATH, headers=World.JSON).json()
+    assert before_anna != {"theme": changed}
+
+    written = called_through_mcp(
+        world.program(),
+        world.bearer(subject=World.ANNA),
+        "set_account_theme",
+        {"theme": changed},
+    )
+
+    assert not written.is_error
+    assert json.loads(written.text) == {"theme": changed}
+    assert world.anna.get(ACCOUNT_PATH, headers=World.JSON).json() == {
+        "theme": changed
+    }
+    assert world.felix.get(ACCOUNT_PATH, headers=World.JSON).json() == before_felix
+
+
+def test_an_own_account_agent_sets_only_its_own_theme(world: World) -> None:
+    """T12: no person's preference changes."""
+    headers = world.own_agent(groups=[*MEMBER, MCP_GROUP, AGENT_GROUP])
+    before = [
+        browser.get(ACCOUNT_PATH, headers=World.JSON).json()
+        for browser in (world.felix, world.anna)
+    ]
+    changed = ThemeChoice.DARK.value
+    assert before[0] != {"theme": changed}
+
+    written = called_through_mcp(
+        world.program(), headers, "set_account_theme", {"theme": changed}
+    )
+    read_back = called_through_mcp(world.program(), headers, "get_account")
+
+    assert not written.is_error
+    assert json.loads(read_back.text) == {"theme": changed}
+    assert [
+        browser.get(ACCOUNT_PATH, headers=World.JSON).json()
+        for browser in (world.felix, world.anna)
+    ] == before
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        pytest.param("get", SETTINGS_PATH, id="settings"),
+        pytest.param("put", SETTINGS_PATH, id="settings written"),
+        pytest.param("get", "/api/sources", id="sources"),
+        pytest.param("get", f"{ADMIN_PREFIX}people/{World.ANNA}/export", id="people"),
+    ],
+)
+def test_an_admin_persons_agents_client_bearer_opens_no_admin_route(
+    tmp_path: Path, method: str, path: str
+) -> None:
+    """T5: an agent's token never carries admin rights."""
+    with a_world(tmp_path, token_clients=frozenset({World.HAL})) as world:
+        headers = world.bearer(groups=[*ADMIN, MCP_GROUP])
+
+        answer = world.program().request(
+            method, path, headers={**headers, **World.JSON}, json={}
+        )
+
+        assert answer.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}
+
+
+def test_a_bearer_on_an_excluded_person_route_is_refused(world: World) -> None:
+    """T6: the PDF is a person's route that no tool answers."""
+    answer = world.program().get(
+        World.EXCLUDED_PATH, headers={**world.bearer(), **World.JSON}
+    )
+
+    assert answer.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_cookie_only_reads_work_and_writes_still_need_their_provenance(
