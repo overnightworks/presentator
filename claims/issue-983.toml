@@ -1,0 +1,8 @@
+claim_id = "34cfc99d05f74bff85729e9a0850e265"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "ae1d5b17f28f30708cefe2295ea432138cb50201"
+branch = "claude/issue-983-the-worker-refuses-to-start-while-it-has"
+scope = ["src/presentator/host/worker.py", "src/presentator/host/worker_self_check.py", "tests/presentator/host/support/sealed_snapshot.py", "tests/presentator/host/test_worker.py", "tests/presentator/host/test_worker_no_route.py"]
+opened_commit = "ac76b4df5fdafcea3cc2c5c28d1585b4bef6b750"
+whole_reason = "The new predicate, the snapshot field it replaces and every test that builds a snapshot change together, or the self-check does not import."
