@@ -235,7 +235,7 @@ describe('presenter controls', () => {
     const { browser, context } = await openRoomBrowser()
     try {
       const presenter = await openPageIn(context, `${state.origin}/presenter/1`, width)
-      const projector = await openPageIn(context, `${state.origin}/1`, 1024)
+      const projector = await openPageIn(context, `${state.origin}/1`, width)
       await presenter.getByRole('switch', { name: 'AI' }).click({ timeout: 2_000 })
       await presenter.getByText('Answered.', { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
       await expect.poll(() => new URL(presenter.url()).pathname).toBe(followed[0])

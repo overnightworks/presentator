@@ -62,6 +62,7 @@ if TYPE_CHECKING:
 
     from agent_runtime_client.agents import TurnRequest
     from agent_runtime_client.backend import TurnEvent, TurnPerson
+    from agent_runtime_client.tools import JsonObject
 
 LOGGER = "presentator.agent.backend"
 # The fixed vector of agent-runtime's docs/wire.md for this issuer and subject.
@@ -118,7 +119,7 @@ async def test_the_request_names_the_agent_files_model_the_words_and_the_key() -
     agent = load_agent(COPRESENTER_AGENT_FILE, [SHOW_SLIDE.declaration])
     assert answered == "Eine Antwort."
     assert body["model"] == agent.model
-    assert json.dumps(body["tools"]).count('"name": "show_slide"') == 1
+    assert [tool["function"]["name"] for tool in body["tools"]] == ["show_slide"]
     assert THE_QUESTION in json.dumps(body["messages"], ensure_ascii=False)
     assert request.headers["authorization"] == (
         f"Bearer {A_GATEWAY_KEY_FILE.read_text(encoding='utf-8').strip()}"
@@ -386,7 +387,7 @@ async def test_a_tool_step_in_the_stream_is_not_spoken() -> None:
         a_relying_party(FrozenClock(instant=NOW)),
     )
 
-    assert await spoken(answerer) == "Hallo."
+    assert await answered(answerer) == ["Hallo."]
 
 
 @on_an_event_loop
@@ -429,9 +430,9 @@ async def test_one_asks_end_leaves_another_intact() -> None:
     assert first_cancelled
 
 
-def a_slide_round(arguments: object) -> list[Reply]:
+def a_slide_round(arguments: JsonObject) -> list[Reply]:
     return [
-        tool_round(tool_call("call-1", "show_slide", arguments)),  # type: ignore[arg-type]
+        tool_round(tool_call("call-1", "show_slide", arguments)),
         completion("Gut."),
     ]
 
@@ -451,7 +452,7 @@ async def test_a_slide_move_comes_before_the_words_that_follow_it() -> None:
 )
 @on_an_event_loop
 async def test_a_bad_slide_number_is_an_error_result_and_moves_nothing(
-    arguments: object,
+    arguments: JsonObject,
 ) -> None:
     """The model is told on round two; the window is not."""
     gateway = FakeGateway(*a_slide_round(arguments))
