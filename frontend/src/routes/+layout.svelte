@@ -1,5 +1,5 @@
 <script lang="ts">
-	import 'overnightworks-appkit/appkit.css';
+	import 'overnightworks-design/design.css';
 	import '../app.css';
 	import { commitSession } from '#lib/session.svelte.ts';
 	import type { LayoutProps } from './$types';

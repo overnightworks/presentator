@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { SignInPage } from 'overnightworks-appkit';
+	import { SignInPage } from 'overnightworks-design';
 	import { signInPageWords } from '#lib/kitWords.ts';
 	import { legalLinks } from '#lib/legal.ts';
 	import type { PageProps } from './$types';

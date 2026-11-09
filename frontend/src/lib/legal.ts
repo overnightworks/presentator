@@ -1,4 +1,4 @@
-import type { LegalLink } from 'overnightworks-appkit';
+import type { LegalLink } from 'overnightworks-design';
 import type { LobbyText } from '#lib/api/session.ts';
 
 // The operator's legal pages, which the person menu and the sign-in pages link to; the
