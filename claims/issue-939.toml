@@ -1,7 +1,0 @@
-claim_id = "f46add422765448987a4045d2b28f3b4"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "c528bf21f6547edbb74479122d9de18bd53c4847"
-branch = "claude/issue-939-the-mirror-s-tree-entry-tests-fail-when"
-scope = ["tests/gitmirror/test_mirror_trees.py", "tests/support/git_remote.py"]
-opened_commit = "bf010a2d18f0096f59e8769e446d6161c67e044f"
