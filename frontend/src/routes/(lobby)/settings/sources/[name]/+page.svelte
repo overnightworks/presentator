@@ -6,6 +6,7 @@
 	import { ageInWords } from '#lib/age.ts';
 	import ActionButton from '#lib/ActionButton.svelte';
 	import CopyValue from '#lib/CopyValue.svelte';
+	import StatusLine from '#lib/StatusLine.svelte';
 	import type { RemovalCounts } from '#lib/api/client.ts';
 	import {
 		fetchNow,
@@ -20,6 +21,7 @@
 	import { languageTag } from '#lib/session.svelte.ts';
 	import {
 		accessView,
+		fetchOutcome,
 		removalBody,
 		removalTitle,
 		runRow,
@@ -51,6 +53,8 @@
 	let declined = $state(false);
 	// Which request runs; every button of the page is disabled meanwhile.
 	let running = $state<Request | null>(null);
+	// How the last fetch ended; any request of the page clears it as it starts.
+	let outcome = $state<ReturnType<typeof fetchOutcome> | null>(null);
 	const pending = $derived(running !== null);
 	// The dialog is mounted with the page, so a click handler always finds it.
 	let dialog = $state() as HTMLDialogElement;
@@ -63,6 +67,7 @@
 
 	async function work(request: Request, attempt: () => Promise<void>): Promise<void> {
 		running = request;
+		outcome = null;
 		try {
 			await attempt();
 		} finally {
@@ -74,7 +79,12 @@
 
 	const fetchSource = (): Promise<void> =>
 		work('fetch', async () => {
-			await fetchNow(fetch, source.name);
+			try {
+				outcome = fetchOutcome(await fetchNow(fetch, source.name), words);
+			} catch (error) {
+				outcome = { shape: 'failed', text: words.source_request_failed };
+				throw error;
+			}
 			await reread();
 		});
 
@@ -172,6 +182,7 @@
 		disabled={pending}
 		onclick={fetchSource}
 	/>
+	{#if outcome !== null}<StatusLine shape={outcome.shape} text={outcome.text} />{/if}
 </div>
 
 <section class="sec">
