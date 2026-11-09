@@ -202,7 +202,7 @@ def test_a_local_address_wins_over_a_peer_address() -> None:
 
     topology, _ = read(script)
 
-    assert topology.addresses[0].address == ipaddress.ip_address("10.0.0.1")
+    assert topology.addresses[0].ip_address == ipaddress.ip_address("10.0.0.1")
 
 
 Alter = Callable[[bytes, int], Reply]
@@ -308,8 +308,10 @@ REJECTIONS: dict[str, tuple[Alter, Rejection]] = {
 def test_a_flawed_dump_rejects_the_whole_read_as_an_os_error(
     alter: Alter, reason: Rejection
 ) -> None:
+    altered_script = first_dump_altered(alter)
+
     with pytest.raises(DumpRejectedError) as raised:
-        read(first_dump_altered(alter))
+        read(altered_script)
 
     assert isinstance(raised.value, OSError)
     assert raised.value.reason == reason
@@ -330,13 +332,19 @@ def test_a_dump_without_an_end_rejects_the_read_when_the_socket_times_out() -> N
         replies = good_replies(request_type, family, sequence)
         return [replace(replies[0], data=replies[0].data[:-20])]
 
-    with pytest.raises(DumpRejectedError):
+    with pytest.raises(DumpRejectedError) as raised:
         read(script)
+
+    assert raised.value.reason == Rejection.NO_END_OF_DUMP_IN_TIME
 
 
 def test_a_dump_that_outgrows_its_byte_bound_is_rejected() -> None:
-    with pytest.raises(DumpRejectedError):
-        read(bounds=ReadBounds(max_bytes=40))
+    bounds = ReadBounds(max_bytes=40)
+
+    with pytest.raises(DumpRejectedError) as raised:
+        read(bounds=bounds)
+
+    assert raised.value.reason == Rejection.DUMP_LARGER_THAN_ITS_BOUND
 
 
 def test_a_dump_within_its_byte_bound_is_read() -> None:
@@ -347,9 +355,12 @@ def test_a_dump_within_its_byte_bound_is_read() -> None:
 
 def test_a_read_that_outlasts_its_time_bound_is_rejected() -> None:
     ticks = iter(range(100))
+    bounds = ReadBounds(max_seconds=3)
 
-    with pytest.raises(DumpRejectedError):
-        read(bounds=ReadBounds(max_seconds=3), clock=lambda: float(next(ticks)))
+    with pytest.raises(DumpRejectedError) as raised:
+        read(bounds=bounds, clock=lambda: float(next(ticks)))
+
+    assert raised.value.reason == Rejection.NO_END_OF_DUMP_IN_TIME
 
 
 DECODING_REJECTIONS = {

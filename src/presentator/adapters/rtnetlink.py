@@ -102,7 +102,7 @@ class Address:
     family: int
     prefix_length: int
     link_index: int
-    address: ipaddress.IPv4Address | ipaddress.IPv6Address
+    ip_address: ipaddress.IPv4Address | ipaddress.IPv6Address
 
 
 @dataclass(frozen=True)
@@ -285,6 +285,15 @@ class _Budget:
         return data
 
 
+def _reject_unless_answer(message_type: int, answer_type: int) -> None:
+    if message_type == NLMSG_ERROR:
+        raise DumpRejectedError(Rejection.KERNEL_REPORTED_AN_ERROR)
+    if message_type == NLMSG_OVERRUN:
+        raise DumpRejectedError(Rejection.DUMP_OVERRUN)
+    if message_type != answer_type:
+        raise DumpRejectedError(Rejection.UNEXPECTED_MESSAGE_TYPE)
+
+
 def _collect_payloads(
     kernel_socket: NetlinkSocket, budget: _Budget, sequence: int, answer_type: int
 ) -> list[bytes]:
@@ -296,12 +305,7 @@ def _collect_payloads(
                 if len(payload) < STATUS.size or STATUS.unpack_from(payload)[0] != 0:
                     raise DumpRejectedError(Rejection.DUMP_ENDED_UNSUCCESSFULLY)
                 return payloads
-            if message_type == NLMSG_ERROR:
-                raise DumpRejectedError(Rejection.KERNEL_REPORTED_AN_ERROR)
-            if message_type == NLMSG_OVERRUN:
-                raise DumpRejectedError(Rejection.DUMP_OVERRUN)
-            if message_type != answer_type:
-                raise DumpRejectedError(Rejection.UNEXPECTED_MESSAGE_TYPE)
+            _reject_unless_answer(message_type, answer_type)
             payloads.append(payload)
 
 
