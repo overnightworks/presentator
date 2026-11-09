@@ -201,6 +201,13 @@ describe('fetchOutcome', () => {
 			},
 			shape: 'failed',
 			text: 'no route'
+		},
+		{
+			answer: {
+				run: { at: '2026-11-09T10:00:00Z', commit: null, outcome: 'failure', reason: null, state: 'error' }
+			},
+			shape: 'failed',
+			text: 'broke'
 		}
 	])('words a fetch that ended with $answer as $text in the $shape shape', ({ answer, shape, text }) => {
 		expect(fetchOutcome(fetched(answer), words)).toEqual({ shape, text });
