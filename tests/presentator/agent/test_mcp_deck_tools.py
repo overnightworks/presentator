@@ -7,6 +7,7 @@ person's own cookie GET as the answer both must equal.
 
 import json
 import logging
+from collections.abc import Iterator
 from dataclasses import replace
 from datetime import timedelta
 from http import HTTPStatus
@@ -47,8 +48,9 @@ _DECK_AND_TEXT = pytest.mark.parametrize(
 
 
 @pytest.fixture
-def world(tmp_path: Path) -> World:
-    return a_world(tmp_path)
+def world(tmp_path: Path) -> Iterator[World]:
+    with a_world(tmp_path) as running:
+        yield running
 
 
 def an_attempt(outcome: BuildOutcome, *, failure: BuildFailure | None) -> BuildAttempt:
@@ -156,21 +158,21 @@ def test_after_a_failed_rebuild_the_view_shows_the_failure_and_the_text_the_last
     texts = FakeDeckTexts(
         by_commit={failed.commit: replace(A_DECK_TEXT, title="Failed commit")}
     )
-    world = a_world(tmp_path, texts=texts)
-    the_deck_has(world, attempt=failed, built=True)
+    with a_world(tmp_path, texts=texts) as world:
+        the_deck_has(world, attempt=failed, built=True)
 
-    view = called_through_mcp(
-        world.program(), world.bearer(), "get_deck", {"slug": World.FELIX_DECK}
-    )
-    text = called_through_mcp(
-        world.program(), world.bearer(), "get_deck_text", {"slug": World.FELIX_DECK}
-    )
+        view = called_through_mcp(
+            world.program(), world.bearer(), "get_deck", {"slug": World.FELIX_DECK}
+        )
+        text = called_through_mcp(
+            world.program(), world.bearer(), "get_deck_text", {"slug": World.FELIX_DECK}
+        )
 
-    shown = json.loads(view.text)
-    assert shown["state"] == DeckState.FAILED
-    assert shown["attempt"]["failure"]["text"] == "it broke"
-    assert not text.is_error
-    assert json.loads(text.text)["title"] == A_DECK_TEXT.title
+        shown = json.loads(view.text)
+        assert shown["state"] == DeckState.FAILED
+        assert shown["attempt"]["failure"]["text"] == "it broke"
+        assert not text.is_error
+        assert json.loads(text.text)["title"] == A_DECK_TEXT.title
 
 
 @pytest.mark.parametrize(
@@ -187,25 +189,25 @@ def test_after_a_failed_rebuild_the_view_shows_the_failure_and_the_text_the_last
 def test_a_deck_without_slides_is_not_found_and_one_with_none_is_an_empty_list(
     tmp_path: Path, text: DeckText | None, answers: HTTPStatus
 ) -> None:
-    world = a_world(tmp_path, texts=FakeDeckTexts(text=text))
-    address = DECK_TEXT_PATH.format(slug=World.FELIX_DECK)
+    with a_world(tmp_path, texts=FakeDeckTexts(text=text)) as world:
+        address = DECK_TEXT_PATH.format(slug=World.FELIX_DECK)
 
-    by_cookie = felix_by_cookie(world, address)
-    by_bearer = felix_by_bearer(world, address)
-    by_tool = called_through_mcp(
-        world.program(), world.bearer(), "get_deck_text", {"slug": World.FELIX_DECK}
-    )
+        by_cookie = felix_by_cookie(world, address)
+        by_bearer = felix_by_bearer(world, address)
+        by_tool = called_through_mcp(
+            world.program(), world.bearer(), "get_deck_text", {"slug": World.FELIX_DECK}
+        )
 
-    assert by_cookie.status_code == answers
-    assert by_bearer.status_code == answers
-    assert by_bearer.content == by_cookie.content
-    if text is None:
-        assert by_tool.is_error
-        assert by_tool.text.encode() == by_cookie.content
-    else:
-        assert not by_tool.is_error
-        assert json.loads(by_tool.text) == by_cookie.json()
-        assert by_cookie.json()["slides"] == []
+        assert by_cookie.status_code == answers
+        assert by_bearer.status_code == answers
+        assert by_bearer.content == by_cookie.content
+        if text is None:
+            assert by_tool.is_error
+            assert by_tool.text.encode() == by_cookie.content
+        else:
+            assert not by_tool.is_error
+            assert json.loads(by_tool.text) == by_cookie.json()
+            assert by_cookie.json()["slides"] == []
 
 
 @_DECK_AND_TEXT
@@ -229,24 +231,34 @@ def test_another_persons_deck_and_an_unknown_one_give_the_same_not_found_bytes(
 def test_an_unreadable_mirror_is_a_503_problem_and_no_usable_answer_to_the_agent(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    world = a_world(tmp_path, texts=FakeDeckTexts(unreadable=True))
-    address = DECK_TEXT_PATH.format(slug=World.FELIX_DECK)
+    with a_world(tmp_path, texts=FakeDeckTexts(unreadable=True)) as world:
+        address = DECK_TEXT_PATH.format(slug=World.FELIX_DECK)
+        bearer = world.bearer()
+        token = bearer["authorization"].removeprefix("Bearer ")
 
-    with caplog.at_level(logging.DEBUG):
-        by_cookie = felix_by_cookie(world, address)
-        by_bearer = felix_by_bearer(world, address)
-        by_tool = called_through_mcp(
-            world.program(), world.bearer(), "get_deck_text", {"slug": World.FELIX_DECK}
-        )
+        with caplog.at_level(logging.DEBUG):
+            by_cookie = felix_by_cookie(world, address)
+            by_bearer = felix_by_bearer(world, address)
+            by_tool = called_through_mcp(
+                world.program(),
+                bearer,
+                "get_deck_text",
+                {"slug": World.FELIX_DECK},
+            )
 
-    assert by_cookie.status_code == HTTPStatus.SERVICE_UNAVAILABLE
-    assert by_bearer.status_code == HTTPStatus.SERVICE_UNAVAILABLE
-    assert by_bearer.headers["content-type"].startswith("application/problem+json")
-    assert by_tool.is_error
-    assert "usable answer" in by_tool.text
-    for leaked in (A_DECK_TEXT.slides[0].body, A_DECK_TEXT.title, A_MIRROR_PATH):
-        assert leaked not in by_tool.text
-        assert leaked not in caplog.text
+        assert by_cookie.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+        assert by_bearer.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+        assert by_bearer.headers["content-type"].startswith("application/problem+json")
+        assert by_tool.is_error
+        assert "usable answer" in by_tool.text
+        for leaked in (
+            A_DECK_TEXT.slides[0].body,
+            A_DECK_TEXT.title,
+            A_MIRROR_PATH,
+            token,
+        ):
+            assert leaked not in by_tool.text
+            assert leaked not in caplog.text
 
 
 @_DECK_AND_TEXT
@@ -338,15 +350,15 @@ def test_the_cookie_and_a_configured_person_bearer_read_beside_the_resource(
     tmp_path: Path, path: str, tool: str
 ) -> None:
     del tool
-    world = a_world(
+    with a_world(
         tmp_path,
         token_clients=frozenset({World.HAL}),
-    )
-    address = path.format(slug=World.FELIX_DECK)
-    token = world.bearer(authorized_party=World.HAL, audience=None, groups=MEMBER)
+    ) as world:
+        address = path.format(slug=World.FELIX_DECK)
+        token = world.bearer(authorized_party=World.HAL, audience=None, groups=MEMBER)
 
-    by_cookie = world.felix.get(address, headers=_JSON)
-    by_person_bearer = world.program().get(address, headers={**token, **_JSON})
+        by_cookie = world.felix.get(address, headers=_JSON)
+        by_person_bearer = world.program().get(address, headers={**token, **_JSON})
 
-    assert by_cookie.status_code == HTTPStatus.OK
-    assert by_person_bearer.json() == by_cookie.json()
+        assert by_cookie.status_code == HTTPStatus.OK
+        assert by_person_bearer.json() == by_cookie.json()

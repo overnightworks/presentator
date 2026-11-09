@@ -6,6 +6,9 @@ account, by the time it runs, and every tool call goes through the whole lobby a
 again, so it meets the same middleware as any request.
 """
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 from agent_runtime_client.mcp_server import McpPersonFront, RouteTools, route_tools
 from agent_runtime_client.mcp_wire import MCP_ENDPOINT_PATH
 from agent_runtime_client.tools import Principal, ToolEffect, agent_tool
@@ -56,6 +59,22 @@ def marked_tools(lobby: FastAPI) -> RouteTools[MarkedRoute]:
     return route_tools(lobby.openapi(), lobby, mark_route=MarkedRoute)
 
 
+def _run_front_with_the_lobby(lobby: FastAPI, front: McpPersonFront) -> None:
+    """Enter `front.running()` in the lobby's lifespan, after what it already does.
+
+    The SDK's session manager needs a running task group, and a request outside
+    `running()` raises.
+    """
+    enclosed = lobby.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+        async with enclosed(app), front.running():
+            yield
+
+    lobby.router.lifespan_context = lifespan
+
+
 def install_mcp_front(
     lobby: FastAPI,
     *,
@@ -73,13 +92,10 @@ def install_mcp_front(
         # The identity store keys an account by the issuer's `sub`, which is the id.
         return Principal(iss=issuer, sub=resource_person(HTTPConnection(scope)).id)
 
+    front = McpPersonFront(tools.tools, resolve_person=person_of)
     # An exact route, never a mount: the gate decides by the path it sees.
-    lobby.router.routes.append(
-        Route(
-            MCP_ENDPOINT_PATH,
-            McpPersonFront(tools.tools, resolve_person=person_of),
-        )
-    )
+    lobby.router.routes.append(Route(MCP_ENDPOINT_PATH, front))
+    _run_front_with_the_lobby(lobby, front)
     return ProtectedResource(
         url=f"{origin}{MCP_ENDPOINT_PATH}",
         scope=MCP_SCOPE,
