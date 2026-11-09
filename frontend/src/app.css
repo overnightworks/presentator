@@ -297,6 +297,13 @@ main {
 .btn[aria-busy='true']:disabled {
 	opacity: 1;
 }
+.btn .state[data-state='building'] {
+	color: inherit;
+}
+.btn .state[data-state='building'] i {
+	border-color: currentColor;
+	border-top-color: transparent;
+}
 .back {
 	font-size: 14px;
 	text-underline-offset: 3px;

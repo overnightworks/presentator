@@ -308,9 +308,16 @@ test.describe('as an admin', () => {
 		const fetchNow = rowOf(page, first).getByRole('button', { name: words.sources_fetch_now });
 		await fetchNow.click();
 
+		const busy = rowOf(page, first).getByRole('button', { name: words.source_busy_fetch });
+		await expect(busy).toHaveAttribute('aria-busy', 'true');
+		await expect(busy.locator('.state[data-state="building"]')).toBeVisible();
+		await expect(
+			rowOf(page, second).getByRole('button', { name: words.sources_fetch_now })
+		).not.toHaveAttribute('aria-busy');
 		for (const button of await page.locator('table.sources button').all()) {
 			await expect(button).toBeDisabled();
 		}
+		await page.screenshot({ path: testInfo.outputPath('list-fetch-busy.png') });
 		release();
 		await reread;
 		await expect(fetchNow).toBeEnabled();

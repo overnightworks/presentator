@@ -611,6 +611,54 @@ test.describe('as an admin', () => {
 		expect(names).not.toContain('new');
 	});
 
+	for (const width of [390, 1280]) {
+		test(`Check and Create show their busy word while held, the rest disabled, at ${width} px`, async ({
+			page
+		}, testInfo) => {
+			const { words } = await sessionOf(page);
+			await page.setViewportSize({ width, height: 900 });
+			const name = aName(testInfo);
+			await opensTheForm(page);
+			let release!: () => void;
+			let gate = new Promise<void>((resolve) => (release = resolve));
+			await page.route(`**${CHECK_API}`, async (route) => {
+				await gate;
+				await route.continue();
+			});
+			await page.route(`**${SOURCES_API}`, async (route) => {
+				if (route.request().method() !== 'POST') {
+					return route.continue();
+				}
+				await gate;
+				return route.continue();
+			});
+			await fillsTheForm(page, words, { name, url: anHttpsAddress(name), secret: ACCESS_TOKEN });
+
+			await page.getByRole('button', { name: words.source_check }).click();
+
+			const busyCheck = page.getByRole('button', { name: words.source_busy_check });
+			await expect(busyCheck).toHaveAttribute('aria-busy', 'true');
+			await expect(busyCheck).toBeDisabled();
+			await expect(busyCheck.locator('.state[data-state="building"]')).toBeVisible();
+			await expect(page.getByRole('button', { name: words.source_create })).toBeDisabled();
+			await page.screenshot({ path: testInfo.outputPath(`check-busy-${width}.png`) });
+			release();
+			await expect(page.getByRole('button', { name: words.source_check })).toBeEnabled();
+			await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
+
+			gate = new Promise<void>((resolve) => (release = resolve));
+			await page.getByRole('button', { name: words.source_create }).click();
+
+			const busyCreate = page.getByRole('button', { name: words.source_busy_create });
+			await expect(busyCreate).toHaveAttribute('aria-busy', 'true');
+			await expect(busyCreate.locator('.state[data-state="building"]')).toBeVisible();
+			await expect(page.getByRole('button', { name: words.source_check })).toBeDisabled();
+			await page.screenshot({ path: testInfo.outputPath(`create-busy-${width}.png`) });
+			release();
+			await expect(page.getByRole('heading', { level: 1 })).toContainText(words.source_created);
+		});
+	}
+
 	// Cell 7.
 	test('a failed write shows no created view, enables Create again and fails loudly', async ({
 		page

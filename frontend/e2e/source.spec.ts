@@ -360,6 +360,10 @@ test.describe('as an admin', () => {
 
 		await page.getByRole('button', { name: words.sources_fetch_now }).click();
 
+		const busy = page.getByRole('button', { name: words.source_busy_fetch });
+		await expect(busy).toHaveAttribute('aria-busy', 'true');
+		await expect(busy.locator('.state[data-state="building"]')).toBeVisible();
+		await page.screenshot({ path: testInfo.outputPath('fetch-busy.png') });
 		const buttons = page.locator('main button');
 		expect(await buttons.count()).toBeGreaterThan(1);
 		for (const button of await buttons.all()) {
@@ -372,6 +376,39 @@ test.describe('as an admin', () => {
 		expect(await entriesOf(page)).toBe(entries);
 		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 	});
+
+	for (const path of ['access', 'webhook-secret']) {
+		test(`a held ${path} renewal shows the busy word on its own button only`, async ({
+			page
+		}, testInfo) => {
+			const { words } = await sessionOf(page);
+			const { name } = await opensAnHttpsSource(page, words, testInfo);
+			let release!: () => void;
+			const gate = new Promise<void>((resolve) => (release = resolve));
+			await page.route(`**${SOURCES_API}/${name}/${path}`, async (route) => {
+				await gate;
+				await route.continue();
+			});
+			await page.getByLabel(words.source_secret, { exact: true }).fill(ACCESS_TOKEN);
+			const heading = path === 'access' ? words.source_access_heading : words.source_webhook_heading;
+
+			await section(page, heading)
+				.getByRole('button', { name: words.source_renew, exact: true })
+				.click();
+
+			const busy = section(page, heading).getByRole('button', { name: words.source_busy_renew });
+			await expect(busy).toHaveAttribute('aria-busy', 'true');
+			await expect(busy.locator('.state[data-state="building"]')).toBeVisible();
+			await expect(page.getByRole('button', { name: words.source_busy_renew })).toHaveCount(1);
+			for (const button of await page.locator('main button').all()) {
+				await expect(button).toBeDisabled();
+			}
+			release();
+			await expect(
+				section(page, heading).getByRole('button', { name: words.source_renew, exact: true })
+			).toBeEnabled();
+		});
+	}
 
 	// Cells 14 and 15.
 	test('an HTTPS renewal clears the field, keeps the dots and leaves the token nowhere', async ({

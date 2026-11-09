@@ -458,6 +458,37 @@ test.describe('as an admin', () => {
 		expect(await sourceNames(page)).toContain(name);
 	});
 
+	// The opener counts before the dialog opens; its request is held here.
+	for (const width of [390, 1280]) {
+		test(`while the removal is counted the opener shows its busy word at ${width} px`, async ({
+			page
+		}, testInfo) => {
+			const { words } = await sessionOf(page);
+			await page.setViewportSize({ width, height: 900 });
+			const { name } = await opensAnHttpsSource(page, words, testInfo);
+			let release!: () => void;
+			const gate = new Promise<void>((resolve) => (release = resolve));
+			await page.route(`**${SOURCES_API}/${name}/removal`, async (route) => {
+				await gate;
+				await route.continue();
+			});
+
+			await removeButton(page, words).click();
+
+			const busy = page.getByRole('button', { name: words.source_busy_count });
+			await expect(busy).toHaveAttribute('aria-busy', 'true');
+			await expect(busy).toBeDisabled();
+			await expect(busy.locator('.state[data-state="building"]')).toBeVisible();
+			for (const button of await page.locator('main button').all()) {
+				await expect(button).toBeDisabled();
+			}
+			await page.screenshot({ path: testInfo.outputPath(`count-busy-${width}.png`) });
+			release();
+			await expect(dialogOf(page)).toBeVisible();
+			await expect(removeButton(page, words)).toBeEnabled();
+		});
+	}
+
 	// Cell 24.
 	test('while the DELETE is pending every button is disabled and a double click sends one', async ({
 		page
@@ -469,7 +500,11 @@ test.describe('as an admin', () => {
 
 		await confirmOf(page, words).dblclick();
 
-		await expect(confirmOf(page, words)).toBeDisabled();
+		const busy = dialogOf(page).getByRole('button', { name: words.source_busy_remove });
+		await expect(busy).toHaveAttribute('aria-busy', 'true');
+		await expect(busy).toBeDisabled();
+		await expect(busy.locator('.state[data-state="building"]')).toBeVisible();
+		await page.screenshot({ path: testInfo.outputPath('remove-busy.png') });
 		await expect(cancelOf(page, words)).toBeDisabled();
 		await expect(removeButton(page, words)).toBeDisabled();
 		for (const button of await page.locator('main button').all()) {
@@ -503,7 +538,9 @@ test.describe('as an admin', () => {
 		});
 
 		await confirmOf(page, words).click();
-		await expect(confirmOf(page, words)).toBeDisabled();
+		await expect(
+			dialogOf(page).getByRole('button', { name: words.source_busy_remove })
+		).toBeDisabled();
 		await page.keyboard.press('Escape');
 		await page.keyboard.press('Escape');
 		release();
