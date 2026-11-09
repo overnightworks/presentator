@@ -3,5 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "b77b8861a51683e6d3b4be055d23ce9222ffa3e8"
 branch = "claude/issue-964-the-python-test-job-runs-in-parallel-and"
-scope = [".github/workflows/ci.yml", "pyproject.toml", "uv.lock"]
+scope = [".github/workflows/ci.yml", "pyproject.toml", "tests/presentator/adapters/test_decks_source_read_failures.py", "uv.lock"]
 opened_commit = "e5aacd817d102dd828f85f5304e8b492d193818e"
+whole_reason = "The worker count, its dependency and the test that cannot run under it are one change: the job is red without any one of them."
