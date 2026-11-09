@@ -1,0 +1,8 @@
+claim_id = "25f1dc32ae5746deaa6f29e8860da2fa"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "de861d576079d547ae865f6c38dcfe3f37f0a335"
+branch = "claude/issue-962-take-appkit-v0-17-0"
+scope = ["frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "frontend/src/lib/kitWords.test.ts", "frontend/src/lib/kitWords.ts", "src/presentator/adapters/catalogs/en.po", "src/presentator/contracts/text.py", "tests/support/vulture_allowlist.py"]
+opened_commit = "4653365ab4053bd7aaa411532f5c2769bcf46bf3"
+whole_reason = "The four new sign-in words run from the text contract through the catalog and the generated API types to kitWords, and the bump cannot type-check without all of them."
