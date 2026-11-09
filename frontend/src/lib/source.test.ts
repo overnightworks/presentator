@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { SourceRefusalReason } from '#lib/api/client.ts';
 import type { LobbyText } from '#lib/api/session.ts';
-import type { ConnectionCheckView } from '#lib/api/sources.ts';
+import type { ConnectionCheckView, SourceFetchView } from '#lib/api/sources.ts';
 import type { AccessKind, SourceRunView, SourceState } from '#lib/api/sources.ts';
 import {
 	accessView,
 	checkBanner,
+	fetchOutcome,
 	refusalWords,
 	removalBody,
 	removalTitle,
@@ -34,6 +35,12 @@ const words = {
 	source_run_failed: 'broke',
 	source_run_secret: 'the secret did not resolve',
 	source_run_fetched: 'taken in',
+	source_fetch_nothing_new: 'all quiet',
+	source_fetch_changed: 'taken.',
+	source_fetch_built: 'built {count}',
+	source_fetch_failed: 'broke {count}',
+	source_fetch_removed: 'gone {count}',
+	source_fetch_busy: 'lock held',
 	source_state_reachable: 'up',
 	source_state_error: 'erroring',
 	source_state_refused: 'rebuffed',
@@ -165,6 +172,38 @@ describe('runRow', () => {
 
 	it('carries no detail for a failure that gave no reason', () => {
 		expect(runRow(run({}), words).detail).toBeNull();
+	});
+});
+
+const fetched = (overrides: Partial<SourceFetchView>): SourceFetchView => ({
+	run: { at: '2026-11-09T10:00:00Z', commit: 'abc1234', outcome: 'success', reason: null, state: 'reachable' },
+	decks_built: 0,
+	builds_failed: 0,
+	decks_removed: 0,
+	...overrides
+});
+
+describe('fetchOutcome', () => {
+	it.each<{ answer: Partial<SourceFetchView>; shape: string; text: string }>([
+		{ answer: { decks_built: 1 }, shape: 'ready', text: 'taken. built 1' },
+		{ answer: { decks_built: 1, builds_failed: 1 }, shape: 'failed', text: 'taken. built 1, broke 1' },
+		{ answer: { decks_removed: 2 }, shape: 'ready', text: 'taken. gone 2' },
+		{
+			answer: { decks_built: 3, builds_failed: 2, decks_removed: 1 },
+			shape: 'failed',
+			text: 'taken. built 3, broke 2, gone 1'
+		},
+		{ answer: {}, shape: 'ready', text: 'all quiet' },
+		{ answer: { run: null }, shape: 'never-built', text: 'lock held' },
+		{
+			answer: {
+				run: { at: '2026-11-09T10:00:00Z', commit: null, outcome: 'failure', reason: 'unreachable', state: 'error' }
+			},
+			shape: 'failed',
+			text: 'no route'
+		}
+	])('words a fetch that ended with $answer as $text in the $shape shape', ({ answer, shape, text }) => {
+		expect(fetchOutcome(fetched(answer), words)).toEqual({ shape, text });
 	});
 });
 

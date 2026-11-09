@@ -667,6 +667,18 @@ export interface components {
             source_deploy_key_info: string;
             /** Source Deploy Key Renew */
             source_deploy_key_renew: string;
+            /** Source Fetch Built */
+            source_fetch_built: string;
+            /** Source Fetch Busy */
+            source_fetch_busy: string;
+            /** Source Fetch Changed */
+            source_fetch_changed: string;
+            /** Source Fetch Failed */
+            source_fetch_failed: string;
+            /** Source Fetch Nothing New */
+            source_fetch_nothing_new: string;
+            /** Source Fetch Removed */
+            source_fetch_removed: string;
             /** Source Folder */
             source_folder: string;
             /** Source Folder Optional */
@@ -739,6 +751,8 @@ export interface components {
             source_removed: string;
             /** Source Renew */
             source_renew: string;
+            /** Source Request Failed */
+            source_request_failed: string;
             /** Source Reverse */
             source_reverse: string;
             /** Source Run Column Detail */
