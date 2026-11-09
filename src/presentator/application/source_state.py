@@ -49,7 +49,7 @@ def deck_state_of(deck: Deck) -> DeckState:
 
     An attempt outranks the talk that stands, because it is the newer news: a
     deck whose last build failed is failed even while yesterday's talk still
-    opens (line 16).
+    opens.
     """
     attempt = deck.attempt
     if attempt is None:
