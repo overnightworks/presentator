@@ -53,7 +53,9 @@ class Serving:
         self._listener.listen()
         self._listener.settimeout(0.0)
         server = _AnnouncingServer(
-            uvicorn.Config(self._app, log_level="error", proxy_headers=False),
+            uvicorn.Config(
+                self._app, log_level="error", proxy_headers=False, ws="wsproto"
+            ),
         )
         server.started_up = asyncio.Event()
         self._server = server
