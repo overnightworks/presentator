@@ -11,8 +11,10 @@ import {
   createMediaObservation,
   createOverlayDeckServer,
   installCspGuard,
+  openPageIn,
   openPresenter,
   openPresenterAt,
+  openRoomBrowser,
   readSameFrameBoxes,
   registerOverlayHarness,
   saveEvidence,
@@ -216,6 +218,54 @@ describe('presenter controls', () => {
       expect(await ai.textContent()).toContain('AI')
     } finally {
       state.whoLanguage = 'de'
+      await browser.close()
+    }
+  })
+
+  it.each([
+    { width: 1024, shown: 3, followed: ['/presenter/3', '/3'] },
+    { width: 390, shown: 3, followed: ['/presenter/3', '/3'] },
+    { width: 1024, shown: 9, followed: ['/presenter/1', '/1'] },
+    { width: 390, shown: 0, followed: ['/presenter/1', '/1'] },
+    { width: 390, shown: 1.5, followed: ['/presenter/1', '/1'] },
+  ])('lets a slide event move the presenter and projector only inside the deck: $shown at $width px', async ({ width, shown, followed }) => {
+    state.answerMode = 'moves-slide'
+    state.slideToShow = shown
+    state.askBodies = []
+    const { browser, context } = await openRoomBrowser()
+    try {
+      const presenter = await openPageIn(context, `${state.origin}/presenter/1`, width)
+      const projector = await openPageIn(context, `${state.origin}/1`, width)
+      await presenter.getByRole('switch', { name: 'AI' }).click({ timeout: 2_000 })
+      await presenter.getByText('Answered.', { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
+      await expect.poll(() => new URL(presenter.url()).pathname).toBe(followed[0])
+      await expect.poll(() => new URL(projector.url()).pathname).toBe(followed[1])
+      // The event adds no line of its own: only the heard question and the answer show.
+      expect(await presenter.locator('.copresenter .line').allTextContents()).toEqual([
+        'Where does the handoff slow down?',
+        'Answered.',
+      ])
+      await saveEvidence(presenter, `presenter-slide-${shown}-${width}.png`)
+    } finally {
+      state.answerMode = 'audio'
+      await browser.close()
+    }
+  })
+
+  it('asks the next question with the slide the model moved to', async () => {
+    state.answerMode = 'moves-slide'
+    state.slideToShow = 2
+    state.askBodies = []
+    const { browser, page } = await openPresenter(1024)
+    try {
+      await page.getByRole('switch', { name: 'AI' }).click({ timeout: 2_000 })
+      await expect.poll(() => new URL(page.url()).pathname).toBe('/presenter/2')
+      await page.getByText('Answered.', { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
+      sendHeard('And now?')
+      await expect.poll(() => state.askBodies.length).toBe(2)
+      expect(state.askBodies.map((body) => body.slide)).toEqual([1, 2])
+    } finally {
+      state.answerMode = 'audio'
       await browser.close()
     }
   })

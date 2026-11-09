@@ -6,7 +6,7 @@ import { useNav } from '@slidev/client'
 import WORKLET_URL from '../worklets/pcm-capture-processor.js?url&no-inline'
 import { publish } from '../room-notice.js'
 
-const { currentSlideNo } = useNav()
+const { currentSlideNo, go, total } = useNav()
 
 const COPRESENTER = '/copresenter'
 // The host delivers this deck at `/deck/<slug>/`, so the base names its slug.
@@ -435,6 +435,12 @@ function applySse(block) {
   }
   if (kind === 'done' && data.text) answer.value = data.text
   if (kind === 'error') error.value = errorEventLine(data)
+  if (kind === 'slide' && isShownSlide(data.number)) go(data.number)
+}
+
+// Slidev's `go` does not check the range, so an unknown slide stays unshown.
+function isShownSlide(number) {
+  return Number.isInteger(number) && number >= 1 && number <= total.value
 }
 
 function enqueueWav(b64) {

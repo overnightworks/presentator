@@ -19,6 +19,7 @@ from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     Done,
     Sentence,
+    ShowSlide,
     SpeechTokens,
 )
 from presentator.contracts.voice import SampleLanguage
@@ -101,13 +102,15 @@ class RecordingSpeaking:
         return f"wav:{text}".encode()
 
 
-async def _deltas(*deltas: str) -> AsyncIterator[str]:
+async def _deltas(*deltas: str | ShowSlide) -> AsyncIterator[str | ShowSlide]:
     for delta in deltas:
         yield delta
 
 
 async def _events(
-    deltas: tuple[str, ...], speaking: RecordingSpeaking, events: list[AnswerEvent]
+    deltas: tuple[str | ShowSlide, ...],
+    speaking: RecordingSpeaking,
+    events: list[AnswerEvent],
 ) -> None:
     async for event in spoken_events(
         _deltas(*deltas), split_after_terminators, speaking, "de", TOKENS
@@ -134,6 +137,21 @@ def test_each_sentence_is_spoken_once_in_order_and_done_carries_the_sentences() 
         Done(text="Eins. Zwei. Drei"),
     ]
     assert speaking.calls == [("Eins.", "de"), ("Zwei.", "de"), ("Drei", "de")]
+
+
+def test_a_shown_slide_passes_through_where_it_came_and_is_not_spoken() -> None:
+    speaking = RecordingSpeaking()
+    events: list[AnswerEvent] = []
+
+    asyncio.run(_events((ShowSlide(number=3), "Gut."), speaking, events))
+
+    assert events == [
+        ShowSlide(number=3),
+        AnswerText(text="Gut."),
+        Sentence(text="Gut."),
+        Audio(text="Gut.", wav=b"wav:Gut."),
+        Done(text="Gut."),
+    ]
 
 
 @pytest.mark.parametrize("deltas", [(), ("  ",)])

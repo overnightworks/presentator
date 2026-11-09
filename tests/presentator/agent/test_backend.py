@@ -11,7 +11,13 @@ import httpx2
 import pytest
 from agent_runtime_client.agents import load_agent
 from agent_runtime_client.backend import TurnStopKind, TurnStopped
-from agent_runtime_client.backend.fake_gateway import FakeGateway, Reply, completion
+from agent_runtime_client.backend.fake_gateway import (
+    FakeGateway,
+    Reply,
+    completion,
+    tool_call,
+    tool_round,
+)
 from agent_runtime_client.turn import (
     FailureCode,
     Principal,
@@ -26,6 +32,7 @@ from agent_runtime_client.turn_events import (
 
 from presentator.agent.backend import (
     COPRESENTER_AGENT_FILE,
+    SHOW_SLIDE,
     GatewayAnswerer,
     gateway_answerer,
 )
@@ -33,6 +40,7 @@ from presentator.contracts.copresenter import (
     AskingPerson,
     CoPresenterUnavailableError,
     NotEnabledError,
+    ShowSlide,
 )
 from presentator.contracts.models import Role
 from tests.presentator.agent.support.driving import on_an_event_loop
@@ -54,6 +62,7 @@ if TYPE_CHECKING:
 
     from agent_runtime_client.agents import TurnRequest
     from agent_runtime_client.backend import TurnEvent, TurnPerson
+    from agent_runtime_client.tools import JsonObject
 
 LOGGER = "presentator.agent.backend"
 # The fixed vector of agent-runtime's docs/wire.md for this issuer and subject.
@@ -73,11 +82,24 @@ def answerer_over(
     return gateway_answerer(an_agent_config(), relying_party, transport=transport)
 
 
-async def spoken(answerer: GatewayAnswerer, person: AskingPerson | None = None) -> str:
+async def answered(
+    answerer: GatewayAnswerer, person: AskingPerson | None = None
+) -> list[str | ShowSlide]:
     async with answerer.answer(
         message=THE_QUESTION, person=person or a_person()
-    ) as texts:
-        return "".join([text async for text in texts])
+    ) as events:
+        return [event async for event in events]
+
+
+async def spoken_to(
+    answerer: GatewayAnswerer, message: str, person: AskingPerson | None = None
+) -> str:
+    async with answerer.answer(message=message, person=person or a_person()) as texts:
+        return "".join([text async for text in texts if isinstance(text, str)])
+
+
+async def spoken(answerer: GatewayAnswerer, person: AskingPerson | None = None) -> str:
+    return await spoken_to(answerer, THE_QUESTION, person)
 
 
 def body_of(gateway: FakeGateway) -> dict[str, object]:
@@ -87,17 +109,18 @@ def body_of(gateway: FakeGateway) -> dict[str, object]:
 
 @on_an_event_loop
 async def test_the_request_names_the_agent_files_model_the_words_and_the_key() -> None:
-    """CP1, CP5: model, bearer and messages, with no tools and no issuer or subject."""
+    """CP1, CP5: model, bearer, messages and the one tool, with no issuer or subject."""
     gateway = FakeGateway(completion("Eine Antwort."))
 
     answered = await spoken(answerer_over(gateway))
 
     (request,) = gateway.requests
     body = body_of(gateway)
-    agent = load_agent(COPRESENTER_AGENT_FILE, [])
+    tools = json.loads(request.content)["tools"]
+    agent = load_agent(COPRESENTER_AGENT_FILE, [SHOW_SLIDE.declaration])
     assert answered == "Eine Antwort."
     assert body["model"] == agent.model
-    assert "tools" not in body
+    assert [tool["function"]["name"] for tool in tools] == ["show_slide"]
     assert THE_QUESTION in json.dumps(body["messages"], ensure_ascii=False)
     assert request.headers["authorization"] == (
         f"Bearer {A_GATEWAY_KEY_FILE.read_text(encoding='utf-8').strip()}"
@@ -365,7 +388,7 @@ async def test_a_tool_step_in_the_stream_is_not_spoken() -> None:
         a_relying_party(FrozenClock(instant=NOW)),
     )
 
-    assert await spoken(answerer) == "Hallo."
+    assert await answered(answerer) == ["Hallo."]
 
 
 @on_an_event_loop
@@ -394,8 +417,7 @@ async def test_one_asks_end_leaves_another_intact() -> None:
     )
 
     async def ask(message: str) -> str:
-        async with answerer.answer(message=message, person=a_person()) as texts:
-            return "".join([text async for text in texts])
+        return await spoken_to(answerer, message)
 
     second = asyncio.create_task(ask("second-question"))
     first = asyncio.create_task(ask("first-question"))
@@ -407,3 +429,64 @@ async def test_one_asks_end_leaves_another_intact() -> None:
 
     assert await second == "Zweite Antwort."
     assert first_cancelled
+
+
+def a_slide_round(arguments: JsonObject) -> list[Reply]:
+    return [
+        tool_round(tool_call("call-1", "show_slide", arguments)),
+        completion("Gut."),
+    ]
+
+
+@on_an_event_loop
+async def test_a_slide_move_comes_before_the_words_that_follow_it() -> None:
+    """CP1, CP6: a show_slide round followed by text yields the move, then the text."""
+    gateway = FakeGateway(*a_slide_round({"number": 3}))
+
+    events = await answered(answerer_over(gateway))
+
+    assert events == [ShowSlide(number=3), "Gut."]
+
+
+@on_an_event_loop
+async def test_every_slide_move_of_a_run_reaches_the_window_in_order() -> None:
+    """A second move in one run is not dropped."""
+    gateway = FakeGateway(
+        tool_round(tool_call("call-1", "show_slide", {"number": 2})),
+        tool_round(tool_call("call-2", "show_slide", {"number": 5})),
+        completion("Gut."),
+    )
+
+    events = await answered(answerer_over(gateway))
+
+    assert events == [ShowSlide(number=2), ShowSlide(number=5), "Gut."]
+
+
+@pytest.mark.parametrize(
+    "arguments", [{"number": 0}, {"number": -2}, {"number": 1.5}, {"number": True}, {}]
+)
+@on_an_event_loop
+async def test_a_bad_slide_number_is_an_error_result_and_moves_nothing(
+    arguments: JsonObject,
+) -> None:
+    """The model is told on round two; the window is not."""
+    gateway = FakeGateway(*a_slide_round(arguments))
+
+    events = await answered(answerer_over(gateway))
+
+    second = json.dumps(json.loads(gateway.requests[1].content)["messages"])
+    assert events == ["Gut."]
+    assert "at least 1" in second
+
+
+@on_an_event_loop
+async def test_the_run_summary_logs_the_time_to_the_first_move(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The move time is measured beside the run's end."""
+    caplog.set_level(logging.DEBUG)
+
+    await answered(answerer_over(FakeGateway(*a_slide_round({"number": 2}))))
+
+    (line,) = [r.getMessage() for r in caplog.records if r.name == LOGGER]
+    assert " move_ms=" in line

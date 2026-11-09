@@ -20,7 +20,13 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Final
 
 import pytest
-from agent_runtime_client.backend.fake_gateway import FakeGateway, Reply, completion
+from agent_runtime_client.backend.fake_gateway import (
+    FakeGateway,
+    Reply,
+    completion,
+    tool_call,
+    tool_round,
+)
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.adapters.deck_texts import MirroredDeckTexts
@@ -440,6 +446,23 @@ def test_every_generated_answer_event_says_ai_generated_and_error_does_not(
     )
     assert refused.keys() == {"error"}
     assert "ai_generated" not in refused["error"][0]
+
+
+def test_a_slide_event_carries_the_number_without_the_ai_mark(
+    tmp_path: Path,
+) -> None:
+    """CP12: the slide event is a control event like error, so it is not marked."""
+    scenario = Scenario(
+        gateway=lambda: FakeGateway(
+            tool_round(tool_call("call-1", "show_slide", {"number": 3})),
+            completion("Gut."),
+        )
+    )
+
+    answered = _payloads_by_event(drive(tmp_path, scenario).response.text)
+
+    assert answered["slide"] == [{"number": 3}]
+    assert answered["done"][0]["ai_generated"] is True
 
 
 def _payloads_by_event(stream: str) -> dict[str, list[dict[str, object]]]:
