@@ -13,6 +13,7 @@
 		readAccess,
 		type SourceProbe
 	} from '#lib/api/sources.ts';
+	import ActionButton from '#lib/ActionButton.svelte';
 	import CopyValue from '#lib/CopyValue.svelte';
 	import { navigation } from '#lib/navigation.ts';
 	import { type CheckBanner, checkBanner, refusalWords } from '#lib/source.ts';
@@ -42,7 +43,9 @@
 	let banner = $state<CheckBanner | null>(null);
 	let fingerprint = $state<string | null>(null);
 	let refusal = $state<string | null>(null);
-	let pending = $state(false);
+	// Which request runs; both buttons are disabled meanwhile.
+	let running = $state<'check' | 'create' | null>(null);
+	const pending = $derived(running !== null);
 	// The only place the webhook secret lives: this page's memory.
 	let created = $state<CreatedSourceView | null>(null);
 
@@ -111,8 +114,8 @@
 		draft = await openKeyDraft(fetch, window.location);
 	}
 
-	async function work(attempt: () => Promise<void>): Promise<void> {
-		pending = true;
+	async function work(request: 'check' | 'create', attempt: () => Promise<void>): Promise<void> {
+		running = request;
 		refusal = null;
 		try {
 			try {
@@ -125,12 +128,12 @@
 			}
 			await reloadDraft();
 		} finally {
-			pending = false;
+			running = null;
 		}
 	}
 
 	const check = (): Promise<void> =>
-		work(async () => {
+		work('check', async () => {
 			banner = null;
 			fingerprint = null;
 			const mine = generation;
@@ -153,7 +156,7 @@
 
 	function create(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		return work(async () => {
+		return work('create', async () => {
 			// Create is disabled until a check answered with a fingerprint.
 			created = await createSource(fetch, {
 				...probe(),
@@ -307,16 +310,22 @@
 			</div>
 		{/if}
 		<div class="actions">
-			<button
-				class="btn secondary"
-				type="button"
+			<ActionButton
+				variant="secondary"
+				label={words.source_check}
+				busyWord={words.source_busy_check}
+				busy={running === 'check'}
 				disabled={pending || known === undefined}
 				onclick={check}
-				>{words.source_check}</button
-			>
-			<button class="btn primary" type="submit" disabled={pending || fingerprint === null}
-				>{words.source_create}</button
-			>
+			/>
+			<ActionButton
+				variant="primary"
+				type="submit"
+				label={words.source_create}
+				busyWord={words.source_busy_create}
+				busy={running === 'create'}
+				disabled={pending || fingerprint === null}
+			/>
 		</div>
 	</form>
 {:else}

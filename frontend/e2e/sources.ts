@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { Page, Route, TestInfo } from '@playwright/test';
+import type { Locator, Page, Route, TestInfo } from '@playwright/test';
 
 import type { SessionView } from '../src/lib/api/session.ts';
 import type {
@@ -42,6 +42,27 @@ export const aLocalAddress = async (page: Page, name: string): Promise<string> =
 	return `${mount.path}/${name}`;
 };
 export const anSshAddress = (name: string): string => `${SSH_ADDRESS}:${name}.git`;
+
+// Holds the matching requests on their route until released; `seen` lists their addresses.
+// `answer` replaces the continue once released.
+export async function holdsRequests(
+	page: Page,
+	url: string | ((address: URL) => boolean),
+	{ method, answer }: { method?: string; answer?: (route: Route) => Promise<void> } = {}
+) {
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => (release = resolve));
+	const seen: string[] = [];
+	await page.route(url, async (route) => {
+		if (method !== undefined && route.request().method() !== method) {
+			return route.continue();
+		}
+		seen.push(route.request().url());
+		await gate;
+		return answer ? answer(route) : route.continue();
+	});
+	return { release, seen };
+}
 
 export const secretField = (page: Page, words: Words) =>
 	page.getByLabel(words.source_secret, { exact: true });
@@ -213,4 +234,17 @@ export async function answersWith(
 			json: change((await real.json()) as SourceView)
 		});
 	});
+}
+
+export const removeButton = (page: Page, words: Words): Locator =>
+	page.getByRole('button', { name: words.source_remove_button });
+export const dialogOf = (page: Page): Locator => page.getByRole('dialog');
+export const cancelOf = (page: Page, words: Words): Locator =>
+	dialogOf(page).getByRole('button', { name: words.source_remove_cancel });
+export const confirmOf = (page: Page, words: Words): Locator =>
+	dialogOf(page).getByRole('button', { name: words.source_remove_confirm, exact: true });
+
+export async function opensTheDialog(page: Page, words: Words): Promise<void> {
+	await removeButton(page, words).click();
+	await expect(dialogOf(page)).toBeVisible();
 }

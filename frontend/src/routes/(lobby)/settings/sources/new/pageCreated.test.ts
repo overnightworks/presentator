@@ -1,7 +1,16 @@
 import { flushSync } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { addresses, close, created, open, press, type, words } from './addPageHarness.ts';
+import {
+	addresses,
+	checkButton,
+	close,
+	createButton,
+	created,
+	open,
+	type,
+	words
+} from './addPageHarness.ts';
 
 afterEach(close);
 
@@ -11,9 +20,9 @@ async function createdSource(): Promise<void> {
 	type('source-url', addresses.https.url);
 	await vi.waitFor(() => expect(document.querySelector('#source-secret')).not.toBeNull());
 	type('source-secret', 'an-access-token');
-	press(words.source_check);
+	checkButton()?.click();
 	await vi.waitFor(() => expect(document.body.textContent).toContain('head c0ffee1'));
-	press(words.source_create);
+	createButton()?.click();
 	await vi.waitFor(() => expect(document.body.textContent).toContain(created.webhook_secret));
 }
 

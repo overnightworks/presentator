@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { navigating } from '$app/state';
 	import { ageInWords } from '#lib/age.ts';
+	import ActionButton from '#lib/ActionButton.svelte';
 	import CopyValue from '#lib/CopyValue.svelte';
 	import type { RemovalCounts } from '#lib/api/client.ts';
 	import {
@@ -48,7 +49,9 @@
 	let renewed = $state<WebhookSecretView | null>(null);
 	let typed = $state('');
 	let declined = $state(false);
-	let pending = $state(false);
+	// Which request runs; every button of the page is disabled meanwhile.
+	let running = $state<Request | null>(null);
+	const pending = $derived(running !== null);
 	// The dialog is mounted with the page, so a click handler always finds it.
 	let dialog = $state() as HTMLDialogElement;
 	let opener = $state() as HTMLButtonElement;
@@ -56,26 +59,28 @@
 	let counts = $state<RemovalCounts | null>(null);
 	let refused = $state(false);
 
-	async function work(attempt: () => Promise<void>): Promise<void> {
-		pending = true;
+	type Request = 'fetch' | 'renewKey' | 'renewToken' | 'renewHook' | 'count' | 'remove';
+
+	async function work(request: Request, attempt: () => Promise<void>): Promise<void> {
+		running = request;
 		try {
 			await attempt();
 		} finally {
-			pending = false;
+			running = null;
 		}
 	}
 
 	const reread = (): Promise<void> => invalidate(sourcePath(source.name));
 
 	const fetchSource = (): Promise<void> =>
-		work(async () => {
+		work('fetch', async () => {
 			await fetchNow(fetch, source.name);
 			await reread();
 		});
 
 	function renewToken(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		return work(async () => {
+		return work('renewToken', async () => {
 			declined = (await renewAccess(fetch, source.name, typed)) === 'declined';
 			if (!declined) {
 				typed = '';
@@ -84,20 +89,20 @@
 	}
 
 	const renewDeployKey = (): Promise<void> =>
-		work(async () => {
+		work('renewKey', async () => {
 			await renewAccess(fetch, source.name, null);
 			await reread();
 		});
 
 	const renewHook = (): Promise<void> =>
-		work(async () => {
+		work('renewHook', async () => {
 			renewed = await renewWebhook(fetch, source.name);
 		});
 
 	// The dialog opens once the buttons are enabled again, from the control that
 	// asked, so closing it returns focus there and Cancel takes it on opening.
 	async function askRemoval(): Promise<void> {
-		await work(async () => {
+		await work('count', async () => {
 			counts = await previewRemoval(fetch, source.name);
 			refused = false;
 		});
@@ -107,7 +112,7 @@
 	}
 
 	const confirmRemoval = (): Promise<void> =>
-		work(async () => {
+		work('remove', async () => {
 			const confirmed = counts as RemovalCounts;
 			refused = false;
 			const answer = await removeSource(fetch, source.name, confirmed);
@@ -158,9 +163,15 @@
 	>
 </div>
 <div class="actions">
-	<button class="btn secondary sm" type="button" disabled={pending} onclick={fetchSource}
-		>{words.sources_fetch_now}</button
-	>
+	<ActionButton
+		variant="secondary"
+		small
+		label={words.sources_fetch_now}
+		busyWord={words.source_busy_fetch}
+		busy={running === 'fetch'}
+		disabled={pending}
+		onclick={fetchSource}
+	/>
 </div>
 
 <section class="sec">
@@ -194,9 +205,15 @@
 			</div>
 		{/if}
 		<div class="actions">
-			<button class="btn secondary sm" type="button" disabled={pending} onclick={renewDeployKey}
-				>{words.source_deploy_key_renew}</button
-			>
+			<ActionButton
+				variant="secondary"
+				small
+				label={words.source_deploy_key_renew}
+				busyWord={words.source_busy_renew}
+				busy={running === 'renewKey'}
+				disabled={pending}
+				onclick={renewDeployKey}
+			/>
 		</div>
 	{:else if access.control === 'token'}
 		<form class="form" onsubmit={renewToken}>
@@ -219,9 +236,15 @@
 				</div>
 			{/if}
 			<div class="actions">
-				<button class="btn secondary sm" type="submit" disabled={pending}
-					>{words.source_renew}</button
-				>
+				<ActionButton
+					variant="secondary"
+					small
+					type="submit"
+					label={words.source_renew}
+					busyWord={words.source_busy_renew}
+					busy={running === 'renewToken'}
+					disabled={pending}
+				/>
 			</div>
 		</form>
 	{/if}
@@ -254,9 +277,15 @@
 		</div>
 	{/if}
 	<div class="actions">
-		<button class="btn secondary sm" type="button" disabled={pending} onclick={renewHook}
-			>{words.source_renew}</button
-		>
+		<ActionButton
+			variant="secondary"
+			small
+			label={words.source_renew}
+			busyWord={words.source_busy_renew}
+			busy={running === 'renewHook'}
+			disabled={pending}
+			onclick={renewHook}
+		/>
 	</div>
 </section>
 
@@ -318,13 +347,16 @@
 	<h2>{words.source_remove_heading}</h2>
 	<p class="muted">{words.source_remove_hint}</p>
 	<div class="actions">
-		<button
-			class="btn secondary sm"
-			type="button"
-			bind:this={opener}
+		<ActionButton
+			variant="secondary"
+			small
+			bind:element={opener}
+			label={words.source_remove_button}
+			busyWord={words.source_busy_count}
+			busy={running === 'count'}
 			disabled={pending}
-			onclick={askRemoval}>{words.source_remove_button}</button
-		>
+			onclick={askRemoval}
+		/>
 	</div>
 </section>
 
@@ -354,9 +386,14 @@
 				disabled={pending}
 				onclick={() => dialog.close()}>{words.source_remove_cancel}</button
 			>
-			<button class="btn primary" type="button" disabled={pending} onclick={confirmRemoval}
-				>{words.source_remove_confirm}</button
-			>
+			<ActionButton
+				variant="primary"
+				label={words.source_remove_confirm}
+				busyWord={words.source_busy_remove}
+				busy={running === 'remove'}
+				disabled={pending}
+				onclick={confirmRemoval}
+			/>
 		</div>
 	{/if}
 </dialog>
