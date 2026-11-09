@@ -41,7 +41,7 @@ services:
       PRESENTATOR_TRUSTED_PROXIES: 172.31.251.1
       PRESENTATOR_AGENT__BACKEND: litellm
       PRESENTATOR_AGENT__GATEWAY__ORIGIN: http://litellm-front:4000
-      PRESENTATOR_SPEECH_SERVICE: http://speech-runtime:8080
+      PRESENTATOR_SPEECH_SERVICE: http://speech:8080
       PRESENTATOR_SPEECH_SERVICE_SCOPE: speech-service-audience
       PRESENTATOR_SPEECH_VOICE: piper
       PRESENTATOR_AGENT__GATEWAY__KEY_FILE: /run/secrets/litellm_key

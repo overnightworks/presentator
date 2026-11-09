@@ -549,6 +549,7 @@ async def _serve(instance: Instance, settings: Settings) -> None:
             host=settings.host,
             port=settings.port,
             proxy_headers=False,
+            ws="wsproto",
             # A path under /api/admin/ carries a subject, and a rejected WebSocket
             # handshake logs its path as an INFO record of uvicorn.error.
             access_log=False,

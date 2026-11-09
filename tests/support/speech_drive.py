@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Final
 from urllib.parse import urlsplit
 
 from agent_runtime_client.backend.fake_gateway import FakeGateway, completion
-from speech_runtime_client import wire
-from speech_runtime_client.outcomes import PastDeadline
+from speech_client import wire
+from speech_client.outcomes import PastDeadline
 from starlette.websockets import WebSocketDisconnect
 
 from presentator.adapters.sentences import split_sentences
@@ -109,7 +109,7 @@ _WIDE_OPEN_LOGGERS = (
     "presentator",
     "webauth",
     "agent_runtime_client",
-    "speech_runtime_client",
+    "speech_client",
     "httpx2",
     "httpcore2",
     "websockets",
