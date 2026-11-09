@@ -11,7 +11,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
-from enum import Enum, StrEnum, auto
+from enum import StrEnum
 from functools import partial
 from hashlib import sha256
 from hmac import compare_digest
@@ -20,7 +20,12 @@ from threading import RLock
 from typing import BinaryIO, Final
 
 from presentator.application import build_retention
-from presentator.application.source_state import source_state_of
+from presentator.application.source_state import (
+    SHORT_COMMIT,
+    deck_state_of,
+    shown_run,
+    source_state_of,
+)
 from presentator.contracts.decks import (
     SLIDES_FILE,
     AccessKind,
@@ -32,12 +37,10 @@ from presentator.contracts.decks import (
     ConnectionCheckResult,
     Deck,
     DeckPage,
-    DeckState,
     DeployKeyDraft,
     ListedDeck,
     ListedSource,
     ShownAttempt,
-    ShownSourceRun,
     Source,
     SourceDeck,
     SourceFetch,
@@ -70,37 +73,6 @@ from presentator.ports.decks import (
 _log = logging.getLogger(__name__)
 
 
-class _LockWasBusy(Enum):
-    """The answer of work dropped because another refresh held the lock."""
-
-    BUSY = auto()
-
-
-_LOCK_WAS_BUSY: Final = _LockWasBusy.BUSY
-
-
-@dataclass(frozen=True, slots=True)
-class _BuildsStarted:
-    """How the builds one pass started ended."""
-
-    succeeded: int = 0
-    failed: int = 0
-
-
-def _shown(run: SourceRun) -> ShownSourceRun:
-    """That run as a page shows it, its commit short."""
-    return ShownSourceRun(
-        outcome=run.outcome,
-        state=source_state_of(run),
-        at=run.at,
-        commit=None if run.commit is None else run.commit[:_SHORT_COMMIT],
-        reason=run.reason,
-    )
-
-
-# A person compares the commit on the page with the one their push wrote, and
-# reads it off the screen; the first characters are what git itself shows.
-_SHORT_COMMIT: Final = 7
 _NOT_A_FOLDERS_OWN_NAME: Final = "folder %r is not a folder's own name, skipped"
 _NAME_BELONGS_TO_ANOTHER_SOURCE: Final = (
     "folder %r is already carried by another source, skipped for source %s"
@@ -244,21 +216,6 @@ def _connection_fingerprint(
     return hmac.new(key, message, sha256).hexdigest()
 
 
-def _state_of(deck: Deck) -> DeckState:
-    """The one word for what this deck is, read off its talk and its attempt.
-
-    An attempt outranks the talk that stands, because it is the newer news: a
-    deck whose last build failed is failed even while yesterday's talk still
-    opens (line 16).
-    """
-    attempt = deck.attempt
-    if attempt is None:
-        return DeckState.READY if deck.build is not None else DeckState.NEVER_BUILT
-    if attempt.outcome is BuildOutcome.RUNNING:
-        return DeckState.BUILDING
-    return DeckState.FAILED
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Decks:
     """Every use case the lobby has around the talks it knows."""
@@ -291,24 +248,21 @@ class Decks:
         each, and the builds of one refresh follow one another instead of
         competing for the machine.
         """
-        self._run_one_at_a_time(self._take_in_and_build)
+        self._run_one_at_a_time(self._take_in_and_build, busy=None)
 
     def refresh_named(self, name: str) -> SourceFetch | None:
         """Take that one source in, build what changed and say what that was.
 
-        A name nobody stored is not a source to fetch, and one removed before the
-        lock is taken is not one either: both answer None. A refresh already
-        running holds the lock, so this call does nothing and answers a fetch
-        without a run, which is not "nothing new".
+        A name nobody stored, or one removed before the lock is taken, answers
+        None. A refresh already running holds the lock, so this call does
+        nothing and answers a fetch without a run, which is not "nothing new".
         """
         if self._named(name) is None:
             return None
-        fetched = self._run_one_at_a_time(partial(self._take_in_and_build_named, name))
-        if fetched is _LOCK_WAS_BUSY:
-            return SourceFetch(
-                run=None, decks_built=0, builds_failed=0, decks_removed=0
-            )
-        return fetched
+        return self._run_one_at_a_time(
+            partial(self._take_in_and_build_named, name),
+            busy=SourceFetch(run=None, decks_built=0, builds_failed=0, decks_removed=0),
+        )
 
     def shown_source(self, name: str, *, viewer: str) -> SourcePage | None:
         """What that source's page says, its deck chips the viewer's own decks."""
@@ -325,7 +279,7 @@ class Decks:
             reason=listed.reason,
             fetched_at=listed.fetched_at,
             public_key=source.public_key,
-            runs=tuple(_shown(run) for run in self.source_runs.recent(source.id)),
+            runs=tuple(shown_run(run) for run in self.source_runs.recent(source.id)),
             decks=tuple(
                 SourceDeck(slug=deck.slug, title=deck.title)
                 for deck in sorted(
@@ -470,7 +424,7 @@ class Decks:
             return probed.as_answered()
         return ConnectionCheckResult(
             failure=None,
-            commit=None if probed.commit is None else probed.commit[:_SHORT_COMMIT],
+            commit=None if probed.commit is None else probed.commit[:SHORT_COMMIT],
             detail=None,
             fingerprint=_connection_fingerprint(
                 self.fingerprint_key,
@@ -643,7 +597,7 @@ class Decks:
             ListedDeck(
                 slug=deck.slug,
                 title=deck.title,
-                state=_state_of(deck),
+                state=deck_state_of(deck),
                 changed_at=deck.changed_at,
             )
             for deck in newest_first
@@ -670,9 +624,9 @@ class Decks:
             slug=deck.slug,
             title=deck.title,
             source=self._address_of(deck),
-            commit=(deck.commit if built is None else built.commit)[:_SHORT_COMMIT],
+            commit=(deck.commit if built is None else built.commit)[:SHORT_COMMIT],
             built_at=None if built is None else built.built_at,
-            state=_state_of(deck),
+            state=deck_state_of(deck),
             attempt=self._shown(deck.attempt),
             themes=self.toolchain_themes.names(),
         )
@@ -686,7 +640,7 @@ class Decks:
         if attempt is None:
             return None
         return ShownAttempt(
-            commit=attempt.commit[:_SHORT_COMMIT],
+            commit=attempt.commit[:SHORT_COMMIT],
             started_at=attempt.started_at,
             outcome=attempt.outcome,
             failure=attempt.failure,
@@ -746,11 +700,11 @@ class Decks:
         )
 
     def _run_one_at_a_time[Answer](
-        self, work: Callable[[], Answer]
-    ) -> Answer | _LockWasBusy:
-        """Run that work, or drop it while another refresh already holds the lock."""
+        self, work: Callable[[], Answer], *, busy: Answer
+    ) -> Answer:
+        """Run that work, or answer `busy` while another refresh holds the lock."""
         if not self.one_at_a_time.acquire(blocking=False):
-            return _LOCK_WAS_BUSY
+            return busy
         try:
             answer = work()
             build_retention.sweep(self.builder, self.sources, self.store)
@@ -774,26 +728,24 @@ class Decks:
         """
         self.key_drafts.sweep(older_than=self.clock.now() - DRAFT_MAX_AGE)
         for source in self.sources.all():
-            self._take_in_and_build_one(source)
+            self._take_in_and_count(source)
 
     def _take_in_and_build_named(self, name: str) -> SourceFetch | None:
         """Take that source in, read again now that nobody can remove it."""
-        if (source := self._named(name)) is None:
-            return None
+        source = self._named(name)
+        return None if source is None else self._take_in_and_count(source)
+
+    def _take_in_and_count(self, source: Source) -> SourceFetch:
+        """Take that source in, build what changed and count what that was."""
         carried_before = self._visible_slugs(source)
         run = self._take_in(source)
-        builds = self._build_what_changed(source)
+        delivered = self._build_what_changed(source)
         return SourceFetch(
-            run=_shown(run),
-            decks_built=builds.succeeded,
-            builds_failed=builds.failed,
+            run=shown_run(run),
+            decks_built=sum(delivered),
+            builds_failed=len(delivered) - sum(delivered),
             decks_removed=len(carried_before - self._visible_slugs(source)),
         )
-
-    def _take_in_and_build_one(self, source: Source) -> None:
-        """Take that source in and build the decks of it that changed."""
-        self._take_in(source)
-        self._build_what_changed(source)
 
     def _visible_slugs(self, source: Source) -> frozenset[str]:
         """The slugs of the decks that source carries and the lobby lists."""
@@ -860,7 +812,7 @@ class Decks:
         )
         return run
 
-    def _build_what_changed(self, source: Source) -> _BuildsStarted:
+    def _build_what_changed(self, source: Source) -> list[bool]:
         """Build that source's decks whose commit nothing has tried yet.
 
         The commit is the change check: a push moves one folder's commit, so only that
@@ -868,9 +820,9 @@ class Decks:
         no build. A tried commit is not retried, so a deck that cannot build costs one
         build, not one per refresh. A vanished run is rebuilt: `builds/` and `mirrors/`
         are caches the rows rebuild; a gone mirror is cloned again at the next take-in.
-        Only the builds this pass started are counted.
+        Answers, per build this pass started, whether it delivered the deck.
         """
-        succeeded = failed = 0
+        delivered: list[bool] = []
         for deck in self.store.all():
             if deck.source_id != source.id:
                 continue
@@ -881,11 +833,8 @@ class Decks:
                 continue
             if self._was_already_tried(deck):
                 continue
-            if self._switch_over(deck, source):
-                succeeded += 1
-            else:
-                failed += 1
-        return _BuildsStarted(succeeded=succeeded, failed=failed)
+            delivered.append(self._switch_over(deck, source))
+        return delivered
 
     def _deliver_the_standing_talk_again(self, deck: Deck, standing: Build) -> None:
         """Make the talk that stands this commit's talk again, building nothing.
@@ -932,8 +881,7 @@ class Decks:
         record behind rather than nothing. A build that failed, and one that
         left artefacts anywhere but under the root they belong in, write no
         pointer at all: whatever the deck was delivering before keeps being
-        delivered, and the attempt says why it is still that one. It answers
-        whether the deck was delivered from the new build.
+        delivered, and the attempt says why. Answers whether it was delivered.
         """
         attempt = BuildAttempt(
             commit=deck.commit,

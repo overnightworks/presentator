@@ -997,6 +997,8 @@ def test_fetching_after_a_folder_was_deleted_answers_one_removed_deck() -> None:
     mirror.carried[SOURCE.id] = (a_folder("kundenfeedback"),)
     fetched = _fetch(decks)
 
+    assert fetched.run is not None
+    assert fetched.run.outcome is SourceRunOutcome.SUCCESS
     assert fetched.decks_removed == 1
     assert (fetched.decks_built, fetched.builds_failed) == (0, 0)
 
