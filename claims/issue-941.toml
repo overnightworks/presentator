@@ -1,8 +1,0 @@
-claim_id = "e318704ce201417990993b57e420274b"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "20e9beac9dda3fc5cbc566ac43cd182003f46365"
-branch = "claude/issue-941-a-tree-the-mirror-cannot-write-fails-onl"
-scope = ["src/gitmirror/mirror.py", "src/gitmirror/model.py", "tests/gitmirror/test_mirror_trees.py", "tests/presentator/adapters/test_builds_mirror.py", "tests/support/git_remote.py"]
-opened_commit = "f211130c9f95c9cfc1aae2223f86d1be395f6c3b"
-whole_reason = "One write path changes in the mirror; its docstring, its tests, their tree planter and the one build test that shows its caller survive it move together."
