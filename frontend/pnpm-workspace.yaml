@@ -8,7 +8,7 @@ minimumReleaseAge: 10080
 # on the fixed range themselves:
 # - minimatch below 11.0.1 (GHSA-g3hv-75wg-m249, medium denial of service) is
 #   still required by @eslint/config-array, @typescript-eslint/typescript-estree
-#   and eslint (^10) and by @redocly/openapi-core (5.1.9).
+#   and eslint (^10) and by @redocly/openapi-core, which pins minimatch 5.1.9.
 # - glob below 14.0.2 (GHSA-3g3m-2fjr-6pw4) is still required by test-exclude
 #   (^13), through vite-plugin-istanbul.
 # minimatch 11 breaks one call of @redocly/openapi-core: lib/utils.js calls
