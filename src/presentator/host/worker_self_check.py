@@ -2,6 +2,7 @@
 
 import ctypes
 import grp
+import ipaddress
 import os
 import pwd
 import stat
@@ -11,7 +12,7 @@ from enum import StrEnum
 from functools import partial
 from pathlib import Path
 
-from presentator.adapters import build_wire
+from presentator.adapters import build_wire, rtnetlink
 from presentator.host.config import worker_settings_variables
 from presentator.host.worker_scratch import (
     QUEUE_MOUNT,
@@ -82,6 +83,13 @@ ALLOWED_ENVIRONMENT_KEYS = frozenset(
     | worker_settings_variables()
 )
 
+LOOPBACK_NAME = "lo"
+LOOPBACK_ADDRESSES = frozenset(
+    {
+        (ipaddress.IPv4Address("127.0.0.1"), 8),
+        (ipaddress.IPv6Address("::1"), 128),
+    }
+)
 PR_GET_DUMPABLE = 3
 PR_SET_DUMPABLE = 4
 
@@ -92,6 +100,7 @@ class Predicate(StrEnum):
     NON_DUMPABLE = "non-dumpable"
     CAPABILITIES = "capabilities"
     MOUNTS = "mounts"
+    NO_ROUTE = "no-route"
     RESOURCE_BOUNDS = "resource-bounds"
     IDENTITIES = "identities"
     ENVIRONMENT = "environment"
@@ -134,7 +143,7 @@ class Snapshot:
     mountinfo: str
     work_mode: int
     work_owner_uid: int
-    network_devices: str
+    topology: rtnetlink.Topology
     docker_socket_present: bool
     pids_max: str
     memory_max: str
@@ -189,17 +198,34 @@ def _mount_table_sealed(mountinfo: str) -> bool:
 
 
 def _mounts_sealed(snapshot: Snapshot) -> bool:
-    interfaces = {
-        line.partition(":")[0].strip()
-        for line in snapshot.network_devices.splitlines()[2:]
-    }
     return (
         snapshot.root_read_only
         and _mount_table_sealed(snapshot.mountinfo)
         and snapshot.work_mode == ROOT_MODE
         and snapshot.work_owner_uid == 0
-        and interfaces == {"lo"}
         and not snapshot.docker_socket_present
+    )
+
+
+def _no_route(snapshot: Snapshot) -> bool:
+    topology = snapshot.topology
+    if len(topology.links) != 1:
+        return False
+    [link] = topology.links
+    return (
+        link.name == LOOPBACK_NAME
+        and bool(link.flags & rtnetlink.IFF_LOOPBACK)
+        and all(
+            found.link_index == link.index
+            and (found.ip_address, found.prefix_length) in LOOPBACK_ADDRESSES
+            for found in topology.addresses
+        )
+        and all(
+            found.output_link_index == link.index
+            and found.destination_prefix_length > 0
+            and not found.has_next_hop
+            for found in topology.routes
+        )
     )
 
 
@@ -262,6 +288,7 @@ SELF_CHECK: tuple[tuple[Predicate, Callable[[Snapshot], bool]], ...] = (
     (Predicate.NON_DUMPABLE, lambda snapshot: snapshot.dumpable == 0),
     (Predicate.CAPABILITIES, _capabilities_sealed),
     (Predicate.MOUNTS, _mounts_sealed),
+    (Predicate.NO_ROUTE, _no_route),
     (Predicate.RESOURCE_BOUNDS, _resources_bounded),
     (Predicate.IDENTITIES, _identities_sealed),
     (Predicate.ENVIRONMENT, _environment_allowed),
@@ -358,14 +385,13 @@ def lstat_if_present(path: Path) -> os.stat_result | None:
         return None
 
 
-def _read_mount_facts(root: Path) -> tuple[bool, str, int, int, str, bool]:
+def _read_mount_facts(root: Path) -> tuple[bool, str, int, int, bool]:
     work = (root / WORK_MOUNT.lstrip("/")).stat()
     return (
         bool(os.statvfs(root).f_flag & os.ST_RDONLY),
         (root / "proc/self/mountinfo").read_text(),
         stat.S_IMODE(work.st_mode),
         work.st_uid,
-        (root / "proc/net/dev").read_text(),
         any(
             lstat_if_present(root / docker_socket.lstrip("/")) is not None
             for docker_socket in DOCKER_SOCKETS
@@ -384,6 +410,7 @@ def _read_resource_bounds(root: Path) -> tuple[str, str]:
 UNREAD_IDENTITY = Identity(-1, -1, -1, (), -1, -1, {})
 UNREAD_TOOLCHAIN = Toolchain(None, None, (), None)
 UNREAD_SCRATCH = Scratch(frozenset(), {})
+UNREAD_TOPOLOGY = rtnetlink.Topology((), (), ())
 
 
 class _FactReader:
@@ -402,13 +429,16 @@ class _FactReader:
             return placeholder
 
 
-def read_snapshot(root: Path) -> Snapshot:
+def read_snapshot(
+    root: Path, *, read_topology: Callable[[], rtnetlink.Topology]
+) -> Snapshot:
     """Read the facts the predicates judge, from the filesystem under `root`.
 
     A fact that cannot be read or decoded marks its predicate unreadable, so the
     self-check judges every predicate in order instead of stopping at the first
     read. The container's task count is read first and the scratch places right
-    after it: no other fact is read and no child is launched in between.
+    after it: no other fact is read and no child is launched in between. The
+    network topology is read after both.
     """
     facts = _FactReader()
     read = facts.read
@@ -426,12 +456,11 @@ def read_snapshot(root: Path) -> Snapshot:
         mountinfo,
         work_mode,
         work_owner_uid,
-        network_devices,
         socket_present,
     ) = read(
         Predicate.MOUNTS,
         partial(_read_mount_facts, root),
-        (False, "", 0, -1, "", True),
+        (False, "", 0, -1, True),
     )
     pids_max, memory_max = read(
         Predicate.RESOURCE_BOUNDS, partial(_read_resource_bounds, root), ("", "")
@@ -443,7 +472,7 @@ def read_snapshot(root: Path) -> Snapshot:
         mountinfo=mountinfo,
         work_mode=work_mode,
         work_owner_uid=work_owner_uid,
-        network_devices=network_devices,
+        topology=read(Predicate.NO_ROUTE, read_topology, UNREAD_TOPOLOGY),
         docker_socket_present=socket_present,
         pids_max=pids_max,
         memory_max=memory_max,
