@@ -822,19 +822,18 @@ class Decks:
         are caches the rows rebuild; a gone mirror is cloned again at the next take-in.
         Answers, per build this pass started, whether it delivered the deck.
         """
-        decks = (deck for deck in self.store.all() if deck.source_id == source.id)
-        return tuple(
-            self._switch_over(d, source) for d in decks if self._needs_a_build(d)
-        )
-
-    def _needs_a_build(self, deck: Deck) -> bool:
-        """Whether this deck wants a build; a standing talk is delivered again."""
-        self._give_up_on_a_build_that_never_returned(deck)
-        standing = build_retention.standing_build(self.builder, deck)
-        if standing is not None and standing.commit == deck.commit:
-            self._deliver_the_standing_talk_again(deck, standing)
-            return False
-        return not self._was_already_tried(deck)
+        delivered: list[bool] = []
+        for deck in self.store.all():
+            if deck.source_id != source.id:
+                continue
+            self._give_up_on_a_build_that_never_returned(deck)
+            standing = build_retention.standing_build(self.builder, deck)
+            if standing is not None and standing.commit == deck.commit:
+                self._deliver_the_standing_talk_again(deck, standing)
+                continue
+            if not self._was_already_tried(deck):
+                delivered.append(self._switch_over(deck, source))
+        return tuple(delivered)
 
     def _deliver_the_standing_talk_again(self, deck: Deck, standing: Build) -> None:
         """Make the talk that stands this commit's talk again, building nothing.
