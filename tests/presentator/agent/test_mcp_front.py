@@ -185,7 +185,7 @@ def test_the_resource_bearer_never_authorizes_an_excluded_route(
 ) -> None:
     """Alone it is refused; beside a cookie it is ignored, never used."""
     with a_world(tmp_path, token_clients=token_clients) as world:
-        bearer = world.bearer()
+        bearer = world.bearer(subject=World.ANNA)
 
         alone = world.program().get(
             World.EXCLUDED_PATH, headers={**bearer, **World.JSON}
@@ -194,6 +194,7 @@ def test_the_resource_bearer_never_authorizes_an_excluded_route(
         cookie_alone = world.felix.get(World.EXCLUDED_PATH)
 
         assert alone.status_code == HTTPStatus.UNAUTHORIZED
+        assert cookie_alone.status_code == HTTPStatus.OK
         assert with_cookie.status_code == cookie_alone.status_code
 
 
@@ -371,6 +372,23 @@ def test_an_admin_persons_agents_client_bearer_opens_no_admin_route(
         answer = world.program().request(
             method, path, headers={**headers, **World.JSON}, json={}
         )
+
+        assert answer.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}
+
+
+@pytest.mark.parametrize("token_clients", [frozenset[str](), frozenset({World.HAL})])
+def test_an_admin_persons_bearer_beside_a_members_cookie_never_opens_an_admin_route(
+    tmp_path: Path, token_clients: frozenset[str]
+) -> None:
+    """The settings are admin-only: the cookie's member is refused, the bearer ignored."""
+    with a_world(tmp_path, token_clients=token_clients) as world:
+        admin_browser = world.scene.browser()
+        assert world.scene.sign_in(
+            admin_browser, subject=World.ADMIN, username="root", groups=ADMIN
+        )
+        bearer = world.bearer(subject=World.ADMIN, groups=[*ADMIN, MCP_GROUP])
+
+        answer = world.felix.get(SETTINGS_PATH, headers={**bearer, **World.JSON})
 
         assert answer.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}
 
