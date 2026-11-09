@@ -116,10 +116,11 @@ async def test_the_request_names_the_agent_files_model_the_words_and_the_key() -
 
     (request,) = gateway.requests
     body = body_of(gateway)
+    tools = json.loads(request.content)["tools"]
     agent = load_agent(COPRESENTER_AGENT_FILE, [SHOW_SLIDE.declaration])
     assert answered == "Eine Antwort."
     assert body["model"] == agent.model
-    assert [tool["function"]["name"] for tool in body["tools"]] == ["show_slide"]
+    assert [tool["function"]["name"] for tool in tools] == ["show_slide"]
     assert THE_QUESTION in json.dumps(body["messages"], ensure_ascii=False)
     assert request.headers["authorization"] == (
         f"Bearer {A_GATEWAY_KEY_FILE.read_text(encoding='utf-8').strip()}"
