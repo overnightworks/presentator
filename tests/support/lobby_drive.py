@@ -279,6 +279,18 @@ def _the_two_languages() -> dict[str, str]:
     return {"first": DEFAULT_LANGUAGE_TAG, "second": SECOND_LANGUAGE_TAG}
 
 
+class AdmitEveryRequest:
+    """A backend that counts nothing.
+
+    Every browser test reaches one lobby from loopback and loads again each
+    page; `test_auth_rate_limit.py` proves the budgets.
+    """
+
+    def is_allowed(self, key: str, *, limit: int, window_seconds: int) -> bool:
+        del key, limit, window_seconds
+        return True
+
+
 def _driven_lobby(build: Path, origin: str) -> FastAPI:
     """The lobby over in-memory stores inside the outer app that makes its people."""
     people = a_crowd()
@@ -286,6 +298,7 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
     shell = LobbyShell.read(build)
     config = replace(
         web_auth_config_for(_SECRET, trusted_proxies="", origin=origin),
+        rate_limits=AdmitEveryRequest(),
         wall_clock=lambda: clock.now().timestamp(),
     )
     auth = replace(

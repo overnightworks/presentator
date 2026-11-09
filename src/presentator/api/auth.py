@@ -41,6 +41,9 @@ from webauth.policies import (
     CsrfPolicy,
     PathRules,
     PublicRule,
+    RateLimitBudget,
+    RateLimitPolicy,
+    RateLimitRule,
     SecurityHeadersPolicy,
     default_content_security_policy,
 )
@@ -71,6 +74,7 @@ from presentator.api.source_api import source_api_routes
 from presentator.application.decks import Decks
 from presentator.application.own_decks import OwnDecks
 from presentator.application.preferences import Preferences
+from presentator.contracts.decks import DECK_PATH
 
 _APP_ASSETS: Final = "/_app"
 _INSIDE_APP_ASSETS: Final = f"{_APP_ASSETS}/"
@@ -170,6 +174,39 @@ _BODY_SIZE: Final = BodySizePolicy(
         ),
         LOBBY_SIGN_IN.backchannel_body_size_rule,
     ),
+)
+
+# One budget per address and host. Signing in is the dear step: a complete
+# one is two requests, so 40 in ten minutes admit about twenty sign-ins. The
+# talk host serves a deck's files `no-store`, so one load fetches every file of
+# the talk again, a presenter view and an audience window each; its files have
+# a budget of their own. WebSockets are not counted, the co-presenter checks
+# the session on every connection.
+SIGN_IN_BUDGET: Final = RateLimitBudget("sign-in", max_requests=40, window_seconds=600)
+DEFAULT_BUDGET: Final = RateLimitBudget("requests", max_requests=600, window_seconds=60)
+TALK_FILES_BUDGET: Final = RateLimitBudget(
+    "talk-files", max_requests=3000, window_seconds=60
+)
+
+
+def _rate_limit(sign_in: SignInPaths, *rules: RateLimitRule) -> RateLimitPolicy:
+    """One host's budgets.
+
+    The readiness probe and Keycloak's back-channel logout, which comes from its
+    shared address, are never counted.
+    """
+    return RateLimitPolicy(
+        default=DEFAULT_BUDGET,
+        rules=(RateLimitRule(sign_in.browser_paths, SIGN_IN_BUDGET), *rules),
+        exempt=PathRules(exact=frozenset({HEALTH_PATH}) | sign_in.backchannel.exact),
+    )
+
+
+LOBBY_RATE_LIMIT: Final = _rate_limit(LOBBY_SIGN_IN)
+TALK_RATE_LIMIT: Final = _rate_limit(
+    TALK_SIGN_IN,
+    # With the slash, so `/deckX` is not a deck file.
+    RateLimitRule(PathRules(prefixes=(f"{DECK_PATH}/",)), TALK_FILES_BUDGET),
 )
 LOGIN_REDIRECT: Final = LOBBY_SIGN_IN.login_redirect
 
@@ -370,6 +407,7 @@ def _install_middleware(
             ),
         ),
         body_size=_BODY_SIZE,
+        rate_limit=LOBBY_RATE_LIMIT,
         bearer_gate=_bearer_gate(auth, admin, resource),
         csrf_origin=_CSRF_POLICY,
         session_gate=SessionGate(

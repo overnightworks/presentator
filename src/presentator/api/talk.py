@@ -32,6 +32,7 @@ from webauth.sign_in_routes import SignInRefusal, install_sign_in_routes
 from presentator.api.admission import signed_in_connection
 from presentator.api.auth import (
     DEFAULT_BODY_BYTES,
+    TALK_RATE_LIMIT,
     TALK_SIGN_IN,
     InstalledAuth,
     talk_sign_in_refusal_path,
@@ -71,6 +72,7 @@ def _install_talk_middleware(
             ),
         ),
         body_size=BodySizePolicy(default_max_bytes=DEFAULT_BODY_BYTES),
+        rate_limit=TALK_RATE_LIMIT,
         csrf_origin=CsrfPolicy(),
         session_gate=SessionGate(
             session_transaction=lambda: nullcontext(sessions),
