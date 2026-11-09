@@ -137,7 +137,7 @@ class GitUnavailableError(RuntimeError):
 
 
 class MirrorError(RuntimeError):
-    """A git command that had to succeed did not."""
+    """A git read or a write of the mirror's that had to succeed did not."""
 
 
 class InvalidCredentialError(ValueError):

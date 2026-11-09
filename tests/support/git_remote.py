@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
@@ -52,13 +53,19 @@ def with_the_program(
     machine.setenv("PATH", a_path_carrying(somewhere_on_path))
 
 
-def _git(inside: Path, *arguments: str, at: datetime | None = None) -> str:
+def _git(
+    inside: Path,
+    *arguments: str,
+    at: datetime | None = None,
+    stdin: bytes | None = None,
+) -> str:
     stamped = {} if at is None else {"GIT_COMMITTER_DATE": at.isoformat()}
     ran = subprocess.run(
         ["git", *arguments],
         capture_output=True,
         check=True,
         cwd=inside,
+        input=stdin,
         env={**os.environ, **_AUTHORSHIP, **stamped},
     )
     return ran.stdout.decode().strip()
@@ -139,10 +146,78 @@ class GitRemote:
         _git(self.work, "update-ref", "HEAD", written.stdout.decode().strip())
         _git(self.work, "push", "--quiet", "origin", MAIN_BRANCH)
 
+    def push_crafted_deck(
+        self,
+        name: str,
+        *,
+        entry: Literal["file", "tree"],
+        deeper: bool = False,
+    ) -> None:
+        """Push a deck whose one entry has that name, as a file or as a tree.
+
+        The entry sits in the deck folder, or one folder further down when
+        `deeper`. The objects are written by hand, because `git mktree` and
+        `git add` refuse the names a crafted tree needs.
+        """
+        blob = _git(self.bare, "hash-object", "-w", "--stdin", stdin=b"payload\n")
+        if entry == "file":
+            planted = ("100644", name, blob)
+        else:
+            below = self._plant_tree([("100644", "payload.txt", blob)])
+            planted = ("40000", name, below)
+        if deeper:
+            sub = self._plant_tree([planted])
+            deck = self._plant_tree([("100644", "a.txt", blob), ("40000", "sub", sub)])
+        else:
+            deck = self._plant_tree([planted])
+        root = self._plant_tree([("40000", "deck", deck)])
+        commit = _git(self.bare, "commit-tree", root, "-m", "a push")
+        _git(self.bare, "update-ref", f"refs/heads/{MAIN_BRANCH}", commit)
+
+    def push_crafted_file(self, path: str) -> None:
+        """Push one file at that slash-separated path, its trees written by hand.
+
+        `git add` and the working tree refuse a path or name the filesystem
+        cannot hold, so the objects are written straight into the repository, and
+        the working side only points at the commit, without checking it out.
+        """
+        *folders, name = path.split("/")
+        blob = _git(self.bare, "hash-object", "-w", "--stdin", stdin=b"payload\n")
+        below = self._plant_tree([("100644", name, blob)])
+        for folder in reversed(folders):
+            below = self._plant_tree([("40000", folder, below)])
+        commit = _git(self.bare, "commit-tree", below, "-m", "a push")
+        _git(self.bare, "update-ref", f"refs/heads/{MAIN_BRANCH}", commit)
+        _git(self.work, "fetch", "--quiet", "origin", MAIN_BRANCH)
+        _git(self.work, "update-ref", "HEAD", commit)
+
+    def _plant_tree(self, entries: list[tuple[str, str, str]]) -> str:
+        """Write one tree object of (mode, name, hex id) entries."""
+        raw = b"".join(
+            f"{mode} {name}".encode() + b"\0" + bytes.fromhex(target)
+            for mode, name, target in entries
+        )
+        return _git(
+            self.bare,
+            "hash-object",
+            "-w",
+            "--literally",
+            "-t",
+            "tree",
+            "--stdin",
+            stdin=raw,
+        )
+
     def _write(self, files: Mapping[str, str]) -> None:
         for path, content in files.items():
             written = self.work / path
-            written.parent.mkdir(parents=True, exist_ok=True)
+            # One folder at a time: `parents=True` recurses once per level
+            # that is missing, which a tree deeper than the recursion limit
+            # would overrun while it is only being planted.
+            folder = self.work
+            for part in Path(path).parent.parts:
+                folder = folder / part
+                folder.mkdir(exist_ok=True)
             written.write_text(content, encoding="utf-8")
 
     def remove(self, folder: str, *, at: datetime) -> None:
