@@ -195,8 +195,10 @@ class Settings(
     # Polling is what makes a push arrive at all, so it runs whether or not any
     # host ever calls the hook.
     source_poll_seconds: float = 300.0
-    # A pull that hangs would hold the tick it runs on, so it is bounded.
-    source_timeout_seconds: float = 20.0
+    # A pull that hangs would hold the tick it runs on, so it is bounded; a
+    # full-history pull of a large public repository takes tens of seconds, so
+    # the bound leaves room for it.
+    source_timeout_seconds: float = 180.0
     host: str = "127.0.0.1"
     port: int = 8000
     public_origin: Annotated[str, AfterValidator(_one_public_origin)]
