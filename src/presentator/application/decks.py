@@ -785,8 +785,7 @@ class Decks:
         folder has been missing for `REMOVED_DECK_KEPT`; a folder that comes back
         under its old name before then loses that mark, so it is the deck it
         was. A folder whose name another source already carries is skipped too:
-        the slug is the address of one deck on this instance, and the source
-        that carried it first keeps it.
+        the slug is one deck's address here, and the first source keeps it.
         """
         for folder in folders:
             if not is_a_plain_folder_name(folder.name):
