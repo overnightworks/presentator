@@ -66,6 +66,7 @@ _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _ONLY_A_MEGABYTE_MAY_BE_LEFT = 1
 _MEGABYTES_A_GREEDY_BUILD_WRITES = 3
 _WATCHED_OFTEN = timedelta(milliseconds=50)
+_WATCHED_NEVER_WITHIN_A_BUILD = timedelta(hours=1)
 _CLOSED_TO_EVERYONE = 0o000
 _TALK = "talk"
 _PDF_FILE = "deck.pdf"
@@ -816,8 +817,9 @@ def test_a_talk_larger_than_a_build_may_leave_is_refused_with_that_reason(
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    # Nothing is written until the last step, so no watch sees it: what the
-    # build left is added up once more when it is over.
+    # No watch may see a half-written file on a slow machine: what the build
+    # left is added up once more when it is over, and only then.
+    machine.setattr(builds_module, "_ACCOUNTED_EVERY", _WATCHED_NEVER_WITHIN_A_BUILD)
     with_the_toolchain(
         machine,
         tmp_path,
