@@ -4,8 +4,12 @@ import type { SourceFetchView } from '../src/lib/api/sources.ts';
 import { expect, test } from './person.ts';
 import { expectsNoHorizontalScroll, sessionOf } from './scenario.ts';
 import {
+	aLocalAddress,
+	aName,
+	createsASource,
 	holdsRequests,
 	opensAnHttpsSource,
+	opensTheForm,
 	sourceAddress,
 	SOURCES_API,
 	SOURCES_LIST,
@@ -95,7 +99,7 @@ for (const surface of ['the source page', 'the list'] as const) {
 		await page.goto(surface === 'the list' ? SOURCES_LIST : sourceAddress(name));
 	};
 	const scope = (page: Page, name: string) =>
-		surface === 'the list' ? page.locator('tr', { hasText: name }) : page.locator('main');
+		surface === 'the list' ? page.locator('tr', { hasText: name }) : page.locator('.actions');
 	const fetchButton = (page: Page, words: Words, name: string) =>
 		scope(page, name).getByRole('button', { name: words.sources_fetch_now });
 
@@ -125,6 +129,20 @@ for (const surface of ['the source page', 'the list'] as const) {
 				});
 			}
 		}
+
+		test('says nothing new after a real fetch of a folder source', async ({ page }, testInfo) => {
+			const { words } = await sessionOf(page);
+			const name = aName(testInfo);
+			await opensTheForm(page);
+			await createsASource(page, words, { name, url: await aLocalAddress(page, name) });
+			await opens(page, name);
+
+			await fetchButton(page, words, name).click();
+
+			const stated = scope(page, name).getByRole('status');
+			await expect(stated).toHaveText(words.source_fetch_nothing_new);
+			await expect(stated).toHaveAttribute('data-state', 'ready');
+		});
 
 		test('clears the line when the next press starts and never shows it before the request ends', async ({
 			page
