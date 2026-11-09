@@ -174,6 +174,23 @@ class GitRemote:
         commit = _git(self.bare, "commit-tree", root, "-m", "a push")
         _git(self.bare, "update-ref", f"refs/heads/{MAIN_BRANCH}", commit)
 
+    def push_crafted_file(self, path: str) -> None:
+        """Push one file at that slash-separated path, its trees written by hand.
+
+        `git add` and the working tree refuse a path or name the filesystem
+        cannot hold, so the objects are written straight into the repository, and
+        the working side only points at the commit, without checking it out.
+        """
+        *folders, name = path.split("/")
+        blob = _git(self.bare, "hash-object", "-w", "--stdin", stdin=b"payload\n")
+        below = self._plant_tree([("100644", name, blob)])
+        for folder in reversed(folders):
+            below = self._plant_tree([("40000", folder, below)])
+        commit = _git(self.bare, "commit-tree", below, "-m", "a push")
+        _git(self.bare, "update-ref", f"refs/heads/{MAIN_BRANCH}", commit)
+        _git(self.work, "fetch", "--quiet", "origin", MAIN_BRANCH)
+        _git(self.work, "update-ref", "HEAD", commit)
+
     def _plant_tree(self, entries: list[tuple[str, str, str]]) -> str:
         """Write one tree object of (mode, name, hex id) entries."""
         raw = b"".join(
@@ -194,7 +211,13 @@ class GitRemote:
     def _write(self, files: Mapping[str, str]) -> None:
         for path, content in files.items():
             written = self.work / path
-            written.parent.mkdir(parents=True, exist_ok=True)
+            # One folder at a time: `parents=True` recurses once per level
+            # that is missing, which a tree deeper than the recursion limit
+            # would overrun while it is only being planted.
+            folder = self.work
+            for part in Path(path).parent.parts:
+                folder = folder / part
+                folder.mkdir(exist_ok=True)
             written.write_text(content, encoding="utf-8")
 
     def remove(self, folder: str, *, at: datetime) -> None:
