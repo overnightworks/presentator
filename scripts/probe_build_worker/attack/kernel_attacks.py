@@ -1,7 +1,7 @@
 """The kernel-facing attacks of the sealed worker's isolation probe, in three vehicles.
 
-`deck ONE PROBE` runs as a child of the attack deck's build code (uid 10001) and
-attacks PID 1 and the probe. `probe` runs as the exec'd 10002 probe, program on
+`deck ONE PROBE` runs as a child of the attack deck's build code (the build user) and
+attacks PID 1 and the probe. `probe` runs as the exec'd wire-user probe, program on
 stdin (`python -I - probe`), and attacks PID 1 and the running step. `fork`
 leaves what a life must not carry into the next; the SysV creations run inside
 `deck`. Every line printed is `KIND ...`; a check records only the kernel's errno
@@ -238,7 +238,7 @@ def deck_attacks(one: int, probe: int) -> None:
 
 
 def probe_attacks() -> None:
-    """Everything the exec'd 10002 probe does, in the rendezvous order."""
+    """Everything the exec'd wire-user probe does, in the rendezvous order."""
     report_status("probe")
     report_confinement()
     if (deck := wait_for("deck.pid")) is None:

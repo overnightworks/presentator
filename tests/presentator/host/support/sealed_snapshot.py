@@ -73,8 +73,8 @@ def sealed_snapshot() -> Snapshot:
             runtime_uid=1000,
             runtime_gid=1000,
             users={
-                "presentator-build": (10001, 10001),
-                "presentator-wire": (10002, 10002),
+                "presentator-build": worker.BUILD_IDENTITY,
+                "presentator-wire": worker.WIRE_IDENTITY,
             },
         ),
         environment_keys=frozenset({"PATH", "HOME", "HOSTNAME"}),
@@ -97,8 +97,8 @@ def with_fields(**changes: object) -> Callable[[Snapshot], Snapshot]:
 def stand_in_users(monkeypatch: pytest.MonkeyPatch) -> None:
     users = {
         "presentator": (1000, 1000),
-        "presentator-build": (10001, 10001),
-        "presentator-wire": (10002, 10002),
+        "presentator-build": worker.BUILD_IDENTITY,
+        "presentator-wire": worker.WIRE_IDENTITY,
     }
 
     def password_entry(name: str) -> SimpleNamespace:

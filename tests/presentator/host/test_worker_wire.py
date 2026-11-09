@@ -74,8 +74,8 @@ BROKEN_ONE_WAY = {
         f"gid position {position}": {"Gid": uid_with(position, "0")}
         for position in range(4)
     },
-    "another user's uid": {"Uid": "\t".join(["10001"] * 4)},
-    "a supplementary group": {"Groups": "10002"},
+    "another user's uid": {"Uid": "\t".join([str(BUILD_ID)] * 4)},
+    "a supplementary group": {"Groups": str(WIRE_ID)},
     "inheritable capability": {"CapInh": "0000000000000001"},
     "permitted capability": {"CapPrm": "0000000000000001"},
     "effective capability": {"CapEff": "0000000000000001"},

@@ -25,8 +25,8 @@ container of the service (`probe_build_worker/plant_residue.py` on stdin) and dr
 start proofs against it: cells 61 to 64 each refuse, cell 65 is the clean control.
 
 The isolation cells run one life attacked from two sides at once, by the attack
-deck (`probe_build_worker/attack`, build code as the build user) and by the 10002
-probe (`attack/kernel_attacks.py` on stdin); `probe_build_worker_isolation.py`
+deck (`probe_build_worker/attack`, build code as the build user) and by the wire
+user's probe (`attack/kernel_attacks.py` on stdin); `probe_build_worker_isolation.py`
 drives and judges them.
 """
 
@@ -100,6 +100,7 @@ from presentator.adapters.build_worker import (
     LONGEST_RETRY_SECONDS,
 )
 from presentator.contracts.decks import StepKind
+from presentator.host.worker import WIRE_IDENTITY
 
 IMAGE = "presentator"
 SOCKET_PATH = f"{SOCKET_DIRECTORY}/{SOCKET_NAME}"
@@ -547,21 +548,22 @@ def prove_socket_identity(report: Report, name: str) -> None:
 
 
 def prove_wire_user(report: Report) -> None:
-    """A8: the wire user is 10002:10002 with no groups and no capabilities."""
+    """A8: the wire user is its own uid and gid with no groups and no capabilities."""
+    uid, gid = WIRE_IDENTITY
     done = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        ("docker", "exec", "--user", "10002:10002", worker(), "sh", "-c",  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
+        ("docker", "exec", "--user", f"{uid}:{gid}", worker(), "sh", "-c",  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
          "echo $(id -u):$(id -g):$(id -G); grep -E '^Cap(Eff|Prm)' /proc/self/status"),
         check=False, capture_output=True, text=True,
     )  # fmt: skip
     identity, *capabilities = done.stdout.splitlines() or [""]
     if (
         done.returncode
-        or identity != "10002:10002:10002"
+        or identity != f"{uid}:{gid}:{gid}"
         or not capabilities
         or any(line.split()[1].strip("0") for line in capabilities)
     ):
         refuse(f"wire user: {done.returncode} {done.stdout}{done.stderr}")
-    report.cell("A8", "exec as 10002:10002: no other group, no capabilities")
+    report.cell("A8", f"exec as {uid}:{gid}: no other group, no capabilities")
 
 
 def start_holder() -> None:

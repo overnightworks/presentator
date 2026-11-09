@@ -326,7 +326,7 @@ def prove_abandoned_build(report: Report, how: Abandonment) -> None:
 
 
 def leave_leftover() -> int:
-    """Leave a `setsid` 10002 process in the worker; its host pid, from `docker top`."""
+    """Leave a `setsid` wire-user process in the worker; its pid from `docker top`."""
     done = subprocess.run(  # noqa: S603 - argv is the list exec_in_worker builds from the literal docker exec words and probe values and runs without a shell
         exec_in_worker(PYTHON, "-I", "-", "fork", user=WIRE_USER),
         input=(PROBE_SOURCES / "attack" / "kernel_attacks.py").read_text(),
@@ -367,7 +367,7 @@ def prove_leftover_swept(name: str, connection: tuple[str, ...]) -> float:
 def prove_kept_life_leftovers(
     report: Report, connections: dict[str, tuple[str, ...]]
 ) -> None:
-    """Cell 56 C: each kept-life sweep reaches a 10002 leftover, no restart."""
+    """Cell 56 C: each kept-life sweep reaches a wire-user leftover, no restart."""
     before = state()
     probe_client("hello")
     seconds = {

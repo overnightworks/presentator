@@ -2,7 +2,7 @@
 // line below runs as the build user, in the step's process. Each attack records
 // the kernel's errno name or `succeeded`, never what it read, into the built talk
 // as `attacks.txt`. The shape and the order are the rendezvous of the probe's
-// driver: publish the step, wait for the 10002 probe, attack, publish done, wait
+// driver: publish the step, wait for the wire-user probe, attack, publish done, wait
 // for the probe to finish. Every wait is bounded.
 import { spawnSync } from 'node:child_process'
 import dns from 'node:dns/promises'
