@@ -1,4 +1,4 @@
-import type { AccountMenuWords, SignInPageWords } from 'overnightworks-appkit';
+import type { AccountMenuWords, SignInPageWords } from 'overnightworks-design';
 import type { LobbyText } from '#lib/api/session.ts';
 import { fill } from '#lib/words.ts';
 
