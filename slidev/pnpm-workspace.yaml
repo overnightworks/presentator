@@ -1,3 +1,6 @@
+# Registry packages resolve only to releases at least seven days old (minutes).
+minimumReleaseAge: 10080
+
 # Security pins for transitive dependencies; pnpm reads overrides only from here.
 overrides:
   dompurify: 3.4.17
