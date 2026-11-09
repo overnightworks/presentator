@@ -380,7 +380,7 @@ def test_an_admin_persons_agents_client_bearer_opens_no_admin_route(
 def test_an_admin_persons_bearer_beside_a_members_cookie_never_opens_an_admin_route(
     tmp_path: Path, token_clients: frozenset[str]
 ) -> None:
-    """The settings are admin-only: the cookie's member is refused, the bearer ignored."""
+    """The settings are admin-only: the member is refused, the bearer ignored."""
     with a_world(tmp_path, token_clients=token_clients) as world:
         admin_browser = world.scene.browser()
         assert world.scene.sign_in(
