@@ -1,0 +1,8 @@
+claim_id = "3ce453613a8f4b82b25c331c80b4b072"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "6dc208b0c1fddf76af6cd2e957d781601254de52"
+branch = "claude/issue-981-the-renew-buttons-say-how-they-ended"
+scope = ["frontend/e2e/source-renew.spec.ts", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "frontend/src/routes/(lobby)/settings/sources/[name]/+page.svelte", "src/presentator/adapters/catalogs/en.po", "src/presentator/contracts/text.py", "tests/support/vulture_allowlist.py"]
+opened_commit = "b9e8db3b686359e152c55967c3cafaa591ca97ec"
+whole_reason = "The words, the page's one outcome owner and the drive that proves them are one behaviour; the words without the page are dead."
