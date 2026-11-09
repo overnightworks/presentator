@@ -43,6 +43,7 @@ from tests.presentator.application.support.decks_support import (
     COMMIT,
     NOW,
     OWNER,
+    SHORT_COMMIT,
     SOURCE,
     DecksFakes,
     a_folder,
@@ -83,7 +84,6 @@ _HTTPS_SOURCE = Source(
     ref="main",
     owner_id=OWNER,
 )
-_SHORT_COMMIT = "a3f19c2"
 _A_LATER_COMMIT = "b7c1d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80"
 _SHORT_LATER_COMMIT = "b7c1d9e"
 _WHAT_THE_TOOLCHAIN_SAID = "slides.md:41:3 Unexpected token in frontmatter"
@@ -213,7 +213,7 @@ def test_a_deck_page_names_the_title_the_source_and_the_short_commit() -> None:
 
     assert (page.slug, page.title) == ("kundenfeedback", "Kundenfeedback Q3")
     assert page.source == SOURCE.url
-    assert page.commit == _SHORT_COMMIT
+    assert page.commit == SHORT_COMMIT
 
 
 def test_a_deck_page_names_the_themes_the_toolchain_carries() -> None:
@@ -308,7 +308,7 @@ def test_a_build_that_failed_leaves_the_talk_that_stands_standing() -> None:
     assert decks.exported_pdf("kundenfeedback", viewer=OWNER) == exported
     standing_page = page_of(decks, "kundenfeedback")
     assert standing_page.built_at == built_when
-    assert standing_page.commit == _SHORT_COMMIT
+    assert standing_page.commit == SHORT_COMMIT
 
 
 @pytest.mark.parametrize(
@@ -350,7 +350,7 @@ def test_a_deck_being_built_says_so_with_the_commit_and_how_long_it_has_run() ->
     building = seen[0]
     assert building.state is DeckState.BUILDING
     assert building.attempt is not None
-    assert building.attempt.commit == _SHORT_COMMIT
+    assert building.attempt.commit == SHORT_COMMIT
     assert building.attempt.started_at == NOW
     assert building.attempt.failure is None
 
@@ -399,7 +399,7 @@ def test_a_build_that_failed_names_its_commit_and_what_the_toolchain_said() -> N
     page = page_of(decks, "kundenfeedback")
     assert page.state is DeckState.FAILED
     assert page.attempt is not None
-    assert page.attempt.commit == _SHORT_COMMIT
+    assert page.attempt.commit == SHORT_COMMIT
     assert page.attempt.started_at == NOW
     assert page.attempt.failure == BuildFailure.said(_WHAT_THE_TOOLCHAIN_SAID)
     assert _listed_states(decks) == [DeckState.FAILED]
@@ -419,7 +419,7 @@ def test_a_failed_build_leaves_the_standing_talk_where_it_is_and_says_failed() -
 
     page = page_of(decks, "kundenfeedback")
     assert page.state is DeckState.FAILED
-    assert page.commit == _SHORT_COMMIT
+    assert page.commit == SHORT_COMMIT
     assert page.attempt is not None
     assert page.attempt.commit == _SHORT_LATER_COMMIT
     assert decks.built_talk("kundenfeedback", viewer=OWNER) == standing
@@ -483,7 +483,7 @@ def test_a_revert_to_the_talk_that_stands_is_ready_again_without_building() -> N
     assert while_the_push_was_broken.state is DeckState.FAILED
     assert reverted.state is DeckState.READY
     assert reverted.attempt is None
-    assert reverted.commit == _SHORT_COMMIT
+    assert reverted.commit == SHORT_COMMIT
     # The talk that stands is the one that was built before the broken push:
     # its own build time, and no second run of the toolchain.
     assert reverted.built_at == NOW
@@ -568,7 +568,7 @@ def test_a_deck_page_names_no_source_while_none_is_configured() -> None:
     )
 
     assert page.source is None
-    assert page.commit == _SHORT_COMMIT
+    assert page.commit == SHORT_COMMIT
 
 
 def test_the_list_shows_the_last_refresh_and_reads_no_source() -> None:
@@ -1441,7 +1441,7 @@ def test_the_source_page_names_state_newest_runs_and_the_decks_from_here() -> No
     assert page.name == SOURCE.name
     assert page.url == SOURCE.url
     assert page.state is SourceState.REACHABLE
-    assert page.runs[0].commit == _SHORT_COMMIT
+    assert page.runs[0].commit == SHORT_COMMIT
     assert page.runs[-1].reason is SourceRunFailure.UNREACHABLE
     assert len(page.runs) == RECENT_SOURCE_RUNS
     assert page.decks == (

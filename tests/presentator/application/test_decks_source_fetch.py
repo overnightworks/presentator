@@ -9,6 +9,7 @@ from presentator.contracts.decks import (
     SourceRunOutcome,
 )
 from tests.presentator.application.support.decks_support import (
+    SHORT_COMMIT,
     SOURCE,
     DecksFakes,
     a_folder,
@@ -21,8 +22,6 @@ from tests.presentator.application.support.fakes import (
     FakeDeckFolders,
     HeldDeckFolders,
 )
-
-_SHORT_COMMIT = "a3f19c2"
 
 
 def _fetched(mirror: FakeDeckFolders, builder: FakeBuildRunner) -> Decks:
@@ -43,7 +42,7 @@ def test_fetching_a_changed_deck_answers_the_run_and_one_build() -> None:
 
     assert fetched.run is not None
     assert fetched.run.outcome is SourceRunOutcome.SUCCESS
-    assert fetched.run.commit == _SHORT_COMMIT
+    assert fetched.run.commit == SHORT_COMMIT
     assert (fetched.decks_built, fetched.builds_failed, fetched.decks_removed) == (
         1,
         0,
