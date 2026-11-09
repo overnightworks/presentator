@@ -24,7 +24,7 @@ from presentator.adapters.worker_children import (
     GatedChild,
     spawn_gated,
 )
-from presentator.host import worker, worker_scratch, worker_serving
+from presentator.host import worker, worker_scratch, worker_self_check, worker_serving
 from presentator.host.config import WorkerSettings
 from presentator.host.worker_serving import (
     HEADER_SECONDS,
@@ -412,7 +412,7 @@ def test_production_spawns_the_wire_child_as_the_wire_user_without_groups(
         spawn(["wire"], environment={"PATH": PATH}, pass_fds=(7,))
 
     [(_arguments, keywords)] = RecordedPopen.calls
-    wire_id = worker.WIRE_IDENTITY[0]
+    wire_id = worker_self_check.WIRE_IDENTITY[0]
     assert (keywords["user"], keywords["group"], keywords["extra_groups"]) == (
         wire_id,
         wire_id,

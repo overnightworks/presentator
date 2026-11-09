@@ -100,7 +100,7 @@ from presentator.adapters.build_worker import (
     LONGEST_RETRY_SECONDS,
 )
 from presentator.contracts.decks import StepKind
-from presentator.host.worker import WIRE_IDENTITY
+from presentator.host.worker_self_check import WIRE_IDENTITY
 
 IMAGE = "presentator"
 SOCKET_PATH = f"{SOCKET_DIRECTORY}/{SOCKET_NAME}"

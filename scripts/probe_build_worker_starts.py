@@ -22,7 +22,8 @@ from probe_build_worker_harness import (
     state,
 )
 
-from presentator.host.worker import BUILD_IDENTITY, REFUSAL_EXIT_STATUS, Predicate
+from presentator.host.worker import REFUSAL_EXIT_STATUS
+from presentator.host.worker_self_check import BUILD_IDENTITY, Predicate
 
 RESIDUE_SOURCE = PROBE_SOURCES / "plant_residue.py"
 START_SECONDS = 120
