@@ -1,7 +1,0 @@
-claim_id = "785b49a3ba4b40ecb8401286b0c9dd42"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "fa39acc23fc16e0520b9f5b40101b899fa92c79c"
-branch = "claude/issue-932-a-pull-of-a-large-public-repository-fits"
-scope = ["docs/configuration.md", "src/presentator/host/config.py"]
-opened_commit = "97dc3ab61df562d062bfd6e874c4e971787d92c4"
