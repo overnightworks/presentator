@@ -10,7 +10,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta
+from datetime import timedelta
 from enum import StrEnum
 from functools import partial
 from hashlib import sha256
@@ -740,11 +740,10 @@ class Decks:
     def _take_in_and_count(self, source: Source) -> SourceFetch:
         """Take that source in, build what changed and count what that was."""
         carried_before = self._visible_slugs(source)
-        at = self.clock.now()
         poll = self.folders.folders(source)
-        run = self._record_run(source, poll, at)
+        run = self._record_run(source, poll)
         if poll.folders is not None:
-            self._take_in(source, poll.folders, at)
+            self._take_in(source, poll.folders)
         delivered = self._build_what_changed(source)
         return SourceFetch(
             run=shown_run(run),
@@ -759,14 +758,11 @@ class Decks:
             deck.slug for deck in self.store.all() if deck.source_id == source.id
         )
 
-    def _record_run(self, source: Source, poll: SourcePoll, at: datetime) -> SourceRun:
-        """Record what the poll found or failed to as the source's newest run.
-
-        A board can show from it that the mechanism ran and what it saw.
-        """
+    def _record_run(self, source: Source, poll: SourcePoll) -> SourceRun:
+        """Record what the poll found or failed to as the source's newest run."""
         run = SourceRun(
             source_id=source.id,
-            at=at,
+            at=self.clock.now(),
             outcome=(
                 SourceRunOutcome.FAILURE
                 if poll.folders is None
@@ -778,9 +774,7 @@ class Decks:
         self.source_runs.record(run)
         return run
 
-    def _take_in(
-        self, source: Source, folders: tuple[DeckFolder, ...], at: datetime
-    ) -> None:
+    def _take_in(self, source: Source, folders: tuple[DeckFolder, ...]) -> None:
         """Store every folder that carries both a manifest and slides.
 
         The folder name becomes the slug, so a changed title reaches no address.
@@ -790,12 +784,9 @@ class Decks:
         has stopped carrying is marked as removed, and its deck deleted once the
         folder has been missing for `REMOVED_DECK_KEPT`; a folder that comes back
         under its old name before then loses that mark, so it is the deck it
-        was. A source nobody could read carries no such news, and leaves every
-        deck where it is. A folder whose name another source already
-        carries is skipped too: the slug is the address of one deck on this
-        instance, and the source that carried it first keeps it. Whatever the
-        poll found or failed to is recorded as this source's newest run, so a
-        board can show that the mechanism ran and what it saw.
+        was. A folder whose name another source already carries is skipped too:
+        the slug is the address of one deck on this instance, and the source
+        that carried it first keeps it.
         """
         for folder in folders:
             if not is_a_plain_folder_name(folder.name):
@@ -819,7 +810,7 @@ class Decks:
                 _log.warning(_NAME_BELONGS_TO_ANOTHER_SOURCE, folder.name, source.name)
         present = frozenset(folder.name for folder in folders)
         build_retention.delete_absent(
-            self.store, present=present, source_id=source.id, at=at
+            self.store, present=present, source_id=source.id, at=self.clock.now()
         )
 
     def _build_what_changed(self, source: Source) -> list[bool]:
