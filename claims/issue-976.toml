@@ -1,0 +1,8 @@
+claim_id = "1b2af1c0a1f7484ab0d9df4d74cf5429"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "46bee06288fc4fe6b80b213d6903012be87af6fe"
+branch = "claude/issue-976-the-worker-s-self-check-moves-to-its-own"
+scope = ["scripts/probe_build_worker.py", "scripts/probe_build_worker_isolation.py", "scripts/probe_build_worker_starts.py", "src/presentator/host/worker.py", "src/presentator/host/worker_self_check.py", "tests/presentator/adapters/test_worker_children.py", "tests/presentator/host/support/sealed_snapshot.py", "tests/presentator/host/test_worker.py", "tests/presentator/host/test_worker_serving_loop.py", "tests/presentator/host/test_worker_settings.py", "tests/presentator/host/test_worker_wire.py"]
+opened_commit = "fd4332de1db10a25a2be4d019fee44a47fa5376f"
+whole_reason = "One module move with every importer of the moved names; a half move would not import."
