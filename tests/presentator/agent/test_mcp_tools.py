@@ -1,18 +1,29 @@
-"""Every tool the lobby offers an agent is pinned here, and every operation is decided."""
+"""Every tool the lobby offers an agent is pinned; every operation is decided."""
 
 import re
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pytest
 from agent_runtime_client.tools import AGENT_TOOL_EXTENSION, ToolEffect
-from fastapi import FastAPI
-from starlette.routing import Match
+from fastapi import APIRouter, FastAPI
+from starlette.routing import BaseRoute, Match, Route
 
 from presentator.agent.mcp import marked_tools
 from tests.presentator.agent.support.mcp_world import World
 from tests.support.sign_in_support import a_scene
 
 _METHODS = frozenset({"get", "put", "post", "delete", "patch"})
+
+
+def registered_routes(routes: Sequence[BaseRoute]) -> Iterator[Route]:
+    """Every route registered on the app, below the routers it includes."""
+    for route in routes:
+        included: APIRouter | None = getattr(route, "original_router", None)
+        if included is not None:
+            yield from registered_routes(included.routes)
+        elif isinstance(route, Route):
+            yield route
 
 
 def operations_of(app: FastAPI) -> list[tuple[str, str, dict[str, dict[str, str]]]]:
@@ -74,7 +85,7 @@ def test_the_lobby_starts_with_every_operation_decided_with_and_without_token_cl
 def test_no_marked_template_is_met_by_another_route_of_its_method(
     tmp_path: Path,
 ) -> None:
-    """T14: a marked path reads as itself and nothing else of its method can answer it."""
+    """T14: a marked path is answered by its own route and no other of its method."""
     app = a_scene(tmp_path).lobby.app
     marked = [
         (method, template)
@@ -87,7 +98,7 @@ def test_no_marked_template_is_met_by_another_route_of_its_method(
         scope = {"type": "http", "method": method, "path": concrete, "root_path": ""}
         answering = [
             route.path
-            for route in app.router.routes
+            for route in registered_routes(app.router.routes)
             if route.matches(scope)[0] is Match.FULL
         ]
         assert answering == [template], (method, template)

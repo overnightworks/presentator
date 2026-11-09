@@ -8,6 +8,7 @@ request and a busy database cannot make it flap.
 
 from typing import Final
 
+from agent_runtime_client.tools import not_an_agent_tool
 from fastapi import FastAPI
 from webauth.policies import PathRules, PublicRule
 
@@ -18,7 +19,14 @@ _HEALTHY: Final = {"status": "ok"}
 
 def add_health_route(app: FastAPI) -> None:
     """Answer `GET /health` with a fixed body, for any caller."""
-    app.add_api_route(HEALTH_PATH, _health, methods=["GET"])
+    app.add_api_route(
+        HEALTH_PATH,
+        _health,
+        methods=["GET"],
+        openapi_extra=not_an_agent_tool(
+            reason="The edge's health probe, not a person's action."
+        ),
+    )
 
 
 def _health() -> dict[str, str]:

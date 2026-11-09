@@ -4,11 +4,11 @@ The owner answers whose deck it is: another person's deck and an unknown one
 raise the same bare problem.
 """
 
-from collections.abc import Mapping
 from datetime import datetime
 from http import HTTPStatus
 from typing import Final
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
@@ -81,19 +81,14 @@ class DeckView(BaseModel):
     views_open: bool
 
 
-def deck_routes(
-    *, decks: Decks, talk_origin: str, mark: Mapping[str, object]
-) -> APIRouter:
-    """The router that answers one deck's view.
-
-    `mark` is the metadata that offers this route to the reader's agent as a tool.
-    """
+def deck_routes(*, decks: Decks, talk_origin: str) -> APIRouter:
+    """The router that answers one deck's view, which is also an agent tool."""
     router = APIRouter()
 
     @router.get(
         DECK_VIEW_PATH,
         responses=problem_response(HTTPStatus.NOT_FOUND),
-        openapi_extra=dict(mark),
+        openapi_extra=agent_tool(name="get_deck", effect=ToolEffect.READ_ONLY),
     )
     def deck(request: Request, slug: str) -> DeckView:
         """Show one of your decks, how its build stands and why a build failed."""

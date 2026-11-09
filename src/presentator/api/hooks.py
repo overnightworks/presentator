@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
 from typing import Annotated, Final
 
+from agent_runtime_client.tools import not_an_agent_tool
 from fastapi import APIRouter, Header, Request, Response
 from webauth.proxies import request_is_https
 
@@ -86,5 +87,12 @@ def fetch_hook(*, decks: Decks) -> APIRouter:
     """The fetch-now route for every stored source, answering other calls alike."""
     hook = _FetchHook(decks=decks)
     router = APIRouter()
-    router.add_api_route(_ANY_CALL, hook.called, methods=[HTTPMethod.POST])
+    router.add_api_route(
+        _ANY_CALL,
+        hook.called,
+        methods=[HTTPMethod.POST],
+        openapi_extra=not_an_agent_tool(
+            reason="A git host's webhook on a catch-all path, not a person's action."
+        ),
+    )
     return router

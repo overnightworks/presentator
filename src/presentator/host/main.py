@@ -75,14 +75,10 @@ from presentator.adapters.speech import (
 )
 from presentator.agent.backend import gateway_answerer
 from presentator.agent.mcp import (
-    deck_list_mark,
-    deck_text_mark,
-    deck_view_mark,
     install_mcp_front,
 )
 from presentator.api.auth import (
     AgentFront,
-    DeckMarks,
     InstalledAuth,
     LobbyPrivate,
     content_security_policy,
@@ -246,13 +242,8 @@ def agent_front(
     issuer: str,
     transaction: SignInTransaction,
 ) -> AgentFront:
-    """The deck routes' marks, and the MCP front installed over them."""
+    """The MCP front, installed over the lobby's routes once they are in."""
     return AgentFront(
-        marks=DeckMarks(
-            deck_list=deck_list_mark(),
-            deck_view=deck_view_mark(),
-            deck_text=deck_text_mark(),
-        ),
         install_resource=partial(
             install_mcp_front,
             origin=origin,

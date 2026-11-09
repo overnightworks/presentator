@@ -371,7 +371,6 @@ name = "Only adapters import agent_runtime_client"
 type = "forbidden"
 source_modules = [
     "presentator.host",
-    "presentator.api",
     "presentator.application",
     "presentator.ports",
     "presentator.contracts",

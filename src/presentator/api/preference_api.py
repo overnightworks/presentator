@@ -9,10 +9,15 @@ from contextlib import contextmanager
 from http import HTTPStatus
 from typing import Final
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict
 
-from presentator.api.admission import gated_admin, gated_person
+from presentator.api.admission import (
+    administration_is_no_tool,
+    gated_admin,
+    gated_person,
+)
 from presentator.api.problems import (
     ProblemError,
     problem_beside_validation,
@@ -84,8 +89,20 @@ def _mounted(
     router = APIRouter()
     unspoken = problem_beside_validation()
     admin_only = problem_response(HTTPStatus.FORBIDDEN)
-    router.add_api_route(ACCOUNT_PATH, read_account, methods=["GET"])
-    router.add_api_route(ACCOUNT_PATH, write_account, methods=["PUT"])
+    router.add_api_route(
+        ACCOUNT_PATH,
+        read_account,
+        methods=["GET"],
+        openapi_extra=agent_tool(name="get_account", effect=ToolEffect.READ_ONLY),
+    )
+    router.add_api_route(
+        ACCOUNT_PATH,
+        write_account,
+        methods=["PUT"],
+        openapi_extra=agent_tool(
+            name="set_account_theme", effect=ToolEffect.SIDE_EFFECTING
+        ),
+    )
     admin = [Depends(gated_admin)]
     router.add_api_route(
         SETTINGS_PATH,
@@ -93,6 +110,7 @@ def _mounted(
         methods=["GET"],
         dependencies=admin,
         responses=admin_only,
+        openapi_extra=administration_is_no_tool(),
     )
     router.add_api_route(
         SETTINGS_PATH,
@@ -100,7 +118,7 @@ def _mounted(
         methods=["PUT"],
         dependencies=admin,
         responses=admin_only,
-        openapi_extra=unspoken,
+        openapi_extra=unspoken | administration_is_no_tool(),
     )
     return router
 
@@ -127,9 +145,11 @@ def preference_api_routes(*, preferences: Preferences) -> APIRouter:
         )
 
     def read_account(request: Request) -> AccountView:
+        """Read the signed-in person's own theme."""
         return account_of(gated_person(request).id)
 
     def write_account(request: Request, body: AccountView) -> AccountView:
+        """Set the signed-in person's own theme and answer the saved choice."""
         person_id = gated_person(request).id
         preferences.save_preferences_of(person_id, PersonPreferences(theme=body.theme))
         return account_of(person_id)

@@ -183,7 +183,7 @@ def test_the_resource_bearer_opens_no_admin_delete_or_excluded_route(
 def test_the_resource_bearer_never_authorizes_an_excluded_route(
     tmp_path: Path, token_clients: frozenset[str]
 ) -> None:
-    """Alone it is refused; beside a cookie it is ignored or refused, never used."""
+    """Alone it is refused; beside a cookie it is ignored, never used."""
     with a_world(tmp_path, token_clients=token_clients) as world:
         bearer = world.bearer()
 
@@ -194,10 +194,7 @@ def test_the_resource_bearer_never_authorizes_an_excluded_route(
         cookie_alone = world.felix.get(World.EXCLUDED_PATH)
 
         assert alone.status_code == HTTPStatus.UNAUTHORIZED
-        if token_clients:
-            assert with_cookie.status_code == HTTPStatus.UNAUTHORIZED
-        else:
-            assert with_cookie.status_code == cookie_alone.status_code
+        assert with_cookie.status_code == cookie_alone.status_code
 
 
 @pytest.mark.parametrize(
@@ -328,9 +325,7 @@ def test_set_account_theme_changes_only_the_theme_of_the_person_whose_token_it_i
 
     assert not written.is_error
     assert json.loads(written.text) == {"theme": changed}
-    assert world.anna.get(ACCOUNT_PATH, headers=World.JSON).json() == {
-        "theme": changed
-    }
+    assert world.anna.get(ACCOUNT_PATH, headers=World.JSON).json() == {"theme": changed}
     assert world.felix.get(ACCOUNT_PATH, headers=World.JSON).json() == before_felix
 
 

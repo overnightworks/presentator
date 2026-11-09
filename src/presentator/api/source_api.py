@@ -13,7 +13,7 @@ from typing import Annotated, Final, NamedTuple
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, SecretStr, WithJsonSchema
 
-from presentator.api.admission import gated_admin
+from presentator.api.admission import administration_is_no_tool, gated_admin
 from presentator.api.hooks import hook_url
 from presentator.api.problems import (
     FixedType,
@@ -423,7 +423,13 @@ class _SourceData:
 def _add_removal_routes(router: APIRouter, data: _SourceData) -> None:
     forbidden = problem_response(HTTPStatus.FORBIDDEN)
     not_found = forbidden | problem_response(HTTPStatus.NOT_FOUND)
-    router.add_api_route(_REMOVAL, data.removal, methods=["GET"], responses=not_found)
+    router.add_api_route(
+        _REMOVAL,
+        data.removal,
+        methods=["GET"],
+        responses=not_found,
+        openapi_extra=administration_is_no_tool(),
+    )
     router.add_api_route(
         _SOURCE,
         data.remove,
@@ -434,6 +440,7 @@ def _add_removal_routes(router: APIRouter, data: _SourceData) -> None:
         | problem_response(
             HTTPStatus.INTERNAL_SERVER_ERROR, SourceRemovalRefusedProblem
         ),
+        openapi_extra=administration_is_no_tool(),
     )
 
 
@@ -444,7 +451,11 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
     not_found = forbidden | problem_response(HTTPStatus.NOT_FOUND)
     router = APIRouter(dependencies=[Depends(gated_admin)])
     router.add_api_route(
-        _SOURCES, data.source_list, methods=["GET"], responses=forbidden
+        _SOURCES,
+        data.source_list,
+        methods=["GET"],
+        responses=forbidden,
+        openapi_extra=administration_is_no_tool(),
     )
     router.add_api_route(
         _SOURCES,
@@ -452,9 +463,16 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         methods=["POST"],
         status_code=HTTPStatus.CREATED,
         responses=forbidden,
-        openapi_extra=problem_beside_validation(SourceRefusedProblem),
+        openapi_extra=problem_beside_validation(SourceRefusedProblem)
+        | administration_is_no_tool(),
     )
-    router.add_api_route(_SOURCE, data.source, methods=["GET"], responses=not_found)
+    router.add_api_route(
+        _SOURCE,
+        data.source,
+        methods=["GET"],
+        responses=not_found,
+        openapi_extra=administration_is_no_tool(),
+    )
     _add_removal_routes(router, data)
     router.add_api_route(
         _FETCH,
@@ -462,6 +480,7 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         methods=["POST"],
         status_code=HTTPStatus.NO_CONTENT,
         responses=not_found,
+        openapi_extra=administration_is_no_tool(),
     )
     router.add_api_route(
         _ACCESS,
@@ -469,25 +488,35 @@ def source_api_routes(*, decks: Decks) -> APIRouter:
         methods=["POST"],
         status_code=HTTPStatus.NO_CONTENT,
         responses=not_found,
-        openapi_extra=problem_beside_validation(),
+        openapi_extra=problem_beside_validation() | administration_is_no_tool(),
     )
     router.add_api_route(
         _WEBHOOK_SECRET,
         data.renew_webhook_secret,
         methods=["POST"],
         responses=not_found,
+        openapi_extra=administration_is_no_tool(),
     )
     router.add_api_route(
-        _KEY_DRAFT, data.key_draft, methods=["POST"], responses=forbidden
+        _KEY_DRAFT,
+        data.key_draft,
+        methods=["POST"],
+        responses=forbidden,
+        openapi_extra=administration_is_no_tool(),
     )
     router.add_api_route(
         _CHECK,
         data.check_connection,
         methods=["POST"],
         responses=forbidden,
-        openapi_extra=problem_beside_validation(SourceRefusedProblem),
+        openapi_extra=problem_beside_validation(SourceRefusedProblem)
+        | administration_is_no_tool(),
     )
     router.add_api_route(
-        _KIND, data.address_access, methods=["POST"], responses=forbidden
+        _KIND,
+        data.address_access,
+        methods=["POST"],
+        responses=forbidden,
+        openapi_extra=administration_is_no_tool(),
     )
     return router

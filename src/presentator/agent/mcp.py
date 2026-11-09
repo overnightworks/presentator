@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 
 from agent_runtime_client.mcp_server import McpPersonFront, RouteTools, route_tools
 from agent_runtime_client.mcp_wire import MCP_ENDPOINT_PATH
-from agent_runtime_client.tools import Principal, ToolEffect, agent_tool
+from agent_runtime_client.tools import Principal
 from fastapi import FastAPI
 from starlette.requests import HTTPConnection
 from starlette.routing import Route
@@ -33,25 +33,6 @@ MCP_GROUP = "/apps/presentator/mcp"
 AGENT_GROUP = "/agents"
 # The one public client whose tokens act as the person who signed in.
 MCP_CLIENT_ID = "agents"
-
-
-def _read_only(name: str) -> dict[str, object]:
-    return agent_tool(name=name, effect=ToolEffect.READ_ONLY)
-
-
-def deck_list_mark() -> dict[str, object]:
-    """The mark of the deck list route: the reader's own decks, read only."""
-    return _read_only("list_decks")
-
-
-def deck_view_mark() -> dict[str, object]:
-    """The mark of the deck view route: one own deck and its build state, read only."""
-    return _read_only("get_deck")
-
-
-def deck_text_mark() -> dict[str, object]:
-    """The mark of the deck text route: one own deck's words, read only."""
-    return _read_only("get_deck_text")
 
 
 def marked_tools(lobby: FastAPI) -> RouteTools[MarkedRoute]:

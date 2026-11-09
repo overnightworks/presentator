@@ -11,13 +11,14 @@ front of the whole lobby covers the download.
 """
 
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from http import HTTPStatus
 from mimetypes import guess_type
 from pathlib import Path
 from typing import BinaryIO, Final
 
+from agent_runtime_client.tools import not_an_agent_tool
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
@@ -183,18 +184,23 @@ def add_deck_pages(
     *,
     decks: Decks,
     talk_origin: str,
-    mark: Mapping[str, object],
     not_found: Callable[[Request], Response],
 ) -> None:
     """Give the lobby the deck's PDF download and its JSON facts.
 
     The page itself is the lobby app's; a download no deck stands under is
-    answered by `not_found`. The views are at `talk_origin`, and `mark` offers the
-    JSON facts to the reader's agent as a tool.
+    answered by `not_found`. The views are at `talk_origin`.
     """
     download = _DeckPdf(decks=decks, not_found=not_found)
-    lobby.add_api_route(_DECK_PDF, download.pdf, methods=["GET"])
-    lobby.include_router(deck_routes(decks=decks, talk_origin=talk_origin, mark=mark))
+    lobby.add_api_route(
+        _DECK_PDF,
+        download.pdf,
+        methods=["GET"],
+        openapi_extra=not_an_agent_tool(
+            reason="A file download, which no tool answers."
+        ),
+    )
+    lobby.include_router(deck_routes(decks=decks, talk_origin=talk_origin))
 
 
 def add_talk_mount(app: FastAPI, *, decks: Decks) -> None:

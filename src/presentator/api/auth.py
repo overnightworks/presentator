@@ -7,12 +7,13 @@ exceptions, a form another site submitted is refused, and no answer may be
 replayed from the browser cache (issue #8, lines 11 to 15).
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
 from typing import Final
 
+from agent_runtime_client.tools import not_an_agent_tool
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse
@@ -238,25 +239,13 @@ type ResourceInstaller = Callable[[FastAPI], ProtectedResource]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DeckMarks:
-    """The marks that make the deck routes tools: plain metadata, one per route."""
-
-    deck_list: Mapping[str, object]
-    deck_view: Mapping[str, object]
-    deck_text: Mapping[str, object]
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class AgentFront:
     """What the host hands the lobby for the agent of a signed-in person.
 
-    The marks make the deck routes tools; they are plain metadata, since the
-    lobby names no agent library. The installer runs once every route that
-    carries a schema is registered and answers the resource the bearer gate
-    admits tokens for.
+    The installer runs once every route that carries a schema is registered and
+    answers the resource the bearer gate admits tokens for.
     """
 
-    marks: DeckMarks
     install_resource: ResourceInstaller
 
 
@@ -344,7 +333,12 @@ def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
         logout_page_text=lambda request: _logout_page_text(request, surfaces),
     )
     for path in _REFUSAL_PATHS:
-        lobby.add_api_route(path, surfaces.refusal_page, methods=["GET"])
+        lobby.add_api_route(
+            path,
+            surfaces.refusal_page,
+            methods=["GET"],
+            openapi_extra=not_an_agent_tool(reason="An HTML page."),
+        )
 
 
 def _install_middleware(
@@ -454,17 +448,14 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     _install_sign_in(lobby, surfaces)
     add_health_route(lobby)
     lobby.include_router(_session_routes(preferences, auth))
-    lobby.include_router(deck_list_routes(decks=decks, mark=agent.marks.deck_list))
-    lobby.include_router(
-        deck_text_routes(own_decks=own_decks, mark=agent.marks.deck_text)
-    )
+    lobby.include_router(deck_list_routes(decks=decks))
+    lobby.include_router(deck_text_routes(own_decks=own_decks))
     lobby.include_router(preference_api_routes(preferences=preferences))
     lobby.include_router(source_api_routes(decks=decks))
     add_deck_pages(
         lobby,
         decks=decks,
         talk_origin=auth.talk_origin,
-        mark=agent.marks.deck_view,
         not_found=surfaces.not_found_page,
     )
     lobby.include_router(fetch_hook(decks=decks))

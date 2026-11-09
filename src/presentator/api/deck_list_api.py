@@ -1,9 +1,9 @@
 """`GET /api/decks`: the reader's own decks, as data a page words itself."""
 
-from collections.abc import Mapping
 from datetime import datetime
 from typing import Final
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
@@ -32,11 +32,8 @@ class DeckListView(BaseModel):
     source_address: str | None
 
 
-def deck_list_routes(*, decks: Decks, mark: Mapping[str, object]) -> APIRouter:
-    """The router that answers the reader's deck list.
-
-    `mark` is the metadata that offers this route to the reader's agent as a tool.
-    """
+def deck_list_routes(*, decks: Decks) -> APIRouter:
+    """The router that answers the reader's deck list, which is also an agent tool."""
     router = APIRouter()
 
     def deck_list(request: Request) -> DeckListView:
@@ -56,6 +53,9 @@ def deck_list_routes(*, decks: Decks, mark: Mapping[str, object]) -> APIRouter:
         )
 
     router.add_api_route(
-        DECK_LIST_PATH, deck_list, methods=["GET"], openapi_extra=dict(mark)
+        DECK_LIST_PATH,
+        deck_list,
+        methods=["GET"],
+        openapi_extra=agent_tool(name="list_decks", effect=ToolEffect.READ_ONLY),
     )
     return router
