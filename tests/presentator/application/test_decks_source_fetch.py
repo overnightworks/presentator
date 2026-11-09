@@ -156,3 +156,21 @@ def test_a_slow_pull_records_the_run_at_the_instant_the_pass_began() -> None:
     run = fakes.source_runs.newest(SOURCE.id)
     assert run is not None
     assert run.at == began
+
+
+def test_a_slow_pull_marks_a_vanished_deck_removed_at_the_instant_the_pass_began() -> (
+    None
+):
+    fakes = DecksFakes()
+    mirror = _SlowFolders(
+        carried={SOURCE.id: (a_folder("alter-vortrag"), a_folder("kundenfeedback"))},
+        clock=fakes.clock,
+    )
+    decks = decks_over(mirror=mirror, fakes=fakes)
+    decks.refresh()
+    mirror.carried[SOURCE.id] = (a_folder("kundenfeedback"),)
+    began = fakes.clock.instant
+
+    decks.refresh()
+
+    assert set(fakes.store.removed.values()) == {began}
