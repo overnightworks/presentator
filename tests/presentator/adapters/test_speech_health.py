@@ -52,6 +52,29 @@ def test_hearing_still_loading_is_not_ready_whatever_the_voice_says(
     assert readiness_of(fake).local_hearing_ready is False
 
 
+def test_a_listed_voice_not_ready_yet_on_a_ready_service_is_available() -> None:
+    body = a_health_document(voice_ready=False, speaking_ready=True)
+    fake = FakeSpeechService(health_answer=lambda: JSONResponse(body))
+
+    assert readiness_of(fake).local_hearing_ready is True
+
+
+def test_a_listed_voice_on_a_service_in_its_start_load_is_unavailable() -> None:
+    body = a_health_document(voice_ready=False, speaking_ready=False)
+    fake = FakeSpeechService(health_answer=lambda: JSONResponse(body))
+
+    with pytest.raises(CoPresenterUnavailableError):
+        readiness_of(fake)
+
+
+def test_an_unlisted_voice_is_unavailable_on_a_ready_service() -> None:
+    body = a_health_document(voice="another-voice")
+    fake = FakeSpeechService(health_answer=lambda: JSONResponse(body))
+
+    with pytest.raises(CoPresenterUnavailableError):
+        readiness_of(fake)
+
+
 def test_the_health_request_carries_no_credential() -> None:
     fake = FakeSpeechService()
 
