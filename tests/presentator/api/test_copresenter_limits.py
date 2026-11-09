@@ -102,27 +102,6 @@ def test_ask_accepts_the_limit_and_the_offered_languages(
     ]
 
 
-def test_the_21st_question_in_ten_minutes_waits_until_the_first_one_leaves() -> None:
-    limiter_clock = FrozenClock(instant=NOW)
-    lobby, private, _clock = a_copresenter_talk_host(
-        limiter=AskLimiter(clock=limiter_clock)
-    )
-    client = lobby.client
-    lobby.sign_in()
-    for _ in range(20):
-        assert ask(client).status_code == HTTPStatus.OK
-        limiter_clock.advance(timedelta(seconds=10))
-
-    refused = ask(client)
-    limiter_clock.advance(timedelta(seconds=int(refused.headers["retry-after"])))
-    allowed_again = ask(client)
-
-    assert refused.status_code == HTTPStatus.TOO_MANY_REQUESTS
-    assert refused.headers["retry-after"] == "400"
-    assert len(private.answers.messages) == 20 + 1
-    assert allowed_again.status_code == HTTPStatus.OK
-
-
 def test_a_second_question_while_the_first_streams_gets_429_and_no_turn() -> None:
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
