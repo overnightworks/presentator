@@ -34,6 +34,6 @@ presentator holds only its own values here.
 - **SI12** A refused sign-in lands on `/login/no-access` or `/login/login-failed`,
   which answer 403.
 - **SI13** The legal links stand in the person menu and on the sign-in pages, and
-  the lobby draws no footer. Appkit's stylesheet contract owns the placement for
+  the lobby draws no footer. Design's stylesheet contract owns the placement for
   every app. This row owns it for both of presentator's pages, and the lobby
   page links here.
