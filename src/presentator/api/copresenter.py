@@ -37,6 +37,7 @@ from presentator.contracts.copresenter import (
     NotEnabledError,
     Question,
     Sentence,
+    ShowSlide,
 )
 from presentator.contracts.decks import MAXIMUM_NAME_BYTES
 from presentator.contracts.voice import SampleLanguage
@@ -594,6 +595,8 @@ def _sse(event: AnswerEvent) -> bytes:
             "audio",
             {"text": event.text, "wav_b64": b64encode(event.wav).decode("ascii")},
         )
+    if isinstance(event, ShowSlide):
+        return _encoded_sse("slide", {"number": event.number})
     return _generated_sse("done", {"text": event.text})
 
 
