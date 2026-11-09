@@ -116,10 +116,10 @@ export const folderField = (): HTMLInputElement | null =>
 	document.querySelector<HTMLInputElement>('#source-folder');
 export const keyBlock = (): Element | null => document.getElementById('deploy-key-label');
 // Found by role and place: a busy button carries another word than its idle one.
-export const checkButton = (): HTMLButtonElement | undefined =>
-	document.querySelector<HTMLButtonElement>('.actions button[type="button"]') ?? undefined;
-export const createButton = (): HTMLButtonElement | undefined =>
-	document.querySelector<HTMLButtonElement>('.actions button[type="submit"]') ?? undefined;
+export const checkButton = (): HTMLButtonElement | null =>
+	document.querySelector<HTMLButtonElement>('.actions button[type="button"]');
+export const createButton = (): HTMLButtonElement | null =>
+	document.querySelector<HTMLButtonElement>('.actions button[type="submit"]');
 
 /** A lookup whose answer the scenario gives when it chooses. */
 export function deferred() {
