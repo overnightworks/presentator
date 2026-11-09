@@ -1,7 +1,0 @@
-claim_id = "e5e7e39e651f4e4a9a3fd5bc72ba5b8b"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "95396ac482e746a5c0dba5df44f1633188756615"
-branch = "claude/issue-884-the-deck-toolchain-waits-seven-days-for"
-scope = ["frontend/pnpm-workspace.yaml", "slidev/pnpm-lock.yaml", "slidev/pnpm-workspace.yaml"]
-opened_commit = "caa0e27a4c748ae764ea53a7864262af46026880"
