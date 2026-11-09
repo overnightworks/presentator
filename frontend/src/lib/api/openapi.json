@@ -732,6 +732,10 @@
             "title": "Sign In Failed Banner",
             "type": "string"
           },
+          "sign_in_in_other_window": {
+            "title": "Sign In In Other Window",
+            "type": "string"
+          },
           "sign_in_log_in": {
             "title": "Sign In Log In",
             "type": "string"
@@ -748,8 +752,20 @@
             "title": "Sign In No Access Sentence",
             "type": "string"
           },
+          "sign_in_open_in_tab": {
+            "title": "Sign In Open In Tab",
+            "type": "string"
+          },
+          "sign_in_signing_in": {
+            "title": "Sign In Signing In",
+            "type": "string"
+          },
           "sign_in_try_again": {
             "title": "Sign In Try Again",
+            "type": "string"
+          },
+          "sign_in_unfinished": {
+            "title": "Sign In Unfinished",
             "type": "string"
           },
           "source_access_deploy_key": {
@@ -1173,6 +1189,10 @@
           "sign_in_try_again",
           "sign_in_no_access",
           "sign_in_no_access_sentence",
+          "sign_in_signing_in",
+          "sign_in_in_other_window",
+          "sign_in_open_in_tab",
+          "sign_in_unfinished",
           "section_decks",
           "section_settings",
           "menu_account",

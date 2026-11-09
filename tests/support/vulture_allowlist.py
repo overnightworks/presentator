@@ -181,6 +181,10 @@ LobbyText.sign_in_failed_banner
 LobbyText.sign_in_try_again
 LobbyText.sign_in_no_access
 LobbyText.sign_in_no_access_sentence
+LobbyText.sign_in_signing_in
+LobbyText.sign_in_in_other_window
+LobbyText.sign_in_open_in_tab
+LobbyText.sign_in_unfinished
 LobbyText.legal_impressum
 LobbyText.legal_datenschutz
 LobbyText.legal_nutzungsbedingungen

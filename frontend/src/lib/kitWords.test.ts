@@ -15,7 +15,11 @@ const words = {
 	sign_in_failed_banner: 'banner',
 	sign_in_try_again: 'again',
 	sign_in_no_access: 'denied',
-	sign_in_no_access_sentence: 'no way into {app}.'
+	sign_in_no_access_sentence: 'no way into {app}.',
+	sign_in_signing_in: 'busy',
+	sign_in_in_other_window: 'elsewhere',
+	sign_in_open_in_tab: 'tab it',
+	sign_in_unfinished: 'not done'
 } as LobbyText;
 
 describe('accountMenuWords', () => {
@@ -39,6 +43,10 @@ describe('signInPageWords', () => {
 			loginFailedBanner: 'banner',
 			tryAgain: 'again',
 			noAccess: 'denied',
+			signingIn: 'busy',
+			inOtherWindow: 'elsewhere',
+			openInTab: 'tab it',
+			signInUnfinished: 'not done',
 			logOut: 'out'
 		});
 	});
