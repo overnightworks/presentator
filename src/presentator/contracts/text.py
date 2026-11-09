@@ -26,6 +26,10 @@ class LobbyText:
     sign_in_try_again: str
     sign_in_no_access: str
     sign_in_no_access_sentence: str
+    sign_in_signing_in: str
+    sign_in_in_other_window: str
+    sign_in_open_in_tab: str
+    sign_in_unfinished: str
     section_decks: str
     section_settings: str
     menu_account: str
