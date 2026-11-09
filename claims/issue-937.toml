@@ -1,7 +1,0 @@
-claim_id = "6d505e55b14a44ba987b683add993766"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "1a445ab7f10653aee3caa661dec9664b91367816"
-branch = "claude/issue-937-the-landing-check-and-the-main-branch-s"
-scope = [".github/pull_request_template.md", ".github/workflows/pr-check.yml"]
-opened_commit = "061f2cff9aa5eedbca1343d56df49fdb713e9cde"
