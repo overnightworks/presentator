@@ -1,6 +1,8 @@
 """The sealed snapshot the self-check passes, its staged root and its alterations."""
 
+import ipaddress
 import os
+import socket
 import stat
 from collections.abc import Callable
 from dataclasses import replace
@@ -9,9 +11,15 @@ from types import SimpleNamespace
 
 import pytest
 
+from presentator.adapters import rtnetlink
 from presentator.host import worker_self_check
 from presentator.host.worker_scratch import QUEUE_MOUNT, Scratch
-from presentator.host.worker_self_check import Identity, Snapshot, Toolchain
+from presentator.host.worker_self_check import (
+    Identity,
+    Snapshot,
+    Toolchain,
+    read_snapshot,
+)
 
 SEALED_STATUS = """Name:\tpresentator-worker
 CapInh:\t0000000000000000
@@ -48,9 +56,43 @@ SYSV_HEADERS = {
         "      otime      ctime\n"
     ),
 }
-NETWORK_HEADER = "Inter-|   Receive\n face |bytes\n"
-LOOPBACK_ONLY = NETWORK_HEADER + "    lo: 0 0\n"
 WORLD_READABLE_EXECUTABLE = 0o755
+LOOPBACK_INDEX = 1
+LOOPBACK_UP = 0x1
+
+
+def sealed_topology() -> rtnetlink.Topology:
+    """The loopback with its two addresses and the routes the kernel adds for it."""
+    return rtnetlink.Topology(
+        links=(
+            rtnetlink.Link(LOOPBACK_INDEX, "lo", rtnetlink.IFF_LOOPBACK | LOOPBACK_UP),
+        ),
+        addresses=(
+            rtnetlink.Address(
+                socket.AF_INET, 8, LOOPBACK_INDEX, ipaddress.IPv4Address("127.0.0.1")
+            ),
+            rtnetlink.Address(
+                socket.AF_INET6, 128, LOOPBACK_INDEX, ipaddress.IPv6Address("::1")
+            ),
+        ),
+        routes=tuple(
+            rtnetlink.Route(
+                family, 255, prefix_length, LOOPBACK_INDEX, has_next_hop=False
+            )
+            for family, prefix_length in (
+                (socket.AF_INET, 8),
+                (socket.AF_INET6, 128),
+                (socket.AF_INET6, 8),
+            )
+        ),
+    )
+
+
+def read_sealed_snapshot(
+    root: Path,
+    read_topology: Callable[[], rtnetlink.Topology] = sealed_topology,
+) -> Snapshot:
+    return read_snapshot(root, read_topology=read_topology)
 
 
 def sealed_snapshot() -> Snapshot:
@@ -61,7 +103,7 @@ def sealed_snapshot() -> Snapshot:
         mountinfo=SEALED_MOUNTINFO,
         work_mode=0o755,
         work_owner_uid=0,
-        network_devices=LOOPBACK_ONLY,
+        topology=sealed_topology(),
         docker_socket_present=False,
         pids_max="512",
         memory_max="1073741824",
@@ -134,7 +176,6 @@ def stage_sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     file_at("proc/self/status", SEALED_STATUS)
     file_at("proc/self/mountinfo", SEALED_MOUNTINFO)
-    file_at("proc/net/dev", LOOPBACK_ONLY)
     file_at("sys/fs/cgroup/pids.current", "1\n")
     file_at("sys/fs/cgroup/pids.max", "512\n")
     file_at("sys/fs/cgroup/memory.max", "1073741824\n")

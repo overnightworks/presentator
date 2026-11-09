@@ -16,7 +16,7 @@ from functools import partial
 from pathlib import Path
 from typing import Protocol
 
-from presentator.adapters import build_wire
+from presentator.adapters import build_wire, rtnetlink
 from presentator.adapters.worker_children import (
     ChildIdentity,
     readable_within,
@@ -328,7 +328,7 @@ def _serve_on_this_machine(
 REAL_BOUNDARY = Boundary(
     _set_non_dumpable,
     _set_umask,
-    partial(read_snapshot, Path("/")),
+    partial(read_snapshot, Path("/"), read_topology=rtnetlink.read_topology),
     load_worker_settings,
     _serve_on_this_machine,
 )

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from presentator.adapters import build_wire
+from presentator.adapters.rtnetlink import Topology
 from presentator.host import worker, worker_self_check
 from presentator.host.config import (
     WorkerSettings,
@@ -27,14 +28,16 @@ from tests.presentator.host.support.audit_recording import (
 )
 from tests.presentator.host.support.sealed_snapshot import (
     HARDENED,
-    LOOPBACK_ONLY,
     SEALED_STATUS,
     SYSV_HEADERS,
+    read_sealed_snapshot,
     sealed_snapshot,
+    sealed_topology,
     stage_sealed_root,
     with_fields,
 )
 
+TOPOLOGY_READ = "topology read"
 WORK_MOUNT, TEMPORARY_MOUNT, SHARED_MEMORY_MOUNT, *_ = worker_self_check.TMPFS_MOUNTS
 
 
@@ -124,10 +127,6 @@ FAILURES = {
     ),
     "work sticky world-writable": (with_fields(work_mode=0o1777), Predicate.MOUNTS),
     "work not root": (with_fields(work_owner_uid=1000), Predicate.MOUNTS),
-    "second interface": (
-        with_fields(network_devices=LOOPBACK_ONLY + "  eth0: 0 0\n"),
-        Predicate.MOUNTS,
-    ),
     "docker socket present": (
         with_fields(docker_socket_present=True),
         Predicate.MOUNTS,
@@ -420,10 +419,9 @@ def sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
-    snapshot = worker_self_check.read_snapshot(sealed_root)
+    snapshot = read_sealed_snapshot(sealed_root)
 
     assert snapshot.process_status == SEALED_STATUS
-    assert snapshot.network_devices == LOOPBACK_ONLY
     assert (snapshot.pids_max, snapshot.memory_max) == ("512", "1073741824")
     assert (snapshot.work_mode, snapshot.work_owner_uid) == (
         0o755,
@@ -444,7 +442,7 @@ def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
 def test_reads_a_missing_toolchain_as_absent(sealed_root: Path) -> None:
     (sealed_root / "app/slidev/node_modules/.bin/slidev").unlink()
 
-    toolchain = worker_self_check.read_snapshot(sealed_root).toolchain
+    toolchain = read_sealed_snapshot(sealed_root).toolchain
 
     assert toolchain.slidev_mode is None
 
@@ -456,10 +454,6 @@ def break_capability_bounding_set(root: Path, _monkeypatch: pytest.MonkeyPatch) 
 
 def remove_status(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
     (root / "proc/self/status").unlink()
-
-
-def remove_network_table(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
-    (root / "proc/net/dev").unlink()
 
 
 def break_mountinfo(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
@@ -579,7 +573,6 @@ REFUSED_FACTS = {
     "status file missing": (remove_status, Predicate.CAPABILITIES),
     "mountinfo malformed": (break_mountinfo, Predicate.MOUNTS),
     "work directory missing": (remove_work, Predicate.MOUNTS),
-    "network table missing": (remove_network_table, Predicate.MOUNTS),
     "mountinfo not UTF-8": (break_mountinfo_encoding, Predicate.MOUNTS),
     "extra capability before non-UTF-8 mountinfo": (
         grant_capability_and_break_mountinfo_encoding,
@@ -625,7 +618,7 @@ def test_a_failing_or_unreadable_fact_refuses_through_main_naming_its_predicate(
 
     def read_with_sealed_process_facts() -> Snapshot:
         return replace(
-            worker_self_check.read_snapshot(sealed_root),
+            read_sealed_snapshot(sealed_root),
             environment_keys=sealed.environment_keys,
             pid=sealed.pid,
             work_owner_uid=sealed.work_owner_uid,
@@ -665,7 +658,7 @@ def test_reads_a_docker_socket_as_present(
 ) -> None:
     make_socket(socket_path)
 
-    assert worker_self_check.read_snapshot(sealed_root).docker_socket_present is True
+    assert read_sealed_snapshot(sealed_root).docker_socket_present is True
 
 
 def test_denied_socket_lookup_marks_mounts_unreadable(
@@ -676,7 +669,7 @@ def test_denied_socket_lookup_marks_mounts_unreadable(
 
     monkeypatch.setattr(worker_self_check.os, "lstat", denied)
 
-    assert worker_self_check.read_snapshot(sealed_root).unreadable == {Predicate.MOUNTS}
+    assert read_sealed_snapshot(sealed_root).unreadable == {Predicate.MOUNTS}
 
 
 @pytest.mark.parametrize(
@@ -691,9 +684,7 @@ def test_unresolvable_slidev_package_gives_no_vite_target(
 ) -> None:
     arrange(sealed_root, monkeypatch)
 
-    assert (
-        worker_self_check.read_snapshot(sealed_root).toolchain.vite_link_target is None
-    )
+    assert read_sealed_snapshot(sealed_root).toolchain.vite_link_target is None
 
 
 def unknown_user(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -708,7 +699,7 @@ def test_unreadable_resource_bound_marks_its_predicate_unreadable(
 ) -> None:
     (sealed_root / "sys/fs/cgroup/memory.max").unlink()
 
-    unreadable = worker_self_check.read_snapshot(sealed_root).unreadable
+    unreadable = read_sealed_snapshot(sealed_root).unreadable
 
     assert unreadable == {Predicate.RESOURCE_BOUNDS}
 
@@ -718,9 +709,7 @@ def test_unknown_user_marks_identities_unreadable(
 ) -> None:
     unknown_user(monkeypatch)
 
-    assert worker_self_check.read_snapshot(sealed_root).unreadable == {
-        Predicate.IDENTITIES
-    }
+    assert read_sealed_snapshot(sealed_root).unreadable == {Predicate.IDENTITIES}
 
 
 def test_unreadable_later_fact_does_not_mask_an_earlier_failing_predicate(
@@ -731,7 +720,7 @@ def test_unreadable_later_fact_does_not_mask_an_earlier_failing_predicate(
     )
     (sealed_root / "work").rmdir()
 
-    snapshot = worker_self_check.read_snapshot(sealed_root)
+    snapshot = read_sealed_snapshot(sealed_root)
 
     assert worker_self_check.first_failing_predicate(snapshot) == Predicate.CAPABILITIES
     assert snapshot.unreadable == {Predicate.MOUNTS, Predicate.SCRATCH}
@@ -762,9 +751,13 @@ def test_prctl_failure_raises() -> None:
 def test_the_snapshot_reads_the_task_count_then_the_scratch_places_and_launches_nothing(
     sealed_root: Path,
 ) -> None:
+    def record_topology_read() -> Topology:
+        audit_recording.events.append((TOPOLOGY_READ, None))
+        return sealed_topology()
+
     audit_recording.start()
     try:
-        worker_self_check.read_snapshot(sealed_root)
+        read_sealed_snapshot(sealed_root, record_topology_read)
     finally:
         audit_recording.stop()
     events = audit_recording.events
@@ -788,3 +781,7 @@ def test_the_snapshot_reads_the_task_count_then_the_scratch_places_and_launches_
         ]
         + [("open", Path("proc/sysvipc") / table) for table in SYSV_HEADERS]
     )
+    ordered = [
+        event for event in events if below_root(event) or event[0] == TOPOLOGY_READ
+    ]
+    assert ordered.index((TOPOLOGY_READ, None)) >= len(reads[:8])
