@@ -477,7 +477,7 @@ jobs:
                 ;;
             esac
           done
-          for uid in 10001 10002 010001; do
+          for uid in 61001 61002 061001; do
             if docker build --progress=plain --build-arg PRESENTATOR_RUNTIME_UID=$uid --tag presentator:uid-$uid . > "uid-$uid.log" 2>&1; then
               echo "a runtime uid of $uid was accepted" >&2
               exit 1
