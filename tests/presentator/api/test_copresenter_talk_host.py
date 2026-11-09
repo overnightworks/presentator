@@ -14,7 +14,6 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import AskLimiter
 from presentator.contracts.models import Role, User
-from tests.presentator.application.support.fakes import FrozenClock
 from tests.support.copresenter_support import (
     HEARING,
     POLICY_VIOLATION,
@@ -30,7 +29,6 @@ from tests.support.copresenter_support import (
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
-    NOW,
     USERNAME,
     a_web_auth,
     hand_over_session_cookies,
@@ -206,7 +204,7 @@ def _talk_host_with_a_signed_in_admin(
     private = PrivateFakes()
     surface = CoPresenterSurface(
         use=a_use(private, the_admins_decks()),
-        limiter=AskLimiter(clock=FrozenClock(instant=NOW)),
+        limiter=AskLimiter(),
         browser_origin=TALK_ORIGIN,
         delay=asyncio.sleep if deadline is None else deadline.wait,
     )

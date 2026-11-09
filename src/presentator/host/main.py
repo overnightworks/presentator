@@ -352,7 +352,7 @@ def _copresenter_surface(
                 speech_scope=settings.speech_service_scope,
             ),
         ),
-        limiter=AskLimiter(clock=SystemClock()),
+        limiter=AskLimiter(),
         browser_origin=settings.talk_origin,
     )
 
