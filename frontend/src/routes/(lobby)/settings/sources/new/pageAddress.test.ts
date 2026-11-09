@@ -7,6 +7,7 @@ import {
 	close,
 	createButton,
 	deferred,
+	deferredCheck,
 	keyBlock,
 	open,
 	press,
@@ -80,7 +81,7 @@ describe('the secret on the wire', () => {
 		await vi.waitFor(() => expect(secretField()).not.toBeNull());
 		type('source-secret', 'a-typed-token');
 
-		press(words.source_check);
+		checkButton()?.click();
 
 		await vi.waitFor(() => expect(sentTo(fetched, CHECK)).toHaveLength(1));
 		expect(sentTo(fetched, CHECK)).toEqual([expect.objectContaining({ secret: 'a-typed-token' })]);
@@ -97,7 +98,7 @@ describe('the secret on the wire', () => {
 			type(URL_FIELD, addresses[which].url);
 			await vi.waitFor(() => expect(secretField()).toBeNull());
 			await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
-			press(words.source_check);
+			checkButton()?.click();
 
 			await vi.waitFor(() => expect(sentTo(fetched, CHECK)).toHaveLength(1));
 			expect(sentTo(fetched, CHECK)).toEqual([expect.objectContaining({ secret: null })]);
@@ -246,7 +247,7 @@ describe('a check result belongs to the address it was for', () => {
 		open();
 		type(URL_FIELD, addresses.https.url);
 		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
-		press(words.source_check);
+		checkButton()?.click();
 		await vi.waitFor(() => expect(createButton()?.disabled).toBe(false));
 		expect(status()?.textContent).toContain('c0ffee1');
 
@@ -261,7 +262,7 @@ describe('a check result belongs to the address it was for', () => {
 		open();
 		type(URL_FIELD, addresses.https.url);
 		await vi.waitFor(() => expect(secretField()).not.toBeNull());
-		press(words.source_check);
+		checkButton()?.click();
 		await vi.waitFor(() => expect(createButton()?.disabled).toBe(false));
 
 		type('source-secret', 'a-typed-token');
@@ -270,6 +271,43 @@ describe('a check result belongs to the address it was for', () => {
 		expect(status()?.textContent).toContain('c0ffee1');
 		expect(createButton()?.disabled).toBe(false);
 	});
+});
+
+describe('a request in flight', () => {
+	it.each(['check', 'create'] as const)(
+		'shows the %s button busy by its word while its answer is held, then reverts',
+		async (which) => {
+			const held = deferredCheck();
+			open(undefined, which === 'check' ? () => held.answer : undefined, () => held.answer);
+			type('source-name', 'talks');
+			type(URL_FIELD, addresses.https.url);
+			await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
+			const pressed = which === 'check' ? checkButton : createButton;
+			if (which === 'create') {
+				checkButton()?.click();
+				await vi.waitFor(() => expect(createButton()?.disabled).toBe(false));
+			}
+
+			pressed()?.click();
+			flushSync();
+
+			const word = which === 'check' ? words.source_busy_check : words.source_busy_create;
+			expect(pressed()?.getAttribute('aria-busy')).toBe('true');
+			expect(pressed()?.textContent?.trim()).toBe(word);
+			expect(pressed()?.querySelector('.state[data-state="building"]')).not.toBeNull();
+			expect(checkButton()?.disabled).toBe(true);
+			expect(createButton()?.disabled).toBe(true);
+
+			if (which === 'check') {
+				held.reachable();
+				await vi.waitFor(() => expect(pressed()?.hasAttribute('aria-busy')).toBe(false));
+				expect(pressed()?.textContent?.trim()).toBe(words.source_check);
+			} else {
+				held.created();
+				await vi.waitFor(() => expect(document.body.textContent).toContain(words.source_created));
+			}
+		}
+	);
 });
 
 describe('a lookup that fails', () => {

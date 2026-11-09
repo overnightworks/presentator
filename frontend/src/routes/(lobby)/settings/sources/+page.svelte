@@ -2,6 +2,7 @@
 	import { invalidate, onNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { ageInWords } from '#lib/age.ts';
+	import ActionButton from '#lib/ActionButton.svelte';
 	import { fetchNow, SOURCES_PATH } from '#lib/api/sources.ts';
 	import { noticeOf } from '#lib/notice.ts';
 	import { languageTag } from '#lib/session.svelte.ts';
@@ -36,15 +37,16 @@
 		removal = null;
 	});
 
-	let pending = $state(false);
+	// The row whose request runs; every other row is disabled meanwhile.
+	let fetching = $state<string | null>(null);
 
 	async function fetchSource(name: string): Promise<void> {
-		pending = true;
+		fetching = name;
 		try {
 			await fetchNow(fetch, name);
 			await invalidate(SOURCES_PATH);
 		} finally {
-			pending = false;
+			fetching = null;
 		}
 	}
 </script>
@@ -96,12 +98,15 @@
 					<td class="access">{#if source.access !== null}{source.access}{/if}</td>
 					<td class="fetched">{source.age}</td>
 					<td class="row-action">
-						<button
-							class="btn secondary sm"
-							type="button"
-							disabled={pending}
-							onclick={() => fetchSource(source.name)}>{words.sources_fetch_now}</button
-						>
+						<ActionButton
+							variant="secondary"
+							small
+							label={words.sources_fetch_now}
+							busyWord={words.source_busy_fetch}
+							busy={fetching === source.name}
+							disabled={fetching !== null}
+							onclick={() => fetchSource(source.name)}
+						/>
 					</td>
 				</tr>
 			{/each}

@@ -261,6 +261,7 @@ main {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	gap: 7px;
 	min-height: 36px;
 	padding: 0 14px;
 	border: 1px solid transparent;
@@ -292,6 +293,9 @@ main {
 .btn:disabled {
 	opacity: 0.5;
 	cursor: default;
+}
+.btn[aria-busy='true']:disabled {
+	opacity: 1;
 }
 .back {
 	font-size: 14px;
@@ -402,6 +406,14 @@ main {
 	}
 }
 @media (prefers-reduced-motion: no-preference) {
+	.state[data-state='building'] i {
+		animation: spin 1s linear infinite;
+	}
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
 	.account {
 		transition: filter 0.15s;
 	}

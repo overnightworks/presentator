@@ -772,6 +772,30 @@
             "title": "Source Access Token",
             "type": "string"
           },
+          "source_busy_check": {
+            "title": "Source Busy Check",
+            "type": "string"
+          },
+          "source_busy_count": {
+            "title": "Source Busy Count",
+            "type": "string"
+          },
+          "source_busy_create": {
+            "title": "Source Busy Create",
+            "type": "string"
+          },
+          "source_busy_fetch": {
+            "title": "Source Busy Fetch",
+            "type": "string"
+          },
+          "source_busy_remove": {
+            "title": "Source Busy Remove",
+            "type": "string"
+          },
+          "source_busy_renew": {
+            "title": "Source Busy Renew",
+            "type": "string"
+          },
           "source_check": {
             "title": "Source Check",
             "type": "string"
@@ -1201,6 +1225,12 @@
           "sources_column_source",
           "sources_column_fetched",
           "sources_fetch_now",
+          "source_busy_check",
+          "source_busy_create",
+          "source_busy_fetch",
+          "source_busy_renew",
+          "source_busy_count",
+          "source_busy_remove",
           "source_state_reachable",
           "source_state_error",
           "source_state_refused",
