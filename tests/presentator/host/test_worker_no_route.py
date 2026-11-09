@@ -172,9 +172,14 @@ def test_a_second_link_listed_only_in_the_device_table_is_not_judged_by_mounts(
         "Inter-|\n face |\n    lo: 0\n  eth0: 0\n"
     )
 
-    snapshot: Snapshot = read_sealed_snapshot(sealed_root)
-
-    judged_alone = replace(
-        sealed_snapshot(), mountinfo=snapshot.mountinfo, topology=snapshot.topology
+    sealed = sealed_snapshot()
+    snapshot: Snapshot = replace(
+        read_sealed_snapshot(sealed_root),
+        environment_keys=sealed.environment_keys,
+        pid=sealed.pid,
+        work_owner_uid=sealed.work_owner_uid,
+        identity=sealed.identity,
     )
-    assert worker_self_check.first_failing_predicate(judged_alone) is None
+
+    assert snapshot.unreadable == frozenset()
+    assert worker_self_check.first_failing_predicate(snapshot) is None
