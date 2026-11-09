@@ -1028,6 +1028,18 @@
             "title": "Source Renew",
             "type": "string"
           },
+          "source_renewed_deploy_key": {
+            "title": "Source Renewed Deploy Key",
+            "type": "string"
+          },
+          "source_renewed_secret": {
+            "title": "Source Renewed Secret",
+            "type": "string"
+          },
+          "source_renewed_webhook": {
+            "title": "Source Renewed Webhook",
+            "type": "string"
+          },
           "source_request_failed": {
             "title": "Source Request Failed",
             "type": "string"
@@ -1350,6 +1362,9 @@
           "source_fetch_removed",
           "source_fetch_busy",
           "source_request_failed",
+          "source_renewed_secret",
+          "source_renewed_deploy_key",
+          "source_renewed_webhook",
           "source_run_fetched",
           "source_run_unreachable",
           "source_run_secret",

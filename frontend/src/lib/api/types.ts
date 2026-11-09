@@ -751,6 +751,12 @@ export interface components {
             source_removed: string;
             /** Source Renew */
             source_renew: string;
+            /** Source Renewed Deploy Key */
+            source_renewed_deploy_key: string;
+            /** Source Renewed Secret */
+            source_renewed_secret: string;
+            /** Source Renewed Webhook */
+            source_renewed_webhook: string;
             /** Source Request Failed */
             source_request_failed: string;
             /** Source Reverse */
