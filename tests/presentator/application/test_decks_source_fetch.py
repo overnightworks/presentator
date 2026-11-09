@@ -1,10 +1,14 @@
 """What a fetch now answers: the run it recorded and what it changed."""
 
+from dataclasses import dataclass
+from datetime import timedelta
 from threading import Thread
 
 from presentator.application.decks import Decks
 from presentator.contracts.decks import (
+    Source,
     SourceFetch,
+    SourcePoll,
     SourceRunFailure,
     SourceRunOutcome,
 )
@@ -20,6 +24,7 @@ from tests.presentator.application.support.fakes import (
     PATIENCE,
     FakeBuildRunner,
     FakeDeckFolders,
+    FrozenClock,
     HeldDeckFolders,
 )
 
@@ -123,3 +128,31 @@ def test_fetching_while_another_refresh_holds_the_lock_answers_no_run() -> None:
     assert fetched == SourceFetch(
         run=None, decks_built=0, builds_failed=0, decks_removed=0
     )
+
+
+@dataclass
+class _SlowFolders(FakeDeckFolders):
+    """A mirror whose pull takes this long on the clock."""
+
+    clock: FrozenClock | None = None
+    pull_takes: timedelta = timedelta(seconds=40)
+
+    def folders(self, source: Source) -> SourcePoll:
+        assert self.clock is not None
+        self.clock.advance(self.pull_takes)
+        return super().folders(source)
+
+
+def test_a_slow_pull_records_the_run_at_the_instant_the_pass_began() -> None:
+    fakes = DecksFakes()
+    mirror = _SlowFolders(
+        carried={SOURCE.id: (a_folder("kundenfeedback"),)}, clock=fakes.clock
+    )
+    began = fakes.clock.instant
+    decks = decks_over(mirror=mirror, fakes=fakes)
+
+    decks.refresh()
+
+    run = fakes.source_runs.newest(SOURCE.id)
+    assert run is not None
+    assert run.at == began
