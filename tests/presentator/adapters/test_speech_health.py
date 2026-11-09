@@ -6,8 +6,8 @@ import asyncio
 
 import pytest
 from fastapi.responses import JSONResponse
-from speech_runtime_client import wire
-from speech_runtime_client.outcomes import PastDeadline
+from speech_client import wire
+from speech_client.outcomes import PastDeadline
 
 from presentator.adapters.speech import SpeechHearing
 from presentator.contracts.copresenter import (

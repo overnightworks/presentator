@@ -16,16 +16,16 @@ from httpx2.websockets import (
     WebSocketUpgradeError,
 )
 from pydantic import ValidationError
-from speech_runtime_client import wire
-from speech_runtime_client.health import UnexpectedStatus, fetch_health
-from speech_runtime_client.outcomes import (
+from speech_client import wire
+from speech_client.health import UnexpectedStatus, fetch_health
+from speech_client.outcomes import (
     Cut,
     Malformed,
     OverCap,
     PastDeadline,
     Unreachable,
 )
-from speech_runtime_client.speak import Busy, Refused, SpeakOutcome, Spoken, speak
+from speech_client.speak import Busy, Refused, SpeakOutcome, Spoken, speak
 from wsproto.utilities import LocalProtocolError
 
 from presentator.contracts.copresenter import (
@@ -38,7 +38,7 @@ from presentator.contracts.copresenter import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
 
-    from speech_runtime_client.health import HealthOutcome
+    from speech_client.health import HealthOutcome
 
     from presentator.ports.copresenter import PrivateHearing
 

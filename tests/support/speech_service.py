@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Final
 
 from fastapi import FastAPI, Request, Response, WebSocket
 from fastapi.responses import JSONResponse, StreamingResponse
-from speech_runtime_client import wire
+from speech_client import wire
 
 from tests.presentator.adapters.support.serving import (
     Serving,

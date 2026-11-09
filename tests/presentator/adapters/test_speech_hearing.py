@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from fastapi import Response, WebSocket
-from speech_runtime_client import wire
+from speech_client import wire
 
 from presentator.adapters.speech import SpeechHearing
 from presentator.contracts.copresenter import (

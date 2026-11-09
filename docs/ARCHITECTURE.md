@@ -37,7 +37,7 @@ flowchart TD
     ports --> contracts
     adapters --> gitmirror
     agent --> arc[agent_runtime_client]
-    adapters --> src[speech_runtime_client]
+    adapters --> src[speech_client]
     host --> webauth
     api --> webauth
     agent --> webauth
@@ -57,7 +57,7 @@ flowchart TD
   `agent_runtime_client` at the tag `pyproject.toml` pins, and `presentator.api`
   only its `tools` module (`tests/presentator/agent/test_backend_imports.py`
   holds that line, which import-linter cannot draw inside one package). Only adapters
-  import `speech_runtime_client`, the pinned client that owns the speech wire, its
+  import `speech_client`, the pinned client that owns the speech wire, its
   upgrade headers, server events and health fetch; `adapters/session_access.py` is
   the one read of what the issuer grants a signed-in session.
 - **webauth** owns the sign-in routes, the gate, the origin check, the body caps

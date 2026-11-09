@@ -8,8 +8,8 @@ import logging
 from typing import TYPE_CHECKING
 
 import pytest
-from speech_runtime_client import wire
-from speech_runtime_client.outcomes import OverCap, PastDeadline
+from speech_client import wire
+from speech_client.outcomes import OverCap, PastDeadline
 
 from presentator.adapters.speech import SpeechSpeaking
 from presentator.contracts.copresenter import (
@@ -29,7 +29,7 @@ from tests.support.speech_service import (
 )
 
 if TYPE_CHECKING:
-    from speech_runtime_client.speak import SpeakOutcome
+    from speech_client.speak import SpeakOutcome
 
 TOKENS = SpeechTokens(person="person-token-MARKER", workload="workload-token-MARKER")
 SENTENCE = "Ein Satz, bitte."
