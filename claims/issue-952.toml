@@ -1,0 +1,7 @@
+claim_id = "66b832a1d32747a3816c6766760e7306"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "7dc1c124402c161298ac4a7e87976743f6b4770a"
+branch = "claude/issue-952-a-gpu-voice-that-loads-on-its-first-requ"
+scope = ["src/presentator/adapters/speech.py", "tests/presentator/adapters/test_speech_health.py", "tests/support/speech_service.py"]
+opened_commit = "5a8976615b0d443c2d902b58f42cfd4521eb48cb"
