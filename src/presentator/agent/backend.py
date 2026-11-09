@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from contextlib import aclosing, asynccontextmanager
@@ -48,7 +49,7 @@ from presentator.contracts.copresenter import (
 from presentator.contracts.models import Role
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, AsyncIterator, Callable
+    from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 
     import httpx2
     from webauth.oidc import OidcRelyingParty
@@ -71,11 +72,15 @@ def _slide_number(arguments: JsonObject) -> int | None:
     return None
 
 
-async def _show_slide(principal: Principal, arguments: JsonObject) -> ToolOutcome:
+def _show_slide(principal: Principal, arguments: JsonObject) -> Awaitable[ToolOutcome]:
     del principal  # the move rides the asking person's own stream
     if _slide_number(arguments) is None:
-        return ToolOutcome("number must be a whole number of at least 1", is_error=True)
-    return ToolOutcome("shown", is_error=False)
+        outcome = ToolOutcome(
+            "number must be a whole number of at least 1", is_error=True
+        )
+    else:
+        outcome = ToolOutcome("shown", is_error=False)
+    return asyncio.sleep(0, outcome)
 
 
 SHOW_SLIDE: Final = HandTool(

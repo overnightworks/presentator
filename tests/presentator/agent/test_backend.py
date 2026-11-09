@@ -448,6 +448,20 @@ async def test_a_slide_move_comes_before_the_words_that_follow_it() -> None:
     assert events == [ShowSlide(number=3), "Gut."]
 
 
+@on_an_event_loop
+async def test_every_slide_move_of_a_run_reaches_the_window_in_order() -> None:
+    """A second move in one run is not dropped."""
+    gateway = FakeGateway(
+        tool_round(tool_call("call-1", "show_slide", {"number": 2})),
+        tool_round(tool_call("call-2", "show_slide", {"number": 5})),
+        completion("Gut."),
+    )
+
+    events = await answered(answerer_over(gateway))
+
+    assert events == [ShowSlide(number=2), ShowSlide(number=5), "Gut."]
+
+
 @pytest.mark.parametrize(
     "arguments", [{"number": 0}, {"number": -2}, {"number": 1.5}, {"number": True}, {}]
 )
