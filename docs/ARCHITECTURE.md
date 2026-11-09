@@ -49,9 +49,9 @@ flowchart TD
   (import-linter in `pyproject.toml`, run by the gate's `import-contract` rule).
   A library an adapter owns behind a port is barred above the adapters by its
   own contract; webauth is barred only from `application`, `ports`, `contracts`,
-  as `api` and `host` import it; the web framework is exempt. The one exception
-  to the barred library is `api`, whose routes import `agent_runtime_client.tools`
-  to declare, beside each route, whether an agent may call it.
+  as `api` and `host` import it; the web framework is exempt. `api` alone may
+  import one module of a barred library, `agent_runtime_client.tools`, to
+  declare, beside each route, whether an agent may call it.
 - **`src/gitmirror`** mirrors any remote read-only through `git`, does not
   import `presentator`, and only adapters name it. **`presentator.agent`** imports
   `agent_runtime_client` at the tag `pyproject.toml` pins, and `presentator.api`

@@ -273,7 +273,7 @@ def test_an_invalid_resource_bearer_beside_a_valid_cookie_gets_no_cookie_fallbac
 def test_get_account_and_get_session_answer_the_person_whose_token_the_agent_holds(
     world: World,
 ) -> None:
-    """T3: that person's theme and name, not the cookie's person's."""
+    """That person's theme and name, not the cookie's person's."""
     chosen = {"theme": ThemeChoice.DARK.value}
     assert world.felix.put(ACCOUNT_PATH, json=chosen).status_code == HTTPStatus.OK
     program = world.program(as_browser=world.anna)
@@ -292,7 +292,7 @@ def test_get_account_and_get_session_answer_the_person_whose_token_the_agent_hol
 def test_an_admin_persons_agents_client_bearer_never_reads_as_admin(
     world: World,
 ) -> None:
-    """T3: the role is the one the library caps for a bearer request."""
+    """The role is the one the library caps for a bearer request."""
     admin_browser = world.scene.browser()
     assert world.scene.sign_in(
         admin_browser, subject=World.ADMIN, username="root", groups=ADMIN
@@ -310,7 +310,7 @@ def test_an_admin_persons_agents_client_bearer_never_reads_as_admin(
 def test_set_account_theme_changes_only_the_theme_of_the_person_whose_token_it_is(
     world: World,
 ) -> None:
-    """T4: admitted with the bearer alone and no Origin."""
+    """Admitted with the bearer alone and no Origin."""
     changed = ThemeChoice.DARK.value
     before_felix = world.felix.get(ACCOUNT_PATH, headers=World.JSON).json()
     before_anna = world.anna.get(ACCOUNT_PATH, headers=World.JSON).json()
@@ -330,7 +330,7 @@ def test_set_account_theme_changes_only_the_theme_of_the_person_whose_token_it_i
 
 
 def test_an_own_account_agent_sets_only_its_own_theme(world: World) -> None:
-    """T12: no person's preference changes."""
+    """No person's preference changes."""
     headers = world.own_agent(groups=[*MEMBER, MCP_GROUP, AGENT_GROUP])
     before = [
         browser.get(ACCOUNT_PATH, headers=World.JSON).json()
@@ -364,7 +364,7 @@ def test_an_own_account_agent_sets_only_its_own_theme(world: World) -> None:
 def test_an_admin_persons_agents_client_bearer_opens_no_admin_route(
     tmp_path: Path, method: str, path: str
 ) -> None:
-    """T5: an agent's token never carries admin rights."""
+    """An agent's token never carries admin rights."""
     with a_world(tmp_path, token_clients=frozenset({World.HAL})) as world:
         headers = world.bearer(groups=[*ADMIN, MCP_GROUP])
 
@@ -376,7 +376,7 @@ def test_an_admin_persons_agents_client_bearer_opens_no_admin_route(
 
 
 def test_a_bearer_on_an_excluded_person_route_is_refused(world: World) -> None:
-    """T6: the PDF is a person's route that no tool answers."""
+    """The PDF is a person's route that no tool answers."""
     answer = world.program().get(
         World.EXCLUDED_PATH, headers={**world.bearer(), **World.JSON}
     )

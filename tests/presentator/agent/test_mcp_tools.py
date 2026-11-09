@@ -71,7 +71,7 @@ def test_the_lobby_offers_exactly_the_pinned_tools(tmp_path: Path) -> None:
 def test_the_lobby_starts_with_every_operation_decided_with_and_without_token_clients(
     tmp_path: Path, token_clients: frozenset[str]
 ) -> None:
-    """T1: a forgotten decision stops the start, so a built lobby holds none."""
+    """A forgotten decision stops the start, so a built lobby holds none."""
     app = a_scene(tmp_path, token_clients=token_clients).lobby.app
 
     operations = operations_of(app)
@@ -85,7 +85,7 @@ def test_the_lobby_starts_with_every_operation_decided_with_and_without_token_cl
 def test_no_marked_template_is_met_by_another_route_of_its_method(
     tmp_path: Path,
 ) -> None:
-    """T14: a marked path is answered by its own route and no other of its method."""
+    """A marked path is answered by its own route and no other of its method."""
     app = a_scene(tmp_path).lobby.app
     marked = [
         (method, template)

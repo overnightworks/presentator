@@ -40,7 +40,7 @@ def names(module: str, library: str) -> bool:
     sorted(SOURCE.rglob("*.py")),
     ids=lambda path: str(path.relative_to(SOURCE)),
 )
-def test_only_the_agent_package_names_the_client_and_its_settings_only_the_config(
+def test_the_agent_package_names_the_client_and_api_only_its_tools_module(
     path: Path,
 ) -> None:
     """C14: the connector and the MCP front name the client; settings, its config.
