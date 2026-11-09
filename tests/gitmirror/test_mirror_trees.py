@@ -37,6 +37,24 @@ def test_a_tree_entry_that_names_a_directory_of_its_own_ends_the_read_before_any
     assert not (tmp_path / "payload.txt").exists()
 
 
+def test_a_listed_path_is_checked_part_by_part_before_any_write(
+    remote: GitRemote,
+    tmp_path: Path,
+) -> None:
+    remote.push_crafted_deck("../../escaped", entry="file")
+    mirror = a_mirror(remote.url, directory=tmp_path)
+    revision = mirror.connect().revision
+    assert revision is not None
+    work = tmp_path / "work"
+    before = {entry.name for entry in tmp_path.iterdir()}
+
+    with pytest.raises(MirrorError):
+        mirror.export(revision, "deck", into=work / "deck")
+
+    assert {entry.name for entry in tmp_path.iterdir()} <= before | {"work"}
+    assert not work.exists()
+
+
 @pytest.mark.parametrize("name", [".github", ".env", "..hidden", "..."])
 def test_a_tree_whose_names_merely_start_with_a_dot_is_written_out_as_it_stands(
     remote: GitRemote,
@@ -138,6 +156,7 @@ def test_a_path_or_name_the_filesystem_refuses_ends_as_a_mirror_error_inside_the
         mirror.export(revision, "deck", into=work / "deck")
 
     assert {entry.name for entry in tmp_path.iterdir()} <= before | {"work"}
+    assert {entry.name for entry in work.iterdir()} <= {"deck"}
 
 
 def test_a_nested_folder_the_commit_does_not_carry_is_refused_and_nothing_is_written(

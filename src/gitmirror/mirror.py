@@ -526,8 +526,12 @@ def _listed_record(record: str) -> tuple[str, TreeEntry]:
     _mode, kind, _object = attributes.split()
     # The raw last element, because a path type drops a `.` element and would
     # hide the name that makes a write land in, or above, its own directory.
-    name = path.rpartition("/")[2]
-    if name in _UNWRITABLE_ENTRY_NAMES:
-        message = f"the tree carries an entry named {name!r}"
-        raise MirrorError(message)
+    parts = path.split("/")
+    name = parts[-1]
+    # Every part, because one entry whose own name holds slashes is listed as
+    # several parts, and a write follows all of them.
+    for part in parts:
+        if part in _UNWRITABLE_ENTRY_NAMES:
+            message = f"the tree carries an entry named {part!r}"
+            raise MirrorError(message)
     return path, TreeEntry(name=name, is_directory=kind == "tree")
