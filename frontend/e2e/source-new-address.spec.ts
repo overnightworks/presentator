@@ -8,8 +8,10 @@ import {
 	anSshAddress,
 	CHECK_API,
 	checks,
+	folderField,
 	KIND_API,
 	opensTheForm,
+	SOURCES_API,
 	secretField,
 	typesTheAddress
 } from './sources.ts';
@@ -22,7 +24,7 @@ test.describe('the address decides what the Add source form shows', () => {
 		['ssh', false, true],
 		['folder', false, false]
 	] as const) {
-		test(`a ${shape} address shows the token field ${token} and the key ${key}`, async ({
+		test(`a ${shape} address shows the token field ${token}, the key ${key} and the folder ${token || key}`, async ({
 			page
 		}, testInfo) => {
 			const { words } = await sessionOf(page);
@@ -38,6 +40,7 @@ test.describe('the address decides what the Add source form shows', () => {
 
 			await expect(secretField(page, words)).toHaveCount(token ? 1 : 0);
 			await expect(page.getByText(words.source_deploy_key_heading)).toHaveCount(key ? 1 : 0);
+			await expect(folderField(page, words)).toHaveCount(token || key ? 1 : 0);
 			await expect(page.getByRole('button', { name: words.source_check })).toBeEnabled();
 		});
 	}
@@ -78,6 +81,67 @@ test.describe('the address decides what the Add source form shows', () => {
 
 		expect((await sent).postDataJSON()).toMatchObject({ secret: null });
 		expect((await sent).postData()).not.toContain(ACCESS_TOKEN);
+	});
+
+	test('the empty form shows no folder field', async ({ page }) => {
+		const { words } = await sessionOf(page);
+
+		await opensTheForm(page);
+
+		await expect(folderField(page, words)).toHaveCount(0);
+	});
+
+	test('a folder typed for https is gone when a server folder follows, and Create sends none', async ({
+		page
+	}, testInfo) => {
+		const { words } = await sessionOf(page);
+		const name = aName(testInfo);
+		await opensTheForm(page);
+		await page.getByLabel(words.source_name, { exact: true }).fill(name);
+		await typesTheAddress(page, words, anHttpsAddress(name));
+		await folderField(page, words).fill('examples');
+
+		await typesTheAddress(page, words, await aLocalAddress(page, name));
+		await expect(folderField(page, words)).toHaveCount(0);
+		await checks(page, words);
+		const sent = page.waitForRequest(
+			(request) => new URL(request.url()).pathname === SOURCES_API && request.method() === 'POST'
+		);
+		await page.getByRole('button', { name: words.source_create }).click();
+
+		expect((await sent).postDataJSON()).toMatchObject({ folder: '' });
+	});
+
+	test('Create sends the folder typed for a key address and Check does not', async ({
+		page
+	}, testInfo) => {
+		const { words } = await sessionOf(page);
+		const name = aName(testInfo);
+		await opensTheForm(page);
+		await page.getByLabel(words.source_name, { exact: true }).fill(name);
+		await typesTheAddress(page, words, anSshAddress(name));
+		await folderField(page, words).fill('examples');
+		const checked = page.waitForRequest((request) => new URL(request.url()).pathname === CHECK_API);
+		await checks(page, words);
+		const created = page.waitForRequest(
+			(request) => new URL(request.url()).pathname === SOURCES_API && request.method() === 'POST'
+		);
+		await page.getByRole('button', { name: words.source_create }).click();
+
+		expect((await checked).postDataJSON()).not.toHaveProperty('folder');
+		expect((await created).postDataJSON()).toMatchObject({ folder: 'examples' });
+	});
+
+	test('every field shown at 390 px leaves no horizontal scroll', async ({ page }, testInfo) => {
+		const { words } = await sessionOf(page);
+		await page.setViewportSize({ width: 390, height: 900 });
+		await opensTheForm(page);
+
+		await typesTheAddress(page, words, anHttpsAddress(aName(testInfo)));
+
+		await expect(folderField(page, words)).toBeVisible();
+		await expect(secretField(page, words)).toBeVisible();
+		await expectsNoHorizontalScroll(page);
 	});
 
 	test('the token field comes back empty when https follows a key address', async ({
