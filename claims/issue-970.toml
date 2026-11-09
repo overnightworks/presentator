@@ -1,0 +1,8 @@
+claim_id = "379d833f0c4b4f088396fd775916c3e4"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "61270a5f21740e1ef0c2510abbdd28bac29873d4"
+branch = "claude/issue-970-take-design-v0-18-0"
+scope = [".github/workflows/ci.yml", "docs/ARCHITECTURE.md", "docs/sign-in.md", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/pnpm-workspace.yaml", "frontend/src/app.css", "frontend/src/lib/AccountPopover.svelte", "frontend/src/lib/kitWords.ts", "frontend/src/lib/legal.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/login/+page.svelte", "frontend/src/routes/login/login-failed/+page.svelte", "frontend/src/routes/login/no-access/+page.svelte", "frontend/src/routes/login/talk/login-failed/+page.svelte", "frontend/src/routes/login/talk/no-access/+page.svelte", "scripts/check_catalog_purity.py"]
+opened_commit = "2173d898a9ce21c9288186dd7972bc2bf3cfed97"
+whole_reason = "One package name across its pin, lockfile, imports and stylesheet import, which cannot build half renamed."
