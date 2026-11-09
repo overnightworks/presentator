@@ -3,6 +3,7 @@ import type { RemovalCounts, SourceRefusalReason } from '#lib/api/client.ts';
 import type {
 	AccessKind,
 	ConnectionCheckView,
+	SourceFetchView,
 	SourceRunFailure,
 	SourceRunView,
 	SourceState
@@ -61,6 +62,34 @@ export function runFailureWords(reason: SourceRunFailure, words: LobbyText): str
 		'credential-unresolvable': words.source_run_secret
 	};
 	return sentences[reason];
+}
+
+interface FetchOutcome {
+	shape: ReturnType<typeof stateShape>;
+	text: string;
+}
+
+/** How a fetch ended, in the catalog's words and the shape `.state` draws. */
+export function fetchOutcome(fetched: SourceFetchView, words: LobbyText): FetchOutcome {
+	const { run } = fetched;
+	if (run === null) {
+		return { shape: 'never-built', text: words.source_fetch_busy };
+	}
+	if (run.outcome === 'failure') {
+		return { shape: 'failed', text: runFailureWords(run.reason ?? 'failed', words) };
+	}
+	const parts = [
+		fetched.decks_built > 0 && fill(words.source_fetch_built, { count: fetched.decks_built }),
+		fetched.builds_failed > 0 && fill(words.source_fetch_failed, { count: fetched.builds_failed }),
+		fetched.decks_removed > 0 && fill(words.source_fetch_removed, { count: fetched.decks_removed })
+	].filter((part) => part !== false);
+	if (parts.length === 0) {
+		return { shape: 'ready', text: words.source_fetch_nothing_new };
+	}
+	return {
+		shape: fetched.builds_failed > 0 ? 'failed' : 'ready',
+		text: `${words.source_fetch_changed} ${parts.join(', ')}`
+	};
 }
 
 /** The shape `.state` draws for a source's state. */

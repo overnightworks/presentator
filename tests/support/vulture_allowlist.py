@@ -111,6 +111,13 @@ LobbyText.source_access_renew_info
 LobbyText.source_deploy_key_info
 LobbyText.source_public_key
 LobbyText.source_deploy_key_renew
+LobbyText.source_fetch_nothing_new
+LobbyText.source_fetch_changed
+LobbyText.source_fetch_built
+LobbyText.source_fetch_failed
+LobbyText.source_fetch_removed
+LobbyText.source_fetch_busy
+LobbyText.source_request_failed
 LobbyText.source_run_fetched
 LobbyText.source_run_unreachable
 LobbyText.source_run_secret
