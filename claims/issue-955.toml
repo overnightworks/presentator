@@ -1,7 +1,0 @@
-claim_id = "44d79d5eb919426eaab822313cc5f244"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "7dc1c124402c161298ac4a7e87976743f6b4770a"
-branch = "claude/issue-955-the-root-agents-md-takes-the-fleet-s-age"
-scope = ["AGENTS.md"]
-opened_commit = "338eb3ba851aa119bddcf209835a86fd77784005"
