@@ -3,7 +3,7 @@
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from presentator.application.copresenter import (
     AskLimiter,
@@ -30,19 +30,24 @@ def test_a_released_old_ticket_cannot_free_the_slot_of_a_newer_answer() -> None:
     assert limiter.admit("session") == RetryAfter(1)
 
 
-def test_sessions_that_asked_once_and_went_quiet_leave_no_record() -> None:
-    clock = FrozenClock(instant=datetime(2026, 1, 1, tzinfo=UTC))
-    limiter = AskLimiter(clock=clock)
+def test_sessions_whose_answer_ended_leave_no_record() -> None:
+    limiter = a_limiter()
     for name in ("quiet-one", "quiet-two"):
         ticket = limiter.admit(name)
         assert isinstance(ticket, AskTicket)
         ticket.release()
-    clock.advance(limiter.limits.window + timedelta(seconds=1))
-
-    assert isinstance(limiter.admit("late"), AskTicket)
 
     assert "quiet-one" not in repr(limiter)
     assert "quiet-two" not in repr(limiter)
+
+
+def test_more_than_twenty_questions_in_a_row_are_admitted() -> None:
+    limiter = a_limiter()
+
+    for _ in range(21):
+        ticket = limiter.admit("session")
+        assert isinstance(ticket, AskTicket)
+        ticket.release()
 
 
 THREADS = 8
