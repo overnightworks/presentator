@@ -10,7 +10,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from enum import StrEnum
 from functools import partial
 from hashlib import sha256
@@ -36,6 +36,7 @@ from presentator.contracts.decks import (
     BuildOutcome,
     ConnectionCheckResult,
     Deck,
+    DeckFolder,
     DeckPage,
     DeployKeyDraft,
     ListedDeck,
@@ -45,6 +46,7 @@ from presentator.contracts.decks import (
     SourceDeck,
     SourceFetch,
     SourcePage,
+    SourcePoll,
     SourceRemoval,
     SourceRun,
     SourceRunFailure,
@@ -738,7 +740,11 @@ class Decks:
     def _take_in_and_count(self, source: Source) -> SourceFetch:
         """Take that source in, build what changed and count what that was."""
         carried_before = self._visible_slugs(source)
-        run = self._take_in(source)
+        at = self.clock.now()
+        poll = self.folders.folders(source)
+        run = self._record_run(source, poll, at)
+        if poll.folders is not None:
+            self._take_in(source, poll.folders, at)
         delivered = self._build_what_changed(source)
         return SourceFetch(
             run=shown_run(run),
@@ -753,7 +759,28 @@ class Decks:
             deck.slug for deck in self.store.all() if deck.source_id == source.id
         )
 
-    def _take_in(self, source: Source) -> SourceRun:
+    def _record_run(self, source: Source, poll: SourcePoll, at: datetime) -> SourceRun:
+        """Record what the poll found or failed to as the source's newest run.
+
+        A board can show from it that the mechanism ran and what it saw.
+        """
+        run = SourceRun(
+            source_id=source.id,
+            at=at,
+            outcome=(
+                SourceRunOutcome.FAILURE
+                if poll.folders is None
+                else SourceRunOutcome.SUCCESS
+            ),
+            commit=poll.commit,
+            reason=poll.failure,
+        )
+        self.source_runs.record(run)
+        return run
+
+    def _take_in(
+        self, source: Source, folders: tuple[DeckFolder, ...], at: datetime
+    ) -> None:
         """Store every folder that carries both a manifest and slides.
 
         The folder name becomes the slug, so a changed title reaches no address.
@@ -770,23 +797,7 @@ class Decks:
         poll found or failed to is recorded as this source's newest run, so a
         board can show that the mechanism ran and what it saw.
         """
-        at = self.clock.now()
-        poll = self.folders.folders(source)
-        run = SourceRun(
-            source_id=source.id,
-            at=at,
-            outcome=(
-                SourceRunOutcome.FAILURE
-                if poll.folders is None
-                else SourceRunOutcome.SUCCESS
-            ),
-            commit=poll.commit,
-            reason=poll.failure,
-        )
-        self.source_runs.record(run)
-        if poll.folders is None:
-            return run
-        for folder in poll.folders:
+        for folder in folders:
             if not is_a_plain_folder_name(folder.name):
                 _log.warning(_NOT_A_FOLDERS_OWN_NAME, folder.name)
                 continue
@@ -806,11 +817,10 @@ class Decks:
             )
             if not taken_in:
                 _log.warning(_NAME_BELONGS_TO_ANOTHER_SOURCE, folder.name, source.name)
-        present = frozenset(folder.name for folder in poll.folders)
+        present = frozenset(folder.name for folder in folders)
         build_retention.delete_absent(
             self.store, present=present, source_id=source.id, at=at
         )
-        return run
 
     def _build_what_changed(self, source: Source) -> list[bool]:
         """Build that source's decks whose commit nothing has tried yet.
