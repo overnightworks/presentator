@@ -6,6 +6,7 @@
 	import {
 		type AccessKind,
 		checkConnection,
+		type ConnectionCheckView,
 		createSource,
 		type CreatedSourceView,
 		openKeyDraft,
@@ -23,6 +24,7 @@
 	let name = $state('');
 	let url = $state('');
 	let secret = $state('');
+	let folder = $state('');
 	let draft = $state(untrack(() => data.draft));
 	// What the server said the typed address needs. Only the latest lookup may write it.
 	type Lookup =
@@ -52,6 +54,9 @@
 		void navigation.goto(page.shallow.url.href, { replace: true });
 	}
 
+	// Only a key or a web address names a part of its repository.
+	const offersFolder = $derived(known === 'ssh-deploy-key' || known === 'https-token');
+
 	const probe = (): SourceProbe => ({
 		url,
 		secret: known === 'https-token' && secret !== '' ? secret : null,
@@ -74,6 +79,9 @@
 			lookup = { state: 'answered', url: address, access };
 			if (access !== 'https-token') {
 				secret = '';
+			}
+			if (access !== 'https-token' && access !== 'ssh-deploy-key') {
+				folder = '';
 			}
 		} catch {
 			if (mine === generation) {
@@ -125,7 +133,20 @@
 		work(async () => {
 			banner = null;
 			fingerprint = null;
-			const found = await checkConnection(fetch, probe());
+			const mine = generation;
+			let found: ConnectionCheckView;
+			try {
+				found = await checkConnection(fetch, probe());
+			} catch (failure) {
+				// A refusal for an address the person has since edited is not theirs to read.
+				if (failure instanceof Refused && mine !== generation) {
+					return;
+				}
+				throw failure;
+			}
+			if (mine !== generation) {
+				return;
+			}
 			banner = checkBanner(found, words);
 			fingerprint = found.fingerprint;
 		});
@@ -137,7 +158,7 @@
 			created = await createSource(fetch, {
 				...probe(),
 				name,
-				folder: '',
+				folder: offersFolder ? folder : '',
 				fingerprint: fingerprint as string
 			});
 			secret = '';
@@ -162,6 +183,7 @@
 		generation += 1;
 		lookup = { state: 'idle' };
 		secret = '';
+		folder = '';
 		banner = null;
 		fingerprint = null;
 		refusal = null;
@@ -214,6 +236,19 @@
 						>{words.source_kind_retry}</button
 					>
 				</div>
+			</div>
+		{/if}
+		{#if offersFolder}
+			<div class="fld">
+				<label for="source-folder">{words.source_folder_optional}</label>
+				<input
+					class="control"
+					id="source-folder"
+					name="folder"
+					autocomplete="off"
+					spellcheck="false"
+					bind:value={folder}
+				/>
 			</div>
 		{/if}
 		{#if known === 'https-token'}

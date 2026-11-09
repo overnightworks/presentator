@@ -638,6 +638,10 @@ export interface components {
             source_deploy_key_info: string;
             /** Source Deploy Key Renew */
             source_deploy_key_renew: string;
+            /** Source Folder */
+            source_folder: string;
+            /** Source Folder Optional */
+            source_folder_optional: string;
             /** Source Kind Failed */
             source_kind_failed: string;
             /** Source Kind Pending */

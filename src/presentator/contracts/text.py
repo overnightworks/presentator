@@ -94,6 +94,8 @@ class LobbyText:
     sources_column_access: str
     source_name: str
     source_url: str
+    source_folder_optional: str
+    source_folder: str
     source_access_token: str
     source_access_deploy_key: str
     source_access_local: str

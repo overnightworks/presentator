@@ -10,6 +10,8 @@ import Page from './+page.svelte';
 export const words = {
 	sources_add: 'Plant a source',
 	source_name: 'Handle',
+	source_folder_optional: 'Subdirectory, if any',
+	source_refused_folder: 'that subdirectory will not do',
 	source_url: 'Where',
 	source_secret: 'Passphrase',
 	source_check: 'Probe',
@@ -36,6 +38,10 @@ export const addresses = {
 } as const satisfies Record<string, { url: string; access: AccessKind | null }>;
 
 export type KindAnswer = (url: string) => Response | Promise<Response>;
+export type CheckAnswer = () => Response | Promise<Response>;
+
+const reachable: CheckAnswer = () =>
+	Response.json({ commit: 'c0ffee1', detail: null, failure: null, fingerprint: 'fp-1' });
 
 const answeredByAddress: KindAnswer = (url) =>
 	Response.json({
@@ -53,14 +59,14 @@ export function close(): void {
 }
 
 /** Mounts the page; the returned mock is every request it sent. */
-export function open(kind: KindAnswer = answeredByAddress) {
+export function open(kind: KindAnswer = answeredByAddress, check: CheckAnswer = reachable) {
 	vi.spyOn(navigation, 'goto').mockResolvedValue(undefined);
 	const fetched = vi.fn(async (path: string, init?: RequestInit) => {
 		if (path === '/api/sources/new/kind') {
 			return kind((JSON.parse(init?.body as string) as { url: string }).url);
 		}
 		if (path === '/api/sources/new/check') {
-			return Response.json({ commit: 'c0ffee1', detail: null, failure: null, fingerprint: 'fp-1' });
+			return check();
 		}
 		if (path === '/api/sources') {
 			return Response.json(created, { status: 201 });
@@ -100,6 +106,8 @@ export function sentTo(fetched: ReturnType<typeof open>, path: string): unknown[
 
 export const secretField = (): HTMLInputElement | null =>
 	document.querySelector<HTMLInputElement>('#source-secret');
+export const folderField = (): HTMLInputElement | null =>
+	document.querySelector<HTMLInputElement>('#source-folder');
 export const keyBlock = (): Element | null => document.getElementById('deploy-key-label');
 export const checkButton = (): HTMLButtonElement | undefined =>
 	[...document.querySelectorAll('button')].find((each) => each.textContent === words.source_check);
@@ -113,4 +121,23 @@ export function deferred() {
 		settle = resolve;
 	});
 	return { answer, answerWith: (access: AccessKind | null) => settle(Response.json({ access })) };
+}
+
+/** A Check whose answer the scenario gives when it chooses. */
+export function deferredCheck() {
+	let settle: (answer: Response) => void = () => undefined;
+	const answer = new Promise<Response>((resolve) => {
+		settle = resolve;
+	});
+	return {
+		answer,
+		reachable: () => settle(reachable() as Response),
+		refusedWith: (reason: string) =>
+			settle(
+				Response.json(
+					{ type: 'tag:hallucinai.de,2026-09-08:presentator/problems/source-refused', reason },
+					{ status: 422 }
+				)
+			)
+	};
 }

@@ -78,6 +78,8 @@ LobbyText.source_created_done
 LobbyText.source_created
 LobbyText.source_name
 LobbyText.source_url
+LobbyText.source_folder_optional
+LobbyText.source_folder
 LobbyText.source_check
 LobbyText.source_create
 LobbyText.source_deploy_key_heading
