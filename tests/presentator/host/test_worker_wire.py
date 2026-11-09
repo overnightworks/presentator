@@ -23,7 +23,7 @@ from presentator.adapters.build_wire import (
 )
 from presentator.adapters.worker_children import ChildIdentity, ChildSurroundings
 from presentator.contracts.decks import StepKind
-from presentator.host import worker, worker_scratch, worker_wire
+from presentator.host import worker, worker_scratch, worker_self_check, worker_wire
 from presentator.host.config import WorkerSettings
 from presentator.host.worker import create_request_record
 from presentator.host.worker_wire import ReplyPlan, WireExit, WireRole
@@ -35,8 +35,8 @@ from tests.support.worker_support import (
     file_header,
 )
 
-WIRE_ID = worker.WIRE_IDENTITY[0]
-BUILD_ID = worker.BUILD_IDENTITY[0]
+WIRE_ID = worker_self_check.WIRE_IDENTITY[0]
+BUILD_ID = worker_self_check.BUILD_IDENTITY[0]
 GATED_FIELDS = {
     "Name": "sh",
     "Uid": "\t".join([str(WIRE_ID)] * 4),
@@ -101,14 +101,16 @@ BROKEN_ONE_WAY = {
 
 
 def test_a_sealed_child_of_the_wire_user_passes_the_gate() -> None:
-    assert worker.child_gate_admits(status_of(), worker.WIRE_IDENTITY)
+    assert worker.child_gate_admits(status_of(), worker_self_check.WIRE_IDENTITY)
 
 
 @pytest.mark.parametrize("changes", BROKEN_ONE_WAY.values(), ids=BROKEN_ONE_WAY.keys())
 def test_the_gate_refuses_a_status_broken_in_one_way(
     changes: dict[str, str | None],
 ) -> None:
-    assert not worker.child_gate_admits(status_of(**changes), worker.WIRE_IDENTITY)
+    assert not worker.child_gate_admits(
+        status_of(**changes), worker_self_check.WIRE_IDENTITY
+    )
 
 
 def test_the_gate_judges_against_the_identity_it_is_given() -> None:
@@ -567,8 +569,8 @@ def test_a_refused_memfd_surfaces_as_the_kernels_error(
     def refusing_libc(*_arguments: object, **_keywords: object) -> SimpleNamespace:
         return SimpleNamespace(memfd_create=memfd_failure)
 
-    monkeypatch.setattr(worker.ctypes, "CDLL", refusing_libc)
-    monkeypatch.setattr(worker.ctypes, "get_errno", lambda: errno.EMFILE)
+    monkeypatch.setattr(worker_self_check.ctypes, "CDLL", refusing_libc)
+    monkeypatch.setattr(worker_self_check.ctypes, "get_errno", lambda: errno.EMFILE)
 
     with pytest.raises(OSError, match="memfd_create failed") as refused:
         create_request_record()

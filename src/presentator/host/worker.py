@@ -3,15 +3,13 @@
 import argparse
 import ctypes
 import fcntl
-import grp
 import logging
 import os
-import pwd
 import signal
 import socket
 import stat
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import IntFlag, StrEnum
 from functools import partial
@@ -28,22 +26,30 @@ from presentator.host.config import (
     ConfigurationError,
     WorkerSettings,
     load_worker_settings,
-    worker_settings_variables,
 )
 from presentator.host.worker_scratch import (
     HOME_DIRECTORY,
-    QUEUE_MOUNT,
-    ROOT_MODE,
-    SHARED_MEMORY_MOUNT,
     TEMPORARY_MOUNT,
-    VITE_DIRECTORY,
     WORK_MOUNT,
-    Scratch,
     close_deck,
     make_open_directory,
     prepare_step_paths,
-    read_scratch,
-    scratch_empty,
+)
+from presentator.host.worker_self_check import (
+    BUILD_IDENTITY,
+    COREPACK_DIRECTORY,
+    NO_CAPABILITIES,
+    PLAYWRIGHT_DIRECTORY,
+    PR_SET_DUMPABLE,
+    TOOLCHAIN_PROJECT,
+    WIRE_IDENTITY,
+    Predicate,
+    Snapshot,
+    first_failing_predicate,
+    libc_prctl,
+    lstat_if_present,
+    read_snapshot,
+    status_fields,
 )
 from presentator.host.worker_serving import (
     Serving,
@@ -61,83 +67,9 @@ from presentator.host.worker_termination import (
 logger = logging.getLogger(__name__)
 
 REFUSAL_EXIT_STATUS = 2
-WORKER_CAPABILITIES = 0xE0
-MAXIMUM_PIDS = 512
-RUNTIME_USER = "presentator"
-BUILD_USER = "presentator-build"
-WIRE_USER = "presentator-wire"
-BUILD_IDENTITY = (61001, 61001)
-WIRE_IDENTITY = (61002, 61002)
-NO_CAPABILITIES = "0" * 16
 BIND_UMASK = 0o117
 LISTEN_BACKLOG = 4
-SOCKET_MOUNT_NAME = build_wire.SOCKET_DIRECTORY.lstrip("/")
-CGROUP_DIRECTORY = "sys/fs/cgroup"
-TMPFS_MOUNT_NAMES = (
-    TEMPORARY_MOUNT.lstrip("/"),
-    SHARED_MEMORY_MOUNT.lstrip("/"),
-    SOCKET_MOUNT_NAME,
-)
-TMPFS_MOUNTS = tuple(
-    str(Path("/") / name) for name in (WORK_MOUNT.lstrip("/"), *TMPFS_MOUNT_NAMES)
-)
-NO_EXECUTION_MOUNTS = TMPFS_MOUNTS[:2]
-GROUP_AND_OTHERS_WRITE = stat.S_IWGRP | stat.S_IWOTH
 ONLY_THE_OWNER = 0o077
-HARDENED_MOUNT_OPTIONS = frozenset({"nosuid", "nodev", "noexec"})
-DOCKER_SOCKETS = ("/run/docker.sock", "/var/run/docker.sock")
-TOOLCHAIN_PROJECT = "app/slidev"
-SLIDEV_BINARY = f"{TOOLCHAIN_PROJECT}/node_modules/.bin/slidev"
-SLIDEV_PACKAGE = f"{TOOLCHAIN_PROJECT}/node_modules/@slidev/cli"
-COREPACK_DIRECTORY = "opt/corepack"
-PLAYWRIGHT_DIRECTORY = "opt/ms-playwright"
-HEADLESS_SHELL_PATTERN = (
-    f"{PLAYWRIGHT_DIRECTORY}/chromium_headless_shell-*/"
-    "chrome-headless-shell-linux64/chrome-headless-shell"
-)
-VITE_CACHE_TARGET = f"{WORK_MOUNT}/{VITE_DIRECTORY}"
-# The image's and its base's keys, the runtime's HOSTNAME, Python's own LC_CTYPE.
-ALLOWED_ENVIRONMENT_KEYS = frozenset(
-    {
-        "HOME",
-        "PLAYWRIGHT_BROWSERS_PATH",
-        "COREPACK_HOME",
-        "UV_PROJECT_ENVIRONMENT",
-        "UV_PYTHON_INSTALL_DIR",
-        "UV_COMPILE_BYTECODE",
-        "UV_NO_CACHE",
-        "PATH",
-        "PRESENTATOR_DATABASE",
-        "PRESENTATOR_MIRRORS",
-        "PRESENTATOR_BUILDS",
-        "PRESENTATOR_TOOLCHAIN",
-        "PRESENTATOR_LOBBY_BUILD",
-        "PRESENTATOR_HOST",
-        "PRESENTATOR_LOCAL_SOURCES_MOUNT",
-        "NODE_VERSION",
-        "YARN_VERSION",
-    }
-    | {"HOSTNAME", "LC_CTYPE"}
-    | worker_settings_variables()
-)
-
-PR_GET_DUMPABLE = 3
-PR_SET_DUMPABLE = 4
-
-
-class Predicate(StrEnum):
-    """A self-check predicate, named in refusal order."""
-
-    NON_DUMPABLE = "non-dumpable"
-    CAPABILITIES = "capabilities"
-    MOUNTS = "mounts"
-    RESOURCE_BOUNDS = "resource-bounds"
-    IDENTITIES = "identities"
-    ENVIRONMENT = "environment"
-    PID_ONE = "pid-one"
-    ALONE = "alone"
-    SCRATCH = "scratch"
-    TOOLCHAIN = "toolchain"
 
 
 class StartRefusal(StrEnum):
@@ -157,52 +89,6 @@ class StartRefusedError(Exception):
         """Remember which step refused."""
         super().__init__(refusal)
         self.refusal = refusal
-
-
-@dataclass(frozen=True)
-class Identity:
-    """The process identity and the users the image created."""
-
-    uid: int
-    euid: int
-    gid: int
-    supplementary_gids: tuple[int, ...]
-    runtime_uid: int
-    runtime_gid: int
-    users: Mapping[str, tuple[int, int]]
-
-
-@dataclass(frozen=True)
-class Toolchain:
-    """What the sealed container holds of the build toolchain."""
-
-    slidev_mode: int | None
-    corepack_mode: int | None
-    headless_shell_modes: tuple[int | None, ...]
-    vite_link_target: str | None
-
-
-@dataclass(frozen=True)
-class Snapshot:
-    """Everything the self-check reads, taken once."""
-
-    dumpable: int
-    process_status: str
-    root_read_only: bool
-    mountinfo: str
-    work_mode: int
-    work_owner_uid: int
-    network_devices: str
-    docker_socket_present: bool
-    pids_max: str
-    memory_max: str
-    identity: Identity
-    environment_keys: frozenset[str]
-    pid: int
-    cgroup_tasks: str
-    scratch: Scratch
-    toolchain: Toolchain
-    unreadable: frozenset[Predicate] = frozenset()
 
 
 class Server(Protocol):
@@ -226,322 +112,12 @@ class Boundary:
     serve: Server
 
 
-def _status_fields(process_status: str) -> dict[str, str]:
-    fields = (line.partition(":") for line in process_status.splitlines())
-    return {name: value.strip() for name, _, value in fields}
-
-
-def _capabilities_sealed(snapshot: Snapshot) -> bool:
-    fields = _status_fields(snapshot.process_status)
-    worker = f"{WORKER_CAPABILITIES:016x}"
-    return (
-        fields.get("CapEff") == worker
-        and fields.get("CapPrm") == worker
-        and fields.get("CapInh") == NO_CAPABILITIES
-        and fields.get("CapAmb") == NO_CAPABILITIES
-        and int(fields.get("CapBnd", "-1"), 16) & ~WORKER_CAPABILITIES == 0
-        and fields.get("NoNewPrivs") == "1"
-        and fields.get("Seccomp") == "2"
-    )
-
-
-def _mount_table(mountinfo: str) -> dict[str, tuple[str, frozenset[str]]]:
-    table: dict[str, tuple[str, frozenset[str]]] = {}
-    for line in mountinfo.splitlines():
-        head, _, tail = line.partition(" - ")
-        fields = head.split()
-        table[fields[4]] = (tail.split()[0], frozenset(fields[5].split(",")))
-    return table
-
-
-def _mount_table_sealed(mountinfo: str) -> bool:
-    table = _mount_table(mountinfo)
-    return (
-        all(mount in table and table[mount][0] == "tmpfs" for mount in TMPFS_MOUNTS)
-        and QUEUE_MOUNT in table
-        and table[QUEUE_MOUNT][0] == "mqueue"
-        and all(
-            table[mount][1] >= HARDENED_MOUNT_OPTIONS for mount in NO_EXECUTION_MOUNTS
-        )
-    )
-
-
-def _mounts_sealed(snapshot: Snapshot) -> bool:
-    interfaces = {
-        line.partition(":")[0].strip()
-        for line in snapshot.network_devices.splitlines()[2:]
-    }
-    return (
-        snapshot.root_read_only
-        and _mount_table_sealed(snapshot.mountinfo)
-        and snapshot.work_mode == ROOT_MODE
-        and snapshot.work_owner_uid == 0
-        and interfaces == {"lo"}
-        and not snapshot.docker_socket_present
-    )
-
-
-def _resources_bounded(snapshot: Snapshot) -> bool:
-    return (
-        snapshot.pids_max.isdecimal()
-        and int(snapshot.pids_max) <= MAXIMUM_PIDS
-        and snapshot.memory_max.isdecimal()
-    )
-
-
-def _identities_sealed(snapshot: Snapshot) -> bool:
-    identity = snapshot.identity
-    build_user = identity.users.get(BUILD_USER)
-    wire_user = identity.users.get(WIRE_USER)
-    unusable = {0, identity.runtime_uid, identity.runtime_gid}
-    return (
-        identity.uid == 0
-        and identity.euid == 0
-        and identity.gid == identity.runtime_gid
-        and identity.supplementary_gids == (identity.runtime_gid,)
-        and build_user == BUILD_IDENTITY
-        and wire_user == WIRE_IDENTITY
-        and not unusable & {*BUILD_IDENTITY, *WIRE_IDENTITY}
-    )
-
-
-def _environment_allowed(snapshot: Snapshot) -> bool:
-    return snapshot.environment_keys <= ALLOWED_ENVIRONMENT_KEYS
-
-
-def _is_pid_one(snapshot: Snapshot) -> bool:
-    return snapshot.pid == 1
-
-
-def _is_alone(snapshot: Snapshot) -> bool:
-    return snapshot.cgroup_tasks == "1"
-
-
-def _toolchain_present(snapshot: Snapshot) -> bool:
-    toolchain = snapshot.toolchain
-    entries = (
-        toolchain.slidev_mode,
-        toolchain.corepack_mode,
-        *toolchain.headless_shell_modes,
-    )
-    return (
-        len(toolchain.headless_shell_modes) == 1
-        and all(
-            mode is not None
-            and mode & stat.S_IXOTH
-            and not mode & GROUP_AND_OTHERS_WRITE
-            for mode in entries
-        )
-        and toolchain.vite_link_target == VITE_CACHE_TARGET
-    )
-
-
-SELF_CHECK: tuple[tuple[Predicate, Callable[[Snapshot], bool]], ...] = (
-    (Predicate.NON_DUMPABLE, lambda snapshot: snapshot.dumpable == 0),
-    (Predicate.CAPABILITIES, _capabilities_sealed),
-    (Predicate.MOUNTS, _mounts_sealed),
-    (Predicate.RESOURCE_BOUNDS, _resources_bounded),
-    (Predicate.IDENTITIES, _identities_sealed),
-    (Predicate.ENVIRONMENT, _environment_allowed),
-    (Predicate.PID_ONE, _is_pid_one),
-    (Predicate.ALONE, _is_alone),
-    (Predicate.SCRATCH, lambda snapshot: scratch_empty(snapshot.scratch)),
-    (Predicate.TOOLCHAIN, _toolchain_present),
-)
-
-
-def _holds(
-    predicate: Predicate, judge: Callable[[Snapshot], bool], snapshot: Snapshot
-) -> bool:
-    if predicate in snapshot.unreadable:
-        return False
-    try:
-        return judge(snapshot)
-    except ValueError, IndexError:
-        return False
-
-
-def first_failing_predicate(snapshot: Snapshot) -> Predicate | None:
-    """The first predicate, in refusal order, that the snapshot fails.
-
-    A predicate whose facts could not be read or parsed fails.
-    """
-    return next(
-        (name for name, judge in SELF_CHECK if not _holds(name, judge, snapshot)),
-        None,
-    )
-
-
-def libc_prctl(option: int, value: int) -> int:
-    """Call prctl, raising the errno it sets on failure."""
-    libc = ctypes.CDLL(None, use_errno=True)
-    libc.prctl.argtypes = [ctypes.c_int, *[ctypes.c_ulong] * 4]
-    libc.prctl.restype = ctypes.c_int
-    result = libc.prctl(option, value, 0, 0, 0)
-    if result < 0:
-        raise OSError(ctypes.get_errno(), "prctl failed")
-    return result
-
-
 def _set_non_dumpable() -> None:
     libc_prctl(PR_SET_DUMPABLE, 0)
 
 
 def _set_umask() -> None:
     os.umask(ONLY_THE_OWNER)
-
-
-def _mode_if_file_or_directory(path: Path) -> int | None:
-    try:
-        mode = path.stat().st_mode
-    except OSError:
-        return None
-    return mode if stat.S_ISREG(mode) or stat.S_ISDIR(mode) else None
-
-
-def _vite_link_target(root: Path) -> str | None:
-    vite = root / SLIDEV_PACKAGE / "node_modules" / ".vite"
-    try:
-        return str(vite.readlink())
-    except OSError:
-        return None
-
-
-def _read_toolchain(root: Path) -> Toolchain:
-    slidev_binary = root / SLIDEV_BINARY
-    return Toolchain(
-        slidev_mode=_mode_if_file_or_directory(slidev_binary),
-        corepack_mode=_mode_if_file_or_directory(root / COREPACK_DIRECTORY),
-        headless_shell_modes=tuple(
-            map(_mode_if_file_or_directory, root.glob(HEADLESS_SHELL_PATTERN))
-        ),
-        vite_link_target=_vite_link_target(root),
-    )
-
-
-def _read_identity() -> Identity:
-    runtime = pwd.getpwnam(RUNTIME_USER)
-    users = {
-        user.pw_name: (user.pw_uid, user.pw_gid)
-        for user in map(pwd.getpwnam, (BUILD_USER, WIRE_USER))
-    }
-    return Identity(
-        uid=os.getuid(),
-        euid=os.geteuid(),
-        gid=os.getgid(),
-        supplementary_gids=tuple(os.getgroups()),
-        runtime_uid=runtime.pw_uid,
-        runtime_gid=grp.getgrnam(RUNTIME_USER).gr_gid,
-        users=users,
-    )
-
-
-def _lstat_if_present(path: Path) -> os.stat_result | None:
-    try:
-        return os.lstat(path)
-    except FileNotFoundError:
-        return None
-
-
-def _read_mount_facts(root: Path) -> tuple[bool, str, int, int, str, bool]:
-    work = (root / WORK_MOUNT.lstrip("/")).stat()
-    return (
-        bool(os.statvfs(root).f_flag & os.ST_RDONLY),
-        (root / "proc/self/mountinfo").read_text(),
-        stat.S_IMODE(work.st_mode),
-        work.st_uid,
-        (root / "proc/net/dev").read_text(),
-        any(
-            _lstat_if_present(root / docker_socket.lstrip("/")) is not None
-            for docker_socket in DOCKER_SOCKETS
-        ),
-    )
-
-
-def _read_cgroup_file(root: Path, name: str) -> str:
-    return (root / CGROUP_DIRECTORY / name).read_text().strip()
-
-
-def _read_resource_bounds(root: Path) -> tuple[str, str]:
-    return _read_cgroup_file(root, "pids.max"), _read_cgroup_file(root, "memory.max")
-
-
-UNREAD_IDENTITY = Identity(-1, -1, -1, (), -1, -1, {})
-UNREAD_TOOLCHAIN = Toolchain(None, None, (), None)
-UNREAD_SCRATCH = Scratch(frozenset(), {})
-
-
-class _FactReader:
-    """Reads facts, remembering the predicate of each one that failed to read."""
-
-    def __init__(self) -> None:
-        self.unreadable: set[Predicate] = set()
-
-    def read[Fact](
-        self, predicate: Predicate, reading: Callable[[], Fact], placeholder: Fact
-    ) -> Fact:
-        try:
-            return reading()
-        except OSError, KeyError, UnicodeDecodeError:
-            self.unreadable.add(predicate)
-            return placeholder
-
-
-def read_snapshot(root: Path) -> Snapshot:
-    """Read the facts the predicates judge, from the filesystem under `root`.
-
-    A fact that cannot be read or decoded marks its predicate unreadable, so the
-    self-check judges every predicate in order instead of stopping at the first
-    read. The container's task count is read first and the scratch places right
-    after it: no other fact is read and no child is launched in between.
-    """
-    facts = _FactReader()
-    read = facts.read
-
-    cgroup_tasks = read(
-        Predicate.ALONE, partial(_read_cgroup_file, root, "pids.current"), ""
-    )
-    scratch = read(Predicate.SCRATCH, partial(read_scratch, root), UNREAD_SCRATCH)
-    dumpable = read(Predicate.NON_DUMPABLE, partial(libc_prctl, PR_GET_DUMPABLE, 0), -1)
-    process_status = read(
-        Predicate.CAPABILITIES, (root / "proc/self/status").read_text, ""
-    )
-    (
-        root_read_only,
-        mountinfo,
-        work_mode,
-        work_owner_uid,
-        network_devices,
-        socket_present,
-    ) = read(
-        Predicate.MOUNTS,
-        partial(_read_mount_facts, root),
-        (False, "", 0, -1, "", True),
-    )
-    pids_max, memory_max = read(
-        Predicate.RESOURCE_BOUNDS, partial(_read_resource_bounds, root), ("", "")
-    )
-    return Snapshot(
-        dumpable=dumpable,
-        process_status=process_status,
-        root_read_only=root_read_only,
-        mountinfo=mountinfo,
-        work_mode=work_mode,
-        work_owner_uid=work_owner_uid,
-        network_devices=network_devices,
-        docker_socket_present=socket_present,
-        pids_max=pids_max,
-        memory_max=memory_max,
-        identity=read(Predicate.IDENTITIES, _read_identity, UNREAD_IDENTITY),
-        environment_keys=frozenset(os.environ),
-        pid=os.getpid(),
-        cgroup_tasks=cgroup_tasks,
-        scratch=scratch,
-        toolchain=read(
-            Predicate.TOOLCHAIN, partial(_read_toolchain, root), UNREAD_TOOLCHAIN
-        ),
-        unreadable=frozenset(facts.unreadable),
-    )
 
 
 def _fix_up_socket_directory(
@@ -563,7 +139,7 @@ def _fix_up_socket_directory(
 def remove_stale_socket(socket_path: Path, controller_uid: int) -> None:
     """Unlink a socket the controller owns; refuse any other entry."""
     try:
-        status = _lstat_if_present(socket_path)
+        status = lstat_if_present(socket_path)
         if status is None:
             return
         if not (stat.S_ISSOCK(status.st_mode) and status.st_uid == controller_uid):
@@ -622,7 +198,7 @@ def start_listening(listener: socket.socket) -> None:
 def child_gate_admits(process_status: str, identity: tuple[int, int]) -> bool:
     """A child may be released only as the identity, unprivileged and sealed."""
     uid, gid = identity
-    fields = _status_fields(process_status)
+    fields = status_fields(process_status)
     return (
         fields.get("Uid", "").split() == [str(uid)] * 4
         and fields.get("Gid", "").split() == [str(gid)] * 4

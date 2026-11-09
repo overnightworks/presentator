@@ -10,18 +10,15 @@ from pathlib import Path
 import pytest
 
 from presentator.adapters import build_wire
-from presentator.host import worker
+from presentator.host import worker, worker_self_check
 from presentator.host.config import (
     WorkerSettings,
     load_worker_settings,
     worker_settings_variables,
 )
-from presentator.host.worker import (
-    Boundary,
-    Predicate,
-    Snapshot,
-)
+from presentator.host.worker import Boundary
 from presentator.host.worker_scratch import QUEUE_MOUNT, scratch_empty
+from presentator.host.worker_self_check import Predicate, Snapshot
 from presentator.host.worker_serving import Serving
 from tests.presentator.host.support.audit_recording import (
     LAUNCH_EVENTS,
@@ -38,7 +35,7 @@ from tests.presentator.host.support.sealed_snapshot import (
     with_fields,
 )
 
-WORK_MOUNT, TEMPORARY_MOUNT, SHARED_MEMORY_MOUNT, *_ = worker.TMPFS_MOUNTS
+WORK_MOUNT, TEMPORARY_MOUNT, SHARED_MEMORY_MOUNT, *_ = worker_self_check.TMPFS_MOUNTS
 
 
 def with_status(**changes: str) -> Callable[[Snapshot], Snapshot]:
@@ -143,16 +140,16 @@ FAILURES = {
         Predicate.IDENTITIES,
     ),
     "build uid is runtime uid": (
-        with_identity(runtime_uid=worker.BUILD_IDENTITY[0]),
+        with_identity(runtime_uid=worker_self_check.BUILD_IDENTITY[0]),
         Predicate.IDENTITIES,
     ),
     "wire uid root": (with_users(**{"presentator-wire": (0, 0)}), Predicate.IDENTITIES),
     "wire uid is runtime uid": (
-        with_identity(runtime_uid=worker.WIRE_IDENTITY[0]),
+        with_identity(runtime_uid=worker_self_check.WIRE_IDENTITY[0]),
         Predicate.IDENTITIES,
     ),
     "wire uid is build uid": (
-        with_users(**{"presentator-wire": worker.BUILD_IDENTITY}),
+        with_users(**{"presentator-wire": worker_self_check.BUILD_IDENTITY}),
         Predicate.IDENTITIES,
     ),
     "wrong controller gid": (with_identity(gid=0), Predicate.IDENTITIES),
@@ -242,7 +239,7 @@ def boundary_over(
 
 
 def test_sealed_container_passes_the_self_check() -> None:
-    assert worker.first_failing_predicate(sealed_snapshot()) is None
+    assert worker_self_check.first_failing_predicate(sealed_snapshot()) is None
 
 
 # DK4
@@ -250,13 +247,15 @@ def test_sealed_container_passes_the_self_check() -> None:
 def test_self_check_names_the_failing_predicate(
     change: Callable[[Snapshot], Snapshot], refused: Predicate
 ) -> None:
-    assert worker.first_failing_predicate(change(sealed_snapshot())) == refused
+    assert (
+        worker_self_check.first_failing_predicate(change(sealed_snapshot())) == refused
+    )
 
 
 def test_double_fault_names_the_first_predicate_in_refusal_order() -> None:
     snapshot = with_identity(gid=0)(with_status(Seccomp="0")(sealed_snapshot()))
 
-    assert worker.first_failing_predicate(snapshot) == Predicate.CAPABILITIES
+    assert worker_self_check.first_failing_predicate(snapshot) == Predicate.CAPABILITIES
 
 
 def test_sealed_check_exits_zero_without_serving() -> None:
@@ -369,7 +368,7 @@ def test_the_settings_keys_pass_the_environment_predicate() -> None:
         sealed_snapshot()
     )
 
-    assert worker.first_failing_predicate(snapshot) is None
+    assert worker_self_check.first_failing_predicate(snapshot) is None
 
 
 def test_the_real_boundary_serves_the_socket_directory_bounded_by_the_settings(
@@ -421,7 +420,7 @@ def sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
-    snapshot = worker.read_snapshot(sealed_root)
+    snapshot = worker_self_check.read_snapshot(sealed_root)
 
     assert snapshot.process_status == SEALED_STATUS
     assert snapshot.network_devices == LOOPBACK_ONLY
@@ -431,7 +430,9 @@ def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
         sealed_root.stat().st_uid,
     )
     assert not snapshot.docker_socket_present
-    assert snapshot.identity.users["presentator-wire"] == worker.WIRE_IDENTITY
+    assert (
+        snapshot.identity.users["presentator-wire"] == worker_self_check.WIRE_IDENTITY
+    )
     assert snapshot.toolchain.vite_link_target == "/work/vite"
     assert len(snapshot.toolchain.headless_shell_modes) == 1
     assert snapshot.toolchain.corepack_mode is not None
@@ -443,7 +444,7 @@ def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
 def test_reads_a_missing_toolchain_as_absent(sealed_root: Path) -> None:
     (sealed_root / "app/slidev/node_modules/.bin/slidev").unlink()
 
-    toolchain = worker.read_snapshot(sealed_root).toolchain
+    toolchain = worker_self_check.read_snapshot(sealed_root).toolchain
 
     assert toolchain.slidev_mode is None
 
@@ -538,7 +539,7 @@ def fail_dumpable_read(_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     def failing(_option: int, _value: int) -> int:
         raise OSError
 
-    monkeypatch.setattr(worker, "libc_prctl", failing)
+    monkeypatch.setattr(worker_self_check, "libc_prctl", failing)
 
 
 def set_task_count(count: str) -> Callable[[Path, pytest.MonkeyPatch], None]:
@@ -624,7 +625,7 @@ def test_a_failing_or_unreadable_fact_refuses_through_main_naming_its_predicate(
 
     def read_with_sealed_process_facts() -> Snapshot:
         return replace(
-            worker.read_snapshot(sealed_root),
+            worker_self_check.read_snapshot(sealed_root),
             environment_keys=sealed.environment_keys,
             pid=sealed.pid,
             work_owner_uid=sealed.work_owner_uid,
@@ -664,7 +665,7 @@ def test_reads_a_docker_socket_as_present(
 ) -> None:
     make_socket(socket_path)
 
-    assert worker.read_snapshot(sealed_root).docker_socket_present is True
+    assert worker_self_check.read_snapshot(sealed_root).docker_socket_present is True
 
 
 def test_denied_socket_lookup_marks_mounts_unreadable(
@@ -673,9 +674,9 @@ def test_denied_socket_lookup_marks_mounts_unreadable(
     def denied(path: Path) -> os.stat_result:
         raise PermissionError(path)
 
-    monkeypatch.setattr(worker.os, "lstat", denied)
+    monkeypatch.setattr(worker_self_check.os, "lstat", denied)
 
-    assert worker.read_snapshot(sealed_root).unreadable == {Predicate.MOUNTS}
+    assert worker_self_check.read_snapshot(sealed_root).unreadable == {Predicate.MOUNTS}
 
 
 @pytest.mark.parametrize(
@@ -690,14 +691,16 @@ def test_unresolvable_slidev_package_gives_no_vite_target(
 ) -> None:
     arrange(sealed_root, monkeypatch)
 
-    assert worker.read_snapshot(sealed_root).toolchain.vite_link_target is None
+    assert (
+        worker_self_check.read_snapshot(sealed_root).toolchain.vite_link_target is None
+    )
 
 
 def unknown_user(monkeypatch: pytest.MonkeyPatch) -> None:
     def refuse(name: str) -> None:
         raise KeyError(name)
 
-    monkeypatch.setattr(worker.pwd, "getpwnam", refuse)
+    monkeypatch.setattr(worker_self_check.pwd, "getpwnam", refuse)
 
 
 def test_unreadable_resource_bound_marks_its_predicate_unreadable(
@@ -705,7 +708,7 @@ def test_unreadable_resource_bound_marks_its_predicate_unreadable(
 ) -> None:
     (sealed_root / "sys/fs/cgroup/memory.max").unlink()
 
-    unreadable = worker.read_snapshot(sealed_root).unreadable
+    unreadable = worker_self_check.read_snapshot(sealed_root).unreadable
 
     assert unreadable == {Predicate.RESOURCE_BOUNDS}
 
@@ -715,7 +718,9 @@ def test_unknown_user_marks_identities_unreadable(
 ) -> None:
     unknown_user(monkeypatch)
 
-    assert worker.read_snapshot(sealed_root).unreadable == {Predicate.IDENTITIES}
+    assert worker_self_check.read_snapshot(sealed_root).unreadable == {
+        Predicate.IDENTITIES
+    }
 
 
 def test_unreadable_later_fact_does_not_mask_an_earlier_failing_predicate(
@@ -726,28 +731,32 @@ def test_unreadable_later_fact_does_not_mask_an_earlier_failing_predicate(
     )
     (sealed_root / "work").rmdir()
 
-    snapshot = worker.read_snapshot(sealed_root)
+    snapshot = worker_self_check.read_snapshot(sealed_root)
 
-    assert worker.first_failing_predicate(snapshot) == Predicate.CAPABILITIES
+    assert worker_self_check.first_failing_predicate(snapshot) == Predicate.CAPABILITIES
     assert snapshot.unreadable == {Predicate.MOUNTS, Predicate.SCRATCH}
 
 
 def test_real_process_effects_make_it_non_dumpable_and_set_the_umask() -> None:
     previous_umask = os.umask(0)
-    original_dumpable = worker.libc_prctl(worker.PR_GET_DUMPABLE, 0)
+    original_dumpable = worker_self_check.libc_prctl(
+        worker_self_check.PR_GET_DUMPABLE, 0
+    )
     try:
         worker.REAL_BOUNDARY.set_non_dumpable()
         worker.REAL_BOUNDARY.set_umask()
-        assert worker.libc_prctl(worker.PR_GET_DUMPABLE, 0) == 0
+        assert worker_self_check.libc_prctl(worker_self_check.PR_GET_DUMPABLE, 0) == 0
         assert os.umask(previous_umask) == worker.ONLY_THE_OWNER
     finally:
         os.umask(previous_umask)
-        worker.libc_prctl(worker.PR_SET_DUMPABLE, original_dumpable)
+        worker_self_check.libc_prctl(
+            worker_self_check.PR_SET_DUMPABLE, original_dumpable
+        )
 
 
 def test_prctl_failure_raises() -> None:
     with pytest.raises(OSError, match="prctl"):
-        worker.libc_prctl(0x7FFFFFFF, 0)
+        worker_self_check.libc_prctl(0x7FFFFFFF, 0)
 
 
 def test_the_snapshot_reads_the_task_count_then_the_scratch_places_and_launches_nothing(
@@ -755,7 +764,7 @@ def test_the_snapshot_reads_the_task_count_then_the_scratch_places_and_launches_
 ) -> None:
     audit_recording.start()
     try:
-        worker.read_snapshot(sealed_root)
+        worker_self_check.read_snapshot(sealed_root)
     finally:
         audit_recording.stop()
     events = audit_recording.events

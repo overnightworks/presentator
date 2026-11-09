@@ -15,7 +15,7 @@ from presentator.host.config import (
     load_worker_settings,
     worker_settings_variables,
 )
-from presentator.host.worker import TOOLCHAIN_PROJECT
+from presentator.host.worker_self_check import TOOLCHAIN_PROJECT
 
 TIMEOUT_VARIABLE = "PRESENTATOR_BUILD_TIMEOUT_SECONDS"
 MEGABYTES_VARIABLE = "PRESENTATOR_BUILD_OUTPUT_MEGABYTES"
