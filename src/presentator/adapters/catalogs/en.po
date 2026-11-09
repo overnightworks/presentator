@@ -57,6 +57,18 @@ msgstr "No access"
 msgid "sign_in_no_access_sentence"
 msgstr "You are signed in, but this account has no access to {app}."
 
+msgid "sign_in_signing_in"
+msgstr "Signing in"
+
+msgid "sign_in_in_other_window"
+msgstr "In the other window"
+
+msgid "sign_in_open_in_tab"
+msgstr "Open in a tab"
+
+msgid "sign_in_unfinished"
+msgstr "Sign-in did not finish."
+
 msgid "legal_impressum"
 msgstr "Impressum"
 

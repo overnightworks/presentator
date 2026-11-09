@@ -603,6 +603,8 @@ export interface components {
             sign_in_failed: string;
             /** Sign In Failed Banner */
             sign_in_failed_banner: string;
+            /** Sign In In Other Window */
+            sign_in_in_other_window: string;
             /** Sign In Log In */
             sign_in_log_in: string;
             /** Sign In Logged Out */
@@ -611,8 +613,14 @@ export interface components {
             sign_in_no_access: string;
             /** Sign In No Access Sentence */
             sign_in_no_access_sentence: string;
+            /** Sign In Open In Tab */
+            sign_in_open_in_tab: string;
+            /** Sign In Signing In */
+            sign_in_signing_in: string;
             /** Sign In Try Again */
             sign_in_try_again: string;
+            /** Sign In Unfinished */
+            sign_in_unfinished: string;
             /** Source Access Deploy Key */
             source_access_deploy_key: string;
             /** Source Access Heading */

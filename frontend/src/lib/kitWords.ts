@@ -21,6 +21,10 @@ export function signInPageWords(words: LobbyText): SignInPageWords {
 		tryAgain: words.sign_in_try_again,
 		noAccess: words.sign_in_no_access,
 		noAccessSentence: (appName) => fill(words.sign_in_no_access_sentence, { app: appName }),
+		signingIn: words.sign_in_signing_in,
+		inOtherWindow: words.sign_in_in_other_window,
+		openInTab: words.sign_in_open_in_tab,
+		signInUnfinished: words.sign_in_unfinished,
 		logOut: words.log_out
 	};
 }
