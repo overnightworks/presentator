@@ -485,7 +485,7 @@ class SlidevBuilds:
         try:
             mirror.export(
                 Revision(ref=source.ref, commit=deck.commit),
-                deck.slug,
+                source.deck_path(deck.slug),
                 into=into,
             )
         except MirrorError as unreadable:

@@ -107,6 +107,7 @@ class SourceView(SourceSummary):
     """One source with its newest runs and the viewer's own decks from it."""
 
     hook_url: str
+    folder: str
     public_key: str | None
     runs: list[SourceRunView]
     decks: list[SourceDeckView]
@@ -175,6 +176,7 @@ class NewSource(SourceProbe):
 
     name: str
     fingerprint: str
+    folder: str = ""
 
 
 class CreatedSourceView(BaseModel):
@@ -294,6 +296,7 @@ class _SourceData:
             reason=page.reason,
             fetched_at=page.fetched_at,
             hook_url=hook_url(request, page.name),
+            folder=page.folder,
             public_key=page.public_key,
             runs=[
                 SourceRunView(
@@ -403,6 +406,7 @@ class _SourceData:
                 secret=secret,
                 fingerprint=new.fingerprint,
                 key_draft_id=key_draft_id,
+                folder=new.folder,
             ),
             owner_id=admin.id,
         )

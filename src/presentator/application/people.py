@@ -125,6 +125,7 @@ class People:
             name=source.name,
             url=source.url,
             ref=source.ref,
+            folder=source.folder,
             public_key=source.public_key,
             decks=tuple(
                 _deck_export(deck) for deck in self.decks.store.for_source(source.id)

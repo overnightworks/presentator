@@ -85,6 +85,7 @@ LobbyText.source_webhook_once
 LobbyText.source_created_toast
 LobbyText.source_check_reachable
 LobbyText.source_refused_name
+LobbyText.source_refused_folder
 LobbyText.source_refused_duplicate_name
 LobbyText.source_refused_duplicate_url
 LobbyText.source_refused_unknown_access

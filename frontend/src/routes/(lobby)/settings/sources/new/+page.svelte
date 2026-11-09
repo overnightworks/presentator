@@ -137,6 +137,7 @@
 			created = await createSource(fetch, {
 				...probe(),
 				name,
+				folder: '',
 				fingerprint: fingerprint as string
 			});
 			secret = '';

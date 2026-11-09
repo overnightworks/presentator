@@ -48,7 +48,9 @@ from presentator.contracts.decks import (
     SourceState,
     SourceWrite,
     access_kind_of,
+    is_a_folder_path,
     is_a_plain_folder_name,
+    normalized_folder,
 )
 from presentator.ports.clock import Clock
 from presentator.ports.decks import (
@@ -91,6 +93,7 @@ class SourceRefusal(StrEnum):
     """Why adding a source did not write a row, in the form's own cases."""
 
     MALFORMED_NAME = "malformed-name"
+    MALFORMED_FOLDER = "malformed-folder"
     DUPLICATE_NAME = "duplicate-name"
     DUPLICATE_URL = "duplicate-url"
     UNKNOWN_ACCESS = "unknown-access"
@@ -142,18 +145,7 @@ class NewSourceDraft:
     fingerprint: str
     # The draft key the Add form was shown; blank unless SSH was posted.
     key_draft_id: str = ""
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _ConnectionProof:
-    """The values one successful Check binds before Create may use them."""
-
-    owner_id: str
-    draft_id: str
-    public_key: str
-    url: str
-    ref: str
-    secret: str
+    folder: str = ""
 
 
 def hash_webhook_secret(secret: str) -> bytes:
@@ -169,6 +161,7 @@ def _refusal_for(
     draft: NewSourceDraft,
     *,
     name: str,
+    folder: str,
     url: str,
     existing: tuple[Source, ...],
 ) -> SourceRefusal | None:
@@ -183,6 +176,7 @@ def _refusal_for(
             name == RESERVED_SOURCE_NAME or _SOURCE_NAME.fullmatch(name) is None,
             SourceRefusal.MALFORMED_NAME,
         ),
+        (not is_a_folder_path(folder), SourceRefusal.MALFORMED_FOLDER),
         (kind is None, SourceRefusal.UNKNOWN_ACCESS),
         (
             kind in (AccessKind.FILE, AccessKind.SSH) and bool(secret.strip()),
@@ -194,21 +188,27 @@ def _refusal_for(
     return next((reason for matched, reason in checks if matched), None)
 
 
-def _connection_fingerprint(key: bytes, proof: _ConnectionProof) -> str:
+def _connection_fingerprint(
+    key: bytes,
+    *,
+    owner_id: str,
+    deploy_key: DeployKeyDraft | None,
+    url: str,
+    secret: str,
+) -> str:
     """The proof Create later checks the posted values against.
 
-    Signed rather than merely hashed: an unsigned digest of these same three
-    values is trivial for a client to forge without ever calling Check.
+    Signed rather than merely hashed: an unsigned digest of these same values is
+    trivial for a client to forge without ever calling Check.
     """
-    secret_hash = sha256(proof.secret.encode()).digest()
     message = b"\0".join(
         (
-            proof.owner_id.encode(),
-            proof.draft_id.encode(),
-            proof.public_key.encode(),
-            proof.url.encode(),
-            proof.ref.encode(),
-            secret_hash,
+            owner_id.encode(),
+            b"" if deploy_key is None else deploy_key.id.encode(),
+            b"" if deploy_key is None else deploy_key.public_key.encode(),
+            url.encode(),
+            _ADDED_REF.encode(),
+            sha256(secret.encode()).digest(),
         ),
     )
     return hmac.new(key, message, sha256).hexdigest()
@@ -284,6 +284,7 @@ class Decks:
         return SourcePage(
             name=listed.name,
             url=listed.url,
+            folder=source.folder,
             access=listed.access,
             state=listed.state,
             reason=listed.reason,
@@ -447,14 +448,10 @@ class Decks:
             detail=None,
             fingerprint=_connection_fingerprint(
                 self.fingerprint_key,
-                _ConnectionProof(
-                    owner_id=owner_id,
-                    draft_id="" if deploy_key is None else deploy_key.id,
-                    public_key="" if deploy_key is None else deploy_key.public_key,
-                    url=address,
-                    ref=_ADDED_REF,
-                    secret=credential,
-                ),
+                owner_id=owner_id,
+                deploy_key=deploy_key,
+                url=address,
+                secret=credential,
             ),
         )
 
@@ -494,10 +491,12 @@ class Decks:
         """
         named = draft.name.strip()
         address = draft.url.strip()
+        folder = normalized_folder(draft.folder)
         existing = self.sources.all()
         preflight = _refusal_for(
             draft,
             name=named,
+            folder=folder,
             url=address,
             existing=existing,
         )
@@ -517,14 +516,10 @@ class Decks:
             draft.fingerprint,
             _connection_fingerprint(
                 self.fingerprint_key,
-                _ConnectionProof(
-                    owner_id=owner_id,
-                    draft_id="" if deploy_key is None else deploy_key.id,
-                    public_key="" if deploy_key is None else deploy_key.public_key,
-                    url=address,
-                    ref=_ADDED_REF,
-                    secret=credential,
-                ),
+                owner_id=owner_id,
+                deploy_key=deploy_key,
+                url=address,
+                secret=credential,
             ),
         )
         if not proven:
@@ -541,6 +536,7 @@ class Decks:
             owner_id=owner_id,
             access_secret=credential,
             hook_secret_hash=hash_webhook_secret(webhook_secret),
+            folder=folder,
             public_key=None if deploy_key is None else deploy_key.public_key,
         )
         stored = (

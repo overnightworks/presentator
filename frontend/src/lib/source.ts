@@ -13,6 +13,7 @@ import type { LobbyText } from '#lib/api/session.ts';
 export function refusalWords(reason: SourceRefusalReason, words: LobbyText): string {
 	const sentences: Record<SourceRefusalReason, string> = {
 		'malformed-name': words.source_refused_name,
+		'malformed-folder': words.source_refused_folder,
 		'duplicate-name': words.source_refused_duplicate_name,
 		'duplicate-url': words.source_refused_duplicate_url,
 		'unknown-access': words.source_refused_unknown_access,

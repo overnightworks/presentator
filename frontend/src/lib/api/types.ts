@@ -660,6 +660,8 @@ export interface components {
             source_refused_duplicate_name: string;
             /** Source Refused Duplicate Url */
             source_refused_duplicate_url: string;
+            /** Source Refused Folder */
+            source_refused_folder: string;
             /** Source Refused Name */
             source_refused_name: string;
             /** Source Refused Not Checked */
@@ -796,6 +798,11 @@ export interface components {
         NewSource: {
             /** Fingerprint */
             fingerprint: string;
+            /**
+             * Folder
+             * @default
+             */
+            folder: string;
             /** Key Draft Id */
             key_draft_id: string | null;
             /** Name */
@@ -1001,6 +1008,8 @@ export interface components {
             decks: components["schemas"]["SourceDeckView"][];
             /** Fetched At */
             fetched_at: string | null;
+            /** Folder */
+            folder: string;
             /** Hook Url */
             hook_url: string;
             /** Name */
@@ -1471,7 +1480,7 @@ export interface operations {
                         /** Detail */
                         detail?: string | null;
                         /** @enum {string} */
-                        reason: "malformed-name" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
+                        reason: "malformed-name" | "malformed-folder" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
                         /** Status */
                         status: number;
                         /** Title */
@@ -1541,7 +1550,7 @@ export interface operations {
                         /** Detail */
                         detail?: string | null;
                         /** @enum {string} */
-                        reason: "malformed-name" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
+                        reason: "malformed-name" | "malformed-folder" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
                         /** Status */
                         status: number;
                         /** Title */
