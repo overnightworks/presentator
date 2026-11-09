@@ -61,11 +61,6 @@ rule = "file-suffix"
 reason = "a redirect rule file the built-talk fixture keeps under its name; the static host serves it as a plain file and does not read its rules"
 
 [[layout.allow]]
-path = "scripts/cutover.py"
-rule = "script-name"
-reason = "the operator ruled this name on #508; the script is deleted in S9m"
-
-[[layout.allow]]
 path = "slidev/tests/addon-package.test.ts"
 rule = "test-layout"
 reason = "its subject is a deck built by the addon's name, which no addon source file mirrors"
