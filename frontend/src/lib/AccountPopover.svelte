@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { AccountMenu } from 'overnightworks-appkit';
+	import { AccountMenu } from 'overnightworks-design';
 	import { accountMenuWords } from '#lib/kitWords.ts';
 	import { type ThemeChoice, writeTheme } from '#lib/api/account.ts';
 	import type { SessionPerson, SessionView } from '#lib/api/session.ts';

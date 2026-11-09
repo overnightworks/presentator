@@ -357,7 +357,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      # The frozen install also holds appkit's tarball to the integrity the
+      # The frozen install also holds design's tarball to the integrity the
       # lockfile carries.
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
