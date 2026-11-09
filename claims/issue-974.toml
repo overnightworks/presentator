@@ -1,0 +1,7 @@
+claim_id = "4e20bcecc6854cc496a5dafc3201f414"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "61270a5f21740e1ef0c2510abbdd28bac29873d4"
+branch = "claude/issue-974-an-rtnetlink-reader-reads-the-kernel-s-l"
+scope = ["src/presentator/adapters/rtnetlink.py", "tests/presentator/adapters/test_rtnetlink.py"]
+opened_commit = "f803c98df1aa3e134d8ee882b73e1bd9fd773a96"
