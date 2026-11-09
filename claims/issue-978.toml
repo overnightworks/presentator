@@ -1,0 +1,8 @@
+claim_id = "745c9fe9d6534603b2db40978483b8b0"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "46bee06288fc4fe6b80b213d6903012be87af6fe"
+branch = "claude/issue-978-presentator-takes-the-renamed-speech-cli"
+scope = ["AGENTS.md", "compose.yaml", "docs/ARCHITECTURE.md", "docs/runbooks/run-from-a-checkout.md", "pyproject.toml", "quality/config.toml", "src/presentator/adapters/speech.py", "tests/presentator/adapters/test_speech_health.py", "tests/presentator/adapters/test_speech_hearing.py", "tests/presentator/adapters/test_speech_speaking.py", "tests/presentator/api/test_copresenter_speech.py", "tests/support/speech_drive.py", "tests/support/speech_service.py", "uv.lock"]
+opened_commit = "f957490d81d24e330b7bc22b580d3295b5e1f464"
+whole_reason = "One distribution's new name across its pin, lock, imports, the import contract and the origin the service now answers on; a half rename does not build or does not reach the service."
