@@ -64,6 +64,7 @@ def a_health_document(
     *,
     hearing_ready: bool = True,
     voice_ready: bool = True,
+    speaking_ready: bool = True,
     voice: str = A_SPEECH_VOICE,
     another_ready_voice: str | None = None,
 ) -> dict[str, object]:
@@ -72,7 +73,7 @@ def a_health_document(
     if another_ready_voice is not None:
         voices[another_ready_voice] = {"model": "m", "ready": True, "sample_rate": 1}
     return {
-        "speaking": {"ready": True, "voices": voices},
+        "speaking": {"ready": speaking_ready, "voices": voices},
         "hearing": {"model": "m", "ready": hearing_ready},
         "card_memory_mb": 1,
     }
@@ -183,9 +184,13 @@ def _the_v0_1_shape() -> Response:
     )
 
 
-def _a_voice_not_ready() -> Response:
+def _a_service_in_its_start_load() -> Response:
     return JSONResponse(
-        a_health_document(voice_ready=False, another_ready_voice="another-voice")
+        a_health_document(
+            voice_ready=False,
+            speaking_ready=False,
+            another_ready_voice="another-voice",
+        )
     )
 
 
@@ -211,7 +216,7 @@ HEALTH_FAILURES: Final[dict[str, Answer]] = {
     "cut-body": _a_cut_health_body,
     "v0.1-shape": _the_v0_1_shape,
     "voice-absent": lambda: JSONResponse(a_health_document(voice="another-voice")),
-    "its-voice-not-ready": _a_voice_not_ready,
+    "service-in-its-start-load": _a_service_in_its_start_load,
 }
 
 
