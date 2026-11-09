@@ -14,7 +14,7 @@ from typing import ClassVar, NoReturn, overload
 import pytest
 
 from presentator.adapters.build_wire import PEER_CREDENTIALS
-from presentator.host import worker, worker_serving
+from presentator.host import worker, worker_self_check, worker_serving
 from presentator.host.worker_serving import HEADER_SECONDS, LifeEnd
 from presentator.host.worker_termination import SWEEP_SECONDS, SweepEffects, sweep
 from presentator.host.worker_wire import WireExit
@@ -794,4 +794,4 @@ def test_the_locale_key_python_sets_itself_passes_the_environment_predicate() ->
         sealed_snapshot()
     )
 
-    assert worker.first_failing_predicate(snapshot) is None
+    assert worker_self_check.first_failing_predicate(snapshot) is None

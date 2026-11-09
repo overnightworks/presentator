@@ -120,8 +120,6 @@ convention = "google"
 "scripts/probe_build_worker_starts.py" = ["INP001"]
 "scripts/probe_build_worker_uploads.py" = ["INP001"]
 "scripts/probe_build_worker_web.py" = ["INP001"]
-# Standalone one-time command, not a package.
-"scripts/cutover.py" = ["INP001"]
 # The attack deck's ctypes child and the programs sent to the worker on stdin.
 "scripts/probe_build_worker/attack/kernel_attacks.py" = ["INP001"]
 "scripts/probe_build_worker/next_life.py" = ["INP001"]

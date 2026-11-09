@@ -816,8 +816,8 @@ def test_a_talk_larger_than_a_build_may_leave_is_refused_with_that_reason(
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    # Nothing is written until the last step, so no watch sees it: what the
-    # build left is added up once more when it is over.
+    # No watch may see a half-written file: the final check adds up what was left.
+    machine.setattr(builds_module, "_ACCOUNTED_EVERY", timedelta(hours=1))
     with_the_toolchain(
         machine,
         tmp_path,

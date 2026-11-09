@@ -30,7 +30,7 @@ from probe_build_worker_harness import (
     worker,
 )
 
-from presentator.host import worker as worker_identity
+from presentator.host import worker_self_check as worker_identity
 
 ATTACK_SLUG = "attack"
 ATTACKS_FILE = "attacks.txt"

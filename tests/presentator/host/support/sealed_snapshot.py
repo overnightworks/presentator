@@ -9,9 +9,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from presentator.host import worker
-from presentator.host.worker import Identity, Snapshot, Toolchain
+from presentator.host import worker_self_check
 from presentator.host.worker_scratch import QUEUE_MOUNT, Scratch
+from presentator.host.worker_self_check import Identity, Snapshot, Toolchain
 
 SEALED_STATUS = """Name:\tpresentator-worker
 CapInh:\t0000000000000000
@@ -28,7 +28,7 @@ SEALED_MOUNTINFO = (
     "20 1 0:20 / / ro,relatime - overlay overlay rw\n"
     + "".join(
         f"{21 + index} 20 0:{21 + index} / {mount} {HARDENED} - tmpfs tmpfs rw\n"
-        for index, mount in enumerate(worker.TMPFS_MOUNTS)
+        for index, mount in enumerate(worker_self_check.TMPFS_MOUNTS)
     )
     + MESSAGE_QUEUE_MOUNTINFO
 )
@@ -73,8 +73,8 @@ def sealed_snapshot() -> Snapshot:
             runtime_uid=1000,
             runtime_gid=1000,
             users={
-                "presentator-build": worker.BUILD_IDENTITY,
-                "presentator-wire": worker.WIRE_IDENTITY,
+                "presentator-build": worker_self_check.BUILD_IDENTITY,
+                "presentator-wire": worker_self_check.WIRE_IDENTITY,
             },
         ),
         environment_keys=frozenset({"PATH", "HOME", "HOSTNAME"}),
@@ -97,8 +97,8 @@ def with_fields(**changes: object) -> Callable[[Snapshot], Snapshot]:
 def stand_in_users(monkeypatch: pytest.MonkeyPatch) -> None:
     users = {
         "presentator": (1000, 1000),
-        "presentator-build": worker.BUILD_IDENTITY,
-        "presentator-wire": worker.WIRE_IDENTITY,
+        "presentator-build": worker_self_check.BUILD_IDENTITY,
+        "presentator-wire": worker_self_check.WIRE_IDENTITY,
     }
 
     def password_entry(name: str) -> SimpleNamespace:
@@ -108,8 +108,8 @@ def stand_in_users(monkeypatch: pytest.MonkeyPatch) -> None:
     def group_entry(name: str) -> SimpleNamespace:
         return SimpleNamespace(gr_gid=users[name][1])
 
-    monkeypatch.setattr(worker.pwd, "getpwnam", password_entry)
-    monkeypatch.setattr(worker.grp, "getgrnam", group_entry)
+    monkeypatch.setattr(worker_self_check.pwd, "getpwnam", password_entry)
+    monkeypatch.setattr(worker_self_check.grp, "getgrnam", group_entry)
 
 
 def stage_sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -122,8 +122,8 @@ def stage_sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     def dumpable_zero(_option: int, _value: int) -> int:
         return 0
 
-    monkeypatch.setattr(worker.os, "statvfs", read_only_root)
-    monkeypatch.setattr(worker, "libc_prctl", dumpable_zero)
+    monkeypatch.setattr(worker_self_check.os, "statvfs", read_only_root)
+    monkeypatch.setattr(worker_self_check, "libc_prctl", dumpable_zero)
 
     def file_at(relative: str, content: str = "", mode: int = 0o644) -> Path:
         path = tmp_path / relative
@@ -150,7 +150,7 @@ def stage_sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     file_at("app/slidev/node_modules/.bin/slidev", mode=0o755)
     package = modules / ".pnpm/@slidev+cli@1/node_modules/@slidev/cli"
     (package / "node_modules").mkdir(parents=True)
-    (package / "node_modules/.vite").symlink_to(worker.VITE_CACHE_TARGET)
+    (package / "node_modules/.vite").symlink_to(worker_self_check.VITE_CACHE_TARGET)
     (modules / "@slidev").mkdir()
     (modules / "@slidev/cli").symlink_to(package)
     shell = (

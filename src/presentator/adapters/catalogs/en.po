@@ -463,6 +463,36 @@ msgstr "Public key"
 msgid "source_deploy_key_renew"
 msgstr "Renew"
 
+msgid "source_fetch_nothing_new"
+msgstr "Fetched, nothing new."
+
+msgid "source_fetch_changed"
+msgstr "Fetched."
+
+msgid "source_fetch_built"
+msgstr "Decks built: {count}"
+
+msgid "source_fetch_failed"
+msgstr "Builds failed: {count}"
+
+msgid "source_fetch_removed"
+msgstr "Decks removed: {count}"
+
+msgid "source_fetch_busy"
+msgstr "Busy with another job, nothing fetched. Try again in a moment."
+
+msgid "source_request_failed"
+msgstr "The request failed. Try again."
+
+msgid "source_renewed_secret"
+msgstr "Secret renewed."
+
+msgid "source_renewed_deploy_key"
+msgstr "Deploy key renewed. Register the new public key at the Git host."
+
+msgid "source_renewed_webhook"
+msgstr "Webhook secret renewed. Set it at the Git host."
+
 msgid "source_run_fetched"
 msgstr "fetched"
 

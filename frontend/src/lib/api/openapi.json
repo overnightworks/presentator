@@ -860,6 +860,30 @@
             "title": "Source Deploy Key Renew",
             "type": "string"
           },
+          "source_fetch_built": {
+            "title": "Source Fetch Built",
+            "type": "string"
+          },
+          "source_fetch_busy": {
+            "title": "Source Fetch Busy",
+            "type": "string"
+          },
+          "source_fetch_changed": {
+            "title": "Source Fetch Changed",
+            "type": "string"
+          },
+          "source_fetch_failed": {
+            "title": "Source Fetch Failed",
+            "type": "string"
+          },
+          "source_fetch_nothing_new": {
+            "title": "Source Fetch Nothing New",
+            "type": "string"
+          },
+          "source_fetch_removed": {
+            "title": "Source Fetch Removed",
+            "type": "string"
+          },
           "source_folder": {
             "title": "Source Folder",
             "type": "string"
@@ -1002,6 +1026,22 @@
           },
           "source_renew": {
             "title": "Source Renew",
+            "type": "string"
+          },
+          "source_renewed_deploy_key": {
+            "title": "Source Renewed Deploy Key",
+            "type": "string"
+          },
+          "source_renewed_secret": {
+            "title": "Source Renewed Secret",
+            "type": "string"
+          },
+          "source_renewed_webhook": {
+            "title": "Source Renewed Webhook",
+            "type": "string"
+          },
+          "source_request_failed": {
+            "title": "Source Request Failed",
             "type": "string"
           },
           "source_reverse": {
@@ -1315,6 +1355,16 @@
           "source_deploy_key_info",
           "source_public_key",
           "source_deploy_key_renew",
+          "source_fetch_nothing_new",
+          "source_fetch_changed",
+          "source_fetch_built",
+          "source_fetch_failed",
+          "source_fetch_removed",
+          "source_fetch_busy",
+          "source_request_failed",
+          "source_renewed_secret",
+          "source_renewed_deploy_key",
+          "source_renewed_webhook",
           "source_run_fetched",
           "source_run_unreachable",
           "source_run_secret",
