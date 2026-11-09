@@ -1,8 +1,0 @@
-claim_id = "0fc0848855f249399178588972cfa554"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "61270a5f21740e1ef0c2510abbdd28bac29873d4"
-branch = "claude/issue-972-the-build-worker-s-child-uids-move-to-61"
-scope = [".github/workflows/ci.yml", "Dockerfile", "scripts/probe_build_worker.py", "scripts/probe_build_worker/attack/kernel_attacks.py", "scripts/probe_build_worker/attack/vite.config.mjs", "scripts/probe_build_worker_isolation.py", "scripts/probe_build_worker_lives.py", "scripts/probe_build_worker_refusals.py", "src/presentator/host/worker.py", "tests/presentator/host/support/sealed_snapshot.py", "tests/presentator/host/test_worker.py", "tests/presentator/host/test_worker_scratch.py", "tests/presentator/host/test_worker_wire.py"]
-opened_commit = "94f630dc2e0c676527ba4a4f22c8d822b5911f89"
-whole_reason = "One pair of uids across the image, the self-check that demands it and the probes that drive it, which cannot land half moved."
