@@ -8,7 +8,6 @@ import pytest
 from webauth.oidc import PENDING_LOGIN_MAX_AGE_SECONDS
 
 from presentator.application.build_retention import REMOVED_DECK_KEPT
-from presentator.application.copresenter import AskLimits
 from presentator.application.decks import DRAFT_MAX_AGE
 from presentator.application.identity import SESSION_LIFETIME, SESSION_SWEEP_INTERVAL
 
@@ -42,10 +41,6 @@ _MINUTE = timedelta(minutes=1)
         (
             r"bleibt es, bis seine (\d+) Minuten ablaufen",
             timedelta(seconds=PENDING_LOGIN_MAX_AGE_SECONDS) / _MINUTE,
-        ),
-        (
-            r"wann eine Sitzung in den letzten (\d+) Minuten gefragt hat",
-            AskLimits().window / _MINUTE,
         ),
     ],
 )

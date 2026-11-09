@@ -29,7 +29,6 @@ from presentator.contracts.models import Role, User
 from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeUserStore,
-    FrozenClock,
 )
 from tests.support.copresenter_support import (
     HEARING,
@@ -44,9 +43,6 @@ from tests.support.copresenter_support import (
     a_use,
     ask,
     who,
-)
-from tests.support.lobby import (
-    NOW,
 )
 
 if TYPE_CHECKING:
@@ -94,7 +90,7 @@ def test_copresenter_routes_refuse_unauthenticated_http_before_private_use() -> 
         app,
         surface=CoPresenterSurface(
             use=a_use(private, FakeDeckStore()),
-            limiter=AskLimiter(clock=FrozenClock(instant=NOW)),
+            limiter=AskLimiter(),
             browser_origin=TALK_ORIGIN,
         ),
         admission=no_session,

@@ -54,7 +54,6 @@ from tests.support.lobby import (
     A_TALK_SOCKET_ADDRESS,
     ADMIN,
     AN_API_GROUP,
-    NOW,
     SOURCE_ID,
     Lobby,
     a_browser_at,
@@ -320,7 +319,7 @@ def a_copresenter_talk_host(
         people=people,
         copresenter=CoPresenterSurface(
             use=a_use(private, decks or the_admins_decks()),
-            limiter=limiter or AskLimiter(clock=FrozenClock(instant=NOW)),
+            limiter=limiter or AskLimiter(),
             browser_origin=TALK_ORIGIN,
             delay=delay,
         ),
@@ -562,7 +561,7 @@ def arrange_the_issuer(hosts: Hosts, scenario: Scenario) -> None:
 def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
     """Sign an admin in at the talk host, then ask once."""
     gateway = scenario.gateway()
-    limiter = RecordingLimiter(clock=FrozenClock(instant=NOW))
+    limiter = RecordingLimiter()
     fakes = the_fakes_of(scenario)
     hosts_made: list[Hosts] = []
     errors: list[BaseException] = []

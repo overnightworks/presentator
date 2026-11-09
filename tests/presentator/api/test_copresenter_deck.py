@@ -9,19 +9,18 @@ from typing import TYPE_CHECKING
 import pytest
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
-from presentator.application.copresenter import AskLimiter, AskLimits
+from presentator.application.copresenter import AskLimiter
 from presentator.contracts.copresenter import DeckText
 from presentator.contracts.models import Role
-from tests.presentator.application.support.fakes import FrozenClock
 from tests.support.copresenter_support import (
     ASKED,
-    NOW,
     QUESTION,
     a_copresenter_talk_host,
     ask,
     the_admins_decks,
     who,
 )
+from tests.support.lobby import NOW
 
 if TYPE_CHECKING:
     from httpx2 import Response
@@ -31,7 +30,6 @@ if TYPE_CHECKING:
     from tests.support.lobby import Lobby
 
 TARGET = "target"
-ONE_QUESTION_ONLY = AskLimits(per_window=1)
 BUILT_TARGET = replace(ASKED.deck, slug=TARGET)
 UNBUILT = replace(BUILT_TARGET, build=None)
 ANOTHERS = replace(BUILT_TARGET, owner_id="id-of-someone-else")
@@ -45,7 +43,7 @@ def ask_about(lobby: Lobby, slug: str) -> Response:
 def an_instance(
     *others: Deck, removed: tuple[str, ...] = (), role: Role = Role.ADMIN
 ) -> tuple[Lobby, PrivateFakes]:
-    """A person signed in, a budget of one question, and the admin's own deck."""
+    """A person signed in and the admin's own deck."""
     decks = the_admins_decks()
     for deck in others:
         decks.put(deck)
@@ -54,7 +52,7 @@ def an_instance(
     decks.removed.update(dict.fromkeys(removed, NOW))
     lobby, private, _clock = a_copresenter_talk_host(
         decks=decks,
-        limiter=AskLimiter(clock=FrozenClock(instant=NOW), limits=ONE_QUESTION_ONLY),
+        limiter=AskLimiter(),
     )
     lobby.sign_in(role=role)
     return lobby, private
@@ -91,10 +89,10 @@ def test_the_owner_asks_about_their_own_built_deck() -> None:
         pytest.param((), (), "x" * 255, id="at the length bound"),
     ],
 )
-def test_a_refused_deck_gets_one_answer_and_spends_no_question(
+def test_a_refused_deck_gets_one_answer_and_leaves_the_session_free(
     others: tuple[Deck, ...], removed: tuple[str, ...], slug: str
 ) -> None:
-    """CP2: every unusable deck gets one 404, no port, no budget."""
+    """CP2: every unusable deck gets one 404, no port, no answer held."""
     lobby, private = an_instance(*others, removed=removed)
 
     refused = ask_about(lobby, slug)
@@ -123,7 +121,7 @@ def test_a_question_without_a_deck_gets_the_same_refusal() -> None:
 
 
 def test_a_name_over_the_length_bound_is_rejected_before_any_lookup() -> None:
-    """A name over 255 is 422 and spends no question."""
+    """A name over 255 is 422 and leaves the session free."""
     lobby, private = an_instance()
 
     refused = ask_about(lobby, "x" * 256)
@@ -147,10 +145,10 @@ def test_an_owner_with_the_user_role_is_answered_and_another_users_deck_is_not()
     assert len(private.answers.messages) == 1
 
 
-def test_a_signed_out_asker_is_refused_and_spends_no_question() -> None:
-    """A signed-out asker is refused 401, no port, no budget."""
+def test_a_signed_out_asker_is_refused_and_leaves_the_session_free() -> None:
+    """A signed-out asker is refused 401, no port, no answer held."""
     lobby, private, _clock = a_copresenter_talk_host(
-        limiter=AskLimiter(clock=FrozenClock(instant=NOW), limits=ONE_QUESTION_ONLY),
+        limiter=AskLimiter(),
     )
 
     lobby.sign_in(role=Role.ADMIN)
@@ -281,8 +279,8 @@ def test_who_names_the_owned_deck_whose_slug_needs_percent_encoding(slug: str) -
     assert private.texts.asked == [(replace(ASKED.deck, slug=slug), ASKED.source)]
 
 
-def test_who_counts_no_question() -> None:
-    """After who, the one question of the window is still admitted."""
+def test_who_leaves_the_session_free() -> None:
+    """After who, the session is free to ask."""
     lobby, _private = an_instance()
 
     assert who(lobby.client).status_code == HTTPStatus.OK
