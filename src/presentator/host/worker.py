@@ -44,11 +44,13 @@ from presentator.host.worker_self_check import (
     TOOLCHAIN_PROJECT,
     WIRE_IDENTITY,
     Predicate,
+    Seal,
     Snapshot,
     first_failing_predicate,
     libc_prctl,
     lstat_if_present,
     read_snapshot,
+    seal_from_environment,
     status_fields,
 )
 from presentator.host.worker_serving import (
@@ -107,7 +109,8 @@ class Boundary:
 
     set_non_dumpable: Callable[[], None]
     set_umask: Callable[[], None]
-    read_snapshot: Callable[[], Snapshot]
+    read_seal: Callable[[], Seal]
+    read_snapshot: Callable[[Seal], Snapshot]
     load_settings: Callable[[], WorkerSettings]
     serve: Server
 
@@ -328,6 +331,7 @@ def _serve_on_this_machine(
 REAL_BOUNDARY = Boundary(
     _set_non_dumpable,
     _set_umask,
+    partial(seal_from_environment, os.environ),
     partial(read_snapshot, Path("/"), read_topology=rtnetlink.read_topology),
     load_worker_settings,
     _serve_on_this_machine,
@@ -337,6 +341,11 @@ REAL_BOUNDARY = Boundary(
 def _refuse(refused: Predicate | StartRefusal) -> int:
     logger.error("start refused: %s", refused)
     return REFUSAL_EXIT_STATUS
+
+
+def _refuse_settings(error: ConfigurationError) -> int:
+    logger.error("settings refused", exc_info=error)
+    return _refuse(StartRefusal.SETTINGS)
 
 
 def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) -> int:
@@ -351,7 +360,11 @@ def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) 
     except OSError:
         return _refuse(Predicate.NON_DUMPABLE)
     boundary.set_umask()
-    snapshot = boundary.read_snapshot()
+    try:
+        seal = boundary.read_seal()
+    except ConfigurationError as error:
+        return _refuse_settings(error)
+    snapshot = boundary.read_snapshot(seal)
     failing = first_failing_predicate(snapshot)
     if failing:
         return _refuse(failing)
@@ -359,9 +372,8 @@ def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) 
         return 0
     try:
         settings = boundary.load_settings()
-    except ConfigurationError:
-        logger.exception("settings refused")
-        return _refuse(StartRefusal.SETTINGS)
+    except ConfigurationError as error:
+        return _refuse_settings(error)
     return boundary.serve(
         controller_gid=snapshot.identity.runtime_gid,
         runtime_uid=snapshot.identity.runtime_uid,

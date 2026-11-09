@@ -16,6 +16,7 @@ from presentator.host import worker_self_check
 from presentator.host.worker_scratch import QUEUE_MOUNT, Scratch
 from presentator.host.worker_self_check import (
     Identity,
+    Seal,
     Snapshot,
     Toolchain,
     read_snapshot,
@@ -91,8 +92,23 @@ def sealed_topology() -> rtnetlink.Topology:
 def read_sealed_snapshot(
     root: Path,
     read_topology: Callable[[], rtnetlink.Topology] = sealed_topology,
+    *,
+    seal: Seal = Seal.COMPOSE,
 ) -> Snapshot:
-    return read_snapshot(root, read_topology=read_topology)
+    """Read the staged root under `seal`, with the topology `read_topology` gives."""
+    return read_snapshot(root, seal, read_topology=read_topology)
+
+
+def read_staged_root_as_sealed_process(root: Path) -> Snapshot:
+    """Read the staged root, with the four process facts of the sealed snapshot."""
+    sealed = sealed_snapshot()
+    return replace(
+        read_sealed_snapshot(root),
+        environment_keys=sealed.environment_keys,
+        pid=sealed.pid,
+        work_owner_uid=sealed.work_owner_uid,
+        identity=sealed.identity,
+    )
 
 
 def sealed_snapshot() -> Snapshot:
@@ -120,6 +136,7 @@ def sealed_snapshot() -> Snapshot:
             },
         ),
         environment_keys=frozenset({"PATH", "HOME", "HOSTNAME"}),
+        seal=Seal.COMPOSE,
         pid=1,
         cgroup_tasks="1",
         scratch=Scratch(occupied_roots=frozenset(), sysv_tables=SYSV_HEADERS),

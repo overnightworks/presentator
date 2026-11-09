@@ -13,13 +13,11 @@ from presentator.adapters import build_wire
 from presentator.adapters.rtnetlink import Topology
 from presentator.host import worker, worker_self_check
 from presentator.host.config import (
-    WorkerSettings,
     load_worker_settings,
     worker_settings_variables,
 )
-from presentator.host.worker import Boundary
 from presentator.host.worker_scratch import QUEUE_MOUNT, scratch_empty
-from presentator.host.worker_self_check import Predicate, Snapshot
+from presentator.host.worker_self_check import Predicate, Seal, Snapshot
 from presentator.host.worker_serving import Serving
 from tests.presentator.host.support.audit_recording import (
     LAUNCH_EVENTS,
@@ -31,13 +29,19 @@ from tests.presentator.host.support.sealed_snapshot import (
     SEALED_STATUS,
     SYSV_HEADERS,
     read_sealed_snapshot,
+    read_staged_root_as_sealed_process,
     sealed_snapshot,
     sealed_topology,
     stage_sealed_root,
     with_fields,
 )
+from tests.presentator.host.support.worker_boundary import (
+    LOADED_SETTINGS,
+    boundary_over,
+)
 
 TOPOLOGY_READ = "topology read"
+READS_BEFORE_TOPOLOGY = 8
 WORK_MOUNT, TEMPORARY_MOUNT, SHARED_MEMORY_MOUNT, *_ = worker_self_check.TMPFS_MOUNTS
 
 
@@ -203,38 +207,6 @@ FAILURES = {
         Predicate.TOOLCHAIN,
     ),
 }
-
-
-LOADED_SETTINGS = WorkerSettings(build_timeout_seconds=45.0, build_output_megabytes=7)
-
-
-def boundary_over(
-    snapshot: Snapshot,
-    events: list[str],
-    served: dict[str, object] | None = None,
-    load_settings: Callable[[], WorkerSettings] = lambda: LOADED_SETTINGS,
-) -> Boundary:
-    def read_snapshot() -> Snapshot:
-        events.append("read")
-        return snapshot
-
-    def settings() -> WorkerSettings:
-        events.append("settings")
-        return load_settings()
-
-    def serve(**arguments: object) -> int:
-        events.append("serve")
-        if served is not None:
-            served.update(arguments)
-        return 0
-
-    return Boundary(
-        set_non_dumpable=lambda: events.append("prctl"),
-        set_umask=lambda: events.append("umask"),
-        read_snapshot=read_snapshot,
-        load_settings=settings,
-        serve=serve,
-    )
 
 
 def test_sealed_container_passes_the_self_check() -> None:
@@ -614,19 +586,12 @@ def test_a_failing_or_unreadable_fact_refuses_through_main_naming_its_predicate(
     refused: Predicate,
 ) -> None:
     arrange(sealed_root, monkeypatch)
-    sealed = sealed_snapshot()
 
-    def read_with_sealed_process_facts() -> Snapshot:
-        return replace(
-            read_sealed_snapshot(sealed_root),
-            environment_keys=sealed.environment_keys,
-            pid=sealed.pid,
-            work_owner_uid=sealed.work_owner_uid,
-            identity=sealed.identity,
-        )
+    def read_staged_root(_seal: Seal) -> Snapshot:
+        return read_staged_root_as_sealed_process(sealed_root)
 
     boundary = replace(
-        boundary_over(sealed, []), read_snapshot=read_with_sealed_process_facts
+        boundary_over(sealed_snapshot(), []), read_snapshot=read_staged_root
     )
 
     assert worker.main(["--check"], boundary) == worker.REFUSAL_EXIT_STATUS
@@ -748,7 +713,7 @@ def test_prctl_failure_raises() -> None:
         worker_self_check.libc_prctl(0x7FFFFFFF, 0)
 
 
-def test_the_snapshot_reads_the_task_count_then_the_scratch_places_and_launches_nothing(
+def test_the_snapshot_reads_task_count_scratch_then_topology_and_launches_nothing(
     sealed_root: Path,
 ) -> None:
     def record_topology_read() -> Topology:
@@ -774,7 +739,7 @@ def test_the_snapshot_reads_the_task_count_then_the_scratch_places_and_launches_
     ]
     assert not [event for event, _ in events if event in LAUNCH_EVENTS]
     assert reads[0] == ("open", Path("sys/fs/cgroup/pids.current"))
-    assert sorted(reads[1:8]) == sorted(
+    assert sorted(reads[1:READS_BEFORE_TOPOLOGY]) == sorted(
         [
             ("os.scandir", Path(root))
             for root in ("work", "tmp", "dev/shm", "dev/mqueue")
@@ -784,4 +749,4 @@ def test_the_snapshot_reads_the_task_count_then_the_scratch_places_and_launches_
     ordered = [
         event for event in events if below_root(event) or event[0] == TOPOLOGY_READ
     ]
-    assert ordered.index((TOPOLOGY_READ, None)) >= len(reads[:8])
+    assert ordered.index((TOPOLOGY_READ, None)) >= READS_BEFORE_TOPOLOGY
