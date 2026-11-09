@@ -1,8 +1,0 @@
-claim_id = "f7ecaad63f2b4c659a337f8b91c04f9a"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "de861d576079d547ae865f6c38dcfe3f37f0a335"
-branch = "claude/issue-960-the-co-presenter-speaks-its-first-senten"
-scope = ["pyproject.toml", "tests/presentator/agent/test_backend.py", "tests/presentator/api/test_copresenter_answer.py", "uv.lock"]
-opened_commit = "a196d2a40b7d5d494639e8883acf87aff9d62b0b"
-whole_reason = "The pin, its lock and the two tests that prove the streamed pieces are one adoption of the release and cannot land apart."
