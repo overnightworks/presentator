@@ -7,6 +7,12 @@ item = "#477"
 date = 2026-10-24
 reason = "the host co-presenter package is deleted (D1 of #355, operator ruling 21.10.2026); its job checks code that no longer exists"
 
+[[gate.loosened]]
+what = 'import contract "Only adapters import agent_runtime_client" changes source_modules'
+item = "#935"
+date = 2026-11-09
+reason = "each route module declares its agent-tool decision beside the route with agent_runtime_client.tools, the one module import-linter cannot separate from the rest of the client; tests/presentator/agent/test_backend_imports.py (C14) holds api to that module alone, and host, application, ports and contracts stay forbidden"
+
 [[size.generated]]
 path = "frontend/src/lib/api/types.ts"
 job = "Lobby: lint, types, tests, drive"

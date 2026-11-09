@@ -8,6 +8,7 @@ renderer or the sign-in wiring to know the person.
 from dataclasses import dataclass
 from http import HTTPStatus
 
+from agent_runtime_client.tools import not_an_agent_tool
 from fastapi import Request
 from starlette.requests import HTTPConnection
 from webauth.config import web_auth_config
@@ -49,6 +50,16 @@ def gated_admin(request: Request) -> User:
     if not person.is_admin:
         raise ProblemError(HTTPStatus.FORBIDDEN)
     return person
+
+
+def administration_is_no_tool() -> dict[str, object]:
+    """The `openapi_extra` of a route only administration calls: no agent tool.
+
+    An agent's token never carries administrator rights, so no tool answers it.
+    """
+    return not_an_agent_tool(
+        reason="Administration only: an agent's token has no administrator rights."
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

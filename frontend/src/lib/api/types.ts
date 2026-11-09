@@ -11,9 +11,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read Account */
+        /**
+         * Read Account
+         * @description Read the signed-in person's own theme.
+         */
         get: operations["read_account_api_account_get"];
-        /** Write Account */
+        /**
+         * Write Account
+         * @description Set the signed-in person's own theme and answer the saved choice.
+         */
         put: operations["write_account_api_account_put"];
         post?: never;
         delete?: never;
@@ -89,7 +95,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Session */
+        /**
+         * Session
+         * @description Show who is signed in, the language and theme they read in, and the words.
+         */
         get: operations["session_api_session_get"];
         put?: never;
         post?: never;

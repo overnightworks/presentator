@@ -30,6 +30,7 @@ flowchart TD
     host --> adapters
     host --> agent
     api --> application
+    api --> arc
     adapters --> ports
     agent --> contracts
     application --> ports
@@ -48,10 +49,14 @@ flowchart TD
   (import-linter in `pyproject.toml`, run by the gate's `import-contract` rule).
   A library an adapter owns behind a port is barred above the adapters by its
   own contract; webauth is barred only from `application`, `ports`, `contracts`,
-  as `api` and `host` import it; the web framework is exempt.
+  as `api` and `host` import it; the web framework is exempt. `api` alone may
+  import one module of a barred library, `agent_runtime_client.tools`, to
+  declare, beside each route, whether an agent may call it.
 - **`src/gitmirror`** mirrors any remote read-only through `git`, does not
-  import `presentator`, and only adapters name it. **`presentator.agent`** alone
-  imports `agent_runtime_client`, at the tag `pyproject.toml` pins. Only adapters
+  import `presentator`, and only adapters name it. **`presentator.agent`** imports
+  `agent_runtime_client` at the tag `pyproject.toml` pins, and `presentator.api`
+  only its `tools` module (`tests/presentator/agent/test_backend_imports.py`
+  holds that line, which import-linter cannot draw inside one package). Only adapters
   import `speech_runtime_client`, the pinned client that owns the speech wire, its
   upgrade headers, server events and health fetch; `adapters/session_access.py` is
   the one read of what the issuer grants a signed-in session.

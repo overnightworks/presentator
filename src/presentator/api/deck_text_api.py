@@ -1,9 +1,9 @@
 """`GET /api/decks/{slug}/text`: the words of one of the reader's own built decks."""
 
-from collections.abc import Mapping
 from http import HTTPStatus
 from typing import Final
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
@@ -37,11 +37,8 @@ class DeckTextView(BaseModel):
     slides: list[SlideTextView]
 
 
-def deck_text_routes(*, own_decks: OwnDecks, mark: Mapping[str, object]) -> APIRouter:
-    """The router that answers the words of the reader's own built deck.
-
-    `mark` is the metadata that offers this route to the reader's agent as a tool.
-    """
+def deck_text_routes(*, own_decks: OwnDecks) -> APIRouter:
+    """The router that answers the words of the reader's own built deck, as a tool."""
     router = APIRouter()
 
     def deck_text(request: Request, slug: str) -> DeckTextView:
@@ -74,6 +71,6 @@ def deck_text_routes(*, own_decks: OwnDecks, mark: Mapping[str, object]) -> APIR
             **problem_response(HTTPStatus.NOT_FOUND),
             **problem_response(HTTPStatus.SERVICE_UNAVAILABLE),
         },
-        openapi_extra=dict(mark),
+        openapi_extra=agent_tool(name="get_deck_text", effect=ToolEffect.READ_ONLY),
     )
     return router

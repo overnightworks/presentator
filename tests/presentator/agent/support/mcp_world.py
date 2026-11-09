@@ -28,6 +28,8 @@ from presentator.agent.mcp import MCP_CLIENT_ID, MCP_GROUP, MCP_SCOPE
 from presentator.api.deck_api import DECK_VIEW_PATH
 from presentator.api.deck_list_api import DECK_LIST_PATH
 from presentator.api.deck_text_api import DECK_TEXT_PATH
+from presentator.api.preference_api import ACCOUNT_PATH
+from presentator.api.session_api import SESSION_PATH
 from presentator.ports.copresenter import DeckTexts
 from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
 from tests.support.deck_text_support import FakeDeckTexts
@@ -56,6 +58,9 @@ class World:
     FELIX_DECK = "felix-deck"
     ANNA_DECK = "anna-deck"
     AGENT_BOT = "subject-of-a-service-account"
+    ADMIN = "subject-of-an-admin"
+    # A person's route no tool answers: a file download.
+    EXCLUDED_PATH = f"/deck/{FELIX_DECK}/pdf"
 
     def __init__(self, scene: Scene, store: FakeDeckStore, program: TestClient) -> None:
         """Sign both people in through the real callback."""
@@ -271,6 +276,8 @@ MARKED_PATHS = (
         ),
         id="text",
     ),
+    pytest.param(MarkedPath(SESSION_PATH, "get_session", {}), id="session"),
+    pytest.param(MarkedPath(ACCOUNT_PATH, "get_account", {}), id="account"),
 )
 
 

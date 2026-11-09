@@ -45,14 +45,17 @@ only its two configured hostnames.
    `<PRESENTATOR_TALK_ORIGIN>/auth/callback` as valid redirect URIs: the talk
    host signs in at its own.
 
-## Let an agent read a person's decks
+## Let an agent act as a person
 
 The lobby always serves `/mcp` and its discovery document; the edge's `/mcp`
 line decides whether the internet reaches them. A person's agent reaches the
-person's decks through `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, as that person: it
-lists them, sees whether each is built and why a build failed, and reads their
-text. It does nothing else. The realm names below are fixed in the app; no
-setting changes them.
+person's account through `<PRESENTATOR_PUBLIC_ORIGIN>/mcp`, as that person: it
+lists their decks, sees whether each is built and why a build failed, reads
+their text, reads who is signed in and the account's theme, and sets that
+theme. It never deletes, shares, publishes or sends anything out, and never
+acts as an admin: the settings, the sources and the people routes stay closed
+to its token. Each route's tool or exclusion is declared beside the route. The
+realm names below are fixed in the app; no setting changes them.
 
 1. Use the shared `agents` client: one public client for every app, with
    client authentication off (no secret) and PKCE S256. Its id is

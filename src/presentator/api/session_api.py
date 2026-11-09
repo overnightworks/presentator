@@ -6,6 +6,7 @@ caller gets the instance's defaults; the person comes from what the gate admitte
 
 from typing import Final
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
@@ -59,8 +60,12 @@ def session_routes(
     """The router that answers the session view."""
     router = APIRouter()
 
-    @router.get(SESSION_PATH)
+    @router.get(
+        SESSION_PATH,
+        openapi_extra=agent_tool(name="get_session", effect=ToolEffect.READ_ONLY),
+    )
     def session(request: Request) -> SessionView:
+        """Show who is signed in, the language and theme they read in, and the words."""
         person = signed_in_person(request)
         appearance = appearance_of(request, preferences)
         return SessionView(

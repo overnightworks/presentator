@@ -1925,6 +1925,7 @@
   "paths": {
     "/api/account": {
       "get": {
+        "description": "Read the signed-in person's own theme.",
         "operationId": "read_account_api_account_get",
         "responses": {
           "200": {
@@ -1938,9 +1939,14 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Read Account"
+        "summary": "Read Account",
+        "x-agent-tool": {
+          "effect": "read_only",
+          "name": "get_account"
+        }
       },
       "put": {
+        "description": "Set the signed-in person's own theme and answer the saved choice.",
         "operationId": "write_account_api_account_put",
         "requestBody": {
           "content": {
@@ -1974,7 +1980,11 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Write Account"
+        "summary": "Write Account",
+        "x-agent-tool": {
+          "effect": "side_effecting",
+          "name": "set_account_theme"
+        }
       }
     },
     "/api/decks": {
@@ -2219,6 +2229,7 @@
     },
     "/api/session": {
       "get": {
+        "description": "Show who is signed in, the language and theme they read in, and the words.",
         "operationId": "session_api_session_get",
         "responses": {
           "200": {
@@ -2232,7 +2243,11 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Session"
+        "summary": "Session",
+        "x-agent-tool": {
+          "effect": "read_only",
+          "name": "get_session"
+        }
       }
     },
     "/api/settings": {
@@ -2293,7 +2308,10 @@
             "description": "Forbidden"
           }
         },
-        "summary": "Read Settings"
+        "summary": "Read Settings",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       },
       "put": {
         "operationId": "write_settings_api_settings_put",
@@ -2410,7 +2428,10 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Write Settings"
+        "summary": "Write Settings",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       }
     },
     "/api/sources": {
@@ -2471,7 +2492,10 @@
             "description": "Forbidden"
           }
         },
-        "summary": "Source List"
+        "summary": "Source List",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       },
       "post": {
         "operationId": "create_api_sources_post",
@@ -2604,7 +2628,10 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Create"
+        "summary": "Create",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       }
     },
     "/api/sources/new/check": {
@@ -2739,7 +2766,10 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Check Connection"
+        "summary": "Check Connection",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       }
     },
     "/api/sources/new/key-draft": {
@@ -2800,7 +2830,10 @@
             "description": "Forbidden"
           }
         },
-        "summary": "Key Draft"
+        "summary": "Key Draft",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       }
     },
     "/api/sources/new/kind": {
@@ -2881,7 +2914,10 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Address Access"
+        "summary": "Address Access",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       }
     },
     "/api/sources/{name}": {
@@ -3124,7 +3160,10 @@
             "description": "Internal Server Error"
           }
         },
-        "summary": "Remove"
+        "summary": "Remove",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       },
       "get": {
         "operationId": "source_api_sources__name__get",
@@ -3247,7 +3286,10 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Source"
+        "summary": "Source",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       }
     },
     "/api/sources/{name}/access": {
@@ -3413,7 +3455,10 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Renew Access"
+        "summary": "Renew Access",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       }
     },
     "/api/sources/{name}/fetch": {
@@ -3531,7 +3576,10 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Fetch Now"
+        "summary": "Fetch Now",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       }
     },
     "/api/sources/{name}/removal": {
@@ -3656,7 +3704,10 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Removal"
+        "summary": "Removal",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       }
     },
     "/api/sources/{name}/webhook-secret": {
@@ -3781,7 +3832,10 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Renew Webhook Secret"
+        "summary": "Renew Webhook Secret",
+        "x-agent-tool": {
+          "excluded": "Administration only: an agent's token has no administrator rights."
+        }
       }
     }
   }

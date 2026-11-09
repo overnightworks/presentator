@@ -12,7 +12,7 @@ dependencies = [
     "cryptography==50.0.2",
     "fastapi==0.162.0",
     "httpx2[ws]==2.16.0",
-    "overnightworks-agent-runtime-client[backend,mcp-server] @ git+https://github.com/overnightworks/agent-runtime@v0.26.0",
+    "overnightworks-agent-runtime-client[backend,mcp-server] @ git+https://github.com/overnightworks/agent-runtime@v0.27.1",
     "overnightworks-speech-runtime-client @ git+https://github.com/overnightworks/speech-runtime@v0.5.0#subdirectory=packages/client",
     "overnightworks-webauth @ git+https://github.com/overnightworks/webauth@v0.34.0",
     "pydantic-settings==2.16.2",
@@ -371,7 +371,6 @@ name = "Only adapters import agent_runtime_client"
 type = "forbidden"
 source_modules = [
     "presentator.host",
-    "presentator.api",
     "presentator.application",
     "presentator.ports",
     "presentator.contracts",

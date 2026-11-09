@@ -23,6 +23,7 @@ from starlette.responses import Response
 from webauth.middleware.bearer_gate import bearer_caller
 from webauth.ports import BearerCaller
 
+from presentator.api.admission import administration_is_no_tool
 from presentator.application.people import People
 from presentator.contracts.people import (
     KindCount,
@@ -185,7 +186,9 @@ def people_routes(*, admin: AdminPeople, app: str) -> APIRouter:
     router = APIRouter()
 
     # A plain `def`: the wait for a running build blocks a pool thread, never the loop.
-    @router.delete(f"{ADMIN_PREFIX}people/{{subject}}")
+    @router.delete(
+        f"{ADMIN_PREFIX}people/{{subject}}", openapi_extra=administration_is_no_tool()
+    )
     def erase_person(
         subject: str,
         caller: Annotated[BearerCaller, Depends(bearer_caller)],
@@ -203,7 +206,10 @@ def people_routes(*, admin: AdminPeople, app: str) -> APIRouter:
             wait_seconds=wait_seconds,
         )
 
-    @router.get(f"{ADMIN_PREFIX}people/{{subject}}/export")
+    @router.get(
+        f"{ADMIN_PREFIX}people/{{subject}}/export",
+        openapi_extra=administration_is_no_tool(),
+    )
     def export_person(
         subject: str,
         caller: Annotated[BearerCaller, Depends(bearer_caller)],
