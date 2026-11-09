@@ -28,7 +28,6 @@ from presentator.contracts.copresenter import (
 )
 from presentator.contracts.models import Role
 from presentator.contracts.voice import SampleLanguage
-from presentator.ports.clock import Clock
 from presentator.ports.copresenter import (
     AgentAnswers,
     DeckTexts,
@@ -195,7 +194,6 @@ class AskLimiter:
     so concurrent asks cannot interleave between them.
     """
 
-    clock: Clock
     _answering: dict[str, AskTicket] = field(default_factory=dict[str, AskTicket])
     guard: AbstractContextManager[bool] = field(default_factory=Lock)
 

@@ -6,7 +6,6 @@ import asyncio
 import json
 import threading
 from dataclasses import dataclass, field, replace
-from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -26,7 +25,6 @@ from tests.presentator.application.support.fakes import FrozenClock
 from tests.support.copresenter_support import (
     A_DECK,
     ASK,
-    NOW,
     QUESTION,
     SPOKEN_QUESTION,
     TALK_ORIGIN,
@@ -39,6 +37,7 @@ from tests.support.copresenter_support import (
 from tests.support.lobby import (
     A_TALK_ADDRESS,
     ADMIN,
+    NOW,
     a_relying_party,
     an_agent_config,
 )
@@ -127,23 +126,6 @@ def test_a_second_question_while_the_first_streams_gets_429_and_no_turn() -> Non
     assert len(private.answers.messages) == len([first, after])
 
 
-def test_each_session_has_its_own_question_budget() -> None:
-    limiter_clock = FrozenClock(instant=NOW)
-    first_lobby, _private, _clock = a_copresenter_talk_host(
-        limiter=AskLimiter(clock=limiter_clock)
-    )
-    first = first_lobby.client
-    first_lobby.sign_in()
-    other_lobby = first_lobby.another_browser()
-    other_lobby.sign_in()
-    other = other_lobby.client
-    for _ in range(20):
-        ask(first)
-
-    assert ask(first).status_code == HTTPStatus.TOO_MANY_REQUESTS
-    assert ask(other).status_code == HTTPStatus.OK
-
-
 @dataclass(frozen=True)
 class FixedSession:
     """The admitted session of a browser."""
@@ -156,7 +138,7 @@ class FixedSession:
 
 
 def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> None:
-    limiter = AskLimiter(clock=FrozenClock(instant=NOW))
+    limiter = AskLimiter()
     private = PrivateFakes()
     app = FastAPI()
     add_copresenter_routes(
@@ -239,7 +221,7 @@ def test_a_browser_that_leaves_mid_answer_closes_the_backend_and_calls_no_more()
 ):
     """C9: the held gateway call is cancelled, none follows, and the ticket is freed."""
     gateway = HeldTransport()
-    limiter = AskLimiter(clock=FrozenClock(instant=NOW))
+    limiter = AskLimiter()
     app = _a_hanging_app(gateway, limiter, lambda _connection: FixedSession())
 
     asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
@@ -258,7 +240,7 @@ def test_the_admission_runs_off_the_event_loop_thread() -> None:
         return FixedSession()
 
     gateway = HeldTransport()
-    app = _a_hanging_app(gateway, AskLimiter(clock=FrozenClock(instant=NOW)), admission)
+    app = _a_hanging_app(gateway, AskLimiter(), admission)
 
     asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
 

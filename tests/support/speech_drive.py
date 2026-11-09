@@ -29,7 +29,7 @@ from presentator.agent.backend import gateway_answerer
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import CoPresenterUse
 from presentator.contracts.copresenter import HearingTranscript, SpeechTokens
-from tests.presentator.application.support.fakes import FakeSourceStore, FrozenClock
+from tests.presentator.application.support.fakes import FakeSourceStore
 from tests.support.copresenter_support import (
     A_DECK_WORDS,
     A_SOURCE,
@@ -61,7 +61,6 @@ from tests.support.lobby import (
     A_SPEECH_SCOPE,
     A_SPEECH_VOICE,
     A_TALK_ADDRESS,
-    NOW,
     an_agent_config,
 )
 from tests.support.speech_service import (
@@ -316,7 +315,7 @@ def a_speech_instance(
 ) -> Generator[SpeechInstance]:
     """Sign an admin in at the talk host, over the fake service, for the block."""
     scenario = scenario or SpeechScenario()
-    limiter = RecordingLimiter(clock=FrozenClock(instant=NOW))
+    limiter = RecordingLimiter()
     deadline = ManualDeadline()
     gateway = scenario.gateway()
     errors: list[BaseException] = []

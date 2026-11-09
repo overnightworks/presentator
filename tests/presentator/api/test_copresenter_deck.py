@@ -12,16 +12,15 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from presentator.application.copresenter import AskLimiter
 from presentator.contracts.copresenter import DeckText
 from presentator.contracts.models import Role
-from tests.presentator.application.support.fakes import FrozenClock
 from tests.support.copresenter_support import (
     ASKED,
-    NOW,
     QUESTION,
     a_copresenter_talk_host,
     ask,
     the_admins_decks,
     who,
 )
+from tests.support.lobby import NOW
 
 if TYPE_CHECKING:
     from httpx2 import Response
@@ -53,7 +52,7 @@ def an_instance(
     decks.removed.update(dict.fromkeys(removed, NOW))
     lobby, private, _clock = a_copresenter_talk_host(
         decks=decks,
-        limiter=AskLimiter(clock=FrozenClock(instant=NOW)),
+        limiter=AskLimiter(),
     )
     lobby.sign_in(role=role)
     return lobby, private
@@ -149,7 +148,7 @@ def test_an_owner_with_the_user_role_is_answered_and_another_users_deck_is_not()
 def test_a_signed_out_asker_is_refused_and_leaves_the_session_free() -> None:
     """A signed-out asker is refused 401, no port, no answer held."""
     lobby, private, _clock = a_copresenter_talk_host(
-        limiter=AskLimiter(clock=FrozenClock(instant=NOW)),
+        limiter=AskLimiter(),
     )
 
     lobby.sign_in(role=Role.ADMIN)

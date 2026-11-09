@@ -3,18 +3,16 @@
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
 
 from presentator.application.copresenter import (
     AskLimiter,
     AskTicket,
     RetryAfter,
 )
-from tests.presentator.application.support.fakes import FrozenClock
 
 
 def a_limiter() -> AskLimiter:
-    return AskLimiter(clock=FrozenClock(instant=datetime(2026, 1, 1, tzinfo=UTC)))
+    return AskLimiter()
 
 
 def test_a_released_old_ticket_cannot_free_the_slot_of_a_newer_answer() -> None:
@@ -110,9 +108,7 @@ def run_on_many_threads_while_one_holds_the_lock[Result](
 
 def test_simultaneous_asks_of_one_session_on_many_threads_admit_exactly_one() -> None:
     guard = ObservedLock()
-    limiter = AskLimiter(
-        clock=FrozenClock(instant=datetime(2026, 1, 1, tzinfo=UTC)), guard=guard
-    )
+    limiter = AskLimiter(guard=guard)
 
     outcomes = run_on_many_threads_while_one_holds_the_lock(
         guard, lambda: limiter.admit("session")
@@ -126,9 +122,7 @@ def test_simultaneous_asks_of_one_session_on_many_threads_admit_exactly_one() ->
 
 def test_simultaneous_releases_of_one_ticket_free_the_slot_exactly_once() -> None:
     guard = ObservedLock()
-    limiter = AskLimiter(
-        clock=FrozenClock(instant=datetime(2026, 1, 1, tzinfo=UTC)), guard=guard
-    )
+    limiter = AskLimiter(guard=guard)
     old = limiter.admit("session")
     assert isinstance(old, AskTicket)
 
