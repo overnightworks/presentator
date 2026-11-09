@@ -159,6 +159,9 @@ class LobbyText:
     source_fetch_removed: str
     source_fetch_busy: str
     source_request_failed: str
+    source_renewed_secret: str
+    source_renewed_deploy_key: str
+    source_renewed_webhook: str
     source_run_fetched: str
     source_run_unreachable: str
     source_run_secret: str

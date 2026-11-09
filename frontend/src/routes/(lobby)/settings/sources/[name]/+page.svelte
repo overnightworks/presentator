@@ -53,8 +53,8 @@
 	let declined = $state(false);
 	// Which request runs; every button of the page is disabled meanwhile.
 	let running = $state<Request | null>(null);
-	// How the last fetch ended; any request of the page clears it as it starts.
-	let outcome = $state<ReturnType<typeof fetchOutcome> | null>(null);
+	// How the last request ended and which one it was; any request of the page clears it as it starts.
+	let outcome = $state<(ReturnType<typeof fetchOutcome> & { request: Request }) | null>(null);
 	const pending = $derived(running !== null);
 	// The dialog is mounted with the page, so a click handler always finds it.
 	let dialog = $state() as HTMLDialogElement;
@@ -65,11 +65,19 @@
 
 	type Request = 'fetch' | 'renewKey' | 'renewToken' | 'renewHook' | 'count' | 'remove';
 
-	async function work(request: Request, attempt: () => Promise<void>): Promise<void> {
+	// A request that ends well may name its outcome; one that throws ends as a failure and rethrows.
+	async function work(
+		request: Request,
+		attempt: () => Promise<ReturnType<typeof fetchOutcome> | null>
+	): Promise<void> {
 		running = request;
 		outcome = null;
 		try {
-			await attempt();
+			const ended = await attempt();
+			outcome = ended && { ...ended, request };
+		} catch (error) {
+			outcome = { request, shape: 'failed', text: words.source_request_failed };
+			throw error;
 		} finally {
 			running = null;
 		}
@@ -79,13 +87,9 @@
 
 	const fetchSource = (): Promise<void> =>
 		work('fetch', async () => {
-			try {
-				outcome = fetchOutcome(await fetchNow(fetch, source.name), words);
-			} catch (error) {
-				outcome = { shape: 'failed', text: words.source_request_failed };
-				throw error;
-			}
+			const ended = fetchOutcome(await fetchNow(fetch, source.name), words);
 			await reread();
+			return ended;
 		});
 
 	function renewToken(event: SubmitEvent): Promise<void> {
@@ -95,6 +99,7 @@
 			if (!declined) {
 				typed = '';
 			}
+			return declined ? null : { shape: 'ready', text: words.source_renewed_secret };
 		});
 	}
 
@@ -102,11 +107,13 @@
 		work('renewKey', async () => {
 			await renewAccess(fetch, source.name, null);
 			await reread();
+			return { shape: 'ready', text: words.source_renewed_deploy_key };
 		});
 
 	const renewHook = (): Promise<void> =>
 		work('renewHook', async () => {
 			renewed = await renewWebhook(fetch, source.name);
+			return { shape: 'ready', text: words.source_renewed_webhook };
 		});
 
 	// The dialog opens once the buttons are enabled again, from the control that
@@ -115,6 +122,7 @@
 		await work('count', async () => {
 			counts = await previewRemoval(fetch, source.name);
 			refused = false;
+			return null;
 		});
 		flushSync();
 		opener.focus();
@@ -136,12 +144,14 @@
 				// An overtaking navigation leaves the notice untaken; the list took it otherwise.
 				notice.take();
 			}
+			return null;
 		});
 
 	// A page kept by the back/forward cache is shown again as it was left, so it
 	// leaves nothing to show: what was typed, shown and asked is gone first.
 	function forget(): void {
 		renewed = null;
+		outcome = null;
 		typed = '';
 		declined = false;
 		counts = null;
@@ -182,7 +192,7 @@
 		disabled={pending}
 		onclick={fetchSource}
 	/>
-	{#if outcome !== null}<StatusLine shape={outcome.shape} text={outcome.text} />{/if}
+	{#if outcome?.request === 'fetch'}<StatusLine shape={outcome.shape} text={outcome.text} />{/if}
 </div>
 
 <section class="sec">
@@ -225,6 +235,7 @@
 				disabled={pending}
 				onclick={renewDeployKey}
 			/>
+			{#if outcome?.request === 'renewKey'}<StatusLine shape={outcome.shape} text={outcome.text} />{/if}
 		</div>
 	{:else if access.control === 'token'}
 		<form class="form" onsubmit={renewToken}>
@@ -256,6 +267,7 @@
 					busy={running === 'renewToken'}
 					disabled={pending}
 				/>
+				{#if outcome?.request === 'renewToken'}<StatusLine shape={outcome.shape} text={outcome.text} />{/if}
 			</div>
 		</form>
 	{/if}
@@ -297,6 +309,7 @@
 			disabled={pending}
 			onclick={renewHook}
 		/>
+		{#if outcome?.request === 'renewHook'}<StatusLine shape={outcome.shape} text={outcome.text} />{/if}
 	</div>
 </section>
 
@@ -368,6 +381,10 @@
 			disabled={pending}
 			onclick={askRemoval}
 		/>
+		{#if outcome?.request === 'count' || outcome?.request === 'remove'}<StatusLine
+				shape={outcome.shape}
+				text={outcome.text}
+			/>{/if}
 	</div>
 </section>
 

@@ -118,6 +118,9 @@ LobbyText.source_fetch_failed
 LobbyText.source_fetch_removed
 LobbyText.source_fetch_busy
 LobbyText.source_request_failed
+LobbyText.source_renewed_secret
+LobbyText.source_renewed_deploy_key
+LobbyText.source_renewed_webhook
 LobbyText.source_run_fetched
 LobbyText.source_run_unreachable
 LobbyText.source_run_secret

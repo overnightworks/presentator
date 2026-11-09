@@ -484,6 +484,15 @@ msgstr "Busy with another job, nothing fetched. Try again in a moment."
 msgid "source_request_failed"
 msgstr "The request failed. Try again."
 
+msgid "source_renewed_secret"
+msgstr "Secret renewed."
+
+msgid "source_renewed_deploy_key"
+msgstr "Deploy key renewed. Register the new public key at the Git host."
+
+msgid "source_renewed_webhook"
+msgstr "Webhook secret renewed. Set it at the Git host."
+
 msgid "source_run_fetched"
 msgstr "fetched"
 
