@@ -371,6 +371,9 @@ def test_a_device_bind_under_proc_or_sys_passes(pod: Path, area: str) -> None:
     assert judged(pod) == Predicate.KUBERNETES_UNPROVEN
 
 
+NOT_GROUP_OR_OTHERS_WRITABLE = 0o644
+
+
 def make_socket(path: Path) -> None:
     directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
     try:
@@ -378,10 +381,12 @@ def make_socket(path: Path) -> None:
             listener.bind(f"/proc/self/fd/{directory}/{path.name}")
     finally:
         os.close(directory)
+    path.chmod(NOT_GROUP_OR_OTHERS_WRITABLE)
 
 
 def make_fifo(path: Path) -> None:
     os.mkfifo(path)
+    path.chmod(NOT_GROUP_OR_OTHERS_WRITABLE)
 
 
 @pytest.mark.parametrize("make", [make_socket, make_fifo], ids=["socket", "fifo"])
