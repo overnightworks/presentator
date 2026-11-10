@@ -1,8 +1,0 @@
-claim_id = "84555467f7904237b4942bc248e557e2"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "fc092461aff6724f13be1a5c9db8c33a1313cc5e"
-branch = "claude/issue-1000-sealed-job-runs-in-parallel-parts"
-scope = [".github/workflows/ci.yml", "scripts/probe_build_worker.py", "scripts/probe_build_worker_refusals.py", "scripts/probe_build_worker_uploads.py", "scripts/probe_build_worker_web.py", "tests/scripts/test_probe_build_worker_parts.py"]
-opened_commit = "c913ee1666dbdb5b1ec00d7236d6a516781715c3"
-whole_reason = "The matrix, the probe's part argument and the shard selection are one contract: the legs the workflow names must be the parts the probe drives, and the union test holds them together."
