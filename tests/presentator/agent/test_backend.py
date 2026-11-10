@@ -332,9 +332,12 @@ WORDED_BY_OUTCOME = {
 @pytest.mark.parametrize(("kind", "code"), ALL_STOPS)
 @on_an_event_loop
 async def test_a_stop_is_worded_by_its_outcome_alone(
-    kind: TurnStopKind, code: RejectionCode | FailureCode
+    kind: TurnStopKind,
+    code: RejectionCode | FailureCode,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Every kind and code of a stop ends in the wording of its outcome."""
+    """Every kind and code of a stop ends in the wording of its outcome, logged."""
+    caplog.set_level(logging.DEBUG)
     stop = TurnStopped(kind, code, retry_after_s=7, detail="closed")
     answerer = GatewayAnswerer(
         ScriptedBackend(stop=stop), a_relying_party(FrozenClock(instant=NOW))
@@ -344,6 +347,8 @@ async def test_a_stop_is_worded_by_its_outcome_alone(
         await spoken(answerer)
 
     assert type(stopped.value) is WORDED_BY_OUTCOME[stop.outcome]
+    (line,) = [r.getMessage() for r in caplog.records if r.name == LOGGER]
+    assert f"outcome={stop.outcome.value}" in line
 
 
 @on_an_event_loop

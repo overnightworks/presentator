@@ -234,6 +234,7 @@ def _refuse(stopped: TurnStopped) -> NoReturn:
     _log_closed(
         kind=stopped.kind.value,
         code=stopped.code.value,
+        outcome=stopped.outcome.value,
         detail=stopped.detail,
         retry_after_s=None
         if stopped.retry_after_s is None
