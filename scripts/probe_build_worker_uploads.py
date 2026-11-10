@@ -163,3 +163,19 @@ UPLOAD_CLASSES = {
     "hang-up": _after_a_directory(b"", ending=Ending.HUNG_UP),
     "half-close": _after_a_directory(b"", ending=Ending.HALF_CLOSED),
 }
+
+
+def upload_rows_of_shard(shard: int, shards: int) -> dict[str, UploadClass]:
+    """The rows of share `shard` of `shards` (1-based) of `UPLOAD_CLASSES`.
+
+    Row `index` belongs to share `index % shards + 1`, so the shares together are
+    every row once and one share of one is every row.
+    """
+    if not 1 <= shard <= shards:
+        message = f"share {shard} of {shards} is not a share of the uploads"
+        raise ValueError(message)
+    return {
+        name: row
+        for index, (name, row) in enumerate(UPLOAD_CLASSES.items())
+        if index % shards == shard - 1
+    }

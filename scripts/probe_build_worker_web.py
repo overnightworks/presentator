@@ -2,8 +2,8 @@
 
 Usage: probe_build_worker_web.py drive
 
-Runs where Docker is, after the worker's own drive has removed its project, with
-the same compose environment plus `WEB_PROBE_OVERRIDE`, the override file that
+Runs where Docker is, in a job that drives no other project, with the same
+compose environment plus `WEB_PROBE_OVERRIDE`, the override file that
 adds the web's three read-only probe mounts (hello-deck, copresenter-deck and
 `probe_build_worker`), publishes the probe's port, which `compose.yaml` never
 does, and carries the job's origins and test issuer; the master key and the
