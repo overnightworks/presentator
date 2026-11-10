@@ -29,11 +29,14 @@ from presentator.application.copresenter import RetryAfter
 from presentator.contracts.copresenter import (
     AccessRefusal,
     AnswerEvent,
+    AnswerStopReason,
     AnswerText,
     AskedDeck,
     Audio,
+    BudgetSpentError,
     CoPresenterUnavailableError,
     Done,
+    GatewayBusyError,
     NotEnabledError,
     Question,
     Sentence,
@@ -59,7 +62,6 @@ _POLICY_VIOLATION: Final = 1008
 _UNSUPPORTED_DATA: Final = 1003
 _INTERNAL_ERROR: Final = 1011
 _GENERIC_ANSWER_FAILURE: Final = "the answer could not be spoken"
-NOT_ENABLED_REASON: Final = "not-enabled"
 _GENERIC_HEARING_FAILURE: Final = "hearing unavailable"
 _BROWSER_DISCONNECT: Final = "websocket.disconnect"
 # About 43 s of the 24 kHz PCM16 input: the lease's own memory bound while the
@@ -348,7 +350,11 @@ async def _answer_events(
                 finally:
                     await _finish_tasks((next_event,))
         except NotEnabledError:
-            yield _error_sse(NOT_ENABLED_REASON)
+            yield _error_sse(AnswerStopReason.NOT_ENABLED)
+        except GatewayBusyError as busy:
+            yield _error_sse(AnswerStopReason.BUSY, retry_after_s=busy.retry_after_s)
+        except BudgetSpentError:
+            yield _error_sse(AnswerStopReason.BUDGET_SPENT)
         except CoPresenterUnavailableError:
             yield _error_sse()
     finally:
@@ -604,10 +610,14 @@ def _generated_sse(event: str, payload: dict[str, object]) -> bytes:
     return _encoded_sse(event, {**payload, "ai_generated": True})
 
 
-def _error_sse(reason: str | None = None) -> bytes:
+def _error_sse(
+    reason: AnswerStopReason | None = None, *, retry_after_s: int | None = None
+) -> bytes:
     payload: dict[str, object] = {"message": _GENERIC_ANSWER_FAILURE}
     if reason is not None:
-        payload["reason"] = reason
+        payload["reason"] = reason.value
+    if retry_after_s is not None:
+        payload["retry_after_s"] = retry_after_s
     return _encoded_sse("error", payload)
 
 
