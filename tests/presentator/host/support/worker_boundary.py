@@ -37,6 +37,7 @@ def boundary_over(
         set_umask=lambda: events.append("umask"),
         read_seal=lambda: Seal.COMPOSE,
         lower_process_limit=lambda: None,
+        fix_up_mounts=lambda: None,
         read_snapshot=read_snapshot,
         load_settings=settings,
         serve=serve,

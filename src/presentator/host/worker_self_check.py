@@ -11,11 +11,12 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import partial
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from presentator.adapters import build_wire, rtnetlink
 from presentator.host.config import cannot_start, worker_settings_variables
 from presentator.host.worker_scratch import (
+    OPEN_DIRECTORY_MODE,
     QUEUE_MOUNT,
     ROOT_MODE,
     SHARED_MEMORY_MOUNT,
@@ -51,6 +52,25 @@ NO_EXECUTION_MOUNTS = TMPFS_MOUNTS[:2]
 GROUP_AND_OTHERS_WRITE = stat.S_IWGRP | stat.S_IWOTH
 HARDENED_MOUNT_OPTIONS = frozenset({"nosuid", "nodev", "noexec"})
 DOCKER_SOCKETS = ("/run/docker.sock", "/var/run/docker.sock")
+CONTAINERD_SOCKETS = (
+    "/run/containerd/containerd.sock",
+    "/run/k3s/containerd/containerd.sock",
+)
+SERVICE_ACCOUNT_DIRECTORY = "/var/run/secrets/kubernetes.io"
+EXPOSED_PATHS = (*CONTAINERD_SOCKETS, SERVICE_ACCOUNT_DIRECTORY)
+TERMINATION_LOG = "/dev/termination-log"
+TERMINATION_LOG_MODE = 0o644
+# The mount roots a pod's kubelet creates, and the mode `mounts` requires of each.
+MOUNT_ROOT_MODES = {
+    WORK_MOUNT: ROOT_MODE,
+    TEMPORARY_MOUNT: OPEN_DIRECTORY_MODE,
+    SHARED_MEMORY_MOUNT: OPEN_DIRECTORY_MODE,
+    TERMINATION_LOG: TERMINATION_LOG_MODE,
+}
+MASKED_AREAS = ("/proc", "/sys")
+JUDGED_MOUNTS = frozenset(
+    {"/", build_wire.SOCKET_DIRECTORY, QUEUE_MOUNT, *MOUNT_ROOT_MODES}
+)
 TOOLCHAIN_PROJECT = "app/slidev"
 SLIDEV_BINARY = f"{TOOLCHAIN_PROJECT}/node_modules/.bin/slidev"
 SLIDEV_PACKAGE = f"{TOOLCHAIN_PROJECT}/node_modules/@slidev/cli"
@@ -159,6 +179,23 @@ class Toolchain:
 
 
 @dataclass(frozen=True)
+class RootFacts:
+    """The type and mode of a mount's root, and who owns it."""
+
+    mode: int
+    owner_uid: int
+
+
+@dataclass(frozen=True)
+class KubernetesMounts:
+    """What a pod's mounts add to the container's; read only under Kubernetes."""
+
+    table_roots: Mapping[str, RootFacts]
+    other_roots: Mapping[str, RootFacts]
+    exposed_path_present: bool
+
+
+@dataclass(frozen=True)
 class Mounts:
     """What the container's mounts and the paths over them look like."""
 
@@ -167,6 +204,7 @@ class Mounts:
     work_mode: int
     work_owner_uid: int
     docker_socket_present: bool
+    kubernetes: KubernetesMounts | None = None
 
 
 @dataclass(frozen=True)
@@ -238,8 +276,73 @@ def _mount_table_sealed(mountinfo: str) -> bool:
     )
 
 
+def _in_masked_area(mount: str) -> bool:
+    return any(PurePosixPath(mount).is_relative_to(area) for area in MASKED_AREAS)
+
+
+def _other_root_admitted(
+    mount: str, mounted: tuple[str, frozenset[str]], root: RootFacts | None
+) -> bool:
+    if root is None:
+        return False
+    filesystem, options = mounted
+    if _in_masked_area(mount) and (
+        stat.S_ISCHR(root.mode) or (filesystem == "tmpfs" and "ro" in options)
+    ):
+        return True
+    return (
+        (stat.S_ISDIR(root.mode) or stat.S_ISREG(root.mode))
+        and root.owner_uid == 0
+        and not root.mode & GROUP_AND_OTHERS_WRITE
+    )
+
+
+def _fixed_up(root: RootFacts | None, mode: int) -> bool:
+    return (
+        root is not None
+        and not stat.S_ISLNK(root.mode)
+        and root.owner_uid == 0
+        and stat.S_IMODE(root.mode) == mode
+    )
+
+
+def _pod_mount_table_sealed(
+    table: dict[str, tuple[str, frozenset[str]]], kubernetes: KubernetesMounts
+) -> bool:
+    return (
+        all(
+            mount in table and table[mount][0] == "tmpfs"
+            for mount in MOUNT_ROOT_MODES
+            if mount != TERMINATION_LOG
+        )
+        and build_wire.SOCKET_DIRECTORY in table
+        and table.get(QUEUE_MOUNT, ("", frozenset()))[0] == "mqueue"
+        and all(
+            _fixed_up(kubernetes.table_roots.get(mount), mode)
+            for mount, mode in MOUNT_ROOT_MODES.items()
+        )
+        and all(
+            _other_root_admitted(mount, table[mount], kubernetes.other_roots.get(mount))
+            for mount in table.keys() - JUDGED_MOUNTS
+        )
+    )
+
+
+def _pod_mounts_sealed(mounts: Mounts) -> bool:
+    kubernetes = mounts.kubernetes
+    return (
+        kubernetes is not None
+        and mounts.root_read_only
+        and not mounts.docker_socket_present
+        and not kubernetes.exposed_path_present
+        and _pod_mount_table_sealed(_mount_table(mounts.mountinfo), kubernetes)
+    )
+
+
 def _mounts_sealed(snapshot: Snapshot) -> bool:
     mounts = snapshot.mounts
+    if pod_mounts_judged(snapshot.seal):
+        return _pod_mounts_sealed(mounts)
     return (
         mounts.root_read_only
         and _mount_table_sealed(mounts.mountinfo)
@@ -273,6 +376,11 @@ def _no_route(snapshot: Snapshot) -> bool:
 
 def _within_maximum(value: str) -> bool:
     return value.isdecimal() and int(value) <= MAXIMUM_PROCESSES
+
+
+def pod_mounts_judged(seal: Seal) -> bool:
+    """Whether `seal` fixes up and judges the pod's mount roots."""
+    return seal is Seal.KUBERNETES
 
 
 def process_limit_bounds(seal: Seal) -> bool:
@@ -464,16 +572,45 @@ def lstat_if_present(path: Path) -> os.stat_result | None:
         return None
 
 
-def _read_mounts(root: Path) -> Mounts:
+def _any_present(root: Path, paths: tuple[str, ...]) -> bool:
+    return any(lstat_if_present(root / path.lstrip("/")) is not None for path in paths)
+
+
+def _root_facts(status: os.stat_result) -> RootFacts:
+    return RootFacts(mode=status.st_mode, owner_uid=status.st_uid)
+
+
+def _read_kubernetes_mounts(root: Path, mountinfo: str) -> KubernetesMounts:
+    table_statuses = {
+        mount: lstat_if_present(root / mount.lstrip("/")) for mount in MOUNT_ROOT_MODES
+    }
+    return KubernetesMounts(
+        table_roots={
+            mount: _root_facts(status)
+            for mount, status in table_statuses.items()
+            if status is not None
+        },
+        other_roots={
+            mount: _root_facts(os.lstat(root / mount.lstrip("/")))
+            for mount in _mount_table(mountinfo).keys() - JUDGED_MOUNTS
+        },
+        exposed_path_present=_any_present(root, EXPOSED_PATHS),
+    )
+
+
+def _read_mounts(root: Path, seal: Seal) -> Mounts:
     work = (root / WORK_MOUNT.lstrip("/")).stat()
+    mountinfo = (root / "proc/self/mountinfo").read_text()
     return Mounts(
         root_read_only=bool(os.statvfs(root).f_flag & os.ST_RDONLY),
-        mountinfo=(root / "proc/self/mountinfo").read_text(),
+        mountinfo=mountinfo,
         work_mode=stat.S_IMODE(work.st_mode),
         work_owner_uid=work.st_uid,
-        docker_socket_present=any(
-            lstat_if_present(root / docker_socket.lstrip("/")) is not None
-            for docker_socket in DOCKER_SOCKETS
+        docker_socket_present=_any_present(root, DOCKER_SOCKETS),
+        kubernetes=(
+            _read_kubernetes_mounts(root, mountinfo)
+            if pod_mounts_judged(seal)
+            else None
         ),
     )
 
@@ -524,7 +661,7 @@ class _FactReader:
     ) -> Fact:
         try:
             return reading()
-        except OSError, KeyError, UnicodeDecodeError:
+        except OSError, KeyError, IndexError, UnicodeDecodeError:
             self.unreadable.add(predicate)
             return placeholder
 
@@ -549,7 +686,7 @@ def read_snapshot(
     process_status = read(
         Predicate.CAPABILITIES, (root / "proc/self/status").read_text, ""
     )
-    mounts = read(Predicate.MOUNTS, partial(_read_mounts, root), UNREAD_MOUNTS)
+    mounts = read(Predicate.MOUNTS, partial(_read_mounts, root, seal), UNREAD_MOUNTS)
     resource_bounds = read(
         Predicate.RESOURCE_BOUNDS,
         partial(_read_resource_bounds, root),
