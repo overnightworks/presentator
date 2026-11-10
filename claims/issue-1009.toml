@@ -1,0 +1,8 @@
+claim_id = "0787e8c4da6746d196d25d5a107134ac"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "33761e92dc8664bb8343bcb39d097d931ec60991"
+branch = "claude/issue-1009-self-check-named-records"
+scope = ["src/presentator/host/worker.py", "src/presentator/host/worker_self_check.py", "tests/presentator/host/support/sealed_snapshot.py", "tests/presentator/host/test_worker.py", "tests/presentator/host/test_worker_no_route.py", "tests/presentator/host/test_worker_process_limit.py"]
+opened_commit = "fa090cca13ad15b3247515df8a236d62c4da24d4"
+whole_reason = "The snapshot's shape, its builder and every test that arranges or reads a moved field change together, or the suite does not import."
