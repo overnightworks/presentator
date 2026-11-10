@@ -12,7 +12,7 @@ dependencies = [
     "cryptography==50.0.2",
     "fastapi==0.162.0",
     "httpx2[ws]==2.16.0",
-    "overnightworks-agent-runtime-client[backend,mcp-server] @ git+https://github.com/overnightworks/agent-runtime@v0.28.0",
+    "overnightworks-agents[backend,mcp-server] @ git+https://github.com/overnightworks/agents@v0.29.0",
     "overnightworks-speech-client @ git+https://github.com/overnightworks/speech@v0.6.0#subdirectory=packages/client",
     "overnightworks-webauth @ git+https://github.com/overnightworks/webauth@v0.34.0",
     "pydantic-settings==2.16.2",
@@ -365,8 +365,8 @@ as_packages = true
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
-id = "agent-runtime-client-library"
-name = "Only adapters import agent_runtime_client"
+id = "agents-library"
+name = "Only adapters import agents"
 type = "forbidden"
 source_modules = [
     "presentator.host",
@@ -374,7 +374,7 @@ source_modules = [
     "presentator.ports",
     "presentator.contracts",
 ]
-forbidden_modules = ["agent_runtime_client"]
+forbidden_modules = ["agents"]
 as_packages = true
 allow_indirect_imports = true
 

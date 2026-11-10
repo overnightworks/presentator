@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Final
 
 import anyio
-from agent_runtime_client.backend.fake_gateway import FakeGateway, Reply, completion
+from agents.backend.fake_gateway import FakeGateway, Reply, completion
 
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.session_access import SessionAccess

@@ -20,7 +20,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Final
 
 import pytest
-from agent_runtime_client.backend.fake_gateway import (
+from agents.backend.fake_gateway import (
     FakeGateway,
     Reply,
     completion,

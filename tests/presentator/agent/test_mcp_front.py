@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from agent_runtime_client.mcp_wire import MCP_ENDPOINT_PATH, PROTOCOL_VERSION
+from agents.mcp_wire import MCP_ENDPOINT_PATH, PROTOCOL_VERSION
 from fastapi.testclient import TestClient
 from mcp_types import UNSUPPORTED_PROTOCOL_VERSION
 from webauth.ports import AccountKind

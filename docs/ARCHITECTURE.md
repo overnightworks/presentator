@@ -16,7 +16,7 @@ flowchart LR
     person([Person in a browser]) --> presentator
     presentator[presentator<br/>web + build worker]
     presentator -- sign-in --> keycloak[Keycloak]
-    presentator -- questions --> gateway[Model gateway<br/>via agent-runtime client]
+    presentator -- questions --> gateway[Model gateway<br/>via agents library]
     presentator -- read-only fetch --> git[(git remotes)]
     presentator -- speak / hear --> speech[Speech service<br/>via speech client]
     hal[hal and edge] -- deploy, legal pages --> presentator
@@ -36,7 +36,7 @@ flowchart TD
     application --> ports
     ports --> contracts
     adapters --> gitmirror
-    agent --> arc[agent_runtime_client]
+    agent --> arc[agents]
     adapters --> src[speech_client]
     host --> webauth
     api --> webauth
@@ -50,11 +50,11 @@ flowchart TD
   A library an adapter owns behind a port is barred above the adapters by its
   own contract; webauth is barred only from `application`, `ports`, `contracts`,
   as `api` and `host` import it; the web framework is exempt. `api` alone may
-  import one module of a barred library, `agent_runtime_client.tools`, to
+  import one module of a barred library, `agents.tools`, to
   declare, beside each route, whether an agent may call it.
 - **`src/gitmirror`** mirrors any remote read-only through `git`, does not
   import `presentator`, and only adapters name it. **`presentator.agent`** imports
-  `agent_runtime_client` at the tag `pyproject.toml` pins, and `presentator.api`
+  `agents` at the tag `pyproject.toml` pins, and `presentator.api`
   only its `tools` module (`tests/presentator/agent/test_backend_imports.py`
   holds that line, which import-linter cannot draw inside one package). Only adapters
   import `speech_client`, the pinned client that owns the speech wire, its

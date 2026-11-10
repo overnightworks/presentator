@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
-from agent_runtime_client.mcp_wire import (
+from agents.mcp_wire import (
     MCP_ENDPOINT_PATH,
     PROTOCOL_VERSION,
     PROTOCOL_VERSION_HEADER,
