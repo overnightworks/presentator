@@ -322,6 +322,10 @@ def start_cluster(run: Run, k3s_version: str) -> None:
     say(f"identity holds: node {run.node} is Ready at {k3s_version}")
 
 
+# A worker's current log and its previous one, in that order.
+Logs = tuple[str, str]
+
+
 @dataclass(frozen=True)
 class Expectation:
     """What a cell's worker pod must show."""
@@ -330,18 +334,18 @@ class Expectation:
     init_container: bool
 
 
-def _terminated(statuses: list[Document], name: str) -> tuple[Document, bool] | None:
-    """A container's termination, and whether it ended an earlier run."""
+def _terminated(statuses: list[Document], name: str) -> Document | None:
+    """A container's termination: its current run's, else the run that ended last."""
     for status in statuses:
         if status["name"] == name:
             if "terminated" in status.get("state", {}):
-                return status["state"]["terminated"], False
+                return status["state"]["terminated"]
             if "terminated" in status.get("lastState", {}):
-                return status["lastState"]["terminated"], True
+                return status["lastState"]["terminated"]
     return None
 
 
-def _worker_termination(pod: Document) -> tuple[Document, bool] | None:
+def _worker_termination(pod: Document) -> Document | None:
     statuses = pod.get("status", {}).get("containerStatuses", [])
     return _terminated(statuses, WORKER_CONTAINER)
 
@@ -354,22 +358,26 @@ def _init_problem(pod: Document, expected: Expectation) -> str | None:
     if not expected.init_container:
         return None
     ended = _terminated(pod["status"]["initContainerStatuses"], INIT_CONTAINER)
-    if ended is None or ended[0]["exitCode"] != 0:
+    if ended is None or ended["exitCode"] != 0:
         return f"{INIT_CONTAINER} ended as {ended}, expected exit status 0"
     return None
 
 
-def worker_problem(pod: Document, log: str, expected: Expectation) -> str | None:
+def worker_problem(
+    pod: Document, matched: str | None, logs: Logs, expected: Expectation
+) -> str | None:
     """Why the worker pod is not what the cell expects; names what it showed."""
     if problem := _init_problem(pod, expected):
         return problem
     worker = _worker_termination(pod)
-    status = worker[0]["exitCode"] if worker else None
+    status = worker["exitCode"] if worker else None
     if status != REFUSAL_EXIT_STATUS:
         return f"the worker ended with exit status {status}, not {REFUSAL_EXIT_STATUS}"
-    if refusal_line(log, expected.refusal) is None:
+    if matched is None:
+        current, previous = logs
         return (
-            f"the log lacks 'start refused: {expected.refusal}': {log.strip()[-500:]}"
+            f"neither log holds 'start refused: {expected.refusal}': "
+            f"current: {current.strip()[-500:]}; previous: {previous.strip()[-500:]}"
         )
     return None
 
@@ -378,6 +386,28 @@ def refusal_line(log: str, refusal: Predicate) -> str | None:
     """The log's line that names the refusal, if one does."""
     needle = f"start refused: {refusal}"
     return next((line.strip() for line in log.splitlines() if needle in line), None)
+
+
+def refusal_in(logs: Logs, refusal: Predicate) -> str | None:
+    """The refusal line of the current log, else of the previous one."""
+    return next((found for log in logs if (found := refusal_line(log, refusal))), None)
+
+
+def worker_logs(run: Run) -> Logs:
+    """The worker's current log and its previous one; no previous run reads as empty."""
+    current = run(
+        "kubectl logs", WORKER_POD, "-c", WORKER_CONTAINER, *IN_NAMESPACE
+    ).stdout
+    earlier = run(
+        "kubectl logs",
+        WORKER_POD,
+        "-c",
+        WORKER_CONTAINER,
+        "--previous",
+        *IN_NAMESPACE,
+        check=False,
+    )
+    return current, "" if earlier.returncode else earlier.stdout
 
 
 def await_pod(
@@ -436,14 +466,10 @@ def drive_cell(run: Run, number: int, manifest: str, expected: Expectation) -> s
         f"no termination within {TERMINATION_WINDOW_SECONDS} s: {pod.get('status')}"
     )
     if ended:
-        earlier = _worker_termination(pod)
-        flags = ("--previous",) if earlier and earlier[1] else ()
-        log = run(
-            "kubectl logs", WORKER_POD, "-c", WORKER_CONTAINER, *flags, *IN_NAMESPACE
-        ).stdout
-        problem = worker_problem(pod, log, expected)
+        logs = worker_logs(run)
+        matched = refusal_in(logs, expected.refusal)
+        problem = worker_problem(pod, matched, logs, expected)
         if problem is None:
-            matched = refusal_line(log, expected.refusal)
             say(f"cell {number}: exit {REFUSAL_EXIT_STATUS}, {matched}")
             return ""
     say(f"cell {number}: FAILED, {problem}")
