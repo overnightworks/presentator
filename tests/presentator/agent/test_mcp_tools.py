@@ -5,7 +5,12 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pytest
-from agent_runtime_client.tools import AGENT_TOOL_EXTENSION, ToolEffect
+from agent_runtime_client.tools import (
+    AGENT_TOOL_EXTENSION,
+    ToolEffect,
+    ToolMark,
+    read_decision,
+)
 from fastapi import APIRouter, FastAPI
 from starlette.routing import BaseRoute, Match, Route
 
@@ -35,33 +40,36 @@ def operations_of(app: FastAPI) -> list[tuple[str, str, dict[str, dict[str, str]
     ]
 
 
+def marks_of(app: FastAPI) -> list[tuple[str, str, ToolMark]]:
+    """Every operation the lobby marks as a tool, with the mark it carries."""
+    return [
+        (method, template, decision)
+        for method, template, node in operations_of(app)
+        if isinstance(decision := read_decision(node[AGENT_TOOL_EXTENSION]), ToolMark)
+    ]
+
+
 def test_the_lobby_offers_exactly_the_pinned_tools(tmp_path: Path) -> None:
     """D7: a route marked as a tool that is not listed here fails the build."""
     app = a_scene(tmp_path).lobby.app
 
     marked = {
-        (
-            method,
-            template,
-            node[AGENT_TOOL_EXTENSION]["name"],
-            node[AGENT_TOOL_EXTENSION]["effect"],
-        )
-        for method, template, node in operations_of(app)
-        if "name" in node[AGENT_TOOL_EXTENSION]
+        (method, template, mark.name, mark.effect)
+        for method, template, mark in marks_of(app)
     }
     offered = marked_tools(app)
 
     assert marked == {
-        ("GET", "/api/decks", "list_decks", ToolEffect.READ_ONLY.value),
-        ("GET", "/api/decks/{slug}", "get_deck", ToolEffect.READ_ONLY.value),
-        ("GET", "/api/decks/{slug}/text", "get_deck_text", ToolEffect.READ_ONLY.value),
-        ("GET", "/api/session", "get_session", ToolEffect.READ_ONLY.value),
-        ("GET", "/api/account", "get_account", ToolEffect.READ_ONLY.value),
-        ("PUT", "/api/account", "set_account_theme", ToolEffect.SIDE_EFFECTING.value),
+        ("GET", "/api/decks", "list_decks", ToolEffect.READ_ONLY),
+        ("GET", "/api/decks/{slug}", "get_deck", ToolEffect.READ_ONLY),
+        ("GET", "/api/decks/{slug}/text", "get_deck_text", ToolEffect.READ_ONLY),
+        ("GET", "/api/session", "get_session", ToolEffect.READ_ONLY),
+        ("GET", "/api/account", "get_account", ToolEffect.READ_ONLY),
+        ("PUT", "/api/account", "set_account_theme", ToolEffect.SIDE_EFFECTING),
     }
     assert {
         (tool.declaration.name, tool.declaration.effect) for tool in offered.tools
-    } == {(name, ToolEffect(effect)) for _, _, name, effect in marked}
+    } == {(name, effect) for _, _, name, effect in marked}
     assert {(mark.method, mark.template) for mark in offered.marks} == {
         (method, template) for method, template, *_ in marked
     }
@@ -87,11 +95,7 @@ def test_no_marked_template_is_met_by_another_route_of_its_method(
 ) -> None:
     """A marked path is answered by its own route and no other of its method."""
     app = a_scene(tmp_path).lobby.app
-    marked = [
-        (method, template)
-        for method, template, node in operations_of(app)
-        if "name" in node[AGENT_TOOL_EXTENSION]
-    ]
+    marked = [(method, template) for method, template, _ in marks_of(app)]
 
     for method, template in marked:
         concrete = re.sub(r"\{[^}]*\}", "a-value", template)

@@ -80,6 +80,7 @@ def _show_slide(principal: Principal, arguments: JsonObject) -> Awaitable[ToolOu
         )
     else:
         outcome = ToolOutcome("shown", is_error=False)
+    # The HandToolHandler port wants an awaitable; Sonar S7503 bans a bare async def.
     return asyncio.sleep(0, outcome)
 
 
