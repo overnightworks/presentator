@@ -576,11 +576,14 @@ def _root_facts(status: os.stat_result) -> RootFacts:
 
 
 def _read_kubernetes_mounts(root: Path, mountinfo: str) -> KubernetesMounts:
+    table_statuses = {
+        mount: lstat_if_present(root / mount.lstrip("/")) for mount in MOUNT_ROOT_MODES
+    }
     return KubernetesMounts(
         table_roots={
             mount: _root_facts(status)
-            for mount in MOUNT_ROOT_MODES
-            if (status := lstat_if_present(root / mount.lstrip("/"))) is not None
+            for mount, status in table_statuses.items()
+            if status is not None
         },
         other_roots={
             mount: _root_facts(os.lstat(root / mount.lstrip("/")))
