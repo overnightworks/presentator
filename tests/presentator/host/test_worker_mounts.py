@@ -73,7 +73,9 @@ CHECK_OR_START = [[], ["--check"]]
 
 @pytest.fixture
 def pod(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    return stage_kubernetes_root(tmp_path, monkeypatch)
+    root = tmp_path / "pod"
+    root.mkdir()
+    return stage_kubernetes_root(root, monkeypatch)
 
 
 def judged(root: Path, seal: Seal = Seal.KUBERNETES) -> Predicate | None:
@@ -618,9 +620,10 @@ def test_a_malformed_mountinfo_refuses_the_pod_as_mounts_without_a_traceback(
 def test_a_symlinked_table_root_refuses_and_its_target_keeps_its_mode(
     pod: Path,
     caplog: pytest.LogCaptureFixture,
-    tmp_path_factory: pytest.TempPathFactory,
+    tmp_path: Path,
 ) -> None:
-    outside = tmp_path_factory.mktemp("outside")
+    outside = tmp_path / "outside"
+    outside.mkdir()
     outside.chmod(OUTSIDE_MODE)
     temporary = path_in(pod, TEMPORARY_MOUNT)
     temporary.rmdir()
