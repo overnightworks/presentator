@@ -485,9 +485,9 @@ def _read_cgroup_file(root: Path, name: str) -> str:
 def _read_process_limit(root: Path) -> tuple[str, str]:
     for line in (root / PROCESS_LIMITS_FILE).read_text().splitlines():
         if line.startswith(PROCESS_LIMIT_ROW):
-            match line.removeprefix(PROCESS_LIMIT_ROW).split():
-                case [soft, hard, *_]:
-                    return soft, hard
+            fields = line.removeprefix(PROCESS_LIMIT_ROW).split()
+            if fields[1:]:
+                return fields[0], fields[1]
     raise KeyError(PROCESS_LIMIT_ROW)
 
 
