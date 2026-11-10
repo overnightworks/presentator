@@ -39,6 +39,7 @@ from presentator.host.worker_scratch import (
 from presentator.host.worker_self_check import (
     BUILD_IDENTITY,
     COREPACK_DIRECTORY,
+    MOUNT_ROOT_MODES,
     NO_CAPABILITIES,
     PLAYWRIGHT_DIRECTORY,
     PR_SET_DUMPABLE,
@@ -114,6 +115,7 @@ class Boundary:
     set_umask: Callable[[], None]
     read_seal: Callable[[], Seal]
     lower_process_limit: Callable[[], None]
+    fix_up_mounts: Callable[[], None]
     read_snapshot: Callable[[Seal], Snapshot]
     load_settings: Callable[[], WorkerSettings]
     serve: Server
@@ -129,6 +131,22 @@ def lower_process_limit(
 ) -> None:
     """Set the process limit to its lowered form."""
     set_limit(lowered_process_limit(*get_limit()))
+
+
+def fix_up_mounts(root: Path) -> None:
+    """Set each mount root under `root` to the mode `mounts` requires of it.
+
+    A root is opened without following a link and without reading what lies
+    below it; any failure propagates.
+    """
+    for mount, mode in MOUNT_ROOT_MODES.items():
+        descriptor = os.open(
+            root / mount.lstrip("/"), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+        )
+        try:
+            os.fchmod(descriptor, mode)
+        finally:
+            os.close(descriptor)
 
 
 def _set_umask() -> None:
@@ -349,6 +367,7 @@ REAL_BOUNDARY = Boundary(
         partial(resource.getrlimit, resource.RLIMIT_NPROC),
         partial(resource.setrlimit, resource.RLIMIT_NPROC),
     ),
+    partial(fix_up_mounts, Path("/")),
     partial(read_snapshot, Path("/"), read_topology=rtnetlink.read_topology),
     load_worker_settings,
     _serve_on_this_machine,
@@ -375,10 +394,22 @@ def _process_limit_lowered(boundary: Boundary, seal: Seal) -> bool:
     return True
 
 
+def _mounts_fixed_up(boundary: Boundary, seal: Seal) -> bool:
+    if seal is not Seal.KUBERNETES:
+        return True
+    try:
+        boundary.fix_up_mounts()
+    except OSError:
+        return False
+    return True
+
+
 def _self_checked(boundary: Boundary, seal: Seal) -> Snapshot | Predicate:
     """The snapshot of a start that passes the self-check, else the predicate."""
     if not _process_limit_lowered(boundary, seal):
         return Predicate.RESOURCE_BOUNDS
+    if not _mounts_fixed_up(boundary, seal):
+        return Predicate.MOUNTS
     snapshot = boundary.read_snapshot(seal)
     return first_failing_predicate(snapshot) or snapshot
 
