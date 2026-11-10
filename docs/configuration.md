@@ -48,7 +48,8 @@ some of them.
 | `PRESENTATOR_BUILDS` | `builds` | Where built talks and PDFs are kept. |
 | `PRESENTATOR_BUILD_TIMEOUT_SECONDS` | `300` | Bound of each build step; compose also hands it to the build worker by name. |
 | `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves; compose also hands it to the build worker by name. |
-| `PRESENTATOR_BUILD_RUNNER` | `worker` | Builds through the build worker's socket and refuses to start unless the worker answers within 70 seconds; `compose.yaml` sets it. `host` builds on this machine instead, for a development run (without the sandbox, whose reason is in [constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons)). |
+| `PRESENTATOR_BUILD_RUNNER` | `worker` | Builds through the build worker's socket and refuses to start unless the worker answers within 70 seconds, after the pod wait of `PRESENTATOR_BUILD_WORKER_POD` when that is set; `compose.yaml` sets it. `host` builds on this machine instead, for a development run (without the sandbox, whose reason is in [constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons)). |
+| `PRESENTATOR_BUILD_WORKER_POD` | unset | The name of the build worker's pod (a DNS-1123 subdomain) when the deployment is a Kubernetes cluster. Set, the web first waits up to the same 70 seconds for an unused pod, ends a used one by its uid through the in-cluster API (graceful, nothing forced), and only then says HELLO; it refuses to start when the API, a right or a credential file is missing. Unset, the web asks the cluster nothing. Only the `worker` build runner reads it. |
 | `PRESENTATOR_BUILD_WORKER_SOCKET` | `/run/presentator-build/worker.sock` | Where the web reaches the build worker; the default is where the worker binds, so set it only where the socket volume is mounted elsewhere. |
 
 ## Trusted proxies and the client address
