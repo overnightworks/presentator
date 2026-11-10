@@ -20,7 +20,12 @@ const NO_ANSWER = 'No answer'
 const NOT_ENABLED = 'Not enabled'
 const VOICE_OFFLINE = 'Voice offline'
 const SIGN_IN_AGAIN = 'Sign in again'
+const BUSY_SOON = 'Busy, try again soon'
+const BUDGET_USED_UP = 'Budget used up'
+// The answer stream's error reasons, owned by AnswerStopReason on the server.
 const NOT_ENABLED_REASON = 'not-enabled'
+const BUSY_REASON = 'busy'
+const BUDGET_SPENT_REASON = 'budget-spent'
 const SIGN_IN_AGAIN_DETAILS = new Set(['Sign in again', 'Not authenticated'])
 
 class WhoRefused extends Error {
@@ -40,8 +45,22 @@ async function refusalLine(response) {
   }
 }
 
+function busyLine(waitSeconds) {
+  const named = typeof waitSeconds === 'number' && Number.isFinite(waitSeconds) && waitSeconds > 0
+  return named ? `Busy, try again in ${Math.ceil(waitSeconds)} s` : BUSY_SOON
+}
+
 function errorEventLine(data) {
-  return data?.reason === NOT_ENABLED_REASON ? NOT_ENABLED : NO_ANSWER
+  switch (data?.reason) {
+    case NOT_ENABLED_REASON:
+      return NOT_ENABLED
+    case BUSY_REASON:
+      return busyLine(data.retry_after_s)
+    case BUDGET_SPENT_REASON:
+      return BUDGET_USED_UP
+    default:
+      return NO_ANSWER
+  }
 }
 
 const on = ref(false)
