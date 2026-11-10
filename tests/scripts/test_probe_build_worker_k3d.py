@@ -102,7 +102,7 @@ class World:
     """Answers every command of a run and remembers it, with its environment."""
 
     nodes: list[Document] = field(default_factory=lambda: [node()])
-    cluster: str = ""
+    node_name: str = ""
     probe_image: str = ""
     pods: list[Document] = field(
         default_factory=lambda: [pod(), pod(remove_link_exit=0, restarted=False)]
@@ -158,7 +158,7 @@ class World:
         items = copy.deepcopy(self.nodes)
         for item in items:
             if item["metadata"]["name"] == OWN:
-                item["metadata"]["name"] = f"k3d-{self.cluster}-server-0"
+                item["metadata"]["name"] = self.node_name
         return json.dumps({"items": items})
 
     def render(self, command: tuple[str, ...]) -> str:
@@ -187,14 +187,12 @@ class World:
         ]
 
     def applied(self, kind: str) -> list[Document]:
-        """The single documents of the given kind that an apply received."""
-        documents: list[Document] = []
-        for command, _, stdin in self.commands:
-            if command[:2] == ("kubectl", "apply") and stdin and stdin.startswith("{"):
-                try:
-                    documents.append(json.loads(stdin))
-                except json.JSONDecodeError:
-                    continue
+        """The documents of the given kind that an apply received, each one JSON."""
+        documents = [
+            json.loads(stdin or "")
+            for command, _, stdin in self.commands
+            if command[:2] == ("kubectl", "apply")
+        ]
         return [document for document in documents if document["kind"] == kind]
 
 
@@ -205,7 +203,6 @@ class Fixture:
     driver: ModuleType
     world: World
     run: Any
-    ticks: list[float] = field(default_factory=lambda: [0.0])
 
     def drive(self) -> None:
         self.driver.drive(self.run)
@@ -228,7 +225,6 @@ def make_fixture(driver: ModuleType, tmp_path: Path) -> Callable[..., Fixture]:
             "kind: Namespace\nmetadata:\n  name: presentator\n"
         )
         directory = tmp_path / "run"
-        directory.mkdir()
         ticks = [0.0]
 
         def sleep(seconds: float) -> None:
@@ -260,8 +256,8 @@ def make_fixture(driver: ModuleType, tmp_path: Path) -> Callable[..., Fixture]:
             platform=platform,
             effects=effects,
         )
-        world.cluster, world.probe_image = run.name, run.tag
-        return Fixture(driver, world, run, ticks)
+        world.node_name, world.probe_image = run.node, run.tag
+        return Fixture(driver, world, run)
 
     return make
 
@@ -276,6 +272,7 @@ def test_drive_refuses_a_checkout_that_is_not_the_pin_before_any_command(
     assert "f" * 40 in refusal
     assert fixture.driver.PLATFORM_COMMIT in refusal
     assert fixture.world.commands == []
+    assert not fixture.run.directory.exists()
 
 
 @pytest.mark.parametrize("tool", ["k3d", "kubectl", "yq"])
@@ -287,6 +284,7 @@ def test_drive_refuses_a_missing_tool_by_name_before_any_command(
         fixture.drive()
     assert tool in capsys.readouterr().err
     assert fixture.world.commands == []
+    assert not fixture.run.directory.exists()
 
 
 @pytest.mark.parametrize(
@@ -328,7 +326,9 @@ def test_drive_passes_when_the_control_and_the_twin_refuse_as_expected(
     fixture = make_fixture()
     fixture.drive()
     assert fixture.world.issued("kubectl", "apply", "--filename", "-") != []
-    assert "cell 7" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    for cell, log in zip((7, 8), fixture.world.logs, strict=True):
+        assert f"cell {cell}: exit {REFUSAL_EXIT_STATUS}, {log}" in output
 
 
 def test_the_overlay_names_the_platform_app_by_a_path_relative_to_itself(

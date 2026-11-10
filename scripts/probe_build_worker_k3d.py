@@ -14,10 +14,12 @@ unchanged and expects remove-link to end 0 and the self-check to refuse with
 kubernetes-unproven. A cell that fails prints the Namespace's events and the
 output of a twin Pod of the same spec; the run fails after both cells ran.
 
-Every subprocess runs with `KUBECONFIG` set to a file in the run's temporary
-directory, so nothing reads or writes the operator's kubeconfig, and no API
-write happens before the cluster's one node is proven to be the run's own. The
-teardown runs on every way out, SIGTERM and SIGINT included. CI runs it on a
+Every k3d, kubectl, docker and yq command runs with `KUBECONFIG` set to a file
+in the run's temporary directory, so nothing reads or writes the operator's
+kubeconfig; only the git lookup of CHECKOUT's commit runs without it. The
+directory exists only once the preflight passed, and no API write happens
+before the cluster's one node is proven to be the run's own. The teardown runs
+on every way out, SIGTERM and SIGINT included. CI runs it on a
 clean runner; a local run takes the probe-stack lock:
 
     flock -o -w 3600 /tmp/probe-stack.lock setpriv --pdeathsig TERM \
@@ -148,6 +150,11 @@ class Run:
         return f"{PROBE_REPOSITORY}:{self.identifier}"
 
     @property
+    def node(self) -> str:
+        """The name k3d gives the cluster's one server node."""
+        return f"k3d-{self.name}-server-0"
+
+    @property
     def kubeconfig(self) -> Path:
         """The only kubeconfig any command of this run sees."""
         return self.directory / "kubeconfig"
@@ -190,10 +197,9 @@ def preflight(run: Run) -> str:
     return mise["env"]["K3S_VERSION"]
 
 
-def node_problem(nodes: Document, cluster: str, k3s_version: str) -> str | None:
+def node_problem(nodes: Document, expected: str, k3s_version: str) -> str | None:
     """Why the cluster is not the run's own single Ready node at K3S_VERSION."""
     items = nodes["items"]
-    expected = f"k3d-{cluster}-server-0"
     if len(items) != 1:
         return f"the cluster has {len(items)} nodes, expected exactly one"
     name = items[0]["metadata"]["name"]
@@ -280,14 +286,10 @@ def prove_render(run: Run) -> list[Document]:
     app = str(run.platform / "apps" / "presentator")
     overlay = run.directory / "overlay"
     overlay.mkdir()
-    swap = {"name": PRODUCTION_IMAGE, "newName": PROBE_REPOSITORY}
+    repository, _, tag = run.tag.rpartition(":")
+    swap = {"name": PRODUCTION_IMAGE, "newName": repository, "newTag": tag}
     (overlay / "kustomization.yaml").write_text(
-        json.dumps(
-            {
-                "resources": [os.path.relpath(app, overlay)],
-                "images": [{**swap, "newTag": run.identifier}],
-            }
-        )
+        json.dumps({"resources": [os.path.relpath(app, overlay)], "images": [swap]})
     )
     base = documents_of(run("kubectl kustomize", app).stdout)
     rendered = documents_of(run("kubectl kustomize", str(overlay)).stdout)
@@ -315,9 +317,9 @@ def start_cluster(run: Run, k3s_version: str) -> None:
     run.kubeconfig.chmod(0o600)
     run("kubectl wait --for=condition=Ready node --all --timeout=120s")
     nodes = json.loads(run("kubectl get nodes --output json").stdout)
-    if problem := node_problem(nodes, run.name, k3s_version):
+    if problem := node_problem(nodes, run.node, k3s_version):
         refuse(f"cluster identity: {problem}")
-    say(f"identity holds: node k3d-{run.name}-server-0 is Ready at {k3s_version}")
+    say(f"identity holds: node {run.node} is Ready at {k3s_version}")
 
 
 @dataclass(frozen=True)
@@ -365,11 +367,17 @@ def worker_problem(pod: Document, log: str, expected: Expectation) -> str | None
     status = worker[0]["exitCode"] if worker else None
     if status != REFUSAL_EXIT_STATUS:
         return f"the worker ended with exit status {status}, not {REFUSAL_EXIT_STATUS}"
-    if f"start refused: {expected.refusal}" not in log:
+    if refusal_line(log, expected.refusal) is None:
         return (
             f"the log lacks 'start refused: {expected.refusal}': {log.strip()[-500:]}"
         )
     return None
+
+
+def refusal_line(log: str, refusal: Predicate) -> str | None:
+    """The log's line that names the refusal, if one does."""
+    needle = f"start refused: {refusal}"
+    return next((line.strip() for line in log.splitlines() if needle in line), None)
 
 
 def await_pod(
@@ -433,10 +441,11 @@ def drive_cell(run: Run, number: int, manifest: str, expected: Expectation) -> s
         log = run(
             "kubectl logs", WORKER_POD, "-c", WORKER_CONTAINER, *flags, *IN_NAMESPACE
         ).stdout
-        problem = worker_problem(pod, log, expected) or ""
-    if not problem:
-        say(f"cell {number}: exit {REFUSAL_EXIT_STATUS}, refused {expected.refusal}")
-        return ""
+        problem = worker_problem(pod, log, expected)
+        if problem is None:
+            matched = refusal_line(log, expected.refusal)
+            say(f"cell {number}: exit {REFUSAL_EXIT_STATUS}, {matched}")
+            return ""
     say(f"cell {number}: FAILED, {problem}")
     diagnose(run, manifest)
     return f"cell {number}: {problem}"
@@ -480,6 +489,9 @@ def teardown(run: Run) -> None:
 def drive(run: Run) -> None:
     """Drive both cells of the pod shape; always remove what the run made."""
     k3s_version = preflight(run)
+    # mkdir refuses an existing path, so a directory planted at the name stops
+    # the run instead of holding its kubeconfig.
+    run.directory.mkdir(mode=0o700)
     try:
         overlay = prove_render(run)
         run("docker build --tag", run.tag, str(run.repository))
@@ -522,10 +534,11 @@ def drive_for_real(checkout: Path) -> None:
     effects = Effects(
         runner, shutil.which, _git_head, _free_port, time.monotonic, time.sleep
     )
+    identifier = uuid.uuid4().hex[:8]
     drive(
         Run(
-            identifier=uuid.uuid4().hex[:8],
-            directory=Path(tempfile.mkdtemp(prefix="probe-k3d-")),
+            identifier=identifier,
+            directory=Path(tempfile.gettempdir()) / f"probe-k3d-{identifier}",
             repository=REPOSITORY,
             platform=checkout.resolve(),
             effects=effects,
