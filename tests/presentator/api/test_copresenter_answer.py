@@ -30,9 +30,6 @@ from agents.backend.fake_gateway import (
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.adapters.deck_texts import MirroredDeckTexts
-from presentator.api.copresenter import (
-    NOT_ENABLED_REASON,
-)
 from presentator.application.copresenter import (
     AskTicket,
 )
@@ -264,7 +261,6 @@ def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made(
         "message": "the answer could not be spoken",
         "reason": "not-enabled",
     }
-    assert NOT_ENABLED_REASON == "not-enabled"
     assert run.gateway.requests == []
     assert the_ticket_was_released(run)
 
@@ -298,10 +294,9 @@ def test_a_talk_session_that_keeps_no_id_token_asks_and_is_answered(
 @pytest.mark.parametrize(
     "reply",
     [
-        pytest.param(Reply(429, {"retry-after": "7"}), id="busy"),
         pytest.param(Reply(401), id="unauthorized"),
         pytest.param(Reply(403), id="forbidden"),
-        pytest.param(Reply(422), id="budget"),
+        pytest.param(Reply(422), id="unprocessable"),
         pytest.param(Reply(500), id="gateway-down"),
         pytest.param(Reply(200, body=b"not json"), id="malformed"),
         pytest.param(completion(""), id="no-words"),
@@ -315,6 +310,39 @@ def test_a_gateway_that_does_not_answer_ends_in_a_plain_error_and_never_in_done(
 
     assert run.events == ["error"]
     assert "reason" not in run.error_payload()
+    assert run.fakes.speaking.spoken == []
+    assert the_ticket_was_released(run)
+
+
+def a_gateway_error(error_type: str) -> bytes:
+    """A gateway reply body that names its error type."""
+    return json.dumps({"error": {"type": error_type, "code": "422"}}).encode()
+
+
+@pytest.mark.parametrize(
+    ("reply", "stop"),
+    [
+        pytest.param(
+            Reply(429, {"retry-after": "7"}),
+            {"reason": "busy", "retry_after_s": 7},
+            id="busy-with-a-wait",
+        ),
+        pytest.param(Reply(429), {"reason": "busy"}, id="busy-without-a-wait"),
+        pytest.param(
+            Reply(422, body=a_gateway_error("budget_exceeded")),
+            {"reason": "budget-spent"},
+            id="budget-spent",
+        ),
+    ],
+)
+def test_a_busy_gateway_or_a_spent_budget_ends_in_its_own_error_reason(
+    tmp_path: Path, reply: Reply, stop: dict[str, object]
+) -> None:
+    """CP6: the overlay reads these literals, so they are spelled out."""
+    run = drive(tmp_path, Scenario(gateway=lambda: FakeGateway(reply)))
+
+    assert run.events == ["error"]
+    assert run.error_payload() == {"message": "the answer could not be spoken", **stop}
     assert run.fakes.speaking.spoken == []
     assert the_ticket_was_released(run)
 

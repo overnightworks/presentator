@@ -41,7 +41,9 @@ from agents.turn_events import (
 
 from presentator.contracts.copresenter import (
     AskingPerson,
+    BudgetSpentError,
     CoPresenterUnavailableError,
+    GatewayBusyError,
     NotEnabledError,
     ShowSlide,
 )
@@ -243,7 +245,11 @@ def _refuse(stopped: TurnStopped) -> NoReturn:
     match stopped.outcome:
         case StopOutcome.NOT_ENABLED:
             raise_without_chain(NotEnabledError())
-        case StopOutcome.BUSY | StopOutcome.BUDGET_SPENT | StopOutcome.UNAVAILABLE:
+        case StopOutcome.BUSY:
+            raise_without_chain(GatewayBusyError(stopped.retry_after_s))
+        case StopOutcome.BUDGET_SPENT:
+            raise_without_chain(BudgetSpentError())
+        case StopOutcome.UNAVAILABLE:
             _unavailable()
         case _:
             assert_never(stopped.outcome)
