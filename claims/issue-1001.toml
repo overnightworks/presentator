@@ -1,0 +1,8 @@
+claim_id = "a67471263bb44a68b697150803392690"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "fc092461aff6724f13be1a5c9db8c33a1313cc5e"
+branch = "claude/issue-1001-worker-lowers-its-process-limit"
+scope = ["src/presentator/host/worker.py", "src/presentator/host/worker_self_check.py", "tests/presentator/host/conftest.py", "tests/presentator/host/support/sealed_snapshot.py", "tests/presentator/host/support/worker_boundary.py", "tests/presentator/host/test_worker.py", "tests/presentator/host/test_worker_no_route.py", "tests/presentator/host/test_worker_process_limit.py", "tests/presentator/host/test_worker_seal.py"]
+opened_commit = "36aab5f64f3f53c3bcbeb38dc9cfbb0abe1fc08a"
+whole_reason = "The lowering, the snapshot's new fact, the predicate and their fakes are one boundary: the boundary record, the sealed snapshot builder and every main-driving test change together."
