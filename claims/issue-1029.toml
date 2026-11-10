@@ -1,0 +1,7 @@
+claim_id = "fedeed40ea6b40a78c0b77d42bcd1b9a"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "a7ac71f02f7a1c430424d4c67235402875bb1045"
+branch = "claude/issue-1029-k3d-probe-log-race"
+scope = ["scripts/probe_build_worker_k3d.py", "tests/scripts/test_probe_build_worker_k3d.py"]
+opened_commit = "ed5fb808a5ca43ef73360944a5756d5359b45f93"
