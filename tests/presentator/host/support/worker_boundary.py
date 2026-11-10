@@ -36,6 +36,7 @@ def boundary_over(
         set_non_dumpable=lambda: events.append("prctl"),
         set_umask=lambda: events.append("umask"),
         read_seal=lambda: Seal.COMPOSE,
+        lower_process_limit=lambda: None,
         read_snapshot=read_snapshot,
         load_settings=settings,
         serve=serve,

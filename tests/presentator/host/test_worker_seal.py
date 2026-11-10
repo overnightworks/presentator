@@ -7,7 +7,7 @@ from functools import partial
 import pytest
 
 from presentator.host import worker
-from presentator.host.config import ConfigurationError, worker_settings_variables
+from presentator.host.config import worker_settings_variables
 from presentator.host.worker import Boundary
 from presentator.host.worker_self_check import (
     KUBERNETES_ENVIRONMENT_KEYS,
@@ -114,7 +114,7 @@ def test_an_unset_seal_starts_the_compose_worker(arguments: list[str]) -> None:
     assert ("serve" in events) is (not arguments)
 
 
-@pytest.mark.parametrize("value", ["Kubernetes", "k8s", ""])
+@pytest.mark.parametrize("value", ["COMPOSE", "Kubernetes", "k8s", ""])
 @pytest.mark.parametrize("arguments", [[], ["--check"]])
 def test_a_refused_seal_refuses_the_start_before_any_read(
     caplog: pytest.LogCaptureFixture, value: str, arguments: list[str]
@@ -164,9 +164,3 @@ def test_the_seal_variable_selects_its_seal(
     environment: Mapping[str, str], seal: Seal
 ) -> None:
     assert seal_from_environment(environment) is seal
-
-
-@pytest.mark.parametrize("value", ["", "Kubernetes", "COMPOSE", "k8s"])
-def test_any_other_seal_value_is_refused_naming_the_variable(value: str) -> None:
-    with pytest.raises(ConfigurationError, match=SEAL_VARIABLE):
-        seal_from_environment({SEAL_VARIABLE: value})

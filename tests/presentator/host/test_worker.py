@@ -32,7 +32,6 @@ from tests.presentator.host.support.sealed_snapshot import (
     read_staged_root_as_sealed_process,
     sealed_snapshot,
     sealed_topology,
-    stage_sealed_root,
     with_fields,
 )
 from tests.presentator.host.support.worker_boundary import (
@@ -383,11 +382,6 @@ def test_failing_prctl_refuses_before_reading_anything() -> None:
 
     assert worker.main(["--check"], boundary) == worker.REFUSAL_EXIT_STATUS
     assert events == []
-
-
-@pytest.fixture
-def sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    return stage_sealed_root(tmp_path, monkeypatch)
 
 
 def test_the_snapshot_carries_the_seal_it_is_read_under(sealed_root: Path) -> None:
