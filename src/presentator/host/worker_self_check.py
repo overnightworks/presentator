@@ -159,20 +159,34 @@ class Toolchain:
 
 
 @dataclass(frozen=True)
+class Mounts:
+    """What the container's mounts and the paths over them look like."""
+
+    root_read_only: bool
+    mountinfo: str
+    work_mode: int
+    work_owner_uid: int
+    docker_socket_present: bool
+
+
+@dataclass(frozen=True)
+class ResourceBounds:
+    """The cgroup bounds and the process limit the container runs under."""
+
+    pids_max: str
+    memory_max: str
+    process_limit: tuple[str, str]
+
+
+@dataclass(frozen=True)
 class Snapshot:
     """Everything the self-check reads, taken once."""
 
     dumpable: int
     process_status: str
-    root_read_only: bool
-    mountinfo: str
-    work_mode: int
-    work_owner_uid: int
+    mounts: Mounts
+    resource_bounds: ResourceBounds
     topology: rtnetlink.Topology
-    docker_socket_present: bool
-    pids_max: str
-    memory_max: str
-    process_limit: tuple[str, str]
     identity: Identity
     environment_keys: frozenset[str]
     seal: Seal
@@ -225,12 +239,13 @@ def _mount_table_sealed(mountinfo: str) -> bool:
 
 
 def _mounts_sealed(snapshot: Snapshot) -> bool:
+    mounts = snapshot.mounts
     return (
-        snapshot.root_read_only
-        and _mount_table_sealed(snapshot.mountinfo)
-        and snapshot.work_mode == ROOT_MODE
-        and snapshot.work_owner_uid == 0
-        and not snapshot.docker_socket_present
+        mounts.root_read_only
+        and _mount_table_sealed(mounts.mountinfo)
+        and mounts.work_mode == ROOT_MODE
+        and mounts.work_owner_uid == 0
+        and not mounts.docker_socket_present
     )
 
 
@@ -260,12 +275,18 @@ def _within_maximum(value: str) -> bool:
     return value.isdecimal() and int(value) <= MAXIMUM_PROCESSES
 
 
+def process_limit_bounds(seal: Seal) -> bool:
+    """Whether `seal` is bounded by `RLIMIT_NPROC` rather than the pid cgroup."""
+    return seal is Seal.KUBERNETES
+
+
 def _resources_bounded(snapshot: Snapshot) -> bool:
-    if snapshot.seal is Seal.KUBERNETES:
-        bounded = all(map(_within_maximum, snapshot.process_limit))
+    bounds = snapshot.resource_bounds
+    if process_limit_bounds(snapshot.seal):
+        bounded = all(map(_within_maximum, bounds.process_limit))
     else:
-        bounded = _within_maximum(snapshot.pids_max)
-    return bounded and snapshot.memory_max.isdecimal()
+        bounded = _within_maximum(bounds.pids_max)
+    return bounded and bounds.memory_max.isdecimal()
 
 
 def _identities_sealed(snapshot: Snapshot) -> bool:
@@ -443,14 +464,14 @@ def lstat_if_present(path: Path) -> os.stat_result | None:
         return None
 
 
-def _read_mount_facts(root: Path) -> tuple[bool, str, int, int, bool]:
+def _read_mounts(root: Path) -> Mounts:
     work = (root / WORK_MOUNT.lstrip("/")).stat()
-    return (
-        bool(os.statvfs(root).f_flag & os.ST_RDONLY),
-        (root / "proc/self/mountinfo").read_text(),
-        stat.S_IMODE(work.st_mode),
-        work.st_uid,
-        any(
+    return Mounts(
+        root_read_only=bool(os.statvfs(root).f_flag & os.ST_RDONLY),
+        mountinfo=(root / "proc/self/mountinfo").read_text(),
+        work_mode=stat.S_IMODE(work.st_mode),
+        work_owner_uid=work.st_uid,
+        docker_socket_present=any(
             lstat_if_present(root / docker_socket.lstrip("/")) is not None
             for docker_socket in DOCKER_SOCKETS
         ),
@@ -464,21 +485,28 @@ def _read_cgroup_file(root: Path, name: str) -> str:
 def _read_process_limit(root: Path) -> tuple[str, str]:
     for line in (root / PROCESS_LIMITS_FILE).read_text().splitlines():
         if line.startswith(PROCESS_LIMIT_ROW):
-            soft, hard, *_ = [*line.removeprefix(PROCESS_LIMIT_ROW).split(), "", ""]
-            if hard:
-                return soft, hard
+            fields = line.removeprefix(PROCESS_LIMIT_ROW).split()
+            if fields[1:]:
+                return fields[0], fields[1]
     raise KeyError(PROCESS_LIMIT_ROW)
 
 
-def _read_resource_bounds(root: Path) -> tuple[str, str, tuple[str, str]]:
-    return (
-        _read_cgroup_file(root, "pids.max"),
-        _read_cgroup_file(root, "memory.max"),
-        _read_process_limit(root),
+def _read_resource_bounds(root: Path) -> ResourceBounds:
+    return ResourceBounds(
+        pids_max=_read_cgroup_file(root, "pids.max"),
+        memory_max=_read_cgroup_file(root, "memory.max"),
+        process_limit=_read_process_limit(root),
     )
 
 
-UNREAD_RESOURCE_BOUNDS = ("", "", ("", ""))
+UNREAD_MOUNTS = Mounts(
+    root_read_only=False,
+    mountinfo="",
+    work_mode=0,
+    work_owner_uid=-1,
+    docker_socket_present=True,
+)
+UNREAD_RESOURCE_BOUNDS = ResourceBounds("", "", ("", ""))
 UNREAD_IDENTITY = Identity(-1, -1, -1, (), -1, -1, {})
 UNREAD_TOOLCHAIN = Toolchain(None, None, (), None)
 UNREAD_SCRATCH = Scratch(frozenset(), {})
@@ -521,18 +549,8 @@ def read_snapshot(
     process_status = read(
         Predicate.CAPABILITIES, (root / "proc/self/status").read_text, ""
     )
-    (
-        root_read_only,
-        mountinfo,
-        work_mode,
-        work_owner_uid,
-        socket_present,
-    ) = read(
-        Predicate.MOUNTS,
-        partial(_read_mount_facts, root),
-        (False, "", 0, -1, True),
-    )
-    pids_max, memory_max, process_limit = read(
+    mounts = read(Predicate.MOUNTS, partial(_read_mounts, root), UNREAD_MOUNTS)
+    resource_bounds = read(
         Predicate.RESOURCE_BOUNDS,
         partial(_read_resource_bounds, root),
         UNREAD_RESOURCE_BOUNDS,
@@ -540,15 +558,9 @@ def read_snapshot(
     return Snapshot(
         dumpable=dumpable,
         process_status=process_status,
-        root_read_only=root_read_only,
-        mountinfo=mountinfo,
-        work_mode=work_mode,
-        work_owner_uid=work_owner_uid,
+        mounts=mounts,
+        resource_bounds=resource_bounds,
         topology=read(Predicate.NO_ROUTE, read_topology, UNREAD_TOPOLOGY),
-        docker_socket_present=socket_present,
-        pids_max=pids_max,
-        memory_max=memory_max,
-        process_limit=process_limit,
         identity=read(Predicate.IDENTITIES, _read_identity, UNREAD_IDENTITY),
         environment_keys=frozenset(os.environ),
         seal=seal,

@@ -33,6 +33,8 @@ from tests.presentator.host.support.sealed_snapshot import (
     sealed_snapshot,
     sealed_topology,
     with_fields,
+    with_mounts,
+    with_resource_bounds,
 )
 from tests.presentator.host.support.worker_boundary import (
     LOADED_SETTINGS,
@@ -74,7 +76,10 @@ def with_toolchain(**changes: object) -> Callable[[Snapshot], Snapshot]:
 
 def with_mountinfo(old: str, new: str) -> Callable[[Snapshot], Snapshot]:
     return lambda snapshot: replace(
-        snapshot, mountinfo=snapshot.mountinfo.replace(old, new)
+        snapshot,
+        mounts=replace(
+            snapshot.mounts, mountinfo=snapshot.mounts.mountinfo.replace(old, new)
+        ),
     )
 
 
@@ -109,7 +114,7 @@ FAILURES = {
     ),
     "new privileges allowed": (with_status(NoNewPrivs="0"), Predicate.CAPABILITIES),
     "no seccomp filter": (with_status(Seccomp="0"), Predicate.CAPABILITIES),
-    "writable root": (with_fields(root_read_only=False), Predicate.MOUNTS),
+    "writable root": (with_mounts(root_read_only=False), Predicate.MOUNTS),
     "work not tmpfs": (
         with_mountinfo(
             f"{WORK_MOUNT} {HARDENED} - tmpfs", f"{WORK_MOUNT} {HARDENED} - ext4"
@@ -128,15 +133,21 @@ FAILURES = {
         with_mountinfo(SHARED_MEMORY_MOUNT, "/dev/other"),
         Predicate.MOUNTS,
     ),
-    "work sticky world-writable": (with_fields(work_mode=0o1777), Predicate.MOUNTS),
-    "work not root": (with_fields(work_owner_uid=1000), Predicate.MOUNTS),
+    "work sticky world-writable": (with_mounts(work_mode=0o1777), Predicate.MOUNTS),
+    "work not root": (with_mounts(work_owner_uid=1000), Predicate.MOUNTS),
     "docker socket present": (
-        with_fields(docker_socket_present=True),
+        with_mounts(docker_socket_present=True),
         Predicate.MOUNTS,
     ),
-    "pids unlimited": (with_fields(pids_max="max"), Predicate.RESOURCE_BOUNDS),
-    "pids above bound": (with_fields(pids_max="513"), Predicate.RESOURCE_BOUNDS),
-    "memory unlimited": (with_fields(memory_max="max"), Predicate.RESOURCE_BOUNDS),
+    "pids unlimited": (with_resource_bounds(pids_max="max"), Predicate.RESOURCE_BOUNDS),
+    "pids above bound": (
+        with_resource_bounds(pids_max="513"),
+        Predicate.RESOURCE_BOUNDS,
+    ),
+    "memory unlimited": (
+        with_resource_bounds(memory_max="max"),
+        Predicate.RESOURCE_BOUNDS,
+    ),
     "build uid root": (
         with_users(**{"presentator-build": (0, 0)}),
         Predicate.IDENTITIES,
@@ -394,12 +405,13 @@ def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
     snapshot = read_sealed_snapshot(sealed_root)
 
     assert snapshot.process_status == SEALED_STATUS
-    assert (snapshot.pids_max, snapshot.memory_max) == ("512", "1073741824")
-    assert (snapshot.work_mode, snapshot.work_owner_uid) == (
+    bounds = snapshot.resource_bounds
+    assert (bounds.pids_max, bounds.memory_max) == ("512", "1073741824")
+    assert (snapshot.mounts.work_mode, snapshot.mounts.work_owner_uid) == (
         0o755,
         sealed_root.stat().st_uid,
     )
-    assert not snapshot.docker_socket_present
+    assert not snapshot.mounts.docker_socket_present
     assert (
         snapshot.identity.users["presentator-wire"] == worker_self_check.WIRE_IDENTITY
     )
@@ -623,7 +635,7 @@ def test_reads_a_docker_socket_as_present(
 ) -> None:
     make_socket(socket_path)
 
-    assert read_sealed_snapshot(sealed_root).docker_socket_present is True
+    assert read_sealed_snapshot(sealed_root).mounts.docker_socket_present is True
 
 
 def test_denied_socket_lookup_marks_mounts_unreadable(

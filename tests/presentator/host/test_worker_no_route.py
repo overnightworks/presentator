@@ -19,6 +19,8 @@ from tests.presentator.host.support.sealed_snapshot import (
     read_staged_root_as_sealed_process,
     sealed_snapshot,
     sealed_topology,
+    with_mounts,
+    with_resource_bounds,
 )
 
 OTHER_INDEX = LOOPBACK_INDEX + 1
@@ -127,15 +129,19 @@ def test_any_other_topology_refuses_as_no_route(
 
 
 def test_no_route_is_judged_after_mounts_and_before_resource_bounds() -> None:
-    snapshot = replace(
-        sealed_snapshot(),
-        root_read_only=False,
-        topology=with_extra(routes=(route(prefix_length=0),))(sealed_topology()),
-        pids_max="max",
+    snapshot = with_resource_bounds(pids_max="max")(
+        with_mounts(root_read_only=False)(
+            replace(
+                sealed_snapshot(),
+                topology=with_extra(routes=(route(prefix_length=0),))(
+                    sealed_topology()
+                ),
+            )
+        )
     )
 
     assert worker_self_check.first_failing_predicate(snapshot) == Predicate.MOUNTS
-    mounted = replace(snapshot, root_read_only=True)
+    mounted = with_mounts(root_read_only=True)(snapshot)
     assert worker_self_check.first_failing_predicate(mounted) == Predicate.NO_ROUTE
 
 
