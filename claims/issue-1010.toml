@@ -1,8 +1,0 @@
-claim_id = "317f418a7a58462dba72359102efe22a"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "8b48d4c0c597af8c5221e3cc608178b6bb29f007"
-branch = "claude/issue-1010-kubernetes-mounts-and-fix-ups"
-scope = ["src/presentator/host/worker.py", "src/presentator/host/worker_self_check.py", "tests/presentator/host/support/sealed_snapshot.py", "tests/presentator/host/support/worker_boundary.py", "tests/presentator/host/test_worker_mounts.py"]
-opened_commit = "fd2b3187f6cc9630f2bee0c4153357046a0408cc"
-whole_reason = "The fix-up and the predicate read one table of roots and modes, and the boundary record, its fake and the staged pod change with them."
