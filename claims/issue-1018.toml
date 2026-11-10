@@ -1,8 +1,0 @@
-claim_id = "aed2c998851142758dcbdcb0850d6aa8"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "fdf29756bf788143b42bc1623e6d7473be353244"
-branch = "claude/issue-1018-take-design-v0-20-0"
-scope = ["frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "frontend/src/lib/kitWords.test.ts", "frontend/src/lib/kitWords.ts", "src/presentator/adapters/catalogs/en.po", "src/presentator/contracts/text.py", "tests/support/vulture_allowlist.py"]
-opened_commit = "dd60398e684a7fd152734158b36162f63311907d"
-whole_reason = "The pin makes two words required, and the words reach the page through the text contract, the catalog and the generated API types; the type check fails until all of them carry both."
