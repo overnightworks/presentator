@@ -1,8 +1,0 @@
-claim_id = "b3976ba427364a788fcb130fbf345075"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "7c1f82ef49823cd7d3ec462e0e5482fc256e1bb7"
-branch = "claude/issue-1004-six-review-follow-ups-land-as-polish"
-scope = ["docs/sources.md", "src/presentator/agent/backend.py", "tests/presentator/agent/test_backend.py", "tests/presentator/agent/test_mcp_tools.py", "tests/presentator/host/test_main.py", "tests/support/step_support.py"]
-opened_commit = "f6385f139a9f0c0b6bba98fbcef4e487e5670c16"
-whole_reason = "Six independent one-file follow-ups from landed reviews; each is a few lines, so one lane and one review cost less than six."
