@@ -1,8 +1,0 @@
-claim_id = "e88cab7a7e8944b1846ddd37106da70c"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "82173328940611ada93996350137a08d12a1f5fa"
-branch = "claude/issue-1014-k3d-harness-and-control"
-scope = [".github/workflows/ci.yml", "pyproject.toml", "quality/config.toml", "scripts/probe_build_worker_k3d.py", "tests/scripts/test_probe_build_worker_k3d.py"]
-opened_commit = "e75520981942062a985e1a7102d37516d43c072c"
-whole_reason = "The driver, its unit tests, the CI job that runs it, its gate registration and its lint entry land together: a job not listed in mandatory_jobs gates nothing, and a driver without its job and tests proves nothing."
