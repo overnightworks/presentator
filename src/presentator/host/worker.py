@@ -122,9 +122,12 @@ def _set_non_dumpable() -> None:
     libc_prctl(PR_SET_DUMPABLE, 0)
 
 
-def _lower_process_limit() -> None:
-    soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
-    resource.setrlimit(resource.RLIMIT_NPROC, lowered_process_limit(soft, hard))
+def lower_process_limit(
+    get_limit: Callable[[], tuple[int, int]],
+    set_limit: Callable[[tuple[int, int]], None],
+) -> None:
+    """Set the process limit to its lowered form."""
+    set_limit(lowered_process_limit(*get_limit()))
 
 
 def _set_umask() -> None:
@@ -340,7 +343,11 @@ REAL_BOUNDARY = Boundary(
     _set_non_dumpable,
     _set_umask,
     partial(seal_from_environment, os.environ),
-    _lower_process_limit,
+    partial(
+        lower_process_limit,
+        partial(resource.getrlimit, resource.RLIMIT_NPROC),
+        partial(resource.setrlimit, resource.RLIMIT_NPROC),
+    ),
     partial(read_snapshot, Path("/"), read_topology=rtnetlink.read_topology),
     load_worker_settings,
     _serve_on_this_machine,

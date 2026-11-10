@@ -3,7 +3,6 @@
 import resource
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -38,7 +37,7 @@ def judged(seal: Seal, soft: str, hard: str, **changes: str) -> Predicate | None
 
 
 COMPOSE_ROWS = {
-    "an unlimited process limit": (UNLIMITED, UNLIMITED, "512", None),
+    "an unlimited process limit": (UNLIMITED, UNLIMITED, MAXIMUM, None),
     "an unlimited pid bound": (MAXIMUM, MAXIMUM, "max", BOUND),
     "a pid bound above the maximum": (MAXIMUM, MAXIMUM, ABOVE_MAXIMUM, BOUND),
 }
@@ -108,7 +107,11 @@ def test_the_process_limit_is_read_from_the_max_processes_row(
 
 @pytest.mark.parametrize(
     "content",
-    [None, limits_file("1", "1").replace("Max processes", "Max pipes"), "Limit\n"],
+    [
+        None,
+        limits_file("1", "1").replace("Max processes", "Max pipes"),
+        "Limit\nMax processes\n",
+    ],
     ids=["no file", "no row", "no values"],
 )
 def test_an_unreadable_process_limit_marks_the_resource_bounds_unreadable(
@@ -151,30 +154,19 @@ def test_the_lowering_caps_at_the_maximum_and_never_raises(
     assert lowered_process_limit(*limits) == lowered
 
 
-def test_the_effect_reads_then_sets_the_lowered_limit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_the_effect_reads_then_sets_the_lowered_limit() -> None:
     calls: list[tuple[object, ...]] = []
 
-    def get_limit(which: int) -> tuple[int, int]:
-        calls.append(("get", which))
+    def get_limit() -> tuple[int, int]:
+        calls.append(("get",))
         return INFINITY, INFINITY
 
-    def set_limit(which: int, limits: tuple[int, int]) -> None:
-        calls.append(("set", which, limits))
+    def set_limit(limits: tuple[int, int]) -> None:
+        calls.append(("set", limits))
 
-    stand_in = SimpleNamespace(
-        RLIMIT_NPROC=resource.RLIMIT_NPROC, getrlimit=get_limit, setrlimit=set_limit
-    )
-    monkeypatch.setattr(worker, "resource", stand_in)
+    worker.lower_process_limit(get_limit, set_limit)
 
-    worker.REAL_BOUNDARY.lower_process_limit()
-
-    which = resource.RLIMIT_NPROC
-    assert calls == [
-        ("get", which),
-        ("set", which, (MAXIMUM_PROCESSES, MAXIMUM_PROCESSES)),
-    ]
+    assert calls == [("get",), ("set", (MAXIMUM_PROCESSES, MAXIMUM_PROCESSES))]
 
 
 def recording_boundary(
