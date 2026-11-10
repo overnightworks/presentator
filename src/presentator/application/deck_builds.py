@@ -5,7 +5,7 @@ build, and what the deck's attempt says about it. The deck store, the build
 runner and the clock stay outside.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import timedelta
 
 from presentator.application import build_retention
@@ -17,6 +17,7 @@ from presentator.contracts.decks import (
     BuildOutcome,
     Deck,
     Source,
+    SourceFetch,
     ToolchainUnavailable,
 )
 from presentator.ports.clock import Clock
@@ -28,6 +29,14 @@ class BuildWalk:
     """One source's walk: what it delivered, and whether building may go on."""
 
     delivered: tuple[bool, ...]
+    still_building: bool
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TakenIn:
+    """What taking one source in fetched, and whether building may go on after it."""
+
+    fetch: SourceFetch
     still_building: bool
 
 
@@ -103,7 +112,16 @@ class DeckBuilds:
         if self.clock.now() - attempt.started_at <= self.build_bound:
             return deck
         failed = self._failed(deck, attempt, BuildFailure.without_words())
-        return replace(deck, attempt=failed)
+        return Deck(
+            slug=deck.slug,
+            title=deck.title,
+            changed_at=deck.changed_at,
+            owner_id=deck.owner_id,
+            source_id=deck.source_id,
+            commit=deck.commit,
+            build=deck.build,
+            attempt=failed,
+        )
 
     def _switch_over(self, deck: Deck, source: Source) -> bool | None:
         """Deliver this deck from its new build, once there really is one.
@@ -149,6 +167,11 @@ class DeckBuilds:
         self, deck: Deck, attempt: BuildAttempt, failure: BuildFailure
     ) -> BuildAttempt:
         """Close this attempt as failed, keeping the moment it started."""
-        closed = replace(attempt, outcome=BuildOutcome.FAILED, failure=failure)
+        closed = BuildAttempt(
+            commit=attempt.commit,
+            started_at=attempt.started_at,
+            outcome=BuildOutcome.FAILED,
+            failure=failure,
+        )
         self.store.put_attempt(deck.slug, closed)
         return closed

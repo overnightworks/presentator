@@ -20,7 +20,7 @@ from threading import RLock
 from typing import BinaryIO, Final
 
 from presentator.application import build_retention
-from presentator.application.deck_builds import DeckBuilds
+from presentator.application.deck_builds import DeckBuilds, TakenIn
 from presentator.application.source_state import (
     SHORT_COMMIT,
     deck_state_of,
@@ -738,16 +738,14 @@ class Decks:
         self.key_drafts.sweep(older_than=self.clock.now() - DRAFT_MAX_AGE)
         building = True
         for source in self.sources.all():
-            building = self._take_in_and_count(source, building=building)[1]
+            building = self._take_in_and_count(source, building=building).still_building
 
     def _take_in_and_build_named(self, name: str) -> SourceFetch | None:
         """Take that source in, read again now that nobody can remove it."""
         source = self._named(name)
-        return None if source is None else self._take_in_and_count(source)[0]
+        return None if source is None else self._take_in_and_count(source).fetch
 
-    def _take_in_and_count(
-        self, source: Source, *, building: bool = True
-    ) -> tuple[SourceFetch, bool]:
+    def _take_in_and_count(self, source: Source, *, building: bool = True) -> TakenIn:
         """Take that source in, build it, count that, say if building goes on."""
         carried_before = self._visible_slugs(source)
         at = self.clock.now()
@@ -762,11 +760,13 @@ class Decks:
             builds_failed=len(walk.delivered) - sum(walk.delivered),
             decks_removed=len(carried_before - self._visible_slugs(source)),
         )
-        return fetch, walk.still_building
+        return TakenIn(fetch=fetch, still_building=walk.still_building)
 
     def _visible_slugs(self, source: Source) -> frozenset[str]:
         """The slugs of the decks that source carries and the lobby lists."""
-        return frozenset(d.slug for d in self.store.all() if d.source_id == source.id)
+        return frozenset(
+            deck.slug for deck in self.store.all() if deck.source_id == source.id
+        )
 
     def _record_run(self, source: Source, poll: SourcePoll, at: datetime) -> SourceRun:
         """Record what the poll found or failed to as the source's newest run."""

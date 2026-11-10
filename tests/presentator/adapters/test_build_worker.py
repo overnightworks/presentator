@@ -342,16 +342,24 @@ def test_a_worker_closing_then_answering_serves_start_build_and_export(
 
 
 def test_a_directory_that_is_not_the_workers_is_refused_without_a_byte_or_a_retry(
-    volume: Path, tmp_path: Path
+    volume: Path, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Cell B3 (I)."""
+    """Cell B3 (I): the log names that what answered is not the worker."""
     started = time.monotonic()
-    with fake_worker(volume, replying(BUILT_BY_STEP)) as seen:
+    with (
+        caplog.at_level(logging.WARNING),
+        fake_worker(volume, replying(BUILT_BY_STEP)) as seen,
+    ):
         refused = toolchain(
             volume, expected_uid=OWN_UID + 1, connect_window_seconds=30.0
         ).ran(a_step(tmp_path))
 
     assert refused == UNAVAILABLE
+    assert any(
+        record.levelno == logging.WARNING
+        and Fault.NOT_THE_WORKER.value in record.getMessage()
+        for record in caplog.records
+    )
     assert not seen.steps
     assert time.monotonic() - started < PROMPTLY
 
