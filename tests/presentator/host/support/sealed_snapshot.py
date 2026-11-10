@@ -17,6 +17,8 @@ from presentator.host.worker_scratch import QUEUE_MOUNT, Scratch
 from presentator.host.worker_self_check import (
     MAXIMUM_PROCESSES,
     Identity,
+    Mounts,
+    ResourceBounds,
     Seal,
     Snapshot,
     Toolchain,
@@ -115,11 +117,12 @@ def read_sealed_snapshot(
 def read_staged_root_as_sealed_process(root: Path) -> Snapshot:
     """Read the staged root, with the four process facts of the sealed snapshot."""
     sealed = sealed_snapshot()
+    read = read_sealed_snapshot(root)
     return replace(
-        read_sealed_snapshot(root),
+        read,
         environment_keys=sealed.environment_keys,
         pid=sealed.pid,
-        work_owner_uid=sealed.work_owner_uid,
+        mounts=replace(read.mounts, work_owner_uid=sealed.mounts.work_owner_uid),
         identity=sealed.identity,
     )
 
@@ -128,15 +131,19 @@ def sealed_snapshot() -> Snapshot:
     return Snapshot(
         dumpable=0,
         process_status=SEALED_STATUS,
-        root_read_only=True,
-        mountinfo=SEALED_MOUNTINFO,
-        work_mode=0o755,
-        work_owner_uid=0,
+        mounts=Mounts(
+            root_read_only=True,
+            mountinfo=SEALED_MOUNTINFO,
+            work_mode=0o755,
+            work_owner_uid=0,
+            docker_socket_present=False,
+        ),
+        resource_bounds=ResourceBounds(
+            pids_max="512",
+            memory_max="1073741824",
+            process_limit=(str(MAXIMUM_PROCESSES), str(MAXIMUM_PROCESSES)),
+        ),
         topology=sealed_topology(),
-        docker_socket_present=False,
-        pids_max="512",
-        memory_max="1073741824",
-        process_limit=(str(MAXIMUM_PROCESSES), str(MAXIMUM_PROCESSES)),
         identity=Identity(
             uid=0,
             euid=0,
@@ -165,6 +172,18 @@ def sealed_snapshot() -> Snapshot:
 
 def with_fields(**changes: object) -> Callable[[Snapshot], Snapshot]:
     return lambda snapshot: replace(snapshot, **changes)
+
+
+def with_mounts(**changes: object) -> Callable[[Snapshot], Snapshot]:
+    return lambda snapshot: replace(
+        snapshot, mounts=replace(snapshot.mounts, **changes)
+    )
+
+
+def with_resource_bounds(**changes: object) -> Callable[[Snapshot], Snapshot]:
+    return lambda snapshot: replace(
+        snapshot, resource_bounds=replace(snapshot.resource_bounds, **changes)
+    )
 
 
 def stand_in_users(monkeypatch: pytest.MonkeyPatch) -> None:

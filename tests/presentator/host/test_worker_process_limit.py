@@ -20,6 +20,7 @@ from tests.presentator.host.support.sealed_snapshot import (
     limits_file,
     read_sealed_snapshot,
     sealed_snapshot,
+    with_resource_bounds,
 )
 from tests.presentator.host.support.worker_boundary import boundary_over
 
@@ -30,8 +31,8 @@ BOUND = Predicate.RESOURCE_BOUNDS
 
 
 def judged(seal: Seal, soft: str, hard: str, **changes: str) -> Predicate | None:
-    snapshot = replace(
-        sealed_snapshot(), seal=seal, process_limit=(soft, hard), **changes
+    snapshot = with_resource_bounds(process_limit=(soft, hard), **changes)(
+        replace(sealed_snapshot(), seal=seal)
     )
     return first_failing_predicate(snapshot)
 
@@ -101,7 +102,7 @@ def test_the_process_limit_is_read_from_the_max_processes_row(
 
     snapshot = read_sealed_snapshot(sealed_root)
 
-    assert snapshot.process_limit == ("100", UNLIMITED)
+    assert snapshot.resource_bounds.process_limit == ("100", UNLIMITED)
     assert snapshot.unreadable == frozenset()
 
 

@@ -51,6 +51,7 @@ from presentator.host.worker_self_check import (
     libc_prctl,
     lowered_process_limit,
     lstat_if_present,
+    process_limit_bounds,
     read_snapshot,
     seal_from_environment,
     status_fields,
@@ -365,7 +366,7 @@ def _refuse_settings(error: ConfigurationError) -> int:
 
 
 def _process_limit_lowered(boundary: Boundary, seal: Seal) -> bool:
-    if seal is not Seal.KUBERNETES:
+    if not process_limit_bounds(seal):
         return True
     try:
         boundary.lower_process_limit()
