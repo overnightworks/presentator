@@ -24,10 +24,12 @@ network `hal_speech_presentator`, and that hop's trust sentence is in
 
 ## What the presenter sees
 
-- **CP6** The overlay shows "Not enabled", "Sign in again" or "No answer", only
-  its own words. It navigates only by the model's `show_slide` call, inside the
-  deck's slides, and shows no word for it. A refusal line clears at the next
-  question.
+- **CP6** The overlay shows only its own words: "Not enabled", "Sign in again",
+  "Busy, try again in N s" for a busy gateway that names its wait (N its seconds
+  rounded up), "Busy, try again soon" for one that names none, "Budget used up"
+  for a spent budget, and "No answer" for every other stop. It navigates only
+  by the model's `show_slide` call, inside the deck's slides, and shows no word
+  for it. A refusal line clears at the next question.
 - **CP7** The overlay's speech words are "Voice offline" (the service does not
   answer, or the configured voice cannot speak), "Local hearing not ready" (hearing
   still loads) and "No hearing" (a hearing that fails or cannot open). A new

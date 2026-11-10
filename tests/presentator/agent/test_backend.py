@@ -41,7 +41,9 @@ from presentator.agent.backend import (
 )
 from presentator.contracts.copresenter import (
     AskingPerson,
+    BudgetSpentError,
     CoPresenterUnavailableError,
+    GatewayBusyError,
     NotEnabledError,
     ShowSlide,
 )
@@ -177,21 +179,19 @@ async def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made
 @pytest.mark.parametrize(
     "reply",
     [
-        pytest.param(Reply(429, {"retry-after": "7"}), id="429-with-a-wait"),
-        pytest.param(Reply(429), id="429-without-a-wait"),
         pytest.param(Reply(401), id="401"),
         pytest.param(Reply(403), id="403"),
-        pytest.param(Reply(422), id="422-budget"),
+        pytest.param(Reply(422), id="422-without-a-budget-error"),
         pytest.param(Reply(500), id="500"),
         pytest.param(Reply(200, body=b"not json"), id="malformed-reply"),
         pytest.param(completion(""), id="no-words"),
     ],
 )
 @on_an_event_loop
-async def test_every_gateway_refusal_ends_as_the_plain_unavailable_error(
+async def test_every_other_gateway_refusal_ends_as_the_plain_unavailable_error(
     reply: Reply,
 ) -> None:
-    """No reason reaches the overlay, whatever the gateway said."""
+    """No reason reaches the overlay beyond a busy gateway and a spent budget."""
     answerer = answerer_over(FakeGateway(reply))
 
     with pytest.raises(CoPresenterUnavailableError) as stopped:
@@ -323,8 +323,8 @@ ALL_STOPS = [
 
 WORDED_BY_OUTCOME = {
     StopOutcome.NOT_ENABLED: NotEnabledError,
-    StopOutcome.BUSY: CoPresenterUnavailableError,
-    StopOutcome.BUDGET_SPENT: CoPresenterUnavailableError,
+    StopOutcome.BUSY: GatewayBusyError,
+    StopOutcome.BUDGET_SPENT: BudgetSpentError,
     StopOutcome.UNAVAILABLE: CoPresenterUnavailableError,
 }
 
@@ -349,6 +349,27 @@ async def test_a_stop_is_worded_by_its_outcome_alone(
     assert type(stopped.value) is WORDED_BY_OUTCOME[stop.outcome]
     (line,) = [r.getMessage() for r in caplog.records if r.name == LOGGER]
     assert f"outcome={stop.outcome.value}" in line
+
+
+@pytest.mark.parametrize(
+    ("reply", "wait"),
+    [
+        pytest.param(Reply(429, {"retry-after": "7"}), 7, id="429-with-a-wait"),
+        pytest.param(Reply(429), None, id="429-without-a-wait"),
+    ],
+)
+@on_an_event_loop
+async def test_a_busy_gateway_stop_carries_the_wait_it_names(
+    reply: Reply, wait: int | None
+) -> None:
+    """The wait the gateway names, or none, travels with the busy stop."""
+    answerer = answerer_over(FakeGateway(reply))
+
+    with pytest.raises(GatewayBusyError) as stopped:
+        await spoken(answerer)
+
+    assert stopped.value.retry_after_s == wait
+    assert (stopped.value.__cause__, stopped.value.__context__) == (None, None)
 
 
 @on_an_event_loop

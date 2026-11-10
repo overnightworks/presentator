@@ -40,7 +40,7 @@ export type AnswerMode =
   | 'audio'
   | 'speech-refused'
   | 'not-enabled'
-  | 'unknown-reason'
+  | 'error-event'
   | 'mid-answer-error'
   | 'moves-slide'
   | 'refused-then-answered'
@@ -62,6 +62,8 @@ export const state = {
   pendingAnswerClosed: 0,
   askHeaderNames: [] as string[],
   answerMode: 'audio' as AnswerMode,
+  // The payload the fake answer stream sends as its `error` event in 'error-event' mode.
+  errorEvent: {} as Record<string, unknown>,
   // The slide the fake model shows in 'moves-slide' mode.
   slideToShow: 1,
   askBodies: [] as { said: string, deck: string, language: string, slide: number }[],
@@ -313,10 +315,10 @@ async function startServer() {
         response.end()
         return
       }
-      if (state.answerMode === 'not-enabled' || state.answerMode === 'unknown-reason') {
+      if (state.answerMode === 'not-enabled' || state.answerMode === 'error-event') {
         sendEvent(response, 'error', {
-          reason: state.answerMode,
           message: 'the answer could not be spoken',
+          ...(state.answerMode === 'not-enabled' ? { reason: 'not-enabled' } : state.errorEvent),
         })
         response.end()
         return

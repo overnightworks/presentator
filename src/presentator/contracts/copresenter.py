@@ -1,7 +1,7 @@
 """Provider-neutral values carried by the authenticated co-presenter path."""
 
 from dataclasses import dataclass, field
-from enum import Enum, auto
+from enum import Enum, StrEnum, auto
 
 from presentator.contracts.decks import Deck, Source
 from presentator.contracts.models import Role
@@ -17,6 +17,27 @@ class CoPresenterUnavailableError(RuntimeError):
 
 class NotEnabledError(CoPresenterUnavailableError):
     """The gateway does not answer this person: they are not enabled for it."""
+
+
+class GatewayBusyError(CoPresenterUnavailableError):
+    """The gateway is busy now, and may name the seconds to wait before asking again."""
+
+    def __init__(self, retry_after_s: int | None) -> None:
+        """Carry the wait the gateway named, or none."""
+        super().__init__()
+        self.retry_after_s = retry_after_s
+
+
+class BudgetSpentError(CoPresenterUnavailableError):
+    """The person's gateway budget is spent; no outage."""
+
+
+class AnswerStopReason(StrEnum):
+    """The reason an answer stream's `error` event names, as the overlay reads it."""
+
+    NOT_ENABLED = "not-enabled"
+    BUSY = "busy"
+    BUDGET_SPENT = "budget-spent"
 
 
 class AccessRefusal(Enum):
