@@ -488,8 +488,6 @@ def _read_process_limit(root: Path) -> tuple[str, str]:
             match line.removeprefix(PROCESS_LIMIT_ROW).split():
                 case [soft, hard, *_]:
                     return soft, hard
-                case _:
-                    pass
     raise KeyError(PROCESS_LIMIT_ROW)
 
 
