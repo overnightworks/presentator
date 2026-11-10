@@ -109,19 +109,16 @@ def token_file(tmp_path: Path) -> Path:
 
 
 def a_pod_owner(
-    api: FakeApi | httpx2.BaseTransport | Callable[[httpx2.Request], httpx2.Response],
+    api: FakeApi | Callable[[httpx2.Request], httpx2.Response],
     clock: FakeClock,
     token_file: Path,
 ) -> WorkerPod:
-    transport = (
-        api if isinstance(api, httpx2.BaseTransport) else httpx2.MockTransport(api)
-    )
     return WorkerPod(
         name=POD_NAME,
         base_url="https://10.0.0.1:443",
         namespace=NAMESPACE,
         token_file=token_file,
-        transport=transport,
+        transport=httpx2.MockTransport(api),
         clock=clock,
         sleep=clock.sleep,
     )
@@ -273,9 +270,10 @@ def test_an_api_that_stays_unavailable_refuses_at_the_bound_naming_the_fault(
 ) -> None:
     api = FakeApi([answer])
     started = clock.now
+    owner = a_pod_owner(api, clock, token_file)
 
     with pytest.raises(WorkerPodError, match=fault):
-        a_pod_owner(api, clock, token_file).unused_generation(window)
+        owner.unused_generation(window)
 
     assert clock.now - started == window
     assert set(api.methods()) == {"GET"}
@@ -284,8 +282,10 @@ def test_an_api_that_stays_unavailable_refuses_at_the_bound_naming_the_fault(
 def test_a_pod_that_stays_absent_refuses_at_the_bound(
     clock: FakeClock, token_file: Path
 ) -> None:
+    owner = a_pod_owner(FakeApi([a_status(404)]), clock, token_file)
+
     with pytest.raises(WorkerPodError, match="absent"):
-        wait(FakeApi([a_status(404)]), clock, token_file)
+        owner.unused_generation(WINDOW_SECONDS)
 
 
 @pytest.mark.parametrize("code", [401, 403])
@@ -459,8 +459,7 @@ def test_a_service_account_file_without_usable_content_refuses(
 ) -> None:
     directory = a_serviceaccount_directory(tmp_path)
     (directory / file).write_text(content)
+    environment = an_environment()
 
     with pytest.raises(WorkerPodError, match=refusal):
-        WorkerPod.in_cluster(
-            POD_NAME, environment=an_environment(), directory=directory
-        )
+        WorkerPod.in_cluster(POD_NAME, environment=environment, directory=directory)

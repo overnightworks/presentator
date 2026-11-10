@@ -147,7 +147,7 @@ class WorkerPod:
         try:
             context = ssl.create_default_context(cafile=directory / "ca.crt")
             namespace = (directory / _NAMESPACE_FILE).read_text().strip()
-        except OSError, ssl.SSLError:
+        except OSError:
             raise _refused(_UNREADABLE) from None
         if not namespace:
             raise _absent(_NAMESPACE_FILE)
@@ -166,25 +166,15 @@ class WorkerPod:
         deadline = self.clock() + window_seconds
         first_used: str | None = None
         pause = FIRST_RETRY_SECONDS
-        waiting_for = "absent"
         with httpx2.Client(
             base_url=self.base_url, transport=self.transport, trust_env=False
         ) as client:
             while True:
-                try:
-                    pod = self._read(client, deadline)
-                    state = None if pod is None else pod.state()
-                    waiting_for = "absent" if state is None else state.value
-                    if pod is not None and state is PodState.UNUSED:
-                        return pod.metadata.uid
-                    if pod is not None and state is PodState.USED:
-                        uid = pod.metadata.uid
-                        first_used = first_used or uid
-                        if uid != first_used:
-                            raise _refused(_SUCCESSOR_USED)
-                        self._end(client, uid, deadline)
-                except _UnavailableError as fault:
-                    waiting_for = str(fault)
+                uid, first_used, waiting_for = self._attempt(
+                    client, deadline, first_used
+                )
+                if uid is not None:
+                    return uid
                 remaining = deadline - self.clock()
                 if remaining <= 0:
                     raise _refused(
@@ -192,6 +182,27 @@ class WorkerPod:
                     )
                 self.sleep(min(pause, remaining))
                 pause = min(pause * 2, LONGEST_RETRY_SECONDS)
+
+    def _attempt(
+        self, client: httpx2.Client, deadline: float, first_used: str | None
+    ) -> tuple[str | None, str | None, str]:
+        """One look at the pod: its uid if unused, the first used uid, what it saw."""
+        try:
+            pod = self._read(client, deadline)
+            if pod is None:
+                return None, first_used, "absent"
+            state = pod.state()
+            uid = pod.metadata.uid
+            if state is PodState.UNUSED:
+                return uid, first_used, state.value
+            if state is PodState.USED:
+                first_used = first_used or uid
+                if uid != first_used:
+                    raise _refused(_SUCCESSOR_USED)
+                self._end(client, uid, deadline)
+        except _UnavailableError as fault:
+            return None, first_used, str(fault)
+        return None, first_used, state.value
 
     def _path(self) -> str:
         return f"/api/v1/namespaces/{self.namespace}/pods/{self.name}"
@@ -219,7 +230,9 @@ class WorkerPod:
         raise self._unexpected(_DELETE, answer)
 
     @staticmethod
-    def _unexpected(right: str, answer: httpx2.Response) -> Exception:
+    def _unexpected(
+        right: str, answer: httpx2.Response
+    ) -> WorkerPodError | _UnavailableError:
         if answer.status_code in _NO_RIGHT:
             return _refused(
                 _NO_RIGHT_MESSAGE.format(right=right, code=answer.status_code)
