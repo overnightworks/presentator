@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from webauth.oidc import PENDING_LOGIN_MAX_AGE_SECONDS
 
+from presentator.api.auth import SIGN_IN_BUDGET
 from presentator.application.build_retention import REMOVED_DECK_KEPT
 from presentator.application.decks import DRAFT_MAX_AGE
 from presentator.application.identity import SESSION_LIFETIME, SESSION_SWEEP_INTERVAL
@@ -41,6 +42,10 @@ _MINUTE = timedelta(minutes=1)
         (
             r"bleibt es, bis seine (\d+) Minuten ablaufen",
             timedelta(seconds=PENDING_LOGIN_MAX_AGE_SECONDS) / _MINUTE,
+        ),
+        (
+            r"bei der Anmeldung der letzten (\d+) Minuten",
+            timedelta(seconds=SIGN_IN_BUDGET.window_seconds) / _MINUTE,
         ),
     ],
 )
