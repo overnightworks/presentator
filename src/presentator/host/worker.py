@@ -52,6 +52,7 @@ from presentator.host.worker_self_check import (
     libc_prctl,
     lowered_process_limit,
     lstat_if_present,
+    pod_mounts_judged,
     process_limit_bounds,
     read_snapshot,
     seal_from_environment,
@@ -395,7 +396,7 @@ def _process_limit_lowered(boundary: Boundary, seal: Seal) -> bool:
 
 
 def _mounts_fixed_up(boundary: Boundary, seal: Seal) -> bool:
-    if seal is not Seal.KUBERNETES:
+    if not pod_mounts_judged(seal):
         return True
     try:
         boundary.fix_up_mounts()

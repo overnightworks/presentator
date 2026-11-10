@@ -341,7 +341,7 @@ def _pod_mounts_sealed(mounts: Mounts) -> bool:
 
 def _mounts_sealed(snapshot: Snapshot) -> bool:
     mounts = snapshot.mounts
-    if snapshot.seal is Seal.KUBERNETES:
+    if pod_mounts_judged(snapshot.seal):
         return _pod_mounts_sealed(mounts)
     return (
         mounts.root_read_only
@@ -376,6 +376,11 @@ def _no_route(snapshot: Snapshot) -> bool:
 
 def _within_maximum(value: str) -> bool:
     return value.isdecimal() and int(value) <= MAXIMUM_PROCESSES
+
+
+def pod_mounts_judged(seal: Seal) -> bool:
+    """Whether `seal` fixes up and judges the pod's mount roots."""
+    return seal is Seal.KUBERNETES
 
 
 def process_limit_bounds(seal: Seal) -> bool:
@@ -604,7 +609,7 @@ def _read_mounts(root: Path, seal: Seal) -> Mounts:
         docker_socket_present=_any_present(root, DOCKER_SOCKETS),
         kubernetes=(
             _read_kubernetes_mounts(root, mountinfo)
-            if seal is Seal.KUBERNETES
+            if pod_mounts_judged(seal)
             else None
         ),
     )
