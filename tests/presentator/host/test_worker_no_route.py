@@ -13,13 +13,12 @@ from presentator.adapters.rtnetlink import Address, Link, Route, Topology
 from presentator.host import worker_self_check
 from presentator.host.worker_self_check import Predicate
 from tests.presentator.host.support.sealed_snapshot import (
+    LINK_UP,
     LOOPBACK_INDEX,
-    LOOPBACK_UP,
     read_sealed_snapshot,
     read_staged_root_as_sealed_process,
     sealed_snapshot,
     sealed_topology,
-    stage_sealed_root,
 )
 
 OTHER_INDEX = LOOPBACK_INDEX + 1
@@ -78,9 +77,9 @@ PASSING = {
     "loopback with no address": with_topology(addresses=(), routes=()),
 }
 REFUSED = {
-    "loopback without the loopback flag": with_topology(links=lo_with(LOOPBACK_UP)),
+    "loopback without the loopback flag": with_topology(links=lo_with(LINK_UP)),
     "second link down": with_extra(links=(Link(OTHER_INDEX, "eth0", 0),)),
-    "second link up": with_extra(links=(Link(OTHER_INDEX, "eth0", LOOPBACK_UP),)),
+    "second link up": with_extra(links=(Link(OTHER_INDEX, "eth0", LINK_UP),)),
     "link named otherwise": with_topology(
         links=(Link(LOOPBACK_INDEX, "dummy0", rtnetlink.IFF_LOOPBACK),)
     ),
@@ -138,11 +137,6 @@ def test_no_route_is_judged_after_mounts_and_before_resource_bounds() -> None:
     assert worker_self_check.first_failing_predicate(snapshot) == Predicate.MOUNTS
     mounted = replace(snapshot, root_read_only=True)
     assert worker_self_check.first_failing_predicate(mounted) == Predicate.NO_ROUTE
-
-
-@pytest.fixture
-def sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    return stage_sealed_root(tmp_path, monkeypatch)
 
 
 @pytest.mark.parametrize(

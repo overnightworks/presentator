@@ -15,6 +15,7 @@ from presentator.adapters import rtnetlink
 from presentator.host import worker_self_check
 from presentator.host.worker_scratch import QUEUE_MOUNT, Scratch
 from presentator.host.worker_self_check import (
+    MAXIMUM_PROCESSES,
     Identity,
     Seal,
     Snapshot,
@@ -59,15 +60,27 @@ SYSV_HEADERS = {
 }
 WORLD_READABLE_EXECUTABLE = 0o755
 LOOPBACK_INDEX = 1
-LOOPBACK_UP = 0x1
+LINK_UP = 0x1
+
+
+def limits_file(soft: str, hard: str) -> str:
+    """The kernel's `proc/self/limits` layout, with the given `Max processes` row."""
+
+    def row(name: str, soft: str, hard: str, units: str = "") -> str:
+        return f"{name:<25} {soft:<20} {hard:<20} {units:<10}\n"
+
+    return (
+        row("Limit", "Soft Limit", "Hard Limit", "Units")
+        + row("Max nice priority", "0", "0")
+        + row("Max processes", soft, hard)
+        + row("Max open files", "1024", "524288", "files")
+    )
 
 
 def sealed_topology() -> rtnetlink.Topology:
     """The loopback with its two addresses and the routes the kernel adds for it."""
     return rtnetlink.Topology(
-        links=(
-            rtnetlink.Link(LOOPBACK_INDEX, "lo", rtnetlink.IFF_LOOPBACK | LOOPBACK_UP),
-        ),
+        links=(rtnetlink.Link(LOOPBACK_INDEX, "lo", rtnetlink.IFF_LOOPBACK | LINK_UP),),
         addresses=(
             rtnetlink.Address(
                 socket.AF_INET, 8, LOOPBACK_INDEX, ipaddress.IPv4Address("127.0.0.1")
@@ -123,6 +136,7 @@ def sealed_snapshot() -> Snapshot:
         docker_socket_present=False,
         pids_max="512",
         memory_max="1073741824",
+        process_limit=(str(MAXIMUM_PROCESSES), str(MAXIMUM_PROCESSES)),
         identity=Identity(
             uid=0,
             euid=0,
@@ -193,6 +207,9 @@ def stage_sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     file_at("proc/self/status", SEALED_STATUS)
     file_at("proc/self/mountinfo", SEALED_MOUNTINFO)
+    file_at(
+        "proc/self/limits", limits_file(str(MAXIMUM_PROCESSES), str(MAXIMUM_PROCESSES))
+    )
     file_at("sys/fs/cgroup/pids.current", "1\n")
     file_at("sys/fs/cgroup/pids.max", "512\n")
     file_at("sys/fs/cgroup/memory.max", "1073741824\n")
