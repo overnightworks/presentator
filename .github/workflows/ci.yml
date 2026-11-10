@@ -53,7 +53,7 @@ jobs:
   tests:
     name: "Python: tests"
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Check out the event commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -85,7 +85,7 @@ jobs:
   speech:
     name: "Speech: lint, tests"
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: speech
@@ -120,7 +120,7 @@ jobs:
   chatterbox-provider:
     name: "Speech: Chatterbox provider"
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: speech/providers/chatterbox
@@ -155,7 +155,7 @@ jobs:
   qwen-provider:
     name: "Speech: Qwen provider"
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: speech/providers/qwen
@@ -191,7 +191,7 @@ jobs:
   voxcpm-provider:
     name: "Speech: VoxCPM provider"
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: speech/providers/voxcpm
@@ -227,7 +227,7 @@ jobs:
   magpie-provider:
     name: "Speech: Magpie provider"
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: speech/providers/magpie
@@ -439,7 +439,7 @@ jobs:
   image:
     name: "Container image"
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Check out the event commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -506,7 +506,7 @@ jobs:
   build-worker:
     name: "Build worker: sealed step"
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 15
     # The file carries its plain values as literals; the probe reads the web's
     # hostname from this environment, and the override below copies both origins
     # into the web. The worker has no env_file and names only the two build
