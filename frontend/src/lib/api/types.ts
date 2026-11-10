@@ -621,6 +621,10 @@ export interface components {
             sign_in_try_again: string;
             /** Sign In Unfinished */
             sign_in_unfinished: string;
+            /** Sign In Window Blocked */
+            sign_in_window_blocked: string;
+            /** Sign In Window Blocked Sentence */
+            sign_in_window_blocked_sentence: string;
             /** Source Access Deploy Key */
             source_access_deploy_key: string;
             /** Source Access Heading */

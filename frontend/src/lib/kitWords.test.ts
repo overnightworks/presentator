@@ -19,7 +19,9 @@ const words = {
 	sign_in_signing_in: 'busy',
 	sign_in_in_other_window: 'elsewhere',
 	sign_in_open_in_tab: 'tab it',
-	sign_in_unfinished: 'not done'
+	sign_in_unfinished: 'not done',
+	sign_in_window_blocked: 'blocked',
+	sign_in_window_blocked_sentence: 'the window was blocked.'
 } as LobbyText;
 
 describe('accountMenuWords', () => {
@@ -47,6 +49,8 @@ describe('signInPageWords', () => {
 			inOtherWindow: 'elsewhere',
 			openInTab: 'tab it',
 			signInUnfinished: 'not done',
+			windowBlocked: 'blocked',
+			windowBlockedSentence: 'the window was blocked.',
 			logOut: 'out'
 		});
 	});

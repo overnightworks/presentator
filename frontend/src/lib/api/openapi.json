@@ -768,6 +768,14 @@
             "title": "Sign In Unfinished",
             "type": "string"
           },
+          "sign_in_window_blocked": {
+            "title": "Sign In Window Blocked",
+            "type": "string"
+          },
+          "sign_in_window_blocked_sentence": {
+            "title": "Sign In Window Blocked Sentence",
+            "type": "string"
+          },
           "source_access_deploy_key": {
             "title": "Source Access Deploy Key",
             "type": "string"
@@ -1233,6 +1241,8 @@
           "sign_in_in_other_window",
           "sign_in_open_in_tab",
           "sign_in_unfinished",
+          "sign_in_window_blocked",
+          "sign_in_window_blocked_sentence",
           "section_decks",
           "section_settings",
           "menu_account",
