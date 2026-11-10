@@ -40,6 +40,7 @@ _SERVER_FAULT: Final = "server error {code}"
 _GET: Final = "GET"
 _DELETE: Final = "DELETE"
 _BEARER_FILE: Final = "token"
+_NAMESPACE_FILE: Final = "namespace"
 _TIMEOUT: Final = "timeout"
 _TRANSPORT: Final = "transport error"
 
@@ -101,7 +102,7 @@ class _Pod(BaseModel):
         return PodState.UNUSED
 
 
-class _Unavailable(Exception):  # noqa: N818 - a signal inside this module
+class _UnavailableError(Exception):
     """A fault the wait retries until its deadline."""
 
 
@@ -140,14 +141,16 @@ class WorkerPod:
             if not value:
                 raise _absent(variable)
         token_file = directory / _BEARER_FILE
-        for file in (token_file, directory / "ca.crt", directory / "namespace"):
+        for file in (token_file, directory / "ca.crt", directory / _NAMESPACE_FILE):
             if not file.is_file():
                 raise _absent(file.name)
         try:
             context = ssl.create_default_context(cafile=directory / "ca.crt")
-            namespace = (directory / "namespace").read_text().strip()
+            namespace = (directory / _NAMESPACE_FILE).read_text().strip()
         except OSError, ssl.SSLError:
             raise _refused(_UNREADABLE) from None
+        if not namespace:
+            raise _absent(_NAMESPACE_FILE)
         return cls(
             name=name,
             base_url=f"https://{host}:{port}",
@@ -180,7 +183,7 @@ class WorkerPod:
                         if uid != first_used:
                             raise _refused(_SUCCESSOR_USED)
                         self._end(client, uid, deadline)
-                except _Unavailable as fault:
+                except _UnavailableError as fault:
                     waiting_for = str(fault)
                 remaining = deadline - self.clock()
                 if remaining <= 0:
@@ -222,7 +225,7 @@ class WorkerPod:
                 _NO_RIGHT_MESSAGE.format(right=right, code=answer.status_code)
             )
         if answer.status_code >= _SERVER_ERROR:
-            return _Unavailable(_SERVER_FAULT.format(code=answer.status_code))
+            return _UnavailableError(_SERVER_FAULT.format(code=answer.status_code))
         return _refused(_UNEXPECTED.format(code=answer.status_code, right=right))
 
     def _send(
@@ -246,6 +249,6 @@ class WorkerPod:
                 timeout=timeout,
             )
         except httpx2.TimeoutException:
-            raise _Unavailable(_TIMEOUT) from None
+            raise _UnavailableError(_TIMEOUT) from None
         except httpx2.TransportError:
-            raise _Unavailable(_TRANSPORT) from None
+            raise _UnavailableError(_TRANSPORT) from None

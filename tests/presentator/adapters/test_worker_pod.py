@@ -1,7 +1,7 @@
 """The web replaces a used worker pod, naming the generation it ends."""
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -108,13 +108,20 @@ def token_file(tmp_path: Path) -> Path:
     return path
 
 
-def a_pod_owner(api: FakeApi, clock: FakeClock, token_file: Path) -> WorkerPod:
+def a_pod_owner(
+    api: FakeApi | httpx2.BaseTransport | Callable[[httpx2.Request], httpx2.Response],
+    clock: FakeClock,
+    token_file: Path,
+) -> WorkerPod:
+    transport = (
+        api if isinstance(api, httpx2.BaseTransport) else httpx2.MockTransport(api)
+    )
     return WorkerPod(
         name=POD_NAME,
         base_url="https://10.0.0.1:443",
         namespace=NAMESPACE,
         token_file=token_file,
-        transport=httpx2.MockTransport(api),
+        transport=transport,
         clock=clock,
         sleep=clock.sleep,
     )
@@ -260,16 +267,17 @@ def test_a_successor_that_is_used_too_is_not_deleted_and_the_start_refuses(
         pytest.param(a_status(503), "server error", id="server-error"),
     ],
 )
+@pytest.mark.parametrize("window", [WINDOW_SECONDS, CONNECT_WINDOW_SECONDS])
 def test_an_api_that_stays_unavailable_refuses_at_the_bound_naming_the_fault(
-    answer: Answer, fault: str, clock: FakeClock, token_file: Path
+    answer: Answer, fault: str, window: float, clock: FakeClock, token_file: Path
 ) -> None:
     api = FakeApi([answer])
     started = clock.now
 
     with pytest.raises(WorkerPodError, match=fault):
-        wait(api, clock, token_file)
+        a_pod_owner(api, clock, token_file).unused_generation(window)
 
-    assert clock.now - started == WINDOW_SECONDS
+    assert clock.now - started == window
     assert set(api.methods()) == {"GET"}
 
 
@@ -307,15 +315,7 @@ def test_the_token_is_read_again_for_every_request(
         token_file.write_text("rotated-token")
         return answer
 
-    pod = WorkerPod(
-        name=POD_NAME,
-        base_url="https://10.0.0.1:443",
-        namespace=NAMESPACE,
-        token_file=token_file,
-        transport=httpx2.MockTransport(rotating),
-        clock=clock,
-        sleep=clock.sleep,
-    )
+    pod = a_pod_owner(rotating, clock, token_file)
     pod.unused_generation(WINDOW_SECONDS)
 
     sent = [request.headers["authorization"] for request in api.requests]
@@ -434,13 +434,33 @@ def test_a_missing_address_or_file_refuses_naming_what_is_missing(
         WorkerPod.in_cluster(POD_NAME, environment=environment, directory=directory)
 
 
-def test_the_window_of_a_wait_is_the_one_the_caller_names(
+def test_a_token_file_that_disappears_refuses_the_first_wait_naming_the_token(
     clock: FakeClock, token_file: Path
 ) -> None:
-    api = FakeApi([httpx2.ConnectError("no route")])
-    started = clock.now
+    api = FakeApi([a_pod("uid-a")])
+    pod = a_pod_owner(api, clock, token_file)
+    token_file.unlink()
 
-    with pytest.raises(WorkerPodError):
-        a_pod_owner(api, clock, token_file).unused_generation(CONNECT_WINDOW_SECONDS)
+    with pytest.raises(WorkerPodError, match="token"):
+        pod.unused_generation(WINDOW_SECONDS)
 
-    assert clock.now - started == CONNECT_WINDOW_SECONDS
+    assert not api.requests
+
+
+@pytest.mark.parametrize(
+    ("file", "content", "refusal"),
+    [
+        pytest.param("ca.crt", "not a certificate", "unreadable", id="garbage-ca"),
+        pytest.param("namespace", "  \n", "namespace is missing", id="empty-namespace"),
+    ],
+)
+def test_a_service_account_file_without_usable_content_refuses(
+    file: str, content: str, refusal: str, tmp_path: Path
+) -> None:
+    directory = a_serviceaccount_directory(tmp_path)
+    (directory / file).write_text(content)
+
+    with pytest.raises(WorkerPodError, match=refusal):
+        WorkerPod.in_cluster(
+            POD_NAME, environment=an_environment(), directory=directory
+        )
