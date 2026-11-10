@@ -282,7 +282,12 @@ def prove_render(run: Run) -> list[Document]:
     overlay.mkdir()
     swap = {"name": PRODUCTION_IMAGE, "newName": PROBE_REPOSITORY}
     (overlay / "kustomization.yaml").write_text(
-        json.dumps({"resources": [app], "images": [{**swap, "newTag": run.identifier}]})
+        json.dumps(
+            {
+                "resources": [os.path.relpath(app, overlay)],
+                "images": [{**swap, "newTag": run.identifier}],
+            }
+        )
     )
     base = documents_of(run("kubectl kustomize", app).stdout)
     rendered = documents_of(run("kubectl kustomize", str(overlay)).stdout)

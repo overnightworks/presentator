@@ -115,6 +115,7 @@ class World:
     )
     failing_command: tuple[str, ...] | None = None
     cell: int = 0
+    overlay_file: str = ""
     commands: list[Issued] = field(default_factory=list[Issued])
 
     def __call__(
@@ -165,12 +166,12 @@ class World:
             return as_yaml_stream(
                 self.statefulset(with_init_container="del(" not in command[1])
             )
-        image = (
-            PRODUCTION_IMAGE
-            if command[2].endswith("apps/presentator")
-            else self.probe_image
-        )
-        return as_yaml_stream(workload_documents(image, image))
+        if command[2].endswith("apps/presentator"):
+            return as_yaml_stream(
+                workload_documents(PRODUCTION_IMAGE, PRODUCTION_IMAGE)
+            )
+        self.overlay_file = (Path(command[2]) / "kustomization.yaml").read_text()
+        return as_yaml_stream(workload_documents(self.probe_image, self.probe_image))
 
     def statefulset(self, *, with_init_container: bool) -> list[Document]:
         document = workload_documents(self.probe_image, self.probe_image)[1]
@@ -328,6 +329,19 @@ def test_drive_passes_when_the_control_and_the_twin_refuse_as_expected(
     fixture.drive()
     assert fixture.world.issued("kubectl", "apply", "--filename", "-") != []
     assert "cell 7" in capsys.readouterr().out
+
+
+def test_the_overlay_names_the_platform_app_by_a_path_relative_to_itself(
+    make_fixture: Callable[..., Fixture],
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    (resource,) = json.loads(fixture.world.overlay_file)["resources"]
+    overlay = fixture.run.directory / "overlay"
+    assert not Path(resource).is_absolute()
+    assert (overlay / resource).resolve() == (
+        fixture.run.platform / "apps" / "presentator"
+    ).resolve()
 
 
 def test_drive_applies_only_the_presentator_namespace_document(
