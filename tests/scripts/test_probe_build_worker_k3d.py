@@ -113,6 +113,8 @@ class World:
             f"start refused: {Predicate.KUBERNETES_UNPROVEN}",
         ]
     )
+    # None is a cell whose worker has no previous run: its `--previous` read fails.
+    previous_logs: list[str | None] = field(default_factory=lambda: [None, None])
     failing_command: tuple[str, ...] | None = None
     cell: int = 0
     overlay_file: str = ""
@@ -123,7 +125,7 @@ class World:
         command: tuple[str, ...],
         environment: Mapping[str, str],
         stdin: str | None,
-    ) -> str:
+    ) -> tuple[int, str]:
         self.commands.append((command, environment, stdin))
         if (
             self.failing_command
@@ -131,9 +133,10 @@ class World:
         ):
             message = "the fake runner broke"
             raise RuntimeError(message)
-        return self.answer(command)
+        answer = self.answer(command)
+        return (1, "") if answer is None else (0, answer)
 
-    def answer(self, command: tuple[str, ...]) -> str:
+    def answer(self, command: tuple[str, ...]) -> str | None:
         match command:
             case ("kubectl", "kustomize", *_) | ("yq", *_):
                 return self.render(command)
@@ -142,12 +145,18 @@ class World:
             case ("kubectl", "get", "pod", name, *_):
                 return json.dumps(self.pod_named(name))
             case ("kubectl", "logs", "build-worker-0", *_):
-                return self.logs[self.cell]
+                return self.worker_log(command)
             case ("kubectl", "delete", "statefulset", *_):
                 self.cell += 1
                 return ""
             case _:
                 return ""
+
+    def worker_log(self, command: tuple[str, ...]) -> str | None:
+        """The worker's previous log when the read asks for it, else its current one."""
+        if "--previous" in command:
+            return self.previous_logs[self.cell]
+        return self.logs[self.cell]
 
     def pod_named(self, name: str) -> Document:
         if name == "build-worker-0":
@@ -233,7 +242,8 @@ def make_fixture(driver: ModuleType, tmp_path: Path) -> Callable[..., Fixture]:
         def run_command(
             command: tuple[str, ...], environment: Mapping[str, str], stdin: str | None
         ) -> object:
-            return driver.Completed(0, world(command, environment, stdin), "")
+            returncode, stdout = world(command, environment, stdin)
+            return driver.Completed(returncode, stdout, "")
 
         def which(tool: str) -> str | None:
             return None if tool == missing else f"/bin/{tool}"
@@ -404,46 +414,114 @@ def test_a_cell_without_termination_in_the_window_fails_naming_the_wait(
     )
 
 
+def judge_cell(
+    make_fixture: Callable[..., Fixture],
+    world: World,
+    refusal: Predicate,
+    *,
+    init_container: bool,
+) -> str:
+    """Judge one cell over the world's worker pod; give the cell's problem, if any."""
+    fixture = make_fixture(world)
+    expectation = fixture.driver.Expectation(
+        refusal=refusal, init_container=init_container
+    )
+    manifest = as_yaml_stream(workload_documents(PRODUCTION_IMAGE, PRODUCTION_IMAGE))
+    return fixture.driver.drive_cell(fixture.run, 7, manifest, expectation)
+
+
 @pytest.mark.parametrize(
-    ("pod_document", "log", "named"),
+    ("pod_document", "current", "previous"),
     [
-        (pod(worker_exit=1), f"start refused: {Predicate.NO_ROUTE}", "exit status 1"),
-        (pod(), f"start refused: {Predicate.ALONE}", Predicate.ALONE),
+        (
+            pod(restarted=False),
+            f"start refused: {Predicate.NO_ROUTE}",
+            "an earlier run",
+        ),
+        (pod(), "", f"start refused: {Predicate.NO_ROUTE}"),
+        (pod(restarted=False), "", f"start refused: {Predicate.NO_ROUTE}"),
+        (pod(restarted=False), f"start refused: {Predicate.NO_ROUTE}", None),
+    ],
+    ids=[
+        "the termination in state, the line in the current log",
+        "the termination in lastState, the line only in the previous log",
+        "the restart race: the current log is empty, the previous log holds the line",
+        "no previous run, the line in the current log",
+    ],
+)
+def test_a_cell_passes_when_the_refusal_is_in_the_current_or_the_previous_log(
+    make_fixture: Callable[..., Fixture],
+    pod_document: Document,
+    current: str,
+    previous: str | None,
+) -> None:
+    world = World(pods=[pod_document], logs=[current], previous_logs=[previous])
+    problem = judge_cell(make_fixture, world, Predicate.NO_ROUTE, init_container=False)
+    assert problem == ""
+
+
+@pytest.mark.parametrize(
+    ("pod_document", "current", "previous", "named"),
+    [
+        (pod(), "current tail", "previous tail", ("current tail", "previous tail")),
+        (
+            pod(worker_exit=1, restarted=False),
+            f"start refused: {Predicate.NO_ROUTE}",
+            "",
+            ("exit status 1",),
+        ),
+        (pod(), f"start refused: {Predicate.ALONE}", "", (Predicate.ALONE,)),
         (
             pod(remove_link_exit=0),
             f"start refused: {Predicate.NO_ROUTE}",
-            "init container",
+            "",
+            ("init container",),
         ),
     ],
     ids=[
-        "another exit status",
-        "another predicate",
+        "neither log holds the line: both tails are named",
+        "the line is present but the exit status differs",
+        "another predicate is in the current log",
         "an init container on the control",
     ],
 )
-def test_the_control_fails_for_each_deviation_and_names_it(
-    driver: ModuleType, pod_document: Document, log: str, named: str
+def test_a_cell_fails_and_names_what_it_showed(
+    make_fixture: Callable[..., Fixture],
+    pod_document: Document,
+    current: str,
+    previous: str,
+    named: tuple[str, ...],
 ) -> None:
-    expectation = driver.Expectation(refusal=Predicate.NO_ROUTE, init_container=False)
-    assert named in driver.worker_problem(pod_document, log, expectation)
+    world = World(pods=[pod_document], logs=[current], previous_logs=[previous])
+    problem = judge_cell(make_fixture, world, Predicate.NO_ROUTE, init_container=False)
+    for fragment in named:
+        assert fragment in problem
 
 
-def test_the_twin_fails_when_remove_link_does_not_end_zero(driver: ModuleType) -> None:
-    expectation = driver.Expectation(
-        refusal=Predicate.KUBERNETES_UNPROVEN, init_container=True
+def test_the_twin_fails_when_remove_link_does_not_end_zero(
+    make_fixture: Callable[..., Fixture],
+) -> None:
+    world = World(
+        pods=[pod(remove_link_exit=1)],
+        logs=[f"start refused: {Predicate.KUBERNETES_UNPROVEN}"],
     )
-    failed_init = pod(remove_link_exit=1)
-    assert "remove-link" in driver.worker_problem(
-        failed_init, f"start refused: {Predicate.KUBERNETES_UNPROVEN}", expectation
+    problem = judge_cell(
+        make_fixture, world, Predicate.KUBERNETES_UNPROVEN, init_container=True
     )
-    assert (
-        driver.worker_problem(
-            pod(remove_link_exit=0),
-            f"start refused: {Predicate.KUBERNETES_UNPROVEN}",
-            expectation,
-        )
-        is None
+    assert "remove-link" in problem
+
+
+def test_the_twin_passes_when_remove_link_ends_zero(
+    make_fixture: Callable[..., Fixture],
+) -> None:
+    world = World(
+        pods=[pod(remove_link_exit=0)],
+        logs=[f"start refused: {Predicate.KUBERNETES_UNPROVEN}"],
     )
+    problem = judge_cell(
+        make_fixture, world, Predicate.KUBERNETES_UNPROVEN, init_container=True
+    )
+    assert problem == ""
 
 
 def change_replicas(documents: list[Document]) -> None:
