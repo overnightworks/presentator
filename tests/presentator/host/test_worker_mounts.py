@@ -257,6 +257,8 @@ def test_work_and_tmp_without_the_hardening_flags_pass_under_kubernetes(
 
 
 def test_the_same_pod_refuses_under_compose_for_the_missing_flags(pod: Path) -> None:
+    remount(pod, SOCKET_DIRECTORY, filesystem="tmpfs")
+
     assert judged(pod, Seal.COMPOSE) == MOUNTS
 
 
