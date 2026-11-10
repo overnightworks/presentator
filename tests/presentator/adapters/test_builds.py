@@ -152,13 +152,13 @@ exec 2>&-
 sleep 60
 """
 # A talk of the size a test asks for, and a step that goes on running after it
-# wrote it: a build is stopped while it writes, not once it is done.
+# wrote it; the pdf is moved in whole, so no watch counts it half-written.
 _A_TOOLCHAIN_THAT_WRITES = (
     _FINDS_ITS_OUTPUT
-    + """a_megabyte=1048576
+    + """a_megabyte=1048576; p="${{out%/*}}/../partial"
 case "$out" in
     *.pdf)
-        dd if=/dev/zero of="$out" bs=$a_megabyte count={pdf} 2>/dev/null
+        dd if=/dev/zero of="$p" bs=$a_megabyte count={pdf} 2>/dev/null && mv "$p" "$out"
         {and_then}
         ;;
     *)
