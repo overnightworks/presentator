@@ -7,7 +7,12 @@ import pytest
 
 from presentator.adapters.builds import DeckToolchain, HostToolchain, SlidevBuilds
 from presentator.adapters.decks import FilesystemLocalMount, SourceMirrors
-from presentator.contracts.decks import Artefacts, BuildFailure, Source
+from presentator.contracts.decks import (
+    Artefacts,
+    BuildFailure,
+    Source,
+    ToolchainUnavailable,
+)
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
 from tests.support.git_remote import with_the_program
 
@@ -96,7 +101,9 @@ def builds_ready_for(
     return builds
 
 
-def what_it_built(built: Artefacts | BuildFailure) -> Artefacts:
+def what_it_built(
+    built: Artefacts | BuildFailure | ToolchainUnavailable,
+) -> Artefacts:
     """What the build left, for a test that has already said it expects a talk."""
     assert isinstance(built, Artefacts)
     return built

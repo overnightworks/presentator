@@ -20,11 +20,8 @@ from presentator.contracts.decks import (
     MANIFEST_FILE,
     RECENT_SOURCE_RUNS,
     AccessKind,
-    BuildAttempt,
     BuildFailure,
-    BuildOutcome,
     ConnectionCheckResult,
-    Deck,
     DeckFolder,
     DeckPage,
     DeckState,
@@ -48,6 +45,7 @@ from tests.presentator.application.support.decks_support import (
     DecksFakes,
     a_folder,
     a_source,
+    a_store_that_was_left_building,
     carrying,
     decks_over,
     having,
@@ -87,36 +85,6 @@ _HTTPS_SOURCE = Source(
 _A_LATER_COMMIT = "b7c1d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80"
 _SHORT_LATER_COMMIT = "b7c1d9e"
 _WHAT_THE_TOOLCHAIN_SAID = "slides.md:41:3 Unexpected token in frontmatter"
-
-
-def a_store_that_was_left_building(*, started_ago: timedelta) -> FakeDeckStore:
-    """A deck whose build said it began and never reported back.
-
-    What a server that was restarted mid-build leaves behind.
-    """
-    store = FakeDeckStore()
-    store.put(
-        Deck(
-            slug="kundenfeedback",
-            title="A talk",
-            changed_at=NOW - timedelta(minutes=2),
-            owner_id=OWNER,
-            source_id=SOURCE.id,
-            commit=COMMIT,
-            build=None,
-            attempt=None,
-        ),
-    )
-    store.put_attempt(
-        "kundenfeedback",
-        BuildAttempt(
-            commit=COMMIT,
-            started_at=NOW - started_ago,
-            outcome=BuildOutcome.RUNNING,
-            failure=None,
-        ),
-    )
-    return store
 
 
 def refreshed(decks: Decks) -> tuple[ListedDeck, ...]:

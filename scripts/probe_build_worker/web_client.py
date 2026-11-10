@@ -26,6 +26,7 @@ from presentator.contracts.decks import (
     OUTPUT_DIRECTORY,
     PDF_FILE,
     TALK_DIRECTORY,
+    BuildFailure,
     StepKind,
 )
 from presentator.host.config import load_settings
@@ -156,7 +157,7 @@ def main(case: Case, kinds: list[StepKind]) -> None:
             )
         )
         step: dict[str, object] = {"step": kind.value, "failed": failure is not None}
-        if failure is not None:
+        if isinstance(failure, BuildFailure):
             step["failure"] = {
                 "reason": failure.reason.value,
                 "text": failure.text,
