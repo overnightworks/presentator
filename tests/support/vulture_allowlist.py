@@ -198,6 +198,8 @@ LobbyText.sign_in_signing_in
 LobbyText.sign_in_in_other_window
 LobbyText.sign_in_open_in_tab
 LobbyText.sign_in_unfinished
+LobbyText.sign_in_window_blocked
+LobbyText.sign_in_window_blocked_sentence
 LobbyText.legal_impressum
 LobbyText.legal_datenschutz
 LobbyText.legal_nutzungsbedingungen

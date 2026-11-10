@@ -25,6 +25,8 @@ export function signInPageWords(words: LobbyText): SignInPageWords {
 		inOtherWindow: words.sign_in_in_other_window,
 		openInTab: words.sign_in_open_in_tab,
 		signInUnfinished: words.sign_in_unfinished,
+		windowBlocked: words.sign_in_window_blocked,
+		windowBlockedSentence: words.sign_in_window_blocked_sentence,
 		logOut: words.log_out
 	};
 }

@@ -30,6 +30,8 @@ class LobbyText:
     sign_in_in_other_window: str
     sign_in_open_in_tab: str
     sign_in_unfinished: str
+    sign_in_window_blocked: str
+    sign_in_window_blocked_sentence: str
     section_decks: str
     section_settings: str
     menu_account: str

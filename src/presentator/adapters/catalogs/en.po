@@ -69,6 +69,12 @@ msgstr "Open in a tab"
 msgid "sign_in_unfinished"
 msgstr "Sign-in did not finish."
 
+msgid "sign_in_window_blocked"
+msgstr "Window blocked"
+
+msgid "sign_in_window_blocked_sentence"
+msgstr "Your browser blocked the sign-in window."
+
 msgid "legal_impressum"
 msgstr "Impressum"
 
