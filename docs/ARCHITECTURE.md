@@ -142,7 +142,9 @@ PCM, transcripts, spoken sentences and two tokens: the person's access token, wh
 carries the account's subject and group memberships, and presentator's workload
 token beside it. Browser cookies and session credentials are not forwarded; what the
 service keeps, logs and admits is the shared section `#sprachdienst`. No operator blessing
-narrows this model yet, so an audit keeps the default trust model.
+narrows this model yet, so an audit keeps the default trust model. In a cluster the
+web holds one more credential: its service account's token may get and delete the
+build worker's one named pod and nothing else, and the worker holds none.
 
 A bearer enters the lobby through two paths besides hal's token clients, and
 both take `/mcp` and the routes marked as tools, and nothing that deletes,

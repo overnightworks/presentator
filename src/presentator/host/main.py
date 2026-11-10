@@ -73,6 +73,7 @@ from presentator.adapters.speech import (
     SpeechSpeaking,
     silence_transport_traces,
 )
+from presentator.adapters.worker_pod import WorkerPod, WorkerPodError
 from presentator.agent.backend import gateway_answerer
 from presentator.agent.mcp import (
     install_mcp_front,
@@ -459,8 +460,16 @@ def build_bound_of(settings: Settings) -> timedelta:
     return timedelta(seconds=settings.build_timeout_seconds)
 
 
-def the_build_worker(settings: Settings, *, bound: timedelta) -> WorkerToolchain:
-    """The sealed build worker, which has to answer before anything is served."""
+def the_build_worker(
+    settings: Settings, *, bound: timedelta, pod: WorkerPod | None = None
+) -> WorkerToolchain:
+    """The sealed build worker, which has to answer before anything is served.
+
+    Where the deployment names the worker's pod, a pod that has ended a life is
+    replaced first, so the worker that answers is a fresh one. `pod` is the
+    cluster's pod when a test or probe brings its own; otherwise it is built from
+    the cluster's files.
+    """
     toolchain = WorkerToolchain(
         socket_path=settings.build_worker_socket,
         megabytes=settings.build_output_megabytes,
@@ -473,11 +482,23 @@ def the_build_worker(settings: Settings, *, bound: timedelta) -> WorkerToolchain
         settings.build_worker_socket,
         toolchain.connect_window_seconds,
     )
+    if settings.build_worker_pod is not None:
+        _an_unused_worker_pod(settings.build_worker_pod, toolchain, pod)
     if not toolchain.is_answering():
         raise cannot_start(
             _WORKER_NOT_ANSWERING.format(window=toolchain.connect_window_seconds)
         )
     return toolchain
+
+
+def _an_unused_worker_pod(
+    name: str, toolchain: WorkerToolchain, pod: WorkerPod | None
+) -> None:
+    try:
+        pod = pod or WorkerPod.in_cluster(name, environment=os.environ)
+        pod.unused_generation(toolchain.connect_window_seconds)
+    except WorkerPodError as unusable:
+        raise cannot_start(str(unusable)) from None
 
 
 def web_auth_config_for(

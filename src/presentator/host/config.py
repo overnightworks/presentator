@@ -26,6 +26,9 @@ from presentator.agent.settings import AgentSettings
 SECRET_LENGTH: Final = 32
 
 _INVALID_PORT: Final = "has an invalid port"
+_DNS_SUBDOMAIN: Final = re.compile(
+    r"(?=.{1,253}\Z)[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*"
+)
 _SCOPE_TOKEN: Final = re.compile(r"[\x21\x23-\x5B\x5D-\x7E]+")
 _REFUSED: Final = "this environment cannot start an instance"
 _EMPTY_CLIENT_ID: Final = "token_clients: names an empty client id"
@@ -155,6 +158,13 @@ def _an_absolute_path(given: Path) -> Path:
     return given
 
 
+def _a_dns_subdomain(given: str) -> str:
+    if not _DNS_SUBDOMAIN.fullmatch(given):
+        message = "is a DNS-1123 subdomain, a pod's name"
+        raise ValueError(message)
+    return given
+
+
 class Settings(
     BaseSettings,
     env_prefix=ENVIRONMENT_PREFIX,
@@ -190,6 +200,10 @@ class Settings(
     build_worker_socket: Annotated[Path, AfterValidator(_an_absolute_path)] = (
         Path(SOCKET_DIRECTORY) / SOCKET_NAME
     )
+    # The pod the build worker runs in when the deployment is a cluster: the web
+    # replaces a used one before it asks the worker anything. Unset, nothing asks
+    # the cluster; only the worker build runner reads it.
+    build_worker_pod: Annotated[str, AfterValidator(_a_dns_subdomain)] | None = None
     # What one build may leave behind, in whole megabytes for its talk.
     build_output_megabytes: int = DEFAULT_BUILD_OUTPUT_MEGABYTES
     # Polling is what makes a push arrive at all, so it runs whether or not any
