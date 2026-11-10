@@ -1,7 +1,0 @@
-claim_id = "3d4202c46fdd431e97bf785136a5fa73"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "5912e3a90633d694227dfc8a3425b398bd9e3536"
-branch = "claude/issue-995-the-greedy-build-test-sees-its-pdf-only"
-scope = ["tests/presentator/adapters/test_builds.py"]
-opened_commit = "d55f7968068703b4f4927b72285c6811b82e5c83"
