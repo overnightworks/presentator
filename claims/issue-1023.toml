@@ -1,8 +1,0 @@
-claim_id = "c1d72f3e41c64e71acaeb9265b42d7bd"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "da0c463b565175e965437bef8c290cdf850ab40f"
-branch = "claude/issue-1023-unstarted-build-is-no-attempt"
-scope = ["quality/baseline.toml", "scripts/probe_build_worker/web_client.py", "src/presentator/adapters/build_worker.py", "src/presentator/adapters/builds.py", "src/presentator/adapters/deck_store.py", "src/presentator/application/deck_builds.py", "src/presentator/application/decks.py", "src/presentator/contracts/decks.py", "src/presentator/ports/decks.py", "tests/presentator/adapters/support/build_support.py", "tests/presentator/adapters/test_build_worker.py", "tests/presentator/adapters/test_builds.py", "tests/presentator/adapters/test_builds_toolchain_unavailable.py", "tests/presentator/adapters/test_deck_store_failures.py", "tests/presentator/application/support/decks_support.py", "tests/presentator/application/support/fakes.py", "tests/presentator/application/test_decks.py", "tests/presentator/application/test_decks_toolchain_unavailable.py"]
-opened_commit = "64b442d4cecfef5c6db805702e2d7deb4a50d8e3"
-whole_reason = "The fault is told apart in the worker client and acted on in the use case; the value between them and the store's put-back have no caller alone."
