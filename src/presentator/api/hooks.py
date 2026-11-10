@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
 from typing import Annotated, Final
 
-from agent_runtime_client.tools import not_an_agent_tool
+from agents.tools import not_an_agent_tool
 from fastapi import APIRouter, Header, Request, Response
 from webauth.proxies import request_is_https
 

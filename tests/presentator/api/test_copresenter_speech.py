@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Final
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from agent_runtime_client.backend.fake_gateway import FakeGateway, completion
+from agents.backend.fake_gateway import FakeGateway, completion
 from fastapi import Response, WebSocket
 from fastapi.responses import JSONResponse
 from speech_client import wire

@@ -25,7 +25,7 @@
 
 - The operator decides product, legal wording and releases.
 - speech decides the speech service and its client.
-- agent-runtime decides the agent client and gateway.
+- agents decides the agent client and gateway.
 - webauth decides sign-in.
 - quality decides the gate.
 - platform decides deployment and the shared privacy sections.

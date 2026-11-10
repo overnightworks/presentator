@@ -8,7 +8,7 @@ renderer or the sign-in wiring to know the person.
 from dataclasses import dataclass
 from http import HTTPStatus
 
-from agent_runtime_client.tools import not_an_agent_tool
+from agents.tools import not_an_agent_tool
 from fastapi import Request
 from starlette.requests import HTTPConnection
 from webauth.config import web_auth_config

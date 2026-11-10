@@ -18,7 +18,7 @@ from mimetypes import guess_type
 from pathlib import Path
 from typing import BinaryIO, Final
 
-from agent_runtime_client.tools import not_an_agent_tool
+from agents.tools import not_an_agent_tool
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool

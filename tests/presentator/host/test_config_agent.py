@@ -6,7 +6,7 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
-from agent_runtime_client.mcp_wire import MCP_ENDPOINT_PATH
+from agents.mcp_wire import MCP_ENDPOINT_PATH
 from fastapi.testclient import TestClient
 
 from presentator.host.config import ConfigurationError, load_settings

@@ -5,7 +5,7 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pytest
-from agent_runtime_client.tools import (
+from agents.tools import (
     AGENT_TOOL_EXTENSION,
     ToolEffect,
     ToolMark,

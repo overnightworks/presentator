@@ -8,10 +8,10 @@ date = 2026-10-24
 reason = "the host co-presenter package is deleted (D1 of #355, operator ruling 21.10.2026); its job checks code that no longer exists"
 
 [[gate.loosened]]
-what = 'import contract "Only adapters import agent_runtime_client" changes source_modules'
-item = "#935"
-date = 2026-11-09
-reason = "each route module declares its agent-tool decision beside the route with agent_runtime_client.tools, the one module import-linter cannot separate from the rest of the client; tests/presentator/agent/test_backend_imports.py (C14) holds api to that module alone, and host, application, ports and contracts stay forbidden"
+what = 'import contract "Only adapters import agent_runtime_client" removed'
+item = "#993"
+date = 2026-11-10
+reason = "the contract is renamed, not dropped: \"Only adapters import agents\" forbids the same source modules from importing the renamed library; api stays out of the source modules because each route module declares its agent-tool decision beside the route with agents.tools, the one module import-linter cannot separate from the rest of the library, and tests/presentator/agent/test_backend_imports.py (C14) holds api to that module alone"
 
 [[gate.loosened]]
 what = 'import contract "Only adapters import speech_runtime_client" removed'

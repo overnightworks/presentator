@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from http import HTTPStatus
 from typing import Final
 
-from agent_runtime_client.tools import ToolEffect, agent_tool
+from agents.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict
 
