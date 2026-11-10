@@ -1,7 +1,0 @@
-claim_id = "3fab4481c1574f41b313caf26edad43a"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "a7ac71f02f7a1c430424d4c67235402875bb1045"
-branch = "claude/issue-1026-build-walk-own-module"
-scope = ["quality/baseline.toml", "src/presentator/application/deck_builds.py", "src/presentator/application/decks.py"]
-opened_commit = "23022c085a238975ef863f091c678e2516d31261"
