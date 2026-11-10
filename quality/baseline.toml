@@ -5,7 +5,7 @@
 
 [file_lines]
 "speech/tests/test_control_voice_status.py" = 1473
-"src/presentator/application/decks.py" = 823
+"src/presentator/application/decks.py" = 824
 "tests/gitmirror/test_mirror.py" = 1112
 "tests/presentator/adapters/test_builds.py" = 1106
 "tests/presentator/adapters/test_decks.py" = 1340

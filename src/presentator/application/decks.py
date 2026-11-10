@@ -718,7 +718,6 @@ class Decks:
         if not self.one_at_a_time.acquire(blocking=False):
             return busy
         try:
-            self.builds.toolchain_unavailable.clear()
             answer = work()
             build_retention.sweep(self.builder, self.sources, self.store)
             return answer
@@ -737,35 +736,37 @@ class Decks:
         opening as many pulls at once as the instance has sources.
         """
         self.key_drafts.sweep(older_than=self.clock.now() - DRAFT_MAX_AGE)
+        building = True
         for source in self.sources.all():
-            self._take_in_and_count(source)
+            building = self._take_in_and_count(source, building=building)[1]
 
     def _take_in_and_build_named(self, name: str) -> SourceFetch | None:
         """Take that source in, read again now that nobody can remove it."""
         source = self._named(name)
-        return None if source is None else self._take_in_and_count(source)
+        return None if source is None else self._take_in_and_count(source)[0]
 
-    def _take_in_and_count(self, source: Source) -> SourceFetch:
-        """Take that source in, build what changed and count what that was."""
+    def _take_in_and_count(
+        self, source: Source, *, building: bool = True
+    ) -> tuple[SourceFetch, bool]:
+        """Take that source in, build it, count that, say if building goes on."""
         carried_before = self._visible_slugs(source)
         at = self.clock.now()
         poll = self.folders.folders(source)
         run = self._record_run(source, poll, at)
         if poll.folders is not None:
             self._take_in(source, poll.folders, at)
-        delivered = self.builds.build_what_changed(source)
-        return SourceFetch(
+        walk = self.builds.build_what_changed(source, building=building)
+        fetch = SourceFetch(
             run=shown_run(run),
-            decks_built=sum(delivered),
-            builds_failed=len(delivered) - sum(delivered),
+            decks_built=sum(walk.delivered),
+            builds_failed=len(walk.delivered) - sum(walk.delivered),
             decks_removed=len(carried_before - self._visible_slugs(source)),
         )
+        return fetch, walk.still_building
 
     def _visible_slugs(self, source: Source) -> frozenset[str]:
         """The slugs of the decks that source carries and the lobby lists."""
-        return frozenset(
-            deck.slug for deck in self.store.all() if deck.source_id == source.id
-        )
+        return frozenset(d.slug for d in self.store.all() if d.source_id == source.id)
 
     def _record_run(self, source: Source, poll: SourcePoll, at: datetime) -> SourceRun:
         """Record what the poll found or failed to as the source's newest run."""
