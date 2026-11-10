@@ -35,7 +35,7 @@ from probe_build_worker_lives import (
     start_client,
     wait_for_uptime,
 )
-from probe_build_worker_uploads import UPLOAD_CLASSES, Ending, UploadClass
+from probe_build_worker_uploads import Ending, UploadClass, upload_rows_of_shard
 
 from presentator.adapters.build_wire import SOCKET_DIRECTORY, SOCKET_NAME
 from presentator.contracts.decks import DECK_DIRECTORY, OUTPUT_DIRECTORY
@@ -293,12 +293,15 @@ def prove_refused_upload(name: str, row: UploadClass) -> str:
     return f"{name}: {line}; {row.life_end}; {seconds:.0f}s; ended {ended}"
 
 
-def prove_refused_uploads(report: Report) -> None:
-    """Cell 50: each crafted upload is refused in a life of its own, writing nothing."""
+def prove_refused_uploads(report: Report, shard: int, shards: int) -> None:
+    """Cell 50: each upload of one share is refused in its own life, writing nothing."""
+    rows = upload_rows_of_shard(shard, shards)
     control = prove_control_life()
     say(control)
-    for name, row in UPLOAD_CLASSES.items():
+    for name, row in rows.items():
         say(f"cell 50 row {prove_refused_upload(name, row)}")
     report.cell(
-        "50", f"{len(UPLOAD_CLASSES)} refused uploads, one life each; {control}"
+        "50",
+        f"share {shard} of {shards}: {len(rows)} refused uploads, one life each; "
+        f"{control}",
     )
