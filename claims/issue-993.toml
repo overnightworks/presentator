@@ -1,0 +1,8 @@
+claim_id = "cc5afe24ccd444fd8ca2eb0e792562e7"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "85f94b77846f3a7b2343d531ef2f57c1b4c7eff9"
+branch = "claude/issue-993-take-agents-0-29-0"
+scope = ["AGENTS.md", "docs/ARCHITECTURE.md", "pyproject.toml", "quality/config.toml", "src/presentator/agent/__init__.py", "src/presentator/agent/backend.py", "src/presentator/agent/mcp.py", "src/presentator/agent/settings.py", "src/presentator/api/admission.py", "src/presentator/api/auth.py", "src/presentator/api/deck_api.py", "src/presentator/api/deck_list_api.py", "src/presentator/api/deck_text_api.py", "src/presentator/api/decks.py", "src/presentator/api/health.py", "src/presentator/api/hooks.py", "src/presentator/api/preference_api.py", "src/presentator/api/session_api.py", "tests/presentator/agent/support/mcp_world.py", "tests/presentator/agent/test_backend.py", "tests/presentator/agent/test_backend_imports.py", "tests/presentator/agent/test_mcp_front.py", "tests/presentator/agent/test_mcp_tools.py", "tests/presentator/api/test_copresenter_answer.py", "tests/presentator/api/test_copresenter_speech.py", "tests/presentator/host/test_config_agent.py", "tests/support/copresenter_support.py", "tests/support/lobby.py", "tests/support/speech_drive.py", "uv.lock"]
+opened_commit = "5fbf9dcbcf908dd07c4f11666076f4970585e813"
+whole_reason = "The pin, the import rename it forces and the outcome match that replaces the code match are one bump; split, either the lock, the imports or the type check fail."
