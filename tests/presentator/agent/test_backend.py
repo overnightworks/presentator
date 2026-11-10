@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 import logging
 from typing import TYPE_CHECKING
@@ -34,6 +35,7 @@ from presentator.agent.backend import (
     COPRESENTER_AGENT_FILE,
     SHOW_SLIDE,
     GatewayAnswerer,
+    GatewayBackend,
     gateway_answerer,
 )
 from presentator.contracts.copresenter import (
@@ -80,6 +82,18 @@ def answerer_over(
 ) -> GatewayAnswerer:
     relying_party = a_relying_party(FrozenClock(instant=NOW), issuer=issuer)
     return gateway_answerer(an_agent_config(), relying_party, transport=transport)
+
+
+def answerer_on_a_ticking_clock(
+    transport: httpx2.AsyncBaseTransport,
+) -> GatewayAnswerer:
+    """An answerer whose run clock reads one second more at every look."""
+    seconds = itertools.count()
+    return GatewayAnswerer(
+        GatewayBackend(an_agent_config(), tools=[SHOW_SLIDE], transport=transport),
+        a_relying_party(FrozenClock(instant=NOW), issuer=AN_ISSUER),
+        monotonic=lambda: float(next(seconds)),
+    )
 
 
 async def answered(
@@ -474,17 +488,22 @@ async def test_a_tool_rounds_pieces_come_before_its_slide_move() -> None:
 
 
 @on_an_event_loop
-async def test_every_slide_move_of_a_run_reaches_the_window_in_order() -> None:
-    """A second move in one run is not dropped."""
+async def test_every_slide_move_of_a_run_reaches_the_window_in_order(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A second move in one run is not dropped, and the move time stays the first's."""
+    caplog.set_level(logging.DEBUG)
     gateway = FakeGateway(
         tool_round(tool_call("call-1", "show_slide", {"number": 2})),
         tool_round(tool_call("call-2", "show_slide", {"number": 5})),
         completion("Gut."),
     )
 
-    events = await answered(answerer_over(gateway))
+    events = await answered(answerer_on_a_ticking_clock(gateway))
 
+    (line,) = [r.getMessage() for r in caplog.records if r.name == LOGGER]
     assert events == [ShowSlide(number=2), ShowSlide(number=5), "Gut."]
+    assert " move_ms=1000" in line
 
 
 @pytest.mark.parametrize(

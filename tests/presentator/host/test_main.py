@@ -108,9 +108,11 @@ def signed_in(
     return client
 
 
-def test_the_composition_root_serves_a_lobby_that_answers_the_login(
+@pytest.fixture
+def served_by_main(
     environment: pytest.MonkeyPatch,
-) -> None:
+) -> tuple[list[Router], list[uvicorn.Config]]:
+    """What the composition root hands the server, recorded instead of served."""
     served: list[Router] = []
     configs: list[uvicorn.Config] = []
 
@@ -127,12 +129,27 @@ def test_the_composition_root_serves_a_lobby_that_answers_the_login(
 
     main.main()
 
+    return served, configs
+
+
+def test_the_composition_root_serves_a_lobby_that_answers_the_login(
+    served_by_main: tuple[list[Router], list[uvicorn.Config]],
+) -> None:
+    served, _ = served_by_main
+
     assert len(served) == 1
-    assert configs[0].ws == "wsproto"
     browser = TestClient(
         served[0], base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS
     )
     assert browser.get("/login").is_success
+
+
+def test_the_composition_root_serves_websockets_through_wsproto(
+    served_by_main: tuple[list[Router], list[uvicorn.Config]],
+) -> None:
+    _, configs = served_by_main
+
+    assert configs[0].ws == "wsproto"
 
 
 def test_a_trusted_proxy_list_that_is_not_addresses_refuses_to_start(

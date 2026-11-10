@@ -25,8 +25,8 @@ about sources stand in [configuration](configuration.md) and the runbook to
   malformed one is refused, and a trailing `/` or surrounding space is dropped.
   The folder is set at Create and not editable, and the source's page names
   it. Check connection does not look at it, and a folder that is missing or is
-  a file reads as an emptied branch (DK15). One address stays one source, so a second source on the same address
-  with another folder is a duplicate address.
+  a file reads as an emptied branch (DK15). One address stays one source, so a
+  second source on the same address with another folder is a duplicate address.
 - **SR9** The folder column is additive, so an older release still reads and
   writes the table, but it reads a stored folder as the top of the repository.
   Its next refresh then marks that source's nested decks removed, and a

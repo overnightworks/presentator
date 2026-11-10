@@ -17,6 +17,7 @@ from presentator.adapters.worker_children import (
     GatedChild,
     spawn_gated,
 )
+from presentator.host.worker_self_check import WIRE_IDENTITY
 from presentator.host.worker_serving import StepEffects, WireChild
 
 if TYPE_CHECKING:
@@ -26,7 +27,8 @@ STEP_PROJECT = Path("/test/project")
 OWN_IDENTITY = ChildIdentity(os.getuid(), os.getgid(), extra_groups=None)
 
 
-GATED_STATUS = "Uid:\t10002\t10002\t10002\t10002"
+_WIRE_UID = WIRE_IDENTITY[0]
+GATED_STATUS = f"Uid:\t{_WIRE_UID}\t{_WIRE_UID}\t{_WIRE_UID}\t{_WIRE_UID}"
 
 
 ADMITTING_PATH = "/opt/test/bin"
