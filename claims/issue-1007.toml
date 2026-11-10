@@ -1,0 +1,8 @@
+claim_id = "1631e231a54a40aab9b2c93f0f83fbed"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "82173328940611ada93996350137a08d12a1f5fa"
+branch = "claude/issue-1007-copresenter-busy-budget-words"
+scope = ["docs/co-presenter.md", "slidev/components/CoPresenter.vue", "slidev/tests/copresenter-refusals.browser.test.ts", "src/presentator/agent/backend.py", "src/presentator/api/copresenter.py", "src/presentator/contracts/copresenter.py", "tests/presentator/agent/test_backend.py", "tests/presentator/api/test_copresenter_answer.py"]
+opened_commit = "53f9581632c9a5003ca4eb56f8615613dad989c0"
+whole_reason = "One outcome travels from the contract through the backend and the answer stream to the overlay word and its CP6 row; a part alone would be a reason nobody shows."
