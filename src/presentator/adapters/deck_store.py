@@ -172,19 +172,10 @@ class SqliteDeckStore:
                 ),
             )
 
-    def put_attempt(self, slug: str, attempt: BuildAttempt) -> None:
+    def put_attempt(self, slug: str, attempt: BuildAttempt | None) -> None:
         """Write down the build this deck last started, and how far it got."""
         with rows(self.database) as cursor:
-            cursor.execute(
-                _PUT_ATTEMPT,
-                (
-                    attempt.commit,
-                    attempt.started_at.isoformat(),
-                    attempt.outcome.value,
-                    *_failure_columns(attempt.failure),
-                    slug,
-                ),
-            )
+            cursor.execute(_PUT_ATTEMPT, (*_attempt_columns(attempt), slug))
 
     def get(self, slug: str) -> Deck | None:
         """Read the one deck row that slug names, while its folder is still there."""
@@ -261,6 +252,18 @@ def _build(
         pdf=Path(pdf),
         commit=commit,
         built_at=datetime.fromisoformat(built_at),
+    )
+
+
+def _attempt_columns(attempt: BuildAttempt | None) -> _AttemptColumns:
+    """The columns an attempt is written as; no attempt is all of them empty."""
+    if attempt is None:
+        return (None, None, None, None, None, None, None, None)
+    return (
+        attempt.commit,
+        attempt.started_at.isoformat(),
+        attempt.outcome.value,
+        *_failure_columns(attempt.failure),
     )
 
 

@@ -31,6 +31,7 @@ from presentator.contracts.decks import (
     SourceRun,
     SourceRunFailure,
     SourceWrite,
+    ToolchainUnavailable,
     local_mount_path_of,
 )
 from presentator.contracts.models import User
@@ -576,7 +577,7 @@ class FakeDeckStore:
         assert deck.build is not None
         self.kept[slug] = replace(deck, build=replace(deck.build, directory=talk))
 
-    def put_attempt(self, slug: str, attempt: BuildAttempt) -> None:
+    def put_attempt(self, slug: str, attempt: BuildAttempt | None) -> None:
         self.kept[slug] = replace(self.kept[slug], attempt=attempt)
 
     def get(self, slug: str) -> Deck | None:
@@ -676,6 +677,8 @@ class FakeBuildRunner:
     root: Path = BUILDS_ROOT
     fails: bool = False
     says: str | None = None
+    # The way a build worker that does not answer ends a build before any step.
+    unavailable: bool = False
     writes_outside_the_root: bool = False
     built: list[str] = field(default_factory=list[str])
     from_source: dict[str, str] = field(default_factory=dict[str, str])
@@ -689,11 +692,15 @@ class FakeBuildRunner:
     # Whether listing the root breaks off, the way an unreadable one does.
     listing_fails: bool = False
 
-    def build(self, deck: Deck, *, source: Source) -> Artefacts | BuildFailure:
+    def build(
+        self, deck: Deck, *, source: Source
+    ) -> Artefacts | BuildFailure | ToolchainUnavailable:
         self.built.append(deck.slug)
         self.from_source[deck.slug] = source.id
         if self.while_building is not None:
             self.while_building(deck)
+        if self.unavailable:
+            return ToolchainUnavailable()
         if self.fails:
             return BuildFailure.said(self.says)
         root = _SOMEWHERE_ELSE if self.writes_outside_the_root else self.root

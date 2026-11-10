@@ -27,6 +27,7 @@ from presentator.adapters.build_wire import (
     send_status,
 )
 from presentator.adapters.build_worker import (
+    Fault,
     SocketFault,
     what_is_wrong,
 )
@@ -38,6 +39,7 @@ from presentator.contracts.decks import (
     BuildFailure,
     BuildFailureReason,
     StepKind,
+    ToolchainUnavailable,
 )
 from presentator.host import worker
 from tests.presentator.adapters.support.build_worker_support import (
@@ -57,6 +59,7 @@ from tests.support import worker_support as support
 from tests.support.worker_support import OWN_GID, OWN_UID
 
 PROMPTLY = 10
+UNAVAILABLE = ToolchainUnavailable()
 WINDOW_TOLERANCE = 0.1
 AS_ROOT = pytest.mark.skipif(
     os.geteuid() == 0, reason="root ignores file modes, so 000 refuses nothing"
@@ -274,6 +277,48 @@ def test_a_peer_that_does_not_speak_the_wire_is_not_answering(volume: Path) -> N
         assert not toolchain(volume).is_answering()
 
 
+def a_peer_speaking_another_wire(
+    connection: socket.socket, _seen: Seen, _uploads: Path
+) -> None:
+    read_request(connection)
+    connection.sendall(b"nonsense")
+
+
+@pytest.mark.parametrize(
+    ("script", "fault"),
+    [
+        pytest.param(None, Fault.DEADLINE, id="no worker within the window"),
+        pytest.param(
+            closing_first(50, answering(nothing_to_reply), after_the_request=True),
+            Fault.DEADLINE,
+            id="a worker closing before its STATUS",
+        ),
+        pytest.param(
+            a_peer_speaking_another_wire, Fault.REPLY_GRAMMAR, id="another wire"
+        ),
+    ],
+)
+def test_a_step_the_worker_never_answered_is_unavailable_and_names_the_fault(
+    volume: Path,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    script: Script | None,
+    fault: Fault,
+) -> None:
+    """Cells B1, B5 and B22: nothing before the STATUS says anything about a deck."""
+    step = a_step(tmp_path)
+
+    with caplog.at_level(logging.WARNING):
+        if script is None:
+            result = toolchain(volume / "absent").ran(step)
+        else:
+            with fake_worker(volume, script, accepts=50):
+                result = toolchain(volume).ran(step)
+
+    assert result == UNAVAILABLE
+    assert fault.value in caplog.text
+
+
 @pytest.mark.parametrize("closes", [1, 3])
 @pytest.mark.parametrize("after_the_request", [False, True])
 def test_a_worker_closing_then_answering_serves_start_build_and_export(
@@ -306,7 +351,7 @@ def test_a_directory_that_is_not_the_workers_is_refused_without_a_byte_or_a_retr
             volume, expected_uid=OWN_UID + 1, connect_window_seconds=30.0
         ).ran(a_step(tmp_path))
 
-    assert refused == WITHOUT_A_REASON
+    assert refused == UNAVAILABLE
     assert not seen.steps
     assert time.monotonic() - started < PROMPTLY
 
@@ -403,7 +448,7 @@ def test_a_step_against_an_unsearchable_directory_fails_at_once(
     with a_worker_arriving_after(volume, None):
         result = toolchain(volume, connect_window_seconds=30.0).ran(a_step(tmp_path))
 
-    assert result == WITHOUT_A_REASON
+    assert result == UNAVAILABLE
     assert time.monotonic() - started < PROMPTLY
 
 
@@ -464,7 +509,7 @@ def test_a_status_later_than_the_window_fails_at_it_with_no_upload_byte_sent(
         result = toolchain(volume).ran(a_step(tmp_path))
         elapsed = time.monotonic() - started
 
-    assert result == WITHOUT_A_REASON
+    assert result == UNAVAILABLE
     assert abs(elapsed - WINDOW) < WINDOW_TOLERANCE
     assert seen_late == [b""]
 

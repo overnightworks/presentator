@@ -16,7 +16,7 @@ from functools import partial
 from hashlib import sha256
 from hmac import compare_digest
 from pathlib import Path, PurePosixPath
-from threading import RLock
+from threading import Event, RLock
 from typing import BinaryIO, Final
 
 from presentator.application import build_retention
@@ -53,6 +53,7 @@ from presentator.contracts.decks import (
     SourceRunOutcome,
     SourceState,
     SourceWrite,
+    ToolchainUnavailable,
     access_kind_of,
     is_a_folder_path,
     is_a_plain_folder_name,
@@ -240,6 +241,7 @@ class Decks:
     # URL and secret it never actually proved reachable.
     fingerprint_key: bytes
     one_at_a_time: RLock = field(default_factory=RLock)
+    toolchain_unavailable: Event = field(default_factory=Event)
 
     def refresh(self) -> None:
         """Take the sources in and build what changed, one refresh at a time.
@@ -707,6 +709,7 @@ class Decks:
         if not self.one_at_a_time.acquire(blocking=False):
             return busy
         try:
+            self.toolchain_unavailable.clear()
             answer = work()
             build_retention.sweep(self.builder, self.sources, self.store)
             return answer
@@ -821,18 +824,21 @@ class Decks:
         no build. A tried commit is not retried, so a deck that cannot build costs one
         build, not one per refresh. A vanished run is rebuilt: `builds/` and `mirrors/`
         are caches the rows rebuild; a gone mirror is cloned again at the next take-in.
-        Answers, per build this pass started, whether it delivered the deck.
+        Answers, per build this pass started, whether it delivered the deck. None
+        is started once a build has met a toolchain that was not there.
         """
         delivered: list[bool] = []
-        for deck in self.store.all():
-            if deck.source_id != source.id:
+        for stored in self.store.all():
+            if stored.source_id != source.id:
                 continue
-            self._give_up_on_a_build_that_never_returned(deck)
+            deck = self._give_up_on_a_build_that_never_returned(stored)
             standing = build_retention.standing_build(self.builder, deck)
             if standing is not None and standing.commit == deck.commit:
                 self._deliver_the_standing_talk_again(deck, standing)
                 continue
-            if not self._was_already_tried(deck):
+            if not (
+                self.toolchain_unavailable.is_set() or self._was_already_tried(deck)
+            ):
                 delivered.append(self._switch_over(deck, source))
         return tuple(delivered)
 
@@ -855,7 +861,7 @@ class Decks:
         """Whether a build was already started for the commit the folder carries."""
         return deck.attempt is not None and deck.attempt.commit == deck.commit
 
-    def _give_up_on_a_build_that_never_returned(self, deck: Deck) -> None:
+    def _give_up_on_a_build_that_never_returned(self, deck: Deck) -> Deck:
         """Call an attempt that outlived the build bound failed, not running.
 
         Builds follow one another inside one refresh, so an attempt still
@@ -868,10 +874,11 @@ class Decks:
         """
         attempt = deck.attempt
         if attempt is None or attempt.outcome is not BuildOutcome.RUNNING:
-            return
+            return deck
         if self.clock.now() - attempt.started_at <= self.build_bound:
-            return
-        self._failed(deck, attempt, BuildFailure.without_words())
+            return deck
+        failed = self._failed(deck, attempt, BuildFailure.without_words())
+        return replace(deck, attempt=failed)
 
     def _switch_over(self, deck: Deck, source: Source) -> bool:
         """Deliver this deck from its new build, once there really is one.
@@ -881,7 +888,9 @@ class Decks:
         record behind rather than nothing. A build that failed, and one that
         left artefacts anywhere but under the root they belong in, write no
         pointer at all: whatever the deck was delivering before keeps being
-        delivered, and the attempt says why. Answers whether it was delivered.
+        delivered, and the attempt says why. A toolchain that was not there makes
+        the build no attempt: the attempt the deck carried is put back. Answers
+        whether it was delivered.
         """
         attempt = BuildAttempt(
             commit=deck.commit,
@@ -891,6 +900,10 @@ class Decks:
         )
         self.store.put_attempt(deck.slug, attempt)
         built = self.builder.build(deck, source=source)
+        if isinstance(built, ToolchainUnavailable):
+            self.store.put_attempt(deck.slug, deck.attempt)
+            self.toolchain_unavailable.set()
+            return False
         if not isinstance(built, Artefacts):
             self._failed(deck, attempt, built)
             return False
@@ -908,9 +921,10 @@ class Decks:
         )
         return True
 
-    def _failed(self, deck: Deck, attempt: BuildAttempt, failure: BuildFailure) -> None:
+    def _failed(
+        self, deck: Deck, attempt: BuildAttempt, failure: BuildFailure
+    ) -> BuildAttempt:
         """Close this attempt as failed, keeping the moment it started."""
-        self.store.put_attempt(
-            deck.slug,
-            replace(attempt, outcome=BuildOutcome.FAILED, failure=failure),
-        )
+        closed = replace(attempt, outcome=BuildOutcome.FAILED, failure=failure)
+        self.store.put_attempt(deck.slug, closed)
+        return closed
