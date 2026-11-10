@@ -4,6 +4,7 @@ from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 from ruamel.yaml import YAML
@@ -55,9 +56,10 @@ def test_a_share_outside_its_count_is_refused(
 def test_the_workflow_legs_are_the_parts_and_the_upload_shares(
     probe: ModuleType,
 ) -> None:
-    legs = YAML(typ="safe").load(_WORKFLOW.read_text(encoding="utf-8"))["jobs"][
-        "build-worker-parts"
-    ]["strategy"]["matrix"]["include"]
+    workflow: dict[str, Any] = YAML(typ="safe").load(  # pyright: ignore[reportUnknownMemberType]
+        _WORKFLOW.read_text(encoding="utf-8")
+    )
+    legs = workflow["jobs"]["build-worker-parts"]["strategy"]["matrix"]["include"]
     upload_legs = [leg for leg in legs if leg["part"] == "uploads"]
 
     assert {leg["part"] for leg in legs} == {*probe.PARTS, "web"}
