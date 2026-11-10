@@ -1,8 +1,0 @@
-claim_id = "e2630f9406494d8298f66854abca2084"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "82173328940611ada93996350137a08d12a1f5fa"
-branch = "claude/issue-1012-web-replaces-used-worker-pod"
-scope = ["docs/ARCHITECTURE.md", "docs/configuration.md", "src/presentator/adapters/worker_pod.py", "src/presentator/host/config.py", "src/presentator/host/main.py", "tests/presentator/adapters/test_worker_pod.py", "tests/presentator/host/test_main_build_worker.py"]
-opened_commit = "3c3803292b900d69557464afb27fb5861f9a6a94"
-whole_reason = "The pod owner, the setting that selects it and its one start-up caller land together, so the owner never stands without a real caller; the documentation row and the tests change with them."
