@@ -503,10 +503,39 @@ jobs:
       - name: Smoke test HTTPS reachability
         run: docker run --rm presentator:${{ github.sha }} git ls-remote https://github.com/git/git.git HEAD
 
-  build-worker:
-    name: "Build worker: sealed step"
+  # The sealed step runs in parallel parts, each on a runner of its own that
+  # builds the image itself. A leg's name and its probe argument come from one
+  # matrix entry, so they cannot drift apart: `part` is the probe's argument and
+  # an upload shard's `shard` of `shards` is its share of cell 50's rows. The
+  # job `build-worker` below is the mandatory name and aggregates the legs.
+  build-worker-parts:
+    name: "Build worker: ${{ matrix.label }}${{ matrix.shards && format(' {0} of {1}', matrix.shard, matrix.shards) || '' }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: socket cells
+            part: cells
+          - label: refused uploads
+            part: uploads
+            shard: 1
+            shards: 4
+          - label: refused uploads
+            part: uploads
+            shard: 2
+            shards: 4
+          - label: refused uploads
+            part: uploads
+            shard: 3
+            shards: 4
+          - label: refused uploads
+            part: uploads
+            shard: 4
+            shards: 4
+          - label: deployed web
+            part: web
     # The file carries its plain values as literals; the probe reads the web's
     # hostname from this environment, and the override below copies both origins
     # into the web. The worker has no env_file and names only the two build
@@ -553,6 +582,7 @@ jobs:
       # The edge builds, then pulls what is not buildable, then creates; the
       # worker's `presentator` image has no build of its own and never pulls.
       - name: Check that a pull leaves the worker's image alone
+        if: ${{ matrix.part == 'cells' }}
         run: |
           before=$(docker image inspect --format '{{.Id}}' presentator)
           docker compose pull --ignore-buildable --quiet > /dev/null 2>&1
@@ -560,7 +590,12 @@ jobs:
           test -n "$before" && test "$before" = "$after"
 
       - name: Drive the sealed worker through its socket
-        run: uv run --locked python scripts/probe_build_worker.py drive
+        if: ${{ matrix.part != 'web' }}
+        env:
+          PART: ${{ matrix.part }}
+          SHARD: ${{ matrix.shard }}
+          SHARDS: ${{ matrix.shards }}
+        run: uv run --locked python scripts/probe_build_worker.py drive "$PART" $SHARD $SHARDS
 
       # The web needs no issuer at start: the sign-in client reads only the
       # secret file, and the issuer is called at sign-in. The override adds
@@ -571,6 +606,7 @@ jobs:
       # run no deck row names, and the probe lays runs of its own under the
       # builds root that no row names.
       - name: Prepare the web's throwaway settings
+        if: ${{ matrix.part == 'web' }}
         run: |
           cat > "$RUNNER_TEMP/web-probe.yaml" <<EOF
           services:
@@ -605,6 +641,7 @@ jobs:
           done
 
       - name: Drive the deployed web through the worker
+        if: ${{ matrix.part == 'web' }}
         run: uv run --locked python scripts/probe_build_worker_web.py drive
 
       - name: Remove the web, the worker and their volumes
@@ -616,6 +653,18 @@ jobs:
           else
             docker compose down --volumes
           fi
+
+  build-worker:
+    name: "Build worker: sealed step"
+    needs: build-worker-parts
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      PARTS_RESULT: ${{ needs.build-worker-parts.result }}
+    steps:
+      - name: Fail unless every part succeeded
+        run: test "$PARTS_RESULT" = success
 
   coverage:
     name: "Coverage report"

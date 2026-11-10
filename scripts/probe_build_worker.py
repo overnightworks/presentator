@@ -1,6 +1,7 @@
 """Drive the sealed build worker through its real socket, from the instance image.
 
-Usage: probe_build_worker.py drive
+Usage: probe_build_worker.py drive cells
+       probe_build_worker.py drive uploads SHARD SHARDS
        probe_build_worker.py client COMMAND [ARGUMENT...]
 
 `drive` runs on the machine that has Docker and the project's compose
@@ -8,7 +9,9 @@ environment (COMPOSE_PROJECT_NAME). It starts the worker service from the
 already built image `presentator`, holds its socket volume in a container of
 the runtime user, and runs `client` in that container, over the real socket,
 through the codec's client half. Every cell it drives prints one line, and a
-cell that is not driven fails the run.
+cell that is not driven fails the run. The run is one part of `PARTS`: `cells`
+drives every cell but 50, `uploads` drives cell 50 for the rows of share SHARD
+of SHARDS, and CI runs each part in a job of its own.
 
 The life-ending cells (`probe_build_worker_lives.py`) end lives by abandonment,
 by exhaustion with the flood deck (`probe_build_worker/flood`), and by a leftover
@@ -144,6 +147,11 @@ CELLS = (
     *("25", "40", "45", "46", "56", "50"),
     *("61", "62", "63", "64", "65"),
 )
+UPLOADS_CELL = "50"
+PARTS = {
+    "cells": tuple(cell for cell in CELLS if cell != UPLOADS_CELL),
+    "uploads": (UPLOADS_CELL,),
+}
 # The kept-life connections of cell 56 C: each ends in a sweep, none in a restart.
 KEPT_LIFE_CONNECTIONS = {
     "answered HELLO": ("hello",),
@@ -693,30 +701,48 @@ def prove_stop(report: Report) -> None:
     )
 
 
-def drive() -> None:
-    """Start the worker from the built image and drive every cell."""
-    report = Report(CELLS)
+def drive_cells(report: Report) -> None:
+    """Drive every cell of the `cells` part, in the order the worker's lives need."""
     prove_variables_reach_the_worker(report)
     prove_glibc_floor(report)
+    start_worker(report)
+    prove_socket_identity(report, "5")
+    prove_inspect_sealing(report)
+    prove_wire_user(report)
+    prove_unsealed_refusal_and_sealed_check(report)
+    prove_refused_starts(report)
+    prove_refused_at_accept(report)
+    prove_header_classes(report)
+    prove_builds(report)
+    prove_attacked_life(report)
+    prove_lives_that_end_badly(report, KEPT_LIFE_CONNECTIONS)
+    prove_fast_lives(report)
+    prove_stop(report)
+
+
+def drive_uploads(report: Report, shard: int, shards: int) -> None:
+    """Drive cell 50 for the rows of one share of the refused uploads."""
+    start_worker(report)
+    prove_refused_uploads(report, shard, shards)
+
+
+def start_worker(report: Report) -> None:
+    """Create the worker, hold its volume, check D2, start it and ask its STATUS."""
     compose("up", "--no-start", SERVICE)
+    start_holder()
+    prove_fresh_volume(report)
+    compose("up", "--detach", "--no-build", SERVICE)
+    say(f"first STATUS {probe_client('hello')}")
+
+
+def drive(part: str, shard: int = 1, shards: int = 1) -> None:
+    """Drive one part of the cells from the built image; always remove the project."""
+    report = Report(PARTS[part])
     try:
-        start_holder()
-        prove_fresh_volume(report)
-        compose("up", "--detach", "--no-build", SERVICE)
-        say(f"first STATUS {probe_client('hello')}")
-        prove_socket_identity(report, "5")
-        prove_inspect_sealing(report)
-        prove_wire_user(report)
-        prove_unsealed_refusal_and_sealed_check(report)
-        prove_refused_starts(report)
-        prove_refused_at_accept(report)
-        prove_header_classes(report)
-        prove_builds(report)
-        prove_attacked_life(report)
-        prove_lives_that_end_badly(report, KEPT_LIFE_CONNECTIONS)
-        prove_refused_uploads(report)
-        prove_fast_lives(report)
-        prove_stop(report)
+        if part == "cells":
+            drive_cells(report)
+        else:
+            drive_uploads(report, shard, shards)
     finally:
         subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
             ("docker", "compose", "--file", str(REPOSITORY / "compose.yaml"),  # noqa: S607 - docker is picked from the operator's trusted PATH on the operator's own machine as when run by hand
@@ -734,8 +760,10 @@ def drive() -> None:
 
 if __name__ == "__main__":
     match sys.argv[1:]:
-        case ["drive"]:
-            drive()
+        case ["drive", "cells"]:
+            drive("cells")
+        case ["drive", "uploads", shard, shards]:
+            drive("uploads", int(shard), int(shards))
         case ["client", command, *arguments]:
             client(command, arguments)
         case _:
