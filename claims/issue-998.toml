@@ -1,7 +1,0 @@
-claim_id = "c5cf542498454b789e7c44d8630d5784"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "d30527351b39b3e8f9243664405e64ce7a8ef02b"
-branch = "claude/issue-998-every-ci-job-stops-after-15-minutes"
-scope = [".github/workflows/ci.yml"]
-opened_commit = "c7a104037acb02d4ee4efbe9f883d6af68191d62"
