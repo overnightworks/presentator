@@ -13,7 +13,7 @@ from functools import partial
 from pathlib import Path
 
 from presentator.adapters import build_wire, rtnetlink
-from presentator.host.config import worker_settings_variables
+from presentator.host.config import cannot_start, worker_settings_variables
 from presentator.host.worker_scratch import (
     QUEUE_MOUNT,
     ROOT_MODE,
@@ -58,6 +58,20 @@ HEADLESS_SHELL_PATTERN = (
     "chrome-headless-shell-linux64/chrome-headless-shell"
 )
 VITE_CACHE_TARGET = f"{WORK_MOUNT}/{VITE_DIRECTORY}"
+SEAL_VARIABLE = "PRESENTATOR_WORKER_SEAL"
+# The names the kubelet injects into every container for the `kubernetes` service.
+KUBERNETES_ENVIRONMENT_KEYS = frozenset(
+    {
+        "KUBERNETES_SERVICE_HOST",
+        "KUBERNETES_SERVICE_PORT",
+        "KUBERNETES_SERVICE_PORT_HTTPS",
+        "KUBERNETES_PORT",
+        "KUBERNETES_PORT_443_TCP",
+        "KUBERNETES_PORT_443_TCP_PROTO",
+        "KUBERNETES_PORT_443_TCP_PORT",
+        "KUBERNETES_PORT_443_TCP_ADDR",
+    }
+)
 # The image's and its base's keys, the runtime's HOSTNAME, Python's own LC_CTYPE.
 ALLOWED_ENVIRONMENT_KEYS = frozenset(
     {
@@ -79,7 +93,7 @@ ALLOWED_ENVIRONMENT_KEYS = frozenset(
         "NODE_VERSION",
         "YARN_VERSION",
     }
-    | {"HOSTNAME", "LC_CTYPE"}
+    | {"HOSTNAME", "LC_CTYPE", SEAL_VARIABLE}
     | worker_settings_variables()
 )
 
@@ -108,6 +122,14 @@ class Predicate(StrEnum):
     ALONE = "alone"
     SCRATCH = "scratch"
     TOOLCHAIN = "toolchain"
+    KUBERNETES_UNPROVEN = "kubernetes-unproven"
+
+
+class Seal(StrEnum):
+    """The container shape the worker is sealed for."""
+
+    COMPOSE = "compose"
+    KUBERNETES = "kubernetes"
 
 
 @dataclass(frozen=True)
@@ -149,6 +171,7 @@ class Snapshot:
     memory_max: str
     identity: Identity
     environment_keys: frozenset[str]
+    seal: Seal
     pid: int
     cgroup_tasks: str
     scratch: Scratch
@@ -253,8 +276,24 @@ def _identities_sealed(snapshot: Snapshot) -> bool:
     )
 
 
+def seal_from_environment(environment: Mapping[str, str]) -> Seal:
+    """The seal the environment selects; unset means Compose.
+
+    The refusal names the variable and never the value read.
+    """
+    try:
+        return Seal(environment.get(SEAL_VARIABLE, Seal.COMPOSE))
+    except ValueError:
+        accepted = " or ".join(Seal)
+        reason = f"{SEAL_VARIABLE}: is {accepted}, or unset"
+        raise cannot_start(reason) from None
+
+
 def _environment_allowed(snapshot: Snapshot) -> bool:
-    return snapshot.environment_keys <= ALLOWED_ENVIRONMENT_KEYS
+    allowed = ALLOWED_ENVIRONMENT_KEYS
+    if snapshot.seal is Seal.KUBERNETES:
+        allowed = allowed | KUBERNETES_ENVIRONMENT_KEYS
+    return snapshot.environment_keys <= allowed
 
 
 def _is_pid_one(snapshot: Snapshot) -> bool:
@@ -296,6 +335,7 @@ SELF_CHECK: tuple[tuple[Predicate, Callable[[Snapshot], bool]], ...] = (
     (Predicate.ALONE, _is_alone),
     (Predicate.SCRATCH, lambda snapshot: scratch_empty(snapshot.scratch)),
     (Predicate.TOOLCHAIN, _toolchain_present),
+    (Predicate.KUBERNETES_UNPROVEN, lambda snapshot: snapshot.seal is Seal.COMPOSE),
 )
 
 
@@ -430,7 +470,7 @@ class _FactReader:
 
 
 def read_snapshot(
-    root: Path, *, read_topology: Callable[[], rtnetlink.Topology]
+    root: Path, seal: Seal, *, read_topology: Callable[[], rtnetlink.Topology]
 ) -> Snapshot:
     """Read the facts the predicates judge, from the filesystem under `root`.
 
@@ -478,6 +518,7 @@ def read_snapshot(
         memory_max=memory_max,
         identity=read(Predicate.IDENTITIES, _read_identity, UNREAD_IDENTITY),
         environment_keys=frozenset(os.environ),
+        seal=seal,
         pid=os.getpid(),
         cgroup_tasks=cgroup_tasks,
         scratch=scratch,

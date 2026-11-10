@@ -11,10 +11,12 @@ import pytest
 from presentator.adapters import rtnetlink
 from presentator.adapters.rtnetlink import Address, Link, Route, Topology
 from presentator.host import worker_self_check
-from presentator.host.worker_self_check import Predicate, Snapshot
+from presentator.host.worker_self_check import Predicate
 from tests.presentator.host.support.sealed_snapshot import (
     LOOPBACK_INDEX,
+    LOOPBACK_UP,
     read_sealed_snapshot,
+    read_staged_root_as_sealed_process,
     sealed_snapshot,
     sealed_topology,
     stage_sealed_root,
@@ -76,9 +78,9 @@ PASSING = {
     "loopback with no address": with_topology(addresses=(), routes=()),
 }
 REFUSED = {
-    "loopback without the loopback flag": with_topology(links=lo_with(0x1)),
+    "loopback without the loopback flag": with_topology(links=lo_with(LOOPBACK_UP)),
     "second link down": with_extra(links=(Link(OTHER_INDEX, "eth0", 0),)),
-    "second link up": with_extra(links=(Link(OTHER_INDEX, "eth0", 0x1),)),
+    "second link up": with_extra(links=(Link(OTHER_INDEX, "eth0", LOOPBACK_UP),)),
     "link named otherwise": with_topology(
         links=(Link(LOOPBACK_INDEX, "dummy0", rtnetlink.IFF_LOOPBACK),)
     ),
@@ -172,14 +174,7 @@ def test_a_second_link_listed_only_in_the_device_table_is_not_judged_by_mounts(
         "Inter-|\n face |\n    lo: 0\n  eth0: 0\n"
     )
 
-    sealed = sealed_snapshot()
-    snapshot: Snapshot = replace(
-        read_sealed_snapshot(sealed_root),
-        environment_keys=sealed.environment_keys,
-        pid=sealed.pid,
-        work_owner_uid=sealed.work_owner_uid,
-        identity=sealed.identity,
-    )
+    snapshot = read_staged_root_as_sealed_process(sealed_root)
 
     assert snapshot.unreadable == frozenset()
     assert worker_self_check.first_failing_predicate(snapshot) is None
