@@ -5,6 +5,7 @@ import ctypes
 import fcntl
 import logging
 import os
+import resource
 import signal
 import socket
 import stat
@@ -48,6 +49,7 @@ from presentator.host.worker_self_check import (
     Snapshot,
     first_failing_predicate,
     libc_prctl,
+    lowered_process_limit,
     lstat_if_present,
     read_snapshot,
     seal_from_environment,
@@ -110,6 +112,7 @@ class Boundary:
     set_non_dumpable: Callable[[], None]
     set_umask: Callable[[], None]
     read_seal: Callable[[], Seal]
+    lower_process_limit: Callable[[], None]
     read_snapshot: Callable[[Seal], Snapshot]
     load_settings: Callable[[], WorkerSettings]
     serve: Server
@@ -117,6 +120,11 @@ class Boundary:
 
 def _set_non_dumpable() -> None:
     libc_prctl(PR_SET_DUMPABLE, 0)
+
+
+def _lower_process_limit() -> None:
+    soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
+    resource.setrlimit(resource.RLIMIT_NPROC, lowered_process_limit(soft, hard))
 
 
 def _set_umask() -> None:
@@ -332,6 +340,7 @@ REAL_BOUNDARY = Boundary(
     _set_non_dumpable,
     _set_umask,
     partial(seal_from_environment, os.environ),
+    _lower_process_limit,
     partial(read_snapshot, Path("/"), read_topology=rtnetlink.read_topology),
     load_worker_settings,
     _serve_on_this_machine,
@@ -346,6 +355,24 @@ def _refuse(refused: Predicate | StartRefusal) -> int:
 def _refuse_settings(error: ConfigurationError) -> int:
     logger.error("settings refused", exc_info=error)
     return _refuse(StartRefusal.SETTINGS)
+
+
+def _process_limit_lowered(boundary: Boundary, seal: Seal) -> bool:
+    if seal is not Seal.KUBERNETES:
+        return True
+    try:
+        boundary.lower_process_limit()
+    except OSError, ValueError:
+        return False
+    return True
+
+
+def _self_checked(boundary: Boundary, seal: Seal) -> Snapshot | Predicate:
+    """The snapshot of a start that passes the self-check, else the predicate."""
+    if not _process_limit_lowered(boundary, seal):
+        return Predicate.RESOURCE_BOUNDS
+    snapshot = boundary.read_snapshot(seal)
+    return first_failing_predicate(snapshot) or snapshot
 
 
 def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) -> int:
@@ -364,10 +391,9 @@ def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) 
         seal = boundary.read_seal()
     except ConfigurationError as error:
         return _refuse_settings(error)
-    snapshot = boundary.read_snapshot(seal)
-    failing = first_failing_predicate(snapshot)
-    if failing:
-        return _refuse(failing)
+    snapshot = _self_checked(boundary, seal)
+    if isinstance(snapshot, Predicate):
+        return _refuse(snapshot)
     if arguments.check:
         return 0
     try:

@@ -5,6 +5,7 @@ import grp
 import ipaddress
 import os
 import pwd
+import resource
 import stat
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -27,7 +28,7 @@ from presentator.host.worker_scratch import (
 )
 
 WORKER_CAPABILITIES = 0xE0
-MAXIMUM_PIDS = 512
+MAXIMUM_PROCESSES = 512
 RUNTIME_USER = "presentator"
 BUILD_USER = "presentator-build"
 WIRE_USER = "presentator-wire"
@@ -36,6 +37,8 @@ WIRE_IDENTITY = (61002, 61002)
 NO_CAPABILITIES = "0" * 16
 SOCKET_MOUNT_NAME = build_wire.SOCKET_DIRECTORY.lstrip("/")
 CGROUP_DIRECTORY = "sys/fs/cgroup"
+PROCESS_LIMITS_FILE = "proc/self/limits"
+PROCESS_LIMIT_ROW = "Max processes"
 TMPFS_MOUNT_NAMES = (
     TEMPORARY_MOUNT.lstrip("/"),
     SHARED_MEMORY_MOUNT.lstrip("/"),
@@ -169,6 +172,7 @@ class Snapshot:
     docker_socket_present: bool
     pids_max: str
     memory_max: str
+    process_limit: tuple[str, str]
     identity: Identity
     environment_keys: frozenset[str]
     seal: Seal
@@ -252,12 +256,16 @@ def _no_route(snapshot: Snapshot) -> bool:
     )
 
 
+def _within_maximum(value: str) -> bool:
+    return value.isdecimal() and int(value) <= MAXIMUM_PROCESSES
+
+
 def _resources_bounded(snapshot: Snapshot) -> bool:
-    return (
-        snapshot.pids_max.isdecimal()
-        and int(snapshot.pids_max) <= MAXIMUM_PIDS
-        and snapshot.memory_max.isdecimal()
-    )
+    if snapshot.seal is Seal.KUBERNETES:
+        bounded = all(map(_within_maximum, snapshot.process_limit))
+    else:
+        bounded = _within_maximum(snapshot.pids_max)
+    return bounded and snapshot.memory_max.isdecimal()
 
 
 def _identities_sealed(snapshot: Snapshot) -> bool:
@@ -361,6 +369,16 @@ def first_failing_predicate(snapshot: Snapshot) -> Predicate | None:
     )
 
 
+def _capped(limit: int, ceiling: int) -> int:
+    return ceiling if limit == resource.RLIM_INFINITY else min(limit, ceiling)
+
+
+def lowered_process_limit(soft: int, hard: int) -> tuple[int, int]:
+    """The soft and hard process limit lowered to at most the maximum, never raised."""
+    lowered_hard = _capped(hard, MAXIMUM_PROCESSES)
+    return _capped(soft, lowered_hard), lowered_hard
+
+
 def libc_prctl(option: int, value: int) -> int:
     """Call prctl, raising the errno it sets on failure."""
     libc = ctypes.CDLL(None, use_errno=True)
@@ -443,10 +461,23 @@ def _read_cgroup_file(root: Path, name: str) -> str:
     return (root / CGROUP_DIRECTORY / name).read_text().strip()
 
 
-def _read_resource_bounds(root: Path) -> tuple[str, str]:
-    return _read_cgroup_file(root, "pids.max"), _read_cgroup_file(root, "memory.max")
+def _read_process_limit(root: Path) -> tuple[str, str]:
+    for line in (root / PROCESS_LIMITS_FILE).read_text().splitlines():
+        if line.startswith(PROCESS_LIMIT_ROW):
+            soft, hard, *_ = line.removeprefix(PROCESS_LIMIT_ROW).split()
+            return soft, hard
+    raise KeyError(PROCESS_LIMIT_ROW)
 
 
+def _read_resource_bounds(root: Path) -> tuple[str, str, tuple[str, str]]:
+    return (
+        _read_cgroup_file(root, "pids.max"),
+        _read_cgroup_file(root, "memory.max"),
+        _read_process_limit(root),
+    )
+
+
+UNREAD_RESOURCE_BOUNDS = ("", "", ("", ""))
 UNREAD_IDENTITY = Identity(-1, -1, -1, (), -1, -1, {})
 UNREAD_TOOLCHAIN = Toolchain(None, None, (), None)
 UNREAD_SCRATCH = Scratch(frozenset(), {})
@@ -475,14 +506,12 @@ def read_snapshot(
     """Read the facts the predicates judge, from the filesystem under `root`.
 
     A fact that cannot be read or decoded marks its predicate unreadable, so the
-    self-check judges every predicate in order instead of stopping at the first
-    read. The container's task count is read first and the scratch places right
-    after it: no other fact is read and no child is launched in between. The
-    network topology is read after both.
+    self-check judges every predicate in order. The container's task count is
+    read first and the scratch places right after it: no other fact is read and
+    no child is launched in between. The network topology is read after both.
     """
     facts = _FactReader()
     read = facts.read
-
     cgroup_tasks = read(
         Predicate.ALONE, partial(_read_cgroup_file, root, "pids.current"), ""
     )
@@ -502,8 +531,10 @@ def read_snapshot(
         partial(_read_mount_facts, root),
         (False, "", 0, -1, True),
     )
-    pids_max, memory_max = read(
-        Predicate.RESOURCE_BOUNDS, partial(_read_resource_bounds, root), ("", "")
+    pids_max, memory_max, process_limit = read(
+        Predicate.RESOURCE_BOUNDS,
+        partial(_read_resource_bounds, root),
+        UNREAD_RESOURCE_BOUNDS,
     )
     return Snapshot(
         dumpable=dumpable,
@@ -516,6 +547,7 @@ def read_snapshot(
         docker_socket_present=socket_present,
         pids_max=pids_max,
         memory_max=memory_max,
+        process_limit=process_limit,
         identity=read(Predicate.IDENTITIES, _read_identity, UNREAD_IDENTITY),
         environment_keys=frozenset(os.environ),
         seal=seal,
