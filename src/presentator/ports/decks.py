@@ -22,6 +22,7 @@ from presentator.contracts.decks import (
     SourcePoll,
     SourceRun,
     SourceWrite,
+    ToolchainUnavailable,
 )
 
 
@@ -233,8 +234,10 @@ class DeckStore(Protocol):
         """
 
     @abstractmethod
-    def put_attempt(self, slug: str, attempt: BuildAttempt) -> None:
+    def put_attempt(self, slug: str, attempt: BuildAttempt | None) -> None:
         """Record the build this deck last started, without touching its talk.
+
+        No attempt puts the row back to carrying none.
 
         What a deck delivers is the build's alone, so a run that says it has
         begun, and a run that says it failed, leave the standing talk and its
@@ -309,14 +312,17 @@ class BuildRunner(Protocol):
     """
 
     @abstractmethod
-    def build(self, deck: Deck, *, source: Source) -> Artefacts | BuildFailure:
+    def build(
+        self, deck: Deck, *, source: Source
+    ) -> Artefacts | BuildFailure | ToolchainUnavailable:
         """What this deck's commit built into, or why nothing came of it.
 
         A failure is what a broken deck yields, so the talk that already stands
         keeps standing until a build really produced a new one. The reason
         travels with the answer rather than staying in a log, because it is
         what the deck's page has to show its owner (line 9); a failure with no
-        words is one no toolchain reported back about.
+        words is one no toolchain reported back about. A build that never
+        reached a step is no attempt at the deck and answers ToolchainUnavailable.
         """
 
     @abstractmethod

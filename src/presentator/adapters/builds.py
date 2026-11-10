@@ -55,6 +55,7 @@ from presentator.contracts.decks import (
     Deck,
     Source,
     StepKind,
+    ToolchainUnavailable,
     failure_text,
     talk_address,
 )
@@ -193,12 +194,13 @@ class DeckToolchain(Protocol):
     """Runs one Slidev command over the directories a build works in."""
 
     @abstractmethod
-    def ran(self, step: BuildStep) -> BuildFailure | None:
+    def ran(self, step: BuildStep) -> BuildFailure | ToolchainUnavailable | None:
         """Run that step, saying nothing when it did what it was asked to.
 
         What the toolchain printed travels back with a failure, because the
         deck's page shows it (line 9); a step that was given up on, and one
-        that could not be started at all, hand back no words.
+        that could not be started at all, hand back no words. A toolchain that
+        was never asked says so with `ToolchainUnavailable`.
         """
 
 
@@ -317,7 +319,9 @@ class SlidevBuilds:
     mirrors: SourceMirrors
     output_megabytes: int
 
-    def build(self, deck: Deck, *, source: Source) -> Artefacts | BuildFailure:
+    def build(
+        self, deck: Deck, *, source: Source
+    ) -> Artefacts | BuildFailure | ToolchainUnavailable:
         """Build this deck at its commit, or say what came of it instead.
 
         The talk and the PDF are written under a directory of this build's own
@@ -327,7 +331,11 @@ class SlidevBuilds:
         that ends any other way than handing back a talk — a failure this
         method returns, or a fault one of its own steps could not turn into
         one — still leaves its directory cleaned up, because a run neither
-        delivered nor removed is one this instance can never try again.
+        delivered nor removed is one this instance can never try again. A
+        toolchain that was not there for the talk step is no attempt at the
+        deck; one that is gone for the PDF step after a talk that ran is a
+        failure without words, so a deck whose PDF never answers does not stall
+        every later one.
         """
         place = self._a_place_of_its_own()
         delivered = False
@@ -410,7 +418,7 @@ class SlidevBuilds:
         *,
         source: Source,
         place: BuildPlace,
-    ) -> BuildFailure | None:
+    ) -> BuildFailure | ToolchainUnavailable | None:
         """Write the deck out, build the talk, export the PDF, or say what broke."""
         if not self._exported(deck, source=source, into=place.here / DECK_DIRECTORY):
             # A tree this server cannot read out of its own mirror is a fault
@@ -428,6 +436,8 @@ class SlidevBuilds:
                     watched=lambda: self._more_than_it_may_leave(deck, place),
                 ),
             )
+            if isinstance(broke, ToolchainUnavailable) and kind is not StepKind.BUILD:
+                return BuildFailure.without_words()
             if broke is not None:
                 return broke
         return self._more_than_it_may_leave(deck, place)

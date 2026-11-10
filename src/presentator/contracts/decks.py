@@ -445,6 +445,15 @@ class BuildFailure:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class ToolchainUnavailable:
+    """That a build never reached a step, so it says nothing about the deck.
+
+    A deck whose build ends this way has had no attempt: the toolchain was not
+    there to be asked, which is a fault of this instance and not of the commit.
+    """
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Build:
     """The talk a deck delivers, the commit it was built from, and when.
 

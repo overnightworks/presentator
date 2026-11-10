@@ -7,7 +7,10 @@ from presentator.application.decks import Decks
 from presentator.contracts.decks import (
     MANIFEST_FILE,
     SLIDES_FILE,
+    BuildAttempt,
+    BuildOutcome,
     ConnectionCheckResult,
+    Deck,
     DeckFolder,
     Source,
 )
@@ -140,3 +143,33 @@ def probed(
     )
     assert isinstance(found, ConnectionCheckResult)
     return found
+
+
+def a_store_that_was_left_building(*, started_ago: timedelta) -> FakeDeckStore:
+    """A deck whose build said it began and never reported back.
+
+    What a server that was restarted mid-build leaves behind.
+    """
+    store = FakeDeckStore()
+    store.put(
+        Deck(
+            slug="kundenfeedback",
+            title="A talk",
+            changed_at=NOW - timedelta(minutes=2),
+            owner_id=OWNER,
+            source_id=SOURCE.id,
+            commit=COMMIT,
+            build=None,
+            attempt=None,
+        ),
+    )
+    store.put_attempt(
+        "kundenfeedback",
+        BuildAttempt(
+            commit=COMMIT,
+            started_at=NOW - started_ago,
+            outcome=BuildOutcome.RUNNING,
+            failure=None,
+        ),
+    )
+    return store

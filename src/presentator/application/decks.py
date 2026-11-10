@@ -20,7 +20,7 @@ from threading import RLock
 from typing import BinaryIO, Final
 
 from presentator.application import build_retention
-from presentator.application.deck_builds import DeckBuilds
+from presentator.application.deck_builds import DeckBuilds, TakenIn
 from presentator.application.source_state import (
     SHORT_COMMIT,
     deck_state_of,
@@ -726,10 +726,7 @@ class Decks:
 
     def _named(self, name: str) -> Source | None:
         """The stored source that answers to this name, if this instance has one."""
-        return next(
-            (item for item in self.sources.all() if item.name == name),
-            None,
-        )
+        return next((item for item in self.sources.all() if item.name == name), None)
 
     def _take_in_and_build(self) -> None:
         """Sweep drafts nobody bound, then walk the sources one by one.
@@ -739,29 +736,31 @@ class Decks:
         opening as many pulls at once as the instance has sources.
         """
         self.key_drafts.sweep(older_than=self.clock.now() - DRAFT_MAX_AGE)
+        building = True
         for source in self.sources.all():
-            self._take_in_and_count(source)
+            building = self._take_in_and_count(source, building=building).still_building
 
     def _take_in_and_build_named(self, name: str) -> SourceFetch | None:
         """Take that source in, read again now that nobody can remove it."""
         source = self._named(name)
-        return None if source is None else self._take_in_and_count(source)
+        return None if source is None else self._take_in_and_count(source).fetch
 
-    def _take_in_and_count(self, source: Source) -> SourceFetch:
-        """Take that source in, build what changed and count what that was."""
+    def _take_in_and_count(self, source: Source, *, building: bool = True) -> TakenIn:
+        """Take that source in, build it, count that, say if building goes on."""
         carried_before = self._visible_slugs(source)
         at = self.clock.now()
         poll = self.folders.folders(source)
         run = self._record_run(source, poll, at)
         if poll.folders is not None:
             self._take_in(source, poll.folders, at)
-        delivered = self.builds.build_what_changed(source)
-        return SourceFetch(
+        walk = self.builds.build_what_changed(source, building=building)
+        fetch = SourceFetch(
             run=shown_run(run),
-            decks_built=sum(delivered),
-            builds_failed=len(delivered) - sum(delivered),
+            decks_built=sum(walk.delivered),
+            builds_failed=len(walk.delivered) - sum(walk.delivered),
             decks_removed=len(carried_before - self._visible_slugs(source)),
         )
+        return TakenIn(fetch=fetch, still_building=walk.still_building)
 
     def _visible_slugs(self, source: Source) -> frozenset[str]:
         """The slugs of the decks that source carries and the lobby lists."""

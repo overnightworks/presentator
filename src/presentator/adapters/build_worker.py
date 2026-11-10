@@ -45,6 +45,7 @@ from presentator.contracts.decks import (
     BuildFailure,
     BuildFailureReason,
     StepKind,
+    ToolchainUnavailable,
 )
 
 CONNECT_WINDOW_SECONDS: Final = 70.0
@@ -254,8 +255,12 @@ def _answer(
     return failure
 
 
-def _failure_of(error: Exception, step: BuildStep) -> BuildFailure:
+def _logged(error: Exception, step: BuildStep) -> None:
     _log.warning(_FAULTED, step.name, step.slug, fault_of(error))
+
+
+def _failure_of(error: Exception, step: BuildStep) -> BuildFailure:
+    _logged(error, step)
     return BuildFailure.without_words()
 
 
@@ -326,8 +331,13 @@ class WorkerToolchain:
             return False
         return True
 
-    def ran(self, step: BuildStep) -> BuildFailure | None:
-        """Send the deck to the worker for that step and admit what it built."""
+    def ran(self, step: BuildStep) -> BuildFailure | ToolchainUnavailable | None:
+        """Send the deck to the worker for that step and admit what it built.
+
+        A fault before the worker's STATUS says nothing about the deck, whose
+        step header the web has already checked: the step is unavailable, not
+        failed.
+        """
         try:
             deck = os.open(
                 step.place.here / DECK_DIRECTORY,
@@ -355,26 +365,37 @@ class WorkerToolchain:
             return _failure_of(error, step)
         return None
 
-    def _through_worker(self, deck: int, step: BuildStep) -> BuildFailure | None:
+    def _through_worker(
+        self, deck: int, step: BuildStep
+    ) -> BuildFailure | ToolchainUnavailable | None:
         window_ends = time.monotonic() + self.connect_window_seconds
         header = StepHeader(step=step.name, slug=step.slug)
         try:
-            with closing(
-                self._opened(lambda sent: send_step(sent, header), window_ends)
-            ) as connection:
-                read_status(connection)
-                connection.until(
-                    window_ends + self.reply_bound_seconds + self.reply_margin_seconds
-                )
-                return exchange_with_worker(
-                    connection,
-                    step=step,
-                    deck=deck,
-                    megabytes=self.megabytes,
-                    remove_staging=self.remove_staging,
-                )
+            connection = self._at_status(header, window_ends)
         except (OSError, WireRefusedError, NotTheWorkerError) as error:
-            return _failure_of(error, step)
+            _logged(error, step)
+            return ToolchainUnavailable()
+        with closing(connection):
+            connection.until(
+                window_ends + self.reply_bound_seconds + self.reply_margin_seconds
+            )
+            return exchange_with_worker(
+                connection,
+                step=step,
+                deck=deck,
+                megabytes=self.megabytes,
+                remove_staging=self.remove_staging,
+            )
+
+    def _at_status(self, header: StepHeader, window_ends: float) -> _DeadlineSocket:
+        """A connection to the worker whose STATUS has been read."""
+        connection = self._opened(lambda sent: send_step(sent, header), window_ends)
+        try:
+            read_status(connection)
+        except BaseException:
+            connection.close()
+            raise
+        return connection
 
     def _opened(
         self,

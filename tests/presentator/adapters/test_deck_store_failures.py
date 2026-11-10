@@ -81,6 +81,28 @@ def test_a_failed_attempt_is_read_back_with_its_reason_and_counts(
 
 
 @pytest.mark.parametrize("failure", _EVERY_FAILURE)
+def test_putting_no_attempt_back_clears_every_attempt_column(
+    tmp_path: Path, failure: BuildFailure
+) -> None:
+    store = a_store(tmp_path)
+    store.put(a_deck())
+    store.put_attempt(_SLUG, an_attempt(failure))
+
+    store.put_attempt(_SLUG, None)
+
+    kept = store.get(_SLUG)
+    assert kept is not None
+    assert kept.attempt is None
+    with closing(sqlite3.connect(store.database)) as connection, connection:
+        left = connection.execute(
+            "SELECT attempt_commit, attempt_started_at, attempt_outcome,"
+            " attempt_failure, attempt_reason, attempt_written_megabytes,"
+            " attempt_allowed_megabytes, attempt_allowed_entries FROM decks"
+        ).fetchall()
+    assert left == [(None,) * 8]
+
+
+@pytest.mark.parametrize("failure", _EVERY_FAILURE)
 def test_a_switch_over_clears_the_attempt_with_its_reason_and_counts(
     tmp_path: Path, failure: BuildFailure
 ) -> None:
