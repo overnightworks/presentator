@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
 from typing import Final
 
-from agent_runtime_client.tools import not_an_agent_tool
+from agents.tools import not_an_agent_tool
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 from urllib.parse import urlsplit
 
-from agent_runtime_client.backend.fake_gateway import FakeGateway, completion
+from agents.backend.fake_gateway import FakeGateway, completion
 from speech_client import wire
 from speech_client.outcomes import PastDeadline
 from starlette.websockets import WebSocketDisconnect
@@ -108,7 +108,7 @@ if TYPE_CHECKING:
 _WIDE_OPEN_LOGGERS = (
     "presentator",
     "webauth",
-    "agent_runtime_client",
+    "agents",
     "speech_client",
     "httpx2",
     "httpcore2",

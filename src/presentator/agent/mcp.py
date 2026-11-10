@@ -9,9 +9,9 @@ again, so it meets the same middleware as any request.
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from agent_runtime_client.mcp_server import McpPersonFront, RouteTools, route_tools
-from agent_runtime_client.mcp_wire import MCP_ENDPOINT_PATH
-from agent_runtime_client.tools import Principal
+from agents.mcp_server import McpPersonFront, RouteTools, route_tools
+from agents.mcp_wire import MCP_ENDPOINT_PATH
+from agents.tools import Principal
 from fastapi import FastAPI
 from starlette.requests import HTTPConnection
 from starlette.routing import Route

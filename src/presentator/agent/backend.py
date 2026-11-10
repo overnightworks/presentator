@@ -9,31 +9,30 @@ from contextlib import aclosing, asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, NoReturn, assert_never, cast
 
-from agent_runtime_client.agents import load_agent
-from agent_runtime_client.backend import (
+from agents.agent_file import load_agent
+from agents.backend import (
     AgentBackend,
     TurnEvent,
     TurnPerson,
-    TurnStopKind,
     TurnStopped,
 )
-from agent_runtime_client.backend.gateway import GatewayBackend
-from agent_runtime_client.errors import raise_without_chain
-from agent_runtime_client.tools import (
+from agents.backend.gateway import GatewayBackend
+from agents.errors import raise_without_chain
+from agents.tools import (
     HandTool,
     JsonObject,
     ToolDeclaration,
     ToolEffect,
     ToolOutcome,
 )
-from agent_runtime_client.turn import (
+from agents.turn import (
     AgentRole,
     Principal,
-    RejectionCode,
+    StopOutcome,
     TurnMessage,
     TurnRole,
 )
-from agent_runtime_client.turn_events import (
+from agents.turn_events import (
     AssistantTextEvent,
     FinalEvent,
     ToolCallEvent,
@@ -232,18 +231,22 @@ async def _answered(
 
 
 def _refuse(stopped: TurnStopped) -> NoReturn:
-    code = stopped.code
     _log_closed(
         kind=stopped.kind.value,
-        code=code.value,
+        code=stopped.code.value,
+        outcome=stopped.outcome.value,
         detail=stopped.detail,
         retry_after_s=None
         if stopped.retry_after_s is None
         else str(stopped.retry_after_s),
     )
-    if stopped.kind is TurnStopKind.REFUSED and code is RejectionCode.NOT_ENABLED:
-        raise_without_chain(NotEnabledError())
-    _unavailable()
+    match stopped.outcome:
+        case StopOutcome.NOT_ENABLED:
+            raise_without_chain(NotEnabledError())
+        case StopOutcome.BUSY | StopOutcome.BUDGET_SPENT | StopOutcome.UNAVAILABLE:
+            _unavailable()
+        case _:
+            assert_never(stopped.outcome)
 
 
 def _log_closed(**values: str | None) -> None:

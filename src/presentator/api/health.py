@@ -8,7 +8,7 @@ request and a busy database cannot make it flap.
 
 from typing import Final
 
-from agent_runtime_client.tools import not_an_agent_tool
+from agents.tools import not_an_agent_tool
 from fastapi import FastAPI
 from webauth.policies import PathRules, PublicRule
 

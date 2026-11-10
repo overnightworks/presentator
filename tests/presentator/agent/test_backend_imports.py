@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 SOURCE = Path(__file__).resolve().parents[3] / "src" / "presentator"
-CLIENT = "agent_runtime_client"
+CLIENT = "agents"
 SETTINGS_MODULE = SOURCE / "agent" / "settings.py"
 CONNECTOR = SOURCE / "agent" / "backend.py"
 MCP_FRONT = SOURCE / "agent" / "mcp.py"

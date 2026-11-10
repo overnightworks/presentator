@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Final, Self
 
 import pytest
-from agent_runtime_client.config import BackendKind, ChatGateway
+from agents.config import BackendKind, ChatGateway
 from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
 from httpx2 import Request as BrowserRequest

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Final
 
-from agent_runtime_client.tools import ToolEffect, agent_tool
+from agents.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 

@@ -10,22 +10,23 @@ from typing import TYPE_CHECKING
 
 import httpx2
 import pytest
-from agent_runtime_client.agents import load_agent
-from agent_runtime_client.backend import TurnStopKind, TurnStopped
-from agent_runtime_client.backend.fake_gateway import (
+from agents.agent_file import load_agent
+from agents.backend import TurnStopKind, TurnStopped
+from agents.backend.fake_gateway import (
     FakeGateway,
     Reply,
     completion,
     tool_call,
     tool_round,
 )
-from agent_runtime_client.turn import (
+from agents.turn import (
     FailureCode,
     Principal,
     RejectionCode,
+    StopOutcome,
     person_fingerprint,
 )
-from agent_runtime_client.turn_events import (
+from agents.turn_events import (
     AssistantTextEvent,
     ToolCallEvent,
     ToolResultEvent,
@@ -62,12 +63,12 @@ from tests.support.lobby import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from agent_runtime_client.agents import TurnRequest
-    from agent_runtime_client.backend import TurnEvent, TurnPerson
-    from agent_runtime_client.tools import JsonObject
+    from agents.agent_file import TurnRequest
+    from agents.backend import TurnEvent, TurnPerson
+    from agents.tools import JsonObject
 
 LOGGER = "presentator.agent.backend"
-# The fixed vector of agent-runtime's docs/wire.md for this issuer and subject.
+# The fixed vector of agents' docs/wire.md for this issuer and subject.
 WIRE_VECTOR = "fp-2db44d96ffdef38f9e1cbfe73e9cf248fb66955b894846b34843a2d3a849d764"
 AN_ISSUER_OF_THE_VECTOR = "https://issuer.example"
 THE_QUESTION = "Was steht auf Folie zwei?"
@@ -320,26 +321,34 @@ ALL_STOPS = [
 ]
 
 
+WORDED_BY_OUTCOME = {
+    StopOutcome.NOT_ENABLED: NotEnabledError,
+    StopOutcome.BUSY: CoPresenterUnavailableError,
+    StopOutcome.BUDGET_SPENT: CoPresenterUnavailableError,
+    StopOutcome.UNAVAILABLE: CoPresenterUnavailableError,
+}
+
+
 @pytest.mark.parametrize(("kind", "code"), ALL_STOPS)
 @on_an_event_loop
-async def test_only_a_not_enabled_refusal_is_not_enabled(
-    kind: TurnStopKind, code: RejectionCode | FailureCode
+async def test_a_stop_is_worded_by_its_outcome_alone(
+    kind: TurnStopKind,
+    code: RejectionCode | FailureCode,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Every kind and code of a stop has a mapping."""
+    """Every kind and code of a stop ends in the wording of its outcome, logged."""
+    caplog.set_level(logging.DEBUG)
+    stop = TurnStopped(kind, code, retry_after_s=7, detail="closed")
     answerer = GatewayAnswerer(
-        ScriptedBackend(stop=TurnStopped(kind, code, retry_after_s=7, detail="closed")),
-        a_relying_party(FrozenClock(instant=NOW)),
-    )
-    expected = (
-        NotEnabledError
-        if (kind, code) == (TurnStopKind.REFUSED, RejectionCode.NOT_ENABLED)
-        else CoPresenterUnavailableError
+        ScriptedBackend(stop=stop), a_relying_party(FrozenClock(instant=NOW))
     )
 
     with pytest.raises(CoPresenterUnavailableError) as stopped:
         await spoken(answerer)
 
-    assert type(stopped.value) is expected
+    assert type(stopped.value) is WORDED_BY_OUTCOME[stop.outcome]
+    (line,) = [r.getMessage() for r in caplog.records if r.name == LOGGER]
+    assert f"outcome={stop.outcome.value}" in line
 
 
 @on_an_event_loop
