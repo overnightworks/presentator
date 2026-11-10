@@ -582,6 +582,7 @@ jobs:
       # The edge builds, then pulls what is not buildable, then creates; the
       # worker's `presentator` image has no build of its own and never pulls.
       - name: Check that a pull leaves the worker's image alone
+        if: ${{ matrix.part == 'cells' }}
         run: |
           before=$(docker image inspect --format '{{.Id}}' presentator)
           docker compose pull --ignore-buildable --quiet > /dev/null 2>&1

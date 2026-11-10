@@ -2,9 +2,13 @@
 
 from collections import Counter
 from collections.abc import Callable
+from pathlib import Path
 from types import ModuleType
 
 import pytest
+from ruamel.yaml import YAML
+
+_WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml"
 
 
 @pytest.fixture
@@ -46,3 +50,19 @@ def test_a_share_outside_its_count_is_refused(
 ) -> None:
     with pytest.raises(ValueError, match="is not a share"):
         uploads.upload_rows_of_shard(shard, shards)
+
+
+def test_the_workflow_legs_are_the_parts_and_the_upload_shares(
+    probe: ModuleType,
+) -> None:
+    legs = YAML(typ="safe").load(_WORKFLOW.read_text(encoding="utf-8"))["jobs"][
+        "build-worker-parts"
+    ]["strategy"]["matrix"]["include"]
+    upload_legs = [leg for leg in legs if leg["part"] == "uploads"]
+
+    assert {leg["part"] for leg in legs} == {*probe.PARTS, "web"}
+    assert [leg["part"] for leg in legs].count("cells") == 1
+    assert len({leg["shards"] for leg in upload_legs}) == 1
+    assert sorted(leg["shard"] for leg in upload_legs) == list(
+        range(1, upload_legs[0]["shards"] + 1)
+    )
