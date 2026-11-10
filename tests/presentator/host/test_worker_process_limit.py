@@ -111,8 +111,9 @@ def test_the_process_limit_is_read_from_the_max_processes_row(
         None,
         limits_file("1", "1").replace("Max processes", "Max pipes"),
         "Limit\nMax processes\n",
+        limits_file("1", ""),
     ],
-    ids=["no file", "no row", "no values"],
+    ids=["no file", "no row", "no values", "one value"],
 )
 def test_an_unreadable_process_limit_marks_the_resource_bounds_unreadable(
     sealed_root: Path, content: str | None
