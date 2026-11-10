@@ -8,6 +8,7 @@ import pytest
 
 from presentator.host import worker
 from presentator.host.config import ConfigurationError, worker_settings_variables
+from presentator.host.worker import Boundary
 from presentator.host.worker_self_check import (
     KUBERNETES_ENVIRONMENT_KEYS,
     SEAL_VARIABLE,
@@ -80,19 +81,32 @@ def test_a_kubelet_name_under_the_compose_seal_fails_the_environment(
     assert first_failing_predicate(snapshot) == Predicate.ENVIRONMENT
 
 
-def test_under_kubernetes_an_earlier_failing_predicate_is_named_first() -> None:
-    snapshot = with_fields(seal=Seal.KUBERNETES, process_status="")(sealed_snapshot())
+@pytest.mark.parametrize(
+    "predicate", [name for name in Predicate if name != Predicate.KUBERNETES_UNPROVEN]
+)
+def test_under_kubernetes_an_earlier_failing_predicate_is_named_first(
+    predicate: Predicate,
+) -> None:
+    snapshot = with_fields(seal=Seal.KUBERNETES, unreadable=frozenset({predicate}))(
+        sealed_snapshot()
+    )
 
-    assert first_failing_predicate(snapshot) == Predicate.CAPABILITIES
+    assert first_failing_predicate(snapshot) == predicate
+
+
+def boundary_with_environment(
+    environment: Mapping[str, str], events: list[str]
+) -> Boundary:
+    return replace(
+        boundary_over(sealed_snapshot(), events),
+        read_seal=partial(seal_from_environment, environment),
+    )
 
 
 @pytest.mark.parametrize("arguments", [[], ["--check"]])
 def test_an_unset_seal_starts_the_compose_worker(arguments: list[str]) -> None:
     events: list[str] = []
-    boundary = replace(
-        boundary_over(sealed_snapshot(), events),
-        read_seal=partial(seal_from_environment, {}),
-    )
+    boundary = boundary_with_environment({}, events)
 
     status = worker.main(arguments, boundary)
 
@@ -106,10 +120,7 @@ def test_a_refused_seal_refuses_the_start_before_any_read(
     caplog: pytest.LogCaptureFixture, value: str, arguments: list[str]
 ) -> None:
     events: list[str] = []
-    boundary = replace(
-        boundary_over(sealed_snapshot(), events),
-        read_seal=partial(seal_from_environment, {SEAL_VARIABLE: value}),
-    )
+    boundary = boundary_with_environment({SEAL_VARIABLE: value}, events)
 
     status = worker.main(arguments, boundary)
 
@@ -121,10 +132,7 @@ def test_a_refused_seal_refuses_the_start_before_any_read(
 def test_a_refused_seal_is_logged_without_its_value(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    boundary = replace(
-        boundary_over(sealed_snapshot(), []),
-        read_seal=partial(seal_from_environment, {SEAL_VARIABLE: "unique-seal-4711"}),
-    )
+    boundary = boundary_with_environment({SEAL_VARIABLE: "unique-seal-4711"}, [])
 
     worker.main([], boundary)
 
@@ -135,10 +143,7 @@ def test_a_check_under_kubernetes_exits_two_naming_kubernetes_unproven(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     events: list[str] = []
-    boundary = replace(
-        boundary_over(sealed_snapshot(), events),
-        read_seal=partial(seal_from_environment, {SEAL_VARIABLE: "kubernetes"}),
-    )
+    boundary = boundary_with_environment({SEAL_VARIABLE: Seal.KUBERNETES}, events)
 
     status = worker.main(["--check"], boundary)
 
