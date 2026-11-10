@@ -345,6 +345,23 @@ def test_judging_without_the_kubernetes_read_fails_closed() -> None:
     assert first_failing_predicate(unread) == MOUNTS
 
 
+def test_a_mount_whose_root_was_not_read_refuses(pod: Path) -> None:
+    stage_directory(pod, "/data", 0o755)
+    mount_extra(pod, PodMount("/data", READ_WRITE, "ext4"))
+    snapshot = read_staged_root_as_sealed_process(pod, seal=Seal.KUBERNETES)
+    kubernetes = snapshot.mounts.kubernetes
+    assert kubernetes is not None
+    unread = replace(
+        snapshot,
+        mounts=replace(
+            snapshot.mounts,
+            kubernetes=replace(kubernetes, other_roots={}),
+        ),
+    )
+
+    assert first_failing_predicate(unread) == MOUNTS
+
+
 @pytest.mark.parametrize("area", ["proc", "sys"])
 def test_a_device_bind_under_proc_or_sys_passes(pod: Path, area: str) -> None:
     mount_extra(pod, PodMount(link_to_host_devices(pod, area), READ_WRITE, "tmpfs"))
