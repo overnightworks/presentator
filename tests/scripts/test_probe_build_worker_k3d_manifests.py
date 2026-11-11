@@ -9,6 +9,8 @@ import pytest
 
 from tests.scripts.support.k3d_world import (
     DIGEST,
+    PROJECTED_KEYS,
+    PROJECTED_NAME,
     RUN_IDENTIFIER,
     Document,
     Fixture,
@@ -157,3 +159,27 @@ def test_the_overlay_render_is_refused_for_each_difference_beyond_the_image_fiel
     change(base, overlay)
     problem = manifests_module.render_problem(base, overlay, probe_image)
     assert named_in_refusal.format(image=manifests_module.PRODUCTION_IMAGE) in problem
+
+
+def test_the_web_documents_are_the_overlays_config_map_and_deployment_as_rendered(
+    manifests_module: ModuleType, production_image: str
+) -> None:
+    rendered = workload_documents(production_image)
+    documents = manifests_module.web_documents(rendered)
+    assert documents == [
+        named(rendered, "Deployment"),
+        named(rendered, "ConfigMap"),
+    ]
+    assert documents[0] is not named(rendered, "Deployment")
+
+
+def test_the_throwaway_secret_reads_its_name_and_keys_from_the_deployment(
+    manifests_module: ModuleType, production_image: str
+) -> None:
+    deployment = named(workload_documents(production_image), "Deployment")
+    values = iter(f"effect-{number}" for number in range(10))
+    secret = manifests_module.throwaway_secret(deployment, lambda: next(values))
+    assert secret["kind"] == "Secret"
+    assert secret["metadata"]["name"] == PROJECTED_NAME
+    assert set(secret["stringData"]) == set(PROJECTED_KEYS)
+    assert sorted(secret["stringData"].values()) == ["effect-0", "effect-1"]
