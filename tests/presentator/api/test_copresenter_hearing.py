@@ -7,7 +7,7 @@ import logging
 import sqlite3
 import threading
 from contextlib import closing
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 from fastapi import Response, WebSocket
@@ -244,7 +244,8 @@ def test_the_upgrade_carries_the_issued_tokens_and_names_the_language_before_aud
     setup, append = service.events
     assert setup["type"] == "session.update"
     session_input = setup["session"]["audio"]["input"]  # type: ignore[index]
-    languages = session_input["transcription"]["languages"]  # type: ignore[index]
+    transcription = cast("dict[str, list[str]]", session_input["transcription"])  # type: ignore[index]
+    languages = transcription["languages"]
     assert languages[0] == language
     assert set(languages) == set(wire.HearingLanguage)
     assert append["type"] == "input_audio_buffer.append"
