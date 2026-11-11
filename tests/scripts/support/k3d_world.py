@@ -29,7 +29,10 @@ def workload_documents(image: str) -> list[Document]:
     """What the overlay and the base render, every production container at `image`."""
 
     def template(container: str, *, init: bool = False) -> Document:
-        spec: Document = {"containers": [{"name": container, "image": image}]}
+        main: Document = {"name": container, "image": image}
+        if container == "worker":
+            main["command"] = ["serve-the-build-worker", "--flag"]
+        spec: Document = {"containers": [main]}
         if init:
             spec["initContainers"] = [
                 {"name": "remove-link", "image": REMOVE_LINK_IMAGE}
@@ -127,6 +130,14 @@ def watch_event(kind: str, pod: Document) -> Document:
     return {"type": kind, "object": pod}
 
 
+def ending(refusal: Predicate | None, *, started: int = 0) -> Document:
+    """The terminated state of a worker that refuses or, with none, exits 0."""
+    if refusal is None:
+        return terminated_state(0, reason="Completed", started=started)
+    said = f"worker started\nstart refused: {refusal}\n"
+    return terminated_state(message=said, started=started)
+
+
 def life_events(
     uid: str,
     refusal: Predicate | None,
@@ -136,12 +147,7 @@ def life_events(
     version: Version = PLAIN,
 ) -> list[Document]:
     """The events of one life that ends by a refusal or, with none, by exit 0."""
-    if refusal is None:
-        default = terminated_state(0, reason="Completed", started=started)
-    else:
-        said = f"worker started\nstart refused: {refusal}\n"
-        default = terminated_state(message=said, started=started)
-    state = ended or default
+    state = ended or ending(refusal, started=started)
     pending = pod_version(uid, version=replace(version, init_exit=None))
     last = pod_version(uid, state, version)
     return [
@@ -168,6 +174,17 @@ def lives_stream(
     ]
 
 
+def twin_answer(
+    refusal: Predicate | None, state: Document | None = None, version: Version = PLAIN
+) -> Document:
+    """The bare Pod kubectl prints once its worker ended as `state` or as expected."""
+    ended = state or ending(refusal)
+    pod = pod_version("twin-uid", ended, version)
+    phase = "Succeeded" if ended["terminated"]["exitCode"] == 0 else "Failed"
+    pod["status"]["phase"] = phase
+    return pod
+
+
 def node(
     name: str = OWN, *, ready: bool = True, version: str = K3S_VERSION
 ) -> Document:
@@ -189,6 +206,11 @@ class World:
     probe_image: str = ""
     production_image: str = ""
     twin_pod: str = ""
+    twin_log: str = "the twin's mount list"
+    # What a residue's twin Pod shows by the residue's name; the expected end if absent.
+    outcomes: dict[str, Document] = field(default_factory=dict[str, Document])
+    # The twin Pods of the residues by their names, set up with the driver.
+    residue_pods: dict[str, Document] = field(default_factory=dict[str, Document])
     # The events the watch of each cell prints; empty is the passing pair.
     streams: list[list[Document]] = field(default_factory=list[list[Document]])
     # The watch ends in a signal's exit after its first event.
@@ -225,12 +247,11 @@ class World:
                 return self.render(command)
             case ("kubectl", "get", "nodes", *_):
                 return self.nodes_json()
-            case ("kubectl", "get", "pod", name, *_) | ("kubectl", "logs", name, *_):
-                if name != self.twin_pod:
-                    message = f"the driver read {name}, which is gone with its life"
-                    raise AssertionError(message)
-                done = json.dumps({"status": {"phase": "Succeeded"}})
-                return done if command[1] == "get" else ""
+            case ("kubectl", "get", "pod", name, *_):
+                return json.dumps(self.pod_named(name))
+            case ("kubectl", "logs", name, *_):
+                self.pod_named(name)
+                return self.twin_log
             case ("kubectl", "delete", "statefulset", *_):
                 self.cell += 1
                 return ""
@@ -262,6 +283,15 @@ class World:
                     raise SystemExit(143)
         finally:
             self.watches_closed += 1
+
+    def pod_named(self, name: str) -> Document:
+        """The bare Pod of the facts twin or of a residue's twin; no other exists."""
+        if name == self.twin_pod:
+            return {"status": {"phase": "Succeeded"}}
+        if name not in self.residue_pods:
+            message = f"the driver read {name}, which is gone with its life"
+            raise AssertionError(message)
+        return copy.deepcopy(self.residue_pods[name])
 
     def nodes_json(self) -> str:
         items = copy.deepcopy(self.nodes)
@@ -321,6 +351,31 @@ def platform_checkout(tmp_path: Path) -> Path:
     return checkout
 
 
+def expected_ends(
+    control: str, starts_module: ModuleType
+) -> list[tuple[str, Predicate | None]]:
+    """The control and each residue with the predicate its owner pairs it with."""
+    refusals: list[tuple[str, Predicate | None]] = [
+        (residue, predicate)
+        for _, predicate, residues in starts_module.REFUSALS
+        for residue in residues
+    ]
+    return [(control, None), *refusals]
+
+
+def residue_pods(
+    load_script: Callable[..., ModuleType],
+    driver: ModuleType,
+    outcomes: dict[str, Document],
+) -> dict[str, Document]:
+    """Each twin Pod by name as kubectl prints it: the chosen or the expected end."""
+    starts_module = load_script("probe_build_worker_starts")
+    return {
+        driver.residue_pod_name(residue): outcomes.get(residue, twin_answer(refusal))
+        for residue, refusal in expected_ends(driver.CONTROL, starts_module)
+    }
+
+
 def fixture_maker(
     load_script: Callable[..., ModuleType], tmp_path: Path
 ) -> Callable[..., Fixture]:
@@ -372,6 +427,7 @@ def fixture_maker(
         )
         world.node_name, world.probe_image = run.node, run.tag
         world.production_image, world.twin_pod = production_image, driver.TWIN_POD
+        world.residue_pods = residue_pods(load_script, driver, world.outcomes)
         world.streams = world.streams or [
             lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
             lives_stream(lives_module.LIVES, None),
