@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useNav } from '@slidev/client'
 // `no-inline`: the file is under Vite's inline limit, and a `data:` URL would
 // break the production CSP.
@@ -66,16 +66,13 @@ function errorEventLine(data) {
 const on = ref(false)
 const heard = ref('')
 const answer = ref('')
-const hearing = ref('off')
 const error = ref('')
 const audioSeconds = ref(0)
 const speaking = ref(false)
-// What the room can observe, which room-notice.js turns into banner and pill:
-// the worklet is connected to the microphone, an answer's audio is playing, and
-// an answer's audio has played since the switch-on.
+// What the room can observe, which room-notice.js turns into band and pill:
+// the worklet is connected to the microphone and an answer's audio is playing.
 const capturing = ref(false)
 const playing = ref(false)
-const answeredSinceOn = ref(false)
 
 let mediaStream = null
 let audioContext = null
@@ -97,19 +94,11 @@ function publishRoomFacts() {
   publish({
     capturing: capturing.value,
     playing: playing.value,
-    answeredSinceOn: answeredSinceOn.value,
     language,
   })
 }
 // Synchronous, so a window that turns off has said so when its handler returns.
-watch([capturing, playing, answeredSinceOn], publishRoomFacts, { flush: 'sync' })
-
-const state = computed(() => {
-  if (!on.value) return 'off'
-  if (error.value) return 'error'
-  if (speaking.value) return 'speak'
-  return 'listen'
-})
+watch([capturing, playing], publishRoomFacts, { flush: 'sync' })
 
 function snapshot() {
   const tracks = mediaStream ? mediaStream.getTracks() : []
@@ -117,7 +106,6 @@ function snapshot() {
     on: on.value,
     heard: heard.value,
     answer: answer.value,
-    hearing: hearing.value,
     audioSeconds: audioSeconds.value,
     error: error.value,
     hearOpen: hearSocket?.readyState === WebSocket.OPEN,
@@ -164,7 +152,6 @@ async function turnOn() {
   heard.value = ''
   answer.value = ''
   audioSeconds.value = 0
-  answeredSinceOn.value = false
   spokenText = ''
   let report
   try {
@@ -178,14 +165,12 @@ async function turnOn() {
   } catch (error_) {
     if (!stillActive(generation)) return
     error.value = error_ instanceof WhoRefused && error_.status === 503 ? VOICE_OFFLINE : 'Unreachable'
-    hearing.value = 'off'
     return
   }
   if (!stillActive(generation)) return
   const lease = await openHearingLease(generation)
   if (!lease || !stillActive(generation)) return
   if (report.speech?.hearing?.ready) {
-    hearing.value = 'local'
     await startLocalHear(generation)
     return
   }
@@ -206,7 +191,6 @@ function fail(message) {
 
 function stopWork() {
   activationGeneration += 1
-  hearing.value = 'off'
   if (askAbort) {
     askAbort.abort()
     askAbort = null
@@ -516,7 +500,6 @@ function playUrl(url, generation) {
         return
       }
       playing.value = true
-      answeredSinceOn.value = true
     }).catch(() => settle(true))
   })
 }
@@ -582,11 +565,13 @@ onUnmounted(() => {
   <aside
     class="copresenter"
     :data-on="on"
-    :data-hearing="hearing"
-    :data-state="state"
     :data-audio-seconds="audioSeconds"
     :aria-label="on ? 'Presenter on' : 'Presenter off'"
   >
+    <span
+      v-if="error"
+      class="fault"
+    >{{ error }}</span>
     <button
       class="switch"
       type="button"
@@ -605,17 +590,9 @@ onUnmounted(() => {
       <span class="label">AI</span>
     </button>
     <section
-      v-if="on"
+      v-if="on && (heard || answer)"
       class="panel"
     >
-      <p class="status">
-        <span
-          class="glyph"
-          :data-state="state"
-          aria-hidden="true"
-        />
-        <span class="path">{{ hearing }}</span>
-      </p>
       <p
         v-if="heard"
         class="line heard"
@@ -628,53 +605,53 @@ onUnmounted(() => {
       >
         {{ answer }}
       </p>
-      <p
-        v-if="error"
-        class="line fail"
-      >
-        {{ error }}
-      </p>
     </section>
   </aside>
 </template>
 
 <style scoped>
 .copresenter {
-  align-self: end;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  max-width: min(420px, calc(100vw - 16px));
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
   color: CanvasText;
   font: 14px/1.3 system-ui, sans-serif;
-  pointer-events: auto;
 }
 .switch {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 44px;
   min-height: 44px;
-  padding: 0 10px;
-  border: 1px solid color-mix(in srgb, CanvasText 35%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, canvas 82%, CanvasText 18%);
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
 }
+.switch:focus-visible {
+  outline: 2px solid CanvasText;
+  outline-offset: 2px;
+}
 .panel {
-  order: -1;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: end;
   box-sizing: border-box;
-  width: min(420px, calc(100vw - 16px));
+  width: min(420px, 100%);
   max-height: min(42vh, 360px);
-  margin-bottom: 8px;
-  padding: 10px 12px;
+  margin-top: 4px;
+  padding: 8px 12px;
   overflow-y: auto;
-  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, canvas 82%, CanvasText 18%);
-  box-shadow: 0 8px 24px color-mix(in srgb, CanvasText 25%, transparent);
+  border: 1px solid color-mix(in srgb, currentcolor 20%, transparent);
+  border-radius: 8px;
 }
 .track {
   width: 36px;
@@ -697,49 +674,23 @@ onUnmounted(() => {
 }
 .track[data-on="true"] .thumb { transform: translateX(16px); }
 .label { font-weight: 650; }
-.status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-}
-.glyph {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #059669;
-  flex-shrink: 0;
-}
-.glyph[data-state="listen"] { animation: pulse 1.2s ease-in-out infinite; }
-.glyph[data-state="speak"] {
-  border-radius: 2px;
-  width: 14px;
-  height: 10px;
-  background: repeating-linear-gradient(90deg, #059669 0 3px, transparent 3px 5px);
-}
-.glyph[data-state="error"] {
-  border-radius: 2px;
-  background: #d97706;
-}
-.path {
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: lowercase;
-  opacity: 0.7;
-}
-.line {
-  margin: 6px 0 0;
-  font-size: 13px;
-}
-.heard { font-style: italic; opacity: 0.8; }
+.line { margin: 6px 0 0; }
+.line:first-child { margin-top: 0; }
+.heard { opacity: 0.8; }
 .answer { font-weight: 550; }
-.fail { color: #d97706; }
-@media (prefers-reduced-motion: reduce) {
-  .glyph[data-state="listen"] { animation: none; }
-  .thumb { transition: none; }
+.fault {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: end;
+  min-width: 0;
+  color: #b45309;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.45; transform: scale(0.85); }
+/* Slidev marks the dark scheme with html.dark and sets no color-scheme on
+   light pages, so the compiled light-dark() never reaches its light value. */
+html.dark .fault { color: #fbbf24; }
+@media (prefers-reduced-motion: reduce) {
+  .thumb { transition: none; }
 }
 </style>

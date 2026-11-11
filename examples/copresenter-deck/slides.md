@@ -9,7 +9,7 @@ favicon: false
 
 # Hallo Co-Presenter
 
-Ein Deck, das man pushen kann. Der Schalter unten rechts schaltet die Stimme
+Ein Deck, das man pushen kann. Der Schalter oben rechts schaltet die Stimme
 ein. Aus bleibt sie still und taub.
 
 <!--

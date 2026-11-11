@@ -249,6 +249,9 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
 - The hosts are same-site, so deck code on the talk host can set `Domain=`
   cookies for the shared domain.
 - Each presenter window mounts its own overlay; nothing enforces one speaker.
+- The presenter bar is teleported into Slidev's presenter page markup, which
+  Slidev does not promise; a Slidev upgrade that moves it shows as a failing
+  presenter-controls test.
 - Under the Kubernetes seal the claim root is born open to everyone, so the web
   could leave an entry there before the worker's first start; the worker then
   refuses with `stale-socket`, and its children never reach the directory.
