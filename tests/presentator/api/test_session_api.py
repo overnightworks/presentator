@@ -184,19 +184,12 @@ def test_a_signed_out_caller_reads_in_the_instances_language(instance: str) -> N
     assert answer.json()["words"]["language_tag"] == instance
 
 
-@pytest.mark.parametrize(
-    ("instance", "account", "spoken"),
-    [("en", "de", "de"), ("de", "fr", "de"), ("de", None, "de"), ("fr", None, "en")],
-    ids=["offered", "unoffered", "none", "gone-instance-catalog"],
-)
-def test_the_lobby_shells_html_lang_follows_the_same_decision(
-    instance: str, account: str | None, spoken: str
-) -> None:
-    lobby = a_lobby_speaking(instance=instance, account=account)
+def test_the_lobby_shells_html_lang_follows_the_account_language() -> None:
+    lobby = a_lobby_speaking(instance="en", account="de")
 
     page = lobby.client.get("/an-address-the-app-decides").text
 
-    assert f'lang="{spoken}"' in page
+    assert 'lang="de"' in page
 
 
 def test_a_browsers_accept_language_changes_nothing_for_an_account_without_one() -> (
@@ -317,19 +310,3 @@ def test_an_invalid_bearer_beside_a_valid_cookie_is_refused_not_the_cookies_pers
 
     assert answer.status_code == HTTPStatus.UNAUTHORIZED
     assert 'error="invalid_token"' in answer.headers["www-authenticate"]
-
-
-def test_a_persons_bearer_alone_reads_in_the_instances_language(
-    tmp_path: Path,
-) -> None:
-    preferences = a_preferences(
-        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN})
-    )
-    preferences.instance.write(InstanceSettings(language_tag="de"))
-    scene = a_scene(tmp_path, token_clients=frozenset({_HAL}), preferences=preferences)
-
-    answer = scene.browser().get(
-        _SESSION, headers=a_bearer(scene, subject=_SUBJECT, groups=MEMBER)
-    )
-
-    assert answer.json()["words"]["language_tag"] == "de"

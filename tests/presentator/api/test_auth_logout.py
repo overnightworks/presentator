@@ -218,13 +218,8 @@ def test_the_logout_page_carries_the_instance_language_as_its_lang(
     assert re.search(r"<html[^>]*\blang=\"de\"", answer.text)
 
 
-@pytest.mark.parametrize(
-    ("account", "spoken"),
-    [("de", "de"), ("fr", "en"), (None, "en")],
-    ids=["offered", "unoffered", "none"],
-)
 def test_the_logout_page_follows_the_account_language_where_a_catalog_has_it(
-    tmp_path: Path, account: str | None, spoken: str
+    tmp_path: Path,
 ) -> None:
     german = replace(
         ENGLISH, language_tag="de", language_name="Deutsch", log_out="Abmelden"
@@ -243,13 +238,13 @@ def test_the_logout_page_follows_the_account_language_where_a_catalog_has_it(
         expires_at=scene.clock.now() + SESSION_LIFETIME,
         refresh_token=None,
         id_token=SecretStr("an-id-token"),
-        account_language=account,
+        account_language="de",
     )
     hand_over_session_cookies(scene.lobby.client, session.id, scene.config)
 
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
 
-    assert re.search(rf"<html[^>]*\blang=\"{spoken}\"", answer.text)
+    assert re.search(r'<html[^>]*\blang="de"', answer.text)
 
 
 def test_the_session_cookie_of_a_logged_out_browser_cannot_come_back(

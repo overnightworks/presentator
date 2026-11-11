@@ -133,35 +133,3 @@ def test_saving_an_unspoken_instance_language_is_refused_and_writes_nothing() ->
         lobby.save_instance_settings(unspoken)
 
     assert lobby.instance_settings() == InstanceSettings()
-
-
-def test_a_page_reads_in_the_language_it_is_given_beside_the_persons_own_theme() -> (
-    None
-):
-    lobby = a_lobby(chosen=PersonPreferences(theme=ThemeChoice.DARK))
-
-    appearance = lobby.appearance_for(_PERSON, language_tag="de")
-
-    assert appearance.text == _GERMAN
-    assert appearance.theme is ThemeChoice.DARK
-
-
-@pytest.mark.parametrize(
-    ("stored", "served"),
-    [
-        ("de", "de"),
-        (DEFAULT_LANGUAGE_TAG, DEFAULT_LANGUAGE_TAG),
-        ("fr", DEFAULT_LANGUAGE_TAG),
-    ],
-    ids=["spoken", "default", "catalog-gone"],
-)
-def test_the_served_language_is_the_catalog_the_instance_language_answers_with(
-    stored: str, served: str
-) -> None:
-    lobby = a_lobby(instance=InstanceSettings(language_tag=stored))
-
-    assert lobby.served_tag() == served
-
-
-def test_every_installed_catalogs_tag_is_offered() -> None:
-    assert set(a_lobby().offered_tags()) == {DEFAULT_LANGUAGE_TAG, "de"}

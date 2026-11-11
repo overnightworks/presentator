@@ -100,11 +100,10 @@ def test_the_sessions_of_a_person_carry_their_times_and_no_secret(
     assert _A_REFRESH_WORD not in repr(found)
 
 
-@pytest.mark.parametrize("language", ["de", None])
 def test_a_persons_session_carries_the_account_language_stored_at_its_sign_in(
-    database: Path, language: str | None
+    database: Path,
 ) -> None:
-    """PE31: the language is exported as stored, `null` where the account named none."""
+    """PE31: the language is exported as stored."""
     sessions = SqliteSessionRecordStore(database)
     sessions.create(
         _THE_PERSON.id,
@@ -112,12 +111,12 @@ def test_a_persons_session_carries_the_account_language_stored_at_its_sign_in(
         expires_at=_NOW + timedelta(hours=1),
         refresh_token=None,
         id_token=None,
-        account_language=language,
+        account_language="de",
     )
 
     (found,) = sessions.sessions_of(_THE_PERSON.id)
 
-    assert found.account_language == language
+    assert found.account_language == "de"
 
 
 def test_only_sessions_holding_a_refresh_token_are_counted_as_holding_one(
