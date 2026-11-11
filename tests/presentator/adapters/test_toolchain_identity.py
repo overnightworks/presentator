@@ -1,6 +1,8 @@
 """The identity of a toolchain project: what moves it and what leaves it alone."""
 
+import os
 import re
+import stat
 from pathlib import Path
 
 import pytest
@@ -98,6 +100,14 @@ def test_a_symbolic_link_is_left_out_and_never_followed(
     (linked / "components" / "link").symlink_to(target)
 
     assert toolchain_identity_of(linked) == toolchain_identity_of(plain)
+
+
+def test_an_entry_that_is_no_regular_file_is_left_out(tmp_path: Path) -> None:
+    plain = a_project(tmp_path / "plain", _A_PROJECT)
+    with_a_socket = a_project(tmp_path / "with-a-socket", _A_PROJECT)
+    os.mknod(with_a_socket / "components" / "socket", stat.S_IFSOCK | 0o600)
+
+    assert toolchain_identity_of(with_a_socket) == toolchain_identity_of(plain)
 
 
 def test_where_one_file_ends_and_the_next_begins_is_part_of_the_identity(
