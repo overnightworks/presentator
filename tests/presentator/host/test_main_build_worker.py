@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-import re
 import socket
 from datetime import UTC, datetime
 from pathlib import Path
@@ -109,12 +108,15 @@ def test_a_deck_the_host_runner_builds_records_the_identity_of_the_toolchain_pro
 
 
 @pytest.mark.parametrize("runner", ["host", "worker"])
-def test_an_instance_whose_toolchain_project_cannot_be_read_refuses_naming_it(
+def test_an_unreadable_toolchain_project_refuses_naming_the_setting_and_the_path(
     environment: pytest.MonkeyPatch, tmp_path: Path, runner: str
 ) -> None:
     project = tmp_path / "no-toolchain-here"
     environment.setenv("PRESENTATOR_BUILD_RUNNER", runner)
     environment.setenv("PRESENTATOR_TOOLCHAIN", str(project))
 
-    with pytest.raises(ConfigurationError, match=re.escape(str(project))):
+    with pytest.raises(ConfigurationError) as refused:
         main.build_instance(load_settings())
+
+    assert "PRESENTATOR_TOOLCHAIN" in str(refused.value)
+    assert str(project) in str(refused.value)

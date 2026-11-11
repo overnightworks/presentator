@@ -21,19 +21,23 @@ def toolchain_identity_of(project: Path) -> ToolchainIdentity:
     """The SHA-256 of the project's files that a build can read.
 
     Symbolic links are skipped, not followed. Files are fed in the byte order of
-    their POSIX paths relative to the project, each as the length and the UTF-8
-    path, then the length and the content, so where one file ends and the next
-    begins is part of what is hashed. A project that cannot be read raises
+    their POSIX paths relative to the project, each as the length and the path
+    as the file system holds it (a name that is not UTF-8 keeps its bytes), then
+    the length and the content, so where one file ends and the next begins is
+    part of what is hashed. A project that cannot be read raises
     `OSError` naming the path that failed.
     """
     digest = hashlib.sha256()
-    for path in sorted(
-        _files_under(project), key=lambda found: found.as_posix().encode()
-    ):
-        for part in (path.as_posix().encode(), (project / path).read_bytes()):
+    for path in sorted(_files_under(project), key=_path_bytes):
+        for part in (_path_bytes(path), (project / path).read_bytes()):
             digest.update(len(part).to_bytes(_LENGTH_BYTES, "big"))
             digest.update(part)
     return ToolchainIdentity(digest.hexdigest())
+
+
+def _path_bytes(path: PurePosixPath) -> bytes:
+    """The bytes the file system holds for a path; a name that is not UTF-8 survives."""
+    return path.as_posix().encode(errors="surrogateescape")
 
 
 def _files_under(project: Path) -> list[PurePosixPath]:

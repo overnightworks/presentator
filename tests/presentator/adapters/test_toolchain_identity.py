@@ -168,6 +168,19 @@ def test_a_file_renamed_with_the_same_content_moves_the_identity(
     assert toolchain_identity_of(before) != toolchain_identity_of(after)
 
 
+def test_a_file_name_that_is_not_utf8_still_has_an_identity(tmp_path: Path) -> None:
+    project = a_project(tmp_path / "project", _A_PROJECT)
+    without = toolchain_identity_of(project)
+    Path(os.fsdecode(os.fsencode(project) + b"/components/caf\xe9.vue")).write_bytes(
+        b"<template />"
+    )
+
+    with_it = toolchain_identity_of(project)
+
+    assert with_it == toolchain_identity_of(project)
+    assert with_it != without
+
+
 def test_the_identity_does_not_depend_on_the_order_the_directory_lists_its_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -101,6 +101,7 @@ from presentator.host.config import (
     WhereBuildsRun,
     cannot_start,
     load_settings,
+    variable_of,
 )
 from presentator.host.oidc import (
     admission_of,
@@ -455,7 +456,8 @@ def _identity_of_the_toolchain(settings: Settings) -> ToolchainIdentity:
     try:
         return toolchain_identity_of(settings.toolchain)
     except OSError as unreadable:
-        reason = f"the toolchain project cannot be read: {unreadable}"
+        setting = variable_of("toolchain")
+        reason = f"{setting}: the project cannot be read: {unreadable}"
         raise cannot_start(reason) from None
 
 

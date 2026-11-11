@@ -43,7 +43,7 @@ some of them.
 | `PRESENTATOR_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/` as the person and `/api/admin/` as an admin; empty serves no route for a token client's token. See [people](people.md). |
 | `PRESENTATOR_SOURCE_POLL_SECONDS` | `300` | Interval of the source poll. |
 | `PRESENTATOR_SOURCE_TIMEOUT_SECONDS` | `180` | Bound of one pull and of one Check connection. |
-| `PRESENTATOR_TOOLCHAIN` | `slidev` | The project carrying Slidev. |
+| `PRESENTATOR_TOOLCHAIN` | `slidev` | The project carrying Slidev. Read once at start under either runner; a project that cannot be read refuses to start. |
 | `PRESENTATOR_LOBBY_BUILD` | `frontend/build` | The lobby app's `pnpm build` output; an instance without a build it can serve refuses to start. |
 | `PRESENTATOR_BUILDS` | `builds` | Where built talks and PDFs are kept. |
 | `PRESENTATOR_BUILD_TIMEOUT_SECONDS` | `300` | Bound of each build step; compose also hands it to the build worker by name. |
