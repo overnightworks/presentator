@@ -41,7 +41,7 @@ def judge_cell(  # noqa: PLR0913 - each argument is one knob of the judged cell
     make_fixture: Callable[..., Fixture],
     lives_module: ModuleType,
     events: list[Document],
-    refusal: Predicate,
+    refusal: Predicate | None,
     *,
     init_container: bool = True,
     lives: int = 1,
@@ -56,10 +56,11 @@ def judge_cell(  # noqa: PLR0913 - each argument is one knob of the judged cell
     return fixture.driver.drive_cell(fixture.run, 8, documents, expectation), world
 
 
-REFUSED = Predicate.KUBERNETES_UNPROVEN
+REFUSED = Predicate.NO_ROUTE
 
 
 refused_life = partial(life_events, "one", REFUSED)
+passing_life = partial(life_events, "one", None)
 GONE = terminated_state(137, reason="ContainerStatusUnknown")
 SECOND = Version(last_state=terminated_state(started=9))
 UNTERMINATED = [
@@ -72,6 +73,7 @@ UNTERMINATED = [
     ("events", "fragment"),
     [
         (refused_life(ended=terminated_state(1)), "exit status 1"),
+        (passing_life(), "exit status 0"),
         (life_events("one", Predicate.ALONE), Predicate.ALONE),
         (refused_life(ended=terminated_state()), "start refused"),
         (refused_life(version=Version(init_exit=1)), "remove-link ended as 1"),
@@ -83,6 +85,7 @@ UNTERMINATED = [
     ],
     ids=[
         "another exit status",
+        "a passing life where a refusal is expected",
         "another predicate",
         "an empty message",
         "remove-link not ended 0",
@@ -102,6 +105,57 @@ def test_a_life_that_is_not_the_expected_one_fails_naming_its_uid_and_the_reason
     problem, _ = judge_cell(make_fixture, lives_module, events, REFUSED)
     assert "uid one" in problem
     assert fragment in problem
+
+
+@pytest.mark.parametrize(
+    ("events", "fragment"),
+    [
+        (refused_life(), "exit status 2"),
+        (refused_life(ended=terminated_state(message="")), "exit status 2"),
+        (passing_life(ended=terminated_state(1)), "exit status 1"),
+        (passing_life(version=Version(restarts=1)), "restartCount is 1"),
+        (passing_life(version=SECOND), "terminated 2 times"),
+        (passing_life(ended=GONE), "ContainerStatusUnknown"),
+        (UNTERMINATED, "deleted before its worker terminated"),
+    ],
+    ids=[
+        "a refusal",
+        "a refusal without a message",
+        "another exit status",
+        "a restart inside one uid",
+        "a second termination inside one uid",
+        "a lost sandbox",
+        "deleted before the worker terminated",
+    ],
+)
+def test_a_life_that_does_not_pass_fails_and_asks_for_the_diagnostics(
+    make_fixture: Callable[..., Fixture],
+    lives_module: ModuleType,
+    events: list[Document],
+    fragment: str,
+) -> None:
+    problem, world = judge_cell(make_fixture, lives_module, events, None)
+    assert "uid one" in problem
+    assert fragment in problem
+    assert world.issued("kubectl", "get", "events") != []
+    assert world.applied("Pod") != []
+
+
+def test_passing_lives_print_their_uid_and_exit_and_every_interval(
+    make_fixture: Callable[..., Fixture],
+    lives_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    count = 3
+    events = lives_stream(count, None)
+    problem, _ = judge_cell(make_fixture, lives_module, events, None, lives=count)
+    lines = capsys.readouterr().out.splitlines()
+    assert problem == ""
+    for position in range(1, count + 1):
+        life = f"cell 8: life {position}, uid life-{position - 1}, exit 0, "
+        assert f"{life}self-check passed" in lines
+    intervals = [line for line in lines if line.startswith("cell 8: interval")]
+    assert len(intervals) == count - 1
 
 
 @pytest.mark.parametrize(

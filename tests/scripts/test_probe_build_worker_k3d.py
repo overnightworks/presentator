@@ -107,13 +107,13 @@ def test_drive_passes_prints_every_life_and_interval_and_bounds_the_watch(
     fixture = make_fixture()
     fixture.drive()
     lines = capsys.readouterr().out.splitlines()
-    for cell, count, refusal in (
-        (7, 1, Predicate.NO_ROUTE),
-        (8, lives_module.LIVES, Predicate.KUBERNETES_UNPROVEN),
+    for cell, count, ending in (
+        (7, 1, f"exit 2, start refused: {Predicate.NO_ROUTE}"),
+        (8, lives_module.LIVES, "exit 0, self-check passed"),
     ):
         lives = [line for line in lines if line.startswith(f"cell {cell}: life")]
         assert len(lives) == count
-        assert all(f"start refused: {refusal}" in line for line in lives)
+        assert all(line.endswith(ending) for line in lives)
     intervals = [line for line in lines if line.startswith("cell 8: interval")]
     assert len(intervals) == lives_module.LIVES - 1
     assert all("3 s" in line and "resolution" in line for line in intervals)

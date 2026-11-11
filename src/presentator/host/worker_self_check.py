@@ -145,7 +145,6 @@ class Predicate(StrEnum):
     ALONE = "alone"
     SCRATCH = "scratch"
     TOOLCHAIN = "toolchain"
-    KUBERNETES_UNPROVEN = "kubernetes-unproven"
 
 
 class Seal(StrEnum):
@@ -472,7 +471,6 @@ SELF_CHECK: tuple[tuple[Predicate, Callable[[Snapshot], bool]], ...] = (
     (Predicate.ALONE, _is_alone),
     (Predicate.SCRATCH, lambda snapshot: scratch_empty(snapshot.scratch)),
     (Predicate.TOOLCHAIN, _toolchain_present),
-    (Predicate.KUBERNETES_UNPROVEN, lambda snapshot: snapshot.seal is Seal.COMPOSE),
 )
 
 

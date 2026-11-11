@@ -129,15 +129,19 @@ def watch_event(kind: str, pod: Document) -> Document:
 
 def life_events(
     uid: str,
-    refusal: Predicate,
+    refusal: Predicate | None,
     *,
     started: int = 0,
     ended: Document | None = None,
     version: Version = PLAIN,
 ) -> list[Document]:
-    """The events of one life that ends by a refusal: created, ended, deleted."""
-    said = f"worker started\nstart refused: {refusal}\n"
-    state = ended or terminated_state(message=said, started=started)
+    """The events of one life that ends by a refusal or, with none, by exit 0."""
+    if refusal is None:
+        default = terminated_state(0, reason="Completed", started=started)
+    else:
+        said = f"worker started\nstart refused: {refusal}\n"
+        default = terminated_state(message=said, started=started)
+    state = ended or default
     pending = pod_version(uid, version=replace(version, init_exit=None))
     last = pod_version(uid, state, version)
     return [
@@ -149,7 +153,7 @@ def life_events(
 
 def lives_stream(
     count: int,
-    refusal: Predicate,
+    refusal: Predicate | None,
     *,
     gap: int = 3,
     version: Version = PLAIN,
@@ -370,7 +374,7 @@ def fixture_maker(
         world.production_image, world.twin_pod = production_image, driver.TWIN_POD
         world.streams = world.streams or [
             lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
-            lives_stream(lives_module.LIVES, Predicate.KUBERNETES_UNPROVEN),
+            lives_stream(lives_module.LIVES, None),
         ]
         return Fixture(driver, world, run)
 

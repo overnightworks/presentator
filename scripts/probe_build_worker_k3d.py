@@ -14,17 +14,18 @@ single-server k3d cluster at platform's K3S_VERSION. A cell applies the
 PersistentVolumeClaims, ServiceAccounts and worker StatefulSet of
 `apps/presentator`; the applied copy differs from the render only in the worker
 container's `terminationMessagePolicy` (so a refusal reaches the terminated
-state's message) and, in cell 7, in the deleted init container.
+state's message), in cell 7 in the deleted init container, and in cell 8 in the
+worker container's `args`, which are `--check`.
 
 Platform replaces a used pod and its log with it, so a cell judges its lives
 from one bounded watch of the worker pod. Cell 7 reads one life without init
 container and expects the self-check to refuse with no-route. Cell 8 reads
-LIVES lives and expects, per life, a new uid, remove-link ending 0, one
-termination of the worker with exit 2 and kubernetes-unproven and restartCount
-0; it prints each interval from a life's end to its successor's start, which
-must stay below the web's HELLO retry window. A cell that fails prints the
-Namespace's events and the output of a twin Pod of the same spec; the run fails
-after both cells ran.
+LIVES lives, each passing the whole self-check under `--check`, and expects,
+per life, a new uid, remove-link ending 0, one termination of the worker with
+exit 0 and restartCount 0; it prints each interval from a life's end to its
+successor's start, which must stay below the web's HELLO retry window. A cell
+that fails prints the Namespace's events and the output of a twin Pod of the
+same spec; the run fails after both cells ran.
 
 Every command runs with `KUBECONFIG` set to a file in the run's temporary
 directory, `KUBECACHEDIR` below it and `KUBERC=off`, so nothing reads or writes
@@ -168,10 +169,8 @@ def drive_cells(run: Run, overlay: list[Document]) -> list[str]:
     problems = [drive_cell(run, 7, control, bare)]
     run("kubectl delete statefulset --wait=true", "build-worker", *IN_NAMESPACE)
     run("kubectl wait --for=delete --timeout=60s", f"pod/{WORKER_POD}", *IN_NAMESPACE)
-    linked = Expectation(
-        Predicate.KUBERNETES_UNPROVEN, init_container=True, lives=LIVES
-    )
-    worker = applied_documents(overlay, init_container=True)
+    linked = Expectation(None, init_container=True, lives=LIVES)
+    worker = applied_documents(overlay, init_container=True, check=True)
     problems.append(drive_cell(run, 8, worker, linked))
     return [problem for problem in problems if problem]
 

@@ -56,7 +56,7 @@ def test_the_overlay_names_the_platform_app_by_a_path_relative_to_itself(
 @pytest.mark.parametrize(
     ("cell", "init_container"), [(0, False), (1, True)], ids=["cell 7", "cell 8"]
 )
-def test_a_cell_applies_only_the_worker_pods_kinds_and_the_message_policy_differs(
+def test_a_cell_applies_only_the_worker_pods_kinds_and_the_cell_dependent_fields_differ(
     make_fixture: Callable[..., Fixture],
     manifests_module: ModuleType,
     *,
@@ -79,6 +79,9 @@ def test_a_cell_applies_only_the_worker_pods_kinds_and_the_message_policy_differ
     (worker,) = spec["containers"]
     assert worker.pop("terminationMessagePolicy") == (
         manifests_module.TERMINATION_MESSAGE_POLICY
+    )
+    assert worker.pop("args", None) == (
+        [manifests_module.CHECK_ARGUMENT] if init_container else None
     )
     expected = named(rendered, "StatefulSet")["spec"]["template"]["spec"]
     if not init_container:
