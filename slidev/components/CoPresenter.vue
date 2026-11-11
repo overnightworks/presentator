@@ -683,10 +683,13 @@ onUnmounted(() => {
   grid-row: 1;
   justify-self: end;
   min-width: 0;
-  color: light-dark(#b45309, #fbbf24);
+  color: #b45309;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+/* Slidev marks the dark scheme with html.dark and sets no color-scheme on
+   light pages, so the compiled light-dark() never reaches its light value. */
+html.dark .fault { color: #fbbf24; }
 @media (prefers-reduced-motion: reduce) {
   .thumb { transition: none; }
 }

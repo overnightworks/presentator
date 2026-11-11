@@ -134,12 +134,13 @@ export async function readSameFrameBoxes(page: Page, homeHandle: ElementHandle<E
 export async function readPaintedColours(page: Page) {
   const colours = await page.evaluate(() => ({
     track: getComputedStyle(document.querySelector('.copresenter .track')!).backgroundColor,
+    barText: getComputedStyle(document.querySelector('.copresenter .label')!).color,
     fault: document.querySelector('.copresenter .fault')
       ? getComputedStyle(document.querySelector('.copresenter .fault')!).color
       : null,
   }))
   const channels = (color: string) => color.match(/[\d.]+/g)!.slice(0, 3).map(Number) as [number, number, number]
-  return { track: channels(colours.track), fault: colours.fault === null ? null : channels(colours.fault) }
+  return { track: channels(colours.track), barText: channels(colours.barText), fault: colours.fault === null ? null : channels(colours.fault) }
 }
 
 type Channels = [number, number, number]

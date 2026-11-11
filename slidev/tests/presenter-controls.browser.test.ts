@@ -348,6 +348,7 @@ describe('presenter controls', () => {
       await expectFaultWordClearOfControls(page, width, ai, page.getByText(message))
       const painted = await readPaintedColours(page)
       expect(contrastRatio(painted.fault!, await readBarBackground(page)), 'the word reads on the bar').toBeGreaterThanOrEqual(4.5)
+      expect(painted.fault, 'a warning colour, not the bar\'s own text colour').not.toEqual(painted.barText)
       expect(painted.track[1], 'the track stays green').toBeGreaterThan(Math.max(painted.track[0], painted.track[2]) + 20)
       expect(await page.evaluate(
         () => (window as unknown as { __speechRecognitionsBuilt: number }).__speechRecognitionsBuilt,
