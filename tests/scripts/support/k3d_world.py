@@ -633,3 +633,26 @@ def fixture_maker(
         return Fixture(driver, world, run)
 
     return make
+
+
+def issued_commands(world: World) -> list[tuple[tuple[str, ...], str]]:
+    """Each command of the run with its stdin, in the order it was issued."""
+    return [(command, stdin or "") for command, _, stdin in world.commands]
+
+
+def apply_positions(world: World, kind: str) -> list[int]:
+    """The positions of the applies whose stream holds a document of the kind."""
+    return [
+        at
+        for at, (command, stdin) in enumerate(issued_commands(world))
+        if command[:2] == ("kubectl", "apply") and f'"kind": "{kind}"' in stdin
+    ]
+
+
+def command_positions(world: World, *prefix: str) -> list[int]:
+    """The positions of the commands that start with the words."""
+    return [
+        at
+        for at, (command, _) in enumerate(issued_commands(world))
+        if command[: len(prefix)] == prefix
+    ]

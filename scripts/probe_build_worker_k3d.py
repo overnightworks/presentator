@@ -424,7 +424,7 @@ def seconds_after_start(web: Document, worker: Document) -> float | None:
 
 def ready_problem(web: Document, worker: Document | None) -> str | None:
     """Why the Ready web is not one that never refused and followed the worker."""
-    restarts = container_status(web, WEB_CONTAINER).get("restartCount", 0)
+    restarts = web_restarts(web)
     if restarts:
         return f"the web's restartCount is {restarts}, expected 0"
     if worker is None:
@@ -440,14 +440,28 @@ def ready_problem(web: Document, worker: Document | None) -> str | None:
     return None
 
 
+def web_restarts(web: Document) -> int:
+    """The web container's restartCount."""
+    return container_status(web, WEB_CONTAINER).get("restartCount", 0)
+
+
+def report_control(web: Document) -> None:
+    """Print what the web's Pod shows while it waits for the worker."""
+    (state, *_) = container_status(web, WEB_CONTAINER).get("state", {"unknown": {}})
+    say(
+        f"cell 10: control: the web logged its wait, Ready False, "
+        f"container {state}, restarts {web_restarts(web)}"
+    )
+
+
 def report_web(web: Document, worker: Document) -> None:
     """Print how long after the worker started the web was Ready."""
     life = Life(worker["metadata"]["uid"]).after(worker, deleted=False)
     say(
         f"cell 10: the web waited, then was Ready "
         f"{seconds_after_start(web, worker):g} s after the worker started "
-        f"(worker pod {life.uid}, {worker['status']['phase']}, "
-        f"restarts {life.restarts})"
+        f"(web restarts {web_restarts(web)}; worker pod {life.uid}, "
+        f"{worker['status']['phase']}, restarts {life.restarts})"
     )
 
 
@@ -459,8 +473,11 @@ def judge_web(run: Run, selector: str, worker: str) -> str | None:
     )
     if not logged:
         return f"the web did not log its wait within {TERMINATION_WINDOW_SECONDS} s"
-    if problem := control_problem(web_pod(run, selector)):
+    waiting_pod = web_pod(run, selector)
+    if problem := control_problem(waiting_pod):
         return problem
+    if waiting_pod is not None:
+        report_control(waiting_pod)
     run("kubectl apply --filename -", stdin=worker)
     web, ready = poll(
         run, lambda: web_pod(run, selector), lambda pod: bool(ready_since(pod)), {}

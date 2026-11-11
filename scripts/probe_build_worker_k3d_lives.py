@@ -3,7 +3,8 @@
 A cell's worker pods are replaced by platform, so a cell judges its lives from
 one watch. `read_lives` folds the watch's events into `Life` records, the
 judgements name the first life or interval that is not what the cell expects,
-and `report_lives` prints each life's uid and how it ended.
+and `report_lives` prints each life's uid, remove-link's exit, restart count and
+how it ended.
 """
 
 import contextlib
@@ -230,9 +231,13 @@ def interval_problem(number: int, lives: list[Life]) -> str | None:
 
 
 def report_lives(number: int, lives: list[Life], refusal: Predicate | None) -> None:
-    """Print every life's uid and how its worker ended."""
+    """Print every life's uid, remove-link's exit, restart count and worker end."""
     for position, life in enumerate(lives, start=1):
-        who = f"cell {number}: life {position}, uid {life.uid}"
+        link = f"remove-link {life.init_exit}" if life.has_init else "no init container"
+        who = (
+            f"cell {number}: life {position}, uid {life.uid}, {link}, "
+            f"restarts {life.restarts}"
+        )
         if refusal is None:
             say(f"{who}, exit {PASSING_EXIT_STATUS}, self-check passed")
         else:

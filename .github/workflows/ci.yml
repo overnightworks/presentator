@@ -685,7 +685,7 @@ jobs:
 
       - name: Read the platform commit the probe is written against
         id: pin
-        run: echo "ref=$(.venv/bin/python scripts/probe_build_worker_k3d.py pin)" >> "$GITHUB_OUTPUT"
+        run: echo "ref=$(.venv/bin/python scripts/probe_build_worker_k3d.py pin)" | tee -a "$GITHUB_OUTPUT"
 
       - name: Check out platform at that commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
