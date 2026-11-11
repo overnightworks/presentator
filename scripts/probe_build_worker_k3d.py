@@ -488,9 +488,11 @@ def watch_events(lines: Iterable[str]) -> Iterator[Document]:
 
 
 def read_lives(events: Iterable[Document], count: int) -> list[Life]:
-    """Fold the events into lives, in order, and stop once `count` lives ended."""
+    """Fold the events into lives; stop at `count` ended lives or an ERROR event."""
     lives: dict[str, Life] = {}
     for event in events:
+        if event["type"] == "ERROR":
+            break
         pod = event["object"]
         uid = pod["metadata"]["uid"]
         known = lives.get(uid, Life(uid))

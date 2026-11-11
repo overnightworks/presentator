@@ -287,11 +287,8 @@ class World:
         return as_yaml_stream(workload_documents(self.probe_image))
 
     def issued(self, *prefix: str) -> list[tuple[str, ...]]:
-        return [
-            command
-            for command, _, _ in self.commands
-            if command[: len(prefix)] == prefix
-        ]
+        commands = (command for command, _, _ in self.commands)
+        return [command for command in commands if command[: len(prefix)] == prefix]
 
     def applies(self) -> list[list[Document]]:
         """The documents of each apply, in order."""
@@ -500,11 +497,7 @@ def test_a_cell_applies_only_the_worker_pods_kinds_and_the_message_policy_differ
     rendered = workload_documents(fixture.world.probe_image)
     namespaces = fixture.world.applied("Namespace")
     assert [d["metadata"]["name"] for d in namespaces] == ["presentator"]
-    cells = [
-        documents
-        for documents in fixture.world.applies()
-        if documents[0]["kind"] != "Namespace"
-    ]
+    cells = [d for d in fixture.world.applies() if d[0]["kind"] != "Namespace"]
     documents = cells[cell]
     assert {document["kind"] for document in documents} == {
         "PersistentVolumeClaim",
@@ -634,10 +627,15 @@ def test_a_successor_must_start_below_the_connect_window(
     assert passes or f"{gap:g} s" in problem
 
 
+@pytest.mark.parametrize(
+    "after",
+    [[], [{"type": "ERROR", "object": {"kind": "Status"}}]],
+    ids=["end", "ERROR"],
+)
 def test_a_watch_that_ends_early_fails_naming_the_lives_and_asks_for_the_diagnostics(
-    make_fixture: Callable[..., Fixture],
+    make_fixture: Callable[..., Fixture], after: list[Document]
 ) -> None:
-    events = lives_stream(2, REFUSED)
+    events = lives_stream(2, REFUSED) + after
     problem, world = judge_cell(make_fixture, events, REFUSED, lives=3)
     assert "2 of 3 lives" in problem
     assert "life-0" in problem
@@ -716,8 +714,8 @@ CHANGES: list[tuple[Change, str]] = [
         "digest",
     ),
     (
-        lambda b, _o: container_of(b, "StatefulSet").update(image=REMOVE_LINK_IMAGE),
-        "worker",
+        lambda b, o: [container_of(d, "StatefulSet").update(name="x") for d in (b, o)],
+        "is not at {image}",
     ),
 ]
 
@@ -745,7 +743,8 @@ def test_the_overlay_render_is_refused_for_each_difference_beyond_the_image_fiel
     overlay = workload_documents(probe_image)
     assert driver.render_problem(base, overlay, probe_image) is None
     change(base, overlay)
-    assert named_in_refusal in driver.render_problem(base, overlay, probe_image)
+    problem = driver.render_problem(base, overlay, probe_image)
+    assert named_in_refusal.format(image=driver.PRODUCTION_IMAGE) in problem
 
 
 def test_the_watch_hands_out_an_event_before_the_stream_goes_on(
