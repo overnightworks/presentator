@@ -386,16 +386,14 @@ def test_a_second_hearing_the_service_finds_busy_closes_4429_on_the_second_only(
         second_browser = instance.hosts.browser_with_the_cookies_of(
             instance.talk, A_TALK_ADDRESS
         )
-        with (
-            instance.talk.websocket_connect(HEARING, headers=ORIGIN) as one,
-            second_browser.websocket_connect(HEARING, headers=ORIGIN) as two,
-        ):
+        with instance.talk.websocket_connect(HEARING, headers=ORIGIN) as one:
             one.send_bytes(_THE_FIRST_FRAME)
             assert service.connected.wait(THREAD_WAIT_SECONDS)
             for _ in range(2):
                 assert service.arrived.acquire(timeout=THREAD_WAIT_SECONDS)
-            two.send_bytes(b"second")
-            second = _closed_with(two)
+            with second_browser.websocket_connect(HEARING, headers=ORIGIN) as two:
+                two.send_bytes(b"second")
+                second = _closed_with(two)
             one.send_bytes(b"still hearing")
             assert service.arrived.acquire(timeout=THREAD_WAIT_SECONDS)
 
