@@ -2,6 +2,7 @@
 
 The session gate lets this one path through without a session, so a signed-out
 caller gets the instance's defaults; the person comes from what the gate admitted.
+The language is the account's where a catalog speaks it, else the instance's.
 """
 
 from typing import Final
@@ -9,6 +10,10 @@ from typing import Final
 from agents.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
+from webauth.config import web_auth_config
+from webauth.dependencies import account_language_of_session
+from webauth.languages import AppLanguages, resolve_language
+from webauth.ports import SessionRecordStore
 
 from presentator.api.admission import signed_in_person
 from presentator.application.preferences import Preferences
@@ -48,14 +53,34 @@ class SessionView(BaseModel):
     sign_in: SessionAddresses
 
 
-def appearance_of(request: Request, preferences: Preferences) -> Appearance:
-    """The words and the look the person behind this request reads in."""
+def appearance_of(
+    request: Request, preferences: Preferences, sessions: SessionRecordStore
+) -> Appearance:
+    """The words and the look the person behind this request reads in.
+
+    The browser's own language is not read: the account's names the language,
+    else the instance's.
+    """
     person = signed_in_person(request)
-    return preferences.appearance_for(None if person is None else person.id)
+    language_tag = resolve_language(
+        AppLanguages(
+            offered=preferences.offered_tags(), default=preferences.served_tag()
+        ),
+        account_tag=account_language_of_session(
+            request, sessions=sessions, config=web_auth_config(request)
+        ),
+        accept_language=None,
+    )
+    return preferences.appearance_for(
+        None if person is None else person.id, language_tag=language_tag
+    )
 
 
 def session_routes(
-    *, preferences: Preferences, addresses: SessionAddresses
+    *,
+    preferences: Preferences,
+    sessions: SessionRecordStore,
+    addresses: SessionAddresses,
 ) -> APIRouter:
     """The router that answers the session view."""
     router = APIRouter()
@@ -67,7 +92,7 @@ def session_routes(
     def session(request: Request) -> SessionView:
         """Show who is signed in, the language and theme they read in, and the words."""
         person = signed_in_person(request)
-        appearance = appearance_of(request, preferences)
+        appearance = appearance_of(request, preferences, sessions)
         return SessionView(
             person=None
             if person is None

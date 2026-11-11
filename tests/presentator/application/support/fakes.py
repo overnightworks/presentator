@@ -206,7 +206,9 @@ class FakePeople:
     sessions: FakeSessionRecordStore
     clock: FrozenClock
 
-    def open_session_for(self, person: User) -> str:
+    def open_session_for(
+        self, person: User, *, account_language: str | None = None
+    ) -> str:
         """Seed the person and one live session of theirs, and return its id."""
         self.users.users[person.id] = person
         now = self.clock.now()
@@ -216,7 +218,7 @@ class FakePeople:
             expires_at=now + SESSION_LIFETIME,
             refresh_token=None,
             id_token=SecretStr("an-id-token"),
-            account_language=None,
+            account_language=account_language,
         ).id
 
 
