@@ -1,0 +1,8 @@
+claim_id = "9fe5c64cfa554c72bebedf615051d1c3"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "2ee60061002f2690b62efa4701ee0438bbfc2e31"
+branch = "claude/issue-1055-k3d-hello-deck-build"
+scope = [".github/workflows/ci.yml", "scripts/probe_build_worker/web_client.py", "scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_builds.py", "scripts/probe_build_worker_k3d_lives.py", "scripts/probe_build_worker_web.py", "tests/scripts/support/k3d_world.py", "tests/scripts/test_probe_build_worker_k3d.py", "tests/scripts/test_probe_build_worker_k3d_builds.py"]
+opened_commit = "cdc3175663b371306e0a7641c1dac868cda58cd6"
+whole_reason = "One cell: hello-deck through the web's composition in the pod (the client's deck root and the shared outcome parse it needs), plus the three print follow-ups #865 routed to the next driver slice, with the fake world and the test modules that drive them."
