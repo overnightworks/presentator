@@ -142,6 +142,28 @@ export async function readPaintedColours(page: Page) {
   return { track: channels(colours.track), fault: colours.fault === null ? null : channels(colours.fault) }
 }
 
+// The open heard panel against every interactive element Slidev draws outside
+// the presenter bar: the panel covers none of them, and the list it was
+// compared with holds Slidev's own controls (never an empty comparison).
+export async function expectPanelCoversNoSlidevControl(page: Page) {
+  const { panel, controls } = await page.evaluate(() => {
+    const bar = document.querySelector('.presenter-bar')!
+    const rectOf = (element: Element) => {
+      const { x, y, width, height } = element.getBoundingClientRect()
+      return { x, y, width, height }
+    }
+    const panelElement = bar.querySelector('.panel')!
+    const outsideBar = [...document.querySelectorAll('button, a, [role]')]
+      .filter((element) => !bar.contains(element) && !element.contains(bar))
+      .filter((element) => element.checkVisibility({ visibilityProperty: true }))
+      .map((element) => ({ name: `${element.tagName.toLowerCase()} "${(element.textContent ?? '').trim().slice(0, 30)}"`, box: rectOf(element) }))
+      .filter(({ box }) => box.width > 0 && box.height > 0)
+    return { panel: rectOf(panelElement), controls: outsideBar }
+  })
+  expect(controls.map(({ name }) => name).join(' | '), 'Slidev\'s own controls are among those compared').toContain('Screen Mirror')
+  expect(controls.filter(({ box }) => boxesIntersect(panel, box)).map(({ name }) => name)).toEqual([])
+}
+
 // The fault word stands whole in the window, clear of Home and of the switch.
 export async function expectFaultWordClearOfControls(page: Page, width: number, aiSwitch: Locator, faultWord: Locator) {
   const [homeBox, aiBox, faultBox] = await Promise.all([

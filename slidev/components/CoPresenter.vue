@@ -611,16 +611,18 @@ onUnmounted(() => {
 
 <style scoped>
 .copresenter {
-  position: relative;
-  z-index: 50;
-  display: flex;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
   min-width: 0;
   color: CanvasText;
   font: 14px/1.3 system-ui, sans-serif;
 }
 .switch {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -635,11 +637,11 @@ onUnmounted(() => {
   font: inherit;
 }
 .panel {
-  position: absolute;
-  top: 100%;
-  right: 0;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: end;
   box-sizing: border-box;
-  width: min(420px, calc(100vw - 16px));
+  width: min(420px, 100%);
   max-height: min(42vh, 360px);
   margin-top: 4px;
   padding: 10px 12px;
@@ -677,6 +679,9 @@ onUnmounted(() => {
 .heard { font-style: italic; opacity: 0.8; }
 .answer { font-weight: 550; }
 .fault {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: end;
   min-width: 0;
   color: #d97706;
   font-weight: 600;

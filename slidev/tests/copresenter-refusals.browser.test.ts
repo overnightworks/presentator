@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   boxesIntersect,
   expectFaultWordClearOfControls,
+  expectPanelCoversNoSlidevControl,
   openPresenter,
   readPaintedColours,
   registerOverlayHarness,
@@ -61,6 +62,7 @@ describe('co-presenter refusals', () => {
         expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(width)
         expect(boxesIntersect(homeBox!, panelBox!)).toBe(false)
         expect(boxesIntersect(aiBox!, panelBox!)).toBe(false)
+        await expectPanelCoversNoSlidevControl(page)
         await saveEvidence(page, `presenter-refusal-${line.replace(/\W+/g, '-')}-${width}.png`)
       } finally {
         state.answerMode = 'audio'

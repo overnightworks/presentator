@@ -11,6 +11,7 @@ import {
   createMediaObservation,
   createOverlayDeckServer,
   expectFaultWordClearOfControls,
+  expectPanelCoversNoSlidevControl,
   installCspGuard,
   openPageIn,
   openPresenter,
@@ -144,14 +145,16 @@ describe('presenter controls', () => {
     }
   })
 
-  it.each([1, 2, 3])('CP15: keeps the bar above every section of Slidev presenter layout %i', async (layout) => {
-    const { browser, page } = await openPresenterAt(state.origin, '/presenter/1', 1440, async (prepared) => {
+  it.each([1, 2, 3].flatMap((layout) => [1440, 1024, 390].map((width) => [layout, width] as const)))('CP15: keeps the bar above every section of Slidev presenter layout %i at %ipx and its open panel covers no Slidev control', async (layout, width) => {
+    const { browser, page } = await openPresenterAt(state.origin, '/presenter/1', width, async (prepared) => {
       await prepared.addInitScript((chosen) => localStorage.setItem('slidev-presenter-layout', String(chosen)), layout)
     })
     try {
       const home = page.getByRole('link', { name: 'Home' })
       const ai = page.getByRole('switch', { name: 'AI' })
       await home.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      await page.locator('.copresenter .panel').waitFor({ state: 'visible', timeout: 5_000 })
       const { homeBox, aiBox, barBox, sectionsBox } = await readSameFrameBoxes(page, await home.elementHandle(), await ai.elementHandle())
       expect(await page.locator('.grid-container').getAttribute('class')).toContain(`layout${layout}`)
       expect(barBox.y + barBox.height).toBeLessThanOrEqual(sectionsBox.y + 1)
@@ -162,7 +165,8 @@ describe('presenter controls', () => {
         expect(boxesIntersect(box, homeBox)).toBe(false)
         expect(boxesIntersect(box, aiBox)).toBe(false)
       }
-      await saveEvidence(page, `presenter-layout-${layout}-1440.png`)
+      await expectPanelCoversNoSlidevControl(page)
+      await saveEvidence(page, `presenter-layout-${layout}-${width}-heard-panel.png`)
     } finally {
       await browser.close()
     }
@@ -227,6 +231,7 @@ describe('presenter controls', () => {
       expect(panelBox!.x).toBeGreaterThanOrEqual(0)
       expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(390)
       expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(900)
+      await expectPanelCoversNoSlidevControl(page)
       await expectNothingOfTheOverlayInTheBottomBar(page, 900 / 2)
       await saveEvidence(page, 'presenter-active-390.png')
       await page.getByRole('link', { name: 'Home' }).click({ timeout: 2_000 })

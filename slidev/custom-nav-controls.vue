@@ -34,7 +34,7 @@ const { isPresenter } = useNav()
 <style scoped>
 .presenter-bar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   padding: 4px 8px;
