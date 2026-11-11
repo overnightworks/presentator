@@ -37,7 +37,10 @@ _CLOSE_WAIT_SECONDS = 10
 
 @dataclass
 class ASilentBrowser:
-    """A browser socket that sends nothing and keeps the code it was closed with."""
+    """A browser socket that sends its queued frames, then nothing.
+
+    It keeps the code it was closed with.
+    """
 
     closed_with: list[int] = field(default_factory=list[int])
     sends: list[dict[str, object]] = field(default_factory=list[dict[str, object]])
@@ -181,10 +184,12 @@ def test_a_fault_of_the_caller_passes_through_and_closes_the_service_side() -> N
             raise _CallerFaultError
 
         async with a_loopback_server(fake.app()) as origin:
+            hearing = SpeechHearing(origin, voice=A_SPEECH_VOICE)
+            relaying = hearing.relay(
+                ASilentBrowser(), "de", TOKENS, ended=asyncio.Event(), heard=heard
+            )
             with pytest.raises(_CallerFaultError):
-                await SpeechHearing(origin, voice=A_SPEECH_VOICE).relay(
-                    ASilentBrowser(), "de", TOKENS, ended=asyncio.Event(), heard=heard
-                )
+                await relaying
             assert await asyncio.to_thread(fake.closed.wait, _CLOSE_WAIT_SECONDS)
             return fake.closes
 
