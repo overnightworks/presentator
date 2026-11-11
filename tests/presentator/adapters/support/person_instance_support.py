@@ -50,6 +50,7 @@ from tests.presentator.adapters.support.key_draft_support import (
     a_key_drafts_store,
 )
 from tests.presentator.application.support.fakes import (
+    THE_TOOLCHAIN,
     FakeConnectionChecker,
     FakeToolchainThemes,
     FrozenClock,
@@ -199,6 +200,7 @@ def _decks_application(
         store=stores.decks,
         builder=SlidevBuilds(
             builds=builds,
+            identity=THE_TOOLCHAIN,
             toolchain=HostToolchain(project=tmp_path, bound=_A_BOUND),
             mirrors=mirrors,
             output_megabytes=1,
