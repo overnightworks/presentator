@@ -9,13 +9,21 @@ import pytest
 
 from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
 from presentator.host.worker import REFUSAL_EXIT_STATUS
-from presentator.host.worker_self_check import Predicate
+from presentator.host.worker_self_check import BUILD_IDENTITY, Predicate
 from tests.scripts.support.k3d_world import (
     Document,
     Fixture,
+    Version,
     World,
+    expected_ends,
     fixture_maker,
+    lives_stream,
+    named,
     node,
+    pod_version,
+    terminated_state,
+    twin_answer,
+    workload_documents,
 )
 
 
@@ -27,6 +35,16 @@ def cluster_module(load_script: Callable[..., ModuleType]) -> ModuleType:
 @pytest.fixture
 def lives_module(load_script: Callable[..., ModuleType]) -> ModuleType:
     return load_script("probe_build_worker_k3d_lives")
+
+
+@pytest.fixture
+def driver_module(load_script: Callable[..., ModuleType]) -> ModuleType:
+    return load_script("probe_build_worker_k3d")
+
+
+@pytest.fixture
+def starts_module(load_script: Callable[..., ModuleType]) -> ModuleType:
+    return load_script("probe_build_worker_starts")
 
 
 @pytest.fixture
@@ -189,3 +207,294 @@ def test_the_runner_hands_the_run_environment_to_the_child(
         "input",
     )
     assert (done.returncode, done.stdout.strip()) == (0, "seen input")
+
+
+def applied_twins(world: World) -> list[str]:
+    """The names of the Pods an apply received, in order."""
+    return [pod["metadata"]["name"] for pod in world.applied("Pod")]
+
+
+def test_a_residue_twin_differs_from_the_applied_pod_template_only_in_how_it_starts(
+    driver_module: ModuleType, starts_module: ModuleType
+) -> None:
+    documents = workload_documents("image")
+    template = named(documents, "StatefulSet")["spec"]["template"]["spec"]
+    template["containers"][0]["args"] = ["--argument"]
+    uid, gid = BUILD_IDENTITY
+    twin = driver_module.residue_twin(documents, "work-entry", ["--tail"])
+    assert twin["metadata"] == {
+        "name": driver_module.residue_pod_name("work-entry"),
+        "namespace": "presentator",
+    }
+    (worker,) = twin["spec"].pop("containers")
+    (original,) = template["containers"]
+    assert worker.pop("command") == [
+        *("python", "-I", "-c", starts_module.RESIDUE_SOURCE.read_text()),
+        *("work-entry", f"{uid}:{gid}"),
+        *original["command"],
+        *original["args"],
+        "--tail",
+    ]
+    assert twin["spec"].pop("restartPolicy") == "Never"
+    assert worker == {k: v for k, v in original.items() if k not in {"command", "args"}}
+    assert twin["spec"] == {k: v for k, v in template.items() if k != "containers"}
+
+
+def twin_names(driver: ModuleType, starts_module: ModuleType) -> list[str]:
+    """The residue twins' Pod names: the control's first, then each residue's."""
+    ends = expected_ends(driver.CONTROL, starts_module)
+    return [driver.residue_pod_name(residue) for residue, _ in ends]
+
+
+def issued_commands(world: World) -> list[tuple[tuple[str, ...], str]]:
+    """Each command of the run with its stdin, in the order it was issued."""
+    return [(command, stdin or "") for command, _, stdin in world.commands]
+
+
+def worker_gone_position(world: World, driver: ModuleType) -> int:
+    """The position of the wait that sees the worker's Pod gone."""
+    issued = issued_commands(world)
+    worker_applied = max(
+        at
+        for at, (command, stdin) in enumerate(issued)
+        if command[:2] == ("kubectl", "apply") and "StatefulSet" in stdin
+    )
+    stopped = next(
+        at
+        for at, (command, _) in enumerate(issued)
+        if at > worker_applied and command[:3] == ("kubectl", "delete", "statefulset")
+    )
+    return next(
+        at
+        for at, (command, _) in enumerate(issued)
+        if at > stopped
+        and command[:3] == ("kubectl", "wait", "--for=delete")
+        and f"pod/{driver.WORKER_POD}" in command
+    )
+
+
+def twin_apply_positions(world: World, pod_names: list[str]) -> list[int]:
+    """The positions of the applies whose manifest names one of the Pods."""
+    return [
+        at
+        for at, (command, stdin) in enumerate(issued_commands(world))
+        if command[:2] == ("kubectl", "apply")
+        and any(
+            f'"name": "{name}"' in stdin or f"name: {name}\n" in stdin
+            for name in pod_names
+        )
+    ]
+
+
+def cell_nine_lines(lines: list[str]) -> list[str]:
+    return [line for line in lines if line.startswith("cell 9: ")]
+
+
+def expected_cell_nine_ends(ends: list[tuple[str, Predicate | None]]) -> list[str]:
+    return [
+        f"cell 9: {residue}: exit {REFUSAL_EXIT_STATUS}, start refused: {refusal}"
+        if refusal
+        else f"cell 9: {residue}: exit 0, self-check passed"
+        for residue, refusal in ends
+    ]
+
+
+@pytest.fixture
+def driven(make_fixture: Callable[..., Fixture]) -> Fixture:
+    """A run over the default fake world, driven to its end."""
+    fixture = make_fixture()
+    fixture.drive()
+    return fixture
+
+
+def test_the_residue_twins_apply_in_control_then_residue_order(
+    driven: Fixture, starts_module: ModuleType
+) -> None:
+    names = twin_names(driven.driver, starts_module)
+    assert applied_twins(driven.world) == [driven.driver.TWIN_POD, *names]
+
+
+def test_the_residue_twins_apply_only_after_the_worker_is_gone(
+    driven: Fixture, starts_module: ModuleType
+) -> None:
+    driver = driven.driver
+    pod_names = [driver.TWIN_POD, *twin_names(driver, starts_module)]
+    applies = twin_apply_positions(driven.world, pod_names)
+    assert len(applies) == len(pod_names)
+    assert min(applies) > worker_gone_position(driven.world, driver)
+
+
+def test_only_the_control_twin_carries_the_check_argument(
+    driven: Fixture, starts_module: ModuleType
+) -> None:
+    names = twin_names(driven.driver, starts_module)
+    tails = {
+        pod["metadata"]["name"]: pod["spec"]["containers"][0]["command"][-1]
+        for pod in driven.world.applied("Pod")[1:]
+    }
+    checked = [
+        name for name, tail in tails.items() if tail == driven.driver.CHECK_ARGUMENT
+    ]
+    assert checked == [names[0]]
+
+
+def test_removing_the_control_twin_names_every_residue_twin(
+    driven: Fixture, starts_module: ModuleType
+) -> None:
+    names = twin_names(driven.driver, starts_module)
+    (removal,) = [
+        command
+        for command in driven.world.issued("kubectl", "delete", "pod")
+        if names[0] in command
+    ]
+    assert set(names) <= set(removal)
+
+
+def test_cell_9_opens_with_the_worker_facts_then_the_twin_log(
+    make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    lines = capsys.readouterr().out.splitlines()
+    facts = cell_nine_lines(lines)[0]
+    assert facts.startswith("cell 9: the worker pod's facts:")
+    assert lines[lines.index(facts) + 1] == fixture.world.twin_log
+
+
+def test_cell_9_prints_each_residue_end_in_order_after_the_facts(
+    make_fixture: Callable[..., Fixture],
+    starts_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    nine = cell_nine_lines(capsys.readouterr().out.splitlines())
+    ends = expected_ends(fixture.driver.CONTROL, starts_module)
+    assert nine[1:] == expected_cell_nine_ends(ends)
+
+
+def test_cell_9_runs_and_prints_the_facts_when_cell_8_fails(
+    make_fixture: Callable[..., Fixture],
+    lives_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    world = World(
+        streams=[
+            lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
+            lives_stream(lives_module.LIVES, Predicate.MOUNTS),
+        ]
+    )
+    fixture = make_fixture(world)
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    output = capsys.readouterr()
+    assert "cell 8" in output.err
+    assert "cell 9: nothing: exit 0, self-check passed" in output.out
+    assert "cell 9: the worker pod's facts:" in output.out
+    assert set(world.residue_pods) <= set(applied_twins(world))
+
+
+def a_failed_end(refusal: Predicate | None) -> Document:
+    return twin_answer(refusal, terminated_state(1, message="plant failed: x"))
+
+
+def an_unterminated_end(_refusal: Predicate | None) -> Document:
+    pod = pod_version("twin-uid")
+    pod["status"]["phase"] = "Failed"
+    return pod
+
+
+def another_predicate(_refusal: Predicate | None) -> Document:
+    return twin_answer(Predicate.MOUNTS)
+
+
+def a_restart(refusal: Predicate | None) -> Document:
+    return twin_answer(refusal, version=Version(restarts=1))
+
+
+def a_failed_remove_link(refusal: Predicate | None) -> Document:
+    return twin_answer(refusal, version=Version(init_exit=1))
+
+
+@pytest.mark.parametrize(
+    ("end", "fragment"),
+    [
+        (another_predicate, "no 'start refused"),
+        (a_failed_end, "exit status 1"),
+        (a_restart, "restartCount is 1"),
+        (a_failed_remove_link, "remove-link ended as 1"),
+        (an_unterminated_end, "before its worker terminated"),
+    ],
+    ids=["another predicate", "a failed plant", "a restart", "remove-link", "no end"],
+)
+def test_a_residue_twin_that_does_not_end_as_expected_fails_the_cell_naming_it(
+    make_fixture: Callable[..., Fixture],
+    starts_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    end: Callable[[Predicate | None], Document],
+    fragment: str,
+) -> None:
+    (_, refusal, (residue, *_)) = starts_module.REFUSALS[0]
+    world = World(outcomes={residue: end(refusal)})
+    fixture = make_fixture(world)
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    output = capsys.readouterr()
+    assert f"cell 9: {residue}: " in output.err
+    assert fragment in output.err
+    assert world.issued("kubectl", "get", "events") != []
+    facts = fixture.driver.TWIN_POD
+    assert applied_twins(world) == [facts, *world.residue_pods, facts]
+
+
+def test_a_failed_plant_prints_the_end_of_its_message(
+    make_fixture: Callable[..., Fixture],
+    starts_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (_, refusal, (residue, *_)) = starts_module.REFUSALS[0]
+    fixture = make_fixture(World(outcomes={residue: a_failed_end(refusal)}))
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    assert f"cell 9: {residue}: message: plant failed: x" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("refusal", [Predicate.SCRATCH, Predicate.ALONE])
+def test_the_control_that_refuses_fails_the_cell_naming_the_control(
+    make_fixture: Callable[..., Fixture],
+    driver_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    refusal: Predicate,
+) -> None:
+    world = World(outcomes={driver_module.CONTROL: twin_answer(refusal)})
+    fixture = make_fixture(world)
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    err = capsys.readouterr().err
+    assert f"cell 9: {fixture.driver.CONTROL}: " in err
+    assert f"exit status {REFUSAL_EXIT_STATUS}" in err
+
+
+def test_a_twin_that_does_not_end_within_the_window_stops_cell_9_after_that_window(
+    make_fixture: Callable[..., Fixture],
+    lives_module: ModuleType,
+    starts_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (_, _, (residue, *_)) = starts_module.REFUSALS[0]
+    running = {"metadata": {"uid": "twin-uid"}, "status": {"phase": "Running"}}
+    fixture = make_fixture(World(outcomes={residue: running}))
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    driver, world = fixture.driver, fixture.world
+    assert "did not end" in capsys.readouterr().err
+    stalled = driver.residue_pod_name(residue)
+    assert applied_twins(world)[-2:] == [stalled, driver.TWIN_POD]
+    polls = world.issued("kubectl", "get", "pod", stalled)
+    assert (
+        len(polls) <= lives_module.TERMINATION_WINDOW_SECONDS // driver.POLL_SECONDS + 1
+    )
+    removal = next(c for c in world.issued("kubectl", "delete", "pod") if stalled in c)
+    assert [n for n in removal if n.startswith(driver.RESIDUE_POD_PREFIX)] == (
+        applied_twins(world)[1:-1]
+    )
