@@ -324,11 +324,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7b/3d/2e4bc4fd1ef9770871669adb348d612a6e4786b303a23f9935b81c48dd60/httpx2-2.16.0-py3-none-any.whl", hash = "sha256:fd2c5d7909e8d86fe92d53020c310ca0e4e431b838c207c5754b9bbf0308d49a", size = 97880, upload-time = "2026-10-21T07:09:44.01Z" },
 ]
 
-[package.optional-dependencies]
-ws = [
-    { name = "wsproto" },
-]
-
 [[package]]
 name = "httpx2-jsfetch"
 version = "1.0"
@@ -468,7 +463,7 @@ dependencies = [
     { name = "babel" },
     { name = "cryptography" },
     { name = "fastapi" },
-    { name = "httpx2", extra = ["ws"] },
+    { name = "httpx2" },
     { name = "overnightworks-agents", extra = ["backend", "mcp-server"] },
     { name = "overnightworks-speech-client" },
     { name = "overnightworks-webauth" },
@@ -495,9 +490,9 @@ requires-dist = [
     { name = "babel", specifier = "==2.18.0" },
     { name = "cryptography", specifier = "==50.0.2" },
     { name = "fastapi", specifier = "==0.162.0" },
-    { name = "httpx2", extras = ["ws"], specifier = "==2.16.0" },
+    { name = "httpx2", specifier = "==2.16.0" },
     { name = "overnightworks-agents", extras = ["backend", "mcp-server"], git = "https://github.com/overnightworks/agents?rev=v0.31.0" },
-    { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.6.0" },
+    { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.8.0" },
     { name = "overnightworks-webauth", git = "https://github.com/overnightworks/webauth?rev=v0.34.0" },
     { name = "pydantic-settings", specifier = "==2.16.2" },
     { name = "syntok", specifier = "==1.4.4" },
@@ -519,8 +514,8 @@ dev = [
 
 [[package]]
 name = "overnightworks-speech-client"
-version = "0.6.0"
-source = { git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.6.0#34cc2c9597fcceac947e129b88c7df7bd84ab201" }
+version = "0.8.0"
+source = { git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.8.0#233d8125ffc3be017ec244526036b1895e1066c0" }
 dependencies = [
     { name = "pydantic" },
     { name = "websockets" },

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from speech_client.relay import HopClose
 from starlette.websockets import WebSocketDisconnect
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
@@ -36,7 +37,6 @@ from tests.support.copresenter_support import (
     POLICY_VIOLATION,
     QUESTION,
     TALK_ORIGIN,
-    UNSUPPORTED_DATA,
     ManualDeadline,
     PrivateFakes,
     a_copresenter_talk_host,
@@ -246,7 +246,7 @@ def test_private_answer_refusal_and_clean_end_do_not_invent_an_answer() -> None:
     assert private.answers.exits == 1
 
 
-def test_foreign_origin_and_text_frames_open_no_private_hearing() -> None:
+def test_foreign_origin_and_a_stray_query_open_no_private_hearing() -> None:
     lobby, private, clock = a_copresenter_talk_host()
     client = lobby.client
     lobby.sign_in()
@@ -261,42 +261,30 @@ def test_foreign_origin_and_text_frames_open_no_private_hearing() -> None:
         assert foreign.value.code == POLICY_VIOLATION
     assert lobby.people.sessions.loads == 0
 
-    with (
-        pytest.raises(WebSocketDisconnect) as extra_query,
-        client.websocket_connect(
-            f"{HEARING}&credential=must-not-travel",
-            headers={"origin": TALK_ORIGIN},
-        ),
-    ):
-        pass
-    assert extra_query.value.code == POLICY_VIOLATION
-
-    with (
-        client.websocket_connect(
-            HEARING,
-            headers={"origin": TALK_ORIGIN},
-        ) as socket,
-    ):
-        socket.send_text("not pcm")
-        with pytest.raises(WebSocketDisconnect) as wrong_type:
-            socket.receive_json()
-
-    assert wrong_type.value.code == UNSUPPORTED_DATA
+    for stray in ("&credential=must-not-travel", "&language=en"):
+        with (
+            pytest.raises(WebSocketDisconnect) as extra_query,
+            client.websocket_connect(
+                f"{HEARING}{stray}", headers={"origin": TALK_ORIGIN}
+            ),
+        ):
+            pass
+        assert extra_query.value.code == POLICY_VIOLATION
     assert private.speech.hearing_opens == 0
 
 
-def test_browser_disconnect_before_pcm_opens_no_private_hearing() -> None:
+def test_a_browser_that_sends_nothing_opens_the_hearing_at_accept_with_no_audio() -> (
+    None
+):
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
     lobby.sign_in()
 
-    with client.websocket_connect(
-        HEARING,
-        headers={"origin": TALK_ORIGIN},
-    ):
+    with client.websocket_connect(HEARING, headers={"origin": TALK_ORIGIN}):
         pass
 
-    assert private.speech.hearing_opens == 0
+    assert private.speech.hearing_opens == 1
+    assert private.speech.hearing.frames == []
 
 
 def test_an_active_session_keeps_hearing_after_an_authoritative_recheck() -> None:
@@ -343,22 +331,9 @@ def test_binary_hearing_forwards_pcm_and_returns_only_typed_transcripts() -> Non
     assert private.speech.hearing.closed == 1
 
 
-def test_transcript_delivery_disconnect_closes_the_private_child() -> None:
+def test_a_browser_that_leaves_while_a_transcript_is_sent_ends_the_hearing() -> None:
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
-    private.speech.grouped_hearing_context = True
-    lobby.sign_in()
-
-    asyncio.run(_send_hearing_event_to_a_disconnected_browser(client))
-
-    assert private.speech.hearing.frames == [b"pcm"]
-    assert private.speech.hearing.closed == 1
-
-
-def test_private_failure_notice_disconnect_closes_the_private_child() -> None:
-    lobby, private, _clock = a_copresenter_talk_host()
-    client = lobby.client
-    private.speech.hearing.events = [None]
     lobby.sign_in()
 
     asyncio.run(_send_hearing_event_to_a_disconnected_browser(client))
@@ -410,71 +385,7 @@ async def _send_hearing_event_to_a_disconnected_browser(client: TestClient) -> N
     await client.app(scope, receive, send)
 
     assert browser_send_attempted
-
-
-def test_an_accepted_hearing_refuses_text_after_private_use_started() -> None:
-    lobby, private, _clock = a_copresenter_talk_host()
-    client = lobby.client
-    lobby.sign_in()
-
-    with client.websocket_connect(
-        HEARING,
-        headers={"origin": TALK_ORIGIN},
-    ) as socket:
-        socket.send_bytes(b"pcm")
-        assert socket.receive_json() == {"text": "gehört", "final": True}
-        socket.send_text("browser data is never private PCM")
-        with pytest.raises(WebSocketDisconnect) as refused:
-            socket.receive_json()
-
-    assert refused.value.code == UNSUPPORTED_DATA
-    assert private.speech.hearing.frames == [b"pcm"]
-    assert private.speech.hearing.closed == 1
-
-
-def test_private_hearing_failure_keeps_the_authenticated_browser_lease() -> None:
-    lobby, private, _clock = a_copresenter_talk_host()
-    client = lobby.client
-    private.speech.hearing.events = [None]
-    lobby.sign_in()
-
-    with client.websocket_connect(
-        HEARING,
-        headers={"origin": TALK_ORIGIN},
-    ) as socket:
-        socket.send_bytes(b"first")
-        assert socket.receive_json() == {
-            "text": "",
-            "final": True,
-            "error": "hearing unavailable",
-        }
-        socket.send_bytes(b"browser recognition keeps the lease alive")
-
-    assert private.speech.hearing.frames == [b"first"]
-    assert private.speech.hearing.closed == 1
-
-
-def test_browser_fallback_refuses_text_frames_without_reopening_private_hearing() -> (
-    None
-):
-    lobby, private, _clock = a_copresenter_talk_host()
-    client = lobby.client
-    private.speech.hearing.events = [None]
-    lobby.sign_in()
-
-    with client.websocket_connect(
-        HEARING,
-        headers={"origin": TALK_ORIGIN},
-    ) as socket:
-        socket.send_bytes(b"local hearing fails")
-        assert socket.receive_json()["error"] == "hearing unavailable"
-        socket.send_text("browser fallback remains binary-only")
-        with pytest.raises(WebSocketDisconnect) as refused:
-            socket.receive_json()
-
-    assert refused.value.code == UNSUPPORTED_DATA
-    assert private.speech.hearing.frames == [b"local hearing fails"]
-    assert private.speech.hearing.closed == 1
+    assert asyncio.all_tasks() == {asyncio.current_task()}
 
 
 def test_unexpected_private_hearing_failure_closes_the_public_connection() -> None:
@@ -506,20 +417,24 @@ def test_private_failures_expose_only_public_failure_shapes() -> None:
     private.speech.readiness_unavailable = False
     private.answers.unavailable = CoPresenterUnavailableError()
     answer = ask(client)
-    private.speech.hearing_unavailable = True
-    with client.websocket_connect(
-        HEARING,
-        headers={"origin": TALK_ORIGIN},
-    ) as socket:
-        socket.send_bytes(b"pcm")
-        hearing = socket.receive_json()
+    private.person_access.unavailable = True
+    with (
+        client.websocket_connect(
+            HEARING,
+            headers={"origin": TALK_ORIGIN},
+        ) as socket,
+        pytest.raises(WebSocketDisconnect) as hearing,
+    ):
+        socket.receive_json()
 
     assert whose.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert whose.json() == {"detail": "Co-presenter unavailable"}
     assert answer.text == (
         'event: error\ndata: {"message": "the answer could not be spoken"}\n\n'
     )
-    assert hearing == {"text": "", "final": True, "error": "hearing unavailable"}
+    assert hearing.value.code == HopClose.SERVICE_FAILED
+    assert private.speech.refusals == 1
+    assert private.speech.hearing_opens == 0
 
 
 def test_local_allowlist_refuses_extra_fields_methods_and_paths() -> None:
@@ -592,20 +507,20 @@ def test_a_running_hearing_ends_at_the_cap_on_its_recheck(
         headers={"origin": TALK_ORIGIN},
     ) as socket:
         assert deadline.started.wait(timeout=1)
+        assert private.speech.relaying.wait(timeout=1)
         touches_before = lobby.people.sessions.touches
         clock.advance(after_the_check)
         deadline.release_first()
         if closed:
-            socket.send_text("force an observable close if the session stood")
             with pytest.raises(WebSocketDisconnect) as ended:
                 socket.receive_json()
-            assert ended.value.code == POLICY_VIOLATION
+            assert ended.value.code == HopClose.NORMAL
         else:
             socket.send_bytes(b"pcm after the check")
             assert socket.receive_json() == {"text": "gehört", "final": True}
 
     if closed:
-        assert private.speech.hearing_opens == 0
+        assert private.speech.hearing.frames == []
         assert lobby.people.sessions.touches == touches_before
     else:
         assert private.speech.hearing.frames == [b"pcm after the check"]
@@ -757,40 +672,9 @@ def test_busy_local_hearing_stops_before_more_pcm_after_authoritative_loss(
         users.fail_reads = loss == "store-error"
         deadline.release_first()
         socket.send_bytes(b"after loss")
-        socket.send_text("force an observable close if the deadline was reset")
         with pytest.raises(WebSocketDisconnect) as ended:
             socket.receive_json()
 
-    assert ended.value.code == POLICY_VIOLATION
+    assert ended.value.code == HopClose.NORMAL
     assert private.speech.hearing.frames == frames_before_loss
     assert private.speech.hearing.closed == 1
-
-
-@pytest.mark.parametrize("loss", ["account-gone", "store-error"])
-def test_busy_browser_fallback_keeps_the_original_authorization_deadline(
-    loss: str,
-) -> None:
-    users = RefusingUserStore()
-    deadline = ManualDeadline()
-    lobby, private, _clock = a_copresenter_talk_host(users=users, delay=deadline.wait)
-    client = lobby.client
-    private.speech.hearing.events = [None]
-    lobby.sign_in()
-
-    with client.websocket_connect(
-        HEARING,
-        headers={"origin": TALK_ORIGIN},
-    ) as socket:
-        assert deadline.started.wait(timeout=1)
-        socket.send_bytes(b"local hearing fails")
-        assert socket.receive_json()["error"] == "hearing unavailable"
-        users.refuse_reads = loss == "account-gone"
-        users.fail_reads = loss == "store-error"
-        deadline.release_first()
-        socket.send_bytes(b"busy fallback lease")
-        socket.send_text("force an observable close if the deadline was reset")
-        with pytest.raises(WebSocketDisconnect) as ended:
-            socket.receive_json()
-
-    assert ended.value.code == POLICY_VIOLATION
-    assert private.speech.hearing.frames == [b"local hearing fails"]

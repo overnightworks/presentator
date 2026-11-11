@@ -8,7 +8,7 @@ import logging
 import re
 import sqlite3
 import threading
-from contextlib import asynccontextmanager, closing, contextmanager, suppress
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 from urllib.parse import urlsplit
@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 from agents.backend.fake_gateway import FakeGateway, completion
 from speech_client import wire
 from speech_client.outcomes import PastDeadline
+from speech_client.relay import HopClose
 from starlette.websockets import WebSocketDisconnect
 
 from presentator.adapters.sentences import split_sentences
@@ -91,7 +92,13 @@ from tests.support.speech_service import (
 from tests.support.talk_support import A, Hosts, two_hosts
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Generator, Mapping, Sequence
+    from collections.abc import (
+        Awaitable,
+        Callable,
+        Generator,
+        Mapping,
+        Sequence,
+    )
     from pathlib import Path
 
     from fastapi.testclient import TestClient
@@ -101,7 +108,7 @@ if TYPE_CHECKING:
     from presentator.adapters.identity import SqliteSessionRecordStore
     from presentator.api.auth import InstalledAuth
     from presentator.contracts.copresenter import CoPresenterReadiness
-    from presentator.ports.copresenter import PrivateHearing, Speaking
+    from presentator.ports.copresenter import HearingSocket, Speaking
     from presentator.ports.copresenter import SpeechHearing as SpeechHearingPort
     from tests.presentator.application.support.fakes import FakeDeckStore
 
@@ -124,7 +131,6 @@ _ANSWER_EVENTS: Final = frozenset({"text", "sentence", "audio", "done"})
 _SSE_EVENT: Final = re.compile(
     r"^event: (?P<name>\w+)\ndata: (?P<data>.*)$", re.MULTILINE
 )
-_NO_HEARING_ERROR_KEY: Final = "error"
 _REFRESH_COLUMN: Final = "refresh_token"
 _USER_ID_COLUMN: Final = "user_id"
 _ID_COLUMN: Final = "id"
@@ -142,6 +148,8 @@ class SpeechScenario:
     peer: Served | None = None
     bounded_calls_stall: bool = False
     speech_scope: str = A_SPEECH_SCOPE
+    hearing_seconds: tuple[float, float] | None = None
+    """The hearing's deadline and opening bound, when a scenario shortens them."""
 
 
 @dataclass(kw_only=True)
@@ -191,31 +199,6 @@ class WitnessedSpeaking:
             raise
 
 
-class _WitnessedHearing:
-    """One hearing, keeping every error it lets out for the leak check."""
-
-    def __init__(self, hearing: PrivateHearing, errors: list[BaseException]) -> None:
-        self._hearing = hearing
-        self._errors = errors
-
-    async def send_pcm(self, frame: bytes) -> None:
-        try:
-            await self._hearing.send_pcm(frame)
-        except BaseException as error:
-            self._errors.append(error)
-            raise
-
-    async def receive(self) -> HearingTranscript | None:
-        try:
-            return await self._hearing.receive()
-        except BaseException as error:
-            self._errors.append(error)
-            raise
-
-    async def aclose(self) -> None:
-        await self._hearing.aclose()
-
-
 class WitnessedSpeech:
     """The real hearing and readiness, keeping every error they let out."""
 
@@ -231,28 +214,52 @@ class WitnessedSpeech:
             self._errors.append(error)
             raise
 
-    @asynccontextmanager
-    async def hear(
-        self, language: str, tokens: SpeechTokens
-    ) -> AsyncGenerator[PrivateHearing]:
+    async def relay(
+        self,
+        browser: HearingSocket,
+        language: str,
+        tokens: SpeechTokens,
+        *,
+        ended: asyncio.Event,
+        heard: Callable[[HearingTranscript], Awaitable[None]],
+    ) -> None:
         try:
-            async with self._speech.hear(language, tokens) as hearing:
-                yield _WitnessedHearing(hearing, self._errors)
+            await self._speech.relay(
+                browser, language, tokens, ended=ended, heard=heard
+            )
+        except BaseException as error:
+            self._errors.append(error)
+            raise
+
+    async def refuse(self, browser: HearingSocket) -> None:
+        try:
+            await self._speech.refuse(browser)
         except BaseException as error:
             self._errors.append(error)
             raise
 
 
 def _real_speech_adapters(
-    origin: str, *, bounded_calls_stall: bool
+    origin: str, scenario: SpeechScenario
 ) -> tuple[SpeechHearing, SpeechSpeaking]:
     silence_transport_traces()
-    if bounded_calls_stall:
+    if scenario.bounded_calls_stall:
         return (
             SpeechHearing(
                 origin, voice=A_SPEECH_VOICE, bounded_health_fetch=_past_deadline
             ),
             SpeechSpeaking(origin, voice=A_SPEECH_VOICE, bounded_speak=_past_deadline),
+        )
+    if scenario.hearing_seconds is not None:
+        deadline, opening = scenario.hearing_seconds
+        return (
+            SpeechHearing(
+                origin,
+                voice=A_SPEECH_VOICE,
+                hearing_deadline_seconds=deadline,
+                opening_seconds=opening,
+            ),
+            SpeechSpeaking(origin, voice=A_SPEECH_VOICE),
         )
     return (
         SpeechHearing(origin, voice=A_SPEECH_VOICE),
@@ -324,9 +331,7 @@ def a_speech_instance(
         hosts = two_hosts(
             tmp_path,
             copresenter=a_surface_over(
-                _real_speech_adapters(
-                    origin, bounded_calls_stall=scenario.bounded_calls_stall
-                ),
+                _real_speech_adapters(origin, scenario),
                 gateway=gateway,
                 limiter=limiter,
                 deadline=deadline,
@@ -383,23 +388,35 @@ def ask_over(
     return instance.run_of(response, logged)
 
 
+@dataclass(frozen=True)
+class Heard:
+    """What one hearing showed the browser and the logs, until its socket closed."""
+
+    frames: list[dict[str, object]]
+    closed_with: int
+    reason: str
+    logged: list[logging.LogRecord]
+
+
 def hear_and_record(
     instance: SpeechInstance,
-) -> tuple[list[dict[str, object]], list[logging.LogRecord]]:
-    """One lease until its error frame; every frame and every log record."""
+    *,
+    url: str = HEARING,
+    audio: Sequence[bytes] = (b"first",),
+) -> Heard:
+    """One hearing until the server closes it; every frame and every log record."""
     frames: list[dict[str, object]] = []
     with (
         recorded_logs() as logged,
-        instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
+        instance.talk.websocket_connect(url, headers=ORIGIN) as socket,
     ):
-        socket.send_bytes(b"first")
-        with suppress(WebSocketDisconnect):
-            while True:
-                frame = socket.receive_json()
-                frames.append(frame)
-                if _NO_HEARING_ERROR_KEY in frame:
-                    break
-    return frames, list(logged)
+        for pcm in audio:
+            socket.send_bytes(pcm)
+        while True:
+            try:
+                frames.append(socket.receive_json())
+            except WebSocketDisconnect as closed:
+                return Heard(frames, closed.code, closed.reason, list(logged))
 
 
 def _every_marker(instance: SpeechInstance) -> tuple[str, ...]:
@@ -496,9 +513,8 @@ def assert_nothing_shows(
         _absent("\n".join(response.headers.values()), (*markers, *words))
         _assert_the_body_keeps_the_answer_to_its_events(response.text, markers)
     for frame in frames:
-        exempt = () if _NO_HEARING_ERROR_KEY in frame else HEARD_WORDS
         text = json.dumps(frame, ensure_ascii=False)
-        _absent(text, (*markers, *(w for w in words if w not in exempt)))
+        _absent(text, (*markers, *(w for w in words if w not in HEARD_WORDS)))
     for reason in close_reasons:
         _absent(reason, (*markers, *words))
 
@@ -605,13 +621,36 @@ def _marked_frames_the_parser_refuses() -> dict[str, Hear]:
     }
 
 
-_HEARING_ENDS: Final[dict[str, Hear]] = {
+@dataclass(frozen=True)
+class Ending:
+    """How a service ends a hearing, and what the browser shows of it."""
+
+    hear: Hear
+    frames: list[dict[str, object]]
+    close: HopClose
+
+
+_HEARING_ENDS: Final[dict[str, Ending]] = {
+    "closes-1000": Ending(
+        after_the_first_audio(close_code=1000, close_reason=PLANTED),
+        [],
+        HopClose.NORMAL,
+    ),
     **{
-        f"closes-{code}": after_the_first_audio(close_code=code, close_reason=PLANTED)
-        for code in (1000, 1009, 1011, 1013)
+        f"closes-{code}": Ending(
+            after_the_first_audio(close_code=code, close_reason=PLANTED),
+            [],
+            HopClose.SERVICE_FAILED,
+        )
+        for code in (1009, 1011, 1013)
     },
-    "peer-crashes-mid-session": crashing_after_the_first_audio(),
-    **_marked_frames_the_parser_refuses(),
+    "peer-crashes-mid-session": Ending(
+        crashing_after_the_first_audio(), [], HopClose.SERVICE_FAILED
+    ),
+    **{
+        name: Ending(hear, [], HopClose.SERVICE_FAILED)
+        for name, hear in _marked_frames_the_parser_refuses().items()
+    },
 }
 
 
@@ -621,7 +660,7 @@ LEAK_HEARINGS: Final[dict[str, Callable[[], SpeechScenario]]] = {
     "marked-failed-then-error": _with_realtime(
         after_the_first_audio(a_marked_failed_item(), a_marked_error_event())
     ),
-    **{name: _with_realtime(hear) for name, hear in _HEARING_ENDS.items()},
+    **{name: _with_realtime(end.hear) for name, end in _HEARING_ENDS.items()},
     "busy-marked": _with_realtime(busy_at_the_upgrade(marked=True)),
     **{
         f"denied-{status}": _with_realtime(denying(status, marked=True))
@@ -708,28 +747,13 @@ def _transcripts(*shown: tuple[str, bool]) -> list[dict[str, object]]:
     return [{"text": text, "final": final} for text, final in shown]
 
 
-BROWSER_FRAMES: dict[str, tuple[Hear, list[dict[str, object]]]] = {
-    "deltas-grow-and-completed-replaces": (
-        after_the_first_audio(
-            a_delta("Gu"),
-            a_delta("Ha", item="item-2"),
-            a_delta("ten"),
-            a_completed("Guten Tag."),
-        ),
-        _transcripts(
-            ("Gu", False), ("Ha", False), ("Guten", False), ("Guten Tag.", True)
-        ),
+BROWSER_ENDINGS: dict[str, Ending] = {
+    "deltas-grow-and-completed-replaces": Ending(
+        after_the_first_audio(a_delta("Gu"), a_delta("ten"), a_completed("Guten Tag.")),
+        _transcripts(("Gu", False), ("Guten", False), ("Guten Tag.", True)),
+        HopClose.NORMAL,
     ),
-    "empty-completed-sends-nothing-and-clears-the-item": (
-        after_the_first_audio(
-            a_delta("Ha", item="item-2"),
-            a_completed("", item="item-2"),
-            a_delta("Neu", item="item-2"),
-            a_completed("Neu.", item="item-2"),
-        ),
-        _transcripts(("Ha", False), ("Neu", False), ("Neu.", True)),
-    ),
-    "session-and-turn-events-skipped": (
+    "session-and-turn-events-skipped": Ending(
         after_the_first_audio(
             wire.SessionCreated(
                 session=wire.TranscriptionSession(type="transcription")
@@ -747,15 +771,20 @@ BROWSER_FRAMES: dict[str, tuple[Hear, list[dict[str, object]]]] = {
             a_completed("Ein Wort."),
         ),
         _transcripts(("Ein Wort.", True)),
+        HopClose.NORMAL,
     ),
-    "failed-then-error": (
+    "failed-then-error": Ending(
         after_the_first_audio(a_failed_item(), an_error_event()),
         [],
+        HopClose.SERVICE_FAILED,
     ),
-    "error-alone": (after_the_first_audio(an_error_event()), []),
-    **{name: (hear, []) for name, hear in _HEARING_ENDS.items()},
-    "busy-at-the-upgrade": (busy_at_the_upgrade(), []),
-    "refused-401": (denying(401), []),
-    "refused-403": (denying(403), []),
-    "refused-503": (denying(503), []),
+    "error-alone": Ending(
+        after_the_first_audio(an_error_event()), [], HopClose.SERVICE_FAILED
+    ),
+    **_HEARING_ENDS,
+    "busy-at-the-upgrade": Ending(busy_at_the_upgrade(), [], HopClose.BUSY),
+    **{
+        f"refused-{status}": Ending(denying(status), [], HopClose.SERVICE_FAILED)
+        for status in (401, 403, 503)
+    },
 }

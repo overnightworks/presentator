@@ -53,22 +53,6 @@ async def _cancel_answer() -> None:
     assert fakes.answers.exits == 1
 
 
-def test_ending_hearing_closes_and_awaits_the_private_child() -> None:
-    """Unchanged behaviour: ending a hearing closes its child."""
-    asyncio.run(_end_hearing())
-
-
-async def _end_hearing() -> None:
-    fakes = PrivateFakes()
-    use = a_use(fakes, FakeDeckStore())
-
-    async with use.hear("de", session_id="a-session") as hearing:
-        await hearing.send_pcm(b"pcm")
-
-    assert fakes.speech.hearing.frames == [b"pcm"]
-    assert fakes.speech.hearing.closed == 1
-
-
 def test_readiness_comes_from_speech_and_never_touches_the_answer_port() -> None:
     """Unchanged behaviour: readiness comes from speech alone."""
     fakes = PrivateFakes()
