@@ -3,7 +3,7 @@
 import contextlib
 import dataclasses
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from types import ModuleType
 
@@ -74,19 +74,31 @@ def test_cell_10_applies_the_secret_and_web_reads_the_control_then_starts_the_wo
 
 
 def test_cell_10_prints_its_control_before_the_worker_applies_then_its_ready_line(
-    make_fixture: Callable[..., Fixture], monkeypatch: pytest.MonkeyPatch
+    make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str]
 ) -> None:
     fixture = make_fixture()
     world = fixture.world
-    said: list[tuple[int, str]] = []
+    marker = "command issued at "
+    run_command = fixture.run.effects.run
 
-    def record(line: str) -> None:
-        said.append((len(world.commands), line))
+    def marking(
+        command: tuple[str, ...], environment: Mapping[str, str], stdin: str | None
+    ) -> object:
+        fixture.driver.say(f"{marker}{len(world.commands)}")
+        return run_command(command, environment, stdin)
 
-    monkeypatch.setattr(fixture.driver, "say", record)
+    effects = dataclasses.replace(fixture.run.effects, run=marking)
+    fixture.run = dataclasses.replace(fixture.run, effects=effects)
     fixture.drive()
     worker = apply_positions(world, "StatefulSet")[-1]
-    cell_ten = [(at, line) for at, line in said if line.startswith("cell 10: ")]
+    printed = capsys.readouterr().out.splitlines()
+    issued_before = 0
+    cell_ten: list[tuple[int, str]] = []
+    for line in printed:
+        if line.startswith(marker):
+            issued_before = int(line.removeprefix(marker)) + 1
+        elif line.startswith("cell 10: "):
+            cell_ten.append((issued_before, line))
     ready = f"Ready {WEB_READY_AFTER} s after the worker started"
     worker_pod = f"worker pod {FIRST_WORKER_UID}, Running, restarts 0"
     control = (
