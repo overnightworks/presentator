@@ -95,6 +95,10 @@ def bare_environment(
     monkeypatch.delenv("PRESENTATOR_SECRET_KEY_FILE", raising=False)
     monkeypatch.setenv("PRESENTATOR_DATABASE", str(tmp_path / "presentator.sqlite3"))
     monkeypatch.setenv("PRESENTATOR_LOBBY_BUILD", str(LOBBY_BUILD))
+    toolchain = tmp_path / "toolchain"
+    toolchain.mkdir()
+    (toolchain / "package.json").write_text("{}")
+    monkeypatch.setenv("PRESENTATOR_TOOLCHAIN", str(toolchain))
     # `remote`/`another_remote` write their bare
     # repositories straight into `tmp_path`, the one directory every real
     # git address these tests build stands under; naming it as the mount
