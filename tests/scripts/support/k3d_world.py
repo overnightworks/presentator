@@ -19,6 +19,8 @@ from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import Predicate
 
 DIGEST = "@sha256:" + "a" * 64
+OTHER_DIGEST = "@sha256:" + "c" * 64
+RELEASED_VERSION = "2026.11.11.1"
 REMOVE_LINK_IMAGE = "docker.io/library/busybox:1.38.0@sha256:" + "b" * 64
 K3S_VERSION = "v1.37.2+k3s1"
 RUN_IDENTIFIER = "0a1b2c3d"
@@ -251,6 +253,11 @@ class World:
     node_name: str = ""
     probe_image: str = ""
     production_image: str = ""
+    # The repo digests the probe tag shows once the published image is tagged;
+    # the published image's own if unset.
+    repo_digests: list[str] | None = None
+    # The error `docker pull` ends with; the pull passes if empty.
+    pull_error: str = ""
     twin_pod: str = ""
     worker_pod: str = ""
     twin_log: str = "the twin's mount list"
@@ -320,6 +327,8 @@ class World:
             message = "the fake runner broke"
             raise RuntimeError(message)
         match command:
+            case ("docker", "pull", *_) if self.pull_error:
+                return 1, "", self.pull_error
             case ("timeout", _, "kubectl", "cp", *_):
                 return self.copy_exit, "", self.copy_stderr
             case ("timeout", _, "kubectl", "exec", *_):
@@ -357,8 +366,12 @@ class World:
                 self.tools_up = False
             case ("docker", "volume", "rm", "--force", _):
                 self.volume_up = False
-            case ("docker", "build", *_) | ("docker", "image", "rm", *_):
-                self.image_built = command[1] == "build"
+            case ("docker", "build", *_):
+                self.image_built = True
+            case ("docker", "tag", _, name) if name == self.probe_image:
+                self.image_built = True
+            case ("docker", "image", "rm", *_, name) if name == self.probe_image:
+                self.image_built = False
             case _:
                 pass
 
@@ -382,6 +395,9 @@ class World:
             case ("docker", "volume", "ls", *_):
                 own = f"k3d-{self.cluster_name}-images"
                 return self.listing("volume", own, exists=self.volume_up)
+            case ("docker", "image", "inspect", *_):
+                shown = self.repo_digests
+                return json.dumps([self.production_image] if shown is None else shown)
             case ("docker", "image", "ls", *_, repository):
                 probe = repository == self.probe_image.split(":")[0]
                 own = self.probe_image if probe else ""
@@ -552,14 +568,17 @@ class Fixture:
     driver: ModuleType
     world: World
     run: Any
+    reference: str
 
-    def drive(self) -> None:
-        self.driver.drive(self.run)
+    def drive(self, *, released: bool = False) -> None:
+        """Drive the run, over the published image if `released`."""
+        image = self.driver.released_image(self.reference) if released else None
+        self.driver.drive(self.run, image)
 
 
 def platform_checkout(tmp_path: Path) -> Path:
     checkout = tmp_path / "platform"
-    (checkout / "infrastructure" / "namespaces").mkdir(parents=True)
+    (checkout / "infrastructure" / "namespaces").mkdir(parents=True, exist_ok=True)
     (checkout / "mise.toml").write_text(f'[env]\nK3S_VERSION = "{K3S_VERSION}"\n')
     (checkout / "infrastructure" / "namespaces" / "namespaces.yaml").write_text(
         "kind: Namespace\nmetadata:\n  name: other\n---\n"
@@ -700,7 +719,8 @@ def fixture_maker(
             lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
             lives_stream(lives_module.LIVES, None),
         ]
-        return Fixture(driver, world, run)
+        reference = f"{manifests_module.PRODUCTION_IMAGE}:{RELEASED_VERSION}{DIGEST}"
+        return Fixture(driver, world, run, reference)
 
     return make
 

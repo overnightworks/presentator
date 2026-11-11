@@ -2,7 +2,7 @@ r"""Drive the build worker's pod shape in an ordinary k3d cluster.
 
 Usage: probe_build_worker_k3d.py pin
        probe_build_worker_k3d.py leftovers
-       probe_build_worker_k3d.py drive --platform CHECKOUT
+       probe_build_worker_k3d.py drive --platform CHECKOUT [--image REF]
 
 `pin` prints the one platform commit this probe is written against; CI checks
 platform out at it. `leftovers` lists the k3d clusters, the containers and
@@ -62,6 +62,14 @@ builds and exports the deck through the worker, whose life ends with each step;
 the client reads the talk's page and the PDF in the web pod. The cell is judged
 by the client's outcome and by a new worker pod with remove-link 0 and restarts 0.
 
+With `--image REF` the drive runs on the image `release.yml` published instead
+of one it builds, and only on a CI runner. REF is exactly
+`ghcr.io/overnightworks/presentator:<tag>@sha256:<64 lowercase hex>`; anything
+else is refused before any command runs. The drive pulls the image by that
+digest, tags it as the run's probe tag, refuses unless the tag's repo digests
+list the published digest and removes the pulled reference again. From the
+cluster on it runs the same code for both sources.
+
 A cell that fails prints the Namespace's events and the output of a twin Pod of
 the same spec; the run fails after the cells ran.
 
@@ -88,6 +96,7 @@ takes the probe-stack lock:
 import copy
 import json
 import os
+import re
 import secrets
 import shutil
 import signal
@@ -98,6 +107,7 @@ import tempfile
 import time
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -139,6 +149,7 @@ from probe_build_worker_k3d_lives import (
     watch_lives,
 )
 from probe_build_worker_k3d_manifests import (
+    PRODUCTION_IMAGE,
     WEB_CONTAINER,
     WORKER_CONTAINER,
     applied_documents,
@@ -516,15 +527,67 @@ def drive_cells(run: Run, overlay: list[Document]) -> list[str]:
     return [problem for problem in problems if problem]
 
 
-def drive(run: Run) -> None:
-    """Drive the cells of the pod shape; always remove what the run made."""
+@dataclass(frozen=True)
+class ReleasedImage:
+    """The image `release.yml` published: its reference and its digest."""
+
+    reference: str
+    digest: str
+
+    @property
+    def pinned(self) -> str:
+        """The production image at the digest, which docker verifies on a pull."""
+        return f"{PRODUCTION_IMAGE}@{self.digest}"
+
+
+RELEASED_IMAGE_FORM = f"{PRODUCTION_IMAGE}:<tag>@sha256:<64 lowercase hex>"
+RELEASED_IMAGE = re.compile(
+    rf"{re.escape(PRODUCTION_IMAGE)}:[A-Za-z0-9_][A-Za-z0-9_.-]{{0,127}}"
+    r"@(?P<digest>sha256:[0-9a-f]{64})"
+)
+
+
+def released_image(reference: str) -> ReleasedImage:
+    """The published image of a reference of exactly the registry form; else refuse."""
+    matched = RELEASED_IMAGE.fullmatch(reference)
+    if matched is None:
+        refuse(f"--image must be {RELEASED_IMAGE_FORM}, not {reference!r}")
+    return ReleasedImage(reference, matched["digest"])
+
+
+def use_released_image(run: Run, released: ReleasedImage) -> None:
+    """Make the probe tag the published image, proven by its repo digest.
+
+    The pulled reference is removed again whether or not the proof holds.
+    """
+    pinned = released.pinned
+    run("docker pull", pinned)
+    try:
+        run("docker tag", pinned, run.tag)
+        listed = run("docker image inspect --format", "{{json .RepoDigests}}", run.tag)
+        digests: list[str] = json.loads(listed.stdout) or []
+        if pinned not in digests:
+            refuse(f"{run.tag} lacks the repo digest {pinned}; it lists {digests}")
+    finally:
+        run("docker image rm", pinned, check=False)
+    say(f"released image {released.reference} is {run.tag}, repo digest {pinned}")
+
+
+def drive(run: Run, released: ReleasedImage | None = None) -> None:
+    """Drive the cells of the pod shape; always remove what the run made.
+
+    The image is built from the checkout, or is the published one if `released`.
+    """
     k3s_version = preflight(run)
     # mkdir refuses an existing path, so a directory planted at the name stops
     # the run instead of holding its kubeconfig.
     run.directory.mkdir(mode=0o700)
     try:
         overlay = prove_render(run)
-        run("docker build --tag", run.tag, str(run.repository))
+        if released is None:
+            run("docker build --tag", run.tag, str(run.repository))
+        else:
+            use_released_image(run, released)
         start_cluster(run, k3s_version)
         prove_label_filter(run)
         run("k3d image import", run.tag, "--cluster", run.name)
@@ -571,7 +634,7 @@ def stop_on_signal(
     return stop
 
 
-def drive_for_real(checkout: Path) -> None:
+def drive_for_real(checkout: Path, released: ReleasedImage | None) -> None:
     """Drive in this process; SIGTERM and SIGINT kill the child, then tear down."""
     runner = SubprocessRunner()
     stop = stop_on_signal(runner, hold_signals)
@@ -596,7 +659,8 @@ def drive_for_real(checkout: Path) -> None:
             repository=REPOSITORY,
             platform=checkout.resolve(),
             effects=effects,
-        )
+        ),
+        released,
     )
 
 
@@ -618,13 +682,20 @@ def check_leftovers(command: Callable[[str], str]) -> None:
     say("no cluster, container, volume or image is left")
 
 
-if __name__ == "__main__":
-    match sys.argv[1:]:
+def main(arguments: list[str]) -> None:
+    """Run the subcommand the arguments name, or exit with the usage."""
+    match arguments:
         case ["pin"]:
             say(PLATFORM_COMMIT)
         case ["leftovers"]:
             check_leftovers(process_listing)
         case ["drive", "--platform", checkout]:
-            drive_for_real(Path(checkout))
+            drive_for_real(Path(checkout), None)
+        case ["drive", "--platform", checkout, "--image", reference]:
+            drive_for_real(Path(checkout), released_image(reference))
         case _:
             sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
