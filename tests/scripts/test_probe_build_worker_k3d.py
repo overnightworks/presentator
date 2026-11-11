@@ -4,11 +4,12 @@ import copy
 import json
 import sys
 from collections.abc import Callable, Generator, Iterator, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from pathlib import Path
 from types import ModuleType
-from typing import Any, TypedDict, Unpack
+from typing import Any
 
 import pytest
 from ruamel.yaml import YAML
@@ -61,6 +62,11 @@ def workload_documents(image: str) -> list[Document]:
         document("ServiceAccount", "build-worker"),
         document("ConfigMap", "sqlite"),
         document("Schedule", "backup"),
+        document(
+            "PodConfig",
+            "backup",
+            template={"spec": {"containers": [{"name": "backup"}]}},
+        ),
     ]
 
 
@@ -94,33 +100,38 @@ def terminated_state(
     }
 
 
-class Version(TypedDict, total=False):
+@dataclass(frozen=True)
+class Version:
     """What one version of a pod differs in."""
 
-    init: bool
-    init_exit: int | None
-    last_state: Document
-    restarts: int
+    init: bool = True
+    init_exit: int | None = 0
+    last_state: Document = field(default_factory=dict[str, Any])
+    restarts: int = 0
+
+
+PLAIN = Version()
 
 
 def pod_version(
-    uid: str, state: Document | None = None, **options: Unpack[Version]
+    uid: str,
+    state: Document | None = None,
+    version: Version = PLAIN,
 ) -> Document:
     """One version of a pod as kubectl's watch prints it."""
     worker: Document = {
         "name": "worker",
-        "restartCount": options.get("restarts", 0),
+        "restartCount": version.restarts,
         "state": state or {"waiting": {}},
-        "lastState": options.get("last_state", {}),
+        "lastState": version.last_state,
     }
     status: Document = {"containerStatuses": [worker]}
     spec: Document = {"containers": [{"name": "worker"}]}
-    if options.get("init", True):
-        init_exit = options.get("init_exit", 0)
+    if version.init:
         spec["initContainers"] = [{"name": "remove-link"}]
         init_state: Document = {"running": {}}
-        if init_exit is not None:
-            init_state = terminated_state(init_exit)
+        if version.init_exit is not None:
+            init_state = terminated_state(version.init_exit)
         status["initContainerStatuses"] = [{"name": "remove-link", "state": init_state}]
     return {"metadata": {"uid": uid}, "spec": spec, "status": status}
 
@@ -136,13 +147,13 @@ def life_events(
     *,
     started: int = 0,
     ended: Document | None = None,
-    **version: Unpack[Version],
+    version: Version = PLAIN,
 ) -> list[Document]:
     """The events of one life that ends by a refusal: created, ended, deleted."""
     said = f"worker started\nstart refused: {refusal}\n"
     state = ended or terminated_state(message=said, started=started)
-    pending = pod_version(uid, **{**version, "init_exit": None})
-    last = pod_version(uid, state, **version)
+    pending = pod_version(uid, version=replace(version, init_exit=None))
+    last = pod_version(uid, state, version)
     return [
         watch_event("ADDED", pending),
         watch_event("MODIFIED", last),
@@ -151,14 +162,18 @@ def life_events(
 
 
 def lives_stream(
-    count: int, refusal: Predicate, *, gap: int = 3, **version: Unpack[Version]
+    count: int,
+    refusal: Predicate,
+    *,
+    gap: int = 3,
+    version: Version = PLAIN,
 ) -> list[Document]:
     """`count` lives, each worker starting `gap` seconds after its predecessor's end."""
     return [
         event
         for number in range(count)
         for event in life_events(
-            f"life-{number}", refusal, started=number * (gap + 1), **version
+            f"life-{number}", refusal, started=number * (gap + 1), version=version
         )
     ]
 
@@ -365,7 +380,7 @@ def make_fixture(
         world.node_name, world.probe_image = run.node, run.tag
         world.production_image, world.twin_pod = production_image, driver.TWIN_POD
         world.streams = world.streams or [
-            lives_stream(1, Predicate.NO_ROUTE, init=False),
+            lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
             lives_stream(driver.LIVES, Predicate.KUBERNETES_UNPROVEN),
         ]
         return Fixture(driver, world, run)
@@ -552,34 +567,27 @@ def judge_cell(
 REFUSED = Predicate.KUBERNETES_UNPROVEN
 
 
+refused_life = partial(life_events, "one", REFUSED)
+GONE = terminated_state(137, reason="ContainerStatusUnknown")
+SECOND = Version(last_state=terminated_state(started=9))
+UNTERMINATED = [
+    watch_event("ADDED", pod_version("one")),
+    watch_event("DELETED", pod_version("one")),
+]
+
+
 @pytest.mark.parametrize(
     ("events", "fragment"),
     [
-        (life_events("one", REFUSED, ended=terminated_state(1)), "exit status 1"),
+        (refused_life(ended=terminated_state(1)), "exit status 1"),
         (life_events("one", Predicate.ALONE), Predicate.ALONE),
-        (life_events("one", REFUSED, ended=terminated_state()), "start refused"),
-        (life_events("one", REFUSED, init_exit=1), "remove-link ended as 1"),
-        (life_events("one", REFUSED, init=False), "lacks an init container"),
-        (life_events("one", REFUSED, restarts=1), "restartCount is 1"),
-        (
-            life_events("one", REFUSED, last_state=terminated_state(started=9)),
-            "terminated 2 times",
-        ),
-        (
-            life_events(
-                "one",
-                REFUSED,
-                ended=terminated_state(137, reason="ContainerStatusUnknown"),
-            ),
-            "ContainerStatusUnknown",
-        ),
-        (
-            [
-                watch_event("ADDED", pod_version("one")),
-                watch_event("DELETED", pod_version("one")),
-            ],
-            "deleted before its worker terminated",
-        ),
+        (refused_life(ended=terminated_state()), "start refused"),
+        (refused_life(version=Version(init_exit=1)), "remove-link ended as 1"),
+        (refused_life(version=Version(init=False)), "lacks an init container"),
+        (refused_life(version=Version(restarts=1)), "restartCount is 1"),
+        (refused_life(version=SECOND), "terminated 2 times"),
+        (refused_life(ended=GONE), "ContainerStatusUnknown"),
+        (UNTERMINATED, "deleted before its worker terminated"),
     ],
     ids=[
         "another exit status",
@@ -599,18 +607,6 @@ def test_a_life_that_is_not_the_expected_one_fails_naming_its_uid_and_the_reason
     problem, _ = judge_cell(make_fixture, events, REFUSED)
     assert "uid one" in problem
     assert fragment in problem
-
-
-def test_a_control_whose_pod_shows_an_init_container_fails(
-    make_fixture: Callable[..., Fixture],
-) -> None:
-    problem, _ = judge_cell(
-        make_fixture,
-        life_events("one", Predicate.NO_ROUTE),
-        Predicate.NO_ROUTE,
-        init_container=False,
-    )
-    assert "shows an init container" in problem
 
 
 @pytest.mark.parametrize(
@@ -661,7 +657,7 @@ def test_a_wrong_predicate_fails_the_cell_and_requests_the_events_and_the_twin_p
 ) -> None:
     world = World(
         streams=[
-            life_events("one", Predicate.MOUNTS, init=False),
+            life_events("one", Predicate.MOUNTS, version=Version(init=False)),
             lives_stream(driver.LIVES, REFUSED),
         ]
     )

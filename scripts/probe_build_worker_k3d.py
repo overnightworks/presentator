@@ -328,7 +328,7 @@ def _swap_images(base: list[Document], overlay: list[Document], image: str) -> s
                 original_spec["containers"], replaced_spec["containers"], strict=False
             )
             for original, replaced in pairs:
-                if not original["image"].startswith(PRODUCTION_IMAGE):
+                if not original.get("image", "").startswith(PRODUCTION_IMAGE):
                     continue
                 if replaced["image"] != image:
                     reason = _wrong_image(replaced["image"])
