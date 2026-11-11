@@ -64,6 +64,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from starlette.testclient import WebSocketTestSession
+
 _POLICY_VIOLATION = 1008
 _SHORT_SECONDS = 0.5
 _THE_FIRST_FRAME = b"first"
@@ -112,9 +114,9 @@ def _held_at_the_workload_grant(
     return entered, release
 
 
-def _closed_with(socket: object) -> WebSocketDisconnect:
+def _closed_with(socket: WebSocketTestSession) -> WebSocketDisconnect:
     with pytest.raises(WebSocketDisconnect) as closed:
-        socket.receive_json()  # type: ignore[attr-defined]
+        socket.receive_json()
     return closed.value
 
 
