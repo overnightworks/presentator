@@ -430,6 +430,39 @@ def residue_pods(
     }
 
 
+def fake_effects(
+    cluster_module: ModuleType, world: World, *, head: str | None, missing: str | None
+) -> object:
+    """The effects of a run whose every outside is the world."""
+    ticks = [0.0]
+
+    def sleep(seconds: float) -> None:
+        ticks[0] += seconds
+
+    def run_command(
+        command: tuple[str, ...], environment: Mapping[str, str], stdin: str | None
+    ) -> object:
+        returncode, stdout = world(command, environment, stdin)
+        return cluster_module.Completed(returncode, stdout, "")
+
+    def which(tool: str) -> str | None:
+        return None if tool == missing else f"/bin/{tool}"
+
+    def head_of(_checkout: Path) -> str:
+        return head or cluster_module.PLATFORM_COMMIT
+
+    return cluster_module.Effects(
+        run=run_command,
+        watch=world.watch,
+        which=which,
+        platform_head=head_of,
+        free_port=lambda: 6550,
+        monotonic=lambda: ticks[0],
+        sleep=sleep,
+        hold_signals=world.hold_signals,
+    )
+
+
 def fixture_maker(
     load_script: Callable[..., ModuleType], tmp_path: Path
 ) -> Callable[..., Fixture]:
@@ -446,30 +479,7 @@ def fixture_maker(
         missing: str | None = None,
     ) -> Fixture:
         world = world or World()
-        ticks = [0.0]
-
-        def sleep(seconds: float) -> None:
-            ticks[0] += seconds
-
-        def run_command(
-            command: tuple[str, ...], environment: Mapping[str, str], stdin: str | None
-        ) -> object:
-            returncode, stdout = world(command, environment, stdin)
-            return cluster_module.Completed(returncode, stdout, "")
-
-        def which(tool: str) -> str | None:
-            return None if tool == missing else f"/bin/{tool}"
-
-        effects = cluster_module.Effects(
-            run=run_command,
-            watch=world.watch,
-            which=which,
-            platform_head=lambda _checkout: head or cluster_module.PLATFORM_COMMIT,
-            free_port=lambda: 6550,
-            monotonic=lambda: ticks[0],
-            sleep=sleep,
-            hold_signals=world.hold_signals,
-        )
+        effects = fake_effects(cluster_module, world, head=head, missing=missing)
         run = cluster_module.Run(
             identifier=RUN_IDENTIFIER,
             directory=tmp_path / "run",
