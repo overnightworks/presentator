@@ -31,6 +31,7 @@ from presentator.contracts.decks import (
     SourceRun,
     SourceRunFailure,
     SourceWrite,
+    ToolchainIdentity,
     ToolchainUnavailable,
     local_mount_path_of,
 )
@@ -665,6 +666,10 @@ BUILDS_ROOT: Final = Path("/var/lib/presentator/builds")
 _SOMEWHERE_ELSE: Final = Path("/var/lib/presentator/mirrors")
 
 
+# The toolchain a fake build runner builds under until a test moves it.
+THE_TOOLCHAIN: Final = ToolchainIdentity("0" * 64)
+
+
 @dataclass
 class FakeBuildRunner:
     """A build that answers with paths instead of running a toolchain.
@@ -691,6 +696,12 @@ class FakeBuildRunner:
     on_disk: set[BuildRun] = field(default_factory=set[BuildRun])
     # Whether listing the root breaks off, the way an unreadable one does.
     listing_fails: bool = False
+    # The toolchain this runner builds under now; a test moves it the way a
+    # release that changes the toolchain does.
+    identity: ToolchainIdentity = THE_TOOLCHAIN
+
+    def toolchain_identity(self) -> ToolchainIdentity:
+        return self.identity
 
     def build(
         self, deck: Deck, *, source: Source

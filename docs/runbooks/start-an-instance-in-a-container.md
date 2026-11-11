@@ -47,5 +47,8 @@ address for everyone. The form guard still passes a real browser, which sends
 
 Three named volumes hold what has to survive, `database`, `mirrors` and
 `builds`, under the project `presentator`. A new tag through `hal apply` keeps
-them: the next start finds the accounts, sources, decks and built talks, with
-nothing built again. The upgrade is that new tag.
+them: the next start finds the accounts, sources, decks and built talks. A deck
+is built again only when its commit changed, or when the new tag changed the
+toolchain that builds it: then the next refresh builds every deck once, one after
+another, and each keeps serving its old talk until its new build succeeds. The
+upgrade is that new tag.

@@ -3,7 +3,12 @@
 from pathlib import Path
 from typing import Final
 
-from presentator.adapters.decks import FOLDER_COLUMN, create_deck_tables
+from presentator.adapters.decks import (
+    ATTEMPT_TOOLCHAIN_COLUMN,
+    BUILT_TOOLCHAIN_COLUMN,
+    FOLDER_COLUMN,
+    create_deck_tables,
+)
 from presentator.adapters.identity import KIND_COLUMN, create_identity_tables
 from presentator.adapters.preferences import create_preference_tables
 from presentator.adapters.sqlite import immediate_transaction
@@ -27,6 +32,18 @@ def create_tables(database: Path) -> None:
     )
     _add_the_column_when_missing(
         database, table="sources", name="folder", definition=FOLDER_COLUMN
+    )
+    _add_the_column_when_missing(
+        database,
+        table="decks",
+        name="built_toolchain",
+        definition=BUILT_TOOLCHAIN_COLUMN,
+    )
+    _add_the_column_when_missing(
+        database,
+        table="decks",
+        name="attempt_toolchain",
+        definition=ATTEMPT_TOOLCHAIN_COLUMN,
     )
     _unchosen_theme_follows_the_system(database)
     _retire_the_instance_theme(database)

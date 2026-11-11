@@ -52,6 +52,10 @@ from presentator.ports.decks import LocalMount
 from presentator.ports.identity import IdentifierFactory
 
 FOLDER_COLUMN: Final = "folder TEXT NOT NULL DEFAULT ''"
+# Each holds the toolchain with the commit it was written for; `deck_store`
+# owns the format.
+BUILT_TOOLCHAIN_COLUMN: Final = "built_toolchain TEXT"
+ATTEMPT_TOOLCHAIN_COLUMN: Final = "attempt_toolchain TEXT"
 _SCHEMA: Final = f"""
 CREATE TABLE IF NOT EXISTS sources (
     id TEXT PRIMARY KEY,
@@ -92,6 +96,8 @@ CREATE TABLE IF NOT EXISTS decks (
     attempt_written_megabytes INTEGER,
     attempt_allowed_megabytes INTEGER,
     attempt_allowed_entries INTEGER,
+    {BUILT_TOOLCHAIN_COLUMN},
+    {ATTEMPT_TOOLCHAIN_COLUMN},
     removed_at TEXT
 );
 CREATE TABLE IF NOT EXISTS source_runs (

@@ -1,6 +1,7 @@
 """The composition root, from the environment to a lobby that answers."""
 
 import asyncio
+import re
 import shutil
 from datetime import UTC, datetime
 from http import HTTPStatus
@@ -320,6 +321,18 @@ def test_an_instance_without_a_lobby_build_refuses_to_start(
         a_real_instance()
 
 
+@pytest.mark.parametrize("runner", ["host", "worker"])
+def test_an_instance_whose_toolchain_project_cannot_be_read_refuses_naming_it(
+    environment: pytest.MonkeyPatch, tmp_path: Path, runner: str
+) -> None:
+    project = tmp_path / "no-toolchain-here"
+    environment.setenv("PRESENTATOR_BUILD_RUNNER", runner)
+    environment.setenv("PRESENTATOR_TOOLCHAIN", str(project))
+
+    with pytest.raises(ConfigurationError, match=re.escape(str(project))):
+        a_real_instance()
+
+
 @pytest.mark.usefixtures("bare_environment")
 def test_an_instance_without_a_key_file_refuses_to_start() -> None:
     with pytest.raises(ConfigurationError, match="secret_key_file"):
@@ -592,7 +605,9 @@ def test_a_deck_the_real_stack_cannot_build_keeps_its_page_and_offers_no_view(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    environment.setenv("PRESENTATOR_TOOLCHAIN", str(tmp_path / "no-toolchain-here"))
+    empty_project = tmp_path / "an-empty-toolchain-project"
+    empty_project.mkdir()
+    environment.setenv("PRESENTATOR_TOOLCHAIN", str(empty_project))
     instance = a_polled_source(remote, tmp_path)
     lobby = signed_in(instance)
     remote.commit_example_deck(at=_PUSHED_AT)
