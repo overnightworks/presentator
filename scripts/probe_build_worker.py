@@ -78,6 +78,7 @@ from probe_build_worker_uploads import (
     Ending,
     UploadClass,
 )
+from pypdf import PdfReader
 
 from presentator.adapters.build_wire import (
     LENGTH,
@@ -649,10 +650,8 @@ def prove_builds(report: Report) -> None:
             "katex-mathml" in text for text in text_files(output / "build-render")
         ):
             refuse("the built render talk carries no KaTeX markup")
-        words = subprocess.run(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-            ("pdftotext", str(output / "export-render" / "deck.pdf"), "-"),  # noqa: S607 - pdftotext is picked from the operator's trusted PATH on the operator's own machine as when run by hand
-            check=True, capture_output=True, text=True,
-        ).stdout  # fmt: skip
+        with PdfReader(output / "export-render" / "deck.pdf") as reader:
+            words = " ".join(page.extract_text() for page in reader.pages)
     # The PDF text layer wraps long mermaid labels at the node width.
     if "Probe node alpha" not in " ".join(words.split()):
         refuse("the exported render PDF carries no mermaid node label")
