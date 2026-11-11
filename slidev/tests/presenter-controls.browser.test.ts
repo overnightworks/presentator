@@ -10,6 +10,7 @@ import {
   buildAddonDeck,
   createMediaObservation,
   createOverlayDeckServer,
+  expectFaultWordClearOfControls,
   installCspGuard,
   openPageIn,
   openPresenter,
@@ -248,7 +249,7 @@ describe('presenter controls', () => {
     ['the deck is not the asker\'s', 'who-not-found', 'Unreachable'],
     ['local hearing is not ready', 'not-ready', 'Local hearing not ready'],
     ['the hearing socket sends an error', 'socket-error', 'No hearing'],
-  ] as const).map((row) => [width, ...row] as const)))('CP7: says so and builds no browser speech recognition at %ipx when %s', async (width, _situation, mode, message) => {
+  ] as const).map((row) => [width, ...row] as const)))('CP7: says so in a warm word clear of Home and the switch, keeps the track green and builds no browser speech recognition at %ipx when %s', async (width, _situation, mode, message) => {
     state.hearingMode = mode
     state.media = createMediaObservation()
     const hearingOpenedBefore = state.hearingOpened
@@ -269,15 +270,7 @@ describe('presenter controls', () => {
         sendHearingError()
       }
       await page.getByText(message).waitFor({ state: 'visible', timeout: 5_000 })
-      const [homeBox, aiBox, faultBox] = await Promise.all([
-        page.getByRole('link', { name: 'Home' }).boundingBox(),
-        ai.boundingBox(),
-        page.getByText(message).boundingBox(),
-      ])
-      expect(faultBox!.x).toBeGreaterThanOrEqual(0)
-      expect(faultBox!.x + faultBox!.width).toBeLessThanOrEqual(width)
-      expect(boxesIntersect(homeBox!, faultBox!)).toBe(false)
-      expect(boxesIntersect(aiBox!, faultBox!)).toBe(false)
+      await expectFaultWordClearOfControls(page, width, ai, page.getByText(message))
       const painted = await readPaintedColours(page)
       expect(painted.fault![0], 'the word is warm').toBeGreaterThan(painted.fault![2] + 80)
       expect(painted.track[1], 'the track stays green').toBeGreaterThan(Math.max(painted.track[0], painted.track[2]) + 20)

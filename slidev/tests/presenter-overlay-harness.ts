@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-import { chromium, type BrowserContext, type ElementHandle, type Page } from 'playwright-chromium'
+import { chromium, type BrowserContext, type ElementHandle, type Locator, type Page } from 'playwright-chromium'
 import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest'
 
 const run = promisify(execFile)
@@ -140,6 +140,20 @@ export async function readPaintedColours(page: Page) {
   }))
   const channels = (color: string) => color.match(/[\d.]+/g)!.slice(0, 3).map(Number) as [number, number, number]
   return { track: channels(colours.track), fault: colours.fault === null ? null : channels(colours.fault) }
+}
+
+// The fault word stands whole in the window, clear of Home and of the switch.
+export async function expectFaultWordClearOfControls(page: Page, width: number, aiSwitch: Locator, faultWord: Locator) {
+  const [homeBox, aiBox, faultBox] = await Promise.all([
+    page.getByRole('link', { name: 'Home' }).boundingBox(),
+    aiSwitch.boundingBox(),
+    faultWord.boundingBox(),
+  ])
+  expect(faultBox!.x).toBeGreaterThanOrEqual(0)
+  expect(faultBox!.x + faultBox!.width).toBeLessThanOrEqual(width)
+  expect(boxesIntersect(homeBox!, faultBox!)).toBe(false)
+  expect(boxesIntersect(aiBox!, faultBox!)).toBe(false)
+  return { homeBox: homeBox!, aiBox: aiBox!, faultBox: faultBox! }
 }
 
 export async function saveEvidence(page: Page, name: string) {
