@@ -99,7 +99,7 @@ def a_scene() -> Scene:
         expires_at=NOW + timedelta(hours=1),
         refresh_token=SecretStr(_A_REFRESH_WORD),
         id_token=SecretStr(_AN_ID_TOKEN),
-        account_language=None,
+        account_language="de",
     )
     an_offset_instant = (NOW + timedelta(microseconds=123456)).astimezone(
         timezone(timedelta(hours=5, minutes=30))
@@ -168,7 +168,7 @@ def test_exported_at_is_utc_with_z_and_whole_seconds() -> None:
 
 
 def test_every_kind_of_row_is_exported_and_each_secret_kind_counted_withheld() -> None:
-    """PE19, PE21: every row keyed by the person; each omitted kind in `withheld`."""
+    """PE19, PE21, PE31: every row keyed by the person, secrets in `withheld`."""
     document = _document(a_scene().export(THE_PERSON.id))
 
     data = cast("dict[str, object]", document["data"])
@@ -179,13 +179,14 @@ def test_every_kind_of_row_is_exported_and_each_secret_kind_counted_withheld() -
         "created_at": "2026-01-15T09:00:00Z",
         "public_key": "ssh-ed25519 AAAAtestkey1 presentator",
     }
-    assert (
-        data["sessions"]
-        == [
-            {"created_at": "2026-01-15T09:00:00Z", "expires_at": "2026-01-15T10:00:00Z"}
-        ]
-        * 2
-    )
+    assert data["sessions"] == [
+        {
+            "created_at": "2026-01-15T09:00:00Z",
+            "expires_at": "2026-01-15T10:00:00Z",
+            "account_language": language,
+        }
+        for language in (None, "de")
+    ]
     sources = cast("list[dict[str, object]]", data["sources"])
     assert [
         (source["name"], source["url"], source["ref"], source["public_key"])
