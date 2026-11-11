@@ -3,10 +3,13 @@
 import os
 import re
 import stat
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Self
 
 import pytest
 
+from presentator.adapters import toolchain_identity
 from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.contracts.decks import ToolchainIdentity
 
@@ -150,3 +153,37 @@ def test_an_identity_refuses_anything_but_sixty_four_lowercase_hex_digits(
 ) -> None:
     with pytest.raises(ValueError, match="64 lowercase hex"):
         ToolchainIdentity(digest)
+
+
+def test_a_file_renamed_with_the_same_content_moves_the_identity(
+    tmp_path: Path,
+) -> None:
+    before = a_project(tmp_path / "before", {"components/A.vue": "<template />"})
+    after = a_project(tmp_path / "after", {"components/B.vue": "<template />"})
+
+    assert toolchain_identity_of(before) != toolchain_identity_of(after)
+
+
+def test_the_identity_does_not_depend_on_the_order_the_directory_lists_its_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = a_project(tmp_path, {"a.txt": "1", "b.txt": "2", "c/d.txt": "3"})
+    listed_in_the_usual_order = toolchain_identity_of(project)
+    real_scandir = os.scandir
+
+    class ListsBackwards:
+        def __init__(self, path: Path) -> None:
+            self._entries = list(real_scandir(path))[::-1]
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __iter__(self) -> Iterator[os.DirEntry[str]]:
+            return iter(self._entries)
+
+        def __exit__(self, *exception: object) -> None:
+            return None
+
+    monkeypatch.setattr(toolchain_identity.os, "scandir", ListsBackwards)
+
+    assert toolchain_identity_of(project) == listed_in_the_usual_order
