@@ -11,9 +11,11 @@ from presentator.contracts.decks import (
     Artefacts,
     BuildFailure,
     Source,
+    ToolchainIdentity,
     ToolchainUnavailable,
 )
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
+from tests.presentator.application.support.fakes import THE_TOOLCHAIN
 from tests.support.git_remote import with_the_program
 
 A_GENEROUS_BOUND = timedelta(seconds=30)
@@ -62,11 +64,13 @@ def builds_under(
     tmp_path: Path,
     *,
     toolchain: DeckToolchain,
+    identity: ToolchainIdentity = THE_TOOLCHAIN,
     output_megabytes: int = A_TALK_THIS_BIG_IS_FINE,
     local_mount: FilesystemLocalMount | None = None,
 ) -> SlidevBuilds:
     return SlidevBuilds(
         builds=tmp_path / "builds",
+        identity=identity,
         toolchain=toolchain,
         mirrors=SourceMirrors(
             directory=tmp_path / "mirrors",
