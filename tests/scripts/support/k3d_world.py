@@ -277,8 +277,8 @@ class World:
                 pass
         return ""
 
-    def container_answer(self, command: tuple[str, ...]) -> str:
-        """What k3d and docker print: the listings follow the cluster and the image."""
+    def container_effect(self, command: tuple[str, ...]) -> None:
+        """What a k3d or docker command changes: the cluster, its volume, its tools."""
         match command:
             case ("k3d", "cluster", "create" | "delete", *_):
                 self.cluster_up = command[2] == "create"
@@ -292,6 +292,13 @@ class World:
                 self.volume_up = False
             case ("docker", "build", *_) | ("docker", "image", "rm", *_):
                 self.image_built = command[1] == "build"
+            case _:
+                pass
+
+    def container_answer(self, command: tuple[str, ...]) -> str:
+        """What k3d and docker print: the listings follow the cluster and the image."""
+        self.container_effect(command)
+        match command:
             case ("k3d", "cluster", "list", *_):
                 own = f"{self.cluster_name}  1/1  0/0  true"
                 return self.listing("cluster", own, exists=self.cluster_up)
