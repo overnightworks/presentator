@@ -311,8 +311,9 @@ def test_the_leftovers_subcommand_ends_clean_when_nothing_is_listed(
 def test_the_leftovers_subcommand_prints_a_listed_container_and_ends_one(
     driver_module: ModuleType, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    lister = World(stray_container="k3d-stray-0").lister
     with pytest.raises(SystemExit) as ended:
-        driver_module.check_leftovers(World(stray_container="k3d-stray-0").lister)
+        driver_module.check_leftovers(lister)
     assert ended.value.code == 1
     assert "k3d-stray-0" in capsys.readouterr().out
 
