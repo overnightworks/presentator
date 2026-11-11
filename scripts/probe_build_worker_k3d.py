@@ -10,22 +10,36 @@ image, which CI's teardown check lists. `drive` refuses unless CHECKOUT is at
 that commit and k3d, kubectl and docker are on PATH, proves that the overlay
 rendering the probe image differs from platform's own render only in the
 production image fields of every pod template, then drives three cells in a
-single-server k3d cluster at platform's K3S_VERSION. A cell applies the
+single-server k3d cluster at platform's K3S_VERSION. Cells 7 and 8 apply the
 PersistentVolumeClaims, ServiceAccounts and worker StatefulSet of
 `apps/presentator`; the applied copy differs from the render only in the worker
 container's `terminationMessagePolicy` (so a refusal reaches the terminated
 state's message), in cell 7 in the deleted init container, and in cell 8 in the
 worker container's `args`, which are `--check`.
 
-Platform replaces a used pod and its log with it, so a cell judges its lives
-from one bounded watch of the worker pod. Cell 7 reads one life without init
-container and expects the self-check to refuse with no-route. Cell 8 reads
+Platform replaces a used pod and its log with it, so cells 7 and 8 judge their
+lives from one bounded watch of the worker pod. Cell 7 reads one life without
+init container and expects the self-check to refuse with no-route. Cell 8 reads
 LIVES lives, each passing the whole self-check under `--check`, and expects,
 per life, a new uid, remove-link ending 0, one termination of the worker with
 exit 0 and restartCount 0; it prints each interval from a life's end to its
-successor's start, which must stay below the web's HELLO retry window. A cell
-that fails prints the Namespace's events and the output of a twin Pod of the
-same spec; the run fails after both cells ran.
+successor's start, which must stay below the web's HELLO retry window.
+
+Cell 9 runs after cell 8, whether or not it failed, on the StatefulSet's pod
+spec of cell 8 with the StatefulSet deleted and its pod gone. It prints the
+worker pod's facts (mountinfo, status, limits and the rest of the twin's
+script) from one bare Pod, then starts bare Pods one at a time: the
+control `nothing`, which plants no residue and ends 0 with the self-check
+passed under `--check`, and one twin per residue of the Compose proof's
+REFUSALS. Each twin plants its residue with the planter, passed as
+`python -I -c`, and becomes the worker; it must end with exit 2 and refuse with
+the predicate its residue belongs to, with remove-link 0 and restartCount 0,
+judged from its terminated state. A twin that does not end within the
+termination window fails the cell and no later twin starts. Every twin is
+deleted before the cell returns.
+
+A cell that fails prints the Namespace's events and the output of a twin Pod of
+the same spec; the run fails after the cells ran.
 
 Every command runs with `KUBECONFIG` set to a file in the run's temporary
 directory, `KUBECACHEDIR` below it and `KUBERC=off`, so nothing reads or writes
