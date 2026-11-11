@@ -694,17 +694,6 @@ def test_cell_10_prints_one_line_with_the_wait_the_interval_and_the_worker_pod(
     assert lines == [f"cell 10: the web waited, then was {ready} ({worker})"]
 
 
-def test_a_web_ready_before_the_worker_is_applied_fails_cell_10_naming_the_control(
-    make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str]
-) -> None:
-    fixture = make_fixture(World(web_ready_early=True))
-    with pytest.raises(SystemExit):
-        fixture.drive()
-    err = capsys.readouterr().err
-    assert "cell 10: the web was Ready before the worker started" in err
-    assert not fixture.world.web_serving()
-
-
 @pytest.mark.parametrize(
     "world",
     [World(web_logs_its_wait=False), World(web_never_ready=True)],
@@ -735,11 +724,12 @@ def test_a_web_not_waiting_or_not_ready_fails_cell_10_within_the_window_with_log
 @pytest.mark.parametrize(
     ("world", "fragment"),
     [
+        (World(web_ready_early=True), "cell 10: the web was Ready before the worker"),
         (World(web_restarts=1), "restartCount is 1"),
         (World(remove_link_exit=1), "remove-link ended as 1"),
         (World(web_ready_after=-5), "Ready 5 s before the worker started"),
     ],
-    ids=["a web restart", "remove-link", "Ready before the worker started"],
+    ids=["the control", "a web restart", "remove-link", "Ready before the start"],
 )
 def test_a_web_or_worker_that_does_not_end_as_expected_fails_cell_10_naming_the_reason(
     make_fixture: Callable[..., Fixture],
