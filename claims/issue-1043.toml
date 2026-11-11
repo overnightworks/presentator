@@ -1,8 +1,0 @@
-claim_id = "4fe7806dfdf34348868b30a6e81daa8b"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "efa3511a8b485de0a3ac1022572b985cb07c17a8"
-branch = "claude/issue-1043-k3d-web-ready"
-scope = ["scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_cluster.py", "scripts/probe_build_worker_k3d_manifests.py", "tests/scripts/support/k3d_world.py", "tests/scripts/test_probe_build_worker_k3d.py", "tests/scripts/test_probe_build_worker_k3d_manifests.py"]
-opened_commit = "7f8137f9ef0542f8d206e35dccc07e4165f81f04"
-whole_reason = "One cell: the pin, the web's documents and Secret, cell 10 and the effect they share, with the fake world and the two test modules that drive them."
