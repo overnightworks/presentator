@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import pytest
 from fastapi import WebSocket
 from speech_client import wire
-from speech_client.relay import HopClose
+from speech_client.relay import HOP_FRAME_BYTES, HopClose
 
 from presentator.adapters.speech import SpeechHearing
 from presentator.contracts.copresenter import HearingTranscript, SpeechTokens
@@ -22,6 +23,7 @@ from tests.support.speech_service import (
     a_delta,
     a_failed_item,
     a_loopback_server,
+    accept_and_hold,
     an_error_event,
     sending,
 )
@@ -38,8 +40,11 @@ class ASilentBrowser:
     """A browser socket that sends nothing and keeps the code it was closed with."""
 
     closed_with: list[int] = field(default_factory=list[int])
+    sends: list[dict[str, object]] = field(default_factory=list[dict[str, object]])
 
     async def receive(self) -> Mapping[str, object]:
+        if self.sends:
+            return self.sends.pop(0)
         await asyncio.Future()
         raise AssertionError
 
@@ -48,10 +53,10 @@ class ASilentBrowser:
 
 
 async def _heard_through(
-    realtime: Hear,
+    realtime: Hear, browser: ASilentBrowser | None = None
 ) -> tuple[list[HearingTranscript], ASilentBrowser]:
     fake = FakeSpeechService(realtime=realtime)
-    browser = ASilentBrowser()
+    browser = browser or ASilentBrowser()
     transcripts: list[HearingTranscript] = []
 
     async def heard(transcript: HearingTranscript) -> None:
@@ -127,6 +132,33 @@ def test_a_failed_item_or_error_event_ends_the_hearing_as_a_service_failure(
 
     assert transcripts == _transcripts(("Ha", False))
     assert browser.closed_with == [HopClose.SERVICE_FAILED]
+
+
+@pytest.mark.parametrize(
+    ("frame", "close"),
+    [
+        ({"type": "websocket.receive", "text": "not pcm"}, HopClose.TEXT_FRAME),
+        (
+            {"type": "websocket.receive", "bytes": b"\0" * (HOP_FRAME_BYTES + 1)},
+            HopClose.FRAME_TOO_LARGE,
+        ),
+    ],
+    ids=["text-frame", "oversize-frame"],
+)
+def test_a_frame_that_breaks_the_hop_rules_closes_the_browser_with_one_warning(
+    frame: dict[str, object],
+    close: HopClose,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    browser = ASilentBrowser(sends=[frame])
+
+    with caplog.at_level(logging.WARNING, logger="presentator"):
+        asyncio.run(_heard_through(accept_and_hold, browser))
+
+    assert browser.closed_with == [close]
+    assert [record.getMessage() for record in caplog.records] == [
+        f"hearing failed: RuleBroken close={close.value}"
+    ]
 
 
 class _CallerFaultError(Exception):
