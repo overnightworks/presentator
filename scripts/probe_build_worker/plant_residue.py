@@ -1,10 +1,12 @@
 """Plant one residue, then become the worker (`python -I - RESIDUE UID:GID COMMAND...`).
 
-The source arrives on stdin. The residue is planted as root or as the build
-identity, and the command replaces this process, so the worker is PID 1 of the
-container. A plant that runs as the build identity is reaped and exits 1 when
-it fails. The `process` child stays alive on purpose; the parent waits until it
-has dropped to the identity and exits 1 when it could not.
+The source arrives on stdin in a Compose one-off container and as the argument
+of `-c` in a Kubernetes pod; both hand this code the same `sys.argv[1:]`. The
+residue is planted as root or as the build identity, and the command replaces
+this process, so the worker is PID 1 of the container. A plant that runs as the
+build identity is reaped and exits 1 when it fails. The `process` child stays
+alive on purpose; the parent waits until it has dropped to the identity and
+exits 1 when it could not.
 """
 
 import ctypes
