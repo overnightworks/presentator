@@ -572,7 +572,7 @@ describe('the room notice', () => {
       const entries = await timelineOf(projector)
       const firstShown = entries.findIndex((entry) => entry.phase !== null)
       expect(entries.slice(firstShown).map((entry) => entry.phase)).not.toContain(null)
-      expect((await readNotice(projector))?.phase).not.toBeNull()
+      expect(['band', 'listening']).toContain((await readNotice(projector))?.phase)
     })
   })
 

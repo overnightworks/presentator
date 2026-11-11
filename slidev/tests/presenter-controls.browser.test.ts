@@ -280,6 +280,7 @@ describe('presenter controls', () => {
       expect(boxesIntersect(aiBox!, faultBox!)).toBe(false)
       const painted = await readPaintedColours(page)
       expect(painted.fault![0], 'the word is warm').toBeGreaterThan(painted.fault![2] + 80)
+      expect(painted.track[1], 'the track stays green').toBeGreaterThan(Math.max(painted.track[0], painted.track[2]) + 20)
       expect(await page.evaluate(
         () => (window as unknown as { __speechRecognitionsBuilt: number }).__speechRecognitionsBuilt,
       )).toBe(0)
