@@ -283,14 +283,17 @@ async function serveFile(directory: string, pathname: string, response: ServerRe
   response.end(await readFile(join(directory, 'index.html')))
 }
 
-// A peer reset while a page tears down is expected on an upgraded socket and
-// would otherwise surface as an unhandled `error` that fails the whole run;
-// any other socket error is kept for the shared `afterEach` to judge.
+// A page that tears down resets its upgraded socket, and the server's own
+// answer to the close frame then writes to a peer that is already gone: both
+// are expected and would otherwise surface as an unhandled `error` that fails
+// the whole run. Any other socket error is kept for the shared `afterEach` to
+// judge.
 const socketErrors: Error[] = []
+const peerGoneCodes = new Set(['ECONNRESET', 'EPIPE'])
 
 function recordUnexpectedSocketErrors(socket: import('node:stream').Duplex) {
   socket.on('error', (error: NodeJS.ErrnoException) => {
-    if (error.code !== 'ECONNRESET') socketErrors.push(error)
+    if (!peerGoneCodes.has(error.code ?? '')) socketErrors.push(error)
   })
 }
 
