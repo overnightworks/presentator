@@ -173,6 +173,7 @@ class Hosts:
                 expires_at=now + SESSION_LIFETIME,
                 refresh_token=None,
                 id_token=SecretStr("an-id-token"),
+                account_language=None,
             )
             .id
         )

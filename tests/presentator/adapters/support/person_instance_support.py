@@ -126,6 +126,7 @@ def _seed_person(
         expires_at=_NOW + timedelta(hours=1),
         refresh_token=SecretStr("a-refresh-token"),
         id_token=SecretStr("an-id-token"),
+        account_language=None,
     )
     stores.preferences.write(person.id, PersonPreferences(theme=ThemeChoice.DARK))
     stores.key_drafts.mint(person.id, at=_NOW)

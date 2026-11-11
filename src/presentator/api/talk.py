@@ -64,6 +64,7 @@ def _install_talk_middleware(
 ) -> None:
     install_web_auth_middleware(
         talk,
+        sign_in_paths=TALK_SIGN_IN,
         security_headers=SecurityHeadersPolicy(
             content_security_policy=auth.content_security_policy,
             permissions_policy=TALK_PERMISSIONS_POLICY,
@@ -79,7 +80,6 @@ def _install_talk_middleware(
             login_redirect=TALK_SIGN_IN.login_redirect,
             public=(
                 PublicRule(PathRules(exact=frozenset({_ROOT}))),
-                *TALK_SIGN_IN.public_rules,
                 HEALTH_IS_PUBLIC,
             ),
         ),
@@ -122,6 +122,7 @@ def create_talk(
         refused=refused,
         keeps_id_token=False,
         max_sessions=None,
+        ui_language=lambda _request: None,
         logout_page_text=None,
     )
     add_talk_mount(talk, decks=decks)

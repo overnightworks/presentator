@@ -30,6 +30,7 @@ KIND_COLUMN: Final = (
     f"kind TEXT NOT NULL DEFAULT '{AccountKind.PERSON.value}'"
     f" CHECK (kind IN ({_KINDS}))"
 )
+ACCOUNT_LANGUAGE_COLUMN: Final = "account_language TEXT"
 _SCHEMA: Final = f"""
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -43,7 +44,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     created_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
     refresh_token TEXT,
-    id_token TEXT
+    id_token TEXT,
+    {ACCOUNT_LANGUAGE_COLUMN}
 );
 """
 _IDENTIFIER_BYTES: Final = 32
@@ -180,6 +182,7 @@ class StoredSession:
     expires_at: datetime
     refresh_token: SecretStr | None
     id_token: SecretStr | None
+    account_language: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,7 +203,7 @@ class SqliteSessionRecordStore:
         """The open transaction's cursor, or a fresh one that commits on its way out."""
         return rows_or_inside(self.database, self.inside)
 
-    def create(
+    def create(  # noqa: PLR0913 - the webauth port fixes this signature
         self,
         user_id: str,
         *,
@@ -208,6 +211,7 @@ class SqliteSessionRecordStore:
         expires_at: datetime,
         refresh_token: SecretStr | None,
         id_token: SecretStr | None,
+        account_language: str | None,
     ) -> StoredSession:
         """Open a session created at `now` that stands until `expires_at`."""
         session_id = secrets.token_urlsafe(_IDENTIFIER_BYTES)
@@ -218,8 +222,9 @@ class SqliteSessionRecordStore:
                 raise LookupError(message)
             cursor.execute(
                 "INSERT INTO sessions"
-                " (id, user_id, created_at, expires_at, refresh_token, id_token)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
+                " (id, user_id, created_at, expires_at, refresh_token, id_token,"
+                " account_language)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     session_id,
                     user_id,
@@ -227,6 +232,7 @@ class SqliteSessionRecordStore:
                     _stored(expires_at),
                     None if refresh_token is None else refresh_token.get_secret_value(),
                     None if id_token is None else id_token.get_secret_value(),
+                    account_language,
                 ),
             )
         return StoredSession(
@@ -236,6 +242,7 @@ class SqliteSessionRecordStore:
             expires_at=expires_at,
             refresh_token=refresh_token,
             id_token=id_token,
+            account_language=account_language,
         )
 
     def load(self, session_id: str) -> StoredSession | None:
@@ -244,6 +251,7 @@ class SqliteSessionRecordStore:
             row = cursor.execute(
                 "SELECT sessions.id, sessions.created_at, sessions.expires_at,"
                 " sessions.refresh_token, sessions.id_token,"
+                " sessions.account_language,"
                 " users.id, users.username, users.role, users.kind"
                 " FROM sessions JOIN users ON users.id = sessions.user_id"
                 " WHERE sessions.id = ?",
@@ -251,7 +259,15 @@ class SqliteSessionRecordStore:
             ).fetchone()
         if row is None:
             return None
-        stored_id, created_at, expires_at, refresh_token, id_token, *account = row
+        (
+            stored_id,
+            created_at,
+            expires_at,
+            refresh_token,
+            id_token,
+            account_language,
+            *account,
+        ) = row
         return StoredSession(
             id=stored_id,
             user=_account(account),
@@ -259,6 +275,7 @@ class SqliteSessionRecordStore:
             expires_at=datetime.fromisoformat(expires_at),
             refresh_token=None if refresh_token is None else SecretStr(refresh_token),
             id_token=None if id_token is None else SecretStr(id_token),
+            account_language=account_language,
         )
 
     def touch(self, session_id: str, *, expires_at: datetime) -> bool:

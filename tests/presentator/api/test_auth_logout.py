@@ -50,7 +50,7 @@ class SessionsThatBreakOnDelete:
     real: SessionRecordStore
     breakdown: Breakdown
 
-    def create(
+    def create(  # noqa: PLR0913 - the webauth port fixes this signature
         self,
         user_id: str,
         *,
@@ -58,6 +58,7 @@ class SessionsThatBreakOnDelete:
         expires_at: datetime,
         refresh_token: SecretStr | None,
         id_token: SecretStr | None,
+        account_language: str | None,
     ) -> SessionRecord:
         return self.real.create(
             user_id,
@@ -65,6 +66,7 @@ class SessionsThatBreakOnDelete:
             expires_at=expires_at,
             refresh_token=refresh_token,
             id_token=id_token,
+            account_language=account_language,
         )
 
     def load(self, session_id: str) -> SessionRecord | None:

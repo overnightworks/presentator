@@ -51,6 +51,7 @@ def test_deleting_an_account_takes_its_sessions_and_leaves_another_account(
             expires_at=_NOW + timedelta(hours=1),
             refresh_token=None,
             id_token=SecretStr("an-id-token"),
+            account_language=None,
         )
 
     accounts.delete_account(_THE_PERSON.id)
@@ -84,6 +85,7 @@ def test_the_sessions_of_a_person_carry_their_times_and_no_secret(
         expires_at=_NOW + timedelta(hours=1),
         refresh_token=SecretStr(_A_REFRESH_WORD),
         id_token=SecretStr("an-id-token"),
+        account_language=None,
     )
 
     found = sessions.sessions_of(_THE_PERSON.id)
@@ -106,6 +108,7 @@ def test_only_sessions_holding_a_refresh_token_are_counted_as_holding_one(
             expires_at=_NOW + timedelta(hours=1),
             refresh_token=token,
             id_token=SecretStr("an-id-token"),
+            account_language=None,
         )
 
     assert sessions.secrets_held(_THE_PERSON.id).refresh_tokens == 1
@@ -178,6 +181,7 @@ def test_deleting_an_account_cannot_split_a_sign_in_that_has_read_the_account(
             expires_at=_NOW + timedelta(hours=1),
             refresh_token=None,
             id_token=SecretStr("an-id-token"),
+            account_language=None,
         )
     deletion.join(timeout=10)
 
