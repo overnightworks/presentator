@@ -168,6 +168,14 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
   worker runs it; the web holds no Docker socket, group or client, drops every
   capability, takes no new privilege and has a read-only root, so deck code
   reaches neither the daemon nor the machine's root.
+- The Kubernetes seal differs from the Compose seal where a pod cannot match
+  it. The pod holds `lo` alone because an init container removes its link before
+  the worker starts. `/work`, `/tmp` and `/dev/shm` are memory volumes that allow
+  execution, because a pod cannot mount them `noexec` and deck code can already
+  execute from memory; no new privilege and no device-node capability keep
+  `nosuid` and `nodev` moot. The process bound is `RLIMIT_NPROC` at 512 per build
+  uid instead of one `pids.max` of 512, because the platform sets no bound per
+  pod and deck code runs under one of the two build uids.
 - The talk has its own origin: one cookie across both hosts would put deck code
   beside the credential it must not reach.
 - One process writes the database: a second would need a second write lock over
@@ -221,5 +229,8 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
 - The hosts are same-site, so deck code on the talk host can set `Domain=`
   cookies for the shared domain.
 - Each presenter window mounts its own overlay; nothing enforces one speaker.
+- Under the Kubernetes seal the claim root is born open to everyone, so the web
+  could leave an entry there before the worker's first start; the worker then
+  refuses with `stale-socket`, and its children never reach the directory.
 - An empty or older database is not guarded against: its retention pass deletes
   the runs only the right database names.

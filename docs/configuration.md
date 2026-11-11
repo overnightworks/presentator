@@ -50,6 +50,7 @@ some of them.
 | `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves; compose also hands it to the build worker by name. |
 | `PRESENTATOR_BUILD_RUNNER` | `worker` | Builds through the build worker's socket and refuses to start unless the worker answers within 70 seconds; `compose.yaml` sets it. `host` builds on this machine instead, for a development run (without the sandbox, whose reason is in [constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons)). |
 | `PRESENTATOR_BUILD_WORKER_SOCKET` | `/run/presentator-build/worker.sock` | Where the web reaches the build worker; the default is where the worker binds, so set it only where the socket volume is mounted elsewhere. |
+| `PRESENTATOR_WORKER_SEAL` | `compose` | The container shape the build worker proves at every start: `compose` for `compose.yaml`, `kubernetes` for platform's pod. Any other value refuses the start. The web does not read it. |
 
 ## Trusted proxies and the client address
 
