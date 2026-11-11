@@ -103,6 +103,18 @@ must name a served host: the container check and edge do, a direct run must.
 The instance joins the internal network `hal_speech_presentator` to reach the
 shared speech service; no host speech process runs.
 
+On the platform's k3s the same image runs as two pods that platform's
+`apps/presentator` defines: the web as a Deployment and the build worker as a
+one-replica StatefulSet, both on the node of one RWO claim mounted at
+`/run/presentator-build`, where the worker's socket lies. The init container
+`remove-link` deletes the worker pod's network link before the worker starts, so
+that pod holds `lo` alone. The worker's container never restarts, so each life
+ends its pod and the StatefulSet makes a fresh one. Neither pod holds a
+Kubernetes API right, and the worker's pod mounts no service-account token. A
+release is tagged only after `release.yml` has driven its published image
+through the k3d probe (`scripts/probe_build_worker_k3d.py`) against
+`apps/presentator` at the platform commit the probe pins.
+
 ## 5. Crosscutting Concepts
 
 **Persistence.** SQLite holds accounts, sessions, preferences, sources, runs,
@@ -144,6 +156,13 @@ carries the account's subject and group memberships, and presentator's workload
 token beside it. Browser cookies and session credentials are not forwarded; what the
 service keeps, logs and admits is the shared section `#sprachdienst`. No operator blessing
 narrows this model yet, so an audit keeps the default trust model.
+
+On the platform the platform is trusted to confine the build worker's pod: that
+deck code there reaches no network and holds no mount, right or limit beyond what
+the pod grants is platform's proof, in platform's CI. presentator proves its own
+product in that pod: the worker's self-check refuses a pod that is not sealed as
+§6 requires, the web becomes Ready against the worker, and a deck builds and
+exports there.
 
 A bearer enters the lobby through two paths besides hal's token clients, and
 both take `/mcp` and the routes marked as tools, and nothing that deletes,
@@ -233,5 +252,13 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
 - Under the Kubernetes seal the claim root is born open to everyone, so the web
   could leave an entry there before the worker's first start; the worker then
   refuses with `stale-socket`, and its children never reach the directory.
+- Under the Kubernetes seal the web records a build under its own toolchain
+  identity, not the worker's. In a rollout that changes the toolchain, one
+  deck's build can still reach the old worker pod before the StatefulSet
+  replaces it. That deck then keeps the old toolchain's talk, or its failure,
+  recorded under the new identity, until its next push or the next toolchain
+  change. The rollout order holds the window to one build: the StatefulSet
+  replaces the old pod at the rollout, and its update strategy must not be
+  `OnDelete`.
 - An empty or older database is not guarded against: its retention pass deletes
   the runs only the right database names.
