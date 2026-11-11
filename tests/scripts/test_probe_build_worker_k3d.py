@@ -160,8 +160,8 @@ def test_a_failure_still_removes_what_the_run_made_then_the_directory(
     run = fixture.run
     steps = fixture.world.commands[-4:]
     assert [command for command, _, _ in steps] == [
-        ("docker", "rm", "--force", run.tools),
         ("k3d", "cluster", "delete", run.name),
+        ("docker", "rm", "--force", run.tools),
         ("docker", "volume", "rm", "--force", run.images_volume),
         ("docker", "image", "rm", "--force", run.tag),
     ]
@@ -180,9 +180,9 @@ def test_an_ordinary_teardown_holds_signals_then_says_so_then_deletes(
     fixture = make_fixture()
     fixture.drive()
     commands = [command for command, _, _ in fixture.world.commands]
-    first = commands.index(("docker", "rm", "--force", fixture.run.tools))
+    first = commands.index(("k3d", "cluster", "delete", fixture.run.name))
     assert fixture.world.holds == [first]
-    assert commands[first + 1] == ("k3d", "cluster", "delete", fixture.run.name)
+    assert commands[first + 1] == ("docker", "rm", "--force", fixture.run.tools)
     assert f"teardown: removing cluster {fixture.run.name}" in capsys.readouterr().out
     assert not fixture.run.directory.exists()
 
@@ -197,7 +197,7 @@ def test_a_signal_during_the_watch_closes_the_watch_then_tears_down(
     assert fixture.world.issued("k3d", "cluster", "delete") != []
     assert not fixture.run.directory.exists()
     first = [c for c, _, _ in fixture.world.commands].index(
-        ("docker", "rm", "--force", fixture.run.tools)
+        ("k3d", "cluster", "delete", fixture.run.name)
     )
     assert fixture.world.holds == [first]
 
