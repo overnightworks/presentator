@@ -1,5 +1,6 @@
 """The sealed job's parts drive every cell and every refused upload exactly once."""
 
+import sys
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
@@ -68,3 +69,14 @@ def test_the_workflow_legs_are_the_parts_and_the_upload_shares(
     assert sorted(leg["shard"] for leg in upload_legs) == list(
         range(1, upload_legs[0]["shards"] + 1)
     )
+
+
+def test_the_probe_loads_where_pypdf_is_absent(
+    monkeypatch: pytest.MonkeyPatch, load_script: Callable[..., ModuleType]
+) -> None:
+    # The client side runs in the holder container, which has no dev group.
+    monkeypatch.setitem(sys.modules, "pypdf", None)
+
+    probe = load_script("probe_build_worker")
+
+    assert callable(probe.client)

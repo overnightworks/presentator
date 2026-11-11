@@ -573,8 +573,6 @@ jobs:
       - name: Install the probe's tools
         run: |
           uv sync --locked
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends poppler-utils
 
       - name: Build the image the worker runs
         run: docker compose build presentator
