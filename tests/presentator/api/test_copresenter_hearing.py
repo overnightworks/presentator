@@ -129,30 +129,45 @@ def test_the_browser_gets_each_transcript_then_the_close_the_service_ended_with(
 
     assert heard.frames == ending.frames
     assert heard.closed_with == ending.close
+    if ending.close == HopClose.NORMAL:
+        assert _warnings(heard.logged) == []
 
 
 @pytest.mark.parametrize(
-    "peer",
+    ("peer", "named"),
     [
-        pytest.param(RawPeer(MALFORMED_PEERS[name]).serving, id=name)
-        for name in MALFORMED_PEERS
-    ]
-    + [
+        pytest.param(
+            RawPeer(MALFORMED_PEERS["status-line-not-http"]).serving,
+            "Malformed",
+            id="status-line-not-http",
+        ),
+        pytest.param(
+            RawPeer(MALFORMED_PEERS["cut-header-block"]).serving,
+            "Cut",
+            id="cut-header-block",
+        ),
+        pytest.param(
+            RawPeer(MALFORMED_PEERS["marked-status-reason"]).serving,
+            "Refused status=500",
+            id="marked-status-reason",
+        ),
         pytest.param(
             RawPeer(b"HTTP/1.1 204 No Content\r\n\r\n").serving,
+            "Malformed",
             id="no-upgrade-204",
         ),
-        pytest.param(nobody_listens, id="nobody-listens"),
+        pytest.param(nobody_listens, "Unreachable", id="nobody-listens"),
     ],
 )
 def test_a_service_that_answers_the_upgrade_off_the_wire_closes_the_browser_4502(
-    tmp_path: Path, peer: Served
+    tmp_path: Path, peer: Served, named: str
 ) -> None:
     with a_speech_instance(tmp_path, SpeechScenario(peer=peer)) as instance:
         heard = hear_and_record(instance)
 
     assert heard.frames == []
     assert heard.closed_with == HopClose.SERVICE_FAILED
+    assert _warnings(heard.logged) == [f"hearing failed: {named}"]
 
 
 @pytest.mark.parametrize(

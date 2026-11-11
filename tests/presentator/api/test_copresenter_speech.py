@@ -66,7 +66,6 @@ if TYPE_CHECKING:
 _POLICY_VIOLATION: Final = 1008
 THREE_SENTENCES: Final = 3
 SECOND: Final = 2
-_NO_HEARING: Final = {"text": "", "final": True, "error": "hearing unavailable"}
 _THE_PLAIN_ERROR: Final = {"message": "the answer could not be spoken"}
 
 
