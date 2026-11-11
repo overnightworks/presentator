@@ -38,6 +38,27 @@ Document = dict[str, Any]
 Issued = tuple[tuple[str, ...], Mapping[str, str], str | None]
 
 
+def add_web_secrets(spec: Document) -> None:
+    """Give the web container's pod spec a projected Secret and the files naming it."""
+    (main,) = spec["containers"]
+    main["env"] = [
+        {"name": "AN_ORIGIN", "value": "https://example.org"},
+        {"name": "A_SECRET_FILE", "value": f"{PROJECTED_MOUNT}/{PROJECTED_KEYS[0]}"},
+        {"name": "AN_OTHER_PATH", "value": "/data/elsewhere"},
+        {"name": "A_REFERENCE", "valueFrom": {"fieldRef": {}}},
+        {"name": "ANOTHER_FILE", "value": f"{PROJECTED_MOUNT}/{PROJECTED_KEYS[1]}"},
+    ]
+    main["volumeMounts"] = [
+        {"name": "elsewhere", "mountPath": "/data/elsewhere"},
+        {"name": SECRETS_VOLUME, "mountPath": PROJECTED_MOUNT},
+    ]
+    projected = {"sources": [{"secret": {"name": PROJECTED_NAME}}]}
+    spec["volumes"] = [
+        {"name": "elsewhere", "emptyDir": {}},
+        {"name": SECRETS_VOLUME, "projected": projected},
+    ]
+
+
 def workload_documents(image: str) -> list[Document]:
     """What the overlay and the base render, every production container at `image`."""
 
@@ -47,28 +68,7 @@ def workload_documents(image: str) -> list[Document]:
             main["command"] = ["serve-the-build-worker", "--flag"]
         spec: Document = {"containers": [main]}
         if container == "web":
-            main["env"] = [
-                {"name": "AN_ORIGIN", "value": "https://example.org"},
-                {
-                    "name": "A_SECRET_FILE",
-                    "value": f"{PROJECTED_MOUNT}/{PROJECTED_KEYS[0]}",
-                },
-                {"name": "AN_OTHER_PATH", "value": "/data/elsewhere"},
-                {"name": "A_REFERENCE", "valueFrom": {"fieldRef": {}}},
-                {
-                    "name": "ANOTHER_FILE",
-                    "value": f"{PROJECTED_MOUNT}/{PROJECTED_KEYS[1]}",
-                },
-            ]
-            main["volumeMounts"] = [
-                {"name": "elsewhere", "mountPath": "/data/elsewhere"},
-                {"name": SECRETS_VOLUME, "mountPath": PROJECTED_MOUNT},
-            ]
-            projected = {"sources": [{"secret": {"name": PROJECTED_NAME}}]}
-            spec["volumes"] = [
-                {"name": "elsewhere", "emptyDir": {}},
-                {"name": SECRETS_VOLUME, "projected": projected},
-            ]
+            add_web_secrets(spec)
         if init:
             spec["initContainers"] = [
                 {"name": "remove-link", "image": REMOVE_LINK_IMAGE}
