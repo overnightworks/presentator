@@ -1,8 +1,0 @@
-claim_id = "1dea0bf1b3da49019b0dc9de65c238cd"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "9d811c2a05cbfe9388841eec817c5eeea7af1e9c"
-branch = "claude/issue-1042-k3d-leftovers-check"
-scope = [".github/workflows/ci.yml", "scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_cluster.py", "tests/scripts/support/k3d_world.py", "tests/scripts/test_probe_build_worker_k3d.py"]
-opened_commit = "81f7a3b3aeaf362ff86b491a3d4a0176698d8aa1"
-whole_reason = "One check: the listing and its control in the cluster module, the subcommand and signal rule in the driver, the CI steps that call it, and the fake world and driver tests that drive them."
