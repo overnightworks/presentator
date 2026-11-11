@@ -55,19 +55,9 @@ def test_compose_judges_the_pid_bound_and_not_the_process_limit(
     assert judged(Seal.COMPOSE, soft, hard, pids_max=pids_max) == refused
 
 
-KUBERNETES_ROWS: dict[str, tuple[str, str, dict[str, str], Predicate]] = {
-    "at the maximum without a pid bound": (
-        MAXIMUM,
-        MAXIMUM,
-        {"pids_max": "max"},
-        Predicate.KUBERNETES_UNPROVEN,
-    ),
-    "below the maximum": (
-        "100",
-        "256",
-        {},
-        Predicate.KUBERNETES_UNPROVEN,
-    ),
+KUBERNETES_ROWS: dict[str, tuple[str, str, dict[str, str], Predicate | None]] = {
+    "at the maximum without a pid bound": (MAXIMUM, MAXIMUM, {"pids_max": "max"}, None),
+    "below the maximum": ("100", "256", {}, None),
     "an unlimited soft limit": (UNLIMITED, MAXIMUM, {}, BOUND),
     "an unlimited hard limit": (MAXIMUM, UNLIMITED, {}, BOUND),
     "a soft limit above the maximum": (ABOVE_MAXIMUM, MAXIMUM, {}, BOUND),
@@ -82,7 +72,7 @@ KUBERNETES_ROWS: dict[str, tuple[str, str, dict[str, str], Predicate]] = {
     ids=KUBERNETES_ROWS.keys(),
 )
 def test_kubernetes_judges_the_process_limit_and_the_memory_bound(
-    soft: str, hard: str, changes: dict[str, str], refused: Predicate
+    soft: str, hard: str, changes: dict[str, str], refused: Predicate | None
 ) -> None:
     assert judged(Seal.KUBERNETES, soft, hard, **changes) == refused
 
@@ -186,16 +176,21 @@ def recording_boundary(
     )
 
 
-@pytest.mark.parametrize("arguments", [[], ["--check"]])
+@pytest.mark.parametrize(
+    ("arguments", "events"),
+    [
+        ([], ["prctl", "umask", "lower", "read", "settings", "serve"]),
+        (["--check"], ["prctl", "umask", "lower", "read"]),
+    ],
+)
 def test_kubernetes_lowers_the_limit_after_the_seal_and_before_the_snapshot(
-    arguments: list[str],
+    arguments: list[str], events: list[str]
 ) -> None:
-    events: list[str] = []
+    recorded: list[str] = []
 
-    status = worker.main(arguments, recording_boundary(Seal.KUBERNETES, events))
+    status = worker.main(arguments, recording_boundary(Seal.KUBERNETES, recorded))
 
-    assert status == worker.REFUSAL_EXIT_STATUS
-    assert events == ["prctl", "umask", "lower", "read"]
+    assert (status, recorded) == (0, events)
 
 
 @pytest.mark.parametrize(

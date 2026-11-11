@@ -136,10 +136,10 @@ def with_owner(snapshot: Snapshot, mount: str, uid: int) -> Snapshot:
     )
 
 
-def test_the_staged_pod_passes_the_mounts_and_ends_in_kubernetes_unproven(
+def test_the_staged_pod_passes_the_self_check(
     pod: Path,
 ) -> None:
-    assert judged(pod) == Predicate.KUBERNETES_UNPROVEN
+    assert judged(pod) is None
 
 
 @pytest.mark.parametrize("arguments", CHECK_OR_START)
@@ -226,7 +226,7 @@ def test_the_claim_directory_may_be_a_mount_of_any_filesystem(
 ) -> None:
     remount(pod, SOCKET_DIRECTORY, filesystem=filesystem)
 
-    assert judged(pod) == Predicate.KUBERNETES_UNPROVEN
+    assert judged(pod) is None
 
 
 QUEUE_FAULTS: dict[str, Callable[[Path], None]] = {
@@ -255,7 +255,7 @@ def test_work_and_tmp_without_the_hardening_flags_pass_under_kubernetes(
     }
 
     assert not flags & HARDENED_MOUNT_OPTIONS
-    assert judged(pod) == Predicate.KUBERNETES_UNPROVEN
+    assert judged(pod) is None
 
 
 def test_the_same_pod_refuses_under_compose_for_the_missing_flags(pod: Path) -> None:
@@ -283,7 +283,7 @@ def test_an_extra_directory_owned_by_a_child_or_the_runtime_refuses(
     mount_extra(pod, PodMount("/data", READ_WRITE, "ext4"))
     snapshot = read_staged_root_as_sealed_process(pod, seal=Seal.KUBERNETES)
 
-    assert first_failing_predicate(snapshot) == Predicate.KUBERNETES_UNPROVEN
+    assert first_failing_predicate(snapshot) is None
     assert first_failing_predicate(with_owner(snapshot, "/data", uid)) == MOUNTS
 
 
@@ -304,7 +304,7 @@ def test_the_staged_extra_file_without_others_write_passes(pod: Path) -> None:
     path.chmod(0o644)
     mount_extra(pod, PodMount("/etc/extra", READ_ONLY, "ext4"))
 
-    assert judged(pod) == Predicate.KUBERNETES_UNPROVEN
+    assert judged(pod) is None
 
 
 @pytest.mark.parametrize("area", ["/proc/masked-directory", "/sys/masked-directory"])
@@ -312,7 +312,7 @@ def test_a_read_only_tmpfs_under_proc_or_sys_passes(pod: Path, area: str) -> Non
     stage_directory(pod, area, OPEN_DIRECTORY_MODE)
     mount_extra(pod, PodMount(area, READ_ONLY, "tmpfs"))
 
-    assert judged(pod) == Predicate.KUBERNETES_UNPROVEN
+    assert judged(pod) is None
 
 
 def test_a_read_only_tmpfs_elsewhere_refuses(pod: Path) -> None:
@@ -368,7 +368,7 @@ def test_a_mount_whose_root_was_not_read_refuses(pod: Path) -> None:
 def test_a_device_bind_under_proc_or_sys_passes(pod: Path, area: str) -> None:
     mount_extra(pod, PodMount(link_to_host_devices(pod, area), READ_WRITE, "tmpfs"))
 
-    assert judged(pod) == Predicate.KUBERNETES_UNPROVEN
+    assert judged(pod) is None
 
 
 NOT_GROUP_OR_OTHERS_WRITABLE = 0o644
@@ -514,9 +514,10 @@ def test_kubernetes_fixes_up_the_born_pod_between_the_lowering_and_the_read(
 
     status = worker.main(arguments, pod_boundary(pod, events, KUBERNETES_ENVIRONMENT))
 
-    assert status == worker.REFUSAL_EXIT_STATUS
-    assert events == ["prctl", "umask", "lower", "fix-up", "read"]
-    assert f"start refused: {Predicate.KUBERNETES_UNPROVEN}" in caplog.text
+    assert status == 0
+    assert events[:5] == ["prctl", "umask", "lower", "fix-up", "read"]
+    assert ("serve" in events) is (not arguments)
+    assert "start refused" not in caplog.text
     assert (
         stat.S_IMODE(path_in(pod, WORK_MOUNT).stat().st_mode)
         == (MOUNT_ROOT_MODES[WORK_MOUNT])

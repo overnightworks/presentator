@@ -1,4 +1,4 @@
-"""The build worker reads its seal and stays closed under Kubernetes."""
+"""The build worker reads its seal and judges every start under it."""
 
 from collections.abc import Mapping
 from dataclasses import replace
@@ -43,17 +43,17 @@ SEAL_AND_KEYS = {
     "kubernetes with the kubelet names": (
         Seal.KUBERNETES,
         SEALED_KEYS | KUBERNETES_ENVIRONMENT_KEYS,
-        Predicate.KUBERNETES_UNPROVEN,
+        None,
     ),
     "kubernetes without the kubelet names": (
         Seal.KUBERNETES,
         SEALED_KEYS,
-        Predicate.KUBERNETES_UNPROVEN,
+        None,
     ),
     "kubernetes with the platform's keys": (
         Seal.KUBERNETES,
         PLATFORM_KEYS | KUBERNETES_ENVIRONMENT_KEYS,
-        Predicate.KUBERNETES_UNPROVEN,
+        None,
     ),
     "kubernetes with another service's link": (
         Seal.KUBERNETES,
@@ -81,10 +81,8 @@ def test_a_kubelet_name_under_the_compose_seal_fails_the_environment(
     assert first_failing_predicate(snapshot) == Predicate.ENVIRONMENT
 
 
-@pytest.mark.parametrize(
-    "predicate", [name for name in Predicate if name != Predicate.KUBERNETES_UNPROVEN]
-)
-def test_under_kubernetes_an_earlier_failing_predicate_is_named_first(
+@pytest.mark.parametrize("predicate", list(Predicate))
+def test_under_kubernetes_an_unreadable_predicate_is_named(
     predicate: Predicate,
 ) -> None:
     snapshot = with_fields(seal=Seal.KUBERNETES, unreadable=frozenset({predicate}))(
@@ -103,15 +101,25 @@ def boundary_with_environment(
     )
 
 
+@pytest.mark.parametrize(
+    "environment",
+    [{}, {SEAL_VARIABLE: Seal.COMPOSE}, {SEAL_VARIABLE: Seal.KUBERNETES}],
+    ids=["an unset seal", "the compose seal", "the kubernetes seal"],
+)
 @pytest.mark.parametrize("arguments", [[], ["--check"]])
-def test_an_unset_seal_starts_the_compose_worker(arguments: list[str]) -> None:
+def test_a_sealed_start_passes_under_either_seal(
+    caplog: pytest.LogCaptureFixture,
+    environment: Mapping[str, str],
+    arguments: list[str],
+) -> None:
     events: list[str] = []
-    boundary = boundary_with_environment({}, events)
+    boundary = boundary_with_environment(environment, events)
 
     status = worker.main(arguments, boundary)
 
     assert status == 0
     assert ("serve" in events) is (not arguments)
+    assert "start refused" not in caplog.text
 
 
 @pytest.mark.parametrize("value", ["COMPOSE", "Kubernetes", "k8s", ""])
@@ -137,19 +145,6 @@ def test_a_refused_seal_is_logged_without_its_value(
     worker.main([], boundary)
 
     assert "unique-seal-4711" not in caplog.text
-
-
-def test_a_check_under_kubernetes_exits_two_naming_kubernetes_unproven(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    events: list[str] = []
-    boundary = boundary_with_environment({SEAL_VARIABLE: Seal.KUBERNETES}, events)
-
-    status = worker.main(["--check"], boundary)
-
-    assert status == worker.REFUSAL_EXIT_STATUS
-    assert "start refused: kubernetes-unproven" in caplog.text
-    assert "settings" not in events
 
 
 @pytest.mark.parametrize(

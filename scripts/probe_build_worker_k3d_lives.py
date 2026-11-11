@@ -3,7 +3,7 @@
 A cell's worker pods are replaced by platform, so a cell judges its lives from
 one watch. `read_lives` folds the watch's events into `Life` records, the
 judgements name the first life or interval that is not what the cell expects,
-and `report_lives` prints each life's uid and refusal line.
+and `report_lives` prints each life's uid and how it ended.
 """
 
 import contextlib
@@ -29,13 +29,15 @@ LOST_SANDBOX_REASON = "ContainerStatusUnknown"
 TERMINATION_WINDOW_SECONDS = 180
 LIVES = 4
 TIMESTAMP_RESOLUTION_SECONDS = 1
+# The exit status of a start whose self-check passes under `--check`.
+PASSING_EXIT_STATUS = 0
 
 
 @dataclass(frozen=True)
 class Expectation:
-    """What a cell's worker pods must show."""
+    """What a cell's worker pods must show; no refusal means a passing start."""
 
-    refusal: Predicate
+    refusal: Predicate | None
     init_container: bool
     lives: int
 
@@ -153,6 +155,10 @@ def refusal_line(message: str, refusal: Predicate) -> str | None:
     return next((line.strip() for line in message.splitlines() if needle in line), None)
 
 
+def _refusal_missing(ended: Termination, refusal: Predicate | None) -> bool:
+    return refusal is not None and refusal_line(ended.message, refusal) is None
+
+
 def _worker_reason(life: Life, expected: Expectation) -> str | None:
     if len(life.terminations) != 1:
         count = len(life.terminations)
@@ -162,6 +168,7 @@ def _worker_reason(life: Life, expected: Expectation) -> str | None:
             else "the Pod was deleted before its worker terminated"
         )
     (ended,) = life.terminations
+    status = PASSING_EXIT_STATUS if expected.refusal is None else REFUSAL_EXIT_STATUS
     wrong_status = f"the worker ended with exit status {ended.exit_code}"
     no_line = (
         f"no 'start refused: {expected.refusal}' in {ended.message.strip()[-500:]}"
@@ -169,8 +176,8 @@ def _worker_reason(life: Life, expected: Expectation) -> str | None:
     reasons = (
         (ended.reason == LOST_SANDBOX_REASON, f"the worker ended as {ended.reason}"),
         (bool(life.restarts), f"restartCount is {life.restarts}, expected 0"),
-        (ended.exit_code != REFUSAL_EXIT_STATUS, wrong_status),
-        (refusal_line(ended.message, expected.refusal) is None, no_line),
+        (ended.exit_code != status, wrong_status),
+        (_refusal_missing(ended, expected.refusal), no_line),
     )
     return next((reason for failed, reason in reasons if failed), None)
 
@@ -222,9 +229,12 @@ def interval_problem(number: int, lives: list[Life]) -> str | None:
     return problem
 
 
-def report_lives(number: int, lives: list[Life], refusal: Predicate) -> None:
-    """Print every life's uid and refusal line."""
+def report_lives(number: int, lives: list[Life], refusal: Predicate | None) -> None:
+    """Print every life's uid and how its worker ended."""
     for position, life in enumerate(lives, start=1):
-        line = refusal_line(_worker_end(life).message, refusal)
         who = f"cell {number}: life {position}, uid {life.uid}"
-        say(f"{who}, exit {REFUSAL_EXIT_STATUS}, {line}")
+        if refusal is None:
+            say(f"{who}, exit {PASSING_EXIT_STATUS}, self-check passed")
+        else:
+            line = refusal_line(_worker_end(life).message, refusal)
+            say(f"{who}, exit {REFUSAL_EXIT_STATUS}, {line}")

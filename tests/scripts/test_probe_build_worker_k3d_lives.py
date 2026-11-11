@@ -9,6 +9,7 @@ from types import ModuleType
 import pytest
 
 from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
+from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import Predicate
 from tests.scripts.support.k3d_world import (
     Document,
@@ -41,7 +42,7 @@ def judge_cell(  # noqa: PLR0913 - each argument is one knob of the judged cell
     make_fixture: Callable[..., Fixture],
     lives_module: ModuleType,
     events: list[Document],
-    refusal: Predicate,
+    refusal: Predicate | None,
     *,
     init_container: bool = True,
     lives: int = 1,
@@ -56,10 +57,11 @@ def judge_cell(  # noqa: PLR0913 - each argument is one knob of the judged cell
     return fixture.driver.drive_cell(fixture.run, 8, documents, expectation), world
 
 
-REFUSED = Predicate.KUBERNETES_UNPROVEN
+REFUSED = Predicate.NO_ROUTE
 
 
 refused_life = partial(life_events, "one", REFUSED)
+passing_life = partial(life_events, "one", None)
 GONE = terminated_state(137, reason="ContainerStatusUnknown")
 SECOND = Version(last_state=terminated_state(started=9))
 UNTERMINATED = [
@@ -69,20 +71,24 @@ UNTERMINATED = [
 
 
 @pytest.mark.parametrize(
-    ("events", "fragment"),
+    ("refusal", "events", "fragment"),
     [
-        (refused_life(ended=terminated_state(1)), "exit status 1"),
-        (life_events("one", Predicate.ALONE), Predicate.ALONE),
-        (refused_life(ended=terminated_state()), "start refused"),
-        (refused_life(version=Version(init_exit=1)), "remove-link ended as 1"),
-        (refused_life(version=Version(init=False)), "lacks an init container"),
-        (refused_life(version=Version(restarts=1)), "restartCount is 1"),
-        (refused_life(version=SECOND), "terminated 2 times"),
-        (refused_life(ended=GONE), "ContainerStatusUnknown"),
-        (UNTERMINATED, "deleted before its worker terminated"),
+        (REFUSED, refused_life(ended=terminated_state(1)), "exit status 1"),
+        (REFUSED, passing_life(), "exit status 0"),
+        (REFUSED, life_events("one", Predicate.ALONE), Predicate.ALONE),
+        (REFUSED, refused_life(ended=terminated_state()), "start refused"),
+        (REFUSED, refused_life(version=Version(init_exit=1)), "remove-link ended as 1"),
+        (REFUSED, refused_life(version=Version(init=False)), "lacks an init container"),
+        (REFUSED, refused_life(version=Version(restarts=1)), "restartCount is 1"),
+        (REFUSED, refused_life(version=SECOND), "terminated 2 times"),
+        (REFUSED, refused_life(ended=GONE), "ContainerStatusUnknown"),
+        (REFUSED, UNTERMINATED, "deleted before its worker terminated"),
+        (None, refused_life(), f"exit status {REFUSAL_EXIT_STATUS}"),
+        (None, passing_life(ended=terminated_state(1)), "exit status 1"),
     ],
     ids=[
         "another exit status",
+        "a passing life where a refusal is expected",
         "another predicate",
         "an empty message",
         "remove-link not ended 0",
@@ -91,17 +97,22 @@ UNTERMINATED = [
         "a second termination inside one uid",
         "a lost sandbox",
         "deleted before the worker terminated",
+        "a refusal where a pass is expected",
+        "another exit status where a pass is expected",
     ],
 )
 def test_a_life_that_is_not_the_expected_one_fails_naming_its_uid_and_the_reason(
     make_fixture: Callable[..., Fixture],
     lives_module: ModuleType,
+    refusal: Predicate | None,
     events: list[Document],
     fragment: str,
 ) -> None:
-    problem, _ = judge_cell(make_fixture, lives_module, events, REFUSED)
+    problem, world = judge_cell(make_fixture, lives_module, events, refusal)
     assert "uid one" in problem
     assert fragment in problem
+    assert world.issued("kubectl", "get", "events") != []
+    assert world.applied("Pod") != []
 
 
 @pytest.mark.parametrize(

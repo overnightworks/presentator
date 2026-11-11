@@ -8,6 +8,7 @@ from types import ModuleType
 import pytest
 
 from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
+from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import Predicate
 from tests.scripts.support.k3d_world import (
     Document,
@@ -107,13 +108,17 @@ def test_drive_passes_prints_every_life_and_interval_and_bounds_the_watch(
     fixture = make_fixture()
     fixture.drive()
     lines = capsys.readouterr().out.splitlines()
-    for cell, count, refusal in (
-        (7, 1, Predicate.NO_ROUTE),
-        (8, lives_module.LIVES, Predicate.KUBERNETES_UNPROVEN),
+    for cell, count, ending in (
+        (7, 1, f"exit {REFUSAL_EXIT_STATUS}, start refused: {Predicate.NO_ROUTE}"),
+        (8, lives_module.LIVES, "exit 0, self-check passed"),
     ):
         lives = [line for line in lines if line.startswith(f"cell {cell}: life")]
         assert len(lives) == count
-        assert all(f"start refused: {refusal}" in line for line in lives)
+        for position, line in enumerate(lives, start=1):
+            assert line.startswith(
+                f"cell {cell}: life {position}, uid life-{position - 1}, "
+            )
+            assert line.endswith(ending)
     intervals = [line for line in lines if line.startswith("cell 8: interval")]
     assert len(intervals) == lives_module.LIVES - 1
     assert all("3 s" in line and "resolution" in line for line in intervals)

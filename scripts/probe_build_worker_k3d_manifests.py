@@ -14,6 +14,7 @@ from typing import Any, cast
 
 from probe_build_worker_harness import refuse, say
 from probe_build_worker_k3d_cluster import NAMESPACE, Document, Run, documents_of
+from probe_build_worker_starts import CHECK_ARGUMENT
 
 PRODUCTION_IMAGE = "ghcr.io/overnightworks/presentator"
 APPLIED_KINDS = ("PersistentVolumeClaim", "ServiceAccount", "StatefulSet")
@@ -121,9 +122,12 @@ def prove_render(run: Run) -> list[Document]:
 
 
 def applied_documents(
-    overlay: list[Document], *, init_container: bool
+    overlay: list[Document], *, init_container: bool, check: bool = False
 ) -> list[Document]:
-    """The overlay's documents the worker pod needs, the worker's message policy set."""
+    """The overlay's documents the worker pod needs.
+
+    The worker's message policy is set, and its arguments are `--check` when `check`.
+    """
     documents = [
         copy.deepcopy(document)
         for document in overlay
@@ -138,6 +142,8 @@ def applied_documents(
         for container in spec["containers"]:
             if container["name"] == WORKER_CONTAINER:
                 container["terminationMessagePolicy"] = TERMINATION_MESSAGE_POLICY
+                if check:
+                    container["args"] = [CHECK_ARGUMENT]
     return documents
 
 
