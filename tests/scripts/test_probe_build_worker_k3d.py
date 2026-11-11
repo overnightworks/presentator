@@ -208,6 +208,10 @@ class World:
     cell: int = 0
     overlay_file: str = ""
     commands: list[Issued] = field(default_factory=list[Issued])
+    # Whether the run's directory existed as each command was issued.
+    directory_present: dict[tuple[str, ...], bool] = field(
+        default_factory=dict[tuple[str, ...], bool]
+    )
     events_printed: int = 0
     watches_closed: int = 0
 
@@ -218,6 +222,9 @@ class World:
         stdin: str | None,
     ) -> tuple[int, str]:
         self.commands.append((command, environment, stdin))
+        self.directory_present[command] = Path(
+            environment["KUBECONFIG"]
+        ).parent.exists()
         if (
             self.failing_command
             and command[: len(self.failing_command)] == self.failing_command
@@ -532,7 +539,11 @@ def test_a_failure_still_removes_the_cluster_then_the_image_then_the_directory(
     delete, image = fixture.world.commands[-2:]
     assert delete[0] == ("k3d", "cluster", "delete", fixture.run.name)
     assert image[0] == ("docker", "image", "rm", "--force", fixture.run.tag)
-    assert image[1]["KUBECONFIG"] == str(fixture.run.kubeconfig)
+    for _, environment, _ in (delete, image):
+        assert environment["KUBECONFIG"] == str(fixture.run.kubeconfig)
+        assert Path(environment["KUBECACHEDIR"]).is_relative_to(fixture.run.directory)
+        assert environment["KUBERC"] == "off"
+    assert fixture.world.directory_present[image[0]]
     assert not fixture.run.directory.exists()
 
 
