@@ -730,7 +730,7 @@ BROKEN_FORMS: list[tuple[str, Callable[[str], str]]] = [
     ("no tag", lambda reference: reference.replace(f":{RELEASED_VERSION}", "")),
     ("another repository", lambda reference: reference.replace("overnightworks", "x")),
     ("the local name", lambda reference: reference.rsplit("/", 1)[-1]),
-    ("uppercase digest", lambda reference: reference.replace(DIGEST, DIGEST.upper())),
+    ("uppercase digest", lambda reference: reference.replace("a" * 64, "A" * 64)),
     ("short digest", lambda reference: reference[:-1]),
     ("long digest", lambda reference: f"{reference}a"),
     ("another algorithm", lambda reference: reference.replace("sha256", "sha512")),
