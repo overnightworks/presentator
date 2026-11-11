@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "cf7ce7230c73e009b5f826f7fa3361ea9302b314"
 branch = "claude/issue-1068-pages-follow-account-language"
-scope = ["docs/ARCHITECTURE.md", "docs/lobby.md", "docs/people.md", "docs/sign-in.md", "legal/datenschutz.html", "src/presentator/adapters/identity.py", "src/presentator/api/auth.py", "src/presentator/api/lobby_shell.py", "src/presentator/api/people.py", "src/presentator/api/session_api.py", "src/presentator/application/preferences.py", "src/presentator/contracts/people.py", "src/presentator/host/main.py", "src/presentator/ports/identity.py", "tests/presentator"]
+scope = ["docs/ARCHITECTURE.md", "docs/lobby.md", "docs/people.md", "legal/datenschutz.html", "src/presentator/adapters/identity.py", "src/presentator/api/auth.py", "src/presentator/api/people.py", "src/presentator/api/session_api.py", "src/presentator/application/preferences.py", "src/presentator/contracts/people.py", "src/presentator/ports/identity.py", "tests/presentator"]
 opened_commit = "34fe4c40832688c91846ce16b103557c7d292463"
 whole_reason = "The stored value's use, its export and its notice are one data-protection change that ships whole."
