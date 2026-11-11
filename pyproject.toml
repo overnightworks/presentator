@@ -117,6 +117,7 @@ convention = "google"
 "scripts/probe_build_worker_harness.py" = ["INP001"]
 "scripts/probe_build_worker_isolation.py" = ["INP001"]
 "scripts/probe_build_worker_k3d.py" = ["INP001"]
+"scripts/probe_build_worker_k3d_builds.py" = ["INP001"]
 "scripts/probe_build_worker_k3d_cluster.py" = ["INP001"]
 "scripts/probe_build_worker_k3d_lives.py" = ["INP001"]
 "scripts/probe_build_worker_k3d_manifests.py" = ["INP001"]
