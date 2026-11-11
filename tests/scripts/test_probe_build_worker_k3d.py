@@ -325,19 +325,25 @@ def an_unterminated_end(_refusal: Predicate | None) -> Document:
     return pod
 
 
+def another_predicate(_refusal: Predicate | None) -> Document:
+    return twin_answer(Predicate.MOUNTS)
+
+
+def a_restart(refusal: Predicate | None) -> Document:
+    return twin_answer(refusal, version=Version(restarts=1))
+
+
+def a_failed_remove_link(refusal: Predicate | None) -> Document:
+    return twin_answer(refusal, version=Version(init_exit=1))
+
+
 @pytest.mark.parametrize(
     ("end", "fragment"),
     [
-        (lambda _: twin_answer(Predicate.MOUNTS), "no 'start refused"),
+        (another_predicate, "no 'start refused"),
         (a_failed_end, "exit status 1"),
-        (
-            lambda refusal: twin_answer(refusal, version=Version(restarts=1)),
-            "restartCount is 1",
-        ),
-        (
-            lambda refusal: twin_answer(refusal, version=Version(init_exit=1)),
-            "remove-link ended as 1",
-        ),
+        (a_restart, "restartCount is 1"),
+        (a_failed_remove_link, "remove-link ended as 1"),
         (an_unterminated_end, "before its worker terminated"),
     ],
     ids=["another predicate", "a failed plant", "a restart", "remove-link", "no end"],

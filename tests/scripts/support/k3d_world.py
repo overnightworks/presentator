@@ -355,11 +355,12 @@ def expected_ends(
     control: str, starts_module: ModuleType
 ) -> list[tuple[str, Predicate | None]]:
     """The control and each residue with the predicate its owner pairs it with."""
-    return [(control, None)] + [
+    refusals: list[tuple[str, Predicate | None]] = [
         (residue, predicate)
         for _, predicate, residues in starts_module.REFUSALS
         for residue in residues
     ]
+    return [(control, None), *refusals]
 
 
 def fixture_maker(
