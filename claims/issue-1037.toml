@@ -1,0 +1,8 @@
+claim_id = "76c2ef9df5e84b8ab211c3f9dd7fb9a7"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "462cf8f138dd8c2806363b5b0d42b0f3fcb6dfc4"
+branch = "claude/issue-1037-k3d-residue-twins"
+scope = ["scripts/probe_build_worker/plant_residue.py", "scripts/probe_build_worker_k3d.py", "tests/scripts/support/k3d_world.py", "tests/scripts/test_probe_build_worker_k3d.py", "tests/scripts/test_probe_build_worker_k3d_lives.py"]
+opened_commit = "57b5332ca499eda45c1508444f2839c1d08eba51"
+whole_reason = "One cell: the twin builder and cell 9 in the driver, the planter's docstring for its second way in, and the fake world, the driver tests and the lives test's repaired diagnostics pin change together."
