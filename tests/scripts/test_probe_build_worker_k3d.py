@@ -12,9 +12,8 @@ from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
 from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import BUILD_IDENTITY, Predicate
 from tests.scripts.support.k3d_world import (
-    DIGEST,
+    BROKEN_FORMS,
     OTHER_DIGEST,
-    RELEASED_VERSION,
     Document,
     Fixture,
     Version,
@@ -652,20 +651,6 @@ def test_a_twin_that_does_not_end_within_the_window_stops_cell_9_after_that_wind
 @pytest.fixture
 def manifests_module(load_script: Callable[..., ModuleType]) -> ModuleType:
     return load_script("probe_build_worker_k3d_manifests")
-
-
-BROKEN_FORMS: list[tuple[str, Callable[[str], str]]] = [
-    ("no digest", lambda reference: reference.replace(DIGEST, "")),
-    ("no tag", lambda reference: reference.replace(f":{RELEASED_VERSION}", "")),
-    ("another repository", lambda reference: reference.replace("overnightworks", "x")),
-    ("the local name", lambda reference: reference.rsplit("/", 1)[-1]),
-    ("uppercase digest", lambda reference: reference.replace(DIGEST, DIGEST.upper())),
-    ("short digest", lambda reference: reference[:-1]),
-    ("long digest", lambda reference: f"{reference}a"),
-    ("another algorithm", lambda reference: reference.replace("sha256", "sha512")),
-    ("trailing text", lambda reference: f"{reference} --privileged"),
-    ("trailing newline", lambda reference: f"{reference}\n"),
-]
 
 
 def recorded_drive() -> tuple[

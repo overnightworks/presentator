@@ -725,6 +725,20 @@ def fixture_maker(
     return make
 
 
+BROKEN_FORMS: list[tuple[str, Callable[[str], str]]] = [
+    ("no digest", lambda reference: reference.replace(DIGEST, "")),
+    ("no tag", lambda reference: reference.replace(f":{RELEASED_VERSION}", "")),
+    ("another repository", lambda reference: reference.replace("overnightworks", "x")),
+    ("the local name", lambda reference: reference.rsplit("/", 1)[-1]),
+    ("uppercase digest", lambda reference: reference.replace(DIGEST, DIGEST.upper())),
+    ("short digest", lambda reference: reference[:-1]),
+    ("long digest", lambda reference: f"{reference}a"),
+    ("another algorithm", lambda reference: reference.replace("sha256", "sha512")),
+    ("trailing text", lambda reference: f"{reference} --privileged"),
+    ("trailing newline", lambda reference: f"{reference}\n"),
+]
+
+
 def issued_commands(world: World) -> list[tuple[tuple[str, ...], str]]:
     """Each command of the run with its stdin, in the order it was issued."""
     return [(command, stdin or "") for command, _, stdin in world.commands]
