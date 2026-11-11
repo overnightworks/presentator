@@ -2,6 +2,7 @@
 
 import copy
 import json
+import signal
 from collections.abc import Callable, Generator, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
@@ -226,6 +227,12 @@ class World:
     cluster_name: str = ""
     cluster_up: bool = False
     image_built: bool = False
+    # The images volume lives from the cluster's creation until it is removed;
+    # `k3d cluster delete` cannot remove it while the import's tools container uses it.
+    volume_up: bool = False
+    tools_up: bool = False
+    # A signal ends `k3d image import` after it started its tools container.
+    import_interrupted: bool = False
     # What the listings leave out of the run's own: cluster, node, volume or tag.
     omitted: frozenset[str] = frozenset()
     # A container of another cluster that every container listing shows.
@@ -275,6 +282,14 @@ class World:
         match command:
             case ("k3d", "cluster", "create" | "delete", *_):
                 self.cluster_up = command[2] == "create"
+                self.volume_up = (self.volume_up and self.tools_up) or self.cluster_up
+            case ("k3d", "image", "import", *_) if self.import_interrupted:
+                self.tools_up = True
+                raise SystemExit(128 + signal.SIGTERM)
+            case ("docker", "rm", "--force", name) if name == self.tools_name:
+                self.tools_up = False
+            case ("docker", "volume", "rm", "--force", _):
+                self.volume_up = False
             case ("docker", "build", *_) | ("docker", "image", "rm", *_):
                 self.image_built = command[1] == "build"
             case ("k3d", "cluster", "list", *_):
@@ -283,15 +298,16 @@ class World:
             case ("docker", "ps", *_):
                 serverlb = f"k3d-{self.cluster_name}-serverlb"
                 own = [serverlb, *([] if "node" in self.omitted else [self.node_name])]
-                return self.listing(
+                shown = self.listing(
                     "container",
                     *own,
                     exists=self.cluster_up,
                     stray=self.stray_container,
                 )
+                return shown + (f"{self.tools_name}\n" if self.tools_up else "")
             case ("docker", "volume", "ls", *_):
                 own = f"k3d-{self.cluster_name}-images"
-                return self.listing("volume", own, exists=self.cluster_up)
+                return self.listing("volume", own, exists=self.volume_up)
             case ("docker", "image", "ls", *_, repository):
                 probe = repository == self.probe_image.split(":")[0]
                 own = self.probe_image if probe else ""
@@ -299,6 +315,10 @@ class World:
             case _:
                 pass
         return ""
+
+    @property
+    def tools_name(self) -> str:
+        return f"k3d-{self.cluster_name}-tools"
 
     def listing(self, what: str, *own: str, exists: bool, stray: str = "") -> str:
         """The lines of a listing: the run's own while they exist, unless omitted."""

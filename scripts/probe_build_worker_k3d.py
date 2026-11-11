@@ -53,7 +53,9 @@ tag, so a label filter that matches nothing cannot pass the check after a
 drive. The teardown runs on every way out, SIGTERM and SIGINT included, which
 also kill the watch. The first signal ignores both signals, so a second one
 cannot interrupt the exit it started; the teardown ignores them too, and a stuck
-teardown is bounded by the wrapper's timeout. CI runs it on a clean runner; a local run
+teardown is bounded by the wrapper's timeout. A signal that ends `k3d image import`
+leaves its tools container and the images volume, so the teardown removes both.
+CI runs it on a clean runner; a local run
 takes the probe-stack lock:
 
     flock -o -w 3600 /tmp/probe-stack.lock setpriv --pdeathsig TERM \

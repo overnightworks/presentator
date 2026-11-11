@@ -4,8 +4,8 @@ Every command of a run goes through `Run` with the run's own kubeconfig, cache
 and `KUBERC=off`, so nothing reads or writes the operator's kubeconfig. The
 cluster is proven to be the run's own before any API write, `leftovers` is the
 one listing of what a run may leave behind, and `teardown` ignores further
-signals, then removes the cluster, the image and the directory whatever each one
-finds.
+signals, then removes the tools container, the cluster, the images volume, the
+image and the directory whatever each one finds.
 """
 
 import contextlib
@@ -146,6 +146,16 @@ class Run:
     def node(self) -> str:
         """The name k3d gives the cluster's one server node."""
         return f"k3d-{self.name}-server-0"
+
+    @property
+    def tools(self) -> str:
+        """The container `k3d image import` starts; a killed import leaves it."""
+        return f"k3d-{self.name}-tools"
+
+    @property
+    def images_volume(self) -> str:
+        """The volume k3d keeps the cluster's images in; the tools container holds it."""
+        return f"k3d-{self.name}-images"
 
     @property
     def kubeconfig(self) -> Path:
@@ -313,16 +323,21 @@ def prove_label_filter(run: Run) -> None:
 
 
 def teardown(run: Run) -> None:
-    """Ignore further signals, then remove the cluster, the image and the directory.
+    """Ignore further signals, then remove what the run made, the directory last.
 
-    Each is attempted whatever the one before did.
+    The tools container goes before the cluster, which cannot remove the images
+    volume while the container holds it. Each step is attempted whatever the one
+    before did.
     """
     run.effects.hold_signals()
     say(f"teardown: removing cluster {run.name}")
-    try:
-        run("k3d cluster delete", run.name, check=False)
-    finally:
-        try:
-            run("docker image rm --force", run.tag, check=False)
-        finally:
-            shutil.rmtree(run.directory, ignore_errors=True)
+    steps = (
+        ("docker rm --force", run.tools),
+        ("k3d cluster delete", run.name),
+        ("docker volume rm --force", run.images_volume),
+        ("docker image rm --force", run.tag),
+    )
+    with contextlib.ExitStack() as cleanup:
+        cleanup.callback(shutil.rmtree, run.directory, ignore_errors=True)
+        for words, name in reversed(steps):
+            cleanup.callback(run, words, name, check=False)

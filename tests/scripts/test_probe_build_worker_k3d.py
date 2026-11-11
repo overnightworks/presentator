@@ -151,22 +151,27 @@ def test_drive_passes_prints_every_life_and_interval_and_bounds_the_watch(
 @pytest.mark.parametrize(
     "failing", [("kubectl", "apply"), ("k3d", "cluster", "delete")], ids=str
 )
-def test_a_failure_still_removes_the_cluster_then_the_image_then_the_directory(
+def test_a_failure_still_removes_what_the_run_made_then_the_directory(
     make_fixture: Callable[..., Fixture], failing: tuple[str, ...]
 ) -> None:
     fixture = make_fixture(World(failing_command=failing))
     with pytest.raises(RuntimeError):
         fixture.drive()
-    delete, image = fixture.world.commands[-2:]
-    assert delete[0] == ("k3d", "cluster", "delete", fixture.run.name)
-    assert image[0] == ("docker", "image", "rm", "--force", fixture.run.tag)
-    for _, environment, _ in (delete, image):
+    run = fixture.run
+    steps = fixture.world.commands[-4:]
+    assert [command for command, _, _ in steps] == [
+        ("docker", "rm", "--force", run.tools),
+        ("k3d", "cluster", "delete", run.name),
+        ("docker", "volume", "rm", "--force", run.images_volume),
+        ("docker", "image", "rm", "--force", run.tag),
+    ]
+    for _, environment, _ in steps:
         assert environment["KUBECONFIG"] == str(fixture.run.kubeconfig)
         assert Path(environment["KUBECACHEDIR"]).is_relative_to(fixture.run.directory)
         assert environment["KUBERC"] == "off"
     assert fixture.world.directory_present_at_last_command
     assert not fixture.run.directory.exists()
-    assert fixture.world.holds[-1] == len(fixture.world.commands) - 2
+    assert fixture.world.holds[-1] == len(fixture.world.commands) - 4
 
 
 def test_an_ordinary_teardown_holds_signals_then_says_so_then_deletes(
@@ -175,9 +180,9 @@ def test_an_ordinary_teardown_holds_signals_then_says_so_then_deletes(
     fixture = make_fixture()
     fixture.drive()
     commands = [command for command, _, _ in fixture.world.commands]
-    delete = commands.index(("k3d", "cluster", "delete", fixture.run.name))
-    assert fixture.world.holds == [delete]
-    assert commands[delete + 1] == ("docker", "image", "rm", "--force", fixture.run.tag)
+    first = commands.index(("docker", "rm", "--force", fixture.run.tools))
+    assert fixture.world.holds == [first]
+    assert commands[first + 1] == ("k3d", "cluster", "delete", fixture.run.name)
     assert f"teardown: removing cluster {fixture.run.name}" in capsys.readouterr().out
     assert not fixture.run.directory.exists()
 
@@ -191,10 +196,19 @@ def test_a_signal_during_the_watch_closes_the_watch_then_tears_down(
     assert fixture.world.watches_closed == 1
     assert fixture.world.issued("k3d", "cluster", "delete") != []
     assert not fixture.run.directory.exists()
-    delete = [c for c, _, _ in fixture.world.commands].index(
-        ("k3d", "cluster", "delete", fixture.run.name)
+    first = [c for c, _, _ in fixture.world.commands].index(
+        ("docker", "rm", "--force", fixture.run.tools)
     )
-    assert fixture.world.holds == [delete]
+    assert fixture.world.holds == [first]
+
+
+def test_a_signal_that_ends_the_image_import_leaves_no_container_or_volume(
+    make_fixture: Callable[..., Fixture], driver_module: ModuleType
+) -> None:
+    fixture = make_fixture(World(import_interrupted=True))
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    driver_module.check_leftovers(fixture.world.lister)
 
 
 def test_a_signal_makes_further_signals_ignored_before_it_kills_and_exits(
