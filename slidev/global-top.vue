@@ -1,7 +1,7 @@
 <script setup>
 import { useDarkMode } from '@slidev/client'
 
-import { Phase, useRoomNotice } from './room-notice.js'
+import { BAND, Phase, useRoomNotice } from './room-notice.js'
 
 const { isDark } = useDarkMode()
 const notice = useRoomNotice()
@@ -14,18 +14,18 @@ const notice = useRoomNotice()
     :class="{ dark: isDark }"
   >
     <p
-      v-if="notice.phase === Phase.BANNER"
-      class="banner"
-      :data-room-notice="notice.phase"
+      v-if="notice.shown === BAND"
+      class="band"
+      :data-room-notice="notice.shown"
       v-text="notice.text"
     />
     <p
       v-else
       class="pill"
-      :data-room-notice="notice.phase"
+      :data-room-notice="notice.shown"
     >
       <svg
-        v-if="notice.phase === Phase.ANSWERING"
+        v-if="notice.shown === Phase.ANSWERING"
         class="glyph"
         viewBox="0 0 24 24"
         aria-hidden="true"
@@ -60,7 +60,7 @@ const notice = useRoomNotice()
   --notice-color: #0b1f33;
   --notice-dot: #0c6c77;
 }
-.banner,
+.band,
 .pill {
   position: absolute;
   margin: 0;
@@ -68,10 +68,10 @@ const notice = useRoomNotice()
   color: var(--notice-color);
   letter-spacing: 0;
 }
-.banner {
+.band {
   inset: auto 0 0;
-  padding: 1em 1.6em;
-  font-size: 28px;
+  padding: 0.6em 1.4em;
+  font-size: 16px;
   line-height: 1.4;
   text-align: left;
 }

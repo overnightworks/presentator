@@ -34,13 +34,24 @@ network `hal_speech_presentator`, and that hop's trust sentence is in
   answer, or the configured voice cannot speak), "Local hearing not ready" (hearing
   still loads) and "No hearing" (a hearing that fails or cannot open). A new
   word needs a ruling.
+- **CP15** The presenter view carries Home at its top left as an icon button and
+  the AI switch at its top right; neither sits in the bottom navigation bar, and
+  nothing of the co-presenter floats over the bottom of the view. The switch is
+  labelled AI, grey when off and green when on, with no word beside it; a word
+  shows beside it only for a fault, in a warning colour.
 
 ## What the room sees
 
 - **CP8** The room notice shows only while the AI listens or answers.
-- **CP9** Once AI is on, the projector shows the whole notice sentence large
-  until the first answer plays, and after that a small corner pill. The notice
-  never shrinks or covers the slide and takes no clicks.
+- **CP9** Once the AI listens, the projector shows the whole notice sentence as
+  a band along the slide's bottom edge for ten seconds, and after that a small
+  corner pill for as long as the AI listens or answers; the pill says whether
+  it listens or answers. The band shows again each time the AI is switched on,
+  and on any window that starts showing the AI as on, for that window's first
+  ten seconds. An answer that plays during the band does not shorten it. The
+  presenter's own preview shows only the pill. The notice never shrinks or
+  moves the slide and takes no clicks; the band covers the slide's bottom strip
+  only for its ten seconds.
 - **CP10** The room's words follow the deck's language, as [decks](decks.md)
   DK3 rules, and the presenter's own controls stay English.
 - **CP11** The notice names no provider. In German it ends „… an einen

@@ -18,7 +18,7 @@ import {
 } from './presenter-overlay-harness'
 
 registerOverlayHarness()
-vi.setConfig({ testTimeout: 60_000 })
+vi.setConfig({ testTimeout: 90_000 })
 
 // CP11: the ruled sentences, and the pill words, as scenario data.
 const BANNER = {
@@ -96,6 +96,12 @@ async function inRoom(run: (room: Room) => Promise<void>, { colorScheme = 'light
   }
 }
 
+async function recordedProjector(context: BrowserContext) {
+  const projector = await openPageIn(context, `${state.origin}/1`, 1024)
+  await recordNotice(projector)
+  return projector
+}
+
 async function switchOn(presenter: Page) {
   const ai = presenter.getByRole('switch', { name: 'AI' })
   await ai.waitFor({ state: 'visible', timeout: 2_000 })
@@ -103,10 +109,22 @@ async function switchOn(presenter: Page) {
 }
 const waitForCapture = (presenter: Page) =>
   expect.poll(async () => (await snapshot(presenter)).capturing, { timeout: 5_000 }).toBe(true)
-const showsPhase = (page: Page, phase: string, text: string, timeout = 5_000) =>
+// CP9: the band lasts ten seconds on a window, then the pill takes over.
+const BAND_SECONDS = 10
+const showsPhase = (page: Page, phase: string, text: string, timeout = 15_000) =>
   expect.poll(() => readNotice(page), { timeout, interval: 50 }).toEqual({ phase, text })
+const showsBand = (page: Page, language: 'de' | 'en' = 'de', timeout = 5_000) =>
+  showsPhase(page, 'band', BANNER[language], timeout)
 const isEmpty = (page: Page, timeout: number) =>
   expect.poll(() => readNotice(page), { timeout, interval: 50 }).toBeNull()
+
+// What a window showed from its first notice on, a gap shown as null.
+async function shownSinceFirstNotice(page: Page, from = 0) {
+  const entries = (await timelineOf(page)).slice(from)
+  return entries.slice(entries.findIndex((entry) => entry.phase !== null)).map((entry) => entry.phase)
+}
+const bandStartedAt = async (page: Page) => (await timelineOf(page)).find((entry) => entry.phase === 'band')!.at
+const phaseStartedAt = async (page: Page, phase: string) => (await timelineOf(page)).find((entry) => entry.phase === phase)!.at
 
 async function expectNothingFor(pages: Page[], milliseconds: number) {
   await pages[0]!.waitForTimeout(milliseconds)
@@ -123,17 +141,25 @@ async function clearanceOf(pages: Page[], label: string) {
 
 describe('the room notice', () => {
   it.each(['de', 'en'] as const)(
-    'CP9, CP10: the banner, then the answering pill, then the listening pill in %s',
+    'CP9: the band for ten seconds, then the listening pill, then the answering pill in %s',
     async (language) => {
       state.whoLanguage = language
       state.heardOnConnect = false
       await inRoom(async ({ presenter, projector }) => {
         await switchOn(presenter)
         await waitForCapture(presenter)
-        await showsPhase(projector, 'banner', BANNER[language])
-        await showsPhase(presenter, 'banner', BANNER[language])
-        await saveEvidence(projector, `room-banner-${language}-1024.png`)
-        await saveEvidence(presenter, `room-presenter-banner-${language}.png`)
+        await showsBand(projector, language)
+        await showsPhase(presenter, 'listening', PILL[language].listening)
+        await saveEvidence(projector, `room-band-${language}-1024.png`)
+        await saveEvidence(presenter, `room-presenter-listening-${language}.png`)
+        await showsPhase(projector, 'listening', PILL[language].listening)
+        const lasted = (await phaseStartedAt(projector, 'listening')) - (await bandStartedAt(projector))
+        console.info(`band on the projector lasted ${lasted} ms in ${language}`)
+        expect(lasted).toBeGreaterThanOrEqual(BAND_SECONDS * 1000 - 200)
+        expect(lasted).toBeLessThanOrEqual(BAND_SECONDS * 1000 + 1_500)
+        expect(await shownSinceFirstNotice(projector)).toEqual(['band', 'listening'])
+        expect(await shownSinceFirstNotice(presenter)).toEqual(['listening'])
+        await saveEvidence(projector, `room-listening-${language}-1024.png`)
         sendHeard('Where does the handoff slow down?')
         await showsPhase(projector, 'answering', PILL[language].answering)
         await showsPhase(presenter, 'answering', PILL[language].answering)
@@ -141,11 +167,28 @@ describe('the room notice', () => {
         await callFake(presenter, 'endPlayback')
         await showsPhase(projector, 'listening', PILL[language].listening)
         await showsPhase(presenter, 'listening', PILL[language].listening)
-        await saveEvidence(projector, `room-listening-${language}-1024.png`)
         expect(await presenter.getByRole('switch', { name: 'AI' }).textContent()).toBe('AI')
       })
     },
   )
+
+  it('CP9: holds the band to its end when an answer plays during it', async () => {
+    await inRoom(async ({ presenter, projector }) => {
+      await switchOn(presenter)
+      await showsPhase(presenter, 'answering', PILL.de.answering)
+      await showsBand(projector)
+      const answeringSince = Date.now()
+      await showsPhase(projector, 'answering', PILL.de.answering)
+      const bandEnd = await phaseStartedAt(projector, 'answering')
+      expect(bandEnd - (await bandStartedAt(projector))).toBeGreaterThanOrEqual(BAND_SECONDS * 1000 - 200)
+      expect(bandEnd).toBeGreaterThan(answeringSince)
+      expect(await shownSinceFirstNotice(projector)).toEqual(['band', 'answering'])
+      expect(await shownSinceFirstNotice(presenter)).toEqual(['answering'])
+      await callFake(presenter, 'endPlayback')
+      await showsPhase(projector, 'listening', PILL.de.listening)
+      await showsPhase(presenter, 'listening', PILL.de.listening)
+    })
+  })
 
   it.each([
     ['a pending microphone permission', { microphone: 'pending' }, false],
@@ -164,7 +207,7 @@ describe('the room notice', () => {
     })
   })
 
-  it('CP9: shows the banner once the pending microphone is allowed', async () => {
+  it('CP9: starts the band when the pending microphone is allowed and lasts ten seconds from then', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await setFakes(presenter, { microphone: 'pending' })
@@ -172,8 +215,14 @@ describe('the room notice', () => {
       await presenter.waitForTimeout(1_000)
       expect(await readNotice(projector)).toBeNull()
       await callFake(presenter, 'releaseMicrophone')
-      await showsPhase(projector, 'banner', BANNER.de)
-      await showsPhase(presenter, 'banner', BANNER.de)
+      const allowedAt = Date.now()
+      await showsBand(projector)
+      await showsPhase(presenter, 'listening', PILL.de.listening)
+      await showsPhase(projector, 'listening', PILL.de.listening)
+      const sinceAllowed = (await phaseStartedAt(projector, 'listening')) - allowedAt
+      console.info(`band lasted ${sinceAllowed} ms from the allowed microphone`)
+      expect(sinceAllowed).toBeGreaterThanOrEqual(BAND_SECONDS * 1000 - 200)
+      expect(sinceAllowed).toBeLessThanOrEqual(BAND_SECONDS * 1000 + 2_000)
     })
   })
 
@@ -192,47 +241,27 @@ describe('the room notice', () => {
     })
   })
 
-  it('CP9: keeps the banner and shows no pill while the first answer cannot start', async () => {
+  it.each([
+    ['cannot start', 'pending'],
+    ['is refused by the player', 'rejected'],
+  ] as const)('CP9: shows the band and then the listening pill, never the answering pill, while the first answer %s', async (_situation, playback) => {
     await inRoom(async ({ presenter, projector }) => {
-      await setFakes(presenter, { playback: 'pending' })
+      await setFakes(presenter, { playback })
       await switchOn(presenter)
-      await expect.poll(async () => (await snapshot(presenter)).speaking, { timeout: 5_000 }).toBe(true)
-      await presenter.waitForTimeout(2_000)
-      for (const page of [presenter, projector]) {
-        expect(new Set(await phasesSince(page, 0))).toEqual(new Set(['banner']))
-      }
-      expect(await readNotice(projector)).toEqual({ phase: 'banner', text: BANNER.de })
-    })
-  })
-
-  it('CP9: keeps the banner and shows no pill when the first answer is refused by the player', async () => {
-    await inRoom(async ({ presenter, projector }) => {
-      await setFakes(presenter, { playback: 'rejected' })
-      await switchOn(presenter)
-      await presenter.getByText('No speech', { exact: true }).waitFor({ state: 'visible' })
-      await presenter.waitForTimeout(2_000)
-      for (const page of [presenter, projector]) {
-        expect(new Set(await phasesSince(page, 0))).toEqual(new Set(['banner']))
-      }
-      expect(await readNotice(projector)).toEqual({ phase: 'banner', text: BANNER.de })
-    })
-  })
-
-  it('CP9: shows the answering pill while audio plays and the listening pill after it ends', async () => {
-    await inRoom(async ({ presenter, projector }) => {
-      await switchOn(presenter)
-      await showsPhase(projector, 'answering', PILL.de.answering)
-      await showsPhase(presenter, 'answering', PILL.de.answering)
-      await callFake(presenter, 'endPlayback')
+      if (playback === 'pending') await expect.poll(async () => (await snapshot(presenter)).speaking, { timeout: 5_000 }).toBe(true)
+      else await presenter.getByText('No speech', { exact: true }).waitFor({ state: 'visible' })
+      await showsBand(projector)
       await showsPhase(projector, 'listening', PILL.de.listening)
+      await presenter.waitForTimeout(1_500)
+      expect(await shownSinceFirstNotice(projector)).toEqual(['band', 'listening'])
+      expect(await shownSinceFirstNotice(presenter)).toEqual(['listening'])
     })
   })
 
   it('Never shows the answering pill for a later answer whose play is refused', async () => {
+    state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
-      await showsPhase(projector, 'answering', PILL.de.answering)
-      await callFake(presenter, 'endPlayback')
       await showsPhase(projector, 'listening', PILL.de.listening)
       await setFakes(presenter, { playback: 'rejected' })
       const marks = [await markTimeline(presenter), await markTimeline(projector)]
@@ -255,9 +284,10 @@ describe('the room notice', () => {
       await switchOn(presenter)
       await presenter.getByText(line, { exact: true }).waitFor({ state: 'visible' })
       await presenter.waitForTimeout(1_500)
-      await showsPhase(projector, 'banner', BANNER.de)
-      await showsPhase(presenter, 'banner', BANNER.de)
-      expect(new Set(await phasesSince(projector, 0))).toEqual(new Set(['banner']))
+      await showsBand(projector)
+      await showsPhase(presenter, 'listening', PILL.de.listening)
+      await showsPhase(projector, 'listening', PILL.de.listening)
+      expect(await shownSinceFirstNotice(projector)).toEqual(['band', 'listening'])
 
       state.answerMode = 'audio'
       sendHeard('Answer this one')
@@ -276,43 +306,42 @@ describe('the room notice', () => {
     })
   })
 
-  it('Clears both windows when the server ends the hearing lease', async () => {
+  it('CP8: clears both windows when the server ends the hearing lease', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
-      await showsPhase(projector, 'banner', BANNER.de)
+      await showsBand(projector)
       closeHearingLeases()
       await clearanceOf([presenter, projector], 'the server ends the hearing lease')
       await presenter.getByText('No hearing', { exact: true }).waitFor({ state: 'visible' })
     })
   })
 
-  it('Clears both windows when capture fails after the notice', async () => {
+  it('CP8: clears both windows when capture fails after the notice', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
-      await showsPhase(projector, 'banner', BANNER.de)
+      await showsBand(projector)
       sendHearingError()
       await clearanceOf([presenter, projector], 'capture fails after the notice')
     })
   })
 
-  it('Clears when the AI is switched off and starts with the banner when it is switched on again', async () => {
+  it('CP9: clears when the AI is switched off and shows the band again when it is switched on again', async () => {
+    state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
-      await showsPhase(projector, 'answering', PILL.de.answering)
-      await callFake(presenter, 'endPlayback')
       await showsPhase(projector, 'listening', PILL.de.listening)
       await presenter.getByRole('switch', { name: 'AI' }).click()
       await clearanceOf([presenter, projector], 'the AI is switched off')
-      state.heardOnConnect = false
       const marks = [await markTimeline(presenter), await markTimeline(projector)]
       await switchOn(presenter)
-      await showsPhase(projector, 'banner', BANNER.de)
-      await showsPhase(presenter, 'banner', BANNER.de)
+      await showsBand(projector)
+      await showsPhase(presenter, 'listening', PILL.de.listening)
       await presenter.waitForTimeout(1_500)
-      expect(new Set(await phasesSince(projector, marks[1]!))).toEqual(new Set(['banner']))
-      expect(new Set(await phasesSince(presenter, marks[0]!))).toEqual(new Set(['banner']))
+      expect(new Set(await phasesSince(projector, marks[1]!))).toEqual(new Set(['band']))
+      expect(new Set(await phasesSince(presenter, marks[0]!))).toEqual(new Set(['listening']))
+      await showsPhase(projector, 'listening', PILL.de.listening)
     })
   })
 
@@ -324,26 +353,28 @@ describe('the room notice', () => {
     })
   })
 
-  it('A projector opened later shows the banner and then the pill within 2.5 s', async () => {
+  it('CP9: shows the band on a projector opened later for its first ten seconds, then the pill', async () => {
     state.heardOnConnect = false
     const { browser, context } = await openRoomBrowser()
     try {
       const presenter = await openPageIn(context, `${state.origin}/presenter/1`, 1024)
       await switchOn(presenter)
-      await showsPhase(presenter, 'banner', BANNER.de)
+      await showsPhase(presenter, 'listening', PILL.de.listening)
+      await presenter.waitForTimeout((BAND_SECONDS + 1) * 1000)
       let opened = Date.now()
-      const lateProjector = await openPageIn(context, `${state.origin}/1`, 1024)
-      await showsPhase(lateProjector, 'banner', BANNER.de, 2_500)
-      console.info(`banner on a late projector after ${Date.now() - opened} ms`)
+      const lateProjector = await recordedProjector(context)
+      await showsBand(lateProjector, 'de', 2_500)
+      console.info(`band on a late projector after ${Date.now() - opened} ms`)
+      await showsPhase(lateProjector, 'listening', PILL.de.listening)
+      expect(await shownSinceFirstNotice(lateProjector)).toEqual(['band', 'listening'])
 
       sendHeard('First question')
       await showsPhase(presenter, 'answering', PILL.de.answering)
-      await callFake(presenter, 'endPlayback')
-      await showsPhase(presenter, 'listening', PILL.de.listening)
       opened = Date.now()
-      const afterAnswerProjector = await openPageIn(context, `${state.origin}/1`, 1024)
-      await showsPhase(afterAnswerProjector, 'listening', PILL.de.listening, 2_500)
-      console.info(`pill on a late projector after ${Date.now() - opened} ms`)
+      const afterAnswerProjector = await recordedProjector(context)
+      await showsBand(afterAnswerProjector, 'de', 2_500)
+      console.info(`band on a projector opened during an answer after ${Date.now() - opened} ms`)
+      await showsPhase(afterAnswerProjector, 'answering', PILL.de.answering)
     } finally {
       await browser.close()
     }
@@ -370,7 +401,7 @@ describe('the room notice', () => {
         })
       })
       await switchOn(presenter)
-      await showsPhase(projector, 'banner', BANNER.de)
+      await showsBand(projector)
       const closed = Date.now()
       await presenter.close()
       await isEmpty(projector, 2_500)
@@ -382,12 +413,12 @@ describe('the room notice', () => {
     }
   })
 
-  it('Expires on a frozen presenter by itself and writes nothing back', async () => {
+  it('CP9: expires on a frozen presenter by itself, writes nothing back and shows the band again after the resume', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
-      await showsPhase(projector, 'banner', BANNER.de)
-      await showsPhase(presenter, 'banner', BANNER.de)
+      await showsBand(projector)
+      await showsPhase(presenter, 'listening', PILL.de.listening)
       const resume = await freezePage(presenter)
       const frozenAt = Date.now()
       await isEmpty(projector, 10_000)
@@ -396,7 +427,8 @@ describe('the room notice', () => {
       expect(expiredAfter).toBeLessThan(4_000)
       await resume()
       await presenter.evaluate(() => true)
-      await showsPhase(projector, 'banner', BANNER.de, 2_500)
+      await showsBand(projector, 'de', 2_500)
+      await showsPhase(projector, 'listening', PILL.de.listening)
       await presenter.waitForTimeout(2_000)
       const entries = await timelineOf(presenter)
       const firstShown = entries.findIndex((entry) => entry.phase !== null)
@@ -404,11 +436,11 @@ describe('the room notice', () => {
     })
   })
 
-  it('Clears the projector by the teardown OFF when the presenter switches to Play Mode', async () => {
+  it('CP8: clears the projector by the teardown OFF when the presenter switches to Play Mode', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
-      await showsPhase(projector, 'banner', BANNER.de)
+      await showsBand(projector)
       await presenter.getByTitle('Play Mode', { exact: true }).click()
       await presenter.waitForURL(`${state.origin}/1`)
       await isEmpty(projector, 1_000)
@@ -421,11 +453,11 @@ describe('the room notice', () => {
     ['/1?print', 'Hallo Co-Presenter'],
     ['/overview', 'Hallo Co-Presenter'],
     ['/notes', 'Begrüsse das Publikum'],
-  ])('Shows no notice on %s', async (path, marker) => {
+  ])('CP8: shows no notice on %s', async (path, marker) => {
     state.heardOnConnect = false
     await inRoom(async ({ context, presenter, projector }) => {
       await switchOn(presenter)
-      await showsPhase(projector, 'banner', BANNER.de)
+      await showsBand(projector)
       const printed = await openPageIn(context, `${state.origin}${path}`, 1024)
       await printed.getByText(marker).first().waitFor({ state: 'attached' })
       await printed.waitForTimeout(2_500)
@@ -433,18 +465,13 @@ describe('the room notice', () => {
     })
   })
 
-  it('CP9: is no control and leaves the slide where it is', async () => {
+  it('CP9: the band and the pill are no control, leave the slide where it is and stay within a fifth of it', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       const container = projector.locator('.slidev-slide-container').first()
       const boxBefore = await container.boundingBox()
       await switchOn(presenter)
-      for (const [phase, text] of [['banner', BANNER.de], ['listening', PILL.de.listening]] as const) {
-        if (phase === 'listening') {
-          sendHeard('Question')
-          await showsPhase(projector, 'answering', PILL.de.answering)
-          await callFake(presenter, 'endPlayback')
-        }
+      for (const [phase, text] of [['band', BANNER.de], ['listening', PILL.de.listening]] as const) {
         await showsPhase(projector, phase, text)
         const notice = projector.locator('[data-room-notice]')
         expect(await notice.locator('button, a, input, [role]').count()).toBe(0)
@@ -461,11 +488,28 @@ describe('the room notice', () => {
         })
         expect(selectedText).not.toContain(text)
         expect(await container.boundingBox()).toEqual(boxBefore)
+        if (phase === 'band') expect(noticeBox.height).toBeLessThanOrEqual(boxBefore!.height / 5)
       }
     })
   })
 
-  it('Inverts the colours on a dark slide', async () => {
+  it.each(['de', 'en'] as const)('CP9: sets the band in at most two lines in %s', async (language) => {
+    state.whoLanguage = language
+    state.heardOnConnect = false
+    await inRoom(async ({ presenter, projector }) => {
+      await switchOn(presenter)
+      await showsBand(projector, language)
+      const lines = await projector.evaluate(() => {
+        const range = document.createRange()
+        range.selectNodeContents(document.querySelector('[data-room-notice="band"]')!)
+        return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size
+      })
+      expect(lines).toBeLessThanOrEqual(2)
+      await saveEvidence(projector, `room-band-lines-${language}.png`)
+    })
+  })
+
+  it('inverts the colours of the band and the pill on a dark slide', async () => {
     state.heardOnConnect = false
     const luminanceOf = (page: Page) => page.evaluate(() => {
       const style = getComputedStyle(document.querySelector('[data-room-notice]')!)
@@ -475,48 +519,50 @@ describe('the room notice', () => {
       }
       return { background: lightness(style.backgroundColor), text: lightness(style.color) }
     })
-    const contrasts = {} as Record<string, boolean>
+    const contrasts = {} as Record<string, { band: boolean, pill: boolean }>
     for (const scheme of ['light', 'dark'] as const) {
       await inRoom(async ({ presenter, projector }) => {
         await switchOn(presenter)
-        await showsPhase(projector, 'banner', BANNER.de)
-        const { background, text } = await luminanceOf(projector)
-        contrasts[scheme] = background > text
-        await saveEvidence(projector, `room-banner-${scheme}-1024.png`)
+        await showsBand(projector)
+        const band = await luminanceOf(projector)
+        await showsPhase(presenter, 'listening', PILL.de.listening)
+        const pill = await luminanceOf(presenter)
+        contrasts[scheme] = { band: band.background > band.text, pill: pill.background > pill.text }
+        await saveEvidence(projector, `room-band-${scheme}-1024.png`)
       }, { colorScheme: scheme })
-      state.heardOnConnect = false
     }
-    expect(contrasts).toEqual({ light: false, dark: true })
+    expect(contrasts).toEqual({ light: { band: false, pill: false }, dark: { band: true, pill: true } })
   })
 
-  it('CP9: scales the banner and the pill whole inside the presenter preview at 390 px', async () => {
+  it.each([1024, 390])('CP9: shows the presenter preview the pill only and whole inside the preview at %ipx', async (width) => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter }) => {
       await switchOn(presenter)
-      for (const phase of ['banner', 'listening'] as const) {
-        if (phase === 'listening') {
-          sendHeard('Question')
-          await expect.poll(async () => (await readNotice(presenter))?.phase, { timeout: 5_000 }).toBe('answering')
-          await callFake(presenter, 'endPlayback')
-        }
+      const expectWholeInPreview = async (phase: string) => {
         await expect.poll(async () => (await readNotice(presenter))?.phase, { timeout: 5_000 }).toBe(phase)
         const previewBox = (await presenter.locator('.slidev-slide-container').first().boundingBox())!
         const noticeBox = (await presenter.locator('[data-room-notice]').boundingBox())!
-        console.info(`${phase}: preview ${JSON.stringify(previewBox)}, notice ${JSON.stringify(noticeBox)}, viewport width 390`)
+        console.info(`${phase}: preview ${JSON.stringify(previewBox)}, notice ${JSON.stringify(noticeBox)}, viewport width ${width}`)
         expect(noticeBox.x).toBeGreaterThanOrEqual(previewBox.x - 1)
         expect(noticeBox.y).toBeGreaterThanOrEqual(previewBox.y - 1)
         expect(noticeBox.x + noticeBox.width).toBeLessThanOrEqual(previewBox.x + previewBox.width + 1)
         expect(noticeBox.y + noticeBox.height).toBeLessThanOrEqual(previewBox.y + previewBox.height + 1)
-        await saveEvidence(presenter, `room-presenter-${phase}-narrow.png`)
+        await saveEvidence(presenter, `room-presenter-${phase}-${width}.png`)
       }
-    }, { presenterWidth: 390 })
+      await expectWholeInPreview('listening')
+      sendHeard('Question')
+      await expectWholeInPreview('answering')
+      await callFake(presenter, 'endPlayback')
+      await expectWholeInPreview('listening')
+      expect(await phasesSince(presenter, 0)).not.toContain('band')
+    }, { presenterWidth: width })
   })
 
   it('A second presenter page that was never on does not clear the room', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ context, presenter, projector }) => {
       await switchOn(presenter)
-      await showsPhase(projector, 'banner', BANNER.de)
+      await showsBand(projector)
       const second = await openPageIn(context, `${state.origin}/presenter/1`, 1024)
       await second.waitForTimeout(1_000)
       await second.getByTitle('Play Mode', { exact: true }).click()
@@ -526,7 +572,7 @@ describe('the room notice', () => {
       const entries = await timelineOf(projector)
       const firstShown = entries.findIndex((entry) => entry.phase !== null)
       expect(entries.slice(firstShown).map((entry) => entry.phase)).not.toContain(null)
-      expect(await readNotice(projector)).toEqual({ phase: 'banner', text: BANNER.de })
+      expect(['band', 'listening']).toContain((await readNotice(projector))?.phase)
     })
   })
 
@@ -543,8 +589,8 @@ describe('the room notice', () => {
       const projectorB = await openPageIn(context, `${origin}/deck/50%25off/1`, 1024)
       await recordNotice(projectorB)
       await switchOn(presenterA)
-      await showsPhase(projectorA, 'banner', BANNER.de)
-      await showsPhase(presenterA, 'banner', BANNER.de)
+      await showsBand(projectorA)
+      await showsPhase(presenterA, 'listening', PILL.de.listening)
       await projectorB.waitForTimeout(4_000)
       expect(await phasesSince(projectorB, 0)).toEqual([])
     } finally {

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import {
   boxesIntersect,
+  contrastRatio,
+  expectFaultWordClearOfControls,
+  expectPanelCoversNoSlidevControl,
   openPresenter,
+  readBarBackground,
+  readPaintedColours,
   registerOverlayHarness,
   saveEvidence,
   state,
@@ -45,14 +50,21 @@ describe('co-presenter refusals', () => {
         expect(await page.getByText('the answer could not be spoken').count()).toBe(0)
         expect(page.url()).toBe(`${state.origin}/presenter/1`)
         expect(await ai.getAttribute('aria-checked')).toBe('true')
-        const [homeBox, aiBox, panelBox] = await Promise.all([
-          page.getByRole('link', { name: 'Home' }).boundingBox(),
-          ai.boundingBox(),
-          page.locator('.copresenter .panel').boundingBox(),
-        ])
+        const { homeBox, aiBox, faultBox } = await expectFaultWordClearOfControls(
+          page,
+          width,
+          ai,
+          page.getByText(line, { exact: true }),
+        )
+        const panelBox = await page.locator('.copresenter .panel').boundingBox()
+        expect(Math.abs((faultBox.y + faultBox.height / 2) - (aiBox.y + aiBox.height / 2))).toBeLessThan(aiBox.height)
+        const painted = await readPaintedColours(page)
+        expect(painted.track[1], 'the track stays green').toBeGreaterThan(Math.max(painted.track[0], painted.track[2]) + 20)
+        expect(contrastRatio(painted.fault!, await readBarBackground(page)), 'the word reads on the bar').toBeGreaterThanOrEqual(4.5)
         expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(width)
         expect(boxesIntersect(homeBox!, panelBox!)).toBe(false)
         expect(boxesIntersect(aiBox!, panelBox!)).toBe(false)
+        await expectPanelCoversNoSlidevControl(page)
         await saveEvidence(page, `presenter-refusal-${line.replace(/\W+/g, '-')}-${width}.png`)
       } finally {
         state.answerMode = 'audio'

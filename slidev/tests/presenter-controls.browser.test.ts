@@ -1,20 +1,25 @@
 import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { chromium } from 'playwright-chromium'
+import { chromium, type Page } from 'playwright-chromium'
 import { describe, expect, it } from 'vitest'
 
 import {
   addonRootDirectory,
   boxesIntersect,
   buildAddonDeck,
+  contrastRatio,
   createMediaObservation,
   createOverlayDeckServer,
+  expectFaultWordClearOfControls,
+  expectPanelCoversNoSlidevControl,
   installCspGuard,
   openPageIn,
   openPresenter,
   openPresenterAt,
   openRoomBrowser,
+  readBarBackground,
+  readPaintedColours,
   readSameFrameBoxes,
   registerOverlayHarness,
   saveEvidence,
@@ -24,6 +29,16 @@ import {
 } from './presenter-overlay-harness'
 
 registerOverlayHarness()
+
+// Slidev's bottom navigation bar holds nothing of the overlay, and no part
+// of the overlay reaches the lower half of the window.
+async function expectNothingOfTheOverlayInTheBottomBar(page: Page, halfway: number) {
+  const bottomBar = page.locator('.grid-section.bottom')
+  expect(await bottomBar.locator('.copresenter, .presenter-bar, a[href="/"], [role="switch"]').count()).toBe(0)
+  const lowestEdge = await page.evaluate(() => Math.max(...[...document.querySelectorAll('.presenter-bar, .presenter-bar *')]
+    .map((element) => element.getBoundingClientRect().bottom)))
+  expect(lowestEdge).toBeLessThanOrEqual(halfway)
+}
 
 describe('presenter controls', () => {
   it.each([1024, 390])('keeps the admitted sentence visible when speech is refused during a switch at %ipx', async (width) => {
@@ -95,22 +110,33 @@ describe('presenter controls', () => {
     }
   }, 30_000)
 
-  it.each([1024, 390])('keeps Home and AI separate and reachable at %ipx', async (width) => {
+  it.each([1024, 390])('CP15: puts Home at the left and the AI switch at the right of one bar above the sections at %ipx', async (width) => {
     const { browser, page } = await openPresenter(width)
     try {
       const home = page.getByRole('link', { name: 'Home' })
       const ai = page.getByRole('switch', { name: 'AI' })
       await home.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.waitFor({ state: 'visible' })
-      const { homeBox, aiBox, navWidth } = await readSameFrameBoxes(page, await home.elementHandle(), await ai.elementHandle())
+      const { homeBox, aiBox, barBox, sectionsBox } = await readSameFrameBoxes(page, await home.elementHandle(), await ai.elementHandle())
       expect(homeBox.width).toBeGreaterThanOrEqual(44)
       expect(homeBox.height).toBeGreaterThanOrEqual(44)
       expect(aiBox.width).toBeGreaterThanOrEqual(44)
       expect(aiBox.height).toBeGreaterThanOrEqual(44)
-      expect(
-        boxesIntersect(homeBox, aiBox),
-        `Home ${JSON.stringify(homeBox)} overlaps AI ${JSON.stringify(aiBox)} in a nav row ${navWidth}px wide`,
-      ).toBe(false)
+      expect((await home.innerText()).trim()).toBe('')
+      expect(await home.getAttribute('title')).toBe('Home')
+      expect(homeBox.x - barBox.x, 'Home leads the bar').toBeLessThan(24)
+      expect(barBox.x + barBox.width - (aiBox.x + aiBox.width), 'the switch ends the bar').toBeLessThan(24)
+      expect(boxesIntersect(homeBox, aiBox)).toBe(false)
+      expect(barBox.y + barBox.height, 'the bar sits above the sections').toBeLessThanOrEqual(sectionsBox.y + 1)
+      const slidevControls = [
+        page.getByText('Current', { exact: true }),
+        page.getByText('Screen Mirror', { exact: true }),
+      ]
+      for (const control of slidevControls) {
+        const box = (await control.boundingBox())!
+        expect(boxesIntersect(box, homeBox)).toBe(false)
+        expect(boxesIntersect(box, aiBox)).toBe(false)
+      }
       await saveEvidence(page, `presenter-home-${width}.png`)
 
       await home.focus()
@@ -121,14 +147,140 @@ describe('presenter controls', () => {
     }
   })
 
-  it('stops the active co-presenter before Home leaves and direct return starts off', async () => {
+  it.each([1, 2, 3].flatMap((layout) => [1440, 1024, 390].map((width) => [layout, width] as const)))('CP15: keeps the bar above every section of Slidev presenter layout %i at %ipx and its open panel covers no Slidev control', async (layout, width) => {
+    const { browser, page } = await openPresenterAt(state.origin, '/presenter/1', width, async (prepared) => {
+      await prepared.addInitScript((chosen) => localStorage.setItem('slidev-presenter-layout', String(chosen)), layout)
+    })
+    try {
+      const home = page.getByRole('link', { name: 'Home' })
+      const ai = page.getByRole('switch', { name: 'AI' })
+      await home.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      await page.locator('.copresenter .panel').waitFor({ state: 'visible', timeout: 5_000 })
+      const { homeBox, aiBox, barBox, sectionsBox } = await readSameFrameBoxes(page, await home.elementHandle(), await ai.elementHandle())
+      expect(await page.locator('.grid-container').getAttribute('class')).toContain(`layout${layout}`)
+      expect(barBox.y + barBox.height).toBeLessThanOrEqual(sectionsBox.y + 1)
+      expect(homeBox.x - barBox.x).toBeLessThan(24)
+      expect(barBox.x + barBox.width - (aiBox.x + aiBox.width)).toBeLessThan(24)
+      for (const control of [page.getByText('Current', { exact: true }), page.getByText('Screen Mirror', { exact: true })]) {
+        const box = (await control.boundingBox())!
+        expect(boxesIntersect(box, homeBox)).toBe(false)
+        expect(boxesIntersect(box, aiBox)).toBe(false)
+      }
+      await expectPanelCoversNoSlidevControl(page)
+      await saveEvidence(page, `presenter-layout-${layout}-${width}-heard-panel.png`)
+    } finally {
+      await browser.close()
+    }
+  })
+
+  it('CP15: paints the track grey off and green on, with the word AI and no state word', async () => {
+    state.heardOnConnect = false
+    const { browser, page } = await openPresenter(1024)
+    try {
+      const ai = page.getByRole('switch', { name: 'AI' })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      const bar = page.locator('.presenter-bar')
+      expect(await ai.getAttribute('aria-checked')).toBe('false')
+      expect(await ai.innerText()).toBe('AI')
+      const [red, green, blue] = (await readPaintedColours(page)).track
+      expect(Math.max(red, green, blue) - Math.min(red, green, blue), 'off is grey').toBeLessThan(24)
+      await ai.click({ timeout: 2_000 })
+      await expect.poll(async () => (await readPaintedColours(page)).track[1]).toBeGreaterThan(120)
+      const [onRed, onGreen, onBlue] = (await readPaintedColours(page)).track
+      expect(onGreen, 'on is green').toBeGreaterThan(Math.max(onRed, onBlue) + 20)
+      expect(await ai.getAttribute('aria-checked')).toBe('true')
+      await expect.poll(async () => (await page.evaluate(() => (window as unknown as {
+        __copresenter: { snapshot: () => { capturing: boolean } }
+      }).__copresenter.snapshot().capturing))).toBe(true)
+      expect(await ai.innerText()).toBe('AI')
+      expect((await bar.innerText()).trim()).toBe('AI')
+      expect(await page.getByText('local', { exact: false }).count()).toBe(0)
+      await saveEvidence(page, 'presenter-on-1024.png')
+    } finally {
+      state.heardOnConnect = true
+      await browser.close()
+    }
+  })
+
+  it.each(['light', 'dark'] as const)('CP15: draws the bar flat, with an off track clear of the bar and a focus ring on Home and the switch in the %s scheme', async (scheme) => {
+    const { browser, page } = await openPresenter(1024, scheme)
+    try {
+      const home = page.getByRole('link', { name: 'Home' })
+      const ai = page.getByRole('switch', { name: 'AI' })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      const flat = await ai.evaluate((element) => {
+        const style = getComputedStyle(element)
+        return { border: style.borderTopWidth, shadow: style.boxShadow, background: style.backgroundColor }
+      })
+      expect(flat.border, 'no border').toBe('0px')
+      expect(flat.shadow, 'no shadow').toBe('none')
+      expect(flat.background, 'no box').toMatch(/^rgba\(.*, 0\)$|^transparent$/)
+      expect(contrastRatio((await readPaintedColours(page)).track, await readBarBackground(page)), 'the off track stands out').toBeGreaterThanOrEqual(3)
+      const expectFocusRing = async (locator: typeof home, name: string) => {
+        const ring = await locator.evaluate((element) => {
+          const style = getComputedStyle(element)
+          return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) }
+        })
+        expect(ring.style, `${name} shows focus`).toBe('solid')
+        expect(ring.width, `${name}'s ring is thick enough to see`).toBeGreaterThanOrEqual(2)
+      }
+      await home.focus()
+      await expectFocusRing(home, 'Home')
+      await page.keyboard.press('Tab')
+      await expect.poll(() => ai.evaluate((element) => element === document.activeElement)).toBe(true)
+      await expectFocusRing(ai, 'the switch')
+      await saveEvidence(page, `presenter-bar-focus-${scheme}-1024.png`)
+    } finally {
+      await browser.close()
+    }
+  })
+
+  it.each(['light', 'dark'] as const)('CP15: sets the heard panel on the bar in upright text at the bar\'s size, readable in the %s scheme', async (scheme) => {
+    state.answerMode = 'mid-answer-error'
+    const { browser, page } = await openPresenter(1024, scheme)
+    try {
+      const ai = page.getByRole('switch', { name: 'AI' })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      await page.locator('.copresenter .panel .answer').waitFor({ state: 'visible', timeout: 5_000 })
+      const background = await readBarBackground(page)
+      const lines = await page.locator('.copresenter .panel .line').evaluateAll((elements) => elements.map((element) => {
+        const style = getComputedStyle(element)
+        return { color: style.color, opacity: Number(style.opacity), fontStyle: style.fontStyle, fontSize: style.fontSize }
+      }))
+      const barFontSize = await ai.evaluate((element) => getComputedStyle(element).fontSize)
+      expect(lines).toHaveLength(2)
+      for (const line of lines) {
+        expect(line.fontStyle, 'upright').toBe('normal')
+        expect(line.fontSize, 'the bar\'s size').toBe(barFontSize)
+        const colour = line.color.match(/[\d.]+/g)!.slice(0, 3).map(Number) as [number, number, number]
+        expect(contrastRatio(colour, background, line.opacity), 'readable').toBeGreaterThanOrEqual(4.5)
+      }
+      const surface = await page.locator('.copresenter .panel').evaluate((element) => {
+        const style = getComputedStyle(element)
+        return { border: style.borderTopWidth, shadow: style.boxShadow, background: style.backgroundColor }
+      })
+      expect(surface.border, 'a hairline border').toBe('1px')
+      expect(surface.shadow, 'no shadow').toBe('none')
+      expect(surface.background, 'the bar\'s own surface').toMatch(/^rgba\(.*, 0\)$|^transparent$/)
+      await saveEvidence(page, `presenter-heard-panel-${scheme}-1024.png`)
+    } finally {
+      state.answerMode = 'audio'
+      await browser.close()
+    }
+  })
+
+  it('CP15: stops the active co-presenter before Home leaves, keeps the overlay out of the bottom and a return starts off', async () => {
     state.media = createMediaObservation()
     const { browser, page } = await openPresenter(390)
     try {
       const ai = page.getByRole('switch', { name: 'AI' })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
-      await page.locator('.copresenter[data-state="speak"]').waitFor({ state: 'visible', timeout: 5_000 })
+      await expect.poll(() => page.evaluate(() => (window as unknown as {
+        __copresenter: { snapshot: () => { speaking: boolean } }
+      }).__copresenter.snapshot().speaking), { timeout: 5_000 }).toBe(true)
       await page.getByText('Where does the handoff slow down?').waitFor({ state: 'visible', timeout: 5_000 })
       expect(state.media.trackStopped).toBe(false)
       expect(state.media.playbackStarted).toBe(true)
@@ -145,6 +297,12 @@ describe('presenter controls', () => {
       expect(panelBox!.height).toBeLessThanOrEqual(900 * 0.42)
       expect(boxesIntersect(homeBox!, panelBox!)).toBe(false)
       expect(boxesIntersect(aiBox!, panelBox!)).toBe(false)
+      expect(panelBox!.y, 'the panel opens below the switch').toBeGreaterThanOrEqual(aiBox!.y + aiBox!.height)
+      expect(panelBox!.x).toBeGreaterThanOrEqual(0)
+      expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(390)
+      expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(900)
+      await expectPanelCoversNoSlidevControl(page)
+      await expectNothingOfTheOverlayInTheBottomBar(page, 900 / 2)
       await saveEvidence(page, 'presenter-active-390.png')
       await page.getByRole('link', { name: 'Home' }).click({ timeout: 2_000 })
       await page.waitForURL(`${state.origin}/`)
@@ -160,17 +318,17 @@ describe('presenter controls', () => {
     }
   })
 
-  it.each([1024, 390].flatMap((width) => ([
+  it.each(([[1024, 'light'], [390, 'light'], [1024, 'dark']] as const).flatMap(([width, scheme]) => ([
     ['speech cannot be reached', 'unreachable', 'Voice offline'],
     ['the co-presenter fails without being offline', 'who-fails', 'Unreachable'],
     ['the deck is not the asker\'s', 'who-not-found', 'Unreachable'],
     ['local hearing is not ready', 'not-ready', 'Local hearing not ready'],
     ['the hearing socket sends an error', 'socket-error', 'No hearing'],
-  ] as const).map((row) => [width, ...row] as const)))('CP7: says so and builds no browser speech recognition at %ipx when %s', async (width, _situation, mode, message) => {
+  ] as const).map((row) => [width, scheme, ...row] as const)))('CP7: says so in a word readable on the bar, clear of Home and the switch, keeps the track green and builds no browser speech recognition at %ipx in the %s scheme when %s', async (width, scheme, _situation, mode, message) => {
     state.hearingMode = mode
     state.media = createMediaObservation()
     const hearingOpenedBefore = state.hearingOpened
-    const { browser, page } = await openPresenter(width)
+    const { browser, page } = await openPresenter(width, scheme)
     try {
       const ai = page.getByRole('switch', { name: 'AI' })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
@@ -187,7 +345,11 @@ describe('presenter controls', () => {
         sendHearingError()
       }
       await page.getByText(message).waitFor({ state: 'visible', timeout: 5_000 })
-      expect(await page.locator('.copresenter').getAttribute('data-hearing')).toBe('off')
+      await expectFaultWordClearOfControls(page, width, ai, page.getByText(message))
+      const painted = await readPaintedColours(page)
+      expect(contrastRatio(painted.fault!, await readBarBackground(page)), 'the word reads on the bar').toBeGreaterThanOrEqual(4.5)
+      expect(painted.fault, 'a warning colour, not the bar\'s own text colour').not.toEqual(painted.barText)
+      expect(painted.track[1], 'the track stays green').toBeGreaterThan(Math.max(painted.track[0], painted.track[2]) + 20)
       expect(await page.evaluate(
         () => (window as unknown as { __speechRecognitionsBuilt: number }).__speechRecognitionsBuilt,
       )).toBe(0)
@@ -215,7 +377,7 @@ describe('presenter controls', () => {
       await expect.poll(() => state.askBodies.length).toBeGreaterThan(0)
       expect(state.hearLanguages).toEqual([language])
       expect(state.askBodies[0]?.language).toBe(language)
-      expect(await ai.textContent()).toContain('AI')
+      expect(await ai.textContent()).toBe('AI')
     } finally {
       state.whoLanguage = 'de'
       await browser.close()
@@ -279,6 +441,7 @@ describe('presenter controls', () => {
       await page.goto(`${state.origin}/1`, { waitUntil: 'domcontentloaded', timeout: 10_000 })
       expect(await page.getByRole('link', { name: 'Home' }).count()).toBe(0)
       expect(await page.getByRole('switch', { name: 'AI' }).count()).toBe(0)
+      expect(await page.locator('.presenter-bar, .copresenter').count()).toBe(0)
       await saveEvidence(page, 'projector.png')
     } finally {
       await browser.close()
@@ -314,16 +477,11 @@ describe('presenter controls', () => {
         expect(await page.getByRole('switch', { name: 'AI' }).count()).toBe(1)
         expect(await page.getByRole('link', { name: 'Home' }).count()).toBe(1)
         await ai.click({ timeout: 2_000 })
-        // `hearing` reaches 'local' optimistically, before
-        // `AudioContext.audioWorklet.addModule` - real, not faked
-        // (installMediaFakes) - is even awaited (CoPresenter.vue), so a test
-        // that only waits for that attribute can pass while the worklet is
-        // still loading or a CSP block is still in flight. `workletLive`
-        // (snapshot()) is true only once the worklet node actually exists,
-        // which happens after `addModule` resolved against the addon's
-        // own worklet, emitted under `<base>assets/`, under the
-        // production CSP; a blocked or missing module throws there instead
-        // and the component says it has no hearing.
+        // `workletLive` (snapshot()) is true only once the worklet node
+        // actually exists, which happens after `addModule` resolved against the
+        // addon's own worklet, emitted under `<base>assets/`, under the
+        // production CSP; a blocked or missing module throws there instead and
+        // the component says it has no hearing.
         await page.waitForFunction(
           () => (window as unknown as {
             __copresenter: { snapshot: () => { workletLive: boolean } }
@@ -331,12 +489,6 @@ describe('presenter controls', () => {
           undefined,
           { timeout: 5_000 },
         )
-        const snapshot = await page.evaluate(
-          () => (window as unknown as {
-            __copresenter: { snapshot: () => { hearing: string } }
-          }).__copresenter.snapshot(),
-        )
-        expect(snapshot.hearing).toBe('local')
         expect(await page.getByText('No hearing').count()).toBe(0)
         if (nested) {
           await page.evaluate(() => (window as unknown as {
