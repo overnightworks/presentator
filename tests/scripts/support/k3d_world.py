@@ -460,14 +460,11 @@ def fixture_maker(
         def which(tool: str) -> str | None:
             return None if tool == missing else f"/bin/{tool}"
 
-        def head_of(_checkout: Path) -> str:
-            return head or cluster_module.PLATFORM_COMMIT
-
         effects = cluster_module.Effects(
             run=run_command,
             watch=world.watch,
             which=which,
-            platform_head=head_of,
+            platform_head=lambda _checkout: head or cluster_module.PLATFORM_COMMIT,
             free_port=lambda: 6550,
             monotonic=lambda: ticks[0],
             sleep=sleep,
