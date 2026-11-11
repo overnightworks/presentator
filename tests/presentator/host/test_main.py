@@ -592,7 +592,9 @@ def test_a_deck_the_real_stack_cannot_build_keeps_its_page_and_offers_no_view(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    environment.setenv("PRESENTATOR_TOOLCHAIN", str(tmp_path / "no-toolchain-here"))
+    empty_project = tmp_path / "an-empty-toolchain-project"
+    empty_project.mkdir()
+    environment.setenv("PRESENTATOR_TOOLCHAIN", str(empty_project))
     instance = a_polled_source(remote, tmp_path)
     lobby = signed_in(instance)
     remote.commit_example_deck(at=_PUSHED_AT)

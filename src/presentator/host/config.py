@@ -266,13 +266,14 @@ class WorkerSettings(BaseSettings):
     build_output_megabytes: int = Field(default=DEFAULT_BUILD_OUTPUT_MEGABYTES, gt=0)
 
 
-def _variable_of(field_name: str) -> str:
+def variable_of(field_name: str) -> str:
+    """The environment variable that carries a settings field."""
     return f"{ENVIRONMENT_PREFIX}{field_name}".upper()
 
 
 def worker_settings_variables() -> frozenset[str]:
     """The environment variables the worker reads, derived from its fields."""
-    return frozenset(_variable_of(name) for name in WorkerSettings.model_fields)
+    return frozenset(variable_of(name) for name in WorkerSettings.model_fields)
 
 
 def load_worker_settings() -> WorkerSettings:
@@ -283,7 +284,7 @@ def load_worker_settings() -> WorkerSettings:
         # `msg` states the rule that failed and never quotes the value.
         raise cannot_start(
             ", ".join(
-                f"{_variable_of(str(fault['loc'][0]))}: {fault['msg']}"
+                f"{variable_of(str(fault['loc'][0]))}: {fault['msg']}"
                 for fault in refused.errors()
             )
         ) from None

@@ -22,6 +22,7 @@ from presentator.contracts.decks import (
     SourcePoll,
     SourceRun,
     SourceWrite,
+    ToolchainIdentity,
     ToolchainUnavailable,
 )
 
@@ -310,6 +311,10 @@ class BuildRunner(Protocol):
     Where the folder comes from and which toolchain turns it into a talk is the
     adapter's business; the use case only says which deck is to be built.
     """
+
+    @abstractmethod
+    def toolchain_identity(self) -> ToolchainIdentity:
+        """Which toolchain builds a deck now, and so what a build records."""
 
     @abstractmethod
     def build(

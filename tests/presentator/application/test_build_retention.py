@@ -33,6 +33,7 @@ from tests.presentator.application.support.decks_support import (
 )
 from tests.presentator.application.support.fakes import (
     BUILDS_ROOT,
+    THE_TOOLCHAIN,
     FakeBuildRunner,
     FakeDeckFolders,
     FakeDeckStore,
@@ -67,6 +68,7 @@ def a_build_in(talk_run: str, pdf_run: str | None = None) -> Build:
         pdf=BUILDS_ROOT / (pdf_run or talk_run) / "out" / "deck.pdf",
         commit=_COMMIT,
         built_at=_NOW,
+        toolchain=THE_TOOLCHAIN,
     )
 
 
@@ -662,6 +664,7 @@ def test_a_refused_sweep_leaves_the_purged_rows_run_to_the_next_pass() -> None:
         pdf=BUILDS_ROOT / "deck.pdf",
         commit=_COMMIT,
         built_at=_NOW,
+        toolchain=THE_TOOLCHAIN,
     )
     instance = a_month_after_a_miss(
         a_row("gone", build=a_build_in("old")),

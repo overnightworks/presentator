@@ -55,6 +55,7 @@ from presentator.contracts.decks import (
     Deck,
     Source,
     StepKind,
+    ToolchainIdentity,
     ToolchainUnavailable,
     failure_text,
     talk_address,
@@ -318,6 +319,14 @@ class SlidevBuilds:
     toolchain: DeckToolchain
     mirrors: SourceMirrors
     output_megabytes: int
+    # The identity of the web's own toolchain project, read once at start: the
+    # worker and the host runner build from the same project, so a build records
+    # this and the wire carries no identity.
+    identity: ToolchainIdentity
+
+    def toolchain_identity(self) -> ToolchainIdentity:
+        """The toolchain a build runs under, which the web computed at its start."""
+        return self.identity
 
     def build(
         self, deck: Deck, *, source: Source

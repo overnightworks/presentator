@@ -16,6 +16,7 @@ from presentator.contracts.decks import (
 )
 from presentator.ports.decks import DeckFolders
 from tests.presentator.application.support.fakes import (
+    THE_TOOLCHAIN,
     FakeBuildRunner,
     FakeConnectionChecker,
     FakeDeckFolders,
@@ -170,6 +171,7 @@ def a_store_that_was_left_building(*, started_ago: timedelta) -> FakeDeckStore:
             started_at=NOW - started_ago,
             outcome=BuildOutcome.RUNNING,
             failure=None,
+            toolchain=THE_TOOLCHAIN,
         ),
     )
     return store

@@ -14,6 +14,7 @@ from presentator.contracts.decks import (
     BuildFailureReason,
     BuildOutcome,
     Deck,
+    ToolchainIdentity,
 )
 
 _ONE_ROW: Final = 1
@@ -41,6 +42,7 @@ WHERE decks.source_id = excluded.source_id
 _PUT_BUILD: Final = """
 UPDATE decks
 SET active_build = ?, pdf_export = ?, built_commit = ?, built_at = ?,
+    built_toolchain = ?, attempt_toolchain = NULL,
     attempt_commit = NULL, attempt_started_at = NULL,
     attempt_outcome = NULL, attempt_failure = NULL, attempt_reason = NULL,
     attempt_written_megabytes = NULL, attempt_allowed_megabytes = NULL,
@@ -54,7 +56,7 @@ UPDATE decks
 SET attempt_commit = ?, attempt_started_at = ?,
     attempt_outcome = ?, attempt_failure = ?, attempt_reason = ?,
     attempt_written_megabytes = ?, attempt_allowed_megabytes = ?,
-    attempt_allowed_entries = ?
+    attempt_allowed_entries = ?, attempt_toolchain = ?
 WHERE slug = ?
 """
 _ALL_DECKS: Final = """
@@ -63,7 +65,7 @@ SELECT slug, title, changed_at, owner_id, source_id, commit_sha,
        attempt_commit, attempt_started_at, attempt_outcome, attempt_failure,
        attempt_reason,
        attempt_written_megabytes, attempt_allowed_megabytes,
-       attempt_allowed_entries
+       attempt_allowed_entries, built_toolchain, attempt_toolchain
 FROM decks
 WHERE removed_at IS NULL
 """
@@ -77,7 +79,7 @@ SELECT slug, title, changed_at, owner_id, source_id, commit_sha,
        attempt_commit, attempt_started_at, attempt_outcome, attempt_failure,
        attempt_reason,
        attempt_written_megabytes, attempt_allowed_megabytes,
-       attempt_allowed_entries
+       attempt_allowed_entries, built_toolchain, attempt_toolchain
 FROM decks
 WHERE source_id = ?
 """
@@ -129,7 +131,13 @@ _DeckRow = tuple[
     int | None,
     int | None,
     int | None,
+    str | None,
+    str | None,
 ]
+# What a toolchain is stored as: the commit it was written for, then its digest.
+# The digest alone could not say which commit it vouches for, and an older
+# release that moves the built commit would leave it standing for the wrong one.
+_TOOLCHAIN_SEPARATOR: Final = ":"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -168,6 +176,7 @@ class SqliteDeckStore:
                     str(build.pdf),
                     build.commit,
                     build.built_at.isoformat(),
+                    _stored_toolchain(build.commit, build.toolchain),
                     slug,
                 ),
             )
@@ -233,8 +242,8 @@ def _deck(row: _DeckRow) -> Deck:
         owner_id=owner_id,
         source_id=source_id,
         commit=commit,
-        build=_build(*row[6:10]),
-        attempt=_attempt(row[10:]),
+        build=_build(*row[6:10], stored_toolchain=row[18]),
+        attempt=_attempt(row[10:18], stored_toolchain=row[19]),
     )
 
 
@@ -243,6 +252,8 @@ def _build(
     pdf: str | None,
     commit: str | None,
     built_at: str | None,
+    *,
+    stored_toolchain: str | None,
 ) -> Build | None:
     """What the row says its talk is, or nothing while no build has switched."""
     if directory is None or pdf is None or commit is None or built_at is None:
@@ -252,18 +263,46 @@ def _build(
         pdf=Path(pdf),
         commit=commit,
         built_at=datetime.fromisoformat(built_at),
+        toolchain=_read_toolchain(stored_toolchain, commit),
     )
 
 
-def _attempt_columns(attempt: BuildAttempt | None) -> _AttemptColumns:
+def _stored_toolchain(commit: str, toolchain: ToolchainIdentity | None) -> str | None:
+    """The one column value a toolchain is written as, with the commit it is for."""
+    if toolchain is None:
+        return None
+    return f"{commit}{_TOOLCHAIN_SEPARATOR}{toolchain.digest}"
+
+
+def _read_toolchain(stored: str | None, commit: str) -> ToolchainIdentity | None:
+    """The toolchain stored for exactly this commit, or nothing where it is unknown.
+
+    A row from before, a value that is no identity, and one written for another
+    commit all read as unknown, so the deck builds once more.
+    """
+    if stored is None:
+        return None
+    written_for, separator, digest = stored.rpartition(_TOOLCHAIN_SEPARATOR)
+    if not separator or written_for != commit:
+        return None
+    try:
+        return ToolchainIdentity(digest)
+    except ValueError:
+        return None
+
+
+def _attempt_columns(
+    attempt: BuildAttempt | None,
+) -> tuple[*_AttemptColumns, str | None]:
     """The columns an attempt is written as; no attempt is all of them empty."""
     if attempt is None:
-        return (None, None, None, None, None, None, None, None)
+        return (None, None, None, None, None, None, None, None, None)
     return (
         attempt.commit,
         attempt.started_at.isoformat(),
         attempt.outcome.value,
         *_failure_columns(attempt.failure),
+        _stored_toolchain(attempt.commit, attempt.toolchain),
     )
 
 
@@ -282,7 +321,9 @@ def _failure_columns(
     )
 
 
-def _attempt(columns: _AttemptColumns) -> BuildAttempt | None:
+def _attempt(
+    columns: _AttemptColumns, *, stored_toolchain: str | None
+) -> BuildAttempt | None:
     """The build the row says ran last, or nothing while none is worth telling."""
     commit, started_at, outcome, text, reason = columns[:5]
     written_megabytes, allowed_megabytes, allowed_entries = columns[5:]
@@ -305,6 +346,7 @@ def _attempt(columns: _AttemptColumns) -> BuildAttempt | None:
         started_at=datetime.fromisoformat(started_at),
         outcome=BuildOutcome(outcome),
         failure=failure,
+        toolchain=_read_toolchain(stored_toolchain, commit),
     )
     if attempt.outcome is BuildOutcome.FAILED and failure is None:
         message = f"the failed attempt of commit {commit} carries no reason"

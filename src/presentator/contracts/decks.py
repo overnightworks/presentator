@@ -453,19 +453,37 @@ class ToolchainUnavailable:
     """
 
 
+_TOOLCHAIN_DIGEST: Final = re.compile(r"[0-9a-f]{64}")
+
+
+@dataclass(frozen=True, slots=True)
+class ToolchainIdentity:
+    """Which toolchain a build ran under: the SHA-256 of its project, as hex."""
+
+    digest: str
+
+    def __post_init__(self) -> None:
+        """Refuse anything but 64 lowercase hex digits."""
+        if _TOOLCHAIN_DIGEST.fullmatch(self.digest) is None:
+            message = "a toolchain identity is 64 lowercase hex digits"
+            raise ValueError(message)
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Build:
-    """The talk a deck delivers, the commit it was built from, and when.
+    """The talk a deck delivers, the commit and toolchain it was built under, and when.
 
-    The four travel together because they switch together: a page that named a
+    They travel together because they switch together: a page that named a
     build time of one commit beside the directory of another would lie about
-    what is on the screen.
+    what is on the screen. No toolchain is a build made before a deck recorded
+    it, which matches no identity.
     """
 
     directory: Path
     pdf: Path
     commit: str
     built_at: datetime
+    toolchain: ToolchainIdentity | None = None
 
 
 class BuildOutcome(StrEnum):
@@ -477,7 +495,7 @@ class BuildOutcome(StrEnum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BuildAttempt:
-    """The build a deck last started, for as long as it did not become its talk.
+    """The build a deck last started, under which toolchain, until it became its talk.
 
     A running attempt is one nothing has reported back about yet and carries no
     failure; a failed one carries what its toolchain said, or nothing where no
@@ -489,6 +507,17 @@ class BuildAttempt:
     started_at: datetime
     outcome: BuildOutcome
     failure: BuildFailure | None
+    toolchain: ToolchainIdentity | None = None
+
+    def failed_with(self, failure: BuildFailure) -> BuildAttempt:
+        """This attempt, closed as failed, keeping the moment it started."""
+        return BuildAttempt(
+            commit=self.commit,
+            started_at=self.started_at,
+            outcome=BuildOutcome.FAILED,
+            failure=failure,
+            toolchain=self.toolchain,
+        )
 
 
 class DeckState(StrEnum):
@@ -521,6 +550,19 @@ class Deck:
     def is_owned_by(self, viewer: str) -> bool:
         """Whether the account owns this talk; only its owner may see it."""
         return self.owner_id == viewer
+
+    def carrying(self, attempt: BuildAttempt) -> Deck:
+        """This talk with the build it last started replaced."""
+        return Deck(
+            slug=self.slug,
+            title=self.title,
+            changed_at=self.changed_at,
+            owner_id=self.owner_id,
+            source_id=self.source_id,
+            commit=self.commit,
+            build=self.build,
+            attempt=attempt,
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

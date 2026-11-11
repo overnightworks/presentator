@@ -73,6 +73,7 @@ from presentator.adapters.speech import (
     SpeechSpeaking,
     silence_transport_traces,
 )
+from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.agent.backend import gateway_answerer
 from presentator.agent.mcp import (
     install_mcp_front,
@@ -94,11 +95,13 @@ from presentator.application.identity import SESSION_LIFETIME, SESSION_SWEEP_INT
 from presentator.application.own_decks import OwnDecks
 from presentator.application.people import People
 from presentator.application.preferences import Preferences
+from presentator.contracts.decks import ToolchainIdentity
 from presentator.host.config import (
     Settings,
     WhereBuildsRun,
     cannot_start,
     load_settings,
+    variable_of,
 )
 from presentator.host.oidc import (
     admission_of,
@@ -283,6 +286,7 @@ def _decks(
         store=SqliteDeckStore(database=settings.database),
         builder=SlidevBuilds(
             builds=settings.builds,
+            identity=_identity_of_the_toolchain(settings),
             toolchain=_what_builds_a_deck(settings, bound=build_bound),
             mirrors=mirrors,
             output_megabytes=settings.build_output_megabytes,
@@ -441,6 +445,20 @@ def _session_sweep(sessions: SqliteSessionRecordStore, clock: SystemClock) -> Sc
         chore=lambda: sessions.delete_expired(clock.now()),
         interval=SESSION_SWEEP_INTERVAL,
     )
+
+
+def _identity_of_the_toolchain(settings: Settings) -> ToolchainIdentity:
+    """The identity of this web's own toolchain project, or a refusal to start.
+
+    Computed once, for the worker runner and the host runner alike: both build
+    from the project this instance carries.
+    """
+    try:
+        return toolchain_identity_of(settings.toolchain)
+    except OSError as unreadable:
+        setting = variable_of("toolchain")
+        reason = f"{setting}: the project cannot be read: {unreadable}"
+        raise cannot_start(reason) from None
 
 
 def _what_builds_a_deck(settings: Settings, *, bound: timedelta) -> DeckToolchain:
