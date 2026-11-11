@@ -152,10 +152,11 @@ def test_hear_is_accepted_only_from_the_talk_origin(
 
 def test_hear_is_accepted_for_a_user_from_the_talk_origin() -> None:
     """A hearing is accepted for a signed-in user."""
-    talk, _private, _clock = a_copresenter_talk_host()
+    talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in(role=Role.USER)
 
     assert _hear_with_origin(talk.client, TALK_ORIGIN) is None
+    assert private.speech.hearing_opens == 1
 
 
 def test_the_lobbys_session_cookie_does_not_sign_in_at_the_talk_host() -> None:

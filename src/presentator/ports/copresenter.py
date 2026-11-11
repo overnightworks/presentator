@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import asyncio
+from collections.abc import Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
@@ -21,17 +22,16 @@ if TYPE_CHECKING:
     from presentator.contracts.decks import Deck, Source
 
 
-class PrivateHearing(Protocol):
-    """One private speech-recognition connection."""
+class HearingSocket(Protocol):
+    """What a hearing calls on the browser's socket; FastAPI's WebSocket fits."""
 
-    async def send_pcm(self, frame: bytes) -> None:
-        """Send one PCM frame upward."""
+    async def receive(self) -> Mapping[str, object]:
+        """The next ASGI message of the socket."""
+        ...
 
-    async def receive(self) -> HearingTranscript | None:
-        """Receive one transcript, or None when the private end closed."""
-
-    async def aclose(self) -> None:
-        """Close the connection and await its owned work."""
+    async def close(self, code: int) -> None:
+        """Close the socket with `code`."""
+        ...
 
 
 class AgentAnswers(Protocol):
@@ -55,10 +55,26 @@ class SpeechHearing(Protocol):
         """Read the readiness facts the browser consumes."""
         ...
 
-    def hear(
-        self, language: str, tokens: SpeechTokens
-    ) -> AbstractAsyncContextManager[PrivateHearing]:
-        """Open one hearing connection for the person these tokens name."""
+    async def relay(
+        self,
+        browser: HearingSocket,
+        language: str,
+        tokens: SpeechTokens,
+        *,
+        ended: asyncio.Event,
+        heard: Callable[[HearingTranscript], Awaitable[None]],
+    ) -> None:
+        """Hear for the person these tokens name until the hearing ends.
+
+        Relays the browser's audio to the service and hands each transcript to
+        `heard`. Closes the browser socket with the code of how the hearing
+        ended, and ends it at once when `ended` is set. A browser that left,
+        or an unexpected failure, passes to the caller.
+        """
+        ...
+
+    async def refuse(self, browser: HearingSocket) -> None:
+        """Close the browser socket as a hearing the service cannot give."""
         ...
 
 

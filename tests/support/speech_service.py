@@ -220,9 +220,26 @@ HEALTH_FAILURES: Final[dict[str, Answer]] = {
 }
 
 
-async def accept_and_hold(socket_to_browser: WebSocket) -> None:
+async def _opened(socket_to_browser: WebSocket) -> None:
+    """Accept the upgrade and send the first event, as the real service does."""
     await socket_to_browser.accept()
+    await socket_to_browser.send_text(
+        wire.SessionCreated(
+            session=wire.TranscriptionSession(type="transcription")
+        ).model_dump_json()
+    )
+
+
+async def accept_and_hold(socket_to_browser: WebSocket) -> None:
+    await _opened(socket_to_browser)
     await socket_to_browser.receive()
+
+
+async def accept_and_stay_silent(socket_to_browser: WebSocket) -> None:
+    """Accept the upgrade, send no first event and stay until the peer leaves."""
+    await socket_to_browser.accept()
+    while (await socket_to_browser.receive())["type"] != "websocket.disconnect":
+        pass
 
 
 def a_delta(text: str, item: str = AN_ITEM) -> wire.TranscriptDelta:
@@ -271,10 +288,11 @@ def _encoded(event: wire.ServerEvent | str) -> str:
 
 
 def sending(*events: wire.ServerEvent) -> Hear:
-    """Accept, send the events at once, then close."""
+    """Accept, take the `session.update`, send the events, then close."""
 
     async def realtime(socket_to_browser: WebSocket) -> None:
-        await socket_to_browser.accept()
+        await _opened(socket_to_browser)
+        await socket_to_browser.receive()
         for event in events:
             await socket_to_browser.send_text(event.model_dump_json())
         await socket_to_browser.close()
@@ -288,7 +306,7 @@ def after_the_first_audio(
     """Accept, take the `session.update` and one append, send the events, close."""
 
     async def realtime(socket_to_browser: WebSocket) -> None:
-        await socket_to_browser.accept()
+        await _opened(socket_to_browser)
         await socket_to_browser.receive()
         await socket_to_browser.receive()
         for event in events:
@@ -298,11 +316,24 @@ def after_the_first_audio(
     return realtime
 
 
+def sending_then_reading(service: FakeSpeechService, *events: wire.ServerEvent) -> Hear:
+    """Accept, send the events, then keep every client event until the peer leaves."""
+
+    async def realtime(socket_to_browser: WebSocket) -> None:
+        await _opened(socket_to_browser)
+        service.connected.set()
+        for event in events:
+            await socket_to_browser.send_text(event.model_dump_json())
+        await service.read_events(socket_to_browser)
+
+    return realtime
+
+
 def crashing_after_the_first_audio() -> Hear:
     """Accept, take the first audio, then the handler dies."""
 
     async def realtime(socket_to_browser: WebSocket) -> None:
-        await socket_to_browser.accept()
+        await _opened(socket_to_browser)
         await socket_to_browser.receive()
         await socket_to_browser.receive()
         message = "the service crashed"
@@ -338,7 +369,7 @@ def reading(service: FakeSpeechService) -> Hear:
     """A Realtime handler that accepts and keeps every client event."""
 
     async def realtime(socket_to_browser: WebSocket) -> None:
-        await socket_to_browser.accept()
+        await _opened(socket_to_browser)
         service.connected.set()
         await service.read_events(socket_to_browser)
 
@@ -492,6 +523,24 @@ class RawPeer:
 async def nobody_listens() -> AsyncGenerator[str]:
     """Yield an origin nothing listens on, in a server's place."""
     yield a_closed_port_origin()
+
+
+@asynccontextmanager
+async def never_answers() -> AsyncGenerator[str]:
+    """Yield an origin that takes connections and requests and never answers."""
+
+    async def hold(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        # Reading to the end lets the server close once the client has gone.
+        await reader.read()
+        writer.close()
+
+    listener = loopback_listener()
+    origin = origin_of(listener)
+    listener.listen()
+    listener.settimeout(0.0)
+    server = await asyncio.start_server(hold, sock=listener)
+    async with server:
+        yield origin
 
 
 MALFORMED_PEERS: Final[dict[str, bytes]] = {

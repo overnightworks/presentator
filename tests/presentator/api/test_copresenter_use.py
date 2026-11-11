@@ -2,15 +2,19 @@
 
 import asyncio
 import logging
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 
 import pytest
+from speech_client.relay import HopClose
 
 from presentator.application.copresenter import CoPresenterUse, PreparedAsk
 from presentator.contracts.copresenter import (
+    AccessRefusal,
     AnswerText,
     CoPresenterReadiness,
+    CoPresenterUnavailableError,
     Question,
+    SpeechTokens,
 )
 from presentator.contracts.models import Role
 from tests.presentator.application.support.fakes import FakeDeckStore
@@ -53,20 +57,46 @@ async def _cancel_answer() -> None:
     assert fakes.answers.exits == 1
 
 
-def test_ending_hearing_closes_and_awaits_the_private_child() -> None:
-    """Unchanged behaviour: ending a hearing closes its child."""
-    asyncio.run(_end_hearing())
+@dataclass
+class ClosedBrowser:
+    """A browser socket that keeps the code it was closed with."""
+
+    closed_with: list[int] = field(default_factory=list[int])
+
+    async def receive(self) -> dict[str, object]:
+        return {"type": "websocket.disconnect"}
+
+    async def close(self, code: int) -> None:
+        self.closed_with.append(code)
 
 
-async def _end_hearing() -> None:
+def test_a_hearing_reads_the_tokens_of_its_session() -> None:
     fakes = PrivateFakes()
     use = a_use(fakes, FakeDeckStore())
 
-    async with use.hear("de", session_id="a-session") as hearing:
-        await hearing.send_pcm(b"pcm")
+    tokens = asyncio.run(use.hearing_tokens("a-session"))
 
-    assert fakes.speech.hearing.frames == [b"pcm"]
-    assert fakes.speech.hearing.closed == 1
+    assert tokens == SpeechTokens(person="a-person", workload="a-workload")
+    assert fakes.person_access.sessions == ["a-session"]
+
+
+@pytest.mark.parametrize("refusal", list(AccessRefusal))
+def test_a_refused_token_read_is_unavailable(refusal: AccessRefusal) -> None:
+    fakes = PrivateFakes()
+    fakes.person_access.refusal = refusal
+    use = a_use(fakes, FakeDeckStore())
+
+    with pytest.raises(CoPresenterUnavailableError):
+        asyncio.run(use.hearing_tokens("a-session"))
+
+
+def test_a_refused_hearing_closes_the_browser_as_a_service_failure() -> None:
+    browser = ClosedBrowser()
+    use = a_use(PrivateFakes(), FakeDeckStore())
+
+    asyncio.run(use.refuse_hearing(browser))
+
+    assert browser.closed_with == [HopClose.SERVICE_FAILED]
 
 
 def test_readiness_comes_from_speech_and_never_touches_the_answer_port() -> None:

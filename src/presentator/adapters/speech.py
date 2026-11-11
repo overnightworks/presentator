@@ -4,20 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from base64 import b64encode
-from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Final, assert_never, cast
+from typing import TYPE_CHECKING, Final, assert_never
 
-import httpx2
-from httpx2.websockets import (
-    AsyncWebSocketSession,
-    HTTPXWSException,
-    WebSocketDisconnect,
-    WebSocketUpgradeError,
-)
 from pydantic import ValidationError
 from speech_client import wire
 from speech_client.health import UnexpectedStatus, fetch_health
+from speech_client.hearing import OPENING_SECONDS, Closed, HearingSession
+from speech_client.hearing import Refused as HearingRefused
 from speech_client.outcomes import (
     Cut,
     Malformed,
@@ -25,8 +18,16 @@ from speech_client.outcomes import (
     PastDeadline,
     Unreachable,
 )
+from speech_client.relay import (
+    HOP_FRAME_BYTES,
+    AppEnded,
+    BrowserLeft,
+    HopClose,
+    RelayOutcome,
+    RuleBroken,
+    relay,
+)
 from speech_client.speak import Busy, Refused, SpeakOutcome, Spoken, speak
-from wsproto.utilities import LocalProtocolError
 
 from presentator.contracts.copresenter import (
     CoPresenterReadiness,
@@ -36,11 +37,11 @@ from presentator.contracts.copresenter import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable
+    from collections.abc import Awaitable, Callable
 
     from speech_client.health import HealthOutcome
 
-    from presentator.ports.copresenter import PrivateHearing
+    from presentator.ports.copresenter import HearingSocket
 
 _LOGGER = logging.getLogger(__name__)
 _HEARING_FAILED_LOG: Final = "hearing failed: %s"
@@ -51,7 +52,11 @@ _SPEAK_DEADLINE_SECONDS: Final = 30.0
 _SPEAK_CAP_BYTES: Final = 8 * 1024 * 1024
 _HEALTH_DEADLINE_SECONDS: Final = 5.0
 _HEALTH_CAP_BYTES: Final = 64 * 1024
-_UPGRADE_STEP_SECONDS: Final = 5.0
+# About 43 s of the 24 kHz PCM16 input: what a hearing holds while the service
+# opens or stops taking audio.
+_HELD_LIMIT_BYTES: Final = 2 * 1024 * 1024
+# Past any talk the operator gives.
+_HEARING_DEADLINE_SECONDS: Final = 4 * 60 * 60.0
 
 
 class _WarningsOnly(logging.Filter):
@@ -145,11 +150,15 @@ class SpeechHearing:
         *,
         voice: str,
         bounded_health_fetch: Callable[..., HealthOutcome] = fetch_health,
+        hearing_deadline_seconds: float = _HEARING_DEADLINE_SECONDS,
+        opening_seconds: float = OPENING_SECONDS,
     ) -> None:
-        """Keep the service's origin and the voice readiness asks after."""
+        """Keep the service's origin, the voice readiness asks after and the bounds."""
         self._origin = origin
         self._voice = voice
         self._bounded_health_fetch = bounded_health_fetch
+        self._hearing_deadline_seconds = hearing_deadline_seconds
+        self._opening_seconds = opening_seconds
 
     async def readiness(self) -> CoPresenterReadiness:
         """Say whether the service hears, or that its voice is missing."""
@@ -168,42 +177,48 @@ class SpeechHearing:
             local_hearing_ready=health.hearing.ready,
         )
 
-    @asynccontextmanager
-    async def hear(
-        self, language: str, tokens: SpeechTokens
-    ) -> AsyncGenerator[PrivateHearing]:
-        """Open one Realtime connection and name the language it hears."""
-        setup = _session_update(language)
-        failure: str | None = None
+    async def relay(
+        self,
+        browser: HearingSocket,
+        language: str,
+        tokens: SpeechTokens,
+        *,
+        ended: asyncio.Event,
+        heard: Callable[[HearingTranscript], Awaitable[None]],
+    ) -> None:
+        """Relay the browser's audio to the service and its transcripts back."""
         try:
-            async with (
-                httpx2.AsyncClient(
-                    base_url=self._origin,
-                    timeout=httpx2.Timeout(_UPGRADE_STEP_SECONDS),
-                    trust_env=False,
-                ) as client,
-                client.websocket(
-                    wire.REALTIME_PATH,
-                    params={wire.REALTIME_INTENT_PARAM: wire.REALTIME_INTENT},
-                    headers=wire.token_headers(
-                        workload_token=tokens.workload, person_token=tokens.person
-                    ),
-                ) as socket,
-            ):
-                hearing = _RealtimeHearing(socket)
-                await hearing.send(setup)
-                yield hearing
-        except BaseExceptionGroup as refused:
-            if not _only_service_failures(refused):
-                raise
-            failure = type(refused).__name__
-        except WebSocketUpgradeError as refused:
-            failure = f"upgrade status {refused.response.status_code}"
-        except (httpx2.HTTPError, HTTPXWSException) as refused:
-            failure = type(refused).__name__
-        if failure is not None:
-            _LOGGER.warning(_HEARING_FAILED_LOG, failure)
-            raise CoPresenterUnavailableError
+            hears = wire.HearingLanguage(language)
+        except ValueError:
+            _LOGGER.warning("hearing refused a language the wire does not name")
+            await self.refuse(browser)
+            return
+        session = HearingSession(
+            self._origin,
+            workload_token=tokens.workload,
+            person_token=tokens.person,
+            language=hears,
+            held_limit_bytes=_HELD_LIMIT_BYTES,
+            deadline_seconds=self._hearing_deadline_seconds,
+            opening_seconds=self._opening_seconds,
+        )
+        try:
+            outcome = await relay(
+                browser,
+                session,
+                app_ended=ended,
+                on_event=_Transcripts(heard).on_event,
+                frame_limit_bytes=HOP_FRAME_BYTES,
+            )
+        except _ServiceFailureError as failure:
+            _LOGGER.warning(_HEARING_FAILED_LOG, failure.event_type)
+            await self.refuse(browser)
+            return
+        _log_ending(outcome)
+
+    async def refuse(self, browser: HearingSocket) -> None:
+        """Close the browser as a hearing the service cannot give."""
+        await browser.close(HopClose.SERVICE_FAILED)
 
 
 def _health_of(outcome: HealthOutcome) -> wire.Health:
@@ -224,91 +239,48 @@ def _speaks(health: wire.Health, voice: str) -> bool:
     return offered is not None and (offered.ready or health.speaking.ready)
 
 
-def _session_update(language: str) -> wire.SessionUpdate:
-    try:
-        hears: wire.HearingLanguage | None = wire.HearingLanguage(language)
-    except ValueError:
-        hears = None
-    if hears is None:
-        _LOGGER.warning("hearing refused a language the wire does not name")
-        raise CoPresenterUnavailableError
-    return wire.SessionUpdate(
-        type="session.update",
-        session=wire.TranscriptionSession(
-            type="transcription",
-            audio=wire.SessionAudio(
-                input=wire.SessionInput(
-                    transcription=wire.TranscriptionSetting(language=hears)
-                )
-            ),
-        ),
-    )
+class _ServiceFailureError(Exception):
+    """A failed item or an error event ended the hearing; names only its type."""
+
+    def __init__(self, event_type: str) -> None:
+        super().__init__()
+        self.event_type = event_type
 
 
-def _only_service_failures(refused: BaseException) -> bool:
-    if isinstance(refused, BaseExceptionGroup):
-        group = cast("BaseExceptionGroup[BaseException]", refused)
-        return all(_only_service_failures(error) for error in group.exceptions)
-    return isinstance(
-        refused,
-        (CoPresenterUnavailableError, httpx2.HTTPError, HTTPXWSException),
-    )
+class _Transcripts:
+    """Turn the service's events into the transcripts the browser is shown."""
 
-
-class _RealtimeHearing:
-    def __init__(self, socket: AsyncWebSocketSession) -> None:
-        self._socket = socket
+    def __init__(self, heard: Callable[[HearingTranscript], Awaitable[None]]) -> None:
+        self._heard = heard
         self._heard_so_far: dict[str, str] = {}
 
-    async def send(self, event: wire.SessionUpdate | wire.AudioAppend) -> None:
-        failure: str | None = None
-        try:
-            await self._socket.send_text(event.model_dump_json(exclude_none=True))
-        # A service that already closed its side makes the library refuse the send.
-        except (HTTPXWSException, LocalProtocolError) as refused:
-            failure = type(refused).__name__
-        if failure is not None:
-            _LOGGER.warning(_HEARING_FAILED_LOG, failure)
-            raise CoPresenterUnavailableError
+    async def on_event(self, event: wire.ServerEvent) -> None:
+        match event:
+            case wire.TranscriptDelta():
+                text = self._heard_so_far.get(event.item_id, "") + event.delta
+                self._heard_so_far[event.item_id] = text
+                await self._heard(HearingTranscript(text=text, final=False))
+            case wire.TranscriptCompleted():
+                self._heard_so_far.pop(event.item_id, None)
+                if event.transcript:
+                    await self._heard(
+                        HearingTranscript(text=event.transcript, final=True)
+                    )
+            case wire.TranscriptFailed() | wire.ErrorEvent():
+                raise _ServiceFailureError(type(event).__name__)
+            case _:
+                return
 
-    async def send_pcm(self, frame: bytes) -> None:
-        await self.send(
-            wire.AudioAppend(
-                type="input_audio_buffer.append",
-                audio=b64encode(frame).decode("ascii"),
-            )
-        )
 
-    async def receive(self) -> HearingTranscript | None:
-        while True:
-            event = await self._next_event()
-            match event:
-                case None:
-                    return None
-                case wire.TranscriptDelta():
-                    heard = self._heard_so_far.get(event.item_id, "") + event.delta
-                    self._heard_so_far[event.item_id] = heard
-                    return HearingTranscript(text=heard, final=False)
-                case wire.TranscriptCompleted():
-                    self._heard_so_far.pop(event.item_id, None)
-                    if event.transcript:
-                        return HearingTranscript(text=event.transcript, final=True)
-                case wire.TranscriptFailed() | wire.ErrorEvent():
-                    _LOGGER.warning(_HEARING_FAILED_LOG, type(event).__name__)
-                    raise CoPresenterUnavailableError
-                case _:
-                    continue
-
-    async def _next_event(self) -> wire.ServerEvent | None:
-        failure: str | None = None
-        try:
-            return wire.parse_server_event(await self._socket.receive_text())
-        except WebSocketDisconnect:
-            return None
-        except (HTTPXWSException, wire.ServerEventError) as refused:
-            failure = type(refused).__name__
-        _LOGGER.warning(_HEARING_FAILED_LOG, failure)
-        raise CoPresenterUnavailableError
-
-    async def aclose(self) -> None:
-        await self._socket.close()
+def _log_ending(outcome: RelayOutcome) -> None:
+    match outcome:
+        case Closed() | BrowserLeft() | AppEnded():
+            return
+        case HearingRefused():
+            _LOGGER.warning("hearing failed: Refused status=%d", outcome.status)
+        case RuleBroken():
+            _LOGGER.warning("hearing failed: RuleBroken close=%d", outcome.close.value)
+        case Busy() | OverCap() | Malformed() | PastDeadline() | Cut() | Unreachable():
+            _LOGGER.warning(_HEARING_FAILED_LOG, type(outcome).__name__)
+        case _:
+            assert_never(outcome)
