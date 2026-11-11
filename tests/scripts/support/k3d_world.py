@@ -1,0 +1,379 @@
+"""The k3d driver tests' shared world: the fake runner, its run and the builders."""
+
+import copy
+import json
+from collections.abc import Callable, Generator, Mapping
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from types import ModuleType
+from typing import Any
+
+from ruamel.yaml import YAML
+
+from presentator.host.worker import REFUSAL_EXIT_STATUS
+from presentator.host.worker_self_check import Predicate
+
+DIGEST = "@sha256:" + "a" * 64
+REMOVE_LINK_IMAGE = "docker.io/library/busybox:1.38.0@sha256:" + "b" * 64
+K3S_VERSION = "v1.37.2+k3s1"
+RUN_IDENTIFIER = "0a1b2c3d"
+OWN = "the run's own node"
+EPOCH = datetime(2026, 11, 11, tzinfo=UTC)
+
+Document = dict[str, Any]
+Issued = tuple[tuple[str, ...], Mapping[str, str], str | None]
+
+
+def workload_documents(image: str) -> list[Document]:
+    """What the overlay and the base render, every production container at `image`."""
+
+    def template(container: str, *, init: bool = False) -> Document:
+        spec: Document = {"containers": [{"name": container, "image": image}]}
+        if init:
+            spec["initContainers"] = [
+                {"name": "remove-link", "image": REMOVE_LINK_IMAGE}
+            ]
+        return {"spec": spec}
+
+    def document(kind: str, name: str, **spec: Any) -> Document:  # noqa: ANN401
+        return {"kind": kind, "metadata": {"name": name}, "spec": spec}
+
+    job = {"spec": {"template": template("restore-test")}}
+    return [
+        document("Deployment", "web", replicas=1, template=template("web")),
+        document("StatefulSet", "build-worker", template=template("worker", init=True)),
+        document("CronJob", "restore-test", jobTemplate=job),
+        document("PersistentVolumeClaim", "build-socket"),
+        document("ServiceAccount", "build-worker"),
+        document("ConfigMap", "sqlite"),
+        document("Schedule", "backup"),
+        document(
+            "PodConfig",
+            "backup",
+            template={"spec": {"containers": [{"name": "backup"}]}},
+        ),
+    ]
+
+
+def named(documents: list[Document], kind: str) -> Document:
+    return next(document for document in documents if document["kind"] == kind)
+
+
+def as_yaml_stream(documents: list[Document]) -> str:
+    return "\n---\n".join(json.dumps(document) for document in documents)
+
+
+def stamp(seconds: int) -> str:
+    return (EPOCH + timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def terminated_state(
+    exit_code: int = REFUSAL_EXIT_STATUS,
+    *,
+    message: str = "",
+    reason: str = "Error",
+    started: int = 0,
+) -> Document:
+    return {
+        "terminated": {
+            "exitCode": exit_code,
+            "reason": reason,
+            "message": message,
+            "startedAt": stamp(started),
+            "finishedAt": stamp(started + 1),
+        }
+    }
+
+
+@dataclass(frozen=True)
+class Version:
+    """What one version of a pod differs in."""
+
+    init: bool = True
+    init_exit: int | None = 0
+    last_state: Document = field(default_factory=dict[str, Any])
+    restarts: int = 0
+
+
+PLAIN = Version()
+
+
+def pod_version(
+    uid: str,
+    state: Document | None = None,
+    version: Version = PLAIN,
+) -> Document:
+    """One version of a pod as kubectl's watch prints it."""
+    worker: Document = {
+        "name": "worker",
+        "restartCount": version.restarts,
+        "state": state or {"waiting": {}},
+        "lastState": version.last_state,
+    }
+    status: Document = {"containerStatuses": [worker]}
+    spec: Document = {"containers": [{"name": "worker"}]}
+    if version.init:
+        spec["initContainers"] = [{"name": "remove-link"}]
+        init_state: Document = {"running": {}}
+        if version.init_exit is not None:
+            init_state = terminated_state(version.init_exit)
+        status["initContainerStatuses"] = [{"name": "remove-link", "state": init_state}]
+    return {"metadata": {"uid": uid}, "spec": spec, "status": status}
+
+
+def watch_event(kind: str, pod: Document) -> Document:
+    assert kind in {"ADDED", "MODIFIED", "DELETED"}, f"the fake does not know {kind}"
+    return {"type": kind, "object": pod}
+
+
+def life_events(
+    uid: str,
+    refusal: Predicate,
+    *,
+    started: int = 0,
+    ended: Document | None = None,
+    version: Version = PLAIN,
+) -> list[Document]:
+    """The events of one life that ends by a refusal: created, ended, deleted."""
+    said = f"worker started\nstart refused: {refusal}\n"
+    state = ended or terminated_state(message=said, started=started)
+    pending = pod_version(uid, version=replace(version, init_exit=None))
+    last = pod_version(uid, state, version)
+    return [
+        watch_event("ADDED", pending),
+        watch_event("MODIFIED", last),
+        watch_event("DELETED", last),
+    ]
+
+
+def lives_stream(
+    count: int,
+    refusal: Predicate,
+    *,
+    gap: int = 3,
+    version: Version = PLAIN,
+) -> list[Document]:
+    """`count` lives, each worker starting `gap` seconds after its predecessor's end."""
+    return [
+        event
+        for number in range(count)
+        for event in life_events(
+            f"life-{number}", refusal, started=number * (gap + 1), version=version
+        )
+    ]
+
+
+def node(
+    name: str = OWN, *, ready: bool = True, version: str = K3S_VERSION
+) -> Document:
+    return {
+        "metadata": {"name": name},
+        "status": {
+            "conditions": [{"type": "Ready", "status": "True" if ready else "False"}],
+            "nodeInfo": {"kubeletVersion": version},
+        },
+    }
+
+
+@dataclass
+class World:
+    """Answers every command of a run and remembers it, with its environment."""
+
+    nodes: list[Document] = field(default_factory=lambda: [node()])
+    node_name: str = ""
+    probe_image: str = ""
+    production_image: str = ""
+    twin_pod: str = ""
+    # The events the watch of each cell prints; empty is the passing pair.
+    streams: list[list[Document]] = field(default_factory=list[list[Document]])
+    # The watch ends in a signal's exit after its first event.
+    interrupted: bool = False
+    failing_command: tuple[str, ...] | None = None
+    cell: int = 0
+    overlay_file: str = ""
+    commands: list[Issued] = field(default_factory=list[Issued])
+    directory_present_at_last_command: bool = False
+    events_printed: int = 0
+    watches_closed: int = 0
+
+    def __call__(
+        self,
+        command: tuple[str, ...],
+        environment: Mapping[str, str],
+        stdin: str | None,
+    ) -> tuple[int, str]:
+        self.commands.append((command, environment, stdin))
+        kubeconfig = Path(environment["KUBECONFIG"])
+        self.directory_present_at_last_command = kubeconfig.parent.exists()
+        if (
+            self.failing_command
+            and command[: len(self.failing_command)] == self.failing_command
+        ):
+            message = "the fake runner broke"
+            raise RuntimeError(message)
+        answer = self.answer(command)
+        return (1, "") if answer is None else (0, answer)
+
+    def answer(self, command: tuple[str, ...]) -> str | None:
+        match command:
+            case ("kubectl", "kustomize", *_):
+                return self.render(command)
+            case ("kubectl", "get", "nodes", *_):
+                return self.nodes_json()
+            case ("kubectl", "get", "pod", name, *_) | ("kubectl", "logs", name, *_):
+                if name != self.twin_pod:
+                    message = f"the driver read {name}, which is gone with its life"
+                    raise AssertionError(message)
+                done = json.dumps({"status": {"phase": "Succeeded"}})
+                return done if command[1] == "get" else ""
+            case ("kubectl", "delete", "statefulset", *_):
+                self.cell += 1
+                return ""
+            case _:
+                return ""
+
+    def watch(
+        self, command: tuple[str, ...], environment: Mapping[str, str]
+    ) -> Generator[str]:
+        """The lines kubectl's watch prints; a closed stream is counted."""
+        self.commands.append((command, environment, None))
+        if not (
+            command[0] == "timeout"
+            and command[1].isdigit()
+            and command[2:5] == ("kubectl", "get", "pods")
+        ):
+            message = f"the fake does not understand the watch {command}"
+            raise AssertionError(message)
+        return self.stream(self.streams[self.cell])
+
+    def stream(self, events: list[Document]) -> Generator[str]:
+        try:
+            for event in events:
+                self.events_printed += 1
+                yield from (
+                    f"{line}\n" for line in json.dumps(event, indent=4).splitlines()
+                )
+                if self.interrupted:
+                    raise SystemExit(143)
+        finally:
+            self.watches_closed += 1
+
+    def nodes_json(self) -> str:
+        items = copy.deepcopy(self.nodes)
+        for item in items:
+            if item["metadata"]["name"] == OWN:
+                item["metadata"]["name"] = self.node_name
+        return json.dumps({"items": items})
+
+    def render(self, command: tuple[str, ...]) -> str:
+        if command[2].endswith("apps/presentator"):
+            return as_yaml_stream(workload_documents(self.production_image))
+        self.overlay_file = (Path(command[2]) / "kustomization.yaml").read_text()
+        return as_yaml_stream(workload_documents(self.probe_image))
+
+    def issued(self, *prefix: str) -> list[tuple[str, ...]]:
+        commands = (command for command, _, _ in self.commands)
+        return [command for command in commands if command[: len(prefix)] == prefix]
+
+    def applies(self) -> list[list[Document]]:
+        """The documents of each apply, in order."""
+        return [
+            list(YAML(typ="safe").load_all(stdin))  # pyright: ignore[reportUnknownMemberType]
+            for command, _, stdin in self.commands
+            if command[:2] == ("kubectl", "apply")
+        ]
+
+    def applied(self, kind: str) -> list[Document]:
+        """The documents of the given kind that an apply received."""
+        return [
+            document
+            for documents in self.applies()
+            for document in documents
+            if document["kind"] == kind
+        ]
+
+
+@dataclass
+class Fixture:
+    """A run over a fake world, with the driver that drives it."""
+
+    driver: ModuleType
+    world: World
+    run: Any
+
+    def drive(self) -> None:
+        self.driver.drive(self.run)
+
+
+def platform_checkout(tmp_path: Path) -> Path:
+    checkout = tmp_path / "platform"
+    (checkout / "infrastructure" / "namespaces").mkdir(parents=True)
+    (checkout / "mise.toml").write_text(f'[env]\nK3S_VERSION = "{K3S_VERSION}"\n')
+    (checkout / "infrastructure" / "namespaces" / "namespaces.yaml").write_text(
+        "kind: Namespace\nmetadata:\n  name: other\n---\n"
+        "kind: Namespace\nmetadata:\n  name: presentator\n"
+    )
+    return checkout
+
+
+def fixture_maker(
+    load_script: Callable[..., ModuleType], tmp_path: Path
+) -> Callable[..., Fixture]:
+    driver = load_script("probe_build_worker_k3d")
+    cluster_module = load_script("probe_build_worker_k3d_cluster")
+    lives_module = load_script("probe_build_worker_k3d_lives")
+    manifests_module = load_script("probe_build_worker_k3d_manifests")
+    platform = platform_checkout(tmp_path)
+    production_image = manifests_module.PRODUCTION_IMAGE + DIGEST
+
+    def make(
+        world: World | None = None,
+        *,
+        head: str | None = None,
+        missing: str | None = None,
+    ) -> Fixture:
+        world = world or World()
+        directory = tmp_path / "run"
+        ticks = [0.0]
+
+        def sleep(seconds: float) -> None:
+            ticks[0] += seconds
+
+        def run_command(
+            command: tuple[str, ...], environment: Mapping[str, str], stdin: str | None
+        ) -> object:
+            returncode, stdout = world(command, environment, stdin)
+            return cluster_module.Completed(returncode, stdout, "")
+
+        def which(tool: str) -> str | None:
+            return None if tool == missing else f"/bin/{tool}"
+
+        def head_of(_checkout: Path) -> str:
+            return head or cluster_module.PLATFORM_COMMIT
+
+        effects = cluster_module.Effects(
+            run=run_command,
+            watch=world.watch,
+            which=which,
+            platform_head=head_of,
+            free_port=lambda: 6550,
+            monotonic=lambda: ticks[0],
+            sleep=sleep,
+        )
+        run = cluster_module.Run(
+            identifier=RUN_IDENTIFIER,
+            directory=directory,
+            repository=tmp_path / "presentator",
+            platform=platform,
+            effects=effects,
+        )
+        world.node_name, world.probe_image = run.node, run.tag
+        world.production_image, world.twin_pod = production_image, driver.TWIN_POD
+        world.streams = world.streams or [
+            lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
+            lives_stream(lives_module.LIVES, Predicate.KUBERNETES_UNPROVEN),
+        ]
+        return Fixture(driver, world, run)
+
+    return make
