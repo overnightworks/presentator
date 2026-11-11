@@ -154,7 +154,7 @@ class Run:
 
     @property
     def images_volume(self) -> str:
-        """The volume k3d keeps the cluster's images in; the tools container holds it."""
+        """The volume k3d keeps the cluster's images; the tools container holds it."""
         return f"k3d-{self.name}-images"
 
     @property
