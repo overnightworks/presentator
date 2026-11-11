@@ -682,7 +682,10 @@ def check_leftovers(command: Callable[[str], str]) -> None:
     say("no cluster, container, volume or image is left")
 
 
-def main(arguments: list[str]) -> None:
+def main(
+    arguments: list[str],
+    drive_checkout: Callable[[Path, ReleasedImage | None], None] = drive_for_real,
+) -> None:
     """Run the subcommand the arguments name, or exit with the usage."""
     match arguments:
         case ["pin"]:
@@ -690,9 +693,9 @@ def main(arguments: list[str]) -> None:
         case ["leftovers"]:
             check_leftovers(process_listing)
         case ["drive", "--platform", checkout]:
-            drive_for_real(Path(checkout), None)
+            drive_checkout(Path(checkout), None)
         case ["drive", "--platform", checkout, "--image", reference]:
-            drive_for_real(Path(checkout), released_image(reference))
+            drive_checkout(Path(checkout), released_image(reference))
         case _:
             sys.exit(__doc__)
 

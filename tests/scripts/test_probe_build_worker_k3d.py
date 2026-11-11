@@ -14,6 +14,7 @@ from presentator.host.worker_self_check import BUILD_IDENTITY, Predicate
 from tests.scripts.support.k3d_world import (
     DIGEST,
     OTHER_DIGEST,
+    RELEASED_VERSION,
     Document,
     Fixture,
     Version,
@@ -648,19 +649,24 @@ def test_a_twin_that_does_not_end_within_the_window_stops_cell_9_after_that_wind
     )
 
 
+@pytest.fixture
+def manifests_module(load_script: Callable[..., ModuleType]) -> ModuleType:
+    return load_script("probe_build_worker_k3d_manifests")
+
+
 @pytest.mark.parametrize(
-    ("replace", "by"),
+    "break_form",
     [
-        (DIGEST, ""),
-        (":2026.11.11.1", ""),
-        ("overnightworks", "elsewhere"),
-        ("ghcr.io/overnightworks/", ""),
-        ("a" * 64, "A" * 64),
-        ("a" * 64, "a" * 63),
-        ("a" * 64, "a" * 65),
-        ("sha256", "sha512"),
-        (DIGEST, DIGEST + " --privileged"),
-        (DIGEST, DIGEST + "\n"),
+        lambda reference: reference.replace(DIGEST, ""),
+        lambda reference: reference.replace(f":{RELEASED_VERSION}", ""),
+        lambda reference: reference.replace("overnightworks", "elsewhere"),
+        lambda reference: reference.rsplit("/", 1)[-1],
+        lambda reference: reference.replace(DIGEST, DIGEST.upper()),
+        lambda reference: reference[:-1],
+        lambda reference: f"{reference}a",
+        lambda reference: reference.replace("sha256", "sha512"),
+        lambda reference: f"{reference} --privileged",
+        lambda reference: f"{reference}\n",
     ],
     ids=[
         "no digest",
@@ -675,20 +681,35 @@ def test_a_twin_that_does_not_end_within_the_window_stops_cell_9_after_that_wind
         "trailing newline",
     ],
 )
-def test_a_published_image_of_another_form_is_refused_before_any_command(
+def test_a_published_image_of_another_form_is_refused_before_the_drive_starts(
     make_fixture: Callable[..., Fixture],
     driver_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
-    replace: str,
-    by: str,
+    break_form: Callable[[str], str],
 ) -> None:
-    fixture = make_fixture()
-    malformed = fixture.reference.replace(replace, by)
+    reference = make_fixture().reference
+    malformed = break_form(reference)
+    assert malformed != reference
+    driven: list[tuple[Path, object]] = []
     with pytest.raises(SystemExit):
-        driver_module.main(["drive", "--platform", "any", "--image", malformed])
+        driver_module.main(
+            ["drive", "--platform", "any", "--image", malformed],
+            lambda checkout, released: driven.append((checkout, released)),
+        )
     assert "@sha256:<64 lowercase hex>" in capsys.readouterr().err
-    assert fixture.world.commands == []
-    assert not fixture.run.directory.exists()
+    assert driven == []
+
+
+def test_a_published_image_of_the_registry_form_starts_the_drive_over_its_digest(
+    make_fixture: Callable[..., Fixture], driver_module: ModuleType
+) -> None:
+    reference = make_fixture().reference
+    driven: list[tuple[Path, object]] = []
+    driver_module.main(
+        ["drive", "--platform", "any", "--image", reference],
+        lambda checkout, released: driven.append((checkout, released)),
+    )
+    assert driven == [(Path("any"), driver_module.released_image(reference))]
 
 
 @pytest.mark.parametrize(
