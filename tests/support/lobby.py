@@ -88,6 +88,7 @@ from presentator.ports.preferences import PersonPreferencesStore
 from tests.presentator.application.support.fakes import (
     A_REACHABLE_CHECK,
     DEFAULT_THEME_SET,
+    THE_TOOLCHAIN,
     FakeBuildRunner,
     FakeConnectionChecker,
     FakeDeckFolders,
@@ -699,6 +700,7 @@ def real_builds_under(root: Path) -> SlidevBuilds:
     """The real adapter over a real directory; only what it reads is ever used."""
     return SlidevBuilds(
         builds=root,
+        identity=THE_TOOLCHAIN,
         toolchain=HostToolchain(project=root, bound=timedelta(minutes=1)),
         mirrors=SourceMirrors(
             directory=root / "mirrors",
