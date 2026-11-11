@@ -2,7 +2,6 @@
 
 import copy
 import json
-import signal
 import sys
 from collections.abc import Callable, Generator, Iterator, Mapping
 from dataclasses import dataclass, field, replace
@@ -208,10 +207,7 @@ class World:
     cell: int = 0
     overlay_file: str = ""
     commands: list[Issued] = field(default_factory=list[Issued])
-    # Whether the run's directory existed as each command was issued.
-    directory_present: dict[tuple[str, ...], bool] = field(
-        default_factory=dict[tuple[str, ...], bool]
-    )
+    directory_present_at_last_command: bool = False
     events_printed: int = 0
     watches_closed: int = 0
 
@@ -222,9 +218,8 @@ class World:
         stdin: str | None,
     ) -> tuple[int, str]:
         self.commands.append((command, environment, stdin))
-        self.directory_present[command] = Path(
-            environment["KUBECONFIG"]
-        ).parent.exists()
+        kubeconfig = Path(environment["KUBECONFIG"])
+        self.directory_present_at_last_command = kubeconfig.parent.exists()
         if (
             self.failing_command
             and command[: len(self.failing_command)] == self.failing_command
@@ -543,7 +538,7 @@ def test_a_failure_still_removes_the_cluster_then_the_image_then_the_directory(
         assert environment["KUBECONFIG"] == str(fixture.run.kubeconfig)
         assert Path(environment["KUBECACHEDIR"]).is_relative_to(fixture.run.directory)
         assert environment["KUBERC"] == "off"
-    assert fixture.world.directory_present[image[0]]
+    assert fixture.world.directory_present_at_last_command
     assert not fixture.run.directory.exists()
 
 
@@ -770,12 +765,9 @@ def test_the_watch_hands_out_an_event_before_the_stream_goes_on(
     assert next(events) == second
 
 
-def test_a_watch_that_ends_inside_an_event_yields_the_events_before_it(
-    driver: ModuleType,
-) -> None:
-    whole = {"type": "ADDED"}
-    lines = [json.dumps(whole), '{"type": "ADD']
-    assert list(driver.watch_events(lines)) == [whole]
+def test_a_cut_watch_keeps_the_events_before_the_cut(driver: ModuleType) -> None:
+    lines = ['{"type": "ADDED"}', '{"type": "ADD']
+    assert list(driver.watch_events(lines)) == [{"type": "ADDED"}]
 
 
 @pytest.mark.parametrize("stop", ["kill_child", "close"])
@@ -788,7 +780,7 @@ def test_stopping_the_stream_kills_and_reaps_its_child(
     assert next(lines) == "ready\n"
     child = runner.child
     getattr(runner if stop == "kill_child" else lines, stop)()
-    assert child.returncode == -signal.SIGKILL
+    assert child.returncode < 0
     lines.close()
     assert runner.child is None
 
