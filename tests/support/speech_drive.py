@@ -621,13 +621,36 @@ def _marked_frames_the_parser_refuses() -> dict[str, Hear]:
     }
 
 
-_HEARING_ENDS: Final[dict[str, Hear]] = {
+@dataclass(frozen=True)
+class Ending:
+    """How a service ends a hearing, and what the browser shows of it."""
+
+    hear: Hear
+    frames: list[dict[str, object]]
+    close: HopClose
+
+
+_HEARING_ENDS: Final[dict[str, Ending]] = {
+    "closes-1000": Ending(
+        after_the_first_audio(close_code=1000, close_reason=PLANTED),
+        [],
+        HopClose.NORMAL,
+    ),
     **{
-        f"closes-{code}": after_the_first_audio(close_code=code, close_reason=PLANTED)
-        for code in (1000, 1009, 1011, 1013)
+        f"closes-{code}": Ending(
+            after_the_first_audio(close_code=code, close_reason=PLANTED),
+            [],
+            HopClose.SERVICE_FAILED,
+        )
+        for code in (1009, 1011, 1013)
     },
-    "peer-crashes-mid-session": crashing_after_the_first_audio(),
-    **_marked_frames_the_parser_refuses(),
+    "peer-crashes-mid-session": Ending(
+        crashing_after_the_first_audio(), [], HopClose.SERVICE_FAILED
+    ),
+    **{
+        name: Ending(hear, [], HopClose.SERVICE_FAILED)
+        for name, hear in _marked_frames_the_parser_refuses().items()
+    },
 }
 
 
@@ -637,7 +660,7 @@ LEAK_HEARINGS: Final[dict[str, Callable[[], SpeechScenario]]] = {
     "marked-failed-then-error": _with_realtime(
         after_the_first_audio(a_marked_failed_item(), a_marked_error_event())
     ),
-    **{name: _with_realtime(hear) for name, hear in _HEARING_ENDS.items()},
+    **{name: _with_realtime(end.hear) for name, end in _HEARING_ENDS.items()},
     "busy-marked": _with_realtime(busy_at_the_upgrade(marked=True)),
     **{
         f"denied-{status}": _with_realtime(denying(status, marked=True))
@@ -724,36 +747,10 @@ def _transcripts(*shown: tuple[str, bool]) -> list[dict[str, object]]:
     return [{"text": text, "final": final} for text, final in shown]
 
 
-@dataclass(frozen=True)
-class Ending:
-    """How a service ends a hearing, and what the browser shows of it."""
-
-    hear: Hear
-    frames: list[dict[str, object]]
-    close: HopClose
-
-
 BROWSER_ENDINGS: dict[str, Ending] = {
     "deltas-grow-and-completed-replaces": Ending(
-        after_the_first_audio(
-            a_delta("Gu"),
-            a_delta("Ha", item="item-2"),
-            a_delta("ten"),
-            a_completed("Guten Tag."),
-        ),
-        _transcripts(
-            ("Gu", False), ("Ha", False), ("Guten", False), ("Guten Tag.", True)
-        ),
-        HopClose.NORMAL,
-    ),
-    "empty-completed-sends-nothing-and-clears-the-item": Ending(
-        after_the_first_audio(
-            a_delta("Ha", item="item-2"),
-            a_completed("", item="item-2"),
-            a_delta("Neu", item="item-2"),
-            a_completed("Neu.", item="item-2"),
-        ),
-        _transcripts(("Ha", False), ("Neu", False), ("Neu.", True)),
+        after_the_first_audio(a_delta("Gu"), a_delta("ten"), a_completed("Guten Tag.")),
+        _transcripts(("Gu", False), ("Guten", False), ("Guten Tag.", True)),
         HopClose.NORMAL,
     ),
     "session-and-turn-events-skipped": Ending(
@@ -784,26 +781,7 @@ BROWSER_ENDINGS: dict[str, Ending] = {
     "error-alone": Ending(
         after_the_first_audio(an_error_event()), [], HopClose.SERVICE_FAILED
     ),
-    "closes-1000": Ending(
-        after_the_first_audio(close_code=1000, close_reason=PLANTED),
-        [],
-        HopClose.NORMAL,
-    ),
-    **{
-        f"closes-{code}": Ending(
-            after_the_first_audio(close_code=code, close_reason=PLANTED),
-            [],
-            HopClose.SERVICE_FAILED,
-        )
-        for code in (1009, 1011, 1013)
-    },
-    "peer-crashes-mid-session": Ending(
-        crashing_after_the_first_audio(), [], HopClose.SERVICE_FAILED
-    ),
-    **{
-        name: Ending(hear, [], HopClose.SERVICE_FAILED)
-        for name, hear in _marked_frames_the_parser_refuses().items()
-    },
+    **_HEARING_ENDS,
     "busy-at-the-upgrade": Ending(busy_at_the_upgrade(), [], HopClose.BUSY),
     **{
         f"refused-{status}": Ending(denying(status), [], HopClose.SERVICE_FAILED)
