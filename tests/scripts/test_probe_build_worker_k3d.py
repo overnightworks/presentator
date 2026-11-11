@@ -754,15 +754,19 @@ def test_a_drive_over_the_published_image_pulls_by_digest_and_proves_it_first(
 
 
 @pytest.mark.parametrize(
-    "listed",
-    [[], [f"ghcr.io/overnightworks/presentator{OTHER_DIGEST}"]],
-    ids=["none", "another digest"],
+    "other_digest_listed", [False, True], ids=["none", "another digest"]
 )
 def test_a_tag_whose_repo_digests_lack_the_published_digest_is_refused_then_torn_down(
     make_fixture: Callable[..., Fixture],
+    manifests_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
-    listed: list[str],
+    other_digest_listed: bool,
 ) -> None:
+    listed = (
+        [f"{manifests_module.PRODUCTION_IMAGE}{OTHER_DIGEST}"]
+        if other_digest_listed
+        else []
+    )
     fixture = make_fixture(World(repo_digests=listed))
     with pytest.raises(SystemExit):
         fixture.drive(released=True)
