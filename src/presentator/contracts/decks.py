@@ -551,7 +551,7 @@ class Deck:
         """Whether the account owns this talk; only its owner may see it."""
         return self.owner_id == viewer
 
-    def carrying(self, attempt: BuildAttempt | None) -> Deck:
+    def carrying(self, attempt: BuildAttempt) -> Deck:
         """This talk with the build it last started replaced."""
         return Deck(
             slug=self.slug,
