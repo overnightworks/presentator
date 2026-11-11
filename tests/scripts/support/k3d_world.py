@@ -222,6 +222,16 @@ class World:
     directory_present_at_last_command: bool = False
     events_printed: int = 0
     watches_closed: int = 0
+    # The listings the run's cluster and image appear in while they exist.
+    cluster_name: str = ""
+    cluster_up: bool = False
+    image_built: bool = False
+    # What the listings leave out of the run's own: cluster, node, volume or tag.
+    omitted: frozenset[str] = frozenset()
+    # A container of another cluster that every container listing shows.
+    stray_container: str = ""
+    # How many commands had been issued each time the signals were held.
+    holds: list[int] = field(default_factory=list[int])
 
     def __call__(
         self,
@@ -254,9 +264,53 @@ class World:
                 return self.twin_log
             case ("kubectl", "delete", "statefulset", *_):
                 self.cell += 1
-                return ""
+            case ("k3d", *_) | ("docker", *_):
+                return self.container_answer(command)
             case _:
-                return ""
+                pass
+        return ""
+
+    def container_answer(self, command: tuple[str, ...]) -> str:
+        """What k3d and docker print: the listings follow the cluster and the image."""
+        match command:
+            case ("k3d", "cluster", "create" | "delete", *_):
+                self.cluster_up = command[2] == "create"
+            case ("docker", "build", *_) | ("docker", "image", "rm", *_):
+                self.image_built = command[1] == "build"
+            case ("k3d", "cluster", "list", *_):
+                own = f"{self.cluster_name}  1/1  0/0  true"
+                return self.listing("cluster", own, exists=self.cluster_up)
+            case ("docker", "ps", *_):
+                serverlb = f"k3d-{self.cluster_name}-serverlb"
+                own = [serverlb, *([] if "node" in self.omitted else [self.node_name])]
+                return self.listing(
+                    "container",
+                    *own,
+                    exists=self.cluster_up,
+                    stray=self.stray_container,
+                )
+            case ("docker", "volume", "ls", *_):
+                own = f"k3d-{self.cluster_name}-images"
+                return self.listing("volume", own, exists=self.cluster_up)
+            case ("docker", "image", "ls", *_, repository):
+                probe = repository == self.probe_image.split(":")[0]
+                own = self.probe_image if probe else ""
+                return self.listing("tag", own, exists=self.image_built)
+            case _:
+                pass
+        return ""
+
+    def listing(self, what: str, *own: str, exists: bool, stray: str = "") -> str:
+        """The lines of a listing: the run's own while they exist, unless omitted."""
+        shown = own if exists and what not in self.omitted else ()
+        return "".join(f"{name}\n" for name in (*shown, stray) if name)
+
+    def lister(self, words: str) -> str:
+        """A listing run outside any drive: no environment, no record."""
+        return self.answer(tuple(words.split())) or ""
+
+    def hold_signals(self) -> None:
+        self.holds.append(len(self.commands))
 
     def watch(
         self, command: tuple[str, ...], environment: Mapping[str, str]
@@ -417,6 +471,7 @@ def fixture_maker(
             free_port=lambda: 6550,
             monotonic=lambda: ticks[0],
             sleep=sleep,
+            hold_signals=world.hold_signals,
         )
         run = cluster_module.Run(
             identifier=RUN_IDENTIFIER,
@@ -426,6 +481,7 @@ def fixture_maker(
             effects=effects,
         )
         world.node_name, world.probe_image = run.node, run.tag
+        world.cluster_name = run.name
         world.production_image, world.twin_pod = production_image, driver.TWIN_POD
         world.residue_pods = residue_pods(load_script, driver, world.outcomes)
         world.streams = world.streams or [

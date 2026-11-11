@@ -2,8 +2,10 @@
 
 Every command of a run goes through `Run` with the run's own kubeconfig, cache
 and `KUBERC=off`, so nothing reads or writes the operator's kubeconfig. The
-cluster is proven to be the run's own before any API write, and `teardown`
-removes the cluster, the image and the directory whatever each one finds.
+cluster is proven to be the run's own before any API write, `leftovers` is the
+one listing of what a run may leave behind, and `teardown` ignores further
+signals, then removes the cluster, the image and the directory whatever each one
+finds.
 """
 
 import contextlib
@@ -26,6 +28,10 @@ TOOLS = ("k3d", "kubectl", "docker")
 NAMESPACE = "presentator"
 IN_NAMESPACE = ("--namespace", NAMESPACE)
 PROBE_REPOSITORY = "presentator-k3d-probe"
+# k3d labels every container and volume of a cluster with it.
+K3D_LABEL = "app=k3d"
+# The production image's name, which the probe never builds.
+PRODUCTION_REPOSITORY = "presentator"
 
 Document = dict[str, Any]
 
@@ -113,6 +119,7 @@ class Effects:
     free_port: Callable[[], int]
     monotonic: Callable[[], float]
     sleep: Callable[[float], None]
+    hold_signals: Callable[[], None]
 
 
 @dataclass(frozen=True)
@@ -236,8 +243,82 @@ def start_cluster(run: Run, k3s_version: str) -> None:
     say(f"identity holds: node {run.node} is Ready at {k3s_version}")
 
 
+@dataclass(frozen=True)
+class Leftovers:
+    """What the k3d and docker listings show a run may leave behind."""
+
+    clusters: tuple[str, ...]
+    containers: tuple[str, ...]
+    volumes: tuple[str, ...]
+    images: tuple[str, ...]
+
+    def lines(self) -> list[str]:
+        """One line per listed thing, naming its kind."""
+        kinds = (
+            ("cluster", self.clusters),
+            ("container", self.containers),
+            ("volume", self.volumes),
+            ("image", self.images),
+        )
+        return [f"{kind}: {name}" for kind, names in kinds for name in names]
+
+
+def leftovers(command: Callable[[str], str]) -> Leftovers:
+    """List the clusters, the labelled containers and volumes, and the images.
+
+    `command` runs fixed words and gives what they print. The images are the
+    probe's and, as a deny list, the production image's.
+    """
+
+    def names(words: str) -> tuple[str, ...]:
+        return tuple(command(words).split())
+
+    label = f"--filter label={K3D_LABEL}"
+    image = "docker image ls --format {{.Repository}}:{{.Tag}}"
+    return Leftovers(
+        clusters=tuple(
+            line.split()[0]
+            for line in command("k3d cluster list --no-headers").splitlines()
+        ),
+        containers=names(f"docker ps --all --format {{{{.Names}}}} {label}"),
+        volumes=names(f"docker volume ls --quiet {label}"),
+        images=names(f"{image} {PROBE_REPOSITORY}")
+        + names(f"{image} {PRODUCTION_REPOSITORY}"),
+    )
+
+
+def prove_label_filter(run: Run) -> None:
+    """Refuse unless the listing shows the run's own cluster, node, a volume and tag.
+
+    The check after a drive reads the same listing, so a filter that matches
+    nothing cannot pass it.
+    """
+    found = leftovers(lambda words: run(words).stdout)
+    lacks = [
+        what
+        for what, holds in (
+            (f"the run's cluster {run.name}", run.name in found.clusters),
+            (f"the run's node container {run.node}", run.node in found.containers),
+            ("a labelled volume", bool(found.volumes)),
+            (f"the run's image tag {run.tag}", run.tag in found.images),
+        )
+        if not holds
+    ]
+    if lacks:
+        refuse(f"label filter: the listing lacks {', '.join(lacks)}")
+    say(
+        f"label filter holds: {len(found.containers)} containers, "
+        f"{len(found.volumes)} volumes of the run's cluster"
+    )
+
+
 def teardown(run: Run) -> None:
-    """Remove the cluster, the image and the directory, whatever each one finds."""
+    """Ignore further signals, then remove the cluster, the image and the directory.
+
+    Each is attempted whatever the one before did.
+    """
+    run.effects.hold_signals()
+    say(f"teardown: removing cluster {run.name}")
     try:
         run("k3d cluster delete", run.name, check=False)
     finally:

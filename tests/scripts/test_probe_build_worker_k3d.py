@@ -1,9 +1,10 @@
 """The k3d driver's runs, driven through a fake runner that starts nothing."""
 
+import signal
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -165,6 +166,20 @@ def test_a_failure_still_removes_the_cluster_then_the_image_then_the_directory(
         assert environment["KUBERC"] == "off"
     assert fixture.world.directory_present_at_last_command
     assert not fixture.run.directory.exists()
+    assert fixture.world.holds[-1] == len(fixture.world.commands) - 2
+
+
+def test_an_ordinary_teardown_holds_signals_then_says_so_then_deletes(
+    make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    commands = [command for command, _, _ in fixture.world.commands]
+    delete = commands.index(("k3d", "cluster", "delete", fixture.run.name))
+    assert fixture.world.holds == [delete]
+    assert commands[delete + 1] == ("docker", "image", "rm", "--force", fixture.run.tag)
+    assert f"teardown: removing cluster {fixture.run.name}" in capsys.readouterr().out
+    assert not fixture.run.directory.exists()
 
 
 def test_a_signal_during_the_watch_closes_the_watch_then_tears_down(
@@ -176,6 +191,125 @@ def test_a_signal_during_the_watch_closes_the_watch_then_tears_down(
     assert fixture.world.watches_closed == 1
     assert fixture.world.issued("k3d", "cluster", "delete") != []
     assert not fixture.run.directory.exists()
+    delete = [c for c, _, _ in fixture.world.commands].index(
+        ("k3d", "cluster", "delete", fixture.run.name)
+    )
+    assert fixture.world.holds == [delete]
+
+
+def test_a_signal_makes_further_signals_ignored_before_it_kills_and_exits(
+    driver_module: ModuleType,
+) -> None:
+    calls: list[str] = []
+
+    runner = SimpleNamespace(kill_child=lambda: calls.append("kill"))
+    handler = driver_module.stop_on_signal(runner, lambda: calls.append("hold"))
+    with pytest.raises(SystemExit) as stopped:
+        handler(signal.SIGTERM, None)
+    assert calls == ["hold", "kill"]
+    assert stopped.value.code == 128 + signal.SIGTERM
+
+
+def test_leftovers_hold_what_each_listing_printed_by_the_probe_filters(
+    cluster_module: ModuleType,
+) -> None:
+    asked: list[str] = []
+    answers = {
+        "k3d cluster list": "probe-a  1/1  0/0  true\nother  1/1  0/0  true\n",
+        "docker ps": "node-a\nlb-a\n",
+        "docker volume ls": "volume-a\n",
+        "docker image ls": "tag-a\n",
+    }
+
+    def command(words: str) -> str:
+        asked.append(words)
+        return next(v for k, v in answers.items() if words.startswith(k))
+
+    found = cluster_module.leftovers(command)
+    assert found.clusters == ("probe-a", "other")
+    assert found.containers == ("node-a", "lb-a")
+    assert found.volumes == ("volume-a",)
+    assert found.images == ("tag-a", "tag-a")
+    label = f"label={cluster_module.K3D_LABEL}"
+    assert [label in words for words in asked if words.startswith("docker ps")] == [
+        True
+    ]
+    assert [label in words for words in asked if words.startswith("docker volume")] == [
+        True
+    ]
+    repositories = {words.split()[-1] for words in asked if "image ls" in words}
+    assert repositories == {cluster_module.PROBE_REPOSITORY, "presentator"}
+
+
+def test_the_label_filter_control_prints_after_identity_and_before_the_first_write(
+    make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    lines = capsys.readouterr().out.splitlines()
+    identity, control = (
+        next(i for i, line in enumerate(lines) if line.startswith(start))
+        for start in ("identity holds", "label filter holds:")
+    )
+    assert identity < control
+    assert "volumes of the run's cluster" in lines[control]
+    commands = [command for command, _, _ in fixture.world.commands]
+    listing = next(
+        i for i, c in enumerate(commands) if c[:3] == ("docker", "volume", "ls")
+    )
+    first_write = next(
+        i for i, c in enumerate(commands) if c[:2] == ("kubectl", "apply")
+    )
+    assert listing < first_write
+
+
+@pytest.mark.parametrize(
+    ("omitted", "missing"),
+    [
+        ("cluster", "cluster"),
+        ("node", "node container"),
+        ("volume", "volume"),
+        ("tag", "image tag"),
+    ],
+)
+def test_a_label_filter_that_misses_the_runs_own_refuses_then_tears_down(
+    make_fixture: Callable[..., Fixture],
+    capsys: pytest.CaptureFixture[str],
+    omitted: str,
+    missing: str,
+) -> None:
+    fixture = make_fixture(World(omitted=frozenset({omitted})))
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    assert missing in capsys.readouterr().err
+    assert fixture.world.issued("kubectl", "apply") == []
+    assert fixture.world.issued("k3d", "cluster", "delete") != []
+    assert not fixture.run.directory.exists()
+
+
+def test_the_leftovers_subcommand_ends_clean_when_nothing_is_listed(
+    driver_module: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    driver_module.check_leftovers(World().lister)
+    assert capsys.readouterr().err == ""
+
+
+def test_the_leftovers_subcommand_prints_a_listed_container_and_ends_one(
+    driver_module: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as ended:
+        driver_module.check_leftovers(World(stray_container="k3d-stray-0").lister)
+    assert ended.value.code == 1
+    assert "k3d-stray-0" in capsys.readouterr().out
+
+
+def test_the_process_listing_gives_a_commands_output_and_refuses_its_failure(
+    driver_module: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert driver_module.process_listing("echo seen") == "seen\n"
+    with pytest.raises(SystemExit):
+        driver_module.process_listing("false")
+    assert "false" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("stop", ["kill_child", "close"])
