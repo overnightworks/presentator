@@ -26,7 +26,7 @@ import {
 
 registerOverlayHarness()
 
-// C6: Slidev's bottom navigation bar holds nothing of the overlay, and no part
+// Slidev's bottom navigation bar holds nothing of the overlay, and no part
 // of the overlay reaches the lower half of the window.
 async function expectNothingOfTheOverlayInTheBottomBar(page: Page, halfway: number) {
   const bottomBar = page.locator('.grid-section.bottom')
@@ -106,7 +106,7 @@ describe('presenter controls', () => {
     }
   }, 30_000)
 
-  it.each([1024, 390])('C1, C2: puts Home at the left and the AI switch at the right of one bar above the sections at %ipx', async (width) => {
+  it.each([1024, 390])('CP15: puts Home at the left and the AI switch at the right of one bar above the sections at %ipx', async (width) => {
     const { browser, page } = await openPresenter(width)
     try {
       const home = page.getByRole('link', { name: 'Home' })
@@ -143,7 +143,7 @@ describe('presenter controls', () => {
     }
   })
 
-  it.each([1, 2, 3])('C10: keeps the bar above every section of Slidev presenter layout %i', async (layout) => {
+  it.each([1, 2, 3])('CP15: keeps the bar above every section of Slidev presenter layout %i', async (layout) => {
     const { browser, page } = await openPresenterAt(state.origin, '/presenter/1', 1440, async (prepared) => {
       await prepared.addInitScript((chosen) => localStorage.setItem('slidev-presenter-layout', String(chosen)), layout)
     })
@@ -167,7 +167,7 @@ describe('presenter controls', () => {
     }
   })
 
-  it('C3, C4: paints the track grey off and green on, with the word AI and no state word', async () => {
+  it('CP15: paints the track grey off and green on, with the word AI and no state word', async () => {
     state.heardOnConnect = false
     const { browser, page } = await openPresenter(1024)
     try {
@@ -196,7 +196,7 @@ describe('presenter controls', () => {
     }
   })
 
-  it('C6, C7, C9: stops the active co-presenter before Home leaves, keeps the overlay out of the bottom and a return starts off', async () => {
+  it('CP15: stops the active co-presenter before Home leaves, keeps the overlay out of the bottom and a return starts off', async () => {
     state.media = createMediaObservation()
     const { browser, page } = await openPresenter(390)
     try {
@@ -269,6 +269,17 @@ describe('presenter controls', () => {
         sendHearingError()
       }
       await page.getByText(message).waitFor({ state: 'visible', timeout: 5_000 })
+      const [homeBox, aiBox, faultBox] = await Promise.all([
+        page.getByRole('link', { name: 'Home' }).boundingBox(),
+        ai.boundingBox(),
+        page.getByText(message).boundingBox(),
+      ])
+      expect(faultBox!.x).toBeGreaterThanOrEqual(0)
+      expect(faultBox!.x + faultBox!.width).toBeLessThanOrEqual(width)
+      expect(boxesIntersect(homeBox!, faultBox!)).toBe(false)
+      expect(boxesIntersect(aiBox!, faultBox!)).toBe(false)
+      const painted = await readPaintedColours(page)
+      expect(painted.fault![0], 'the word is warm').toBeGreaterThan(painted.fault![2] + 80)
       expect(await page.evaluate(
         () => (window as unknown as { __speechRecognitionsBuilt: number }).__speechRecognitionsBuilt,
       )).toBe(0)
@@ -351,7 +362,7 @@ describe('presenter controls', () => {
     }
   })
 
-  it('C8: does not put presenter controls on the projector', async () => {
+  it('does not put presenter controls on the projector', async () => {
     const browser = await chromium.launch({ headless: true })
     const page = await browser.newPage({ viewport: { width: 1024, height: 900 } })
     page.setDefaultTimeout(5_000)

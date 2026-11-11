@@ -52,7 +52,7 @@ describe('co-presenter refusals', () => {
           page.getByText(line, { exact: true }).boundingBox(),
           page.locator('.copresenter .panel').boundingBox(),
         ])
-        // C5: the word stands beside the switch, whole in the window and clear of Home.
+        // the word stands beside the switch, whole in the window and clear of Home.
         expect(faultBox!.x).toBeGreaterThanOrEqual(0)
         expect(faultBox!.x + faultBox!.width).toBeLessThanOrEqual(width)
         expect(boxesIntersect(homeBox!, faultBox!)).toBe(false)
