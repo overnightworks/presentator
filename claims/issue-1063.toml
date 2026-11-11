@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "f9f4bb1c87cbc04ffa54e0f67df78e3c96aa484b"
 branch = "claude/issue-1063-webauth-v0-37-wiring"
-scope = ["docs/ARCHITECTURE.md", "docs/sign-in.md", "pyproject.toml", "src/presentator/adapters/identity.py", "src/presentator/adapters/schema.py", "src/presentator/api/auth.py", "src/presentator/api/talk.py", "tests/presentator", "uv.lock"]
+scope = ["docs/ARCHITECTURE.md", "docs/sign-in.md", "pyproject.toml", "src/presentator/adapters/identity.py", "src/presentator/adapters/schema.py", "src/presentator/api/auth.py", "src/presentator/api/talk.py", "tests/presentator", "tests/support/talk_support.py", "uv.lock"]
 opened_commit = "2a4f2de64c24c25420d197d0b09675035bfb4a5e"
 whole_reason = "webauth v0.37.0 cannot be pinned without its required parameters, and the store's changed create signature reaches some twenty test call sites."
