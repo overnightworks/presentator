@@ -448,6 +448,7 @@ def test_a_store_failure_inside_the_callback_leaves_no_account_no_session_and_no
         expires_at: datetime,
         refresh_token: SecretStr | None,
         id_token: SecretStr,
+        account_language: str | None,
     ) -> StoredSession:
         if failures:
             raise failures.pop()
@@ -458,6 +459,7 @@ def test_a_store_failure_inside_the_callback_leaves_no_account_no_session_and_no
             expires_at=expires_at,
             refresh_token=refresh_token,
             id_token=id_token,
+            account_language=account_language,
         )
 
     monkeypatch.setattr(

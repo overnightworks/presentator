@@ -97,6 +97,7 @@ def _another_session(instance: Instance, *, id_token: SecretStr | None) -> None:
         expires_at=_NOW + timedelta(hours=1),
         refresh_token=None,
         id_token=id_token,
+        account_language=None,
     )
 
 

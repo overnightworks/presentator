@@ -10,19 +10,14 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from webauth.policies import RateLimitBudget
+from webauth.policies import RateLimitBudget, RateLimitPolicy
 
 from presentator.api.auth import (
-    BACKCHANNEL_LOGOUT_PATH,
-    DEFAULT_BUDGET,
-    LOGOUT_PATH,
-    SIGN_IN_BUDGET,
-    SIGN_IN_CALLBACK_PATH,
-    START_SIGN_IN_PATH,
+    LOBBY_RATE_LIMIT,
     TALK_FILES_BUDGET,
+    TALK_RATE_LIMIT,
 )
 from presentator.api.health import HEALTH_PATH
-from presentator.api.session_api import SESSION_PATH
 from presentator.contracts.decks import DECK_PATH
 from presentator.host.main import web_auth_config_for
 from tests.support.lobby import (
@@ -54,66 +49,25 @@ def hosts(tmp_path: Path) -> Hosts:
 
 
 @pytest.mark.parametrize(
-    ("address", "spent_on", "refused_at"),
+    ("address", "policy"),
     [
-        (A_BROWSERS_ADDRESS, START_SIGN_IN_PATH, START_SIGN_IN_PATH),
-        (A_BROWSERS_ADDRESS, START_SIGN_IN_PATH, SIGN_IN_CALLBACK_PATH),
-        (A_BROWSERS_ADDRESS, START_SIGN_IN_PATH, LOGOUT_PATH),
-        (A_TALK_ADDRESS, START_SIGN_IN_PATH, START_SIGN_IN_PATH),
-        (A_TALK_ADDRESS, START_SIGN_IN_PATH, SIGN_IN_CALLBACK_PATH),
+        (A_BROWSERS_ADDRESS, LOBBY_RATE_LIMIT),
+        (A_TALK_ADDRESS, TALK_RATE_LIMIT),
     ],
+    ids=["lobby", "talk"],
 )
-def test_the_sign_in_paths_of_a_host_share_one_budget_per_address(
-    hosts: Hosts, address: str, spent_on: str, refused_at: str
+def test_health_is_never_refused_by_a_budget(
+    hosts: Hosts, address: str, policy: RateLimitPolicy
 ) -> None:
     client = hosts.browser(address)
-    spend(client, spent_on, SIGN_IN_BUDGET)
-
-    refused = client.get(refused_at)
-
-    assert refused.status_code == HTTPStatus.TOO_MANY_REQUESTS
-    assert "retry-after" in refused.headers
-
-
-def test_a_spent_sign_in_budget_leaves_the_api_of_a_signed_in_person_open(
-    hosts: Hosts,
-) -> None:
-    spend(hosts.browser(A_BROWSERS_ADDRESS), START_SIGN_IN_PATH, SIGN_IN_BUDGET)
-
-    answer = hosts.signed_in_at(A_BROWSERS_ADDRESS).get(SESSION_PATH)
-
-    assert answer.status_code != HTTPStatus.TOO_MANY_REQUESTS
-
-
-def test_any_other_path_of_the_lobby_is_refused_past_the_default_budget(
-    hosts: Hosts,
-) -> None:
-    client = hosts.browser(A_BROWSERS_ADDRESS)
-    spend(client, _AN_OTHER_PATH, DEFAULT_BUDGET)
-
+    spend(client, _AN_OTHER_PATH, policy.default)
     assert client.get(_AN_OTHER_PATH).status_code == HTTPStatus.TOO_MANY_REQUESTS
 
-
-@pytest.mark.parametrize(
-    ("address", "exempt_request"),
-    [
-        (A_BROWSERS_ADDRESS, ("GET", HEALTH_PATH)),
-        (A_BROWSERS_ADDRESS, ("POST", BACKCHANNEL_LOGOUT_PATH)),
-        (A_TALK_ADDRESS, ("GET", HEALTH_PATH)),
-    ],
-)
-def test_health_and_the_back_channel_logout_are_never_refused_by_a_budget(
-    hosts: Hosts, address: str, exempt_request: tuple[str, str]
-) -> None:
-    client = hosts.browser(address)
-    spend(client, _AN_OTHER_PATH, DEFAULT_BUDGET)
-    method, path = exempt_request
-
-    assert client.request(method, path).status_code != HTTPStatus.TOO_MANY_REQUESTS
+    assert client.get(HEALTH_PATH).status_code != HTTPStatus.TOO_MANY_REQUESTS
 
 
 def test_the_talk_host_counts_apart_from_the_lobby(hosts: Hosts) -> None:
-    spend(hosts.browser(A_BROWSERS_ADDRESS), _AN_OTHER_PATH, DEFAULT_BUDGET)
+    spend(hosts.browser(A_BROWSERS_ADDRESS), _AN_OTHER_PATH, LOBBY_RATE_LIMIT.default)
 
     answer = hosts.browser(A_TALK_ADDRESS).get(_AN_OTHER_PATH)
 
@@ -124,7 +78,7 @@ def test_deck_files_spend_the_talk_files_budget_not_the_default_one(
     hosts: Hosts,
 ) -> None:
     client = hosts.browser(A_TALK_ADDRESS)
-    spend(client, _A_DECK_FILE, DEFAULT_BUDGET)
+    spend(client, _A_DECK_FILE, TALK_RATE_LIMIT.default)
 
     assert client.get(_A_DECK_FILE).status_code != HTTPStatus.TOO_MANY_REQUESTS
 
@@ -140,7 +94,7 @@ def test_a_path_that_only_starts_like_the_deck_directory_spends_the_default_budg
     hosts: Hosts,
 ) -> None:
     client = hosts.browser(A_TALK_ADDRESS)
-    spend(client, f"{DECK_PATH}X", DEFAULT_BUDGET)
+    spend(client, f"{DECK_PATH}X", TALK_RATE_LIMIT.default)
 
     assert client.get(f"{DECK_PATH}X").status_code == HTTPStatus.TOO_MANY_REQUESTS
 
@@ -170,7 +124,7 @@ def test_behind_a_trusted_proxy_each_forwarded_address_has_its_own_budget() -> N
     def forwarded(address: str) -> dict[str, str]:
         return {_FORWARDED_FOR: address}
 
-    for _ in range(DEFAULT_BUDGET.max_requests):
+    for _ in range(LOBBY_RATE_LIMIT.default.max_requests):
         through_the_proxy.get(_AN_OTHER_PATH, headers=forwarded("203.0.113.1"))
     first = through_the_proxy.get(_AN_OTHER_PATH, headers=forwarded("203.0.113.1"))
     second = through_the_proxy.get(_AN_OTHER_PATH, headers=forwarded("203.0.113.2"))

@@ -93,6 +93,7 @@ class FakeSession:
     expires_at: datetime
     refresh_token: SecretStr | None
     id_token: SecretStr | None
+    account_language: str | None
 
 
 @dataclass
@@ -105,7 +106,7 @@ class FakeSessionRecordStore:
     loads: int = 0
     touches: int = 0
 
-    def create(
+    def create(  # noqa: PLR0913 - the webauth port fixes this signature
         self,
         user_id: str,
         *,
@@ -113,6 +114,7 @@ class FakeSessionRecordStore:
         expires_at: datetime,
         refresh_token: SecretStr | None,
         id_token: SecretStr | None,
+        account_language: str | None,
     ) -> FakeSession:
         self.minted += 1
         session = FakeSession(
@@ -122,6 +124,7 @@ class FakeSessionRecordStore:
             expires_at=expires_at,
             refresh_token=refresh_token,
             id_token=id_token,
+            account_language=account_language,
         )
         self.rows[session.id] = session
         return session
@@ -213,6 +216,7 @@ class FakePeople:
             expires_at=now + SESSION_LIFETIME,
             refresh_token=None,
             id_token=SecretStr("an-id-token"),
+            account_language=None,
         ).id
 
 

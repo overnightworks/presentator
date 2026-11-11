@@ -198,6 +198,7 @@ def test_the_composition_root_serves_the_copresenter_at_the_talk_host_only() -> 
         expires_at=now + SESSION_LIFETIME,
         refresh_token=None,
         id_token=SecretStr("an-id-token"),
+        account_language=None,
     )
     lobby = TestClient(router, base_url=settings.public_origin)
     talk = TestClient(router, base_url=settings.talk_origin)

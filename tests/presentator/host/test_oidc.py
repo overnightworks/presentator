@@ -112,7 +112,9 @@ def test_the_relying_party_begins_a_login_at_the_issuer_the_settings_name(
 ) -> None:
     del environment
 
-    started = relying_party(client_configs_of(load_settings())[0]).begin_login()
+    started = relying_party(client_configs_of(load_settings())[0]).begin_login(
+        ui_locales=None
+    )
 
     assert started.url.startswith(f"{AN_ISSUER}/protocol/openid-connect/auth?")
 

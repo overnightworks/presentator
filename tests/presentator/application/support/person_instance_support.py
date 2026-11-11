@@ -102,6 +102,7 @@ def an_instance(
             expires_at=clock.now() + timedelta(hours=1),
             refresh_token=None,
             id_token=SecretStr("an-id-token"),
+            account_language=None,
         )
         resolved.key_drafts.mint(person.id, at=clock.now())
     preferences = FakePersonPreferencesStore(

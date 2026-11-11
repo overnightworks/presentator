@@ -9,7 +9,11 @@ from presentator.adapters.decks import (
     FOLDER_COLUMN,
     create_deck_tables,
 )
-from presentator.adapters.identity import KIND_COLUMN, create_identity_tables
+from presentator.adapters.identity import (
+    ACCOUNT_LANGUAGE_COLUMN,
+    KIND_COLUMN,
+    create_identity_tables,
+)
 from presentator.adapters.preferences import create_preference_tables
 from presentator.adapters.sqlite import immediate_transaction
 from presentator.contracts.preferences import ThemeChoice
@@ -29,6 +33,12 @@ def create_tables(database: Path) -> None:
     create_deck_tables(database)
     _add_the_column_when_missing(
         database, table="users", name="kind", definition=KIND_COLUMN
+    )
+    _add_the_column_when_missing(
+        database,
+        table="sessions",
+        name="account_language",
+        definition=ACCOUNT_LANGUAGE_COLUMN,
     )
     _add_the_column_when_missing(
         database, table="sources", name="folder", definition=FOLDER_COLUMN
@@ -55,8 +65,8 @@ def _add_the_column_when_missing(
     """Give the table its column on every start; every old row reads the default.
 
     One immediate transaction, so two starts on one file cannot both add it. The
-    column carries a default, so the release before, inserting without it after a
-    rollback, still writes a valid row.
+    column is nullable or carries a default, so the release before, inserting
+    without it after a rollback, still writes a valid row.
     """
     with immediate_transaction(database) as cursor:
         present = {column for (column,) in cursor.execute(_COLUMNS_OF, (table,))}

@@ -99,6 +99,7 @@ def a_scene() -> Scene:
         expires_at=NOW + timedelta(hours=1),
         refresh_token=SecretStr(_A_REFRESH_WORD),
         id_token=SecretStr(_AN_ID_TOKEN),
+        account_language=None,
     )
     an_offset_instant = (NOW + timedelta(microseconds=123456)).astimezone(
         timezone(timedelta(hours=5, minutes=30))
