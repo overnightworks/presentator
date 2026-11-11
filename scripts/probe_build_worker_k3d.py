@@ -11,7 +11,7 @@ prints each and ends 1 if any is listed; it needs no cluster, run directory or
 kubeconfig, and CI runs it after each drive. `drive` refuses unless CHECKOUT is at
 that commit and k3d, kubectl and docker are on PATH, proves that the overlay
 rendering the probe image differs from platform's own render only in the
-production image fields of every pod template, then drives three cells in a
+production image fields of every pod template, then drives its cells in a
 single-server k3d cluster at platform's K3S_VERSION. Cells 7 and 8 apply the
 PersistentVolumeClaims, ServiceAccounts and worker StatefulSet of
 `apps/presentator`; the applied copy differs from the render only in the worker
@@ -40,6 +40,28 @@ judged from its terminated state. A twin that does not end within the
 termination window fails the cell and no later twin starts. Every twin is
 deleted before the cell returns.
 
+Cell 10 runs after cell 9 and starts the web as platform renders it, at the
+pin: the render's ConfigMap and Deployment, applied unaltered, and a Secret the
+driver generates. The Secret's name and keys come from the Deployment's
+`secrets` volume and the files its environment names under that volume's mount,
+and each value comes from the effect `secret`, 64 hex characters from `secrets`
+in a real run. The values go to `kubectl apply` on stdin only and never to a
+printed line, an error, an argument or a file; they live in the run's cluster.
+The cell awaits the web's log with the text its composition root logs while it
+waits for the worker, reads the Pod once (not Ready, its container not
+terminated), then applies the worker's documents as cell 8 does but without
+`--check`. It awaits the web's Ready condition and judges the web's restartCount
+(0), the worker pod's remove-link (exit 0) and that Ready came after the worker
+container started. A failure prints the web's log and its previous life's.
+
+Cell 11 runs after cell 10 passed, with the web Ready and the worker serving:
+it copies `examples/hello-deck` into the web pod's `emptyDir` with `kubectl cp`
+and runs the web's own client there with `kubectl exec`, so the deck and the
+client cross no network but the run's own API server. The web's composition
+builds and exports the deck through the worker, whose life ends with each step;
+the client reads the talk's page and the PDF in the web pod. The cell is judged
+by the client's outcome and by a new worker pod with remove-link 0 and restarts 0.
+
 A cell that fails prints the Namespace's events and the output of a twin Pod of
 the same spec; the run fails after the cells ran.
 
@@ -66,6 +88,7 @@ takes the probe-stack lock:
 import copy
 import json
 import os
+import secrets
 import shutil
 import signal
 import socket
@@ -75,13 +98,16 @@ import tempfile
 import time
 import uuid
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 from probe_build_worker_harness import REPOSITORY, refuse, say
+from probe_build_worker_k3d_builds import drive_build
 from probe_build_worker_k3d_cluster import (
     IN_NAMESPACE,
     NAMESPACE,
     PLATFORM_COMMIT,
+    Completed,
     Document,
     Effects,
     Run,
@@ -101,17 +127,25 @@ from probe_build_worker_k3d_lives import (
     WORKER_POD,
     Expectation,
     Life,
+    await_pod,
+    container_status,
     interval_problem,
     life_problem,
     lives_problem,
+    poll,
+    read_pod,
+    remove_link_problem,
     report_lives,
     watch_lives,
 )
 from probe_build_worker_k3d_manifests import (
+    WEB_CONTAINER,
     WORKER_CONTAINER,
     applied_documents,
     namespace_document,
     prove_render,
+    throwaway_secret,
+    web_documents,
 )
 from probe_build_worker_starts import (
     CHECK_ARGUMENT,
@@ -119,6 +153,7 @@ from probe_build_worker_starts import (
     RESIDUE_SOURCE,
 )
 
+from presentator.host.main import WAITING_FOR_THE_WORKER
 from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import BUILD_IDENTITY, Predicate
 
@@ -127,7 +162,6 @@ RESIDUE_POD_PREFIX = "build-worker-residue-"
 # The planter's residue that plants nothing.
 CONTROL = "nothing"
 ENDED_PHASES = frozenset({"Succeeded", "Failed"})
-POLL_SECONDS = 2
 # The environment names come from python: `env` would print the later lines of
 # a multi-line value.
 TWIN_SCRIPT = r"""cat /proc/self/mountinfo /proc/self/status /proc/self/limits
@@ -135,25 +169,6 @@ cat /sys/fs/cgroup/memory.max
 id
 stat --format '%n %U:%G %a' /etc/hosts /dev/pts /sys/fs/cgroup
 python -c 'import os; print("\n".join(sorted(os.environ)))'"""
-
-
-def await_pod(
-    run: Run, name: str, done: Callable[[Document], bool]
-) -> tuple[Document, bool]:
-    """Poll a Pod until `done` or the window passes; give the last Pod seen."""
-    started = run.effects.monotonic()
-    pod: Document = {}
-    while True:
-        answer = run(
-            "kubectl get pod", name, "--output", "json", *IN_NAMESPACE, check=False
-        )
-        if answer.returncode == 0:
-            pod = json.loads(answer.stdout)
-            if done(pod):
-                return pod, True
-        if run.effects.monotonic() - started >= TERMINATION_WINDOW_SECONDS:
-            return pod, False
-        run.effects.sleep(POLL_SECONDS)
 
 
 def pod_of(name: str, documents: list[Document]) -> Document:
@@ -302,8 +317,193 @@ def drive_residues(run: Run, overlay: list[Document]) -> list[str]:
     return [f"cell 9: {problem}" for problem in problems]
 
 
+def web_selector(deployment: Document) -> str:
+    """The Deployment's `spec.selector.matchLabels` as a label selector."""
+    labels = deployment["spec"]["selector"]["matchLabels"]
+    return ",".join(f"{key}={value}" for key, value in labels.items())
+
+
+def apply_secret(run: Run, secret: Document) -> None:
+    """Apply the Secret from stdin; a failure names only the exit status.
+
+    The command's stderr is not quoted: a rejected object may be echoed in it.
+    """
+    done = run("kubectl apply --filename -", stdin=json.dumps(secret), check=False)
+    if done.returncode:
+        refuse(f"applying the Secret ended {done.returncode}")
+
+
+def web_pod(run: Run, selector: str) -> Document | None:
+    """The web's Pod, or none while there is no Pod or kubectl cannot list it."""
+    answer = run(
+        "kubectl get pods --output json",
+        *("--selector", selector, *IN_NAMESPACE),
+        check=False,
+    )
+    items: list[Document] = (
+        json.loads(answer.stdout)["items"] if answer.returncode == 0 else []
+    )
+    return items[0] if items else None
+
+
+def web_logs(run: Run, selector: str, *options: str) -> Completed:
+    """What `kubectl logs` gives for the web's Pod."""
+    return run(
+        "kubectl logs --selector",
+        selector,
+        *("--tail=-1", *options, *IN_NAMESPACE),
+        check=False,
+    )
+
+
+def web_log(run: Run, selector: str) -> str | None:
+    """The web's log, or none while kubectl has none to give."""
+    answer = web_logs(run, selector)
+    return answer.stdout if answer.returncode == 0 else None
+
+
+def ready_since(pod: Document) -> str | None:
+    """When the Pod's Ready condition last turned True; none if it is not Ready."""
+    conditions = pod.get("status", {}).get("conditions", [])
+    ready = next((c for c in conditions if c["type"] == "Ready"), Document())
+    return ready.get("lastTransitionTime") if ready.get("status") == "True" else None
+
+
+def control_problem(pod: Document | None) -> str | None:
+    """Why the web that logged its wait is not waiting, not Ready and alive."""
+    if pod is None:
+        return "no web Pod could be read after its wait was logged"
+    if ready_since(pod):
+        return "the web was Ready before the worker started"
+    if "terminated" in container_status(pod, WEB_CONTAINER).get("state", {}):
+        return "the web's container terminated before the worker started"
+    return None
+
+
+def seconds_after_start(web: Document, worker: Document) -> float | None:
+    """How long after the worker container started the web turned Ready."""
+    state = container_status(worker, WORKER_CONTAINER).get("state", Document())
+    began: Document = state.get("running") or state.get("terminated") or Document()
+    started: str | None = began.get("startedAt")
+    ready = ready_since(web)
+    if started is None or ready is None:
+        return None
+    return (
+        datetime.fromisoformat(ready) - datetime.fromisoformat(started)
+    ).total_seconds()
+
+
+def ready_problem(web: Document, worker: Document | None) -> str | None:
+    """Why the Ready web is not one that never refused and followed the worker."""
+    restarts = web_restarts(web)
+    if restarts:
+        return f"the web's restartCount is {restarts}, expected 0"
+    if worker is None:
+        return f"the worker Pod {WORKER_POD} cannot be read"
+    if problem := remove_link_problem(
+        Life(worker["metadata"]["uid"]).after(worker, deleted=False)
+    ):
+        return problem
+    after = seconds_after_start(web, worker)
+    if after is None:
+        return "the worker container has not started"
+    if after < 0:
+        return f"the web was Ready {-after:g} s before the worker started"
+    return None
+
+
+def web_restarts(web: Document) -> int:
+    """The web container's restartCount."""
+    return container_status(web, WEB_CONTAINER).get("restartCount", 0)
+
+
+def report_control(web: Document) -> None:
+    """Print what the web's Pod shows while it waits for the worker."""
+    (state, *_) = container_status(web, WEB_CONTAINER).get("state", {"unknown": {}})
+    say(
+        f"cell 10: control: the web logged its wait, Ready False, "
+        f"container {state}, restarts {web_restarts(web)}"
+    )
+
+
+def report_web(web: Document, worker: Document) -> None:
+    """Print how long after the worker started the web was Ready."""
+    life = Life(worker["metadata"]["uid"]).after(worker, deleted=False)
+    say(
+        f"cell 10: the web waited, then was Ready "
+        f"{seconds_after_start(web, worker):g} s after the worker started "
+        f"(web restarts {web_restarts(web)}; worker pod {life.uid}, "
+        f"{worker['status']['phase']}, restarts {life.restarts})"
+    )
+
+
+def judge_web(run: Run, selector: str, worker: str) -> str | None:
+    """Judge the web's wait as the control, start the worker, judge the web's Ready."""
+    waiting = WAITING_FOR_THE_WORKER.split("%", 1)[0]
+    _, logged = poll(
+        run, lambda: web_log(run, selector), lambda log: waiting in log, ""
+    )
+    if not logged:
+        return f"the web did not log its wait within {TERMINATION_WINDOW_SECONDS} s"
+    waiting_pod = web_pod(run, selector)
+    if problem := control_problem(waiting_pod):
+        return problem
+    if waiting_pod is not None:
+        report_control(waiting_pod)
+    run("kubectl apply --filename -", stdin=worker)
+    web, ready = poll(
+        run, lambda: web_pod(run, selector), lambda pod: bool(ready_since(pod)), {}
+    )
+    if not ready:
+        return f"the web was not Ready within {TERMINATION_WINDOW_SECONDS} s"
+    pod = read_pod(run, WORKER_POD)
+    problem = ready_problem(web, pod)
+    if problem is None and pod is not None:
+        report_web(web, pod)
+    return problem
+
+
+def print_web_logs(run: Run, number: int, selector: str) -> None:
+    """Print the end of the web's log and of its previous life's."""
+    for title, options in (("log", ()), ("previous log", ("--previous",))):
+        answer = web_logs(run, selector, *options)
+        tail = (answer.stdout + answer.stderr)[-2000:]
+        say(f"cell {number}: the web's {title}:\n{tail}")
+
+
+def build_through_web(run: Run, deployment: Document, selector: str) -> str | None:
+    """Cell 11 in the web's Pod; give the problem."""
+    pod = web_pod(run, selector)
+    if pod is None:
+        return "no web Pod could be read to build in"
+    return drive_build(run, deployment, pod["metadata"]["name"])
+
+
+def drive_web(run: Run, overlay: list[Document]) -> str:
+    """Cells 10 and 11: the web waits, is Ready once the worker runs, then builds.
+
+    A Secret of generated values goes in first, from stdin only. Cell 11 runs
+    only when cell 10 passed; give the problem of the one that failed.
+    """
+    documents = web_documents(overlay)
+    deployment = next(d for d in documents if d["kind"] == "Deployment")
+    apply_secret(run, throwaway_secret(deployment, run.effects.secret))
+    run("kubectl apply --filename -", stdin=as_stream(documents))
+    selector = web_selector(deployment)
+    worker = as_stream(applied_documents(overlay, init_container=True))
+    number, problem = 10, judge_web(run, selector, worker)
+    if problem is None:
+        number, problem = 11, build_through_web(run, deployment, selector)
+    if problem is None:
+        return ""
+    say(f"cell {number}: FAILED, {problem}")
+    print_web_logs(run, number, selector)
+    diagnose(run, worker)
+    return f"cell {number}: {problem}"
+
+
 def drive_cells(run: Run, overlay: list[Document]) -> list[str]:
-    """Drive the control, its twin with the init container, then the residues."""
+    """Drive the control, its init-container twin, the residues, then the web."""
     bare = Expectation(Predicate.NO_ROUTE, init_container=False, lives=1)
     control = applied_documents(overlay, init_container=False)
     problems = [drive_cell(run, 7, control, bare)]
@@ -311,7 +511,9 @@ def drive_cells(run: Run, overlay: list[Document]) -> list[str]:
     linked = Expectation(None, init_container=True, lives=LIVES)
     worker = applied_documents(overlay, init_container=True, check=True)
     problems.append(drive_cell(run, 8, worker, linked))
-    return [problem for problem in problems if problem] + drive_residues(run, overlay)
+    problems.extend(drive_residues(run, overlay))
+    problems.append(drive_web(run, overlay))
+    return [problem for problem in problems if problem]
 
 
 def drive(run: Run) -> None:
@@ -384,6 +586,7 @@ def drive_for_real(checkout: Path) -> None:
         time.monotonic,
         time.sleep,
         hold_signals,
+        lambda: secrets.token_hex(32),
     )
     identifier = uuid.uuid4().hex[:8]
     drive(

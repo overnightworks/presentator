@@ -1,6 +1,7 @@
 """The k3d driver tests' shared world: the fake runner, its run and the builders."""
 
 import copy
+import itertools
 import json
 import signal
 from collections.abc import Callable, Generator, Mapping
@@ -12,6 +13,8 @@ from typing import Any
 
 from ruamel.yaml import YAML
 
+from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
+from presentator.host.main import WAITING_FOR_THE_WORKER
 from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import Predicate
 
@@ -21,9 +24,43 @@ K3S_VERSION = "v1.37.2+k3s1"
 RUN_IDENTIFIER = "0a1b2c3d"
 OWN = "the run's own node"
 EPOCH = datetime(2026, 11, 11, tzinfo=UTC)
+SECRETS_VOLUME = "secrets"
+PROJECTED_NAME = "web-secrets"
+PROJECTED_MOUNT = "/run/fake-secrets"
+PROJECTED_KEYS = ("first_key", "second_key")
+WEB_LABELS = {"app": "fake-web", "tier": "front"}
+WAITING_LINE = WAITING_FOR_THE_WORKER % ("/fake/socket", CONNECT_WINDOW_SECONDS)
+GENERATED_VALUE = "generated-value-"
+WORKER_START = 40
+WEB_READY_AFTER = 12
+SCRATCH_MOUNT = "/data/elsewhere"
+WEB_POD = "web-pod"
+FIRST_WORKER_UID = "worker-uid"
+NEXT_WORKER_UID = "successor-uid"
 
 Document = dict[str, Any]
 Issued = tuple[tuple[str, ...], Mapping[str, str], str | None]
+
+
+def add_web_secrets(spec: Document) -> None:
+    """Give the web container's pod spec a projected Secret and the files naming it."""
+    (main,) = spec["containers"]
+    main["env"] = [
+        {"name": "AN_ORIGIN", "value": "https://example.org"},
+        {"name": "A_SECRET_FILE", "value": f"{PROJECTED_MOUNT}/{PROJECTED_KEYS[0]}"},
+        {"name": "AN_OTHER_PATH", "value": SCRATCH_MOUNT},
+        {"name": "A_REFERENCE", "valueFrom": {"fieldRef": {}}},
+        {"name": "ANOTHER_FILE", "value": f"{PROJECTED_MOUNT}/{PROJECTED_KEYS[1]}"},
+    ]
+    main["volumeMounts"] = [
+        {"name": "elsewhere", "mountPath": SCRATCH_MOUNT},
+        {"name": SECRETS_VOLUME, "mountPath": PROJECTED_MOUNT},
+    ]
+    projected = {"sources": [{"secret": {"name": PROJECTED_NAME}}]}
+    spec["volumes"] = [
+        {"name": "elsewhere", "emptyDir": {}},
+        {"name": SECRETS_VOLUME, "projected": projected},
+    ]
 
 
 def workload_documents(image: str) -> list[Document]:
@@ -34,6 +71,8 @@ def workload_documents(image: str) -> list[Document]:
         if container == "worker":
             main["command"] = ["serve-the-build-worker", "--flag"]
         spec: Document = {"containers": [main]}
+        if container == "web":
+            add_web_secrets(spec)
         if init:
             spec["initContainers"] = [
                 {"name": "remove-link", "image": REMOVE_LINK_IMAGE}
@@ -45,7 +84,13 @@ def workload_documents(image: str) -> list[Document]:
 
     job = {"spec": {"template": template("restore-test")}}
     return [
-        document("Deployment", "web", replicas=1, template=template("web")),
+        document(
+            "Deployment",
+            "web",
+            replicas=1,
+            selector={"matchLabels": WEB_LABELS},
+            template=template("web"),
+        ),
         document("StatefulSet", "build-worker", template=template("worker", init=True)),
         document("CronJob", "restore-test", jobTemplate=job),
         document("PersistentVolumeClaim", "build-socket"),
@@ -207,7 +252,26 @@ class World:
     probe_image: str = ""
     production_image: str = ""
     twin_pod: str = ""
+    worker_pod: str = ""
     twin_log: str = "the twin's mount list"
+    # What the web does: it logs its wait, is Ready once the worker's apply came.
+    web_logs_its_wait: bool = True
+    web_ready_early: bool = False
+    web_never_ready: bool = False
+    web_restarts: int = 0
+    web_ready_after: int = WEB_READY_AFTER
+    remove_link_exit: int = 0
+    # What the web's client does when the build cell runs it, and what comes after:
+    # the exec's end and output (set up with the driver if empty), the copy's end,
+    # and the worker pod that follows the client's two steps.
+    client_exit: int = 0
+    client_stdout: str = ""
+    client_stderr: str = ""
+    copy_exit: int = 0
+    copy_stderr: str = ""
+    worker_keeps_uid: bool = False
+    next_remove_link_exit: int = 0
+    next_restarts: int = 0
     # What a residue's twin Pod shows by the residue's name; the expected end if absent.
     outcomes: dict[str, Document] = field(default_factory=dict[str, Document])
     # The twin Pods of the residues by their names, set up with the driver.
@@ -245,7 +309,7 @@ class World:
         command: tuple[str, ...],
         environment: Mapping[str, str],
         stdin: str | None,
-    ) -> tuple[int, str]:
+    ) -> tuple[int, str, str]:
         self.commands.append((command, environment, stdin))
         kubeconfig = Path(environment["KUBECONFIG"])
         self.directory_present_at_last_command = kubeconfig.parent.exists()
@@ -255,8 +319,14 @@ class World:
         ):
             message = "the fake runner broke"
             raise RuntimeError(message)
-        answer = self.answer(command)
-        return (1, "") if answer is None else (0, answer)
+        match command:
+            case ("timeout", _, "kubectl", "cp", *_):
+                return self.copy_exit, "", self.copy_stderr
+            case ("timeout", _, "kubectl", "exec", *_):
+                return self.client_exit, self.client_stdout, self.client_stderr
+            case _:
+                answer = self.answer(command)
+                return (1, "", "") if answer is None else (0, answer, "")
 
     def answer(self, command: tuple[str, ...]) -> str | None:
         match command:
@@ -264,11 +334,8 @@ class World:
                 return self.render(command)
             case ("kubectl", "get", "nodes", *_):
                 return self.nodes_json()
-            case ("kubectl", "get", "pod", name, *_):
-                return json.dumps(self.pod_named(name))
-            case ("kubectl", "logs", name, *_):
-                self.pod_named(name)
-                return self.twin_log
+            case ("kubectl", "get", "pod" | "pods", *_) | ("kubectl", "logs", *_):
+                return self.pod_answer(command)
             case ("kubectl", "delete", "statefulset", *_):
                 self.cell += 1
             case ("k3d", *_) | ("docker", *_):
@@ -365,8 +432,77 @@ class World:
         finally:
             self.watches_closed += 1
 
+    def pod_answer(self, command: tuple[str, ...]) -> str:
+        """What kubectl prints when it gets or logs Pods, by name or by selector."""
+        verb, target = command[1], command[2]
+        if verb == "logs":
+            if target == "--selector":
+                return self.web_log(previous="--previous" in command)
+            self.pod_named(target)
+            return self.twin_log
+        if target == "pods":
+            return json.dumps({"items": [self.web_pod()]})
+        return json.dumps(self.pod_named(command[3]))
+
+    def web_serving(self) -> bool:
+        """The worker's StatefulSet was applied after the web's Deployment."""
+        deployed = False
+        for command, _, stdin in self.commands:
+            if command[:2] == ("kubectl", "apply"):
+                deployed = deployed or '"kind": "Deployment"' in (stdin or "")
+                if deployed and '"kind": "StatefulSet"' in (stdin or ""):
+                    return True
+        return False
+
+    def web_pod(self) -> Document:
+        """The web's Pod as kubectl prints it for the Deployment's selector."""
+        ready = self.web_ready_early or (
+            self.web_serving() and not self.web_never_ready
+        )
+        ready_at = WORKER_START + self.web_ready_after
+        condition = {
+            "type": "Ready",
+            "status": "True" if ready else "False",
+            "lastTransitionTime": stamp(ready_at),
+        }
+        web: Document = {
+            "name": "web",
+            "restartCount": self.web_restarts,
+            "state": {"running": {"startedAt": stamp(0)}},
+        }
+        return {
+            "metadata": {"uid": "web-uid", "name": WEB_POD},
+            "status": {"conditions": [condition], "containerStatuses": [web]},
+        }
+
+    def web_log(self, *, previous: bool) -> str:
+        """The web's log: its wait, once it started; the log it left, if asked."""
+        if previous:
+            return "the web's previous life"
+        return WAITING_LINE if self.web_logs_its_wait else "the web is starting"
+
+    def worker_pod_json(self) -> Document:
+        """The worker's Pod once it serves: running, its remove-link ended."""
+        running = {"running": {"startedAt": stamp(WORKER_START)}}
+        if self.client_ran() and not self.worker_keeps_uid:
+            version = Version(
+                init_exit=self.next_remove_link_exit, restarts=self.next_restarts
+            )
+            pod = pod_version(NEXT_WORKER_UID, running, version)
+        else:
+            version = Version(init_exit=self.remove_link_exit)
+            pod = pod_version(FIRST_WORKER_UID, running, version)
+        pod["status"]["phase"] = "Running"
+        return pod
+
+    def client_ran(self) -> bool:
+        """The web's client was started in the web: the worker's lives were spent."""
+        return any(c[2:4] == ("kubectl", "exec") for c, _, _ in self.commands)
+
     def pod_named(self, name: str) -> Document:
         """The bare Pod of the facts twin or of a residue's twin; no other exists."""
+        if name == self.worker_pod:
+            return self.worker_pod_json()
         if name == self.twin_pod:
             return {"status": {"phase": "Succeeded"}}
         if name not in self.residue_pods:
@@ -457,11 +593,47 @@ def residue_pods(
     }
 
 
+def delivered_outcome(web_module: ModuleType) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
+    """The outcome of a client whose build and export delivered the talk and PDF."""
+    steps = tuple(
+        web_module.StepOutcome(step, failed=False, failure=None)
+        for step in web_module.HELLO_STEPS
+    )
+    return web_module.Outcome(
+        steps=steps,
+        staged=(),
+        out=("deck.pdf", "talk"),
+        talk_page=True,
+        pdf=True,
+        worklet=False,
+        worklet_sha256=None,
+    )
+
+
+def client_output(outcome: Any) -> str:  # noqa: ANN401 - the web probe's Outcome, loaded by name
+    """What the web's client prints: its run's name, then its outcome."""
+    steps = [
+        {"step": step.step, "failed": step.failed, "failure": step.failure}
+        for step in outcome.steps
+    ]
+    said = {
+        "steps": steps,
+        "staged": list(outcome.staged),
+        "out": list(outcome.out),
+        "talk_page": outcome.talk_page,
+        "pdf": outcome.pdf,
+        "worklet": outcome.worklet,
+        "worklet_sha256": outcome.worklet_sha256,
+    }
+    return f"{json.dumps({'run': 'a-run'})}\n{json.dumps(said)}\n"
+
+
 def fake_effects(
     cluster_module: ModuleType, world: World, *, head: str | None, missing: str | None
 ) -> object:
     """The effects of a run whose every outside is the world."""
     ticks = [0.0]
+    generated = itertools.count()
 
     def sleep(seconds: float) -> None:
         ticks[0] += seconds
@@ -469,8 +641,8 @@ def fake_effects(
     def run_command(
         command: tuple[str, ...], environment: Mapping[str, str], stdin: str | None
     ) -> object:
-        returncode, stdout = world(command, environment, stdin)
-        return cluster_module.Completed(returncode, stdout, "")
+        returncode, stdout, stderr = world(command, environment, stdin)
+        return cluster_module.Completed(returncode, stdout, stderr)
 
     def which(tool: str) -> str | None:
         return None if tool == missing else f"/bin/{tool}"
@@ -487,6 +659,7 @@ def fake_effects(
         monotonic=lambda: ticks[0],
         sleep=sleep,
         hold_signals=world.hold_signals,
+        secret=lambda: f"{GENERATED_VALUE}{next(generated)}",
     )
 
 
@@ -497,6 +670,7 @@ def fixture_maker(
     cluster_module = load_script("probe_build_worker_k3d_cluster")
     lives_module = load_script("probe_build_worker_k3d_lives")
     manifests_module = load_script("probe_build_worker_k3d_manifests")
+    web_module = load_script("probe_build_worker_web")
     production_image = manifests_module.PRODUCTION_IMAGE + DIGEST
 
     def make(
@@ -517,7 +691,11 @@ def fixture_maker(
         world.node_name, world.probe_image = run.node, run.tag
         world.cluster_name = run.name
         world.production_image, world.twin_pod = production_image, driver.TWIN_POD
+        world.worker_pod = lives_module.WORKER_POD
         world.residue_pods = residue_pods(load_script, driver, world.outcomes)
+        world.client_stdout = world.client_stdout or client_output(
+            delivered_outcome(web_module)
+        )
         world.streams = world.streams or [
             lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
             lives_stream(lives_module.LIVES, None),
@@ -525,3 +703,26 @@ def fixture_maker(
         return Fixture(driver, world, run)
 
     return make
+
+
+def issued_commands(world: World) -> list[tuple[tuple[str, ...], str]]:
+    """Each command of the run with its stdin, in the order it was issued."""
+    return [(command, stdin or "") for command, _, stdin in world.commands]
+
+
+def apply_positions(world: World, kind: str) -> list[int]:
+    """The positions of the applies whose stream holds a document of the kind."""
+    return [
+        at
+        for at, (command, stdin) in enumerate(issued_commands(world))
+        if command[:2] == ("kubectl", "apply") and f'"kind": "{kind}"' in stdin
+    ]
+
+
+def command_positions(world: World, *prefix: str) -> list[int]:
+    """The positions of the commands that start with the words."""
+    return [
+        at
+        for at, (command, _) in enumerate(issued_commands(world))
+        if command[: len(prefix)] == prefix
+    ]

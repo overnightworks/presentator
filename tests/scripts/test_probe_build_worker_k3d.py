@@ -18,6 +18,7 @@ from tests.scripts.support.k3d_world import (
     World,
     expected_ends,
     fixture_maker,
+    issued_commands,
     lives_stream,
     named,
     node,
@@ -127,9 +128,14 @@ def test_drive_passes_prints_every_life_and_interval_and_bounds_the_watch(
     fixture = make_fixture()
     fixture.drive()
     lines = capsys.readouterr().out.splitlines()
-    for cell, count, ending in (
-        (7, 1, f"exit {REFUSAL_EXIT_STATUS}, start refused: {Predicate.NO_ROUTE}"),
-        (8, lives_module.LIVES, "exit 0, self-check passed"),
+    for cell, count, init_fact, ending in (
+        (
+            7,
+            1,
+            "no init container",
+            f"exit {REFUSAL_EXIT_STATUS}, start refused: {Predicate.NO_ROUTE}",
+        ),
+        (8, lives_module.LIVES, "remove-link 0", "exit 0, self-check passed"),
     ):
         lives = [line for line in lines if line.startswith(f"cell {cell}: life")]
         assert len(lives) == count
@@ -137,6 +143,7 @@ def test_drive_passes_prints_every_life_and_interval_and_bounds_the_watch(
             assert line.startswith(
                 f"cell {cell}: life {position}, uid life-{position - 1}, "
             )
+            assert f", {init_fact}, restarts 0, " in line
             assert line.endswith(ending)
     intervals = [line for line in lines if line.startswith("cell 8: interval")]
     assert len(intervals) == lives_module.LIVES - 1
@@ -395,29 +402,12 @@ def twin_names(driver: ModuleType, starts_module: ModuleType) -> list[str]:
     return [driver.residue_pod_name(residue) for residue, _ in ends]
 
 
-def issued_commands(world: World) -> list[tuple[tuple[str, ...], str]]:
-    """Each command of the run with its stdin, in the order it was issued."""
-    return [(command, stdin or "") for command, _, stdin in world.commands]
-
-
 def worker_gone_position(world: World, driver: ModuleType) -> int:
-    """The position of the wait that sees the worker's Pod gone."""
-    issued = issued_commands(world)
-    worker_applied = max(
+    """The position of the last wait that sees the worker's Pod gone."""
+    return max(
         at
-        for at, (command, stdin) in enumerate(issued)
-        if command[:2] == ("kubectl", "apply") and "StatefulSet" in stdin
-    )
-    stopped = next(
-        at
-        for at, (command, _) in enumerate(issued)
-        if at > worker_applied and command[:3] == ("kubectl", "delete", "statefulset")
-    )
-    return next(
-        at
-        for at, (command, _) in enumerate(issued)
-        if at > stopped
-        and command[:3] == ("kubectl", "wait", "--for=delete")
+        for at, (command, _) in enumerate(issued_commands(world))
+        if command[:3] == ("kubectl", "wait", "--for=delete")
         and f"pod/{driver.WORKER_POD}" in command
     )
 
@@ -640,9 +630,8 @@ def test_a_twin_that_does_not_end_within_the_window_stops_cell_9_after_that_wind
     stalled = driver.residue_pod_name(residue)
     assert applied_twins(world)[-2:] == [stalled, driver.TWIN_POD]
     polls = world.issued("kubectl", "get", "pod", stalled)
-    assert (
-        len(polls) <= lives_module.TERMINATION_WINDOW_SECONDS // driver.POLL_SECONDS + 1
-    )
+    window = lives_module.TERMINATION_WINDOW_SECONDS // lives_module.POLL_SECONDS
+    assert len(polls) <= window + 1
     removal = next(c for c in world.issued("kubectl", "delete", "pod") if stalled in c)
     assert [n for n in removal if n.startswith(driver.RESIDUE_POD_PREFIX)] == (
         applied_twins(world)[1:-1]

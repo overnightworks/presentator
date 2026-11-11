@@ -1,8 +1,9 @@
 """Build one deck through the web's own composition.
 
-Usage: `python -I - CASE [STEP...]`, the program on stdin.
+Usage: `python -I - DECKS CASE [STEP...]`, the program on stdin; DECKS is the
+directory that holds the decks of the cases.
 
-Run inside the `presentator` service as its own user. It reads the settings
+Run inside the web's container as its own user. It reads the settings
 with `load_settings()`, takes the worker from `the_build_worker` and runs the
 named steps of a deck in a fresh run directory under the builds root. It prints
 the run's name as the first JSON line, so a driver can watch the run directory,
@@ -32,11 +33,6 @@ from presentator.contracts.decks import (
 from presentator.host.config import load_settings
 from presentator.host.main import build_bound_of, the_build_worker
 
-DECKS = Path("/decks")
-HELLO_DECK = DECKS / "hello-deck"
-ADDON_DECK = DECKS / "copresenter-deck"
-FLOOD_DECK = DECKS / "probe" / "flood"
-LIMITS_DECK = DECKS / "probe" / "limits"
 LIMIT_FILE = "limit.txt"
 STAGED_PREFIX = "staged-"
 EXTRA_PART = "a"
@@ -65,17 +61,20 @@ class Source:
     limit: str | None = None
 
 
-SOURCES = {
-    Case.HELLO: Source(HELLO_DECK),
-    Case.ADDON: Source(ADDON_DECK),
-    Case.HOLD: Source(FLOOD_DECK),
-    Case.MANY_ENTRIES: Source(LIMITS_DECK, Case.MANY_ENTRIES),
-    Case.OUTPUT_MEGABYTES: Source(LIMITS_DECK, Case.OUTPUT_MEGABYTES),
-    Case.OUTPUT_ENTRIES: Source(LIMITS_DECK, Case.OUTPUT_ENTRIES),
-    Case.OUTPUT_SHAPE: Source(LIMITS_DECK, Case.OUTPUT_SHAPE),
-    Case.DECK_MEGABYTES: Source(LIMITS_DECK),
-    Case.DECK_PATHS: Source(LIMITS_DECK),
-}
+def sources_of(decks: Path) -> dict[Case, Source]:
+    """Where each case's deck lies under the directory that holds the decks."""
+    limits = decks / "probe" / "limits"
+    return {
+        Case.HELLO: Source(decks / "hello-deck"),
+        Case.ADDON: Source(decks / "copresenter-deck"),
+        Case.HOLD: Source(decks / "probe" / "flood"),
+        Case.MANY_ENTRIES: Source(limits, Case.MANY_ENTRIES),
+        Case.OUTPUT_MEGABYTES: Source(limits, Case.OUTPUT_MEGABYTES),
+        Case.OUTPUT_ENTRIES: Source(limits, Case.OUTPUT_ENTRIES),
+        Case.OUTPUT_SHAPE: Source(limits, Case.OUTPUT_SHAPE),
+        Case.DECK_MEGABYTES: Source(limits),
+        Case.DECK_PATHS: Source(limits),
+    }
 
 
 def swell(deck: Path, case: Case, megabytes: int) -> None:
@@ -89,11 +88,11 @@ def swell(deck: Path, case: Case, megabytes: int) -> None:
         (deep / EXTRA_PART).write_text("x", encoding="utf-8")
 
 
-def prepared_run(case: Case, builds: Path, megabytes: int) -> BuildPlace:
+def prepared_run(case: Case, decks: Path, builds: Path, megabytes: int) -> BuildPlace:
     """A fresh run directory holding the case's deck and an empty out/."""
     run = Path(mkdtemp(dir=builds))
     (run / OUTPUT_DIRECTORY).mkdir()
-    source = SOURCES[case]
+    source = sources_of(decks)[case]
     deck = run / DECK_DIRECTORY
     copytree(source.deck, deck)
     if source.limit is not None:
@@ -138,11 +137,11 @@ def delivered(place: BuildPlace) -> dict[str, bool | str | None]:
     }
 
 
-def main(case: Case, kinds: list[StepKind]) -> None:
+def main(decks: Path, case: Case, kinds: list[StepKind]) -> None:
     """Run the steps and print the run's name, then the outcome."""
     settings = load_settings()
     toolchain = the_build_worker(settings, bound=build_bound_of(settings))
-    place = prepared_run(case, settings.builds, settings.build_output_megabytes)
+    place = prepared_run(case, decks, settings.builds, settings.build_output_megabytes)
     sys.stdout.write(json.dumps({"run": place.run.name}) + "\n")
     sys.stdout.flush()
     steps: list[dict[str, object]] = []
@@ -184,4 +183,8 @@ def main(case: Case, kinds: list[StepKind]) -> None:
 
 
 if __name__ == "__main__":
-    main(Case(sys.argv[1]), [StepKind(name) for name in sys.argv[2:]] or list(StepKind))
+    main(
+        Path(sys.argv[1]),
+        Case(sys.argv[2]),
+        [StepKind(name) for name in sys.argv[3:]] or list(StepKind),
+    )

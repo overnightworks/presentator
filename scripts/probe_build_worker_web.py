@@ -59,6 +59,8 @@ from presentator.host.config import DEFAULT_BUILD_OUTPUT_MEGABYTES
 from presentator.host.main import WAITING_FOR_THE_WORKER
 
 WEB = "presentator"
+DECKS_DIRECTORY = "/decks"
+WEB_PYTHON = "/opt/venv/bin/python"
 CLIENT_PROGRAM = PROBE_SOURCES / "web_client.py"
 ROUTE = "http://127.0.0.1:8000/login"
 BUILDS_ROOT = "/data/builds"
@@ -118,7 +120,10 @@ def in_web(*command: str) -> subprocess.CompletedProcess[str]:
 def start_client(case: str, *steps: str) -> subprocess.Popen[str]:
     """Send the client program into the web; it prints its run's name first."""
     client = subprocess.Popen(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
-        web_command("exec", "-T", WEB, "/opt/venv/bin/python", "-I", "-", case, *steps),
+        web_command(
+            "exec", "-T", WEB, WEB_PYTHON, "-I", "-",
+            DECKS_DIRECTORY, case, *steps,
+        ),
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True,
     )  # fmt: skip
@@ -160,16 +165,12 @@ class Outcome:
     worklet_sha256: str | None
 
 
-def outcome_of(client: subprocess.Popen[str]) -> Outcome:
-    """The client's last line, after it has ended."""
-    try:
-        stdout, stderr = client.communicate(timeout=STEP_SECONDS)
-    except subprocess.TimeoutExpired:
-        client.kill()
-        refuse(f"the web client did not end within {STEP_SECONDS} seconds")
+def outcome_in(stdout: str) -> Outcome:
+    """The outcome in the client's last printed line."""
     lines = stdout.splitlines()
-    if client.returncode or not lines:
-        refuse(f"the web client failed: {client.returncode} {stderr}")
+    if not lines:
+        message = "the web client printed nothing"
+        raise ValueError(message)
     said = json.loads(lines[-1])
     return Outcome(
         steps=tuple(
@@ -183,6 +184,28 @@ def outcome_of(client: subprocess.Popen[str]) -> Outcome:
         worklet=said["worklet"],
         worklet_sha256=said["worklet_sha256"],
     )
+
+
+def delivers_the_deck(done: Outcome) -> bool:
+    """Whether the build and the export ran unfailed and left the talk page and PDF."""
+    return (
+        tuple(step.step for step in done.steps) == HELLO_STEPS
+        and not any(step.failed for step in done.steps)
+        and done.talk_page
+        and done.pdf
+    )
+
+
+def outcome_of(client: subprocess.Popen[str]) -> Outcome:
+    """The client's last line, after it has ended."""
+    try:
+        stdout, stderr = client.communicate(timeout=STEP_SECONDS)
+    except subprocess.TimeoutExpired:
+        client.kill()
+        refuse(f"the web client did not end within {STEP_SECONDS} seconds")
+    if client.returncode or not stdout.splitlines():
+        refuse(f"the web client failed: {client.returncode} {stderr}")
+    return outcome_in(stdout)
 
 
 def build(case: str, *steps: str) -> Outcome:
@@ -227,11 +250,7 @@ def restart_count_is(expected: int) -> None:
 def the_next_build_delivers_hello_deck() -> None:
     """A fresh run of hello-deck builds and exports through the restarted worker."""
     done = build("hello", *HELLO_STEPS)
-    if (
-        tuple(step.step for step in done.steps) != HELLO_STEPS
-        or any(step.failed for step in done.steps)
-        or not (done.talk_page and done.pdf)
-    ):
+    if not delivers_the_deck(done):
         refuse(f"hello-deck was not delivered: {done}")
 
 
@@ -340,7 +359,7 @@ def prove_start_before_the_worker(report: Report) -> None:
         refuse("the web's log holds a start refusal")
     prove_inspected_shape()
     scratch = in_web(
-        "/opt/venv/bin/python", "-I", "-c", "import tempfile; print(tempfile.mkdtemp())"
+        WEB_PYTHON, "-I", "-c", "import tempfile; print(tempfile.mkdtemp())"
     )
     ssh = in_web(
         "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=2",
@@ -497,9 +516,7 @@ def prove_addon_deck(report: Report) -> None:
     done = build("addon", *HELLO_STEPS)
     expected = hashlib.sha256(ADDON_WORKLET.read_bytes()).hexdigest()
     if (
-        tuple(step.step for step in done.steps) != HELLO_STEPS
-        or any(step.failed for step in done.steps)
-        or not (done.talk_page and done.pdf)
+        not delivers_the_deck(done)
         or not done.worklet
         or done.worklet_sha256 != expected
     ):

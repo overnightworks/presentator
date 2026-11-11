@@ -3,13 +3,17 @@
 `prove_render` renders the image-only overlay and proves it differs from
 platform's own render only in the production image fields of every pod
 template. `applied_documents` takes the overlay's documents the worker pod
-needs, and `namespace_document` takes production's Namespace for presentator.
+needs, `web_documents` those the web needs and `throwaway_secret` the Secret
+the web's Deployment names, with a value from an effect for each file its
+environment names under the Secret's mount. `namespace_document` takes
+production's Namespace for presentator.
 """
 
 import copy
 import json
 import os
-from pathlib import Path
+from collections.abc import Callable
+from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 from probe_build_worker_harness import refuse, say
@@ -18,7 +22,10 @@ from probe_build_worker_starts import CHECK_ARGUMENT
 
 PRODUCTION_IMAGE = "ghcr.io/overnightworks/presentator"
 APPLIED_KINDS = ("PersistentVolumeClaim", "ServiceAccount", "StatefulSet")
+WEB_KINDS = ("ConfigMap", "Deployment")
 WORKER_CONTAINER = "worker"
+WEB_CONTAINER = "web"
+SECRETS_VOLUME = "secrets"
 INIT_CONTAINER = "remove-link"
 TERMINATION_MESSAGE_POLICY = "FallbackToLogsOnError"
 
@@ -145,6 +152,36 @@ def applied_documents(
                 if check:
                     container["args"] = [CHECK_ARGUMENT]
     return documents
+
+
+def web_documents(overlay: list[Document]) -> list[Document]:
+    """The overlay's ConfigMap and Deployment, exactly as rendered."""
+    return [
+        copy.deepcopy(document) for document in overlay if document["kind"] in WEB_KINDS
+    ]
+
+
+def throwaway_secret(deployment: Document, value: Callable[[], str]) -> Document:
+    """The Secret the Deployment's `secrets` volume projects, a `value()` per file.
+
+    Its keys are the last parts of the web container's environment values that
+    lie under the volume's mount path.
+    """
+    pod = deployment["spec"]["template"]["spec"]
+    volume = next(v for v in pod["volumes"] if v["name"] == SECRETS_VOLUME)
+    name = next(
+        s["secret"]["name"] for s in volume["projected"]["sources"] if "secret" in s
+    )
+    container = next(c for c in pod["containers"] if c["name"] == WEB_CONTAINER)
+    mount = next(m for m in container["volumeMounts"] if m["name"] == SECRETS_VOLUME)
+    files = (PurePosixPath(e["value"]) for e in container["env"] if "value" in e)
+    keys = [file.name for file in files if file.is_relative_to(mount["mountPath"])]
+    return {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": name, "namespace": NAMESPACE},
+        "stringData": {key: value() for key in keys},
+    }
 
 
 def namespace_document(platform: Path) -> Document:
