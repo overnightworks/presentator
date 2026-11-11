@@ -5,7 +5,7 @@ toolchain that builds now need a build, and what the deck's attempt says about
 it. The deck store, the build runner and the clock stay outside.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import timedelta
 
 from presentator.application import build_retention
@@ -128,7 +128,7 @@ class DeckBuilds:
         if self.clock.now() - attempt.started_at <= self.build_bound:
             return deck
         failed = self._failed(deck, attempt, BuildFailure.without_words())
-        return replace(deck, attempt=failed)
+        return deck.carrying(failed)
 
     def _switch_over(
         self, deck: Deck, source: Source, toolchain: ToolchainIdentity
@@ -178,6 +178,6 @@ class DeckBuilds:
         self, deck: Deck, attempt: BuildAttempt, failure: BuildFailure
     ) -> BuildAttempt:
         """Close this attempt as failed, keeping the moment it started."""
-        closed = replace(attempt, outcome=BuildOutcome.FAILED, failure=failure)
+        closed = attempt.failed_with(failure)
         self.store.put_attempt(deck.slug, closed)
         return closed

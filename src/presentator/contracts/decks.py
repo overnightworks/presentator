@@ -509,6 +509,16 @@ class BuildAttempt:
     failure: BuildFailure | None
     toolchain: ToolchainIdentity | None = None
 
+    def failed_with(self, failure: BuildFailure) -> BuildAttempt:
+        """This attempt, closed as failed, keeping the moment it started."""
+        return BuildAttempt(
+            commit=self.commit,
+            started_at=self.started_at,
+            outcome=BuildOutcome.FAILED,
+            failure=failure,
+            toolchain=self.toolchain,
+        )
+
 
 class DeckState(StrEnum):
     """What the list and the deck page say a deck is, in one word.
@@ -540,6 +550,19 @@ class Deck:
     def is_owned_by(self, viewer: str) -> bool:
         """Whether the account owns this talk; only its owner may see it."""
         return self.owner_id == viewer
+
+    def carrying(self, attempt: BuildAttempt | None) -> Deck:
+        """This talk with the build it last started replaced."""
+        return Deck(
+            slug=self.slug,
+            title=self.title,
+            changed_at=self.changed_at,
+            owner_id=self.owner_id,
+            source_id=self.source_id,
+            commit=self.commit,
+            build=self.build,
+            attempt=attempt,
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
