@@ -251,27 +251,35 @@ def test_the_residue_twins_start_one_after_another_each_judged_by_its_own_predic
     ends = expected_ends(driver.CONTROL, starts_module)
     names = [driver.residue_pod_name(residue) for residue, _ in ends]
     assert applied_twins(world) == [driver.TWIN_POD, *names]
-    commands = [command for command, _, _ in world.commands]
-    stopped = commands.index(
-        (
-            "kubectl",
-            "delete",
-            "statefulset",
-            "--wait=true",
-            "build-worker",
-            "--namespace",
-            "presentator",
-        )
+    issued = [(command, stdin or "") for command, _, stdin in world.commands]
+    worker_applied = max(
+        at
+        for at, (command, stdin) in enumerate(issued)
+        if command[:2] == ("kubectl", "apply") and "StatefulSet" in stdin
     )
-    assert (
-        "kubectl",
-        "wait",
-        "--for=delete",
-        "--timeout=60s",
-        "pod/build-worker-0",
-        "--namespace",
-        "presentator",
-    ) in commands[stopped:]
+    stopped = next(
+        at
+        for at, (command, _) in enumerate(issued)
+        if at > worker_applied and command[:3] == ("kubectl", "delete", "statefulset")
+    )
+    gone = next(
+        at
+        for at, (command, _) in enumerate(issued)
+        if at > stopped
+        and command[:3] == ("kubectl", "wait", "--for=delete")
+        and f"pod/{driver.WORKER_POD}" in command
+    )
+    twin_applies = [
+        at
+        for at, (command, stdin) in enumerate(issued)
+        if command[:2] == ("kubectl", "apply")
+        and any(
+            f'"name": "{name}"' in stdin or f"name: {name}\n" in stdin
+            for name in [driver.TWIN_POD, *names]
+        )
+    ]
+    assert len(twin_applies) == 1 + len(names)
+    assert min(twin_applies) > gone
     tails = {
         pod["metadata"]["name"]: pod["spec"]["containers"][0]["command"][-1]
         for pod in world.applied("Pod")[1:]
