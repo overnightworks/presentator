@@ -53,8 +53,14 @@ jobs:
           ref: ${{ needs.gate.outputs.commit }}
           persist-credentials: false
 
-      - name: Prepare the probe's tools
+      - name: Install platform's tools
+        id: tools
         uses: $/.github/actions/k3d-probe-tools
+
+      - name: Put k3d and kubectl on PATH
+        env:
+          DIRECTORIES: ${{ steps.tools.outputs.directories }}
+        run: echo "${DIRECTORIES//:/$'\n'}" >> "$GITHUB_PATH"
 
       - name: Log in to GHCR
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0

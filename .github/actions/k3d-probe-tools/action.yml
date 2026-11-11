@@ -1,5 +1,10 @@
 name: Prepare the k3d probe's tools
-description: Installs the locked dependencies, reads the platform commit the probe pins, checks platform out at it as `platform` and puts k3d and kubectl on PATH. The caller has checked this repository out.
+description: Installs the locked dependencies, reads the platform commit the probe pins, checks platform out at it as `platform` and installs platform's k3d and kubectl. The caller has checked this repository out and puts the tools' directories on PATH.
+
+outputs:
+  directories:
+    description: The directories of k3d and kubectl, joined by `:`.
+    value: ${{ steps.tools.outputs.directories }}
 
 runs:
   using: composite
@@ -25,13 +30,16 @@ runs:
         persist-credentials: false
 
     # mise installs the tools of platform's lock but puts none on PATH. Only the
-    # directories of the two tools join it, so this repository's uv stays the uv
-    # of every later step.
-    - name: Install platform's tools and put k3d and kubectl on PATH
+    # directories of the two tools are handed out, so this repository's uv stays
+    # the uv of every later step.
+    - name: Install platform's tools
+      id: tools
       shell: bash
       working-directory: platform
       run: |
         scripts/bootstrap_pc.sh --only tools
+        directories=
         for tool in k3d kubectl; do
-          dirname "$("$HOME/.local/bin/mise" which "$tool")" >> "$GITHUB_PATH"
+          directories="$directories:$(dirname "$("$HOME/.local/bin/mise" which "$tool")")"
         done
+        echo "directories=${directories#:}" >> "$GITHUB_OUTPUT"

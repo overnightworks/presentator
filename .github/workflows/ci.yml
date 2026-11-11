@@ -677,8 +677,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Prepare the probe's tools
+      - name: Install platform's tools
+        id: tools
         uses: $/.github/actions/k3d-probe-tools
+
+      - name: Put k3d and kubectl on PATH
+        env:
+          DIRECTORIES: ${{ steps.tools.outputs.directories }}
+        run: echo "${DIRECTORIES//:/$'\n'}" >> "$GITHUB_PATH"
 
       - name: Write a kubeconfig whose context is unreachable, to prove the probe leaves it alone
         run: |
