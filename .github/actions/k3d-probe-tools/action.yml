@@ -1,0 +1,45 @@
+name: Prepare the k3d probe's tools
+description: Installs the locked dependencies, reads the platform commit the probe pins, checks platform out at it as `platform` and installs platform's k3d and kubectl. The caller has checked this repository out and puts the tools' directories on PATH.
+
+outputs:
+  directories:
+    description: The directories of k3d and kubectl, joined by `:`.
+    value: ${{ steps.tools.outputs.directories }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install uv
+      uses: $/.github/actions/setup-uv
+
+    - name: Install locked dependencies
+      shell: bash
+      run: uv sync --locked
+
+    - name: Read the platform commit the probe is written against
+      id: pin
+      shell: bash
+      run: echo "ref=$(.venv/bin/python scripts/probe_build_worker_k3d.py pin)" | tee -a "$GITHUB_OUTPUT"
+
+    - name: Check out platform at that commit
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        repository: overnightworks/platform
+        ref: ${{ steps.pin.outputs.ref }}
+        path: platform
+        persist-credentials: false
+
+    # mise installs the tools of platform's lock but puts none on PATH. Only the
+    # directories of the two tools are handed out, so this repository's uv stays
+    # the uv of every later step.
+    - name: Install platform's tools
+      id: tools
+      shell: bash
+      working-directory: platform
+      run: |
+        scripts/bootstrap_pc.sh --only tools
+        directories=
+        for tool in k3d kubectl; do
+          directories="$directories:$(dirname "$("$HOME/.local/bin/mise" which "$tool")")"
+        done
+        echo "directories=${directories#:}" >> "$GITHUB_OUTPUT"
