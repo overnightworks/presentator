@@ -23,7 +23,7 @@ from typing import Any
 from probe_build_worker_harness import refuse, say
 from ruamel.yaml import YAML
 
-PLATFORM_COMMIT = "8fc9046d873ffdb0c3b0732120d9655d8591ff9a"
+PLATFORM_COMMIT = "6d0fa986308d6a57a0df367441f8abd33a4adb62"
 TOOLS = ("k3d", "kubectl", "docker")
 NAMESPACE = "presentator"
 IN_NAMESPACE = ("--namespace", NAMESPACE)
@@ -120,6 +120,7 @@ class Effects:
     monotonic: Callable[[], float]
     sleep: Callable[[float], None]
     hold_signals: Callable[[], None]
+    secret: Callable[[], str]
 
 
 @dataclass(frozen=True)
