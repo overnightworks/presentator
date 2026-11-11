@@ -52,13 +52,14 @@ def an_id_token(word: str = _ID_MARKER) -> SecretStr:
     return SecretStr(word)
 
 
-def open_session(
+def open_session(  # noqa: PLR0913 - one keyword per stored column
     store: SqliteSessionRecordStore,
     user_id: str = "user-1",
     *,
     now: datetime = _NOW,
     expires_at: datetime = _NOW,
     refresh_token: SecretStr | None = None,
+    account_language: str | None = None,
 ) -> StoredSession:
     return store.create(
         user_id,
@@ -66,6 +67,7 @@ def open_session(
         expires_at=expires_at,
         refresh_token=refresh_token,
         id_token=an_id_token(),
+        account_language=account_language,
     )
 
 
@@ -230,6 +232,7 @@ def test_a_timestamp_given_with_an_offset_is_stored_as_the_same_instant_in_utc(
         expires_at=(_NOW + timedelta(hours=1)).astimezone(in_berlin),
         refresh_token=None,
         id_token=an_id_token(),
+        account_language=None,
     )
 
     assert stored_expiry(database, session.id) == "2026-01-15T10:00:00+00:00"
@@ -301,7 +304,12 @@ def test_creating_the_tables_twice_leaves_the_people_as_they_were(
     database: Path,
 ) -> None:
     session = SqliteSessionRecordStore(database).create(
-        "user-1", now=_NOW, expires_at=_NOW, refresh_token=None, id_token=an_id_token()
+        "user-1",
+        now=_NOW,
+        expires_at=_NOW,
+        refresh_token=None,
+        id_token=an_id_token(),
+        account_language=None,
     )
 
     create_identity_tables(database)
@@ -337,6 +345,7 @@ def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_add
         "expires_at",
         "refresh_token",
         "id_token",
+        "account_language",
     ]
     assert "login_attempts" not in tables
 
@@ -371,6 +380,7 @@ def test_a_file_this_version_started_is_completed_to_sessions_without_a_client_a
         "expires_at",
         "refresh_token",
         "id_token",
+        "account_language",
     ]
 
 
@@ -470,6 +480,20 @@ def test_a_refresh_token_is_stored_in_the_row_and_read_back_as_a_secret(
     assert loaded.refresh_token is not None
     assert loaded.refresh_token.get_secret_value() == "rt-MARKER"
     assert occurrences_in_the_file(database, "rt-MARKER") == 1
+
+
+@pytest.mark.parametrize("language", ["de", "pt-BR", None])
+def test_a_session_reads_back_the_account_language_it_was_created_with(
+    sessions: SqliteSessionRecordStore, language: str | None
+) -> None:
+    created = open_session(sessions, "user-1", account_language=language)
+
+    loaded = sessions.load(created.id)
+
+    assert (created.account_language, loaded and loaded.account_language) == (
+        language,
+        language,
+    )
 
 
 def test_a_session_without_a_refresh_token_reads_back_none(
@@ -600,6 +624,7 @@ def test_a_session_never_shows_its_tokens_in_repr_or_str(
         expires_at=_NOW,
         refresh_token=a_token(),
         id_token=an_id_token("id-MARKER"),
+        account_language=None,
     )
 
     for shown in (repr(created), str(created), repr(sessions.load(created.id))):
@@ -617,6 +642,7 @@ def test_the_id_token_is_read_back_and_survives_a_touch_and_a_refresh_token_swap
         expires_at=_NOW,
         refresh_token=a_token(),
         id_token=an_id_token("id-kept"),
+        account_language=None,
     )
 
     sessions.touch(created.id, expires_at=_NOW + timedelta(hours=1))
@@ -639,6 +665,7 @@ def test_a_session_created_without_an_id_token_stores_none(
         expires_at=_NOW,
         refresh_token=None,
         id_token=None,
+        account_language=None,
     )
 
     assert created.id_token is None

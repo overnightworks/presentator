@@ -7,17 +7,22 @@ from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import urlencode
 
+import pytest
 from fastapi.testclient import TestClient
 from starlette.types import ASGIApp, Message
+from webauth.middleware.body_size import BodySizeLimitMiddleware
+from webauth.policies import BodySizePolicy
 
-from presentator.api.auth import BACKCHANNEL_LOGOUT_PATH
+from presentator.api.auth import BACKCHANNEL_LOGOUT_PATH, DEFAULT_BODY_BYTES
 from presentator.api.copresenter import MAX_SAID_LENGTH
+from presentator.api.hooks import hook_address
 from presentator.contracts.models import Role
 from presentator.contracts.text import DEFAULT_LANGUAGE_TAG
 from tests.support.copresenter_support import QUESTION, a_copresenter_talk_host
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
+    Lobby,
     a_content_security_policy,
     a_lobby,
 )
@@ -211,3 +216,39 @@ def test_a_33_kib_settings_write_gets_413_with_the_security_headers() -> None:
     assert answer.headers["content-security-policy"] == a_content_security_policy()
     assert answer.headers["cache-control"] == "no-store"
     assert _A_NAME not in admin.client.get(_SETTINGS).text
+
+
+def the_lobbys_body_policy(admin: Lobby) -> BodySizePolicy:
+    (policy,) = (
+        middleware.kwargs["policy"]
+        for middleware in admin.app.user_middleware
+        if middleware.cls is BodySizeLimitMiddleware
+    )
+    assert isinstance(policy, BodySizePolicy)
+    return policy
+
+
+@pytest.mark.parametrize(
+    ("over_the_cap", "status"),
+    [
+        pytest.param(0, HTTPStatus.NOT_FOUND, id="at-the-cap"),
+        pytest.param(1, HTTPStatus.REQUEST_ENTITY_TOO_LARGE, id="one-byte-over"),
+    ],
+)
+def test_a_signed_in_hook_call_without_the_origin_proof_is_held_to_the_hooks_cap(
+    over_the_cap: int, status: HTTPStatus
+) -> None:
+    admin = a_lobby()
+    admin.sign_in()
+    del admin.client.headers["sec-fetch-site"]
+    hook = hook_address("a-source")
+    cap = the_lobbys_body_policy(admin).max_bytes(hook, "POST")
+
+    called = admin.client.post(
+        hook, headers={"content-length": str(cap + over_the_cap)}, content=b""
+    )
+    refused = admin.client.post(_SETTINGS)
+
+    assert cap > DEFAULT_BODY_BYTES
+    assert called.status_code == status
+    assert refused.status_code == HTTPStatus.FORBIDDEN

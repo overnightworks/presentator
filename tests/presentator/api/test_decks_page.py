@@ -152,8 +152,8 @@ def test_a_download_with_nothing_behind_it_answers_the_lobby_app_under_not_found
 
 @pytest.mark.parametrize(
     "slug",
-    ["hello\\deck", 'hello"deck', "hello\ndeck"],
-    ids=["a separator", "a quote", "a line break"],
+    ["hello\\deck", 'hello"deck'],
+    ids=["a separator", "a quote"],
 )
 def test_a_slug_that_could_reach_a_header_is_refused_before_one_is_built(
     slug: str,

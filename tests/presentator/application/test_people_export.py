@@ -58,6 +58,7 @@ def _exported(subject: str = _THE_PERSON) -> PersonExport:
         expires_at=_NOW + timedelta(hours=1),
         refresh_token=SecretStr(_A_REFRESH_WORD),
         id_token=SecretStr("an-id-token"),
+        account_language=None,
     )
     return instance.people.export_person(subject)
 

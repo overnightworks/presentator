@@ -116,13 +116,11 @@ _REFUSAL_PATHS: Final = frozenset(
     for path in (sign_in_refusal_path(refusal), talk_sign_in_refusal_path(refusal))
 )
 
-# Signing in (its start and the issuer's return) and signing out are the
-# addresses the gate leaves alone, and the library derives them from the
-# sign-in paths; logging out ends a session rather than using one. The lobby
-# app's built assets have to render the open pages themselves, so they are
-# public too, and so is the address another server
-# posts to: a source host's POST under the hook prefix. Keycloak's back-channel
-# logout is open and exempt from the origin check through the sign-in paths.
+# The sign-in addresses are public through the sign-in paths the middleware is
+# given; only the back-channel logout among them is exempt from the origin
+# check. The lobby app's built assets have to render the open pages themselves,
+# so they are public too, and so is the address another server posts to: a
+# source host's POST under the hook prefix.
 # `/setup` is a retired address: it answers 404 to everyone, so a signed-out
 # reader is not sent to a login for a page that does not exist.
 _SERVER_CALLS: Final = PathRules(prefixes=(HOOK_CALLS,))
@@ -141,7 +139,6 @@ _PUBLIC_RULES: Final = (
     PublicRule(PathRules(prefixes=(_INSIDE_APP_ASSETS,))),
     HEALTH_IS_PUBLIC,
     PublicRule(_SERVER_CALLS, methods=frozenset({HTTPMethod.POST})),
-    *LOBBY_SIGN_IN.public_rules,
 )
 # The lobby app's shell answers a page load on any lobby address no route
 # claims, but never on these: a missing asset, API or server route stays the
@@ -156,11 +153,7 @@ _NEVER_THE_SHELL: Final = PathRules(
     ),
 )
 PERMISSIONS_POLICY: Final = "camera=(), microphone=(), geolocation=()"
-_CSRF_POLICY: Final = CsrfPolicy(
-    exempt=PathRules(
-        exact=LOBBY_SIGN_IN.backchannel.exact, prefixes=_SERVER_CALLS.prefixes
-    )
-)
+_CSRF_POLICY: Final = CsrfPolicy(exempt=_SERVER_CALLS)
 DEFAULT_BODY_BYTES: Final = 32 * 1024
 # Every route has this budget, forms and the ask included; the hook keeps a git
 # host's push budget, since GitHub documents payloads of up to 25 MB.
@@ -172,41 +165,22 @@ _BODY_SIZE: Final = BodySizePolicy(
             max_bytes=25 * 1024 * 1024,
             methods=frozenset({HTTPMethod.POST}),
         ),
-        LOBBY_SIGN_IN.backchannel_body_size_rule,
     ),
 )
 
-# One budget per address and host. Signing in is the dear step: a complete
-# one is two requests, so 40 in ten minutes admit about twenty sign-ins. The
-# talk host serves a deck's files `no-store`, so one load fetches every file of
-# the talk again, a presenter view and an audience window each; its files have
-# a budget of their own. WebSockets are not counted, the co-presenter checks
-# the session on every connection.
-SIGN_IN_BUDGET: Final = RateLimitBudget("sign-in", max_requests=40, window_seconds=600)
-DEFAULT_BUDGET: Final = RateLimitBudget("requests", max_requests=600, window_seconds=60)
+# The talk host serves a deck's files `no-store`, so one load fetches every file
+# of the talk again, a presenter view and an audience window each; its files have
+# a budget of their own. The readiness probe is never counted. WebSockets are not
+# counted, the co-presenter checks the session on every connection.
 TALK_FILES_BUDGET: Final = RateLimitBudget(
     "talk-files", max_requests=3000, window_seconds=60
 )
-
-
-def _rate_limit(sign_in: SignInPaths, *rules: RateLimitRule) -> RateLimitPolicy:
-    """One host's budgets.
-
-    The readiness probe and Keycloak's back-channel logout, which comes from its
-    shared address, are never counted.
-    """
-    return RateLimitPolicy(
-        default=DEFAULT_BUDGET,
-        rules=(RateLimitRule(sign_in.browser_paths, SIGN_IN_BUDGET), *rules),
-        exempt=PathRules(exact=frozenset({HEALTH_PATH}) | sign_in.backchannel.exact),
-    )
-
-
-LOBBY_RATE_LIMIT: Final = _rate_limit(LOBBY_SIGN_IN)
-TALK_RATE_LIMIT: Final = _rate_limit(
-    TALK_SIGN_IN,
+_NOT_COUNTED: Final = PathRules(exact=frozenset({HEALTH_PATH}))
+LOBBY_RATE_LIMIT: Final = RateLimitPolicy(exempt=_NOT_COUNTED)
+TALK_RATE_LIMIT: Final = RateLimitPolicy(
     # With the slash, so `/deckX` is not a deck file.
-    RateLimitRule(PathRules(prefixes=(f"{DECK_PATH}/",)), TALK_FILES_BUDGET),
+    rules=(RateLimitRule(PathRules(prefixes=(f"{DECK_PATH}/",)), TALK_FILES_BUDGET),),
+    exempt=_NOT_COUNTED,
 )
 LOGIN_REDIRECT: Final = LOBBY_SIGN_IN.login_redirect
 
@@ -367,6 +341,7 @@ def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
         ),
         keeps_id_token=True,
         max_sessions=None,
+        ui_language=lambda _request: None,
         logout_page_text=lambda request: _logout_page_text(request, surfaces),
     )
     for path in _REFUSAL_PATHS:
@@ -399,6 +374,7 @@ def _install_middleware(
     install_error_answers(lobby)
     install_web_auth_middleware(
         lobby,
+        sign_in_paths=LOBBY_SIGN_IN,
         security_headers=SecurityHeadersPolicy(
             content_security_policy=auth.content_security_policy,
             permissions_policy=PERMISSIONS_POLICY,

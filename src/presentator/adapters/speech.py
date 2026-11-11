@@ -197,7 +197,7 @@ class SpeechHearing:
             self._origin,
             workload_token=tokens.workload,
             person_token=tokens.person,
-            language=hears,
+            languages=_hearing_languages(hears),
             held_limit_bytes=_HELD_LIMIT_BYTES,
             deadline_seconds=self._hearing_deadline_seconds,
             opening_seconds=self._opening_seconds,
@@ -237,6 +237,11 @@ def _health_of(outcome: HealthOutcome) -> wire.Health:
 def _speaks(health: wire.Health, voice: str) -> bool:
     offered = health.speaking.voices.get(voice)
     return offered is not None and (offered.ready or health.speaking.ready)
+
+
+def _hearing_languages(main: wire.HearingLanguage) -> tuple[wire.HearingLanguage, ...]:
+    """The languages a hearing asks for: the main one first, then the other one."""
+    return (main, *(code for code in wire.HearingLanguage if code is not main))
 
 
 class _ServiceFailureError(Exception):

@@ -248,7 +248,10 @@ def a_delta(text: str, item: str = AN_ITEM) -> wire.TranscriptDelta:
 
 def a_completed(text: str, item: str = AN_ITEM) -> wire.TranscriptCompleted:
     return wire.TranscriptCompleted(
-        item_id=item, transcript=text, usage=wire.DurationUsage(seconds=1.0)
+        item_id=item,
+        transcript=text,
+        usage=wire.DurationUsage(seconds=1.0),
+        languages=(wire.TranscriptLanguage(code=wire.HearingLanguage.DE),),
     )
 
 

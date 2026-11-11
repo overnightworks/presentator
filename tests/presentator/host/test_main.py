@@ -92,6 +92,7 @@ def signed_in(
         expires_at=now + SESSION_LIFETIME,
         refresh_token=None,
         id_token=SecretStr("an-id-token"),
+        account_language=None,
     )
     client = TestClient(
         instance.lobby,
@@ -749,6 +750,7 @@ def test_an_instance_restarts_on_a_crash_that_left_only_current_frames_in_the_lo
             expires_at=now + SESSION_LIFETIME,
             refresh_token=None,
             id_token=SecretStr("an-id-token"),
+            account_language=None,
         )
         session_ids.append(opened.id)
 
