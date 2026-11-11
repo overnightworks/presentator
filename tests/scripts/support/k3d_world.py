@@ -363,6 +363,16 @@ def expected_ends(
     return [(control, None), *refusals]
 
 
+def residue_pods(
+    driver: ModuleType, starts_module: ModuleType, outcomes: dict[str, Document]
+) -> dict[str, Document]:
+    """Each twin Pod by name as kubectl prints it: the outcome chosen or the expected end."""
+    return {
+        driver.residue_pod_name(residue): outcomes.get(residue, twin_answer(refusal))
+        for residue, refusal in expected_ends(driver.CONTROL, starts_module)
+    }
+
+
 def fixture_maker(
     load_script: Callable[..., ModuleType], tmp_path: Path
 ) -> Callable[..., Fixture]:
@@ -415,12 +425,7 @@ def fixture_maker(
         )
         world.node_name, world.probe_image = run.node, run.tag
         world.production_image, world.twin_pod = production_image, driver.TWIN_POD
-        world.residue_pods = {
-            driver.residue_pod_name(residue): world.outcomes.get(
-                residue, twin_answer(refusal)
-            )
-            for residue, refusal in expected_ends(driver.CONTROL, starts_module)
-        }
+        world.residue_pods = residue_pods(driver, starts_module, world.outcomes)
         world.streams = world.streams or [
             lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
             lives_stream(lives_module.LIVES, None),
