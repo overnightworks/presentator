@@ -2,6 +2,7 @@
 
 import copy
 import json
+import signal
 import sys
 from collections.abc import Callable, Generator, Iterator, Mapping
 from dataclasses import dataclass, field, replace
@@ -773,7 +774,7 @@ def test_stopping_the_stream_kills_and_reaps_its_child(
     assert next(lines) == "ready\n"
     child = runner.child
     getattr(runner if stop == "kill_child" else lines, stop)()
-    assert child.returncode is not None
+    assert child.returncode == -signal.SIGKILL
     lines.close()
     assert runner.child is None
 
