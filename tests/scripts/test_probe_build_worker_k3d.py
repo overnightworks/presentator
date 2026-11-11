@@ -3,22 +3,27 @@
 import copy
 import json
 import sys
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from collections.abc import Callable, Generator, Iterator, Mapping
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime, timedelta
+from functools import partial
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
 import pytest
+from ruamel.yaml import YAML
 
+from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
 from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import Predicate
 
-PRODUCTION_IMAGE = "ghcr.io/overnightworks/presentator@sha256:" + "a" * 64
+DIGEST = "@sha256:" + "a" * 64
 REMOVE_LINK_IMAGE = "docker.io/library/busybox:1.38.0@sha256:" + "b" * 64
 K3S_VERSION = "v1.37.2+k3s1"
 RUN_IDENTIFIER = "0a1b2c3d"
 OWN = "the run's own node"
+EPOCH = datetime(2026, 11, 11, tzinfo=UTC)
 
 Document = dict[str, Any]
 Issued = tuple[tuple[str, ...], Mapping[str, str], str | None]
@@ -29,60 +34,148 @@ def driver(load_script: Callable[..., ModuleType]) -> ModuleType:
     return load_script("probe_build_worker_k3d")
 
 
-def workload_documents(web_image: str, worker_image: str) -> list[Document]:
+@pytest.fixture
+def production_image(driver: ModuleType) -> str:
+    return driver.PRODUCTION_IMAGE + DIGEST
+
+
+def workload_documents(image: str) -> list[Document]:
+    """What the overlay and the base render, every production container at `image`."""
+
+    def template(container: str, *, init: bool = False) -> Document:
+        spec: Document = {"containers": [{"name": container, "image": image}]}
+        if init:
+            spec["initContainers"] = [
+                {"name": "remove-link", "image": REMOVE_LINK_IMAGE}
+            ]
+        return {"spec": spec}
+
+    def document(kind: str, name: str, **spec: Any) -> Document:  # noqa: ANN401
+        return {"kind": kind, "metadata": {"name": name}, "spec": spec}
+
+    job = {"spec": {"template": template("restore-test")}}
     return [
-        {
-            "kind": "Deployment",
-            "metadata": {"name": "web"},
-            "spec": {
-                "replicas": 1,
-                "template": {
-                    "spec": {"containers": [{"name": "web", "image": web_image}]}
-                },
-            },
-        },
-        {
-            "kind": "StatefulSet",
-            "metadata": {"name": "build-worker"},
-            "spec": {
-                "replicas": 1,
-                "template": {
-                    "spec": {
-                        "initContainers": [
-                            {"name": "remove-link", "image": REMOVE_LINK_IMAGE}
-                        ],
-                        "containers": [{"name": "worker", "image": worker_image}],
-                    }
-                },
-            },
-        },
+        document("Deployment", "web", replicas=1, template=template("web")),
+        document("StatefulSet", "build-worker", template=template("worker", init=True)),
+        document("CronJob", "restore-test", jobTemplate=job),
+        document("PersistentVolumeClaim", "build-socket"),
+        document("ServiceAccount", "build-worker"),
+        document("ConfigMap", "sqlite"),
+        document("Schedule", "backup"),
+        document(
+            "PodConfig",
+            "backup",
+            template={"spec": {"containers": [{"name": "backup"}]}},
+        ),
     ]
+
+
+def named(documents: list[Document], kind: str) -> Document:
+    return next(document for document in documents if document["kind"] == kind)
 
 
 def as_yaml_stream(documents: list[Document]) -> str:
     return "\n---\n".join(json.dumps(document) for document in documents)
 
 
-def terminated(exit_code: int) -> Document:
-    return {"terminated": {"exitCode": exit_code}}
+def stamp(seconds: int) -> str:
+    return (EPOCH + timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def pod(
+def terminated_state(
+    exit_code: int = REFUSAL_EXIT_STATUS,
     *,
-    worker_exit: int = REFUSAL_EXIT_STATUS,
-    remove_link_exit: int | None = None,
-    restarted: bool = True,
+    message: str = "",
+    reason: str = "Error",
+    started: int = 0,
 ) -> Document:
-    worker: Document = {"name": "worker", "state": {}, "lastState": {}}
-    worker["lastState" if restarted else "state"] = terminated(worker_exit)
+    return {
+        "terminated": {
+            "exitCode": exit_code,
+            "reason": reason,
+            "message": message,
+            "startedAt": stamp(started),
+            "finishedAt": stamp(started + 1),
+        }
+    }
+
+
+@dataclass(frozen=True)
+class Version:
+    """What one version of a pod differs in."""
+
+    init: bool = True
+    init_exit: int | None = 0
+    last_state: Document = field(default_factory=dict[str, Any])
+    restarts: int = 0
+
+
+PLAIN = Version()
+
+
+def pod_version(
+    uid: str,
+    state: Document | None = None,
+    version: Version = PLAIN,
+) -> Document:
+    """One version of a pod as kubectl's watch prints it."""
+    worker: Document = {
+        "name": "worker",
+        "restartCount": version.restarts,
+        "state": state or {"waiting": {}},
+        "lastState": version.last_state,
+    }
     status: Document = {"containerStatuses": [worker]}
     spec: Document = {"containers": [{"name": "worker"}]}
-    if remove_link_exit is not None:
-        status["initContainerStatuses"] = [
-            {"name": "remove-link", "state": terminated(remove_link_exit)}
-        ]
+    if version.init:
         spec["initContainers"] = [{"name": "remove-link"}]
-    return {"spec": spec, "status": status}
+        init_state: Document = {"running": {}}
+        if version.init_exit is not None:
+            init_state = terminated_state(version.init_exit)
+        status["initContainerStatuses"] = [{"name": "remove-link", "state": init_state}]
+    return {"metadata": {"uid": uid}, "spec": spec, "status": status}
+
+
+def watch_event(kind: str, pod: Document) -> Document:
+    assert kind in {"ADDED", "MODIFIED", "DELETED"}, f"the fake does not know {kind}"
+    return {"type": kind, "object": pod}
+
+
+def life_events(
+    uid: str,
+    refusal: Predicate,
+    *,
+    started: int = 0,
+    ended: Document | None = None,
+    version: Version = PLAIN,
+) -> list[Document]:
+    """The events of one life that ends by a refusal: created, ended, deleted."""
+    said = f"worker started\nstart refused: {refusal}\n"
+    state = ended or terminated_state(message=said, started=started)
+    pending = pod_version(uid, version=replace(version, init_exit=None))
+    last = pod_version(uid, state, version)
+    return [
+        watch_event("ADDED", pending),
+        watch_event("MODIFIED", last),
+        watch_event("DELETED", last),
+    ]
+
+
+def lives_stream(
+    count: int,
+    refusal: Predicate,
+    *,
+    gap: int = 3,
+    version: Version = PLAIN,
+) -> list[Document]:
+    """`count` lives, each worker starting `gap` seconds after its predecessor's end."""
+    return [
+        event
+        for number in range(count)
+        for event in life_events(
+            f"life-{number}", refusal, started=number * (gap + 1), version=version
+        )
+    ]
 
 
 def node(
@@ -104,21 +197,19 @@ class World:
     nodes: list[Document] = field(default_factory=lambda: [node()])
     node_name: str = ""
     probe_image: str = ""
-    pods: list[Document] = field(
-        default_factory=lambda: [pod(), pod(remove_link_exit=0, restarted=False)]
-    )
-    logs: list[str] = field(
-        default_factory=lambda: [
-            f"start refused: {Predicate.NO_ROUTE}",
-            f"start refused: {Predicate.KUBERNETES_UNPROVEN}",
-        ]
-    )
-    # None is a cell whose worker has no previous run: its `--previous` read fails.
-    previous_logs: list[str | None] = field(default_factory=lambda: [None, None])
+    production_image: str = ""
+    twin_pod: str = ""
+    # The events the watch of each cell prints; empty is the passing pair.
+    streams: list[list[Document]] = field(default_factory=list[list[Document]])
+    # The watch ends in a signal's exit after its first event.
+    interrupted: bool = False
     failing_command: tuple[str, ...] | None = None
     cell: int = 0
     overlay_file: str = ""
     commands: list[Issued] = field(default_factory=list[Issued])
+    directory_present_at_last_command: bool = False
+    events_printed: int = 0
+    watches_closed: int = 0
 
     def __call__(
         self,
@@ -127,6 +218,8 @@ class World:
         stdin: str | None,
     ) -> tuple[int, str]:
         self.commands.append((command, environment, stdin))
+        kubeconfig = Path(environment["KUBECONFIG"])
+        self.directory_present_at_last_command = kubeconfig.parent.exists()
         if (
             self.failing_command
             and command[: len(self.failing_command)] == self.failing_command
@@ -138,30 +231,47 @@ class World:
 
     def answer(self, command: tuple[str, ...]) -> str | None:
         match command:
-            case ("kubectl", "kustomize", *_) | ("yq", *_):
+            case ("kubectl", "kustomize", *_):
                 return self.render(command)
             case ("kubectl", "get", "nodes", *_):
                 return self.nodes_json()
-            case ("kubectl", "get", "pod", name, *_):
-                return json.dumps(self.pod_named(name))
-            case ("kubectl", "logs", "build-worker-0", *_):
-                return self.worker_log(command)
+            case ("kubectl", "get", "pod", name, *_) | ("kubectl", "logs", name, *_):
+                if name != self.twin_pod:
+                    message = f"the driver read {name}, which is gone with its life"
+                    raise AssertionError(message)
+                done = json.dumps({"status": {"phase": "Succeeded"}})
+                return done if command[1] == "get" else ""
             case ("kubectl", "delete", "statefulset", *_):
                 self.cell += 1
                 return ""
             case _:
                 return ""
 
-    def worker_log(self, command: tuple[str, ...]) -> str | None:
-        """The worker's previous log when the read asks for it, else its current one."""
-        if "--previous" in command:
-            return self.previous_logs[self.cell]
-        return self.logs[self.cell]
+    def watch(
+        self, command: tuple[str, ...], environment: Mapping[str, str]
+    ) -> Generator[str]:
+        """The lines kubectl's watch prints; a closed stream is counted."""
+        self.commands.append((command, environment, None))
+        if not (
+            command[0] == "timeout"
+            and command[1].isdigit()
+            and command[2:5] == ("kubectl", "get", "pods")
+        ):
+            message = f"the fake does not understand the watch {command}"
+            raise AssertionError(message)
+        return self.stream(self.streams[self.cell])
 
-    def pod_named(self, name: str) -> Document:
-        if name == "build-worker-0":
-            return self.pods[self.cell]
-        return {"status": {"phase": "Succeeded"}}
+    def stream(self, events: list[Document]) -> Generator[str]:
+        try:
+            for event in events:
+                self.events_printed += 1
+                yield from (
+                    f"{line}\n" for line in json.dumps(event, indent=4).splitlines()
+                )
+                if self.interrupted:
+                    raise SystemExit(143)
+        finally:
+            self.watches_closed += 1
 
     def nodes_json(self) -> str:
         items = copy.deepcopy(self.nodes)
@@ -171,38 +281,31 @@ class World:
         return json.dumps({"items": items})
 
     def render(self, command: tuple[str, ...]) -> str:
-        if command[0] == "yq":
-            return as_yaml_stream(
-                self.statefulset(with_init_container="del(" not in command[1])
-            )
         if command[2].endswith("apps/presentator"):
-            return as_yaml_stream(
-                workload_documents(PRODUCTION_IMAGE, PRODUCTION_IMAGE)
-            )
+            return as_yaml_stream(workload_documents(self.production_image))
         self.overlay_file = (Path(command[2]) / "kustomization.yaml").read_text()
-        return as_yaml_stream(workload_documents(self.probe_image, self.probe_image))
-
-    def statefulset(self, *, with_init_container: bool) -> list[Document]:
-        document = workload_documents(self.probe_image, self.probe_image)[1]
-        if not with_init_container:
-            del document["spec"]["template"]["spec"]["initContainers"]
-        return [document]
+        return as_yaml_stream(workload_documents(self.probe_image))
 
     def issued(self, *prefix: str) -> list[tuple[str, ...]]:
-        return [
-            command
-            for command, _, _ in self.commands
-            if command[: len(prefix)] == prefix
-        ]
+        commands = (command for command, _, _ in self.commands)
+        return [command for command in commands if command[: len(prefix)] == prefix]
 
-    def applied(self, kind: str) -> list[Document]:
-        """The documents of the given kind that an apply received, each one JSON."""
-        documents = [
-            json.loads(stdin or "")
+    def applies(self) -> list[list[Document]]:
+        """The documents of each apply, in order."""
+        return [
+            list(YAML(typ="safe").load_all(stdin))  # pyright: ignore[reportUnknownMemberType]
             for command, _, stdin in self.commands
             if command[:2] == ("kubectl", "apply")
         ]
-        return [document for document in documents if document["kind"] == kind]
+
+    def applied(self, kind: str) -> list[Document]:
+        """The documents of the given kind that an apply received."""
+        return [
+            document
+            for documents in self.applies()
+            for document in documents
+            if document["kind"] == kind
+        ]
 
 
 @dataclass
@@ -218,7 +321,21 @@ class Fixture:
 
 
 @pytest.fixture
-def make_fixture(driver: ModuleType, tmp_path: Path) -> Callable[..., Fixture]:
+def platform(tmp_path: Path) -> Path:
+    checkout = tmp_path / "platform"
+    (checkout / "infrastructure" / "namespaces").mkdir(parents=True)
+    (checkout / "mise.toml").write_text(f'[env]\nK3S_VERSION = "{K3S_VERSION}"\n')
+    (checkout / "infrastructure" / "namespaces" / "namespaces.yaml").write_text(
+        "kind: Namespace\nmetadata:\n  name: other\n---\n"
+        "kind: Namespace\nmetadata:\n  name: presentator\n"
+    )
+    return checkout
+
+
+@pytest.fixture
+def make_fixture(
+    driver: ModuleType, production_image: str, platform: Path, tmp_path: Path
+) -> Callable[..., Fixture]:
     def make(
         world: World | None = None,
         *,
@@ -226,13 +343,6 @@ def make_fixture(driver: ModuleType, tmp_path: Path) -> Callable[..., Fixture]:
         missing: str | None = None,
     ) -> Fixture:
         world = world or World()
-        platform = tmp_path / "platform"
-        (platform / "infrastructure" / "namespaces").mkdir(parents=True)
-        (platform / "mise.toml").write_text(f'[env]\nK3S_VERSION = "{K3S_VERSION}"\n')
-        (platform / "infrastructure" / "namespaces" / "namespaces.yaml").write_text(
-            "kind: Namespace\nmetadata:\n  name: other\n---\n"
-            "kind: Namespace\nmetadata:\n  name: presentator\n"
-        )
         directory = tmp_path / "run"
         ticks = [0.0]
 
@@ -253,6 +363,7 @@ def make_fixture(driver: ModuleType, tmp_path: Path) -> Callable[..., Fixture]:
 
         effects = driver.Effects(
             run=run_command,
+            watch=world.watch,
             which=which,
             platform_head=head_of,
             free_port=lambda: 6550,
@@ -267,6 +378,11 @@ def make_fixture(driver: ModuleType, tmp_path: Path) -> Callable[..., Fixture]:
             effects=effects,
         )
         world.node_name, world.probe_image = run.node, run.tag
+        world.production_image, world.twin_pod = production_image, driver.TWIN_POD
+        world.streams = world.streams or [
+            lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
+            lives_stream(driver.LIVES, Predicate.KUBERNETES_UNPROVEN),
+        ]
         return Fixture(driver, world, run)
 
     return make
@@ -285,7 +401,7 @@ def test_drive_refuses_a_checkout_that_is_not_the_pin_before_any_command(
     assert not fixture.run.directory.exists()
 
 
-@pytest.mark.parametrize("tool", ["k3d", "kubectl", "yq"])
+@pytest.mark.parametrize("tool", ["k3d", "kubectl", "docker"])
 def test_drive_refuses_a_missing_tool_by_name_before_any_command(
     make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str], tool: str
 ) -> None:
@@ -298,7 +414,7 @@ def test_drive_refuses_a_missing_tool_by_name_before_any_command(
 
 
 @pytest.mark.parametrize(
-    ("nodes", "named"),
+    ("nodes", "named_in_refusal"),
     [
         ([node(), node("k3d-other-agent-0")], "2 nodes"),
         ([node("k3d-someone-else-server-0")], "k3d-someone-else-server-0"),
@@ -311,34 +427,50 @@ def test_drive_refuses_a_cluster_that_is_not_the_runs_own_before_any_write(
     make_fixture: Callable[..., Fixture],
     capsys: pytest.CaptureFixture[str],
     nodes: list[Document],
-    named: str,
+    named_in_refusal: str,
 ) -> None:
     fixture = make_fixture(World(nodes=nodes))
     with pytest.raises(SystemExit):
         fixture.drive()
-    assert named in capsys.readouterr().err
+    assert named_in_refusal in capsys.readouterr().err
     assert fixture.world.issued("kubectl", "apply") == []
 
 
-def test_every_command_of_a_run_carries_the_runs_kubeconfig_including_the_delete(
+def test_every_command_of_a_run_carries_the_runs_own_environment(
     make_fixture: Callable[..., Fixture],
 ) -> None:
     fixture = make_fixture()
     fixture.drive()
-    kubeconfigs = {env["KUBECONFIG"] for _, env, _ in fixture.world.commands}
-    assert kubeconfigs == {str(fixture.run.directory / "kubeconfig")}
+    directory = fixture.run.directory
+    for command, environment, _ in fixture.world.commands:
+        assert environment["KUBECONFIG"] == str(directory / "kubeconfig"), command
+        assert Path(environment["KUBECACHEDIR"]).is_relative_to(directory), command
+        assert environment["KUBERC"] == "off", command
     assert fixture.world.issued("k3d", "cluster", "delete") != []
+    assert fixture.world.issued("timeout") != []
 
 
-def test_drive_passes_when_the_control_and_the_twin_refuse_as_expected(
+def test_drive_passes_prints_every_life_and_interval_and_bounds_the_watch(
     make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str]
 ) -> None:
     fixture = make_fixture()
     fixture.drive()
-    assert fixture.world.issued("kubectl", "apply", "--filename", "-") != []
-    output = capsys.readouterr().out
-    for cell, log in zip((7, 8), fixture.world.logs, strict=True):
-        assert f"cell {cell}: exit {REFUSAL_EXIT_STATUS}, {log}" in output
+    lines = capsys.readouterr().out.splitlines()
+    for cell, count, refusal in (
+        (7, 1, Predicate.NO_ROUTE),
+        (8, fixture.driver.LIVES, Predicate.KUBERNETES_UNPROVEN),
+    ):
+        lives = [line for line in lines if line.startswith(f"cell {cell}: life")]
+        assert len(lives) == count
+        assert all(f"start refused: {refusal}" in line for line in lives)
+    intervals = [line for line in lines if line.startswith("cell 8: interval")]
+    assert len(intervals) == fixture.driver.LIVES - 1
+    assert all("3 s" in line and "resolution" in line for line in intervals)
+    *_, (_, budget, *_rest) = fixture.world.issued("timeout")
+    assert int(budget) >= (
+        fixture.driver.TERMINATION_WINDOW_SECONDS
+        + (fixture.driver.LIVES - 1) * CONNECT_WINDOW_SECONDS
+    )
 
 
 def test_the_overlay_names_the_platform_app_by_a_path_relative_to_itself(
@@ -354,36 +486,184 @@ def test_the_overlay_names_the_platform_app_by_a_path_relative_to_itself(
     ).resolve()
 
 
-def test_drive_applies_only_the_presentator_namespace_document(
-    make_fixture: Callable[..., Fixture],
+@pytest.mark.parametrize(
+    ("cell", "init_container"), [(0, False), (1, True)], ids=["cell 7", "cell 8"]
+)
+def test_a_cell_applies_only_the_worker_pods_kinds_and_the_message_policy_differs(
+    make_fixture: Callable[..., Fixture], *, cell: int, init_container: bool
 ) -> None:
     fixture = make_fixture()
     fixture.drive()
+    rendered = workload_documents(fixture.world.probe_image)
     namespaces = fixture.world.applied("Namespace")
-    assert [document["metadata"]["name"] for document in namespaces] == ["presentator"]
+    assert [d["metadata"]["name"] for d in namespaces] == ["presentator"]
+    cells = [d for d in fixture.world.applies() if d[0]["kind"] != "Namespace"]
+    documents = cells[cell]
+    assert {document["kind"] for document in documents} == {
+        "PersistentVolumeClaim",
+        "ServiceAccount",
+        "StatefulSet",
+    }
+    spec = named(documents, "StatefulSet")["spec"]["template"]["spec"]
+    (worker,) = spec["containers"]
+    assert worker.pop("terminationMessagePolicy") == (
+        fixture.driver.TERMINATION_MESSAGE_POLICY
+    )
+    expected = named(rendered, "StatefulSet")["spec"]["template"]["spec"]
+    if not init_container:
+        del expected["initContainers"]
+    assert spec == expected
 
 
-def test_drive_removes_the_cluster_and_the_image_after_a_failure_mid_run(
-    make_fixture: Callable[..., Fixture],
+@pytest.mark.parametrize(
+    "failing", [("kubectl", "apply"), ("k3d", "cluster", "delete")], ids=str
+)
+def test_a_failure_still_removes_the_cluster_then_the_image_then_the_directory(
+    make_fixture: Callable[..., Fixture], failing: tuple[str, ...]
 ) -> None:
-    fixture = make_fixture(World(failing_command=("kubectl", "apply")))
+    fixture = make_fixture(World(failing_command=failing))
     with pytest.raises(RuntimeError):
         fixture.drive()
-    (delete,) = fixture.world.issued("k3d", "cluster", "delete")
-    assert delete[-1] == fixture.run.name
-    assert fixture.world.issued("docker", "image", "rm") == [
-        ("docker", "image", "rm", "--force", fixture.run.tag)
-    ]
+    delete, image = fixture.world.commands[-2:]
+    assert delete[0] == ("k3d", "cluster", "delete", fixture.run.name)
+    assert image[0] == ("docker", "image", "rm", "--force", fixture.run.tag)
+    for _, environment, _ in (delete, image):
+        assert environment["KUBECONFIG"] == str(fixture.run.kubeconfig)
+        assert Path(environment["KUBECACHEDIR"]).is_relative_to(fixture.run.directory)
+        assert environment["KUBERC"] == "off"
+    assert fixture.world.directory_present_at_last_command
     assert not fixture.run.directory.exists()
 
 
+def test_a_signal_during_the_watch_closes_the_watch_then_tears_down(
+    make_fixture: Callable[..., Fixture],
+) -> None:
+    fixture = make_fixture(World(interrupted=True))
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    assert fixture.world.watches_closed == 1
+    assert fixture.world.issued("k3d", "cluster", "delete") != []
+    assert not fixture.run.directory.exists()
+
+
+def judge_cell(
+    make_fixture: Callable[..., Fixture],
+    events: list[Document],
+    refusal: Predicate,
+    *,
+    init_container: bool = True,
+    lives: int = 1,
+) -> tuple[str, World]:
+    """Judge one cell over the watch's events; give its problem and the world."""
+    world = World(streams=[events])
+    fixture = make_fixture(world)
+    expectation = fixture.driver.Expectation(
+        refusal=refusal, init_container=init_container, lives=lives
+    )
+    documents = workload_documents(world.production_image)
+    return fixture.driver.drive_cell(fixture.run, 8, documents, expectation), world
+
+
+REFUSED = Predicate.KUBERNETES_UNPROVEN
+
+
+refused_life = partial(life_events, "one", REFUSED)
+GONE = terminated_state(137, reason="ContainerStatusUnknown")
+SECOND = Version(last_state=terminated_state(started=9))
+UNTERMINATED = [
+    watch_event("ADDED", pod_version("one")),
+    watch_event("DELETED", pod_version("one")),
+]
+
+
+@pytest.mark.parametrize(
+    ("events", "fragment"),
+    [
+        (refused_life(ended=terminated_state(1)), "exit status 1"),
+        (life_events("one", Predicate.ALONE), Predicate.ALONE),
+        (refused_life(ended=terminated_state()), "start refused"),
+        (refused_life(version=Version(init_exit=1)), "remove-link ended as 1"),
+        (refused_life(version=Version(init=False)), "lacks an init container"),
+        (refused_life(version=Version(restarts=1)), "restartCount is 1"),
+        (refused_life(version=SECOND), "terminated 2 times"),
+        (refused_life(ended=GONE), "ContainerStatusUnknown"),
+        (UNTERMINATED, "deleted before its worker terminated"),
+    ],
+    ids=[
+        "another exit status",
+        "another predicate",
+        "an empty message",
+        "remove-link not ended 0",
+        "the Pod has no init container",
+        "a restart inside one uid",
+        "a second termination inside one uid",
+        "a lost sandbox",
+        "deleted before the worker terminated",
+    ],
+)
+def test_a_life_that_is_not_the_expected_one_fails_naming_its_uid_and_the_reason(
+    make_fixture: Callable[..., Fixture], events: list[Document], fragment: str
+) -> None:
+    problem, _ = judge_cell(make_fixture, events, REFUSED)
+    assert "uid one" in problem
+    assert fragment in problem
+
+
+@pytest.mark.parametrize(
+    ("gap", "passes"),
+    [
+        (CONNECT_WINDOW_SECONDS - 1, True),
+        (CONNECT_WINDOW_SECONDS, False),
+        (CONNECT_WINDOW_SECONDS + 30, False),
+    ],
+    ids=["just below the window", "at the window", "above the window"],
+)
+def test_a_successor_must_start_below_the_connect_window(
+    make_fixture: Callable[..., Fixture], *, gap: float, passes: bool
+) -> None:
+    events = lives_stream(2, REFUSED, gap=int(gap))
+    problem, _ = judge_cell(make_fixture, events, REFUSED, lives=2)
+    assert (problem == "") is passes
+    assert passes or f"{gap:g} s" in problem
+
+
+@pytest.mark.parametrize(
+    "after",
+    [[], [{"type": "ERROR", "object": {"kind": "Status"}}]],
+    ids=["end", "ERROR"],
+)
+def test_a_watch_that_ends_early_fails_naming_the_lives_and_asks_for_the_diagnostics(
+    make_fixture: Callable[..., Fixture], after: list[Document]
+) -> None:
+    events = lives_stream(2, REFUSED) + after
+    problem, world = judge_cell(make_fixture, events, REFUSED, lives=3)
+    assert "2 of 3 lives" in problem
+    assert "life-0" in problem
+    assert "life-1" in problem
+    assert world.issued("kubectl", "get", "events") != []
+    assert world.applied("Pod") != []
+
+
+def test_the_driver_stops_after_its_lives_and_closes_the_watch(
+    make_fixture: Callable[..., Fixture],
+) -> None:
+    judged = lives_stream(2, REFUSED)
+    later = life_events("later", REFUSED, ended=terminated_state(1))
+    problem, world = judge_cell(make_fixture, judged + later, REFUSED, lives=2)
+    assert problem == ""
+    assert world.events_printed == len(judged)
+    assert world.watches_closed == 1
+
+
 def test_a_wrong_predicate_fails_the_cell_and_requests_the_events_and_the_twin_pod(
-    make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str]
+    driver: ModuleType,
+    make_fixture: Callable[..., Fixture],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     world = World(
-        logs=[
-            f"start refused: {Predicate.MOUNTS}",
-            f"start refused: {Predicate.KUBERNETES_UNPROVEN}",
+        streams=[
+            life_events("one", Predicate.MOUNTS, version=Version(init=False)),
+            lives_stream(driver.LIVES, REFUSED),
         ]
     )
     fixture = make_fixture(world)
@@ -391,183 +671,117 @@ def test_a_wrong_predicate_fails_the_cell_and_requests_the_events_and_the_twin_p
         fixture.drive()
     output = capsys.readouterr()
     assert Predicate.MOUNTS in output.err
-    assert "cell 8" in output.out
+    assert "cell 7" in output.out
     assert world.issued("kubectl", "get", "events") != []
     twin = world.applied("Pod")[0]
     assert "/proc/self/mountinfo" in twin["spec"]["containers"][0]["command"][-1]
     assert "initContainers" not in twin["spec"]
 
 
-def test_a_cell_without_termination_in_the_window_fails_naming_the_wait(
-    make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str]
-) -> None:
-    waiting: Document = {
-        "spec": {"containers": []},
-        "status": {"containerStatuses": [{"name": "worker", "state": {"waiting": {}}}]},
-    }
-    fixture = make_fixture(World(pods=[waiting, waiting]))
-    with pytest.raises(SystemExit):
-        fixture.drive()
-    assert (
-        f"no termination within {fixture.driver.TERMINATION_WINDOW_SECONDS} s"
-        in capsys.readouterr().err
-    )
+def container_of(documents: list[Document], kind: str) -> Document:
+    """The first container of the kind's pod template, a CronJob's job template too."""
+    spec = named(documents, kind)["spec"]
+    return spec.get("jobTemplate", {}).get("spec", spec)["template"]["spec"][
+        "containers"
+    ][0]
 
 
-def judge_cell(
-    make_fixture: Callable[..., Fixture],
-    world: World,
-    refusal: Predicate,
-    *,
-    init_container: bool,
-) -> str:
-    """Judge one cell over the world's worker pod; give the cell's problem, if any."""
-    fixture = make_fixture(world)
-    expectation = fixture.driver.Expectation(
-        refusal=refusal, init_container=init_container
-    )
-    manifest = as_yaml_stream(workload_documents(PRODUCTION_IMAGE, PRODUCTION_IMAGE))
-    return fixture.driver.drive_cell(fixture.run, 7, manifest, expectation)
+Change = Callable[[list[Document], list[Document]], object]
+CHANGES: list[tuple[Change, str]] = [
+    (lambda _b, o: named(o, "Deployment")["spec"].update(replicas=3), "replicas"),
+    (
+        lambda _b, o: named(o, "StatefulSet")["spec"]["template"]["spec"][
+            "initContainers"
+        ][0].update(image="busybox:latest"),
+        "initContainers",
+    ),
+    (
+        lambda b, o: container_of(o, "Deployment").update(
+            image=container_of(b, "Deployment")["image"]
+        ),
+        "Deployment web",
+    ),
+    (
+        lambda b, o: container_of(o, "CronJob").update(
+            image=container_of(b, "CronJob")["image"]
+        ),
+        "CronJob restore-test",
+    ),
+    (
+        lambda _b, o: container_of(o, "CronJob").update(
+            image=container_of(o, "CronJob")["image"] + DIGEST
+        ),
+        "digest",
+    ),
+    (
+        lambda b, o: [container_of(d, "StatefulSet").update(name="x") for d in (b, o)],
+        "is not at {image}",
+    ),
+]
 
 
 @pytest.mark.parametrize(
-    ("pod_document", "current", "previous"),
-    [
-        (
-            pod(restarted=False),
-            f"start refused: {Predicate.NO_ROUTE}",
-            "an earlier run",
-        ),
-        (pod(), "", f"start refused: {Predicate.NO_ROUTE}"),
-        (pod(restarted=False), "", f"start refused: {Predicate.NO_ROUTE}"),
-        (pod(restarted=False), f"start refused: {Predicate.NO_ROUTE}", None),
-    ],
-    ids=[
-        "the termination in state, the line in the current log",
-        "the termination in lastState, the line only in the previous log",
-        "the restart race: the current log is empty, the previous log holds the line",
-        "no previous run, the line in the current log",
-    ],
-)
-def test_a_cell_passes_when_the_refusal_is_in_the_current_or_the_previous_log(
-    make_fixture: Callable[..., Fixture],
-    pod_document: Document,
-    current: str,
-    previous: str | None,
-) -> None:
-    world = World(pods=[pod_document], logs=[current], previous_logs=[previous])
-    problem = judge_cell(make_fixture, world, Predicate.NO_ROUTE, init_container=False)
-    assert problem == ""
-
-
-@pytest.mark.parametrize(
-    ("pod_document", "current", "previous", "named"),
-    [
-        (pod(), "current tail", "previous tail", ("current tail", "previous tail")),
-        (
-            pod(worker_exit=1, restarted=False),
-            f"start refused: {Predicate.NO_ROUTE}",
-            "",
-            ("exit status 1",),
-        ),
-        (pod(), f"start refused: {Predicate.ALONE}", "", (Predicate.ALONE,)),
-        (
-            pod(remove_link_exit=0),
-            f"start refused: {Predicate.NO_ROUTE}",
-            "",
-            ("init container",),
-        ),
-    ],
-    ids=[
-        "neither log holds the line: both tails are named",
-        "the line is present but the exit status differs",
-        "another predicate is in the current log",
-        "an init container on the control",
-    ],
-)
-def test_a_cell_fails_and_names_what_it_showed(
-    make_fixture: Callable[..., Fixture],
-    pod_document: Document,
-    current: str,
-    previous: str,
-    named: tuple[str, ...],
-) -> None:
-    world = World(pods=[pod_document], logs=[current], previous_logs=[previous])
-    problem = judge_cell(make_fixture, world, Predicate.NO_ROUTE, init_container=False)
-    for fragment in named:
-        assert fragment in problem
-
-
-def test_the_twin_fails_when_remove_link_does_not_end_zero(
-    make_fixture: Callable[..., Fixture],
-) -> None:
-    world = World(
-        pods=[pod(remove_link_exit=1)],
-        logs=[f"start refused: {Predicate.KUBERNETES_UNPROVEN}"],
-    )
-    problem = judge_cell(
-        make_fixture, world, Predicate.KUBERNETES_UNPROVEN, init_container=True
-    )
-    assert "remove-link" in problem
-
-
-def test_the_twin_passes_when_remove_link_ends_zero(
-    make_fixture: Callable[..., Fixture],
-) -> None:
-    world = World(
-        pods=[pod(remove_link_exit=0)],
-        logs=[f"start refused: {Predicate.KUBERNETES_UNPROVEN}"],
-    )
-    problem = judge_cell(
-        make_fixture, world, Predicate.KUBERNETES_UNPROVEN, init_container=True
-    )
-    assert problem == ""
-
-
-def change_replicas(documents: list[Document]) -> None:
-    documents[0]["spec"]["replicas"] = 3
-
-
-def change_remove_link_image(documents: list[Document]) -> None:
-    init = documents[1]["spec"]["template"]["spec"]["initContainers"][0]
-    init["image"] = "busybox:latest"
-
-
-def leave_web_at_ghcr(documents: list[Document]) -> None:
-    documents[0]["spec"]["template"]["spec"]["containers"][0]["image"] = (
-        PRODUCTION_IMAGE
-    )
-
-
-@pytest.mark.parametrize(
-    ("change", "named"),
-    [
-        (change_replicas, "replicas"),
-        (change_remove_link_image, "initContainers"),
-        (leave_web_at_ghcr, "left at"),
-    ],
+    ("change", "named_in_refusal"),
+    CHANGES,
     ids=[
         "another field changed",
         "remove-link's digest changed",
-        "an image left at ghcr.io",
+        "the web left at the production image",
+        "the CronJob's container left at the production image",
+        "a digest on the probe image",
+        "the worker container not swapped",
     ],
 )
-def test_the_overlay_render_is_refused_for_each_difference_beyond_the_two_images(
-    driver: ModuleType, change: Callable[[list[Document]], object], named: str
+def test_the_overlay_render_is_refused_for_each_difference_beyond_the_image_fields(
+    driver: ModuleType,
+    production_image: str,
+    change: Change,
+    named_in_refusal: str,
 ) -> None:
     probe_image = f"{driver.PROBE_REPOSITORY}:{RUN_IDENTIFIER}"
-    base = workload_documents(PRODUCTION_IMAGE, PRODUCTION_IMAGE)
-    overlay = workload_documents(probe_image, probe_image)
+    base = workload_documents(production_image)
+    overlay = workload_documents(probe_image)
     assert driver.render_problem(base, overlay, probe_image) is None
-    change(overlay)
-    assert named in driver.render_problem(base, overlay, probe_image)
+    change(base, overlay)
+    problem = driver.render_problem(base, overlay, probe_image)
+    assert named_in_refusal.format(image=driver.PRODUCTION_IMAGE) in problem
 
 
-def test_a_digest_on_the_probe_image_is_refused(driver: ModuleType) -> None:
-    base = workload_documents(PRODUCTION_IMAGE, PRODUCTION_IMAGE)
-    probe_image = f"{driver.PROBE_REPOSITORY}:{RUN_IDENTIFIER}"
-    overlay = workload_documents(probe_image + "@sha256:" + "c" * 64, probe_image)
-    assert "digest" in driver.render_problem(base, overlay, probe_image)
+def test_the_watch_hands_out_an_event_before_the_stream_goes_on(
+    driver: ModuleType,
+) -> None:
+    first = watch_event("ADDED", pod_version("one"))
+    second = watch_event("DELETED", pod_version("one"))
+
+    def lines() -> Iterator[str]:
+        yield from f"{json.dumps(first, indent=4)}\n".splitlines(keepends=True)
+        yield json.dumps(second)
+        message = "the stream was read on before the first event was handed out"
+        raise AssertionError(message)
+
+    events = driver.watch_events(lines())
+    assert next(events) == first
+    assert next(events) == second
+
+
+def test_a_cut_watch_keeps_the_events_before_the_cut(driver: ModuleType) -> None:
+    lines = ['{"type": "ADDED"}', '{"type": "ADD']
+    assert list(driver.watch_events(lines)) == [{"type": "ADDED"}]
+
+
+@pytest.mark.parametrize("stop", ["kill_child", "close"])
+def test_stopping_the_stream_kills_and_reaps_its_child(
+    driver: ModuleType, stop: str
+) -> None:
+    runner = driver.SubprocessRunner()
+    program = "import time; print('ready', flush=True); time.sleep(60)"
+    lines = runner.stream((sys.executable, "-c", program), {})
+    assert next(lines) == "ready\n"
+    child = runner.child
+    getattr(runner if stop == "kill_child" else lines, stop)()
+    assert child.returncode < 0
+    lines.close()
+    assert runner.child is None
 
 
 def test_the_runner_hands_the_run_environment_to_the_child(driver: ModuleType) -> None:
