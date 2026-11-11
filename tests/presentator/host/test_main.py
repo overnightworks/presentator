@@ -17,8 +17,10 @@ from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.ports import AccountKind
 
+from presentator.adapters.build_worker import WorkerToolchain
+from presentator.adapters.builds import DeckToolchain, SlidevBuilds
 from presentator.adapters.deck_store import SqliteDeckStore
-from presentator.adapters.decks import SqliteSourceStore
+from presentator.adapters.decks import SourceMirrors, SqliteSourceStore
 from presentator.adapters.identity import (
     SqliteSessionRecordStore,
     StoredAccount,
@@ -27,10 +29,11 @@ from presentator.adapters.identity import (
 )
 from presentator.adapters.secrets import secret_box
 from presentator.adapters.sqlite import rows
+from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.api.hooks import hook_address
 from presentator.application.decks import hash_webhook_secret
 from presentator.application.identity import SESSION_LIFETIME
-from presentator.contracts.decks import SourceWrite
+from presentator.contracts.decks import SourceWrite, ToolchainIdentity
 from presentator.contracts.models import Role, User
 from presentator.host import main
 from presentator.host.config import (
@@ -319,6 +322,50 @@ def test_an_instance_without_a_lobby_build_refuses_to_start(
 
     with pytest.raises(ConfigurationError, match="no built lobby"):
         a_real_instance()
+
+
+@pytest.mark.parametrize("runner", ["host", "worker"])
+def test_the_runner_an_instance_builds_with_answers_the_identity_of_its_project(
+    environment: pytest.MonkeyPatch, tmp_path: Path, runner: str
+) -> None:
+    project = tmp_path / "a-toolchain-project"
+    project.mkdir()
+    (project / "package.json").write_text("{}", encoding="utf-8")
+    environment.setenv("PRESENTATOR_BUILD_RUNNER", runner)
+    environment.setenv("PRESENTATOR_TOOLCHAIN", str(project))
+
+    def answering(_toolchain: WorkerToolchain) -> bool:
+        return True
+
+    environment.setattr(WorkerToolchain, "is_answering", answering)
+    composed: list[SlidevBuilds] = []
+
+    def composing(
+        *,
+        builds: Path,
+        identity: ToolchainIdentity,
+        toolchain: DeckToolchain,
+        mirrors: SourceMirrors,
+        output_megabytes: int,
+    ) -> SlidevBuilds:
+        composed.append(
+            SlidevBuilds(
+                builds=builds,
+                identity=identity,
+                toolchain=toolchain,
+                mirrors=mirrors,
+                output_megabytes=output_megabytes,
+            )
+        )
+        return composed[-1]
+
+    environment.setattr(main, "SlidevBuilds", composing)
+
+    a_real_instance()
+
+    assert [runner.toolchain_identity() for runner in composed] == [
+        toolchain_identity_of(project)
+    ]
 
 
 @pytest.mark.parametrize("runner", ["host", "worker"])
