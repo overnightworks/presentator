@@ -1,8 +1,0 @@
-claim_id = "efb2ef49e0834e78a9ffd7e2001fd034"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "462cf8f138dd8c2806363b5b0d42b0f3fcb6dfc4"
-branch = "claude/issue-1047-notice-band-top-bar"
-scope = ["docs/ARCHITECTURE.md", "docs/co-presenter.md", "examples/copresenter-deck/slides.md", "slidev/components/CoPresenter.vue", "slidev/custom-nav-controls.vue", "slidev/global-top.vue", "slidev/room-notice.js", "slidev/tests/copresenter-refusals.browser.test.ts", "slidev/tests/presenter-controls.browser.test.ts", "slidev/tests/presenter-overlay-harness.ts", "slidev/tests/room-notice.browser.test.ts"]
-opened_commit = "e76e9c06e8f797609e802bdb710d7c60a71b2ffb"
-whole_reason = "One ruling changes the room's notice and the presenter's controls across the same two windows; one drive and one rebuild wave prove both, and both halves edit CoPresenter.vue."
