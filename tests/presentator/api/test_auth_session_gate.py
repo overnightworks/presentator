@@ -200,14 +200,14 @@ def test_an_address_beside_a_public_one_is_gated(lobby: Lobby, path: str) -> Non
     assert answer.headers["location"].startswith("/login/oidc?next=")
 
 
-def test_a_signed_in_browser_reading_the_login_costs_no_store_read(
+def test_a_signed_in_browser_reading_the_login_costs_one_load_and_no_touch(
     signed_in_lobby: Lobby,
 ) -> None:
     answer = signed_in_lobby.client.get("/login")
 
     assert answer.status_code == HTTPStatus.OK
     assert ENGLISH.log_out not in answer.text
-    assert _counts(signed_in_lobby) == (0, 0)
+    assert _counts(signed_in_lobby) == (1, 0)
 
 
 def test_a_head_request_to_the_hook_address_is_gated(lobby: Lobby) -> None:
@@ -230,11 +230,13 @@ def test_a_dot_segment_under_the_hook_prefix_is_refused_before_the_route(
     assert answer.status_code == status
 
 
-def test_a_signed_in_page_costs_one_load_and_one_touch(signed_in_lobby: Lobby) -> None:
+def test_a_signed_in_page_costs_two_loads_and_one_touch(
+    signed_in_lobby: Lobby,
+) -> None:
     answer = signed_in_lobby.client.get("/")
 
     assert answer.status_code == HTTPStatus.OK
-    assert _counts(signed_in_lobby) == (1, 1)
+    assert _counts(signed_in_lobby) == (2, 1)
 
 
 def test_the_renewal_runs_on_a_thread_with_no_event_loop() -> None:
