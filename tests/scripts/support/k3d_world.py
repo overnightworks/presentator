@@ -324,7 +324,6 @@ def fixture_maker(
     cluster_module = load_script("probe_build_worker_k3d_cluster")
     lives_module = load_script("probe_build_worker_k3d_lives")
     manifests_module = load_script("probe_build_worker_k3d_manifests")
-    platform = platform_checkout(tmp_path)
     production_image = manifests_module.PRODUCTION_IMAGE + DIGEST
 
     def make(
@@ -334,7 +333,6 @@ def fixture_maker(
         missing: str | None = None,
     ) -> Fixture:
         world = world or World()
-        directory = tmp_path / "run"
         ticks = [0.0]
 
         def sleep(seconds: float) -> None:
@@ -363,9 +361,9 @@ def fixture_maker(
         )
         run = cluster_module.Run(
             identifier=RUN_IDENTIFIER,
-            directory=directory,
+            directory=tmp_path / "run",
             repository=tmp_path / "presentator",
-            platform=platform,
+            platform=platform_checkout(tmp_path),
             effects=effects,
         )
         world.node_name, world.probe_image = run.node, run.tag
