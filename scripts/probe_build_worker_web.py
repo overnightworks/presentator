@@ -60,6 +60,7 @@ from presentator.host.main import WAITING_FOR_THE_WORKER
 
 WEB = "presentator"
 DECKS_DIRECTORY = "/decks"
+WEB_PYTHON = "/opt/venv/bin/python"
 CLIENT_PROGRAM = PROBE_SOURCES / "web_client.py"
 ROUTE = "http://127.0.0.1:8000/login"
 BUILDS_ROOT = "/data/builds"
@@ -120,7 +121,7 @@ def start_client(case: str, *steps: str) -> subprocess.Popen[str]:
     """Send the client program into the web; it prints its run's name first."""
     client = subprocess.Popen(  # noqa: S603 - argv is a tuple of literal words and probe values and run without a shell
         web_command(
-            "exec", "-T", WEB, "/opt/venv/bin/python", "-I", "-",
+            "exec", "-T", WEB, WEB_PYTHON, "-I", "-",
             DECKS_DIRECTORY, case, *steps,
         ),
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -358,7 +359,7 @@ def prove_start_before_the_worker(report: Report) -> None:
         refuse("the web's log holds a start refusal")
     prove_inspected_shape()
     scratch = in_web(
-        "/opt/venv/bin/python", "-I", "-c", "import tempfile; print(tempfile.mkdtemp())"
+        WEB_PYTHON, "-I", "-c", "import tempfile; print(tempfile.mkdtemp())"
     )
     ssh = in_web(
         "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=2",

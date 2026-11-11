@@ -630,9 +630,8 @@ def test_a_twin_that_does_not_end_within_the_window_stops_cell_9_after_that_wind
     stalled = driver.residue_pod_name(residue)
     assert applied_twins(world)[-2:] == [stalled, driver.TWIN_POD]
     polls = world.issued("kubectl", "get", "pod", stalled)
-    assert (
-        len(polls) <= lives_module.TERMINATION_WINDOW_SECONDS // driver.POLL_SECONDS + 1
-    )
+    window = lives_module.TERMINATION_WINDOW_SECONDS // lives_module.POLL_SECONDS
+    assert len(polls) <= window + 1
     removal = next(c for c in world.issued("kubectl", "delete", "pod") if stalled in c)
     assert [n for n in removal if n.startswith(driver.RESIDUE_POD_PREFIX)] == (
         applied_twins(world)[1:-1]

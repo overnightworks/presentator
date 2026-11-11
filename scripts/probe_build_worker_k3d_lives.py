@@ -11,7 +11,7 @@ import contextlib
 import itertools
 import json
 import math
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Self
@@ -28,6 +28,7 @@ WORKER_POD = "build-worker-0"
 # What the kubelet reports for a container whose sandbox was lost.
 LOST_SANDBOX_REASON = "ContainerStatusUnknown"
 TERMINATION_WINDOW_SECONDS = 180
+POLL_SECONDS = 2
 LIVES = 4
 TIMESTAMP_RESOLUTION_SECONDS = 1
 # The exit status of a start whose self-check passes under `--check`.
@@ -99,6 +100,53 @@ class Life:
 
 def _status_of(statuses: list[Document], name: str) -> Document:
     return next((s for s in statuses if s["name"] == name), Document())
+
+
+def container_status(pod: Document, name: str) -> Document:
+    """The status of the Pod's container of that name; empty while it has none."""
+    return _status_of(pod.get("status", {}).get("containerStatuses", []), name)
+
+
+def poll[Answer](
+    run: Run,
+    read: Callable[[], Answer | None],
+    done: Callable[[Answer], bool],
+    empty: Answer,
+) -> tuple[Answer, bool]:
+    """Read until `done` or the window passes; give the last answer and if done."""
+    started = run.effects.monotonic()
+    last = empty
+    while True:
+        answer = read()
+        if answer is not None:
+            last = answer
+            if done(answer):
+                return last, True
+        if run.effects.monotonic() - started >= TERMINATION_WINDOW_SECONDS:
+            return last, False
+        run.effects.sleep(POLL_SECONDS)
+
+
+def read_pod(run: Run, name: str) -> Document | None:
+    """The named Pod as kubectl prints it, or none if kubectl cannot read it."""
+    answer = run(
+        "kubectl get pod", name, "--output", "json", *IN_NAMESPACE, check=False
+    )
+    return json.loads(answer.stdout) if answer.returncode == 0 else None
+
+
+def await_pod(
+    run: Run, name: str, done: Callable[[Document], bool]
+) -> tuple[Document, bool]:
+    """Poll a Pod until `done` or the window passes; give the last Pod seen."""
+    return poll(run, lambda: read_pod(run, name), done, {})
+
+
+def remove_link_problem(life: Life) -> str | None:
+    """Why the life's remove-link did not end with exit status 0."""
+    if life.init_exit != 0:
+        return f"{INIT_CONTAINER} ended as {life.init_exit}, expected exit status 0"
+    return None
 
 
 def watch_events(lines: Iterable[str]) -> Iterator[Document]:

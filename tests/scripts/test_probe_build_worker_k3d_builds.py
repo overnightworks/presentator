@@ -10,13 +10,19 @@ from types import ModuleType
 import pytest
 
 from tests.scripts.support.k3d_world import (
+    FIRST_WORKER_UID,
     GENERATED_VALUE,
+    NEXT_WORKER_UID,
+    SCRATCH_MOUNT,
     WEB_LABELS,
+    WEB_POD,
     WEB_READY_AFTER,
     Fixture,
     World,
     apply_positions,
+    client_output,
     command_positions,
+    delivered_outcome,
     fixture_maker,
     issued_commands,
 )
@@ -73,14 +79,16 @@ def test_cell_10_prints_its_control_before_the_worker_applies_then_its_ready_lin
     fixture = make_fixture()
     world = fixture.world
     said: list[tuple[int, str]] = []
-    monkeypatch.setattr(
-        fixture.driver, "say", lambda line: said.append((len(world.commands), line))
-    )
+
+    def record(line: str) -> None:
+        said.append((len(world.commands), line))
+
+    monkeypatch.setattr(fixture.driver, "say", record)
     fixture.drive()
     worker = apply_positions(world, "StatefulSet")[-1]
     cell_ten = [(at, line) for at, line in said if line.startswith("cell 10: ")]
     ready = f"Ready {WEB_READY_AFTER} s after the worker started"
-    worker_pod = "worker pod worker-uid, Running, restarts 0"
+    worker_pod = f"worker pod {FIRST_WORKER_UID}, Running, restarts 0"
     control = (
         "cell 10: control: the web logged its wait, Ready False, "
         "container running, restarts 0"
@@ -113,7 +121,7 @@ def test_a_web_not_waiting_or_not_ready_fails_cell_10_within_the_window_with_log
         world.issued("kubectl", "logs", "--selector")
     )
     # One window of polls, the control's read and the failure's two log prints.
-    window = lives_module.TERMINATION_WINDOW_SECONDS // fixture.driver.POLL_SECONDS
+    window = lives_module.TERMINATION_WINDOW_SECONDS // lives_module.POLL_SECONDS
     assert polls <= window + 1 + 3 + 1
 
 
@@ -185,3 +193,163 @@ def test_a_failing_secret_apply_refuses_without_the_value_its_stderr_echoes(
     err = capsys.readouterr().err
     assert "Secret" in err
     assert GENERATED_VALUE not in err
+
+
+@pytest.fixture
+def web_module(load_script: Callable[..., ModuleType]) -> ModuleType:
+    return load_script("probe_build_worker_web")
+
+
+def positions(world: World, verb: str) -> list[int]:
+    """The positions of the bounded `kubectl <verb>` commands the run issued."""
+    return [
+        at
+        for at, (command, _) in enumerate(issued_commands(world))
+        if command[2:4] == ("kubectl", verb)
+    ]
+
+
+def cell_eleven(output: str) -> list[str]:
+    return [line for line in output.splitlines() if line.startswith("cell 11: ")]
+
+
+def test_the_shared_parse_reads_the_outcome_the_fake_client_prints(
+    web_module: ModuleType,
+) -> None:
+    done = delivered_outcome(web_module)
+    assert web_module.outcome_in(client_output(done)) == done
+
+
+def test_cell_11_copies_the_deck_then_runs_the_web_client_and_prints_one_line(
+    make_fixture: Callable[..., Fixture],
+    web_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    world = fixture.world
+    commands = issued_commands(world)
+    (copied,) = positions(world, "cp")
+    (ran,) = positions(world, "exec")
+    assert copied < ran
+    deck = fixture.run.repository / "examples" / "hello-deck"
+    assert str(deck) in commands[copied][0]
+    assert f"{WEB_POD}:{SCRATCH_MOUNT}/{deck.name}" in commands[copied][0]
+    program = web_module.CLIENT_PROGRAM.read_text(encoding="utf-8")
+    assert commands[ran][1] == program
+    arguments = (SCRATCH_MOUNT, "hello", *web_module.HELLO_STEPS)
+    assert commands[ran][0][-len(arguments) :] == arguments
+    done = delivered_outcome(web_module)
+    listing = ", ".join(done.out)
+    began = f"the steps began in worker pod {FIRST_WORKER_UID}"
+    ran_on = f"the next pod {NEXT_WORKER_UID} runs with remove-link 0, restarts 0"
+    delivered = f"(talk index.html, PDF %PDF-, out: {listing})"
+    line = f"cell 11: hello-deck built and exported through the web {delivered}"
+    assert cell_eleven(capsys.readouterr().out) == [f"{line}; {began}, {ran_on}"]
+
+
+def test_cell_11_runs_nothing_in_the_web_when_cell_10_failed(
+    make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture = make_fixture(World(web_never_ready=True))
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    assert positions(fixture.world, "cp") == []
+    assert positions(fixture.world, "exec") == []
+    assert cell_eleven(capsys.readouterr().out) == []
+
+
+@pytest.mark.parametrize(
+    ("world", "complaint"),
+    [
+        (World(client_exit=1, client_stderr="a traceback"), "a traceback"),
+        (World(client_stdout="not json\n", client_stderr="a log"), "a log"),
+        (World(copy_exit=1, copy_stderr="a tar error"), "a tar error"),
+    ],
+    ids=["client ended non-zero", "last line not JSON", "the copy failed"],
+)
+def test_a_deck_or_client_that_does_not_end_with_an_outcome_fails_cell_11_with_stderr(
+    make_fixture: Callable[..., Fixture],
+    capsys: pytest.CaptureFixture[str],
+    world: World,
+    complaint: str,
+) -> None:
+    fixture = make_fixture(world)
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    output = capsys.readouterr()
+    assert "cell 11" in output.err
+    assert complaint in output.out
+    assert world.web_log(previous=False) in output.out
+    assert world.issued("kubectl", "get", "events") != []
+
+
+@pytest.mark.parametrize(
+    ("changes", "fragment"),
+    [
+        ({"steps": ()}, "steps=()"),
+        ({"talk_page": False}, "talk_page=False"),
+        ({"pdf": False}, "pdf=False"),
+    ],
+    ids=["no step ran", "no talk page", "no PDF"],
+)
+def test_an_outcome_that_is_not_hello_deck_delivered_fails_cell_11_naming_it(
+    make_fixture: Callable[..., Fixture],
+    web_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    changes: dict[str, object],
+    fragment: str,
+) -> None:
+    done = dataclasses.replace(delivered_outcome(web_module), **changes)
+    fixture = make_fixture(World(client_stdout=client_output(done)))
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    output = capsys.readouterr()
+    assert fragment in output.err
+    assert "cell 11: FAILED" in output.out
+
+
+def test_a_failed_step_fails_cell_11_naming_it(
+    make_fixture: Callable[..., Fixture],
+    web_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    done = delivered_outcome(web_module)
+    failed = web_module.StepOutcome(
+        step=done.steps[0].step, failed=True, failure={"reason": "toolchain"}
+    )
+    outcome = dataclasses.replace(done, steps=(failed, *done.steps[1:]))
+    fixture = make_fixture(World(client_stdout=client_output(outcome)))
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    assert "toolchain" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("world", "fragment"),
+    [
+        (World(worker_keeps_uid=True), f"no worker pod other than {FIRST_WORKER_UID}"),
+        (World(next_remove_link_exit=1), "remove-link ended as 1"),
+        (World(next_restarts=1), "restartCount is 1"),
+    ],
+    ids=["the uid is kept", "remove-link", "a restart"],
+)
+def test_a_next_worker_pod_that_is_not_new_or_not_clean_fails_cell_11_in_the_window(
+    make_fixture: Callable[..., Fixture],
+    lives_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    world: World,
+    fragment: str,
+) -> None:
+    fixture = make_fixture(world)
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    assert fragment in capsys.readouterr().err
+    (ran,) = positions(world, "exec")
+    reads = [
+        at
+        for at in command_positions(world, "kubectl", "get", "pod")
+        if at > ran and lives_module.WORKER_POD in issued_commands(world)[at][0]
+    ]
+    window = lives_module.TERMINATION_WINDOW_SECONDS // lives_module.POLL_SECONDS
+    assert len(reads) <= window + 1

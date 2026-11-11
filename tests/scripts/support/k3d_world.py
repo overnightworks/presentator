@@ -33,6 +33,10 @@ WAITING_LINE = WAITING_FOR_THE_WORKER % ("/fake/socket", CONNECT_WINDOW_SECONDS)
 GENERATED_VALUE = "generated-value-"
 WORKER_START = 40
 WEB_READY_AFTER = 12
+SCRATCH_MOUNT = "/data/elsewhere"
+WEB_POD = "web-pod"
+FIRST_WORKER_UID = "worker-uid"
+NEXT_WORKER_UID = "successor-uid"
 
 Document = dict[str, Any]
 Issued = tuple[tuple[str, ...], Mapping[str, str], str | None]
@@ -44,12 +48,12 @@ def add_web_secrets(spec: Document) -> None:
     main["env"] = [
         {"name": "AN_ORIGIN", "value": "https://example.org"},
         {"name": "A_SECRET_FILE", "value": f"{PROJECTED_MOUNT}/{PROJECTED_KEYS[0]}"},
-        {"name": "AN_OTHER_PATH", "value": "/data/elsewhere"},
+        {"name": "AN_OTHER_PATH", "value": SCRATCH_MOUNT},
         {"name": "A_REFERENCE", "valueFrom": {"fieldRef": {}}},
         {"name": "ANOTHER_FILE", "value": f"{PROJECTED_MOUNT}/{PROJECTED_KEYS[1]}"},
     ]
     main["volumeMounts"] = [
-        {"name": "elsewhere", "mountPath": "/data/elsewhere"},
+        {"name": "elsewhere", "mountPath": SCRATCH_MOUNT},
         {"name": SECRETS_VOLUME, "mountPath": PROJECTED_MOUNT},
     ]
     projected = {"sources": [{"secret": {"name": PROJECTED_NAME}}]}
@@ -257,6 +261,17 @@ class World:
     web_restarts: int = 0
     web_ready_after: int = WEB_READY_AFTER
     remove_link_exit: int = 0
+    # What the web's client does when the build cell runs it, and what comes after:
+    # the exec's end and output (set up with the driver if empty), the copy's end,
+    # and the worker pod that follows the client's two steps.
+    client_exit: int = 0
+    client_stdout: str = ""
+    client_stderr: str = ""
+    copy_exit: int = 0
+    copy_stderr: str = ""
+    worker_keeps_uid: bool = False
+    next_remove_link_exit: int = 0
+    next_restarts: int = 0
     # What a residue's twin Pod shows by the residue's name; the expected end if absent.
     outcomes: dict[str, Document] = field(default_factory=dict[str, Document])
     # The twin Pods of the residues by their names, set up with the driver.
@@ -294,7 +309,7 @@ class World:
         command: tuple[str, ...],
         environment: Mapping[str, str],
         stdin: str | None,
-    ) -> tuple[int, str]:
+    ) -> tuple[int, str, str]:
         self.commands.append((command, environment, stdin))
         kubeconfig = Path(environment["KUBECONFIG"])
         self.directory_present_at_last_command = kubeconfig.parent.exists()
@@ -304,8 +319,14 @@ class World:
         ):
             message = "the fake runner broke"
             raise RuntimeError(message)
-        answer = self.answer(command)
-        return (1, "") if answer is None else (0, answer)
+        match command:
+            case ("timeout", _, "kubectl", "cp", *_):
+                return self.copy_exit, "", self.copy_stderr
+            case ("timeout", _, "kubectl", "exec", *_):
+                return self.client_exit, self.client_stdout, self.client_stderr
+            case _:
+                answer = self.answer(command)
+                return (1, "", "") if answer is None else (0, answer, "")
 
     def answer(self, command: tuple[str, ...]) -> str | None:
         match command:
@@ -450,7 +471,7 @@ class World:
             "state": {"running": {"startedAt": stamp(0)}},
         }
         return {
-            "metadata": {"uid": "web-uid"},
+            "metadata": {"uid": "web-uid", "name": WEB_POD},
             "status": {"conditions": [condition], "containerStatuses": [web]},
         }
 
@@ -463,10 +484,20 @@ class World:
     def worker_pod_json(self) -> Document:
         """The worker's Pod once it serves: running, its remove-link ended."""
         running = {"running": {"startedAt": stamp(WORKER_START)}}
-        version = Version(init_exit=self.remove_link_exit)
-        pod = pod_version("worker-uid", running, version)
+        if self.client_ran() and not self.worker_keeps_uid:
+            version = Version(
+                init_exit=self.next_remove_link_exit, restarts=self.next_restarts
+            )
+            pod = pod_version(NEXT_WORKER_UID, running, version)
+        else:
+            version = Version(init_exit=self.remove_link_exit)
+            pod = pod_version(FIRST_WORKER_UID, running, version)
         pod["status"]["phase"] = "Running"
         return pod
+
+    def client_ran(self) -> bool:
+        """The web's client was started in the web: the worker's lives were spent."""
+        return any(c[2:4] == ("kubectl", "exec") for c, _, _ in self.commands)
 
     def pod_named(self, name: str) -> Document:
         """The bare Pod of the facts twin or of a residue's twin; no other exists."""
@@ -562,6 +593,41 @@ def residue_pods(
     }
 
 
+def delivered_outcome(web_module: ModuleType) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
+    """The outcome of a client whose build and export delivered the talk and PDF."""
+    steps = tuple(
+        web_module.StepOutcome(step, failed=False, failure=None)
+        for step in web_module.HELLO_STEPS
+    )
+    return web_module.Outcome(
+        steps=steps,
+        staged=(),
+        out=("deck.pdf", "talk"),
+        talk_page=True,
+        pdf=True,
+        worklet=False,
+        worklet_sha256=None,
+    )
+
+
+def client_output(outcome: Any) -> str:  # noqa: ANN401 - the web probe's Outcome, loaded by name
+    """What the web's client prints: its run's name, then its outcome."""
+    steps = [
+        {"step": step.step, "failed": step.failed, "failure": step.failure}
+        for step in outcome.steps
+    ]
+    said = {
+        "steps": steps,
+        "staged": list(outcome.staged),
+        "out": list(outcome.out),
+        "talk_page": outcome.talk_page,
+        "pdf": outcome.pdf,
+        "worklet": outcome.worklet,
+        "worklet_sha256": outcome.worklet_sha256,
+    }
+    return f"{json.dumps({'run': 'a-run'})}\n{json.dumps(said)}\n"
+
+
 def fake_effects(
     cluster_module: ModuleType, world: World, *, head: str | None, missing: str | None
 ) -> object:
@@ -575,8 +641,8 @@ def fake_effects(
     def run_command(
         command: tuple[str, ...], environment: Mapping[str, str], stdin: str | None
     ) -> object:
-        returncode, stdout = world(command, environment, stdin)
-        return cluster_module.Completed(returncode, stdout, "")
+        returncode, stdout, stderr = world(command, environment, stdin)
+        return cluster_module.Completed(returncode, stdout, stderr)
 
     def which(tool: str) -> str | None:
         return None if tool == missing else f"/bin/{tool}"
@@ -604,6 +670,7 @@ def fixture_maker(
     cluster_module = load_script("probe_build_worker_k3d_cluster")
     lives_module = load_script("probe_build_worker_k3d_lives")
     manifests_module = load_script("probe_build_worker_k3d_manifests")
+    web_module = load_script("probe_build_worker_web")
     production_image = manifests_module.PRODUCTION_IMAGE + DIGEST
 
     def make(
@@ -626,6 +693,9 @@ def fixture_maker(
         world.production_image, world.twin_pod = production_image, driver.TWIN_POD
         world.worker_pod = lives_module.WORKER_POD
         world.residue_pods = residue_pods(load_script, driver, world.outcomes)
+        world.client_stdout = world.client_stdout or client_output(
+            delivered_outcome(web_module)
+        )
         world.streams = world.streams or [
             lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
             lives_stream(lives_module.LIVES, None),
