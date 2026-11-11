@@ -1,12 +1,14 @@
 r"""Drive the build worker's pod shape in an ordinary k3d cluster.
 
 Usage: probe_build_worker_k3d.py pin
-       probe_build_worker_k3d.py probe-repository
+       probe_build_worker_k3d.py leftovers
        probe_build_worker_k3d.py drive --platform CHECKOUT
 
 `pin` prints the one platform commit this probe is written against; CI checks
-platform out at it. `probe-repository` prints the repository of every probe
-image, which CI's teardown check lists. `drive` refuses unless CHECKOUT is at
+platform out at it. `leftovers` lists the k3d clusters, the containers and
+volumes labelled `app=k3d` and the images of the probe and of production,
+prints each and ends 1 if any is listed; it needs no cluster, run directory or
+kubeconfig, and CI runs it after each drive. `drive` refuses unless CHECKOUT is at
 that commit and k3d, kubectl and docker are on PATH, proves that the overlay
 rendering the probe image differs from platform's own render only in the
 production image fields of every pod template, then drives three cells in a
@@ -45,8 +47,15 @@ Every command runs with `KUBECONFIG` set to a file in the run's temporary
 directory, `KUBECACHEDIR` below it and `KUBERC=off`, so nothing reads or writes
 the operator's kubeconfig; only the git lookup of CHECKOUT's commit runs
 without them. No API write happens before the cluster's one node is proven to
-be the run's own. The teardown runs on every way out, SIGTERM and SIGINT
-included, which also kill the watch. CI runs it on a clean runner; a local run
+be the run's own. Right after that, the same listing as `leftovers` must show
+the run's cluster, its node container, a labelled volume and the run's image
+tag, so a label filter that matches nothing cannot pass the check after a
+drive. The teardown runs on every way out, SIGTERM and SIGINT included, which
+also kill the watch. The first signal ignores both signals, so a second one
+cannot interrupt the exit it started; the teardown ignores them too, and a stuck
+teardown is bounded by the wrapper's timeout. A signal that ends `k3d image import`
+leaves its tools container and the images volume, so the teardown removes both.
+CI runs it on a clean runner; a local run
 takes the probe-stack lock:
 
     flock -o -w 3600 /tmp/probe-stack.lock setpriv --pdeathsig TERM \
@@ -56,6 +65,7 @@ takes the probe-stack lock:
 
 import copy
 import json
+import os
 import shutil
 import signal
 import socket
@@ -72,14 +82,15 @@ from probe_build_worker_k3d_cluster import (
     IN_NAMESPACE,
     NAMESPACE,
     PLATFORM_COMMIT,
-    PROBE_REPOSITORY,
     Document,
     Effects,
     Run,
     SubprocessRunner,
     as_stream,
     documents_of,
+    leftovers,
     preflight,
+    prove_label_filter,
     start_cluster,
     teardown,
 )
@@ -313,6 +324,7 @@ def drive(run: Run) -> None:
         overlay = prove_render(run)
         run("docker build --tag", run.tag, str(run.repository))
         start_cluster(run, k3s_version)
+        prove_label_filter(run)
         run("k3d image import", run.tag, "--cluster", run.name)
         namespace = json.dumps(namespace_document(run.platform))
         run("kubectl apply --filename -", stdin=namespace)
@@ -338,14 +350,29 @@ def _free_port() -> int:
         return probe.getsockname()[1]
 
 
-def drive_for_real(checkout: Path) -> None:
-    """Drive in this process; SIGTERM and SIGINT kill the child, then tear down."""
-    runner = SubprocessRunner()
+def hold_signals() -> None:
+    """Ignore SIGTERM and SIGINT; only SIGKILL reaches the children that inherit it."""
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
+def stop_on_signal(
+    runner: SubprocessRunner, hold: Callable[[], None]
+) -> Callable[[int, object], None]:
+    """The handler of SIGTERM and SIGINT: hold further signals, kill the child, exit."""
 
     def stop(signal_number: int, _frame: object) -> None:
+        hold()
         runner.kill_child()
         sys.exit(128 + signal_number)
 
+    return stop
+
+
+def drive_for_real(checkout: Path) -> None:
+    """Drive in this process; SIGTERM and SIGINT kill the child, then tear down."""
+    runner = SubprocessRunner()
+    stop = stop_on_signal(runner, hold_signals)
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     effects = Effects(
@@ -356,6 +383,7 @@ def drive_for_real(checkout: Path) -> None:
         _free_port,
         time.monotonic,
         time.sleep,
+        hold_signals,
     )
     identifier = uuid.uuid4().hex[:8]
     drive(
@@ -369,12 +397,30 @@ def drive_for_real(checkout: Path) -> None:
     )
 
 
+def process_listing(words: str) -> str:
+    """What the fixed `words` print here; refuse if they fail."""
+    done = SubprocessRunner()(tuple(words.split()), os.environ, None)
+    if done.returncode:
+        refuse(f"{words} ended {done.returncode}: {done.stderr[-2000:]}")
+    return done.stdout
+
+
+def check_leftovers(command: Callable[[str], str]) -> None:
+    """Print what `leftovers` finds and end 1 if anything is listed."""
+    lines = leftovers(command).lines()
+    for line in lines:
+        say(line)
+    if lines:
+        sys.exit(1)
+    say("no cluster, container, volume or image is left")
+
+
 if __name__ == "__main__":
     match sys.argv[1:]:
         case ["pin"]:
             say(PLATFORM_COMMIT)
-        case ["probe-repository"]:
-            say(PROBE_REPOSITORY)
+        case ["leftovers"]:
+            check_leftovers(process_listing)
         case ["drive", "--platform", checkout]:
             drive_for_real(Path(checkout))
         case _:

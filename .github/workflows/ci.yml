@@ -731,9 +731,18 @@ jobs:
       - name: Drive the worker's pod shape in a k3d cluster
         run: uv run --locked python scripts/probe_build_worker_k3d.py drive --platform platform
 
+      # The driver owns the listing and its label filter, which it proves
+      # against its own cluster before it goes on.
+      - name: Check for leftovers after the cells drive
+        if: ${{ always() }}
+        run: |
+          .venv/bin/python scripts/probe_build_worker_k3d.py leftovers
+          echo "$SENTINEL_SHA256  $HOME/.kube/config" | sha256sum --check
+
       # The signal waits for the line the driver prints once its identity check
       # holds, so it never lands inside `k3d cluster create`. It goes to the
-      # driver's own Python process, which `uv run` would not forward.
+      # driver's own Python process, which `uv run` would not forward. A second
+      # one follows once the teardown has begun, which must not interrupt it.
       - name: Stop a second drive with SIGTERM after its cluster is proven
         run: |
           log="$RUNNER_TEMP/sigterm-drive.log"
@@ -751,8 +760,13 @@ jobs:
             exit 1
           fi
           kill -TERM "$driver"
+          second=
           for _ in $(seq 30); do
             kill -0 "$driver" 2>/dev/null || break
+            if [ -z "$second" ] && grep -q '^teardown:' "$log"; then
+              kill -TERM "$driver"
+              second=sent
+            fi
             sleep 1
           done
           if kill -0 "$driver" 2>/dev/null; then
@@ -764,25 +778,16 @@ jobs:
           status=0
           wait "$driver" || status=$?
           cat "$log"
-          test "$status" = 143
-
-      # k3d labels every container and volume of a cluster app=k3d.
-      - name: Check that no cluster, container, volume, probe image or image presentator remain
-        if: ${{ always() }}
-        run: |
-          repository="$(.venv/bin/python scripts/probe_build_worker_k3d.py probe-repository)"
-          clusters="$(k3d cluster list --no-headers)"
-          containers="$(docker ps --all --quiet --filter label=app=k3d)"
-          volumes="$(docker volume ls --quiet --filter label=app=k3d)"
-          images="$(docker image ls --quiet "$repository"; docker image ls --quiet presentator)"
-          if [ -n "$clusters$containers$volumes$images" ]; then
-            echo "$clusters"
-            docker ps --all
-            docker volume ls
-            docker image ls
-            echo "::error::the probe left a cluster, a container, a volume or an image"
+          if [ -z "$second" ]; then
+            echo "::error::the driver ended before it printed teardown, so no second SIGTERM landed in it"
             exit 1
           fi
+          test "$status" = 143
+
+      - name: Check for leftovers after the signalled drive
+        if: ${{ always() }}
+        run: |
+          .venv/bin/python scripts/probe_build_worker_k3d.py leftovers
           echo "$SENTINEL_SHA256  $HOME/.kube/config" | sha256sum --check
 
   coverage:
