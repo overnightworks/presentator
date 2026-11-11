@@ -1,6 +1,7 @@
 import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 
+import { HopClose } from 'overnightworks-speech-browser'
 import { chromium, type Page } from 'playwright-chromium'
 import { describe, expect, it } from 'vitest'
 
@@ -11,6 +12,7 @@ import {
   contrastRatio,
   createMediaObservation,
   createOverlayDeckServer,
+  endHearings,
   expectFaultWordClearOfControls,
   expectPanelCoversNoSlidevControl,
   installCspGuard,
@@ -24,7 +26,6 @@ import {
   registerOverlayHarness,
   saveEvidence,
   sendHeard,
-  sendHearingError,
   state,
 } from './presenter-overlay-harness'
 
@@ -323,7 +324,8 @@ describe('presenter controls', () => {
     ['the co-presenter fails without being offline', 'who-fails', 'Unreachable'],
     ['the deck is not the asker\'s', 'who-not-found', 'Unreachable'],
     ['local hearing is not ready', 'not-ready', 'Local hearing not ready'],
-    ['the hearing socket sends an error', 'socket-error', 'No hearing'],
+    ['the server refuses the hearing', 'refused-on-open', 'No hearing'],
+    ['the hearing fails after capture started', 'fails-after-capture', 'No hearing'],
   ] as const).map((row) => [width, scheme, ...row] as const)))('CP7: says so in a word readable on the bar, clear of Home and the switch, keeps the track green and builds no browser speech recognition at %ipx in the %s scheme when %s', async (width, scheme, _situation, mode, message) => {
     state.hearingMode = mode
     state.media = createMediaObservation()
@@ -333,16 +335,15 @@ describe('presenter controls', () => {
       const ai = page.getByRole('switch', { name: 'AI' })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
-      if (mode === 'socket-error') {
-        // The error must land after activation finished: an error during
-        // `addModule` is released by activation's own cleanup and would not
-        // prove the error path releases the microphone.
+      if (mode === 'fails-after-capture') {
+        // The end must land after capture is live, so it proves the end of a
+        // running capture releases the microphone.
         await expect.poll(() => page.evaluate(
           () => (window as unknown as {
-            __copresenter: { snapshot: () => { workletLive: boolean } }
-          }).__copresenter.snapshot().workletLive,
+            __copresenter: { snapshot: () => { capturing: boolean } }
+          }).__copresenter.snapshot().capturing,
         )).toBe(true)
-        sendHearingError()
+        endHearings(HopClose.SERVICE_FAILED)
       }
       await page.getByText(message).waitFor({ state: 'visible', timeout: 5_000 })
       await expectFaultWordClearOfControls(page, width, ai, page.getByText(message))
@@ -355,7 +356,7 @@ describe('presenter controls', () => {
       )).toBe(0)
       await expect.poll(() => state.hearingClosed).toBeGreaterThanOrEqual(state.hearingOpened)
       if (['unreachable', 'who-fails', 'who-not-found'].includes(mode)) expect(state.hearingOpened).toBe(hearingOpenedBefore)
-      if (mode === 'socket-error') await expect.poll(() => state.media.trackStopped).toBe(true)
+      if (['refused-on-open', 'fails-after-capture'].includes(mode)) await expect.poll(() => state.media.trackStopped).toBe(true)
       else {
         expect(await page.evaluate(
           () => (window as unknown as { __microphonesRequested: number }).__microphonesRequested,
@@ -363,6 +364,28 @@ describe('presenter controls', () => {
       }
     } finally {
       state.hearingMode = 'ready'
+      await browser.close()
+    }
+  })
+
+  it('CP14: shows no fault word when the server ends the hearing in order, and lets the microphone go', async () => {
+    state.media = createMediaObservation()
+    const { browser, page } = await openPresenter(1024)
+    try {
+      const ai = page.getByRole('switch', { name: 'AI' })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      const capturing = () => page.evaluate(() => (window as unknown as {
+        __copresenter: { snapshot: () => { capturing: boolean } }
+      }).__copresenter.snapshot().capturing)
+      await expect.poll(capturing).toBe(true)
+      endHearings(HopClose.NORMAL)
+      await expect.poll(capturing, { timeout: 1_000 }).toBe(false)
+      await expect.poll(() => state.media.trackStopped, { timeout: 1_000 }).toBe(true)
+      for (const word of ['No hearing', 'Unreachable', 'Voice offline', 'Local hearing not ready']) {
+        expect(await page.getByText(word, { exact: true }).count()).toBe(0)
+      }
+    } finally {
       await browser.close()
     }
   })
@@ -458,7 +481,7 @@ describe('presenter controls', () => {
     ['/', null],
     ['/deck/50%25off/', '50%off'],
     ['/deck/%C3%BC%20b%2541/', 'ü b%41'],
-  ])('mounts one overlay and loads its AudioWorklet from <base>assets/ at %s', async (base, slug) => {
+  ])('mounts one overlay and loads the capture worklet from <base>assets/ at %s', async (base, slug) => {
     const nested = slug !== null
     const overlayBuildDirectory = await buildAddonDeck(base)
     const asked: { said: string, deck: string }[] = []
@@ -477,15 +500,15 @@ describe('presenter controls', () => {
         expect(await page.getByRole('switch', { name: 'AI' }).count()).toBe(1)
         expect(await page.getByRole('link', { name: 'Home' }).count()).toBe(1)
         await ai.click({ timeout: 2_000 })
-        // `workletLive` (snapshot()) is true only once the worklet node
-        // actually exists, which happens after `addModule` resolved against the
-        // addon's own worklet, emitted under `<base>assets/`, under the
-        // production CSP; a blocked or missing module throws there instead and
-        // the component says it has no hearing.
+        // `capturing` (snapshot()) is true only once the package's worklet node
+        // runs, which happens after `addModule` resolved against the worklet
+        // emitted under `<base>assets/`, under the production CSP; a blocked
+        // or missing module ends the capture instead and the component says
+        // it has no hearing.
         await page.waitForFunction(
           () => (window as unknown as {
-            __copresenter: { snapshot: () => { workletLive: boolean } }
-          }).__copresenter.snapshot().workletLive,
+            __copresenter: { snapshot: () => { capturing: boolean } }
+          }).__copresenter.snapshot().capturing,
           undefined,
           { timeout: 5_000 },
         )
