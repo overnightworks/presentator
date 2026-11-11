@@ -654,32 +654,36 @@ def manifests_module(load_script: Callable[..., ModuleType]) -> ModuleType:
     return load_script("probe_build_worker_k3d_manifests")
 
 
+BROKEN_FORMS: list[tuple[str, Callable[[str], str]]] = [
+    ("no digest", lambda reference: reference.replace(DIGEST, "")),
+    ("no tag", lambda reference: reference.replace(f":{RELEASED_VERSION}", "")),
+    ("another repository", lambda reference: reference.replace("overnightworks", "x")),
+    ("the local name", lambda reference: reference.rsplit("/", 1)[-1]),
+    ("uppercase digest", lambda reference: reference.replace(DIGEST, DIGEST.upper())),
+    ("short digest", lambda reference: reference[:-1]),
+    ("long digest", lambda reference: f"{reference}a"),
+    ("another algorithm", lambda reference: reference.replace("sha256", "sha512")),
+    ("trailing text", lambda reference: f"{reference} --privileged"),
+    ("trailing newline", lambda reference: f"{reference}\n"),
+]
+
+
+def recorded_drive() -> tuple[
+    list[tuple[Path, object]], Callable[[Path, object], None]
+]:
+    """The drives a `main` asked for, and the drive that records them."""
+    driven: list[tuple[Path, object]] = []
+
+    def record(checkout: Path, released: object) -> None:
+        driven.append((checkout, released))
+
+    return driven, record
+
+
 @pytest.mark.parametrize(
     "break_form",
-    [
-        lambda reference: reference.replace(DIGEST, ""),
-        lambda reference: reference.replace(f":{RELEASED_VERSION}", ""),
-        lambda reference: reference.replace("overnightworks", "elsewhere"),
-        lambda reference: reference.rsplit("/", 1)[-1],
-        lambda reference: reference.replace(DIGEST, DIGEST.upper()),
-        lambda reference: reference[:-1],
-        lambda reference: f"{reference}a",
-        lambda reference: reference.replace("sha256", "sha512"),
-        lambda reference: f"{reference} --privileged",
-        lambda reference: f"{reference}\n",
-    ],
-    ids=[
-        "no digest",
-        "no tag",
-        "another repository",
-        "the local name",
-        "uppercase digest",
-        "short digest",
-        "long digest",
-        "another algorithm",
-        "trailing text",
-        "trailing newline",
-    ],
+    [broken for _, broken in BROKEN_FORMS],
+    ids=[name for name, _ in BROKEN_FORMS],
 )
 def test_a_published_image_of_another_form_is_refused_before_the_drive_starts(
     make_fixture: Callable[..., Fixture],
@@ -690,12 +694,9 @@ def test_a_published_image_of_another_form_is_refused_before_the_drive_starts(
     reference = make_fixture().reference
     malformed = break_form(reference)
     assert malformed != reference
-    driven: list[tuple[Path, object]] = []
+    driven, record = recorded_drive()
     with pytest.raises(SystemExit):
-        driver_module.main(
-            ["drive", "--platform", "any", "--image", malformed],
-            lambda checkout, released: driven.append((checkout, released)),
-        )
+        driver_module.main(["drive", "--platform", "any", "--image", malformed], record)
     assert "@sha256:<64 lowercase hex>" in capsys.readouterr().err
     assert driven == []
 
@@ -704,11 +705,8 @@ def test_a_published_image_of_the_registry_form_starts_the_drive_over_its_digest
     make_fixture: Callable[..., Fixture], driver_module: ModuleType
 ) -> None:
     reference = make_fixture().reference
-    driven: list[tuple[Path, object]] = []
-    driver_module.main(
-        ["drive", "--platform", "any", "--image", reference],
-        lambda checkout, released: driven.append((checkout, released)),
-    )
+    driven, record = recorded_drive()
+    driver_module.main(["drive", "--platform", "any", "--image", reference], record)
     assert driven == [(Path("any"), driver_module.released_image(reference))]
 
 
@@ -754,19 +752,15 @@ def test_a_drive_over_the_published_image_pulls_by_digest_and_proves_it_first(
 
 
 @pytest.mark.parametrize(
-    "other_digest_listed", [False, True], ids=["none", "another digest"]
+    "digests", [(), (OTHER_DIGEST,)], ids=["none", "another digest"]
 )
 def test_a_tag_whose_repo_digests_lack_the_published_digest_is_refused_then_torn_down(
     make_fixture: Callable[..., Fixture],
     manifests_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
-    other_digest_listed: bool,
+    digests: tuple[str, ...],
 ) -> None:
-    listed = (
-        [f"{manifests_module.PRODUCTION_IMAGE}{OTHER_DIGEST}"]
-        if other_digest_listed
-        else []
-    )
+    listed = [f"{manifests_module.PRODUCTION_IMAGE}{digest}" for digest in digests]
     fixture = make_fixture(World(repo_digests=listed))
     with pytest.raises(SystemExit):
         fixture.drive(released=True)
