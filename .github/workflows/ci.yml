@@ -677,34 +677,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install uv
-        uses: $/.github/actions/setup-uv
-
-      - name: Install locked dependencies
-        run: uv sync --locked
-
-      - name: Read the platform commit the probe is written against
-        id: pin
-        run: echo "ref=$(.venv/bin/python scripts/probe_build_worker_k3d.py pin)" | tee -a "$GITHUB_OUTPUT"
-
-      - name: Check out platform at that commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          repository: overnightworks/platform
-          ref: ${{ steps.pin.outputs.ref }}
-          path: platform
-          persist-credentials: false
-
-      # mise installs the tools of platform's lock but puts none on PATH. Only
-      # the directories of the two tools join it, so this repository's uv
-      # stays the uv of every later step.
-      - name: Install platform's tools and put k3d and kubectl on PATH
-        working-directory: platform
-        run: |
-          scripts/bootstrap_pc.sh --only tools
-          for tool in k3d kubectl; do
-            dirname "$("$HOME/.local/bin/mise" which "$tool")" >> "$GITHUB_PATH"
-          done
+      - name: Prepare the probe's tools
+        uses: $/.github/actions/k3d-probe-tools
 
       - name: Write a kubeconfig whose context is unreachable, to prove the probe leaves it alone
         run: |

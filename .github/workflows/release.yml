@@ -38,8 +38,39 @@ jobs:
       version: ${{ inputs.version }}
       push: true
 
-  tag:
+  pod-proof:
+    name: "Build worker: released image in a k3d pod"
     needs: [gate, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Check out the gated commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.gate.outputs.commit }}
+          persist-credentials: false
+
+      - name: Prepare the probe's tools
+        uses: $/.github/actions/k3d-probe-tools
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # The image job's reference is the only input the proof drives.
+      - name: Drive the published image in a k3d cluster
+        env:
+          IMAGE: ${{ needs.image.outputs.ref }}
+        run: uv run --locked python scripts/probe_build_worker_k3d.py drive --platform platform --image "$IMAGE"
+
+  tag:
+    needs: [gate, image, pod-proof]
     permissions:
       contents: write
     uses: overnightworks/quality/.github/workflows/release-tag.yml@2d2b68bf3916b34f6f2c72a540c1e3d8a947b750 # v0.10.0
