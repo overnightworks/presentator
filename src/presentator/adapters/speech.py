@@ -70,11 +70,11 @@ _TRANSPORT_TRACES: Final = _WarningsOnly()
 
 
 def silence_transport_traces() -> None:
-    """Keep the transports' traces of an upgrade out of every log, for the process.
+    """Keep the transports' traces of a call out of every log, for the process.
 
-    httpcore2 traces the upgrade's response headers at DEBUG and httpx2 the
-    response line at INFO, whatever level an operator set; those carry what the
-    speech service answered.
+    httpcore2 traces a response's headers at DEBUG and httpx2 the response line
+    at INFO, whatever level an operator set; those carry what the called service
+    answered.
     """
     for name in ("httpx2", "httpcore2.http11"):
         logging.getLogger(name).addFilter(_TRANSPORT_TRACES)
