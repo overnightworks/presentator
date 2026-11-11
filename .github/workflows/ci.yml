@@ -698,13 +698,13 @@ jobs:
           persist-credentials: false
 
       # mise installs the tools of platform's lock but puts none on PATH. Only
-      # the directories of the three tools join it, so this repository's uv
+      # the directories of the two tools join it, so this repository's uv
       # stays the uv of every later step.
-      - name: Install platform's tools and put k3d, kubectl and yq on PATH
+      - name: Install platform's tools and put k3d and kubectl on PATH
         working-directory: platform
         run: |
           scripts/bootstrap_pc.sh --only tools
-          for tool in k3d kubectl yq; do
+          for tool in k3d kubectl; do
             dirname "$("$HOME/.local/bin/mise" which "$tool")" >> "$GITHUB_PATH"
           done
 
@@ -768,15 +768,21 @@ jobs:
           cat "$log"
           test "$status" = 143
 
-      - name: Check that no cluster, no probe image and no image presentator remain
+      # k3d labels every container and volume of a cluster app=k3d.
+      - name: Check that no cluster, container, volume, probe image or image presentator remain
         if: ${{ always() }}
         run: |
+          repository="$(.venv/bin/python scripts/probe_build_worker_k3d.py probe-repository)"
           clusters="$(k3d cluster list --no-headers)"
-          images="$(docker image ls --quiet presentator-k3d-probe; docker image ls --quiet presentator)"
-          if [ -n "$clusters$images" ]; then
+          containers="$(docker ps --all --quiet --filter label=app=k3d)"
+          volumes="$(docker volume ls --quiet --filter label=app=k3d)"
+          images="$(docker image ls --quiet "$repository"; docker image ls --quiet presentator)"
+          if [ -n "$clusters$containers$volumes$images" ]; then
             echo "$clusters"
+            docker ps --all
+            docker volume ls
             docker image ls
-            echo "::error::the probe left a cluster or an image"
+            echo "::error::the probe left a cluster, a container, a volume or an image"
             exit 1
           fi
           echo "$SENTINEL_SHA256  $HOME/.kube/config" | sha256sum --check
