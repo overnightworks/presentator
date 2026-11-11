@@ -471,6 +471,8 @@ def watch_events(lines: Iterable[str]) -> Iterator[Document]:
     """The watch events of kubectl's output, each as soon as its last line arrives.
 
     kubectl prints the events as concatenated JSON objects, so no line ends one.
+    A watch that ends inside an event yields only the events before it, so the
+    cell judges the lives read.
     """
     decoder = json.JSONDecoder()
     buffer = ""
@@ -483,8 +485,6 @@ def watch_events(lines: Iterable[str]) -> Iterator[Document]:
                 break
             yield event
             buffer = buffer[end:].lstrip()
-    if buffer:
-        refuse(f"the watch ended inside an event: {buffer[:500]}")
 
 
 def read_lives(events: Iterable[Document], count: int) -> list[Life]:

@@ -770,9 +770,12 @@ def test_the_watch_hands_out_an_event_before_the_stream_goes_on(
     assert next(events) == second
 
 
-def test_a_watch_that_ends_inside_an_event_is_refused(driver: ModuleType) -> None:
-    with pytest.raises(SystemExit):
-        list(driver.watch_events(['{"type": "ADD']))
+def test_a_watch_that_ends_inside_an_event_yields_the_events_before_it(
+    driver: ModuleType,
+) -> None:
+    whole = {"type": "ADDED"}
+    lines = [json.dumps(whole), '{"type": "ADD']
+    assert list(driver.watch_events(lines)) == [whole]
 
 
 @pytest.mark.parametrize("stop", ["kill_child", "close"])
