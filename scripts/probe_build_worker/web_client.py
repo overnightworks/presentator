@@ -35,7 +35,7 @@ from presentator.host.main import build_bound_of, the_build_worker
 LIMIT_FILE = "limit.txt"
 STAGED_PREFIX = "staged-"
 EXTRA_PART = "a"
-# Every audio worklet module registers its processor, whatever file name the build gives it.
+# Every audio worklet module registers its processor, whatever its built file is named.
 WORKLET_MARKER = b"registerProcessor("
 
 
