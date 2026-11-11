@@ -16,7 +16,7 @@ export const Phase = Object.freeze({
 export const BAND = 'band'
 
 // A window shows the whole sentence this long from when it first sees the AI live.
-export const BAND_MILLISECONDS = 10_000
+const BAND_MILLISECONDS = 10_000
 const HEARTBEAT_MILLISECONDS = 1000
 const EXPIRY_MILLISECONDS = 3000
 const CLOCK_MILLISECONDS = 500
