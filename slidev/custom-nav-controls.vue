@@ -40,4 +40,8 @@ const { isPresenter } = useNav()
   padding: 4px 8px;
   border-bottom: 1px solid color-mix(in srgb, currentcolor 20%, transparent);
 }
+.presenter-bar .slidev-icon-btn:focus-visible {
+  outline: 2px solid CanvasText;
+  outline-offset: 2px;
+}
 </style>

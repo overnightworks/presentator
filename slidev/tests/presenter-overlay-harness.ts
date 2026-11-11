@@ -142,6 +142,36 @@ export async function readPaintedColours(page: Page) {
   return { track: channels(colours.track), fault: colours.fault === null ? null : channels(colours.fault) }
 }
 
+type Channels = [number, number, number]
+
+// WCAG 2.x contrast ratio, with a foreground painted at `opacity` over the
+// background.
+export function contrastRatio(foreground: Channels, background: Channels, opacity = 1) {
+  const luminance = (channels: Channels) => {
+    const [red, green, blue] = channels.map((channel) => {
+      const unit = channel / 255
+      return unit <= 0.04045 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!
+  }
+  const seen = foreground.map((channel, index) => channel * opacity + background[index]! * (1 - opacity)) as Channels
+  const [lighter, darker] = [luminance(seen), luminance(background)].sort((first, second) => second - first)
+  return (lighter! + 0.05) / (darker! + 0.05)
+}
+
+// What the presenter bar is painted on: the first opaque background up its
+// ancestors.
+export async function readBarBackground(page: Page): Promise<Channels> {
+  const painted = await page.evaluate(() => {
+    for (let element: Element | null = document.querySelector('.presenter-bar'); element; element = element.parentElement) {
+      const colour = getComputedStyle(element).backgroundColor
+      if (!/^rgba?\(.*, 0\)$/.test(colour) && colour !== 'transparent') return colour
+    }
+    return 'rgb(255, 255, 255)'
+  })
+  return painted.match(/[\d.]+/g)!.slice(0, 3).map(Number) as Channels
+}
+
 // The open heard panel against every interactive element Slidev draws outside
 // the presenter bar: the panel covers none of them, and the list it was
 // compared with holds Slidev's own controls (never an empty comparison).
@@ -645,8 +675,8 @@ export async function freezePage(page: Page) {
   }
 }
 
-export async function openPresenter(width: number) {
-  return openPresenterAt(state.origin, '/presenter/1', width)
+export async function openPresenter(width: number, colorScheme: 'light' | 'dark' = 'light') {
+  return openPresenterAt(state.origin, '/presenter/1', width, (prepared) => prepared.emulateMedia({ colorScheme }))
 }
 
 

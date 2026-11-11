@@ -628,13 +628,17 @@ onUnmounted(() => {
   gap: 8px;
   min-width: 44px;
   min-height: 44px;
-  padding: 0 10px;
-  border: 1px solid color-mix(in srgb, CanvasText 35%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, canvas 82%, CanvasText 18%);
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
+}
+.switch:focus-visible {
+  outline: 2px solid CanvasText;
+  outline-offset: 2px;
 }
 .panel {
   grid-column: 1 / -1;
@@ -644,12 +648,10 @@ onUnmounted(() => {
   width: min(420px, 100%);
   max-height: min(42vh, 360px);
   margin-top: 4px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   overflow-y: auto;
-  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, canvas 82%, CanvasText 18%);
-  box-shadow: 0 8px 24px color-mix(in srgb, CanvasText 25%, transparent);
+  border: 1px solid color-mix(in srgb, currentcolor 20%, transparent);
+  border-radius: 8px;
 }
 .track {
   width: 36px;
@@ -672,18 +674,16 @@ onUnmounted(() => {
 }
 .track[data-on="true"] .thumb { transform: translateX(16px); }
 .label { font-weight: 650; }
-.line {
-  margin: 6px 0 0;
-  font-size: 13px;
-}
-.heard { font-style: italic; opacity: 0.8; }
+.line { margin: 6px 0 0; }
+.line:first-child { margin-top: 0; }
+.heard { opacity: 0.8; }
 .answer { font-weight: 550; }
 .fault {
   grid-column: 1;
   grid-row: 1;
   justify-self: end;
   min-width: 0;
-  color: #d97706;
+  color: light-dark(#b45309, #fbbf24);
   font-weight: 600;
   overflow-wrap: anywhere;
 }

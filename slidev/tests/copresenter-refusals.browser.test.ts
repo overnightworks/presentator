@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   boxesIntersect,
+  contrastRatio,
   expectFaultWordClearOfControls,
   expectPanelCoversNoSlidevControl,
   openPresenter,
+  readBarBackground,
   readPaintedColours,
   registerOverlayHarness,
   saveEvidence,
@@ -58,7 +60,7 @@ describe('co-presenter refusals', () => {
         expect(Math.abs((faultBox.y + faultBox.height / 2) - (aiBox.y + aiBox.height / 2))).toBeLessThan(aiBox.height)
         const painted = await readPaintedColours(page)
         expect(painted.track[1], 'the track stays green').toBeGreaterThan(Math.max(painted.track[0], painted.track[2]) + 20)
-        expect(painted.fault![0], 'the word is warm').toBeGreaterThan(painted.fault![2] + 80)
+        expect(contrastRatio(painted.fault!, await readBarBackground(page)), 'the word reads on the bar').toBeGreaterThanOrEqual(4.5)
         expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(width)
         expect(boxesIntersect(homeBox!, panelBox!)).toBe(false)
         expect(boxesIntersect(aiBox!, panelBox!)).toBe(false)
