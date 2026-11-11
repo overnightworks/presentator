@@ -58,7 +58,8 @@ flowchart TD
   only its `tools` module (`tests/presentator/agent/test_backend_imports.py`
   holds that line, which import-linter cannot draw inside one package). Only adapters
   import `speech_client`, the pinned client that owns the speech wire, its
-  upgrade headers, server events and health fetch; `adapters/session_access.py` is
+  upgrade headers, server events, health fetch, hearing session and the relay of
+  a browser's audio to it; `adapters/session_access.py` is
   the one read of what the issuer grants a signed-in session.
 - **webauth** owns the sign-in routes, the gate, the origin check, the body caps
   and the cookies; presentator's SQLite stores fill its ports.

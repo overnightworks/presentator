@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import time
-from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import AbstractContextManager, aclosing, asynccontextmanager
 from dataclasses import dataclass, field
 from threading import Lock
@@ -23,6 +23,7 @@ from presentator.contracts.copresenter import (
     Audio,
     CoPresenterReadiness,
     CoPresenterUnavailableError,
+    HearingTranscript,
     Question,
     SpeechTokens,
 )
@@ -31,15 +32,13 @@ from presentator.contracts.voice import SampleLanguage
 from presentator.ports.copresenter import (
     AgentAnswers,
     DeckTexts,
+    HearingSocket,
     PersonAccess,
-    PrivateHearing,
     SentenceBoundaries,
     Speaking,
     SpeechHearing,
 )
 from presentator.ports.decks import DeckStore, SourceStore
-
-type CoPresenterHearing = PrivateHearing
 
 _LOGGER = logging.getLogger(__name__)
 _MILLISECONDS = 1000
@@ -140,22 +139,31 @@ class CoPresenterUse:
                 _LOGGER.info("co-presenter first audio: ms=%d", elapsed * _MILLISECONDS)
             yield event
 
-    @asynccontextmanager
-    async def hear(
-        self, language: str, *, session_id: str
-    ) -> AsyncGenerator[PrivateHearing]:
-        """Read the session's speech tokens, then close the child on every exit.
+    async def hearing_tokens(self, session_id: str) -> SpeechTokens:
+        """The session's speech tokens, for the route to hold while it hears.
 
-        Raises CoPresenterUnavailableError when the tokens cannot be had.
+        Raises CoPresenterUnavailableError when they cannot be had.
         """
         tokens = await self.person_access.speech_tokens_of(session_id)
         if isinstance(tokens, AccessRefusal):
             raise CoPresenterUnavailableError
-        async with self.speech.hear(language, tokens) as hearing:
-            try:
-                yield hearing
-            finally:
-                await hearing.aclose()
+        return tokens
+
+    async def relay_hearing(
+        self,
+        browser: HearingSocket,
+        language: str,
+        tokens: SpeechTokens,
+        *,
+        ended: asyncio.Event,
+        heard: Callable[[HearingTranscript], Awaitable[None]],
+    ) -> None:
+        """Hear for the person these tokens name until the hearing ends."""
+        await self.speech.relay(browser, language, tokens, ended=ended, heard=heard)
+
+    async def refuse_hearing(self, browser: HearingSocket) -> None:
+        """Close the browser as a hearing the service cannot give."""
+        await self.speech.refuse(browser)
 
 
 BUSY_RETRY_SECONDS = 1

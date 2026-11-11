@@ -12,8 +12,8 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager, closing
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Final
 
-import anyio
 from agents.backend.fake_gateway import FakeGateway, Reply, completion
+from speech_client.relay import HopClose
 
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.session_access import SessionAccess
@@ -83,8 +83,8 @@ if TYPE_CHECKING:
     from presentator.ports.copresenter import (
         AgentAnswers,
         DeckTexts,
+        HearingSocket,
         PersonAccess,
-        PrivateHearing,
     )
 
 TALK_ORIGIN = A_TALK_ADDRESS
@@ -115,53 +115,30 @@ ASKED = AskedDeck(deck=the_admins_decks().kept[A_DECK], source=A_SOURCE)
 
 HEARING = f"{A_TALK_SOCKET_ADDRESS}/copresenter/hear?language=de"
 POLICY_VIOLATION = 1008
-UNSUPPORTED_DATA = 1003
 INTERNAL_ERROR = 1011
 
 
 @dataclass
 class RecordingHearing:
-    """The private hearing child whose use the route makes observable."""
+    """What a relayed hearing took from the browser and what the service answers."""
 
     frames: list[bytes] = field(default_factory=list[bytes])
     closed: int = 0
     events: list[HearingTranscript | RuntimeError | None] = field(
         default_factory=lambda: [HearingTranscript(text="gehört", final=True)]
     )
-    _frame_ready: asyncio.Queue[None] | None = field(default=None, init=False)
-
-    async def send_pcm(self, frame: bytes) -> None:
-        self.frames.append(frame)
-        if self._frame_ready is None:
-            self._frame_ready = asyncio.Queue()
-        self._frame_ready.put_nowait(None)
-
-    async def receive(self) -> HearingTranscript | None:
-        if self._frame_ready is None:
-            self._frame_ready = asyncio.Queue()
-        await self._frame_ready.get()
-        if self.events:
-            event = self.events.pop(0)
-            if isinstance(event, RuntimeError):
-                raise event
-            return event
-        await asyncio.Future()
-        return None
-
-    async def aclose(self) -> None:
-        self.closed += 1
 
 
 @dataclass
 class RecordingSpeech:
-    """The speech service's hearing side: readiness and the one hearing child."""
+    """The speech service's hearing side: readiness and one relayed hearing."""
 
     readiness_calls: int = 0
     hearing_opens: int = 0
+    refusals: int = 0
+    relaying: threading.Event = field(default_factory=threading.Event)
     hearing: RecordingHearing = field(default_factory=RecordingHearing)
     readiness_unavailable: bool = False
-    hearing_unavailable: bool = False
-    grouped_hearing_context: bool = False
     local_hearing_ready: bool = True
     heard_with: list[SpeechTokens] = field(default_factory=list[SpeechTokens])
 
@@ -174,23 +151,72 @@ class RecordingSpeech:
             local_hearing_ready=self.local_hearing_ready,
         )
 
-    def hear(
-        self, language: str, tokens: SpeechTokens
-    ) -> AbstractAsyncContextManager[PrivateHearing]:
-        @asynccontextmanager
-        async def operation() -> AsyncGenerator[PrivateHearing]:
-            assert language == "de"
-            self.heard_with.append(tokens)
-            self.hearing_opens += 1
-            if self.hearing_unavailable:
-                raise CoPresenterUnavailableError
-            if self.grouped_hearing_context:
-                async with anyio.create_task_group():
-                    yield self.hearing
-                return
-            yield self.hearing
+    async def relay(
+        self,
+        browser: HearingSocket,
+        language: str,
+        tokens: SpeechTokens,
+        *,
+        ended: asyncio.Event,
+        heard: Callable[[HearingTranscript], Awaitable[None]],
+    ) -> None:
+        """Take frames, answer each with the next event, and end as the relay does."""
+        assert language == "de"
+        self.heard_with.append(tokens)
+        self.hearing_opens += 1
+        self.relaying.set()
+        try:
+            while await self._answered_one_frame(browser, ended, heard):
+                pass
+        finally:
+            self.hearing.closed += 1
 
-        return operation()
+    async def _answered_one_frame(
+        self,
+        browser: HearingSocket,
+        ended: asyncio.Event,
+        heard: Callable[[HearingTranscript], Awaitable[None]],
+    ) -> bool:
+        message = asyncio.ensure_future(browser.receive())
+        stop = asyncio.ensure_future(ended.wait())
+        try:
+            await asyncio.wait({message, stop}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for pending in (message, stop):
+                pending.cancel()
+            await asyncio.gather(message, stop, return_exceptions=True)
+        if stop.done() and not stop.cancelled():
+            await browser.close(HopClose.NORMAL)
+            return False
+        received = message.result()
+        if received["type"] == "websocket.disconnect":
+            return False
+        frame = received.get("bytes")
+        if not isinstance(frame, bytes):
+            await browser.close(HopClose.TEXT_FRAME)
+            return False
+        self.hearing.frames.append(frame)
+        return await self._reply(browser, heard)
+
+    async def _reply(
+        self,
+        browser: HearingSocket,
+        heard: Callable[[HearingTranscript], Awaitable[None]],
+    ) -> bool:
+        if not self.hearing.events:
+            return True
+        event = self.hearing.events.pop(0)
+        if isinstance(event, RuntimeError):
+            raise event
+        if event is None:
+            await browser.close(HopClose.SERVICE_FAILED)
+            return False
+        await heard(event)
+        return True
+
+    async def refuse(self, browser: HearingSocket) -> None:
+        self.refusals += 1
+        await browser.close(HopClose.SERVICE_FAILED)
 
 
 @dataclass
