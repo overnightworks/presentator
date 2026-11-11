@@ -1,17 +1,22 @@
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { createSyncState, useNav } from '@slidev/client'
 
-// The room notice (#293 E8): the presenter window decides what the room hears
-// and writes it here; a projector, or the presenter's own preview, reads it.
-// The state travels between the windows of one browser and is never stored.
+// The room notice: the presenter window decides what the AI does and writes it
+// here; each window that shows the deck reads it and decides for itself how
+// long it shows the whole sentence. The state travels between the windows of
+// one browser and is never stored.
 
 export const Phase = Object.freeze({
   OFF: 'off',
-  BANNER: 'banner',
   LISTENING: 'listening',
   ANSWERING: 'answering',
 })
 
+// What a window can show besides a phase's pill: the whole sentence.
+export const BAND = 'band'
+
+// A window shows the whole sentence this long from when it first sees the AI live.
+export const BAND_MILLISECONDS = 10_000
 const HEARTBEAT_MILLISECONDS = 1000
 const EXPIRY_MILLISECONDS = 3000
 const CLOCK_MILLISECONDS = 500
@@ -20,22 +25,20 @@ const CLOCK_MILLISECONDS = 500
 // closes to these two.
 const WORDS = Object.freeze({
   de: {
-    banner: 'Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an einen KI-Dienst gesendet. Welcher, steht in der Datenschutzerklärung.',
+    band: 'Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an einen KI-Dienst gesendet. Welcher, steht in der Datenschutzerklärung.',
     listening: 'KI hört zu',
     answering: 'KI antwortet',
   },
   en: {
-    banner: 'This talk uses an AI co-presenter. While it is switched on, speech is converted to text locally and sent with the slides to an AI service. The Datenschutzerklärung (privacy notice) says which one.',
+    band: 'This talk uses an AI co-presenter. While it is switched on, speech is converted to text locally and sent with the slides to an AI service. The Datenschutzerklärung (privacy notice) says which one.',
     listening: 'AI is listening',
     answering: 'AI is answering',
   },
 })
 
-export function derivePhase({ capturing, playing, answeredSinceOn }) {
+export function derivePhase({ capturing, playing }) {
   if (!capturing) return Phase.OFF
-  if (playing) return Phase.ANSWERING
-  if (!answeredSinceOn) return Phase.BANNER
-  return Phase.LISTENING
+  return playing ? Phase.ANSWERING : Phase.LISTENING
 }
 
 const sync = createSyncState(
@@ -75,20 +78,32 @@ export function publish(facts) {
   }
 }
 
-// What the room should see now, or null. Expiry is computed and never written
-// back, so a reader that outlives its writer cannot clear a live one.
+// What this window should show now, or null: the whole sentence for the first
+// BAND_MILLISECONDS after it sees the AI live (the presenter's own preview
+// never), then the pill of the current phase. Expiry is computed and never
+// written back, so a reader that outlives its writer cannot clear a live one.
 export function useRoomNotice() {
   const { isPlaying, isPresenter, isPrintMode } = useNav()
   const now = ref(Date.now())
+  const liveSince = ref(null)
   let clock = null
   onMounted(() => {
     clock = setInterval(() => { now.value = Date.now() }, CLOCK_MILLISECONDS)
   })
   onUnmounted(() => clearInterval(clock))
+  const live = computed(() => {
+    if (!(isPlaying.value || isPresenter.value) || isPrintMode.value) return false
+    const { phase, stamp } = sync.state
+    return phase !== Phase.OFF && (writing.value || now.value - stamp <= EXPIRY_MILLISECONDS)
+  })
+  // A window that sees the AI not live forgets the moment, so the next live
+  // state starts a new band.
+  watch(live, (isLive) => { liveSince.value = isLive ? Date.now() : null }, { immediate: true, flush: 'sync' })
   return computed(() => {
-    if (!(isPlaying.value || isPresenter.value) || isPrintMode.value) return null
-    const { phase, language, stamp } = sync.state
-    if (phase === Phase.OFF || (!writing.value && now.value - stamp > EXPIRY_MILLISECONDS)) return null
-    return { phase, text: WORDS[language][phase] }
+    if (!live.value) return null
+    const { phase, language } = sync.state
+    const inBand = !isPresenter.value && now.value - liveSince.value < BAND_MILLISECONDS
+    const shown = inBand ? BAND : phase
+    return { shown, text: WORDS[language][shown] }
   })
 }

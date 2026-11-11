@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   boxesIntersect,
   openPresenter,
+  readPaintedColours,
   registerOverlayHarness,
   saveEvidence,
   state,
@@ -45,11 +46,21 @@ describe('co-presenter refusals', () => {
         expect(await page.getByText('the answer could not be spoken').count()).toBe(0)
         expect(page.url()).toBe(`${state.origin}/presenter/1`)
         expect(await ai.getAttribute('aria-checked')).toBe('true')
-        const [homeBox, aiBox, panelBox] = await Promise.all([
+        const [homeBox, aiBox, faultBox, panelBox] = await Promise.all([
           page.getByRole('link', { name: 'Home' }).boundingBox(),
           ai.boundingBox(),
+          page.getByText(line, { exact: true }).boundingBox(),
           page.locator('.copresenter .panel').boundingBox(),
         ])
+        // C5: the word stands beside the switch, whole in the window and clear of Home.
+        expect(faultBox!.x).toBeGreaterThanOrEqual(0)
+        expect(faultBox!.x + faultBox!.width).toBeLessThanOrEqual(width)
+        expect(boxesIntersect(homeBox!, faultBox!)).toBe(false)
+        expect(boxesIntersect(aiBox!, faultBox!)).toBe(false)
+        expect(Math.abs((faultBox!.y + faultBox!.height / 2) - (aiBox!.y + aiBox!.height / 2))).toBeLessThan(aiBox!.height)
+        const painted = await readPaintedColours(page)
+        expect(painted.track[1], 'the track stays green').toBeGreaterThan(Math.max(painted.track[0], painted.track[2]) + 20)
+        expect(painted.fault![0], 'the word is warm').toBeGreaterThan(painted.fault![2] + 80)
         expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(width)
         expect(boxesIntersect(homeBox!, panelBox!)).toBe(false)
         expect(boxesIntersect(aiBox!, panelBox!)).toBe(false)

@@ -124,9 +124,22 @@ export async function readSameFrameBoxes(page: Page, homeHandle: ElementHandle<E
     return {
       homeBox: rectOf(home),
       aiBox: rectOf(ai),
-      navWidth: home.parentElement!.getBoundingClientRect().width,
+      barBox: rectOf(home.parentElement!),
+      sectionsBox: rectOf(document.querySelector('.slidev-presenter .grid-container')!),
     }
   }, [homeHandle, aiHandle] as const)
+}
+// The switch's track and the fault word as the browser paints them, so a test
+// judges colours by their channels and never by a copied literal.
+export async function readPaintedColours(page: Page) {
+  const colours = await page.evaluate(() => ({
+    track: getComputedStyle(document.querySelector('.copresenter .track')!).backgroundColor,
+    fault: document.querySelector('.copresenter .fault')
+      ? getComputedStyle(document.querySelector('.copresenter .fault')!).color
+      : null,
+  }))
+  const channels = (color: string) => color.match(/[\d.]+/g)!.slice(0, 3).map(Number) as [number, number, number]
+  return { track: channels(colours.track), fault: colours.fault === null ? null : channels(colours.fault) }
 }
 
 export async function saveEvidence(page: Page, name: string) {
