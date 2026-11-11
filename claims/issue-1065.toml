@@ -1,0 +1,8 @@
+claim_id = "4433abdd9ba34d9da2b154d2876556e0"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "cf9a157d25a3054f588e76a42145bd0146bd25a2"
+branch = "claude/issue-1065-capture-through-speech-package"
+scope = ["docs/ARCHITECTURE.md", "docs/co-presenter.md", "docs/runbooks/start-an-instance-in-a-container.md", "quality/config.toml", "scripts/probe_build_worker", "scripts/probe_build_worker_web.py", "slidev", "tests/scripts"]
+opened_commit = "4a4de4a2badc4ae115cf6d1c566c99f55ed8a440"
+whole_reason = "The worklet's deletion and the pins on it in the browser tests, the probe, lint and layout configuration must move in one change."
