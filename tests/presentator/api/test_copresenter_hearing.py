@@ -244,7 +244,9 @@ def test_the_upgrade_carries_the_issued_tokens_and_names_the_language_before_aud
     setup, append = service.events
     assert setup["type"] == "session.update"
     session_input = setup["session"]["audio"]["input"]  # type: ignore[index]
-    assert session_input["transcription"]["language"] == language  # type: ignore[index]
+    languages = session_input["transcription"]["languages"]  # type: ignore[index]
+    assert languages[0] == language
+    assert set(languages) == set(wire.HearingLanguage)
     assert append["type"] == "input_audio_buffer.append"
 
 
