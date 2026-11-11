@@ -1,8 +1,0 @@
-claim_id = "16fb4fc4a4014fcdb5dc6cbb547d1470"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "54286080c2b090283aae9e7a31f506ad2fbb7b29"
-branch = "claude/issue-1035-k3d-driver-split"
-scope = ["pyproject.toml", "scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_cluster.py", "scripts/probe_build_worker_k3d_lives.py", "scripts/probe_build_worker_k3d_manifests.py", "tests/scripts/support/k3d_world.py", "tests/scripts/test_probe_build_worker_k3d.py", "tests/scripts/test_probe_build_worker_k3d_lives.py", "tests/scripts/test_probe_build_worker_k3d_manifests.py"]
-opened_commit = "50c188f64f685153113ecdc14b96724499600654"
-whole_reason = "One move: the four driver modules, their INP001 entries and the split test modules change together, since a partial move leaves the entry at the 800-line ceiling."
