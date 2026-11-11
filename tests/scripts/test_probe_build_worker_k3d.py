@@ -266,7 +266,7 @@ def test_the_label_filter_control_prints_after_identity_and_before_the_first_wri
         for start in ("identity holds", "label filter holds:")
     )
     assert identity < control
-    assert "volumes of the run's cluster" in lines[control]
+    assert "the run's node among them" in lines[control]
     commands = [command for command, _, _ in fixture.world.commands]
     listing = next(
         i for i, c in enumerate(commands) if c[:3] == ("docker", "volume", "ls")

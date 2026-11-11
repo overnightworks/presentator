@@ -318,7 +318,7 @@ def prove_label_filter(run: Run) -> None:
         refuse(f"label filter: the listing lacks {', '.join(lacks)}")
     say(
         f"label filter holds: {len(found.containers)} containers, "
-        f"{len(found.volumes)} volumes of the run's cluster"
+        f"{len(found.volumes)} volumes listed on the host, the run's node among them"
     )
 
 
