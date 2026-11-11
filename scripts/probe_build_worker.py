@@ -78,7 +78,6 @@ from probe_build_worker_uploads import (
     Ending,
     UploadClass,
 )
-from pypdf import PdfReader
 
 from presentator.adapters.build_wire import (
     LENGTH,
@@ -650,6 +649,9 @@ def prove_builds(report: Report) -> None:
             "katex-mathml" in text for text in text_files(output / "build-render")
         ):
             refuse("the built render talk carries no KaTeX markup")
+        # The holder's client side has no pypdf; only the host reads the PDF.
+        from pypdf import PdfReader  # noqa: PLC0415 - the client side loads this module without pypdf
+
         with PdfReader(output / "export-render" / "deck.pdf") as reader:
             words = " ".join(page.extract_text() for page in reader.pages)
     # The PDF text layer wraps long mermaid labels at the node width.
