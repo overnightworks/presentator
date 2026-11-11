@@ -1,0 +1,8 @@
+claim_id = "4ccffce4717b4925ab0a2e1d1e6e47a7"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "462cf8f138dd8c2806363b5b0d42b0f3fcb6dfc4"
+branch = "claude/issue-1027-speech-relay-hearing"
+scope = ["docs/ARCHITECTURE.md", "pyproject.toml", "src/presentator/adapters/speech.py", "src/presentator/api/copresenter.py", "src/presentator/application/copresenter.py", "src/presentator/ports/copresenter.py", "tests/presentator/adapters/test_speech_hearing.py", "tests/presentator/api/test_copresenter.py", "tests/presentator/api/test_copresenter_hearing.py", "tests/presentator/api/test_copresenter_speech.py", "tests/presentator/api/test_copresenter_talk_host.py", "tests/presentator/api/test_copresenter_use.py", "tests/support/copresenter_support.py", "tests/support/speech_drive.py", "tests/support/speech_service.py", "uv.lock"]
+opened_commit = "6a55d7f600474ce79483d96d8f8f68fe75512e3d"
+whole_reason = "The port, the use case, the adapter and the route are one seam; any one changed alone leaves a port without a caller."
