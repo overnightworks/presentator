@@ -153,7 +153,8 @@ def test_a_watch_that_ends_early_fails_naming_the_lives_and_asks_for_the_diagnos
     assert "life-0" in problem
     assert "life-1" in problem
     assert world.issued("kubectl", "get", "events") != []
-    assert world.applied("Pod") != []
+    diagnostics = [pod["metadata"]["name"] for pod in world.applied("Pod")]
+    assert diagnostics == [world.twin_pod]
 
 
 def test_the_driver_stops_after_its_lives_and_closes_the_watch(

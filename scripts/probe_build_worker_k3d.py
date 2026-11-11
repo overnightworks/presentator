@@ -9,7 +9,7 @@ platform out at it. `probe-repository` prints the repository of every probe
 image, which CI's teardown check lists. `drive` refuses unless CHECKOUT is at
 that commit and k3d, kubectl and docker are on PATH, proves that the overlay
 rendering the probe image differs from platform's own render only in the
-production image fields of every pod template, then drives two cells in a
+production image fields of every pod template, then drives three cells in a
 single-server k3d cluster at platform's K3S_VERSION. A cell applies the
 PersistentVolumeClaims, ServiceAccounts and worker StatefulSet of
 `apps/presentator`; the applied copy differs from the render only in the worker
@@ -71,23 +71,37 @@ from probe_build_worker_k3d_cluster import (
 )
 from probe_build_worker_k3d_lives import (
     LIVES,
+    PASSING_EXIT_STATUS,
     TERMINATION_WINDOW_SECONDS,
     WORKER_POD,
     Expectation,
+    Life,
     interval_problem,
+    life_problem,
     lives_problem,
     report_lives,
     watch_lives,
 )
 from probe_build_worker_k3d_manifests import (
+    WORKER_CONTAINER,
     applied_documents,
     namespace_document,
     prove_render,
 )
+from probe_build_worker_starts import (
+    CHECK_ARGUMENT,
+    REFUSALS,
+    RESIDUE_SOURCE,
+)
 
-from presentator.host.worker_self_check import Predicate
+from presentator.host.worker import REFUSAL_EXIT_STATUS
+from presentator.host.worker_self_check import BUILD_IDENTITY, Predicate
 
 TWIN_POD = "build-worker-twin"
+RESIDUE_POD_PREFIX = "build-worker-residue-"
+# The planter's residue that plants nothing.
+CONTROL = "nothing"
+ENDED_PHASES = frozenset({"Succeeded", "Failed"})
 POLL_SECONDS = 2
 # The environment names come from python: `env` would print the later lines of
 # a multi-line value.
@@ -117,31 +131,69 @@ def await_pod(
         run.effects.sleep(POLL_SECONDS)
 
 
-def twin_pod(manifest: str) -> Document:
-    """A Pod of the manifest's worker pod spec that prints its facts, not serves."""
-    workers = [d for d in documents_of(manifest) if d["kind"] == "StatefulSet"]
+def pod_of(name: str, documents: list[Document]) -> Document:
+    """A Pod of the documents' worker pod spec that never restarts."""
+    workers = [d for d in documents if d["kind"] == "StatefulSet"]
     spec = copy.deepcopy(workers[0]["spec"]["template"]["spec"])
     spec["restartPolicy"] = "Never"
-    for container in spec["containers"]:
+    metadata = {"name": name, "namespace": NAMESPACE}
+    return {"apiVersion": "v1", "kind": "Pod", "metadata": metadata, "spec": spec}
+
+
+def twin_pod(manifest: str) -> Document:
+    """A Pod of the manifest's worker pod spec that prints its facts, not serves."""
+    pod = pod_of(TWIN_POD, documents_of(manifest))
+    for container in pod["spec"]["containers"]:
         container["command"] = ["sh", "-c", TWIN_SCRIPT]
         container.pop("args", None)
-    metadata = {"name": TWIN_POD, "namespace": NAMESPACE}
-    return {"apiVersion": "v1", "kind": "Pod", "metadata": metadata, "spec": spec}
+    return pod
+
+
+def residue_pod_name(residue: str) -> str:
+    """The name of the twin that holds the residue."""
+    return f"{RESIDUE_POD_PREFIX}{residue}"
+
+
+def residue_twin(
+    worker_documents: list[Document], residue: str, command_tail: list[str]
+) -> Document:
+    """A Pod of the worker pod spec whose worker starts over the planted residue.
+
+    The planter runs as the container's command with its source as `-c`'s
+    argument and execs the template's own command and arguments, then the tail.
+    """
+    pod = pod_of(residue_pod_name(residue), worker_documents)
+    identity = ":".join(map(str, BUILD_IDENTITY))
+    for container in pod["spec"]["containers"]:
+        if container["name"] == WORKER_CONTAINER:
+            start = [*container.get("command", []), *container.pop("args", [])]
+            container["command"] = [
+                *("python", "-I", "-c", RESIDUE_SOURCE.read_text()),
+                residue,
+                identity,
+                *start,
+                *command_tail,
+            ]
+    return pod
+
+
+def print_twin(run: Run, manifest: str, title: str) -> None:
+    """Print what the manifest's twin Pod prints, then delete the twin."""
+    run("kubectl apply --filename -", stdin=json.dumps(twin_pod(manifest)))
+    _, finished = await_pod(
+        run, TWIN_POD, lambda pod: pod.get("status", {}).get("phase") in ENDED_PHASES
+    )
+    said = run("kubectl logs", TWIN_POD, *IN_NAMESPACE, check=False)
+    verdict = "" if finished else " (did not end)"
+    say(f"{title}{verdict}:\n{said.stdout}{said.stderr}")
+    run("kubectl delete pod --wait=true", TWIN_POD, *IN_NAMESPACE)
 
 
 def diagnose(run: Run, manifest: str) -> None:
     """Print the Namespace's events and what the manifest's twin Pod prints."""
     sort = "--sort-by=.metadata.creationTimestamp"
     say(f"events:\n{run('kubectl get events', sort, *IN_NAMESPACE).stdout}")
-    run("kubectl apply --filename -", stdin=json.dumps(twin_pod(manifest)))
-    ended = {"Succeeded", "Failed"}
-    _, finished = await_pod(
-        run, TWIN_POD, lambda pod: pod.get("status", {}).get("phase") in ended
-    )
-    said = run("kubectl logs", TWIN_POD, *IN_NAMESPACE, check=False)
-    verdict = "ended" if finished else "did not end"
-    say(f"twin Pod {verdict}:\n{said.stdout}{said.stderr}")
-    run("kubectl delete pod --wait=true", TWIN_POD, *IN_NAMESPACE)
+    print_twin(run, manifest, "twin Pod")
 
 
 def drive_cell(
@@ -162,21 +214,83 @@ def drive_cell(
     return f"cell {number}: {problem}"
 
 
+def stop_worker(run: Run) -> None:
+    """Delete the StatefulSet and wait for its pod to go; the claim stays."""
+    run("kubectl delete statefulset --wait=true", "build-worker", *IN_NAMESPACE)
+    run("kubectl wait --for=delete --timeout=60s", f"pod/{WORKER_POD}", *IN_NAMESPACE)
+
+
+def drive_twin(
+    run: Run, documents: list[Document], residue: str, refusal: Predicate | None
+) -> tuple[str, bool]:
+    """Start the residue's twin, judge its end; give the problem and if it ended."""
+    tail = [CHECK_ARGUMENT] if refusal is None else []
+    twin = residue_twin(documents, residue, tail)
+    name = twin["metadata"]["name"]
+    run("kubectl apply --filename -", stdin=json.dumps(twin))
+    pod, ended = await_pod(
+        run, name, lambda pod: pod.get("status", {}).get("phase") in ENDED_PHASES
+    )
+    if not ended:
+        problem = (
+            f"{residue}: the Pod did not end within {TERMINATION_WINDOW_SECONDS} s"
+        )
+        return problem, False
+    life = Life(pod["metadata"]["uid"]).after(pod, deleted=False)
+    problem = life_problem(life, Expectation(refusal, init_container=True, lives=1))
+    if problem is None:
+        status, line = (
+            (PASSING_EXIT_STATUS, "self-check passed")
+            if refusal is None
+            else (REFUSAL_EXIT_STATUS, f"start refused: {refusal}")
+        )
+        say(f"cell 9: {residue}: exit {status}, {line}")
+        return "", True
+    say(f"cell 9: {residue}: FAILED, {problem}")
+    for termination in life.terminations:
+        say(f"cell 9: {residue}: message: {termination.message.strip()[-500:]}")
+    return f"{residue}: {problem}", True
+
+
+def drive_residues(run: Run, overlay: list[Document]) -> list[str]:
+    """Cell 9: print the worker pod's facts, then start each twin and delete them."""
+    stop_worker(run)
+    documents = applied_documents(overlay, init_container=True)
+    manifest = as_stream(documents)
+    print_twin(run, manifest, "cell 9: the worker pod's facts")
+    starts = [(CONTROL, None)] + [
+        (residue, predicate)
+        for _, predicate, residues in REFUSALS
+        for residue in residues
+    ]
+    problems: list[str] = []
+    applied: list[str] = []
+    for residue, refusal in starts:
+        applied.append(residue_pod_name(residue))
+        problem, ended = drive_twin(run, documents, residue, refusal)
+        problems.extend(filter(None, [problem]))
+        if not ended:
+            break
+    run("kubectl delete pod --wait=true", *applied, *IN_NAMESPACE)
+    if problems:
+        diagnose(run, manifest)
+    return [f"cell 9: {problem}" for problem in problems]
+
+
 def drive_cells(run: Run, overlay: list[Document]) -> list[str]:
-    """Drive the control, then its twin with the init container; both always run."""
+    """Drive the control, its twin with the init container, then the residues."""
     bare = Expectation(Predicate.NO_ROUTE, init_container=False, lives=1)
     control = applied_documents(overlay, init_container=False)
     problems = [drive_cell(run, 7, control, bare)]
-    run("kubectl delete statefulset --wait=true", "build-worker", *IN_NAMESPACE)
-    run("kubectl wait --for=delete --timeout=60s", f"pod/{WORKER_POD}", *IN_NAMESPACE)
+    stop_worker(run)
     linked = Expectation(None, init_container=True, lives=LIVES)
     worker = applied_documents(overlay, init_container=True, check=True)
     problems.append(drive_cell(run, 8, worker, linked))
-    return [problem for problem in problems if problem]
+    return [problem for problem in problems if problem] + drive_residues(run, overlay)
 
 
 def drive(run: Run) -> None:
-    """Drive both cells of the pod shape; always remove what the run made."""
+    """Drive the cells of the pod shape; always remove what the run made."""
     k3s_version = preflight(run)
     # mkdir refuses an existing path, so a directory planted at the name stops
     # the run instead of holding its kubeconfig.
