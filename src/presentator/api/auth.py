@@ -116,10 +116,11 @@ _REFUSAL_PATHS: Final = frozenset(
     for path in (sign_in_refusal_path(refusal), talk_sign_in_refusal_path(refusal))
 )
 
-# The sign-in addresses are public and exempt from the origin check through the
-# sign-in paths the middleware is given. The lobby app's built assets have to
-# render the open pages themselves, so they are public too, and so is the
-# address another server posts to: a source host's POST under the hook prefix.
+# The sign-in addresses are public through the sign-in paths the middleware is
+# given; only the back-channel logout among them is exempt from the origin
+# check. The lobby app's built assets have to render the open pages themselves,
+# so they are public too, and so is the address another server posts to: a
+# source host's POST under the hook prefix.
 # `/setup` is a retired address: it answers 404 to everyone, so a signed-out
 # reader is not sent to a login for a page that does not exist.
 _SERVER_CALLS: Final = PathRules(prefixes=(HOOK_CALLS,))

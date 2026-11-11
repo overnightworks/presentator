@@ -62,7 +62,7 @@ def create_tables(database: Path) -> None:
 def _add_the_column_when_missing(
     database: Path, *, table: str, name: str, definition: str
 ) -> None:
-    """Give the table its column on every start; every old row reads the default.
+    """Give the table its column on every start; an old row reads its default or NULL.
 
     One immediate transaction, so two starts on one file cannot both add it. The
     column is nullable or carries a default, so the release before, inserting
