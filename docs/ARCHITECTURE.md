@@ -140,8 +140,8 @@ type is a `tag:` URI, because an https address breaks when its page moves.
 
 **Words and look.** Every lobby word comes from gettext catalogs via Babel
 (`adapters/catalog.py`); `scripts/check_catalog_purity.py` holds the pages to
-it, and a language is a file. The language is the instance's, the theme the
-person's. The look is design's, with presentator's teal in the app slot
+it, and a language is a file. The language is the instance's unless a signed-in
+person's account names one a catalog speaks; the theme is the person's. The look is design's, with presentator's teal in the app slot
 (`frontend/src/app.css`). The overlay's controls use English literals; the room
 notice follows the deck's language.
 
