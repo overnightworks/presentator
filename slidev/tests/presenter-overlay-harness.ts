@@ -394,17 +394,12 @@ async function startServer() {
     if (url.pathname === '/copresenter/who') {
       await state.whoGate
       const scripted = state.whoScript[state.whoRequests++] ?? {}
-      if (scripted.fails) {
-        response.writeHead(500, { 'content-type': 'application/json' })
-        response.end(JSON.stringify({ detail: 'Co-presenter failed' }))
-        return
-      }
       if (state.hearingMode === 'who-not-found') {
         response.writeHead(404, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ detail: 'Not found' }))
         return
       }
-      if (state.hearingMode === 'who-fails') {
+      if (scripted.fails || state.hearingMode === 'who-fails') {
         response.writeHead(500, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ detail: 'Co-presenter failed' }))
         return
