@@ -202,7 +202,7 @@ msgid "Der Vortrag, den dieser Build geschrieben hat, enthält mehr als {entries
 msgstr "The talk this build wrote holds more than {entries} files; a build may leave fewer."
 
 msgctxt "deck.failedOutputShape"
-msgid "Der Vortrag, den dieser Build geschrieben hat, kann nicht übernommen werden: Er enthält einen Link, eine Spezialdatei oder nicht lesbare Datei, einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes oder eine Datei, die dieser Schritt nicht schreiben darf."
+msgid "Der Vortrag, den dieser Build geschrieben hat, kann nicht übernommen werden: Er enthält einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes, eine Datei, die dieser Schritt nicht schreiben darf, einen Link, eine Spezialdatei oder eine nicht lesbare Datei."
 msgstr "The talk this build wrote cannot be taken: it holds a link, a special or unreadable file, a path of more than 32 parts (folders and the file) or 1024 bytes, or a file this step may not write."
 
 msgctxt "deck.failedDeckMegabytes"
@@ -210,7 +210,7 @@ msgid "Dieses Deck ist zu groß zum Bauen: Ein Deck darf höchstens {megabytes} 
 msgstr "This deck is too large to build: a deck may hold at most {megabytes} MB and at most {entries} files and folders together, not counting its top-level node_modules."
 
 msgctxt "deck.failedDeckPaths"
-msgid "Dieses Deck kann nicht gebaut werden: Es enthält einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes oder einen Link, eine Spezialdatei oder nicht lesbare Datei."
+msgid "Dieses Deck kann nicht gebaut werden: Es enthält einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes oder einen Link, eine Spezialdatei oder eine nicht lesbare Datei."
 msgstr "This deck cannot be built: it holds a path of more than 32 parts (folders and the file) or 1024 bytes, or a link, a special or an unreadable file."
 
 msgctxt "deck.failedLastTalkStands"
@@ -282,7 +282,7 @@ msgid "Standardsprache"
 msgstr "Default language"
 
 msgctxt "settings.languageHint"
-msgid "Füge eine Katalogdatei hinzu, um eine Sprache hinzuzufügen."
+msgid "Eine weitere Sprache kommt mit einer weiteren Katalogdatei."
 msgstr "Add a catalog file to add a language."
 
 msgctxt "settings.save"
@@ -562,7 +562,7 @@ msgid "Eine Quelle mit dieser Git-URL gibt es schon."
 msgstr "A source with this Git URL is already here."
 
 msgctxt "source.refusedUnknownAccess"
-msgid "Nimm https://host/pfad, user@host:pfad oder ssh://user@host/pfad oder einen Ordner auf diesem Rechner, ohne Benutzername und Passwort darin."
+msgid "Nutze https://host/pfad, user@host:pfad, ssh://user@host/pfad oder einen Ordner auf diesem Rechner, ohne Benutzername und Passwort darin."
 msgstr "Use https://host/path, user@host:path or ssh://user@host/path, or a folder on this box, with no user name or password in it."
 
 msgctxt "source.refusedNotChecked"

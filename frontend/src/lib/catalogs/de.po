@@ -202,7 +202,7 @@ msgid "Der Vortrag, den dieser Build geschrieben hat, enthält mehr als {entries
 msgstr ""
 
 msgctxt "deck.failedOutputShape"
-msgid "Der Vortrag, den dieser Build geschrieben hat, kann nicht übernommen werden: Er enthält einen Link, eine Spezialdatei oder nicht lesbare Datei, einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes oder eine Datei, die dieser Schritt nicht schreiben darf."
+msgid "Der Vortrag, den dieser Build geschrieben hat, kann nicht übernommen werden: Er enthält einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes, eine Datei, die dieser Schritt nicht schreiben darf, einen Link, eine Spezialdatei oder eine nicht lesbare Datei."
 msgstr ""
 
 msgctxt "deck.failedDeckMegabytes"
@@ -210,7 +210,7 @@ msgid "Dieses Deck ist zu groß zum Bauen: Ein Deck darf höchstens {megabytes} 
 msgstr ""
 
 msgctxt "deck.failedDeckPaths"
-msgid "Dieses Deck kann nicht gebaut werden: Es enthält einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes oder einen Link, eine Spezialdatei oder nicht lesbare Datei."
+msgid "Dieses Deck kann nicht gebaut werden: Es enthält einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes oder einen Link, eine Spezialdatei oder eine nicht lesbare Datei."
 msgstr ""
 
 msgctxt "deck.failedLastTalkStands"
@@ -282,7 +282,7 @@ msgid "Standardsprache"
 msgstr ""
 
 msgctxt "settings.languageHint"
-msgid "Füge eine Katalogdatei hinzu, um eine Sprache hinzuzufügen."
+msgid "Eine weitere Sprache kommt mit einer weiteren Katalogdatei."
 msgstr ""
 
 msgctxt "settings.save"
@@ -562,7 +562,7 @@ msgid "Eine Quelle mit dieser Git-URL gibt es schon."
 msgstr ""
 
 msgctxt "source.refusedUnknownAccess"
-msgid "Nimm https://host/pfad, user@host:pfad oder ssh://user@host/pfad oder einen Ordner auf diesem Rechner, ohne Benutzername und Passwort darin."
+msgid "Nutze https://host/pfad, user@host:pfad, ssh://user@host/pfad oder einen Ordner auf diesem Rechner, ohne Benutzername und Passwort darin."
 msgstr ""
 
 msgctxt "source.refusedNotChecked"
