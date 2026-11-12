@@ -1,7 +1,0 @@
-claim_id = "d32f485956044e8a80f5ea6d2afd8611"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "c4cef46bcb7ade0b5a87fbd393bad93414fb05b2"
-branch = "claude/issue-1111-release-build-cache"
-scope = [".github/workflows/release.yml"]
-opened_commit = "3ab981795852e4909ddd7b42d059f41a098becad"
