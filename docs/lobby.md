@@ -8,7 +8,7 @@ under "Words and look".
 
 - **LB1** The admin sets the instance's language. A signed-in person whose
   account names a language presentator has a catalog for sees that language;
-  everyone else sees the instance's.
+  everyone else sees the instance's, and English where that has no catalog.
 - **LB2** The lobby has no account page. Each person chooses the theme in the
   person menu, the instance sets no theme, and whoever chooses none gets Follow
   system.
