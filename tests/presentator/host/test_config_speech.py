@@ -87,6 +87,13 @@ def test_an_empty_voice_refuses() -> None:
         _settings_with(speech_voice="")
 
 
+def test_a_voice_outside_the_catalogue_refuses_naming_the_field() -> None:
+    with pytest.raises(ValidationError) as refused:
+        _settings_with(speech_voice="a-voice-outside-the-catalogue")
+
+    assert "speech_voice" in str(refused.value)
+
+
 def test_an_env_file_with_the_three_keys_starts_and_a_leftover_socket_key_refuses(
     tmp_path: Path, environment: pytest.MonkeyPatch
 ) -> None:

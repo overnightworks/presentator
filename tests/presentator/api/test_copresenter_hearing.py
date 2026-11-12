@@ -247,7 +247,7 @@ def test_the_upgrade_carries_the_issued_tokens_and_names_the_language_before_aud
     transcription = cast("dict[str, list[str]]", session_input["transcription"])  # type: ignore[index]
     languages = transcription["languages"]
     assert languages[0] == language
-    assert set(languages) == set(wire.HearingLanguage)
+    assert set(languages) == set(wire.Language)
     assert append["type"] == "input_audio_buffer.append"
 
 

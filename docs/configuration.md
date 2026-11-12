@@ -21,7 +21,7 @@ secret does not land in the startup output.
 | `PRESENTATOR_AGENT__GATEWAY__CA_FILE` | Optional absolute path of the CA file an `https` gateway origin needs; an `http` origin forbids it. |
 | `PRESENTATOR_SPEECH_SERVICE` | The one plain `http` origin of the shared speech service, without a path; `compose.yaml` sets it. No default. |
 | `PRESENTATOR_SPEECH_SERVICE_SCOPE` | The one scope token that names the service at the issuer; both sign-ins and the workload grant ask for it. No default. |
-| `PRESENTATOR_SPEECH_VOICE` | The voice this instance speaks in, one the service offers. No default. |
+| `PRESENTATOR_SPEECH_VOICE` | The voice this instance speaks in, a voice id from the speech service's catalogue, the speech client's `VoiceId`; any other value refuses the start. No default. |
 | `PRESENTATOR_OIDC_ISSUER` | The https URL of the Keycloak realm, without a trailing slash; exactly the `issuer` of its discovery document. |
 | `PRESENTATOR_OIDC_CLIENT_ID` | The Keycloak client id. |
 | `PRESENTATOR_OIDC_CLIENT_SECRET_FILE` | Absolute path of a file holding the client secret, read once at start, minus one trailing newline. |

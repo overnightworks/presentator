@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 from httpx2 import Request as BrowserRequest
 from httpx2 import Response as BrowserResponse
 from pydantic import SecretStr
+from speech_client import wire
 from webauth.config import WebAuthConfig, installed_web_auth_config
 from webauth.cookies import issue_session_cookies
 from webauth.jwt_verification import KeySetFetch
@@ -158,7 +159,7 @@ A_TALK_SOCKET_ADDRESS: Final = "wss://talk.testserver"
 A_GATEWAY_ORIGIN: Final = "http://gateway.test:4000"
 A_SPEECH_SERVICE: Final = "http://speech.test:8080"
 A_SPEECH_SCOPE: Final = "speech-scope-of-this-test"
-A_SPEECH_VOICE: Final = "voice-of-this-test"
+A_SPEECH_VOICE: Final = wire.VoiceId.NORMAN
 AN_API_GROUP: Final = "/services/agent-service/api"
 AN_ISSUER: Final = "https://auth.example.test/realms/test"
 A_CLIENT_ID: Final = "presentator-test"

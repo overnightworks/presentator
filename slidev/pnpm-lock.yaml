@@ -206,8 +206,8 @@ importers:
         specifier: 10.12.0
         version: 10.12.0(@typescript-eslint/parser@8.72.1(eslint@10.14.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.14.0(jiti@2.7.0))(vue-eslint-parser@10.4.1(eslint@10.14.0(jiti@2.7.0)))
       overnightworks-speech-browser:
-        specifier: https://github.com/overnightworks/speech/releases/download/v0.9.0/overnightworks-speech-browser-0.9.0.tgz
-        version: https://github.com/overnightworks/speech/releases/download/v0.9.0/overnightworks-speech-browser-0.9.0.tgz
+        specifier: https://github.com/overnightworks/speech/releases/download/v0.10.0/overnightworks-speech-browser-0.10.0.tgz
+        version: https://github.com/overnightworks/speech/releases/download/v0.10.0/overnightworks-speech-browser-0.10.0.tgz
       playwright-chromium:
         specifier: 1.64.1
         version: 1.64.1
@@ -2983,9 +2983,9 @@ packages:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
 
-  overnightworks-speech-browser@https://github.com/overnightworks/speech/releases/download/v0.9.0/overnightworks-speech-browser-0.9.0.tgz:
-    resolution: {integrity: sha512-Tw+2uHy6AN9knWrFeN+FVU2TEF9DIi6Cc6+LKtRrnOhOZwK8HrTy3/iOG64Yzz7hC2YpX2xyl7KOEH5Aj2hxSA==, tarball: https://github.com/overnightworks/speech/releases/download/v0.9.0/overnightworks-speech-browser-0.9.0.tgz}
-    version: 0.9.0
+  overnightworks-speech-browser@https://github.com/overnightworks/speech/releases/download/v0.10.0/overnightworks-speech-browser-0.10.0.tgz:
+    resolution: {integrity: sha512-DoSX6Qy3DippLcQ5PClNKyrZoUxh2G8G93pC9LPogdJ0tnRoDZwPNGf9EvcjSpLCoFUwP/rzIP9VrcJviUQH9A==, tarball: https://github.com/overnightworks/speech/releases/download/v0.10.0/overnightworks-speech-browser-0.10.0.tgz}
+    version: 0.10.0
 
   oxc-parser@0.153.0:
     resolution: {integrity: sha512-cEnpyyV1OJRXv++SFNw0z8i+2o/cr88rVLaOYJafELDoHM5yHvCAbwGRLvxuany6SNLcbblSMUyZaGzH+quSYg==}
@@ -7218,7 +7218,7 @@ snapshots:
       type-check: 0.4.0
       word-wrap: 1.2.5
 
-  overnightworks-speech-browser@https://github.com/overnightworks/speech/releases/download/v0.9.0/overnightworks-speech-browser-0.9.0.tgz: {}
+  overnightworks-speech-browser@https://github.com/overnightworks/speech/releases/download/v0.10.0/overnightworks-speech-browser-0.10.0.tgz: {}
 
   oxc-parser@0.153.0:
     dependencies:
