@@ -128,14 +128,17 @@ hal's token clients are trusted. The shared speech service gets readiness, PCM, 
 sentences and two tokens, the person's access token and presentator's workload token, over its plain
 `http` origin; cookies are not forwarded, and what the service keeps is the shared section
 `#sprachdienst`. No operator blessing narrows this model, so an audit keeps the default. The
-platform confines the worker's pod and proves it in its CI; presentator proves only its own product
-there: the worker's self-check, the web Ready against the worker, a deck built and exported.
+platform confines the worker's pod and proves it in its CI; presentator proves only its own product.
 
 A bearer enters the lobby through two paths besides hal's token clients, both limited to `/mcp` and
 the routes marked as tools, never one that deletes, shares, publishes, sends outward or is admin:
 the `agents` client's token, which acts as the person behind its subject, and a token of a service
 account in the realm's agent group, whose first call creates an agent account that owns and sees no
 deck. Without a bearer the cookie session and its CSRF check decide.
+
+**Proof.** A test sits at the layer that owns the behaviour: pure logic runs with fakes at the
+ports, an adapter against a temporary real dependency, routes through the real app in `TestClient`.
+A delegated agent proves a person's flow at a surface; a leak fails the run.
 
 ## 6. Constraints and reasons
 
@@ -180,8 +183,7 @@ deck. Without a bearer the cookie session and its CSRF check decide.
   Reopens if the build gains a registry.
 - A wake word: the engines are proprietary or English-only. Reopens with a self-hosted German one.
 - Required pull request approvals: agents review before it opens. Reopens if review moves to GitHub.
-- A custom Sonar quality gate: the coverage floors, all at 100 %, are stricter. Reopens if one
-  drops.
+- A custom Sonar gate: its coverage floors, all at 100 %, are stricter. Reopens if one drops.
 
 ## 8. Risks and Technical Debt
 
