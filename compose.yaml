@@ -43,7 +43,6 @@ services:
       PRESENTATOR_AGENT__GATEWAY__ORIGIN: http://litellm-front:4000
       PRESENTATOR_SPEECH_SERVICE: http://speech:8080
       PRESENTATOR_SPEECH_SERVICE_SCOPE: speech-service-audience
-      PRESENTATOR_SPEECH_VOICE: de_DE-thorsten-medium
       PRESENTATOR_AGENT__GATEWAY__KEY_FILE: /run/secrets/litellm_key
       PRESENTATOR_AGENT__API_GROUP: /services/agent-service/api
       PRESENTATOR_BUILD_RUNNER: worker

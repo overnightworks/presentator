@@ -7,21 +7,19 @@ from typing import TYPE_CHECKING
 
 import pytest
 from pydantic import ValidationError
+from speech_client import wire
 
+from presentator.contracts.voice import SampleLanguage
 from presentator.host.config import ConfigurationError, Settings, load_settings
 from presentator.host.main import build_instance
-from tests.support.lobby import (
-    A_SPEECH_SCOPE,
-    A_SPEECH_SERVICE,
-    A_SPEECH_VOICE,
-    a_settings,
-)
+from tests.support.lobby import A_SPEECH_SCOPE, A_SPEECH_SERVICE, a_settings
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 A_CREDENTIALED_ORIGIN = "http://user:pa55word-MARKER@speech:8080"
-_FIELDS = ("speech_service", "speech_service_scope", "speech_voice")
+_REMOVED_VOICE_VARIABLE = "PRESENTATOR_SPEECH_" + "VOICE"
+_FIELDS = ("speech_service", "speech_service_scope")
 
 
 def _settings_with(**overrides: object) -> Settings:
@@ -29,12 +27,23 @@ def _settings_with(**overrides: object) -> Settings:
     return Settings.model_validate({**good, **overrides})
 
 
-def test_the_three_values_build_settings_without_any_network() -> None:
+def _voice_field(language: SampleLanguage) -> str:
+    return f"speech_voice_{language.value}"
+
+
+def test_the_service_and_its_scope_build_settings_without_any_network() -> None:
     settings = _settings_with()
 
     assert settings.speech_service == A_SPEECH_SERVICE
     assert settings.speech_service_scope == A_SPEECH_SCOPE
-    assert settings.speech_voice == A_SPEECH_VOICE
+
+
+def test_each_language_has_a_voice_that_speaks_it_when_no_setting_names_one() -> None:
+    voices = a_settings().speech_voices()
+
+    assert set(voices) == set(SampleLanguage)
+    for language, voice in voices.items():
+        assert wire.Language(language.value) in wire.VOICES[voice].languages
 
 
 @pytest.mark.parametrize("name", _FIELDS)
@@ -82,38 +91,71 @@ def test_a_scope_that_is_not_one_token_refuses_without_echoing_it(scope: str) ->
     assert all(scope not in str(error["msg"]) for error in errors if scope)
 
 
-def test_an_empty_voice_refuses() -> None:
-    with pytest.raises(ValidationError):
-        _settings_with(speech_voice="")
-
-
-def test_a_voice_outside_the_catalogue_refuses_naming_the_field() -> None:
+@pytest.mark.parametrize("language", list(SampleLanguage))
+@pytest.mark.parametrize("voice", ["", "a-voice-outside-the-catalogue"])
+def test_a_voice_outside_the_catalogue_refuses_naming_the_field(
+    language: SampleLanguage, voice: str
+) -> None:
     with pytest.raises(ValidationError) as refused:
-        _settings_with(speech_voice="a-voice-outside-the-catalogue")
+        _settings_with(**{_voice_field(language): voice})
 
-    assert "speech_voice" in str(refused.value)
+    assert _voice_field(language) in str(refused.value)
 
 
-def test_an_env_file_with_the_three_keys_starts_and_a_leftover_socket_key_refuses(
+@pytest.mark.parametrize(
+    ("language", "voice"),
+    [
+        (language, voice)
+        for language in SampleLanguage
+        for voice, entry in wire.VOICES.items()
+        if wire.Language(language.value) not in entry.languages
+    ],
+)
+def test_a_voice_that_does_not_speak_the_settings_language_refuses_naming_it(
+    language: SampleLanguage, voice: wire.VoiceId
+) -> None:
+    with pytest.raises(ValidationError) as refused:
+        _settings_with(**{_voice_field(language): voice})
+
+    assert _voice_field(language) in str(refused.value)
+
+
+@pytest.mark.parametrize("language", list(SampleLanguage))
+def test_a_voice_of_several_languages_is_accepted_for_either_language(
+    language: SampleLanguage,
+) -> None:
+    settings = _settings_with(**{_voice_field(language): wire.VoiceId.RYAN})
+
+    assert settings.speech_voices()[language] == wire.VoiceId.RYAN
+
+
+def test_an_env_file_names_the_voices_and_a_leftover_key_refuses(
     tmp_path: Path, environment: pytest.MonkeyPatch
 ) -> None:
     environment.chdir(tmp_path)
-    for name in ("SERVICE", "SERVICE_SCOPE", "VOICE"):
+    for name in ("SERVICE", "SERVICE_SCOPE"):
         environment.delenv(f"PRESENTATOR_SPEECH_{name}")
     env_file = tmp_path / ".env"
     lines = [
         f"PRESENTATOR_SPEECH_SERVICE={A_SPEECH_SERVICE}",
         f"PRESENTATOR_SPEECH_SERVICE_SCOPE={A_SPEECH_SCOPE}",
-        f"PRESENTATOR_SPEECH_VOICE={A_SPEECH_VOICE}",
+        f"PRESENTATOR_SPEECH_VOICE_EN={wire.VoiceId.RYAN}",
     ]
     env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    assert load_settings().speech_voice == A_SPEECH_VOICE
+    assert load_settings().speech_voices()[SampleLanguage.ENGLISH] == wire.VoiceId.RYAN
 
-    leftover = "SPEECH_" + "SOCKET"
-    env_file.write_text(f"PRESENTATOR_{leftover}=/run/old\n", encoding="utf-8")
+    env_file.write_text(f"{_REMOVED_VOICE_VARIABLE}=ryan\n", encoding="utf-8")
     with pytest.raises(ConfigurationError) as refused:
         load_settings()
-    assert leftover.lower() in str(refused.value).lower()
+    assert _REMOVED_VOICE_VARIABLE.lower() in str(refused.value).lower()
+
+
+def test_the_removed_voice_variable_in_the_process_environment_is_ignored(
+    environment: pytest.MonkeyPatch,
+) -> None:
+    environment.setenv(_REMOVED_VOICE_VARIABLE, "a-voice-outside-the-catalogue")
+
+    assert load_settings().speech_voices() == a_settings().speech_voices()
 
 
 @pytest.mark.usefixtures("environment")

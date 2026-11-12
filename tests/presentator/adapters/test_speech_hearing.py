@@ -14,7 +14,7 @@ from speech_client.relay import HOP_FRAME_BYTES, HopClose
 
 from presentator.adapters.speech import SpeechHearing
 from presentator.contracts.copresenter import HearingTranscript, SpeechTokens
-from tests.support.lobby import A_SPEECH_VOICE
+from tests.support.lobby import the_speech_voices
 from tests.support.speech_service import (
     AN_ITEM,
     FakeSpeechService,
@@ -66,7 +66,7 @@ async def _heard_through(
         transcripts.append(transcript)
 
     async with a_loopback_server(fake.app()) as origin:
-        await SpeechHearing(origin, voice=A_SPEECH_VOICE).relay(
+        await SpeechHearing(origin, voices=the_speech_voices()).relay(
             browser, "de", TOKENS, ended=asyncio.Event(), heard=heard
         )
     return transcripts, browser
@@ -184,7 +184,7 @@ def test_a_fault_of_the_caller_passes_through_and_closes_the_service_side() -> N
             raise _CallerFaultError
 
         async with a_loopback_server(fake.app()) as origin:
-            hearing = SpeechHearing(origin, voice=A_SPEECH_VOICE)
+            hearing = SpeechHearing(origin, voices=the_speech_voices())
             relaying = hearing.relay(
                 ASilentBrowser(), "de", TOKENS, ended=asyncio.Event(), heard=heard
             )

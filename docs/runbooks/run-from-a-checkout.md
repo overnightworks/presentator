@@ -42,13 +42,14 @@ export PRESENTATOR_AGENT__GATEWAY__KEY_FILE=/run/user/"$(id -u)"/presentator/lit
 export PRESENTATOR_AGENT__API_GROUP=/services/agent-service/api
 export PRESENTATOR_SPEECH_SERVICE=http://speech:8080
 export PRESENTATOR_SPEECH_SERVICE_SCOPE=speech-service-audience
-export PRESENTATOR_SPEECH_VOICE=de_DE-thorsten-medium
 export PRESENTATOR_BUILD_RUNNER=host
 uv run presentator
 ```
 
 A checkout has no route to the speech network, so its speaking and hearing report
-the service as unreachable.
+the service as unreachable. The voices have defaults, set by
+`PRESENTATOR_SPEECH_VOICE_DE` and `PRESENTATOR_SPEECH_VOICE_EN`; a `.env` that
+still names the removed `PRESENTATOR_SPEECH_VOICE` refuses the start.
 
 The co-presenter cannot answer from a checkout: the gateway sits on the
 `hal_agent_presentator` network, which has no host address and publishes no port, so every

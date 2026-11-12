@@ -36,9 +36,10 @@ from presentator.contracts.copresenter import (
     HearingTranscript,
     SpeechTokens,
 )
+from presentator.contracts.voice import SampleLanguage
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Mapping
 
     from speech_client.health import HealthOutcome
 
@@ -81,6 +82,15 @@ def silence_transport_traces() -> None:
         logging.getLogger(name).addFilter(_TRANSPORT_TRACES)
 
 
+def voice_speaks(voice: VoiceId, language: SampleLanguage) -> bool:
+    """Whether the service's catalogue has `voice` speak `language`."""
+    return _client_language(language) in wire.VOICES[voice].languages
+
+
+def _client_language(language: SampleLanguage) -> wire.Language:
+    return wire.Language(language.value)
+
+
 class SpeechSpeaking:
     """Speak one sentence at the shared speech service."""
 
@@ -88,24 +98,24 @@ class SpeechSpeaking:
         self,
         origin: str,
         *,
-        voice: VoiceId,
+        voices: Mapping[SampleLanguage, VoiceId],
         bounded_speak: Callable[..., SpeakOutcome] = speak,
     ) -> None:
-        """Keep the service's origin and the voice this instance speaks in."""
+        """Keep the service's origin and the voice of each language."""
         self._origin = origin
-        self._voice = voice
+        self._voices = voices
         self._bounded_speak = bounded_speak
 
     async def speak(self, text: str, language: str, tokens: SpeechTokens) -> bytes:
         """The sentence as one whole WAV, exactly as the service sent it."""
-        # The configured voice speaks one language, so the request names none.
-        del language
+        spoken = SampleLanguage(language)
         try:
             outcome: SpeakOutcome | None = await asyncio.to_thread(
                 self._bounded_speak,
                 self._origin,
                 text,
-                self._voice,
+                self._voices[spoken],
+                language=_client_language(spoken),
                 response_format=wire.ResponseFormat.WAV,
                 workload_token=tokens.workload,
                 person_token=tokens.person,
@@ -149,20 +159,20 @@ class SpeechHearing:
         self,
         origin: str,
         *,
-        voice: VoiceId,
+        voices: Mapping[SampleLanguage, VoiceId],
         bounded_health_fetch: Callable[..., HealthOutcome] = fetch_health,
         hearing_deadline_seconds: float = _HEARING_DEADLINE_SECONDS,
         opening_seconds: float = OPENING_SECONDS,
     ) -> None:
-        """Keep the service's origin, the voice readiness asks after and the bounds."""
+        """Keep the service's origin, the voices readiness asks after and the bounds."""
         self._origin = origin
-        self._voice = voice
+        self._voices = voices
         self._bounded_health_fetch = bounded_health_fetch
         self._hearing_deadline_seconds = hearing_deadline_seconds
         self._opening_seconds = opening_seconds
 
     async def readiness(self) -> CoPresenterReadiness:
-        """Say whether the service hears, or that its voice is missing."""
+        """Say whether the service hears, or that a configured voice cannot speak."""
         outcome = await asyncio.to_thread(
             self._bounded_health_fetch,
             self._origin,
@@ -170,8 +180,10 @@ class SpeechHearing:
             cap_bytes=_HEALTH_CAP_BYTES,
         )
         health = _health_of(outcome)
-        if health.hearing.ready and not _speaks(health, self._voice):
-            _LOGGER.warning("the configured voice cannot speak")
+        if health.hearing.ready and not all(
+            _speaks(health, voice) for voice in self._voices.values()
+        ):
+            _LOGGER.warning("a configured voice cannot speak")
             raise CoPresenterUnavailableError
         return CoPresenterReadiness(
             local_hearing_ready=health.hearing.ready,

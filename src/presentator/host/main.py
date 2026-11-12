@@ -338,13 +338,15 @@ def _copresenter_surface(
     return CoPresenterSurface(
         use=CoPresenterUse(
             answers=gateway_answerer(settings.agent, auth.relying_party),
-            speech=SpeechHearing(settings.speech_service, voice=settings.speech_voice),
+            speech=SpeechHearing(
+                settings.speech_service, voices=settings.speech_voices()
+            ),
             decks=decks.store,
             sources=decks.sources,
             texts=MirroredDeckTexts(mirrors=mirrors),
             boundaries=split_sentences,
             speaking=SpeechSpeaking(
-                settings.speech_service, voice=settings.speech_voice
+                settings.speech_service, voices=settings.speech_voices()
             ),
             person_access=SessionAccess(
                 auth.relying_party,

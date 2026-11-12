@@ -290,7 +290,6 @@ def test_the_speech_values_compose_sets_construct_valid_settings() -> None:
             **a_settings().model_dump(),
             "speech_service": environment["PRESENTATOR_SPEECH_SERVICE"],
             "speech_service_scope": environment["PRESENTATOR_SPEECH_SERVICE_SCOPE"],
-            "speech_voice": environment["PRESENTATOR_SPEECH_VOICE"],
         }
     )
     assert "speech" in instance["networks"]

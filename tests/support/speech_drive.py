@@ -60,9 +60,9 @@ from tests.support.leak_support import everything_shown
 from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     A_SPEECH_SCOPE,
-    A_SPEECH_VOICE,
     A_TALK_ADDRESS,
     an_agent_config,
+    the_speech_voices,
 )
 from tests.support.speech_service import (
     AN_ITEM,
@@ -246,24 +246,26 @@ def _real_speech_adapters(
     if scenario.bounded_calls_stall:
         return (
             SpeechHearing(
-                origin, voice=A_SPEECH_VOICE, bounded_health_fetch=_past_deadline
+                origin, voices=the_speech_voices(), bounded_health_fetch=_past_deadline
             ),
-            SpeechSpeaking(origin, voice=A_SPEECH_VOICE, bounded_speak=_past_deadline),
+            SpeechSpeaking(
+                origin, voices=the_speech_voices(), bounded_speak=_past_deadline
+            ),
         )
     if scenario.hearing_seconds is not None:
         deadline, opening = scenario.hearing_seconds
         return (
             SpeechHearing(
                 origin,
-                voice=A_SPEECH_VOICE,
+                voices=the_speech_voices(),
                 hearing_deadline_seconds=deadline,
                 opening_seconds=opening,
             ),
-            SpeechSpeaking(origin, voice=A_SPEECH_VOICE),
+            SpeechSpeaking(origin, voices=the_speech_voices()),
         )
     return (
-        SpeechHearing(origin, voice=A_SPEECH_VOICE),
-        SpeechSpeaking(origin, voice=A_SPEECH_VOICE),
+        SpeechHearing(origin, voices=the_speech_voices()),
+        SpeechSpeaking(origin, voices=the_speech_voices()),
     )
 
 
