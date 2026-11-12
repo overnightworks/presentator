@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 import uvicorn
 from fastapi import FastAPI
 from pydantic import SecretStr
-from starlette.routing import Host, Router
+from starlette.routing import Host, Route, Router
 from webauth.config import SessionLifetime, WebAuthConfig
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
 from webauth.ports import SignInTransaction
@@ -79,6 +79,7 @@ from presentator.agent.mcp import (
     install_mcp_front,
 )
 from presentator.api.auth import (
+    BACKCHANNEL_LOGOUT_PATH,
     AgentFront,
     InstalledAuth,
     LobbyPrivate,
@@ -536,11 +537,17 @@ def main() -> None:
 
 
 def served_by_host(instance: Instance, settings: Settings) -> Router:
-    """The app that answers each hostname, and nothing for any other.
+    """The app that answers each hostname, and one route for any other.
 
     The `Host` header alone chooses: a request for a hostname this instance does
-    not serve, with a port or without, gets the router's 404 and a socket is
-    refused, so neither app ever answers under the other's name.
+    not serve, with a port or without, or with none, gets the router's 404 and a
+    socket is refused, so neither app ever answers under the other's name. The
+    one exception is the lobby's back-channel logout path: the identity provider
+    reaches it under the name of the network it shares with the instance, and
+    the signed Logout Token is its only control. Other methods on that path
+    answer 405. The talk hostname stays the talk app's alone, so the path is a
+    404 there. Nothing the
+    caller sent builds a redirect.
     """
 
     @asynccontextmanager
@@ -554,7 +561,9 @@ def served_by_host(instance: Instance, settings: Settings) -> Router:
         routes=[
             Host(str(urlsplit(settings.public_origin).hostname), instance.lobby),
             Host(str(urlsplit(settings.talk_origin).hostname), instance.talk),
+            Route(BACKCHANNEL_LOGOUT_PATH, instance.lobby, methods=["POST"]),
         ],
+        redirect_slashes=False,
         lifespan=lifespan,
     )
 

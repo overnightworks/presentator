@@ -8,8 +8,8 @@ There is no password login and no `/setup`: [sign-in](../sign-in.md) (SI2).
 
 The instance's `PRESENTATOR_PUBLIC_ORIGIN` and `PRESENTATOR_TALK_ORIGIN`
 (both https) are known. Inside the internal network the lobby's public
-hostname must resolve to the instance (an alias), because the instance answers
-only its two configured hostnames.
+hostname must resolve to the instance (an alias), because step 4 registers the
+back-channel logout URL under that name.
 
 ## Steps
 
@@ -30,12 +30,12 @@ only its two configured hostnames.
 4. Register `http://presentator.hallucinai.de:8000/auth/backchannel-logout` as
    the client's back-channel logout URL. Keycloak reaches it inside the
    network `hal_backchannel_presentator` through the alias
-   `presentator.hallucinai.de`, in plain HTTP: TLS ends at the edge. Its
-   hostname is the lobby's public hostname, and the port does not matter to the
-   match; a request under any other Host, an internal hostname or an IP
-   included, gets 404 and ends no session. The route is not live until the
-   client registers it; a valid Logout Token then ends every session of its
-   subject, on every device. The web joins
+   `presentator.hallucinai.de`, in plain HTTP: TLS ends at the edge. The route
+   answers a `POST` under any Host and port except the talk host's, which never
+   serves it, so a Service name works as well; the signed Logout Token is its only
+   control, and the deployment keeps the path off the public internet. The
+   route is not live until the client registers it; a valid Logout Token then
+   ends every session of its subject, on every device. The web joins
    `hal_backchannel_presentator` with this release; registering the client's
    URL is the edge's (overnightworks/edge#446). Until it is registered, a block
    in Keycloak ends a session only at its 12 h cap.
