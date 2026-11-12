@@ -1,8 +1,0 @@
-claim_id = "4a8aa0ef5f3e44388298ed9ff90469b0"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "1517ffdbe557637aac151f3c4009645d73a4cd06"
-branch = "claude/issue-1091-room-notice-test-race"
-scope = ["slidev/components/CoPresenter.vue", "slidev/room-notice.js", "slidev/tests/presenter-overlay-harness.ts", "slidev/tests/room-notice.browser.test.ts"]
-opened_commit = "01302ef9e832c987607e1b5f08f6272e60e5e49c"
-whole_reason = "Whether the test or the overlay changes is decided by reading both against the spec."
