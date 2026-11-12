@@ -180,8 +180,10 @@ catalogs. The language is the instance's unless a signed-in person's account
 names one a catalog speaks, and English stands in where none does
 (`DEFAULT_LANGUAGE`); the theme is the person's. The look
 is design's, with presentator's teal in the app slot (`frontend/src/app.css`).
-The overlay's controls use English literals. The room notice follows the deck's
-language and reads its words from the overlay's own catalog pair
+The overlay's controls load their words once, by the presenter's account
+language that the first `/who` answer names; English, bundled with the overlay,
+shows only while no `/who` has answered or the named language cannot be loaded.
+The room notice follows the deck's language and reads its words from the overlay's own catalog pair
 (`slidev/catalogs`, generated into `slidev/words`): the overlay is a separately
 shipped unit that builds decks without network, so it cannot import the lobby's
 words and owns its own, imported statically so that a projector opened late shows

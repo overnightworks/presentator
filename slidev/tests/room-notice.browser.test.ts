@@ -17,6 +17,7 @@ import {
   saveEvidence,
   sendHeard,
   state,
+  wordsOf,
 } from './presenter-overlay-harness'
 
 registerOverlayHarness()
@@ -103,7 +104,7 @@ async function recordedProjector(context: BrowserContext) {
 }
 
 async function switchOn(presenter: Page) {
-  const ai = presenter.getByRole('switch', { name: 'AI' })
+  const ai = presenter.getByRole('switch', { name: wordsEn['controls.switch'] })
   await ai.waitFor({ state: 'visible', timeout: 2_000 })
   await ai.click({ timeout: 2_000 })
 }
@@ -167,10 +168,27 @@ describe('the room notice', () => {
         await callFake(presenter, 'endPlayback')
         await showsPhase(projector, 'listening', PILL[language].listening)
         await showsPhase(presenter, 'listening', PILL[language].listening)
-        expect(await presenter.getByRole('switch', { name: 'AI' }).textContent()).toBe('AI')
+        expect(await presenter.getByRole('switch', { name: wordsEn['controls.switch'] }).textContent()).toBe(wordsEn['controls.switch'])
       })
     },
   )
+
+  it.each([
+    { deck: 'en', account: 'de' },
+    { deck: 'de', account: 'en' },
+  ] as const)('CP10: a $account account presenting a $deck deck has controls in $account and the room notice in $deck', async ({ deck, account }) => {
+    state.whoLanguage = deck
+    state.interfaceLanguage = account
+    state.heardOnConnect = false
+    await inRoom(async ({ presenter, projector }) => {
+      const ai = presenter.getByRole('switch', { name: wordsOf[account]['controls.switch'] })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      await showsBand(projector, deck)
+      await showsPhase(presenter, 'listening', PILL[deck].listening)
+      expect(await presenter.getByRole('complementary', { name: wordsOf[account]['controls.presenterOn'] }).count()).toBe(1)
+    })
+  })
 
   it('CP9: holds the band to its end when an answer plays during it', async () => {
     await inRoom(async ({ presenter, projector }) => {
@@ -207,7 +225,7 @@ describe('the room notice', () => {
         () => (window as unknown as { __microphonesRequested: number }).__microphonesRequested,
       ), { timeout: 5_000 }).toBeGreaterThanOrEqual(1)
       await expectNothingFor([presenter, projector], 4_000)
-      if (failsLoudly) await presenter.getByText('No hearing').waitFor({ state: 'visible' })
+      if (failsLoudly) await presenter.getByText(wordsEn['controls.noHearing']).waitFor({ state: 'visible' })
     })
   })
 
@@ -231,11 +249,11 @@ describe('the room notice', () => {
   })
 
   it.each([
-    ['local hearing that is not ready', 'not-ready', 'Local hearing not ready'],
-    ['speech that cannot be reached', 'unreachable', 'Voice offline'],
-    ['a /who that fails', 'who-fails', 'Unreachable'],
-    ['a /who that finds no deck', 'who-not-found', 'Unreachable'],
-    ['a hearing the server refuses', 'refused-on-open', 'No hearing'],
+    ['local hearing that is not ready', 'not-ready', wordsEn['controls.hearingNotReady']],
+    ['speech that cannot be reached', 'unreachable', wordsEn['controls.voiceOffline']],
+    ['a /who that fails', 'who-fails', wordsEn['controls.unreachable']],
+    ['a /who that finds no deck', 'who-not-found', wordsEn['controls.unreachable']],
+    ['a hearing the server refuses', 'refused-on-open', wordsEn['controls.noHearing']],
   ] as const)('CP8: shows nothing for 4 s with %s', async (_situation, mode, failure) => {
     state.hearingMode = mode
     await inRoom(async ({ presenter, projector }) => {
@@ -253,7 +271,7 @@ describe('the room notice', () => {
       await setFakes(presenter, { playback })
       await switchOn(presenter)
       if (playback === 'pending') await expect.poll(async () => (await snapshot(presenter)).speaking, { timeout: 5_000 }).toBe(true)
-      else await presenter.getByText('No speech', { exact: true }).waitFor({ state: 'visible' })
+      else await presenter.getByText(wordsEn['controls.noSpeech'], { exact: true }).waitFor({ state: 'visible' })
       await showsBand(projector)
       await showsPhase(projector, 'listening', PILL.de.listening)
       await presenter.waitForTimeout(1_500)
@@ -270,7 +288,7 @@ describe('the room notice', () => {
       await setFakes(presenter, { playback: 'rejected' })
       const marks = [await markTimeline(presenter), await markTimeline(projector)]
       sendHeard('Another question about the handoff')
-      await presenter.getByText('No speech', { exact: true }).waitFor({ state: 'visible' })
+      await presenter.getByText(wordsEn['controls.noSpeech'], { exact: true }).waitFor({ state: 'visible' })
       await presenter.waitForTimeout(1_500)
       expect(new Set(await phasesSince(projector, marks[1]!))).toEqual(new Set())
       expect(new Set(await phasesSince(presenter, marks[0]!))).toEqual(new Set())
@@ -289,7 +307,7 @@ describe('the room notice', () => {
       await showsPhase(projector, 'answering', PILL.de.answering)
       await expect.poll(() => presenter.evaluate(() => (window as unknown as Probed).__fakes.failSecond !== null)).toBe(true)
       await presenter.evaluate(() => (window as unknown as Probed).__fakes.failSecond?.())
-      await presenter.getByText('No speech', { exact: true }).waitFor({ state: 'visible' })
+      await presenter.getByText(wordsEn['controls.noSpeech'], { exact: true }).waitFor({ state: 'visible' })
       await presenter.waitForTimeout(1_500)
       await showsPhase(projector, 'answering', PILL.de.answering)
       await callFake(presenter, 'endPlayback')
@@ -298,9 +316,9 @@ describe('the room notice', () => {
   })
 
   it.each([
-    ['not-enabled', 'Not enabled'],
-    ['signed-out-refresh', 'Sign in again'],
-    ['no-session', 'Sign in again'],
+    ['not-enabled', wordsEn['controls.notEnabled']],
+    ['signed-out-refresh', wordsEn['controls.signInAgain']],
+    ['no-session', wordsEn['controls.signInAgain']],
   ] as const)('CP8: keeps the notice when the ask is refused (%s)', async (mode, line) => {
     await inRoom(async ({ presenter, projector }) => {
       state.answerMode = mode
@@ -336,7 +354,7 @@ describe('the room notice', () => {
       await showsBand(projector)
       endHearings(HopClose.NORMAL)
       await clearanceOf([presenter, projector], 'the server ends the hearing in order')
-      expect(await presenter.getByText('No hearing', { exact: true }).count()).toBe(0)
+      expect(await presenter.getByText(wordsEn['controls.noHearing'], { exact: true }).count()).toBe(0)
     })
   })
 
@@ -347,7 +365,7 @@ describe('the room notice', () => {
       await showsBand(projector)
       endHearings(HopClose.SERVICE_FAILED)
       await clearanceOf([presenter, projector], 'the hearing fails after the notice')
-      await presenter.getByText('No hearing', { exact: true }).waitFor({ state: 'visible' })
+      await presenter.getByText(wordsEn['controls.noHearing'], { exact: true }).waitFor({ state: 'visible' })
     })
   })
 
@@ -356,7 +374,7 @@ describe('the room notice', () => {
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
       await showsPhase(projector, 'listening', PILL.de.listening)
-      await presenter.getByRole('switch', { name: 'AI' }).click()
+      await presenter.getByRole('switch', { name: wordsEn['controls.switch'] }).click()
       await clearanceOf([presenter, projector], 'the AI is switched off')
       const marks = [await markTimeline(presenter), await markTimeline(projector)]
       await switchOn(presenter)
@@ -499,8 +517,8 @@ describe('the room notice', () => {
         await showsPhase(projector, phase, text)
         const notice = projector.locator('[data-room-notice]')
         expect(await notice.locator('button, a, input, [role]').count()).toBe(0)
-        expect(await projector.getByRole('switch', { name: 'AI' }).count()).toBe(0)
-        expect(await projector.getByRole('link', { name: 'Home' }).count()).toBe(0)
+        expect(await projector.getByRole('switch', { name: wordsEn['controls.switch'] }).count()).toBe(0)
+        expect(await projector.getByRole('link', { name: wordsEn['controls.home'] }).count()).toBe(0)
         const noticeBox = (await notice.boundingBox())!
         const covered = await projector.evaluate(([x, y]) => (
           document.elementFromPoint(x!, y!)?.closest('[data-room-notice]') ?? null

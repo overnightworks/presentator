@@ -29,17 +29,24 @@ the cluster, and that hop's trust sentence is in
   rounded up), "Busy, try again soon" for one that names none, "Budget used up"
   for a spent budget, and "No answer" for every other stop. It navigates only
   by the model's `show_slide` call, inside the deck's slides, and shows no word
-  for it. A refusal line clears at the next question.
+  for it. A refusal line clears at the next question. Each word has a German
+  version in the overlay's catalog.
 - **CP7** The overlay's speech words are "Voice offline" (the service does not
   answer, or a configured voice cannot speak), "Local hearing not ready" (hearing
   still loads) and "No hearing" (a hearing that fails or cannot open). A hearing
-  the server ends in order, as at sign-out, shows no word. A new word needs a
-  ruling.
+  the server ends in order, as at sign-out, shows no word. Two more words
+  complete the set: "Unreachable" when `/who` fails for any other reason, and
+  "No speech" when an answer's sound cannot play. A fault word shows in the
+  language the overlay already knows from an earlier `/who` answer, and in
+  English only while no `/who` has ever answered. Each word has a German version
+  in the overlay's catalog. A new word needs a ruling.
 - **CP15** The presenter view carries Home at its top left as an icon button and
   the AI switch at its top right; neither sits in the bottom navigation bar, and
   nothing of the co-presenter floats over the bottom of the view. The switch is
   labelled AI, grey when off and green when on, with no word beside it; a word
-  shows beside it only for a fault, in a warning colour.
+  shows beside it only for a fault, in a warning colour. A screen reader hears
+  "Home" for the icon button and "Presenter on" or "Presenter off" for the
+  view's controls, each with a German version in the overlay's catalog.
 
 ## What the room sees
 
@@ -53,8 +60,14 @@ the cluster, and that hop's trust sentence is in
   presenter's own preview shows only the pill. The notice never shrinks or
   moves the slide and takes no clicks; the band covers the slide's bottom strip
   only for its ten seconds.
-- **CP10** The room's words follow the deck's language, as [decks](decks.md)
-  DK3 rules, and the presenter's own controls stay English.
+- **CP10** The presenter's own controls and fault words follow the presenter's
+  account language (German or English, English as fallback); the room notice and
+  pills keep following the deck's language, as [decks](decks.md) DK3 rules, and
+  so do the hearing and the questions. `/who` names the account language beside
+  the deck's. Until it has answered the overlay shows only the switch. The
+  overlay loads the words of the language the first `/who` answer names, at start
+  or at switch-on if the start's `/who` failed, and keeps them; a fault word is
+  English only while no `/who` has ever answered.
 - **CP11** The notice names no provider. In German it ends „… an einen
   KI-Dienst gesendet. Welcher, steht in der Datenschutzerklärung.“ and in
   English „… sent with the slides to an AI service. The Datenschutzerklärung

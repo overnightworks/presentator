@@ -27,9 +27,12 @@ import {
   saveEvidence,
   sendHeard,
   state,
+  wordsOf,
 } from './presenter-overlay-harness'
 
 registerOverlayHarness()
+
+const en = wordsOf.en
 
 // Slidev's bottom navigation bar holds nothing of the overlay, and no part
 // of the overlay reaches the lower half of the window.
@@ -47,16 +50,16 @@ describe('presenter controls', () => {
     state.askHeaderNames = []
     const { browser, page } = await openPresenter(width)
     try {
-      const ai = page.getByRole('switch', { name: 'AI' })
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
       const sentence = page.getByText('The handoff keeps this sentence.')
-      const refusal = page.getByText('No answer')
+      const refusal = page.getByText(en['controls.noAnswer'])
       await sentence.waitFor({ state: 'visible', timeout: 5_000 })
       await refusal.waitFor({ state: 'visible', timeout: 5_000 })
       expect(state.askHeaderNames).toContain('content-type')
       expect(state.askHeaderNames).not.toContain('x-csrf-token')
-      expect(await page.getByText('Not enabled').count()).toBe(0)
+      expect(await page.getByText(en['controls.notEnabled']).count()).toBe(0)
       expect(await sentence.isVisible()).toBe(true)
       expect(await refusal.isVisible()).toBe(true)
       await saveEvidence(page, `presenter-speech-refused-${width}.png`)
@@ -72,10 +75,10 @@ describe('presenter controls', () => {
     state.answerMode = 'mid-answer-error'
     const { browser, page } = await openPresenter(1024)
     try {
-      const ai = page.getByRole('switch', { name: 'AI' })
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
-      await page.getByText('No answer', { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
+      await page.getByText(en['controls.noAnswer'], { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
       expect(await page.getByText('Then the second one fails.').count()).toBeGreaterThan(0)
       // The fake player never ends on its own; ending it lets the next question be heard.
       type Snapshot = { speaking: boolean }
@@ -102,8 +105,8 @@ describe('presenter controls', () => {
   it.each([1024, 390])('CP15: puts Home at the left and the AI switch at the right of one bar above the sections at %ipx', async (width) => {
     const { browser, page } = await openPresenter(width)
     try {
-      const home = page.getByRole('link', { name: 'Home' })
-      const ai = page.getByRole('switch', { name: 'AI' })
+      const home = page.getByRole('link', { name: en['controls.home'] })
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await home.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.waitFor({ state: 'visible' })
       const { homeBox, aiBox, barBox, sectionsBox } = await readSameFrameBoxes(page, await home.elementHandle(), await ai.elementHandle())
@@ -112,7 +115,7 @@ describe('presenter controls', () => {
       expect(aiBox.width).toBeGreaterThanOrEqual(44)
       expect(aiBox.height).toBeGreaterThanOrEqual(44)
       expect((await home.innerText()).trim()).toBe('')
-      expect(await home.getAttribute('title')).toBe('Home')
+      expect(await home.getAttribute('title')).toBe(en['controls.home'])
       expect(homeBox.x - barBox.x, 'Home leads the bar').toBeLessThan(24)
       expect(barBox.x + barBox.width - (aiBox.x + aiBox.width), 'the switch ends the bar').toBeLessThan(24)
       expect(boxesIntersect(homeBox, aiBox)).toBe(false)
@@ -141,8 +144,8 @@ describe('presenter controls', () => {
       await prepared.addInitScript((chosen) => localStorage.setItem('slidev-presenter-layout', String(chosen)), layout)
     })
     try {
-      const home = page.getByRole('link', { name: 'Home' })
-      const ai = page.getByRole('switch', { name: 'AI' })
+      const home = page.getByRole('link', { name: en['controls.home'] })
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await home.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
       await page.locator('.copresenter .panel').waitFor({ state: 'visible', timeout: 5_000 })
@@ -167,11 +170,11 @@ describe('presenter controls', () => {
     state.heardOnConnect = false
     const { browser, page } = await openPresenter(1024)
     try {
-      const ai = page.getByRole('switch', { name: 'AI' })
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       const bar = page.locator('.presenter-bar')
       expect(await ai.getAttribute('aria-checked')).toBe('false')
-      expect(await ai.innerText()).toBe('AI')
+      expect(await ai.innerText()).toBe(en['controls.switch'])
       const [red, green, blue] = (await readPaintedColours(page)).track
       expect(Math.max(red, green, blue) - Math.min(red, green, blue), 'off is grey').toBeLessThan(24)
       await ai.click({ timeout: 2_000 })
@@ -182,8 +185,8 @@ describe('presenter controls', () => {
       await expect.poll(async () => (await page.evaluate(() => (window as unknown as {
         __copresenter: { snapshot: () => { capturing: boolean } }
       }).__copresenter.snapshot().capturing))).toBe(true)
-      expect(await ai.innerText()).toBe('AI')
-      expect((await bar.innerText()).trim()).toBe('AI')
+      expect(await ai.innerText()).toBe(en['controls.switch'])
+      expect((await bar.innerText()).trim()).toBe(en['controls.switch'])
       expect(await page.getByText('local', { exact: false }).count()).toBe(0)
       await saveEvidence(page, 'presenter-on-1024.png')
     } finally {
@@ -195,8 +198,8 @@ describe('presenter controls', () => {
   it.each(['light', 'dark'] as const)('CP15: draws the bar flat, with an off track clear of the bar and a focus ring on Home and the switch in the %s scheme', async (scheme) => {
     const { browser, page } = await openPresenter(1024, scheme)
     try {
-      const home = page.getByRole('link', { name: 'Home' })
-      const ai = page.getByRole('switch', { name: 'AI' })
+      const home = page.getByRole('link', { name: en['controls.home'] })
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       const flat = await ai.evaluate((element) => {
         const style = getComputedStyle(element)
@@ -215,7 +218,7 @@ describe('presenter controls', () => {
         expect(ring.width, `${name}'s ring is thick enough to see`).toBeGreaterThanOrEqual(2)
       }
       await home.focus()
-      await expectFocusRing(home, 'Home')
+      await expectFocusRing(home, en['controls.home'])
       await page.keyboard.press('Tab')
       await expect.poll(() => ai.evaluate((element) => element === document.activeElement)).toBe(true)
       await expectFocusRing(ai, 'the switch')
@@ -229,7 +232,7 @@ describe('presenter controls', () => {
     state.answerMode = 'mid-answer-error'
     const { browser, page } = await openPresenter(1024, scheme)
     try {
-      const ai = page.getByRole('switch', { name: 'AI' })
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
       await page.locator('.copresenter .panel .answer').waitFor({ state: 'visible', timeout: 5_000 })
@@ -264,7 +267,7 @@ describe('presenter controls', () => {
     state.media = createMediaObservation()
     const { browser, page } = await openPresenter(390)
     try {
-      const ai = page.getByRole('switch', { name: 'AI' })
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
       await expect.poll(() => page.evaluate(() => (window as unknown as {
@@ -275,7 +278,7 @@ describe('presenter controls', () => {
       expect(state.media.playbackStarted).toBe(true)
       expect(state.media.playbackPaused).toBe(false)
       const [homeBox, aiBox, panelBox] = await Promise.all([
-        page.getByRole('link', { name: 'Home' }).boundingBox(),
+        page.getByRole('link', { name: en['controls.home'] }).boundingBox(),
         ai.boundingBox(),
         page.locator('.copresenter .panel').boundingBox(),
       ])
@@ -293,7 +296,7 @@ describe('presenter controls', () => {
       await expectPanelCoversNoSlidevControl(page)
       await expectNothingOfTheOverlayInTheBottomBar(page, 900 / 2)
       await saveEvidence(page, 'presenter-active-390.png')
-      await page.getByRole('link', { name: 'Home' }).click({ timeout: 2_000 })
+      await page.getByRole('link', { name: en['controls.home'] }).click({ timeout: 2_000 })
       await page.waitForURL(`${state.origin}/`)
       await expect.poll(() => state.hearingClosed).toBeGreaterThanOrEqual(state.hearingOpened)
       await expect.poll(() => state.pendingAnswerClosed).toBeGreaterThan(0)
@@ -301,26 +304,34 @@ describe('presenter controls', () => {
       await expect.poll(() => state.media.playbackPaused).toBe(true)
 
       await page.goto(`${state.origin}/presenter/1`, { waitUntil: 'domcontentloaded', timeout: 10_000 })
-      expect(await page.getByRole('switch', { name: 'AI' }).getAttribute('aria-checked')).toBe('false')
+      expect(await page.getByRole('switch', { name: en['controls.switch'] }).getAttribute('aria-checked')).toBe('false')
     } finally {
       await browser.close()
     }
   })
 
-  it.each(([[1024, 'light'], [390, 'light'], [1024, 'dark']] as const).flatMap(([width, scheme]) => ([
-    ['speech cannot be reached', 'unreachable', 'Voice offline'],
-    ['the co-presenter fails without being offline', 'who-fails', 'Unreachable'],
-    ['the deck is not the asker\'s', 'who-not-found', 'Unreachable'],
-    ['local hearing is not ready', 'not-ready', 'Local hearing not ready'],
-    ['the server refuses the hearing', 'refused-on-open', 'No hearing'],
-    ['the hearing fails after capture started', 'fails-after-capture', 'No hearing'],
-  ] as const).map((row) => [width, scheme, ...row] as const)))('CP7: says so in a word readable on the bar, clear of Home and the switch, keeps the track green and builds no browser speech recognition at %ipx in the %s scheme when %s', async (width, scheme, _situation, mode, message) => {
+  // A German account is driven at 390 px, where the longer German words must stand whole. Where /who fails no
+  // language is known, so the fault word is English whatever the account.
+  const hearingFaults = [
+    ['speech cannot be reached', 'unreachable', 'voiceOffline'],
+    ['the co-presenter fails without being offline', 'who-fails', 'unreachable'],
+    ['the deck is not the asker\'s', 'who-not-found', 'unreachable'],
+    ['local hearing is not ready', 'not-ready', 'hearingNotReady'],
+    ['the server refuses the hearing', 'refused-on-open', 'noHearing'],
+    ['the hearing fails after capture started', 'fails-after-capture', 'noHearing'],
+  ] as const
+  const whoFailures = ['unreachable', 'who-fails', 'who-not-found']
+  it.each(([[1024, 'light', 'en'], [390, 'light', 'en'], [1024, 'dark', 'en'], [390, 'light', 'de']] as const).flatMap(
+    ([width, scheme, account]) => hearingFaults.map((row) => [width, scheme, account, ...row] as const),
+  ))('CP7: says so in a word readable on the bar, clear of Home and the switch, keeps the track green and builds no browser speech recognition at %ipx in the %s scheme for a %s account when %s', async (width, scheme, account, _situation, mode, fault) => {
     state.hearingMode = mode
+    state.interfaceLanguage = account
+    const message = wordsOf[whoFailures.includes(mode) ? 'en' : account][`controls.${fault}`]
     state.media = createMediaObservation()
     const hearingOpenedBefore = state.hearingOpened
     const { browser, page } = await openPresenter(width, scheme)
     try {
-      const ai = page.getByRole('switch', { name: 'AI' })
+      const ai = page.getByRole('switch', { name: wordsOf[account]['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
       if (mode === 'fails-after-capture') {
@@ -360,7 +371,7 @@ describe('presenter controls', () => {
     state.media = createMediaObservation()
     const { browser, page } = await openPresenter(1024)
     try {
-      const ai = page.getByRole('switch', { name: 'AI' })
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
       const capturing = () => page.evaluate(() => (window as unknown as {
@@ -370,7 +381,7 @@ describe('presenter controls', () => {
       endHearings(HopClose.NORMAL)
       await expect.poll(capturing, { timeout: 1_000 }).toBe(false)
       await expect.poll(() => state.media.trackStopped, { timeout: 1_000 }).toBe(true)
-      for (const word of ['No hearing', 'Unreachable', 'Voice offline', 'Local hearing not ready']) {
+      for (const word of [en['controls.noHearing'], en['controls.unreachable'], en['controls.voiceOffline'], en['controls.hearingNotReady']]) {
         expect(await page.getByText(word, { exact: true }).count()).toBe(0)
       }
     } finally {
@@ -378,19 +389,117 @@ describe('presenter controls', () => {
     }
   })
 
-  it.each(['de', 'en'] as const)('CP10: the answered language %s reaches /hear and /ask', async (language) => {
-    state.whoLanguage = language
+  // The deck's language reaches /hear and /ask; the controls' words are the account's, whatever the deck's.
+  it.each([
+    { deck: 'de', account: 'de' },
+    { deck: 'en', account: 'de' },
+    { deck: 'de', account: 'en' },
+    { deck: 'en', account: 'en' },
+  ] as const)('CP10: a $deck deck presented by a $account account reaches /hear and /ask in $deck and shows the controls in $account', async ({ deck, account }) => {
+    state.whoLanguage = deck
+    state.interfaceLanguage = account
+    const controls = wordsOf[account]
     const { browser, page } = await openPresenter(1024)
     try {
-      const ai = page.getByRole('switch', { name: 'AI' })
+      const ai = page.getByRole('switch', { name: controls['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
       await ai.click({ timeout: 2_000 })
       await expect.poll(() => state.askBodies.length).toBeGreaterThan(0)
-      expect(state.hearLanguages).toEqual([language])
-      expect(state.askBodies[0]?.language).toBe(language)
-      expect(await ai.textContent()).toBe('AI')
+      expect(state.hearLanguages).toEqual([deck])
+      expect(state.askBodies[0]?.language).toBe(deck)
+      expect(await ai.textContent()).toBe(controls['controls.switch'])
+      expect(await page.getByRole('link', { name: controls['controls.home'] }).getAttribute('title')).toBe(controls['controls.home'])
+      expect(await page.getByRole('complementary', { name: controls['controls.presenterOn'] }).count()).toBe(1)
+      await ai.click({ timeout: 2_000 })
+      expect(await page.getByRole('complementary', { name: controls['controls.presenterOff'] }).count()).toBe(1)
     } finally {
       state.whoLanguage = 'de'
+      await browser.close()
+    }
+  })
+
+  it('CP10: shows only the switch until /who has answered, then the controls in the account language', async () => {
+    state.interfaceLanguage = 'de'
+    let answer = () => {}
+    state.whoGate = new Promise<void>((resolve) => { answer = resolve })
+    const { browser, page } = await openPresenter(1024)
+    try {
+      await page.getByRole('switch', { name: wordsOf.de['controls.switch'] }).waitFor({ state: 'visible', timeout: 2_000 })
+      expect(await page.locator('.presenter-bar a[href="/"]').count()).toBe(0)
+      expect(await page.locator('.copresenter').getAttribute('aria-label')).toBeNull()
+      answer()
+      await page.getByRole('link', { name: wordsOf.de['controls.home'] }).waitFor({ state: 'visible', timeout: 5_000 })
+      expect(await page.getByRole('complementary', { name: wordsOf.de['controls.presenterOff'] }).count()).toBe(1)
+    } finally {
+      answer()
+      await browser.close()
+    }
+  })
+
+  it('CP10: shows only the switch while no /who has answered, though the start\'s /who failed', async () => {
+    state.interfaceLanguage = 'de'
+    state.hearingMode = 'who-fails'
+    const { browser, page } = await openPresenter(390)
+    try {
+      await page.getByRole('switch', { name: wordsOf.de['controls.switch'] }).waitFor({ state: 'visible', timeout: 2_000 })
+      await expect.poll(() => state.whoRequests).toBe(1)
+      // The failed answer has been handled once the next frame is drawn.
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      expect(await page.locator('.presenter-bar a[href="/"]').count()).toBe(0)
+      expect(await page.locator('.copresenter').getAttribute('aria-label')).toBeNull()
+    } finally {
+      state.hearingMode = 'ready'
+      await browser.close()
+    }
+  })
+
+  it('CP10: keeps the language the start\'s /who named, so a switch-on that names another loads no further words', async () => {
+    state.whoScript = [{ interfaceLanguage: 'en' }, { interfaceLanguage: 'de' }]
+    const { browser, page } = await openPresenter(1024)
+    try {
+      await page.getByRole('link', { name: en['controls.home'] }).waitFor({ state: 'visible', timeout: 5_000 })
+      const scripts: string[] = []
+      page.on('request', (request) => {
+        if (request.resourceType() === 'script') scripts.push(request.url())
+      })
+      const hearingsBefore = state.hearingOpened
+      await page.getByRole('switch', { name: en['controls.switch'] }).click({ timeout: 2_000 })
+      // The hearing opens only after the switch-on's /who answer is handled.
+      await expect.poll(() => state.hearingOpened).toBeGreaterThan(hearingsBefore)
+      expect(state.whoRequests).toBe(2)
+      expect(await page.getByRole('complementary', { name: en['controls.presenterOn'] }).count()).toBe(1)
+      expect(scripts).toEqual([])
+    } finally {
+      await browser.close()
+    }
+  })
+
+  it('CP10: learns the account language at switch-on when the start\'s /who failed', async () => {
+    state.interfaceLanguage = 'de'
+    state.whoScript = [{ fails: true }]
+    const { browser, page } = await openPresenter(1024)
+    try {
+      const ai = page.getByRole('switch', { name: wordsOf.de['controls.switch'] })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await expect.poll(() => state.whoRequests).toBe(1)
+      await ai.click({ timeout: 2_000 })
+      await page.getByRole('complementary', { name: wordsOf.de['controls.presenterOn'] }).waitFor({ state: 'attached', timeout: 5_000 })
+      expect(await page.getByRole('link', { name: wordsOf.de['controls.home'] }).count()).toBe(1)
+    } finally {
+      await browser.close()
+    }
+  })
+
+  it('CP7: shows the fault word in the known language when /who fails at switch-on after the start\'s /who answered', async () => {
+    state.interfaceLanguage = 'de'
+    state.whoScript = [{}, { fails: true }]
+    const { browser, page } = await openPresenter(390)
+    try {
+      await page.getByRole('link', { name: wordsOf.de['controls.home'] }).waitFor({ state: 'visible', timeout: 5_000 })
+      await page.getByRole('switch', { name: wordsOf.de['controls.switch'] }).click({ timeout: 2_000 })
+      await page.getByText(wordsOf.de['controls.unreachable'], { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
+      expect(await page.getByText(en['controls.unreachable'], { exact: true }).count()).toBe(0)
+    } finally {
       await browser.close()
     }
   })
@@ -409,7 +518,7 @@ describe('presenter controls', () => {
     try {
       const presenter = await openPageIn(context, `${state.origin}/presenter/1`, width)
       const projector = await openPageIn(context, `${state.origin}/1`, width)
-      await presenter.getByRole('switch', { name: 'AI' }).click({ timeout: 2_000 })
+      await presenter.getByRole('switch', { name: en['controls.switch'] }).click({ timeout: 2_000 })
       await presenter.getByText('Answered.', { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
       await expect.poll(() => new URL(presenter.url()).pathname).toBe(followed[0])
       await expect.poll(() => new URL(projector.url()).pathname).toBe(followed[1])
@@ -431,7 +540,7 @@ describe('presenter controls', () => {
     state.askBodies = []
     const { browser, page } = await openPresenter(1024)
     try {
-      await page.getByRole('switch', { name: 'AI' }).click({ timeout: 2_000 })
+      await page.getByRole('switch', { name: en['controls.switch'] }).click({ timeout: 2_000 })
       await expect.poll(() => new URL(page.url()).pathname).toBe('/presenter/2')
       await page.getByText('Answered.', { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
       sendHeard('And now?')
@@ -450,8 +559,8 @@ describe('presenter controls', () => {
     await installCspGuard(page)
     try {
       await page.goto(`${state.origin}/1`, { waitUntil: 'domcontentloaded', timeout: 10_000 })
-      expect(await page.getByRole('link', { name: 'Home' }).count()).toBe(0)
-      expect(await page.getByRole('switch', { name: 'AI' }).count()).toBe(0)
+      expect(await page.getByRole('link', { name: en['controls.home'] }).count()).toBe(0)
+      expect(await page.getByRole('switch', { name: en['controls.switch'] }).count()).toBe(0)
       expect(await page.locator('.presenter-bar, .copresenter').count()).toBe(0)
       await saveEvidence(page, 'projector.png')
     } finally {
@@ -483,10 +592,10 @@ describe('presenter controls', () => {
     try {
       const { browser, page } = await openPresenterAt(overlayOrigin, `${base}presenter/1`, 1024)
       try {
-        const ai = page.getByRole('switch', { name: 'AI' })
+        const ai = page.getByRole('switch', { name: en['controls.switch'] })
         await ai.waitFor({ state: 'visible', timeout: 2_000 })
-        expect(await page.getByRole('switch', { name: 'AI' }).count()).toBe(1)
-        expect(await page.getByRole('link', { name: 'Home' }).count()).toBe(1)
+        expect(await page.getByRole('switch', { name: en['controls.switch'] }).count()).toBe(1)
+        expect(await page.getByRole('link', { name: en['controls.home'] }).count()).toBe(1)
         await ai.click({ timeout: 2_000 })
         // `capturing` (snapshot()) is true only once the package's worklet node
         // runs, which happens after `addModule` resolved against the worklet
@@ -500,13 +609,14 @@ describe('presenter controls', () => {
           undefined,
           { timeout: 5_000 },
         )
-        expect(await page.getByText('No hearing').count()).toBe(0)
+        expect(await page.getByText(en['controls.noHearing']).count()).toBe(0)
         if (nested) {
           await page.evaluate(() => (window as unknown as {
             __copresenter: { say: (text: string) => void }
           }).__copresenter.say('Which deck is this?'))
           await expect.poll(() => asked).toEqual([{ said: 'Which deck is this?', deck: slug }])
-          expect(whoDecks).toEqual([slug])
+          // One /who at start for the controls' language, one on turning the AI on.
+          expect(whoDecks).toEqual([slug, slug])
         }
       } finally {
         await browser.close()

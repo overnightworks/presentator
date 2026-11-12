@@ -16,3 +16,63 @@ msgstr "AI is listening"
 msgctxt "roomNotice.answering"
 msgid "KI antwortet"
 msgstr "AI is answering"
+
+msgctxt "controls.switch"
+msgid "AI"
+msgstr "AI"
+
+msgctxt "controls.presenterOn"
+msgid "KI-Co-Presenter an"
+msgstr "Presenter on"
+
+msgctxt "controls.presenterOff"
+msgid "KI-Co-Presenter aus"
+msgstr "Presenter off"
+
+msgctxt "controls.home"
+msgid "Startseite"
+msgstr "Home"
+
+msgctxt "controls.notEnabled"
+msgid "Nicht aktiviert"
+msgstr "Not enabled"
+
+msgctxt "controls.signInAgain"
+msgid "Melde dich erneut an"
+msgstr "Sign in again"
+
+msgctxt "controls.busyIn"
+msgid "Gerade ausgelastet, versuch es in {seconds} s noch einmal"
+msgstr "Busy, try again in {seconds} s"
+
+msgctxt "controls.busySoon"
+msgid "Gerade ausgelastet, versuch es gleich noch einmal"
+msgstr "Busy, try again soon"
+
+msgctxt "controls.budgetUsedUp"
+msgid "Budget aufgebraucht"
+msgstr "Budget used up"
+
+msgctxt "controls.noAnswer"
+msgid "Keine Antwort"
+msgstr "No answer"
+
+msgctxt "controls.voiceOffline"
+msgid "Stimme offline"
+msgstr "Voice offline"
+
+msgctxt "controls.hearingNotReady"
+msgid "Lokale Spracherkennung nicht bereit"
+msgstr "Local hearing not ready"
+
+msgctxt "controls.noHearing"
+msgid "KI hört nicht zu"
+msgstr "No hearing"
+
+msgctxt "controls.unreachable"
+msgid "Nicht erreichbar"
+msgstr "Unreachable"
+
+msgctxt "controls.noSpeech"
+msgid "Keine Sprachausgabe"
+msgstr "No speech"

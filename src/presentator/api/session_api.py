@@ -16,7 +16,7 @@ from webauth.languages import AppLanguages, resolve_language
 from webauth.ports import SessionRecordStore
 
 from presentator.api.admission import signed_in_person
-from presentator.application.preferences import Preferences
+from presentator.application.preferences import Preferences, offered_language
 from presentator.contracts.models import Role
 from presentator.contracts.preferences import Appearance, ThemeChoice
 from presentator.contracts.words import Language
@@ -53,15 +53,14 @@ class SessionView(BaseModel):
     sign_in: SessionAddresses
 
 
-def appearance_of(
+def language_of(
     request: Request, preferences: Preferences, sessions: SessionRecordStore
-) -> Appearance:
-    """The language and the look the person behind this request reads in.
+) -> Language:
+    """The offered language the person behind this request reads in.
 
     The browser's own language is not read: the account's names the language,
     else the instance's.
     """
-    person = signed_in_person(request)
     language_tag = resolve_language(
         AppLanguages(
             offered=preferences.languages(), default=preferences.served_language()
@@ -71,8 +70,17 @@ def appearance_of(
         ),
         accept_language=None,
     )
+    return offered_language(language_tag)
+
+
+def appearance_of(
+    request: Request, preferences: Preferences, sessions: SessionRecordStore
+) -> Appearance:
+    """The language and the look the person behind this request reads in."""
+    person = signed_in_person(request)
     return preferences.appearance_for(
-        None if person is None else person.id, language_tag=language_tag
+        None if person is None else person.id,
+        language_tag=language_of(request, preferences, sessions),
     )
 
 
