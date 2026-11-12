@@ -91,6 +91,10 @@ def _client_language(language: SampleLanguage) -> wire.Language:
     return wire.Language(language.value)
 
 
+def _sample_language(language: wire.Language) -> SampleLanguage:
+    return SampleLanguage(language.value)
+
+
 class SpeechSpeaking:
     """Speak one sentence at the shared speech service."""
 
@@ -280,8 +284,13 @@ class _Transcripts:
             case wire.TranscriptCompleted():
                 self._heard_so_far.pop(event.item_id, None)
                 if event.transcript:
+                    (decoded,) = event.languages
                     await self._heard(
-                        HearingTranscript(text=event.transcript, final=True)
+                        HearingTranscript(
+                            text=event.transcript,
+                            final=True,
+                            language=_sample_language(decoded.code),
+                        )
                     )
             case wire.TranscriptFailed() | wire.ErrorEvent():
                 raise _ServiceFailureError(type(event).__name__)

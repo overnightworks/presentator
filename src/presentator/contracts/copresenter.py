@@ -5,6 +5,7 @@ from enum import Enum, StrEnum, auto
 
 from presentator.contracts.decks import Deck, Source
 from presentator.contracts.models import Role
+from presentator.contracts.voice import SampleLanguage
 
 
 class CoPresenterUnavailableError(RuntimeError):
@@ -130,10 +131,20 @@ type AnswerEvent = AnswerText | Sentence | Audio | Done | ShowSlide
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class HearingTranscript:
-    """One interim or final transcript from private hearing."""
+    """One interim or final transcript from private hearing.
+
+    A final one carries the language its utterance was heard in.
+    """
 
     text: str
     final: bool
+    language: SampleLanguage | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse a final transcript that names no language."""
+        if self.final and self.language is None:
+            message = "a final transcript names its language"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

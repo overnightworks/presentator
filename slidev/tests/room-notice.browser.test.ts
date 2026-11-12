@@ -48,6 +48,7 @@ const scenarioDefaults = {
   whoLanguage: state.whoLanguage,
   hearingMode: state.hearingMode,
   heardOnConnect: state.heardOnConnect,
+  heardLanguage: state.heardLanguage,
 }
 afterEach(() => { Object.assign(state, scenarioDefaults) })
 
@@ -174,11 +175,12 @@ describe('the room notice', () => {
   )
 
   it.each([
-    { deck: 'en', account: 'de' },
-    { deck: 'de', account: 'en' },
-  ] as const)('CP10: a $account account presenting a $deck deck has controls in $account and the room notice in $deck', async ({ deck, account }) => {
+    { deck: 'en', account: 'de', heard: 'de' },
+    { deck: 'de', account: 'en', heard: 'en' },
+  ] as const)('CP10: a $account account presenting a $deck deck has controls in $account and the room notice in $deck, whatever language $heard the question is heard in', async ({ deck, account, heard }) => {
     state.whoLanguage = deck
     state.interfaceLanguage = account
+    state.heardLanguage = heard
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       const ai = presenter.getByRole('switch', { name: wordsOf[account]['controls.switch'] })
@@ -186,6 +188,8 @@ describe('the room notice', () => {
       await ai.click({ timeout: 2_000 })
       await showsBand(projector, deck)
       await showsPhase(presenter, 'listening', PILL[deck].listening)
+      sendHeard('Where does the handoff slow down?')
+      await showsPhase(presenter, 'answering', PILL[deck].answering)
       expect(await presenter.getByRole('complementary', { name: wordsOf[account]['controls.presenterOn'] }).count()).toBe(1)
     })
   })

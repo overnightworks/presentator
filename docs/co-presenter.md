@@ -63,7 +63,8 @@ the cluster, and that hop's trust sentence is in
 - **CP10** The presenter's own controls and fault words follow the presenter's
   account language (German or English, English as fallback); the room notice and
   pills keep following the deck's language, as [decks](decks.md) DK3 rules, and
-  so do the hearing and the questions. `/who` names the account language beside
+  so does the hearing request; a question carries the language its utterance was
+  heard in. `/who` names the account language beside
   the deck's. Until it has answered the overlay shows only the switch. The
   overlay loads the words of the language the first `/who` answer names, at start
   or at switch-on if the start's `/who` failed, and keeps them; a fault word is
@@ -80,7 +81,8 @@ the cluster, and that hop's trust sentence is in
   notice) says which one."
 - **CP12** Every answer event of text, sentence, audio and done carries
   `"ai_generated": true`; `error` and `slide`, the control events, do not; and
-  nothing switches it off. The answer is spoken by the voice of its language.
+  nothing switches it off. The answer is spoken by the voice of the heard
+  question's language, which the hearing reports for each finished utterance.
 
 ## Where it runs and when it stops
 

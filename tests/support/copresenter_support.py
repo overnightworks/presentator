@@ -38,6 +38,7 @@ from presentator.contracts.copresenter import (
     SpeechTokens,
 )
 from presentator.contracts.decks import Source
+from presentator.contracts.voice import SampleLanguage
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
 from tests.presentator.application.support.fakes import (
     FakeDeckStore,
@@ -126,7 +127,9 @@ class RecordingHearing:
     frames: list[bytes] = field(default_factory=list[bytes])
     closed: int = 0
     events: list[HearingTranscript | RuntimeError | None] = field(
-        default_factory=lambda: [HearingTranscript(text="gehört", final=True)]
+        default_factory=lambda: [
+            HearingTranscript(text="gehört", final=True, language=SampleLanguage.GERMAN)
+        ]
     )
 
 

@@ -8,6 +8,7 @@ from presentator.application.copresenter import PreparedAsk
 from presentator.contracts.copresenter import (
     CoPresenterReadiness,
     CoPresenterUnavailableError,
+    HearingTranscript,
     Question,
     SpeechTokens,
 )
@@ -20,6 +21,11 @@ def test_copresenter_values_are_closed_and_immutable() -> None:
     assert readiness.local_hearing_ready is True
     with pytest.raises(FrozenInstanceError):
         question.slide = 4  # type: ignore[misc]
+
+
+def test_a_final_transcript_without_its_language_is_refused() -> None:
+    with pytest.raises(ValueError, match="language"):
+        HearingTranscript(text="gehört", final=True)
 
 
 def test_expected_private_refusal_has_one_neutral_exception() -> None:

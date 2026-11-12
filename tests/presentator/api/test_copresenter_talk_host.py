@@ -249,7 +249,11 @@ def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_running_hearing(
         _demote_at_the_lobby(hosts)
         deadline.release_first()
         socket.send_bytes(b"after demotion")
-        assert socket.receive_json() == {"text": "gehört", "final": True}
+        assert socket.receive_json() == {
+            "text": "gehört",
+            "final": True,
+            "language": "de",
+        }
 
     assert private.speech.hearing.frames == [b"after demotion"]
 

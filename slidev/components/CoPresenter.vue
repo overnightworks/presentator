@@ -96,15 +96,17 @@ const handedOver = new Set()
 let playingSound = null
 let spokenText = ''
 let unvoicedSentence = ''
-// The deck's language, which the server reports before the hearing opens.
-let language = ''
+// The deck's language, which the server reports before the hearing opens. It
+// drives the hearing request and the room facts; a question carries the
+// language of its utterance, and the controls' words the account's.
+let deckLanguage = ''
 let activationGeneration = 0
 
 function publishRoomFacts() {
   publish({
     capturing: capturing.value,
     playing: playing.value,
-    language,
+    language: deckLanguage,
   })
 }
 // Synchronous, so a window that turns off has said so when its handler returns.
@@ -169,7 +171,7 @@ async function turnOn() {
     if (!response.ok) throw new WhoRefused(response.status)
     report = await response.json()
     if (!stillActive(generation)) return
-    language = report.language
+    deckLanguage = report.language
     await useAccountLanguage(report.interface_language)
   } catch (error_) {
     if (!stillActive(generation)) return
@@ -222,7 +224,7 @@ async function startLocalHear(generation) {
     const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const running = startCapture({
       stream,
-      hopUrl: `${scheme}//${window.location.host}${COPRESENTER}/hear?language=${language}`,
+      hopUrl: `${scheme}//${window.location.host}${COPRESENTER}/hear?language=${deckLanguage}`,
       workletUrl: WORKLET_URL,
       onMessage: (data) => onHeard(data, generation),
     })
@@ -255,7 +257,7 @@ function onHeard(data, generation) {
   }
   if (!payload.text) return
   heard.value = payload.text
-  if (payload.final) onFinal(payload.text)
+  if (payload.final) onFinal(payload.text, payload.language)
 }
 
 function stopStream(stream) {
@@ -272,10 +274,10 @@ function releaseCapture() {
   if (mediaStream) stopStream(mediaStream)
 }
 
-function onFinal(text) {
+function onFinal(text, utteranceLanguage) {
   if (!on.value || speaking.value) return
   if (isEcho(text, spokenText)) return
-  void ask(text)
+  void ask(text, utteranceLanguage)
 }
 
 function isEcho(text, spoken) {
@@ -289,7 +291,7 @@ function isEcho(text, spoken) {
   return overlap / a.size >= 0.5
 }
 
-async function ask(text) {
+async function ask(text, utteranceLanguage) {
   if (!capture) return
   invalidatePlayback()
   if (askAbort) askAbort.abort()
@@ -308,7 +310,7 @@ async function ask(text) {
       body: JSON.stringify({
         said: text,
         slide: currentSlideNo.value,
-        language,
+        language: utteranceLanguage,
         deck: DECK_SLUG,
       }),
       signal: controller.signal,
