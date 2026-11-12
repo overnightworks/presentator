@@ -123,8 +123,8 @@ RUN mkdir -p /data/database /data/mirrors /data/builds \
     && chown presentator /data/database /data/mirrors /data/builds
 
 # Where this filesystem keeps what has to survive the container, and the address
-# it answers at inside it; compose gives each directory a volume and offers the
-# port to the machine alone.
+# it answers at inside it; the deployment mounts a volume over each directory and
+# routes to the port.
 ENV PRESENTATOR_DATABASE=/data/database/presentator.sqlite3 \
     PRESENTATOR_MIRRORS=/data/mirrors \
     PRESENTATOR_BUILDS=/data/builds \
