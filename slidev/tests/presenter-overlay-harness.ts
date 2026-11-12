@@ -45,6 +45,7 @@ export type AnswerMode =
   | 'mid-answer-error'
   | 'moves-slide'
   | 'refused-then-answered'
+  | 'two-sounds'
   | keyof typeof REFUSED_REQUESTS
 
 type MediaObservation = {
@@ -450,7 +451,10 @@ async function startServer() {
         response.end('event: error\ndata: {}\n\n')
         return
       }
-      response.write(`event: audio\ndata: {"wav_b64":"${wav}"}\n\n`)
+      const audio = `event: audio\ndata: {"wav_b64":"${wav}"}\n\n`
+      response.write(audio)
+      // The second sound queues behind the first one, which plays.
+      if (state.answerMode === 'two-sounds') response.write(audio)
       response.on('close', () => { state.pendingAnswerClosed += 1 })
       return
     }
@@ -551,12 +555,15 @@ async function installMediaFakes(page: Page) {
     const fakes = {
       microphone: 'ready' as 'ready' | 'pending' | 'denied',
       worklet: 'ready' as 'ready' | 'failing',
-      playback: 'resolve' as 'resolve' | 'pending' | 'rejected',
+      playback: 'resolve' as 'resolve' | 'pending' | 'rejected' | 'second-fails-on-cue',
       played: [] as { onended: (() => void) | null }[],
+      // Set once the second sound's decode waits; the test rejects that decode with it.
+      failSecond: null as (() => void) | null,
       releaseMicrophone: () => {},
       endPlayback: () => fakes.played.splice(0).forEach((source) => source.onended?.()),
     }
     Object.assign(window, { __fakes: fakes })
+    let decodeCalls = 0
     const newTrack = () => ({
       readyState: 'live',
       addEventListener() {},
@@ -604,6 +611,12 @@ async function installMediaFakes(page: Page) {
       decodeAudioData() {
         if (fakes.playback === 'pending') return new Promise<object>(() => undefined)
         if (fakes.playback === 'rejected') return Promise.reject(new DOMException('undecodable', 'EncodingError'))
+        decodeCalls += 1
+        if (fakes.playback === 'second-fails-on-cue' && decodeCalls === 2) {
+          return new Promise<object>((_resolve, reject) => {
+            fakes.failSecond = () => reject(new DOMException('undecodable', 'EncodingError'))
+          })
+        }
         return Promise.resolve({})
       }
       createBufferSource() {

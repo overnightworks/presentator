@@ -80,6 +80,8 @@ let askAbort = null
 let player = null
 // The sounds handed to the player that have not ended; `speaking` is true while any is.
 const handedOver = new Set()
+// The sound the player is playing now; `playing` follows it, so a queued sound that ends first leaves it on.
+let playingSound = null
 let spokenText = ''
 let unvoicedSentence = ''
 // The deck's language, which the server reports before the hearing opens.
@@ -341,11 +343,17 @@ function enqueueWav(b64) {
   handedOver.add(playback)
   speaking.value = true
   void playback.started.then((state) => {
-    if (state === 'playing' && handedOver.has(playback)) playing.value = true
+    if (state === 'playing' && handedOver.has(playback)) {
+      playingSound = playback
+      playing.value = true
+    }
   })
   void playback.ended.then((end) => {
     if (!handedOver.delete(playback)) return
-    playing.value = false
+    if (playingSound === playback) {
+      playingSound = null
+      playing.value = false
+    }
     speaking.value = handedOver.size > 0
     if (end.kind === 'failed' || end.kind === 'refused') error.value = 'No speech'
   })
@@ -362,6 +370,7 @@ function startPlayer() {
 
 function invalidatePlayback() {
   handedOver.clear()
+  playingSound = null
   player?.stop()
   speaking.value = false
   playing.value = false
