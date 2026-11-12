@@ -36,7 +36,9 @@ network `hal_speech_presentator`, and that hop's trust sentence is in
   still loads) and "No hearing" (a hearing that fails or cannot open). A hearing
   the server ends in order, as at sign-out, shows no word. Two more words
   complete the set: "Unreachable" when `/who` fails for any other reason, and
-  "No speech" when an answer's sound cannot play. Each word has a German version
+  "No speech" when an answer's sound cannot play. A fault word shows in the
+  language the overlay already knows from an earlier `/who` answer, and in
+  English only while no `/who` has ever answered. Each word has a German version
   in the overlay's catalog. A new word needs a ruling.
 - **CP15** The presenter view carries Home at its top left as an icon button and
   the AI switch at its top right; neither sits in the bottom navigation bar, and
@@ -62,8 +64,10 @@ network `hal_speech_presentator`, and that hop's trust sentence is in
   account language (German or English, English as fallback); the room notice and
   pills keep following the deck's language, as [decks](decks.md) DK3 rules, and
   so do the hearing and the questions. `/who` names the account language beside
-  the deck's. Until it has answered the overlay shows only the switch, and
-  where it has not answered no language is known, so a fault word is English.
+  the deck's. Until it has answered the overlay shows only the switch. The
+  overlay loads the words of the language the first `/who` answer names, at start
+  or at switch-on if the start's `/who` failed, and keeps them; a fault word is
+  English only while no `/who` has ever answered.
 - **CP11** The notice names no provider. In German it ends „… an einen
   KI-Dienst gesendet. Welcher, steht in der Datenschutzerklärung.“ and in
   English „… sent with the slides to an AI service. The Datenschutzerklärung

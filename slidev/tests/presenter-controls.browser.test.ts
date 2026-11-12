@@ -473,6 +473,20 @@ describe('presenter controls', () => {
     }
   })
 
+  it('CP7: shows the fault word in the known language when /who fails at switch-on after the start\'s /who answered', async () => {
+    state.interfaceLanguage = 'de'
+    state.whoScript = [{}, { fails: true }]
+    const { browser, page } = await openPresenter(390)
+    try {
+      await page.getByRole('link', { name: wordsOf.de['controls.home'] }).waitFor({ state: 'visible', timeout: 5_000 })
+      await page.getByRole('switch', { name: wordsOf.de['controls.switch'] }).click({ timeout: 2_000 })
+      await page.getByText(wordsOf.de['controls.unreachable'], { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
+      expect(await page.getByText(en['controls.unreachable'], { exact: true }).count()).toBe(0)
+    } finally {
+      await browser.close()
+    }
+  })
+
   it.each([
     { width: 1024, shown: 3, followed: ['/presenter/3', '/3'] },
     { width: 390, shown: 3, followed: ['/presenter/3', '/3'] },
