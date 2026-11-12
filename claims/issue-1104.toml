@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "9b084fc6a015293d9d3447941970deb1eae1595f"
 branch = "claude/issue-1104-presenter-controls-account-language"
-scope = ["docs/co-presenter.md", "frontend/src/lib/api", "slidev", "src/presentator/api/copresenter.py", "src/presentator/application", "src/presentator/contracts", "tests/presentator", "tests/support"]
+scope = ["docs/co-presenter.md", "frontend/src/lib/api", "slidev", "src/presentator/api/copresenter.py", "src/presentator/api/session_api.py", "src/presentator/api/talk.py", "src/presentator/application", "src/presentator/contracts", "src/presentator/host/main.py", "tests/presentator", "tests/support"]
 opened_commit = "bd859e9dbe6e1cf87029cef2055a79e8c3376068"
 whole_reason = "The words, the server's answer that picks their language and the component that shows them change what a person sees only together."
