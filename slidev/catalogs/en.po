@@ -1,0 +1,18 @@
+msgid ""
+msgstr ""
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgctxt "roomNotice.band"
+msgid "Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an einen KI-Dienst gesendet. Welcher, steht in der Datenschutzerklärung."
+msgstr "This talk uses an AI co-presenter. While it is switched on, speech is converted to text locally and sent with the slides to an AI service. The Datenschutzerklärung (privacy notice) says which one."
+
+msgctxt "roomNotice.listening"
+msgid "KI hört zu"
+msgstr "AI is listening"
+
+msgctxt "roomNotice.answering"
+msgid "KI antwortet"
+msgstr "AI is answering"
