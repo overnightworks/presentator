@@ -115,9 +115,9 @@ One process serves the lobby and the talk host and tells them apart by the
 `Host` header (`served_by_host` in `host/main.py`); a request for any other host
 gets a 404, except the lobby's back-channel logout path, which the lobby answers
 to a `POST` under any Host but the talk host's (other methods on that path
-answer 405). The identity provider posts the logout to the web's Service address
-inside the cluster; the route ignores forwarded headers, and the signed Logout
-Token is its only control. Whether the path is also reachable through the edge is
+answer 405). The route ignores forwarded headers, and the signed Logout Token is
+its only control. The platform's realm registers no back-channel logout URL for
+presentator, so whether and from where the identity provider calls the path is
 the deployment's decision, and presentator's safety does not depend on it. The image's glibc is 2.36 or later,
 because the controller reaches `pidfd_open` through ctypes. Both hosts answer
 `GET /health` with a fixed 200 and no session, store read or cookie
@@ -249,9 +249,9 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
   (the speech service) or a bare `http` or `https` origin (the gateway), and a
   gateway CA file with an `http` origin. The platform decides whom the gateway
   admits.
-- Back-channel logout is posted by the identity provider from inside the cluster
-  and ignores forwarded headers, so `X-Forwarded-For` does not decide anything
-  there.
+- The back-channel logout route ignores forwarded headers, so `X-Forwarded-For`
+  does not decide anything there. The platform's realm registers no logout URL
+  for presentator; registering it and the path to it belong to the deployment.
 - The fetch-now webhook holds a per-source secret, not a login: a git host has
   no browser ([fetch-now hook](runbooks/call-the-fetch-now-hook.md)).
 - `/api/admin/` takes a Keycloak access token, not a session cookie, so a forged
