@@ -1,0 +1,8 @@
+claim_id = "82e04a5e6d6343c695c09febb1f6ca48"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "c4cef46bcb7ade0b5a87fbd393bad93414fb05b2"
+branch = "claude/issue-1115-agents-0-33"
+scope = ["pyproject.toml", "src/presentator/agent", "tests/presentator/agent", "tests/support", "uv.lock"]
+opened_commit = "2943c05d92a2291afd96254c7f92e9ee3d14d82f"
+whole_reason = "The pin, its lock and the fakes that mirror the library's request and events pass only together."
