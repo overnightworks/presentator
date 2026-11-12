@@ -19,6 +19,12 @@ item = "#978"
 date = 2026-11-09
 reason = "the contract is renamed, not dropped: \"Only adapters import speech_client\" forbids the same source modules from importing the renamed client library"
 
+[[gate.loosened]]
+what = 'import contract "Only adapters read the manifest format and word a language" removed'
+item = "#1075"
+date = 2026-11-12
+reason = "the contract is renamed, not dropped: \"Only adapters read the manifest format\" forbids the same source modules from importing tomllib; babel left the runtime dependencies with the catalog adapter, so no layer imports it and the words come from the generated module"
+
 [[size.generated]]
 path = "frontend/src/lib/api/types.ts"
 job = "Lobby: lint, types, tests, drive"
