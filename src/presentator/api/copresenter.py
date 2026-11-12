@@ -24,6 +24,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.requests import HTTPConnection
 from starlette.responses import Response
 
+from presentator.api.session_api import language_of
 from presentator.application.copresenter import RetryAfter
 from presentator.contracts.copresenter import (
     AccessRefusal,
@@ -47,13 +48,17 @@ from presentator.contracts.decks import MAXIMUM_NAME_BYTES
 from presentator.contracts.voice import SampleLanguage
 
 if TYPE_CHECKING:
+    from webauth.ports import SessionRecordStore
+
     from presentator.application.copresenter import (
         AskLimiter,
         AskTicket,
         CoPresenterUse,
         PreparedAsk,
     )
+    from presentator.application.preferences import Preferences
     from presentator.contracts.models import Role, User
+    from presentator.contracts.words import Language
 
 _CHECK_INTERVAL_SECONDS: Final = 0.5
 _POLICY_VIOLATION: Final = 1008
@@ -91,6 +96,7 @@ class CoPresenterSurface:
 
     use: CoPresenterUse
     limiter: AskLimiter
+    preferences: Preferences
     browser_origin: str
     delay: Delay = asyncio.sleep
 
@@ -128,6 +134,7 @@ def add_copresenter_routes(
     *,
     surface: CoPresenterSurface,
     admission: Admission,
+    sessions: SessionRecordStore,
 ) -> None:
     """Add the exact signed-in co-presenter allowlist to the talk host."""
     router = APIRouter(prefix="/copresenter")
@@ -155,7 +162,17 @@ def add_copresenter_routes(
             guard=guard,
         )
 
-    router.add_api_route("/who", _who_route(use, admission=admission), methods=["GET"])
+    router.add_api_route(
+        "/who",
+        _who_route(
+            use,
+            admission=admission,
+            interface_language=lambda request: language_of(
+                request, surface.preferences, sessions
+            ),
+        ),
+        methods=["GET"],
+    )
     router.add_api_route(
         "/ask", _ask_route(surface, admission=admission, guard=guard), methods=["POST"]
     )
@@ -164,7 +181,10 @@ def add_copresenter_routes(
 
 
 def _who_route(
-    use: CoPresenterUse, *, admission: Admission
+    use: CoPresenterUse,
+    *,
+    admission: Admission,
+    interface_language: Callable[[Request], Language],
 ) -> Callable[[Request, str], Awaitable[JSONResponse]]:
     async def _who(request: Request, deck: str = "") -> JSONResponse:
         connection = admission(request)
@@ -181,6 +201,7 @@ def _who_route(
         return JSONResponse(
             {
                 "language": language.value,
+                "interface_language": interface_language(request),
                 "speech": {"hearing": {"ready": ready.local_hearing_ready}},
             },
         )

@@ -131,5 +131,6 @@ def create_talk(
             talk,
             surface=copresenter,
             admission=lambda connection: signed_in_connection(connection, sessions),
+            sessions=sessions,
         )
     return talk

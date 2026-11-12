@@ -29,6 +29,7 @@ from presentator.contracts.copresenter import (
 from presentator.contracts.models import Role, User
 from tests.presentator.application.support.fakes import (
     FakeDeckStore,
+    FakeSessionRecordStore,
     FakeUserStore,
 )
 from tests.support.copresenter_support import (
@@ -44,6 +45,7 @@ from tests.support.copresenter_support import (
     ask,
     who,
 )
+from tests.support.lobby import a_preferences
 
 if TYPE_CHECKING:
     from starlette.requests import HTTPConnection
@@ -91,9 +93,11 @@ def test_copresenter_routes_refuse_unauthenticated_http_before_private_use() -> 
         surface=CoPresenterSurface(
             use=a_use(private, FakeDeckStore()),
             limiter=AskLimiter(),
+            preferences=a_preferences(),
             browser_origin=TALK_ORIGIN,
         ),
         admission=no_session,
+        sessions=FakeSessionRecordStore(users=FakeUserStore()),
     )
     client = TestClient(app)
 
@@ -114,6 +118,7 @@ def test_the_admin_receives_the_decks_language_and_speech_readiness() -> None:
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {
         "language": "de",
+        "interface_language": "en",
         "speech": {"hearing": {"ready": True}},
     }
     assert private.speech.readiness_calls == 1

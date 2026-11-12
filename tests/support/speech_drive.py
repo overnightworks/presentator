@@ -61,6 +61,7 @@ from tests.support.lobby import (
     A_BROWSERS_HEADERS,
     A_SPEECH_SCOPE,
     A_TALK_ADDRESS,
+    a_preferences,
     an_agent_config,
     the_speech_voices,
 )
@@ -311,6 +312,7 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
                 ),
             ),
             limiter=limiter,
+            preferences=a_preferences(),
             browser_origin=A_TALK_ADDRESS,
             delay=deadline.wait,
         )

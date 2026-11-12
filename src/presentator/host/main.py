@@ -356,6 +356,7 @@ def _copresenter_surface(
             ),
         ),
         limiter=AskLimiter(),
+        preferences=_preferences(settings),
         browser_origin=settings.talk_origin,
     )
 

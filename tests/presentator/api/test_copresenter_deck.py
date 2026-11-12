@@ -41,7 +41,10 @@ def ask_about(lobby: Lobby, slug: str) -> Response:
 
 
 def an_instance(
-    *others: Deck, removed: tuple[str, ...] = (), role: Role = Role.ADMIN
+    *others: Deck,
+    removed: tuple[str, ...] = (),
+    role: Role = Role.ADMIN,
+    account_language: str | None = None,
 ) -> tuple[Lobby, PrivateFakes]:
     """A person signed in and the admin's own deck."""
     decks = the_admins_decks()
@@ -54,7 +57,7 @@ def an_instance(
         decks=decks,
         limiter=AskLimiter(),
     )
-    lobby.sign_in(role=role)
+    lobby.sign_in(role=role, account_language=account_language)
     return lobby, private
 
 
@@ -218,6 +221,29 @@ def test_who_answers_the_decks_language_to_its_owner(language: str, role: Role) 
     assert answer.json()["language"] == language
 
 
+@pytest.mark.parametrize(
+    ("account_language", "deck_language", "interface_language"),
+    [
+        pytest.param("de", "en", "de", id="german-account-english-deck"),
+        pytest.param("en", "de", "en", id="english-account-german-deck"),
+        pytest.param("de-AT", "en", "de", id="regional-german-account"),
+        pytest.param(None, "de", "en", id="no-account-language"),
+        pytest.param("fr", "de", "en", id="account-language-not-offered"),
+    ],
+)
+def test_who_names_the_presenters_interface_language_beside_the_decks(
+    account_language: str | None, deck_language: str, interface_language: str
+) -> None:
+    """CP10: the controls follow the account's language, the deck's stays apart."""
+    lobby, private = an_instance(account_language=account_language)
+    private.texts.text = a_text_in(deck_language)
+
+    answer = who(lobby.client)
+
+    assert answer.json()["language"] == deck_language
+    assert answer.json()["interface_language"] == interface_language
+
+
 def test_who_reports_hearing_not_ready_together_with_the_decks_language() -> None:
     """An owned English deck while the speech service cannot hear."""
     lobby, private = an_instance()
@@ -229,6 +255,7 @@ def test_who_reports_hearing_not_ready_together_with_the_decks_language() -> Non
     assert answer.status_code == HTTPStatus.OK
     assert answer.json() == {
         "language": "en",
+        "interface_language": "en",
         "speech": {"hearing": {"ready": False}},
     }
 
