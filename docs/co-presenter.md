@@ -3,8 +3,8 @@
 Audience: whoever changes or operates the co-presenter, the AI that answers
 beside a talk. This page holds the co-presenter's ruled sentences, each with the
 ID its test cites. How a question is asked, bounded and answered is in the code;
-the instance speaks and hears through the shared speech service over the internal
-network `hal_speech_presentator`, and that hop's trust sentence is in
+the instance speaks and hears through the shared speech service, a service inside
+the cluster, and that hop's trust sentence is in
 [Trust](ARCHITECTURE.md#5-crosscutting-concepts).
 
 ## What it knows and whom it answers
