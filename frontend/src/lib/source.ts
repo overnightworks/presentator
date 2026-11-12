@@ -174,6 +174,6 @@ const NAME_PLACE = '\uE000';
 
 /** The dialog's heading, split where the source's name stands, so the page can set the name as typed. */
 export function removalTitle(words: Words): { before: string; after: string } {
-	const [before = '', after = ''] = words['source.removeConfirmTitle']({ name: NAME_PLACE }).split(NAME_PLACE);
-	return { before, after };
+	const parts = words['source.removeConfirmTitle']({ name: NAME_PLACE }).split(NAME_PLACE);
+	return { before: parts[0] as string, after: parts[1] as string };
 }
