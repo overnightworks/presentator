@@ -17,7 +17,7 @@ from presentator.api.auth import BACKCHANNEL_LOGOUT_PATH, DEFAULT_BODY_BYTES
 from presentator.api.copresenter import MAX_SAID_LENGTH
 from presentator.api.hooks import hook_address
 from presentator.contracts.models import Role
-from presentator.contracts.text import DEFAULT_LANGUAGE_TAG
+from presentator.contracts.preferences import DEFAULT_LANGUAGE
 from tests.support.copresenter_support import QUESTION, a_copresenter_talk_host
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -119,7 +119,7 @@ def a_settings_write(padding: int) -> str:
     return json.dumps(
         {
             "name": _A_NAME + "x" * padding,
-            "language_tag": DEFAULT_LANGUAGE_TAG,
+            "language_tag": DEFAULT_LANGUAGE,
         }
     )
 

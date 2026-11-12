@@ -46,10 +46,6 @@ from presentator.adapters.builds import (
     PackageJsonThemes,
     SlidevBuilds,
 )
-from presentator.adapters.catalog import (
-    CATALOG_DIRECTORY,
-    load_catalogs,
-)
 from presentator.adapters.decks import SourceMirrors
 from presentator.adapters.secrets import talk_session_secret
 from presentator.agent.settings import AgentSettings
@@ -78,7 +74,6 @@ from presentator.contracts.decks import (
     SourceRunFailure,
 )
 from presentator.contracts.models import Role, User
-from presentator.contracts.text import DEFAULT_LANGUAGE_TAG, Catalogs
 from presentator.host.config import Settings
 from presentator.host.main import agent_front, web_auth_config_for
 from presentator.host.oidc import admission_of, oidc_client_config
@@ -140,8 +135,6 @@ BUILD_BOUND: Final = timedelta(minutes=5)
 # What this lobby signs a Check connection fingerprint with; no test reads
 # this value, only the fingerprint a real Check response carries.
 _FINGERPRINT_KEY: Final = b"what only this test's lobby signs a fingerprint with"
-CATALOGS: Final = load_catalogs(CATALOG_DIRECTORY)
-ENGLISH: Final = CATALOGS.text(DEFAULT_LANGUAGE_TAG)
 USERNAME: Final = "felix"
 NEIGHBOUR: Final = "anna"
 ADMIN: Final = f"id-of-{USERNAME}"
@@ -549,14 +542,12 @@ def a_decks(given: GivenDecks, clock: FrozenClock) -> Decks:
 
 def a_preferences(
     *,
-    catalogs: Catalogs = CATALOGS,
     people: PersonPreferencesStore | None = None,
 ) -> Preferences:
     """The language and theme rules over in-memory stores, or the given person store."""
     return Preferences(
         instance=FakeInstanceSettingsStore(),
         people=FakePersonPreferencesStore() if people is None else people,
-        catalogs=catalogs,
     )
 
 
@@ -655,7 +646,6 @@ def a_browser_at(
 def a_lobby(
     *,
     users: FakeUserStore | None = None,
-    catalogs: Catalogs = CATALOGS,
     given: GivenDecks = NO_DECKS,
     person_preferences: PersonPreferencesStore | None = None,
 ) -> Lobby:
@@ -663,7 +653,7 @@ def a_lobby(
     people = a_crowd(users)
     app, _ = a_lobby_app(
         people=people,
-        preferences=a_preferences(catalogs=catalogs, people=person_preferences),
+        preferences=a_preferences(people=person_preferences),
         given=given,
     )
     return a_browser_at(

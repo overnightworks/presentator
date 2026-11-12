@@ -21,6 +21,8 @@ from webauth.middleware.security_headers import (
 from presentator.api.admission import gated_person
 from presentator.api.auth import PERMISSIONS_POLICY
 from presentator.api.hooks import hook_address
+from presentator.contracts.preferences import DEFAULT_LANGUAGE
+from presentator.contracts.words import text
 from tests.presentator.application.support.fakes import (
     FakeSession,
     FakeSessionRecordStore,
@@ -30,7 +32,6 @@ from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     A_LOBBY_ASSET,
-    ENGLISH,
     Lobby,
     a_browser_at,
     a_content_security_policy,
@@ -206,7 +207,7 @@ def test_a_signed_in_browser_reading_the_login_costs_one_load_and_no_touch(
     answer = signed_in_lobby.client.get("/login")
 
     assert answer.status_code == HTTPStatus.OK
-    assert ENGLISH.log_out not in answer.text
+    assert text(DEFAULT_LANGUAGE, "logout.button") not in answer.text
     assert _counts(signed_in_lobby) == (1, 0)
 
 

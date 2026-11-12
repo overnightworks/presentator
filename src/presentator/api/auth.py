@@ -75,6 +75,7 @@ from presentator.application.decks import Decks
 from presentator.application.own_decks import OwnDecks
 from presentator.application.preferences import Preferences
 from presentator.contracts.decks import DECK_PATH
+from presentator.contracts.words import text
 
 _APP_ASSETS: Final = "/_app"
 _INSIDE_APP_ASSETS: Final = f"{_APP_ASSETS}/"
@@ -324,8 +325,10 @@ def _install_lobby_app(lobby: FastAPI, surfaces: _Surfaces) -> None:
 
 
 def _logout_page_text(request: Request, surfaces: _Surfaces) -> LogoutPageText:
-    text = appearance_of(request, surfaces.preferences, surfaces.sessions).text
-    return LogoutPageText(language=text.language_tag, button_label=text.log_out)
+    language = appearance_of(request, surfaces.preferences, surfaces.sessions).language
+    return LogoutPageText(
+        language=language, button_label=text(language, "logout.button")
+    )
 
 
 def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:

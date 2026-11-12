@@ -83,7 +83,7 @@ class LobbyShell:
 
     def filled(self, appearance: Appearance) -> str:
         """The shell in the reader's language and theme."""
-        return self.page.replace(LANGUAGE_MARK, appearance.text.language_tag).replace(
+        return self.page.replace(LANGUAGE_MARK, appearance.language).replace(
             THEME_MARK, appearance.theme.value
         )
 

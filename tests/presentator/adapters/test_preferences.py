@@ -16,6 +16,7 @@ from presentator.adapters.preferences import (
 from presentator.adapters.schema import create_tables
 from presentator.application.preferences import Preferences
 from presentator.contracts.preferences import (
+    DEFAULT_LANGUAGE,
     InstanceSettings,
     PersonPreferences,
     ThemeChoice,
@@ -26,8 +27,6 @@ from tests.presentator.adapters.support.person_instance_support import (
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
-    CATALOGS,
-    ENGLISH,
     Lobby,
     a_browser_at,
     a_crowd,
@@ -260,7 +259,7 @@ def test_everybody_reads_the_instances_words_and_their_own_theme_after_the_start
         browser.sign_in(username=user_id.removeprefix("id-of-"))
         body = browser.client.get("/api/session").json()
         themes[user_id] = ThemeChoice(body["theme"])
-        assert body["words"]["language_tag"] == ENGLISH.language_tag
+        assert body["language"] == DEFAULT_LANGUAGE
 
     assert themes == sign_in_as
     assert lobby.client.get("/api/session").json()["theme"] == (
@@ -288,7 +287,7 @@ def test_everybody_reads_the_instances_words_and_their_own_theme(
     database = tmp_path / "fresh.sqlite3"
     create_tables(database)
     SqliteInstanceSettingsStore(database).write(
-        InstanceSettings(name="Heim", language_tag=ENGLISH.language_tag)
+        InstanceSettings(name="Heim", language_tag=DEFAULT_LANGUAGE)
     )
     chosen = {
         "felix": ThemeChoice.DARK,
@@ -306,7 +305,7 @@ def test_everybody_reads_the_instances_words_and_their_own_theme(
         browser.sign_in(username=username)
         body = browser.client.get("/api/session").json()
         themes[username] = ThemeChoice(body["theme"])
-        assert body["words"]["language_tag"] == ENGLISH.language_tag
+        assert body["language"] == DEFAULT_LANGUAGE
 
     assert themes == {**chosen, "dora": ThemeChoice.FOLLOW_SYSTEM}
 
@@ -335,7 +334,6 @@ def a_lobby_over(database: Path) -> Lobby:
         preferences=Preferences(
             instance=SqliteInstanceSettingsStore(database),
             people=SqlitePersonPreferencesStore(database),
-            catalogs=CATALOGS,
         ),
     )
     return a_browser_at(

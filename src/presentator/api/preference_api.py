@@ -1,7 +1,7 @@
 """`/api/account` and `/api/settings`: the choices a page reads and writes as data.
 
 Account is the person's own theme; Settings is the admin's instance name and
-language and carries the language list, so a select needs no third address.
+language and carries the language tags, so a select needs no third address.
 """
 
 from collections.abc import Callable, Generator
@@ -29,18 +29,10 @@ from presentator.contracts.preferences import (
     PersonPreferences,
     ThemeChoice,
 )
+from presentator.contracts.words import Language
 
 ACCOUNT_PATH: Final = "/api/account"
 SETTINGS_PATH: Final = "/api/settings"
-
-
-class LanguageView(BaseModel):
-    """A language an instance can speak, named the way its own catalog names it."""
-
-    model_config = ConfigDict(frozen=True)
-
-    tag: str
-    name: str
 
 
 class AccountView(BaseModel):
@@ -66,7 +58,7 @@ class SettingsWrite(BaseModel):
 class SettingsView(SettingsWrite):
     """The instance settings and the languages an admin may choose from."""
 
-    languages: list[LanguageView]
+    languages: list[Language]
 
 
 @contextmanager
@@ -126,12 +118,6 @@ def _mounted(
 def preference_api_routes(*, preferences: Preferences) -> APIRouter:
     """The router that reads and writes a person's theme and the instance settings."""
 
-    def languages() -> list[LanguageView]:
-        return [
-            LanguageView(tag=language.tag, name=language.name)
-            for language in preferences.languages()
-        ]
-
     def account_of(person_id: str) -> AccountView:
         chosen = preferences.preferences_of(person_id)
         return AccountView(theme=chosen.theme)
@@ -141,7 +127,7 @@ def preference_api_routes(*, preferences: Preferences) -> APIRouter:
         return SettingsView(
             name=stored.name,
             language_tag=stored.language_tag,
-            languages=languages(),
+            languages=list(preferences.languages()),
         )
 
     def read_account(request: Request) -> AccountView:
