@@ -51,7 +51,8 @@ some of them.
 | `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves; the build worker reads it too. |
 | `PRESENTATOR_BUILD_RUNNER` | `worker` | Builds through the build worker's socket and refuses to start unless the worker answers within 70 seconds. `host` builds on this machine instead, for a development run (without the sandbox, whose reason is in [constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons)). |
 | `PRESENTATOR_BUILD_WORKER_SOCKET` | `/run/presentator-build/worker.sock` | Where the web reaches the build worker; the default is where the worker binds, so set it only where the socket volume is mounted elsewhere. |
-| `PRESENTATOR_WORKER_SEAL` | `compose` | The container shape the build worker proves at every start: `compose` or `kubernetes` for platform's pod. Any other value refuses the start. The web does not read it. |
+
+The build worker tolerates `PRESENTATOR_WORKER_SEAL` in its environment and reads it nowhere; the platform's manifest still sets it.
 
 ## Trusted proxies and the client address
 

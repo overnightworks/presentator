@@ -206,13 +206,12 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
   worker runs it; the web holds no Docker socket, group or client, drops every
   capability, takes no new privilege and has a read-only root, so deck code
   reaches neither the daemon nor the machine's root.
-- The Kubernetes seal differs from the Compose seal where a pod cannot match
-  it. The pod holds `lo` alone because an init container removes its link before
-  the worker starts. `/work`, `/tmp` and `/dev/shm` are memory volumes that allow
-  execution, because a pod cannot mount them `noexec` and deck code can already
-  execute from memory; no new privilege and no device-node capability keep
-  `nosuid` and `nodev` moot. The process bound is `RLIMIT_NPROC` at 512 per build
-  uid instead of one `pids.max` of 512, because the platform sets no bound per
+- The pod is sealed where a pod can be. It holds `lo` alone because an init
+  container removes its link before the worker starts. `/work`, `/tmp` and
+  `/dev/shm` are memory volumes that allow execution, because a pod cannot mount
+  them `noexec` and deck code can already execute from memory; no new privilege
+  and no device-node capability keep `nosuid` and `nodev` moot. The process bound
+  is `RLIMIT_NPROC` at 512 per build uid, because the platform sets no bound per
   pod and deck code runs under one of the two build uids.
 - The talk has its own origin: one cookie across both hosts would put deck code
   beside the credential it must not reach.
@@ -272,11 +271,11 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
 - The presenter bar is teleported into Slidev's presenter page markup, which
   Slidev does not promise; a Slidev upgrade that moves it shows as a failing
   presenter-controls test.
-- Under the Kubernetes seal the claim root is born open to everyone, so the web
-  could leave an entry there before the worker's first start; the worker then
-  refuses with `stale-socket`, and its children never reach the directory.
-- Under the Kubernetes seal the web records a build under its own toolchain
-  identity, not the worker's. In a rollout that changes the toolchain, one
+- In the pod the claim root is born open to everyone, so the web could leave an
+  entry there before the worker's first start; the worker then refuses with
+  `stale-socket`, and its children never reach the directory.
+- In the pod the web records a build under its own toolchain identity, not the
+  worker's. In a rollout that changes the toolchain, one
   deck's build can still reach the old worker pod before the StatefulSet
   replaces it. That deck then keeps the old toolchain's talk, or its failure,
   recorded under the new identity, until its next push or the next toolchain

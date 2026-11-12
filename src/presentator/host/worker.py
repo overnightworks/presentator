@@ -46,16 +46,12 @@ from presentator.host.worker_self_check import (
     TOOLCHAIN_PROJECT,
     WIRE_IDENTITY,
     Predicate,
-    Seal,
     Snapshot,
     first_failing_predicate,
     libc_prctl,
     lowered_process_limit,
     lstat_if_present,
-    pod_mounts_judged,
-    process_limit_bounds,
     read_snapshot,
-    seal_from_environment,
     status_fields,
 )
 from presentator.host.worker_serving import (
@@ -114,10 +110,9 @@ class Boundary:
 
     set_non_dumpable: Callable[[], None]
     set_umask: Callable[[], None]
-    read_seal: Callable[[], Seal]
     lower_process_limit: Callable[[], None]
     fix_up_mounts: Callable[[], None]
-    read_snapshot: Callable[[Seal], Snapshot]
+    read_snapshot: Callable[[], Snapshot]
     load_settings: Callable[[], WorkerSettings]
     serve: Server
 
@@ -362,7 +357,6 @@ def _serve_on_this_machine(
 REAL_BOUNDARY = Boundary(
     _set_non_dumpable,
     _set_umask,
-    partial(seal_from_environment, os.environ),
     partial(
         lower_process_limit,
         partial(resource.getrlimit, resource.RLIMIT_NPROC),
@@ -385,9 +379,7 @@ def _refuse_settings(error: ConfigurationError) -> int:
     return _refuse(StartRefusal.SETTINGS)
 
 
-def _process_limit_lowered(boundary: Boundary, seal: Seal) -> bool:
-    if not process_limit_bounds(seal):
-        return True
+def _process_limit_lowered(boundary: Boundary) -> bool:
     try:
         boundary.lower_process_limit()
     except OSError, ValueError:
@@ -395,9 +387,7 @@ def _process_limit_lowered(boundary: Boundary, seal: Seal) -> bool:
     return True
 
 
-def _mounts_fixed_up(boundary: Boundary, seal: Seal) -> bool:
-    if not pod_mounts_judged(seal):
-        return True
+def _mounts_fixed_up(boundary: Boundary) -> bool:
     try:
         boundary.fix_up_mounts()
     except OSError:
@@ -405,13 +395,13 @@ def _mounts_fixed_up(boundary: Boundary, seal: Seal) -> bool:
     return True
 
 
-def _self_checked(boundary: Boundary, seal: Seal) -> Snapshot | Predicate:
+def _self_checked(boundary: Boundary) -> Snapshot | Predicate:
     """The snapshot of a start that passes the self-check, else the predicate."""
-    if not _process_limit_lowered(boundary, seal):
+    if not _process_limit_lowered(boundary):
         return Predicate.RESOURCE_BOUNDS
-    if not _mounts_fixed_up(boundary, seal):
+    if not _mounts_fixed_up(boundary):
         return Predicate.MOUNTS
-    snapshot = boundary.read_snapshot(seal)
+    snapshot = boundary.read_snapshot()
     return first_failing_predicate(snapshot) or snapshot
 
 
@@ -427,11 +417,7 @@ def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) 
     except OSError:
         return _refuse(Predicate.NON_DUMPABLE)
     boundary.set_umask()
-    try:
-        seal = boundary.read_seal()
-    except ConfigurationError as error:
-        return _refuse_settings(error)
-    snapshot = _self_checked(boundary, seal)
+    snapshot = _self_checked(boundary)
     if isinstance(snapshot, Predicate):
         return _refuse(snapshot)
     if arguments.check:
