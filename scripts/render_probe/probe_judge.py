@@ -7,8 +7,10 @@ PDF is the export. It passes only when one file of the talk holds the markup KaT
 emits for a formula it rendered together with the formula's token (KaTeX's own
 bundle holds its class names with no formula, and its error markup holds the
 formula's source, so neither alone passes), and when the PDF's text holds the
-diagram's label, whitespace-normalised because the text layer wraps. A PDF that
-cannot be read refuses. Its one output is the findings, one line each, and its
+diagram's label, whitespace-normalised because the text layer wraps, without the
+diagram's source syntax (the label is part of that source, so a PDF showing the
+source or an error carrying it would otherwise pass). A PDF that cannot be read
+refuses. Its one output is the findings, one line each, and its
 exit status is 0 when both hold and 1 when either does not.
 """
 
@@ -22,9 +24,10 @@ from pathlib import Path
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
-# Both values are written into the fixture deck in this directory's `deck/`.
+# These values are written into the fixture deck in this directory's `deck/`.
 FORMULA_LABEL = "probeNumerator"
 DIAGRAM_LABEL = "Probe node alpha"
+DIAGRAM_SOURCE_SYNTAX = re.compile(r"\bgraph\s+LR\b|\bA\[")
 KATEX_MARKUP = re.compile(rb"\bkatex-mathml\b")
 PDF_MAGIC = b"%PDF-"
 PASSED = 0
@@ -69,6 +72,11 @@ def label_found(text: str, label: str) -> bool:
     return " ".join(label.split()) in " ".join(text.split())
 
 
+def source_shown(text: str) -> bool:
+    """Whether the text holds the diagram's source syntax instead of its rendering."""
+    return DIAGRAM_SOURCE_SYNTAX.search(text) is not None
+
+
 def main(arguments: Sequence[str]) -> int:
     """Print what the judge found in the talk and the PDF; refuse what it did not."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -89,7 +97,11 @@ def main(arguments: Sequence[str]) -> int:
     except UnreadablePdfError as unreadable:
         refusals.append(f"refused: {unreadable}")
     else:
-        if label_found(text, DIAGRAM_LABEL):
+        if source_shown(text):
+            refusals.append(
+                "refused: the PDF shows the diagram's source instead of the diagram"
+            )
+        elif label_found(text, DIAGRAM_LABEL):
             sys.stdout.write(f"diagram label found in the PDF: {DIAGRAM_LABEL}\n")
         else:
             refusals.append(f"refused: the PDF does not show the label {DIAGRAM_LABEL}")

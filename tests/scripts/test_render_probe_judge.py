@@ -97,19 +97,38 @@ def write_talk(directory: Path, *contents: str) -> Path:
             True,
             id="label_wrapped_across_lines_is_found",
         ),
+        pytest.param(
+            (MARKUP, FORMULA_LABEL),
+            pdf_showing([f"A[{LABEL}]"]),
+            False,
+            id="label_inside_the_diagram_bracket_source_refuses",
+        ),
+        pytest.param(
+            (MARKUP, FORMULA_LABEL),
+            pdf_showing(["graph LR", LABEL]),
+            False,
+            id="label_beside_the_diagram_declaration_refuses",
+        ),
+        pytest.param(
+            (MARKUP, FORMULA_LABEL),
+            None,
+            False,
+            id="a_pdf_path_that_does_not_exist_refuses",
+        ),
     ],
 )
 def test_the_judge_passes_only_a_rendered_formula_and_a_found_label(
     tmp_path: Path,
     load_script: Callable[..., ModuleType],
     talk_contents: tuple[str, ...],
-    pdf: bytes,
+    pdf: bytes | None,
     rendered: bool,  # noqa: FBT001 - a parametrized row states its expectation
 ) -> None:
     judge = load_script("probe_judge", "render_probe")
     talk = write_talk(tmp_path / "talk", *talk_contents)
     document = tmp_path / "deck.pdf"
-    document.write_bytes(pdf)
+    if pdf is not None:
+        document.write_bytes(pdf)
 
     status = judge.main([str(talk), str(document)])
 
