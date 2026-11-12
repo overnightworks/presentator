@@ -249,7 +249,7 @@ def test_cell_11_copies_the_deck_then_runs_the_web_client_and_prints_one_line(
     assert f"{WEB_POD}:{SCRATCH_MOUNT}/{deck.name}" in commands[copied][0]
     program = web_module.CLIENT_PROGRAM.read_text(encoding="utf-8")
     assert commands[ran][1] == program
-    arguments = (SCRATCH_MOUNT, "hello", *web_module.HELLO_STEPS)
+    arguments = (SCRATCH_MOUNT, *web_module.HELLO_STEPS)
     assert commands[ran][0][-len(arguments) :] == arguments
     done = delivered_outcome(web_module)
     listing = ", ".join(done.out)

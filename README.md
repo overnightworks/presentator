@@ -5,7 +5,7 @@ presentator is a self-hosted web service for giving a Slidev talk from any brows
 ## Quick start
 
 - Run it from a checkout: [run-from-a-checkout](docs/runbooks/run-from-a-checkout.md).
-- Run it in a container: [start-an-instance-in-a-container](docs/runbooks/start-an-instance-in-a-container.md).
+- An instance for others runs on the operator's platform, which supplies the container, its secrets and its front.
 
 ## Documentation
 
@@ -23,7 +23,6 @@ presentator is a self-hosted web service for giving a Slidev talk from any brows
 
 - [Configuration](docs/configuration.md) and [sources](docs/sources.md).
 - Run: [from a checkout](docs/runbooks/run-from-a-checkout.md),
-  [in a container](docs/runbooks/start-an-instance-in-a-container.md),
   [install the host build toolchain](docs/runbooks/install-the-host-build-toolchain.md).
 - Sign-in: [configure Keycloak](docs/runbooks/configure-keycloak.md).
 - Sources: [add a Git source](docs/runbooks/add-a-source.md),
