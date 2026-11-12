@@ -45,14 +45,14 @@ export PRESENTATOR_BUILD_RUNNER=host
 uv run presentator
 ```
 
-A checkout has no route to the speech network, so its speaking and hearing report
+A checkout has no route to the cluster's speech service, so its speaking and hearing report
 the service as unreachable. The voices have defaults, set by
 `PRESENTATOR_SPEECH_VOICE_DE` and `PRESENTATOR_SPEECH_VOICE_EN`; a `.env` that
 still names the removed `PRESENTATOR_SPEECH_VOICE` refuses the start.
 
-The co-presenter cannot answer from a checkout: the gateway sits on the
-`hal_agent_presentator` network, which has no host address and publishes no port, so every
-ask ends in an `error` event.
+The co-presenter cannot answer from a checkout: the model gateway is a
+service inside the cluster, which a checkout cannot reach, so every ask ends in an
+`error` event.
 
 ## Check
 

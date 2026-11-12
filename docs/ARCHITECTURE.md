@@ -19,7 +19,7 @@ flowchart LR
     presentator -- questions --> gateway[Model gateway<br/>via agents library]
     presentator -- read-only fetch --> git[(git remotes)]
     presentator -- speak / hear --> speech[Speech service<br/>via speech client]
-    hal[hal and edge] -- deploy, legal pages --> presentator
+    platform[platform] -- deploys, backs up, legal pages --> presentator
 ```
 
 ## 2. Building Block View
@@ -88,35 +88,55 @@ sequenceDiagram
 
 ## 4. Deployment View
 
-`compose.yaml` defines two services, `presentator` (web) and `build-worker`,
-which hal deploys with `hal apply`. One process serves the lobby and the talk
-host and tells them apart by the `Host` header (`served_by_host` in
-`host/main.py`); a request for any other host gets a 404, except the lobby's
-back-channel logout path, which the lobby answers to a `POST` under any Host but
-the talk host's (other methods on that path answer 405): the signed Logout
-Token is its only control, and the deployment keeps that path off the public
-internet. The host keeps
-Docker's default seccomp and AppArmor profiles in force and the image's glibc is
-2.36 or later, because the controller reaches `pidfd_open` through ctypes. See
-[configuration](configuration.md). Edge's backup of the volume runs as another
-user, so build runs are readable by others; a `staged-<step>` directory is
-closed to everyone but the web, and that backup skips `staged-*` by name. Both
-hosts answer `GET /health` with a fixed 200 and no session, store read or cookie
-(`api/health.py`); the port opens only after the database is migrated and, under
-the worker runner, the worker answers, so an answer means it serves. The request
-must name a served host: the container check and edge do, a direct run must.
-The instance joins the internal network `hal_speech_presentator` to reach the
-shared speech service; no host speech process runs.
+```mermaid
+flowchart LR
+    traefik[Traefik] -- lobby host and talk host --> web
+    subgraph namespace[presentator Namespace]
+        web[web<br/>Deployment]
+        worker[build worker<br/>StatefulSet, lo only]
+        web <-- socket on a shared claim --> worker
+    end
+    web -- http --> speech[speech-runtime]
+    web -- http --> gateway[LiteLLM front]
+    web -- https --> keycloak[Keycloak]
+    backup[platform backup] -- database file --> web
+```
 
-On the platform's k3s the same image runs as two pods that platform's
-`apps/presentator` defines: the web as a Deployment and the build worker as a
-one-replica StatefulSet, both on the node of one RWO claim mounted at
-`/run/presentator-build`, where the worker's socket lies. The init container
-`remove-link` deletes the worker pod's network link before the worker starts, so
-that pod holds `lo` alone. The worker's container never restarts, so each life
-ends its pod and the StatefulSet makes a fresh one. Neither pod holds a
-Kubernetes API right, and the worker's pod mounts no service-account token. A
-release is tagged only after `release.yml` has driven its published image
+presentator has one deployment, on the platform's k3s cluster. One image runs
+as two workloads in presentator's own Namespace: the web, a one-replica
+Deployment that recreates instead of rolling, and the build worker, a
+one-replica StatefulSet. Both are on the node of one claim mounted at
+`/run/presentator-build`, where the worker's socket lies. The platform's
+manifest, `apps/presentator` in overnightworks/platform, owns the pod specs,
+the volumes, the settings and origins they set and the secret files; the
+[configuration](configuration.md) owns what each setting means.
+
+One process serves the lobby and the talk host and tells them apart by the
+`Host` header (`served_by_host` in `host/main.py`); a request for any other host
+gets a 404, except the lobby's back-channel logout path, which the lobby answers
+to a `POST` under any Host but the talk host's (other methods on that path
+answer 405): the signed Logout Token is its only control, so the path is meant
+to be reached from inside the cluster alone. The image's glibc is 2.36 or later,
+because the controller reaches `pidfd_open` through ctypes. Both hosts answer
+`GET /health` with a fixed 200 and no session, store read or cookie
+(`api/health.py`); the port opens only after the database is migrated and the
+worker answers, so an answer means it serves. The request must name a served
+host: the platform's probe does, a direct run must.
+
+The web reaches the speech service and the model gateway by the origins its
+settings name, which are services inside the cluster, and Keycloak at its
+issuer address. The platform owns the pod's seal, the network policy, the edge,
+the volumes, the backup of the database file with its restore test and the
+release the cluster runs; the worker's pod holds `lo` alone because the init
+container `remove-link` deletes its network link before the worker starts. The
+worker's container never restarts, so each life ends its pod and the
+StatefulSet makes a fresh one. Neither pod holds a Kubernetes API right, and
+the worker's pod mounts no service-account token.
+
+presentator owns what it checks itself: the worker's self-check, the web's
+readiness against the worker, the migration of its own database at start and
+the validation of its settings, which refuses a start that names a wrong value.
+A release is tagged only after `release.yml` has driven its published image
 through the k3d probe (`scripts/probe_build_worker_k3d.py`) against
 `apps/presentator` at the platform commit the probe pins.
 
@@ -129,8 +149,9 @@ derived from its source's address. `builds/` and `mirrors/` are caches the rows
 rebuild, so a restore of the database alone is enough. A column goes in two
 releases, the second dropping it in `create_tables`, gated on
 `pragma_table_info` (`adapters/schema.py`), so a restorable older backup starts.
-The drop is tagged once a release with the first step has been live, since hal
-deploys only the newest tag and an earlier drop skips the first release.
+The drop is tagged once a release with the first step has been live, since the
+platform pins one release and a bump may skip those between, so an earlier drop
+may skip the first release.
 
 **Authentication.** Keycloak groups admit people ([sign-in](sign-in.md)). There
 is no Redis or session cache: rate limits are single-process
@@ -168,17 +189,17 @@ The operator's settings, his local sources folder and hal's token clients are
 trusted. A folder under the local-sources mount is read with the operator's
 trust: its repositories, their metadata (a `gitdir` file,
 `objects/info/alternates`, a symlink) and everyone who can write there. Across
-the shared speech service, over an internal network with no egress, go readiness,
+the shared speech service, over a plain `http` origin inside the cluster, go readiness,
 PCM, transcripts, spoken sentences and two tokens: the person's access token, which
 carries the account's subject and group memberships, and presentator's workload
 token beside it. Browser cookies and session credentials are not forwarded; what the
 service keeps, logs and admits is the shared section `#sprachdienst`. No operator blessing
 narrows this model yet, so an audit keeps the default trust model.
 
-On the platform the platform is trusted to confine the build worker's pod: that
-deck code there reaches no network and holds no mount, right or limit beyond what
-the pod grants is platform's proof, in platform's CI. presentator proves its own
-product in that pod: the worker's self-check refuses a pod that is not sealed as
+The platform is trusted to confine the build worker's pod: that deck code there
+reaches no network and holds no mount, right or limit beyond what the pod grants
+is platform's proof, in platform's CI. presentator proves its own product in
+that pod: the worker's self-check refuses a pod that is not sealed as
 §6 requires, the web becomes Ready against the worker, and a deck builds and
 exports there.
 
@@ -203,9 +224,9 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
 ## 6. Constraints and reasons
 
 - A deck is code: its Vue components run in its build. Only the sealed build
-  worker runs it; the web holds no Docker socket, group or client, drops every
+  worker runs it; the web holds no right in the Kubernetes API, drops every
   capability, takes no new privilege and has a read-only root, so deck code
-  reaches neither the daemon nor the machine's root.
+  reaches neither the cluster nor the node's root.
 - The pod is sealed where a pod can be. It holds `lo` alone because an init
   container removes its link before the worker starts. `/work`, `/tmp` and
   `/dev/shm` are memory volumes that allow execution, because a pod cannot mount
@@ -217,11 +238,10 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
   beside the credential it must not reach.
 - One process writes the database: a second would need a second write lock over
   the one SQLite file, and the identity lock relies on one writer.
-- The plain `http` hop to the speech service is safe only because
-  `hal_speech_presentator` is internal.
-- The plain `http` hop to the model gateway is safe only because
-  `hal_agent_presentator` has no host address or published port; hal decides
-  whom the gateway admits.
+- The plain `http` hop to the speech service is safe only because its origin is
+  a service inside the cluster.
+- The plain `http` hop to the model gateway is safe only because its origin is
+  a service inside the cluster; the platform decides whom the gateway admits.
 - Back-channel logout comes from inside, not through the trusted proxy, so its
   `X-Forwarded-For` is ignored.
 - The fetch-now webhook holds a per-source secret, not a login: a git host has
@@ -242,7 +262,8 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
   Reopens with a second writing process.
 - Cloudflare Access in front, or an own password login: Keycloak is the one door
   and owns accounts and groups. Reopens if Keycloak leaves the fleet.
-- A Docker socket in the web service: deck code runs only in the sealed worker.
+- A right in the cluster's API for the web pod: deck code runs only in the sealed
+  worker.
   Reopens if builds stop running deck code.
 - Deck uploads or editing in the lobby: a deck is a git folder, so history and
   the editor come with the remote. Reopens for authors without git.

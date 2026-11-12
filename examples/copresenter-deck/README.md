@@ -23,6 +23,6 @@ The presenter toolbar uses the signed-in Presentator origin's relative
 built deck its asker owns. Presentator checks the existing session before
 readiness, answers, or microphone capture and keeps the hearing lease open only
 while local hearing is active. The instance speaks and hears through the shared
-speech service that `compose.yaml` joins it to.
+speech service, a service inside the cluster the instance runs in.
 
 The folder contract is [decks](../../docs/decks.md).
