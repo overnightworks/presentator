@@ -1,8 +1,0 @@
-claim_id = "5190274cb7824b998e3189caa8f95eb1"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "c9753c5b296e8c5684d4b9b3a883032547fd5834"
-branch = "claude/issue-1074-german-source-catalogs"
-scope = [".github/workflows/ci.yml", "frontend/eslint.config.js", "frontend/src/lib/catalogs", "frontend/src/lib/words", "frontend/vite.config.ts", "pyproject.toml", "quality/config.toml", "sonar-project.properties", "src/presentator/contracts/words.py", "tests/support/vulture_allowlist.py", "uv.lock"]
-opened_commit = "335fdb365313874f998139528610a88d4fa0a15f"
-whole_reason = "The catalogs, the modules generated from them and the tooling that checks them must land together, or the check has nothing to judge."
