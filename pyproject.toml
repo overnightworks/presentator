@@ -27,6 +27,7 @@ presentator-worker = "presentator.host.worker:main"
 [dependency-groups]
 dev = [
     "overnightworks-design[catalogs] @ https://github.com/overnightworks/design/releases/download/v0.25.0/overnightworks_design-0.25.0-py3-none-any.whl#sha256=088e282b2979675ae730eaa0304bf5df13184507d89e174c7f6abd2adb8062bb",
+    "pypdf==7.0.1",
     "pytest==9.2.0",
     "pytest-cov==7.1.0",
     "pytest-xdist==3.8.0",
@@ -129,6 +130,7 @@ convention = "google"
 "scripts/probe_build_worker_web.py" = ["INP001"]
 "scripts/probe_build_worker/plant_residue.py" = ["INP001"]
 "scripts/probe_build_worker/web_client.py" = ["INP001"]
+"scripts/render_probe/judge.py" = ["INP001"]
 # design-catalogs writes this module and design --check holds it current, so its
 # layout is the generator's: no docstrings, single-quoted texts, lines longer than
 # the line length, exception messages built in place, and the typography of the
