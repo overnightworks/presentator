@@ -1,0 +1,8 @@
+claim_id = "0da190c187db4be08e6b0d7a0d7d93df"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "1517ffdbe557637aac151f3c4009645d73a4cd06"
+branch = "claude/issue-1089-design-0-25-kit-words"
+scope = ["docs/ARCHITECTURE.md", "frontend/e2e", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src", "pyproject.toml", "scripts/check_catalog_purity.py", "src/presentator/contracts/words.py", "tests/scripts/test_check_catalog_purity.py", "uv.lock"]
+opened_commit = "221f538d7ababb156b24e3268758f82207aabac9"
+whole_reason = "The kit's types, the root load, the callers of the two components, the catalogs and the generated word modules compile only together."
