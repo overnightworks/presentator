@@ -84,9 +84,8 @@ export const state = {
   whoScript: [] as { fails?: boolean, interfaceLanguage?: 'de' | 'en' }[],
   hearLanguages: [] as (string | null)[],
   hearingMode: 'ready' as 'ready' | 'not-ready' | 'refused-on-open' | 'fails-after-capture' | 'unreachable' | 'who-fails' | 'who-not-found',
-  // Whether the fake hearing sends a final question as soon as the hearing opens.
+  // Whether the fake hearing sends a final question as soon as the hearing opens, and the language it reports for each.
   heardOnConnect: true,
-  // The language the fake hearing reports for each final question it sends.
   heardLanguage: 'de' as 'de' | 'en',
   media: createMediaObservation(),
 }
