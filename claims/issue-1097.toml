@@ -3,6 +3,6 @@ agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
 role = "builder"
 base = "19f99966a03ce2186df97c9f7ad445ce590dbdf7"
 branch = "claude/issue-1097-compose-file-and-probe-leave"
-scope = [".github/workflows/ci.yml", "compose.yaml", "docs/README.md", "docs/configuration.md", "docs/runbooks", "quality/config.toml", "scripts", "tests/presentator/host", "tests/scripts", "tests/test_compose.py"]
+scope = [".github/workflows/ci.yml", "README.md", "compose.yaml", "docs/README.md", "docs/configuration.md", "docs/runbooks", "pyproject.toml", "quality/config.toml", "scripts", "tests/presentator/host", "tests/scripts", "tests/test_compose.py", "uv.lock"]
 opened_commit = "17cee05bf6d99a617b0a57f162b96714e5da56d4"
 whole_reason = "The Compose file, every reader of it and the CI job that ran them are red unless they leave together."
