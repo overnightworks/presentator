@@ -14,7 +14,7 @@ from functools import partial
 from pathlib import Path, PurePosixPath
 
 from presentator.adapters import build_wire, rtnetlink
-from presentator.host.config import cannot_start, worker_settings_variables
+from presentator.host.config import worker_settings_variables
 from presentator.host.worker_scratch import (
     OPEN_DIRECTORY_MODE,
     QUEUE_MOUNT,
@@ -36,21 +36,10 @@ WIRE_USER = "presentator-wire"
 BUILD_IDENTITY = (61001, 61001)
 WIRE_IDENTITY = (61002, 61002)
 NO_CAPABILITIES = "0" * 16
-SOCKET_MOUNT_NAME = build_wire.SOCKET_DIRECTORY.lstrip("/")
 CGROUP_DIRECTORY = "sys/fs/cgroup"
 PROCESS_LIMITS_FILE = "proc/self/limits"
 PROCESS_LIMIT_ROW = "Max processes"
-TMPFS_MOUNT_NAMES = (
-    TEMPORARY_MOUNT.lstrip("/"),
-    SHARED_MEMORY_MOUNT.lstrip("/"),
-    SOCKET_MOUNT_NAME,
-)
-TMPFS_MOUNTS = tuple(
-    str(Path("/") / name) for name in (WORK_MOUNT.lstrip("/"), *TMPFS_MOUNT_NAMES)
-)
-NO_EXECUTION_MOUNTS = TMPFS_MOUNTS[:2]
 GROUP_AND_OTHERS_WRITE = stat.S_IWGRP | stat.S_IWOTH
-HARDENED_MOUNT_OPTIONS = frozenset({"nosuid", "nodev", "noexec"})
 DOCKER_SOCKETS = ("/run/docker.sock", "/var/run/docker.sock")
 CONTAINERD_SOCKETS = (
     "/run/containerd/containerd.sock",
@@ -81,7 +70,7 @@ HEADLESS_SHELL_PATTERN = (
     "chrome-headless-shell-linux64/chrome-headless-shell"
 )
 VITE_CACHE_TARGET = f"{WORK_MOUNT}/{VITE_DIRECTORY}"
-SEAL_VARIABLE = "PRESENTATOR_WORKER_SEAL"
+TOLERATED_UNREAD_VARIABLE = "PRESENTATOR_WORKER_SEAL"
 # The names the kubelet injects into every container for the `kubernetes` service.
 KUBERNETES_ENVIRONMENT_KEYS = frozenset(
     {
@@ -116,7 +105,11 @@ ALLOWED_ENVIRONMENT_KEYS = frozenset(
         "NODE_VERSION",
         "YARN_VERSION",
     }
-    | {"HOSTNAME", "LC_CTYPE", SEAL_VARIABLE}
+    | {"HOSTNAME", "LC_CTYPE"}
+    # The platform's manifest still sets this name and nothing reads it; the
+    # allowlist refuses an unknown key, so the pod would not start without it.
+    | {TOLERATED_UNREAD_VARIABLE}
+    | KUBERNETES_ENVIRONMENT_KEYS
     | worker_settings_variables()
 )
 
@@ -145,13 +138,6 @@ class Predicate(StrEnum):
     ALONE = "alone"
     SCRATCH = "scratch"
     TOOLCHAIN = "toolchain"
-
-
-class Seal(StrEnum):
-    """The container shape the worker is sealed for."""
-
-    COMPOSE = "compose"
-    KUBERNETES = "kubernetes"
 
 
 @dataclass(frozen=True)
@@ -186,31 +172,21 @@ class RootFacts:
 
 
 @dataclass(frozen=True)
-class KubernetesMounts:
-    """What a pod's mounts add to the container's; read only under Kubernetes."""
+class Mounts:
+    """What the pod's mounts, their roots and the paths over them look like."""
 
+    root_read_only: bool
+    mountinfo: str
+    docker_socket_present: bool
     table_roots: Mapping[str, RootFacts]
     other_roots: Mapping[str, RootFacts]
     exposed_path_present: bool
 
 
 @dataclass(frozen=True)
-class Mounts:
-    """What the container's mounts and the paths over them look like."""
-
-    root_read_only: bool
-    mountinfo: str
-    work_mode: int
-    work_owner_uid: int
-    docker_socket_present: bool
-    kubernetes: KubernetesMounts | None = None
-
-
-@dataclass(frozen=True)
 class ResourceBounds:
     """The cgroup bounds and the process limit the container runs under."""
 
-    pids_max: str
     memory_max: str
     process_limit: tuple[str, str]
 
@@ -226,7 +202,6 @@ class Snapshot:
     topology: rtnetlink.Topology
     identity: Identity
     environment_keys: frozenset[str]
-    seal: Seal
     pid: int
     cgroup_tasks: str
     scratch: Scratch
@@ -263,18 +238,6 @@ def _mount_table(mountinfo: str) -> dict[str, tuple[str, frozenset[str]]]:
     return table
 
 
-def _mount_table_sealed(mountinfo: str) -> bool:
-    table = _mount_table(mountinfo)
-    return (
-        all(mount in table and table[mount][0] == "tmpfs" for mount in TMPFS_MOUNTS)
-        and QUEUE_MOUNT in table
-        and table[QUEUE_MOUNT][0] == "mqueue"
-        and all(
-            table[mount][1] >= HARDENED_MOUNT_OPTIONS for mount in NO_EXECUTION_MOUNTS
-        )
-    )
-
-
 def _in_masked_area(mount: str) -> bool:
     return any(PurePosixPath(mount).is_relative_to(area) for area in MASKED_AREAS)
 
@@ -305,9 +268,8 @@ def _fixed_up(root: RootFacts | None, mode: int) -> bool:
     )
 
 
-def _pod_mount_table_sealed(
-    table: dict[str, tuple[str, frozenset[str]]], kubernetes: KubernetesMounts
-) -> bool:
+def _mount_table_sealed(mounts: Mounts) -> bool:
+    table = _mount_table(mounts.mountinfo)
     return (
         all(
             mount in table and table[mount][0] == "tmpfs"
@@ -317,37 +279,23 @@ def _pod_mount_table_sealed(
         and build_wire.SOCKET_DIRECTORY in table
         and table.get(QUEUE_MOUNT, ("", frozenset()))[0] == "mqueue"
         and all(
-            _fixed_up(kubernetes.table_roots.get(mount), mode)
+            _fixed_up(mounts.table_roots.get(mount), mode)
             for mount, mode in MOUNT_ROOT_MODES.items()
         )
         and all(
-            _other_root_admitted(mount, table[mount], kubernetes.other_roots.get(mount))
+            _other_root_admitted(mount, table[mount], mounts.other_roots.get(mount))
             for mount in table.keys() - JUDGED_MOUNTS
         )
     )
 
 
-def _pod_mounts_sealed(mounts: Mounts) -> bool:
-    kubernetes = mounts.kubernetes
-    return (
-        kubernetes is not None
-        and mounts.root_read_only
-        and not mounts.docker_socket_present
-        and not kubernetes.exposed_path_present
-        and _pod_mount_table_sealed(_mount_table(mounts.mountinfo), kubernetes)
-    )
-
-
 def _mounts_sealed(snapshot: Snapshot) -> bool:
     mounts = snapshot.mounts
-    if pod_mounts_judged(snapshot.seal):
-        return _pod_mounts_sealed(mounts)
     return (
         mounts.root_read_only
-        and _mount_table_sealed(mounts.mountinfo)
-        and mounts.work_mode == ROOT_MODE
-        and mounts.work_owner_uid == 0
         and not mounts.docker_socket_present
+        and not mounts.exposed_path_present
+        and _mount_table_sealed(mounts)
     )
 
 
@@ -377,23 +325,11 @@ def _within_maximum(value: str) -> bool:
     return value.isdecimal() and int(value) <= MAXIMUM_PROCESSES
 
 
-def pod_mounts_judged(seal: Seal) -> bool:
-    """Whether `seal` fixes up and judges the pod's mount roots."""
-    return seal is Seal.KUBERNETES
-
-
-def process_limit_bounds(seal: Seal) -> bool:
-    """Whether `seal` is bounded by `RLIMIT_NPROC` rather than the pid cgroup."""
-    return seal is Seal.KUBERNETES
-
-
 def _resources_bounded(snapshot: Snapshot) -> bool:
     bounds = snapshot.resource_bounds
-    if process_limit_bounds(snapshot.seal):
-        bounded = all(map(_within_maximum, bounds.process_limit))
-    else:
-        bounded = _within_maximum(bounds.pids_max)
-    return bounded and bounds.memory_max.isdecimal()
+    return all(map(_within_maximum, bounds.process_limit)) and (
+        bounds.memory_max.isdecimal()
+    )
 
 
 def _identities_sealed(snapshot: Snapshot) -> bool:
@@ -412,24 +348,8 @@ def _identities_sealed(snapshot: Snapshot) -> bool:
     )
 
 
-def seal_from_environment(environment: Mapping[str, str]) -> Seal:
-    """The seal the environment selects; unset means Compose.
-
-    The refusal names the variable and never the value read.
-    """
-    try:
-        return Seal(environment.get(SEAL_VARIABLE, Seal.COMPOSE))
-    except ValueError:
-        accepted = " or ".join(Seal)
-        reason = f"{SEAL_VARIABLE}: is {accepted}, or unset"
-        raise cannot_start(reason) from None
-
-
 def _environment_allowed(snapshot: Snapshot) -> bool:
-    allowed = ALLOWED_ENVIRONMENT_KEYS
-    if snapshot.seal is Seal.KUBERNETES:
-        allowed = allowed | KUBERNETES_ENVIRONMENT_KEYS
-    return snapshot.environment_keys <= allowed
+    return snapshot.environment_keys <= ALLOWED_ENVIRONMENT_KEYS
 
 
 def _is_pid_one(snapshot: Snapshot) -> bool:
@@ -578,11 +498,15 @@ def _root_facts(status: os.stat_result) -> RootFacts:
     return RootFacts(mode=status.st_mode, owner_uid=status.st_uid)
 
 
-def _read_kubernetes_mounts(root: Path, mountinfo: str) -> KubernetesMounts:
+def _read_mounts(root: Path) -> Mounts:
+    mountinfo = (root / "proc/self/mountinfo").read_text()
     table_statuses = {
         mount: lstat_if_present(root / mount.lstrip("/")) for mount in MOUNT_ROOT_MODES
     }
-    return KubernetesMounts(
+    return Mounts(
+        root_read_only=bool(os.statvfs(root).f_flag & os.ST_RDONLY),
+        mountinfo=mountinfo,
+        docker_socket_present=_any_present(root, DOCKER_SOCKETS),
         table_roots={
             mount: _root_facts(status)
             for mount, status in table_statuses.items()
@@ -593,23 +517,6 @@ def _read_kubernetes_mounts(root: Path, mountinfo: str) -> KubernetesMounts:
             for mount in _mount_table(mountinfo).keys() - JUDGED_MOUNTS
         },
         exposed_path_present=_any_present(root, EXPOSED_PATHS),
-    )
-
-
-def _read_mounts(root: Path, seal: Seal) -> Mounts:
-    work = (root / WORK_MOUNT.lstrip("/")).stat()
-    mountinfo = (root / "proc/self/mountinfo").read_text()
-    return Mounts(
-        root_read_only=bool(os.statvfs(root).f_flag & os.ST_RDONLY),
-        mountinfo=mountinfo,
-        work_mode=stat.S_IMODE(work.st_mode),
-        work_owner_uid=work.st_uid,
-        docker_socket_present=_any_present(root, DOCKER_SOCKETS),
-        kubernetes=(
-            _read_kubernetes_mounts(root, mountinfo)
-            if pod_mounts_judged(seal)
-            else None
-        ),
     )
 
 
@@ -628,7 +535,6 @@ def _read_process_limit(root: Path) -> tuple[str, str]:
 
 def _read_resource_bounds(root: Path) -> ResourceBounds:
     return ResourceBounds(
-        pids_max=_read_cgroup_file(root, "pids.max"),
         memory_max=_read_cgroup_file(root, "memory.max"),
         process_limit=_read_process_limit(root),
     )
@@ -637,11 +543,12 @@ def _read_resource_bounds(root: Path) -> ResourceBounds:
 UNREAD_MOUNTS = Mounts(
     root_read_only=False,
     mountinfo="",
-    work_mode=0,
-    work_owner_uid=-1,
     docker_socket_present=True,
+    table_roots={},
+    other_roots={},
+    exposed_path_present=True,
 )
-UNREAD_RESOURCE_BOUNDS = ResourceBounds("", "", ("", ""))
+UNREAD_RESOURCE_BOUNDS = ResourceBounds("", ("", ""))
 UNREAD_IDENTITY = Identity(-1, -1, -1, (), -1, -1, {})
 UNREAD_TOOLCHAIN = Toolchain(None, None, (), None)
 UNREAD_SCRATCH = Scratch(frozenset(), {})
@@ -665,7 +572,7 @@ class _FactReader:
 
 
 def read_snapshot(
-    root: Path, seal: Seal, *, read_topology: Callable[[], rtnetlink.Topology]
+    root: Path, *, read_topology: Callable[[], rtnetlink.Topology]
 ) -> Snapshot:
     """Read the facts the predicates judge, from the filesystem under `root`.
 
@@ -684,7 +591,7 @@ def read_snapshot(
     process_status = read(
         Predicate.CAPABILITIES, (root / "proc/self/status").read_text, ""
     )
-    mounts = read(Predicate.MOUNTS, partial(_read_mounts, root, seal), UNREAD_MOUNTS)
+    mounts = read(Predicate.MOUNTS, partial(_read_mounts, root), UNREAD_MOUNTS)
     resource_bounds = read(
         Predicate.RESOURCE_BOUNDS,
         partial(_read_resource_bounds, root),
@@ -698,7 +605,6 @@ def read_snapshot(
         topology=read(Predicate.NO_ROUTE, read_topology, UNREAD_TOPOLOGY),
         identity=read(Predicate.IDENTITIES, _read_identity, UNREAD_IDENTITY),
         environment_keys=frozenset(os.environ),
-        seal=seal,
         pid=os.getpid(),
         cgroup_tasks=cgroup_tasks,
         scratch=scratch,

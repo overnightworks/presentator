@@ -16,8 +16,13 @@ from presentator.host.config import (
     load_worker_settings,
     worker_settings_variables,
 )
-from presentator.host.worker_scratch import QUEUE_MOUNT, scratch_empty
-from presentator.host.worker_self_check import Predicate, Seal, Snapshot
+from presentator.host.worker_scratch import (
+    QUEUE_MOUNT,
+    SHARED_MEMORY_MOUNT,
+    WORK_MOUNT,
+    scratch_empty,
+)
+from presentator.host.worker_self_check import Predicate, Snapshot
 from presentator.host.worker_serving import Serving
 from tests.presentator.host.support.audit_recording import (
     LAUNCH_EVENTS,
@@ -25,7 +30,7 @@ from tests.presentator.host.support.audit_recording import (
     audit_recording,
 )
 from tests.presentator.host.support.sealed_snapshot import (
-    HARDENED,
+    READ_WRITE,
     SEALED_STATUS,
     SYSV_HEADERS,
     read_sealed_snapshot,
@@ -43,7 +48,6 @@ from tests.presentator.host.support.worker_boundary import (
 
 TOPOLOGY_READ = "topology read"
 READS_BEFORE_TOPOLOGY = 8
-WORK_MOUNT, TEMPORARY_MOUNT, SHARED_MEMORY_MOUNT, *_ = worker_self_check.TMPFS_MOUNTS
 
 
 def with_status(**changes: str) -> Callable[[Snapshot], Snapshot]:
@@ -117,32 +121,17 @@ FAILURES = {
     "writable root": (with_mounts(root_read_only=False), Predicate.MOUNTS),
     "work not tmpfs": (
         with_mountinfo(
-            f"{WORK_MOUNT} {HARDENED} - tmpfs", f"{WORK_MOUNT} {HARDENED} - ext4"
+            f"{WORK_MOUNT} {READ_WRITE} - tmpfs", f"{WORK_MOUNT} {READ_WRITE} - ext4"
         ),
-        Predicate.MOUNTS,
-    ),
-    "tmp without nosuid": (
-        with_mountinfo(f"{TEMPORARY_MOUNT} rw,nosuid,", f"{TEMPORARY_MOUNT} rw,"),
-        Predicate.MOUNTS,
-    ),
-    "work without noexec": (
-        with_mountinfo(f"{WORK_MOUNT} {HARDENED}", f"{WORK_MOUNT} rw,nosuid,nodev"),
         Predicate.MOUNTS,
     ),
     "dev shm missing": (
         with_mountinfo(SHARED_MEMORY_MOUNT, "/dev/other"),
         Predicate.MOUNTS,
     ),
-    "work sticky world-writable": (with_mounts(work_mode=0o1777), Predicate.MOUNTS),
-    "work not root": (with_mounts(work_owner_uid=1000), Predicate.MOUNTS),
     "docker socket present": (
         with_mounts(docker_socket_present=True),
         Predicate.MOUNTS,
-    ),
-    "pids unlimited": (with_resource_bounds(pids_max="max"), Predicate.RESOURCE_BOUNDS),
-    "pids above bound": (
-        with_resource_bounds(pids_max="513"),
-        Predicate.RESOURCE_BOUNDS,
     ),
     "memory unlimited": (
         with_resource_bounds(memory_max="max"),
@@ -395,22 +384,12 @@ def test_failing_prctl_refuses_before_reading_anything() -> None:
     assert events == []
 
 
-def test_the_snapshot_carries_the_seal_it_is_read_under(sealed_root: Path) -> None:
-    assert read_sealed_snapshot(sealed_root, seal=Seal.KUBERNETES).seal is (
-        Seal.KUBERNETES
-    )
-
-
 def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
     snapshot = read_sealed_snapshot(sealed_root)
 
     assert snapshot.process_status == SEALED_STATUS
     bounds = snapshot.resource_bounds
-    assert (bounds.pids_max, bounds.memory_max) == ("512", "1073741824")
-    assert (snapshot.mounts.work_mode, snapshot.mounts.work_owner_uid) == (
-        0o755,
-        sealed_root.stat().st_uid,
-    )
+    assert bounds.memory_max == "1073741824"
     assert not snapshot.mounts.docker_socket_present
     assert (
         snapshot.identity.users["presentator-wire"] == worker_self_check.WIRE_IDENTITY
@@ -531,8 +510,10 @@ def remove_task_count(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
     (root / "sys/fs/cgroup/pids.current").unlink()
 
 
-def remove_temporary_directory(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
-    (root / "tmp").rmdir()
+def remove_message_queue_directory(
+    root: Path, _monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (root / "dev/mqueue").rmdir()
 
 
 def fill_work(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
@@ -580,7 +561,10 @@ REFUSED_FACTS = {
     "task count not decimal": (set_task_count("one\n"), Predicate.ALONE),
     "task count two": (set_task_count("2\n"), Predicate.ALONE),
     "entry in work": (fill_work, Predicate.SCRATCH),
-    "temporary directory missing": (remove_temporary_directory, Predicate.SCRATCH),
+    "message queue directory missing": (
+        remove_message_queue_directory,
+        Predicate.SCRATCH,
+    ),
     "shared memory table missing": (replace_table("shm", None), Predicate.SCRATCH),
     "message table empty": (replace_table("msg", ""), Predicate.SCRATCH),
     "semaphore table foreign": (replace_table("sem", "foreign\n"), Predicate.SCRATCH),
@@ -599,7 +583,7 @@ def test_a_failing_or_unreadable_fact_refuses_through_main_naming_its_predicate(
 ) -> None:
     arrange(sealed_root, monkeypatch)
 
-    def read_staged_root(_seal: Seal) -> Snapshot:
+    def read_staged_root() -> Snapshot:
         return read_staged_root_as_sealed_process(sealed_root)
 
     boundary = replace(
@@ -696,6 +680,7 @@ def test_unreadable_later_fact_does_not_mask_an_earlier_failing_predicate(
         SEALED_STATUS.replace("00000000000000e0", "00000000002000e0", 1)
     )
     (sealed_root / "work").rmdir()
+    (sealed_root / "proc/self/mountinfo").unlink()
 
     snapshot = read_sealed_snapshot(sealed_root)
 
