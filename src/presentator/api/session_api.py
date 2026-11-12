@@ -56,7 +56,7 @@ class SessionView(BaseModel):
 def appearance_of(
     request: Request, preferences: Preferences, sessions: SessionRecordStore
 ) -> Appearance:
-    """The words and the look the person behind this request reads in.
+    """The language and the look the person behind this request reads in.
 
     The browser's own language is not read: the account's names the language,
     else the instance's.

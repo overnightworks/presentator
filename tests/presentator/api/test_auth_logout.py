@@ -18,7 +18,7 @@ from webauth.ports import SessionRecord, SessionRecordStore
 
 from presentator.api.auth import LOGIN_PATH, LOGOUT_PATH
 from presentator.application.identity import SESSION_LIFETIME
-from presentator.contracts.preferences import InstanceSettings
+from presentator.contracts.preferences import DEFAULT_LANGUAGE, InstanceSettings
 from presentator.contracts.words import Language, text
 from presentator.host.oidc import oidc_client_config
 from tests.support.lobby import (
@@ -199,7 +199,8 @@ def test_the_fallback_button_is_worded_in_the_instance_language(scene: Scene) ->
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
 
     assert (
-        f'<button type="submit">{text("en", "logout.button")}</button>' in answer.text
+        f'<button type="submit">{text(DEFAULT_LANGUAGE, "logout.button")}</button>'
+        in answer.text
     )
 
 
