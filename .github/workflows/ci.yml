@@ -122,7 +122,8 @@ jobs:
         run: uv run --locked ruff format --check
 
       - name: Test
-        run: uv run --locked pytest -q -n auto
+        # pytest-workers: the speech package does not install pytest-xdist, so its tests run serially until speech/ adds it
+        run: uv run --locked pytest -q
 
   chatterbox-provider:
     name: "Speech: Chatterbox provider"
