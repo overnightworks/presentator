@@ -4,13 +4,15 @@
 	import AccountPopover from '#lib/AccountPopover.svelte';
 	import type { SessionPerson, SessionView } from '#lib/api/session.ts';
 	import { ariaCurrent } from '#lib/section.ts';
+	import type { KitWords } from 'overnightworks-design';
 	import type { Words } from '#lib/words/de.ts';
 
 	let {
 		session,
 		person,
-		words
-	}: { session: SessionView; person: SessionPerson; words: Words } = $props();
+		words,
+		kitWords
+	}: { session: SessionView; person: SessionPerson; words: Words; kitWords: KitWords } = $props();
 	const pathname = $derived(page.url.pathname);
 </script>
 
@@ -27,5 +29,5 @@
 			>
 		{/if}
 	</nav>
-	<AccountPopover {session} {person} {words} />
+	<AccountPopover {session} {person} {words} {kitWords} />
 </header>

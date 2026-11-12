@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { AccountMenu } from 'overnightworks-design';
-	import { accountMenuWords } from '#lib/kitWords.ts';
+	import { AccountMenu, type KitWords } from 'overnightworks-design';
 	import { type ThemeChoice, writeTheme } from '#lib/api/account.ts';
 	import type { SessionPerson, SessionView } from '#lib/api/session.ts';
 	import { legalLinks } from '#lib/legal.ts';
@@ -10,8 +9,9 @@
 	let {
 		session,
 		person,
-		words
-	}: { session: SessionView; person: SessionPerson; words: Words } = $props();
+		words,
+		kitWords
+	}: { session: SessionView; person: SessionPerson; words: Words; kitWords: KitWords } = $props();
 	let popover: HTMLElement;
 
 	// The radio shows the choice at once and snaps back when the write fails.
@@ -43,7 +43,7 @@
 		appRows={[]}
 		theme={{ choice: currentTheme(), onChange: chooseTheme }}
 		legalLinks={legalLinks(words)}
-		words={accountMenuWords(words)}
+		words={kitWords}
 		logOutAction={session.sign_in.logout}
 	/>
 </div>

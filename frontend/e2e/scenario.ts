@@ -1,5 +1,7 @@
 import type { BrowserContext, Locator, Page } from '@playwright/test';
 
+import type { KitLanguage, KitWords } from 'overnightworks-design';
+
 import type { SessionView } from '../src/lib/api/session.ts';
 import type { Words } from '../src/lib/words/de.ts';
 import { loadWords } from '../src/lib/words/index.ts';
@@ -26,12 +28,28 @@ export async function wordsOf(page: Page): Promise<Words> {
 	return loadWords((await sessionOf(page)).language);
 }
 
-// The session beside the words of its language, as the page holds both after its load.
-export type Reader = SessionView & { words: Words };
+// Node cannot load the kit's package root (its entry is Svelte), so the kit's
+// words come from the language modules the package ships, one per language.
+const kitWordModules: Record<KitLanguage, () => Promise<{ words: KitWords }>> = {
+	de: () => import('../node_modules/overnightworks-design/svelte-dist/words/de.js'),
+	en: () => import('../node_modules/overnightworks-design/svelte-dist/words/en.js')
+};
+
+// The kit's words of the language the lobby serves this page in.
+export async function kitWordsOf(page: Page): Promise<KitWords> {
+	return (await kitWordModules[(await sessionOf(page)).language]()).words;
+}
+
+// The session beside the words of its language, the app's and the kit's, as the page holds them after its load.
+export type Reader = SessionView & { words: Words; kitWords: KitWords };
 
 export async function readerOf(page: Page): Promise<Reader> {
 	const session = await sessionOf(page);
-	return { ...session, words: await loadWords(session.language) };
+	return {
+		...session,
+		words: await loadWords(session.language),
+		kitWords: await kitWordsOf(page)
+	};
 }
 
 export async function opensTheMenu(page: Page): Promise<void> {
@@ -58,10 +76,10 @@ export const entriesOf = (page: Page): Promise<number> => page.evaluate(() => hi
 
 type ThemeRow = 'followSystem' | 'light' | 'dark';
 
-// The menu's radio of a theme row, named by the page's words.
+// The menu's radio of a theme row, named by the kit's words.
 export async function themeRow(page: Page, row: ThemeRow): Promise<Locator> {
-	const words = await wordsOf(page);
-	return page.getByRole('radio', { name: words[`account.${row}`], exact: true });
+	const kitWords = await kitWordsOf(page);
+	return page.getByRole('radio', { name: kitWords[`account.${row}`], exact: true });
 }
 
 export async function chooseTheme(page: Page, row: ThemeRow): Promise<void> {
