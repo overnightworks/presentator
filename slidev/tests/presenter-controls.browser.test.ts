@@ -389,15 +389,16 @@ describe('presenter controls', () => {
     }
   })
 
-  // The deck's language reaches /hear and /ask; the controls' words are the account's, whatever the deck's.
+  // The deck's language reaches /hear; the heard question's language is the ask's; the controls' words are the account's.
   it.each([
-    { deck: 'de', account: 'de' },
-    { deck: 'en', account: 'de' },
-    { deck: 'de', account: 'en' },
-    { deck: 'en', account: 'en' },
-  ] as const)('CP10: a $deck deck presented by a $account account reaches /hear and /ask in $deck and shows the controls in $account', async ({ deck, account }) => {
+    { deck: 'de', account: 'de', heard: 'de' },
+    { deck: 'en', account: 'de', heard: 'en' },
+    { deck: 'de', account: 'en', heard: 'en' },
+    { deck: 'en', account: 'en', heard: 'de' },
+  ] as const)('CP10: a $deck deck presented by a $account account reaches /hear in $deck, asks in the heard $heard and shows the controls in $account', async ({ deck, account, heard }) => {
     state.whoLanguage = deck
     state.interfaceLanguage = account
+    state.heardLanguage = heard
     const controls = wordsOf[account]
     const { browser, page } = await openPresenter(1024)
     try {
@@ -406,7 +407,7 @@ describe('presenter controls', () => {
       await ai.click({ timeout: 2_000 })
       await expect.poll(() => state.askBodies.length).toBeGreaterThan(0)
       expect(state.hearLanguages).toEqual([deck])
-      expect(state.askBodies[0]?.language).toBe(deck)
+      expect(state.askBodies[0]?.language).toBe(heard)
       expect(await ai.textContent()).toBe(controls['controls.switch'])
       expect(await page.getByRole('link', { name: controls['controls.home'] }).getAttribute('title')).toBe(controls['controls.home'])
       expect(await page.getByRole('complementary', { name: controls['controls.presenterOn'] }).count()).toBe(1)
