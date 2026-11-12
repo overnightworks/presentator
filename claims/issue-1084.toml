@@ -1,8 +1,0 @@
-claim_id = "3f44e75954cb459aae4c0ca29c8136dd"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "a33d35eca4ecb1e87a44ff1031577dbc13ddf513"
-branch = "claude/issue-1084-overlay-speaks-through-player"
-scope = ["slidev/components/CoPresenter.vue", "slidev/tests"]
-opened_commit = "0a763123c6ebf46742c03458c97e6dbfe4aa3099"
-whole_reason = "One component swaps its playback owner, and the one harness that fakes the browser's audio for three test files moves with it."
