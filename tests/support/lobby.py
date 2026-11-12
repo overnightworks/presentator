@@ -193,18 +193,27 @@ class Lobby:
     people: FakePeople
     config: WebAuthConfig
 
-    def sign_in(self, *, username: str = USERNAME, role: Role | None = None) -> None:
+    def sign_in(
+        self,
+        *,
+        username: str = USERNAME,
+        role: Role | None = None,
+        account_language: str | None = None,
+    ) -> None:
         """Seed the person and a live session, and give the client its cookies.
 
         `USERNAME` is the instance's admin; anyone else is an ordinary user
-        unless the test names the role.
+        unless the test names the role. The session holds the account language
+        the issuer gave at sign-in, or none.
         """
         person = User(
             id=f"id-of-{username}",
             username=username,
             role=role or (Role.ADMIN if username == USERNAME else Role.USER),
         )
-        session_id = self.people.open_session_for(person)
+        session_id = self.people.open_session_for(
+            person, account_language=account_language
+        )
         hand_over_session_cookies(self.client, session_id, self.config)
 
     def another_browser(self) -> Self:
