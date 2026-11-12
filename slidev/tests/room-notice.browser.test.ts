@@ -33,7 +33,8 @@ const PILL = {
 type Fakes = {
   microphone: 'ready' | 'pending' | 'denied'
   worklet: 'ready' | 'failing'
-  playback: 'resolve' | 'pending' | 'rejected'
+  playback: 'resolve' | 'pending' | 'rejected' | 'second-fails-on-cue'
+  failSecond: (() => void) | null
   releaseMicrophone: () => void
   endPlayback: () => void
 }
@@ -270,6 +271,25 @@ describe('the room notice', () => {
       await presenter.waitForTimeout(1_500)
       expect(new Set(await phasesSince(projector, marks[1]!))).toEqual(new Set())
       expect(new Set(await phasesSince(presenter, marks[0]!))).toEqual(new Set())
+      await showsPhase(projector, 'listening', PILL.de.listening)
+    })
+  })
+
+  it('CP9: keeps the answering pill while the playing sound goes on, when a queued sound fails', async () => {
+    state.heardOnConnect = false
+    await inRoom(async ({ presenter, projector }) => {
+      state.answerMode = 'two-sounds'
+      await setFakes(presenter, { playback: 'second-fails-on-cue' })
+      await switchOn(presenter)
+      await showsPhase(projector, 'listening', PILL.de.listening)
+      sendHeard('Answer both sounds')
+      await showsPhase(projector, 'answering', PILL.de.answering)
+      await expect.poll(() => presenter.evaluate(() => (window as unknown as Probed).__fakes.failSecond !== null)).toBe(true)
+      await presenter.evaluate(() => (window as unknown as Probed).__fakes.failSecond?.())
+      await presenter.getByText('No speech', { exact: true }).waitFor({ state: 'visible' })
+      await presenter.waitForTimeout(1_500)
+      await showsPhase(projector, 'answering', PILL.de.answering)
+      await callFake(presenter, 'endPlayback')
       await showsPhase(projector, 'listening', PILL.de.listening)
     })
   })

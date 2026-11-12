@@ -70,18 +70,7 @@ describe('presenter controls', () => {
 
   it('Counts only a voiced sentence as spoken when an answer fails midway', async () => {
     state.answerMode = 'mid-answer-error'
-    const { browser, page } = await openPresenterAt(state.origin, '/presenter/1', 1024, async (prepared) => {
-      await prepared.addInitScript(() => {
-        const RealAudio = window.Audio
-        const made: HTMLAudioElement[] = []
-        ;(window as unknown as { __audios: HTMLAudioElement[] }).__audios = made
-        window.Audio = function (url?: string) {
-          const audio = new RealAudio(url)
-          made.push(audio)
-          return audio
-        } as unknown as typeof Audio
-      })
-    })
+    const { browser, page } = await openPresenter(1024)
     try {
       const ai = page.getByRole('switch', { name: 'AI' })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
@@ -93,8 +82,7 @@ describe('presenter controls', () => {
       await page.waitForFunction(() => (window as unknown as {
         __copresenter: { snapshot: () => Snapshot }
       }).__copresenter.snapshot().speaking)
-      await page.evaluate(() => (window as unknown as { __audios: HTMLAudioElement[] }).__audios
-        .forEach((audio) => audio.dispatchEvent(new Event('ended'))))
+      await page.evaluate(() => (window as unknown as { __fakes: { endPlayback: () => void } }).__fakes.endPlayback())
       await page.waitForFunction(() => !(window as unknown as {
         __copresenter: { snapshot: () => Snapshot }
       }).__copresenter.snapshot().speaking)

@@ -45,6 +45,7 @@ export type AnswerMode =
   | 'mid-answer-error'
   | 'moves-slide'
   | 'refused-then-answered'
+  | 'two-sounds'
   | keyof typeof REFUSED_REQUESTS
 
 type MediaObservation = {
@@ -450,7 +451,10 @@ async function startServer() {
         response.end('event: error\ndata: {}\n\n')
         return
       }
-      response.write(`event: audio\ndata: {"wav_b64":"${wav}"}\n\n`)
+      const audio = `event: audio\ndata: {"wav_b64":"${wav}"}\n\n`
+      response.write(audio)
+      // The second sound queues behind the first one, which plays.
+      if (state.answerMode === 'two-sounds') response.write(audio)
       response.on('close', () => { state.pendingAnswerClosed += 1 })
       return
     }
@@ -551,12 +555,15 @@ async function installMediaFakes(page: Page) {
     const fakes = {
       microphone: 'ready' as 'ready' | 'pending' | 'denied',
       worklet: 'ready' as 'ready' | 'failing',
-      playback: 'resolve' as 'resolve' | 'pending' | 'rejected',
-      played: [] as HTMLMediaElement[],
+      playback: 'resolve' as 'resolve' | 'pending' | 'rejected' | 'second-fails-on-cue',
+      played: [] as { onended: (() => void) | null }[],
+      // Set once the second sound's decode waits; the test rejects that decode with it.
+      failSecond: null as (() => void) | null,
       releaseMicrophone: () => {},
-      endPlayback: () => fakes.played.forEach((audio) => audio.dispatchEvent(new Event('ended'))),
+      endPlayback: () => fakes.played.splice(0).forEach((source) => source.onended?.()),
     }
     Object.assign(window, { __fakes: fakes })
+    let decodeCalls = 0
     const newTrack = () => ({
       readyState: 'live',
       addEventListener() {},
@@ -598,7 +605,36 @@ async function installMediaFakes(page: Page) {
           ? Promise.reject(new Error('worklet failed to load'))
           : new RealAudioContext().audioWorklet.addModule(moduleUrl)),
       }
+      destination = {}
       createMediaStreamSource() { return { connect: () => undefined, disconnect: () => undefined } }
+      createGain() { return { gain: { value: 1 }, connect: () => undefined } }
+      decodeAudioData() {
+        if (fakes.playback === 'pending') return new Promise<object>(() => undefined)
+        if (fakes.playback === 'rejected') return Promise.reject(new DOMException('undecodable', 'EncodingError'))
+        decodeCalls += 1
+        if (fakes.playback === 'second-fails-on-cue' && decodeCalls === 2) {
+          return new Promise<object>((_resolve, reject) => {
+            fakes.failSecond = () => reject(new DOMException('undecodable', 'EncodingError'))
+          })
+        }
+        return Promise.resolve({})
+      }
+      createBufferSource() {
+        const source = {
+          onended: null as (() => void) | null,
+          connect: () => undefined,
+          start() {
+            fakes.played.push(source)
+            report('playback-started')
+          },
+          stop() {
+            const index = fakes.played.indexOf(source)
+            if (index >= 0) fakes.played.splice(index, 1)
+            report('playback-paused')
+          },
+        }
+        return source
+      }
       close() { return Promise.resolve() }
     }
     window.AudioContext = FakeContext as unknown as typeof AudioContext
@@ -618,17 +654,6 @@ async function installMediaFakes(page: Page) {
       SpeechRecognition: CountedSpeechRecognition,
       webkitSpeechRecognition: CountedSpeechRecognition,
     })
-    HTMLMediaElement.prototype.play = async function () {
-      if (fakes.playback === 'pending') return new Promise<void>(() => undefined)
-      if (fakes.playback === 'rejected') throw new DOMException('blocked', 'NotAllowedError')
-      Object.defineProperty(this, 'paused', { value: false, configurable: true })
-      fakes.played.push(this)
-      report('playback-started')
-    }
-    HTMLMediaElement.prototype.pause = function () {
-      Object.defineProperty(this, 'paused', { value: true, configurable: true })
-      report('playback-paused')
-    }
   })
 }
 

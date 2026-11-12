@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useNav } from '@slidev/client'
-import { HopClose, startCapture } from 'overnightworks-speech-browser'
+import { createPlayer, HopClose, startCapture } from 'overnightworks-speech-browser'
 // `no-inline`: the file is under Vite's inline limit, and a `data:` URL would
 // break the production CSP.
 import WORKLET_URL from 'overnightworks-speech-browser/capture-worklet.js?url&no-inline'
@@ -68,7 +68,6 @@ const on = ref(false)
 const heard = ref('')
 const answer = ref('')
 const error = ref('')
-const audioSeconds = ref(0)
 const speaking = ref(false)
 // What the room can observe, which room-notice.js turns into band and pill:
 // the capture is streaming the microphone and an answer's audio is playing.
@@ -78,15 +77,16 @@ const playing = ref(false)
 let mediaStream = null
 let capture = null
 let askAbort = null
-let playQueue = Promise.resolve()
+let player = null
+// The sounds handed to the player that have not ended; `speaking` is true while any is.
+const handedOver = new Set()
+// The sound the player is playing now; `playing` follows it, so a queued sound that ends first leaves it on.
+let playingSound = null
 let spokenText = ''
 let unvoicedSentence = ''
 // The deck's language, which the server reports before the hearing opens.
 let language = ''
 let activationGeneration = 0
-let playGeneration = 0
-let activeAudio = null
-let finishActivePlay = null
 
 function publishRoomFacts() {
   publish({
@@ -104,13 +104,11 @@ function snapshot() {
     on: on.value,
     heard: heard.value,
     answer: answer.value,
-    audioSeconds: audioSeconds.value,
     error: error.value,
     speaking: speaking.value,
     micLive: tracks.some((track) => track.readyState === 'live'),
     capturing: capturing.value,
     playing: playing.value,
-    audioPlaying: Boolean(activeAudio && !activeAudio.paused && !activeAudio.ended),
   }
 }
 
@@ -136,7 +134,6 @@ async function turnOn() {
   error.value = ''
   heard.value = ''
   answer.value = ''
-  audioSeconds.value = 0
   spokenText = ''
   let report
   try {
@@ -339,85 +336,44 @@ function isShownSlide(number) {
 
 function enqueueWav(b64) {
   if (!on.value) return
-  const generation = playGeneration
+  player ??= startPlayer()
+  if (!player) return
   const bytes = Uint8Array.from(atob(b64), (c) => c.codePointAt(0))
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }))
-  playQueue = playQueue.then(() => {
-    if (generation !== playGeneration) return undefined
-    return playUrl(url, generation)
-  }).finally(() => URL.revokeObjectURL(url))
-}
-
-function playUrl(url, generation) {
-  return new Promise((resolve) => {
-    if (generation !== playGeneration) {
-      resolve()
-      return
-    }
-    const activation = activationGeneration
-    const audio = new Audio(url)
-    activeAudio = audio
-    speaking.value = true
-    let settled = false
-    const settle = (failed) => {
-      if (settled) return
-      settled = true
-      if (finishActivePlay === abortPlay) finishActivePlay = null
-      if (activeAudio === audio) {
-        activeAudio = null
-        playing.value = false
-      }
-      if (generation !== playGeneration) {
-        resolve()
-        return
-      }
-      speaking.value = false
-      if (failed) error.value = 'No speech'
-      resolve()
-    }
-    const abortPlay = () => settle(false)
-    finishActivePlay = abortPlay
-    audio.onloadedmetadata = () => {
-      if (generation !== playGeneration) return
-      if (Number.isFinite(audio.duration) && audio.duration > 0) {
-        audioSeconds.value += audio.duration
-      }
-    }
-    audio.onended = () => settle(false)
-    audio.onerror = () => settle(true)
-    audio.play().then(() => {
-      if (generation !== playGeneration || !stillActive(activation)) {
-        abortPlay()
-        return
-      }
+  const playback = player.play(bytes.buffer)
+  handedOver.add(playback)
+  speaking.value = true
+  void playback.started.then((state) => {
+    if (state === 'playing' && handedOver.has(playback)) {
+      playingSound = playback
       playing.value = true
-    }).catch(() => settle(true))
+    }
+  })
+  void playback.ended.then((end) => {
+    if (!handedOver.delete(playback)) return
+    if (playingSound === playback) {
+      playingSound = null
+      playing.value = false
+    }
+    speaking.value = handedOver.size > 0
+    if (end.kind === 'failed' || end.kind === 'refused') error.value = 'No speech'
   })
 }
 
-function stopActiveAudio() {
-  const audio = activeAudio
-  activeAudio = null
-  if (!audio) return
-  audio.onended = null
-  audio.onerror = null
-  audio.onloadedmetadata = null
-  audio.pause()
-  audio.removeAttribute('src')
-  audio.load()
+function startPlayer() {
+  try {
+    return createPlayer()
+  } catch {
+    error.value = 'No speech'
+    return null
+  }
 }
 
 function invalidatePlayback() {
-  playGeneration += 1
-  stopActiveAudio()
+  handedOver.clear()
+  playingSound = null
+  player?.stop()
   speaking.value = false
   playing.value = false
-  if (finishActivePlay) {
-    const finish = finishActivePlay
-    finishActivePlay = null
-    finish()
-  }
-  playQueue = Promise.resolve()
 }
 
 onMounted(() => {
@@ -427,6 +383,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('pagehide', turnOff)
   turnOff()
+  player?.close()
+  player = null
   // Vue stops this component's watchers before onUnmounted runs.
   publishRoomFacts()
   delete window.__copresenter
@@ -437,7 +395,6 @@ onUnmounted(() => {
   <aside
     class="copresenter"
     :data-on="on"
-    :data-audio-seconds="audioSeconds"
     :aria-label="on ? 'Presenter on' : 'Presenter off'"
   >
     <span
