@@ -22,10 +22,10 @@ from tests.presentator.adapters.support.serving import (
     loopback_listener,
     origin_of,
 )
-from tests.support.lobby import A_SPEECH_VOICE
+from tests.support.lobby import the_speech_voices
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, AsyncIterator, Generator
+    from collections.abc import AsyncGenerator, AsyncIterator, Generator, Mapping
 
 type Answer = Callable[[], Response]
 type Hear = Callable[[WebSocket], Awaitable[None]]
@@ -76,11 +76,17 @@ def a_health_document(
     hearing_ready: bool = True,
     voice_ready: bool = True,
     speaking_ready: bool = True,
-    voice: str = A_SPEECH_VOICE,
+    voices_offered: Mapping[str, bool] | None = None,
     another_ready_voice: str | None = None,
 ) -> dict[str, object]:
-    """A `/health` body; `voice` names what the service offers."""
-    voices = {voice: _a_voice_entry(ready=voice_ready)}
+    """A `/health` body; the service offers `voices_offered` or else both configured."""
+    if voices_offered is None:
+        voices_offered = {
+            str(voice): voice_ready for voice in the_speech_voices().values()
+        }
+    voices = {
+        voice: _a_voice_entry(ready=ready) for voice, ready in voices_offered.items()
+    }
     if another_ready_voice is not None:
         voices[another_ready_voice] = _a_voice_entry(ready=True)
     return {
@@ -206,7 +212,10 @@ def _a_service_in_its_start_load() -> Response:
 
 
 def _sample_rate_as_text() -> Response:
-    voices = {A_SPEECH_VOICE: _a_voice_entry(ready=True, sample_rate="1")}
+    voices = {
+        voice: _a_voice_entry(ready=True, sample_rate="1")
+        for voice in the_speech_voices().values()
+    }
     return _a_health_body(speaking={"ready": True, "voices": voices})()
 
 
@@ -226,7 +235,9 @@ HEALTH_FAILURES: Final[dict[str, Answer]] = {
     ),
     "cut-body": _a_cut_health_body,
     "v0.1-shape": _the_v0_1_shape,
-    "voice-absent": lambda: JSONResponse(a_health_document(voice="another-voice")),
+    "voice-absent": lambda: JSONResponse(
+        a_health_document(voices_offered={"another-voice": True})
+    ),
     "service-in-its-start-load": _a_service_in_its_start_load,
 }
 

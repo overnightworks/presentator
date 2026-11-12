@@ -14,7 +14,8 @@ from presentator.contracts.copresenter import (
     CoPresenterReadiness,
     CoPresenterUnavailableError,
 )
-from tests.support.lobby import A_SPEECH_VOICE
+from presentator.contracts.voice import SampleLanguage
+from tests.support.lobby import the_speech_voices
 from tests.support.speech_service import (
     HEALTH_FAILURES,
     MALFORMED_PEERS,
@@ -29,7 +30,7 @@ from tests.support.speech_service import (
 def readiness_of(fake: FakeSpeechService) -> CoPresenterReadiness:
     async def scenario() -> CoPresenterReadiness:
         async with a_loopback_server(fake.app()) as origin:
-            return await SpeechHearing(origin, voice=A_SPEECH_VOICE).readiness()
+            return await SpeechHearing(origin, voices=the_speech_voices()).readiness()
 
     return asyncio.run(scenario())
 
@@ -65,8 +66,30 @@ def test_a_listed_voice_on_a_service_in_its_start_load_is_unavailable() -> None:
         readiness_of(fake)
 
 
-def test_an_unlisted_voice_is_unavailable_on_a_ready_service() -> None:
-    body = a_health_document(voice="another-voice")
+@pytest.mark.parametrize("language", list(SampleLanguage))
+def test_a_service_not_offering_the_voice_of_one_language_is_unavailable(
+    language: SampleLanguage,
+) -> None:
+    voices = dict(the_speech_voices())
+    del voices[language]
+    body = a_health_document(
+        voices_offered={str(voice): True for voice in voices.values()}
+    )
+    fake = FakeSpeechService(health_answer=lambda: JSONResponse(body))
+
+    with pytest.raises(CoPresenterUnavailableError):
+        readiness_of(fake)
+
+
+@pytest.mark.parametrize("language", list(SampleLanguage))
+def test_one_languages_voice_not_ready_in_the_start_load_is_unavailable(
+    language: SampleLanguage,
+) -> None:
+    voices_offered = {
+        str(voice): voice != the_speech_voices()[language]
+        for voice in the_speech_voices().values()
+    }
+    body = a_health_document(voices_offered=voices_offered, speaking_ready=False)
     fake = FakeSpeechService(health_answer=lambda: JSONResponse(body))
 
     with pytest.raises(CoPresenterUnavailableError):
@@ -98,7 +121,7 @@ def test_a_health_read_past_its_deadline_is_unavailable() -> None:
 
     hearing = SpeechHearing(
         "http://speech.test",
-        voice=A_SPEECH_VOICE,
+        voices=the_speech_voices(),
         bounded_health_fetch=bounded_health_fetch,
     )
 
@@ -108,7 +131,7 @@ def test_a_health_read_past_its_deadline_is_unavailable() -> None:
 
 
 def test_a_refused_connection_is_unavailable() -> None:
-    hearing = SpeechHearing(a_closed_port_origin(), voice=A_SPEECH_VOICE)
+    hearing = SpeechHearing(a_closed_port_origin(), voices=the_speech_voices())
 
     running = hearing.readiness()
     with pytest.raises(CoPresenterUnavailableError):
@@ -126,7 +149,7 @@ def test_a_refused_connection_is_unavailable() -> None:
 def test_a_malformed_or_cut_answer_is_unavailable(answer: bytes) -> None:
     async def scenario() -> None:
         async with RawPeer(answer).serving() as origin:
-            await SpeechHearing(origin, voice=A_SPEECH_VOICE).readiness()
+            await SpeechHearing(origin, voices=the_speech_voices()).readiness()
 
     running = scenario()
     with pytest.raises(CoPresenterUnavailableError):

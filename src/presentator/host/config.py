@@ -2,6 +2,7 @@
 
 import re
 import threading
+from collections.abc import Mapping
 from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
@@ -19,8 +20,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from webauth.proxies import TrustedProxies
 
 from presentator.adapters.build_wire import SOCKET_DIRECTORY, SOCKET_NAME
-from presentator.adapters.speech import VoiceId
+from presentator.adapters.speech import VoiceId, voice_speaks
 from presentator.agent.settings import AgentSettings
+from presentator.contracts.voice import SampleLanguage
 
 # Every secret this instance is handed is at least this many characters, so no
 # guard of it rests on a value somebody could type.
@@ -30,6 +32,9 @@ _INVALID_PORT: Final = "has an invalid port"
 _SCOPE_TOKEN: Final = re.compile(r"[\x21\x23-\x5B\x5D-\x7E]+")
 _REFUSED: Final = "this environment cannot start an instance"
 _EMPTY_CLIENT_ID: Final = "token_clients: names an empty client id"
+_VOICE_SPEAKS_OTHER: Final = (
+    "speech_voice_{language}: names a voice that does not speak it"
+)
 _ONE_HOSTNAME: Final = "talk_origin: is another hostname than public_origin"
 
 ENVIRONMENT_PREFIX: Final = "PRESENTATOR_"
@@ -214,14 +219,16 @@ class Settings(
     # Which backend answers, where its gateway is, the file holding this app's
     # key there and the group that may ask. They are deployment facts: no default.
     agent: AgentSettings
-    # Where the shared speech service answers, the scope that names it at the
-    # issuer and the voice this instance speaks in, one the service's catalogue
-    # names. They are deployment facts: no default. The client reaches only a
-    # plain http origin on internal networks, so this is the one origin here
-    # that is not https.
+    # Where the shared speech service answers and the scope that names it at the
+    # issuer are deployment facts: no default. The client reaches only a plain
+    # http origin on internal networks, so this is the one origin here that is
+    # not https.
     speech_service: Annotated[str, AfterValidator(_one_http_origin)]
     speech_service_scope: Annotated[str, AfterValidator(_one_scope_token)]
-    speech_voice: VoiceId
+    # The voice an answer is spoken in, one per language, each a catalogue voice
+    # that speaks that language.
+    speech_voice_de: VoiceId = VoiceId.THORSTEN
+    speech_voice_en: VoiceId = VoiceId.NORMAN
     # Empty: the client address is the ASGI peer. A list is the peers whose
     # X-Forwarded-For this instance believes.
     trusted_proxies: Annotated[str, AfterValidator(_a_proxy_list)] = ""
@@ -245,6 +252,20 @@ class Settings(
         if not self.token_clients:
             return frozenset()
         return frozenset(_split_client_ids(self.token_clients))
+
+    def speech_voices(self) -> Mapping[SampleLanguage, VoiceId]:
+        """The voice an answer is spoken in, by the language of the answer."""
+        return {
+            SampleLanguage.GERMAN: self.speech_voice_de,
+            SampleLanguage.ENGLISH: self.speech_voice_en,
+        }
+
+    @model_validator(mode="after")
+    def _voices_speak_their_language(self) -> Self:
+        for language, voice in self.speech_voices().items():
+            if not voice_speaks(voice, language):
+                raise ValueError(_VOICE_SPEAKS_OTHER.format(language=language.value))
+        return self
 
     @model_validator(mode="after")
     def _two_hostnames(self) -> Self:
