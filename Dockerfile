@@ -39,7 +39,8 @@ RUN case "$PRESENTATOR_RUNTIME_UID" in \
     && useradd --create-home --non-unique --uid "$PRESENTATOR_RUNTIME_UID" presentator
 # Node 26 no longer bundles corepack, which hands out the pnpm that each
 # package.json names in packageManager.
-RUN npm install --global corepack@0.36.0
+RUN npm install --global corepack@0.36.0 \
+    && rm -rf /root/.npm
 
 # The browser and corepack's package managers are root's and live outside the
 # runtime HOME, so every one of the three users can run them.
@@ -71,12 +72,25 @@ WORKDIR /app/slidev
 # pnpm 12 fetches its native binary on its first run into the root-owned
 # corepack home, so that run happens here as root, before the user switch.
 RUN corepack install && pnpm --version
+# A release builds with SOURCE_DATE_EPOCH, and pnpm then records that time in
+# node_modules instead of the clock's. Its store, metadata cache and update-check
+# state hold clock times too, and nothing needs them after the install, so the
+# same RUN removes them; so is /tmp left empty, because a leftover there would
+# carry a random name.
+ARG SOURCE_DATE_EPOCH
 USER presentator
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile \
+    && rm -rf ~/.local/share/pnpm ~/.local/state/pnpm ~/.cache/pnpm \
+    && find /tmp -mindepth 1 -delete
 USER root
+# ldconfig's aux-cache and fontconfig's caches record directory mtimes, which a
+# release resets, so the fontconfig cache is rebuilt at its first use either way.
 RUN pnpm exec playwright install-deps chromium \
-    && rm -rf /var/lib/apt/lists/* \
-    && pnpm exec playwright install chromium
+    && pnpm exec playwright install chromium \
+    && rm -rf /var/lib/apt/lists/* /var/log/apt /var/log/dpkg.log /var/log/alternatives.log \
+        /var/cache/ldconfig/aux-cache /var/cache/fontconfig \
+        ~/.local/share/pnpm ~/.local/state/pnpm ~/.cache/pnpm \
+    && find /tmp -mindepth 1 -delete
 # The export's dev server keeps its dependency cache beside Slidev's own
 # package, which a read-only root cannot hold, so it points into the step's
 # scratch directory.
@@ -100,13 +114,17 @@ USER root
 # repeatable.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates git openssh-client \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /var/log/apt /var/log/dpkg.log /var/log/alternatives.log \
+        /var/cache/ldconfig/aux-cache
 
 COPY --from=uv /uv /usr/local/bin/uv
 
+# Bytecode stays in the image because the runtime's root is read-only. It
+# records its source's hash, not the source's install time, so it repeats.
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON_INSTALL_DIR=/opt/python \
     UV_COMPILE_BYTECODE=1 \
+    PYC_INVALIDATION_MODE=CHECKED_HASH \
     UV_NO_CACHE=1 \
     PATH=/opt/venv/bin:$PATH
 
