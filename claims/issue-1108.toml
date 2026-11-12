@@ -1,8 +1,0 @@
-claim_id = "73f69a87209a4060871c74f5ff7170e5"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "8b84cad4441257da6d36419c2d9093917036feb7"
-branch = "claude/issue-1108-image-renders-formula-and-diagram"
-scope = [".github/workflows/ci.yml", "pyproject.toml", "quality/config.toml", "scripts", "tests/scripts", "uv.lock"]
-opened_commit = "532cdace5705267984f9596a9164b7386575e23d"
-whole_reason = "The fixture, the script that judges the built talk and the PDF, its tests and the CI step that runs them are a proof only together."
