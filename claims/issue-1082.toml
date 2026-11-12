@@ -1,7 +1,0 @@
-claim_id = "21941153ea5249e7ae611a90abf51c38"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "833a2aa87613d97e68df52f65595ed4ce0da244b"
-branch = "claude/issue-1082-instance-key-docs"
-scope = ["docs/ARCHITECTURE.md", "docs/configuration.md"]
-opened_commit = "1410eaff340016d55dc2fa6aeb730fee3fd4e5cc"
