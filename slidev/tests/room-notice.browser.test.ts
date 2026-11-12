@@ -1,19 +1,19 @@
 import { rm } from 'node:fs/promises'
 
+import { HopClose } from 'overnightworks-speech-browser'
 import type { BrowserContext, Page } from 'playwright-chromium'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildAddonDeck,
-  closeHearingLeases,
   createOverlayDeckServer,
+  endHearings,
   freezePage,
   openPageIn,
   openRoomBrowser,
   registerOverlayHarness,
   saveEvidence,
   sendHeard,
-  sendHearingError,
   state,
 } from './presenter-overlay-harness'
 
@@ -33,7 +33,8 @@ const PILL = {
 type Fakes = {
   microphone: 'ready' | 'pending' | 'denied'
   worklet: 'ready' | 'failing'
-  playback: 'resolve' | 'pending' | 'rejected'
+  playback: 'resolve' | 'pending' | 'rejected' | 'second-fails-on-cue'
+  failSecond: (() => void) | null
   releaseMicrophone: () => void
   endPlayback: () => void
 }
@@ -231,7 +232,7 @@ describe('the room notice', () => {
     ['speech that cannot be reached', 'unreachable', 'Voice offline'],
     ['a /who that fails', 'who-fails', 'Unreachable'],
     ['a /who that finds no deck', 'who-not-found', 'Unreachable'],
-    ['a hearing socket that errors before capture', 'error-on-open', 'No hearing'],
+    ['a hearing the server refuses', 'refused-on-open', 'No hearing'],
   ] as const)('CP8: shows nothing for 4 s with %s', async (_situation, mode, failure) => {
     state.hearingMode = mode
     await inRoom(async ({ presenter, projector }) => {
@@ -274,6 +275,25 @@ describe('the room notice', () => {
     })
   })
 
+  it('CP9: keeps the answering pill while the playing sound goes on, when a queued sound fails', async () => {
+    state.heardOnConnect = false
+    await inRoom(async ({ presenter, projector }) => {
+      state.answerMode = 'two-sounds'
+      await setFakes(presenter, { playback: 'second-fails-on-cue' })
+      await switchOn(presenter)
+      await showsPhase(projector, 'listening', PILL.de.listening)
+      sendHeard('Answer both sounds')
+      await showsPhase(projector, 'answering', PILL.de.answering)
+      await expect.poll(() => presenter.evaluate(() => (window as unknown as Probed).__fakes.failSecond !== null)).toBe(true)
+      await presenter.evaluate(() => (window as unknown as Probed).__fakes.failSecond?.())
+      await presenter.getByText('No speech', { exact: true }).waitFor({ state: 'visible' })
+      await presenter.waitForTimeout(1_500)
+      await showsPhase(projector, 'answering', PILL.de.answering)
+      await callFake(presenter, 'endPlayback')
+      await showsPhase(projector, 'listening', PILL.de.listening)
+    })
+  })
+
   it.each([
     ['not-enabled', 'Not enabled'],
     ['signed-out-refresh', 'Sign in again'],
@@ -306,24 +326,25 @@ describe('the room notice', () => {
     })
   })
 
-  it('CP8: clears both windows when the server ends the hearing lease', async () => {
+  it('CP8: clears both windows, with no fault word, when the server ends the hearing in order', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
       await showsBand(projector)
-      closeHearingLeases()
-      await clearanceOf([presenter, projector], 'the server ends the hearing lease')
-      await presenter.getByText('No hearing', { exact: true }).waitFor({ state: 'visible' })
+      endHearings(HopClose.NORMAL)
+      await clearanceOf([presenter, projector], 'the server ends the hearing in order')
+      expect(await presenter.getByText('No hearing', { exact: true }).count()).toBe(0)
     })
   })
 
-  it('CP8: clears both windows when capture fails after the notice', async () => {
+  it('CP8: clears both windows when the hearing fails after the notice', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
       await showsBand(projector)
-      sendHearingError()
-      await clearanceOf([presenter, projector], 'capture fails after the notice')
+      endHearings(HopClose.SERVICE_FAILED)
+      await clearanceOf([presenter, projector], 'the hearing fails after the notice')
+      await presenter.getByText('No hearing', { exact: true }).waitFor({ state: 'visible' })
     })
   })
 

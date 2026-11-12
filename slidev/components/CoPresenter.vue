@@ -1,9 +1,10 @@
 <script setup>
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useNav } from '@slidev/client'
+import { createPlayer, HopClose, startCapture } from 'overnightworks-speech-browser'
 // `no-inline`: the file is under Vite's inline limit, and a `data:` URL would
 // break the production CSP.
-import WORKLET_URL from '../worklets/pcm-capture-processor.js?url&no-inline'
+import WORKLET_URL from 'overnightworks-speech-browser/capture-worklet.js?url&no-inline'
 import { publish } from '../room-notice.js'
 
 const { currentSlideNo, go, total } = useNav()
@@ -67,28 +68,25 @@ const on = ref(false)
 const heard = ref('')
 const answer = ref('')
 const error = ref('')
-const audioSeconds = ref(0)
 const speaking = ref(false)
 // What the room can observe, which room-notice.js turns into band and pill:
-// the worklet is connected to the microphone and an answer's audio is playing.
+// the capture is streaming the microphone and an answer's audio is playing.
 const capturing = ref(false)
 const playing = ref(false)
 
 let mediaStream = null
-let audioContext = null
-let workletNode = null
-let hearSocket = null
+let capture = null
 let askAbort = null
-let playQueue = Promise.resolve()
+let player = null
+// The sounds handed to the player that have not ended; `speaking` is true while any is.
+const handedOver = new Set()
+// The sound the player is playing now; `playing` follows it, so a queued sound that ends first leaves it on.
+let playingSound = null
 let spokenText = ''
 let unvoicedSentence = ''
-let sampleRate = 16000
-// The deck's language, which the server reports before the hearing lease opens.
+// The deck's language, which the server reports before the hearing opens.
 let language = ''
 let activationGeneration = 0
-let playGeneration = 0
-let activeAudio = null
-let finishActivePlay = null
 
 function publishRoomFacts() {
   publish({
@@ -106,15 +104,11 @@ function snapshot() {
     on: on.value,
     heard: heard.value,
     answer: answer.value,
-    audioSeconds: audioSeconds.value,
     error: error.value,
-    hearOpen: hearSocket?.readyState === WebSocket.OPEN,
     speaking: speaking.value,
     micLive: tracks.some((track) => track.readyState === 'live'),
     capturing: capturing.value,
     playing: playing.value,
-    workletLive: capturing.value,
-    audioPlaying: Boolean(activeAudio && !activeAudio.paused && !activeAudio.ended),
   }
 }
 
@@ -133,17 +127,6 @@ function say(text) {
   void ask(text)
 }
 
-async function sendPcm(bytes) {
-  if (hearSocket?.readyState !== WebSocket.OPEN) return false
-  hearSocket.send(bytes)
-  return true
-}
-
-function closeHear() {
-  if (!hearSocket) return
-  try { hearSocket.close() } catch { /* already closed */ }
-}
-
 async function turnOn() {
   if (on.value) return
   const generation = ++activationGeneration
@@ -151,7 +134,6 @@ async function turnOn() {
   error.value = ''
   heard.value = ''
   answer.value = ''
-  audioSeconds.value = 0
   spokenText = ''
   let report
   try {
@@ -160,7 +142,6 @@ async function turnOn() {
     if (!response.ok) throw new WhoRefused(response.status)
     report = await response.json()
     if (!stillActive(generation)) return
-    sampleRate = report.speech?.sample_rate || 16000
     language = report.language
   } catch (error_) {
     if (!stillActive(generation)) return
@@ -168,8 +149,6 @@ async function turnOn() {
     return
   }
   if (!stillActive(generation)) return
-  const lease = await openHearingLease(generation)
-  if (!lease || !stillActive(generation)) return
   if (report.speech?.hearing?.ready) {
     await startLocalHear(generation)
     return
@@ -199,141 +178,56 @@ function stopWork() {
   invalidatePlayback()
 }
 
-async function openHearingLease(generation) {
-  const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const url = `${scheme}//${window.location.host}${COPRESENTER}/hear?language=${language}`
-  const socket = new WebSocket(url)
-  socket.binaryType = 'arraybuffer'
-  bindHearSocket(socket, generation)
-  hearSocket = socket
-  try {
-    await new Promise((resolve, reject) => {
-      socket.onopen = resolve
-      const refused = () => reject(new Error('hearing lease refused'))
-      socket.onerror = refused
-      socket.onclose = refused
-    })
-  } catch {
-    if (hearSocket === socket) hearSocket = null
-    abandon({ socket })
-    if (stillActive(generation)) {
-      fail('No hearing')
-    }
-    return null
-  }
-  if (!stillActive(generation)) {
-    abandon({ socket })
-    return null
-  }
-  bindHearSocket(socket, generation)
-  return socket
-}
-
 async function startLocalHear(generation) {
-  let stream = null
-  let context = null
-  let node = null
   try {
     // Echo cancellation and noise suppression stay on as a second layer and are
     // not relied on: the room's speakers are not the browser's loopback. The
     // transcript filter in isEcho is the first layer.
-    stream = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
     })
     if (!stillActive(generation)) {
-      abandon({ stream })
+      stopStream(stream)
       return
     }
     mediaStream = stream
-    context = new AudioContext()
-    audioContext = context
-    await context.audioWorklet.addModule(WORKLET_URL)
-    if (!stillActive(generation)) {
-      abandon({ stream, context })
-      return
+    const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const running = startCapture({
+      stream,
+      hopUrl: `${scheme}//${window.location.host}${COPRESENTER}/hear?language=${language}`,
+      workletUrl: WORKLET_URL,
+      onMessage: (data) => onHeard(data, generation),
+    })
+    capture = running
+    void running.ended.then((end) => endHearing(generation, end))
+    if (await running.started === 'streaming' && stillActive(generation) && capture === running) {
+      capturing.value = true
     }
-    const source = context.createMediaStreamSource(stream)
-    node = new AudioWorkletNode(context, 'pcm-capture')
-    workletNode = node
-    const fromRate = context.sampleRate
-    let pending = new Float32Array(0)
-    node.port.onmessage = (event) => {
-      if (!stillActive(generation)) return
-      pending = concat(pending, event.data)
-      const needed = Math.round(fromRate * 0.1)
-      while (pending.length >= needed) {
-        const frame = pending.subarray(0, needed)
-        pending = pending.subarray(needed)
-        if (hearSocket?.readyState === WebSocket.OPEN) {
-          hearSocket.send(toPcm16(frame, fromRate, sampleRate).buffer)
-        }
-      }
-    }
-    source.connect(node)
-    capturing.value = true
   } catch {
-    abandon({ stream, context, node })
-    if (!stillActive(generation)) return
-    fail('No hearing')
+    endHearing(generation, null)
   }
 }
 
-function bindHearSocket(socket, generation) {
-  socket.onopen = null
-  socket.onmessage = (event) => {
-    if (!stillActive(generation) || hearSocket !== socket) return
-    let payload
-    try {
-      payload = JSON.parse(event.data)
-    } catch {
-      return
-    }
-    if (payload.error) {
-      fail('No hearing')
-      return
-    }
-    if (!payload.text) return
-    heard.value = payload.text
-    if (payload.final) onFinal(payload.text)
-  }
-  socket.onerror = () => {
-    if (!stillActive(generation) || hearSocket !== socket) return
-    fail('No hearing')
-  }
-  socket.onclose = () => {
-    if (hearSocket === socket) hearSocket = null
-    if (!stillActive(generation)) return
-    fail('No hearing')
-  }
+// The one place that says what a lost hearing shows: nothing for the server's
+// orderly close, "No hearing" for every other end. `end` is what the capture
+// reports, or null when no capture ran to report one.
+function endHearing(generation, end) {
+  if (!stillActive(generation)) return
+  if (end?.kind === 'hop' && end.close === HopClose.NORMAL) turnOff()
+  else fail('No hearing')
 }
 
-function abandon({ socket, stream, context, node } = {}) {
-  if (socket) closeSocket(socket)
-  if (node) disconnectNode(node)
-  if (context) closeContext(context)
-  if (stream) stopStream(stream)
-}
-
-function closeSocket(socket) {
-  if (hearSocket === socket) hearSocket = null
-  socket.onmessage = null
-  socket.onerror = null
-  socket.onclose = null
-  try { socket.close() } catch { /* already closed */ }
-}
-
-function disconnectNode(node) {
-  if (workletNode === node) {
-    workletNode = null
-    capturing.value = false
+function onHeard(data, generation) {
+  if (!stillActive(generation) || typeof data !== 'string') return
+  let payload
+  try {
+    payload = JSON.parse(data)
+  } catch {
+    return
   }
-  node.port.onmessage = null
-  try { node.disconnect() } catch { /* already disconnected */ }
-}
-
-function closeContext(context) {
-  if (audioContext === context) audioContext = null
-  try { context.close() } catch { /* already closed */ }
+  if (!payload.text) return
+  heard.value = payload.text
+  if (payload.final) onFinal(payload.text)
 }
 
 function stopStream(stream) {
@@ -342,18 +236,12 @@ function stopStream(stream) {
 }
 
 function releaseCapture() {
-  abandon({
-    socket: hearSocket,
-  })
-  releaseMicrophone()
-}
-
-function releaseMicrophone() {
-  abandon({
-    stream: mediaStream,
-    context: audioContext,
-    node: workletNode,
-  })
+  capturing.value = false
+  if (capture) {
+    capture.stop()
+    capture = null
+  }
+  if (mediaStream) stopStream(mediaStream)
 }
 
 function onFinal(text) {
@@ -374,7 +262,7 @@ function isEcho(text, spoken) {
 }
 
 async function ask(text) {
-  if (hearSocket?.readyState !== WebSocket.OPEN) return
+  if (!capture) return
   invalidatePlayback()
   if (askAbort) askAbort.abort()
   const controller = new AbortController()
@@ -448,113 +336,55 @@ function isShownSlide(number) {
 
 function enqueueWav(b64) {
   if (!on.value) return
-  const generation = playGeneration
+  player ??= startPlayer()
+  if (!player) return
   const bytes = Uint8Array.from(atob(b64), (c) => c.codePointAt(0))
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }))
-  playQueue = playQueue.then(() => {
-    if (generation !== playGeneration) return undefined
-    return playUrl(url, generation)
-  }).finally(() => URL.revokeObjectURL(url))
-}
-
-function playUrl(url, generation) {
-  return new Promise((resolve) => {
-    if (generation !== playGeneration) {
-      resolve()
-      return
-    }
-    const activation = activationGeneration
-    const audio = new Audio(url)
-    activeAudio = audio
-    speaking.value = true
-    let settled = false
-    const settle = (failed) => {
-      if (settled) return
-      settled = true
-      if (finishActivePlay === abortPlay) finishActivePlay = null
-      if (activeAudio === audio) {
-        activeAudio = null
-        playing.value = false
-      }
-      if (generation !== playGeneration) {
-        resolve()
-        return
-      }
-      speaking.value = false
-      if (failed) error.value = 'No speech'
-      resolve()
-    }
-    const abortPlay = () => settle(false)
-    finishActivePlay = abortPlay
-    audio.onloadedmetadata = () => {
-      if (generation !== playGeneration) return
-      if (Number.isFinite(audio.duration) && audio.duration > 0) {
-        audioSeconds.value += audio.duration
-      }
-    }
-    audio.onended = () => settle(false)
-    audio.onerror = () => settle(true)
-    audio.play().then(() => {
-      if (generation !== playGeneration || !stillActive(activation)) {
-        abortPlay()
-        return
-      }
+  const playback = player.play(bytes.buffer)
+  handedOver.add(playback)
+  speaking.value = true
+  void playback.started.then((state) => {
+    if (state === 'playing' && handedOver.has(playback)) {
+      playingSound = playback
       playing.value = true
-    }).catch(() => settle(true))
+    }
+  })
+  void playback.ended.then((end) => {
+    if (!handedOver.delete(playback)) return
+    if (playingSound === playback) {
+      playingSound = null
+      playing.value = false
+    }
+    speaking.value = handedOver.size > 0
+    if (end.kind === 'failed' || end.kind === 'refused') error.value = 'No speech'
   })
 }
 
-function stopActiveAudio() {
-  const audio = activeAudio
-  activeAudio = null
-  if (!audio) return
-  audio.onended = null
-  audio.onerror = null
-  audio.onloadedmetadata = null
-  audio.pause()
-  audio.removeAttribute('src')
-  audio.load()
+function startPlayer() {
+  try {
+    return createPlayer()
+  } catch {
+    error.value = 'No speech'
+    return null
+  }
 }
 
 function invalidatePlayback() {
-  playGeneration += 1
-  stopActiveAudio()
+  handedOver.clear()
+  playingSound = null
+  player?.stop()
   speaking.value = false
   playing.value = false
-  if (finishActivePlay) {
-    const finish = finishActivePlay
-    finishActivePlay = null
-    finish()
-  }
-  playQueue = Promise.resolve()
-}
-
-function concat(left, right) {
-  const out = new Float32Array(left.length + right.length)
-  out.set(left)
-  out.set(right, left.length)
-  return out
-}
-
-function toPcm16(float32, fromRate, toRate) {
-  const ratio = fromRate / toRate
-  const length = Math.max(1, Math.round(float32.length / ratio))
-  const out = new Int16Array(length)
-  for (let i = 0; i < length; i += 1) {
-    const sample = float32[Math.min(float32.length - 1, Math.floor(i * ratio))]
-    const clamped = Math.max(-1, Math.min(1, sample))
-    out[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff
-  }
-  return out
 }
 
 onMounted(() => {
   window.addEventListener('pagehide', turnOff)
-  window.__copresenter = { setOn, say, sendPcm, snapshot, closeHear }
+  window.__copresenter = { setOn, say, snapshot }
 })
 onUnmounted(() => {
   window.removeEventListener('pagehide', turnOff)
   turnOff()
+  player?.close()
+  player = null
   // Vue stops this component's watchers before onUnmounted runs.
   publishRoomFacts()
   delete window.__copresenter
@@ -565,7 +395,6 @@ onUnmounted(() => {
   <aside
     class="copresenter"
     :data-on="on"
-    :data-audio-seconds="audioSeconds"
     :aria-label="on ? 'Presenter on' : 'Presenter off'"
   >
     <span

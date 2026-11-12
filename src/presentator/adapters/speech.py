@@ -173,7 +173,6 @@ class SpeechHearing:
             _LOGGER.warning("the configured voice cannot speak")
             raise CoPresenterUnavailableError
         return CoPresenterReadiness(
-            hearing_sample_rate=wire.SessionInput().format.rate,
             local_hearing_ready=health.hearing.ready,
         )
 

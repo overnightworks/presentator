@@ -34,12 +34,10 @@ def readiness_of(fake: FakeSpeechService) -> CoPresenterReadiness:
     return asyncio.run(scenario())
 
 
-def test_a_ready_service_hears_at_the_clients_fixed_rate() -> None:
+def test_a_ready_service_is_ready_to_hear() -> None:
     readiness = readiness_of(FakeSpeechService())
 
-    assert readiness == CoPresenterReadiness(
-        hearing_sample_rate=wire.SessionInput().format.rate, local_hearing_ready=True
-    )
+    assert readiness == CoPresenterReadiness(local_hearing_ready=True)
 
 
 @pytest.mark.parametrize("voice_ready", [True, False], ids=["voice-ready", "voice-not"])

@@ -11,7 +11,7 @@ secret does not land in the startup output.
 
 | Setting | Meaning |
 | --- | --- |
-| `PRESENTATOR_SECRET_KEY_FILE` | Absolute path of a file holding the master key, read once at start, minus one trailing newline; at least 32 characters. `webauth` signs the lobby's session cookie with it, signs the talk host's through a derivation of its own, and, through another, encrypts what a source's row holds. Without a readable key file the process refuses to start. Keep it with the data: an instance restored without it lists its decks and can pull none of them, and a source's secret is [renewed](runbooks/renew-a-source-secret.md) if it is unreadable. |
+| `PRESENTATOR_SECRET_KEY_FILE` | Absolute path of a file holding the master key, read once at start, minus one trailing newline; at least 32 characters. `webauth` signs the lobby's session cookie with it, signs the talk host's through a derivation of its own, and, through another, encrypts what a source's row holds. Without a readable key file the process refuses to start. Keep it in the deployment's secret store, apart from the database backup: an instance restored without it lists its decks and can pull none of them, and a source's secret is [renewed](runbooks/renew-a-source-secret.md) if it is unreadable. |
 | `PRESENTATOR_PUBLIC_ORIGIN` | The one canonical https origin. An `http://` origin refuses the start, because a browser does not send a `Secure` cookie back over plain http. |
 | `PRESENTATOR_TALK_ORIGIN` | The talk host's canonical https origin, on another hostname than `PRESENTATOR_PUBLIC_ORIGIN`; talks are served and signed in there. |
 | `PRESENTATOR_AGENT__BACKEND` | Which backend answers the co-presenter: `litellm`, the one value; any other, `service` included, refuses the start. No default. |

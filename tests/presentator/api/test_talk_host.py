@@ -451,7 +451,7 @@ def test_trying_again_after_a_refusal_signs_in_and_the_talk_host_sends_on_to_the
         ),
     ],
 )
-def test_a_verified_logout_token_at_the_lobby_ends_both_hosts_sessions(
+def test_a_verified_logout_token_under_a_lobby_address_ends_both_sessions(
     hosts: Hosts,
     logout_address: str,
 ) -> None:

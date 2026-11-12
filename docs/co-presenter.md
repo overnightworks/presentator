@@ -32,8 +32,9 @@ network `hal_speech_presentator`, and that hop's trust sentence is in
   for it. A refusal line clears at the next question.
 - **CP7** The overlay's speech words are "Voice offline" (the service does not
   answer, or the configured voice cannot speak), "Local hearing not ready" (hearing
-  still loads) and "No hearing" (a hearing that fails or cannot open). A new
-  word needs a ruling.
+  still loads) and "No hearing" (a hearing that fails or cannot open). A hearing
+  the server ends in order, as at sign-out, shows no word. A new word needs a
+  ruling.
 - **CP15** The presenter view carries Home at its top left as an icon button and
   the AI switch at its top right; neither sits in the bottom navigation bar, and
   nothing of the co-presenter floats over the bottom of the view. The switch is
@@ -72,4 +73,5 @@ network `hal_speech_presentator`, and that hop's trust sentence is in
 
 - **CP13** The microphone is allowed only on the talk host.
 - **CP14** Signing out, an expired session or a lost account ends the hearing
-  and a running answer, queued and playing audio included, within one second.
+  and a running answer, queued and playing audio included, within one second,
+  with no fault word.

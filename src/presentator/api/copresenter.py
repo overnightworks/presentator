@@ -181,10 +181,7 @@ def _who_route(
         return JSONResponse(
             {
                 "language": language.value,
-                "speech": {
-                    "sample_rate": ready.hearing_sample_rate,
-                    "hearing": {"ready": ready.local_hearing_ready},
-                },
+                "speech": {"hearing": {"ready": ready.local_hearing_ready}},
             },
         )
 

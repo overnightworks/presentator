@@ -66,7 +66,9 @@ flowchart TD
 - **`frontend/`** is a SvelteKit single-page shell (`adapter-static`, `ssr =
   false`), built in the image; FastAPI serves it and no Node service runs.
 - **`slidev/`** owns every theme and addon a deck may name, among them the
-  overlay addon `slidev-addon-presentator`.
+  overlay addon `slidev-addon-presentator`. The overlay captures the microphone
+  through speech's browser package, which opens the hearing socket itself and
+  owns the capture and the frame format.
 
 ## 3. Runtime View
 
@@ -89,7 +91,11 @@ sequenceDiagram
 `compose.yaml` defines two services, `presentator` (web) and `build-worker`,
 which hal deploys with `hal apply`. One process serves the lobby and the talk
 host and tells them apart by the `Host` header (`served_by_host` in
-`host/main.py`); a request for any other host gets a 404. The host keeps
+`host/main.py`); a request for any other host gets a 404, except the lobby's
+back-channel logout path, which the lobby answers to a `POST` under any Host but
+the talk host's (other methods on that path answer 405): the signed Logout
+Token is its only control, and the deployment keeps that path off the public
+internet. The host keeps
 Docker's default seccomp and AppArmor profiles in force and the image's glibc is
 2.36 or later, because the controller reaches `pidfd_open` through ctypes. See
 [start an instance](runbooks/start-an-instance-in-a-container.md) and
@@ -220,7 +226,9 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
   browser session cannot erase a person; the path carries the subject, so the
   server keeps no access log ([people](people.md)).
 - The refresh token is plain text because Keycloak renews it only with the
-  client secret, outside the database; the instance key goes in the same backup.
+  client secret, outside the database. The instance key is a secret file the
+  deployment supplies, outside the database and its backup; on the platform it
+  is in `platform-secrets`, and a restore needs both.
 - A change to what the instance stores or sends to a provider changes
   presentator's section in `legal/` in the same pull request.
 

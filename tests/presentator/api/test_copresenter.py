@@ -114,7 +114,7 @@ def test_the_admin_receives_the_decks_language_and_speech_readiness() -> None:
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {
         "language": "de",
-        "speech": {"sample_rate": 16_000, "hearing": {"ready": True}},
+        "speech": {"hearing": {"ready": True}},
     }
     assert private.speech.readiness_calls == 1
 

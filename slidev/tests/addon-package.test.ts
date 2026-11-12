@@ -1,13 +1,10 @@
-import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { addonRootDirectory, buildStagedDeck, stageAddonDeck } from './presenter-overlay-harness'
-
-const sha256 = (content: Buffer) => createHash('sha256').update(content).digest('hex')
+import { buildStagedDeck, stageAddonDeck } from './presenter-overlay-harness'
 
 describe('the presentator addon package', () => {
   // DK5
@@ -21,15 +18,19 @@ describe('the presentator addon package', () => {
 
       await buildStagedDeck(deckDirectory, outDirectory)
 
-      const emittedWorklets = (await readdir(join(outDirectory, 'assets')))
-        .filter((name) => /^pcm-capture-processor-.*\.js$/.test(name))
+      // Every audio worklet module registers its processor, whatever file name
+      // the build gives it; the CSP proof that it loads lives in the browser tests.
+      const assets = await readdir(join(outDirectory, 'assets'))
+      const emittedWorklets = []
+      for (const name of assets.filter((asset) => asset.endsWith('.js'))) {
+        if ((await readFile(join(outDirectory, 'assets', name), 'utf8')).includes('registerProcessor(')) {
+          emittedWorklets.push(name)
+        }
+      }
       expect(emittedWorklets).toHaveLength(1)
-      const emittedWorklet = await readFile(join(outDirectory, 'assets', ...emittedWorklets))
-      const addonWorklet = await readFile(join(addonRootDirectory, 'worklets/pcm-capture-processor.js'))
-      expect(sha256(emittedWorklet)).toBe(sha256(addonWorklet))
 
       const stagedEntries = await readdir(deckDirectory)
-      for (const copiedSource of ['custom-nav-controls.vue', 'style.css', 'components', 'worklets']) {
+      for (const copiedSource of ['custom-nav-controls.vue', 'style.css', 'components']) {
         expect(stagedEntries).not.toContain(copiedSource)
       }
     } finally {

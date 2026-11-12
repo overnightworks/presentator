@@ -625,7 +625,6 @@ def delivered_outcome(web_module: ModuleType) -> Any:  # noqa: ANN401 - the web 
         talk_page=True,
         pdf=True,
         worklet=False,
-        worklet_sha256=None,
     )
 
 
@@ -642,7 +641,6 @@ def client_output(outcome: Any) -> str:  # noqa: ANN401 - the web probe's Outcom
         "talk_page": outcome.talk_page,
         "pdf": outcome.pdf,
         "worklet": outcome.worklet,
-        "worklet_sha256": outcome.worklet_sha256,
     }
     return f"{json.dumps({'run': 'a-run'})}\n{json.dumps(said)}\n"
 
