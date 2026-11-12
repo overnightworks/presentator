@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Final, assert_never
 from pydantic import ValidationError
 from speech_client import wire
 from speech_client.health import UnexpectedStatus, fetch_health
-from speech_client.hearing import OPENING_SECONDS, Closed, HearingSession
+from speech_client.hearing import OPENING_SECONDS, Closed
 from speech_client.hearing import Refused as HearingRefused
 from speech_client.outcomes import (
     Cut,
@@ -18,16 +18,15 @@ from speech_client.outcomes import (
     PastDeadline,
     Unreachable,
 )
-from speech_client.relay import (
-    HOP_FRAME_BYTES,
-    AppEnded,
-    BrowserLeft,
-    HopClose,
-    RelayOutcome,
-    RuleBroken,
-    relay,
-)
+from speech_client.relay import AppEnded, BrowserLeft, HopClose, RuleBroken
 from speech_client.speak import Busy, Refused, SpeakOutcome, Spoken, speak
+from speech_client.utterances import (
+    Partial,
+    ServiceFailed,
+    Utterance,
+    UtteranceOutcome,
+    hear_utterances,
+)
 from speech_client.wire import VoiceId
 
 from presentator.contracts.copresenter import (
@@ -209,27 +208,32 @@ class SpeechHearing:
             _LOGGER.warning("hearing refused a language the wire does not name")
             await self.refuse(browser)
             return
-        session = HearingSession(
+
+        async def heard_utterance(utterance: Utterance) -> None:
+            await heard(
+                HearingTranscript(
+                    text=utterance.text,
+                    final=True,
+                    language=_sample_language(utterance.language),
+                )
+            )
+
+        async def heard_partial(partial: Partial) -> None:
+            await heard(HearingTranscript(text=partial.text, final=False))
+
+        outcome = await hear_utterances(
+            browser,
             self._origin,
             workload_token=tokens.workload,
             person_token=tokens.person,
             languages=_hearing_languages(hears),
-            held_limit_bytes=_HELD_LIMIT_BYTES,
             deadline_seconds=self._hearing_deadline_seconds,
+            held_limit_bytes=_HELD_LIMIT_BYTES,
+            ended=ended,
+            on_utterance=heard_utterance,
+            on_partial=heard_partial,
             opening_seconds=self._opening_seconds,
         )
-        try:
-            outcome = await relay(
-                browser,
-                session,
-                app_ended=ended,
-                on_event=_Transcripts(heard).on_event,
-                frame_limit_bytes=HOP_FRAME_BYTES,
-            )
-        except _ServiceFailureError as failure:
-            _LOGGER.warning(_HEARING_FAILED_LOG, failure.event_type)
-            await self.refuse(browser)
-            return
         _log_ending(outcome)
 
     async def refuse(self, browser: HearingSocket) -> None:
@@ -260,50 +264,14 @@ def _hearing_languages(main: wire.Language) -> tuple[wire.Language, ...]:
     return (main, *(code for code in wire.Language if code is not main))
 
 
-class _ServiceFailureError(Exception):
-    """A failed item or an error event ended the hearing; names only its type."""
-
-    def __init__(self, event_type: str) -> None:
-        super().__init__()
-        self.event_type = event_type
-
-
-class _Transcripts:
-    """Turn the service's events into the transcripts the browser is shown."""
-
-    def __init__(self, heard: Callable[[HearingTranscript], Awaitable[None]]) -> None:
-        self._heard = heard
-        self._heard_so_far: dict[str, str] = {}
-
-    async def on_event(self, event: wire.ServerEvent) -> None:
-        match event:
-            case wire.TranscriptDelta():
-                text = self._heard_so_far.get(event.item_id, "") + event.delta
-                self._heard_so_far[event.item_id] = text
-                await self._heard(HearingTranscript(text=text, final=False))
-            case wire.TranscriptCompleted():
-                self._heard_so_far.pop(event.item_id, None)
-                if event.transcript:
-                    (decoded,) = event.languages
-                    await self._heard(
-                        HearingTranscript(
-                            text=event.transcript,
-                            final=True,
-                            language=_sample_language(decoded.code),
-                        )
-                    )
-            case wire.TranscriptFailed() | wire.ErrorEvent():
-                raise _ServiceFailureError(type(event).__name__)
-            case _:
-                return
-
-
-def _log_ending(outcome: RelayOutcome) -> None:
+def _log_ending(outcome: UtteranceOutcome) -> None:
     match outcome:
         case Closed() | BrowserLeft() | AppEnded():
             return
         case HearingRefused():
             _LOGGER.warning("hearing failed: Refused status=%d", outcome.status)
+        case ServiceFailed():
+            _LOGGER.warning("hearing failed: ServiceFailed code=%s", outcome.code.value)
         case RuleBroken():
             _LOGGER.warning("hearing failed: RuleBroken close=%d", outcome.close.value)
         case Busy() | OverCap() | Malformed() | PastDeadline() | Cut() | Unreachable():
