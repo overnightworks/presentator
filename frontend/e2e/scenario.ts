@@ -1,6 +1,6 @@
 import type { BrowserContext, Locator, Page } from '@playwright/test';
 
-import type { KitLanguage, KitWords } from 'overnightworks-design';
+import { loadKitWords, type KitWords } from 'overnightworks-design/words';
 
 import type { SessionView } from '../src/lib/api/session.ts';
 import type { Words } from '../src/lib/words/de.ts';
@@ -28,16 +28,10 @@ export async function wordsOf(page: Page): Promise<Words> {
 	return loadWords((await sessionOf(page)).language);
 }
 
-// Node cannot load the kit's package root (its entry is Svelte), so the kit's
-// words come from the language modules the package ships, one per language.
-const kitWordModules: Record<KitLanguage, () => Promise<{ words: KitWords }>> = {
-	de: () => import('../node_modules/overnightworks-design/svelte-dist/words/de.js'),
-	en: () => import('../node_modules/overnightworks-design/svelte-dist/words/en.js')
-};
-
+// The words export loads under plain Node; the package root is Svelte and does not.
 // The kit's words of the language the lobby serves this page in.
 export async function kitWordsOf(page: Page): Promise<KitWords> {
-	return (await kitWordModules[(await sessionOf(page)).language]()).words;
+	return loadKitWords((await sessionOf(page)).language);
 }
 
 // The session beside the words of its language, the app's and the kit's, as the page holds them after its load.

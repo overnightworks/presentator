@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { invalidate, onNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { Marked } from 'overnightworks-design';
 	import { ageInWords } from '#lib/age.ts';
 	import ActionButton from '#lib/ActionButton.svelte';
 	import StatusLine from '#lib/StatusLine.svelte';
@@ -63,6 +64,8 @@
 		}
 	}
 </script>
+
+{#snippet code({ text }: { text: string })}<code>{text}</code>{/snippet}
 
 <svelte:head>
 	<!-- A template literal: a bare interpolation compiles to a `?? ''` branch no page reaches. -->
@@ -132,12 +135,7 @@
 	<section class="empty">
 		<h2>{words['sources.emptyTitle']}</h2>
 		<p>{words['sources.emptyExplanation']}</p>
-		<!-- Template literals: a bare interpolation beside other text compiles to a `?? ''` branch no page reaches. -->
-		<p>
-			{`${words['sources.emptyNeed']} `}<code>{words['sources.emptySsh']}</code>{` ${words['sources.emptyOr']} `}<code
-				>{words['sources.emptyHttps']}</code
-			>
-		</p>
+		<p><Marked parts={words['sources.emptyNeed']} marked={{ code }} /></p>
 		<a class="btn primary" href={resolve('/(lobby)/settings/sources/new')}>{words['sources.add']}</a>
 	</section>
 {/if}

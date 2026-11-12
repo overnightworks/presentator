@@ -1,6 +1,6 @@
 // Generated from the en catalog by design-catalogs. Do not edit.
 
-import type { Words } from "./de";
+import type { Words } from "./de.js";
 const numberFormat = new Intl.NumberFormat("en");
 const pluralRules = new Intl.PluralRules("en");
 // prettier-ignore
@@ -70,10 +70,7 @@ const translated = {
     "sources.add": "Add source",
     "sources.emptyTitle": "No source yet",
     "sources.emptyExplanation": "A source is a Git repository that the server reads every few minutes — GitHub, GitLab, in-house, or bare.",
-    "sources.emptyNeed": "You need the Git URL and a read-only secret:",
-    "sources.emptySsh": "SSH deploy key",
-    "sources.emptyOr": "or",
-    "sources.emptyHttps": "HTTPS token",
+    "sources.emptyNeed": ["You need the Git URL and a read-only secret: ", { marker: "code", text: "SSH deploy key" }, " or ", { marker: "code", text: "HTTPS token" }] as readonly (string | { readonly marker: "code"; readonly text: string })[],
     "source.back": "← Sources",
     "source.folder": "Folder",
     "source.columnFetched": "Fetched",

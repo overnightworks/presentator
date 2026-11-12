@@ -457,10 +457,10 @@ mcp-server = [
 
 [[package]]
 name = "overnightworks-design"
-version = "0.25.0"
-source = { url = "https://github.com/overnightworks/design/releases/download/v0.25.0/overnightworks_design-0.25.0-py3-none-any.whl" }
+version = "0.27.0"
+source = { url = "https://github.com/overnightworks/design/releases/download/v0.27.0/overnightworks_design-0.27.0-py3-none-any.whl" }
 wheels = [
-    { url = "https://github.com/overnightworks/design/releases/download/v0.25.0/overnightworks_design-0.25.0-py3-none-any.whl", hash = "sha256:088e282b2979675ae730eaa0304bf5df13184507d89e174c7f6abd2adb8062bb" },
+    { url = "https://github.com/overnightworks/design/releases/download/v0.27.0/overnightworks_design-0.27.0-py3-none-any.whl", hash = "sha256:0a84437df37848c1a7bc4bb63ba9027ea4f8ff3c091554765a68ccf7ff9b0154" },
 ]
 
 [package.optional-dependencies]
@@ -518,7 +518,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "overnightworks-design", extras = ["catalogs"], url = "https://github.com/overnightworks/design/releases/download/v0.25.0/overnightworks_design-0.25.0-py3-none-any.whl" },
+    { name = "overnightworks-design", extras = ["catalogs"], url = "https://github.com/overnightworks/design/releases/download/v0.27.0/overnightworks_design-0.27.0-py3-none-any.whl" },
     { name = "pypdf", specifier = "==7.0.1" },
     { name = "pyright", specifier = "==1.1.414" },
     { name = "pytest", specifier = "==9.2.0" },
