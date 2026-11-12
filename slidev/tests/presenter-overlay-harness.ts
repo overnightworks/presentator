@@ -79,6 +79,9 @@ export const state = {
   interfaceLanguage: 'en' as 'de' | 'en',
   // While set, `/who` answers only once it has settled.
   whoGate: null as Promise<void> | null,
+  // How `/who` answers its nth request (from 0 since the test began): it fails, or names another account language.
+  whoRequests: 0,
+  whoScript: [] as { fails?: boolean, interfaceLanguage?: 'de' | 'en' }[],
   hearLanguages: [] as (string | null)[],
   hearingMode: 'ready' as 'ready' | 'not-ready' | 'refused-on-open' | 'fails-after-capture' | 'unreachable' | 'who-fails' | 'who-not-found',
   // Whether the fake hearing sends a final question as soon as the hearing opens.
@@ -390,6 +393,12 @@ async function startServer() {
     const url = new URL(request.url ?? '/', 'http://presenter.test')
     if (url.pathname === '/copresenter/who') {
       await state.whoGate
+      const scripted = state.whoScript[state.whoRequests++] ?? {}
+      if (scripted.fails) {
+        response.writeHead(500, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ detail: 'Co-presenter failed' }))
+        return
+      }
       if (state.hearingMode === 'who-not-found') {
         response.writeHead(404, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ detail: 'Not found' }))
@@ -408,7 +417,7 @@ async function startServer() {
       response.writeHead(200, { 'content-type': 'application/json' })
       response.end(JSON.stringify({
         language: state.whoLanguage,
-        interface_language: state.interfaceLanguage,
+        interface_language: scripted.interfaceLanguage ?? state.interfaceLanguage,
         speech: { hearing: { ready: state.hearingMode !== 'not-ready' } },
       }))
       return
@@ -780,6 +789,8 @@ export function registerOverlayHarness() {
     state.hearLanguages = []
     state.interfaceLanguage = 'en'
     state.whoGate = null
+    state.whoRequests = 0
+    state.whoScript = []
   })
 
   afterEach(() => {

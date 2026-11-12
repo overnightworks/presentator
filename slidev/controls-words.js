@@ -9,11 +9,18 @@ import { words as english } from './words/en'
 // in the wrong language.
 export const controlWords = shallowRef(null)
 
-// The server named the language; a language that cannot be loaded counts as no
-// language known.
+let languageKnown = false
+
+// The first language the server names is loaded and kept; a later answer does
+// not load another. A language that cannot be loaded counts as no language
+// known, so a later answer may still supply one.
 export async function useAccountLanguage(language) {
+  if (languageKnown) return
   try {
-    controlWords.value = await loadWords(language)
+    const words = await loadWords(language)
+    if (languageKnown) return
+    controlWords.value = words
+    languageKnown = true
   } catch {
     useEnglishUnlessKnown()
   }

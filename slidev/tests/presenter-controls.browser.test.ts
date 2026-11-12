@@ -436,6 +436,43 @@ describe('presenter controls', () => {
     }
   })
 
+  it('CP10: keeps the language the start\'s /who named, so a switch-on that names another loads no further words', async () => {
+    state.whoScript = [{ interfaceLanguage: 'en' }, { interfaceLanguage: 'de' }]
+    const { browser, page } = await openPresenter(1024)
+    try {
+      await page.getByRole('link', { name: en['controls.home'] }).waitFor({ state: 'visible', timeout: 5_000 })
+      const scripts: string[] = []
+      page.on('request', (request) => {
+        if (request.resourceType() === 'script') scripts.push(request.url())
+      })
+      const hearingsBefore = state.hearingOpened
+      await page.getByRole('switch', { name: en['controls.switch'] }).click({ timeout: 2_000 })
+      // The hearing opens only after the switch-on's /who answer is handled.
+      await expect.poll(() => state.hearingOpened).toBeGreaterThan(hearingsBefore)
+      expect(state.whoRequests).toBe(2)
+      expect(await page.getByRole('complementary', { name: en['controls.presenterOn'] }).count()).toBe(1)
+      expect(scripts).toEqual([])
+    } finally {
+      await browser.close()
+    }
+  })
+
+  it('CP10: learns the account language at switch-on when the start\'s /who failed', async () => {
+    state.interfaceLanguage = 'de'
+    state.whoScript = [{ fails: true }]
+    const { browser, page } = await openPresenter(1024)
+    try {
+      const ai = page.getByRole('switch', { name: wordsOf.de['controls.switch'] })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await expect.poll(() => state.whoRequests).toBe(1)
+      await ai.click({ timeout: 2_000 })
+      await page.getByRole('complementary', { name: wordsOf.de['controls.presenterOn'] }).waitFor({ state: 'attached', timeout: 5_000 })
+      expect(await page.getByRole('link', { name: wordsOf.de['controls.home'] }).count()).toBe(1)
+    } finally {
+      await browser.close()
+    }
+  })
+
   it.each([
     { width: 1024, shown: 3, followed: ['/presenter/3', '/3'] },
     { width: 390, shown: 3, followed: ['/presenter/3', '/3'] },
