@@ -39,8 +39,12 @@ RUN case "$PRESENTATOR_RUNTIME_UID" in \
     && useradd --create-home --non-unique --uid "$PRESENTATOR_RUNTIME_UID" presentator
 # Node 26 no longer bundles corepack, which hands out the pnpm that each
 # package.json names in packageManager.
+# npm leaves its cache and timestamped logs in root's home, and Node writes its
+# compile cache to /tmp; the root steps of the toolchain remove both, because a
+# layer that repeats holds neither.
 RUN npm install --global corepack@0.36.0 \
-    && rm -rf /root/.npm
+    && rm -rf /root/.npm \
+    && find /tmp -mindepth 1 -delete
 
 # The browser and corepack's package managers are root's and live outside the
 # runtime HOME, so every one of the three users can run them.
@@ -62,7 +66,8 @@ RUN pnpm build
 FROM runtime-user AS toolchain
 
 # The toolchain runs as the named unprivileged runtime user.
-RUN corepack enable pnpm
+RUN corepack enable pnpm \
+    && find /tmp -mindepth 1 -delete
 
 # The project's dependencies are installed as that user, because a build writes
 # its caches beside the project; pnpm and the browser are installed as root.
@@ -71,12 +76,12 @@ COPY --chown=presentator slidev/package.json slidev/pnpm-lock.yaml slidev/pnpm-w
 WORKDIR /app/slidev
 # pnpm 12 fetches its native binary on its first run into the root-owned
 # corepack home, so that run happens here as root, before the user switch.
-RUN corepack install && pnpm --version
+RUN corepack install && pnpm --version \
+    && find /tmp -mindepth 1 -delete
 # A release builds with SOURCE_DATE_EPOCH, and pnpm then records that time in
 # node_modules instead of the clock's. Its store, metadata cache and update-check
 # state hold clock times too, and nothing needs them after the install, so the
-# same RUN removes them; so is /tmp left empty, because a leftover there would
-# carry a random name.
+# same RUN removes them.
 ARG SOURCE_DATE_EPOCH
 USER presentator
 RUN pnpm install --frozen-lockfile \
