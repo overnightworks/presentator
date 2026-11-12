@@ -542,10 +542,11 @@ def served_by_host(instance: Instance, settings: Settings) -> Router:
     The `Host` header alone chooses: a request for a hostname this instance does
     not serve, with a port or without, or with none, gets the router's 404 and a
     socket is refused, so neither app ever answers under the other's name. The
-    one exception is a `POST` to the lobby's back-channel logout path: the
-    identity provider reaches it under the name of the network it shares with
-    the instance, and the signed Logout Token is its only control. The talk
-    hostname stays the talk app's alone, so the path is a 404 there. Nothing the
+    one exception is the lobby's back-channel logout path: the identity provider
+    reaches it under the name of the network it shares with the instance, and
+    the signed Logout Token is its only control. Other methods on that path
+    answer 405. The talk hostname stays the talk app's alone, so the path is a
+    404 there. Nothing the
     caller sent builds a redirect.
     """
 
