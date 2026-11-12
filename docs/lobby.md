@@ -19,4 +19,5 @@ under "Words and look".
   `sessionStorage`. The lobby keeps no app data, form input or secret there and
   uses no `localStorage`.
 - **LB6** The content security policy admits exactly one inline style,
-  SvelteKit's announcer style, by its sha256 with `'unsafe-hashes'`.
+  SvelteKit's announcer style, by the sha256 the build states, with
+  `'unsafe-hashes'`.
