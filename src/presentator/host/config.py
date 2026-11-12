@@ -19,6 +19,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from webauth.proxies import TrustedProxies
 
 from presentator.adapters.build_wire import SOCKET_DIRECTORY, SOCKET_NAME
+from presentator.adapters.speech import VoiceId
 from presentator.agent.settings import AgentSettings
 
 # Every secret this instance is handed is at least this many characters, so no
@@ -214,12 +215,13 @@ class Settings(
     # key there and the group that may ask. They are deployment facts: no default.
     agent: AgentSettings
     # Where the shared speech service answers, the scope that names it at the
-    # issuer and the voice this instance speaks in. They are deployment facts:
-    # no default. The client reaches only a plain http origin on internal
-    # networks, so this is the one origin here that is not https.
+    # issuer and the voice this instance speaks in, one the service's catalogue
+    # names. They are deployment facts: no default. The client reaches only a
+    # plain http origin on internal networks, so this is the one origin here
+    # that is not https.
     speech_service: Annotated[str, AfterValidator(_one_http_origin)]
     speech_service_scope: Annotated[str, AfterValidator(_one_scope_token)]
-    speech_voice: str = Field(min_length=1)
+    speech_voice: VoiceId
     # Empty: the client address is the ASGI peer. A list is the peers whose
     # X-Forwarded-For this instance believes.
     trusted_proxies: Annotated[str, AfterValidator(_a_proxy_list)] = ""
