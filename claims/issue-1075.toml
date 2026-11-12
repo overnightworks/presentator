@@ -1,8 +1,0 @@
-claim_id = "c7701c44dbd647dca3e5c7d287c4993c"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "914148a51a9ac7e360b4ebe17442c97915ab14b6"
-branch = "claude/issue-1075-page-loads-its-words"
-scope = ["AGENTS.md", "docs/ARCHITECTURE.md", "docs/lobby.md", "frontend/e2e", "frontend/src", "pyproject.toml", "quality/config.toml", "scripts/check_catalog_purity.py", "src/presentator", "tests", "uv.lock"]
-opened_commit = "e344df22942db4e575fcc6593d44c0689ae47f73"
-whole_reason = "Every read site moves from one type to the other in one compile unit, and the old catalog path is deleted in the same change so that no second source survives."
