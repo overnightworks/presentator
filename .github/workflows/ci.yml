@@ -50,6 +50,10 @@ jobs:
       - name: Check the catalogs and the generated words
         run: uv run --locked design-catalogs --check
 
+      - name: Check the overlay's catalogs and the generated words
+        working-directory: slidev
+        run: uv run --locked --project .. design-catalogs --check
+
       - name: Check catalog purity
         run: uv run --locked python scripts/check_catalog_purity.py
 

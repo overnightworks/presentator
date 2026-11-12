@@ -8,6 +8,7 @@
 - `uv run --locked pyright` and `uv run --locked vulture` from the root: types and dead code.
 - `uv run --locked python scripts/check_catalog_purity.py` from the root: finds literal page text.
 - `pnpm lint` and `pnpm check` from `frontend/`: lint and types of the lobby pages.
+- `uv run --locked design-catalogs` from the root, and `uv run --locked --project .. design-catalogs` from `slidev/`: write the words of the lobby and of the overlay from their catalogs; `--check` holds them current.
 - `pnpm lint` and `pnpm typecheck` from `slidev/`: lint and types of the deck build.
 - `uv run --locked python -m tests.support.lobby_drive openapi frontend/src/lib/api/openapi.json` from the root, then `pnpm generate:types` from `frontend/`: regenerates the OpenAPI document and the wire types.
 
@@ -17,7 +18,7 @@
 - `sonar-project.properties` carries only the keys the quality gate allows.
 - A new root entry is declared in `quality/config.toml` with a reason, or lives in its owner's directory.
 - A change to the lobby API regenerates `openapi.json` and `types.ts`; CI diffs them.
-- Page text comes from the generated words of `frontend/src/lib/catalogs/*.po` (`design-catalogs` writes `frontend/src/lib/words/` and `src/presentator/contracts/words.py`), never a literal in a `.svelte` file.
+- Page text comes from the generated words of `frontend/src/lib/catalogs/*.po` (`design-catalogs` writes `frontend/src/lib/words/` and `src/presentator/contracts/words.py`), never a literal in a `.svelte` file. The overlay is its own catalog owner: its words come from `slidev/catalogs/*.po`, written to `slidev/words/`, and never from the lobby's.
 - `legal/` changes only by wording the operator released.
 
 ## Owners
