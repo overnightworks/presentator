@@ -1,0 +1,8 @@
+claim_id = "e578754a1ea5418f9034aeda9bae1bd7"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "c9753c5b296e8c5684d4b9b3a883032547fd5834"
+branch = "claude/issue-1077-k3d-sigterm-step-race"
+scope = [".github/workflows/ci.yml", "scripts/probe_build_worker", "scripts/probe_build_worker_k3d.py", "tests/scripts"]
+opened_commit = "778ae4fa15db476b793fc79beb27d79395511ebb"
+whole_reason = "The race sits between the CI step and the driver; which of the two changes is decided by reading both."
