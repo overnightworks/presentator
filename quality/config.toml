@@ -64,6 +64,11 @@ rule = "file-suffix"
 reason = "a redirect rule file the built-talk fixture keeps under its name; the static host serves it as a plain file and does not read its rules"
 
 [[layout.allow]]
+path = "tests/presentator/api/fixtures/lobby_build/_app/announcer-style-hash"
+rule = "file-suffix"
+reason = "a fixture copy of the file the frontend build emits under this name and the lobby shell reads by it; the name is the contract between the two"
+
+[[layout.allow]]
 path = "slidev/tests/addon-package.test.ts"
 rule = "test-layout"
 reason = "its subject is a deck built by the addon's name, which no addon source file mirrors"
