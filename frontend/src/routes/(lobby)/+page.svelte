@@ -6,24 +6,24 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const words = $derived(data.session.words);
+	const words = $derived(data.words);
 	const states = $derived(stateWords(words));
 	const tag = $derived(languageTag());
 </script>
 
 <svelte:head>
 	<!-- A template literal: a bare interpolation compiles to a `?? ''` branch no page reaches. -->
-	<title>{`${words.decks_title}`}</title>
+	<title>{`${words['decks.title']}`}</title>
 </svelte:head>
 
-<h1>{words.decks_title}</h1>
+<h1>{words['decks.title']}</h1>
 {#if data.list.decks.length > 0}
 	<table class="decks">
 		<thead>
 			<tr>
-				<th scope="col">{words.decks_column_state}</th>
-				<th scope="col">{words.decks_column_deck}</th>
-				<th scope="col">{words.decks_column_changed}</th>
+				<th scope="col">{words['decks.columnState']}</th>
+				<th scope="col">{words['decks.columnDeck']}</th>
+				<th scope="col">{words['decks.columnChanged']}</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -41,12 +41,12 @@
 	</table>
 {:else}
 	<section class="empty">
-		<h2>{words.decks_empty_title}</h2>
+		<h2>{words['decks.emptyTitle']}</h2>
 		<p>
 			{#if data.person.role === 'admin'}
-				<a href={resolve('/(lobby)/settings/sources')}>{words.decks_empty_explanation}</a>
+				<a href={resolve('/(lobby)/settings/sources')}>{words['decks.emptyExplanation']}</a>
 			{:else}
-				{words.decks_empty_explanation}
+				{words['decks.emptyExplanation']}
 			{/if}
 		</p>
 		{#if data.list.source_address}

@@ -31,7 +31,7 @@ describe('the Add source page after a create', () => {
 		await createdSource();
 
 		expect(document.querySelector('form')).toBeNull();
-		expect(document.body.textContent).toContain(words.source_webhook_once);
+		expect(document.body.textContent).toContain(words['sourceNew.webhookOnce']);
 	});
 
 	it('forgets the webhook secret when the page is hidden', async () => {

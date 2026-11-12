@@ -176,7 +176,7 @@ describe('the lookup is latest wins', () => {
 		flushSync();
 
 		expect(secretField()).toBeNull();
-		expect(status()?.textContent).toBe(words.source_kind_pending);
+		expect(status()?.textContent).toBe(words['sourceNew.kindPending']);
 		expect(checkButton()?.disabled).toBe(true);
 	});
 
@@ -254,7 +254,7 @@ describe('a check result belongs to the address it was for', () => {
 		type(URL_FIELD, addresses.ssh.url);
 		flushSync();
 
-		expect(status()?.textContent).toBe(words.source_kind_pending);
+		expect(status()?.textContent).toBe(words['sourceNew.kindPending']);
 		expect(createButton()?.disabled).toBe(true);
 	});
 
@@ -291,7 +291,7 @@ describe('a request in flight', () => {
 			pressed()?.click();
 			flushSync();
 
-			const word = which === 'check' ? words.source_busy_check : words.source_busy_create;
+			const word = which === 'check' ? words['sourceNew.busyCheck'] : words['sourceNew.busyCreate'];
 			expect(pressed()?.getAttribute('aria-busy')).toBe('true');
 			expect(pressed()?.textContent?.trim()).toBe(word);
 			expect(pressed()?.querySelector('.state[data-state="building"]')).not.toBeNull();
@@ -301,10 +301,10 @@ describe('a request in flight', () => {
 			if (which === 'check') {
 				held.reachable();
 				await vi.waitFor(() => expect(pressed()?.hasAttribute('aria-busy')).toBe(false));
-				expect(pressed()?.textContent?.trim()).toBe(words.source_check);
+				expect(pressed()?.textContent?.trim()).toBe(words['sourceNew.check']);
 			} else {
 				held.created();
-				await vi.waitFor(() => expect(document.body.textContent).toContain(words.source_created));
+				await vi.waitFor(() => expect(document.body.textContent).toContain(words['sourceNew.created']));
 			}
 		}
 	);
@@ -318,7 +318,7 @@ describe('a lookup that fails', () => {
 
 			type(URL_FIELD, addresses.https.url);
 
-			await vi.waitFor(() => expect(alert()?.textContent).toContain(words.source_kind_failed));
+			await vi.waitFor(() => expect(alert()?.textContent).toContain(words['sourceNew.kindFailed']));
 			expect(secretField()).toBeNull();
 			expect(keyBlock()).toBeNull();
 			expect(checkButton()?.disabled).toBe(true);
@@ -335,7 +335,7 @@ describe('a lookup that fails', () => {
 		await vi.waitFor(() => expect(alert()).not.toBeNull());
 		healthy = true;
 
-		press(words.source_kind_retry);
+		press(words['sourceNew.kindRetry']);
 
 		await vi.waitFor(() => expect(secretField()).not.toBeNull());
 		expect(alert()).toBeNull();

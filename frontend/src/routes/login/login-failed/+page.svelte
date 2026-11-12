@@ -5,12 +5,12 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const words = $derived(data.session.words);
+	const words = $derived(data.words);
 	const addresses = $derived(data.session.sign_in);
 </script>
 
 <SignInPage
-	appName={words.wordmark}
+	appName={words['app.name']}
 	state={{ page: 'login-failed', signInHref: addresses.start }}
 	legalLinks={legalLinks(words)}
 	words={signInPageWords(words)}

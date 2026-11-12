@@ -18,7 +18,7 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const words = $derived(data.session.words);
+	const words = $derived(data.words);
 	const tag = $derived(languageTag());
 	const sources = $derived(
 		data.sources.map((source) => ({
@@ -54,7 +54,7 @@
 			try {
 				outcome = { name, ...fetchOutcome(await fetchNow(fetch, name), words) };
 			} catch (error) {
-				outcome = { name, shape: 'failed', text: words.source_request_failed };
+				outcome = { name, shape: 'failed', text: words['sources.requestFailed'] };
 				throw error;
 			}
 			await invalidate(SOURCES_PATH);
@@ -66,12 +66,12 @@
 
 <svelte:head>
 	<!-- A template literal: a bare interpolation compiles to a `?? ''` branch no page reaches. -->
-	<title>{`${words.settings_sources}`}</title>
+	<title>{`${words['sources.title']}`}</title>
 </svelte:head>
 
 <div class="head">
-	<h1>{words.settings_sources}</h1>
-	<a class="btn primary" href={resolve('/(lobby)/settings/sources/new')}>{words.sources_add}</a>
+	<h1>{words['sources.title']}</h1>
+	<a class="btn primary" href={resolve('/(lobby)/settings/sources/new')}>{words['sources.add']}</a>
 </div>
 {#if removal !== null}
 	<output class="toast"
@@ -86,10 +86,10 @@
 	<table class="sources">
 		<thead>
 			<tr>
-				<th scope="col">{words.decks_column_state}</th>
-				<th scope="col">{words.sources_column_source}</th>
-				<th scope="col">{words.sources_column_access}</th>
-				<th scope="col">{words.sources_column_fetched}</th>
+				<th scope="col">{words['sources.columnState']}</th>
+				<th scope="col">{words['sources.columnSource']}</th>
+				<th scope="col">{words['sources.columnAccess']}</th>
+				<th scope="col">{words['sources.columnFetched']}</th>
 				<th scope="col"></th>
 			</tr>
 		</thead>
@@ -114,8 +114,8 @@
 						<ActionButton
 							variant="secondary"
 							small
-							label={words.sources_fetch_now}
-							busyWord={words.source_busy_fetch}
+							label={words['sources.fetchNow']}
+							busyWord={words['sources.busyFetch']}
 							busy={fetching === source.name}
 							disabled={fetching !== null}
 							onclick={() => fetchSource(source.name)}
@@ -130,15 +130,15 @@
 	</table>
 {:else}
 	<section class="empty">
-		<h2>{words.sources_empty_title}</h2>
-		<p>{words.sources_empty_explanation}</p>
+		<h2>{words['sources.emptyTitle']}</h2>
+		<p>{words['sources.emptyExplanation']}</p>
 		<!-- Template literals: a bare interpolation beside other text compiles to a `?? ''` branch no page reaches. -->
 		<p>
-			{`${words.sources_empty_need} `}<code>{words.sources_empty_ssh}</code>{` ${words.sources_empty_or} `}<code
-				>{words.sources_empty_https}</code
+			{`${words['sources.emptyNeed']} `}<code>{words['sources.emptySsh']}</code>{` ${words['sources.emptyOr']} `}<code
+				>{words['sources.emptyHttps']}</code
 			>
 		</p>
-		<a class="btn primary" href={resolve('/(lobby)/settings/sources/new')}>{words.sources_add}</a>
+		<a class="btn primary" href={resolve('/(lobby)/settings/sources/new')}>{words['sources.add']}</a>
 	</section>
 {/if}
 

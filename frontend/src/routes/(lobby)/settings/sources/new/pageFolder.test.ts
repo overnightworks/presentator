@@ -58,7 +58,7 @@ describe('what the address shows of the folder', () => {
 
 		await vi.waitFor(() => expect(folderField()).not.toBeNull());
 		expect(document.querySelector('label[for="source-folder"]')?.textContent).toBe(
-			words.source_folder_optional
+			words['sourceNew.folderOptional']
 		);
 	});
 });
@@ -147,7 +147,7 @@ describe('the folder on the wire', () => {
 
 		createButton()?.click();
 
-		await vi.waitFor(() => expect(alert()?.textContent).toContain(words.source_refused_folder));
+		await vi.waitFor(() => expect(alert()?.textContent).toContain(words['source.refusedFolder']));
 	});
 });
 
