@@ -449,9 +449,12 @@ def test_trying_again_after_a_refusal_signs_in_and_the_talk_host_sends_on_to_the
             f"http://{urlsplit(A_BROWSERS_ADDRESS).hostname}:8000",
             id="lobby hostname with port 8000",
         ),
+        pytest.param("http://web.presentator.svc:8000", id="service name with port"),
+        pytest.param("http://web.presentator.svc", id="service name"),
+        pytest.param("http://10.43.7.21:8000", id="ip with port"),
     ],
 )
-def test_a_verified_logout_token_at_the_lobby_ends_both_hosts_sessions(
+def test_a_verified_logout_token_under_any_host_but_the_talk_hosts_ends_both_sessions(
     hosts: Hosts,
     logout_address: str,
 ) -> None:
