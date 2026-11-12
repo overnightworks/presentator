@@ -1,11 +1,17 @@
 [gate]
-mandatory_jobs = ["Python: architecture, lint, types", "Python: tests", "Speech: lint, tests", "Speech: Chatterbox provider", "Speech: Qwen provider", "Speech: VoxCPM provider", "Speech: Magpie provider", "Frontend: lint, types, tests, deck build", "Lobby: lint, types, tests, drive", "Coverage report", "Container image", "Build worker: sealed step", "Build worker: k3d pod"]
+mandatory_jobs = ["Python: architecture, lint, types", "Python: tests", "Speech: lint, tests", "Speech: Chatterbox provider", "Speech: Qwen provider", "Speech: VoxCPM provider", "Speech: Magpie provider", "Frontend: lint, types, tests, deck build", "Lobby: lint, types, tests, drive", "Coverage report", "Container image", "Build worker: k3d pod"]
 
 [[gate.loosened]]
 what = 'mandatory job "Co-presenter: lint, tests" removed'
 item = "#477"
 date = 2026-10-24
 reason = "the host co-presenter package is deleted (D1 of #355, operator ruling 21.10.2026); its job checks code that no longer exists"
+
+[[gate.loosened]]
+what = 'mandatory job "Build worker: sealed step" removed'
+item = "#1097"
+date = 2026-11-12
+reason = "the Compose deployment it drove is switched off and presentator serves from the platform's cluster; its Docker probe backend, its job and compose.yaml leave together, and the pod shape stays proven by the mandatory job \"Build worker: k3d pod\""
 
 [[gate.loosened]]
 what = 'import contract "Only adapters import agent_runtime_client" removed'
@@ -53,21 +59,6 @@ entry = "speech/"
 reason = "the host speech service and its provider workers, each with its own lock"
 
 [[layout.allow]]
-path = "scripts/probe_build_worker/attack/vite.config.mjs"
-rule = "script-name"
-reason = "Vite loads its configuration by the name vite.config.mjs"
-
-[[layout.allow]]
-path = "scripts/probe_build_worker/flood/vite.config.mjs"
-rule = "script-name"
-reason = "Vite loads its configuration by the name vite.config.mjs"
-
-[[layout.allow]]
-path = "scripts/probe_build_worker/limits/vite.config.mjs"
-rule = "script-name"
-reason = "Vite loads its configuration by the name vite.config.mjs"
-
-[[layout.allow]]
 path = "tests/presentator/api/fixtures/built_talk/_redirects"
 rule = "file-suffix"
 reason = "a redirect rule file the built-talk fixture keeps under its name; the static host serves it as a plain file and does not read its rules"
@@ -91,11 +82,6 @@ reason = "it exercises the addon's overlay in a browser through a built deck, wh
 path = "slidev/tests/room-notice.browser.test.ts"
 rule = "test-layout"
 reason = "it exercises the room notice across a presenter and a projector window in a browser through built decks, which no single addon source file mirrors"
-
-[[layout.allow]]
-path = "tests/test_compose.py"
-rule = "test-layout"
-reason = "its subject is the root compose.yaml, which no package mirrors"
 
 [[layout.allow]]
 path = "tests/support/vulture_allowlist.py"

@@ -7,8 +7,7 @@ worker and refuses to start where the worker does not answer
 ([constraints and reasons](../ARCHITECTURE.md#6-constraints-and-reasons)). A run from a checkout
 is the one place that says otherwise: `PRESENTATOR_BUILD_RUNNER=host` executes
 a deck's Vue components as the server process, with its rights over every file
-and the network. `compose.yaml` never sets it. Do not use it for a repository
-somebody else can push to.
+and the network. Do not use it for a repository somebody else can push to.
 
 ## Before you start
 
