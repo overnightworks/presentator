@@ -1,0 +1,8 @@
+claim_id = "fdd3d772b6df4d1d95faba9c0e64994f"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "5a786f501f1e0d88d45c3686573ef472cb988677"
+branch = "claude/issue-1100-voice-per-language"
+scope = ["compose.yaml", "docs/co-presenter.md", "docs/configuration.md", "docs/runbooks/run-from-a-checkout.md", "src/presentator/adapters/speech.py", "src/presentator/host/config.py", "src/presentator/host/main.py", "tests/conftest.py", "tests/presentator", "tests/support", "tests/test_compose.py"]
+opened_commit = "fb26459a3d378899e9204647bb71d6f14e92fd04"
+whole_reason = "The two settings, the adapter that reads them and the tests and fakes that construct them compile only together."
