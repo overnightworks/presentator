@@ -1,0 +1,8 @@
+claim_id = "9facd8dce2ce4ac497acfc777549996c"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "c4cef46bcb7ade0b5a87fbd393bad93414fb05b2"
+branch = "claude/issue-1110-documents-one-deployment"
+scope = ["Dockerfile", "docs/ARCHITECTURE.md", "docs/co-presenter.md", "docs/runbooks/run-from-a-checkout.md", "examples/copresenter-deck/README.md"]
+opened_commit = "484f8b6b0b0adfda341e801adb04f0b30bad8d7f"
+whole_reason = "The same fact, that presentator has one deployment on the platform, is stated in five places that must agree."
