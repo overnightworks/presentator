@@ -169,14 +169,13 @@ def _who_status(instance: SpeechInstance) -> HTTPStatus:
     return HTTPStatus(response.status_code)
 
 
-def test_who_says_a_ready_service_hears_at_the_clients_rate(tmp_path: Path) -> None:
+def test_who_says_a_ready_service_is_ready_to_hear(tmp_path: Path) -> None:
     with a_speech_instance(tmp_path) as instance:
         response, _logged = who_over(instance)
 
     assert response.status_code == HTTPStatus.OK
     speech = response.json()["speech"]
     assert speech["hearing"]["ready"] is True
-    assert speech["sample_rate"] == wire.SessionInput().format.rate
 
 
 def test_who_says_hearing_still_loading_even_when_the_voice_is_not_ready(

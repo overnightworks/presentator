@@ -59,9 +59,7 @@ def test_readiness_comes_from_speech_and_never_touches_the_answer_port() -> None
 
     readiness = asyncio.run(a_use(fakes, FakeDeckStore()).readiness())
 
-    assert readiness == CoPresenterReadiness(
-        hearing_sample_rate=16_000, local_hearing_ready=True
-    )
+    assert readiness == CoPresenterReadiness(local_hearing_ready=True)
     assert fakes.speech.readiness_calls == 1
     assert (fakes.answers.messages, fakes.answers.exits) == ([], 0)
 
