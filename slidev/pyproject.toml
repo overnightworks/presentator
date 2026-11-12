@@ -1,0 +1,3 @@
+[tool.design-catalogs]
+catalogs = "catalogs"
+typescript = "words"

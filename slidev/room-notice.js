@@ -1,6 +1,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { createSyncState, useNav } from '@slidev/client'
 
+import { words as de } from './words/de'
+import { words as en } from './words/en'
+
 // The room notice: the presenter window decides what the AI does and writes it
 // here; each window that shows the deck reads it and decides for itself how
 // long it shows the whole sentence. The state travels between the windows of
@@ -22,19 +25,9 @@ const EXPIRY_MILLISECONDS = 3000
 const CLOCK_MILLISECONDS = 500
 
 // The room's words follow the deck's language, which the speech contract
-// closes to these two.
-const WORDS = Object.freeze({
-  de: {
-    band: 'Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an einen KI-Dienst gesendet. Welcher, steht in der Datenschutzerklärung.',
-    listening: 'KI hört zu',
-    answering: 'KI antwortet',
-  },
-  en: {
-    band: 'This talk uses an AI co-presenter. While it is switched on, speech is converted to text locally and sent with the slides to an AI service. The Datenschutzerklärung (privacy notice) says which one.',
-    listening: 'AI is listening',
-    answering: 'AI is answering',
-  },
-})
+// closes to these two. They are imported statically: a projector opened late
+// must show the notice at once and without the server.
+const WORDS_BY_LANGUAGE = Object.freeze({ de, en })
 
 export function derivePhase({ capturing, playing }) {
   if (!capturing) return Phase.OFF
@@ -104,6 +97,6 @@ export function useRoomNotice() {
     const { phase, language } = sync.state
     const inBand = !isPresenter.value && now.value - liveSince.value < BAND_MILLISECONDS
     const shown = inBand ? BAND : phase
-    return { shown, text: WORDS[language][shown] }
+    return { shown, text: WORDS_BY_LANGUAGE[language][`roomNotice.${shown}`] }
   })
 }

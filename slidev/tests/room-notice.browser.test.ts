@@ -4,6 +4,8 @@ import { HopClose } from 'overnightworks-speech-browser'
 import type { BrowserContext, Page } from 'playwright-chromium'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { words as wordsDe } from '../words/de'
+import { words as wordsEn } from '../words/en'
 import {
   buildAddonDeck,
   createOverlayDeckServer,
@@ -20,14 +22,11 @@ import {
 registerOverlayHarness()
 vi.setConfig({ testTimeout: 90_000 })
 
-// CP11: the ruled sentences, and the pill words, as scenario data.
-const BANNER = {
-  de: 'Dieser Vortrag nutzt einen KI-Co-Presenter. Solange er eingeschaltet ist, wird Gesprochenes lokal in Text umgewandelt und mit den Folien an einen KI-Dienst gesendet. Welcher, steht in der Datenschutzerklärung.',
-  en: 'This talk uses an AI co-presenter. While it is switched on, speech is converted to text locally and sent with the slides to an AI service. The Datenschutzerklärung (privacy notice) says which one.',
-}
+// CP11: the sentences and the pill words, as the overlay's catalogs hold them.
+const BANNER = { de: wordsDe['roomNotice.band'], en: wordsEn['roomNotice.band'] }
 const PILL = {
-  de: { listening: 'KI hört zu', answering: 'KI antwortet' },
-  en: { listening: 'AI is listening', answering: 'AI is answering' },
+  de: { listening: wordsDe['roomNotice.listening'], answering: wordsDe['roomNotice.answering'] },
+  en: { listening: wordsEn['roomNotice.listening'], answering: wordsEn['roomNotice.answering'] },
 }
 
 type Fakes = {
