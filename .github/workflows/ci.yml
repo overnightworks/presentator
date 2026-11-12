@@ -47,6 +47,9 @@ jobs:
       - name: Check for dead code
         run: uv run --locked vulture
 
+      - name: Check the catalogs and the generated words
+        run: uv run --locked design-catalogs --check
+
       - name: Check catalog purity
         run: uv run --locked python scripts/check_catalog_purity.py
 
