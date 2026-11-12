@@ -11,7 +11,6 @@ and the outcome as the last one: each step's `BuildFailure` reason, text and
 counts, and what the run directory holds when the steps are over.
 """
 
-import hashlib
 import json
 import sys
 from dataclasses import dataclass
@@ -36,7 +35,8 @@ from presentator.host.main import build_bound_of, the_build_worker
 LIMIT_FILE = "limit.txt"
 STAGED_PREFIX = "staged-"
 EXTRA_PART = "a"
-WORKLET_GLOB = "assets/pcm-capture-processor-*.js"
+# Every audio worklet module registers its processor, whatever its built file is named.
+WORKLET_MARKER = b"registerProcessor("
 
 
 class Case(StrEnum):
@@ -120,20 +120,19 @@ def staged_names(place: BuildPlace) -> list[str]:
     )
 
 
-def delivered(place: BuildPlace) -> dict[str, bool | str | None]:
-    """What reached out/: the talk's page, the PDF and the addon's worklet."""
+def delivered(place: BuildPlace) -> dict[str, bool]:
+    """What reached out/: the talk's page, the PDF and the capture worklet."""
     out = place.here / OUTPUT_DIRECTORY
     pdf = out / PDF_FILE
-    worklets = list((out / TALK_DIRECTORY).glob(WORKLET_GLOB))
+    worklets = [
+        asset
+        for asset in (out / TALK_DIRECTORY / "assets").glob("*.js")
+        if WORKLET_MARKER in asset.read_bytes()
+    ]
     return {
         "talk_page": (out / TALK_DIRECTORY / "index.html").is_file(),
         "pdf": pdf.is_file() and pdf.read_bytes().startswith(b"%PDF-"),
         "worklet": len(worklets) == 1,
-        "worklet_sha256": (
-            hashlib.sha256(worklets[0].read_bytes()).hexdigest()
-            if len(worklets) == 1
-            else None
-        ),
     }
 
 

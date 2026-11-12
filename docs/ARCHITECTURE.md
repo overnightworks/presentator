@@ -66,7 +66,9 @@ flowchart TD
 - **`frontend/`** is a SvelteKit single-page shell (`adapter-static`, `ssr =
   false`), built in the image; FastAPI serves it and no Node service runs.
 - **`slidev/`** owns every theme and addon a deck may name, among them the
-  overlay addon `slidev-addon-presentator`.
+  overlay addon `slidev-addon-presentator`. The overlay captures the microphone
+  through speech's browser package, which opens the hearing socket itself and
+  owns the capture and the frame format.
 
 ## 3. Runtime View
 

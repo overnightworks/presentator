@@ -17,17 +17,10 @@ export default tseslint.config(
     languageOptions: {
       globals: Object.fromEntries(
         [
-          'window', 'document', 'navigator', 'fetch', 'WebSocket', 'AudioContext',
-          'AudioWorkletNode', 'AbortController', 'TextDecoder', 'atob', 'URL', 'Blob', 'Audio',
-          'setInterval', 'clearInterval',
+          'window', 'document', 'navigator', 'fetch', 'AbortController', 'TextDecoder', 'atob',
+          'URL', 'Blob', 'Audio', 'setInterval', 'clearInterval',
         ].map((name) => [name, 'readonly']),
       ),
-    },
-  },
-  {
-    files: ['worklets/**/*.js'],
-    languageOptions: {
-      globals: { AudioWorkletProcessor: 'readonly', registerProcessor: 'readonly' },
     },
   },
 )

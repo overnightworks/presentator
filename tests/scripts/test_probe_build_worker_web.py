@@ -15,7 +15,7 @@ print('{"run": "refused-build"}')
 print('{"steps": [{"step": "build", "failed": true, "failure": '
       '{"reason": "toolchain", "text": "Build refused"}}], '
       '"staged": [], "out": [], "talk_page": false, "pdf": false, '
-      '"worklet": false, "worklet_sha256": null}')
+      '"worklet": false}')
 """
     with subprocess.Popen(  # noqa: S603
         (sys.executable, "-c", program),
@@ -39,7 +39,6 @@ print('{"steps": [{"step": "build", "failed": true, "failure": '
                 talk_page=False,
                 pdf=False,
                 worklet=False,
-                worklet_sha256=None,
             )
         finally:
             if client.poll() is None:

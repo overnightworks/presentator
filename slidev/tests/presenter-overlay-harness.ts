@@ -8,6 +8,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 import { chromium, type BrowserContext, type ElementHandle, type Locator, type Page } from 'playwright-chromium'
+import { HopClose } from 'overnightworks-speech-browser'
 import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest'
 
 const run = promisify(execFile)
@@ -69,10 +70,31 @@ export const state = {
   askBodies: [] as { said: string, deck: string, language: string, slide: number }[],
   whoLanguage: 'de' as 'de' | 'en',
   hearLanguages: [] as (string | null)[],
-  hearingMode: 'ready' as 'ready' | 'not-ready' | 'socket-error' | 'error-on-open' | 'unreachable' | 'who-fails' | 'who-not-found',
-  // Whether the fake hearing sends a final question as soon as the lease opens.
+  hearingMode: 'ready' as 'ready' | 'not-ready' | 'refused-on-open' | 'fails-after-capture' | 'unreachable' | 'who-fails' | 'who-not-found',
+  // Whether the fake hearing sends a final question as soon as the hearing opens.
   heardOnConnect: true,
   media: createMediaObservation(),
+}
+
+function closeFrame(code: number) {
+  return Buffer.from([0x88, 0x02, code >> 8, code & 0xff])
+}
+
+const endedByServer = new WeakSet<import('node:stream').Duplex>()
+
+// Whether a client's masked frames, which may arrive together, include a close frame.
+function hasCloseFrame(data: Buffer) {
+  const CLOSE = 0x08
+  const MASKED_HEADER = 6
+  let offset = 0
+  while (offset + 2 <= data.length) {
+    if ((data.readUInt8(offset) & 0x0f) === CLOSE) return true
+    const short = data.readUInt8(offset + 1) & 0x7f
+    if (short === 126) offset += MASKED_HEADER + 2 + data.readUInt16BE(offset + 2)
+    else if (short === 127) offset += MASKED_HEADER + 8 + Number(data.readBigUInt64BE(offset + 2))
+    else offset += MASKED_HEADER + short
+  }
+  return false
 }
 
 function frame(message: string) {
@@ -261,14 +283,17 @@ async function serveFile(directory: string, pathname: string, response: ServerRe
   response.end(await readFile(join(directory, 'index.html')))
 }
 
-// A peer reset while a page tears down is expected on an upgraded socket and
-// would otherwise surface as an unhandled `error` that fails the whole run;
-// any other socket error is kept for the shared `afterEach` to judge.
+// A page that tears down resets its upgraded socket, and the server's own
+// answer to the close frame then writes to a peer that is already gone: both
+// are expected and would otherwise surface as an unhandled `error` that fails
+// the whole run. Any other socket error is kept for the shared `afterEach` to
+// judge.
 const socketErrors: Error[] = []
+const peerGoneCodes = new Set(['ECONNRESET', 'EPIPE'])
 
 function recordUnexpectedSocketErrors(socket: import('node:stream').Duplex) {
   socket.on('error', (error: NodeJS.ErrnoException) => {
-    if (error.code !== 'ECONNRESET') socketErrors.push(error)
+    if (!peerGoneCodes.has(error.code ?? '')) socketErrors.push(error)
   })
 }
 
@@ -278,7 +303,7 @@ function websocketAcceptKey(key: string) {
 
 // The minimal server the addon-deck proof needs: the static build plus
 // the two routes `startLocalHear`'s own path calls before it ever reaches the
-// AudioWorklet (`/who`, then the hearing lease). `/ask` only reports what it
+// capture (`/who`, then the hearing socket the capture opens). `/ask` only reports what it
 // was asked, and there are no observation beacons: no proof here drives a
 // spoken turn. `basePath` serves the build below the folder a deck lives in.
 export async function createOverlayDeckServer(
@@ -303,7 +328,7 @@ export async function createOverlayDeckServer(
       response.end(
         JSON.stringify({
           language: 'de',
-          speech: { sample_rate: 16000, hearing: { ready: true } },
+          speech: { hearing: { ready: true } },
         }),
       )
       return
@@ -371,7 +396,7 @@ async function startServer() {
       response.writeHead(200, { 'content-type': 'application/json' })
       response.end(JSON.stringify({
         language: state.whoLanguage,
-        speech: { sample_rate: 16000, hearing: { ready: state.hearingMode !== 'not-ready' } },
+        speech: { hearing: { ready: state.hearingMode !== 'not-ready' } },
       }))
       return
     }
@@ -459,7 +484,7 @@ async function startServer() {
     if (state.hearingMode === 'ready' && state.heardOnConnect) {
       socket.write(frame(JSON.stringify({ text: 'Where does the handoff slow down?', final: true })))
     }
-    if (state.hearingMode === 'error-on-open') socket.write(frame(JSON.stringify({ error: 'hearing failed' })))
+    if (state.hearingMode === 'refused-on-open') socket.write(closeFrame(HopClose.BUSY))
     recordUnexpectedSocketErrors(socket)
     hearingSockets.add(socket)
     let closed = false
@@ -470,8 +495,10 @@ async function startServer() {
       state.hearingClosed += 1
     }
     socket.on('data', (data) => {
-      if ((data[0] & 0x0f) !== 0x08) return
-      socket.end(Buffer.from([0x88, 0x00]))
+      if (!hasCloseFrame(data)) return
+      // The side that closes first sends the only close frame; the other answers it.
+      if (endedByServer.has(socket)) socket.end()
+      else socket.end(closeFrame(HopClose.NORMAL))
     })
     socket.on('close', () => {
       closeHearing()
@@ -497,13 +524,13 @@ export function sendHeard(text: string) {
   for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final: true })))
 }
 
-export function sendHearingError() {
-  for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ error: 'hearing failed' })))
-}
-
-// The server ends every open hearing lease, as it does when a session ends.
-export function closeHearingLeases() {
-  for (const socket of hearingSockets) socket.write(Buffer.from([0x88, 0x00]))
+// The server ends every open hearing with a close code, as it does when a
+// session ends (orderly) or a hearing fails (any other code).
+export function endHearings(code: number) {
+  for (const socket of hearingSockets) {
+    endedByServer.add(socket)
+    socket.write(closeFrame(code))
+  }
 }
 
 export function createMediaObservation(): MediaObservation {
@@ -530,13 +557,15 @@ async function installMediaFakes(page: Page) {
       endPlayback: () => fakes.played.forEach((audio) => audio.dispatchEvent(new Event('ended'))),
     }
     Object.assign(window, { __fakes: fakes })
-    const track = {
+    const newTrack = () => ({
       readyState: 'live',
+      addEventListener() {},
+      removeEventListener() {},
       stop() {
         this.readyState = 'ended'
         report('track-stopped')
       },
-    }
+    })
     const microphones = window as unknown as { __microphonesRequested: number }
     microphones.__microphonesRequested = 0
     Object.defineProperty(navigator, 'mediaDevices', {
@@ -548,14 +577,16 @@ async function installMediaFakes(page: Page) {
             await new Promise<void>((release) => { fakes.releaseMicrophone = release })
           }
           report('microphone-opened')
-          return { getTracks: () => [track] }
+          const track = newTrack()
+          return { getTracks: () => [track], getAudioTracks: () => [track] }
         },
       },
       configurable: true,
     })
     const RealAudioContext = window.AudioContext
     class FakeContext {
-      sampleRate = 16000
+      state = 'running'
+      sampleRate = 48000
       audioWorklet = {
         // Real, not faked: this is the one call the page's own CSP governs
         // (`script-src 'self'`), so delegating to a real, unconnected
@@ -567,10 +598,11 @@ async function installMediaFakes(page: Page) {
           ? Promise.reject(new Error('worklet failed to load'))
           : new RealAudioContext().audioWorklet.addModule(moduleUrl)),
       }
-      createMediaStreamSource() { return { connect: () => undefined } }
+      createMediaStreamSource() { return { connect: () => undefined, disconnect: () => undefined } }
       close() { return Promise.resolve() }
     }
     window.AudioContext = FakeContext as unknown as typeof AudioContext
+    window.MediaStream = class {} as unknown as typeof MediaStream
     window.AudioWorkletNode = class {
       port = { onmessage: null }
       disconnect() {}
