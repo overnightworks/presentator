@@ -184,7 +184,11 @@ describe('the room notice', () => {
       expect(bandEnd - (await bandStartedAt(projector))).toBeGreaterThanOrEqual(BAND_SECONDS * 1000 - 200)
       expect(bandEnd).toBeGreaterThan(answeringSince)
       expect(await shownSinceFirstNotice(projector)).toEqual(['band', 'answering'])
-      expect(await shownSinceFirstNotice(presenter)).toEqual(['answering'])
+      // The presenter's pill listens until the sound starts, so listening may come first;
+      // the pill then reaches answering and holds it while the sound plays.
+      const presenterShown = await shownSinceFirstNotice(presenter)
+      expect(presenterShown.at(-1)).toBe('answering')
+      expect(presenterShown.slice(0, -1).every((phase) => phase === 'listening')).toBe(true)
       await callFake(presenter, 'endPlayback')
       await showsPhase(projector, 'listening', PILL.de.listening)
       await showsPhase(presenter, 'listening', PILL.de.listening)
