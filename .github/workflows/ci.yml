@@ -744,14 +744,18 @@ jobs:
           fi
           kill -TERM "$driver"
           second=
-          for _ in $(seq 30); do
-            kill -0 "$driver" 2>/dev/null || break
-            if [ -z "$second" ] && grep -q '^teardown:' "$log"; then
-              kill -TERM "$driver"
-              second=sent
-            fi
-            sleep 1
-          done
+          # tail follows the log as the driver writes it, so the second SIGTERM
+          # goes out with the teardown line, not at a poll. It ends with the
+          # driver (--pid); timeout ends it when the driver outlives 30 seconds.
+          while IFS= read -r line; do
+            case $line in
+              teardown:*)
+                if [ -z "$second" ] && kill -TERM "$driver" 2>/dev/null; then
+                  second=sent
+                fi
+                ;;
+            esac
+          done < <(timeout 30 tail -n +1 -F --pid="$driver" "$log")
           if kill -0 "$driver" 2>/dev/null; then
             kill -KILL "$driver"
             cat "$log"
@@ -761,9 +765,14 @@ jobs:
           status=0
           wait "$driver" || status=$?
           cat "$log"
-          if [ -z "$second" ]; then
+          if ! grep -q '^teardown:' "$log"; then
             echo "::error::the driver ended before it printed teardown, so no second SIGTERM landed in it"
             exit 1
+          fi
+          if [ -n "$second" ]; then
+            echo "second SIGTERM landed in the driver's teardown"
+          else
+            echo "the driver printed teardown and ended before the second SIGTERM could land; the leftovers checks judge it"
           fi
           test "$status" = 143
 
