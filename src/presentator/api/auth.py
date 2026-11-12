@@ -265,6 +265,7 @@ class _Surfaces:
     """The lobby's HTML answers, each one asking the use cases what is true."""
 
     preferences: Preferences
+    sessions: SessionRecordStore
     auth: InstalledAuth
     shell: LobbyShell
 
@@ -273,7 +274,7 @@ class _Surfaces:
     ) -> Response:
         """The lobby app's shell, in the reader's language and theme."""
         return HTMLResponse(
-            self.shell.filled(appearance_of(request, self.preferences)),
+            self.shell.filled(appearance_of(request, self.preferences, self.sessions)),
             status_code=status,
         )
 
@@ -323,7 +324,7 @@ def _install_lobby_app(lobby: FastAPI, surfaces: _Surfaces) -> None:
 
 
 def _logout_page_text(request: Request, surfaces: _Surfaces) -> LogoutPageText:
-    text = appearance_of(request, surfaces.preferences).text
+    text = appearance_of(request, surfaces.preferences, surfaces.sessions).text
     return LogoutPageText(language=text.language_tag, button_label=text.log_out)
 
 
@@ -417,9 +418,12 @@ def _bearer_gate(
     )
 
 
-def _session_routes(preferences: Preferences, auth: InstalledAuth) -> APIRouter:
+def _session_routes(
+    preferences: Preferences, sessions: SessionRecordStore, auth: InstalledAuth
+) -> APIRouter:
     return session_routes(
         preferences=preferences,
+        sessions=sessions,
         addresses=SessionAddresses(
             start=START_SIGN_IN_PATH,
             logout=LOGOUT_PATH,
@@ -456,12 +460,14 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     session. The app's shell answers what no route claims, and the refusal
     addresses under 403.
     """
-    surfaces = _Surfaces(preferences=preferences, auth=auth, shell=shell)
+    surfaces = _Surfaces(
+        preferences=preferences, sessions=sessions, auth=auth, shell=shell
+    )
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(lobby, auth.config)
     _install_sign_in(lobby, surfaces)
     add_health_route(lobby)
-    lobby.include_router(_session_routes(preferences, auth))
+    lobby.include_router(_session_routes(preferences, sessions, auth))
     lobby.include_router(deck_list_routes(decks=decks))
     lobby.include_router(deck_text_routes(own_decks=own_decks))
     lobby.include_router(preference_api_routes(preferences=preferences))

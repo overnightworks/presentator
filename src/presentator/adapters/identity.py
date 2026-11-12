@@ -23,7 +23,7 @@ from presentator.adapters.sqlite import (
     rows_or_inside,
 )
 from presentator.contracts.models import Role, User
-from presentator.contracts.people import SessionSecretsHeld, SessionTimes
+from presentator.contracts.people import SessionExport, SessionSecretsHeld
 
 _KINDS: Final = ", ".join(f"'{kind.value}'" for kind in AccountKind)
 KIND_COLUMN: Final = (
@@ -312,19 +312,21 @@ class SqliteSessionRecordStore:
             cursor.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
             return int(cursor.rowcount)
 
-    def sessions_of(self, user_id: str) -> tuple[SessionTimes, ...]:
-        """When each sign-in of one account began and ends, and nothing else."""
+    def sessions_of(self, user_id: str) -> tuple[SessionExport, ...]:
+        """When each sign-in of one account began and ends and its language."""
         with self.cursor() as cursor:
             found = cursor.execute(
-                "SELECT created_at, expires_at FROM sessions WHERE user_id = ?",
+                "SELECT created_at, expires_at, account_language"
+                " FROM sessions WHERE user_id = ?",
                 (user_id,),
             ).fetchall()
         return tuple(
-            SessionTimes(
+            SessionExport(
                 created_at=datetime.fromisoformat(created_at),
                 expires_at=datetime.fromisoformat(expires_at),
+                account_language=account_language,
             )
-            for created_at, expires_at in found
+            for created_at, expires_at, account_language in found
         )
 
     def secrets_held(self, user_id: str) -> SessionSecretsHeld:

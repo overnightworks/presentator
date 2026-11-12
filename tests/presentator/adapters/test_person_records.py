@@ -18,7 +18,7 @@ from presentator.adapters.identity import (
 from presentator.adapters.preferences import SqlitePersonPreferencesStore
 from presentator.adapters.schema import create_tables
 from presentator.contracts.models import Role, User
-from presentator.contracts.people import SessionTimes
+from presentator.contracts.people import SessionExport
 from presentator.contracts.preferences import PersonPreferences, ThemeChoice
 from tests.presentator.adapters.support.key_draft_support import a_key_drafts_store
 from tests.support.people import seed_user
@@ -91,9 +91,33 @@ def test_the_sessions_of_a_person_carry_their_times_and_no_secret(
     found = sessions.sessions_of(_THE_PERSON.id)
 
     assert found == (
-        SessionTimes(created_at=_NOW, expires_at=_NOW + timedelta(hours=1)),
+        SessionExport(
+            created_at=_NOW,
+            expires_at=_NOW + timedelta(hours=1),
+            account_language=None,
+        ),
     )
     assert _A_REFRESH_WORD not in repr(found)
+
+
+@pytest.mark.parametrize("language", ["de", None])
+def test_a_persons_session_carries_the_account_language_stored_at_its_sign_in(
+    database: Path, language: str | None
+) -> None:
+    """PE31: the language is exported as stored, `null` where the account named none."""
+    sessions = SqliteSessionRecordStore(database)
+    sessions.create(
+        _THE_PERSON.id,
+        now=_NOW,
+        expires_at=_NOW + timedelta(hours=1),
+        refresh_token=None,
+        id_token=None,
+        account_language=language,
+    )
+
+    (found,) = sessions.sessions_of(_THE_PERSON.id)
+
+    assert found.account_language == language
 
 
 def test_only_sessions_holding_a_refresh_token_are_counted_as_holding_one(

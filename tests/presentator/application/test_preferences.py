@@ -4,6 +4,7 @@ import pytest
 
 from presentator.application.preferences import Preferences, UnspokenLanguageError
 from presentator.contracts.preferences import (
+    Appearance,
     InstanceSettings,
     PersonPreferences,
     ThemeChoice,
@@ -36,8 +37,14 @@ def a_lobby(
     )
 
 
+def _reads_in_the_instances_language(
+    lobby: Preferences, user_id: str | None
+) -> Appearance:
+    return lobby.appearance_for(user_id, language_tag=lobby.served_tag())
+
+
 def test_an_instance_nobody_configured_speaks_english_and_follows_the_system() -> None:
-    appearance = a_lobby().appearance_for(_PERSON)
+    appearance = _reads_in_the_instances_language(a_lobby(), _PERSON)
 
     assert appearance.text == _ENGLISH
     assert appearance.theme is ThemeChoice.FOLLOW_SYSTEM
@@ -49,7 +56,7 @@ def test_a_person_without_a_choice_reads_follow_system_in_the_instances_language
     """LB2."""
     lobby = a_lobby(instance=InstanceSettings(language_tag="de"))
 
-    appearance = lobby.appearance_for(_PERSON)
+    appearance = _reads_in_the_instances_language(lobby, _PERSON)
 
     assert appearance.text == _GERMAN
     assert appearance.theme is ThemeChoice.FOLLOW_SYSTEM
@@ -61,7 +68,7 @@ def test_a_persons_own_choice_is_their_theme_in_the_instances_language() -> None
         chosen=PersonPreferences(theme=ThemeChoice.LIGHT),
     )
 
-    appearance = lobby.appearance_for(_PERSON)
+    appearance = _reads_in_the_instances_language(lobby, _PERSON)
 
     assert appearance.text == _GERMAN
     assert appearance.theme is ThemeChoice.LIGHT
@@ -70,7 +77,7 @@ def test_a_persons_own_choice_is_their_theme_in_the_instances_language() -> None
 def test_one_persons_choice_leaves_everybody_else_following_the_system() -> None:
     lobby = a_lobby(chosen=PersonPreferences(theme=ThemeChoice.DARK))
 
-    neighbour = lobby.appearance_for(_NEIGHBOUR)
+    neighbour = _reads_in_the_instances_language(lobby, _NEIGHBOUR)
 
     assert neighbour.text == _ENGLISH
     assert neighbour.theme is ThemeChoice.FOLLOW_SYSTEM
@@ -82,14 +89,16 @@ def test_nobody_signed_in_reads_the_instances_language_and_follows_the_system() 
         chosen=PersonPreferences(theme=ThemeChoice.DARK),
     )
 
-    assert lobby.appearance_for(None).text == _GERMAN
-    assert lobby.appearance_for(None).theme is ThemeChoice.FOLLOW_SYSTEM
+    assert _reads_in_the_instances_language(lobby, None).text == _GERMAN
+    assert (
+        _reads_in_the_instances_language(lobby, None).theme is ThemeChoice.FOLLOW_SYSTEM
+    )
 
 
 def test_an_instance_whose_catalog_file_is_gone_reads_english_again() -> None:
     lobby = a_lobby(instance=InstanceSettings(language_tag="fr"))
 
-    assert lobby.appearance_for(_PERSON).text == _ENGLISH
+    assert _reads_in_the_instances_language(lobby, _PERSON).text == _ENGLISH
 
 
 def test_saving_the_instance_settings_leaves_a_persons_own_choice_alone() -> None:
@@ -98,7 +107,7 @@ def test_saving_the_instance_settings_leaves_a_persons_own_choice_alone() -> Non
     lobby.save_instance_settings(InstanceSettings(name="Heim", language_tag="de"))
 
     assert lobby.instance_settings().name == "Heim"
-    assert lobby.appearance_for(_PERSON).theme is ThemeChoice.LIGHT
+    assert _reads_in_the_instances_language(lobby, _PERSON).theme is ThemeChoice.LIGHT
 
 
 def test_every_installed_catalog_is_offered_as_a_language() -> None:

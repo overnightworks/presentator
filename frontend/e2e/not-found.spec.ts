@@ -44,7 +44,7 @@ for (const role of ['admin', 'user'] as const) {
 			test.describe(`/account of ${role === 'admin' ? 'an admin' : 'a member'} at ${width} px, ${colorScheme}`, () => {
 				test.use({ person: { role }, colorScheme });
 
-				// LB1.
+				// LB2.
 				test('is the not-found board with the header and no form', async ({ page }, testInfo) => {
 					const { words } = await sessionOf(page);
 					await page.setViewportSize({ width, height: 900 });

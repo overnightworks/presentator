@@ -4,7 +4,7 @@ from abc import abstractmethod
 from typing import Protocol
 
 from presentator.contracts.models import User
-from presentator.contracts.people import SessionSecretsHeld, SessionTimes
+from presentator.contracts.people import SessionExport, SessionSecretsHeld
 
 
 class IdentifierFactory(Protocol):
@@ -31,8 +31,8 @@ class PersonSessions(Protocol):
     """The sign-in records of one person, without anything that could resume one."""
 
     @abstractmethod
-    def sessions_of(self, user_id: str) -> tuple[SessionTimes, ...]:
-        """When each sign-in of that account began and ends."""
+    def sessions_of(self, user_id: str) -> tuple[SessionExport, ...]:
+        """When each sign-in of that account began and ends, and its language."""
 
     @abstractmethod
     def secrets_held(self, user_id: str) -> SessionSecretsHeld:
