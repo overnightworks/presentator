@@ -7,7 +7,9 @@ from types import ModuleType
 import pytest
 
 FORMULA_LABEL = "probeNumerator"
-MARKUP = '<span class="katex"><span class="mord mathnormal">x</span></span>'
+MARKUP = '<span class="katex"><span class="katex-mathml"><math></math></span></span>'
+ERROR_MARKUP = '<span class="katex-error" title="ParseError">'
+
 TALK_FILE = "assets/index-probe.js"
 LABEL = "Probe node alpha"
 
@@ -64,6 +66,12 @@ def write_talk(directory: Path, *contents: str) -> Path:
             pdf_showing([LABEL]),
             False,
             id="class_without_the_formula_token_refuses",
+        ),
+        pytest.param(
+            (ERROR_MARKUP, FORMULA_LABEL),
+            pdf_showing([LABEL]),
+            False,
+            id="katex_error_markup_holding_the_source_refuses",
         ),
         pytest.param(
             (FORMULA_LABEL,),

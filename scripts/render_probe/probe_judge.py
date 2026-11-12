@@ -3,9 +3,10 @@
 Usage: `uv run --locked python scripts/render_probe/probe_judge.py TALK PDF`.
 
 The talk is the built directory the probe's client copied out of the image; the
-PDF is the export. It passes only when one file of the talk holds KaTeX's markup
-class together with the formula's token (KaTeX's own bundle holds the class with
-no formula, so the class alone does not pass), and when the PDF's text holds the
+PDF is the export. It passes only when one file of the talk holds the markup KaTeX
+emits for a formula it rendered together with the formula's token (KaTeX's own
+bundle holds its class names with no formula, and its error markup holds the
+formula's source, so neither alone passes), and when the PDF's text holds the
 diagram's label, whitespace-normalised because the text layer wraps. A PDF that
 cannot be read refuses. Its one output is the findings, one line each, and its
 exit status is 0 when both hold and 1 when either does not.
@@ -24,7 +25,7 @@ from pypdf.errors import PyPdfError
 # Both values are written into the fixture deck in this directory's `deck/`.
 FORMULA_LABEL = "probeNumerator"
 DIAGRAM_LABEL = "Probe node alpha"
-KATEX_CLASS = re.compile(rb"\bkatex\b")
+KATEX_MARKUP = re.compile(rb"\bkatex-mathml\b")
 PDF_MAGIC = b"%PDF-"
 PASSED = 0
 REFUSED = 1
@@ -35,12 +36,12 @@ class UnreadablePdfError(Exception):
 
 
 def find_formula(talk: Path) -> Path | None:
-    """The first file of the talk that holds KaTeX's class and the formula's token."""
+    """The first file of the talk that holds the rendered formula's markup and token."""
     for candidate in sorted(talk.rglob("*")):
         if not candidate.is_file():
             continue
         content = candidate.read_bytes()
-        if KATEX_CLASS.search(content) and FORMULA_LABEL.encode() in content:
+        if KATEX_MARKUP.search(content) and FORMULA_LABEL.encode() in content:
             return candidate
     return None
 
@@ -78,7 +79,7 @@ def main(arguments: Sequence[str]) -> int:
     formula = find_formula(parsed.talk)
     if formula is None:
         refusals.append(
-            "refused: no file of the talk holds KaTeX's markup class with "
+            "refused: no file of the talk holds KaTeX's rendered markup with "
             f"{FORMULA_LABEL}"
         )
     else:
