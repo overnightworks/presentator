@@ -1,8 +1,0 @@
-claim_id = "866353e857e0453080d04a73565f2279"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "1517ffdbe557637aac151f3c4009645d73a4cd06"
-branch = "claude/issue-1090-speech-0-10-catalogue-voice"
-scope = ["compose.yaml", "docs/configuration.md", "docs/runbooks/run-from-a-checkout.md", "pyproject.toml", "scripts/probe_build_worker_k3d_cluster.py", "slidev/package.json", "slidev/pnpm-lock.yaml", "src/presentator/adapters/speech.py", "src/presentator/host/config.py", "src/presentator/host/main.py", "tests/conftest.py", "tests/presentator", "tests/support", "tests/test_compose.py", "uv.lock"]
-opened_commit = "cb76b75557667130363bd734d957ca7e2a821868"
-whole_reason = "The two pins, the setting's type, the adapter's calls and the fakes of the service's health document compile and pass only together."
