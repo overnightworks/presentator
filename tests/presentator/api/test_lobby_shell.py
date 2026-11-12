@@ -33,12 +33,14 @@ _HTML = (
 )
 _BOOTSTRAP = "<script>import('/_app/start.js');</script>"
 _REBUILT_BOOTSTRAP = "<script>import('/_app/rebuilt.js');</script>"
-_AN_ANNOUNCER_HASH = "sha256-" + "A" * 43 + "="
-_ANOTHER_ANNOUNCER_HASH = "sha256-" + "B" * 43 + "="
+
+
+def _a_style_hash(fill: str) -> str:
+    return "sha256-" + fill * 43 + "="
 
 
 def _a_build(
-    directory: Path, page: str, announcer_hash: str | None = _AN_ANNOUNCER_HASH
+    directory: Path, page: str, announcer_hash: str | None = _a_style_hash("A")
 ) -> Path:
     (directory / "_app").mkdir(parents=True)
     (directory / "index.html").write_text(page, encoding="utf-8")
@@ -102,17 +104,18 @@ def test_a_shell_this_host_cannot_serve_is_refused(tmp_path: Path, page: str) ->
 
 
 def test_the_announcer_style_hash_is_the_one_the_build_states(tmp_path: Path) -> None:
-    one = LobbyShell.read(_a_build(tmp_path / "one", _HTML.format(_BOOTSTRAP)))
+    stated, restated = _a_style_hash("C"), _a_style_hash("D")
+    one = LobbyShell.read(
+        _a_build(tmp_path / "one", _HTML.format(_BOOTSTRAP), announcer_hash=stated)
+    )
     rebuilt = LobbyShell.read(
         _a_build(
-            tmp_path / "rebuilt",
-            _HTML.format(_BOOTSTRAP),
-            announcer_hash=_ANOTHER_ANNOUNCER_HASH,
+            tmp_path / "rebuilt", _HTML.format(_BOOTSTRAP), announcer_hash=restated
         )
     )
 
-    assert one.announcer_style_hash == _AN_ANNOUNCER_HASH
-    assert rebuilt.announcer_style_hash == _ANOTHER_ANNOUNCER_HASH
+    assert one.announcer_style_hash == stated
+    assert rebuilt.announcer_style_hash == restated
 
 
 @pytest.mark.parametrize(
@@ -121,7 +124,7 @@ def test_the_announcer_style_hash_is_the_one_the_build_states(tmp_path: Path) ->
         pytest.param(None, id="no-hash-file"),
         pytest.param("", id="empty-hash-file"),
         pytest.param("S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=", id="no-algorithm"),
-        pytest.param(f"{_AN_ANNOUNCER_HASH}' 'unsafe-inline", id="more-than-a-hash"),
+        pytest.param(f"{_a_style_hash('E')}' 'unsafe-inline", id="more-than-a-hash"),
     ],
 )
 def test_a_build_without_a_usable_announcer_style_hash_is_refused(
