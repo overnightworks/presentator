@@ -436,6 +436,23 @@ describe('presenter controls', () => {
     }
   })
 
+  it('CP10: shows only the switch while no /who has answered, though the start\'s /who failed', async () => {
+    state.interfaceLanguage = 'de'
+    state.hearingMode = 'who-fails'
+    const { browser, page } = await openPresenter(390)
+    try {
+      await page.getByRole('switch', { name: wordsOf.de['controls.switch'] }).waitFor({ state: 'visible', timeout: 2_000 })
+      await expect.poll(() => state.whoRequests).toBe(1)
+      // The failed answer has been handled once the next frame is drawn.
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      expect(await page.locator('.presenter-bar a[href="/"]').count()).toBe(0)
+      expect(await page.locator('.copresenter').getAttribute('aria-label')).toBeNull()
+    } finally {
+      state.hearingMode = 'ready'
+      await browser.close()
+    }
+  })
+
   it('CP10: keeps the language the start\'s /who named, so a switch-on that names another loads no further words', async () => {
     state.whoScript = [{ interfaceLanguage: 'en' }, { interfaceLanguage: 'de' }]
     const { browser, page } = await openPresenter(1024)

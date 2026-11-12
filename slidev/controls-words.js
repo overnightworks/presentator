@@ -4,9 +4,9 @@ import { loadWords } from './words'
 import { words as english } from './words/en'
 
 // The words of the presenter's controls, in the presenter's account language,
-// which only the server's `/who` answer knows. Null until it has answered or
-// failed; the controls other than the switch wait for it so that no word shows
-// in the wrong language.
+// which only the server's `/who` answer knows. Null until a `/who` has
+// answered; the controls other than the switch wait for it so that no word
+// shows in the wrong language.
 export const controlWords = shallowRef(null)
 
 let languageKnown = false
@@ -22,17 +22,14 @@ export async function useAccountLanguage(language) {
     controlWords.value = words
     languageKnown = true
   } catch {
-    useEnglishUnlessKnown()
+    // English is the one module bundled with the overlay, so the controls are
+    // never missing because the named language could not be loaded.
+    controlWords.value ??= english
   }
 }
 
-// English is the one module bundled with the overlay, so a fault word is
-// never missing because the language could not be loaded.
-export function useEnglishUnlessKnown() {
-  controlWords.value ??= english
-}
-
-// The words to show now: the account's language once known, else English.
+// The words to show now: the account's language once known, else English,
+// which a fault word needs while no `/who` has answered.
 export function currentWords() {
   return controlWords.value ?? english
 }

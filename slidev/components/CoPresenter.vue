@@ -5,7 +5,7 @@ import { createPlayer, HopClose, startCapture } from 'overnightworks-speech-brow
 // `no-inline`: the file is under Vite's inline limit, and a `data:` URL would
 // break the production CSP.
 import WORKLET_URL from 'overnightworks-speech-browser/capture-worklet.js?url&no-inline'
-import { controlWords, currentWords, useAccountLanguage, useEnglishUnlessKnown } from '../controls-words.js'
+import { controlWords, currentWords, useAccountLanguage } from '../controls-words.js'
 import { publish } from '../room-notice.js'
 
 const { currentSlideNo, go, total } = useNav()
@@ -152,7 +152,6 @@ async function learnAccountLanguage() {
   } catch {
     // The switch still works; turning it on asks `/who` again and shows the fault.
   }
-  useEnglishUnlessKnown()
 }
 
 async function turnOn() {
@@ -174,7 +173,6 @@ async function turnOn() {
     await useAccountLanguage(report.interface_language)
   } catch (error_) {
     if (!stillActive(generation)) return
-    useEnglishUnlessKnown()
     error.value = faultLine(error_ instanceof WhoRefused && error_.status === 503 ? VOICE_OFFLINE : UNREACHABLE)
     return
   }

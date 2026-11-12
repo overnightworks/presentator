@@ -230,18 +230,20 @@ export async function expectPanelCoversNoSlidevControl(page: Page) {
   expect(controls.filter(({ box }) => boxesIntersect(panel, box)).map(({ name }) => name)).toEqual([])
 }
 
-// The fault word stands whole in the window, clear of Home (whatever language it is named in) and of the switch.
+// The fault word stands whole in the window, clear of the switch and, once a `/who` has answered and Home shows, of Home
+// (whatever language it is named in).
 export async function expectFaultWordClearOfControls(page: Page, width: number, aiSwitch: Locator, faultWord: Locator) {
+  const home = page.locator('.presenter-bar a[href="/"]')
   const [homeBox, aiBox, faultBox] = await Promise.all([
-    page.locator('.presenter-bar a[href="/"]').boundingBox(),
+    (await home.count()) > 0 ? home.boundingBox() : null,
     aiSwitch.boundingBox(),
     faultWord.boundingBox(),
   ])
   expect(faultBox!.x).toBeGreaterThanOrEqual(0)
   expect(faultBox!.x + faultBox!.width).toBeLessThanOrEqual(width)
-  expect(boxesIntersect(homeBox!, faultBox!)).toBe(false)
+  if (homeBox) expect(boxesIntersect(homeBox, faultBox!)).toBe(false)
   expect(boxesIntersect(aiBox!, faultBox!)).toBe(false)
-  return { homeBox: homeBox!, aiBox: aiBox!, faultBox: faultBox! }
+  return { homeBox, aiBox: aiBox!, faultBox: faultBox! }
 }
 
 export async function saveEvidence(page: Page, name: string) {

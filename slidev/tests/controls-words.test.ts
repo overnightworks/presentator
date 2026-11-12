@@ -9,7 +9,6 @@ interface ControlsWords {
   controlWords: { value: Words | null }
   currentWords: () => Words
   useAccountLanguage: (language: string) => Promise<void>
-  useEnglishUnlessKnown: () => void
 }
 
 // The module keeps the account language in module state, so each case loads a
@@ -88,22 +87,5 @@ describe('the presenter controls words', () => {
     await useAccountLanguage('de')
 
     expect(currentWords()['controls.home']).toBe(german['controls.home'])
-  })
-
-  it('does not replace a known language with English', async () => {
-    const { currentWords, useAccountLanguage, useEnglishUnlessKnown } = await freshControlsWords()
-
-    await useAccountLanguage('de')
-    useEnglishUnlessKnown()
-
-    expect(currentWords()['controls.home']).toBe(german['controls.home'])
-  })
-
-  it('sets English when no language is known', async () => {
-    const { controlWords, useEnglishUnlessKnown } = await freshControlsWords()
-
-    useEnglishUnlessKnown()
-
-    expect(controlWords.value?.['controls.home']).toBe(english['controls.home'])
   })
 })
