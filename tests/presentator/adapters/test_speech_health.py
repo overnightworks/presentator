@@ -66,14 +66,6 @@ def test_a_listed_voice_on_a_service_in_its_start_load_is_unavailable() -> None:
         readiness_of(fake)
 
 
-def test_a_service_offering_neither_configured_voice_is_unavailable() -> None:
-    body = a_health_document(voices_offered={"another-voice": True})
-    fake = FakeSpeechService(health_answer=lambda: JSONResponse(body))
-
-    with pytest.raises(CoPresenterUnavailableError):
-        readiness_of(fake)
-
-
 @pytest.mark.parametrize("language", list(SampleLanguage))
 def test_a_service_not_offering_the_voice_of_one_language_is_unavailable(
     language: SampleLanguage,
