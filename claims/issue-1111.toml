@@ -1,8 +1,0 @@
-claim_id = "a81a90b6e737423eb60a6b5234013cfc"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "5579955ac1f51b0e2c0325d2225db8ba3f013b97"
-branch = "claude/issue-1111-release-layers-repeat"
-scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "Dockerfile", "quality/baseline.toml", "quality/config.toml"]
-opened_commit = "bcb0c2e009e051c0f75c459b2710b2e3971ddcad"
-whole_reason = "The pin that carries the input, the input's switch and the Dockerfile's layers it is meant to steady are one change to how a release is built."
