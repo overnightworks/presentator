@@ -1,6 +1,5 @@
-"""`GET /api/session` tells a page who reads, in which words and theme."""
+"""`GET /api/session` tells a page who reads, in which language and theme."""
 
-from dataclasses import replace
 from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
@@ -14,18 +13,17 @@ from presentator.api.session_api import SessionView
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.contracts.preferences import (
+    DEFAULT_LANGUAGE,
     InstanceSettings,
     PersonPreferences,
     ThemeChoice,
 )
-from presentator.contracts.text import Catalogs
 from tests.presentator.application.support.fakes import FakePersonPreferencesStore
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
     A_TALK_ADDRESS,
     AN_ISSUER,
-    ENGLISH,
     NEIGHBOUR,
     USERNAME,
     Lobby,
@@ -41,25 +39,15 @@ from tests.support.sign_in_support import ADMIN, MEMBER, Scene, a_scene
 
 _SESSION = "/api/session"
 _JSON = {"accept": "application/json"}
-_GERMAN = replace(
-    ENGLISH, language_tag="de", language_name="Deutsch", log_out="Abmelden"
-)
 _HAL = "hal-client"
 _SUBJECT = "keycloak-subject-of-a-member"
-
-
-def a_german_lobby() -> Lobby:
-    catalogs = Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN})
-    return a_lobby(catalogs=catalogs)
 
 
 def a_lobby_speaking(
     *, instance: str, account: str | None = None, signed_in: bool = True
 ) -> Lobby:
     """A lobby whose instance stores `instance`, with its reader's account language."""
-    preferences = a_preferences(
-        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN})
-    )
+    preferences = a_preferences()
     preferences.instance.write(InstanceSettings(language_tag=instance))
     people = a_crowd()
     app, _ = a_lobby_app(people=people, preferences=preferences)
@@ -77,7 +65,9 @@ def choose(lobby: Lobby, *, theme: ThemeChoice) -> None:
     lobby.client.put("/api/account", json={"theme": theme.value})
 
 
-def test_a_signed_out_caller_gets_the_instances_words_and_theme_and_no_person() -> None:
+def test_a_signed_out_caller_gets_the_instances_language_and_theme_and_no_person() -> (
+    None
+):
     lobby = a_lobby()
 
     answer = lobby.client.get(_SESSION)
@@ -87,7 +77,7 @@ def test_a_signed_out_caller_gets_the_instances_words_and_theme_and_no_person() 
     view = SessionView.model_validate(answer.json())
     assert view.person is None
     assert view.theme == ThemeChoice.FOLLOW_SYSTEM
-    assert view.words.log_out == ENGLISH.log_out
+    assert view.language == DEFAULT_LANGUAGE
     assert view.sign_in.start == START_SIGN_IN_PATH
     assert view.sign_in.logout == LOGOUT_PATH
     assert view.sign_in.talk_start == f"{A_TALK_ADDRESS}{START_SIGN_IN_PATH}"
@@ -109,11 +99,11 @@ def test_the_session_names_the_central_account_at_the_configured_issuer(
         "talk_start": f"{A_TALK_ADDRESS}{START_SIGN_IN_PATH}",
         "account_console_url": f"{AN_ISSUER}/account",
     }
-    assert set(body) == {"person", "theme", "words", "sign_in"}
+    assert set(body) == {"person", "theme", "language", "sign_in"}
 
 
 def test_a_persons_own_theme_wins_and_the_instances_language_is_german() -> None:
-    admin = a_german_lobby()
+    admin = a_lobby()
     admin.sign_in()
     admin.client.put(
         "/api/settings",
@@ -127,7 +117,7 @@ def test_a_persons_own_theme_wins_and_the_instances_language_is_german() -> None
 
     assert body["person"] == {"username": NEIGHBOUR, "role": "user"}
     assert body["theme"] == "dark"
-    assert body["words"]["language_tag"] == "de"
+    assert body["language"] == "de"
 
 
 def test_an_admin_is_told_apart_by_role() -> None:
@@ -151,6 +141,7 @@ def test_an_admin_is_told_apart_by_role() -> None:
         ("fr", None, "en"),
         ("fr", "fr", "en"),
         ("fr", "de", "de"),
+        ("en", "de-AT", "de"),
     ],
     ids=[
         "offered-beats-instance",
@@ -161,9 +152,10 @@ def test_an_admin_is_told_apart_by_role() -> None:
         "gone-instance-catalog-none",
         "gone-instance-catalog-unoffered",
         "gone-instance-catalog-offered",
+        "region-of-an-offered-language",
     ],
 )
-def test_the_words_follow_the_account_language_where_a_catalog_has_it(
+def test_the_language_follows_the_account_language_where_a_catalog_has_it(
     instance: str, account: str | None, spoken: str
 ) -> None:
     """LB1."""
@@ -172,7 +164,7 @@ def test_the_words_follow_the_account_language_where_a_catalog_has_it(
     answer = lobby.client.get(_SESSION)
 
     assert answer.status_code == HTTPStatus.OK
-    assert answer.json()["words"]["language_tag"] == spoken
+    assert answer.json()["language"] == spoken
 
 
 @pytest.mark.parametrize("instance", ["en", "de"])
@@ -181,7 +173,7 @@ def test_a_signed_out_caller_reads_in_the_instances_language(instance: str) -> N
 
     answer = lobby.client.get(_SESSION)
 
-    assert answer.json()["words"]["language_tag"] == instance
+    assert answer.json()["language"] == instance
 
 
 def test_the_lobby_shells_html_lang_follows_the_account_language() -> None:
@@ -199,7 +191,7 @@ def test_a_browsers_accept_language_changes_nothing_for_an_account_without_one()
 
     answer = lobby.client.get(_SESSION, headers={"accept-language": "de"})
 
-    assert answer.json()["words"]["language_tag"] == "en"
+    assert answer.json()["language"] == "en"
 
 
 @pytest.mark.parametrize("cookie", ["forged", "ended", "expired"])

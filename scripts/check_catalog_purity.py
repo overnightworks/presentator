@@ -2,8 +2,10 @@
 
 Owner: the catalog rule in `docs/ARCHITECTURE.md` §5, "Words and look".
 Every user-facing word on a lobby page must come from the message catalog;
-typing a sentence into a page would make a second language a code change. This
-script is a CI gate, not a package layer.
+typing a sentence into a page would make a second language a code change.
+`design-catalogs --check` holds the catalogs and the modules written from them
+but scans no markup, so this script is the one gate on the pages. It is a CI
+gate, not a package layer.
 
 The rule is narrow and mechanical: it flags a literal (non-catalog) piece of
 page text only where a person reads it — HTML text-node content, or one of the

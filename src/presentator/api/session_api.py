@@ -1,4 +1,4 @@
-"""`GET /api/session`: who reads, in which words and theme, and where sign-in is.
+"""`GET /api/session`: who reads, in which language and theme, and where sign-in is.
 
 The session gate lets this one path through without a session, so a signed-out
 caller gets the instance's defaults; the person comes from what the gate admitted.
@@ -19,7 +19,7 @@ from presentator.api.admission import signed_in_person
 from presentator.application.preferences import Preferences
 from presentator.contracts.models import Role
 from presentator.contracts.preferences import Appearance, ThemeChoice
-from presentator.contracts.text import LobbyText
+from presentator.contracts.words import Language
 
 SESSION_PATH: Final = "/api/session"
 
@@ -49,14 +49,14 @@ class SessionView(BaseModel):
 
     person: SessionPerson | None
     theme: ThemeChoice
-    words: LobbyText
+    language: Language
     sign_in: SessionAddresses
 
 
 def appearance_of(
     request: Request, preferences: Preferences, sessions: SessionRecordStore
 ) -> Appearance:
-    """The words and the look the person behind this request reads in.
+    """The language and the look the person behind this request reads in.
 
     The browser's own language is not read: the account's names the language,
     else the instance's.
@@ -64,7 +64,7 @@ def appearance_of(
     person = signed_in_person(request)
     language_tag = resolve_language(
         AppLanguages(
-            offered=preferences.offered_tags(), default=preferences.served_tag()
+            offered=preferences.languages(), default=preferences.served_language()
         ),
         account_tag=account_language_of_session(
             request, sessions=sessions, config=web_auth_config(request)
@@ -90,7 +90,10 @@ def session_routes(
         openapi_extra=agent_tool(name="get_session", effect=ToolEffect.READ_ONLY),
     )
     def session(request: Request) -> SessionView:
-        """Show who is signed in, the language and theme they read in, and the words."""
+        """Show who is signed in, their language tag and theme, and where to sign in.
+
+        The answer carries the language as a tag and no sentence.
+        """
         person = signed_in_person(request)
         appearance = appearance_of(request, preferences, sessions)
         return SessionView(
@@ -98,7 +101,7 @@ def session_routes(
             if person is None
             else SessionPerson(username=person.username, role=person.role),
             theme=appearance.theme,
-            words=appearance.text,
+            language=appearance.language,
             sign_in=addresses,
         )
 

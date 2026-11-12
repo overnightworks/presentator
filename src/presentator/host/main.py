@@ -32,10 +32,6 @@ from presentator.adapters.builds import (
     PackageJsonThemes,
     SlidevBuilds,
 )
-from presentator.adapters.catalog import (
-    CATALOG_DIRECTORY,
-    load_catalogs,
-)
 from presentator.adapters.deck_store import SqliteDeckStore
 from presentator.adapters.deck_texts import MirroredDeckTexts
 from presentator.adapters.decks import (
@@ -436,7 +432,6 @@ def _preferences(settings: Settings) -> Preferences:
     return Preferences(
         instance=SqliteInstanceSettingsStore(settings.database),
         people=SqlitePersonPreferencesStore(settings.database),
-        catalogs=load_catalogs(CATALOG_DIRECTORY),
     )
 
 

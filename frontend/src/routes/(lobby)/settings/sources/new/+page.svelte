@@ -20,7 +20,7 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const words = $derived(data.session.words);
+	const words = $derived(data.words);
 
 	let name = $state('');
 	let url = $state('');
@@ -196,16 +196,16 @@
 
 <svelte:head>
 	<!-- A template literal: a bare interpolation compiles to a `?? ''` branch no page reaches. -->
-	<title>{`${words.sources_add}`}</title>
+	<title>{`${words['sourceNew.title']}`}</title>
 </svelte:head>
 <svelte:window onpagehide={forget} />
 
-<a class="back" href={resolve('/(lobby)/settings/sources')}>{words.sources_back}</a>
+<a class="back" href={resolve('/(lobby)/settings/sources')}>{words['sourceNew.back']}</a>
 {#if created === null}
-	<h1>{words.sources_add}</h1>
+	<h1>{words['sourceNew.title']}</h1>
 	<form class="form" onsubmit={create}>
 		<div class="fld">
-			<label for="source-name">{words.source_name}</label>
+			<label for="source-name">{words['sourceNew.name']}</label>
 			<input
 				class="control"
 				id="source-name"
@@ -216,7 +216,7 @@
 			/>
 		</div>
 		<div class="fld">
-			<label for="source-url">{words.source_url}</label>
+			<label for="source-url">{words['sourceNew.url']}</label>
 			<input
 				class="control"
 				id="source-url"
@@ -229,21 +229,21 @@
 			/>
 		</div>
 		{#if lookup.state === 'pending'}
-			<p class="muted" role="status">{words.source_kind_pending}</p>
+			<p class="muted" role="status">{words['sourceNew.kindPending']}</p>
 		{:else if lookup.state === 'failed'}
 			<div class="banner" data-banner="fail" role="alert">
 				<span class="state" data-state="failed"><i></i></span>
 				<div>
-					<p>{words.source_kind_failed}</p>
+					<p>{words['sourceNew.kindFailed']}</p>
 					<button class="btn secondary" type="button" onclick={() => lookUp(url)}
-						>{words.source_kind_retry}</button
+						>{words['sourceNew.kindRetry']}</button
 					>
 				</div>
 			</div>
 		{/if}
 		{#if offersFolder}
 			<div class="fld">
-				<label for="source-folder">{words.source_folder_optional}</label>
+				<label for="source-folder">{words['sourceNew.folderOptional']}</label>
 				<input
 					class="control"
 					id="source-folder"
@@ -257,12 +257,12 @@
 		{#if known === 'https-token'}
 			<div class="fld">
 				<span class="lb">
-					<label for="source-secret">{words.source_secret}</label>
+					<label for="source-secret">{words['sourceNew.secret']}</label>
 					<button
 						class="info"
 						type="button"
 						popovertarget="secret-hint"
-						aria-label={words.source_secret_info}
+						aria-label={words['sourceNew.secretInfo']}
 					>
 						<svg viewBox="0 0 24 24" aria-hidden="true">
 							<circle cx="12" cy="12" r="9" />
@@ -278,20 +278,20 @@
 					autocomplete="new-password"
 					bind:value={secret}
 				/>
-				<span id="secret-hint" class="hint" popover="auto">{words.source_secret_info}</span>
+				<span id="secret-hint" class="hint" popover="auto">{words['sourceNew.secretInfo']}</span>
 			</div>
 		{:else if known === 'ssh-deploy-key'}
 			<div class="fld">
-				<h2 class="lb" id="deploy-key-label">{words.source_deploy_key_heading}</h2>
-				<span class="muted">{words.source_deploy_key_hint}</span>
+				<h2 class="lb" id="deploy-key-label">{words['sourceNew.deployKeyHeading']}</h2>
+				<span class="muted">{words['sourceNew.deployKeyHint']}</span>
 				<CopyValue
 					value={draft.public_key}
-					label={words.source_copy}
+					label={words['sourceNew.copy']}
 					labelledby="deploy-key-label"
 				/>
 			</div>
 		{/if}
-		<p class="muted">{words.source_webhook_later}</p>
+		<p class="muted">{words['sourceNew.webhookLater']}</p>
 		{#if refusal !== null}
 			<div class="banner" data-banner="fail" role="alert">
 				<span class="state" data-state="failed"><i></i></span>
@@ -312,8 +312,8 @@
 		<div class="actions">
 			<ActionButton
 				variant="secondary"
-				label={words.source_check}
-				busyWord={words.source_busy_check}
+				label={words['sourceNew.check']}
+				busyWord={words['sourceNew.busyCheck']}
 				busy={running === 'check'}
 				disabled={pending || known === undefined}
 				onclick={check}
@@ -321,8 +321,8 @@
 			<ActionButton
 				variant="primary"
 				type="submit"
-				label={words.source_create}
-				busyWord={words.source_busy_create}
+				label={words['sourceNew.create']}
+				busyWord={words['sourceNew.busyCreate']}
 				busy={running === 'create'}
 				disabled={pending || fingerprint === null}
 			/>
@@ -330,39 +330,39 @@
 	</form>
 {:else}
 	<!-- Template literals: a bare interpolation in a text compiles to a `?? ''` branch no page reaches. -->
-	<h1><span class="as-typed">{`${created.name}`}</span>{` ${words.source_created}`}</h1>
+	<h1><span class="as-typed">{`${created.name}`}</span>{` ${words['sourceNew.created']}`}</h1>
 	<section class="sec">
-		<h2>{words.source_webhook}</h2>
+		<h2>{words['sourceNew.webhook']}</h2>
 		<div class="fld">
-			<span class="lb" id="hook-address-label">{words.source_webhook_address}</span>
+			<span class="lb" id="hook-address-label">{words['sourceNew.webhookAddress']}</span>
 			<CopyValue
 				value={created.hook_url}
-				label={words.source_copy}
+				label={words['sourceNew.copy']}
 				labelledby="hook-address-label"
 			/>
 		</div>
 		<div class="fld">
 			<span class="lb" id="hook-secret-label"
-				>{words.source_webhook_secret}<span class="once">{words.source_webhook_once}</span></span
+				>{words['sourceNew.webhookSecret']}<span class="once">{words['sourceNew.webhookOnce']}</span></span
 			>
 			<CopyValue
 				value={created.webhook_secret}
-				label={words.source_copy}
+				label={words['sourceNew.copy']}
 				labelledby="hook-secret-label"
 			/>
 		</div>
-		<p class="muted">{words.source_webhook_payload}</p>
+		<p class="muted">{words['sourceNew.webhookPayload']}</p>
 	</section>
 	<div class="actions">
 		<a
 			class="btn primary"
 			href={`/settings/sources/${encodeURIComponent(created.name)}`}
 			rel="external"
-			data-sveltekit-reload>{words.source_created_done}</a
+			data-sveltekit-reload>{words['sourceNew.createdDone']}</a
 		>
 	</div>
 	<output class="toast"
-		><span class="state" data-state="ready"><i></i></span>{words.source_created_toast}</output
+		><span class="state" data-state="ready"><i></i></span>{words['sourceNew.createdToast']}</output
 	>
 {/if}
 

@@ -2,30 +2,11 @@ import { flushSync, mount, unmount } from 'svelte';
 import { vi } from 'vitest';
 
 import type { AccessKind } from '#lib/api/sources.ts';
-import type { LobbyText } from '#lib/api/session.ts';
 import { navigation } from '#lib/navigation.ts';
+import { words } from '#lib/words/en.ts';
 import Page from './+page.svelte';
 
-// A scenario's own templates: none of them is the catalog's sentence.
-export const words = {
-	sources_add: 'Plant a source',
-	source_name: 'Handle',
-	source_folder_optional: 'Subdirectory, if any',
-	source_refused_folder: 'that subdirectory will not do',
-	source_url: 'Where',
-	source_secret: 'Passphrase',
-	source_check: 'Probe',
-	source_create: 'Plant',
-	source_busy_check: 'Probing',
-	source_busy_create: 'Planting',
-	source_created: 'is planted',
-	source_webhook_once: 'seen this once',
-	source_check_reachable: 'head {commit}',
-	source_kind_pending: 'reading it',
-	source_kind_failed: 'could not read it',
-	source_kind_retry: 'once more',
-	source_deploy_key_heading: 'the key to place'
-} as LobbyText;
+export { words };
 export const draft = { id: 'draft-1', public_key: 'a-public-key' };
 export const created = {
 	name: 'talks',
@@ -83,7 +64,7 @@ export function open(
 	mounted.add(
 		mount(Page, {
 			target: document.body,
-			props: { data: { session: { words }, draft } } as never
+			props: { data: { words, draft } } as never
 		})
 	);
 	flushSync();

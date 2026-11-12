@@ -1,6 +1,5 @@
 """`/api/account` and `/api/settings` read and write the choices as data."""
 
-from dataclasses import replace
 from http import HTTPStatus
 from pathlib import Path
 
@@ -13,11 +12,14 @@ from fastapi.testclient import TestClient
 from httpx2 import Response
 
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
-from presentator.contracts.preferences import InstanceSettings, ThemeChoice
-from presentator.contracts.text import Catalogs
+from presentator.contracts.preferences import (
+    DEFAULT_LANGUAGE,
+    InstanceSettings,
+    ThemeChoice,
+)
+from presentator.contracts.words import LANGUAGES
 from tests.presentator.application.support.fakes import FakePersonPreferencesStore
 from tests.support.lobby import (
-    ENGLISH,
     NEIGHBOUR,
     Lobby,
     a_lobby,
@@ -30,28 +32,18 @@ _SETTINGS = "/api/settings"
 _SESSION = "/api/session"
 _JSON = {"accept": "application/json"}
 _HAL = "hal-client"
-_GERMAN = replace(ENGLISH, language_tag="de", language_name="Deutsch")
-_LANGUAGES = [
-    {"tag": "de", "name": "Deutsch"},
-    {"tag": "en", "name": ENGLISH.language_name},
-]
+_LANGUAGES = list(LANGUAGES)
 _ANOTHER_SITE = "https://evil.example"
 
 
-def a_german_lobby() -> Lobby:
-    return a_lobby(
-        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN})
-    )
-
-
 def an_admin_lobby() -> Lobby:
-    lobby = a_german_lobby()
+    lobby = a_lobby()
     lobby.sign_in()
     return lobby
 
 
 def a_member_lobby() -> Lobby:
-    lobby = a_german_lobby()
+    lobby = a_lobby()
     lobby.sign_in(username=NEIGHBOUR)
     return lobby
 
@@ -87,7 +79,7 @@ def is_a_problem(answer: Response, status: HTTPStatus) -> None:
 def test_a_signed_out_caller_gets_webauths_refusal_not_a_problem(
     method: str, path: str
 ) -> None:
-    lobby = a_german_lobby()
+    lobby = a_lobby()
 
     answer = lobby.client.request(method, path, headers=_JSON)
 
@@ -96,7 +88,7 @@ def test_a_signed_out_caller_gets_webauths_refusal_not_a_problem(
 
 
 def test_a_signed_out_browser_is_sent_to_sign_in() -> None:
-    lobby = a_german_lobby()
+    lobby = a_lobby()
 
     answer = lobby.client.get(_ACCOUNT, headers={"accept": "text/html"})
 
@@ -208,7 +200,7 @@ def test_an_admin_reads_the_defaults_of_a_fresh_instance() -> None:
     assert answer.headers["cache-control"] == "no-store"
     assert answer.json() == {
         "name": InstanceSettings().name,
-        "language_tag": ENGLISH.language_tag,
+        "language_tag": DEFAULT_LANGUAGE,
         "languages": _LANGUAGES,
     }
 
@@ -226,7 +218,7 @@ def test_an_admins_instance_language_reaches_a_member_who_keeps_follow_system() 
     assert admin.client.get(_SETTINGS).json() == answer.json()
     session = member.client.get(_SESSION).json()
     assert session["theme"] == ThemeChoice.FOLLOW_SYSTEM.value
-    assert session["words"]["language_tag"] == some_settings()["language_tag"]
+    assert session["language"] == some_settings()["language_tag"]
 
 
 def test_an_admin_saves_an_empty_instance_name_and_reads_it_back_empty() -> None:
@@ -255,7 +247,7 @@ def test_an_admin_writing_account_changes_only_their_own_overrides() -> None:
 
     settings = lobby.client.get(_SETTINGS).json()
     assert settings["name"] == InstanceSettings().name
-    assert settings["language_tag"] == ENGLISH.language_tag
+    assert settings["language_tag"] == DEFAULT_LANGUAGE
     assert lobby.client.get(_ACCOUNT).json()["theme"] == ThemeChoice.LIGHT.value
 
 

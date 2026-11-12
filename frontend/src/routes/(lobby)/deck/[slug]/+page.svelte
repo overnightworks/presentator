@@ -4,13 +4,12 @@
 	import { ageInWords, durationInWords } from '#lib/age.ts';
 	import { buildsWith, failureWords, stateWords } from '#lib/deck.ts';
 	import { languageTag } from '#lib/session.svelte.ts';
-	import { fill } from '#lib/words.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const words = $derived(data.session.words);
+	const words = $derived(data.words);
 	const tag = $derived(languageTag());
-	const title = $derived(data.deck === null ? words.deck_unknown_title : data.deck.title);
+	const title = $derived(data.deck === null ? words['deck.unknownTitle'] : data.deck.title);
 	const home = resolve('/(lobby)');
 </script>
 
@@ -21,19 +20,19 @@
 
 {#if data.deck === null}
 	<NoteCard
-		title={words.deck_unknown_title}
-		explanation={words.deck_unknown_explanation}
+		title={words['deck.unknownTitle']}
+		explanation={words['deck.unknownExplanation']}
 		href={home}
-		label={words.decks_title}
+		label={words['deck.decksLink']}
 	/>
 {:else}
 	{@const deck = data.deck}
 	{@const attempt = deck.attempt}
-	<a class="back" href={home}>{words.deck_back}</a>
+	<a class="back" href={home}>{words['deck.back']}</a>
 	<h1 class="as-typed">{deck.title}</h1>
 	<code>{deck.slug}</code>
 	<section class="status">
-		<h2>{words.deck_status}</h2>
+		<h2>{words['deck.status']}</h2>
 		<div class="meta">
 			<span class="state" data-state={deck.state}><i></i>{stateWords(words)[deck.state]}</span>
 			<span>
@@ -41,36 +40,36 @@
 				<code>{deck.commit}</code>
 			</span>
 			{#if deck.built_at}
-				<span>{fill(words.deck_built, { age: ageInWords(deck.built_at, Date.now(), tag) })}</span>
+				<span>{words['deck.built']({ age: ageInWords(deck.built_at, Date.now(), tag) })}</span>
 			{/if}
 		</div>
 		{#if deck.themes}
-			<p class="muted">{buildsWith(deck.themes, words)}</p>
+			<p class="muted">{buildsWith(deck.themes, words, tag)}</p>
 		{/if}
 	</section>
 	{#if attempt}
 		{@const failure = failureWords(attempt.failure, words)}
 		<aside class="banner" data-banner={deck.state}>
 			<span class="state" data-state={deck.state}
-				><i></i>{deck.state === 'building' ? words.deck_building_label : words.deck_failed_title}</span
+				><i></i>{deck.state === 'building' ? words['deck.buildingLabel'] : words['deck.failedTitle']}</span
 			>
 			<div>
 				{#if deck.state === 'building'}
 					<p>
 						<code>{attempt.commit}</code>
-						{fill(words.deck_building_for, {
+						{words['deck.buildingFor']({
 							age: durationInWords(attempt.started_at, Date.now(), tag)
 						})}
 					</p>
-					<p>{words.deck_building_explanation}</p>
+					<p>{words['deck.buildingExplanation']}</p>
 				{:else}
 					<p>
-						<b>{words.deck_attempt_label}</b>
+						<b>{words['deck.attemptLabel']}</b>
 						<code>{attempt.commit}</code>
 						{ageInWords(attempt.started_at, Date.now(), tag)}
 					</p>
 					{#if failure === null}
-						<p>{words.deck_failed_without_a_message}</p>
+						<p>{words['deck.failedWithoutMessage']}</p>
 					{:else}
 						<pre>{failure}</pre>
 					{/if}
@@ -78,29 +77,29 @@
 			</div>
 		</aside>
 		{#if deck.state !== 'building' && deck.built_at}
-			<p class="muted standing">{words.deck_failed_last_talk_stands}</p>
+			<p class="muted standing">{words['deck.failedLastTalkStands']}</p>
 		{/if}
 	{/if}
 	{#if deck.built_at}
 		<div class="actions">
 			{#if deck.views_open}
 				<a class="btn primary" href={`${deck.talk}presenter/`} rel="external"
-					>{words.deck_presenter_view}</a
+					>{words['deck.presenterView']}</a
 				>
-				<a class="btn secondary" href={deck.talk} rel="external">{words.deck_projector_view}</a>
+				<a class="btn secondary" href={deck.talk} rel="external">{words['deck.projectorView']}</a>
 			{:else}
-				<span class="btn primary off">{words.deck_presenter_view}</span>
-				<span class="btn secondary off">{words.deck_projector_view}</span>
+				<span class="btn primary off">{words['deck.presenterView']}</span>
+				<span class="btn secondary off">{words['deck.projectorView']}</span>
 			{/if}
 			<a
 				class="btn secondary"
 				href={`/deck/${encodeURIComponent(deck.slug)}/pdf`}
 				rel="external"
-				data-sveltekit-reload>{words.deck_pdf}</a
+				data-sveltekit-reload>{words['deck.pdf']}</a
 			>
 		</div>
 	{:else}
-		<p class="muted">{words.deck_not_built_explanation}</p>
+		<p class="muted">{words['deck.notBuiltExplanation']}</p>
 	{/if}
 {/if}
 

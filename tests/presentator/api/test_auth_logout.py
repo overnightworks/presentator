@@ -18,13 +18,12 @@ from webauth.ports import SessionRecord, SessionRecordStore
 
 from presentator.api.auth import LOGIN_PATH, LOGOUT_PATH
 from presentator.application.identity import SESSION_LIFETIME
-from presentator.contracts.preferences import InstanceSettings
-from presentator.contracts.text import Catalogs
+from presentator.contracts.preferences import DEFAULT_LANGUAGE, InstanceSettings
+from presentator.contracts.words import Language, text
 from presentator.host.oidc import oidc_client_config
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_CLIENT_CREDENTIAL,
-    ENGLISH,
     a_preferences,
     a_settings,
     hand_over_session_cookies,
@@ -193,22 +192,22 @@ def test_the_logout_page_brings_its_own_policy_naming_the_issuer(
     assert "'self'" not in directives["form-action"]
 
 
-def test_the_fallback_button_reads_the_catalogs_log_out(scene: Scene) -> None:
-    """The fallback button reads the catalog's `log_out`."""
+def test_the_fallback_button_is_worded_in_the_instance_language(scene: Scene) -> None:
+    """The button reads `logout.button` of the instance's language, English fresh."""
     scene.sign_in()
 
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
 
-    assert '<button type="submit">Log out</button>' in answer.text
+    assert (
+        f'<button type="submit">{text(DEFAULT_LANGUAGE, "logout.button")}</button>'
+        in answer.text
+    )
 
 
-def test_the_logout_page_carries_the_instance_language_as_its_lang(
+def test_the_logout_page_carries_the_instance_language_as_its_lang_and_its_button(
     tmp_path: Path,
 ) -> None:
-    german = replace(ENGLISH, language_tag="de", language_name="Deutsch")
-    preferences = a_preferences(
-        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": german})
-    )
+    preferences = a_preferences()
     preferences.instance.write(InstanceSettings(language_tag="de"))
     scene = a_scene(tmp_path, preferences=preferences)
     scene.sign_in()
@@ -216,20 +215,18 @@ def test_the_logout_page_carries_the_instance_language_as_its_lang(
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
 
     assert re.search(r"<html[^>]*\blang=\"de\"", answer.text)
+    assert (
+        f'<button type="submit">{text("de", "logout.button")}</button>' in answer.text
+    )
 
 
+@pytest.mark.parametrize(
+    ("account", "spoken"), [("de", "de"), ("de-AT", "de"), ("fr", "en")]
+)
 def test_the_logout_page_follows_the_account_language_where_a_catalog_has_it(
-    tmp_path: Path,
+    tmp_path: Path, account: str, spoken: Language
 ) -> None:
-    german = replace(
-        ENGLISH, language_tag="de", language_name="Deutsch", log_out="Abmelden"
-    )
-    scene = a_scene(
-        tmp_path,
-        preferences=a_preferences(
-            catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": german})
-        ),
-    )
+    scene = a_scene(tmp_path, preferences=a_preferences())
     scene.sign_in()
     scene.sessions.delete_for_user("subject-1")
     session = scene.sessions.create(
@@ -238,13 +235,16 @@ def test_the_logout_page_follows_the_account_language_where_a_catalog_has_it(
         expires_at=scene.clock.now() + SESSION_LIFETIME,
         refresh_token=None,
         id_token=SecretStr("an-id-token"),
-        account_language="de",
+        account_language=account,
     )
     hand_over_session_cookies(scene.lobby.client, session.id, scene.config)
 
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
 
-    assert re.search(r'<html[^>]*\blang="de"', answer.text)
+    assert re.search(rf'<html[^>]*\blang="{spoken}"', answer.text)
+    assert (
+        f'<button type="submit">{text(spoken, "logout.button")}</button>' in answer.text
+    )
 
 
 def test_the_session_cookie_of_a_logged_out_browser_cannot_come_back(

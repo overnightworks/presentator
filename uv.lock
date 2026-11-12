@@ -477,7 +477,6 @@ name = "overnightworks-presentator"
 version = "0.0.0"
 source = { editable = "." }
 dependencies = [
-    { name = "babel" },
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx2" },
@@ -505,7 +504,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "babel", specifier = "==2.18.0" },
     { name = "cryptography", specifier = "==50.0.2" },
     { name = "fastapi", specifier = "==0.162.0" },
     { name = "httpx2", specifier = "==2.16.0" },

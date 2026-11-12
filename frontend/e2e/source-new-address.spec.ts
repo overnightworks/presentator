@@ -1,5 +1,5 @@
 import { expect, test } from './person.ts';
-import { expectsNoHorizontalScroll, sessionOf } from './scenario.ts';
+import { expectsNoHorizontalScroll, wordsOf } from './scenario.ts';
 import {
 	ACCESS_TOKEN,
 	aLocalAddress,
@@ -27,7 +27,7 @@ test.describe('the address decides what the Add source form shows', () => {
 		test(`a ${shape} address shows the token field ${token}, the key ${key} and the folder ${token || key}`, async ({
 			page
 		}, testInfo) => {
-			const { words } = await sessionOf(page);
+			const words = await wordsOf(page);
 			const name = aName(testInfo);
 			const url = {
 				https: () => anHttpsAddress(name),
@@ -39,9 +39,9 @@ test.describe('the address decides what the Add source form shows', () => {
 			await typesTheAddress(page, words, await url);
 
 			await expect(secretField(page, words)).toHaveCount(token ? 1 : 0);
-			await expect(page.getByText(words.source_deploy_key_heading)).toHaveCount(key ? 1 : 0);
+			await expect(page.getByText(words['sourceNew.deployKeyHeading'])).toHaveCount(key ? 1 : 0);
 			await expect(folderField(page, words)).toHaveCount(token || key ? 1 : 0);
-			await expect(page.getByRole('button', { name: words.source_check })).toBeEnabled();
+			await expect(page.getByRole('button', { name: words['sourceNew.check'] })).toBeEnabled();
 		});
 	}
 
@@ -52,23 +52,23 @@ test.describe('the address decides what the Add source form shows', () => {
 		test(`${url.split(':')[0]} names no access: no field, and Check answers the unknown-access sentence`, async ({
 			page
 		}) => {
-			const { words } = await sessionOf(page);
+			const words = await wordsOf(page);
 			await opensTheForm(page);
 
 			await typesTheAddress(page, words, url);
 			await expect(secretField(page, words)).toHaveCount(0);
-			await expect(page.getByText(words.source_deploy_key_heading)).toHaveCount(0);
-			await page.getByLabel(words.source_name, { exact: true }).fill('talks');
+			await expect(page.getByText(words['sourceNew.deployKeyHeading'])).toHaveCount(0);
+			await page.getByLabel(words['sourceNew.name'], { exact: true }).fill('talks');
 			await checks(page, words);
 
-			await expect(page.getByRole('alert')).toHaveText(words.source_refused_unknown_access);
+			await expect(page.getByRole('alert')).toHaveText(words['source.refusedUnknownAccess']);
 		});
 	}
 
 	test('a token typed for https is gone when a key address follows, and the check carries no secret', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
 		await typesTheAddress(page, words, anHttpsAddress(name));
@@ -77,14 +77,14 @@ test.describe('the address decides what the Add source form shows', () => {
 		await typesTheAddress(page, words, anSshAddress(name));
 		await expect(secretField(page, words)).toHaveCount(0);
 		const sent = page.waitForRequest((request) => new URL(request.url()).pathname === CHECK_API);
-		await page.getByRole('button', { name: words.source_check }).click();
+		await page.getByRole('button', { name: words['sourceNew.check'] }).click();
 
 		expect((await sent).postDataJSON()).toMatchObject({ secret: null });
 		expect((await sent).postData()).not.toContain(ACCESS_TOKEN);
 	});
 
 	test('the empty form shows no folder field', async ({ page }) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 
 		await opensTheForm(page);
 
@@ -94,10 +94,10 @@ test.describe('the address decides what the Add source form shows', () => {
 	test('a folder typed for https is gone when a server folder follows, and Create sends none', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
-		await page.getByLabel(words.source_name, { exact: true }).fill(name);
+		await page.getByLabel(words['sourceNew.name'], { exact: true }).fill(name);
 		await typesTheAddress(page, words, anHttpsAddress(name));
 		await folderField(page, words).fill('examples');
 
@@ -107,7 +107,7 @@ test.describe('the address decides what the Add source form shows', () => {
 		const sent = page.waitForRequest(
 			(request) => new URL(request.url()).pathname === SOURCES_API && request.method() === 'POST'
 		);
-		await page.getByRole('button', { name: words.source_create }).click();
+		await page.getByRole('button', { name: words['sourceNew.create'] }).click();
 
 		expect((await sent).postDataJSON()).toMatchObject({ folder: '' });
 	});
@@ -115,10 +115,10 @@ test.describe('the address decides what the Add source form shows', () => {
 	test('Create sends the folder typed for a key address and Check does not', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
-		await page.getByLabel(words.source_name, { exact: true }).fill(name);
+		await page.getByLabel(words['sourceNew.name'], { exact: true }).fill(name);
 		await typesTheAddress(page, words, anSshAddress(name));
 		await folderField(page, words).fill('examples');
 		const checked = page.waitForRequest((request) => new URL(request.url()).pathname === CHECK_API);
@@ -126,7 +126,7 @@ test.describe('the address decides what the Add source form shows', () => {
 		const created = page.waitForRequest(
 			(request) => new URL(request.url()).pathname === SOURCES_API && request.method() === 'POST'
 		);
-		await page.getByRole('button', { name: words.source_create }).click();
+		await page.getByRole('button', { name: words['sourceNew.create'] }).click();
 
 		expect((await checked).postDataJSON()).not.toHaveProperty('folder');
 		expect((await created).postDataJSON()).toMatchObject({ folder: 'examples' });
@@ -135,25 +135,25 @@ test.describe('the address decides what the Add source form shows', () => {
 	test('the token field comes back empty when https follows a key address', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
 		await typesTheAddress(page, words, anHttpsAddress(name));
 		await secretField(page, words).fill(ACCESS_TOKEN);
 		await typesTheAddress(page, words, anSshAddress(name));
-		await expect(page.getByText(words.source_deploy_key_heading)).toBeVisible();
+		await expect(page.getByText(words['sourceNew.deployKeyHeading'])).toBeVisible();
 
 		await typesTheAddress(page, words, anHttpsAddress(name));
 
-		await expect(page.getByText(words.source_deploy_key_heading)).toHaveCount(0);
+		await expect(page.getByText(words['sourceNew.deployKeyHeading'])).toHaveCount(0);
 		await expect(secretField(page, words)).toHaveValue('');
 	});
 
 	test('Check stays disabled on a blank address and until the address has its answer', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
-		const check = page.getByRole('button', { name: words.source_check });
+		const words = await wordsOf(page);
+		const check = page.getByRole('button', { name: words['sourceNew.check'] });
 		let release: () => void = () => undefined;
 		const held = new Promise<void>((resolve) => {
 			release = resolve;
@@ -165,11 +165,11 @@ test.describe('the address decides what the Add source form shows', () => {
 		await opensTheForm(page);
 		await expect(check).toBeDisabled();
 
-		await page.getByLabel(words.source_url, { exact: true }).fill('   ');
+		await page.getByLabel(words['sourceNew.url'], { exact: true }).fill('   ');
 		await expect(check).toBeDisabled();
-		await page.getByLabel(words.source_url, { exact: true }).fill(anHttpsAddress(aName(testInfo)));
+		await page.getByLabel(words['sourceNew.url'], { exact: true }).fill(anHttpsAddress(aName(testInfo)));
 
-		await expect(page.getByRole('status')).toHaveText(words.source_kind_pending);
+		await expect(page.getByRole('status')).toHaveText(words['sourceNew.kindPending']);
 		await expect(check).toBeDisabled();
 		release();
 		await expect(check).toBeEnabled();
@@ -177,26 +177,26 @@ test.describe('the address decides what the Add source form shows', () => {
 	});
 
 	test('a failed lookup says so with a retry and names no access', async ({ page }, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		let failing = true;
 		await page.route(`**${KIND_API}`, (route) =>
 			failing ? route.fulfill({ status: 500, json: {} }) : route.continue()
 		);
 		await opensTheForm(page);
-		await page.getByLabel(words.source_url, { exact: true }).fill(anHttpsAddress(aName(testInfo)));
+		await page.getByLabel(words['sourceNew.url'], { exact: true }).fill(anHttpsAddress(aName(testInfo)));
 
-		await expect(page.getByRole('alert')).toContainText(words.source_kind_failed);
+		await expect(page.getByRole('alert')).toContainText(words['sourceNew.kindFailed']);
 		await expect(secretField(page, words)).toHaveCount(0);
-		await expect(page.getByRole('button', { name: words.source_check })).toBeDisabled();
+		await expect(page.getByRole('button', { name: words['sourceNew.check'] })).toBeDisabled();
 		failing = false;
-		await page.getByRole('button', { name: words.source_kind_retry }).click();
+		await page.getByRole('button', { name: words['sourceNew.kindRetry'] }).click();
 
 		await expect(secretField(page, words)).toBeVisible();
 		await expect(page.getByRole('alert')).toHaveCount(0);
 	});
 
 	test('every field shown at 390 px leaves no horizontal scroll', async ({ page }, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.setViewportSize({ width: 390, height: 900 });
 		await opensTheForm(page);
 
@@ -206,7 +206,7 @@ test.describe('the address decides what the Add source form shows', () => {
 		await expectsNoHorizontalScroll(page);
 
 		await typesTheAddress(page, words, anSshAddress(aName(testInfo)));
-		await expect(page.getByText(words.source_deploy_key_heading)).toBeVisible();
+		await expect(page.getByText(words['sourceNew.deployKeyHeading'])).toBeVisible();
 		await expectsNoHorizontalScroll(page);
 	});
 });

@@ -29,11 +29,11 @@ $effect.root(() => {
 		}
 		// The same marks the server's shell writes on first paint.
 		document.documentElement.dataset.theme = view.theme;
-		document.documentElement.lang = view.words.language_tag;
+		document.documentElement.lang = view.language;
 	});
 });
 
 /** The language tag the person's words are in; ages are worded in it. */
 export function languageTag(): string {
-	return view.words.language_tag;
+	return view.language;
 }

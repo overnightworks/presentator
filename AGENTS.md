@@ -16,9 +16,8 @@
 - A new mandatory CI job is added to `quality/config.toml` by its display name.
 - `sonar-project.properties` carries only the keys the quality gate allows.
 - A new root entry is declared in `quality/config.toml` with a reason, or lives in its owner's directory.
-- A change to the lobby API or to `LobbyText` regenerates `openapi.json` and `types.ts`; CI diffs them.
-- Page text comes from `LobbyText` and `src/presentator/adapters/catalogs/en.po`, never a literal in a `.svelte` file.
-- A `LobbyText` field only a page reads is listed in `tests/support/vulture_allowlist.py`.
+- A change to the lobby API regenerates `openapi.json` and `types.ts`; CI diffs them.
+- Page text comes from the generated words of `frontend/src/lib/catalogs/*.po` (`design-catalogs` writes `frontend/src/lib/words/` and `src/presentator/contracts/words.py`), never a literal in a `.svelte` file.
 - `legal/` changes only by wording the operator released.
 
 ## Owners

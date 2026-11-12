@@ -1,6 +1,8 @@
 import type { BrowserContext, Locator, Page } from '@playwright/test';
 
 import type { SessionView } from '../src/lib/api/session.ts';
+import type { Words } from '../src/lib/words/de.ts';
+import { loadWords } from '../src/lib/words/index.ts';
 import { expect } from './person.ts';
 
 // The scenario's clock; each deck's `changed_at` is this instant less its age.
@@ -8,6 +10,7 @@ export const NOW = '2026-11-03T12:00:00Z';
 export const minutesAgo = (minutes: number): string =>
 	new Date(Date.parse(NOW) - minutes * 60_000).toISOString();
 
+export type { Words };
 export const SIGN_IN_START = '/login/oidc';
 export const MENU = '#account-menu';
 
@@ -16,6 +19,19 @@ export async function sessionOf(page: Page): Promise<SessionView> {
 		headers: { Accept: 'application/json' }
 	});
 	return (await answer.json()) as SessionView;
+}
+
+// The words of the language the lobby serves this page in, loaded as the page loads them.
+export async function wordsOf(page: Page): Promise<Words> {
+	return loadWords((await sessionOf(page)).language);
+}
+
+// The session beside the words of its language, as the page holds both after its load.
+export type Reader = SessionView & { words: Words };
+
+export async function readerOf(page: Page): Promise<Reader> {
+	const session = await sessionOf(page);
+	return { ...session, words: await loadWords(session.language) };
 }
 
 export async function opensTheMenu(page: Page): Promise<void> {
@@ -40,12 +56,12 @@ export async function leftForSignIn(page: Page, started: ReturnType<typeof start
 
 export const entriesOf = (page: Page): Promise<number> => page.evaluate(() => history.length);
 
-type ThemeRow = 'follow_system' | 'light' | 'dark';
+type ThemeRow = 'followSystem' | 'light' | 'dark';
 
-// The menu's radio of a theme row, named by the session's words.
+// The menu's radio of a theme row, named by the page's words.
 export async function themeRow(page: Page, row: ThemeRow): Promise<Locator> {
-	const { words } = await sessionOf(page);
-	return page.getByRole('radio', { name: words[`theme_${row}`], exact: true });
+	const words = await wordsOf(page);
+	return page.getByRole('radio', { name: words[`account.${row}`], exact: true });
 }
 
 export async function chooseTheme(page: Page, row: ThemeRow): Promise<void> {

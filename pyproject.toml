@@ -8,7 +8,6 @@ version = "0.0.0"
 requires-python = ">=3.14"
 license = "MIT"
 dependencies = [
-    "babel==2.18.0",
     "cryptography==50.0.2",
     "fastapi==0.162.0",
     "httpx2==2.16.0",
@@ -260,12 +259,11 @@ as_packages = true
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
-id = "manifest-and-wording-libraries"
-name = "Only adapters read the manifest format and word a language"
+id = "manifest-library"
+name = "Only adapters read the manifest format"
 type = "forbidden"
 # A third-party or format library lives in the adapter that owns it.
-# `tomllib` reads the deck manifest and `babel` owns the catalog and the
-# wording of an age, so a layer above must ask a port or be handed the words.
+# `tomllib` reads the deck manifest, so a layer above must ask a port.
 source_modules = [
     "presentator.host",
     "presentator.api",
@@ -273,7 +271,7 @@ source_modules = [
     "presentator.ports",
     "presentator.contracts",
 ]
-forbidden_modules = ["tomllib", "babel"]
+forbidden_modules = ["tomllib"]
 as_packages = true
 allow_indirect_imports = true
 

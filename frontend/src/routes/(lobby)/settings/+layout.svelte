@@ -5,16 +5,16 @@
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
-	const words = $derived(data.session.words);
+	const words = $derived(data.words);
 </script>
 
-<nav class="tabs" aria-label={words.section_settings}>
+<nav class="tabs" aria-label={words['settings.navLabel']}>
 	<a href={resolve('/(lobby)/settings')} aria-current={tabCurrent(page.url.pathname, 'general')}
-		>{words.settings_title}</a
+		>{words['settings.generalTab']}</a
 	>
 	<a
 		href={resolve('/(lobby)/settings/sources')}
-		aria-current={tabCurrent(page.url.pathname, 'sources')}>{words.settings_sources}</a
+		aria-current={tabCurrent(page.url.pathname, 'sources')}>{words['settings.sourcesTab']}</a
 	>
 </nav>
 {@render children()}

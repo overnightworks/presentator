@@ -4,12 +4,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { SessionView } from '#lib/api/session.ts';
 import { commitSession, languageTag, showTheme } from '#lib/session.svelte.ts';
 
-function sessionIn(language: string, theme: SessionView['theme']): SessionView {
+function sessionIn(language: SessionView['language'], theme: SessionView['theme']): SessionView {
 	return {
 		person: { role: 'user', username: 'anna' },
+		language,
 		sign_in: { account_console_url: '', logout: '', start: '', talk_start: '' },
-		theme,
-		words: { language_tag: language } as SessionView['words']
+		theme
 	};
 }
 

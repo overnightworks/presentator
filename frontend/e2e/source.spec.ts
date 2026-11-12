@@ -9,9 +9,9 @@ import {
 	expectsNoHorizontalScroll,
 	leftForSignIn,
 	SIGN_IN_START,
-	sessionOf,
 	startsSignIn,
-	tabbedControlWithRing
+	tabbedControlWithRing,
+	wordsOf
 } from './scenario.ts';
 import {
 	ACCESS_TOKEN,
@@ -47,13 +47,13 @@ async function renewsTheWebhook(page: Page, words: Words, name: string): Promise
 			received.url().endsWith(`${SOURCES_API}/${name}/webhook-secret`) &&
 			received.request().method() === 'POST'
 	);
-	await section(page, words.source_webhook_heading)
-		.getByRole('button', { name: words.source_renew, exact: true })
+	await section(page, words['source.webhookHeading'])
+		.getByRole('button', { name: words['source.renew'], exact: true })
 		.click();
 	const answer = await answered;
 	expect(answer.status()).toBe(200);
 	const { webhook_secret: secret } = (await answer.json()) as WebhookSecretView;
-	await expect(section(page, words.source_webhook_heading)).toContainText(secret);
+	await expect(section(page, words['source.webhookHeading'])).toContainText(secret);
 	return secret;
 }
 
@@ -81,7 +81,7 @@ test.describe('as an admin', () => {
 					test('shows every part of its kind and saves a screenshot', async ({
 						page
 					}, testInfo) => {
-						const { words } = await sessionOf(page);
+						const words = await wordsOf(page);
 						await page.setViewportSize({ width, height: 900 });
 						let name: string;
 						if (kind === 'ssh') {
@@ -97,30 +97,30 @@ test.describe('as an admin', () => {
 						expect(shell?.status()).toBe(200);
 						await expect(page).toHaveTitle(name);
 						await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
-						const access = section(page, words.source_access_heading);
-						const webhook = section(page, words.source_webhook_heading);
-						const dots = page.getByText(words.source_secret_dots, { exact: true });
+						const access = section(page, words['source.accessHeading']);
+						const webhook = section(page, words['source.webhookHeading']);
+						const dots = page.getByText(words['source.secretMask'], { exact: true });
 						if (kind === 'https') {
-							await expect(access.locator('.tag')).toHaveText(words.source_access_token);
+							await expect(access.locator('.tag')).toHaveText(words['source.accessToken']);
 							await expect(access.locator('input[type="password"]')).toHaveCount(1);
 							await expect(dots).toHaveCount(2);
-							await expect(page.getByRole('heading', { name: words.source_decks })).toHaveCount(0);
+							await expect(page.getByRole('heading', { name: words['source.decks'] })).toHaveCount(0);
 						} else if (kind === 'ssh') {
-							await expect(access.locator('.tag')).toHaveText(words.source_access_deploy_key);
+							await expect(access.locator('.tag')).toHaveText(words['source.accessDeployKey']);
 							await expect(access.locator('input')).toHaveCount(0);
-							await expect(access.getByRole('button', { name: words.source_copy })).toBeVisible();
+							await expect(access.getByRole('button', { name: words['source.copy'] })).toBeVisible();
 							await expect(
-								access.getByRole('button', { name: words.source_deploy_key_renew, exact: true })
+								access.getByRole('button', { name: words['source.deployKeyRenew'], exact: true })
 							).toBeVisible();
 							await expect(dots).toHaveCount(1);
 						} else {
-							await expect(access.locator('.tag')).toHaveText(words.source_access_local);
+							await expect(access.locator('.tag')).toHaveText(words['source.accessLocal']);
 							await expect(access.locator('input')).toHaveCount(0);
 							await expect(access.getByRole('button')).toHaveCount(0);
 							await expect(dots).toHaveCount(1);
 						}
-						await expect(webhook.getByRole('group', { name: words.source_webhook_address })).toBeVisible();
-						await expect(webhook.getByRole('button', { name: words.source_copy })).toBeVisible();
+						await expect(webhook.getByRole('group', { name: words['source.webhookAddress'] })).toBeVisible();
+						await expect(webhook.getByRole('button', { name: words['source.copy'] })).toBeVisible();
 						await expect(page.locator('main form form')).toHaveCount(0);
 						await expectsNoHorizontalScroll(page);
 						if (width === 390) {
@@ -140,19 +140,19 @@ test.describe('as an admin', () => {
 	test('names a folder in the header when the source has one and nothing when it has none', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		for (const width of [390, 1280]) {
 			await page.setViewportSize({ width, height: 900 });
 			await answersWith(page, name, (view) => ({ ...view, folder: 'examples' }));
 			await page.goto(sourceAddress(name));
-			await expect(page.locator('.meta')).toContainText(`${words.source_folder}examples`);
+			await expect(page.locator('.meta')).toContainText(`${words['source.folder']}examples`);
 			await expectsNoHorizontalScroll(page);
 			await page.unroute(`**${SOURCES_API}/${name}`);
 
 			await answersWith(page, name, (view) => ({ ...view, folder: '' }));
 			await page.goto(sourceAddress(name));
-			await expect(page.locator('.meta')).not.toContainText(words.source_folder);
+			await expect(page.locator('.meta')).not.toContainText(words['source.folder']);
 			await page.unroute(`**${SOURCES_API}/${name}`);
 		}
 	});
@@ -161,7 +161,7 @@ test.describe('as an admin', () => {
 	test('words every state, run, commit and failure of the answer, the null access and the missing key', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		const at = new Date().toISOString();
 		const runs = (['unreachable', 'refused', 'failed', 'credential-unresolvable'] as const).map(
@@ -186,24 +186,24 @@ test.describe('as an admin', () => {
 
 		const table = page.locator('table.runs');
 		await expect(table.locator('tbody tr')).toHaveCount(6);
-		await expect(table.locator('tbody tr').first()).toContainText(words.source_run_fetched);
+		await expect(table.locator('tbody tr').first()).toContainText(words['source.runFetched']);
 		await expect(table.locator('tbody tr').first().locator('samp')).toHaveText('a3f19c2');
 		for (const sentence of [
-			words.source_run_unreachable,
-			words.source_run_refused,
-			words.source_run_failed,
-			words.source_run_secret
+			words['source.runUnreachable'],
+			words['source.runRefused'],
+			words['source.runFailed'],
+			words['source.runSecret']
 		]) {
 			await expect(table).toContainText(sentence);
 		}
-		await expect(page.locator('.meta .state')).toHaveText(words.source_state_error);
+		await expect(page.locator('.meta .state')).toHaveText(words['source.stateError']);
 		await page.unroute(`**${SOURCES_API}/${name}`);
 
 		for (const [state, word] of [
-			['reachable', words.source_state_reachable],
-			['refused', words.source_state_refused],
-			['failed', words.source_state_failed],
-			['never-fetched', words.source_state_never_fetched]
+			['reachable', words['source.stateReachable']],
+			['refused', words['source.stateRefused']],
+			['failed', words['source.stateFailed']],
+			['never-fetched', words['source.stateNeverFetched']]
 		] as const) {
 			await answersWith(page, name, (view) => ({
 				...view,
@@ -222,7 +222,7 @@ test.describe('as an admin', () => {
 
 		await answersWith(page, name, (view) => ({ ...view, access: null }));
 		await page.goto(sourceAddress(name));
-		const access = section(page, words.source_access_heading);
+		const access = section(page, words['source.accessHeading']);
 		await expect(access.locator('.tag')).toHaveCount(0);
 		await expect(access.locator('input[type="password"]')).toHaveCount(1);
 		await page.unroute(`**${SOURCES_API}/${name}`);
@@ -231,9 +231,9 @@ test.describe('as an admin', () => {
 		await givenADeployKey(page, own);
 		await answersWith(page, own, (view) => ({ ...view, public_key: null }));
 		await page.goto(sourceAddress(own));
-		const ssh = section(page, words.source_access_heading);
-		await expect(ssh.getByRole('button', { name: words.source_deploy_key_renew, exact: true })).toBeVisible();
-		await expect(ssh.getByRole('button', { name: words.source_copy })).toHaveCount(0);
+		const ssh = section(page, words['source.accessHeading']);
+		await expect(ssh.getByRole('button', { name: words['source.deployKeyRenew'], exact: true })).toBeVisible();
+		await expect(ssh.getByRole('button', { name: words['source.copy'] })).toHaveCount(0);
 	});
 
 	// Cell 6.
@@ -275,16 +275,16 @@ test.describe('as an admin', () => {
 	test('the back link and General are client navigations and Sources is the current tab', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
 		const tabs = tabsOf(page, words);
-		await expect(tabs.getByRole('link', { name: words.settings_sources })).toHaveAttribute(
+		await expect(tabs.getByRole('link', { name: words['settings.sourcesTab'] })).toHaveAttribute(
 			'aria-current',
 			'page'
 		);
 
-		await tabs.getByRole('link', { name: words.settings_title }).click();
+		await tabs.getByRole('link', { name: words['settings.generalTab'] }).click();
 		await expect(page).toHaveURL('/settings');
 		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 		await page.goBack();
@@ -295,9 +295,9 @@ test.describe('as an admin', () => {
 				documents.push(sent.url());
 			}
 		});
-		await page.getByRole('link', { name: words.sources_back }).click();
+		await page.getByRole('link', { name: words['source.back'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
-		await expect(tabs.getByRole('link', { name: words.settings_sources })).toHaveAttribute(
+		await expect(tabs.getByRole('link', { name: words['settings.sourcesTab'] })).toHaveAttribute(
 			'aria-current',
 			'page'
 		);
@@ -307,11 +307,11 @@ test.describe('as an admin', () => {
 
 	// Cell 8.
 	test('an unknown source shows the not-found board inside the lobby', async ({ page }) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 
 		await page.goto(sourceAddress(GONE));
 
-		await expect(page.locator('main h1')).toHaveText(words.address_unknown_title);
+		await expect(page.locator('main h1')).toHaveText(words['error.notFoundTitle']);
 		await expect(page.locator('header.top')).toBeVisible();
 	});
 
@@ -320,7 +320,7 @@ test.describe('as an admin', () => {
 		page,
 		context
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		const signIns: string[] = [];
 		page.on('request', (sent) => {
@@ -331,7 +331,7 @@ test.describe('as an admin', () => {
 		await endsTheSession(context);
 		const started = startsSignIn(page, NEXT_OF(name));
 
-		await page.getByRole('button', { name: words.sources_fetch_now }).click();
+		await page.getByRole('button', { name: words['source.fetchNow'] }).click();
 
 		await leftForSignIn(page, started);
 		expect(signIns).toEqual([`?next=${NEXT_OF(name)}`]);
@@ -341,7 +341,7 @@ test.describe('as an admin', () => {
 	test('Fetch now answers 200, re-reads the page, disables the buttons meanwhile and adds no entry', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		const entries = await entriesOf(page);
 		await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
@@ -354,9 +354,9 @@ test.describe('as an admin', () => {
 				received.url().endsWith(`${SOURCES_API}/${name}`) && received.request().method() === 'GET'
 		);
 
-		await page.getByRole('button', { name: words.sources_fetch_now }).click();
+		await page.getByRole('button', { name: words['source.fetchNow'] }).click();
 
-		const busy = page.getByRole('button', { name: words.source_busy_fetch });
+		const busy = page.getByRole('button', { name: words['source.busyFetch'] });
 		await expect(busy).toHaveAttribute('aria-busy', 'true');
 		await expect(busy.locator('.state[data-state="building"]')).toBeVisible();
 		await page.screenshot({ path: testInfo.outputPath('fetch-busy.png') });
@@ -368,7 +368,7 @@ test.describe('as an admin', () => {
 		held.release();
 		await answered;
 		await reread;
-		await expect(page.getByRole('button', { name: words.sources_fetch_now })).toBeEnabled();
+		await expect(page.getByRole('button', { name: words['source.fetchNow'] })).toBeEnabled();
 		expect(await entriesOf(page)).toBe(entries);
 		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 	});
@@ -377,26 +377,26 @@ test.describe('as an admin', () => {
 		test(`a held ${path} renewal shows the busy word on its own button only`, async ({
 			page
 		}, testInfo) => {
-			const { words } = await sessionOf(page);
+			const words = await wordsOf(page);
 			const { name } = await opensAnHttpsSource(page, words, testInfo);
 			const held = await holdsRequests(page, `**${SOURCES_API}/${name}/${path}`);
-			await page.getByLabel(words.source_secret, { exact: true }).fill(ACCESS_TOKEN);
-			const heading = path === 'access' ? words.source_access_heading : words.source_webhook_heading;
+			await page.getByLabel(words['source.secret'], { exact: true }).fill(ACCESS_TOKEN);
+			const heading = path === 'access' ? words['source.accessHeading'] : words['source.webhookHeading'];
 
 			await section(page, heading)
-				.getByRole('button', { name: words.source_renew, exact: true })
+				.getByRole('button', { name: words['source.renew'], exact: true })
 				.click();
 
-			const busy = section(page, heading).getByRole('button', { name: words.source_busy_renew });
+			const busy = section(page, heading).getByRole('button', { name: words['source.busyRenew'] });
 			await expect(busy).toHaveAttribute('aria-busy', 'true');
 			await expect(busy.locator('.state[data-state="building"]')).toBeVisible();
-			await expect(page.getByRole('button', { name: words.source_busy_renew })).toHaveCount(1);
+			await expect(page.getByRole('button', { name: words['source.busyRenew'] })).toHaveCount(1);
 			for (const button of await page.locator('main button').all()) {
 				await expect(button).toBeDisabled();
 			}
 			held.release();
 			await expect(
-				section(page, heading).getByRole('button', { name: words.source_renew, exact: true })
+				section(page, heading).getByRole('button', { name: words['source.renew'], exact: true })
 			).toBeEnabled();
 		});
 	}
@@ -406,26 +406,26 @@ test.describe('as an admin', () => {
 		page,
 		context
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		const consoleLines: string[] = [];
 		const requested: string[] = [];
 		page.on('console', (message) => consoleLines.push(message.text()));
 		page.on('request', (sent) => requested.push(sent.url()));
 		const entries = await entriesOf(page);
-		const field = page.getByLabel(words.source_secret, { exact: true });
+		const field = page.getByLabel(words['source.secret'], { exact: true });
 		await field.fill(ACCESS_TOKEN);
 		const answered = page.waitForResponse(
 			(received) => received.url().endsWith(`${name}/access`) && received.status() === 204
 		);
 
-		await section(page, words.source_access_heading)
-			.getByRole('button', { name: words.source_renew, exact: true })
+		await section(page, words['source.accessHeading'])
+			.getByRole('button', { name: words['source.renew'], exact: true })
 			.click();
 		await answered;
 
 		await expect(field).toHaveValue('');
-		await expect(page.getByText(words.source_secret_dots, { exact: true })).toHaveCount(2);
+		await expect(page.getByText(words['source.secretMask'], { exact: true })).toHaveCount(2);
 		expect(await entriesOf(page)).toBe(entries);
 		await expect(page.locator('body')).not.toContainText(ACCESS_TOKEN);
 		const kept = await page.evaluate(() =>
@@ -448,16 +448,16 @@ test.describe('as an admin', () => {
 	test('spaces as the token show the refusal sentence and keep what was typed', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await opensAnHttpsSource(page, words, testInfo);
-		const field = page.getByLabel(words.source_secret, { exact: true });
+		const field = page.getByLabel(words['source.secret'], { exact: true });
 		await field.fill('   ');
 
-		await section(page, words.source_access_heading)
-			.getByRole('button', { name: words.source_renew, exact: true })
+		await section(page, words['source.accessHeading'])
+			.getByRole('button', { name: words['source.renew'], exact: true })
 			.click();
 
-		await expect(page.getByRole('alert')).toHaveText(words.source_refused_secret);
+		await expect(page.getByRole('alert')).toHaveText(words['source.refusedSecret']);
 		await expect(field).toHaveValue('   ');
 	});
 
@@ -465,36 +465,36 @@ test.describe('as an admin', () => {
 	test('a renewal answered 500 fails loud, keeps the typed token and enables the buttons again', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		const failures: Error[] = [];
 		page.on('pageerror', (failure) => failures.push(failure));
 		await page.route(`**${SOURCES_API}/${name}/access`, (route) =>
 			route.fulfill({ status: 500, json: {} })
 		);
-		const field = page.getByLabel(words.source_secret, { exact: true });
+		const field = page.getByLabel(words['source.secret'], { exact: true });
 		await field.fill(ACCESS_TOKEN);
 
-		await section(page, words.source_access_heading)
-			.getByRole('button', { name: words.source_renew, exact: true })
+		await section(page, words['source.accessHeading'])
+			.getByRole('button', { name: words['source.renew'], exact: true })
 			.click();
 
 		await expect.poll(() => failures.length).toBe(1);
 		await expect(field).toHaveValue(ACCESS_TOKEN);
-		await expect(page.getByRole('button', { name: words.sources_fetch_now })).toBeEnabled();
+		await expect(page.getByRole('button', { name: words['source.fetchNow'] })).toBeEnabled();
 	});
 
 	// Cell 16.
 	test('the SSH renewal shows a different public key', async ({ page }) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = await ownSourceName(page, OWN_SOURCE);
 		await givenADeployKey(page, name);
 		await page.goto(sourceAddress(name));
-		const key = section(page, words.source_access_heading).locator('.code code');
+		const key = section(page, words['source.accessHeading']).locator('.code code');
 		const before = await key.textContent();
 
-		await section(page, words.source_access_heading)
-			.getByRole('button', { name: words.source_deploy_key_renew, exact: true })
+		await section(page, words['source.accessHeading'])
+			.getByRole('button', { name: words['source.deployKeyRenew'], exact: true })
 			.click();
 
 		await expect(key).not.toHaveText(before ?? '');
@@ -504,15 +504,15 @@ test.describe('as an admin', () => {
 	test('a webhook renewal shows the secret once, a second replaces it and the old one stops working', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name, created } = await opensAnHttpsSource(page, words, testInfo);
 		const hook = await hookUrlOf(page, name);
 		const entries = await entriesOf(page);
 
 		const first = await renewsTheWebhook(page, words, name);
 
-		await expect(page.locator('.once')).toHaveText(words.source_webhook_once);
-		await expect(page.getByText(words.source_secret_dots, { exact: true })).toHaveCount(1);
+		await expect(page.locator('.once')).toHaveText(words['source.webhookOnce']);
+		await expect(page.getByText(words['source.secretMask'], { exact: true })).toHaveCount(1);
 		expect(await entriesOf(page)).toBe(entries);
 		expect(await hookStatus(page, hook, created.webhook_secret)).toBe(404);
 		expect(await hookStatus(page, hook, first)).toBe(204);
@@ -527,7 +527,7 @@ test.describe('as an admin', () => {
 		page,
 		context
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		const consoleLines: string[] = [];
 		const requested: string[] = [];
@@ -566,11 +566,11 @@ test.describe('as an admin', () => {
 		expect(await shell.text()).not.toContain(secret);
 		const other = await context.newPage();
 		await other.goto(sourceAddress(name));
-		await expect(other.locator('body')).toContainText(words.source_secret_dots);
+		await expect(other.locator('body')).toContainText(words['source.secretMask']);
 		await notInThePage(other, secret);
 		await other.close();
 		await page.reload();
-		await expect(page.getByText(words.source_secret_dots, { exact: true })).toHaveCount(2);
+		await expect(page.getByText(words['source.secretMask'], { exact: true })).toHaveCount(2);
 		await notInThePage(page, secret);
 	});
 
@@ -578,15 +578,15 @@ test.describe('as an admin', () => {
 	test('General then Back and Forward, and the back link then Back and Forward, never show it', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		const secret = await renewsTheWebhook(page, words, name);
 
-		await tabsOf(page, words).getByRole('link', { name: words.settings_title }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.generalTab'] }).click();
 		await expect(page).toHaveURL('/settings');
 		await page.goBack();
 		await expect(page).toHaveURL(sourceAddress(name));
-		await expect(page.getByText(words.source_secret_dots, { exact: true })).toHaveCount(2);
+		await expect(page.getByText(words['source.secretMask'], { exact: true })).toHaveCount(2);
 		await notInThePage(page, secret);
 		await page.goForward();
 		await expect(page).toHaveURL('/settings');
@@ -594,11 +594,11 @@ test.describe('as an admin', () => {
 
 		await page.goBack();
 		const secondSecret = await renewsTheWebhook(page, words, name);
-		await page.getByRole('link', { name: words.sources_back }).click();
+		await page.getByRole('link', { name: words['source.back'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
 		await page.goBack();
 		await expect(page).toHaveURL(sourceAddress(name));
-		await expect(page.getByText(words.source_secret_dots, { exact: true })).toHaveCount(2);
+		await expect(page.getByText(words['source.secretMask'], { exact: true })).toHaveCount(2);
 		await notInThePage(page, secondSecret);
 		await page.goForward();
 		await expect(page).toHaveURL(SOURCES_LIST);
@@ -619,9 +619,9 @@ test.describe('as an admin', () => {
 	test('hiding the page clears the typed token and the shown secret, both present before', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
-		const field = page.getByLabel(words.source_secret, { exact: true });
+		const field = page.getByLabel(words['source.secret'], { exact: true });
 		await field.fill(ACCESS_TOKEN);
 		const secret = await renewsTheWebhook(page, words, name);
 		await expect(field).toHaveValue(ACCESS_TOKEN);
@@ -631,7 +631,7 @@ test.describe('as an admin', () => {
 
 		await expect(field).toHaveValue('');
 		await notInThePage(page, secret);
-		await expect(page.getByText(words.source_secret_dots, { exact: true })).toHaveCount(2);
+		await expect(page.getByText(words['source.secretMask'], { exact: true })).toHaveCount(2);
 	});
 
 	// Cell 23, the back-forward cache, which Chromium keeps from a no-store page.
@@ -640,7 +640,7 @@ test.describe('as an admin', () => {
 		browserName
 	}, testInfo) => {
 		test.skip(browserName !== 'chromium', 'only Chromium is driven for the cache');
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.addInitScript(() => {
 			addEventListener('pageshow', (shown) => {
 				if (shown.persisted) {
@@ -674,7 +674,7 @@ test.describe('as an admin', () => {
 	test('every control shows a focus ring at 390 px, in order, and the info opens by keyboard', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.setViewportSize({ width: 390, height: 900 });
 		await opensAnHttpsSource(page, words, testInfo);
 		await page.locator('body').click({ position: { x: 1, y: 1 } });
@@ -685,13 +685,13 @@ test.describe('as an admin', () => {
 		}
 
 		const controlsInOrder = [
-			words.sources_back,
-			words.sources_fetch_now,
+			words['source.back'],
+			words['source.fetchNow'],
 			'info',
-			words.source_secret,
-			words.source_renew,
-			words.source_copy,
-			words.source_renew
+			words['source.secret'],
+			words['source.renew'],
+			words['source.copy'],
+			words['source.renew']
 		];
 		let from = 0;
 		for (const control of controlsInOrder) {
@@ -712,7 +712,7 @@ test.describe('as an admin', () => {
 		context,
 		browserName
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const failures: Error[] = [];
 		page.on('pageerror', (failure) => failures.push(failure));
 		if (browserName === 'chromium') {
@@ -721,10 +721,10 @@ test.describe('as an admin', () => {
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		const secret = await renewsTheWebhook(page, words, name);
 
-		await section(page, words.source_webhook_heading)
+		await section(page, words['source.webhookHeading'])
 			.locator('.code')
 			.filter({ hasText: secret })
-			.getByRole('button', { name: words.source_copy })
+			.getByRole('button', { name: words['source.copy'] })
 			.click();
 
 		if (browserName === 'chromium') {
@@ -739,7 +739,7 @@ test.describe('the age of the fetch', () => {
 	test.use({ person: { role: 'admin', source: OWN_SOURCE }, locale: 'en-US' });
 
 	test("is worded in English", async ({ page }) => {
-		const session = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = await ownSourceName(page, OWN_SOURCE);
 		await answersWith(page, name, (view) => ({
 			...view,
@@ -749,7 +749,7 @@ test.describe('the age of the fetch', () => {
 		await page.goto(sourceAddress(name));
 
 		await expect(page.locator('.meta')).toContainText('3 days ago');
-		await expect(page.getByRole('link', { name: session.words.sources_back })).toBeVisible();
+		await expect(page.getByRole('link', { name: words['source.back'] })).toBeVisible();
 	});
 });
 
@@ -758,12 +758,12 @@ test.describe('a member', () => {
 	test.use({ person: { role: 'user' } });
 
 	test('meets the for-admins board with no controls and no tab strip', async ({ page }) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 
 		await page.goto(sourceAddress(GONE));
 
-		await expect(page.locator('main h1')).toHaveText(words.for_admins_title);
-		await expect(page.getByRole('navigation', { name: words.section_settings })).toHaveCount(0);
+		await expect(page.locator('main h1')).toHaveText(words['error.adminsTitle']);
+		await expect(page.getByRole('navigation', { name: words['settings.navLabel'] })).toHaveCount(0);
 		await expect(page.locator('main button')).toHaveCount(0);
 	});
 });

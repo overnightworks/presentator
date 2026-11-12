@@ -1,32 +1,31 @@
 import type { AccountMenuWords, SignInPageWords } from 'overnightworks-design';
-import type { LobbyText } from '#lib/api/session.ts';
-import { fill } from '#lib/words.ts';
+import type { Words } from '#lib/words/de.ts';
 
-export function accountMenuWords(words: LobbyText): AccountMenuWords {
+export function accountMenuWords(words: Words): AccountMenuWords {
 	return {
-		theme: words.theme_title,
-		followSystem: words.theme_follow_system,
-		light: words.theme_light,
-		dark: words.theme_dark,
-		logOut: words.log_out
+		theme: words['account.theme'],
+		followSystem: words['account.followSystem'],
+		light: words['account.light'],
+		dark: words['account.dark'],
+		logOut: words['logout.button']
 	};
 }
 
-export function signInPageWords(words: LobbyText): SignInPageWords {
+export function signInPageWords(words: Words): SignInPageWords {
 	return {
-		loggedOut: words.sign_in_logged_out,
-		logIn: words.sign_in_log_in,
-		loginFailed: words.sign_in_failed,
-		loginFailedBanner: words.sign_in_failed_banner,
-		tryAgain: words.sign_in_try_again,
-		noAccess: words.sign_in_no_access,
-		noAccessSentence: (appName) => fill(words.sign_in_no_access_sentence, { app: appName }),
-		signingIn: words.sign_in_signing_in,
-		inOtherWindow: words.sign_in_in_other_window,
-		openInTab: words.sign_in_open_in_tab,
-		signInUnfinished: words.sign_in_unfinished,
-		windowBlocked: words.sign_in_window_blocked,
-		windowBlockedSentence: words.sign_in_window_blocked_sentence,
-		logOut: words.log_out
+		loggedOut: words['signIn.loggedOut'],
+		logIn: words['signIn.logIn'],
+		loginFailed: words['signIn.loginFailed'],
+		loginFailedBanner: words['signIn.loginFailedBanner'],
+		tryAgain: words['signIn.tryAgain'],
+		noAccess: words['signIn.noAccess'],
+		noAccessSentence: (app) => words['signIn.noAccessSentence']({ app }),
+		signingIn: words['signIn.signingIn'],
+		inOtherWindow: words['signIn.inOtherWindow'],
+		openInTab: words['signIn.openInTab'],
+		signInUnfinished: words['signIn.unfinished'],
+		windowBlocked: words['signIn.windowBlocked'],
+		windowBlockedSentence: words['signIn.windowBlockedSentence'],
+		logOut: words['logout.button']
 	};
 }

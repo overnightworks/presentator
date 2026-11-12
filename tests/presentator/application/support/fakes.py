@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass, field, fields, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, BinaryIO, Final
@@ -38,7 +38,6 @@ from presentator.contracts.decks import (
 from presentator.contracts.models import User
 from presentator.contracts.people import SessionExport, SessionSecretsHeld
 from presentator.contracts.preferences import InstanceSettings, PersonPreferences
-from presentator.contracts.text import LobbyText
 from presentator.ports.decks import BuildRun
 
 # How long one thread waits for another before a test calls the run stuck.
@@ -772,9 +771,3 @@ class FakeToolchainThemes:
 
     def names(self) -> tuple[str, ...] | None:
         return self.names_to_return
-
-
-def some_words(*, language_tag: str, language_name: str) -> LobbyText:
-    """A catalog whose every word is its own field name, in a named language."""
-    named = LobbyText(**{field.name: field.name for field in fields(LobbyText)})
-    return replace(named, language_tag=language_tag, language_name=language_name)

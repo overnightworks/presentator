@@ -9,9 +9,9 @@ import {
 	minutesAgo,
 	NOW,
 	SIGN_IN_START,
-	sessionOf,
 	startsSignIn,
-	tabbedControlWithRing
+	tabbedControlWithRing,
+	wordsOf
 } from './scenario.ts';
 
 const SOURCE_ADDRESS = 'git@heimserver:decks.git';
@@ -94,17 +94,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				page,
 				signedIn
 			}, testInfo) => {
-				const { words } = await sessionOf(page);
+				const words = await wordsOf(page);
 				const slugs = signedIn?.slugs ?? [];
 				await page.clock.setFixedTime(NOW);
 				await page.setViewportSize({ width, height: 900 });
 				const [ready, building, failedWithTalk, failedWithout, neverBuilt] = slugs;
-				const filled = (template: string, age: string): string => template.replace('{age}', age);
 				const views = (wire: DeckView) => [
-					page.getByRole('link', { name: words.deck_presenter_view }).and(
+					page.getByRole('link', { name: words['deck.presenterView'] }).and(
 						page.locator(`a[href="${wire.talk}presenter/"]`)
 					),
-					page.getByRole('link', { name: words.deck_projector_view }).and(
+					page.getByRole('link', { name: words['deck.projectorView'] }).and(
 						page.locator(`a[href="${wire.talk}"]`)
 					)
 				];
@@ -114,16 +113,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await page.goto(`/deck/${ready}`);
 				await expect(page.locator('h1')).toHaveText('Agenten-Fabrik');
 				await expect(page.locator('h1')).toHaveCSS('text-transform', 'none');
-				await expect(page.locator('.status .state')).toHaveText(words.deck_state_ready);
+				await expect(page.locator('.status .state')).toHaveText(words['deck.stateReady']);
 				await expect(page.locator('.status .state')).toHaveAttribute('data-state', 'ready');
 				await expect(page.getByText(ready ?? '', { exact: true })).toBeVisible();
 				await expect(page.locator('.meta')).toContainText(SOURCE_ADDRESS);
 				await expect(page.locator('.meta')).toContainText(wire.commit);
 				await expect(page.locator('.meta')).toContainText(
-					filled(words.deck_built, inEnglish.built)
+					words['deck.built']({ age: inEnglish.built })
 				);
 				await expect(page.locator('.status .muted')).toContainText(
-					words.deck_builds_with.split('{themes}')[0] ?? ''
+					words['deck.buildsWith']({ themes: '' }).trim()
 				);
 				for (const theme of wire.themes ?? []) {
 					await expect(page.locator('.status .muted')).toContainText(theme);
@@ -131,7 +130,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				for (const view of views(wire)) {
 					await expect(view).toBeVisible();
 				}
-				await expect(page.getByRole('link', { name: words.deck_pdf })).toHaveAttribute(
+				await expect(page.getByRole('link', { name: words['deck.pdf'] })).toHaveAttribute(
 					'href',
 					`/deck/${ready}/pdf`
 				);
@@ -145,16 +144,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(page.locator('.status .state')).toHaveAttribute('data-state', 'building');
 				const banner = page.locator('aside.banner');
 				await expect(banner).toHaveAttribute('data-banner', 'building');
-				await expect(banner).toContainText(words.deck_building_label);
+				await expect(banner).toContainText(words['deck.buildingLabel']);
 				await expect(banner).toContainText(wire.attempt?.commit ?? '');
-				await expect(banner).toContainText(filled(words.deck_building_for, inEnglish.building));
-				await expect(banner).toContainText(words.deck_building_explanation);
+				await expect(banner).toContainText(words['deck.buildingFor']({ age: inEnglish.building }));
+				await expect(banner).toContainText(words['deck.buildingExplanation']);
 				await expect(page.locator('.actions .off')).toHaveText([
-					words.deck_presenter_view,
-					words.deck_projector_view
+					words['deck.presenterView'],
+					words['deck.projectorView']
 				]);
 				await expect(page.locator(`a[href^="${wire.talk}"]`)).toHaveCount(0);
-				await expect(page.getByRole('link', { name: words.deck_pdf })).toBeVisible();
+				await expect(page.getByRole('link', { name: words['deck.pdf'] })).toBeVisible();
 				await page.evaluate(() => document.fonts.ready);
 				await page.screenshot({ path: testInfo.outputPath(`deck-building-${width}-${colorScheme}.png`), fullPage: true });
 
@@ -163,13 +162,13 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await page.goto(`/deck/${failedWithTalk}`);
 				await expect(page.locator('.status .state')).toHaveAttribute('data-state', 'failed');
 				await expect(banner).toHaveAttribute('data-banner', 'failed');
-				await expect(banner).toContainText(words.deck_failed_title);
-				await expect(banner).toContainText(words.deck_attempt_label);
+				await expect(banner).toContainText(words['deck.failedTitle']);
+				await expect(banner).toContainText(words['deck.attemptLabel']);
 				await expect(banner).toContainText(wire.attempt?.commit ?? '');
 				await expect(banner).toContainText(inEnglish.attempt);
 				await expect(banner.locator('pre')).toHaveText(toolchainFailure.text);
-				await expect(banner).not.toContainText(words.deck_failed_last_talk_stands);
-				await expect(page.getByText(words.deck_failed_last_talk_stands)).toBeVisible();
+				await expect(banner).not.toContainText(words['deck.failedLastTalkStands']);
+				await expect(page.getByText(words['deck.failedLastTalkStands'])).toBeVisible();
 				for (const view of views(wire)) {
 					await expect(view).toBeVisible();
 				}
@@ -178,18 +177,18 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
 				// Failed with no talk, and nothing said.
 				await page.goto(`/deck/${failedWithout}`);
-				await expect(banner).toContainText(words.deck_failed_without_a_message);
+				await expect(banner).toContainText(words['deck.failedWithoutMessage']);
 				await expect(banner.locator('pre')).toHaveCount(0);
-				await expect(page.getByText(words.deck_failed_last_talk_stands)).toHaveCount(0);
-				await expect(page.getByText(words.deck_not_built_explanation)).toBeVisible();
+				await expect(page.getByText(words['deck.failedLastTalkStands'])).toHaveCount(0);
+				await expect(page.getByText(words['deck.notBuiltExplanation'])).toBeVisible();
 				await expect(page.locator('.actions')).toHaveCount(0);
 				await page.evaluate(() => document.fonts.ready);
 				await page.screenshot({ path: testInfo.outputPath(`deck-failed-no-talk-${width}-${colorScheme}.png`), fullPage: true });
 
 				// Never built.
 				await page.goto(`/deck/${neverBuilt}`);
-				await expect(page.locator('.status .state')).toHaveText(words.deck_state_never_built);
-				await expect(page.getByText(words.deck_not_built_explanation)).toBeVisible();
+				await expect(page.locator('.status .state')).toHaveText(words['deck.stateNeverBuilt']);
+				await expect(page.getByText(words['deck.notBuiltExplanation'])).toBeVisible();
 				await expect(page.locator('aside.banner')).toHaveCount(0);
 				await expect(page.locator('.actions')).toHaveCount(0);
 				// The state word "never built" holds the template's first word, so the build's age is told by its unit.
@@ -275,7 +274,7 @@ test.describe("an unknown deck and another person's", () => {
 	test.use({ person: { role: 'admin' } });
 
 	test('show the same board inside the lobby at 200', async ({ page, browser, baseURL }) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const foreign = await aForeignSlug(browser, baseURL);
 		const boards: { text: string | null; title: string }[] = [];
 
@@ -283,15 +282,15 @@ test.describe("an unknown deck and another person's", () => {
 			const answer = await page.goto(`/deck/${slug}`);
 
 			expect(answer?.status()).toBe(200);
-			await expect(page.locator('main h1')).toHaveText(words.deck_unknown_title);
-			await expect(page.locator('main p')).toHaveText(words.deck_unknown_explanation);
-			await expect(page.locator('header.top .wordmark')).toHaveText(words.wordmark);
-			await expect(page.locator('main a.btn')).toHaveText(words.decks_title);
+			await expect(page.locator('main h1')).toHaveText(words['deck.unknownTitle']);
+			await expect(page.locator('main p')).toHaveText(words['deck.unknownExplanation']);
+			await expect(page.locator('header.top .wordmark')).toHaveText(words['app.name']);
+			await expect(page.locator('main a.btn')).toHaveText(words['deck.decksLink']);
 			boards.push({ text: await page.locator('main').textContent(), title: await page.title() });
 		}
 
 		expect(boards[0]).toEqual(boards[1]);
-		expect(boards[0]?.title).toBe(words.deck_unknown_title);
+		expect(boards[0]?.title).toBe(words['deck.unknownTitle']);
 	});
 });
 
@@ -307,7 +306,7 @@ test.describe('the deck page inside the app', () => {
 		page,
 		signedIn
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.clock.setFixedTime(NOW);
 		await page.goto('/');
 		const entries = await entriesOf(page);
@@ -318,7 +317,7 @@ test.describe('the deck page inside the app', () => {
 		await expect(page.locator('h1')).toHaveText('Agenten-Fabrik');
 		expect(await entriesOf(page)).toBe(entries + 1);
 		await page.goBack();
-		await expect(page.getByRole('heading', { name: words.decks_title })).toBeVisible();
+		await expect(page.getByRole('heading', { name: words['deck.decksLink'] })).toBeVisible();
 		await page.goForward();
 		await expect(page.locator('h1')).toHaveText('Agenten-Fabrik');
 
@@ -330,19 +329,19 @@ test.describe('the deck page inside the app', () => {
 	test('marks Decks as the current section on / and on the deck page, after back too', async ({
 		page
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const current = page.locator('header.top nav [aria-current]');
 		await page.goto('/');
-		await expect(current).toHaveText(words.section_decks);
+		await expect(current).toHaveText(words['header.decks']);
 
 		await page.getByRole('link', { name: 'Agenten-Fabrik' }).click();
 		await expect(page.locator('h1')).toHaveText('Agenten-Fabrik');
-		await expect(current).toHaveText(words.section_decks);
+		await expect(current).toHaveText(words['header.decks']);
 		await expect(current).toHaveAttribute('aria-current', 'page');
 
 		await page.goBack();
-		await expect(page.getByRole('heading', { name: words.decks_title })).toBeVisible();
-		await expect(current).toHaveText(words.section_decks);
+		await expect(page.getByRole('heading', { name: words['deck.decksLink'] })).toBeVisible();
+		await expect(current).toHaveText(words['header.decks']);
 	});
 
 	// Cell 7.
@@ -351,7 +350,7 @@ test.describe('the deck page inside the app', () => {
 		context,
 		signedIn
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const signInRequests: string[] = [];
 		page.on('request', (sent) => {
 			if (new URL(sent.url()).pathname === SIGN_IN_START) {
@@ -359,7 +358,7 @@ test.describe('the deck page inside the app', () => {
 			}
 		});
 		await page.goto('/');
-		await expect(page.getByRole('heading', { name: words.decks_title })).toBeVisible();
+		await expect(page.getByRole('heading', { name: words['deck.decksLink'] })).toBeVisible();
 		await endsTheSession(context);
 		const started = startsSignIn(page, `%2Fdeck%2F${signedIn?.slugs[0]}`);
 
@@ -374,7 +373,7 @@ test.describe('the deck page inside the app', () => {
 		context,
 		signedIn
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const signInRequests: string[] = [];
 		page.on('request', (sent) => {
 			if (new URL(sent.url()).pathname === SIGN_IN_START) {
@@ -386,7 +385,7 @@ test.describe('the deck page inside the app', () => {
 		await endsTheSession(context);
 		const started = startsSignIn(page);
 
-		await page.getByRole('link', { name: words.deck_back }).click();
+		await page.getByRole('link', { name: words['deck.back'] }).click();
 
 		await leftForSignIn(page, started);
 		expect(signInRequests).toEqual(['?next=%2F']);
@@ -419,12 +418,12 @@ test.describe('the PDF', () => {
 	});
 
 	test("downloads under the deck's slug as a document navigation", async ({ page, signedIn }) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.goto(`/deck/${signedIn?.slugs[0]}`);
 
 		const [download] = await Promise.all([
 			page.waitForEvent('download'),
-			page.getByRole('link', { name: words.deck_pdf }).click()
+			page.getByRole('link', { name: words['deck.pdf'] }).click()
 		]);
 
 		expect(download.suggestedFilename()).toBe(`${signedIn?.slugs[0]}.pdf`);
@@ -434,13 +433,13 @@ test.describe('the PDF', () => {
 		page,
 		signedIn
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 
 		const answer = await page.goto(`/deck/${signedIn?.slugs[1]}/pdf`);
 
 		expect(answer?.status()).toBe(404);
-		await expect(page.locator('main h1')).toHaveText(words.address_unknown_title);
-		await expect(page.locator('header.top .wordmark')).toHaveText(words.wordmark);
+		await expect(page.locator('main h1')).toHaveText(words['error.notFoundTitle']);
+		await expect(page.locator('header.top .wordmark')).toHaveText(words['app.name']);
 		await expect(page.locator('header.top nav [aria-current]')).toHaveCount(0);
 	});
 
@@ -491,7 +490,7 @@ test.describe('sentence 9 on the deck page', () => {
 		page,
 		signedIn
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto(`/deck/${signedIn?.slugs[0]}`);
 		await expect(page.locator('h1')).toHaveText('Agenten-Fabrik');
@@ -505,10 +504,10 @@ test.describe('sentence 9 on the deck page', () => {
 		}
 
 		for (const name of [
-			words.deck_back,
-			words.deck_presenter_view,
-			words.deck_projector_view,
-			words.deck_pdf
+			words['deck.back'],
+			words['deck.presenterView'],
+			words['deck.projectorView'],
+			words['deck.pdf']
 		]) {
 			expect(focused).toContain(name);
 		}

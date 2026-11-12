@@ -2,8 +2,12 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Final
 
-from presentator.contracts.text import DEFAULT_LANGUAGE_TAG, LobbyText
+from presentator.contracts.words import Language
+
+# What a fresh instance, a signed-out visitor and a stored tag with no catalog read in.
+DEFAULT_LANGUAGE: Final[Language] = "en"
 
 
 class ThemeChoice(StrEnum):
@@ -19,7 +23,7 @@ class InstanceSettings:
     """What an admin sets for everyone, and what a fresh instance starts with."""
 
     name: str = ""
-    language_tag: str = DEFAULT_LANGUAGE_TAG
+    language_tag: str = DEFAULT_LANGUAGE
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -31,7 +35,7 @@ class PersonPreferences:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Appearance:
-    """The words and the look one page is rendered in."""
+    """The language and the look one page is rendered in."""
 
-    text: LobbyText
+    language: Language
     theme: ThemeChoice

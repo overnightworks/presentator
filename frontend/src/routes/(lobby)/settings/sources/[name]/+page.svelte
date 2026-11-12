@@ -32,7 +32,7 @@
 
 	let { data }: PageProps = $props();
 	const source = $derived(data.source);
-	const words = $derived(data.session.words);
+	const words = $derived(data.words);
 	const tag = $derived(languageTag());
 	const access = $derived(accessView(source.access, words));
 	const runs = $derived(
@@ -76,7 +76,7 @@
 			const ended = await attempt();
 			outcome = ended && { ...ended, request };
 		} catch (error) {
-			outcome = { request, shape: 'failed', text: words.source_request_failed };
+			outcome = { request, shape: 'failed', text: words['source.requestFailed'] };
 			throw error;
 		} finally {
 			running = null;
@@ -99,7 +99,7 @@
 			if (!declined) {
 				typed = '';
 			}
-			return declined ? null : { shape: 'ready', text: words.source_renewed_secret };
+			return declined ? null : { shape: 'ready', text: words['source.renewedSecret'] };
 		});
 	}
 
@@ -107,13 +107,13 @@
 		work('renewKey', async () => {
 			await renewAccess(fetch, source.name, null);
 			await reread();
-			return { shape: 'ready', text: words.source_renewed_deploy_key };
+			return { shape: 'ready', text: words['source.renewedDeployKey'] };
 		});
 
 	const renewHook = (): Promise<void> =>
 		work('renewHook', async () => {
 			renewed = await renewWebhook(fetch, source.name);
-			return { shape: 'ready', text: words.source_renewed_webhook };
+			return { shape: 'ready', text: words['source.renewedWebhook'] };
 		});
 
 	// The dialog opens once the buttons are enabled again, from the control that
@@ -167,18 +167,18 @@
 </svelte:head>
 <svelte:window onpagehide={forget} />
 
-<a class="back" href={resolve('/(lobby)/settings/sources')}>{words.sources_back}</a>
+<a class="back" href={resolve('/(lobby)/settings/sources')}>{words['source.back']}</a>
 <h1 class="as-typed">{source.name}</h1>
 <div class="meta">
 	<code>{source.url}</code>
 	{#if source.folder !== ''}
-		<span><b>{words.source_folder}</b>{source.folder}</span>
+		<span><b>{words['source.folder']}</b>{source.folder}</span>
 	{/if}
 	<span class="state" data-state={stateShape(source.state)}
 		><i></i>{stateWords(source.state, words)}</span
 	>
 	<span
-		><b>{words.sources_column_fetched}</b
+		><b>{words['source.columnFetched']}</b
 		>{source.fetched_at === null ? '—' : ageInWords(source.fetched_at, Date.now(), tag)}</span
 	>
 </div>
@@ -186,8 +186,8 @@
 	<ActionButton
 		variant="secondary"
 		small
-		label={words.sources_fetch_now}
-		busyWord={words.source_busy_fetch}
+		label={words['source.fetchNow']}
+		busyWord={words['source.busyFetch']}
 		busy={running === 'fetch'}
 		disabled={pending}
 		onclick={fetchSource}
@@ -196,14 +196,14 @@
 </div>
 
 <section class="sec">
-	<h2>{words.source_access_heading}</h2>
+	<h2>{words['source.accessHeading']}</h2>
 	<div class="ctrl">
 		{#if access.tag !== null}<span class="tag">{access.tag}</span>{/if}
 		{#if access.control === 'token'}
-			<samp class="dots">{words.source_secret_dots}</samp>
+			<samp class="dots">{words['source.secretMask']}</samp>
 		{/if}
 		{#if access.control !== 'none'}
-			{@const hint = access.control === 'token' ? words.source_access_renew_info : words.source_deploy_key_info}
+			{@const hint = access.control === 'token' ? words['source.accessRenewInfo'] : words['source.deployKeyInfo']}
 			<button class="info" type="button" popovertarget="access-hint" aria-label={hint} disabled={pending}>
 				<svg viewBox="0 0 24 24" aria-hidden="true">
 					<circle cx="12" cy="12" r="9" />
@@ -216,10 +216,10 @@
 	{#if access.control === 'deploy-key'}
 		{#if source.public_key !== null}
 			<div class="fld">
-				<span class="lb" id="public-key-label">{words.source_public_key}</span>
+				<span class="lb" id="public-key-label">{words['source.publicKey']}</span>
 				<CopyValue
 					value={source.public_key}
-					label={words.source_copy}
+					label={words['source.copy']}
 					labelledby="public-key-label"
 					disabled={pending}
 				/>
@@ -229,8 +229,8 @@
 			<ActionButton
 				variant="secondary"
 				small
-				label={words.source_deploy_key_renew}
-				busyWord={words.source_busy_renew}
+				label={words['source.deployKeyRenew']}
+				busyWord={words['source.busyRenew']}
 				busy={running === 'renewKey'}
 				disabled={pending}
 				onclick={renewDeployKey}
@@ -240,7 +240,7 @@
 	{:else if access.control === 'token'}
 		<form class="form" onsubmit={renewToken}>
 			<div class="fld">
-				<label for="renew-secret">{words.source_secret}</label>
+				<label for="renew-secret">{words['source.secret']}</label>
 				<input
 					class="control"
 					id="renew-secret"
@@ -254,7 +254,7 @@
 			{#if declined}
 				<div class="banner" data-banner="fail" role="alert">
 					<span class="state" data-state="failed"><i></i></span>
-					<p>{words.source_refused_secret}</p>
+					<p>{words['source.refusedSecret']}</p>
 				</div>
 			{/if}
 			<div class="actions">
@@ -262,8 +262,8 @@
 					variant="secondary"
 					small
 					type="submit"
-					label={words.source_renew}
-					busyWord={words.source_busy_renew}
+					label={words['source.renew']}
+					busyWord={words['source.busyRenew']}
 					busy={running === 'renewToken'}
 					disabled={pending}
 				/>
@@ -274,26 +274,26 @@
 </section>
 
 <section class="sec">
-	<h2>{words.source_webhook_heading}</h2>
+	<h2>{words['source.webhookHeading']}</h2>
 	<div class="fld">
-		<span class="lb" id="hook-address-label">{words.source_webhook_address}</span>
+		<span class="lb" id="hook-address-label">{words['source.webhookAddress']}</span>
 		<CopyValue
 			value={source.hook_url}
-			label={words.source_copy}
+			label={words['source.copy']}
 			labelledby="hook-address-label"
 			disabled={pending}
 		/>
 	</div>
 	{#if renewed === null}
-		<div class="ctrl"><samp class="dots">{words.source_secret_dots}</samp></div>
+		<div class="ctrl"><samp class="dots">{words['source.secretMask']}</samp></div>
 	{:else}
 		<div class="fld">
 			<span class="lb" id="hook-secret-label"
-				>{words.source_webhook_secret}<span class="once">{words.source_webhook_once}</span></span
+				>{words['source.webhookSecret']}<span class="once">{words['source.webhookOnce']}</span></span
 			>
 			<CopyValue
 				value={renewed.webhook_secret}
-				label={words.source_copy}
+				label={words['source.copy']}
 				labelledby="hook-secret-label"
 				disabled={pending}
 			/>
@@ -303,8 +303,8 @@
 		<ActionButton
 			variant="secondary"
 			small
-			label={words.source_renew}
-			busyWord={words.source_busy_renew}
+			label={words['source.renew']}
+			busyWord={words['source.busyRenew']}
 			busy={running === 'renewHook'}
 			disabled={pending}
 			onclick={renewHook}
@@ -315,13 +315,13 @@
 
 {#if runs.length > 0}
 	<section class="sec">
-		<h2>{words.source_recent_runs}</h2>
+		<h2>{words['source.recentRuns']}</h2>
 		<table class="runs">
 			<thead>
 				<tr>
-					<th scope="col">{words.source_run_column_state}</th>
-					<th scope="col">{words.source_run_column_fetched}</th>
-					<th scope="col">{words.source_run_column_detail}</th>
+					<th scope="col">{words['source.runColumnState']}</th>
+					<th scope="col">{words['source.runColumnFetched']}</th>
+					<th scope="col">{words['source.runColumnDetail']}</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -347,7 +347,7 @@
 
 {#if source.decks.length > 0}
 	<section class="sec">
-		<h2>{words.source_decks}</h2>
+		<h2>{words['source.decks']}</h2>
 		<div class="chips">
 			{#each source.decks as deck (deck.slug)}
 				<a class="chip" href={resolve('/(lobby)/deck/[slug]', { slug: deck.slug })}>
@@ -360,23 +360,23 @@
 {/if}
 
 <section class="sec">
-	<h2>{words.source_reverse}</h2>
+	<h2>{words['source.reverse']}</h2>
 	<p class="later">
-		<span>{words.source_push_inbox}</span>
-		<span class="tag">{words.source_later}</span>
+		<span>{words['source.pushInbox']}</span>
+		<span class="tag">{words['source.later']}</span>
 	</p>
 </section>
 
 <section class="sec">
-	<h2>{words.source_remove_heading}</h2>
-	<p class="muted">{words.source_remove_hint}</p>
+	<h2>{words['source.removeHeading']}</h2>
+	<p class="muted">{words['source.removeHint']}</p>
 	<div class="actions">
 		<ActionButton
 			variant="secondary"
 			small
 			bind:element={opener}
-			label={words.source_remove_button}
-			busyWord={words.source_busy_count}
+			label={words['source.removeButton']}
+			busyWord={words['source.busyCount']}
 			busy={running === 'count'}
 			disabled={pending}
 			onclick={askRemoval}
@@ -403,7 +403,7 @@
 		{#if refused}
 			<div class="banner" data-banner="fail" role="alert">
 				<span class="state" data-state="failed"><i></i></span>
-				<p>{words.source_remove_refused}</p>
+				<p>{words['source.removeRefused']}</p>
 			</div>
 		{/if}
 		<p>{removalBody(counts, words)}</p>
@@ -412,12 +412,12 @@
 				class="btn secondary"
 				type="button"
 				disabled={pending}
-				onclick={() => dialog.close()}>{words.source_remove_cancel}</button
+				onclick={() => dialog.close()}>{words['source.removeCancel']}</button
 			>
 			<ActionButton
 				variant="primary"
-				label={words.source_remove_confirm}
-				busyWord={words.source_busy_remove}
+				label={words['source.removeConfirm']}
+				busyWord={words['source.busyRemove']}
 				busy={running === 'remove'}
 				disabled={pending}
 				onclick={confirmRemoval}

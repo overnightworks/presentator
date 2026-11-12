@@ -22,17 +22,14 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from http.cookies import SimpleCookie
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Final, Literal, Self
 
 import uvicorn
-from babel.messages.pofile import read_po, write_po
 from fastapi import FastAPI, Response
 from pydantic import BaseModel, ConfigDict, SecretStr, model_validator
 from webauth.config import WebAuthConfig
 from webauth.cookies import issue_session_cookies
 
-from presentator.adapters.catalog import CATALOG_DIRECTORY, load_lobby_text
 from presentator.api.lobby_shell import LobbyShell
 from presentator.contracts.decks import (
     Build,
@@ -44,7 +41,6 @@ from presentator.contracts.decks import (
     DeckState,
 )
 from presentator.contracts.models import Role, User
-from presentator.contracts.text import DEFAULT_LANGUAGE_TAG, Catalogs
 from presentator.host.main import web_auth_config_for
 from tests.presentator.application.support.fakes import (
     LOCAL_MOUNT_EXAMPLE,
@@ -54,7 +50,6 @@ from tests.presentator.application.support.fakes import (
 )
 from tests.support.lobby import (
     BUILT_TALK,
-    CATALOGS,
     EXPORTED_PDF,
     NOW,
     SOURCE_ID,
@@ -76,17 +71,11 @@ _MACHINE_ROUTES: Final = "/api/admin/"
 _SCHEMA_REFERENCE: Final = "#/components/schemas/"
 _SECRET: Final = SecretStr("a drive's own key of at least 32 bytes")
 _PERSON_ROUTE: Final = "/drive/person"
-_LANGUAGES_ROUTE: Final = "/drive/languages"
 _DECK_ROUTE: Final = f"{_PERSON_ROUTE}/{{person_id}}/deck"
 _LOCAL_MOUNT_ROUTE: Final = "/drive/local-mount"
-# Chromium words ages in this language and has none for `eo`; it is no shipped
-# catalog, so the drive builds it from English (`_second_language`).
-SECOND_LANGUAGE_TAG: Final = "de"
-_SECOND_LANGUAGE_NAME: Final = "German"
 _SOME_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _ATTEMPT_COMMIT: Final = "e91c5ad4f3b2a1908877665544332211aabbccdd"
 _A_PDF_NOBODY_WROTE: Final = EXPORTED_PDF.with_name("nobody-wrote-this.pdf")
-_LANGUAGE_NAME_MESSAGE: Final = "language_name"
 
 type JsonNode = dict[str, JsonNode] | list[JsonNode] | str | int | float | bool | None
 
@@ -253,32 +242,6 @@ class _Newcomers:
         return {"slug": self.add_deck(person_id, record)}
 
 
-def _second_language(catalogs: Catalogs) -> Catalogs:
-    """The catalogs plus one built from English whose words all differ from it."""
-    catalog = read_po(
-        (CATALOG_DIRECTORY / f"{DEFAULT_LANGUAGE_TAG}.po").open(encoding="utf-8")
-    )
-    catalog.locale = SECOND_LANGUAGE_TAG
-    for message in catalog:
-        if message.id:
-            message.string = (
-                _SECOND_LANGUAGE_NAME
-                if message.id == _LANGUAGE_NAME_MESSAGE
-                else f"{SECOND_LANGUAGE_TAG}: {message.string}"
-            )
-    with TemporaryDirectory() as directory:
-        written = Path(directory) / f"{SECOND_LANGUAGE_TAG}.po"
-        with written.open("wb") as target:
-            write_po(target, catalog)
-        second = load_lobby_text(written)
-    return Catalogs(by_tag={**catalogs.by_tag, SECOND_LANGUAGE_TAG: second})
-
-
-def _the_two_languages() -> dict[str, str]:
-    """The tag the lobby starts with and the second one, so no spec restates them."""
-    return {"first": DEFAULT_LANGUAGE_TAG, "second": SECOND_LANGUAGE_TAG}
-
-
 class AdmitEveryRequest:
     """A backend that counts nothing.
 
@@ -313,7 +276,7 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
     sources = FakeSourceStore()
     lobby, _ = a_lobby_app(
         people=people,
-        preferences=a_preferences(catalogs=_second_language(CATALOGS)),
+        preferences=a_preferences(),
         given=GivenDecks(store=store, source_store=sources),
         signing_in=SigningIn(sessions=people.sessions, auth=auth),
         shell=shell,
@@ -328,7 +291,6 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
     outer = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     outer.add_api_route(_PERSON_ROUTE, newcomers.enter, methods=["POST"])
-    outer.add_api_route(_LANGUAGES_ROUTE, _the_two_languages, methods=["GET"])
     outer.add_api_route(_DECK_ROUTE, newcomers.add_deck_of, methods=["POST"])
     outer.add_api_route(_LOCAL_MOUNT_ROUTE, _local_mount, methods=["GET"])
     outer.mount("/", lobby)

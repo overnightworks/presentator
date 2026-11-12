@@ -144,10 +144,16 @@ prefix or a catch-all. A store failure while resolving a reader is a 500, never
 a signed-out answer. Problems follow RFC 9457 (`api/problems.py`), and a problem
 type is a `tag:` URI, because an https address breaks when its page moves.
 
-**Words and look.** Every lobby word comes from gettext catalogs via Babel
-(`adapters/catalog.py`); `scripts/check_catalog_purity.py` holds the pages to
-it, and a language is a file. The language is the instance's unless a signed-in
-person's account names one a catalog speaks; the theme is the person's. The look
+**Words and look.** Every lobby word comes from one gettext catalog per
+language (`frontend/src/lib/catalogs`), from which `design-catalogs` writes a
+typed module per language for the page and one Python module for the server
+(`contracts/words.py`); a language is a catalog file. The page loads the words
+of its language once, in the root load, from the language `/api/session` names;
+the session answer carries that tag and no sentence. The server words only the
+logout page's button. `scripts/check_catalog_purity.py` holds the pages to the
+catalogs. The language is the instance's unless a signed-in person's account
+names one a catalog speaks, and English stands in where none does
+(`DEFAULT_LANGUAGE`); the theme is the person's. The look
 is design's, with presentator's teal in the app slot (`frontend/src/app.css`).
 The overlay's controls use English literals; the room notice follows the deck's
 language.

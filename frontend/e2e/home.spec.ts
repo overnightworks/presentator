@@ -12,11 +12,13 @@ import {
 	minutesAgo,
 	NOW,
 	opensTheMenu,
+	readerOf,
 	sessionOf,
 	themeRow,
 	SIGN_IN_START,
 	startsSignIn,
-	tabbedControlWithRing
+	tabbedControlWithRing,
+	wordsOf
 } from './scenario.ts';
 
 const SOURCE_ADDRESS = 'git@heimserver:decks.git';
@@ -77,7 +79,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				page,
 				signedIn
 			}, testInfo) => {
-				const { words } = await sessionOf(page);
+				const words = await wordsOf(page);
 				await page.clock.setFixedTime(NOW);
 				await page.setViewportSize({ width, height: 900 });
 
@@ -86,10 +88,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				const rows = page.locator('table.decks tbody tr');
 				await expect(rows).toHaveCount(4);
 				const states = [
-					words.deck_state_building,
-					words.deck_state_failed,
-					words.deck_state_ready,
-					words.deck_state_never_built
+					words['deck.stateBuilding'],
+					words['deck.stateFailed'],
+					words['deck.stateReady'],
+					words['deck.stateNeverBuilt']
 				];
 				for (const [index, deck] of fourStates.entries()) {
 					const row = rows.nth(index);
@@ -102,7 +104,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 					);
 					await expect(row.locator('.changed')).toHaveText(englishAges[index] ?? '');
 				}
-				await expect(page.locator('html')).toHaveAttribute('lang', words.language_tag);
+				await expect(page.locator('html')).toHaveAttribute('lang', (await sessionOf(page)).language);
 				await page.evaluate(() => document.fonts.ready);
 
 				await page.screenshot({
@@ -128,18 +130,18 @@ for (const { role, source } of emptyCards) {
 		test('names what absence means, the explanation a link for an admin only, the address whenever set', async ({
 			page
 		}) => {
-			const { words } = await sessionOf(page);
+			const words = await wordsOf(page);
 
 			await page.goto('/');
 
-			await expect(page.getByRole('heading', { name: words.decks_empty_title })).toBeVisible();
+			await expect(page.getByRole('heading', { name: words['decks.emptyTitle'] })).toBeVisible();
 			await expect(page.locator('table')).toHaveCount(0);
 			// An empty list offers no way to add a deck or a source.
 			await expect(page.locator('main input, main button')).toHaveCount(0);
-			await expect(page.getByRole('link', { name: words.decks_empty_explanation })).toHaveCount(
+			await expect(page.getByRole('link', { name: words['decks.emptyExplanation'] })).toHaveCount(
 				role === 'admin' ? 1 : 0
 			);
-			await expect(page.getByText(words.decks_empty_explanation)).toBeVisible();
+			await expect(page.getByText(words['decks.emptyExplanation'])).toBeVisible();
 			const address = page.locator('.empty code');
 			if (source) {
 				await expect(address).toHaveText(source);
@@ -165,9 +167,9 @@ test.describe('the header on a narrow screen and its focus', () => {
 	test('shows a focus ring on each control and marks Decks as the current page', async ({
 		page
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.goto('/');
-		await expect(page.getByRole('link', { name: words.section_decks })).toHaveAttribute(
+		await expect(page.getByRole('link', { name: words['header.decks'] })).toHaveAttribute(
 			'aria-current',
 			'page'
 		);
@@ -183,12 +185,12 @@ test.describe('the header on a narrow screen and its focus', () => {
 	});
 
 	test('shows a focus ring on every control of the open menu', async ({ page }) => {
-		const { person, words } = await sessionOf(page);
+		const { person, words } = await readerOf(page);
 		await page.goto('/');
 		await opensTheMenu(page);
 
 		const focused: string[] = [];
-		for (let tab = 0; tab < 12 && !focused.includes(words.log_out); tab++) {
+		for (let tab = 0; tab < 12 && !focused.includes(words['logout.button']); tab++) {
 			const control = await tabbedControlWithRing(page);
 			if (control) {
 				focused.push(control);
@@ -196,9 +198,9 @@ test.describe('the header on a narrow screen and its focus', () => {
 		}
 
 		expect(focused).toContain(person?.username);
-		expect(focused).toContain(words.log_out);
+		expect(focused).toContain(words['logout.button']);
 		expect(focused.length).toBeGreaterThanOrEqual(3);
-		expect(focused.some((control) => [words.theme_follow_system, words.theme_light, words.theme_dark].includes(control))).toBe(true);
+		expect(focused.some((control) => [words['account.followSystem'], words['account.light'], words['account.dark']].includes(control))).toBe(true);
 	});
 
 	test('closes the menu on Escape and returns focus to its button; a click outside leaves focus where it landed', async ({
@@ -249,7 +251,7 @@ test.describe('the theme', () => {
 		await page.goto('/');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'follow-system');
 		await opensTheMenu(page);
-		await expect((await themeRow(page, 'follow_system'))).toBeChecked();
+		await expect((await themeRow(page, 'followSystem'))).toBeChecked();
 		await page.keyboard.press('Escape');
 		await page.emulateMedia({ colorScheme: 'dark' });
 		const deviceDark = await backgroundOf();
@@ -273,7 +275,7 @@ test.describe('the theme', () => {
 		expect(((await account.json()) as { theme: string }).theme).toBe('dark');
 
 		await page.goto('/');
-		await chooseTheme(page, 'follow_system');
+		await chooseTheme(page, 'followSystem');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'follow-system');
 		await page.emulateMedia({ colorScheme: 'dark' });
 		await expect(page.locator('body')).toHaveCSS('background-color', darkBackground);
@@ -306,7 +308,7 @@ test.describe('the theme', () => {
 		await chooseTheme(page, 'dark');
 
 		await expect((await themeRow(page, 'dark'))).not.toBeChecked();
-		await expect((await themeRow(page, 'follow_system'))).toBeChecked();
+		await expect((await themeRow(page, 'followSystem'))).toBeChecked();
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'follow-system');
 	});
 });
@@ -315,9 +317,9 @@ test.describe('an ended session', () => {
 	test.use({ person: { role: 'admin', decks: [aDeck()] } });
 
 	test('an ended session meets the sign-in when the theme changes', async ({ page, context }) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.goto('/');
-		await expect(page.getByRole('heading', { name: words.decks_title })).toBeVisible();
+		await expect(page.getByRole('heading', { name: words['deck.decksLink'] })).toBeVisible();
 		await endsTheSession(context);
 		const started = startsSignIn(page);
 
@@ -330,13 +332,13 @@ test.describe('an ended session', () => {
 		page,
 		context
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.goto('/');
-		await expect(page.getByRole('heading', { name: words.decks_title })).toBeVisible();
+		await expect(page.getByRole('heading', { name: words['deck.decksLink'] })).toBeVisible();
 		await endsTheSession(context);
 		const started = startsSignIn(page);
 
-		await page.getByRole('link', { name: words.section_decks }).click();
+		await page.getByRole('link', { name: words['header.decks'] }).click();
 
 		await leftForSignIn(page, started);
 	});
@@ -348,9 +350,9 @@ test.describe('history across lobby pages', () => {
 	test('walks back and forward across lobby pages and a refusal board', async ({
 		page
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const showsHome = () =>
-			expect(page.getByRole('heading', { name: words.decks_title })).toBeVisible();
+			expect(page.getByRole('heading', { name: words['deck.decksLink'] })).toBeVisible();
 		const showsSources = () => expect(page).toHaveURL(/\/settings\/sources$/);
 
 		await page.goto('/');
@@ -377,7 +379,7 @@ test.describe('history across lobby pages', () => {
 		context,
 		signedIn
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.goto('/');
 		await expect(page.locator('table.decks tbody tr')).toHaveCount(1);
 		const entries = await entriesOf(page);
@@ -390,7 +392,7 @@ test.describe('history across lobby pages', () => {
 			})
 		);
 
-		await page.getByRole('link', { name: words.section_decks }).click();
+		await page.getByRole('link', { name: words['header.decks'] }).click();
 
 		await expect(page.locator('table.decks tbody tr')).toHaveCount(2);
 		await expect(page.getByRole('link', { name: 'Added meanwhile' })).toBeVisible();
@@ -404,14 +406,14 @@ test.describe('the empty card of an admin', () => {
 	test.use({ person: { role: 'admin' } });
 
 	test('links Sources by a client navigation', async ({ page }) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.goto('/');
 		await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
 
-		await page.getByRole('link', { name: words.decks_empty_explanation }).click();
+		await page.getByRole('link', { name: words['decks.emptyExplanation'] }).click();
 
 		await expect(page).toHaveURL(/\/settings\/sources$/);
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_sources);
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['sources.title']);
 		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 		await expect(page.locator('#svelte-announcer')).toHaveCount(1);
 	});
@@ -426,13 +428,13 @@ test.describe('log out', () => {
 		violations,
 		browserName
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.goto('/');
 		await opensTheMenu(page);
 
 		const [posted] = await Promise.all([
 			page.waitForRequest((sent) => new URL(sent.url()).pathname === '/logout'),
-			page.getByRole('button', { name: words.log_out }).click()
+			page.getByRole('button', { name: words['logout.button'] }).click()
 		]);
 		await posted.response();
 
@@ -463,12 +465,12 @@ test.describe('a member', () => {
 	test.use({ person: { role: 'user' } });
 
 	test('sees no Settings link', async ({ page }) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 
 		await page.goto('/');
 
-		await expect(page.getByRole('link', { name: words.section_decks })).toBeVisible();
-		await expect(page.getByRole('link', { name: words.section_settings })).toHaveCount(0);
+		await expect(page.getByRole('link', { name: words['header.decks'] })).toBeVisible();
+		await expect(page.getByRole('link', { name: words['settings.navLabel'] })).toHaveCount(0);
 	});
 });
 
@@ -480,7 +482,8 @@ test.describe('the account menu', () => {
 		page,
 		context
 	}) => {
-		const { words, sign_in: addresses, person } = await sessionOf(page);
+		const words = await wordsOf(page);
+		const { sign_in: addresses, person } = await sessionOf(page);
 		await context.route(addresses.account_console_url, (route) =>
 			route.fulfill({ contentType: 'text/plain', body: 'the central account' })
 		);
@@ -507,12 +510,12 @@ test.describe('the account menu', () => {
 	});
 
 	test('keeps the header link type off the menu legal links', async ({ page }) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.goto('/');
 		const textTransformOf = (link: Locator) =>
 			link.evaluate((element) => getComputedStyle(element).textTransform);
 		const headerTransform = await textTransformOf(
-			page.getByRole('banner').getByRole('link', { name: words.section_decks })
+			page.getByRole('banner').getByRole('link', { name: words['header.decks'] })
 		);
 		await opensTheMenu(page);
 		for (const { label } of legalLinks(words)) {
