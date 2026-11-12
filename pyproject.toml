@@ -27,6 +27,7 @@ presentator-worker = "presentator.host.worker:main"
 
 [dependency-groups]
 dev = [
+    "overnightworks-design[catalogs] @ https://github.com/overnightworks/design/releases/download/v0.24.0/overnightworks_design-0.24.0-py3-none-any.whl#sha256=a467bfcb2d8a7504f07cee5b626a0e5c0510922c83ec5845b51500fe16a03d20",
     "pypdf==7.0.1",
     "pytest==9.2.0",
     "pytest-cov==7.1.0",
@@ -57,6 +58,9 @@ filterwarnings = [
 
 [tool.coverage.run]
 branch = true
+# design-catalogs writes this module and `design-catalogs --check` holds it
+# current, so its lines have no test of ours to be covered by.
+omit = ["src/presentator/contracts/words.py"]
 
 [tool.coverage.report]
 fail_under = 100
@@ -69,6 +73,11 @@ exclude_also = ["case _:\\n\\s+assert_never\\("]
 include = ["src", "tests", "scripts"]
 typeCheckingMode = "strict"
 pythonVersion = "3.14"
+
+# The generator's defaults put the catalogs and the page's modules where the
+# fleet standard names them; only the server's Python module needs a path.
+[tool.design-catalogs]
+python = "src/presentator/contracts/words.py"
 
 [tool.vulture]
 paths = ["src", "tests", "tests/support/vulture_allowlist.py"]
@@ -134,6 +143,11 @@ convention = "google"
 "scripts/probe_build_worker/flood/flood_actions.py" = ["INP001"]
 # The root watcher run on the host beside the worker's container.
 "scripts/probe_build_worker/upload_watcher.py" = ["INP001"]
+# design-catalogs writes this module and design --check holds it current, so its
+# layout is the generator's: no docstrings, single-quoted texts, lines longer than
+# the line length, exception messages built in place, and the typography of the
+# texts (dashes, quotation marks) that RUF001 reads as ambiguous.
+"src/presentator/contracts/words.py" = ["D100", "D103", "E501", "EM102", "Q000", "RUF001", "TRY003"]
 # Standalone gate, not a package.
 "scripts/check_catalog_purity.py" = ["INP001"]
 # Drives the check script as a subprocess against temporary and real pages.

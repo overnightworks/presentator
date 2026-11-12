@@ -10,6 +10,7 @@ from presentator.api.copresenter import AskRequest
 from presentator.api.decks import TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
 from presentator.api.problems import ValidationFault
+from presentator.contracts import words
 from presentator.contracts.text import LobbyText
 from presentator.host.config import Settings, WorkerSettings
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
@@ -246,3 +247,8 @@ ValidationFault.msg
 
 # Pydantic calls the drive's deck-record validator when a request is parsed.
 DeckRecord.builds_fit_the_state
+
+# The server reads the generated words module once the lobby's catalog moves
+# onto it; until then no call site reaches its language constants.
+words.SOURCE_LANGUAGE
+words.LANGUAGES

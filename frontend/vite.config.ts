@@ -17,9 +17,11 @@ export const sveltekitOptions: Parameters<typeof sveltekit>[0] = {
 // The drive's CI job alone builds the instrumented lobby (`pnpm build:instrumented`);
 // the production build and the image never carry counters. The sources and
 // exclusions are the ones vitest measures, so both reports name the same files.
+// The words modules are written by design-catalogs and held current by
+// `design-catalogs --check`, so no test of ours covers them.
 export const coverageSources = {
 	include: ['src/**/*.ts', 'src/**/*.svelte'],
-	exclude: ['src/**/*.test.ts', 'src/lib/api/types.ts']
+	exclude: ['src/**/*.test.ts', 'src/lib/api/types.ts', 'src/lib/words/**']
 };
 
 export default defineConfig({

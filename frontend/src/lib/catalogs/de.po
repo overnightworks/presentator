@@ -1,0 +1,778 @@
+msgid ""
+msgstr ""
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgctxt "app.name"
+msgid "Presentator"
+msgstr ""
+
+msgctxt "header.decks"
+msgid "Decks"
+msgstr ""
+
+msgctxt "header.settings"
+msgid "Einstellungen"
+msgstr ""
+
+msgctxt "account.title"
+msgid "Konto"
+msgstr ""
+
+msgctxt "account.theme"
+msgid "Darstellung"
+msgstr ""
+
+msgctxt "account.followSystem"
+msgid "Wie das System"
+msgstr ""
+
+msgctxt "account.light"
+msgid "Hell"
+msgstr ""
+
+msgctxt "account.dark"
+msgid "Dunkel"
+msgstr ""
+
+msgctxt "logout.button"
+msgid "Abmelden"
+msgstr ""
+
+msgctxt "signIn.loggedOut"
+msgid "Du bist abgemeldet."
+msgstr ""
+
+msgctxt "signIn.logIn"
+msgid "Anmelden"
+msgstr ""
+
+msgctxt "signIn.loginFailed"
+msgid "Anmeldung fehlgeschlagen"
+msgstr ""
+
+msgctxt "signIn.loginFailedBanner"
+msgid "Die Anmeldung hat nicht geklappt. Versuch es noch einmal."
+msgstr ""
+
+msgctxt "signIn.tryAgain"
+msgid "Erneut versuchen"
+msgstr ""
+
+msgctxt "signIn.noAccess"
+msgid "Kein Zugang"
+msgstr ""
+
+msgctxt "signIn.noAccessSentence"
+msgid "Du bist angemeldet, aber dieses Konto hat keinen Zugang zu {app}."
+msgstr ""
+
+msgctxt "signIn.signingIn"
+msgid "Anmeldung läuft"
+msgstr ""
+
+msgctxt "signIn.inOtherWindow"
+msgid "Im anderen Fenster"
+msgstr ""
+
+msgctxt "signIn.openInTab"
+msgid "In einem Tab öffnen"
+msgstr ""
+
+msgctxt "signIn.unfinished"
+msgid "Die Anmeldung wurde nicht abgeschlossen."
+msgstr ""
+
+msgctxt "signIn.windowBlocked"
+msgid "Fenster blockiert"
+msgstr ""
+
+msgctxt "signIn.windowBlockedSentence"
+msgid "Dein Browser hat das Anmeldefenster blockiert."
+msgstr ""
+
+msgctxt "legal.impressum"
+msgid "Impressum"
+msgstr ""
+
+msgctxt "legal.datenschutz"
+msgid "Datenschutz"
+msgstr ""
+
+msgctxt "legal.nutzungsbedingungen"
+msgid "Nutzungsbedingungen"
+msgstr ""
+
+msgctxt "decks.title"
+msgid "Decks"
+msgstr ""
+
+msgctxt "decks.columnState"
+msgid "Status"
+msgstr ""
+
+msgctxt "decks.columnDeck"
+msgid "Deck"
+msgstr ""
+
+msgctxt "decks.columnChanged"
+msgid "Geändert"
+msgstr ""
+
+msgctxt "decks.emptyTitle"
+msgid "Noch kein Deck"
+msgstr ""
+
+msgctxt "decks.emptyExplanation"
+msgid "Decks kommen nur aus Git. Lege per Push einen Ordner mit deck.toml und slides.md in eine deiner Quellen."
+msgstr ""
+
+msgctxt "deck.decksLink"
+msgid "Decks"
+msgstr ""
+
+msgctxt "deck.back"
+msgid "← Decks"
+msgstr ""
+
+msgctxt "deck.status"
+msgid "Status"
+msgstr ""
+
+msgctxt "deck.stateReady"
+msgid "bereit"
+msgstr ""
+
+msgctxt "deck.stateBuilding"
+msgid "wird gebaut"
+msgstr ""
+
+msgctxt "deck.stateFailed"
+msgid "fehlgeschlagen"
+msgstr ""
+
+msgctxt "deck.stateNeverBuilt"
+msgid "nie gebaut"
+msgstr ""
+
+msgctxt "deck.built"
+msgid "gebaut {age}"
+msgstr ""
+
+msgctxt "deck.buildsWith"
+msgid "Gebaut mit: {themes}"
+msgstr ""
+
+msgctxt "deck.notBuiltExplanation"
+msgid "Aus diesem Deck wurde noch kein Vortrag gebaut, deshalb gibt es keine Ansicht zum Öffnen."
+msgstr ""
+
+msgctxt "deck.buildingExplanation"
+msgid "Beide Ansichten lassen sich öffnen, sobald der Build fertig ist. Lade die Seite neu."
+msgstr ""
+
+msgctxt "deck.buildingLabel"
+msgid "Wird gebaut"
+msgstr ""
+
+msgctxt "deck.buildingFor"
+msgid "seit {age}"
+msgstr ""
+
+msgctxt "deck.failedTitle"
+msgid "Fehler"
+msgstr ""
+
+msgctxt "deck.attemptLabel"
+msgid "Versuch"
+msgstr ""
+
+msgctxt "deck.failedWithoutMessage"
+msgid "Dieser Build hat keine Meldung hinterlassen. Vielleicht hat er zu lange gedauert oder wurde abgebrochen."
+msgstr ""
+
+msgctxt "deck.failedOutputMegabytes"
+msgid "Der Vortrag, den dieser Build geschrieben hat, ist {written} MB groß; ein Build darf höchstens {allowed} MB hinterlassen."
+msgstr ""
+
+msgctxt "deck.failedOutputEntries"
+msgid "Der Vortrag, den dieser Build geschrieben hat, enthält mehr als {entries} Dateien; ein Build darf weniger hinterlassen."
+msgstr ""
+
+msgctxt "deck.failedOutputShape"
+msgid "Der Vortrag, den dieser Build geschrieben hat, kann nicht übernommen werden: Er enthält einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes, eine Datei, die dieser Schritt nicht schreiben darf, einen Link, eine Spezialdatei oder eine nicht lesbare Datei."
+msgstr ""
+
+msgctxt "deck.failedDeckMegabytes"
+msgid "Dieses Deck ist zu groß zum Bauen: Ein Deck darf höchstens {megabytes} MB und höchstens {entries} Dateien und Ordner zusammen enthalten, den obersten Ordner node_modules nicht mitgezählt."
+msgstr ""
+
+msgctxt "deck.failedDeckPaths"
+msgid "Dieses Deck kann nicht gebaut werden: Es enthält einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes oder einen Link, eine Spezialdatei oder eine nicht lesbare Datei."
+msgstr ""
+
+msgctxt "deck.failedLastTalkStands"
+msgid "Der zuletzt gebaute Vortrag lässt sich weiterhin in beiden Ansichten öffnen."
+msgstr ""
+
+msgctxt "deck.presenterView"
+msgid "Presenter-Ansicht"
+msgstr ""
+
+msgctxt "deck.projectorView"
+msgid "Projektor-Ansicht"
+msgstr ""
+
+msgctxt "deck.pdf"
+msgid "PDF"
+msgstr ""
+
+msgctxt "deck.unknownTitle"
+msgid "Kein solches Deck"
+msgstr ""
+
+msgctxt "deck.unknownExplanation"
+msgid "Unter dieser Adresse gibt es kein Deck."
+msgstr ""
+
+msgctxt "error.notFoundTitle"
+msgid "Nicht gefunden"
+msgstr ""
+
+msgctxt "error.notFoundExplanation"
+msgid "Unter dieser Adresse gibt es nichts."
+msgstr ""
+
+msgctxt "error.adminsTitle"
+msgid "Für Admins"
+msgstr ""
+
+msgctxt "error.adminsExplanation"
+msgid "Einstellungen sind für Admins. Dein Konto hat keine Admin-Rolle."
+msgstr ""
+
+msgctxt "error.decksLink"
+msgid "Decks"
+msgstr ""
+
+msgctxt "settings.title"
+msgid "Allgemein"
+msgstr ""
+
+msgctxt "settings.generalTab"
+msgid "Allgemein"
+msgstr ""
+
+msgctxt "settings.navLabel"
+msgid "Einstellungen"
+msgstr ""
+
+msgctxt "settings.sourcesTab"
+msgid "Quellen"
+msgstr ""
+
+msgctxt "settings.instanceName"
+msgid "Name der Instanz"
+msgstr ""
+
+msgctxt "settings.defaultLanguage"
+msgid "Standardsprache"
+msgstr ""
+
+msgctxt "settings.languageHint"
+msgid "Eine weitere Sprache kommt mit einer weiteren Katalogdatei."
+msgstr ""
+
+msgctxt "settings.save"
+msgid "Speichern"
+msgstr ""
+
+msgctxt "sources.title"
+msgid "Quellen"
+msgstr ""
+
+msgctxt "sources.columnSource"
+msgid "Quelle"
+msgstr ""
+
+msgctxt "sources.columnState"
+msgid "Status"
+msgstr ""
+
+msgctxt "sources.columnFetched"
+msgid "Abgerufen"
+msgstr ""
+
+msgctxt "sources.columnAccess"
+msgid "Zugriff"
+msgstr ""
+
+msgctxt "sources.fetchNow"
+msgid "Jetzt abrufen"
+msgstr ""
+
+msgctxt "sources.busyFetch"
+msgid "Wird abgerufen…"
+msgstr ""
+
+msgctxt "sources.requestFailed"
+msgid "Die Anfrage ist fehlgeschlagen. Versuch es noch einmal."
+msgstr ""
+
+msgctxt "sources.add"
+msgid "Quelle hinzufügen"
+msgstr ""
+
+msgctxt "sources.emptyTitle"
+msgid "Noch keine Quelle"
+msgstr ""
+
+msgctxt "sources.emptyExplanation"
+msgid "Eine Quelle ist ein Git-Repository, das der Server alle paar Minuten liest – GitHub, GitLab, firmenintern oder Bare."
+msgstr ""
+
+msgctxt "sources.emptyNeed"
+msgid "Du brauchst die Git-URL und ein Secret mit reinem Lesezugriff:"
+msgstr ""
+
+msgctxt "sources.emptySsh"
+msgid "SSH-Deploy-Key"
+msgstr ""
+
+msgctxt "sources.emptyOr"
+msgid "oder"
+msgstr ""
+
+msgctxt "sources.emptyHttps"
+msgid "HTTPS-Token"
+msgstr ""
+
+msgctxt "source.back"
+msgid "← Quellen"
+msgstr ""
+
+msgctxt "source.folder"
+msgid "Ordner"
+msgstr ""
+
+msgctxt "source.columnFetched"
+msgid "Abgerufen"
+msgstr ""
+
+msgctxt "source.fetchNow"
+msgid "Jetzt abrufen"
+msgstr ""
+
+msgctxt "source.busyFetch"
+msgid "Wird abgerufen…"
+msgstr ""
+
+msgctxt "source.requestFailed"
+msgid "Die Anfrage ist fehlgeschlagen. Versuch es noch einmal."
+msgstr ""
+
+msgctxt "source.busyRenew"
+msgid "Wird erneuert…"
+msgstr ""
+
+msgctxt "source.busyCount"
+msgid "Wird gezählt…"
+msgstr ""
+
+msgctxt "source.busyRemove"
+msgid "Wird entfernt…"
+msgstr ""
+
+msgctxt "source.copy"
+msgid "Kopieren"
+msgstr ""
+
+msgctxt "source.secret"
+msgid "Secret"
+msgstr ""
+
+msgctxt "source.webhookAddress"
+msgid "Adresse"
+msgstr ""
+
+msgctxt "source.webhookSecret"
+msgid "Secret"
+msgstr ""
+
+msgctxt "source.webhookOnce"
+msgid "nur jetzt sichtbar"
+msgstr ""
+
+msgctxt "source.refusedSecret"
+msgid "Gib zuerst das neue Secret ein."
+msgstr ""
+
+msgctxt "source.accessHeading"
+msgid "Zugriff auf Git"
+msgstr ""
+
+msgctxt "source.webhookHeading"
+msgid "Webhook"
+msgstr ""
+
+msgctxt "source.recentRuns"
+msgid "Letzte Läufe"
+msgstr ""
+
+msgctxt "source.decks"
+msgid "Decks aus dieser Quelle"
+msgstr ""
+
+msgctxt "source.reverse"
+msgid "Umgekehrte Richtung"
+msgstr ""
+
+msgctxt "source.pushInbox"
+msgid "Push-Eingang – der Heimserver bietet ein eigenes Git an, wenn er dein Firmen-Git nicht erreicht"
+msgstr ""
+
+msgctxt "source.later"
+msgid "später"
+msgstr ""
+
+msgctxt "source.renew"
+msgid "Secret erneuern"
+msgstr ""
+
+msgctxt "source.secretMask"
+msgid "••••••••••••••••••"
+msgstr ""
+
+msgctxt "source.accessRenewInfo"
+msgid "Verschlüsselt gespeichert und seit der Eingabe nie wieder angezeigt. Beim Erneuern wird es durch ein neues ersetzt."
+msgstr ""
+
+msgctxt "source.deployKeyInfo"
+msgid "Trage diesen öffentlichen Schlüssel beim Git-Host mit Lesezugriff ein. Beim Erneuern ersetzt er den alten sofort in dieser Quelle."
+msgstr ""
+
+msgctxt "source.publicKey"
+msgid "Öffentlicher Schlüssel"
+msgstr ""
+
+msgctxt "source.deployKeyRenew"
+msgid "Erneuern"
+msgstr ""
+
+msgctxt "source.renewedSecret"
+msgid "Secret erneuert."
+msgstr ""
+
+msgctxt "source.renewedDeployKey"
+msgid "Deploy-Key erneuert. Trage den neuen öffentlichen Schlüssel beim Git-Host ein."
+msgstr ""
+
+msgctxt "source.renewedWebhook"
+msgid "Webhook-Secret erneuert. Trage es beim Git-Host ein."
+msgstr ""
+
+msgctxt "source.runColumnState"
+msgid "Status"
+msgstr ""
+
+msgctxt "source.runColumnFetched"
+msgid "Abgerufen"
+msgstr ""
+
+msgctxt "source.runColumnDetail"
+msgid "Details"
+msgstr ""
+
+msgctxt "source.removeHeading"
+msgid "Quelle entfernen"
+msgstr ""
+
+msgctxt "source.removeHint"
+msgid "Löscht den Mirror, seine Decks und deren gebaute Vorträge; die URL lässt sich wieder hinzufügen."
+msgstr ""
+
+msgctxt "source.removeButton"
+msgid "Quelle entfernen…"
+msgstr ""
+
+msgctxt "source.removeConfirmTitle"
+msgid "{name} entfernen?"
+msgstr ""
+
+msgctxt "source.removeCancel"
+msgid "Abbrechen"
+msgstr ""
+
+msgctxt "source.removeConfirm"
+msgid "Entfernen"
+msgstr ""
+
+msgctxt "source.removeRefused"
+msgid "Der Mirror oder ein Build-Ordner konnte nicht entfernt werden, deshalb wurde nichts gelöscht."
+msgstr ""
+
+msgctxt "source.stateReachable"
+msgid "erreichbar"
+msgstr ""
+
+msgctxt "source.stateError"
+msgid "Fehler"
+msgstr ""
+
+msgctxt "source.stateRefused"
+msgid "Abgelehnt"
+msgstr ""
+
+msgctxt "source.stateFailed"
+msgid "Fehlgeschlagen"
+msgstr ""
+
+msgctxt "source.stateNeverFetched"
+msgid "nie abgerufen"
+msgstr ""
+
+msgctxt "source.accessToken"
+msgid "Token"
+msgstr ""
+
+msgctxt "source.accessDeployKey"
+msgid "Deploy-Key"
+msgstr ""
+
+msgctxt "source.accessLocal"
+msgid "Auf diesem Rechner"
+msgstr ""
+
+msgctxt "source.refusedName"
+msgid "Ein Name besteht aus Kleinbuchstaben, Ziffern und Bindestrichen, beginnt mit einem Buchstaben oder einer Ziffer und ist höchstens 64 Zeichen lang."
+msgstr ""
+
+msgctxt "source.refusedFolder"
+msgid "Ein Ordner ist ein Pfad im Repository, etwa examples oder talks/2026, ohne führenden Schrägstrich und ohne .. darin."
+msgstr ""
+
+msgctxt "source.refusedDuplicateName"
+msgid "Eine Quelle mit diesem Namen gibt es schon."
+msgstr ""
+
+msgctxt "source.refusedDuplicateUrl"
+msgid "Eine Quelle mit dieser Git-URL gibt es schon."
+msgstr ""
+
+msgctxt "source.refusedUnknownAccess"
+msgid "Nutze https://host/pfad, user@host:pfad, ssh://user@host/pfad oder einen Ordner auf diesem Rechner, ohne Benutzername und Passwort darin."
+msgstr ""
+
+msgctxt "source.refusedNotChecked"
+msgid "Prüfe die Verbindung noch einmal – die URL oder das Secret hat sich seit der letzten Prüfung geändert."
+msgstr ""
+
+msgctxt "source.checkReachable"
+msgid "Repository gelesen, Head {commit}."
+msgstr ""
+
+msgctxt "source.refusedSecretNotAllowed"
+msgid "Ein Schlüssel oder ein Ordner auf diesem Rechner braucht kein Token – lass das Feld leer."
+msgstr ""
+
+msgctxt "source.refusedOutsideMount"
+msgid "Die Adresse muss einen Pfad unter /data/local-sources nennen, wo das Host-Verzeichnis eingebunden ist."
+msgstr ""
+
+msgctxt "source.refusedDeployKey"
+msgid "Dieser Deploy-Key gehört dir nicht mehr – hier ist ein neuer zum Eintragen."
+msgstr ""
+
+msgctxt "source.fetchNothingNew"
+msgid "Abgerufen, nichts Neues."
+msgstr ""
+
+msgctxt "source.fetchChanged"
+msgid "Abgerufen."
+msgstr ""
+
+msgctxt "source.fetchBuilt"
+msgid "Decks gebaut: {count}"
+msgstr ""
+
+msgctxt "source.fetchFailed"
+msgid "Builds fehlgeschlagen: {count}"
+msgstr ""
+
+msgctxt "source.fetchRemoved"
+msgid "Decks entfernt: {count}"
+msgstr ""
+
+msgctxt "source.fetchBusy"
+msgid "Mit einem anderen Auftrag beschäftigt, nichts abgerufen. Versuch es gleich noch einmal."
+msgstr ""
+
+msgctxt "source.runFetched"
+msgid "abgerufen"
+msgstr ""
+
+msgctxt "source.runUnreachable"
+msgid "Nicht erreichbar: Der Host antwortet nicht, oder das Repository ist privat und braucht ein Token."
+msgstr ""
+
+msgctxt "source.runSecret"
+msgid "Secret nicht gespeichert"
+msgstr ""
+
+msgctxt "source.runRefused"
+msgid "Anmeldung abgelehnt"
+msgstr ""
+
+msgctxt "source.runFailed"
+msgid "Abruf fehlgeschlagen"
+msgstr ""
+
+msgctxt "sourceNew.back"
+msgid "← Quellen"
+msgstr ""
+
+msgctxt "sourceNew.title"
+msgid "Quelle hinzufügen"
+msgstr ""
+
+msgctxt "sourceNew.name"
+msgid "Name"
+msgstr ""
+
+msgctxt "sourceNew.url"
+msgid "Git-URL"
+msgstr ""
+
+msgctxt "sourceNew.folderOptional"
+msgid "Ordner (optional)"
+msgstr ""
+
+msgctxt "sourceNew.secret"
+msgid "Secret"
+msgstr ""
+
+msgctxt "sourceNew.secretInfo"
+msgid "Nur ein privates Repository braucht ein Token. Es wird verschlüsselt gespeichert, nach dem Anlegen nie wieder angezeigt und braucht nur Lesezugriff – der Server schreibt nie zurück nach Git."
+msgstr ""
+
+msgctxt "sourceNew.busyCheck"
+msgid "Wird geprüft…"
+msgstr ""
+
+msgctxt "sourceNew.busyCreate"
+msgid "Wird angelegt und gebaut…"
+msgstr ""
+
+msgctxt "sourceNew.kindPending"
+msgid "Adresse wird gelesen."
+msgstr ""
+
+msgctxt "sourceNew.kindFailed"
+msgid "Die Adresse konnte nicht gelesen werden. Versuch es noch einmal."
+msgstr ""
+
+msgctxt "sourceNew.kindRetry"
+msgid "Erneut lesen"
+msgstr ""
+
+msgctxt "sourceNew.webhookLater"
+msgid "Die Webhook-Adresse und ihr Secret entstehen erst, wenn du die Quelle hinzufügst."
+msgstr ""
+
+msgctxt "sourceNew.deployKeyHeading"
+msgid "Auf der Gegenseite eintragen"
+msgstr ""
+
+msgctxt "sourceNew.deployKeyHint"
+msgid "Der öffentliche Schlüssel des Servers – als Deploy-Key mit Lesezugriff"
+msgstr ""
+
+msgctxt "sourceNew.check"
+msgid "Verbindung prüfen"
+msgstr ""
+
+msgctxt "sourceNew.create"
+msgid "Anlegen"
+msgstr ""
+
+msgctxt "sourceNew.created"
+msgid "angelegt"
+msgstr ""
+
+msgctxt "sourceNew.webhook"
+msgid "Webhook – trage beide in dein GitLab ein"
+msgstr ""
+
+msgctxt "sourceNew.webhookAddress"
+msgid "Adresse"
+msgstr ""
+
+msgctxt "sourceNew.webhookSecret"
+msgid "Secret"
+msgstr ""
+
+msgctxt "sourceNew.webhookOnce"
+msgid "nur jetzt sichtbar"
+msgstr ""
+
+msgctxt "sourceNew.copy"
+msgid "Kopieren"
+msgstr ""
+
+msgctxt "sourceNew.webhookPayload"
+msgid "Der Server liest die Nutzdaten des Hosts nicht – jeder gültige Aufruf heißt nur „Jetzt abrufen“."
+msgstr ""
+
+msgctxt "sourceNew.createdDone"
+msgid "Fertig"
+msgstr ""
+
+msgctxt "sourceNew.createdToast"
+msgid "Quelle angelegt"
+msgstr ""
+
+msgctxt "source.removeConfirmDecks.one"
+msgid "{count} Deck und sein gebauter Vortrag gehen mit."
+msgstr ""
+
+msgctxt "source.removeConfirmDecks.other"
+msgid "{count} Decks und ihre Vorträge gehen mit."
+msgstr ""
+
+msgctxt "source.removeConfirmRuns.one"
+msgid "{count} Lauf geht mit."
+msgstr ""
+
+msgctxt "source.removeConfirmRuns.other"
+msgid "{count} Läufe gehen mit."
+msgstr ""
+
+msgctxt "source.removeConfirmUrl"
+msgid "Die URL lässt sich wieder hinzufügen."
+msgstr ""
+
+msgctxt "source.removedName"
+msgid "{name} ist weg."
+msgstr ""
+
+msgctxt "source.removedDecks.one"
+msgid "{count} Deck ging mit."
+msgstr ""
+
+msgctxt "source.removedDecks.other"
+msgid "{count} Decks gingen mit."
+msgstr ""
+
+msgctxt "source.removedRuns.one"
+msgid "{count} Lauf ging mit."
+msgstr ""
+
+msgctxt "source.removedRuns.other"
+msgid "{count} Läufe gingen mit."
+msgstr ""
+
+msgctxt "source.removedUrl"
+msgid "Die URL lässt sich wieder hinzufügen."
+msgstr ""
