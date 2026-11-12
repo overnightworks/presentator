@@ -70,10 +70,7 @@ export type Words = {
     readonly "sources.add": string;
     readonly "sources.emptyTitle": string;
     readonly "sources.emptyExplanation": string;
-    readonly "sources.emptyNeed": string;
-    readonly "sources.emptySsh": string;
-    readonly "sources.emptyOr": string;
-    readonly "sources.emptyHttps": string;
+    readonly "sources.emptyNeed": readonly (string | { readonly marker: "code"; readonly text: string })[];
     readonly "source.back": string;
     readonly "source.folder": string;
     readonly "source.columnFetched": string;
@@ -245,10 +242,7 @@ export const words: Words = {
     "sources.add": "Quelle hinzufügen",
     "sources.emptyTitle": "Noch keine Quelle",
     "sources.emptyExplanation": "Eine Quelle ist ein Git-Repository, das der Server alle paar Minuten liest – GitHub, GitLab, firmenintern oder Bare.",
-    "sources.emptyNeed": "Du brauchst die Git-URL und ein Secret mit reinem Lesezugriff:",
-    "sources.emptySsh": "SSH-Deploy-Key",
-    "sources.emptyOr": "oder",
-    "sources.emptyHttps": "HTTPS-Token",
+    "sources.emptyNeed": ["Du brauchst die Git-URL und ein Secret mit reinem Lesezugriff: ", { marker: "code", text: "SSH-Deploy-Key" }, " oder ", { marker: "code", text: "HTTPS-Token" }] as readonly (string | { readonly marker: "code"; readonly text: string })[],
     "source.back": "← Quellen",
     "source.folder": "Ordner",
     "source.columnFetched": "Abgerufen",

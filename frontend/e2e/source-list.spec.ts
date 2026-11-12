@@ -193,9 +193,11 @@ test.describe('as an admin', () => {
 		const empty = page.locator('section.empty');
 		await expect(empty.getByRole('heading', { name: words['sources.emptyTitle'] })).toBeVisible();
 		await expect(empty).toContainText(words['sources.emptyExplanation']);
-		await expect(empty).toContainText(words['sources.emptyNeed']);
-		await expect(empty.locator('code').nth(0)).toHaveText(words['sources.emptySsh']);
-		await expect(empty.locator('code').nth(1)).toHaveText(words['sources.emptyHttps']);
+		const need = words['sources.emptyNeed'];
+		const sentence = need.map((part) => (typeof part === 'string' ? part : part.text)).join('');
+		const marked = need.flatMap((part) => (typeof part === 'string' ? [] : [part.text]));
+		await expect(empty.locator('p').nth(1)).toHaveText(sentence);
+		await expect(empty.locator('code')).toHaveText(marked);
 		await expect(page.locator('table')).toHaveCount(0);
 		await expect(empty.getByRole('link', { name: words['sources.add'] })).toBeVisible();
 	});

@@ -26,7 +26,7 @@ presentator-worker = "presentator.host.worker:main"
 
 [dependency-groups]
 dev = [
-    "overnightworks-design[catalogs] @ https://github.com/overnightworks/design/releases/download/v0.25.0/overnightworks_design-0.25.0-py3-none-any.whl#sha256=088e282b2979675ae730eaa0304bf5df13184507d89e174c7f6abd2adb8062bb",
+    "overnightworks-design[catalogs] @ https://github.com/overnightworks/design/releases/download/v0.26.0/overnightworks_design-0.26.0-py3-none-any.whl#sha256=a8c7670cc797d2fbee29ac88e878e127e663330e300d7b0a083180b3dca81dad",
     "pypdf==7.0.1",
     "pytest==9.2.0",
     "pytest-cov==7.1.0",

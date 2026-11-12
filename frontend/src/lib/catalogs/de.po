@@ -266,19 +266,7 @@ msgid "Eine Quelle ist ein Git-Repository, das der Server alle paar Minuten lies
 msgstr ""
 
 msgctxt "sources.emptyNeed"
-msgid "Du brauchst die Git-URL und ein Secret mit reinem Lesezugriff:"
-msgstr ""
-
-msgctxt "sources.emptySsh"
-msgid "SSH-Deploy-Key"
-msgstr ""
-
-msgctxt "sources.emptyOr"
-msgid "oder"
-msgstr ""
-
-msgctxt "sources.emptyHttps"
-msgid "HTTPS-Token"
+msgid "Du brauchst die Git-URL und ein Secret mit reinem Lesezugriff: {#code}SSH-Deploy-Key{/code} oder {#code}HTTPS-Token{/code}"
 msgstr ""
 
 msgctxt "source.back"
