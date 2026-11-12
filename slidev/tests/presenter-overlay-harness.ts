@@ -552,9 +552,9 @@ async function installMediaFakes(page: Page) {
       microphone: 'ready' as 'ready' | 'pending' | 'denied',
       worklet: 'ready' as 'ready' | 'failing',
       playback: 'resolve' as 'resolve' | 'pending' | 'rejected',
-      played: [] as HTMLMediaElement[],
+      played: [] as { onended: (() => void) | null }[],
       releaseMicrophone: () => {},
-      endPlayback: () => fakes.played.forEach((audio) => audio.dispatchEvent(new Event('ended'))),
+      endPlayback: () => fakes.played.splice(0).forEach((source) => source.onended?.()),
     }
     Object.assign(window, { __fakes: fakes })
     const newTrack = () => ({
@@ -598,7 +598,30 @@ async function installMediaFakes(page: Page) {
           ? Promise.reject(new Error('worklet failed to load'))
           : new RealAudioContext().audioWorklet.addModule(moduleUrl)),
       }
+      destination = {}
       createMediaStreamSource() { return { connect: () => undefined, disconnect: () => undefined } }
+      createGain() { return { gain: { value: 1 }, connect: () => undefined } }
+      decodeAudioData() {
+        if (fakes.playback === 'pending') return new Promise<object>(() => undefined)
+        if (fakes.playback === 'rejected') return Promise.reject(new DOMException('undecodable', 'EncodingError'))
+        return Promise.resolve({})
+      }
+      createBufferSource() {
+        const source = {
+          onended: null as (() => void) | null,
+          connect: () => undefined,
+          start() {
+            fakes.played.push(source)
+            report('playback-started')
+          },
+          stop() {
+            const index = fakes.played.indexOf(source)
+            if (index >= 0) fakes.played.splice(index, 1)
+            report('playback-paused')
+          },
+        }
+        return source
+      }
       close() { return Promise.resolve() }
     }
     window.AudioContext = FakeContext as unknown as typeof AudioContext
@@ -618,17 +641,6 @@ async function installMediaFakes(page: Page) {
       SpeechRecognition: CountedSpeechRecognition,
       webkitSpeechRecognition: CountedSpeechRecognition,
     })
-    HTMLMediaElement.prototype.play = async function () {
-      if (fakes.playback === 'pending') return new Promise<void>(() => undefined)
-      if (fakes.playback === 'rejected') throw new DOMException('blocked', 'NotAllowedError')
-      Object.defineProperty(this, 'paused', { value: false, configurable: true })
-      fakes.played.push(this)
-      report('playback-started')
-    }
-    HTMLMediaElement.prototype.pause = function () {
-      Object.defineProperty(this, 'paused', { value: true, configurable: true })
-      report('playback-paused')
-    }
   })
 }
 
