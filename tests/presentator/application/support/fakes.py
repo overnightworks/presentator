@@ -36,7 +36,7 @@ from presentator.contracts.decks import (
     local_mount_path_of,
 )
 from presentator.contracts.models import User
-from presentator.contracts.people import SessionSecretsHeld, SessionTimes
+from presentator.contracts.people import SessionExport, SessionSecretsHeld
 from presentator.contracts.preferences import InstanceSettings, PersonPreferences
 from presentator.contracts.text import LobbyText
 from presentator.ports.decks import BuildRun
@@ -172,9 +172,13 @@ class FakeSessionRecordStore:
             del self.rows[session_id]
         return len(owned)
 
-    def sessions_of(self, user_id: str) -> tuple[SessionTimes, ...]:
+    def sessions_of(self, user_id: str) -> tuple[SessionExport, ...]:
         return tuple(
-            SessionTimes(created_at=session.created_at, expires_at=session.expires_at)
+            SessionExport(
+                created_at=session.created_at,
+                expires_at=session.expires_at,
+                account_language=session.account_language,
+            )
             for session in self.rows.values()
             if session.user.id == user_id
         )
@@ -206,7 +210,9 @@ class FakePeople:
     sessions: FakeSessionRecordStore
     clock: FrozenClock
 
-    def open_session_for(self, person: User) -> str:
+    def open_session_for(
+        self, person: User, *, account_language: str | None = None
+    ) -> str:
         """Seed the person and one live session of theirs, and return its id."""
         self.users.users[person.id] = person
         now = self.clock.now()
@@ -216,7 +222,7 @@ class FakePeople:
             expires_at=now + SESSION_LIFETIME,
             refresh_token=None,
             id_token=SecretStr("an-id-token"),
-            account_language=None,
+            account_language=account_language,
         ).id
 
 

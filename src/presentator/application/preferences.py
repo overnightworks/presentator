@@ -1,7 +1,9 @@
 """The instance's settings, a person's choices, and how a page resolves them.
 
-The language is the instance's alone; the theme is the person's own and, with
-none chosen, follows the device.
+The instance names the language every page falls back to; a signed-in person's
+account may name another that a catalog speaks, which the api resolves from the
+offered tags. The theme is the person's own and, with none chosen, follows the
+device.
 """
 
 from dataclasses import dataclass
@@ -59,16 +61,20 @@ class Preferences:
         """Keep that person's choice; the instance settings stay untouched."""
         self.people.write(user_id, chosen)
 
-    def appearance_for(self, user_id: str | None) -> Appearance:
-        """The instance's words, and the person's own theme."""
-        settings = self.instance_settings()
+    def appearance_for(self, user_id: str | None, *, language_tag: str) -> Appearance:
+        """The words of the resolved language, and the person's own theme."""
         chosen = (
             PersonPreferences() if user_id is None else self.preferences_of(user_id)
         )
-        return Appearance(
-            text=self.catalogs.text(settings.language_tag),
-            theme=chosen.theme,
-        )
+        return Appearance(text=self.catalogs.text(language_tag), theme=chosen.theme)
+
+    def offered_tags(self) -> tuple[str, ...]:
+        """The tag of every catalog a page can be answered in."""
+        return tuple(self.catalogs.by_tag)
+
+    def served_tag(self) -> str:
+        """The tag of the catalog that answers for the instance's language today."""
+        return self.catalogs.text(self.instance_settings().language_tag).language_tag
 
     def languages(self) -> tuple[Language, ...]:
         """Every language a select may offer."""

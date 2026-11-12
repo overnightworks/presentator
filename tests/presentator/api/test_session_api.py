@@ -12,18 +12,30 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from presentator.api.auth import LOGOUT_PATH, START_SIGN_IN_PATH
 from presentator.api.session_api import SessionView
 from presentator.application.identity import SESSION_LIFETIME
-from presentator.contracts.preferences import PersonPreferences, ThemeChoice
+from presentator.contracts.models import Role, User
+from presentator.contracts.preferences import (
+    InstanceSettings,
+    PersonPreferences,
+    ThemeChoice,
+)
 from presentator.contracts.text import Catalogs
 from tests.presentator.application.support.fakes import FakePersonPreferencesStore
 from tests.support.lobby import (
+    A_BROWSERS_ADDRESS,
+    A_BROWSERS_HEADERS,
     A_TALK_ADDRESS,
     AN_ISSUER,
     ENGLISH,
     NEIGHBOUR,
     USERNAME,
     Lobby,
+    a_browser_at,
+    a_crowd,
     a_lobby,
+    a_lobby_app,
     a_lobby_that_claims_no_origin_of_its_own,
+    a_preferences,
+    hand_over_session_cookies,
 )
 from tests.support.sign_in_support import ADMIN, MEMBER, Scene, a_scene
 
@@ -39,6 +51,26 @@ _SUBJECT = "keycloak-subject-of-a-member"
 def a_german_lobby() -> Lobby:
     catalogs = Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN})
     return a_lobby(catalogs=catalogs)
+
+
+def a_lobby_speaking(
+    *, instance: str, account: str | None = None, signed_in: bool = True
+) -> Lobby:
+    """A lobby whose instance stores `instance`, with its reader's account language."""
+    preferences = a_preferences(
+        catalogs=Catalogs(by_tag={ENGLISH.language_tag: ENGLISH, "de": _GERMAN})
+    )
+    preferences.instance.write(InstanceSettings(language_tag=instance))
+    people = a_crowd()
+    app, _ = a_lobby_app(people=people, preferences=preferences)
+    lobby = a_browser_at(
+        app, people=people, base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS
+    )
+    if signed_in:
+        person = User(id="id-of-a-person", username=USERNAME, role=Role.USER)
+        session = people.open_session_for(person, account_language=account)
+        hand_over_session_cookies(lobby.client, session, lobby.config)
+    return lobby
 
 
 def choose(lobby: Lobby, *, theme: ThemeChoice) -> None:
@@ -106,6 +138,68 @@ def test_an_admin_is_told_apart_by_role() -> None:
         "username": USERNAME,
         "role": "admin",
     }
+
+
+@pytest.mark.parametrize(
+    ("instance", "account", "spoken"),
+    [
+        ("en", "de", "de"),
+        ("de", "en", "en"),
+        ("en", "fr", "en"),
+        ("de", "fr", "de"),
+        ("de", None, "de"),
+        ("fr", None, "en"),
+        ("fr", "fr", "en"),
+        ("fr", "de", "de"),
+    ],
+    ids=[
+        "offered-beats-instance",
+        "offered-english-beats-german-instance",
+        "unoffered-answers-instance",
+        "unoffered-answers-german-instance",
+        "none-answers-instance",
+        "gone-instance-catalog-none",
+        "gone-instance-catalog-unoffered",
+        "gone-instance-catalog-offered",
+    ],
+)
+def test_the_words_follow_the_account_language_where_a_catalog_has_it(
+    instance: str, account: str | None, spoken: str
+) -> None:
+    """LB1."""
+    lobby = a_lobby_speaking(instance=instance, account=account)
+
+    answer = lobby.client.get(_SESSION)
+
+    assert answer.status_code == HTTPStatus.OK
+    assert answer.json()["words"]["language_tag"] == spoken
+
+
+@pytest.mark.parametrize("instance", ["en", "de"])
+def test_a_signed_out_caller_reads_in_the_instances_language(instance: str) -> None:
+    lobby = a_lobby_speaking(instance=instance, signed_in=False)
+
+    answer = lobby.client.get(_SESSION)
+
+    assert answer.json()["words"]["language_tag"] == instance
+
+
+def test_the_lobby_shells_html_lang_follows_the_account_language() -> None:
+    lobby = a_lobby_speaking(instance="en", account="de")
+
+    page = lobby.client.get("/an-address-the-app-decides").text
+
+    assert 'lang="de"' in page
+
+
+def test_a_browsers_accept_language_changes_nothing_for_an_account_without_one() -> (
+    None
+):
+    lobby = a_lobby_speaking(instance="en", account=None)
+
+    answer = lobby.client.get(_SESSION, headers={"accept-language": "de"})
+
+    assert answer.json()["words"]["language_tag"] == "en"
 
 
 @pytest.mark.parametrize("cookie", ["forged", "ended", "expired"])

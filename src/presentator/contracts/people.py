@@ -87,11 +87,12 @@ class PersonDiskLeftover:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SessionTimes:
-    """When one sign-in began and ends; nothing that could resume it."""
+class SessionExport:
+    """One sign-in: its times and language, nothing that could resume it."""
 
     created_at: datetime
     expires_at: datetime
+    account_language: str | None
 
 
 PersonErasure = PersonErased | PersonBusy | PersonDiskLeftover
@@ -162,7 +163,7 @@ class PersonData:
     """Everything shown of a person, by kind; a kind they lack is empty."""
 
     account: User | None
-    sessions: tuple[SessionTimes, ...]
+    sessions: tuple[SessionExport, ...]
     preferences: PersonPreferences | None
     key_draft: KeyDraftExport | None
     sources: tuple[SourceExport, ...]

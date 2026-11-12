@@ -81,6 +81,8 @@ is `{subject}`. `?dry_run=true` counts and changes nothing.
   answers 401 and 403 are the erase route's, and every answer carries
   `Cache-Control: no-store`.
 - **PE24** The log line holds the withheld counts and names nobody.
+- **PE31** Each exported session carries the account language stored at its
+  sign-in, `null` where the account named none; the language is not withheld.
 
 A source address is exported as stored: its authority carries no credential
 part; a secret typed into a path or query is exported as typed.
