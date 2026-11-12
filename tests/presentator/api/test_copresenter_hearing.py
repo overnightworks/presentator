@@ -212,7 +212,8 @@ def test_a_failed_item_or_error_event_closes_the_browser_4502_and_the_service_so
         heard = hear_and_record(instance)
         assert service.closed.wait(THREAD_WAIT_SECONDS)
 
-    assert len(_warnings(heard.logged)) == 1
+    (warning,) = _warnings(heard.logged)
+    assert wire.RefusalCode.UNAVAILABLE.value in warning
     assert heard.closed_with == HopClose.SERVICE_FAILED
 
 
