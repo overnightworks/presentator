@@ -1,4 +1,4 @@
-"""The worker lowers its process limit under Kubernetes and judges it."""
+"""The worker lowers its process limit and judges it."""
 
 import resource
 from dataclasses import replace
@@ -12,13 +12,13 @@ from presentator.host.worker_self_check import (
     MAXIMUM_PROCESSES,
     PROCESS_LIMITS_FILE,
     Predicate,
-    Seal,
     first_failing_predicate,
     lowered_process_limit,
 )
 from tests.presentator.host.support.sealed_snapshot import (
     limits_file,
     read_sealed_snapshot,
+    read_staged_root_as_sealed_process,
     sealed_snapshot,
     with_resource_bounds,
 )
@@ -30,59 +30,46 @@ ABOVE_MAXIMUM = str(MAXIMUM_PROCESSES + 1)
 BOUND = Predicate.RESOURCE_BOUNDS
 
 
-def judged(seal: Seal, soft: str, hard: str, **changes: str) -> Predicate | None:
+def judged(soft: str, hard: str, **changes: str) -> Predicate | None:
     snapshot = with_resource_bounds(process_limit=(soft, hard), **changes)(
-        replace(sealed_snapshot(), seal=seal)
+        sealed_snapshot()
     )
     return first_failing_predicate(snapshot)
 
 
-COMPOSE_ROWS = {
-    "an unlimited process limit": (UNLIMITED, UNLIMITED, MAXIMUM, None),
-    "an unlimited pid bound": (MAXIMUM, MAXIMUM, "max", BOUND),
-    "a pid bound above the maximum": (MAXIMUM, MAXIMUM, ABOVE_MAXIMUM, BOUND),
-}
-
-
-@pytest.mark.parametrize(
-    ("soft", "hard", "pids_max", "refused"),
-    COMPOSE_ROWS.values(),
-    ids=COMPOSE_ROWS.keys(),
-)
-def test_compose_judges_the_pid_bound_and_not_the_process_limit(
-    soft: str, hard: str, pids_max: str, refused: Predicate | None
-) -> None:
-    assert judged(Seal.COMPOSE, soft, hard, pids_max=pids_max) == refused
-
-
-KUBERNETES_ROWS: dict[str, tuple[str, str, dict[str, str], Predicate | None]] = {
-    "at the maximum without a pid bound": (MAXIMUM, MAXIMUM, {"pids_max": "max"}, None),
+ROWS: dict[str, tuple[str, str, dict[str, str], Predicate | None]] = {
+    "at the maximum": (MAXIMUM, MAXIMUM, {}, None),
     "below the maximum": ("100", "256", {}, None),
     "an unlimited soft limit": (UNLIMITED, MAXIMUM, {}, BOUND),
     "an unlimited hard limit": (MAXIMUM, UNLIMITED, {}, BOUND),
     "a soft limit above the maximum": (ABOVE_MAXIMUM, MAXIMUM, {}, BOUND),
     "a hard limit above the maximum": (MAXIMUM, ABOVE_MAXIMUM, {}, BOUND),
     "an unlimited memory bound": (MAXIMUM, MAXIMUM, {"memory_max": "max"}, BOUND),
+    "a memory bound that is not decimal": (
+        MAXIMUM,
+        MAXIMUM,
+        {"memory_max": "1G"},
+        BOUND,
+    ),
 }
 
 
 @pytest.mark.parametrize(
-    ("soft", "hard", "changes", "refused"),
-    KUBERNETES_ROWS.values(),
-    ids=KUBERNETES_ROWS.keys(),
+    ("soft", "hard", "changes", "refused"), ROWS.values(), ids=ROWS.keys()
 )
-def test_kubernetes_judges_the_process_limit_and_the_memory_bound(
+def test_the_process_limit_and_the_memory_bound_are_judged(
     soft: str, hard: str, changes: dict[str, str], refused: Predicate | None
 ) -> None:
-    assert judged(Seal.KUBERNETES, soft, hard, **changes) == refused
+    assert judged(soft, hard, **changes) == refused
 
 
-def test_a_missing_pid_bound_is_unreadable_under_kubernetes(sealed_root: Path) -> None:
-    (sealed_root / "sys/fs/cgroup/pids.max").unlink()
+def test_a_cgroup_without_a_pid_bound_passes(sealed_root: Path) -> None:
+    assert not (sealed_root / "sys/fs/cgroup/pids.max").exists()
 
-    snapshot = read_sealed_snapshot(sealed_root, seal=Seal.KUBERNETES)
+    snapshot = read_staged_root_as_sealed_process(sealed_root)
 
-    assert snapshot.unreadable == {BOUND}
+    assert snapshot.unreadable == frozenset()
+    assert first_failing_predicate(snapshot) is None
 
 
 def test_the_process_limit_is_read_from_the_max_processes_row(
@@ -162,7 +149,7 @@ def test_the_effect_reads_then_sets_the_lowered_limit() -> None:
 
 
 def recording_boundary(
-    seal: Seal, events: list[str], lowering: Exception | None = None
+    events: list[str], lowering: Exception | None = None
 ) -> Boundary:
     def lower() -> None:
         events.append("lower")
@@ -171,7 +158,6 @@ def recording_boundary(
 
     return replace(
         boundary_over(sealed_snapshot(), events),
-        read_seal=lambda: seal,
         lower_process_limit=lower,
     )
 
@@ -183,29 +169,12 @@ def recording_boundary(
         (["--check"], ["prctl", "umask", "lower", "read"]),
     ],
 )
-def test_kubernetes_lowers_the_limit_after_the_seal_and_before_the_snapshot(
+def test_a_start_lowers_the_limit_before_the_snapshot_is_read(
     arguments: list[str], events: list[str]
 ) -> None:
     recorded: list[str] = []
 
-    status = worker.main(arguments, recording_boundary(Seal.KUBERNETES, recorded))
-
-    assert (status, recorded) == (0, events)
-
-
-@pytest.mark.parametrize(
-    ("arguments", "events"),
-    [
-        ([], ["prctl", "umask", "read", "settings", "serve"]),
-        (["--check"], ["prctl", "umask", "read"]),
-    ],
-)
-def test_compose_never_lowers_the_limit(
-    arguments: list[str], events: list[str]
-) -> None:
-    recorded: list[str] = []
-
-    status = worker.main(arguments, recording_boundary(Seal.COMPOSE, recorded))
+    status = worker.main(arguments, recording_boundary(recorded))
 
     assert (status, recorded) == (0, events)
 
@@ -217,9 +186,7 @@ def test_a_failed_lowering_refuses_the_start_before_the_snapshot_is_read(
 ) -> None:
     events: list[str] = []
 
-    status = worker.main(
-        arguments, recording_boundary(Seal.KUBERNETES, events, failure)
-    )
+    status = worker.main(arguments, recording_boundary(events, failure))
 
     assert status == worker.REFUSAL_EXIT_STATUS
     assert f"start refused: {BOUND}" in caplog.text

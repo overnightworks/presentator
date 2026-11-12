@@ -129,7 +129,7 @@ def test_any_other_topology_refuses_as_no_route(
 
 
 def test_no_route_is_judged_after_mounts_and_before_resource_bounds() -> None:
-    snapshot = with_resource_bounds(pids_max="max")(
+    snapshot = with_resource_bounds(memory_max="max")(
         with_mounts(root_read_only=False)(
             replace(
                 sealed_snapshot(),
