@@ -120,9 +120,7 @@ Problems follow RFC 9457 with `tag:` URI types, as an https address breaks when 
 
 **Words and look.** Every lobby word comes from one gettext catalog per language
 (`frontend/src/lib/catalogs`), generated into typed modules for page and server; the session answer
-carries a language tag, no sentence. The overlay is a separately shipped unit that builds decks
-without network, so it owns its own catalog pair (`slidev/catalogs`) imported statically
-([co-presenter](co-presenter.md)).
+carries a language tag, no sentence. The overlay owns its pair ([co-presenter](co-presenter.md)).
 
 **Trust.** A deck author's code, git remotes and people's input are untrusted. The operator's
 settings, his local sources folder (its repositories, metadata and everyone who can write there) and
@@ -139,26 +137,25 @@ the `agents` client's token, which acts as the person behind its subject, and a 
 account in the realm's agent group, whose first call creates an agent account that owns and sees no
 deck. Without a bearer the cookie session and its CSRF check decide.
 
-**Proof.** A test sits at the layer that owns the behaviour: pure logic runs with fakes at the
-ports, an adapter against a temporary real dependency, routes through the real app in `TestClient`.
-A delegated agent proves a person's flow at a surface; a leak fails the run.
-
 ## 6. Constraints and reasons
 
 - A deck is code: its Vue components run in its build. Only the sealed build worker runs it; the web
-  holds no right in the Kubernetes API, drops every capability, takes no new privilege and has a
-  read-only root, so deck code reaches neither the cluster nor the node's root.
+  holds no right in the Kubernetes API and the worker's pod mounts no service-account token; both
+  drop every capability, take no new privilege and have a read-only root, so deck code reaches
+  neither the cluster nor the node's root.
 - `/work`, `/tmp` and `/dev/shm` are memory volumes that allow execution, because a pod cannot mount
-  them `noexec` and deck code can already execute from memory. The process bound is `RLIMIT_NPROC`
-  at 512 per build uid, because the platform sets no bound per pod.
+  them `noexec` and deck code can already execute from memory; no new privilege and no device-node
+  capability keep `nosuid` and `nodev` moot. The process bound is `RLIMIT_NPROC` at 512 per build
+  uid, because deck code runs under one of the two build uids and the platform sets no bound per
+  pod.
 - The talk has its own origin: one cookie across both hosts would put deck code beside the
   credential it must not reach.
 - One process writes the database: a second would need a second write lock over the one SQLite file,
   and the identity lock relies on one writer.
-- The speech service and the model gateway are reached over plain `http` at Service addresses inside
-  the cluster. presentator sends its workload token and the person's token over that hop and relies
-  on the deployment to keep it inside the cluster; settings validation refuses only an origin that
-  is not a bare `http` or `https` one. The platform decides whom the gateway admits.
+- The speech origin must be plain `http` and the gateway's `http` or `https`, both at Service
+  addresses inside the cluster. presentator sends its workload token and the person's token over
+  that hop and relies on the deployment to keep it inside the cluster. The platform decides whom the
+  gateway admits.
 - The fetch-now webhook holds a per-source secret, not a login: a git host has no browser
   ([hook](runbooks/call-the-fetch-now-hook.md)). `/api/admin/` takes a Keycloak access token, not a
   session cookie, so a forged browser session cannot erase a person; the path carries the subject,
@@ -192,6 +189,7 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
 - A database copy plus the client secret renews a session until the SSO session ends; deleting a row
   revokes nothing, and freed pages, the `-wal` and backups keep ended tokens.
 - The hosts are same-site: deck code on the talk host can set `Domain=` cookies.
+- The overlay's palette can clash with a deck's palette.
 - Each presenter window mounts its own overlay; nothing enforces one speaker.
 - The presenter bar is teleported into Slidev's presenter markup, which Slidev does not promise; a
   failing presenter-controls test shows a move.
@@ -199,3 +197,4 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
   the new identity until its next push; the update strategy must not be `OnDelete`.
 - An empty or older database is not guarded against: its retention pass deletes the runs only the
   right database names.
+- The claim root is born open: a web entry before the worker's first start is `stale-socket`.
