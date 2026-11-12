@@ -1,8 +1,0 @@
-claim_id = "94ea60ad827f4ae9b479d6ddccd8b9b6"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "19f99966a03ce2186df97c9f7ad445ce590dbdf7"
-branch = "claude/issue-1098-room-notice-catalog"
-scope = [".github/workflows/ci.yml", "AGENTS.md", "Dockerfile", "docs/ARCHITECTURE.md", "quality/config.toml", "slidev", "sonar-project.properties"]
-opened_commit = "ddb2e161804418ff2bc0b8fb35b038053d6c70f7"
-whole_reason = "The catalog pair, its declaration, the generated modules, their reader and the CI check exist only together."
