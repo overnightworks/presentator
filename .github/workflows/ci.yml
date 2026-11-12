@@ -453,6 +453,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install uv
+        uses: $/.github/actions/setup-uv
+
       - name: Build the image
         run: docker build --tag presentator:${{ github.sha }} .
 
@@ -509,6 +512,21 @@ jobs:
       # repository's own reachability.
       - name: Smoke test HTTPS reachability
         run: docker run --rm presentator:${{ github.sha }} git ls-remote https://github.com/git/git.git HEAD
+
+      # The image builds and exports a deck with a formula and a diagram, with
+      # its network off, through the step launcher the build worker starts. The
+      # talk and the PDF come out with docker cp from the stopped container, and
+      # the judge reads them on the runner: the rendered formula and the label.
+      - name: Build and export the render probe's deck with the network off
+        run: |
+          set -euo pipefail
+          trap 'docker rm --force render-probe >/dev/null 2>&1 || true' EXIT
+          docker run --name render-probe --network none --tmpfs /work \
+            --volume "$GITHUB_WORKSPACE/scripts/render_probe:/probe:ro" \
+            presentator:${{ github.sha }} python -I /probe/probe_client.py /data/builds/render-probe
+          delivered="$RUNNER_TEMP/render-probe"
+          docker cp render-probe:/data/builds/render-probe "$delivered"
+          uv run --locked python scripts/render_probe/probe_judge.py "$delivered/talk" "$delivered/deck.pdf"
 
   # The worker's pod shape in a real k3s: the driver owns the platform commit,
   # and every other name it uses is its own.
