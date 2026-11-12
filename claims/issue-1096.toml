@@ -1,0 +1,8 @@
+claim_id = "425c9b40650843cab0bf168d5e22ab79"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "19f99966a03ce2186df97c9f7ad445ce590dbdf7"
+branch = "claude/issue-1096-agents-0-32"
+scope = ["pyproject.toml", "src/presentator/agent/backend.py", "tests/presentator/agent/test_backend.py", "uv.lock"]
+opened_commit = "303275b8307dd671af4b5d81ce3d1bcb47275559"
+whole_reason = "The pin, its lock and the two files that use the retyped name compile only together."
