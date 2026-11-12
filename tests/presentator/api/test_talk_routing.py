@@ -18,7 +18,7 @@ from webauth.config import installed_web_auth_config
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
 
 from presentator.adapters.identity import SqliteSessionRecordStore
-from presentator.api.auth import BACKCHANNEL_LOGOUT_PATH
+from presentator.api.auth import BACKCHANNEL_LOGOUT_PATH, DEFAULT_BODY_BYTES
 from presentator.api.talk import TALK_PERMISSIONS_POLICY, talk_content_security_policy
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
@@ -291,7 +291,6 @@ _FOREIGN_ADDRESSES = [
     pytest.param(None, id="no host header"),
 ]
 _FORM = {"content-type": "application/x-www-form-urlencoded"}
-_OVER_THE_CAP = 33 * 1024
 
 
 def _without_host_header(app: ASGIApp) -> ASGIApp:
@@ -467,7 +466,7 @@ def test_the_talk_host_never_serves_the_logout_path_and_keeps_its_session(
 def test_a_body_over_the_cap_under_a_foreign_host_is_refused_as_at_the_lobby(
     hosts: Hosts, address: str | None
 ) -> None:
-    oversized = b"x" * _OVER_THE_CAP
+    oversized = b"x" * (DEFAULT_BODY_BYTES + 1)
 
     at_the_lobby = _send(
         hosts.browser(A_BROWSERS_ADDRESS), "POST", BACKCHANNEL_LOGOUT_PATH, oversized
