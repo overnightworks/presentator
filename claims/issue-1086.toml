@@ -1,0 +1,8 @@
+claim_id = "90663c3695024bd79490a5e8baf5696c"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "3492fe5d5d107f39ef800a6afd5eea3291e4e093"
+branch = "claude/issue-1086-backchannel-any-host"
+scope = ["docs/ARCHITECTURE.md", "docs/runbooks/configure-keycloak.md", "docs/runbooks/run-from-a-checkout.md", "docs/sign-in.md", "src/presentator/host/main.py", "tests/presentator/api/test_talk_host.py", "tests/presentator/api/test_talk_routing.py"]
+opened_commit = "1a6b46e19ae1856a9409c3a5db65229cb0dc628e"
+whole_reason = "The one routing rule, the two test modules that pin the host split and the four documents that state it are true only together."
