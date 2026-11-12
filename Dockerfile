@@ -39,7 +39,12 @@ RUN case "$PRESENTATOR_RUNTIME_UID" in \
     && useradd --create-home --non-unique --uid "$PRESENTATOR_RUNTIME_UID" presentator
 # Node 26 no longer bundles corepack, which hands out the pnpm that each
 # package.json names in packageManager.
-RUN npm install --global corepack@0.36.0
+# npm leaves its cache and timestamped logs in root's home, and Node writes its
+# compile cache to /tmp; the root steps of the toolchain remove both, because a
+# layer that repeats holds neither.
+RUN npm install --global corepack@0.36.0 \
+    && rm -rf /root/.npm \
+    && find /tmp -mindepth 1 -delete
 
 # The browser and corepack's package managers are root's and live outside the
 # runtime HOME, so every one of the three users can run them.
@@ -61,7 +66,8 @@ RUN pnpm build
 FROM runtime-user AS toolchain
 
 # The toolchain runs as the named unprivileged runtime user.
-RUN corepack enable pnpm
+RUN corepack enable pnpm \
+    && find /tmp -mindepth 1 -delete
 
 # The project's dependencies are installed as that user, because a build writes
 # its caches beside the project; pnpm and the browser are installed as root.
@@ -70,13 +76,28 @@ COPY --chown=presentator slidev/package.json slidev/pnpm-lock.yaml slidev/pnpm-w
 WORKDIR /app/slidev
 # pnpm 12 fetches its native binary on its first run into the root-owned
 # corepack home, so that run happens here as root, before the user switch.
-RUN corepack install && pnpm --version
+RUN corepack install && pnpm --version \
+    && find /tmp -mindepth 1 -delete
+# A release builds with SOURCE_DATE_EPOCH, and pnpm then records that time in
+# node_modules instead of the clock's. Its store, metadata cache and update-check
+# state hold clock times too, and nothing needs them after the install, so the
+# same RUN removes them.
+ARG SOURCE_DATE_EPOCH
 USER presentator
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile \
+    && rm -rf ~/.local/share/pnpm ~/.local/state/pnpm ~/.cache/pnpm \
+    && find /tmp -mindepth 1 -delete
 USER root
+# ldconfig's aux-cache and fontconfig's caches record directory mtimes, which a
+# release resets, so fontconfig would reject the cache as stale at runtime. A
+# read-only root cannot write it back, so Chromium rescans the fonts at every
+# launch either way.
 RUN pnpm exec playwright install-deps chromium \
-    && rm -rf /var/lib/apt/lists/* \
-    && pnpm exec playwright install chromium
+    && pnpm exec playwright install chromium \
+    && rm -rf /var/lib/apt/lists/* /var/log/apt /var/log/dpkg.log /var/log/alternatives.log \
+        /var/cache/ldconfig/aux-cache /var/cache/fontconfig \
+        ~/.local/share/pnpm ~/.local/state/pnpm ~/.cache/pnpm \
+    && find /tmp -mindepth 1 -delete
 # The export's dev server keeps its dependency cache beside Slidev's own
 # package, which a read-only root cannot hold, so it points into the step's
 # scratch directory.
@@ -100,10 +121,15 @@ USER root
 # repeatable.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates git openssh-client \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /var/log/apt /var/log/dpkg.log /var/log/alternatives.log \
+        /var/cache/ldconfig/aux-cache
 
 COPY --from=uv /uv /usr/local/bin/uv
 
+# Bytecode stays in the image because the runtime's root is read-only. The two
+# syncs below set PYC_INVALIDATION_MODE for their compile alone, so the bytecode
+# records its source's hash, not the source's install time, and so repeats;
+# the runtime environment carries no such key.
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON_INSTALL_DIR=/opt/python \
     UV_COMPILE_BYTECODE=1 \
@@ -112,9 +138,9 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 
 WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
-RUN uv sync --locked --no-dev --no-install-project
+RUN PYC_INVALIDATION_MODE=CHECKED_HASH uv sync --locked --no-dev --no-install-project
 COPY src ./src
-RUN uv sync --locked --no-dev --no-editable
+RUN PYC_INVALIDATION_MODE=CHECKED_HASH uv sync --locked --no-dev --no-editable
 COPY --from=lobby /lobby/build /app/lobby
 
 # The directories the instance keeps its state in are made here so that an empty
