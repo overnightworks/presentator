@@ -86,7 +86,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 					'aria-current',
 					'page'
 				);
-				await expect(tabs.getByRole('link', { name: words['sources.title'] })).not.toHaveAttribute(
+				await expect(tabs.getByRole('link', { name: words['settings.sourcesTab'] })).not.toHaveAttribute(
 					'aria-current'
 				);
 				await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['settings.title']);
@@ -176,7 +176,7 @@ test.describe('as an admin', () => {
 		await page.goto(SETTINGS_ADDRESS);
 		await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
 
-		await page.getByRole('link', { name: words['sources.title'] }).click();
+		await page.getByRole('link', { name: words['settings.sourcesTab'] }).click();
 
 		await expect(page).toHaveURL(/\/settings\/sources$/);
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['sources.title']);

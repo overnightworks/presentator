@@ -82,7 +82,7 @@ test.describe('as an admin', () => {
 					await expect(page).toHaveTitle(words['sources.add']);
 					await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['sources.add']);
 					const tabs = tabsOf(page, words);
-					await expect(tabs.getByRole('link', { name: words['sources.title'] })).toHaveAttribute(
+					await expect(tabs.getByRole('link', { name: words['settings.sourcesTab'] })).toHaveAttribute(
 						'aria-current',
 						'page'
 					);

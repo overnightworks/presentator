@@ -241,7 +241,7 @@ test.describe('as an admin', () => {
 		await rowOf(page, name).getByRole('link', { name, exact: true }).click();
 		await expect(page).toHaveURL(sourceAddress(name));
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
-		await expect(tabsOf(page, words).getByRole('link', { name: words['sources.title'] })).toHaveAttribute(
+		await expect(tabsOf(page, words).getByRole('link', { name: words['settings.sourcesTab'] })).toHaveAttribute(
 			'aria-current',
 			'page'
 		);
@@ -251,7 +251,7 @@ test.describe('as an admin', () => {
 		await expect(page).toHaveURL(sourceAddress(name));
 		await page.goForward();
 		await expect(page).toHaveURL(SOURCES_LIST);
-		await expect(tabsOf(page, words).getByRole('link', { name: words['sources.title'] })).toHaveAttribute(
+		await expect(tabsOf(page, words).getByRole('link', { name: words['settings.sourcesTab'] })).toHaveAttribute(
 			'aria-current',
 			'page'
 		);
@@ -396,9 +396,9 @@ test.describe('as an admin', () => {
 
 		await tabsOf(page, words).getByRole('link', { name: words['settings.generalTab'] }).click();
 		await expect(page).toHaveURL('/settings');
-		await tabsOf(page, words).getByRole('link', { name: words['sources.title'] }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.sourcesTab'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
-		await expect(tabsOf(page, words).getByRole('link', { name: words['sources.title'] })).toHaveAttribute(
+		await expect(tabsOf(page, words).getByRole('link', { name: words['settings.sourcesTab'] })).toHaveAttribute(
 			'aria-current',
 			'page'
 		);

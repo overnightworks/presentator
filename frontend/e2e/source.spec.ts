@@ -279,7 +279,7 @@ test.describe('as an admin', () => {
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
 		const tabs = tabsOf(page, words);
-		await expect(tabs.getByRole('link', { name: words['sources.title'] })).toHaveAttribute(
+		await expect(tabs.getByRole('link', { name: words['settings.sourcesTab'] })).toHaveAttribute(
 			'aria-current',
 			'page'
 		);
@@ -297,7 +297,7 @@ test.describe('as an admin', () => {
 		});
 		await page.getByRole('link', { name: words['source.back'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
-		await expect(tabs.getByRole('link', { name: words['sources.title'] })).toHaveAttribute(
+		await expect(tabs.getByRole('link', { name: words['settings.sourcesTab'] })).toHaveAttribute(
 			'aria-current',
 			'page'
 		);

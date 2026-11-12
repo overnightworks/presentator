@@ -308,7 +308,7 @@ test.describe('as an admin', () => {
 		await second.close();
 		await tabsOf(page, words).getByRole('link', { name: words['settings.generalTab'] }).click();
 		await expect(page).toHaveURL('/settings');
-		await tabsOf(page, words).getByRole('link', { name: words['sources.title'] }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.sourcesTab'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
 		await expect(toast).toHaveCount(0);
 	});
@@ -542,7 +542,7 @@ test.describe('as an admin', () => {
 
 		await expect(page).toHaveURL(/\/settings$/);
 		expect(await entriesOf(page)).toBe(entries);
-		await tabsOf(page, words).getByRole('link', { name: words['sources.title'] }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.sourcesTab'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
 		await expect(page.locator('output.toast')).toHaveCount(0);
 		expect(await sourceNames(page)).not.toContain(name);
@@ -580,7 +580,7 @@ test.describe('as an admin', () => {
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['settings.title']);
 		await expect(page).toHaveURL(/\/settings$/);
 		expect(await entriesOf(page)).toBe(entries + 1);
-		await tabsOf(page, words).getByRole('link', { name: words['sources.title'] }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.sourcesTab'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
 		await expect(page.locator('output.toast')).toHaveCount(0);
 		expect(await sourceNames(page)).not.toContain(name);
