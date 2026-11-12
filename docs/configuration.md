@@ -15,11 +15,11 @@ secret does not land in the startup output.
 | `PRESENTATOR_PUBLIC_ORIGIN` | The one canonical https origin. An `http://` origin refuses the start, because a browser does not send a `Secure` cookie back over plain http. |
 | `PRESENTATOR_TALK_ORIGIN` | The talk host's canonical https origin, on another hostname than `PRESENTATOR_PUBLIC_ORIGIN`; talks are served and signed in there. |
 | `PRESENTATOR_AGENT__BACKEND` | Which backend answers the co-presenter: `litellm`, the one value; any other, `service` included, refuses the start. No default. |
-| `PRESENTATOR_AGENT__GATEWAY__ORIGIN` | Where the LiteLLM gateway answers: one `http` or `https` origin, scheme, host and optional port, without a path, credentials, query or fragment. Compose sets `http://litellm-front:4000`, the name it has on the `hal_agent_presentator` network. No default. |
+| `PRESENTATOR_AGENT__GATEWAY__ORIGIN` | Where the LiteLLM gateway answers: one `http` or `https` origin, scheme, host and optional port, without a path, credentials, query or fragment. No default. |
 | `PRESENTATOR_AGENT__GATEWAY__KEY_FILE` | Absolute path of the file holding this app's gateway key. It is read for every question, not at start, so a missing file refuses the question and not the start. The file holds the key alone on one line of printable ASCII without a space, 1024 bytes at most; the client strips one trailing `\n`, so any other control character, a `\r` from a Windows editor included, refuses every question with only `key_unusable` logged. No default. |
 | `PRESENTATOR_AGENT__API_GROUP` | The Keycloak group path whose members the co-presenter answers; any other person is answered "not enabled". No default. |
 | `PRESENTATOR_AGENT__GATEWAY__CA_FILE` | Optional absolute path of the CA file an `https` gateway origin needs; an `http` origin forbids it. |
-| `PRESENTATOR_SPEECH_SERVICE` | The one plain `http` origin of the shared speech service, without a path; `compose.yaml` sets it. No default. |
+| `PRESENTATOR_SPEECH_SERVICE` | The one plain `http` origin of the shared speech service, without a path. No default. |
 | `PRESENTATOR_SPEECH_SERVICE_SCOPE` | The one scope token that names the service at the issuer; both sign-ins and the workload grant ask for it. No default. |
 | `PRESENTATOR_SPEECH_VOICE` | The voice this instance speaks in, a voice id from the speech service's catalogue, the speech client's `VoiceId`; any other value refuses the start. No default. |
 | `PRESENTATOR_OIDC_ISSUER` | The https URL of the Keycloak realm, without a trailing slash; exactly the `issuer` of its discovery document. |
@@ -46,11 +46,11 @@ some of them.
 | `PRESENTATOR_TOOLCHAIN` | `slidev` | The project carrying Slidev. Read once at start under either runner; a project that cannot be read refuses to start. |
 | `PRESENTATOR_LOBBY_BUILD` | `frontend/build` | The lobby app's `pnpm build` output; an instance without a build it can serve refuses to start. |
 | `PRESENTATOR_BUILDS` | `builds` | Where built talks and PDFs are kept. |
-| `PRESENTATOR_BUILD_TIMEOUT_SECONDS` | `300` | Bound of each build step; compose also hands it to the build worker by name. |
-| `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves; compose also hands it to the build worker by name. |
-| `PRESENTATOR_BUILD_RUNNER` | `worker` | Builds through the build worker's socket and refuses to start unless the worker answers within 70 seconds; `compose.yaml` sets it. `host` builds on this machine instead, for a development run (without the sandbox, whose reason is in [constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons)). |
+| `PRESENTATOR_BUILD_TIMEOUT_SECONDS` | `300` | Bound of each build step; the build worker reads it too. |
+| `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves; the build worker reads it too. |
+| `PRESENTATOR_BUILD_RUNNER` | `worker` | Builds through the build worker's socket and refuses to start unless the worker answers within 70 seconds. `host` builds on this machine instead, for a development run (without the sandbox, whose reason is in [constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons)). |
 | `PRESENTATOR_BUILD_WORKER_SOCKET` | `/run/presentator-build/worker.sock` | Where the web reaches the build worker; the default is where the worker binds, so set it only where the socket volume is mounted elsewhere. |
-| `PRESENTATOR_WORKER_SEAL` | `compose` | The container shape the build worker proves at every start: `compose` for `compose.yaml`, `kubernetes` for platform's pod. Any other value refuses the start. The web does not read it. |
+| `PRESENTATOR_WORKER_SEAL` | `compose` | The container shape the build worker proves at every start: `compose` or `kubernetes` for platform's pod. Any other value refuses the start. The web does not read it. |
 
 ## Trusted proxies and the client address
 
@@ -59,15 +59,14 @@ correct for a direct run. Behind a proxy every request shares the proxy's addres
 Setting the list to that peer makes the library read `X-Forwarded-For` and
 `X-Forwarded-Proto`: the per-address rate limit counts the real client instead
 of the proxy, and the fetch-now hook address the Sources page shows names the
-https the proxy saw, not the plain http the app itself is served over. A
-deployed container has a network of its own and sees the edge's proxy as its gateway
-(`172.31.251.1`, a subnet `compose.yaml` fixes). The guard against another site's form does not depend on this list
+https the proxy saw, not the plain http the app itself is served over.
+The guard against another site's form does not depend on this list
 (webauth's [host contract](https://github.com/overnightworks/webauth/blob/main/docs/host-contract.md)).
 
 ## In the container image
 
-The first six rows are a fact of the image's filesystem and network, so the
-image sets them and the defaults above do not apply; compose sets the rest.
+These rows are a fact of the image's filesystem and network, so the image sets
+them and the defaults above do not apply.
 
 | Setting | In this image |
 | --- | --- |
@@ -77,11 +76,7 @@ image sets them and the defaults above do not apply; compose sets the rest.
 | `PRESENTATOR_LOCAL_SOURCES_MOUNT` | `/data/local-sources` |
 | `PRESENTATOR_TOOLCHAIN` | `/app/slidev` |
 | `PRESENTATOR_LOBBY_BUILD` | `/app/lobby` |
-| `PRESENTATOR_HOST` | `0.0.0.0`, reached through the edge's proxy |
-| `PRESENTATOR_BUILD_RUNNER` | `worker`, set by `compose.yaml` |
-
-The compose file needs no value from the operator: its plain values are
-literals, and `COMPOSE_PROJECT_NAME` is only a probe's.
+| `PRESENTATOR_HOST` | `0.0.0.0`, reached through a proxy |
 
 ## Speech (host process)
 
@@ -92,9 +87,6 @@ literals, and `COMPOSE_PROJECT_NAME` is only a probe's.
 
 This section holds the configuration rulings, each with the ID its test cites.
 
-- **CF1.** Every app secret reaches the container as a mounted file, never an
-  environment variable. Proven by `test_each_secret_is_a_file_secret_that_only_the_instance_mounts`
-  in `tests/test_compose.py`.
 - **CF2.** The talk origin is configuration, on its own canonical https
   hostname. Proven by `test_the_talk_origin_must_be_another_canonical_https_hostname`
   in `tests/presentator/host/test_oidc.py`.
@@ -102,8 +94,6 @@ This section holds the configuration rulings, each with the ID its test cites.
   purpose; there is no second secret. Proven by
   `test_the_talk_session_secret_is_long_and_shares_no_bytes_with_another_purpose`
   in `tests/presentator/adapters/test_secrets.py`.
-- **CF4.** The instance's compose follows the fleet's app contract. Proven by
-  the tests of `tests/test_compose.py` whose docstring cites CF4.
 - **CF5.** The co-presenter's backend takes exactly `litellm`, with no default.
   Proven by the tests of `tests/presentator/host/test_config_agent.py` whose
   docstring cites CF5.

@@ -620,29 +620,25 @@ def delivered_outcome(web_module: ModuleType) -> Any:  # noqa: ANN401 - the web 
     )
     return web_module.Outcome(
         steps=steps,
-        staged=(),
         out=("deck.pdf", "talk"),
         talk_page=True,
         pdf=True,
-        worklet=False,
     )
 
 
 def client_output(outcome: Any) -> str:  # noqa: ANN401 - the web probe's Outcome, loaded by name
-    """What the web's client prints: its run's name, then its outcome."""
+    """What the web's client prints: its outcome."""
     steps = [
         {"step": step.step, "failed": step.failed, "failure": step.failure}
         for step in outcome.steps
     ]
     said = {
         "steps": steps,
-        "staged": list(outcome.staged),
         "out": list(outcome.out),
         "talk_page": outcome.talk_page,
         "pdf": outcome.pdf,
-        "worklet": outcome.worklet,
     }
-    return f"{json.dumps({'run': 'a-run'})}\n{json.dumps(said)}\n"
+    return f"{json.dumps(said)}\n"
 
 
 def fake_effects(

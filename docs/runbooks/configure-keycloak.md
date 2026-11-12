@@ -7,18 +7,16 @@ There is no password login and no `/setup`: [sign-in](../sign-in.md) (SI2).
 ## Before you start
 
 The instance's `PRESENTATOR_PUBLIC_ORIGIN` and `PRESENTATOR_TALK_ORIGIN`
-(both https) are known. Inside the internal network the lobby's public
-hostname must resolve to the instance (an alias), because step 4 registers the
-back-channel logout URL under that name.
+(both https) are known, and so is the name under which Keycloak reaches the
+instance inside the internal network, because step 4 registers the back-channel
+logout URL under that name.
 
 ## Steps
 
 1. Create a client for the instance. Its id is
    `PRESENTATOR_OIDC_CLIENT_ID`; write its secret to a file whose absolute path
-   is `PRESENTATOR_OIDC_CLIENT_SECRET_FILE`. Under compose the file on the host
-   is `~/.secrets/keycloak/clients/presentator`, which compose mounts, and the
-   container reads it at `/run/secrets/oidc_client_secret`. The file is read
-   once at start, minus one trailing newline.
+   is `PRESENTATOR_OIDC_CLIENT_SECRET_FILE`. The file is read once at start,
+   minus one trailing newline.
 2. Set `PRESENTATOR_OIDC_ISSUER` exactly to the `issuer` of the realm's
    discovery document, without a trailing slash. The token's `iss` is compared
    with it character for character: nothing is normalised and an explicit port
@@ -27,18 +25,15 @@ back-channel logout URL under that name.
    nobody matches `/apps/presentator` and every sign-in shows "No access".
    Members of `/apps/presentator` are admitted; members of
    `/apps/presentator/admin` are admins.
-4. Register `http://presentator.hallucinai.de:8000/auth/backchannel-logout` as
-   the client's back-channel logout URL. Keycloak reaches it inside the
-   network `hal_backchannel_presentator` through the alias
-   `presentator.hallucinai.de`, in plain HTTP: TLS ends at the edge. The route
-   answers a `POST` under any Host and port except the talk host's, which never
-   serves it, so a Service name works as well; the signed Logout Token is its only
-   control, and the deployment keeps the path off the public internet. The
-   route is not live until the client registers it; a valid Logout Token then
-   ends every session of its subject, on every device. The web joins
-   `hal_backchannel_presentator` with this release; registering the client's
-   URL is the edge's (overnightworks/edge#446). Until it is registered, a block
-   in Keycloak ends a session only at its 12 h cap.
+4. Register `http://<name>/auth/backchannel-logout` as the client's
+   back-channel logout URL, where `<name>` is the name under which Keycloak
+   reaches the instance inside the network, in plain HTTP: TLS ends before the
+   instance. The route answers a `POST` under any Host and port except the talk
+   host's, which never serves it, so a Service name works as well; the signed
+   Logout Token is its only control, and the deployment keeps the path off the
+   public internet. The route is not live until the client registers it; a valid
+   Logout Token then ends every session of its subject, on every device. Until
+   it is registered, a block in Keycloak ends a session only at its 12 h cap.
 5. Register `<PRESENTATOR_PUBLIC_ORIGIN>/login` as the post-logout redirect
    URI, or Keycloak shows an error page at every logout.
 6. Register both `<PRESENTATOR_PUBLIC_ORIGIN>/auth/callback` and

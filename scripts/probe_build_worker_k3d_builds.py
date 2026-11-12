@@ -103,7 +103,7 @@ def drive_build(run: Run, deployment: Document, web_pod: str) -> str | None:
     client = run(
         f"timeout {CLIENT_SECONDS} kubectl exec --stdin",
         *(web_pod, "--container", WEB_CONTAINER, *IN_NAMESPACE),
-        *("--", WEB_PYTHON, "-I", "-", root, "hello", *HELLO_STEPS),
+        *("--", WEB_PYTHON, "-I", "-", root, *HELLO_STEPS),
         stdin=CLIENT_PROGRAM.read_text(encoding="utf-8"),
         check=False,
     )

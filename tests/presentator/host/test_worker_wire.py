@@ -18,6 +18,7 @@ from presentator.adapters.build_wire import (
     LENGTH,
     MAGIC,
     MEGABYTE,
+    RecordTag,
     StepHeader,
     write_record,
 )
@@ -30,6 +31,7 @@ from presentator.host.worker_wire import ReplyPlan, WireExit, WireRole
 from tests.support import worker_support as support
 from tests.support.worker_support import (
     UNUSED_WORK,
+    directory_entry,
     end_entry,
     file_entry,
     file_header,
@@ -411,6 +413,47 @@ def test_the_upload_entry_enforces_the_megabytes_of_its_argument(
     )
     assert client.recv(64) == support.STATUS
     assert not (work / "deck" / "f").exists()
+
+
+REFUSED_AFTER_A_DIRECTORY = {
+    "an absolute path": directory_entry(b"/b"),
+    "a parent component": directory_entry(b"a/.."),
+    "a repeated directory": directory_entry(b"a"),
+    "an entry below a missing directory": directory_entry(b"b/c"),
+    "a top-level node_modules": directory_entry(b"node_modules"),
+    "a file over the megabytes": file_header(b"f", MEGABYTE + 1),
+    "an unknown tag": bytes([max(RecordTag) + 1]),
+    "an END that miscounts": end_entry(2, 0),
+}
+
+
+@pytest.mark.parametrize(
+    "defect",
+    REFUSED_AFTER_A_DIRECTORY.values(),
+    ids=REFUSED_AFTER_A_DIRECTORY.keys(),
+)
+def test_a_refused_upload_leaves_its_valid_prefix_in_the_deck_and_nothing_beside_it(
+    client_and_descriptor: tuple[socket.socket, int],
+    record: int,
+    work: Path,
+    defect: bytes,
+) -> None:
+    client, descriptor = client_and_descriptor
+    write_record(record, StepHeader(step=StepKind.EXPORT, slug="my-deck"))
+    client.sendall(directory_entry(b"a") + defect)
+
+    assert (
+        run_bounded(
+            client,
+            lambda: worker_wire.main(
+                entry_arguments(descriptor, record, WireRole.UPLOAD, work, 1)
+            ),
+        )
+        == WireExit.CLOSED
+    )
+    assert client.recv(64) == support.STATUS
+    assert {path.name for path in work.iterdir()} == {"deck"}
+    assert {path.name for path in (work / "deck").iterdir()} == {"a"}
 
 
 def test_the_upload_entry_accepts_what_its_larger_argument_allows(

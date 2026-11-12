@@ -32,7 +32,7 @@ spec of cell 8 with the StatefulSet deleted and its pod gone. It prints the
 worker pod's facts (mountinfo, status, limits and the rest of the twin's
 script) from one bare Pod, then starts bare Pods one at a time: the
 control `nothing`, which plants no residue and ends 0 with the self-check
-passed under `--check`, and one twin per residue of the Compose proof's
+passed under `--check`, and one twin per residue of
 REFUSALS. Each twin plants its residue with the planter, passed as
 `python -I -c`, and becomes the worker; it must end with exit 2 and refuse with
 the predicate its residue belongs to, with remove-link 0 and restartCount 0,
