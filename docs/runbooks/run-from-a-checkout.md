@@ -57,7 +57,8 @@ ask ends in an `error` event.
 ## Check
 
 Open the public origin, under its hostname: any other Host, 127.0.0.1
-included, gets 404. A signed-out visitor sees `/login`. A refusal at start
-names the setting and what is wrong with it, never the value.
+included, gets 404, except a `POST` to the back-channel logout path. A
+signed-out visitor sees `/login`. A refusal at start names the setting and what
+is wrong with it, never the value.
 
 Related: [settings](../configuration.md).

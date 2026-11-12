@@ -91,7 +91,10 @@ sequenceDiagram
 `compose.yaml` defines two services, `presentator` (web) and `build-worker`,
 which hal deploys with `hal apply`. One process serves the lobby and the talk
 host and tells them apart by the `Host` header (`served_by_host` in
-`host/main.py`); a request for any other host gets a 404. The host keeps
+`host/main.py`); a request for any other host gets a 404, except a `POST` to the
+lobby's back-channel logout path, which the lobby answers under any Host but the
+talk host's: the signed Logout Token is its only control, and the deployment
+keeps that path off the public internet. The host keeps
 Docker's default seccomp and AppArmor profiles in force and the image's glibc is
 2.36 or later, because the controller reaches `pidfd_open` through ctypes. See
 [start an instance](runbooks/start-an-instance-in-a-container.md) and
