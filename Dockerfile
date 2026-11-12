@@ -126,20 +126,21 @@ RUN apt-get update \
 
 COPY --from=uv /uv /usr/local/bin/uv
 
-# Bytecode stays in the image because the runtime's root is read-only. It
-# records its source's hash, not the source's install time, so it repeats.
+# Bytecode stays in the image because the runtime's root is read-only. The two
+# syncs below set PYC_INVALIDATION_MODE for their compile alone, so the bytecode
+# records its source's hash, not the source's install time, and so repeats;
+# the runtime environment carries no such key.
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON_INSTALL_DIR=/opt/python \
     UV_COMPILE_BYTECODE=1 \
-    PYC_INVALIDATION_MODE=CHECKED_HASH \
     UV_NO_CACHE=1 \
     PATH=/opt/venv/bin:$PATH
 
 WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
-RUN uv sync --locked --no-dev --no-install-project
+RUN PYC_INVALIDATION_MODE=CHECKED_HASH uv sync --locked --no-dev --no-install-project
 COPY src ./src
-RUN uv sync --locked --no-dev --no-editable
+RUN PYC_INVALIDATION_MODE=CHECKED_HASH uv sync --locked --no-dev --no-editable
 COPY --from=lobby /lobby/build /app/lobby
 
 # The directories the instance keeps its state in are made here so that an empty

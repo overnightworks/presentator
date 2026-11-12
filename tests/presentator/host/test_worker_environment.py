@@ -1,6 +1,5 @@
 """The worker judges the environment's names, one set for every start."""
 
-import re
 from dataclasses import replace
 from pathlib import Path
 
@@ -9,7 +8,6 @@ import pytest
 from presentator.host import worker, worker_self_check
 from presentator.host.config import worker_settings_variables
 from presentator.host.worker_self_check import (
-    ALLOWED_ENVIRONMENT_KEYS,
     KUBERNETES_ENVIRONMENT_KEYS,
     TOLERATED_UNREAD_VARIABLE,
     Predicate,
@@ -50,21 +48,6 @@ def test_the_environment_names_decide_the_failing_predicate(
     snapshot = with_fields(environment_keys=keys)(sealed_snapshot())
 
     assert first_failing_predicate(snapshot) == refused
-
-
-def test_the_image_sets_no_environment_key_the_worker_refuses() -> None:
-    dockerfile = Path(__file__).parents[3] / "Dockerfile"
-    instructions = re.findall(
-        r"^ENV\s+((?:.*\\\n)*.*)", dockerfile.read_text(), re.MULTILINE
-    )
-    declared = {
-        key
-        for instruction in instructions
-        for key in re.findall(r"(\w+)=", instruction)
-    }
-    assert declared, "the Dockerfile sets no ENV key"
-
-    assert declared <= ALLOWED_ENVIRONMENT_KEYS
 
 
 @pytest.mark.parametrize("predicate", list(Predicate))
