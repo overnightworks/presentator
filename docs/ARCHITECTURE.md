@@ -216,7 +216,9 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
   browser session cannot erase a person; the path carries the subject, so the
   server keeps no access log ([people](people.md)).
 - The refresh token is plain text because Keycloak renews it only with the
-  client secret, outside the database; the instance key goes in the same backup.
+  client secret, outside the database. The instance key is a secret file the
+  deployment supplies, outside the database and its backup; on the platform it
+  is in `platform-secrets`, and a restore needs both.
 - A change to what the instance stores or sends to a provider changes
   presentator's section in `legal/` in the same pull request.
 
