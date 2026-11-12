@@ -27,6 +27,7 @@ from presentator.contracts.copresenter import (
     HearingTranscript,
 )
 from presentator.contracts.models import Role, User
+from presentator.contracts.voice import SampleLanguage
 from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeSessionRecordStore,
@@ -134,7 +135,11 @@ def test_a_signed_in_user_is_answered_on_every_copresenter_route() -> None:
     answer = ask(client)
     with client.websocket_connect(HEARING, headers={"origin": TALK_ORIGIN}) as socket:
         socket.send_bytes(b"a user speaks")
-        assert socket.receive_json() == {"text": "gehört", "final": True}
+        assert socket.receive_json() == {
+            "text": "gehört",
+            "final": True,
+            "language": "de",
+        }
 
     assert whose.status_code == HTTPStatus.OK
     assert answer.status_code == HTTPStatus.OK
@@ -158,7 +163,11 @@ def test_a_running_hearing_keeps_going_when_its_person_changes_role() -> None:
         _demote(users)
         deadline.release_first()
         socket.send_bytes(b"after the role change")
-        assert socket.receive_json() == {"text": "gehört", "final": True}
+        assert socket.receive_json() == {
+            "text": "gehört",
+            "final": True,
+            "language": "de",
+        }
 
     assert private.speech.hearing.frames == [b"after the role change"]
 
@@ -305,7 +314,11 @@ def test_an_active_session_keeps_hearing_after_an_authoritative_recheck() -> Non
         assert deadline.started.wait(timeout=1)
         deadline.release_first()
         socket.send_bytes(b"pcm after the session check")
-        assert socket.receive_json() == {"text": "gehört", "final": True}
+        assert socket.receive_json() == {
+            "text": "gehört",
+            "final": True,
+            "language": "de",
+        }
 
     assert private.speech.hearing.frames == [b"pcm after the session check"]
     assert private.speech.hearing.closed == 1
@@ -316,7 +329,12 @@ def test_binary_hearing_forwards_pcm_and_returns_only_typed_transcripts() -> Non
     client = lobby.client
     private.speech.hearing.events = [
         HearingTranscript(text="erste Antwort", final=False),
-        HearingTranscript(text="zweite Antwort", final=True),
+        HearingTranscript(
+            text="second answer", final=True, language=SampleLanguage.ENGLISH
+        ),
+        HearingTranscript(
+            text="zweite Antwort", final=True, language=SampleLanguage.GERMAN
+        ),
         HearingTranscript(text="leere Antwort", final=False),
     ]
     lobby.sign_in()
@@ -326,13 +344,36 @@ def test_binary_hearing_forwards_pcm_and_returns_only_typed_transcripts() -> Non
         headers={"origin": TALK_ORIGIN},
     ) as socket:
         socket.send_bytes(b"erstes pcm")
-        assert socket.receive_json() == {"text": "erste Antwort", "final": False}
+        assert socket.receive_json() == {
+            "text": "erste Antwort",
+            "final": False,
+            "language": None,
+        }
         socket.send_bytes(b"zweites pcm")
-        assert socket.receive_json() == {"text": "zweite Antwort", "final": True}
+        assert socket.receive_json() == {
+            "text": "second answer",
+            "final": True,
+            "language": "en",
+        }
+        socket.send_bytes(b"drittes pcm")
+        assert socket.receive_json() == {
+            "text": "zweite Antwort",
+            "final": True,
+            "language": "de",
+        }
         socket.send_bytes(b"")
-        assert socket.receive_json() == {"text": "leere Antwort", "final": False}
+        assert socket.receive_json() == {
+            "text": "leere Antwort",
+            "final": False,
+            "language": None,
+        }
 
-    assert private.speech.hearing.frames == [b"erstes pcm", b"zweites pcm", b""]
+    assert private.speech.hearing.frames == [
+        b"erstes pcm",
+        b"zweites pcm",
+        b"drittes pcm",
+        b"",
+    ]
     assert private.speech.hearing.closed == 1
 
 
@@ -522,7 +563,11 @@ def test_a_running_hearing_ends_at_the_cap_on_its_recheck(
             assert ended.value.code == HopClose.NORMAL
         else:
             socket.send_bytes(b"pcm after the check")
-            assert socket.receive_json() == {"text": "gehört", "final": True}
+            assert socket.receive_json() == {
+                "text": "gehört",
+                "final": True,
+                "language": "de",
+            }
 
     if closed:
         assert private.speech.hearing.frames == []
@@ -660,8 +705,8 @@ def test_busy_local_hearing_stops_before_more_pcm_after_authoritative_loss(
     lobby, private, _clock = a_copresenter_talk_host(users=users, delay=deadline.wait)
     client = lobby.client
     private.speech.hearing.events = [
-        HearingTranscript(text="eins", final=True),
-        HearingTranscript(text="zwei", final=True),
+        HearingTranscript(text="eins", final=True, language=SampleLanguage.GERMAN),
+        HearingTranscript(text="zwei", final=True, language=SampleLanguage.GERMAN),
     ]
     lobby.sign_in()
 

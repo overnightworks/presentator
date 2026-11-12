@@ -14,6 +14,7 @@ from speech_client.relay import HOP_FRAME_BYTES, HopClose
 
 from presentator.adapters.speech import SpeechHearing
 from presentator.contracts.copresenter import HearingTranscript, SpeechTokens
+from presentator.contracts.voice import SampleLanguage
 from tests.support.lobby import the_speech_voices
 from tests.support.speech_service import (
     AN_ITEM,
@@ -72,8 +73,14 @@ async def _heard_through(
     return transcripts, browser
 
 
-def _transcripts(*shown: tuple[str, bool]) -> list[HearingTranscript]:
-    return [HearingTranscript(text=text, final=final) for text, final in shown]
+def _interim(text: str) -> HearingTranscript:
+    return HearingTranscript(text=text, final=False)
+
+
+def _final(
+    text: str, language: SampleLanguage = SampleLanguage.GERMAN
+) -> HearingTranscript:
+    return HearingTranscript(text=text, final=True, language=language)
 
 
 def test_deltas_grow_per_item_and_the_completed_text_replaces_them() -> None:
@@ -88,15 +95,29 @@ def test_deltas_grow_per_item_and_the_completed_text_replaces_them() -> None:
 
     transcripts, browser = asyncio.run(_heard_through(sending(*events)))
 
-    assert transcripts == _transcripts(
-        ("Gu", False),
-        ("Ha", False),
-        ("Guten", False),
-        ("Hallo", False),
-        ("Guten Tag.", True),
-        ("Hallo.", True),
-    )
+    assert transcripts == [
+        _interim("Gu"),
+        _interim("Ha"),
+        _interim("Guten"),
+        _interim("Hallo"),
+        _final("Guten Tag."),
+        _final("Hallo."),
+    ]
     assert browser.closed_with == [HopClose.NORMAL]
+
+
+@pytest.mark.parametrize("language", list(SampleLanguage))
+def test_a_completed_transcript_carries_the_language_the_hearing_decoded_it_in(
+    language: SampleLanguage,
+) -> None:
+    events = (
+        a_delta("Hello"),
+        a_completed("Hello there.", language=wire.Language(language.value)),
+    )
+
+    transcripts, _browser = asyncio.run(_heard_through(sending(*events)))
+
+    assert transcripts == [_interim("Hello"), _final("Hello there.", language)]
 
 
 def test_an_empty_completed_sends_nothing_and_clears_the_item_for_its_next_delta() -> (
@@ -106,7 +127,7 @@ def test_an_empty_completed_sends_nothing_and_clears_the_item_for_its_next_delta
 
     transcripts, _browser = asyncio.run(_heard_through(sending(*events)))
 
-    assert transcripts == _transcripts(("Ha", False), ("Neu", False), ("Neu.", True))
+    assert transcripts == [_interim("Ha"), _interim("Neu"), _final("Neu.")]
 
 
 def test_session_and_turn_events_are_skipped() -> None:
@@ -122,7 +143,7 @@ def test_session_and_turn_events_are_skipped() -> None:
 
     transcripts, _browser = asyncio.run(_heard_through(sending(*events)))
 
-    assert transcripts == _transcripts(("Ein Wort.", True))
+    assert transcripts == [_final("Ein Wort.")]
 
 
 @pytest.mark.parametrize("event", [a_failed_item(), an_error_event()], ids=type)
@@ -133,7 +154,7 @@ def test_a_failed_item_or_error_event_ends_the_hearing_as_a_service_failure(
         _heard_through(sending(a_delta("Ha"), event, a_delta("never shown")))
     )
 
-    assert transcripts == _transcripts(("Ha", False))
+    assert transcripts == [_interim("Ha")]
     assert browser.closed_with == [HopClose.SERVICE_FAILED]
 
 

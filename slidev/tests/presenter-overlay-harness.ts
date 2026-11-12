@@ -84,8 +84,9 @@ export const state = {
   whoScript: [] as { fails?: boolean, interfaceLanguage?: 'de' | 'en' }[],
   hearLanguages: [] as (string | null)[],
   hearingMode: 'ready' as 'ready' | 'not-ready' | 'refused-on-open' | 'fails-after-capture' | 'unreachable' | 'who-fails' | 'who-not-found',
-  // Whether the fake hearing sends a final question as soon as the hearing opens.
+  // Whether the fake hearing sends a final question as soon as the hearing opens, and the language it reports for each.
   heardOnConnect: true,
+  heardLanguage: 'de' as 'de' | 'en',
   media: createMediaObservation(),
 }
 
@@ -504,7 +505,7 @@ async function startServer() {
       + `Sec-WebSocket-Accept: ${websocketAcceptKey(key)}\r\n\r\n`,
     )
     if (state.hearingMode === 'ready' && state.heardOnConnect) {
-      socket.write(frame(JSON.stringify({ text: 'Where does the handoff slow down?', final: true })))
+      socket.write(frame(JSON.stringify({ text: 'Where does the handoff slow down?', final: true, language: state.heardLanguage })))
     }
     if (state.hearingMode === 'refused-on-open') socket.write(closeFrame(HopClose.BUSY))
     recordUnexpectedSocketErrors(socket)
@@ -543,7 +544,7 @@ async function readAskBody(request: import('node:http').IncomingMessage) {
 }
 
 export function sendHeard(text: string) {
-  for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final: true })))
+  for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final: true, language: state.heardLanguage })))
 }
 
 // The server ends every open hearing with a close code, as it does when a
@@ -784,6 +785,7 @@ export function registerOverlayHarness() {
     socketErrors.length = 0
     state.askBodies = []
     state.hearLanguages = []
+    state.heardLanguage = 'de'
     state.interfaceLanguage = 'en'
     state.whoGate = null
     state.whoRequests = 0
