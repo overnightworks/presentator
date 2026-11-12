@@ -28,6 +28,7 @@ from speech_client.relay import (
     relay,
 )
 from speech_client.speak import Busy, Refused, SpeakOutcome, Spoken, speak
+from speech_client.wire import VoiceId
 
 from presentator.contracts.copresenter import (
     CoPresenterReadiness,
@@ -87,7 +88,7 @@ class SpeechSpeaking:
         self,
         origin: str,
         *,
-        voice: str,
+        voice: VoiceId,
         bounded_speak: Callable[..., SpeakOutcome] = speak,
     ) -> None:
         """Keep the service's origin and the voice this instance speaks in."""
@@ -97,7 +98,7 @@ class SpeechSpeaking:
 
     async def speak(self, text: str, language: str, tokens: SpeechTokens) -> bytes:
         """The sentence as one whole WAV, exactly as the service sent it."""
-        # The wire takes no language: it speaks one.
+        # The configured voice speaks one language, so the request names none.
         del language
         try:
             outcome: SpeakOutcome | None = await asyncio.to_thread(
@@ -111,8 +112,8 @@ class SpeechSpeaking:
                 deadline_seconds=_SPEAK_DEADLINE_SECONDS,
                 cap_bytes=_SPEAK_CAP_BYTES,
             )
-        # Start refuses an empty voice, and the origin is checked apart, so what
-        # the request can still refuse here is the sentence.
+        # Start refuses a voice outside the catalogue, and the origin is checked
+        # apart, so what the request can still refuse here is the sentence.
         except ValidationError:
             outcome = None
         if outcome is None:
@@ -148,7 +149,7 @@ class SpeechHearing:
         self,
         origin: str,
         *,
-        voice: str,
+        voice: VoiceId,
         bounded_health_fetch: Callable[..., HealthOutcome] = fetch_health,
         hearing_deadline_seconds: float = _HEARING_DEADLINE_SECONDS,
         opening_seconds: float = OPENING_SECONDS,
@@ -187,7 +188,7 @@ class SpeechHearing:
     ) -> None:
         """Relay the browser's audio to the service and its transcripts back."""
         try:
-            hears = wire.HearingLanguage(language)
+            hears = wire.Language(language)
         except ValueError:
             _LOGGER.warning("hearing refused a language the wire does not name")
             await self.refuse(browser)
@@ -233,14 +234,14 @@ def _health_of(outcome: HealthOutcome) -> wire.Health:
     raise CoPresenterUnavailableError
 
 
-def _speaks(health: wire.Health, voice: str) -> bool:
+def _speaks(health: wire.Health, voice: VoiceId) -> bool:
     offered = health.speaking.voices.get(voice)
     return offered is not None and (offered.ready or health.speaking.ready)
 
 
-def _hearing_languages(main: wire.HearingLanguage) -> tuple[wire.HearingLanguage, ...]:
+def _hearing_languages(main: wire.Language) -> tuple[wire.Language, ...]:
     """The languages a hearing asks for: the main one first, then the other one."""
-    return (main, *(code for code in wire.HearingLanguage if code is not main))
+    return (main, *(code for code in wire.Language if code is not main))
 
 
 class _ServiceFailureError(Exception):
