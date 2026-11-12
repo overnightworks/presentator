@@ -98,7 +98,7 @@ def test_the_judge_passes_only_a_rendered_formula_and_a_found_label(
     pdf: bytes,
     rendered: bool,  # noqa: FBT001 - a parametrized row states its expectation
 ) -> None:
-    judge = load_script("judge", "render_probe")
+    judge = load_script("probe_judge", "render_probe")
     talk = write_talk(tmp_path / "talk", *talk_contents)
     document = tmp_path / "deck.pdf"
     document.write_bytes(pdf)
@@ -112,7 +112,7 @@ def test_an_unreadable_pdf_refuses_even_when_the_formula_rendered(
     tmp_path: Path,
     load_script: Callable[..., ModuleType],
 ) -> None:
-    judge = load_script("judge", "render_probe")
+    judge = load_script("probe_judge", "render_probe")
     talk = write_talk(tmp_path / "talk", MARKUP, FORMULA_LABEL)
     document = tmp_path / "deck.pdf"
     document.write_bytes(b"%PDF-1.4\ntruncated, not a document")

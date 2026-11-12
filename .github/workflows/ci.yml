@@ -523,10 +523,10 @@ jobs:
           trap 'docker rm --force render-probe >/dev/null 2>&1 || true' EXIT
           docker run --name render-probe --network none --tmpfs /work \
             --volume "$GITHUB_WORKSPACE/scripts/render_probe:/probe:ro" \
-            presentator:${{ github.sha }} python -I /probe/client.py /data/builds/render-probe
+            presentator:${{ github.sha }} python -I /probe/probe_client.py /data/builds/render-probe
           delivered="$RUNNER_TEMP/render-probe"
           docker cp render-probe:/data/builds/render-probe "$delivered"
-          uv run --locked python scripts/render_probe/judge.py "$delivered/talk" "$delivered/deck.pdf"
+          uv run --locked python scripts/render_probe/probe_judge.py "$delivered/talk" "$delivered/deck.pdf"
 
   # The worker's pod shape in a real k3s: the driver owns the platform commit,
   # and every other name it uses is its own.

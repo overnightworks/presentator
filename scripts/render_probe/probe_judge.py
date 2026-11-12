@@ -1,6 +1,6 @@
 """Judge the render probe's built talk and its exported PDF.
 
-Usage: `uv run --locked python scripts/render_probe/judge.py TALK PDF`.
+Usage: `uv run --locked python scripts/render_probe/probe_judge.py TALK PDF`.
 
 The talk is the built directory the probe's client copied out of the image; the
 PDF is the export. It passes only when one file of the talk holds KaTeX's markup

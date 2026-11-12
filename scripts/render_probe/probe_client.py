@@ -1,6 +1,6 @@
 """Build and export the render probe's deck in the image, as the worker runs a step.
 
-Usage: `python -I /probe/client.py DESTINATION`, run by the image's CI step with
+Usage: `python -I /probe/probe_client.py DESTINATION`, run by the image's CI step with
 the probe directory mounted at `/probe`, `/work` a tmpfs and the network off. The
 step launcher the worker starts, `presentator.host.worker_step`, runs once for
 the build and once for the export, each with its step record on a file
