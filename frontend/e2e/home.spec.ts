@@ -7,6 +7,7 @@ import {
 	endsTheSession,
 	expectsHeaderOnOneLine,
 	expectsNoHorizontalScroll,
+	kitWordsOf,
 	leftForSignIn,
 	MENU,
 	minutesAgo,
@@ -185,12 +186,12 @@ test.describe('the header on a narrow screen and its focus', () => {
 	});
 
 	test('shows a focus ring on every control of the open menu', async ({ page }) => {
-		const { person, words } = await readerOf(page);
+		const { person, kitWords } = await readerOf(page);
 		await page.goto('/');
 		await opensTheMenu(page);
 
 		const focused: string[] = [];
-		for (let tab = 0; tab < 12 && !focused.includes(words['logout.button']); tab++) {
+		for (let tab = 0; tab < 12 && !focused.includes(kitWords['account.logOut']); tab++) {
 			const control = await tabbedControlWithRing(page);
 			if (control) {
 				focused.push(control);
@@ -198,9 +199,9 @@ test.describe('the header on a narrow screen and its focus', () => {
 		}
 
 		expect(focused).toContain(person?.username);
-		expect(focused).toContain(words['logout.button']);
+		expect(focused).toContain(kitWords['account.logOut']);
 		expect(focused.length).toBeGreaterThanOrEqual(3);
-		expect(focused.some((control) => [words['account.followSystem'], words['account.light'], words['account.dark']].includes(control))).toBe(true);
+		expect(focused.some((control) => [kitWords['account.followSystem'], kitWords['account.light'], kitWords['account.dark']].includes(control))).toBe(true);
 	});
 
 	test('closes the menu on Escape and returns focus to its button; a click outside leaves focus where it landed', async ({
@@ -428,13 +429,13 @@ test.describe('log out', () => {
 		violations,
 		browserName
 	}) => {
-		const words = await wordsOf(page);
+		const kitWords = await kitWordsOf(page);
 		await page.goto('/');
 		await opensTheMenu(page);
 
 		const [posted] = await Promise.all([
 			page.waitForRequest((sent) => new URL(sent.url()).pathname === '/logout'),
-			page.getByRole('button', { name: words['logout.button'] }).click()
+			page.getByRole('button', { name: kitWords['account.logOut'] }).click()
 		]);
 		await posted.response();
 

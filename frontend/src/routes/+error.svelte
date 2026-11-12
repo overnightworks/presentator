@@ -7,6 +7,7 @@
 
 	const session = $derived(page.data.session);
 	const words = $derived(page.data.words);
+	const kitWords = $derived(page.data.kitWords);
 	// The session gate serves this shell only to a signed-in person, and the
 	// lobby layout leaves for the sign-in before any page below it fails.
 	const person = $derived(session.person as SessionPerson);
@@ -23,7 +24,7 @@
 	<title>{`${board ? board.title : words['app.name']}`}</title>
 </svelte:head>
 
-<LobbyHeader {session} {person} {words} />
+<LobbyHeader {session} {person} {words} {kitWords} />
 <main>
 	{#if board}
 		<NoteCard
