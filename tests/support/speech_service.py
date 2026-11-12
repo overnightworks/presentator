@@ -60,6 +60,17 @@ A_WAV: Final[bytes] = _a_wav_with_its_ai_mark()
 AN_ITEM: Final = "item-1"
 
 
+def _a_voice_entry(*, ready: bool, sample_rate: object = 1) -> dict[str, object]:
+    """What `/health` says of one voice the service offers."""
+    return {
+        "model": wire.SpeakingModel.PIPER,
+        "name": "a-name",
+        "languages": [wire.Language.DE],
+        "ready": ready,
+        "sample_rate": sample_rate,
+    }
+
+
 def a_health_document(
     *,
     hearing_ready: bool = True,
@@ -69,9 +80,9 @@ def a_health_document(
     another_ready_voice: str | None = None,
 ) -> dict[str, object]:
     """A `/health` body; `voice` names what the service offers."""
-    voices = {voice: {"model": "m", "ready": voice_ready, "sample_rate": 1}}
+    voices = {voice: _a_voice_entry(ready=voice_ready)}
     if another_ready_voice is not None:
-        voices[another_ready_voice] = {"model": "m", "ready": True, "sample_rate": 1}
+        voices[another_ready_voice] = _a_voice_entry(ready=True)
     return {
         "speaking": {"ready": speaking_ready, "voices": voices},
         "hearing": {"model": "m", "ready": hearing_ready},
@@ -195,7 +206,7 @@ def _a_service_in_its_start_load() -> Response:
 
 
 def _sample_rate_as_text() -> Response:
-    voices = {A_SPEECH_VOICE: {"model": "m", "ready": True, "sample_rate": "1"}}
+    voices = {A_SPEECH_VOICE: _a_voice_entry(ready=True, sample_rate="1")}
     return _a_health_body(speaking={"ready": True, "voices": voices})()
 
 
@@ -251,7 +262,7 @@ def a_completed(text: str, item: str = AN_ITEM) -> wire.TranscriptCompleted:
         item_id=item,
         transcript=text,
         usage=wire.DurationUsage(seconds=1.0),
-        languages=(wire.TranscriptLanguage(code=wire.HearingLanguage.DE),),
+        languages=(wire.TranscriptLanguage(code=wire.Language.DE),),
     )
 
 
