@@ -147,7 +147,6 @@ class RecordingSpeech:
         if self.readiness_unavailable:
             raise CoPresenterUnavailableError
         return CoPresenterReadiness(
-            hearing_sample_rate=16_000,
             local_hearing_ready=self.local_hearing_ready,
         )
 

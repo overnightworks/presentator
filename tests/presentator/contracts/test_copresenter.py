@@ -15,10 +15,7 @@ from presentator.contracts.copresenter import (
 
 def test_copresenter_values_are_closed_and_immutable() -> None:
     question = Question(said="Was ist wichtig?", slide=3, language="de")
-    readiness = CoPresenterReadiness(
-        hearing_sample_rate=16_000,
-        local_hearing_ready=True,
-    )
+    readiness = CoPresenterReadiness(local_hearing_ready=True)
     assert question == Question(said="Was ist wichtig?", slide=3, language="de")
     assert readiness.local_hearing_ready is True
     with pytest.raises(FrozenInstanceError):

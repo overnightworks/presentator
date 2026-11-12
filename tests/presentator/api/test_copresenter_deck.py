@@ -229,7 +229,7 @@ def test_who_reports_hearing_not_ready_together_with_the_decks_language() -> Non
     assert answer.status_code == HTTPStatus.OK
     assert answer.json() == {
         "language": "en",
-        "speech": {"sample_rate": 16_000, "hearing": {"ready": False}},
+        "speech": {"hearing": {"ready": False}},
     }
 
 

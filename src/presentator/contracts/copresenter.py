@@ -86,7 +86,6 @@ class Question:
 class CoPresenterReadiness:
     """The readiness facts the repository overlay consumes."""
 
-    hearing_sample_rate: int
     local_hearing_ready: bool
 
 
