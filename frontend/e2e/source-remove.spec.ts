@@ -13,9 +13,9 @@ import {
 	expectsNoHorizontalScroll,
 	leftForSignIn,
 	SIGN_IN_START,
-	sessionOf,
 	startsSignIn,
-	tabbedControlWithRing
+	tabbedControlWithRing,
+	wordsOf
 } from './scenario.ts';
 import {
 	anHttpsAddress,
@@ -68,17 +68,9 @@ const previewOf = async (page: Page, name: string): Promise<RemovalCounts> =>
 
 const deletePath = (name: string): string => `**${SOURCES_API}/${name}?*`;
 
-// The notice's sentence as the catalog words it: the name, then a count of decks and of runs.
+// The notice opens with the catalog's sentence that names the source.
 function noticeOf(words: Words, name: string): RegExp {
-	const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	return new RegExp(
-		escaped(words.source_removed)
-			.replace(escaped('{name}'), escaped(name))
-			.replace(escaped('{decks}'), '\\d+')
-			.replace(escaped('{runs}'), '\\d+')
-			.replace(escaped('{deck_word}'), '\\S+')
-			.replace(escaped('{run_word}'), '\\S+')
-	);
+	return new RegExp(words['source.removedName']({ name }).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 }
 
 const stillTheSameDocument = (page: Page) =>
@@ -101,7 +93,7 @@ test.describe('as an admin', () => {
 				test('shows the name as typed and the preview counts, gives Cancel the focus and saves a screenshot', async ({
 					page
 				}, testInfo) => {
-					const { words } = await sessionOf(page);
+					const words = await wordsOf(page);
 					const { name } = await opensAnHttpsSource(page, words, testInfo);
 					await page.setViewportSize({ width, height: 900 });
 					await page.route(`**${SOURCES_API}/${name}/removal`, (route) =>
@@ -135,7 +127,7 @@ test.describe('as an admin', () => {
 	test('Cancel and Escape close the dialog and delete nothing, focus returns to Remove and Tab stays inside', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 
 		await opensTheDialog(page, words);
@@ -165,7 +157,7 @@ test.describe('as an admin', () => {
 	test('SR3: Remove sends one DELETE with the counts shown, replaces the page by the list and shows the notice once', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		await stillTheSameDocument(page);
 		const entries = await entriesOf(page);
@@ -199,7 +191,7 @@ test.describe('as an admin', () => {
 				test('sits above the empty board of a list that has no source left', async ({
 					page
 				}, testInfo) => {
-					const { words } = await sessionOf(page);
+					const words = await wordsOf(page);
 					await page.setViewportSize({ width, height: 900 });
 					const { name } = await opensAnHttpsSource(page, words, testInfo);
 					await page.route(`**${SOURCES_API}`, (route) =>
@@ -232,7 +224,7 @@ test.describe('as an admin', () => {
 
 	// Cell 18.
 	test('the notice sentence is found nowhere but the toast', async ({ page }, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		const requested: string[] = [];
 		const consoled: string[] = [];
@@ -270,7 +262,7 @@ test.describe('as an admin', () => {
 		page,
 		context
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name: gone } = await opensAnHttpsSource(page, words, testInfo);
 		const { name: kept } = await opensAnHttpsSource(page, words, testInfo);
 		await page.goto(SOURCES_LIST);
@@ -292,7 +284,7 @@ test.describe('as an admin', () => {
 		await page
 			.locator('table.sources tbody tr')
 			.filter({ has: page.getByRole('link', { name: kept, exact: true }) })
-			.getByRole('button', { name: words.sources_fetch_now })
+			.getByRole('button', { name: words['source.fetchNow'] })
 			.click();
 		await reread;
 		await expect(toast).toHaveText(noticeOf(words, gone));
@@ -307,16 +299,16 @@ test.describe('as an admin', () => {
 		expect(await entriesOf(page)).toBe(entries);
 
 		await page.reload();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_sources);
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['sources.title']);
 		await expect(toast).toHaveCount(0);
 		const second = await context.newPage();
 		await second.goto(SOURCES_LIST);
-		await expect(second.getByRole('heading', { level: 1 })).toHaveText(words.settings_sources);
+		await expect(second.getByRole('heading', { level: 1 })).toHaveText(words['sources.title']);
 		await expect(second.locator('output.toast')).toHaveCount(0);
 		await second.close();
-		await tabsOf(page, words).getByRole('link', { name: words.settings_title }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.title'] }).click();
 		await expect(page).toHaveURL('/settings');
-		await tabsOf(page, words).getByRole('link', { name: words.settings_sources }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['sources.title'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
 		await expect(toast).toHaveCount(0);
 	});
@@ -325,7 +317,7 @@ test.describe('as an admin', () => {
 	test("a removed source's address is the not-found board and no history step shows its page", async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		await page.goto(SOURCES_LIST);
 		await page.getByRole('link', { name, exact: true }).click();
@@ -336,18 +328,18 @@ test.describe('as an admin', () => {
 		const itsPage = page.getByRole('heading', { level: 1, name, exact: true });
 
 		await page.goto(sourceAddress(name));
-		await expect(page.locator('main h1')).toHaveText(words.address_unknown_title);
+		await expect(page.locator('main h1')).toHaveText(words['error.notFoundTitle']);
 		await expect(page.locator('header.top')).toBeVisible();
 		await page.goBack();
-		await expect(page.locator('main h1')).toHaveText(words.settings_sources);
+		await expect(page.locator('main h1')).toHaveText(words['sources.title']);
 		await expect(itsPage).toHaveCount(0);
 		await page.goBack();
-		await expect(page.locator('main h1')).toHaveText(words.settings_sources);
+		await expect(page.locator('main h1')).toHaveText(words['sources.title']);
 		await expect(itsPage).toHaveCount(0);
 		await page.goForward();
-		await expect(page.locator('main h1')).toHaveText(words.settings_sources);
+		await expect(page.locator('main h1')).toHaveText(words['sources.title']);
 		await page.goForward();
-		await expect(page.locator('main h1')).toHaveText(words.address_unknown_title);
+		await expect(page.locator('main h1')).toHaveText(words['error.notFoundTitle']);
 		await expect(itsPage).toHaveCount(0);
 	});
 
@@ -355,7 +347,7 @@ test.describe('as an admin', () => {
 	test('a real 409 shows the current counts, deletes nothing and confirms only when asked again', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		await opensTheDialog(page, words);
 		const before = await previewOf(page, name);
@@ -386,7 +378,7 @@ test.describe('as an admin', () => {
 	test('a 500 of a refused removal keeps the dialog and its counts, shows the sentence and a retry removes', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		await opensTheDialog(page, words);
 		const textBefore = await dialogOf(page).locator('p').last().innerText();
@@ -410,7 +402,7 @@ test.describe('as an admin', () => {
 
 		await confirmOf(page, words).click();
 
-		await expect(dialogOf(page).getByRole('alert')).toHaveText(words.source_remove_refused);
+		await expect(dialogOf(page).getByRole('alert')).toHaveText(words['source.removeRefused']);
 		await expect(dialogOf(page).locator('p').last()).toHaveText(textBefore);
 		await expect(confirmOf(page, words)).toBeEnabled();
 		await expect(cancelOf(page, words)).toBeEnabled();
@@ -425,7 +417,7 @@ test.describe('as an admin', () => {
 	test('a 500 of any other shape fails loud, keeps the dialog and enables the buttons', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		const failures: Error[] = [];
 		page.on('pageerror', (failure) => failures.push(failure));
@@ -446,14 +438,14 @@ test.describe('as an admin', () => {
 		test(`while the removal is counted the opener shows its busy word at ${width} px`, async ({
 			page
 		}, testInfo) => {
-			const { words } = await sessionOf(page);
+			const words = await wordsOf(page);
 			await page.setViewportSize({ width, height: 900 });
 			const { name } = await opensAnHttpsSource(page, words, testInfo);
 			const held = await holdsRequests(page, `**${SOURCES_API}/${name}/removal`);
 
 			await removeButton(page, words).click();
 
-			const busy = page.getByRole('button', { name: words.source_busy_count });
+			const busy = page.getByRole('button', { name: words['source.busyCount'] });
 			await expect(busy).toHaveAttribute('aria-busy', 'true');
 			await expect(busy).toBeDisabled();
 			await expect(busy.locator('.state[data-state="building"]')).toBeVisible();
@@ -471,14 +463,14 @@ test.describe('as an admin', () => {
 	test('while the DELETE is pending every button is disabled and a double click sends one', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		await opensTheDialog(page, words);
 		const held = await holdsTheDelete(page, name);
 
 		await confirmOf(page, words).dblclick();
 
-		const busy = dialogOf(page).getByRole('button', { name: words.source_busy_remove });
+		const busy = dialogOf(page).getByRole('button', { name: words['source.busyRemove'] });
 		await expect(busy).toHaveAttribute('aria-busy', 'true');
 		await expect(busy).toBeDisabled();
 		await expect(busy.locator('.state[data-state="building"]')).toBeVisible();
@@ -496,7 +488,7 @@ test.describe('as an admin', () => {
 	test('Escape while the DELETE is pending keeps the dialog, and a refused answer is shown in it', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		await opensTheDialog(page, words);
 		const held = await holdsRequests(page, deletePath(name), {
@@ -515,13 +507,13 @@ test.describe('as an admin', () => {
 
 		await confirmOf(page, words).click();
 		await expect(
-			dialogOf(page).getByRole('button', { name: words.source_busy_remove })
+			dialogOf(page).getByRole('button', { name: words['source.busyRemove'] })
 		).toBeDisabled();
 		await page.keyboard.press('Escape');
 		await page.keyboard.press('Escape');
 		held.release();
 
-		await expect(dialogOf(page).getByRole('alert')).toHaveText(words.source_remove_refused);
+		await expect(dialogOf(page).getByRole('alert')).toHaveText(words['source.removeRefused']);
 		await expect(confirmOf(page, words)).toBeEnabled();
 	});
 
@@ -529,7 +521,7 @@ test.describe('as an admin', () => {
 	test('a DELETE answered after the person left the page removes the source and changes nothing else', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		await opensTheDialog(page, words);
 		const held = await holdsTheDelete(page, name);
@@ -538,9 +530,9 @@ test.describe('as an admin', () => {
 
 		// The pending modal makes the page inert, so the link is followed from script.
 		await tabsOf(page, words)
-			.getByRole('link', { name: words.settings_title })
+			.getByRole('link', { name: words['settings.title'] })
 			.evaluate((link: HTMLElement) => link.click());
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_title);
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['settings.title']);
 		const entries = await entriesOf(page);
 		const removed = page.waitForResponse(
 			(received) => received.url().includes(`${SOURCES_API}/${name}?`) && received.status() === 204
@@ -550,7 +542,7 @@ test.describe('as an admin', () => {
 
 		await expect(page).toHaveURL(/\/settings$/);
 		expect(await entriesOf(page)).toBe(entries);
-		await tabsOf(page, words).getByRole('link', { name: words.settings_sources }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['sources.title'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
 		await expect(page.locator('output.toast')).toHaveCount(0);
 		expect(await sourceNames(page)).not.toContain(name);
@@ -560,7 +552,7 @@ test.describe('as an admin', () => {
 	test('a DELETE answered while another navigation is still loading changes neither the history nor the notice', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		await opensTheDialog(page, words);
 		const held = await holdsTheDelete(page, name);
@@ -571,7 +563,7 @@ test.describe('as an admin', () => {
 
 		// The pending modal makes the page inert, so the link is followed from script.
 		await tabsOf(page, words)
-			.getByRole('link', { name: words.settings_title })
+			.getByRole('link', { name: words['settings.title'] })
 			.evaluate((link: HTMLElement) => link.click());
 		await expect.poll(() => load.seen.length).toBe(1);
 		const removed = page.waitForResponse(
@@ -585,10 +577,10 @@ test.describe('as an admin', () => {
 		);
 		load.release();
 
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_title);
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['settings.title']);
 		await expect(page).toHaveURL(/\/settings$/);
 		expect(await entriesOf(page)).toBe(entries + 1);
-		await tabsOf(page, words).getByRole('link', { name: words.settings_sources }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['sources.title'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
 		await expect(page.locator('output.toast')).toHaveCount(0);
 		expect(await sourceNames(page)).not.toContain(name);
@@ -596,7 +588,7 @@ test.describe('as an admin', () => {
 
 	// Cell 24d.
 	test('hiding the page closes the removal dialog', async ({ page }, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await opensAnHttpsSource(page, words, testInfo);
 		await opensTheDialog(page, words);
 		await expect(dialogOf(page)).toBeVisible();
@@ -612,7 +604,7 @@ test.describe('as an admin', () => {
 			page,
 			context
 		}, testInfo) => {
-			const { words } = await sessionOf(page);
+			const words = await wordsOf(page);
 			const { name } = await opensAnHttpsSource(page, words, testInfo);
 			const signIns: string[] = [];
 			page.on('request', (sent) => {
@@ -641,7 +633,7 @@ test.describe('as an admin', () => {
 	test('removing one of two sources leaves the other, kills the hook and frees the name and address', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const first = await opensAnHttpsSource(page, words, testInfo);
 		const second = await opensAnHttpsSource(page, words, testInfo);
 		const hookUrl = ((await (
@@ -680,11 +672,11 @@ test.describe('as an admin', () => {
 	test('the old removal address is the not-found board for a GET and a 404 for a POST, and the source stays', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 
 		await page.goto(GONE_ADDRESS(name));
-		await expect(page.locator('main h1')).toHaveText(words.address_unknown_title);
+		await expect(page.locator('main h1')).toHaveText(words['error.notFoundTitle']);
 		const posted = await page.request.post(GONE_ADDRESS(name), { headers: SAME_ORIGIN });
 
 		expect(posted.status()).toBe(404);
@@ -695,7 +687,7 @@ test.describe('as an admin', () => {
 	test("the source page's back link and Settings tab are client navigations", async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await opensAnHttpsSource(page, words, testInfo);
 		await stillTheSameDocument(page);
 		const documents: string[] = [];
@@ -705,10 +697,10 @@ test.describe('as an admin', () => {
 			}
 		});
 
-		await page.getByRole('link', { name: words.sources_back }).click();
+		await page.getByRole('link', { name: words['source.back'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
 		await page.goBack();
-		await tabsOf(page, words).getByRole('link', { name: words.settings_title }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.title'] }).click();
 		await expect(page).toHaveURL('/settings');
 
 		expect(documents).toEqual([]);
@@ -719,15 +711,15 @@ test.describe('as an admin', () => {
 	test('the dialog shows a focus ring on Cancel and Remove at 390 px, in order', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.setViewportSize({ width: 390, height: 900 });
 		await opensAnHttpsSource(page, words, testInfo);
 		await opensTheDialog(page, words);
 		await cancelOf(page, words).focus();
 
-		const focused = [words.source_remove_cancel];
+		const focused = [words['source.removeCancel']];
 		focused.push((await tabbedControlWithRing(page)) as string);
 
-		expect(focused).toEqual([words.source_remove_cancel, words.source_remove_confirm]);
+		expect(focused).toEqual([words['source.removeCancel'], words['source.removeConfirm']]);
 	});
 });

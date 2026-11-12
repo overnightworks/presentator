@@ -9,9 +9,9 @@ import {
 	expectsNoHorizontalScroll,
 	leftForSignIn,
 	SIGN_IN_START,
-	sessionOf,
 	startsSignIn,
-	tabbedControlWithRing
+	tabbedControlWithRing,
+	wordsOf
 } from './scenario.ts';
 import {
 	ACCESS_TOKEN,
@@ -40,10 +40,12 @@ import {
 } from './sources.ts';
 
 const NEXT = '%2Fsettings%2Fsources%2Fnew';
+// The words that are one plain sentence, without gaps.
+type PlainWord = { [Key in keyof Words]: Words[Key] extends string ? Key : never }[keyof Words];
 
 // The source's own page: the dots stand for its secrets and the Add form is gone.
 const showsTheSourcePage = async (page: Page, words: Words): Promise<void> => {
-	await expect(page.locator('body')).toContainText(words.source_secret_dots);
+	await expect(page.locator('body')).toContainText(words['source.secretMask']);
 	await expect(page.locator('input[name="name"]')).toHaveCount(0);
 };
 
@@ -70,36 +72,36 @@ test.describe('as an admin', () => {
 				test('shows the name and address alone, then the token field for an https address, and saves a screenshot', async ({
 					page
 				}, testInfo) => {
-					const { words } = await sessionOf(page);
+					const words = await wordsOf(page);
 					await page.setViewportSize({ width, height: 900 });
 
 					const shell = await page.goto(NEW_ADDRESS);
 
 					expect(shell?.status()).toBe(200);
 					const draft = await keyDraftOf(page);
-					await expect(page).toHaveTitle(words.sources_add);
-					await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.sources_add);
+					await expect(page).toHaveTitle(words['sources.add']);
+					await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['sources.add']);
 					const tabs = tabsOf(page, words);
-					await expect(tabs.getByRole('link', { name: words.settings_sources })).toHaveAttribute(
+					await expect(tabs.getByRole('link', { name: words['sources.title'] })).toHaveAttribute(
 						'aria-current',
 						'page'
 					);
-					await expect(tabs.getByRole('link', { name: words.settings_title })).not.toHaveAttribute(
+					await expect(tabs.getByRole('link', { name: words['settings.title'] })).not.toHaveAttribute(
 						'aria-current'
 					);
-					await expect(page.getByLabel(words.source_name, { exact: true })).toHaveValue('');
-					await expect(page.getByLabel(words.source_url, { exact: true })).toHaveValue('');
+					await expect(page.getByLabel(words['sourceNew.name'], { exact: true })).toHaveValue('');
+					await expect(page.getByLabel(words['sourceNew.url'], { exact: true })).toHaveValue('');
 					await expect(page.getByRole('radio')).toHaveCount(0);
 					await expect(secretField(page, words)).toHaveCount(0);
-					await expect(page.getByText(words.source_deploy_key_heading)).toHaveCount(0);
+					await expect(page.getByText(words['sourceNew.deployKeyHeading'])).toHaveCount(0);
 					await expect(page.getByText(draft.public_key, { exact: true })).toHaveCount(0);
-					await expect(page.getByRole('button', { name: words.source_check })).toBeDisabled();
-					await expect(page.getByRole('button', { name: words.source_create })).toBeDisabled();
-					await expect(page.getByLabel(words.source_name, { exact: true })).toHaveAttribute(
+					await expect(page.getByRole('button', { name: words['sourceNew.check'] })).toBeDisabled();
+					await expect(page.getByRole('button', { name: words['sourceNew.create'] })).toBeDisabled();
+					await expect(page.getByLabel(words['sourceNew.name'], { exact: true })).toHaveAttribute(
 						'autocomplete',
 						'off'
 					);
-					await expect(page.getByLabel(words.source_url, { exact: true })).toHaveAttribute(
+					await expect(page.getByLabel(words['sourceNew.url'], { exact: true })).toHaveAttribute(
 						'autocomplete',
 						'off'
 					);
@@ -107,12 +109,12 @@ test.describe('as an admin', () => {
 					await expect(secretField(page, words)).toHaveAttribute('type', 'password');
 					await expect(secretField(page, words)).toHaveAttribute('autocomplete', 'new-password');
 					await expect(secretField(page, words)).toHaveValue('');
-					await expect(page.getByRole('button', { name: words.source_check })).toBeEnabled();
+					await expect(page.getByRole('button', { name: words['sourceNew.check'] })).toBeEnabled();
 					await expectsNoHorizontalScroll(page);
 					if (width === 390) {
 						await expectsHeaderOnOneLine(page);
 					}
-					await page.getByRole('button', { name: words.source_secret_info }).click();
+					await page.getByRole('button', { name: words['sourceNew.secretInfo'] }).click();
 					await expect(page.locator('#secret-hint')).toBeVisible();
 					await page.keyboard.press('Escape');
 					await page.evaluate(() => document.fonts.ready);
@@ -129,7 +131,7 @@ test.describe('as an admin', () => {
 	test('the list opens the form and the back link returns to the list, both by client navigation', async ({
 		page
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.goto(SOURCES_LIST);
 		await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
 		const documents: string[] = [];
@@ -139,15 +141,15 @@ test.describe('as an admin', () => {
 			}
 		});
 
-		await page.getByRole('link', { name: words.sources_add }).first().click();
+		await page.getByRole('link', { name: words['sources.add'] }).first().click();
 		await expect(page).toHaveURL(NEW_ADDRESS);
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.sources_add);
-		const back = page.getByRole('link', { name: words.sources_back });
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['sources.add']);
+		const back = page.getByRole('link', { name: words['source.back'] });
 		await expect(back).toHaveAttribute('href', SOURCES_LIST);
 		await back.click();
 
 		await expect(page).toHaveURL(SOURCES_LIST);
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_sources);
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['sources.title']);
 		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 		expect(documents).toEqual([]);
 	});
@@ -156,7 +158,7 @@ test.describe('as an admin', () => {
 	test('a reachable check shows the commit it read and leaves Create enabled', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
 		await fillsTheForm(page, words, { name, url: anHttpsAddress(name) });
@@ -165,29 +167,30 @@ test.describe('as an admin', () => {
 
 		const banner = page.getByRole('status').filter({ has: page.locator('.state') });
 		await expect(banner).toHaveText(
-			`${words.source_state_reachable} ${words.source_check_reachable.replace('{commit}', found.commit ?? '')}`
+			`${words['source.stateReachable']} ${words['source.checkReachable']({ commit: found.commit ?? '' })}`
 		);
 		await expect(banner).toHaveAttribute('data-banner', 'ok');
-		await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
+		await expect(page.getByRole('button', { name: words['sourceNew.create'] })).toBeEnabled();
 	});
 
 	const markup = '<b onclick="alert(1)">not found</b> & gone';
 	const failures: [
 		NonNullable<ConnectionCheckView['failure']>,
 		ConnectionCheckView['state'],
-		keyof Words,
+		PlainWord,
+		PlainWord,
 		string | null
 	][] = [
-		['refused', 'refused', 'source_run_refused', null],
-		['unreachable', 'error', 'source_run_unreachable', null],
-		['failed', 'failed', 'source_run_failed', markup],
-		['credential-unresolvable', 'error', 'source_run_secret', null]
+		['refused', 'refused', 'source.runRefused', 'source.stateRefused', null],
+		['unreachable', 'error', 'source.runUnreachable', 'source.stateError', null],
+		['failed', 'failed', 'source.runFailed', 'source.stateFailed', markup],
+		['credential-unresolvable', 'error', 'source.runSecret', 'source.stateError', null]
 	];
-	for (const [failure, state, sentence, detail] of failures) {
+	for (const [failure, state, sentence, stated, detail] of failures) {
 		test(`a ${failure} check shows its reason, git's line as text and leaves Create disabled`, async ({
 			page
 		}, testInfo) => {
-			const { words } = await sessionOf(page);
+			const words = await wordsOf(page);
 			const name = aName(testInfo);
 			await opensTheForm(page);
 			const answer: ConnectionCheckView = {
@@ -204,23 +207,21 @@ test.describe('as an admin', () => {
 
 			const banner = page.locator('.banner[data-banner="fail"]');
 			await expect(banner).toContainText(words[sentence]);
-			await expect(banner.locator('.state-word')).toHaveText(
-				words[`source_state_${state}` as keyof Words]
-			);
+			await expect(banner.locator('.state-word')).toHaveText(words[stated]);
 			if (detail === null) {
 				await expect(banner.locator('samp')).toHaveCount(0);
 			} else {
 				await expect(banner.locator('samp')).toHaveText(detail);
 				await expect(banner.locator('samp b')).toHaveCount(0);
 			}
-			await expect(page.getByRole('button', { name: words.source_create })).toBeDisabled();
+			await expect(page.getByRole('button', { name: words['sourceNew.create'] })).toBeDisabled();
 		});
 	}
 
 	test('SR1: an address with a user part is refused by the real check with the unknown-access sentence', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
 		await fillsTheForm(page, words, {
@@ -230,8 +231,8 @@ test.describe('as an admin', () => {
 
 		await checks(page, words).catch(() => undefined);
 
-		await expect(page.getByRole('alert')).toHaveText(words.source_refused_unknown_access);
-		await expect(page.getByRole('button', { name: words.source_create })).toBeDisabled();
+		await expect(page.getByRole('alert')).toHaveText(words['source.refusedUnknownAccess']);
+		await expect(page.getByRole('button', { name: words['sourceNew.create'] })).toBeDisabled();
 	});
 
 	// The harness's stores cannot consume a draft key, so the refusal and the
@@ -240,7 +241,7 @@ test.describe('as an admin', () => {
 	test('a create refused for its key shows its sentence and the key read again', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		const newerKey = {
 			id: 'a-newer-draft',
@@ -279,9 +280,9 @@ test.describe('as an admin', () => {
 		await expect(page.getByText(before.public_key, { exact: true })).toBeVisible();
 		await checks(page, words);
 
-		await page.getByRole('button', { name: words.source_create }).click();
+		await page.getByRole('button', { name: words['sourceNew.create'] }).click();
 
-		await expect(page.getByRole('alert')).toHaveText(words.source_refused_deploy_key);
+		await expect(page.getByRole('alert')).toHaveText(words['source.refusedDeployKey']);
 		await expect(page.getByText(newerKey.public_key, { exact: true })).toBeVisible();
 		await expect(page.getByText(before.public_key, { exact: true })).toHaveCount(0);
 		expect(await sourceNames(page)).not.toContain(name);
@@ -297,7 +298,7 @@ test.describe('as an admin', () => {
 					page,
 					context
 				}, testInfo) => {
-					const { words } = await sessionOf(page);
+					const words = await wordsOf(page);
 					await page.setViewportSize({ width, height: 900 });
 					const consoleLines: string[] = [];
 					const requested: string[] = [];
@@ -315,18 +316,18 @@ test.describe('as an admin', () => {
 					});
 
 					await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-						`${name} ${words.source_created}`
+						`${name} ${words['sourceNew.created']}`
 					);
 					await expect(
-						page.getByRole('group', { name: words.source_webhook_address })
+						page.getByRole('group', { name: words['source.webhookAddress'] })
 					).toContainText(created.hook_url);
 					const secretRow = page.getByRole('group', {
-						name: new RegExp(words.source_webhook_secret)
+						name: new RegExp(words['source.webhookSecret'])
 					});
 					await expect(secretRow).toContainText(created.webhook_secret);
-					await expect(page.locator('.once')).toHaveText(words.source_webhook_once);
+					await expect(page.locator('.once')).toHaveText(words['source.webhookOnce']);
 					await expect(
-						page.getByRole('status').filter({ hasText: words.source_created_toast })
+						page.getByRole('status').filter({ hasText: words['sourceNew.createdToast'] })
 					).toBeVisible();
 					await expect(page.locator('main form')).toHaveCount(0);
 					await expect(page.locator('body')).not.toContainText(ACCESS_TOKEN);
@@ -378,7 +379,7 @@ test.describe('as an admin', () => {
 	test('the General tab then Back shows the source page with dots, never the secret or the form', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
 		const created = await createsASource(page, words, {
@@ -386,7 +387,7 @@ test.describe('as an admin', () => {
 			url: anHttpsAddress(name)
 		});
 
-		await tabsOf(page, words).getByRole('link', { name: words.settings_title }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.title'] }).click();
 		await expect(page).toHaveURL('/settings');
 		await page.goBack();
 		await expect(page).toHaveURL(`${SOURCES_LIST}/${name}`);
@@ -394,7 +395,7 @@ test.describe('as an admin', () => {
 		await expect(page.locator('body')).not.toContainText(created.webhook_secret);
 
 		await page.goForward();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_title);
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['settings.title']);
 		await expect(page.locator('body')).not.toContainText(created.webhook_secret);
 		await page.goBack();
 		await showsTheSourcePage(page, words);
@@ -405,7 +406,7 @@ test.describe('as an admin', () => {
 	test('a reload at the source address, the General tab, then Back shows the source page with dots', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
 		const created = await createsASource(page, words, {
@@ -416,7 +417,7 @@ test.describe('as an admin', () => {
 		await page.reload();
 		await showsTheSourcePage(page, words);
 
-		await tabsOf(page, words).getByRole('link', { name: words.settings_title }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.title'] }).click();
 		await expect(page).toHaveURL('/settings');
 		await page.goBack();
 
@@ -429,7 +430,7 @@ test.describe('as an admin', () => {
 	test('Done takes the address the bar shows as a replace, and back and forward never show the secret', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		await page.goto(SOURCES_LIST);
 		await opensTheForm(page);
@@ -442,7 +443,7 @@ test.describe('as an admin', () => {
 		const left = page.waitForResponse(
 			(received) => new URL(received.url()).pathname === `${SOURCES_LIST}/${name}`
 		);
-		await page.getByRole('link', { name: words.source_created_done }).click();
+		await page.getByRole('link', { name: words['sourceNew.createdDone'] }).click();
 
 		expect((await left).status()).toBe(200);
 		await expect(page).toHaveURL(`${SOURCES_LIST}/${name}`);
@@ -464,7 +465,7 @@ test.describe('as an admin', () => {
 	test('hiding the page on the created view leaves the empty form without the secret', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
 		const created = await createsASource(page, words, {
@@ -484,7 +485,7 @@ test.describe('as an admin', () => {
 	test('hiding the page on the form forgets the typed fields and the secret', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
 		await fillsTheForm(page, words, {
@@ -523,7 +524,7 @@ test.describe('as an admin', () => {
 			browserName
 		}, testInfo) => {
 			test.skip(browserName !== 'chromium', 'only Chromium is driven for the cache');
-			const { words } = await sessionOf(page);
+			const words = await wordsOf(page);
 			await page.addInitScript(() => {
 				addEventListener('pageshow', (shown) => {
 					if (shown.persisted) {
@@ -535,7 +536,7 @@ test.describe('as an admin', () => {
 			await opensTheForm(page);
 			await page.goto(SOURCES_LIST);
 			await page.goBack();
-			await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.sources_add);
+			await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['sources.add']);
 			const restored = await restoredFromTheCache(page);
 			test.skip(
 				!restored,
@@ -565,7 +566,7 @@ test.describe('as an admin', () => {
 	test('a real refusal names its reason, keeps the fields and makes no source', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const taken = aName(testInfo, 'taken');
 		const other = aName(testInfo, 'other');
 		const takenAddress = anHttpsAddress(taken);
@@ -573,8 +574,8 @@ test.describe('as an admin', () => {
 		await createsASource(page, words, { name: taken, url: takenAddress });
 		await opensTheForm(page);
 		const refusal = page.getByRole('alert');
-		const name = page.getByLabel(words.source_name, { exact: true });
-		const url = page.getByLabel(words.source_url, { exact: true });
+		const name = page.getByLabel(words['sourceNew.name'], { exact: true });
+		const url = page.getByLabel(words['sourceNew.url'], { exact: true });
 
 		await fillsTheForm(page, words, {
 			name: taken,
@@ -582,29 +583,29 @@ test.describe('as an admin', () => {
 			secret: ACCESS_TOKEN
 		});
 		await checks(page, words);
-		await page.getByRole('button', { name: words.source_create }).click();
-		await expect(refusal).toHaveText(words.source_refused_duplicate_name);
+		await page.getByRole('button', { name: words['sourceNew.create'] }).click();
+		await expect(refusal).toHaveText(words['source.refusedDuplicateName']);
 		await expect(name).toHaveValue(taken);
 		await expect(secretField(page, words)).toHaveValue(ACCESS_TOKEN);
 
 		await name.fill(other);
 		await url.fill(takenAddress);
 		await checks(page, words);
-		await page.getByRole('button', { name: words.source_create }).click();
-		await expect(refusal).toHaveText(words.source_refused_duplicate_url);
+		await page.getByRole('button', { name: words['sourceNew.create'] }).click();
+		await expect(refusal).toHaveText(words['source.refusedDuplicateUrl']);
 		await expect(url).toHaveValue(takenAddress);
 
 		await name.fill('new');
 		await url.fill(anHttpsAddress(other));
 		await checks(page, words);
-		await page.getByRole('button', { name: words.source_create }).click();
-		await expect(refusal).toHaveText(words.source_refused_name);
+		await page.getByRole('button', { name: words['sourceNew.create'] }).click();
+		await expect(refusal).toHaveText(words['source.refusedName']);
 		await expect(name).toHaveValue('new');
 
 		await name.fill(other);
 		await secretField(page, words).fill('');
-		await page.getByRole('button', { name: words.source_create }).click();
-		await expect(refusal).toHaveText(words.source_refused_not_checked);
+		await page.getByRole('button', { name: words['sourceNew.create'] }).click();
+		await expect(refusal).toHaveText(words['source.refusedNotChecked']);
 
 		const names = await sourceNames(page);
 		expect(names).toContain(taken);
@@ -616,35 +617,35 @@ test.describe('as an admin', () => {
 		test(`Check and Create show their busy word while held, the rest disabled, at ${width} px`, async ({
 			page
 		}, testInfo) => {
-			const { words } = await sessionOf(page);
+			const words = await wordsOf(page);
 			await page.setViewportSize({ width, height: 900 });
 			const name = aName(testInfo);
 			await opensTheForm(page);
 			const heldCheck = await holdsRequests(page, `**${CHECK_API}`);
 			await fillsTheForm(page, words, { name, url: anHttpsAddress(name), secret: ACCESS_TOKEN });
 
-			await page.getByRole('button', { name: words.source_check }).click();
+			await page.getByRole('button', { name: words['sourceNew.check'] }).click();
 
-			const busyCheck = page.getByRole('button', { name: words.source_busy_check });
+			const busyCheck = page.getByRole('button', { name: words['sourceNew.busyCheck'] });
 			await expect(busyCheck).toHaveAttribute('aria-busy', 'true');
 			await expect(busyCheck).toBeDisabled();
 			await expect(busyCheck.locator('.state[data-state="building"]')).toBeVisible();
-			await expect(page.getByRole('button', { name: words.source_create })).toBeDisabled();
+			await expect(page.getByRole('button', { name: words['sourceNew.create'] })).toBeDisabled();
 			await page.screenshot({ path: testInfo.outputPath(`check-busy-${width}.png`) });
 			heldCheck.release();
-			await expect(page.getByRole('button', { name: words.source_check })).toBeEnabled();
-			await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
+			await expect(page.getByRole('button', { name: words['sourceNew.check'] })).toBeEnabled();
+			await expect(page.getByRole('button', { name: words['sourceNew.create'] })).toBeEnabled();
 
 			const heldCreate = await holdsRequests(page, `**${SOURCES_API}`, { method: 'POST' });
-			await page.getByRole('button', { name: words.source_create }).click();
+			await page.getByRole('button', { name: words['sourceNew.create'] }).click();
 
-			const busyCreate = page.getByRole('button', { name: words.source_busy_create });
+			const busyCreate = page.getByRole('button', { name: words['sourceNew.busyCreate'] });
 			await expect(busyCreate).toHaveAttribute('aria-busy', 'true');
 			await expect(busyCreate.locator('.state[data-state="building"]')).toBeVisible();
-			await expect(page.getByRole('button', { name: words.source_check })).toBeDisabled();
+			await expect(page.getByRole('button', { name: words['sourceNew.check'] })).toBeDisabled();
 			await page.screenshot({ path: testInfo.outputPath(`create-busy-${width}.png`) });
 			heldCreate.release();
-			await expect(page.getByRole('heading', { level: 1 })).toContainText(words.source_created);
+			await expect(page.getByRole('heading', { level: 1 })).toContainText(words['sourceNew.created']);
 		});
 	}
 
@@ -652,7 +653,7 @@ test.describe('as an admin', () => {
 	test('a failed write shows no created view, enables Create again and fails loudly', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const failures: Error[] = [];
 		page.on('pageerror', (failure) => failures.push(failure));
 		const name = aName(testInfo);
@@ -669,12 +670,12 @@ test.describe('as an admin', () => {
 		});
 		await checks(page, words);
 
-		await page.getByRole('button', { name: words.source_create }).click();
+		await page.getByRole('button', { name: words['sourceNew.create'] }).click();
 
 		await expect.poll(() => failures.length).toBe(1);
-		await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
-		await expect(page.getByRole('button', { name: words.source_check })).toBeEnabled();
-		await expect(page.getByLabel(words.source_name, { exact: true })).toHaveValue(name);
+		await expect(page.getByRole('button', { name: words['sourceNew.create'] })).toBeEnabled();
+		await expect(page.getByRole('button', { name: words['sourceNew.check'] })).toBeEnabled();
+		await expect(page.getByLabel(words['sourceNew.name'], { exact: true })).toHaveValue(name);
 		await expect(secretField(page, words)).toHaveValue(ACCESS_TOKEN);
 		await expect(page.locator('.once')).toHaveCount(0);
 		expect(await sourceNames(page)).not.toContain(name);
@@ -685,7 +686,7 @@ test.describe('as an admin', () => {
 		page,
 		context
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const signInRequests: string[] = [];
 		page.on('request', (sent) => {
 			if (new URL(sent.url()).pathname === SIGN_IN_START) {
@@ -698,7 +699,7 @@ test.describe('as an admin', () => {
 		await endsTheSession(context);
 		const started = startsSignIn(page, NEXT);
 
-		await page.getByRole('button', { name: words.source_check }).click();
+		await page.getByRole('button', { name: words['sourceNew.check'] }).click();
 
 		await leftForSignIn(page, started);
 		expect(signInRequests).toEqual([`?next=${NEXT}`]);
@@ -709,7 +710,7 @@ test.describe('as an admin', () => {
 		test('every control shows a focus ring, in the order of the page', async ({
 			page
 		}, testInfo) => {
-			const { words } = await sessionOf(page);
+			const words = await wordsOf(page);
 			await page.setViewportSize({ width: 390, height: 900 });
 			await opensTheForm(page);
 			await fillsTheForm(page, words, {
@@ -725,12 +726,12 @@ test.describe('as an admin', () => {
 
 			// The info button has no text, so it is named by its class.
 			const controlsInOrder = [
-				words.sources_back,
-				words.source_name,
-				words.source_url,
+				words['source.back'],
+				words['sourceNew.name'],
+				words['sourceNew.url'],
 				'info',
-				words.source_secret,
-				words.source_check
+				words['source.secret'],
+				words['sourceNew.check']
 			];
 			const positions = controlsInOrder.map((control) => focused.indexOf(control));
 			expect(
@@ -747,7 +748,7 @@ test.describe('as an admin', () => {
 		context,
 		browserName
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const failures: Error[] = [];
 		page.on('pageerror', (failure) => failures.push(failure));
 		if (browserName === 'chromium') {
@@ -757,7 +758,7 @@ test.describe('as an admin', () => {
 		const draft = await keyDraftOf(page);
 		await typesTheAddress(page, words, anSshAddress(aName(testInfo)));
 
-		await page.getByRole('button', { name: words.source_copy }).click();
+		await page.getByRole('button', { name: words['source.copy'] }).click();
 
 		if (browserName === 'chromium') {
 			await expect

@@ -1,5 +1,5 @@
 import { expect, test } from './person.ts';
-import { expectsNoHorizontalScroll, leftForSignIn, sessionOf, startsSignIn } from './scenario.ts';
+import { expectsNoHorizontalScroll, leftForSignIn, startsSignIn, wordsOf } from './scenario.ts';
 import { KEY_DRAFT_API, NEW_ADDRESS, SAME_ORIGIN } from './sources.ts';
 
 const NEXT = '%2Fsettings%2Fsources%2Fnew';
@@ -13,7 +13,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 			test('meets the for-admins board inside the lobby over a 200 shell', async ({
 				page
 			}, testInfo) => {
-				const { words } = await sessionOf(page);
+				const words = await wordsOf(page);
 				await page.setViewportSize({ width, height: 900 });
 
 				const shell = await page.goto(NEW_ADDRESS);
@@ -22,10 +22,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				expect((await page.request.post(KEY_DRAFT_API, { headers: SAME_ORIGIN })).status()).toBe(
 					403
 				);
-				await expect(page.locator('main h1')).toHaveText(words.for_admins_title);
-				await expect(page.locator('main p')).toHaveText(words.for_admins_explanation);
-				await expect(page.getByRole('navigation', { name: words.section_settings })).toHaveCount(0);
-				await expect(page.getByRole('link', { name: words.section_settings })).toHaveCount(0);
+				await expect(page.locator('main h1')).toHaveText(words['error.adminsTitle']);
+				await expect(page.locator('main p')).toHaveText(words['error.adminsExplanation']);
+				await expect(page.getByRole('navigation', { name: words['settings.navLabel'] })).toHaveCount(0);
+				await expect(page.getByRole('link', { name: words['settings.navLabel'] })).toHaveCount(0);
 				await expectsNoHorizontalScroll(page);
 				await page.screenshot({
 					path: testInfo.outputPath(`source-new-for-admins-${width}-${colorScheme}.png`),

@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import type { Locator, Page, Route, TestInfo } from '@playwright/test';
 
-import type { SessionView } from '../src/lib/api/session.ts';
 import type {
 	ConnectionCheckView,
 	CreatedSourceView,
@@ -11,8 +10,9 @@ import type {
 } from '../src/lib/api/sources.ts';
 import type { components } from '../src/lib/api/types.ts';
 import { expect } from './person.ts';
+import type { Words } from './scenario.ts';
 
-export type Words = SessionView['words'];
+export type { Words };
 export type AccessKind = components['schemas']['AccessKind'];
 
 export const NEW_ADDRESS = '/settings/sources/new';
@@ -65,7 +65,7 @@ export async function holdsRequests(
 }
 
 export const secretField = (page: Page, words: Words) =>
-	page.getByLabel(words.source_secret, { exact: true });
+	page.getByLabel(words['source.secret'], { exact: true });
 
 export async function opensTheForm(page: Page): Promise<void> {
 	await page.goto(NEW_ADDRESS);
@@ -78,12 +78,12 @@ export async function typesTheAddress(page: Page, words: Words, url: string): Pr
 	const answered = page.waitForResponse(
 		(received) => new URL(received.url()).pathname === KIND_API
 	);
-	await page.getByLabel(words.source_url, { exact: true }).fill(url);
+	await page.getByLabel(words['sourceNew.url'], { exact: true }).fill(url);
 	await answered;
 }
 
 export const folderField = (page: Page, words: Words) =>
-	page.getByLabel(words.source_folder_optional, { exact: true });
+	page.getByLabel(words['sourceNew.folderOptional'], { exact: true });
 
 // A token is typed only when asked for, and only an https address has its field;
 // a folder likewise only for a key or web address.
@@ -92,7 +92,7 @@ export async function fillsTheForm(
 	words: Words,
 	values: { name: string; url: string; secret?: string; folder?: string }
 ): Promise<void> {
-	await page.getByLabel(words.source_name, { exact: true }).fill(values.name);
+	await page.getByLabel(words['sourceNew.name'], { exact: true }).fill(values.name);
 	await typesTheAddress(page, words, values.url);
 	if (values.secret !== undefined) {
 		await secretField(page, words).fill(values.secret);
@@ -106,7 +106,7 @@ export async function checks(page: Page, words: Words): Promise<ConnectionCheckV
 	const answered = page.waitForResponse(
 		(received) => new URL(received.url()).pathname === CHECK_API
 	);
-	await page.getByRole('button', { name: words.source_check }).click();
+	await page.getByRole('button', { name: words['sourceNew.check'] }).click();
 	return (await (await answered).json()) as ConnectionCheckView;
 }
 
@@ -115,7 +115,7 @@ async function creates(page: Page, words: Words): Promise<CreatedSourceView> {
 		(received) =>
 			new URL(received.url()).pathname === SOURCES_API && received.request().method() === 'POST'
 	);
-	await page.getByRole('button', { name: words.source_create }).click();
+	await page.getByRole('button', { name: words['sourceNew.create'] }).click();
 	const answer = await answered;
 	expect(answer.status(), await answer.text()).toBe(201);
 	return (await answer.json()) as CreatedSourceView;
@@ -129,7 +129,7 @@ export async function createsASource(
 ): Promise<CreatedSourceView> {
 	await fillsTheForm(page, words, values);
 	await checks(page, words);
-	await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
+	await expect(page.getByRole('button', { name: words['sourceNew.create'] })).toBeEnabled();
 	return creates(page, words);
 }
 
@@ -144,7 +144,7 @@ export async function sourceNames(page: Page): Promise<string[]> {
 }
 
 export const tabsOf = (page: Page, words: Words) =>
-	page.getByRole('navigation', { name: words.section_settings });
+	page.getByRole('navigation', { name: words['settings.navLabel'] });
 
 /** The address of a source's own page. */
 export const sourceAddress = (name: string): string => `${SOURCES_LIST}/${name}`;
@@ -211,7 +211,7 @@ export async function opensALocalSource(
 	await opensTheForm(page);
 	await fillsTheForm(page, words, { name, url: `${mount.path}/${name}` });
 	await checks(page, words);
-	await expect(page.getByRole('button', { name: words.source_create })).toBeEnabled();
+	await expect(page.getByRole('button', { name: words['sourceNew.create'] })).toBeEnabled();
 	const created = await creates(page, words);
 	await page.goto(sourceAddress(name));
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
@@ -237,12 +237,12 @@ export async function answersWith(
 }
 
 export const removeButton = (page: Page, words: Words): Locator =>
-	page.getByRole('button', { name: words.source_remove_button });
+	page.getByRole('button', { name: words['source.removeButton'] });
 export const dialogOf = (page: Page): Locator => page.getByRole('dialog');
 export const cancelOf = (page: Page, words: Words): Locator =>
-	dialogOf(page).getByRole('button', { name: words.source_remove_cancel });
+	dialogOf(page).getByRole('button', { name: words['source.removeCancel'] });
 export const confirmOf = (page: Page, words: Words): Locator =>
-	dialogOf(page).getByRole('button', { name: words.source_remove_confirm, exact: true });
+	dialogOf(page).getByRole('button', { name: words['source.removeConfirm'], exact: true });
 
 export async function opensTheDialog(page: Page, words: Words): Promise<void> {
 	await removeButton(page, words).click();

@@ -1,34 +1,33 @@
 import type { Page } from '@playwright/test';
 
-import type { SessionView } from '../src/lib/api/session.ts';
 import { expect, test } from './person.ts';
-import { sessionOf } from './scenario.ts';
+import { type Reader, readerOf } from './scenario.ts';
 
 const SOURCES_PAGE = '/settings/sources';
 
-async function showsTheSignInBoard(page: Page, session: SessionView): Promise<void> {
-	await expect(page.locator('.signin .wordmark')).toHaveText(session.words.wordmark);
+async function showsTheSignInBoard(page: Page, session: Reader): Promise<void> {
+	await expect(page.locator('.signin .wordmark')).toHaveText(session.words['app.name']);
 	await expect(page.locator('.signin a[href]').first()).toHaveAttribute(
 		'href',
 		session.sign_in.start
 	);
 }
 
-async function showsALobbyPage(page: Page, session: SessionView): Promise<void> {
+async function showsALobbyPage(page: Page, session: Reader): Promise<void> {
 	await expect(
-		page.getByRole('link', { name: session.words.section_decks, exact: true })
+		page.getByRole('link', { name: session.words['header.decks'], exact: true })
 	).toBeVisible();
 	await expect(page.locator('.signin')).toHaveCount(0);
 }
 
 // SI2.
 test('the signed-out page renders the sign-in board from the kit', async ({ page }) => {
-	const session = await sessionOf(page);
+	const session = await readerOf(page);
 
 	await page.goto('/login');
 
 	await showsTheSignInBoard(page, session);
-	await expect(page).toHaveTitle(session.words.wordmark);
+	await expect(page).toHaveTitle(session.words['app.name']);
 });
 
 const refusals = [
@@ -37,24 +36,24 @@ const refusals = [
 	{
 		path: '/login/login-failed',
 		action: 'retry',
-		retry: (session: SessionView) => session.sign_in.start
+		retry: (session: Reader) => session.sign_in.start
 	},
 	{
 		path: '/login/talk/login-failed',
 		action: 'retry',
-		retry: (session: SessionView) => session.sign_in.talk_start
+		retry: (session: Reader) => session.sign_in.talk_start
 	}
 ] as const;
 
 async function showsTheRefusalBoard(
 	page: Page,
-	session: SessionView,
+	session: Reader,
 	refusal: (typeof refusals)[number]
 ): Promise<void> {
-	await expect(page.locator('.signin .wordmark')).toHaveText(session.words.wordmark);
-	await expect(page.getByRole('link', { name: session.words.legal_impressum })).toBeVisible();
-	await expect(page.getByRole('link', { name: session.words.legal_datenschutz })).toBeVisible();
-	await expect(page.getByRole('link', { name: session.words.legal_nutzungsbedingungen })).toBeVisible();
+	await expect(page.locator('.signin .wordmark')).toHaveText(session.words['app.name']);
+	await expect(page.getByRole('link', { name: session.words['legal.impressum'] })).toBeVisible();
+	await expect(page.getByRole('link', { name: session.words['legal.datenschutz'] })).toBeVisible();
+	await expect(page.getByRole('link', { name: session.words['legal.nutzungsbedingungen'] })).toBeVisible();
 	if (refusal.action === 'log-out') {
 		await expect(page.locator('form.log-out')).toHaveAttribute('action', session.sign_in.logout);
 		await expect(page.locator('form.log-out')).toHaveAttribute('method', /post/i);
@@ -84,7 +83,7 @@ test.describe('signed in as an admin', () => {
 	test('back and forward across a lobby page and a refusal land on the right page', async ({
 		page
 	}) => {
-		const session = await sessionOf(page);
+		const session = await readerOf(page);
 
 		await page.goto(SOURCES_PAGE);
 		await showsALobbyPage(page, session);
@@ -101,7 +100,7 @@ test.describe('signed in as an admin', () => {
 });
 
 test('a link to a page the app does not own leaves the app by a page load', async ({ page }) => {
-	const session = await sessionOf(page);
+	const session = await readerOf(page);
 	await page.route(`**${session.sign_in.start}`, (route) =>
 		route.fulfill({ contentType: 'text/plain', body: 'the sign-in start' })
 	);
@@ -133,7 +132,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				test('shows its board, answers 403 on a refusal address and saves a screenshot', async ({
 					page
 				}, testInfo) => {
-					const session = await sessionOf(page);
+					const session = await readerOf(page);
 					await page.setViewportSize({ width, height: 844 });
 					await page.emulateMedia({ colorScheme });
 

@@ -11,7 +11,8 @@ import {
 	SIGN_IN_START,
 	sessionOf,
 	startsSignIn,
-	tabbedControlWithRing
+	tabbedControlWithRing,
+	wordsOf
 } from './scenario.ts';
 import {
 	aName,
@@ -101,19 +102,19 @@ test.describe('as an admin', () => {
 				test('shows reachable, refused with its reason and never fetched, and saves a screenshot', async ({
 					page
 				}, testInfo) => {
-					const { words } = await sessionOf(page);
+					const words = await wordsOf(page);
 					await page.setViewportSize({ width, height: 900 });
 					await listAnswers(page, boardRows);
 
 					await page.goto(SOURCES_LIST);
 
 					await expect(page.locator('table.sources tbody tr')).toHaveCount(3);
-					await expect(rowOf(page, 'github-privat')).toContainText(words.source_run_refused);
+					await expect(rowOf(page, 'github-privat')).toContainText(words['source.runRefused']);
 					await expectsNoHorizontalScroll(page);
 					if (width === 390) {
 						await expectsHeaderOnOneLine(page);
 					}
-					const fetchNow = page.getByRole('button', { name: words.sources_fetch_now }).first();
+					const fetchNow = page.getByRole('button', { name: words['source.fetchNow'] }).first();
 					const box = await fetchNow.boundingBox();
 					expect(box?.width).toBeGreaterThan(80);
 					await fetchNow.focus();
@@ -133,7 +134,7 @@ test.describe('as an admin', () => {
 	test('words every state, reason and age of the answer, the null access and the never fetched', async ({
 		page
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await listAnswers(page, [
 			aSummary('Reach-Able'),
 			aSummary('refused-one', { state: 'refused', reason: 'refused', access: 'ssh-deploy-key' }),
@@ -148,22 +149,22 @@ test.describe('as an admin', () => {
 		await page.goto(SOURCES_LIST);
 
 		const states: [string, string][] = [
-			['Reach-Able', words.source_state_reachable],
-			['refused-one', words.source_state_refused],
-			['failed-one', words.source_state_failed],
-			['dead-host', words.source_state_error],
-			['lost-secret', words.source_state_error],
-			['no-reason', words.source_state_failed],
-			['never-one', words.source_state_never_fetched]
+			['Reach-Able', words['source.stateReachable']],
+			['refused-one', words['source.stateRefused']],
+			['failed-one', words['source.stateFailed']],
+			['dead-host', words['source.stateError']],
+			['lost-secret', words['source.stateError']],
+			['no-reason', words['source.stateFailed']],
+			['never-one', words['source.stateNeverFetched']]
 		];
 		for (const [name, word] of states) {
 			await expect(rowOf(page, name).locator('.state')).toHaveText(word);
 		}
 		const reasons: [string, string][] = [
-			['refused-one', words.source_run_refused],
-			['failed-one', words.source_run_failed],
-			['dead-host', words.source_run_unreachable],
-			['lost-secret', words.source_run_secret]
+			['refused-one', words['source.runRefused']],
+			['failed-one', words['source.runFailed']],
+			['dead-host', words['source.runUnreachable']],
+			['lost-secret', words['source.runSecret']]
 		];
 		for (const [name, sentence] of reasons) {
 			await expect(rowOf(page, name).locator('.reason')).toHaveText(sentence);
@@ -172,7 +173,7 @@ test.describe('as an admin', () => {
 		await expect(rowOf(page, 'no-reason').locator('.reason')).toHaveCount(0);
 		await expect(rowOf(page, 'plain-http').locator('.access')).toHaveText('');
 		await expect(rowOf(page, 'refused-one').locator('.access')).toHaveText(
-			words.source_access_deploy_key
+			words['source.accessDeployKey']
 		);
 		await expect(rowOf(page, 'never-one').locator('.fetched')).toHaveText('—');
 		await expect(rowOf(page, 'Reach-Able').locator('a.as-typed')).toHaveText('Reach-Able');
@@ -184,19 +185,19 @@ test.describe('as an admin', () => {
 	test('an empty list shows its title, what a source needs and an Add source button', async ({
 		page
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await listAnswers(page, []);
 
 		await page.goto(SOURCES_LIST);
 
 		const empty = page.locator('section.empty');
-		await expect(empty.getByRole('heading', { name: words.sources_empty_title })).toBeVisible();
-		await expect(empty).toContainText(words.sources_empty_explanation);
-		await expect(empty).toContainText(words.sources_empty_need);
-		await expect(empty.locator('code').nth(0)).toHaveText(words.sources_empty_ssh);
-		await expect(empty.locator('code').nth(1)).toHaveText(words.sources_empty_https);
+		await expect(empty.getByRole('heading', { name: words['sources.emptyTitle'] })).toBeVisible();
+		await expect(empty).toContainText(words['sources.emptyExplanation']);
+		await expect(empty).toContainText(words['sources.emptyNeed']);
+		await expect(empty.locator('code').nth(0)).toHaveText(words['sources.emptySsh']);
+		await expect(empty.locator('code').nth(1)).toHaveText(words['sources.emptyHttps']);
 		await expect(page.locator('table')).toHaveCount(0);
-		await expect(empty.getByRole('link', { name: words.sources_add })).toBeVisible();
+		await expect(empty.getByRole('link', { name: words['sources.add'] })).toBeVisible();
 	});
 
 	// Cell 4.
@@ -204,7 +205,7 @@ test.describe('as an admin', () => {
 		test(`Add source in ${where} opens the form by client navigation and its back link returns`, async ({
 			page
 		}) => {
-			const { words } = await sessionOf(page);
+			const words = await wordsOf(page);
 			if (where === 'the empty state') {
 				await listAnswers(page, []);
 			}
@@ -214,12 +215,12 @@ test.describe('as an admin', () => {
 			const add =
 				where === 'the head' ? page.locator('.head') : page.locator('section.empty');
 
-			await add.getByRole('link', { name: words.sources_add }).click();
+			await add.getByRole('link', { name: words['sources.add'] }).click();
 			await expect(page).toHaveURL(NEW_ADDRESS);
-			await page.getByRole('link', { name: words.sources_back }).click();
+			await page.getByRole('link', { name: words['source.back'] }).click();
 
 			await expect(page).toHaveURL(SOURCES_LIST);
-			await expect(page.getByRole('heading', { level: 1 })).toHaveText(words.settings_sources);
+			await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['sources.title']);
 			expect(await isStillTheSameDocument(page)).toBe(true);
 			expect(documents).toEqual([]);
 		});
@@ -229,7 +230,7 @@ test.describe('as an admin', () => {
 	test('a name opens the source page by client navigation, its back link returns and Back and Forward move between them', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const name = aName(testInfo);
 		await opensTheForm(page);
 		await createsASource(page, words, { name, url: anHttpsAddress(name) });
@@ -240,17 +241,17 @@ test.describe('as an admin', () => {
 		await rowOf(page, name).getByRole('link', { name, exact: true }).click();
 		await expect(page).toHaveURL(sourceAddress(name));
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
-		await expect(tabsOf(page, words).getByRole('link', { name: words.settings_sources })).toHaveAttribute(
+		await expect(tabsOf(page, words).getByRole('link', { name: words['sources.title'] })).toHaveAttribute(
 			'aria-current',
 			'page'
 		);
-		await page.getByRole('link', { name: words.sources_back }).click();
+		await page.getByRole('link', { name: words['source.back'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
 		await page.goBack();
 		await expect(page).toHaveURL(sourceAddress(name));
 		await page.goForward();
 		await expect(page).toHaveURL(SOURCES_LIST);
-		await expect(tabsOf(page, words).getByRole('link', { name: words.settings_sources })).toHaveAttribute(
+		await expect(tabsOf(page, words).getByRole('link', { name: words['sources.title'] })).toHaveAttribute(
 			'aria-current',
 			'page'
 		);
@@ -261,7 +262,7 @@ test.describe('as an admin', () => {
 
 	// Cell 6.
 	test('two real sources are listed in the order of the list answer', async ({ page }, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const first = aName(testInfo, 'first');
 		const second = aName(testInfo, 'second');
 		for (const name of [first, second]) {
@@ -282,7 +283,7 @@ test.describe('as an admin', () => {
 	test('Fetch now posts once to its row, re-reads the list in place, leaves the other row and disables every button meanwhile', async ({
 		page
 	}, testInfo) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		const first = aName(testInfo, 'first');
 		const second = aName(testInfo, 'second');
 		for (const name of [first, second]) {
@@ -299,14 +300,14 @@ test.describe('as an admin', () => {
 				new URL(received.url()).pathname === SOURCES_API && received.request().method() === 'GET'
 		);
 
-		const fetchNow = rowOf(page, first).getByRole('button', { name: words.sources_fetch_now });
+		const fetchNow = rowOf(page, first).getByRole('button', { name: words['source.fetchNow'] });
 		await fetchNow.click();
 
-		const busy = rowOf(page, first).getByRole('button', { name: words.source_busy_fetch });
+		const busy = rowOf(page, first).getByRole('button', { name: words['source.busyFetch'] });
 		await expect(busy).toHaveAttribute('aria-busy', 'true');
 		await expect(busy.locator('.state[data-state="building"]')).toBeVisible();
 		await expect(
-			rowOf(page, second).getByRole('button', { name: words.sources_fetch_now })
+			rowOf(page, second).getByRole('button', { name: words['source.fetchNow'] })
 		).not.toHaveAttribute('aria-busy');
 		for (const button of await page.locator('table.sources button').all()) {
 			await expect(button).toBeDisabled();
@@ -328,10 +329,10 @@ test.describe('as an admin', () => {
 		page,
 		context
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await listAnswers(page, [aSummary('some-source')]);
 		await page.goto(SOURCES_LIST);
-		await expect(page.getByRole('button', { name: words.sources_fetch_now })).toBeVisible();
+		await expect(page.getByRole('button', { name: words['source.fetchNow'] })).toBeVisible();
 		const signIns: string[] = [];
 		page.on('request', (sent) => {
 			if (new URL(sent.url()).pathname === SIGN_IN_START) {
@@ -341,7 +342,7 @@ test.describe('as an admin', () => {
 		await endsTheSession(context);
 		const started = startsSignIn(page, NEXT);
 
-		await page.getByRole('button', { name: words.sources_fetch_now }).click({ noWaitAfter: true });
+		await page.getByRole('button', { name: words['source.fetchNow'] }).click({ noWaitAfter: true });
 
 		await leftForSignIn(page, started);
 		expect(signIns).toEqual([`?next=${NEXT}`]);
@@ -349,7 +350,7 @@ test.describe('as an admin', () => {
 
 	// Cell 12.
 	test('every control shows a focus ring at 390 px, in order', async ({ page }) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.setViewportSize({ width: 390, height: 900 });
 		await listAnswers(page, [aSummary('one-source'), aSummary('another-source')]);
 		await page.goto(SOURCES_LIST);
@@ -361,11 +362,11 @@ test.describe('as an admin', () => {
 		}
 
 		const controlsInOrder = [
-			words.sources_add,
+			words['sources.add'],
 			'one-source',
-			words.sources_fetch_now,
+			words['source.fetchNow'],
 			'another-source',
-			words.sources_fetch_now
+			words['source.fetchNow']
 		];
 		let from = 0;
 		for (const control of controlsInOrder) {
@@ -379,25 +380,25 @@ test.describe('as an admin', () => {
 	test('Settings is the current section, and General then Sources by the tab strip is a client navigation both ways', async ({
 		page
 	}) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await page.goto(SOURCES_LIST);
 		await stillTheSameDocument(page);
 		const documents = documentsRequested(page);
 		const header = page.locator('header.top');
-		await expect(header.getByRole('link', { name: words.section_settings })).toHaveAttribute(
+		await expect(header.getByRole('link', { name: words['settings.navLabel'] })).toHaveAttribute(
 			'aria-current',
 			'page'
 		);
-		await expect(header.getByRole('link', { name: words.section_decks, exact: true })).not.toHaveAttribute(
+		await expect(header.getByRole('link', { name: words['header.decks'], exact: true })).not.toHaveAttribute(
 			'aria-current',
 			'page'
 		);
 
-		await tabsOf(page, words).getByRole('link', { name: words.settings_title }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.title'] }).click();
 		await expect(page).toHaveURL('/settings');
-		await tabsOf(page, words).getByRole('link', { name: words.settings_sources }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['sources.title'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
-		await expect(tabsOf(page, words).getByRole('link', { name: words.settings_sources })).toHaveAttribute(
+		await expect(tabsOf(page, words).getByRole('link', { name: words['sources.title'] })).toHaveAttribute(
 			'aria-current',
 			'page'
 		);
@@ -416,17 +417,18 @@ test.describe('in the instance language', () => {
 	test.use({ person: { role: 'admin' } });
 
 	test('words the age of the fetch in the browser, in the instance language', async ({ page }) => {
-		const session = await sessionOf(page);
+		const { language } = await sessionOf(page);
+		const words = await wordsOf(page);
 		await listAnswers(page, [aSummary('one-source', { fetched_at: minutesAgo(3 * 24 * 60) })]);
 
 		await page.goto(SOURCES_LIST);
 
 		const expected = await page.evaluate(
 			(tag) => new Intl.RelativeTimeFormat(tag, { numeric: 'auto' }).format(-3, 'day'),
-			session.words.language_tag
+			language
 		);
 		await expect(page.locator('.fetched')).toHaveText(expected);
-		await expect(page.locator('main h1')).toHaveText(session.words.settings_sources);
+		await expect(page.locator('main h1')).toHaveText(words['sources.title']);
 	});
 });
 
@@ -435,12 +437,12 @@ test.describe('a member', () => {
 	test.use({ person: { role: 'user' } });
 
 	test('meets the for-admins board with no controls and no tab strip', async ({ page }) => {
-		const { words } = await sessionOf(page);
+		const words = await wordsOf(page);
 
 		await page.goto(SOURCES_LIST);
 
-		await expect(page.locator('main h1')).toHaveText(words.for_admins_title);
-		await expect(page.getByRole('navigation', { name: words.section_settings })).toHaveCount(0);
+		await expect(page.locator('main h1')).toHaveText(words['error.adminsTitle']);
+		await expect(page.getByRole('navigation', { name: words['settings.navLabel'] })).toHaveCount(0);
 		await expect(page.locator('main button')).toHaveCount(0);
 	});
 });
