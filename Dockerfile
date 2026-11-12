@@ -89,7 +89,9 @@ RUN pnpm install --frozen-lockfile \
     && find /tmp -mindepth 1 -delete
 USER root
 # ldconfig's aux-cache and fontconfig's caches record directory mtimes, which a
-# release resets, so the fontconfig cache is rebuilt at its first use either way.
+# release resets, so fontconfig would reject the cache as stale at runtime. A
+# read-only root cannot write it back, so Chromium rescans the fonts at every
+# launch either way.
 RUN pnpm exec playwright install-deps chromium \
     && pnpm exec playwright install chromium \
     && rm -rf /var/lib/apt/lists/* /var/log/apt /var/log/dpkg.log /var/log/alternatives.log \
