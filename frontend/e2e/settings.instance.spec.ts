@@ -39,20 +39,15 @@ async function storedSettings(page: Page): Promise<SettingsView> {
 const languageName = (tag: Language): string =>
 	new Intl.DisplayNames(tag, { type: 'language' }).of(tag) ?? tag;
 
-// The baseline speaks the language the driven lobby starts with, which the
-// first test of the worker reads from the session before any test changes it,
-// so no test restates a tag.
-let startingLanguage: Language | undefined;
+// The baseline speaks the first language the generated words offer, so no test
+// restates a tag and none depends on what an earlier test left behind.
+const [baselineLanguage] = languages;
 const test = base.extend<{
 	arrangeBaseline: (name?: string) => Promise<SettingsView>;
 }>({
 	arrangeBaseline: async ({ page }, use) => {
 		await use(async (name = 'Heim') => {
-			startingLanguage ??= (await sessionOf(page)).language;
-			const baseline: SettingsWrite = {
-				name,
-				language_tag: startingLanguage
-			};
+			const baseline: SettingsWrite = { name, language_tag: baselineLanguage };
 			const answer = await page.request.put(SETTINGS_API, {
 				headers: SAME_ORIGIN,
 				data: baseline
