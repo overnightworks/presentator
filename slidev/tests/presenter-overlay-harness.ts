@@ -11,10 +11,15 @@ import { chromium, type BrowserContext, type ElementHandle, type Locator, type P
 import { HopClose } from 'overnightworks-speech-browser'
 import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest'
 
+import { words as germanWords } from '../words/de'
+import { words as englishWords } from '../words/en'
+
 const run = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
 const slidevRoot = join(repositoryRoot, 'slidev')
 export const addonRootDirectory = slidevRoot
+// The generated words by language: a case reads the word of the language it serves by key.
+export const wordsOf = { de: germanWords, en: englishWords }
 const exampleDeckDirectory = join(repositoryRoot, 'examples/copresenter-deck')
 const addonFixtureDeck = fileURLToPath(new URL('./fixtures/addon-fixture.md', import.meta.url))
 const providedBuild = process.env.PRESENTER_RETURN_BUILD_DIR
@@ -69,7 +74,11 @@ export const state = {
   // The slide the fake model shows in 'moves-slide' mode.
   slideToShow: 1,
   askBodies: [] as { said: string, deck: string, language: string, slide: number }[],
+  // The deck's language, and apart from it the presenter's account language.
   whoLanguage: 'de' as 'de' | 'en',
+  interfaceLanguage: 'en' as 'de' | 'en',
+  // While set, `/who` answers only once it has settled.
+  whoGate: null as Promise<void> | null,
   hearLanguages: [] as (string | null)[],
   hearingMode: 'ready' as 'ready' | 'not-ready' | 'refused-on-open' | 'fails-after-capture' | 'unreachable' | 'who-fails' | 'who-not-found',
   // Whether the fake hearing sends a final question as soon as the hearing opens.
@@ -218,10 +227,10 @@ export async function expectPanelCoversNoSlidevControl(page: Page) {
   expect(controls.filter(({ box }) => boxesIntersect(panel, box)).map(({ name }) => name)).toEqual([])
 }
 
-// The fault word stands whole in the window, clear of Home and of the switch.
+// The fault word stands whole in the window, clear of Home (whatever language it is named in) and of the switch.
 export async function expectFaultWordClearOfControls(page: Page, width: number, aiSwitch: Locator, faultWord: Locator) {
   const [homeBox, aiBox, faultBox] = await Promise.all([
-    page.getByRole('link', { name: 'Home' }).boundingBox(),
+    page.locator('.presenter-bar a[href="/"]').boundingBox(),
     aiSwitch.boundingBox(),
     faultWord.boundingBox(),
   ])
@@ -329,6 +338,7 @@ export async function createOverlayDeckServer(
       response.end(
         JSON.stringify({
           language: 'de',
+          interface_language: 'en',
           speech: { hearing: { ready: true } },
         }),
       )
@@ -379,6 +389,7 @@ async function startServer() {
   server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://presenter.test')
     if (url.pathname === '/copresenter/who') {
+      await state.whoGate
       if (state.hearingMode === 'who-not-found') {
         response.writeHead(404, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ detail: 'Not found' }))
@@ -397,6 +408,7 @@ async function startServer() {
       response.writeHead(200, { 'content-type': 'application/json' })
       response.end(JSON.stringify({
         language: state.whoLanguage,
+        interface_language: state.interfaceLanguage,
         speech: { hearing: { ready: state.hearingMode !== 'not-ready' } },
       }))
       return
@@ -766,6 +778,8 @@ export function registerOverlayHarness() {
     socketErrors.length = 0
     state.askBodies = []
     state.hearLanguages = []
+    state.interfaceLanguage = 'en'
+    state.whoGate = null
   })
 
   afterEach(() => {

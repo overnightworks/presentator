@@ -1,10 +1,11 @@
 <script setup>
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useNav } from '@slidev/client'
 import { createPlayer, HopClose, startCapture } from 'overnightworks-speech-browser'
 // `no-inline`: the file is under Vite's inline limit, and a `data:` URL would
 // break the production CSP.
 import WORKLET_URL from 'overnightworks-speech-browser/capture-worklet.js?url&no-inline'
+import { controlWords, currentWords, useAccountLanguage, useEnglishUnlessKnown } from '../controls-words.js'
 import { publish } from '../room-notice.js'
 
 const { currentSlideNo, go, total } = useNav()
@@ -16,17 +17,22 @@ const DECK_SLUG = decodeURIComponent(
   import.meta.env.BASE_URL.split('/').findLast(Boolean) ?? '',
 )
 
-// The overlay shows only these lines, never a message the server sent.
-const NO_ANSWER = 'No answer'
-const NOT_ENABLED = 'Not enabled'
-const VOICE_OFFLINE = 'Voice offline'
-const SIGN_IN_AGAIN = 'Sign in again'
-const BUSY_SOON = 'Busy, try again soon'
-const BUDGET_USED_UP = 'Budget used up'
+// The overlay shows only the catalog's words, never a message the server sent.
+const NO_ANSWER = 'controls.noAnswer'
+const NOT_ENABLED = 'controls.notEnabled'
+const VOICE_OFFLINE = 'controls.voiceOffline'
+const SIGN_IN_AGAIN = 'controls.signInAgain'
+const BUSY_SOON = 'controls.busySoon'
+const BUDGET_USED_UP = 'controls.budgetUsedUp'
+const HEARING_NOT_READY = 'controls.hearingNotReady'
+const NO_HEARING = 'controls.noHearing'
+const NO_SPEECH = 'controls.noSpeech'
+const UNREACHABLE = 'controls.unreachable'
 // The answer stream's error reasons, owned by AnswerStopReason on the server.
 const NOT_ENABLED_REASON = 'not-enabled'
 const BUSY_REASON = 'busy'
 const BUDGET_SPENT_REASON = 'budget-spent'
+// The server's `detail` values are compared as data, never shown.
 const SIGN_IN_AGAIN_DETAILS = new Set(['Sign in again', 'Not authenticated'])
 
 class WhoRefused extends Error {
@@ -37,30 +43,36 @@ class WhoRefused extends Error {
 }
 
 async function refusalLine(response) {
-  if (response.status !== 401) return NO_ANSWER
+  if (response.status !== 401) return faultLine(NO_ANSWER)
   try {
     const body = await response.json()
-    return SIGN_IN_AGAIN_DETAILS.has(body?.detail) ? SIGN_IN_AGAIN : NO_ANSWER
+    return faultLine(SIGN_IN_AGAIN_DETAILS.has(body?.detail) ? SIGN_IN_AGAIN : NO_ANSWER)
   } catch {
-    return NO_ANSWER
+    return faultLine(NO_ANSWER)
   }
 }
 
 function busyLine(waitSeconds) {
   const named = typeof waitSeconds === 'number' && Number.isFinite(waitSeconds) && waitSeconds > 0
-  return named ? `Busy, try again in ${Math.ceil(waitSeconds)} s` : BUSY_SOON
+  return named ? currentWords()['controls.busyIn']({ seconds: String(Math.ceil(waitSeconds)) }) : faultLine(BUSY_SOON)
 }
+
+function faultLine(key) {
+  return currentWords()[key]
+}
+
+const words = computed(currentWords)
 
 function errorEventLine(data) {
   switch (data?.reason) {
     case NOT_ENABLED_REASON:
-      return NOT_ENABLED
+      return faultLine(NOT_ENABLED)
     case BUSY_REASON:
       return busyLine(data.retry_after_s)
     case BUDGET_SPENT_REASON:
-      return BUDGET_USED_UP
+      return faultLine(BUDGET_USED_UP)
     default:
-      return NO_ANSWER
+      return faultLine(NO_ANSWER)
   }
 }
 
@@ -127,6 +139,22 @@ function say(text) {
   void ask(text)
 }
 
+function whoUrl() {
+  return `${COPRESENTER}/who?deck=${encodeURIComponent(DECK_SLUG)}`
+}
+
+// The controls' language is the account's, which only `/who` knows, so it is
+// asked once at start. Turning the AI on asks again and shows why it fails.
+async function learnAccountLanguage() {
+  try {
+    const response = await fetch(whoUrl())
+    if (response.ok) await useAccountLanguage((await response.json()).interface_language)
+  } catch {
+    // The switch still works; turning it on asks `/who` again and shows the fault.
+  }
+  useEnglishUnlessKnown()
+}
+
 async function turnOn() {
   if (on.value) return
   const generation = ++activationGeneration
@@ -137,15 +165,17 @@ async function turnOn() {
   spokenText = ''
   let report
   try {
-    const response = await fetch(`${COPRESENTER}/who?deck=${encodeURIComponent(DECK_SLUG)}`)
+    const response = await fetch(whoUrl())
     if (!stillActive(generation)) return
     if (!response.ok) throw new WhoRefused(response.status)
     report = await response.json()
     if (!stillActive(generation)) return
     language = report.language
+    await useAccountLanguage(report.interface_language)
   } catch (error_) {
     if (!stillActive(generation)) return
-    error.value = error_ instanceof WhoRefused && error_.status === 503 ? VOICE_OFFLINE : 'Unreachable'
+    useEnglishUnlessKnown()
+    error.value = faultLine(error_ instanceof WhoRefused && error_.status === 503 ? VOICE_OFFLINE : UNREACHABLE)
     return
   }
   if (!stillActive(generation)) return
@@ -153,7 +183,7 @@ async function turnOn() {
     await startLocalHear(generation)
     return
   }
-  fail('Local hearing not ready')
+  fail(faultLine(HEARING_NOT_READY))
 }
 
 function turnOff() {
@@ -214,7 +244,7 @@ async function startLocalHear(generation) {
 function endHearing(generation, end) {
   if (!stillActive(generation)) return
   if (end?.kind === 'hop' && end.close === HopClose.NORMAL) turnOff()
-  else fail('No hearing')
+  else fail(faultLine(NO_HEARING))
 }
 
 function onHeard(data, generation) {
@@ -286,13 +316,13 @@ async function ask(text) {
       signal: controller.signal,
     })
     if (!response.ok || !response.body) {
-      error.value = response.ok ? NO_ANSWER : await refusalLine(response)
+      error.value = response.ok ? faultLine(NO_ANSWER) : await refusalLine(response)
       return
     }
     await readSse(response.body, controller.signal)
   } catch (err) {
     if (err.name === 'AbortError') return
-    error.value = NO_ANSWER
+    error.value = faultLine(NO_ANSWER)
   }
 }
 
@@ -355,7 +385,7 @@ function enqueueWav(b64) {
       playing.value = false
     }
     speaking.value = handedOver.size > 0
-    if (end.kind === 'failed' || end.kind === 'refused') error.value = 'No speech'
+    if (end.kind === 'failed' || end.kind === 'refused') error.value = faultLine(NO_SPEECH)
   })
 }
 
@@ -363,7 +393,7 @@ function startPlayer() {
   try {
     return createPlayer()
   } catch {
-    error.value = 'No speech'
+    error.value = faultLine(NO_SPEECH)
     return null
   }
 }
@@ -379,6 +409,7 @@ function invalidatePlayback() {
 onMounted(() => {
   window.addEventListener('pagehide', turnOff)
   window.__copresenter = { setOn, say, snapshot }
+  void learnAccountLanguage()
 })
 onUnmounted(() => {
   window.removeEventListener('pagehide', turnOff)
@@ -395,7 +426,7 @@ onUnmounted(() => {
   <aside
     class="copresenter"
     :data-on="on"
-    :aria-label="on ? 'Presenter on' : 'Presenter off'"
+    :aria-label="controlWords ? (on ? words['controls.presenterOn'] : words['controls.presenterOff']) : undefined"
   >
     <span
       v-if="error"
@@ -406,8 +437,8 @@ onUnmounted(() => {
       type="button"
       role="switch"
       :aria-checked="on"
-      aria-label="AI"
-      title="AI"
+      :aria-label="words['controls.switch']"
+      :title="words['controls.switch']"
       @click="setOn(!on)"
     >
       <span
@@ -416,7 +447,7 @@ onUnmounted(() => {
       >
         <span class="thumb" />
       </span>
-      <span class="label">AI</span>
+      <span class="label">{{ words['controls.switch'] }}</span>
     </button>
     <section
       v-if="on && (heard || answer)"

@@ -2,6 +2,7 @@
 import { useNav } from '@slidev/client'
 
 import CoPresenter from './components/CoPresenter.vue'
+import { controlWords } from './controls-words.js'
 
 const { isPresenter } = useNav()
 </script>
@@ -16,10 +17,11 @@ const { isPresenter } = useNav()
   >
     <div class="presenter-bar">
       <a
+        v-if="controlWords"
         class="slidev-icon-btn"
         href="/"
-        aria-label="Home"
-        title="Home"
+        :aria-label="controlWords['controls.home']"
+        :title="controlWords['controls.home']"
       >
         <div
           class="i-carbon:home"
