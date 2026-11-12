@@ -8,8 +8,8 @@ There is no password login and no `/setup`: [sign-in](../sign-in.md) (SI2).
 
 The instance's `PRESENTATOR_PUBLIC_ORIGIN` and `PRESENTATOR_TALK_ORIGIN`
 (both https) are known. Inside the internal network the lobby's public
-hostname must resolve to the instance (an alias), because the instance answers
-only its two configured hostnames.
+hostname must resolve to the instance (an alias), because step 4 registers the
+back-channel logout URL under that name.
 
 ## Steps
 
