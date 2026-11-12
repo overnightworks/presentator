@@ -6,11 +6,11 @@ on:
     branches:
       - main
 
-# A pull request collapses onto its newest push, but every push to main keeps a
-# group of its own so no landing is ever cancelled by the next one.
+# A pull request collapses onto its newest push; a run on main keeps a group of
+# its own, so no landing is ever cancelled by the next one.
 concurrency:
-  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event.pull_request.number != null }}
 
 permissions:
   contents: read
@@ -122,6 +122,7 @@ jobs:
         run: uv run --locked ruff format --check
 
       - name: Test
+        # pytest-workers: the speech package does not install pytest-xdist, so its tests run serially until speech/ adds it
         run: uv run --locked pytest -q
 
   chatterbox-provider:
@@ -157,6 +158,7 @@ jobs:
         run: uv run --locked ruff format --check src tests ../provider-contract/src
 
       - name: Test
+        # pytest-workers: the chatterbox provider does not install pytest-xdist, so its tests run serially until speech/ adds it
         run: uv run --locked pytest -q tests
 
   qwen-provider:
@@ -193,6 +195,7 @@ jobs:
         run: uv run --locked ruff format --check src tests ../provider-contract/src
 
       - name: Test
+        # pytest-workers: the qwen provider does not install pytest-xdist, so its tests run serially until speech/ adds it
         run: uv run --locked pytest -q tests/test_main.py tests/test_model.py
 
   voxcpm-provider:
@@ -229,6 +232,7 @@ jobs:
         run: uv run --locked ruff format --check src tests ../provider-contract/src
 
       - name: Test
+        # pytest-workers: the voxcpm provider does not install pytest-xdist, so its tests run serially until speech/ adds it
         run: uv run --locked pytest -q tests/test_main.py tests/test_model.py
 
   magpie-provider:
@@ -259,6 +263,7 @@ jobs:
       - name: Check formatting
         run: uv run --locked ruff format --check src tests ../provider-contract/src
       - name: Test
+        # pytest-workers: the magpie provider does not install pytest-xdist, so its tests run serially until speech/ adds it
         run: uv run --locked pytest -q tests/test_main.py tests/test_model.py
 
   slidev:
@@ -683,7 +688,7 @@ jobs:
       - image
       - build-worker-k3d
     if: always()
-    uses: overnightworks/quality/.github/workflows/gate.yml@2d2b68bf3916b34f6f2c72a540c1e3d8a947b750 # v0.10.0
+    uses: overnightworks/quality/.github/workflows/gate.yml@9ced0f5cee689f2c70fb1467513b943484bd65a5 # v0.11.1
     permissions:
       contents: read
       actions: read
