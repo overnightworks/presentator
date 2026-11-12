@@ -8,6 +8,12 @@ on:
   schedule:
     - cron: '23 4 * * 1'
 
+# A pull request collapses onto its newest push; a run on main or a schedule
+# keeps a group of its own, so no landing is ever cancelled by the next one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event.pull_request.number != null }}
+
 permissions:
   contents: read
 
@@ -17,6 +23,6 @@ jobs:
       security-events: write
       contents: read
       actions: read
-    uses: overnightworks/quality/.github/workflows/codeql.yml@2d2b68bf3916b34f6f2c72a540c1e3d8a947b750 # v0.10.0
+    uses: overnightworks/quality/.github/workflows/codeql.yml@9ced0f5cee689f2c70fb1467513b943484bd65a5 # v0.11.1
     with:
       languages: '["actions", "javascript-typescript", "python"]'
