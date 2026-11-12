@@ -96,10 +96,12 @@ def test_a_scope_that_is_not_one_token_refuses_without_echoing_it(scope: str) ->
 def test_a_voice_outside_the_catalogue_refuses_naming_the_field(
     language: SampleLanguage, voice: str
 ) -> None:
-    with pytest.raises(ValidationError) as refused:
-        _settings_with(**{_voice_field(language): voice})
+    field = _voice_field(language)
 
-    assert _voice_field(language) in str(refused.value)
+    with pytest.raises(ValidationError) as refused:
+        _settings_with(**{field: voice})
+
+    assert field in str(refused.value)
 
 
 @pytest.mark.parametrize(
@@ -114,10 +116,12 @@ def test_a_voice_outside_the_catalogue_refuses_naming_the_field(
 def test_a_voice_that_does_not_speak_the_settings_language_refuses_naming_it(
     language: SampleLanguage, voice: wire.VoiceId
 ) -> None:
-    with pytest.raises(ValidationError) as refused:
-        _settings_with(**{_voice_field(language): voice})
+    field = _voice_field(language)
 
-    assert _voice_field(language) in str(refused.value)
+    with pytest.raises(ValidationError) as refused:
+        _settings_with(**{field: voice})
+
+    assert field in str(refused.value)
 
 
 @pytest.mark.parametrize("language", list(SampleLanguage))
