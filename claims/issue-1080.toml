@@ -1,0 +1,8 @@
+claim_id = "ee8d61eca76a486ab8032e01641c58fc"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "65ca4888ce72ee8422ee25d96f1505ded95c9348"
+branch = "claude/issue-1080-who-names-no-sample-rate"
+scope = ["src/presentator/adapters/speech.py", "src/presentator/api/copresenter.py", "src/presentator/contracts/copresenter.py", "tests/presentator", "tests/support/copresenter_support.py"]
+opened_commit = "81dc58458c22a1d2c0eff3edb19bfadfd41e1e29"
+whole_reason = "One field leaves its contract, its two production users and the tests that construct or pin it in one compile unit."
