@@ -6,7 +6,7 @@ stands here once, with the doubles and the accounts a test hands in.
 
 import atexit
 import tempfile
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
@@ -75,6 +75,7 @@ from presentator.contracts.decks import (
     SourceRunFailure,
 )
 from presentator.contracts.models import Role, User
+from presentator.contracts.voice import SampleLanguage
 from presentator.host.config import Settings
 from presentator.host.main import agent_front, web_auth_config_for
 from presentator.host.oidc import admission_of, oidc_client_config
@@ -159,7 +160,6 @@ A_TALK_SOCKET_ADDRESS: Final = "wss://talk.testserver"
 A_GATEWAY_ORIGIN: Final = "http://gateway.test:4000"
 A_SPEECH_SERVICE: Final = "http://speech.test:8080"
 A_SPEECH_SCOPE: Final = "speech-scope-of-this-test"
-A_SPEECH_VOICE: Final = wire.VoiceId.NORMAN
 AN_API_GROUP: Final = "/services/agent-service/api"
 AN_ISSUER: Final = "https://auth.example.test/realms/test"
 A_CLIENT_ID: Final = "presentator-test"
@@ -311,9 +311,13 @@ def a_settings() -> Settings:
         oidc_client_secret_file=Path("/run/oidc-client-secret"),
         speech_service=A_SPEECH_SERVICE,
         speech_service_scope=A_SPEECH_SCOPE,
-        speech_voice=A_SPEECH_VOICE,
         lobby_build=LOBBY_BUILD,
     )
+
+
+def the_speech_voices() -> Mapping[SampleLanguage, wire.VoiceId]:
+    """The voices an instance speaks in when no setting names them."""
+    return a_settings().speech_voices()
 
 
 def a_content_security_policy() -> str:

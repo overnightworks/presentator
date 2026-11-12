@@ -32,7 +32,7 @@ network `hal_speech_presentator`, and that hop's trust sentence is in
   for it. A refusal line clears at the next question. Each word has a German
   version in the overlay's catalog.
 - **CP7** The overlay's speech words are "Voice offline" (the service does not
-  answer, or the configured voice cannot speak), "Local hearing not ready" (hearing
+  answer, or a configured voice cannot speak), "Local hearing not ready" (hearing
   still loads) and "No hearing" (a hearing that fails or cannot open). A hearing
   the server ends in order, as at sign-out, shows no word. Two more words
   complete the set: "Unreachable" when `/who` fails for any other reason, and
@@ -76,7 +76,7 @@ network `hal_speech_presentator`, and that hop's trust sentence is in
   notice) says which one."
 - **CP12** Every answer event of text, sentence, audio and done carries
   `"ai_generated": true`; `error` and `slide`, the control events, do not; and
-  nothing switches it off.
+  nothing switches it off. The answer is spoken by the voice of its language.
 
 ## Where it runs and when it stops
 
