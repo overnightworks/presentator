@@ -1,0 +1,8 @@
+claim_id = "e175afb358b64e61b904d3ad8a1cb0a8"
+agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
+role = "builder"
+base = "5579955ac1f51b0e2c0325d2225db8ba3f013b97"
+branch = "claude/issue-1118-utterance-language-to-ask"
+scope = ["docs/co-presenter.md", "slidev/components/CoPresenter.vue", "slidev/tests", "src/presentator/adapters/speech.py", "src/presentator/api/copresenter.py", "src/presentator/application", "src/presentator/contracts/copresenter.py", "tests/presentator", "tests/support"]
+opened_commit = "b66ecfb9a66caaf43c875b532680910bc87aa21f"
+whole_reason = "The utterance's language travels from the adapter through the contract, the relay and the overlay into the ask before the voice can follow it."
