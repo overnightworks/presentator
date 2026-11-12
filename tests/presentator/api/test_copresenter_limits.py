@@ -19,6 +19,7 @@ from presentator.api.copresenter import (
     add_copresenter_routes,
 )
 from presentator.application.copresenter import AskLimiter, AskTicket
+from presentator.contracts.copresenter import DeckText
 from presentator.contracts.models import Role, User
 from tests.presentator.agent.support.transports import HeldTransport
 from tests.presentator.application.support.fakes import (
@@ -104,6 +105,23 @@ def test_ask_accepts_the_limit_and_the_offered_languages(
     assert [language for _text, language in private.speaking.spoken] == [
         language_handed_on
     ]
+
+
+@pytest.mark.parametrize(
+    ("deck_language", "heard_language"),
+    [("de", "de"), ("de", "en"), ("en", "de"), ("en", "en")],
+)
+def test_the_answer_is_spoken_in_the_language_the_question_was_heard_in(
+    deck_language: str, heard_language: str
+) -> None:
+    lobby, private, _clock = a_copresenter_talk_host()
+    private.texts.text = DeckText(title="t", language=deck_language, slides=())
+    lobby.sign_in()
+
+    response = ask(lobby.client, {**QUESTION, "language": heard_language})
+
+    assert response.status_code == HTTPStatus.OK
+    assert [language for _text, language in private.speaking.spoken] == [heard_language]
 
 
 def test_a_second_question_while_the_first_streams_gets_429_and_no_turn() -> None:

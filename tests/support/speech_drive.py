@@ -747,14 +747,18 @@ async def ask_and_leave_at_the_first_speak(
     release.set()
 
 
-def _transcripts(*shown: tuple[str, bool]) -> list[dict[str, object]]:
-    return [{"text": text, "final": final} for text, final in shown]
+def _interim(text: str) -> dict[str, object]:
+    return {"text": text, "final": False, "language": None}
+
+
+def _final(text: str, language: str = "de") -> dict[str, object]:
+    return {"text": text, "final": True, "language": language}
 
 
 BROWSER_ENDINGS: dict[str, Ending] = {
     "deltas-grow-and-completed-replaces": Ending(
         after_the_first_audio(a_delta("Gu"), a_delta("ten"), a_completed("Guten Tag.")),
-        _transcripts(("Gu", False), ("Guten", False), ("Guten Tag.", True)),
+        [_interim("Gu"), _interim("Guten"), _final("Guten Tag.")],
         HopClose.NORMAL,
     ),
     "session-and-turn-events-skipped": Ending(
@@ -774,7 +778,7 @@ BROWSER_ENDINGS: dict[str, Ending] = {
             ),
             a_completed("Ein Wort."),
         ),
-        _transcripts(("Ein Wort.", True)),
+        [_final("Ein Wort.")],
         HopClose.NORMAL,
     ),
     "failed-then-error": Ending(

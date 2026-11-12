@@ -440,7 +440,13 @@ async def _relay(
     ended = asyncio.Event()
 
     async def heard(transcript: HearingTranscript) -> None:
-        await socket.send_json({"text": transcript.text, "final": transcript.final})
+        await socket.send_json(
+            {
+                "text": transcript.text,
+                "final": transcript.final,
+                "language": transcript.language and transcript.language.value,
+            }
+        )
 
     hearing = asyncio.create_task(
         use.relay_hearing(socket, language, tokens, ended=ended, heard=heard)
