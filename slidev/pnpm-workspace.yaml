@@ -5,6 +5,7 @@ minimumReleaseAge: 10080
 overrides:
   dompurify: 3.4.17
   image-size: ^2.0.3
+  hono: ^4.13.16
   '@hono/node-server': ^2.1.6
   '@modelcontextprotocol/node': 2.1.0
   katex: ^0.18.2
