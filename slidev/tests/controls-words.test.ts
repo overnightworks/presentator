@@ -41,6 +41,14 @@ describe('the presenter controls words', () => {
     expect(currentWords()['controls.home']).toBe(german['controls.home'])
   })
 
+  it('shows the English words when the server names English', async () => {
+    const { controlWords, useAccountLanguage } = await freshControlsWords()
+
+    await useAccountLanguage('en')
+
+    expect(controlWords.value?.['controls.home']).toBe(english['controls.home'])
+  })
+
   it('keeps the first language when a later answer names another', async () => {
     const { currentWords, useAccountLanguage } = await freshControlsWords()
 
