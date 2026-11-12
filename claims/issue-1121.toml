@@ -3,6 +3,6 @@ agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
 role = "builder"
 base = "edbb4f53e3f2b183962cb5cd05b42d05b18d2b96"
 branch = "claude/issue-1121-speech-0-11-utterances"
-scope = ["pyproject.toml", "slidev/package.json", "slidev/pnpm-lock.yaml", "slidev/pnpm-workspace.yaml", "src/presentator/adapters/speech.py", "tests/presentator/adapters", "tests/support", "uv.lock"]
+scope = ["pyproject.toml", "slidev/package.json", "slidev/pnpm-lock.yaml", "slidev/pnpm-workspace.yaml", "src/presentator/adapters/speech.py", "tests/presentator/adapters", "tests/presentator/api/test_copresenter_hearing.py", "tests/support", "uv.lock"]
 opened_commit = "a8e4324b864667802c28042639be424df2bbddfa"
 whole_reason = "The pin, its lockfiles and the adapter that drops the lifted glue compile and test only together."
