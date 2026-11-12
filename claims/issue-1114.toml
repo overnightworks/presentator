@@ -1,8 +1,0 @@
-claim_id = "e95a1707f8fa4074bddd94aece49c78f"
-agent = "Claude 039f38b9-d4c2-4378-ad4f-d277ce00e349"
-role = "builder"
-base = "4f1936113557b404d85678a8f79b8e40d19120ce"
-branch = "claude/issue-1114-design-0-26-marked-parts"
-scope = ["frontend/e2e", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src", "pyproject.toml", "slidev/words", "src/presentator/contracts/words.py", "uv.lock"]
-opened_commit = "116bca295ef8440bdf6351c9a5d1c6d105b2581b"
-whole_reason = "The two pins, the catalogs, the generated modules and the page that renders the joined sentence compile only together."
