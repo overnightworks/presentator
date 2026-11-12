@@ -120,7 +120,7 @@ def test_every_generated_language_is_offered() -> None:
     ("tag", "offered"),
     [("de", "de"), ("en", "en"), ("fr", DEFAULT_LANGUAGE), ("de-AT", DEFAULT_LANGUAGE)],
 )
-def test_a_tag_without_a_catalog_is_the_fallback_language(
+def test_a_tag_is_its_offered_language_else_the_fallback(
     tag: str, offered: str
 ) -> None:
     assert offered_language(tag) == offered
