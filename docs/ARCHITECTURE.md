@@ -115,8 +115,10 @@ One process serves the lobby and the talk host and tells them apart by the
 `Host` header (`served_by_host` in `host/main.py`); a request for any other host
 gets a 404, except the lobby's back-channel logout path, which the lobby answers
 to a `POST` under any Host but the talk host's (other methods on that path
-answer 405): the signed Logout Token is its only control, so the path is meant
-to be reached from inside the cluster alone. The image's glibc is 2.36 or later,
+answer 405). The identity provider posts the logout to the web's Service address
+inside the cluster; the route ignores forwarded headers, and the signed Logout
+Token is its only control. Whether the path is also reachable through the edge is
+the deployment's decision, and presentator's safety does not depend on it. The image's glibc is 2.36 or later,
 because the controller reaches `pidfd_open` through ctypes. Both hosts answer
 `GET /health` with a fixed 200 and no session, store read or cookie
 (`api/health.py`); the port opens only after the database is migrated and the
@@ -133,8 +135,9 @@ worker's container never restarts, so each life ends its pod and the
 StatefulSet makes a fresh one. Neither pod holds a Kubernetes API right, and
 the worker's pod mounts no service-account token.
 
-presentator owns what it checks itself: the worker's self-check, the web's
-readiness against the worker, the migration of its own database at start and
+presentator owns what it checks itself: the worker's self-check, the migration
+of its own database at start (the web opens its port only after that migration
+and an answer from the worker; the health route then answers a fixed 200) and
 the validation of its settings, which refuses a start that names a wrong value.
 A release is tagged only after `release.yml` has driven its published image
 through the k3d probe (`scripts/probe_build_worker_k3d.py`) against
@@ -189,7 +192,7 @@ The operator's settings, his local sources folder and hal's token clients are
 trusted. A folder under the local-sources mount is read with the operator's
 trust: its repositories, their metadata (a `gitdir` file,
 `objects/info/alternates`, a symlink) and everyone who can write there. Across
-the shared speech service, over a plain `http` origin inside the cluster, go readiness,
+the shared speech service, over the plain `http` origin its setting names, go readiness,
 PCM, transcripts, spoken sentences and two tokens: the person's access token, which
 carries the account's subject and group memberships, and presentator's workload
 token beside it. Browser cookies and session credentials are not forwarded; what the
@@ -238,12 +241,17 @@ surface. A leak fails the run (`filterwarnings` in `pyproject.toml`).
   beside the credential it must not reach.
 - One process writes the database: a second would need a second write lock over
   the one SQLite file, and the identity lock relies on one writer.
-- The plain `http` hop to the speech service is safe only because its origin is
-  a service inside the cluster.
-- The plain `http` hop to the model gateway is safe only because its origin is
-  a service inside the cluster; the platform decides whom the gateway admits.
-- Back-channel logout comes from inside, not through the trusted proxy, so its
-  `X-Forwarded-For` is ignored.
+- The web reaches the speech service and the model gateway over plain `http` at
+  the origins its settings name, which on the platform are Service addresses
+  inside the cluster. presentator sends its workload token and the person's token
+  over that hop and relies on the deployment to keep it inside the cluster; its
+  settings validation only refuses an origin that is not a bare `http` origin
+  (the speech service) or a bare `http` or `https` origin (the gateway), and a
+  gateway CA file with an `http` origin. The platform decides whom the gateway
+  admits.
+- Back-channel logout is posted by the identity provider from inside the cluster
+  and ignores forwarded headers, so `X-Forwarded-For` does not decide anything
+  there.
 - The fetch-now webhook holds a per-source secret, not a login: a git host has
   no browser ([fetch-now hook](runbooks/call-the-fetch-now-hook.md)).
 - `/api/admin/` takes a Keycloak access token, not a session cookie, so a forged
