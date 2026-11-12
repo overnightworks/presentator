@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { words as german } from './words/de'
-import { words as english } from './words/en'
+import { words as german } from '../words/de'
+import { words as english } from '../words/en'
 
 type Words = typeof english | typeof german
 
@@ -17,11 +17,11 @@ interface ControlsWords {
 async function freshControlsWords(): Promise<ControlsWords> {
   vi.resetModules()
   // @ts-expect-error -- the addon ships this plain JavaScript module without declarations
-  return import('./controls-words.js')
+  return import('../controls-words.js')
 }
 
 beforeEach(() => {
-  vi.doUnmock('./words')
+  vi.doUnmock('../words')
 })
 
 describe('the presenter controls words', () => {
@@ -52,7 +52,7 @@ describe('the presenter controls words', () => {
 
   it('keeps the language whose answer came first when two answers overlap', async () => {
     const answers = new Map<string, (words: Words) => void>()
-    vi.doMock('./words', () => ({
+    vi.doMock('../words', () => ({
       loadWords: (language: string) =>
         new Promise((resolve) => {
           answers.set(language, resolve)

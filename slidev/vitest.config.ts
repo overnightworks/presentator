@@ -12,7 +12,7 @@ export default defineConfig({
     // The overlay browser tests each build the example deck from the shared
     // repository folder, and Slidev writes generated files into it.
     fileParallelism: false,
-    include: ['slidev/*.test.ts', 'slidev/tests/**/*.test.ts'],
+    include: ['slidev/tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcovonly'],

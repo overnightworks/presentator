@@ -69,6 +69,11 @@ rule = "test-layout"
 reason = "its subject is a deck built by the addon's name, which no addon source file mirrors"
 
 [[layout.allow]]
+path = "slidev/tests/controls-words.test.ts"
+rule = "test-layout"
+reason = "its subject, controls-words.js, sits in the addon root; sonar indexes only slidev/tests as tests, and a test beside the module would count as production code"
+
+[[layout.allow]]
 path = "slidev/tests/copresenter-refusals.browser.test.ts"
 rule = "test-layout"
 reason = "it exercises the addon's overlay in a browser through a built deck, which no single addon source file mirrors"
