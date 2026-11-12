@@ -86,7 +86,7 @@ test.describe('as an admin', () => {
 						'aria-current',
 						'page'
 					);
-					await expect(tabs.getByRole('link', { name: words['settings.title'] })).not.toHaveAttribute(
+					await expect(tabs.getByRole('link', { name: words['settings.generalTab'] })).not.toHaveAttribute(
 						'aria-current'
 					);
 					await expect(page.getByLabel(words['sourceNew.name'], { exact: true })).toHaveValue('');
@@ -387,7 +387,7 @@ test.describe('as an admin', () => {
 			url: anHttpsAddress(name)
 		});
 
-		await tabsOf(page, words).getByRole('link', { name: words['settings.title'] }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.generalTab'] }).click();
 		await expect(page).toHaveURL('/settings');
 		await page.goBack();
 		await expect(page).toHaveURL(`${SOURCES_LIST}/${name}`);
@@ -417,7 +417,7 @@ test.describe('as an admin', () => {
 		await page.reload();
 		await showsTheSourcePage(page, words);
 
-		await tabsOf(page, words).getByRole('link', { name: words['settings.title'] }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.generalTab'] }).click();
 		await expect(page).toHaveURL('/settings');
 		await page.goBack();
 

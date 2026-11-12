@@ -261,6 +261,10 @@ msgctxt "settings.title"
 msgid "Allgemein"
 msgstr "General"
 
+msgctxt "settings.generalTab"
+msgid "Allgemein"
+msgstr "General"
+
 msgctxt "settings.navLabel"
 msgid "Einstellungen"
 msgstr "Settings"

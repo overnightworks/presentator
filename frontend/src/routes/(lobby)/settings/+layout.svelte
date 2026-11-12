@@ -10,7 +10,7 @@
 
 <nav class="tabs" aria-label={words['settings.navLabel']}>
 	<a href={resolve('/(lobby)/settings')} aria-current={tabCurrent(page.url.pathname, 'general')}
-		>{words['settings.title']}</a
+		>{words['settings.generalTab']}</a
 	>
 	<a
 		href={resolve('/(lobby)/settings/sources')}

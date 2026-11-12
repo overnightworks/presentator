@@ -306,7 +306,7 @@ test.describe('as an admin', () => {
 		await expect(second.getByRole('heading', { level: 1 })).toHaveText(words['sources.title']);
 		await expect(second.locator('output.toast')).toHaveCount(0);
 		await second.close();
-		await tabsOf(page, words).getByRole('link', { name: words['settings.title'] }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.generalTab'] }).click();
 		await expect(page).toHaveURL('/settings');
 		await tabsOf(page, words).getByRole('link', { name: words['sources.title'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
@@ -530,7 +530,7 @@ test.describe('as an admin', () => {
 
 		// The pending modal makes the page inert, so the link is followed from script.
 		await tabsOf(page, words)
-			.getByRole('link', { name: words['settings.title'] })
+			.getByRole('link', { name: words['settings.generalTab'] })
 			.evaluate((link: HTMLElement) => link.click());
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['settings.title']);
 		const entries = await entriesOf(page);
@@ -563,7 +563,7 @@ test.describe('as an admin', () => {
 
 		// The pending modal makes the page inert, so the link is followed from script.
 		await tabsOf(page, words)
-			.getByRole('link', { name: words['settings.title'] })
+			.getByRole('link', { name: words['settings.generalTab'] })
 			.evaluate((link: HTMLElement) => link.click());
 		await expect.poll(() => load.seen.length).toBe(1);
 		const removed = page.waitForResponse(
@@ -700,7 +700,7 @@ test.describe('as an admin', () => {
 		await page.getByRole('link', { name: words['source.back'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);
 		await page.goBack();
-		await tabsOf(page, words).getByRole('link', { name: words['settings.title'] }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.generalTab'] }).click();
 		await expect(page).toHaveURL('/settings');
 
 		expect(documents).toEqual([]);

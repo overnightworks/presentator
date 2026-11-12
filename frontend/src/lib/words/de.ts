@@ -69,6 +69,7 @@ export type Words = {
     readonly "error.adminsExplanation": string;
     readonly "error.decksLink": string;
     readonly "settings.title": string;
+    readonly "settings.generalTab": string;
     readonly "settings.navLabel": string;
     readonly "settings.sourcesTab": string;
     readonly "settings.instanceName": string;
@@ -260,6 +261,7 @@ export const words: Words = {
     "error.adminsExplanation": "Einstellungen sind für Admins. Dein Konto hat keine Admin-Rolle.",
     "error.decksLink": "Decks",
     "settings.title": "Allgemein",
+    "settings.generalTab": "Allgemein",
     "settings.navLabel": "Einstellungen",
     "settings.sourcesTab": "Quellen",
     "settings.instanceName": "Name der Instanz",

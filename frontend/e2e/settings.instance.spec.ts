@@ -81,7 +81,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await page.goto(SETTINGS_ADDRESS);
 
 				const tabs = page.getByRole('navigation', { name: words['settings.navLabel'] });
-				await expect(tabs.getByRole('link', { name: words['settings.title'] })).toHaveAttribute(
+				await expect(tabs.getByRole('link', { name: words['settings.generalTab'] })).toHaveAttribute(
 					'aria-current',
 					'page'
 				);
@@ -180,7 +180,7 @@ test.describe('as an admin', () => {
 		await expect(page).toHaveURL(/\/settings\/sources$/);
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['sources.title']);
 		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
-		await page.getByRole('link', { name: words['settings.title'] }).click();
+		await page.getByRole('link', { name: words['settings.generalTab'] }).click();
 		await expect(page).toHaveURL(/\/settings$/);
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(words['settings.title']);
 	});

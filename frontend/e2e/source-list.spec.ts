@@ -394,7 +394,7 @@ test.describe('as an admin', () => {
 			'page'
 		);
 
-		await tabsOf(page, words).getByRole('link', { name: words['settings.title'] }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.generalTab'] }).click();
 		await expect(page).toHaveURL('/settings');
 		await tabsOf(page, words).getByRole('link', { name: words['sources.title'] }).click();
 		await expect(page).toHaveURL(SOURCES_LIST);

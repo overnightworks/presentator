@@ -284,7 +284,7 @@ test.describe('as an admin', () => {
 			'page'
 		);
 
-		await tabs.getByRole('link', { name: words['settings.title'] }).click();
+		await tabs.getByRole('link', { name: words['settings.generalTab'] }).click();
 		await expect(page).toHaveURL('/settings');
 		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 		await page.goBack();
@@ -582,7 +582,7 @@ test.describe('as an admin', () => {
 		const { name } = await opensAnHttpsSource(page, words, testInfo);
 		const secret = await renewsTheWebhook(page, words, name);
 
-		await tabsOf(page, words).getByRole('link', { name: words['settings.title'] }).click();
+		await tabsOf(page, words).getByRole('link', { name: words['settings.generalTab'] }).click();
 		await expect(page).toHaveURL('/settings');
 		await page.goBack();
 		await expect(page).toHaveURL(sourceAddress(name));

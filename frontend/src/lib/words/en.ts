@@ -69,6 +69,7 @@ const translated = {
     "error.adminsExplanation": "Settings are for admins. Your account has no admin role.",
     "error.decksLink": "Decks",
     "settings.title": "General",
+    "settings.generalTab": "General",
     "settings.navLabel": "Settings",
     "settings.sourcesTab": "Sources",
     "settings.instanceName": "Instance name",
