@@ -186,29 +186,25 @@ TALK_RATE_LIMIT: Final = RateLimitPolicy(
 LOGIN_REDIRECT: Final = LOBBY_SIGN_IN.login_redirect
 
 
-# SvelteKit writes its accessibility announcer with this one inline style
-# attribute, which `style-src 'self'` refuses; the policy admits exactly it by
-# its hash under 'unsafe-hashes', since hiding it by a build step would patch
-# the framework. It is the sha256 of the attribute's value in @sveltejs/kit
-# 3.1.0's runtime/components/root.svelte, so a kit update that changes the
-# style turns the browser drive red. It goes when SvelteKit writes the
-# announcer without an inline style (sveltejs/kit#11747).
-_ANNOUNCER_STYLE_HASH: Final = "sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo="
-
-
 def content_security_policy(shell: LobbyShell) -> str:
     """The one policy every answer of the lobby carries, except the logout page.
 
     Nothing in the lobby needs an external host or a frame: every asset ships
     under `/_app`, served from this origin. The one inline script
-    is the app's bootstrap, admitted by its hash, and the one inline style is
-    SvelteKit's announcer. The logout page brings its own policy, which
+    is the app's bootstrap, admitted by its hash, and the one inline style
+    attribute is SvelteKit's announcer, admitted by the hash the build states
+    under 'unsafe-hashes', since hiding it by a build step would patch the
+    framework. It goes when SvelteKit writes the announcer without an inline
+    style (sveltejs/kit#11747). The logout page brings its own policy, which
     webauth's security headers leave in place.
     """
     return default_content_security_policy(
         [shell.bootstrap_hash],
         added_sources={
-            CspDirective.STYLE_SRC: ["'unsafe-hashes'", f"'{_ANNOUNCER_STYLE_HASH}'"]
+            CspDirective.STYLE_SRC: [
+                "'unsafe-hashes'",
+                f"'{shell.announcer_style_hash}'",
+            ]
         },
     )
 

@@ -7,6 +7,7 @@ import pytest
 from webauth.policies import default_content_security_policy
 
 from presentator.api.lobby_shell import (
+    ANNOUNCER_STYLE_HASH_FILE,
     LANGUAGE_MARK,
     THEME_MARK,
     LobbyBuildError,
@@ -32,11 +33,19 @@ _HTML = (
 )
 _BOOTSTRAP = "<script>import('/_app/start.js');</script>"
 _REBUILT_BOOTSTRAP = "<script>import('/_app/rebuilt.js');</script>"
+_AN_ANNOUNCER_HASH = "sha256-" + "A" * 43 + "="
+_ANOTHER_ANNOUNCER_HASH = "sha256-" + "B" * 43 + "="
 
 
-def _a_build(directory: Path, page: str) -> Path:
+def _a_build(
+    directory: Path, page: str, announcer_hash: str | None = _AN_ANNOUNCER_HASH
+) -> Path:
     (directory / "_app").mkdir(parents=True)
     (directory / "index.html").write_text(page, encoding="utf-8")
+    if announcer_hash is not None:
+        (directory / ANNOUNCER_STYLE_HASH_FILE).write_text(
+            f"{announcer_hash}\n", encoding="utf-8"
+        )
     return directory
 
 
@@ -89,6 +98,38 @@ def test_the_bootstrap_hash_follows_the_built_script(tmp_path: Path) -> None:
 def test_a_shell_this_host_cannot_serve_is_refused(tmp_path: Path, page: str) -> None:
     build = _a_build(tmp_path, page)
     with pytest.raises(LobbyBuildError):
+        LobbyShell.read(build)
+
+
+def test_the_announcer_style_hash_is_the_one_the_build_states(tmp_path: Path) -> None:
+    one = LobbyShell.read(_a_build(tmp_path / "one", _HTML.format(_BOOTSTRAP)))
+    rebuilt = LobbyShell.read(
+        _a_build(
+            tmp_path / "rebuilt",
+            _HTML.format(_BOOTSTRAP),
+            announcer_hash=_ANOTHER_ANNOUNCER_HASH,
+        )
+    )
+
+    assert one.announcer_style_hash == _AN_ANNOUNCER_HASH
+    assert rebuilt.announcer_style_hash == _ANOTHER_ANNOUNCER_HASH
+
+
+@pytest.mark.parametrize(
+    "announcer_hash",
+    [
+        pytest.param(None, id="no-hash-file"),
+        pytest.param("", id="empty-hash-file"),
+        pytest.param("S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=", id="no-algorithm"),
+        pytest.param(f"{_AN_ANNOUNCER_HASH}' 'unsafe-inline", id="more-than-a-hash"),
+    ],
+)
+def test_a_build_without_a_usable_announcer_style_hash_is_refused(
+    tmp_path: Path, announcer_hash: str | None
+) -> None:
+    build = _a_build(tmp_path, _HTML.format(_BOOTSTRAP), announcer_hash)
+
+    with pytest.raises(LobbyBuildError, match="announcer"):
         LobbyShell.read(build)
 
 
@@ -217,6 +258,8 @@ def test_the_policy_admits_one_style_attribute_by_its_hash_and_no_inline_style(
     """LB6."""
     policy = lobby.client.get("/login").headers["content-security-policy"]
 
-    self_keyword, unsafe_hashes, *hashes = _directives(policy)["style-src"]
-    assert (self_keyword, unsafe_hashes) == ("'self'", "'unsafe-hashes'")
-    assert [source.startswith("'sha256-") for source in hashes] == [True]
+    assert _directives(policy)["style-src"] == [
+        "'self'",
+        "'unsafe-hashes'",
+        f"'{LOBBY_SHELL.announcer_style_hash}'",
+    ]
