@@ -30,7 +30,7 @@ presentator holds only its own values here.
 - **SI10** When Keycloak signs a person out, every presentator session of that
   person ends on both hosts. The route answers a `POST` under any Host but the
   talk host's, an internal service name or an address included, and the signed
-  Logout Token is its only control; the talk host answers 404 there.
+  Logout Token is its only control; the talk host never serves it.
 - **SI11** Only the fetch-now hook's prefix `/sources/` and
   `/auth/backchannel-logout` are exempt from the origin check.
 - **SI14** Each host counts HTTP requests per address, behind the trusted proxy

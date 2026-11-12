@@ -31,8 +31,8 @@ only its two configured hostnames.
    the client's back-channel logout URL. Keycloak reaches it inside the
    network `hal_backchannel_presentator` through the alias
    `presentator.hallucinai.de`, in plain HTTP: TLS ends at the edge. The route
-   answers a `POST` under any Host and port except the talk host's, which gets
-   404, so a Service name works as well; the signed Logout Token is its only
+   answers a `POST` under any Host and port except the talk host's, which never
+   serves it, so a Service name works as well; the signed Logout Token is its only
    control, and the deployment keeps the path off the public internet. The
    route is not live until the client registers it; a valid Logout Token then
    ends every session of its subject, on every device. The web joins
