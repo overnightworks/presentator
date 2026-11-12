@@ -26,11 +26,9 @@ from presentator.host.worker_self_check import (
     MOUNT_ROOT_MODES,
     TERMINATION_LOG,
     Identity,
-    KubernetesMounts,
     Mounts,
     ResourceBounds,
     RootFacts,
-    Seal,
     Snapshot,
     Toolchain,
     read_snapshot,
@@ -45,16 +43,6 @@ CapAmb:\t0000000000000000
 NoNewPrivs:\t1
 Seccomp:\t2
 """
-HARDENED = "rw,nosuid,nodev,noexec"
-MESSAGE_QUEUE_MOUNTINFO = f"40 20 0:40 / {QUEUE_MOUNT} {HARDENED} - mqueue mqueue rw\n"
-SEALED_MOUNTINFO = (
-    "20 1 0:20 / / ro,relatime - overlay overlay rw\n"
-    + "".join(
-        f"{21 + index} 20 0:{21 + index} / {mount} {HARDENED} - tmpfs tmpfs rw\n"
-        for index, mount in enumerate(worker_self_check.TMPFS_MOUNTS)
-    )
-    + MESSAGE_QUEUE_MOUNTINFO
-)
 # The kernel's own header lines of its empty SysV tables, as read in a container.
 SYSV_HEADERS = {
     "shm": (
@@ -107,6 +95,18 @@ POD_MOUNTS = (
 )
 
 
+def mountinfo_rows(mounts: Iterable[PodMount]) -> str:
+    """The `mountinfo` text of `mounts`, one row each."""
+    return "".join(
+        f"{20 + index} 1 0:{20 + index} / {row.mount} {row.options}"
+        f" - {row.filesystem} {row.filesystem} rw\n"
+        for index, row in enumerate(mounts)
+    )
+
+
+SEALED_MOUNTINFO = mountinfo_rows(POD_MOUNTS)
+
+
 def limits_file(soft: str, hard: str) -> str:
     """The kernel's `proc/self/limits` layout, with the given `Max processes` row."""
 
@@ -149,11 +149,9 @@ def sealed_topology() -> rtnetlink.Topology:
 def read_sealed_snapshot(
     root: Path,
     read_topology: Callable[[], rtnetlink.Topology] = sealed_topology,
-    *,
-    seal: Seal = Seal.COMPOSE,
 ) -> Snapshot:
-    """Read the staged root under `seal`, with the topology `read_topology` gives."""
-    return read_snapshot(root, seal, read_topology=read_topology)
+    """Read the staged root, with the topology `read_topology` gives."""
+    return read_snapshot(root, read_topology=read_topology)
 
 
 def _owned_by_root(roots: Mapping[str, RootFacts]) -> dict[str, RootFacts]:
@@ -161,22 +159,17 @@ def _owned_by_root(roots: Mapping[str, RootFacts]) -> dict[str, RootFacts]:
 
 
 def _mounts_owned_by_root(mounts: Mounts) -> Mounts:
-    kubernetes = mounts.kubernetes
-    if kubernetes is not None:
-        kubernetes = replace(
-            kubernetes,
-            table_roots=_owned_by_root(kubernetes.table_roots),
-            other_roots=_owned_by_root(kubernetes.other_roots),
-        )
-    return replace(mounts, work_owner_uid=0, kubernetes=kubernetes)
+    return replace(
+        mounts,
+        table_roots=_owned_by_root(mounts.table_roots),
+        other_roots=_owned_by_root(mounts.other_roots),
+    )
 
 
-def read_staged_root_as_sealed_process(
-    root: Path, *, seal: Seal = Seal.COMPOSE
-) -> Snapshot:
+def read_staged_root_as_sealed_process(root: Path) -> Snapshot:
     """Read the staged root as a root-run worker would, owners included."""
     sealed = sealed_snapshot()
-    read = read_sealed_snapshot(root, seal=seal)
+    read = read_sealed_snapshot(root)
     return replace(
         read,
         environment_keys=sealed.environment_keys,
@@ -196,6 +189,16 @@ def _fixed_up_roots() -> dict[str, RootFacts]:
     }
 
 
+def _admitted_other_roots() -> dict[str, RootFacts]:
+    """The roots of the pod mounts that no rule names, as the kubelet makes them."""
+    return {
+        "/proc": RootFacts(mode=stat.S_IFDIR | 0o555, owner_uid=0),
+        POD_HOSTNAME: RootFacts(mode=stat.S_IFREG | 0o644, owner_uid=0),
+        POD_MASKED_DIRECTORY: RootFacts(mode=stat.S_IFDIR | 0o755, owner_uid=0),
+        POD_NULL_BIND: RootFacts(mode=stat.S_IFCHR | 0o666, owner_uid=0),
+    }
+
+
 def sealed_snapshot() -> Snapshot:
     return Snapshot(
         dumpable=0,
@@ -203,17 +206,12 @@ def sealed_snapshot() -> Snapshot:
         mounts=Mounts(
             root_read_only=True,
             mountinfo=SEALED_MOUNTINFO,
-            work_mode=0o755,
-            work_owner_uid=0,
             docker_socket_present=False,
-            kubernetes=KubernetesMounts(
-                table_roots=_fixed_up_roots(),
-                other_roots={},
-                exposed_path_present=False,
-            ),
+            table_roots=_fixed_up_roots(),
+            other_roots=_admitted_other_roots(),
+            exposed_path_present=False,
         ),
         resource_bounds=ResourceBounds(
-            pids_max="512",
             memory_max="1073741824",
             process_limit=(str(MAXIMUM_PROCESSES), str(MAXIMUM_PROCESSES)),
         ),
@@ -231,7 +229,6 @@ def sealed_snapshot() -> Snapshot:
             },
         ),
         environment_keys=frozenset({"PATH", "HOME", "HOSTNAME"}),
-        seal=Seal.COMPOSE,
         pid=1,
         cgroup_tasks="1",
         scratch=Scratch(occupied_roots=frozenset(), sysv_tables=SYSV_HEADERS),
@@ -278,8 +275,28 @@ def stand_in_users(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(worker_self_check.grp, "getgrnam", group_entry)
 
 
+def _stage_pod_roots(root: Path) -> None:
+    """Give the staged mounts the roots a kubelet makes, and a masked path."""
+    (root / TERMINATION_LOG.lstrip("/")).touch()
+    for path, mode in MOUNT_ROOT_MODES.items():
+        (root / path.lstrip("/")).chmod(mode)
+    (root / QUEUE_MOUNT.lstrip("/")).chmod(OPEN_DIRECTORY_MODE)
+    claim = root / build_wire.SOCKET_DIRECTORY.lstrip("/")
+    claim.mkdir(parents=True)
+    claim.chmod(0o777)
+    (root / "proc").chmod(WORLD_READABLE_EXECUTABLE)
+    hostname = root / POD_HOSTNAME.lstrip("/")
+    hostname.parent.mkdir()
+    hostname.touch()
+    hostname.chmod(0o644)
+    masked = root / POD_MASKED_DIRECTORY.lstrip("/")
+    masked.mkdir()
+    masked.chmod(OPEN_DIRECTORY_MODE)
+    (root / "proc/masked").symlink_to("/dev")
+
+
 def stage_sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Stage the sealed container's files under `tmp_path`, and the reads' stand-ins."""
+    """Stage the sealed pod's files under `tmp_path`, and the reads' stand-ins."""
     stand_in_users(monkeypatch)
 
     def read_only_root(_root: Path) -> SimpleNamespace:
@@ -304,7 +321,6 @@ def stage_sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "proc/self/limits", limits_file(str(MAXIMUM_PROCESSES), str(MAXIMUM_PROCESSES))
     )
     file_at("sys/fs/cgroup/pids.current", "1\n")
-    file_at("sys/fs/cgroup/pids.max", "512\n")
     file_at("sys/fs/cgroup/memory.max", "1073741824\n")
     (tmp_path / "work").mkdir()
     (tmp_path / "work").chmod(0o755)
@@ -325,37 +341,10 @@ def stage_sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "opt/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64"
     )
     file_at(f"{shell}/chrome-headless-shell", mode=0o755)
+    _stage_pod_roots(tmp_path)
     return tmp_path
 
 
 def write_pod_mountinfo(root: Path, mounts: Iterable[PodMount]) -> None:
     """Replace the staged `mountinfo` with the rows of `mounts`."""
-    rows = (
-        f"{20 + index} 1 0:{20 + index} / {row.mount} {row.options}"
-        f" - {row.filesystem} {row.filesystem} rw\n"
-        for index, row in enumerate(mounts)
-    )
-    (root / "proc/self/mountinfo").write_text("".join(rows))
-
-
-def stage_kubernetes_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Stage the pod: its mounts, its roots at their fixed-up modes, a masked path."""
-    root = stage_sealed_root(tmp_path, monkeypatch)
-    write_pod_mountinfo(root, POD_MOUNTS)
-    (root / TERMINATION_LOG.lstrip("/")).touch()
-    for path, mode in MOUNT_ROOT_MODES.items():
-        (root / path.lstrip("/")).chmod(mode)
-    (root / QUEUE_MOUNT.lstrip("/")).chmod(OPEN_DIRECTORY_MODE)
-    claim = root / build_wire.SOCKET_DIRECTORY.lstrip("/")
-    claim.mkdir(parents=True)
-    claim.chmod(0o777)
-    (root / "proc").chmod(WORLD_READABLE_EXECUTABLE)
-    hostname = root / POD_HOSTNAME.lstrip("/")
-    hostname.parent.mkdir()
-    hostname.touch()
-    hostname.chmod(0o644)
-    masked = root / POD_MASKED_DIRECTORY.lstrip("/")
-    masked.mkdir()
-    masked.chmod(OPEN_DIRECTORY_MODE)
-    (root / "proc/masked").symlink_to("/dev")
-    return root
+    (root / "proc/self/mountinfo").write_text(mountinfo_rows(mounts))
