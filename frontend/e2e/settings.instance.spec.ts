@@ -9,6 +9,7 @@ import {
 	entriesOf,
 	expectsHeaderOnOneLine,
 	expectsNoHorizontalScroll,
+	kitWordsOf,
 	leftForSignIn,
 	MENU,
 	minutesAgo,
@@ -240,6 +241,7 @@ test.describe('as an admin', () => {
 		});
 		expect(saved.status()).toBe(200);
 		const words = await wordsOf(page);
+		const kitWords = await kitWordsOf(page);
 		expect((await sessionOf(page)).language).toBe(second.tag);
 
 		await page.goto('/');
@@ -247,22 +249,22 @@ test.describe('as an admin', () => {
 		for (const row of ['followSystem', 'light', 'dark'] as const) {
 			await expect(await themeRow(page, row)).toBeVisible();
 		}
-		await expect(page.locator(MENU).getByText(words['account.theme'], { exact: true })).toBeVisible();
-		await expect(page.locator(MENU).getByRole('button', { name: words['logout.button'] })).toBeVisible();
+		await expect(page.locator(MENU).getByText(kitWords['account.theme'], { exact: true })).toBeVisible();
+		await expect(page.locator(MENU).getByRole('button', { name: kitWords['account.logOut'] })).toBeVisible();
 
 		const visitor = await browser.newContext({ baseURL: testInfo.project.use.baseURL });
 		try {
 			const seen = await visitor.newPage();
-			const noAccess = words['signIn.noAccessSentence']({ app: words['app.name'] });
+			const noAccess = kitWords['signIn.noAccessSentence']({ appName: words['app.name'] });
 			const boards = [
-				{ path: '/login', shown: [words['signIn.loggedOut'], words['signIn.logIn']] },
+				{ path: '/login', shown: [kitWords['signIn.loggedOut'], kitWords['signIn.logIn']] },
 				...['/login/login-failed', '/login/talk/login-failed'].map((path) => ({
 					path,
-					shown: [words['signIn.loginFailed'], words['signIn.loginFailedBanner'], words['signIn.tryAgain']]
+					shown: [kitWords['signIn.loginFailed'], kitWords['signIn.loginFailedBanner'], kitWords['signIn.tryAgain']]
 				})),
 				...['/login/no-access', '/login/talk/no-access'].map((path) => ({
 					path,
-					shown: [words['signIn.noAccess'], noAccess, words['logout.button']]
+					shown: [kitWords['signIn.noAccess'], noAccess, kitWords['signIn.logOut']]
 				}))
 			];
 			for (const board of boards) {

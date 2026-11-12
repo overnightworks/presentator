@@ -9,5 +9,5 @@
 	provideNotice(new Notice());
 </script>
 
-<LobbyHeader session={data.session} person={data.person} words={data.words} />
+<LobbyHeader session={data.session} person={data.person} words={data.words} kitWords={data.kitWords} />
 <main>{@render children()}</main>

@@ -149,8 +149,10 @@ language (`frontend/src/lib/catalogs`), from which `design-catalogs` writes a
 typed module per language for the page and one Python module for the server
 (`contracts/words.py`); a language is a catalog file. The page loads the words
 of its language once, in the root load, from the language `/api/session` names;
-the session answer carries that tag and no sentence. The server words only the
-logout page's button. `scripts/check_catalog_purity.py` holds the pages to the
+the session answer carries that tag and no sentence. The root load fetches the
+design kit's words for its components (sign-in page, account menu) in the same
+language and hands them over as `words`; presentator overrides none. The
+server words only the logout page's button. `scripts/check_catalog_purity.py` holds the pages to the
 catalogs. The language is the instance's unless a signed-in person's account
 names one a catalog speaks, and English stands in where none does
 (`DEFAULT_LANGUAGE`); the theme is the person's. The look

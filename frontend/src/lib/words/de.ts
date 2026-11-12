@@ -9,24 +9,7 @@ export type Words = {
     readonly "header.decks": string;
     readonly "header.settings": string;
     readonly "account.title": string;
-    readonly "account.theme": string;
-    readonly "account.followSystem": string;
-    readonly "account.light": string;
-    readonly "account.dark": string;
     readonly "logout.button": string;
-    readonly "signIn.loggedOut": string;
-    readonly "signIn.logIn": string;
-    readonly "signIn.loginFailed": string;
-    readonly "signIn.loginFailedBanner": string;
-    readonly "signIn.tryAgain": string;
-    readonly "signIn.noAccess": string;
-    readonly "signIn.noAccessSentence": (gaps: { readonly app: string }) => string;
-    readonly "signIn.signingIn": string;
-    readonly "signIn.inOtherWindow": string;
-    readonly "signIn.openInTab": string;
-    readonly "signIn.unfinished": string;
-    readonly "signIn.windowBlocked": string;
-    readonly "signIn.windowBlockedSentence": string;
     readonly "legal.impressum": string;
     readonly "legal.datenschutz": string;
     readonly "legal.nutzungsbedingungen": string;
@@ -201,24 +184,7 @@ export const words: Words = {
     "header.decks": "Decks",
     "header.settings": "Einstellungen",
     "account.title": "Konto",
-    "account.theme": "Darstellung",
-    "account.followSystem": "Wie das System",
-    "account.light": "Hell",
-    "account.dark": "Dunkel",
     "logout.button": "Abmelden",
-    "signIn.loggedOut": "Du bist abgemeldet.",
-    "signIn.logIn": "Anmelden",
-    "signIn.loginFailed": "Anmeldung fehlgeschlagen",
-    "signIn.loginFailedBanner": "Die Anmeldung hat nicht geklappt. Versuch es noch einmal.",
-    "signIn.tryAgain": "Erneut versuchen",
-    "signIn.noAccess": "Kein Zugang",
-    "signIn.noAccessSentence": (gaps: { readonly app: string }) => "Du bist angemeldet, aber dieses Konto hat keinen Zugang zu " + gaps.app + ".",
-    "signIn.signingIn": "Anmeldung läuft",
-    "signIn.inOtherWindow": "Im anderen Fenster",
-    "signIn.openInTab": "In einem Tab öffnen",
-    "signIn.unfinished": "Die Anmeldung wurde nicht abgeschlossen.",
-    "signIn.windowBlocked": "Fenster blockiert",
-    "signIn.windowBlockedSentence": "Dein Browser hat das Anmeldefenster blockiert.",
     "legal.impressum": "Impressum",
     "legal.datenschutz": "Datenschutz",
     "legal.nutzungsbedingungen": "Nutzungsbedingungen",

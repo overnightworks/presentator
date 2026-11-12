@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { SignInPage } from 'overnightworks-design';
-	import { signInPageWords } from '#lib/kitWords.ts';
 	import { legalLinks } from '#lib/legal.ts';
 	import type { PageProps } from './$types';
 
@@ -13,5 +12,5 @@
 	appName={words['app.name']}
 	state={{ page: 'no-access', logOutAction: addresses.logout }}
 	legalLinks={legalLinks(words)}
-	words={signInPageWords(words)}
+	words={data.kitWords}
 />
