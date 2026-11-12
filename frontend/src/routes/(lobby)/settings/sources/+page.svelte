@@ -65,7 +65,7 @@
 	}
 </script>
 
-{#snippet code(text: string)}<code>{text}</code>{/snippet}
+{#snippet code({ text }: { text: string })}<code>{text}</code>{/snippet}
 
 <svelte:head>
 	<!-- A template literal: a bare interpolation compiles to a `?? ''` branch no page reaches. -->

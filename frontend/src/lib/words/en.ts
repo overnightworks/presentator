@@ -1,6 +1,6 @@
 // Generated from the en catalog by design-catalogs. Do not edit.
 
-import type { Words } from "./de";
+import type { Words } from "./de.js";
 const numberFormat = new Intl.NumberFormat("en");
 const pluralRules = new Intl.PluralRules("en");
 // prettier-ignore
