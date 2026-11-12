@@ -86,13 +86,12 @@ flowchart LR
     web -- https --> keycloak[Keycloak]
 ```
 
-presentator has one deployment, on the platform's k3s cluster. One image runs as two workloads in
-presentator's own Namespace: the web, a one-replica Deployment that recreates instead of rolling,
-and the build worker, a one-replica StatefulSet, both on the node of one claim mounted at
-`/run/presentator-build`, where the worker's socket lies. The platform's manifest
-(`apps/presentator` in overnightworks/platform) owns the pod specs, network policy, edge, secrets,
-the database backup with its restore test and the release; the [configuration](configuration.md)
-owns what each setting means.
+presentator has one deployment on the platform's k3s cluster. One image runs as two one-replica
+workloads in its own Namespace: the web, a Deployment that recreates instead of rolling, and the
+build worker, a StatefulSet, both on the node of one claim mounted at `/run/presentator-build`,
+where the worker's socket lies. The platform's manifest (`apps/presentator` in
+overnightworks/platform) owns the pod specs, network policy, edge, secrets, the database backup with
+its restore test and the release; the [configuration](configuration.md) owns each setting's meaning.
 
 One process serves the lobby and the talk host and tells them apart by the `Host` header; any other
 host gets a 404, except the lobby's back-channel logout path ([sign-in](sign-in.md)), which ignores
@@ -101,8 +100,7 @@ URL for presentator, so its safety does not depend on the call. `GET /health` an
 and the port opens only after the database is migrated and the worker answers.
 
 The worker's pod holds `lo` alone because the init container `remove-link` deletes its network link
-first; its container never restarts, so each life ends its pod and the StatefulSet makes a fresh
-one.
+first; its container never restarts, so each life ends the pod and the StatefulSet makes a fresh one.
 
 ## 5. Crosscutting Concepts
 
@@ -125,7 +123,7 @@ carries a language tag, no sentence. The overlay owns its pair ([co-presenter](c
 **Trust.** A deck author's code, git remotes and people's input are untrusted. The operator's
 settings, his local sources folder (its repositories, metadata and everyone who can write there) and
 hal's token clients are trusted. The shared speech service gets readiness, PCM, transcripts, spoken
-sentences and two tokens, the person's access token and presentator's workload token, over its plain
+sentences and two tokens (the person's access token and presentator's workload token) over its plain
 `http` origin; cookies are not forwarded, and what the service keeps is the shared section
 `#sprachdienst`. No operator blessing narrows this model, so an audit keeps the default. The
 platform confines the worker's pod and proves it in its CI; presentator proves only its own product.
