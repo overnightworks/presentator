@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 
 import type { SettingsView, SettingsWrite } from '../src/lib/api/settings.ts';
-import { type Language, languages } from '../src/lib/words/index.ts';
+import { type Language, languages, sourceLanguage } from '../src/lib/words/index.ts';
 import { type DeckRecord, expect, signIn, test as base } from './person.ts';
 import {
 	chooseTheme,
@@ -39,9 +39,10 @@ async function storedSettings(page: Page): Promise<SettingsView> {
 const languageName = (tag: Language): string =>
 	new Intl.DisplayNames(tag, { type: 'language' }).of(tag) ?? tag;
 
-// The baseline speaks the first language the generated words offer, so no test
-// restates a tag and none depends on what an earlier test left behind.
-const [baselineLanguage] = languages;
+// The baseline speaks a language other than the one the words are written in, so
+// no test restates a tag, none depends on what an earlier test left behind, and
+// a test that words a page in the written language always has a change to make.
+const baselineLanguage = languages.find((language) => language !== sourceLanguage) as Language;
 const test = base.extend<{
 	arrangeBaseline: (name?: string) => Promise<SettingsView>;
 }>({
@@ -470,12 +471,13 @@ test.describe('an instance in the second language', () => {
 		arrangeBaseline
 	}) => {
 		const settings = await arrangeBaseline();
-		const second = otherLanguage(settings);
+		// The expected ages are the written language's own, never the browser's en-US.
+		const second = sourceLanguage;
 		const put = await page.request.put(SETTINGS_API, {
 			headers: SAME_ORIGIN,
 			data: {
 				name: settings.name,
-				language_tag: second.tag
+				language_tag: second
 			}
 		});
 		expect(put.status()).toBe(200);
@@ -486,7 +488,7 @@ test.describe('an instance in the second language', () => {
 			await page.goto('/');
 			await page.evaluate(() => Object.assign(window, { stillTheSameDocument: true }));
 
-			await expect(page.locator('html')).toHaveAttribute('lang', second.tag);
+			await expect(page.locator('html')).toHaveAttribute('lang', second);
 			await expect(page.locator('table.decks tbody tr .changed')).toHaveText([
 				'vor 2 Minuten',
 				'vor 26 Minuten',
