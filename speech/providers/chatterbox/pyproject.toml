@@ -11,6 +11,10 @@ dependencies = ["chatterbox-tts==0.1.7", "numpy==1.26.4", "overnightworks-presen
 [project.scripts]
 presentator-chatterbox-worker = "presentator_chatterbox.__main__:main"
 
+[tool.uv]
+# gradio, pinned by the model package, caps pillow below the release that fixes its advisories; the provider never decodes images.
+override-dependencies = ["pillow>=13.0.0"]
+
 [tool.uv.sources]
 overnightworks-presentator-speech-provider-contract = { path = "../provider-contract", editable = true }
 
