@@ -31,6 +31,36 @@ item = "#1075"
 date = 2026-11-12
 reason = "the contract is renamed, not dropped: \"Only adapters read the manifest format\" forbids the same source modules from importing tomllib; babel left the runtime dependencies with the catalog adapter, so no layer imports it and the words come from the generated module"
 
+[[gate.loosened]]
+what = 'mandatory job "Speech: lint, tests" removed'
+item = "#1130"
+date = 2026-11-13
+reason = "the host speech service under speech/ is deleted (P1b of #512); presentator speaks and hears through the shared speech service, so its job checks code that no longer exists"
+
+[[gate.loosened]]
+what = 'mandatory job "Speech: Chatterbox provider" removed'
+item = "#1130"
+date = 2026-11-13
+reason = "the host speech service under speech/ is deleted (P1b of #512); presentator speaks and hears through the shared speech service, so its job checks code that no longer exists"
+
+[[gate.loosened]]
+what = 'mandatory job "Speech: Qwen provider" removed'
+item = "#1130"
+date = 2026-11-13
+reason = "the host speech service under speech/ is deleted (P1b of #512); presentator speaks and hears through the shared speech service, so its job checks code that no longer exists"
+
+[[gate.loosened]]
+what = 'mandatory job "Speech: VoxCPM provider" removed'
+item = "#1130"
+date = 2026-11-13
+reason = "the host speech service under speech/ is deleted (P1b of #512); presentator speaks and hears through the shared speech service, so its job checks code that no longer exists"
+
+[[gate.loosened]]
+what = 'mandatory job "Speech: Magpie provider" removed'
+item = "#1130"
+date = 2026-11-13
+reason = "the host speech service under speech/ is deleted (P1b of #512); presentator speaks and hears through the shared speech service, so its job checks code that no longer exists"
+
 [[size.generated]]
 path = "frontend/src/lib/api/types.ts"
 job = "Lobby: lint, types, tests, drive"
