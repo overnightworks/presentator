@@ -1,7 +1,0 @@
-claim_id = "806bdbf755e14ec49e889582f6ea0bfe"
-agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
-role = "builder"
-base = "edbb4f53e3f2b183962cb5cd05b42d05b18d2b96"
-branch = "claude/issue-1126-architecture-budget"
-scope = ["docs/ARCHITECTURE.md", "slidev/pnpm-lock.yaml", "slidev/pnpm-workspace.yaml"]
-opened_commit = "449dee4c6cc6b0d50bb537ce70475b2aa8608482"
