@@ -165,8 +165,8 @@ settings:
 overrides:
   dompurify: 3.4.17
   image-size: ^2.0.3
-  hono: ^4.13.16
   '@hono/node-server': ^2.1.6
+  hono: ^4.13.16
   '@modelcontextprotocol/node': 2.1.0
   katex: ^0.18.2
   minimatch: ^11.0.1
