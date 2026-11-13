@@ -1,8 +1,0 @@
-claim_id = "9c1ead55975f4ddeb0032bd318ddf46a"
-agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
-role = "builder"
-base = "bf928cfb1befe2bf5be940fb2f76b4283d3406a5"
-branch = "claude/issue-1130-speech-goes"
-scope = [".aco/board.toml", ".github/dependabot.yml", ".github/workflows/ci.yml", "README.md", "docs/configuration.md", "docs/runbooks/run-the-speech-service-on-the-host.md", "quality/baseline.toml", "quality/config.toml", "speech"]
-opened_commit = "104e77d2fbead1a732f7e82e8b9e4b3d03ea776f"
-whole_reason = "The directory, its CI jobs and the gate entries must go together, or the gate refuses missing mandatory jobs and orphaned exceptions."
