@@ -1,8 +1,0 @@
-claim_id = "b67022c152be4575a2248738e4f756c7"
-agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
-role = "builder"
-base = "6b6ed0f8746379004aced67f059a0670d20379c1"
-branch = "claude/issue-1151-quality-v0-16"
-scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "quality/baseline.toml"]
-opened_commit = "3eeb4d1a21b80ad7096d592e8de74de3c5c1df40"
-whole_reason = "Four pins and the ceiling file move together because v0.16.0 must read the table it records."
