@@ -8,7 +8,8 @@ declare global {
 
 // Every drive fails on a CSP violation: the page's
 // securitypolicyviolation event and the console line a browser writes for one,
-// so a changed announcer style or a new inline script is red here.
+// so a new inline script is red here, and an announcer style only when the
+// build's plugin misreads it.
 export const test = base.extend<{ violations: string[] }>({
 	violations: [
 		async ({ context, page }, use) => {

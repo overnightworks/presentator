@@ -197,4 +197,5 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
   the new identity until its next push; the update strategy must not be `OnDelete`.
 - An empty or older database is not guarded against: its retention pass deletes the runs only the
   right database names.
-- The claim root is born open: a web entry before the worker's first start is `stale-socket`.
+- The claim root is born open: an entry the web made at the socket's name
+  before the worker's first start is `stale-socket`.
