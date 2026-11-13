@@ -15,6 +15,10 @@ dependencies = [
 [project.scripts]
 presentator-qwen-worker = "presentator_qwen.__main__:main"
 
+[tool.uv]
+# gradio, pinned by the model package, caps pillow below the release that fixes its advisories; the provider never decodes images.
+override-dependencies = ["pillow>=13.0.0"]
+
 [tool.uv.sources]
 overnightworks-presentator-speech-provider-contract = { path = "../provider-contract", editable = true }
 
