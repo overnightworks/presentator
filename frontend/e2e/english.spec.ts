@@ -18,12 +18,46 @@ const admin: Person = {
 
 const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// The German source words that the English catalog words differently.
+// Words that read the same in German and English: names, loanwords and the legal page titles.
+const SAME_IN_BOTH_LANGUAGES: ReadonlySet<string> = new Set([
+	'app.name',
+	'header.decks',
+	'legal.impressum',
+	'legal.datenschutz',
+	'legal.nutzungsbedingungen',
+	'decks.title',
+	'decks.columnDeck',
+	'deck.decksLink',
+	'deck.back',
+	'deck.status',
+	'deck.pdf',
+	'error.decksLink',
+	'source.secret',
+	'source.webhookSecret',
+	'source.webhookHeading',
+	'source.secretMask',
+	'source.accessToken',
+	'source.accessDeployKey',
+	'sourceNew.name',
+	'sourceNew.secret',
+	'sourceNew.webhookSecret'
+]);
+
+// The German source words that the English catalog words differently; an English word
+// that copies the German one without being listed as the same in both fails here.
 async function germanWordsDifferingFromEnglish(english: Words): Promise<RegExp[]> {
 	const german = await loadWords('de');
-	return Object.entries(german)
-		.filter(([key, word]) => typeof word === 'string' && word !== english[key as keyof Words])
-		.map(([, word]) => new RegExp(`(?<!\\p{L})${escaped(word as string)}(?!\\p{L})`, 'u'));
+	const strings = Object.entries(german).filter(
+		(entry): entry is [string, string] => typeof entry[1] === 'string'
+	);
+	const copied = strings
+		.filter(([key, word]) => word === english[key as keyof Words])
+		.map(([key]) => key)
+		.filter((key) => !SAME_IN_BOTH_LANGUAGES.has(key));
+	expect(copied, 'English words that copy the German word').toEqual([]);
+	return strings
+		.filter(([key, word]) => word !== english[key as keyof Words])
+		.map(([, word]) => new RegExp(`(?<!\\p{L})${escaped(word)}(?!\\p{L})`, 'u'));
 }
 
 // The refusal boards answer 403 by design, and the browser logs that for the document itself.
