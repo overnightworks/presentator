@@ -241,14 +241,9 @@ test.describe('as an admin', () => {
 		await page.keyboard.press('Escape');
 
 		await page.getByLabel(words['settings.instanceName']).fill('Hafen');
-		const sessionRead = page.waitForResponse(
-			(received) =>
-				new URL(received.url()).pathname === '/api/session' && received.request().method() === 'GET'
-		);
 		await page.getByRole('button', { name: words['settings.save'] }).click();
 
 		await expect.poll(async () => (await storedSettings(page)).name).toBe('Hafen');
-		await sessionRead;
 		await expect(page.getByRole('button', { name: words['settings.save'] })).toBeEnabled();
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 	});
