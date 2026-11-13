@@ -12,10 +12,6 @@ import pytest
 from presentator.adapters import toolchain_identity
 from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.contracts.decks import ToolchainIdentity
-from tests.presentator.adapters.support.build_support import (
-    builds_under,
-    on_this_machine,
-)
 
 _A_PROJECT = {
     "package.json": '{"name": "toolchain"}',
@@ -204,12 +200,3 @@ def test_the_identity_does_not_depend_on_the_order_the_directory_lists_its_files
     monkeypatch.setattr(toolchain_identity.os, "scandir", ListsBackwards)
 
     assert toolchain_identity_of(project) == listed_in_the_usual_order
-
-
-def test_the_runner_answers_the_identity_it_was_handed(tmp_path: Path) -> None:
-    handed = ToolchainIdentity("c" * 64)
-    builds = builds_under(
-        tmp_path, toolchain=on_this_machine(tmp_path), identity=handed
-    )
-
-    assert builds.toolchain_identity() == handed

@@ -528,16 +528,15 @@ def serving(
 
 
 class ServingThread(threading.Thread):
-    """Keeps the error that ended the thread while pytest still sees it."""
+    """Ends cleanly and keeps the error, which `serving` raises or notes."""
 
     failure: BaseException | None = None
 
     def run(self) -> None:
         try:
             super().run()
-        except BaseException as error:
+        except Exception as error:  # noqa: BLE001 - `serving` raises or notes it
             self.failure = error
-            raise
 
 
 def wake_until_ended(volume: Path, thread: threading.Thread) -> None:
