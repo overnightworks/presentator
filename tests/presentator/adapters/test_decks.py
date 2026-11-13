@@ -101,15 +101,12 @@ def an_attempt(
     outcome: BuildOutcome = BuildOutcome.FAILED,
     commit: str = _A_LATER_COMMIT,
 ) -> BuildAttempt:
+    said = BuildFailure.said(_WHAT_THE_TOOLCHAIN_SAID)
     return BuildAttempt(
         commit=commit,
         started_at=_TRIED_AT,
         outcome=outcome,
-        failure=(
-            None
-            if outcome is BuildOutcome.RUNNING
-            else BuildFailure.said(_WHAT_THE_TOOLCHAIN_SAID)
-        ),
+        failure=None if outcome is BuildOutcome.RUNNING else said,
         toolchain=None,
     )
 

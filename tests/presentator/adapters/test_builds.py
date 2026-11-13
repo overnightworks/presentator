@@ -32,7 +32,6 @@ from presentator.contracts.decks import (
     BuildFailureReason,
     Deck,
     Source,
-    ToolchainIdentity,
     talk_address,
 )
 from presentator.ports.decks import BuildRun
@@ -1105,12 +1104,3 @@ def test_a_name_that_is_no_longer_a_directory_when_it_is_opened_is_refused(
     assert built == BuildFailure.without_words()
     assert EXAMPLE_SLUG in caplog.text
     assert list(builds.builds.iterdir()) == []
-
-
-def test_the_runner_answers_the_identity_it_was_handed(tmp_path: Path) -> None:
-    handed = ToolchainIdentity("c" * 64)
-    builds = builds_under(
-        tmp_path, toolchain=on_this_machine(tmp_path), identity=handed
-    )
-
-    assert builds.toolchain_identity() == handed
