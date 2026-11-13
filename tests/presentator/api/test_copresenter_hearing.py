@@ -213,7 +213,7 @@ def test_a_failed_item_or_error_event_closes_the_browser_4502_and_the_service_so
         assert service.closed.wait(THREAD_WAIT_SECONDS)
 
     (warning,) = _warnings(heard.logged)
-    assert type(event).__name__ in warning
+    assert wire.RefusalCode.UNAVAILABLE.value in warning
     assert heard.closed_with == HopClose.SERVICE_FAILED
 
 
