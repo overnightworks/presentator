@@ -3,6 +3,6 @@ agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
 role = "builder"
 base = "546cdddfc05ea7dcc0d7d5ced0933347cddeb9bc"
 branch = "claude/issue-1146-instance-language-retires"
-scope = ["docs", "frontend/e2e", "frontend/src", "src/presentator/adapters/preferences.py", "src/presentator/adapters/schema.py", "src/presentator/api/auth.py", "src/presentator/api/preference_api.py", "src/presentator/api/session_api.py", "src/presentator/api/talk.py", "src/presentator/application/preferences.py", "src/presentator/contracts/preferences.py", "src/presentator/contracts/words.py", "tests"]
+scope = ["docs", "frontend/e2e", "frontend/src", "src/presentator/adapters/preferences.py", "src/presentator/adapters/schema.py", "src/presentator/api/auth.py", "src/presentator/api/copresenter.py", "src/presentator/api/preference_api.py", "src/presentator/api/session_api.py", "src/presentator/api/talk.py", "src/presentator/application/preferences.py", "src/presentator/contracts/preferences.py", "src/presentator/contracts/words.py", "src/presentator/host/main.py", "tests"]
 opened_commit = "8e4c404d958a3d96245297152bccc0c16d819ab7"
 whole_reason = "One ruled behaviour: the instance language's reader, writer, field, column and docs go together, or a half-retired setting stays visible."
