@@ -36,6 +36,17 @@ async function germanWordsDifferingFromEnglish(): Promise<RegExp[]> {
 	return differing.map((word) => new RegExp(`(?<!\\p{L})${escaped(word)}(?!\\p{L})`, 'iu'));
 }
 
+// The page renders an absent or blank word as nothing, which no scan of the page text can see,
+// so the render pass asks the words once whether the English ones are all there.
+test('every German word has a non-blank English word', async () => {
+	const [german, english] = [await loadWords('de'), await loadWords('en')];
+	for (const key of Object.keys(german) as (keyof Words)[]) {
+		const word = english[key];
+		expect(word, `no English word for ${key}`).toBeDefined();
+		if (typeof word === 'string') expect(word.trim(), `a blank English word for ${key}`).not.toBe('');
+	}
+});
+
 // The refusal boards answer 403 by design, and the browser logs that for the document itself.
 const REFUSALS = ['/login/login-failed', '/login/no-access'];
 
