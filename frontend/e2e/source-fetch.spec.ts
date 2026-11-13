@@ -99,7 +99,7 @@ for (const surface of ['the source page', 'the list'] as const) {
 		await page.goto(surface === 'the list' ? SOURCES_LIST : sourceAddress(name));
 	};
 	const scope = (page: Page, name: string) =>
-		surface === 'the list' ? page.locator('tr', { hasText: name }) : page.locator('.actions');
+		surface === 'the list' ? page.locator('tr', { hasText: name }) : page.getByTestId('fetch-now');
 	const fetchButton = (page: Page, words: Words, name: string) =>
 		scope(page, name).getByRole('button', { name: words['source.fetchNow'] });
 
