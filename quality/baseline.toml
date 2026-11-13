@@ -8,7 +8,7 @@
 "src/presentator/application/decks.py" = 824
 "tests/gitmirror/test_mirror.py" = 1112
 "tests/presentator/adapters/test_builds.py" = 1106
-"tests/presentator/adapters/test_decks.py" = 1340
+"tests/presentator/adapters/test_decks.py" = 1338
 "tests/presentator/application/test_decks.py" = 1856
 
 [function_lines."speech/providers/chatterbox/src/presentator_chatterbox/model.py"]

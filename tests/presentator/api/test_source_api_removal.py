@@ -374,6 +374,7 @@ def test_a_removed_sources_talk_answers_not_found(tmp_path: Path) -> None:
             pdf=built / "deck.pdf",
             commit="a-commit",
             built_at=NOW,
+            toolchain=None,
         ),
     )
     decks = a_decks(

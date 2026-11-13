@@ -744,7 +744,7 @@ def a_swapped_build(tmp_path: Path, *, slug: str) -> tuple[GivenDecks, Path]:
     )
     store.put_build(
         slug,
-        Build(directory=talk, pdf=pdf, commit=_A_COMMIT, built_at=NOW),
+        Build(directory=talk, pdf=pdf, commit=_A_COMMIT, built_at=NOW, toolchain=None),
     )
     given = GivenDecks(
         store=store,
@@ -789,5 +789,6 @@ def put_a_built_deck(
             pdf=EXPORTED_PDF,
             commit=_BUILT_DECK_COMMIT,
             built_at=NOW,
+            toolchain=None,
         ),
     )

@@ -17,19 +17,14 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.ports import AccountKind
 
 from presentator.adapters.deck_store import SqliteDeckStore
-from presentator.adapters.decks import SqliteSourceStore
 from presentator.adapters.identity import (
     SqliteSessionRecordStore,
     StoredAccount,
-    TokenIdentifierFactory,
     create_identity_tables,
 )
-from presentator.adapters.secrets import secret_box
 from presentator.adapters.sqlite import rows
 from presentator.api.hooks import hook_address
-from presentator.application.decks import hash_webhook_secret
 from presentator.application.identity import SESSION_LIFETIME
-from presentator.contracts.decks import SourceWrite
 from presentator.contracts.models import Role, User
 from presentator.host import main
 from presentator.host.config import (
@@ -56,6 +51,7 @@ from tests.support.people import (
     copy_of_a_crashed_database,
     seed_user,
 )
+from tests.support.polled_source_support import add_a_polled_source, sources_over
 
 _PERSON = "felix"
 _ADMIN = User(id="id-of-felix", username=_PERSON, role=Role.ADMIN)
@@ -428,17 +424,14 @@ def a_polled_source(
     instance = a_real_instance()
     signed_in(instance)
     database = tmp_path / "presentator.sqlite3"
-    added = sources_over(database).add(
-        SourceWrite(
-            name=name,
-            url=remote.url,
-            ref="main",
-            owner_id=_ADMIN.id,
-            access_secret=_WHAT_THE_GIT_HOST_EXPECTS,
-            hook_secret_hash=hash_webhook_secret(_WHAT_THE_HOST_CARRIES),
-        ),
+    add_a_polled_source(
+        database,
+        remote,
+        name=name,
+        owner_id=_ADMIN.id,
+        access_secret=_WHAT_THE_GIT_HOST_EXPECTS,
+        hook_secret=_WHAT_THE_HOST_CARRIES,
     )
-    assert added is not None
     if not armed:
         with rows(database) as cursor:
             cursor.execute(
@@ -463,21 +456,6 @@ def call_the_hook(lobby: TestClient, *, carrying: str) -> Response:
     return lobby.post(
         hook_address(_SOURCE_NAME),
         headers={"authorization": f"Bearer {carrying}"},
-    )
-
-
-def sources_over(
-    database: Path, *, instance_key: str = INSTANCE_KEY
-) -> SqliteSourceStore:
-    """The real source store over the instance's file, keyed as it says.
-
-    What the instance itself writes is keyed by its own instance key; another
-    key stands for a row this installation did not write.
-    """
-    return SqliteSourceStore(
-        database=database,
-        identifiers=TokenIdentifierFactory(),
-        box=secret_box(instance_key),
     )
 
 
@@ -697,17 +675,14 @@ def test_two_sources_each_list_their_own_decks_and_reconcile_alone(
     asyncio.run(first.poller.tick())
     another_remote.commit_example_deck(at=_PUSHED_AT, into=_ANOTHER_SLUG)
     database = tmp_path / "presentator.sqlite3"
-    added = sources_over(database).add(
-        SourceWrite(
-            name=_ANOTHER_SOURCE_NAME,
-            url=another_remote.url,
-            ref="main",
-            owner_id=_ADMIN.id,
-            access_secret=_WHAT_THE_GIT_HOST_EXPECTS,
-            hook_secret_hash=hash_webhook_secret(_WHAT_THE_HOST_CARRIES),
-        ),
+    add_a_polled_source(
+        database,
+        another_remote,
+        name=_ANOTHER_SOURCE_NAME,
+        owner_id=_ADMIN.id,
+        access_secret=_WHAT_THE_GIT_HOST_EXPECTS,
+        hook_secret=_WHAT_THE_HOST_CARRIES,
     )
-    assert added is not None
     both = a_real_instance()
 
     asyncio.run(both.poller.tick())

@@ -64,7 +64,11 @@ def a_deck(
         source_id=SOURCE_ID,
         commit=a_commit(),
         build=Build(
-            directory=BUILT_TALK, pdf=EXPORTED_PDF, commit=a_commit(), built_at=NOW
+            directory=BUILT_TALK,
+            pdf=EXPORTED_PDF,
+            commit=a_commit(),
+            built_at=NOW,
+            toolchain=None,
         )
         if built
         else None,
@@ -74,7 +78,7 @@ def a_deck(
 
 def an_attempt(outcome: BuildOutcome) -> BuildAttempt:
     return BuildAttempt(
-        commit=a_commit(), started_at=NOW, outcome=outcome, failure=None
+        commit=a_commit(), started_at=NOW, outcome=outcome, failure=None, toolchain=None
     )
 
 

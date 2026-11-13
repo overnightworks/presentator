@@ -101,7 +101,7 @@ UNTERMINATED = [
         "another exit status where a pass is expected",
     ],
 )
-def test_a_life_that_is_not_the_expected_one_fails_naming_its_uid_and_the_reason(
+def test_a_wrong_life_fails_naming_its_uid_and_reason_and_asked_for_the_events(
     make_fixture: Callable[..., Fixture],
     lives_module: ModuleType,
     refusal: Predicate | None,

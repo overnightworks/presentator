@@ -483,7 +483,7 @@ class Build:
     pdf: Path
     commit: str
     built_at: datetime
-    toolchain: ToolchainIdentity | None = None
+    toolchain: ToolchainIdentity | None
 
 
 class BuildOutcome(StrEnum):
@@ -507,7 +507,7 @@ class BuildAttempt:
     started_at: datetime
     outcome: BuildOutcome
     failure: BuildFailure | None
-    toolchain: ToolchainIdentity | None = None
+    toolchain: ToolchainIdentity | None
 
     def failed_with(self, failure: BuildFailure) -> BuildAttempt:
         """This attempt, closed as failed, keeping the moment it started."""

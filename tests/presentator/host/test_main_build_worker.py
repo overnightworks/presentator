@@ -1,4 +1,4 @@
-"""The composition root builds a deck through the build worker when told to."""
+"""The composition root builds a deck through the runner it is told to."""
 
 import asyncio
 import os
@@ -11,19 +11,14 @@ import pytest
 from presentator.adapters.build_wire import SOCKET_NAME
 from presentator.adapters.build_worker import WorkerToolchain
 from presentator.adapters.deck_store import SqliteDeckStore
-from presentator.adapters.decks import SqliteSourceStore
-from presentator.adapters.identity import TokenIdentifierFactory
-from presentator.adapters.secrets import secret_box
 from presentator.adapters.toolchain_identity import toolchain_identity_of
-from presentator.application.decks import hash_webhook_secret
-from presentator.contracts.decks import SourceWrite
 from presentator.contracts.models import Role, User
 from presentator.host import main
 from presentator.host.config import ConfigurationError, load_settings
 from presentator.host.worker_serving import emergency_end
 from tests.support.git_remote import GitRemote
-from tests.support.lobby import INSTANCE_KEY
 from tests.support.people import seed_user
+from tests.support.polled_source_support import add_a_polled_source
 
 BUILD_TIMEOUT_SECONDS = 123.0
 OUTPUT_MEGABYTES = 77
@@ -76,28 +71,21 @@ def test_an_instance_starts_on_a_worker_that_answers_with_the_workers_own_bounds
     assert (toolchain.expected_uid, toolchain.expected_gid) == (0, os.getegid())
 
 
+@pytest.mark.usefixtures("environment")
 def test_a_deck_the_host_runner_builds_records_the_identity_of_the_toolchain_project(
-    environment: pytest.MonkeyPatch, remote: GitRemote
+    remote: GitRemote,
 ) -> None:
-    environment.setenv("PRESENTATOR_BUILD_RUNNER", "host")
     settings = load_settings()
     instance = main.build_instance(settings)
     seed_user(settings.database, AN_OWNER)
-    added = SqliteSourceStore(
-        database=settings.database,
-        identifiers=TokenIdentifierFactory(),
-        box=secret_box(INSTANCE_KEY),
-    ).add(
-        SourceWrite(
-            name="talks",
-            url=remote.url,
-            ref="main",
-            owner_id=AN_OWNER.id,
-            access_secret=WHAT_THE_GIT_HOST_EXPECTS,
-            hook_secret_hash=hash_webhook_secret(WHAT_THE_GIT_HOST_EXPECTS),
-        )
+    add_a_polled_source(
+        settings.database,
+        remote,
+        name="talks",
+        owner_id=AN_OWNER.id,
+        access_secret=WHAT_THE_GIT_HOST_EXPECTS,
+        hook_secret=WHAT_THE_GIT_HOST_EXPECTS,
     )
-    assert added is not None
     remote.commit_example_deck(at=datetime(2026, 1, 15, 9, tzinfo=UTC))
 
     asyncio.run(instance.poller.tick())

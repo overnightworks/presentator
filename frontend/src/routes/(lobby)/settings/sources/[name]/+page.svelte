@@ -182,7 +182,7 @@
 		>{source.fetched_at === null ? '—' : ageInWords(source.fetched_at, Date.now(), tag)}</span
 	>
 </div>
-<div class="actions">
+<div class="actions" data-testid="fetch-now">
 	<ActionButton
 		variant="secondary"
 		small

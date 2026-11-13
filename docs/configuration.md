@@ -4,7 +4,7 @@ Audience: the operator whose deployment supplies the settings, and an
 engineer looking one up. Settings are environment variables with the prefix
 `PRESENTATOR_`, read from the process environment and, in development, from a
 gitignored `.env` at the repository root. A refusal at start names the
-setting and what is wrong with it, never the value it was given, so a mistyped
+setting and what is wrong with it, never a secret's value, so a mistyped
 secret does not land in the startup output.
 
 ## Every run names

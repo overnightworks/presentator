@@ -71,7 +71,7 @@ class LobbyShell:
         if not shell.is_file() or not assets.is_dir():
             message = f"{build} holds no built lobby: run `pnpm build` in frontend/"
             raise LobbyBuildError(message)
-        page = shell.read_text(encoding="utf-8")
+        page = _read_build_file(shell)
         missing = [mark for mark in (LANGUAGE_MARK, THEME_MARK) if mark not in page]
         if missing:
             message = f"{shell} lacks {', '.join(missing)}"
@@ -99,12 +99,20 @@ class LobbyShell:
         )
 
 
+def _read_build_file(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as unreadable:
+        message = f"{path} cannot be read as UTF-8 text: {unreadable}"
+        raise LobbyBuildError(message) from unreadable
+
+
 def _announcer_style_hash(build: Path) -> str:
     hash_file = build / ANNOUNCER_STYLE_HASH_FILE
     if not hash_file.is_file():
         message = f"{hash_file} is missing: the build must state the announcer style"
         raise LobbyBuildError(message)
-    stated = hash_file.read_text(encoding="utf-8").strip()
+    stated = _read_build_file(hash_file).strip()
     if _SHA256_SOURCE.fullmatch(stated) is None:
         message = f"{hash_file} is not one sha256 hash of the announcer style"
         raise LobbyBuildError(message)

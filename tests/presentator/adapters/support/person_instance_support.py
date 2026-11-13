@@ -175,6 +175,7 @@ def _seed_deck(stores: _Stores, person: User, source: Source, build: Path) -> No
             pdf=build.parent / "deck.pdf",
             commit=_COMMIT,
             built_at=_NOW,
+            toolchain=None,
         ),
     )
     stores.runs.record(

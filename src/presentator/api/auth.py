@@ -158,12 +158,13 @@ _CSRF_POLICY: Final = CsrfPolicy(exempt=_SERVER_CALLS)
 DEFAULT_BODY_BYTES: Final = 32 * 1024
 # Every route has this budget, forms and the ask included; the hook keeps a git
 # host's push budget, since GitHub documents payloads of up to 25 MB.
-_BODY_SIZE: Final = BodySizePolicy(
+HOOK_BODY_BYTES: Final = 25 * 1024 * 1024
+LOBBY_BODY_SIZE: Final = BodySizePolicy(
     default_max_bytes=DEFAULT_BODY_BYTES,
     rules=(
         BodySizeRule(
             PathRules(prefixes=(HOOK_CALLS,)),
-            max_bytes=25 * 1024 * 1024,
+            max_bytes=HOOK_BODY_BYTES,
             methods=frozenset({HTTPMethod.POST}),
         ),
     ),
@@ -382,7 +383,7 @@ def _install_middleware(
                 CacheControlRule(PathRules(prefixes=("/",)), "no-store"),
             ),
         ),
-        body_size=_BODY_SIZE,
+        body_size=LOBBY_BODY_SIZE,
         rate_limit=LOBBY_RATE_LIMIT,
         bearer_gate=_bearer_gate(auth, admin, resource),
         csrf_origin=_CSRF_POLICY,
