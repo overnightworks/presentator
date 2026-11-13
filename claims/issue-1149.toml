@@ -1,8 +1,0 @@
-claim_id = "0cbcd3d62f484a2b9b0a1d10955f2347"
-agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
-role = "builder"
-base = "4b4f5472eef223f7c84267a7a623c41a649dcfad"
-branch = "claude/issue-1149-lobby-e2e-by-key"
-scope = ["frontend/e2e"]
-opened_commit = "f91f3c8e294306fe147c79c85c8cfde8852fe49f"
-whole_reason = "One test-only change across the lobby specs; split by spec file would leave half the suite on literals."
