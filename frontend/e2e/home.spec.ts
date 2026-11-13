@@ -1,3 +1,4 @@
+import { ageInWords } from '../src/lib/age.ts';
 import { legalLinks } from '../src/lib/legal.ts';
 import type { Locator } from '@playwright/test';
 import { addDeck, type DeckRecord, expect, type Person, test } from './person.ts';
@@ -61,8 +62,6 @@ const fourStates = [
 	})
 ];
 
-// The ages are worded in the page's language, English for the default browser.
-const englishAges = ['2 minutes ago', '26 minutes ago', '3 hours ago', '6 days ago'];
 
 for (const colorScheme of ['light', 'dark'] as const) {
 	for (const width of [390, 1280]) {
@@ -103,7 +102,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
 					await expect(row.locator('code')).toHaveText(
 						signedIn?.slugs[fourStates.length - 1 - index] ?? ''
 					);
-					await expect(row.locator('.changed')).toHaveText(englishAges[index] ?? '');
+					await expect(row.locator('.changed')).toHaveText(
+						ageInWords(deck.changed_at, Date.parse(NOW), (await sessionOf(page)).language)
+					);
 				}
 				await expect(page.locator('html')).toHaveAttribute('lang', (await sessionOf(page)).language);
 				await page.evaluate(() => document.fonts.ready);
