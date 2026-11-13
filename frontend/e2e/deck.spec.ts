@@ -1,6 +1,7 @@
 import type { APIResponse, Browser, Page } from '@playwright/test';
 
 import type { DeckView } from '../src/lib/api/decks.ts';
+import { ageInWords, durationInWords } from '../src/lib/age.ts';
 import { type DeckRecord, expect, signIn, test } from './person.ts';
 import {
 	endsTheSession,
@@ -8,6 +9,7 @@ import {
 	leftForSignIn,
 	minutesAgo,
 	NOW,
+	sessionOf,
 	SIGN_IN_START,
 	startsSignIn,
 	tabbedControlWithRing,
@@ -30,13 +32,17 @@ const toolchainFailure = {
 } as const;
 const JSON_HEADERS = { Accept: 'application/json' };
 
-// The ages and the duration are worded in the page's language, English here
-// for the default browser, as scenario literals.
-const inEnglish = {
-	built: '12 minutes ago',
-	attempt: '26 minutes ago',
-	building: '40 seconds'
-};
+// The ages and the duration as the page words them, through the lobby's own age helpers.
+async function agesOf(page: Page) {
+	const { language } = await sessionOf(page);
+	const now = Date.parse(NOW);
+	return {
+		built: ageInWords(minutesAgo(12), now, language),
+		changed: ageInWords(minutesAgo(180), now, language),
+		attempt: ageInWords(minutesAgo(26), now, language),
+		building: durationInWords(secondsAgo(40), now, language)
+	};
+}
 
 async function wireOf(page: Page, slug: string): Promise<DeckView> {
 	const answer = await page.request.get(`/api/decks/${slug}`, { headers: JSON_HEADERS });
@@ -95,6 +101,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				signedIn
 			}, testInfo) => {
 				const words = await wordsOf(page);
+				const ages = await agesOf(page);
 				const slugs = signedIn?.slugs ?? [];
 				await page.clock.setFixedTime(NOW);
 				await page.setViewportSize({ width, height: 900 });
@@ -119,7 +126,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(page.locator('.meta')).toContainText(SOURCE_ADDRESS);
 				await expect(page.locator('.meta')).toContainText(wire.commit);
 				await expect(page.locator('.meta')).toContainText(
-					words['deck.built']({ age: inEnglish.built })
+					words['deck.built']({ age: ages.built })
 				);
 				await expect(page.locator('.status .muted')).toContainText(
 					words['deck.buildsWith']({ themes: '' }).trim()
@@ -146,7 +153,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(banner).toHaveAttribute('data-banner', 'building');
 				await expect(banner).toContainText(words['deck.buildingLabel']);
 				await expect(banner).toContainText(wire.attempt?.commit ?? '');
-				await expect(banner).toContainText(words['deck.buildingFor']({ age: inEnglish.building }));
+				await expect(banner).toContainText(words['deck.buildingFor']({ age: ages.building }));
 				await expect(banner).toContainText(words['deck.buildingExplanation']);
 				await expect(page.locator('.actions .off')).toHaveText([
 					words['deck.presenterView'],
@@ -165,7 +172,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(banner).toContainText(words['deck.failedTitle']);
 				await expect(banner).toContainText(words['deck.attemptLabel']);
 				await expect(banner).toContainText(wire.attempt?.commit ?? '');
-				await expect(banner).toContainText(inEnglish.attempt);
+				await expect(banner).toContainText(ages.attempt);
 				await expect(banner.locator('pre')).toHaveText(toolchainFailure.text);
 				await expect(banner).not.toContainText(words['deck.failedLastTalkStands']);
 				await expect(page.getByText(words['deck.failedLastTalkStands'])).toBeVisible();
@@ -191,8 +198,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(page.getByText(words['deck.notBuiltExplanation'])).toBeVisible();
 				await expect(page.locator('aside.banner')).toHaveCount(0);
 				await expect(page.locator('.actions')).toHaveCount(0);
-				// The state word "never built" holds the template's first word, so the build's age is told by its unit.
-				await expect(page.locator('.meta')).not.toContainText(/built \d+ \w+ ago/);
+				for (const age of [ages.built, ages.changed, ages.attempt]) {
+					await expect(page.locator('.meta')).not.toContainText(age);
+				}
 				const overflow = await page.evaluate(
 					() => document.documentElement.scrollWidth - document.documentElement.clientWidth
 				);

@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 
 import type { SettingsView } from '../src/lib/api/settings.ts';
+import { ageInWords, durationInWords } from '../src/lib/age.ts';
 import { sourceLanguage } from '../src/lib/words/index.ts';
 import { type DeckRecord, expect, test as base } from './person.ts';
 import {
@@ -418,6 +419,9 @@ test.describe('a browser that asks for the written language', () => {
 		signedIn
 	}) => {
 		const words = await wordsOf(page);
+		const { language } = await sessionOf(page);
+		const now = Date.parse(NOW);
+		const ageOf = (minutes: number): string => ageInWords(minutesAgo(minutes), now, language);
 		await page.clock.setFixedTime(NOW);
 
 		await page.goto('/');
@@ -425,23 +429,23 @@ test.describe('a browser that asks for the written language', () => {
 
 		await expect(page.locator('html')).toHaveAttribute('lang', sourceLanguage);
 		await expect(page.locator('table.decks tbody tr .changed')).toHaveText([
-			'vor 2 Minuten',
-			'vor 26 Minuten',
-			'vor 3 Stunden',
-			'vor 6 Tagen'
+			ageOf(2),
+			ageOf(26),
+			ageOf(180),
+			ageOf(6 * 24 * 60)
 		]);
 		const slugs = signedIn?.slugs ?? [];
 		await page.locator('table.decks tbody tr', { hasText: slugs[1] }).getByRole('link').click();
-		await expect(page.locator('.meta')).toContainText(words['deck.built']({ age: 'vor 12 Minuten' }));
+		await expect(page.locator('.meta')).toContainText(words['deck.built']({ age: ageOf(12) }));
 		expect(await page.evaluate(() => 'stillTheSameDocument' in window)).toBe(true);
 		await page.goto(`/deck/${slugs[0]}`);
 		await expect(page.locator('h1')).toHaveText(agedDecks[0]?.title ?? '');
 		await page.goto(`/deck/${slugs[3]}`);
 		await expect(page.locator('aside.banner')).toContainText(
-			words['deck.buildingFor']({ age: '40 Sekunden' })
+			words['deck.buildingFor']({ age: durationInWords(secondsAgo(40), now, language) })
 		);
 		await page.goto(`/deck/${slugs[2]}`);
-		await expect(page.locator('aside.banner')).toContainText('vor 26 Minuten');
+		await expect(page.locator('aside.banner')).toContainText(ageOf(26));
 
 		const name = await ownSourceName(page, OWN_SOURCE);
 		await answersWith(page, name, (view) => ({
@@ -449,6 +453,6 @@ test.describe('a browser that asks for the written language', () => {
 			fetched_at: new Date(Date.parse(NOW) - 3 * DAY).toISOString()
 		}));
 		await page.goto(sourceAddress(name));
-		await expect(page.locator('.meta')).toContainText('vor 3 Tagen');
+		await expect(page.locator('.meta')).toContainText(ageInWords(minutesAgo(3 * 24 * 60), now, language));
 	});
 });
