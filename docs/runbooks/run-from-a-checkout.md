@@ -59,6 +59,6 @@ service inside the cluster, which a checkout cannot reach, so every ask ends in 
 Open the public origin, under its hostname: any other Host, 127.0.0.1
 included, gets 404, except the back-channel logout path, which answers a `POST`
 (other methods answer 405). A signed-out visitor sees `/login`. A refusal at
-start names the setting and what is wrong with it, never the value.
+start names the setting and what is wrong with it, never a secret's value.
 
 Related: [settings](../configuration.md).
