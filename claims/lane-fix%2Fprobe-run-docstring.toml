@@ -1,7 +1,0 @@
-claim_id = "a1d072f18f9b49639175124d2ef85733"
-agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
-role = "builder"
-base = "546cdddfc05ea7dcc0d7d5ced0933347cddeb9bc"
-branch = "fix/probe-run-docstring"
-scope = ["scripts/probe_build_worker_k3d.py"]
-opened_commit = "fc69aef7119699f96d65378fe3de5e814771bf88"
