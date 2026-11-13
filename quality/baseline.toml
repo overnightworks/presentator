@@ -47,3 +47,5 @@ test_a_nested_upload_over_a_controller_gets_status_built_talk_entries_end_and_eo
 
 [clones."tests/presentator/host/test_worker_record_life.py"]
 test_the_upload_wait_is_what_remains_of_the_budget_taken_at_the_accepted_exit = [["tests/presentator/host/test_worker_reply.py", "test_the_sender_wait_is_what_remains_of_the_reply_budget"]]
+
+[literal_text]
