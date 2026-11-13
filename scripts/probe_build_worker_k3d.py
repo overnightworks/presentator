@@ -86,10 +86,9 @@ cannot interrupt the exit it started; the teardown ignores them too, and a stuck
 teardown is bounded by the wrapper's timeout. A signal that ends `k3d image import`
 leaves its tools container and the images volume, so the teardown removes both.
 CI runs it on a clean runner; a local run
-takes the probe-stack lock:
+starts through the machine's load-gated wrapper:
 
-    flock -o -w 3600 /tmp/probe-stack.lock setpriv --pdeathsig TERM \
-        timeout -k 30 1800 python scripts/probe_build_worker_k3d.py drive \
+    probe-run python scripts/probe_build_worker_k3d.py drive \
         --platform CHECKOUT
 """
 
