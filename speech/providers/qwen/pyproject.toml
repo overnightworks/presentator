@@ -23,7 +23,7 @@ override-dependencies = ["pillow>=13.0.0"]
 overnightworks-presentator-speech-provider-contract = { path = "../provider-contract", editable = true }
 
 [dependency-groups]
-dev = ["pytest==9.2.0", "ruff==0.17.3"]
+dev = ["pytest==9.2.0", "ruff==0.17.4"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/presentator_qwen"]
