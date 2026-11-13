@@ -38,6 +38,7 @@ async function agesOf(page: Page) {
 	const now = Date.parse(NOW);
 	return {
 		built: ageInWords(minutesAgo(12), now, language),
+		changed: ageInWords(minutesAgo(180), now, language),
 		attempt: ageInWords(minutesAgo(26), now, language),
 		building: durationInWords(secondsAgo(40), now, language)
 	};
@@ -197,7 +198,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await expect(page.getByText(words['deck.notBuiltExplanation'])).toBeVisible();
 				await expect(page.locator('aside.banner')).toHaveCount(0);
 				await expect(page.locator('.actions')).toHaveCount(0);
-								await expect(page.locator('.meta')).not.toContainText(words['deck.built']({ age: ages.built }));
+				for (const age of [ages.built, ages.changed, ages.attempt]) {
+					await expect(page.locator('.meta')).not.toContainText(age);
+				}
 				const overflow = await page.evaluate(
 					() => document.documentElement.scrollWidth - document.documentElement.clientWidth
 				);
