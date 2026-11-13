@@ -1,8 +1,0 @@
-claim_id = "f2d9f359a9ce40a5afe8d169c16588e3"
-agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
-role = "builder"
-base = "edbb4f53e3f2b183962cb5cd05b42d05b18d2b96"
-branch = "claude/issue-1124-announcer-hash-from-build"
-scope = ["docs/lobby.md", "frontend/vite.config.ts", "quality/config.toml", "slidev/pnpm-lock.yaml", "slidev/pnpm-workspace.yaml", "src/presentator/api/auth.py", "src/presentator/api/lobby_shell.py", "tests/presentator/api/fixtures/lobby_build", "tests/presentator/api/test_lobby_shell.py", "tests/presentator/api/test_talk_built_hosts.py"]
-opened_commit = "827055b3be645c9aa18ad2e5d69e91dcff1f23c9"
-whole_reason = "The build that emits the hash, the policy that reads it, its fixture and the gate's declaration change only together; the slidev advisory bump is what keeps the gate green."
