@@ -1,5 +1,7 @@
 """The lobby's built shell: read once, hashed for the policy, served per reader."""
 
+import os
+import re
 from http import HTTPStatus
 from pathlib import Path
 
@@ -133,6 +135,23 @@ def test_a_build_without_a_usable_announcer_style_hash_is_refused(
     build = _a_build(tmp_path, _HTML.format(_BOOTSTRAP), announcer_hash)
 
     with pytest.raises(LobbyBuildError, match="announcer"):
+        LobbyShell.read(build)
+
+
+@pytest.mark.parametrize("built_file", ["index.html", ANNOUNCER_STYLE_HASH_FILE])
+@pytest.mark.parametrize("damage", ["non-utf8", "unreadable"])
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a file whatever its mode")
+def test_a_build_file_that_cannot_be_read_is_refused_naming_it(
+    tmp_path: Path, built_file: str, damage: str
+) -> None:
+    build = _a_build(tmp_path, _HTML.format(_BOOTSTRAP))
+    damaged = build / built_file
+    if damage == "non-utf8":
+        damaged.write_bytes(b"\xff\xfe not utf-8")
+    else:
+        damaged.chmod(0)
+
+    with pytest.raises(LobbyBuildError, match=re.escape(str(damaged))):
         LobbyShell.read(build)
 
 
