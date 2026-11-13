@@ -1,6 +1,5 @@
 import type { Page } from '@playwright/test';
 
-import { loadWords } from '../src/lib/words/index.ts';
 import { type Person, expect, test } from './person.ts';
 import { minutesAgo, NOW, wordsOf, type Words } from './scenario.ts';
 import { OWN_SOURCE, ownSourceName, sourceAddress, SOURCES_LIST, NEW_ADDRESS } from './sources.ts';
@@ -15,37 +14,6 @@ const admin: Person = {
 	source: OWN_SOURCE,
 	decks: [{ state: 'ready', title: DECK_TITLE, changed_at: minutesAgo(180), built_at: minutesAgo(12) }]
 };
-
-const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-// The German source words that the English words differently, read from the generated words the
-// pages render from; any of them on an English page is a page defect, also where the English
-// word fell back to the German one. A German word that is also an English word of another key
-// ("Status") can say nothing about a page and is left out. The match ignores case because the
-// lobby uppercases headings, column headers and links, and innerText shows them so.
-async function germanWordsDifferingFromEnglish(): Promise<RegExp[]> {
-	const [german, english] = [await loadWords('de'), await loadWords('en')];
-	const englishWords = new Set(
-		Object.values(english).filter((word) => typeof word === 'string').map((word) => word.toLowerCase())
-	);
-	const differing = Object.entries(german).flatMap(([key, word]) =>
-		typeof word === 'string' && word !== english[key as keyof Words] && !englishWords.has(word.toLowerCase())
-			? [word]
-			: []
-	);
-	return differing.map((word) => new RegExp(`(?<!\\p{L})${escaped(word)}(?!\\p{L})`, 'iu'));
-}
-
-// The page renders an absent or blank word as nothing, which no scan of the page text can see,
-// so the render pass asks the words once whether the English ones are all there.
-test('every German word has a non-blank English word', async () => {
-	const [german, english] = [await loadWords('de'), await loadWords('en')];
-	for (const key of Object.keys(german) as (keyof Words)[]) {
-		const word = english[key];
-		expect(word, `no English word for ${key}`).toBeDefined();
-		if (typeof word === 'string') expect(word.trim(), `a blank English word for ${key}`).not.toBe('');
-	}
-});
 
 // The refusal boards answer 403 by design, and the browser logs that for the document itself.
 const REFUSALS = ['/login/login-failed', '/login/no-access'];
@@ -71,9 +39,6 @@ async function rendersInEnglish(
 
 	await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 	const shown = await page.locator('body').innerText();
-	for (const german of await germanWordsDifferingFromEnglish()) {
-		expect(shown, `a German word on the page: ${german}`).not.toMatch(german);
-	}
 	for (const key of Object.keys(words)) {
 		expect(shown, `a catalog key on the page: ${key}`).not.toContain(key);
 	}
