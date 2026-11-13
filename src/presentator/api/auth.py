@@ -68,6 +68,7 @@ from presentator.api.session_api import (
     SESSION_PATH,
     SessionAddresses,
     appearance_of,
+    language_of,
     session_routes,
 )
 from presentator.api.source_api import source_api_routes
@@ -342,7 +343,7 @@ def _install_sign_in(lobby: FastAPI, surfaces: _Surfaces) -> None:
         ),
         keeps_id_token=True,
         max_sessions=None,
-        ui_language=lambda _request: None,
+        ui_language=lambda request: language_of(request, surfaces.sessions),
         logout_page_text=lambda request: _logout_page_text(request, surfaces),
     )
     for path in _REFUSAL_PATHS:

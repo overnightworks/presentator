@@ -12,12 +12,7 @@ from fastapi.testclient import TestClient
 from httpx2 import Response
 
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
-from presentator.contracts.preferences import (
-    DEFAULT_LANGUAGE,
-    InstanceSettings,
-    ThemeChoice,
-)
-from presentator.contracts.words import LANGUAGES
+from presentator.contracts.preferences import InstanceSettings, ThemeChoice
 from tests.presentator.application.support.fakes import FakePersonPreferencesStore
 from tests.support.lobby import (
     NEIGHBOUR,
@@ -32,7 +27,6 @@ _SETTINGS = "/api/settings"
 _SESSION = "/api/session"
 _JSON = {"accept": "application/json"}
 _HAL = "hal-client"
-_LANGUAGES = list(LANGUAGES)
 _ANOTHER_SITE = "https://evil.example"
 
 
@@ -52,8 +46,8 @@ def an_account(theme: str | None) -> dict[str, str | None]:
     return {"theme": theme}
 
 
-def some_settings(language: str = "de", name: str = "Heim") -> dict[str, str]:
-    return {"name": name, "language_tag": language}
+def some_settings(name: str = "Heim") -> dict[str, str]:
+    return {"name": name}
 
 
 def the_session(lobby: Lobby) -> dict[str, object]:
@@ -144,7 +138,7 @@ def test_following_the_system_again_stores_follow_system() -> None:
     [
         an_account("purple"),
         an_account(None),
-        {"language_tag": "en"},
+        {"name": "Heim"},
         {},
     ],
     ids=["unknown theme", "no theme", "theme missing", "empty"],
@@ -198,15 +192,10 @@ def test_an_admin_reads_the_defaults_of_a_fresh_instance() -> None:
 
     assert answer.status_code == HTTPStatus.OK
     assert answer.headers["cache-control"] == "no-store"
-    assert answer.json() == {
-        "name": InstanceSettings().name,
-        "language_tag": DEFAULT_LANGUAGE,
-        "languages": _LANGUAGES,
-    }
+    assert answer.json() == {"name": InstanceSettings().name}
 
 
-def test_an_admins_instance_language_reaches_a_member_who_keeps_follow_system() -> None:
-    """LB1."""
+def test_an_admin_saves_the_instance_name_and_a_member_keeps_follow_system() -> None:
     admin = an_admin_lobby()
     member = admin.another_browser()
     member.sign_in(username=NEIGHBOUR)
@@ -214,11 +203,11 @@ def test_an_admins_instance_language_reaches_a_member_who_keeps_follow_system() 
     answer = admin.client.put(_SETTINGS, json=some_settings())
 
     assert answer.status_code == HTTPStatus.OK
-    assert answer.json() == {**some_settings(), "languages": _LANGUAGES}
+    assert answer.json() == some_settings()
     assert admin.client.get(_SETTINGS).json() == answer.json()
-    session = member.client.get(_SESSION).json()
-    assert session["theme"] == ThemeChoice.FOLLOW_SYSTEM.value
-    assert session["language"] == some_settings()["language_tag"]
+    assert member.client.get(_SESSION).json()["theme"] == (
+        ThemeChoice.FOLLOW_SYSTEM.value
+    )
 
 
 def test_an_admin_saves_an_empty_instance_name_and_reads_it_back_empty() -> None:
@@ -231,15 +220,6 @@ def test_an_admin_saves_an_empty_instance_name_and_reads_it_back_empty() -> None
     assert lobby.client.get(_SETTINGS).json()["name"] == ""
 
 
-def test_an_unspoken_language_on_settings_is_a_problem_and_writes_nothing() -> None:
-    lobby = an_admin_lobby()
-
-    answer = lobby.client.put(_SETTINGS, json=some_settings(language="xx"))
-
-    is_a_problem(answer, HTTPStatus.UNPROCESSABLE_ENTITY)
-    assert lobby.client.get(_SETTINGS).json()["name"] == InstanceSettings().name
-
-
 def test_an_admin_writing_account_changes_only_their_own_overrides() -> None:
     lobby = an_admin_lobby()
 
@@ -247,7 +227,6 @@ def test_an_admin_writing_account_changes_only_their_own_overrides() -> None:
 
     settings = lobby.client.get(_SETTINGS).json()
     assert settings["name"] == InstanceSettings().name
-    assert settings["language_tag"] == DEFAULT_LANGUAGE
     assert lobby.client.get(_ACCOUNT).json()["theme"] == ThemeChoice.LIGHT.value
 
 
@@ -292,7 +271,7 @@ def a_signed_in_browser_that_claims_nothing() -> Lobby:
 
 def a_write(lobby: Lobby, headers: dict[str, str]) -> Response:
     return lobby.client.put(
-        _SETTINGS, json=some_settings(language="en"), headers={**_JSON, **headers}
+        _SETTINGS, json=some_settings(), headers={**_JSON, **headers}
     )
 
 
@@ -417,7 +396,7 @@ def test_an_admins_bearer_writes_the_instance_defaults(scene: Scene) -> None:
     program = a_program(scene)
     bearer = a_bearer(scene, subject="admin-subject", groups=ADMIN)
 
-    answer = program.put(_SETTINGS, json=some_settings(language="en"), headers=bearer)
+    answer = program.put(_SETTINGS, json=some_settings(), headers=bearer)
 
     assert answer.status_code == HTTPStatus.OK
     assert (
@@ -434,7 +413,7 @@ def test_an_invalid_bearer_beside_an_admin_cookie_writes_nothing(
 
     answer = browser.put(
         _SETTINGS,
-        json=some_settings(language="en"),
+        json=some_settings(),
         headers={"authorization": "Bearer nonsense", **_JSON},
     )
 
@@ -443,17 +422,6 @@ def test_an_invalid_bearer_beside_an_admin_cookie_writes_nothing(
     assert (
         browser.get(_SETTINGS, headers=_JSON).json()["name"] == InstanceSettings().name
     )
-
-
-def test_the_generated_spec_declares_the_put_422_as_a_problem_and_as_validation() -> (
-    None
-):
-    responses = an_admin_lobby().app.openapi()["paths"][_SETTINGS]["put"]["responses"]
-
-    assert set(responses["422"]["content"]) == {
-        PROBLEM_MEDIA_TYPE,
-        "application/json",
-    }
 
 
 @pytest.mark.parametrize("path", [_ACCOUNT, _SETTINGS])

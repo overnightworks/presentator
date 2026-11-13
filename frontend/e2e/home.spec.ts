@@ -61,7 +61,7 @@ const fourStates = [
 	})
 ];
 
-// The ages are worded in the instance's language.
+// The ages are worded in the page's language, English for the default browser.
 const englishAges = ['2 minutes ago', '26 minutes ago', '3 hours ago', '6 days ago'];
 
 for (const colorScheme of ['light', 'dark'] as const) {

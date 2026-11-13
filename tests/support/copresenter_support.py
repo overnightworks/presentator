@@ -60,7 +60,6 @@ from tests.support.lobby import (
     Lobby,
     a_browser_at,
     a_crowd,
-    a_preferences,
     a_talk_app,
     an_agent_config,
 )
@@ -350,7 +349,6 @@ def a_copresenter_talk_host(
         copresenter=CoPresenterSurface(
             use=a_use(private, decks or the_admins_decks()),
             limiter=limiter or AskLimiter(),
-            preferences=a_preferences(),
             browser_origin=TALK_ORIGIN,
             delay=delay,
         ),
@@ -623,7 +621,6 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
                 person_access=WitnessedAccess(_access_over(auth, sessions), errors),
             ),
             limiter=limiter,
-            preferences=a_preferences(),
             browser_origin=A_TALK_ADDRESS,
             delay=wait,
         )

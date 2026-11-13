@@ -14,8 +14,7 @@ from presentator.contracts.preferences import (
 _SCHEMA: Final = """
 CREATE TABLE IF NOT EXISTS instance_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    name TEXT NOT NULL,
-    language_tag TEXT NOT NULL
+    name TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS person_preferences (
     user_id TEXT PRIMARY KEY REFERENCES users(id),
@@ -42,23 +41,21 @@ class SqliteInstanceSettingsStore:
         """Read the settings an admin saved."""
         with rows(self.database) as cursor:
             row = cursor.execute(
-                "SELECT name, language_tag FROM instance_settings WHERE id = ?",
+                "SELECT name FROM instance_settings WHERE id = ?",
                 (_THE_ONLY_ROW,),
             ).fetchone()
         if row is None:
             return None
-        name, language_tag = row
-        return InstanceSettings(name=name, language_tag=language_tag)
+        (name,) = row
+        return InstanceSettings(name=name)
 
     def write(self, settings: InstanceSettings) -> None:
         """Write the settings over whatever stood there."""
         with immediate_transaction(self.database) as cursor:
             cursor.execute(
-                "INSERT INTO instance_settings (id, name, language_tag)"
-                " VALUES (?, ?, ?)"
-                " ON CONFLICT(id) DO UPDATE SET"
-                " name = excluded.name, language_tag = excluded.language_tag",
-                (_THE_ONLY_ROW, settings.name, settings.language_tag),
+                "INSERT INTO instance_settings (id, name) VALUES (?, ?)"
+                " ON CONFLICT(id) DO UPDATE SET name = excluded.name",
+                (_THE_ONLY_ROW, settings.name),
             )
 
 

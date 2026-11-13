@@ -16,11 +16,11 @@ from presentator.api.lobby_shell import (
     LobbyShell,
 )
 from presentator.contracts.preferences import (
-    DEFAULT_LANGUAGE,
     Appearance,
     PersonPreferences,
     ThemeChoice,
 )
+from presentator.contracts.words import SOURCE_LANGUAGE
 from tests.presentator.application.support.fakes import FakePersonPreferencesStore
 from tests.support.lobby import (
     A_LOBBY_ASSET,
@@ -58,9 +58,9 @@ def test_the_shell_is_filled_with_the_readers_language_and_theme(
 ) -> None:
     shell = LobbyShell.read(_a_build(tmp_path, _HTML.format(_BOOTSTRAP)))
 
-    page = shell.filled(Appearance(language=DEFAULT_LANGUAGE, theme=ThemeChoice.DARK))
+    page = shell.filled(Appearance(language=SOURCE_LANGUAGE, theme=ThemeChoice.DARK))
 
-    assert f'lang="{DEFAULT_LANGUAGE}"' in page
+    assert f'lang="{SOURCE_LANGUAGE}"' in page
     assert 'data-theme="dark"' in page
 
 
@@ -174,7 +174,7 @@ def test_the_signed_out_login_loads_the_lobby_app(lobby: Lobby) -> None:
 
     assert answer.status_code == HTTPStatus.OK
     assert _is_the_lobby_app(answer.text)
-    assert f'lang="{DEFAULT_LANGUAGE}"' in answer.text
+    assert f'lang="{SOURCE_LANGUAGE}"' in answer.text
 
 
 def test_the_lobby_app_opens_in_the_readers_own_theme() -> None:

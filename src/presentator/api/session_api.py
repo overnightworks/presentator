@@ -1,8 +1,9 @@
 """`GET /api/session`: who reads, in which language and theme, and where sign-in is.
 
 The session gate lets this one path through without a session, so a signed-out
-caller gets the instance's defaults; the person comes from what the gate admitted.
-The language is the account's where a catalog speaks it, else the instance's.
+caller gets the browser's language and the default theme; the person comes from what
+the gate admitted. The language is the account's where a catalog speaks it, else the
+browser's, else the catalog source's.
 """
 
 from typing import Final
@@ -19,7 +20,7 @@ from presentator.api.admission import signed_in_person
 from presentator.application.preferences import Preferences, offered_language
 from presentator.contracts.models import Role
 from presentator.contracts.preferences import Appearance, ThemeChoice
-from presentator.contracts.words import Language
+from presentator.contracts.words import LANGUAGES, SOURCE_LANGUAGE, Language
 
 SESSION_PATH: Final = "/api/session"
 
@@ -53,22 +54,18 @@ class SessionView(BaseModel):
     sign_in: SessionAddresses
 
 
-def language_of(
-    request: Request, preferences: Preferences, sessions: SessionRecordStore
-) -> Language:
+def language_of(request: Request, sessions: SessionRecordStore) -> Language:
     """The offered language the person behind this request reads in.
 
-    The browser's own language is not read: the account's names the language,
-    else the instance's.
+    The account's language where a catalog speaks it, else the browser's, else the
+    catalog source's.
     """
     language_tag = resolve_language(
-        AppLanguages(
-            offered=preferences.languages(), default=preferences.served_language()
-        ),
+        AppLanguages(offered=LANGUAGES, default=SOURCE_LANGUAGE),
         account_tag=account_language_of_session(
             request, sessions=sessions, config=web_auth_config(request)
         ),
-        accept_language=None,
+        accept_language=request.headers.get("accept-language"),
     )
     return offered_language(language_tag)
 
@@ -80,7 +77,7 @@ def appearance_of(
     person = signed_in_person(request)
     return preferences.appearance_for(
         None if person is None else person.id,
-        language_tag=language_of(request, preferences, sessions),
+        language=language_of(request, sessions),
     )
 
 

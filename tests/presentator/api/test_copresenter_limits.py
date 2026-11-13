@@ -43,7 +43,6 @@ from tests.support.lobby import (
     A_TALK_ADDRESS,
     ADMIN,
     NOW,
-    a_preferences,
     a_relying_party,
     an_agent_config,
 )
@@ -169,7 +168,6 @@ def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> Non
         surface=CoPresenterSurface(
             use=a_use(private, the_admins_decks()),
             limiter=limiter,
-            preferences=a_preferences(),
             browser_origin=TALK_ORIGIN,
         ),
         admission=lambda _connection: FixedSession(),
@@ -234,7 +232,6 @@ def _a_hanging_app(
                 ),
             ),
             limiter=limiter,
-            preferences=a_preferences(),
             browser_origin=A_TALK_ADDRESS,
         ),
         admission=admission,

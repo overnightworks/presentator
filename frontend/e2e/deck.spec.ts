@@ -30,8 +30,8 @@ const toolchainFailure = {
 } as const;
 const JSON_HEADERS = { Accept: 'application/json' };
 
-// The ages and the duration are worded in the instance's language, English
-// here, as scenario literals.
+// The ages and the duration are worded in the page's language, English here
+// for the default browser, as scenario literals.
 const inEnglish = {
 	built: '12 minutes ago',
 	attempt: '26 minutes ago',

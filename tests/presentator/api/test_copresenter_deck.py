@@ -12,6 +12,7 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from presentator.application.copresenter import AskLimiter
 from presentator.contracts.copresenter import DeckText
 from presentator.contracts.models import Role
+from presentator.contracts.words import SOURCE_LANGUAGE
 from tests.support.copresenter_support import (
     ASKED,
     QUESTION,
@@ -227,8 +228,8 @@ def test_who_answers_the_decks_language_to_its_owner(language: str, role: Role) 
         pytest.param("de", "en", "de", id="german-account-english-deck"),
         pytest.param("en", "de", "en", id="english-account-german-deck"),
         pytest.param("de-AT", "en", "de", id="regional-german-account"),
-        pytest.param(None, "de", "en", id="no-account-language"),
-        pytest.param("fr", "de", "en", id="account-language-not-offered"),
+        pytest.param(None, "de", SOURCE_LANGUAGE, id="no-account-language"),
+        pytest.param("fr", "de", SOURCE_LANGUAGE, id="account-language-not-offered"),
     ],
 )
 def test_who_names_the_presenters_interface_language_beside_the_decks(
@@ -255,7 +256,7 @@ def test_who_reports_hearing_not_ready_together_with_the_decks_language() -> Non
     assert answer.status_code == HTTPStatus.OK
     assert answer.json() == {
         "language": "en",
-        "interface_language": "en",
+        "interface_language": SOURCE_LANGUAGE,
         "speech": {"hearing": {"ready": False}},
     }
 

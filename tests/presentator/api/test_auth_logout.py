@@ -18,8 +18,7 @@ from webauth.ports import SessionRecord, SessionRecordStore
 
 from presentator.api.auth import LOGIN_PATH, LOGOUT_PATH
 from presentator.application.identity import SESSION_LIFETIME
-from presentator.contracts.preferences import DEFAULT_LANGUAGE, InstanceSettings
-from presentator.contracts.words import Language, text
+from presentator.contracts.words import SOURCE_LANGUAGE, Language, text
 from presentator.host.oidc import oidc_client_config
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -192,36 +191,38 @@ def test_the_logout_page_brings_its_own_policy_naming_the_issuer(
     assert "'self'" not in directives["form-action"]
 
 
-def test_the_fallback_button_is_worded_in_the_instance_language(scene: Scene) -> None:
-    """The button reads `logout.button` of the instance's language, English fresh."""
+def test_the_fallback_button_is_worded_in_the_catalog_source_without_other_hints(
+    scene: Scene,
+) -> None:
+    """The button reads `logout.button` of the catalog source when nothing names one."""
     scene.sign_in()
 
     answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
 
     assert (
-        f'<button type="submit">{text(DEFAULT_LANGUAGE, "logout.button")}</button>'
+        f'<button type="submit">{text(SOURCE_LANGUAGE, "logout.button")}</button>'
         in answer.text
     )
 
 
-def test_the_logout_page_carries_the_instance_language_as_its_lang_and_its_button(
+def test_the_logout_page_carries_the_browsers_language_as_its_lang_and_its_button(
     tmp_path: Path,
 ) -> None:
-    preferences = a_preferences()
-    preferences.instance.write(InstanceSettings(language_tag="de"))
-    scene = a_scene(tmp_path, preferences=preferences)
+    scene = a_scene(tmp_path, preferences=a_preferences())
     scene.sign_in()
 
-    answer = scene.lobby.client.post(LOGOUT_PATH, headers=_A_FORM)
+    answer = scene.lobby.client.post(
+        LOGOUT_PATH, headers={**_A_FORM, "accept-language": "en"}
+    )
 
-    assert re.search(r"<html[^>]*\blang=\"de\"", answer.text)
+    assert re.search(r"<html[^>]*\blang=\"en\"", answer.text)
     assert (
-        f'<button type="submit">{text("de", "logout.button")}</button>' in answer.text
+        f'<button type="submit">{text("en", "logout.button")}</button>' in answer.text
     )
 
 
 @pytest.mark.parametrize(
-    ("account", "spoken"), [("de", "de"), ("de-AT", "de"), ("fr", "en")]
+    ("account", "spoken"), [("en", "en"), ("en-GB", "en"), ("fr", SOURCE_LANGUAGE)]
 )
 def test_the_logout_page_follows_the_account_language_where_a_catalog_has_it(
     tmp_path: Path, account: str, spoken: Language

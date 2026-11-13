@@ -209,14 +209,6 @@ msgctxt "settings.instanceName"
 msgid "Name der Instanz"
 msgstr "Instance name"
 
-msgctxt "settings.defaultLanguage"
-msgid "Standardsprache"
-msgstr "Default language"
-
-msgctxt "settings.languageHint"
-msgid "Eine weitere Sprache kommt mit einer weiteren Katalogdatei."
-msgstr "Add a catalog file to add a language."
-
 msgctxt "settings.save"
 msgid "Speichern"
 msgstr "Save"
