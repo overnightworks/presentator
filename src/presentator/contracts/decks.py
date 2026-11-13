@@ -3,7 +3,7 @@
 import posixpath
 import re
 import unicodedata
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from ipaddress import IPv6Address
@@ -511,7 +511,13 @@ class BuildAttempt:
 
     def failed_with(self, failure: BuildFailure) -> BuildAttempt:
         """This attempt, closed as failed, keeping the moment it started."""
-        return replace(self, outcome=BuildOutcome.FAILED, failure=failure)
+        return BuildAttempt(
+            commit=self.commit,
+            started_at=self.started_at,
+            outcome=BuildOutcome.FAILED,
+            failure=failure,
+            toolchain=self.toolchain,
+        )
 
 
 class DeckState(StrEnum):
@@ -547,7 +553,16 @@ class Deck:
 
     def carrying(self, attempt: BuildAttempt) -> Deck:
         """This talk with the build it last started replaced."""
-        return replace(self, attempt=attempt)
+        return Deck(
+            slug=self.slug,
+            title=self.title,
+            changed_at=self.changed_at,
+            owner_id=self.owner_id,
+            source_id=self.source_id,
+            commit=self.commit,
+            build=self.build,
+            attempt=attempt,
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
