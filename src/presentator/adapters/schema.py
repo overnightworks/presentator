@@ -19,7 +19,7 @@ from presentator.adapters.sqlite import immediate_transaction
 from presentator.contracts.preferences import ThemeChoice
 
 _INSTANCE_COLUMNS: Final = "SELECT name FROM pragma_table_info('instance_settings')"
-_THE_INSTANCE_THEME: Final = "theme"
+_RETIRED_INSTANCE_COLUMNS: Final = ("theme", "language_tag")
 _COLUMNS_OF: Final = "SELECT name FROM pragma_table_info(?)"
 _UNCHOSEN_THEME_FOLLOWS_THE_SYSTEM: Final = (
     "UPDATE person_preferences SET theme = ? WHERE theme IS NULL"
@@ -27,7 +27,7 @@ _UNCHOSEN_THEME_FOLLOWS_THE_SYSTEM: Final = (
 
 
 def create_tables(database: Path) -> None:
-    """Make every table exist, then run the column and theme upgrades."""
+    """Make every table exist, then run the column upgrades."""
     create_identity_tables(database)
     create_preference_tables(database)
     create_deck_tables(database)
@@ -56,7 +56,7 @@ def create_tables(database: Path) -> None:
         definition=ATTEMPT_TOOLCHAIN_COLUMN,
     )
     _unchosen_theme_follows_the_system(database)
-    _retire_the_instance_theme(database)
+    _retire_the_unread_instance_columns(database)
 
 
 def _add_the_column_when_missing(
@@ -88,16 +88,16 @@ def _unchosen_theme_follows_the_system(database: Path) -> None:
         )
 
 
-def _retire_the_instance_theme(database: Path) -> None:
-    """Drop the instance's unread theme column, on every start; it is one-way.
+def _retire_the_unread_instance_columns(database: Path) -> None:
+    """Drop the instance's theme and language columns, on every start; it is one-way.
 
     One immediate transaction, so two starts on one file cannot both drop. No row
-    goes. Code that still names the column reads the file and updates its row, but
-    cannot insert a first settings row into it.
+    goes, the instance name stays. A release that still reads the language column
+    cannot read the settings from the dropped file, so a rollback restores the
+    file from before the start.
     """
     with immediate_transaction(database) as cursor:
         present = {name for (name,) in cursor.execute(_INSTANCE_COLUMNS)}
-        if _THE_INSTANCE_THEME in present:
-            cursor.execute(
-                f"ALTER TABLE instance_settings DROP COLUMN {_THE_INSTANCE_THEME}"
-            )
+        for column in _RETIRED_INSTANCE_COLUMNS:
+            if column in present:
+                cursor.execute(f"ALTER TABLE instance_settings DROP COLUMN {column}")

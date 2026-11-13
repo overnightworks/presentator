@@ -546,23 +546,11 @@ export interface components {
         };
         /**
          * SettingsView
-         * @description The instance settings and the languages an admin may choose from.
+         * @description The instance name an admin sets for everyone, read and written.
+         *
+         *     No default: one schema serves the body and the answer.
          */
         SettingsView: {
-            /** Language Tag */
-            language_tag: string;
-            /** Languages */
-            languages: components["schemas"]["Language"][];
-            /** Name */
-            name: string;
-        };
-        /**
-         * SettingsWrite
-         * @description The instance name and language an admin sets for everyone.
-         */
-        SettingsWrite: {
-            /** Language Tag */
-            language_tag: string;
             /** Name */
             name: string;
         };
@@ -1033,7 +1021,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SettingsWrite"];
+                "application/json": components["schemas"]["SettingsView"];
             };
         };
         responses: {
@@ -1074,19 +1062,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                    "application/problem+json": {
-                        /** Detail */
-                        detail?: string | null;
-                        /** Status */
-                        status: number;
-                        /** Title */
-                        title: string;
-                        /**
-                         * Type
-                         * @default about:blank
-                         */
-                        type: string;
-                    };
                 };
             };
         };

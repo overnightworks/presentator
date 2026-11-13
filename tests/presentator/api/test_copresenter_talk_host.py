@@ -30,7 +30,6 @@ from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
     USERNAME,
-    a_preferences,
     a_web_auth,
     hand_over_session_cookies,
 )
@@ -207,7 +206,6 @@ def _talk_host_with_a_signed_in_admin(
     surface = CoPresenterSurface(
         use=a_use(private, the_admins_decks()),
         limiter=AskLimiter(),
-        preferences=a_preferences(),
         browser_origin=TALK_ORIGIN,
         delay=asyncio.sleep if deadline is None else deadline.wait,
     )

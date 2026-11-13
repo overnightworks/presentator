@@ -56,8 +56,6 @@ export type Words = {
     readonly "settings.navLabel": string;
     readonly "settings.sourcesTab": string;
     readonly "settings.instanceName": string;
-    readonly "settings.defaultLanguage": string;
-    readonly "settings.languageHint": string;
     readonly "settings.save": string;
     readonly "sources.title": string;
     readonly "sources.columnSource": string;
@@ -228,8 +226,6 @@ export const words: Words = {
     "settings.navLabel": "Einstellungen",
     "settings.sourcesTab": "Quellen",
     "settings.instanceName": "Name der Instanz",
-    "settings.defaultLanguage": "Standardsprache",
-    "settings.languageHint": "Eine weitere Sprache kommt mit einer weiteren Katalogdatei.",
     "settings.save": "Speichern",
     "sources.title": "Quellen",
     "sources.columnSource": "Quelle",

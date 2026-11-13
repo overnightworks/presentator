@@ -56,8 +56,6 @@ const translated = {
     "settings.navLabel": "Settings",
     "settings.sourcesTab": "Sources",
     "settings.instanceName": "Instance name",
-    "settings.defaultLanguage": "Default language",
-    "settings.languageHint": "Add a catalog file to add a language.",
     "settings.save": "Save",
     "sources.title": "Sources",
     "sources.columnSource": "Source",

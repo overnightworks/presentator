@@ -21,8 +21,7 @@ from webauth.middleware.security_headers import (
 from presentator.api.admission import gated_person
 from presentator.api.auth import PERMISSIONS_POLICY
 from presentator.api.hooks import hook_address
-from presentator.contracts.preferences import DEFAULT_LANGUAGE
-from presentator.contracts.words import text
+from presentator.contracts.words import SOURCE_LANGUAGE, text
 from tests.presentator.application.support.fakes import (
     FakeSession,
     FakeSessionRecordStore,
@@ -167,7 +166,7 @@ def test_a_public_path_answers_a_signed_out_browser_without_a_store_read(
     assert _counts(lobby) == (0, 0)
 
 
-@pytest.mark.parametrize("path", ["/setup", A_LOBBY_ASSET, "/login/oidc"])
+@pytest.mark.parametrize("path", ["/setup", A_LOBBY_ASSET])
 def test_a_signed_in_browser_on_a_public_path_costs_no_store_read(
     signed_in_lobby: Lobby,
     path: str,
@@ -175,6 +174,14 @@ def test_a_signed_in_browser_on_a_public_path_costs_no_store_read(
     signed_in_lobby.client.get(path)
 
     assert _counts(signed_in_lobby) == (0, 0)
+
+
+def test_a_signed_in_browser_starting_a_sign_in_never_renews_its_session(
+    signed_in_lobby: Lobby,
+) -> None:
+    signed_in_lobby.client.get("/login/oidc")
+
+    assert _counts(signed_in_lobby)[1] == 0
 
 
 def test_the_sign_in_callback_is_not_turned_to_the_login_by_the_gate(
@@ -207,7 +214,7 @@ def test_a_signed_in_browser_reading_the_login_costs_one_load_and_no_touch(
     answer = signed_in_lobby.client.get("/login")
 
     assert answer.status_code == HTTPStatus.OK
-    assert text(DEFAULT_LANGUAGE, "logout.button") not in answer.text
+    assert text(SOURCE_LANGUAGE, "logout.button") not in answer.text
     assert _counts(signed_in_lobby) == (1, 0)
 
 

@@ -8,8 +8,7 @@ from urllib.parse import quote
 import pytest
 from fastapi.testclient import TestClient
 
-from presentator.contracts.preferences import DEFAULT_LANGUAGE
-from presentator.contracts.words import text
+from presentator.contracts.words import SOURCE_LANGUAGE, text
 from tests.support.deck_page_support import (
     a_build,
     a_deck_store,
@@ -185,7 +184,7 @@ def test_a_nonsense_address_under_a_built_talk_is_the_application(
 
     assert nonsense.status_code == HTTPStatus.OK
     assert nonsense.content == application
-    assert text(DEFAULT_LANGUAGE, "deck.unknownTitle") not in nonsense.text
+    assert text(SOURCE_LANGUAGE, "deck.unknownTitle") not in nonsense.text
 
 
 def test_a_talk_refuses_a_method_that_is_not_a_read(tmp_path: Path) -> None:

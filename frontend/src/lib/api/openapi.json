@@ -645,49 +645,17 @@
         "type": "object"
       },
       "SettingsView": {
-        "description": "The instance settings and the languages an admin may choose from.",
+        "description": "The instance name an admin sets for everyone, read and written.\n\nNo default: one schema serves the body and the answer.",
         "properties": {
-          "language_tag": {
-            "title": "Language Tag",
-            "type": "string"
-          },
-          "languages": {
-            "items": {
-              "$ref": "#/components/schemas/Language"
-            },
-            "title": "Languages",
-            "type": "array"
-          },
           "name": {
             "title": "Name",
             "type": "string"
           }
         },
         "required": [
-          "name",
-          "language_tag",
-          "languages"
+          "name"
         ],
         "title": "SettingsView",
-        "type": "object"
-      },
-      "SettingsWrite": {
-        "description": "The instance name and language an admin sets for everyone.",
-        "properties": {
-          "language_tag": {
-            "title": "Language Tag",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "language_tag"
-        ],
-        "title": "SettingsWrite",
         "type": "object"
       },
       "SlideTextView": {
@@ -1563,7 +1531,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SettingsWrite"
+                "$ref": "#/components/schemas/SettingsView"
               }
             }
           },
@@ -1628,44 +1596,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              },
-              "application/problem+json": {
-                "schema": {
-                  "description": "The body of a problem; fields that are `None` stay out of the wire.",
-                  "properties": {
-                    "detail": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "title": "Detail"
-                    },
-                    "status": {
-                      "title": "Status",
-                      "type": "integer"
-                    },
-                    "title": {
-                      "title": "Title",
-                      "type": "string"
-                    },
-                    "type": {
-                      "default": "about:blank",
-                      "title": "Type",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "type",
-                    "title",
-                    "status"
-                  ],
-                  "title": "ProblemDetails",
-                  "type": "object"
                 }
               }
             },

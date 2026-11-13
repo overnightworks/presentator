@@ -16,6 +16,7 @@ from webauth.middleware.security_headers import (
 )
 
 from presentator.api.talk import TALK_PERMISSIONS_POLICY, talk_content_security_policy
+from presentator.contracts.words import SOURCE_LANGUAGE
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_LOBBY_ASSET,
@@ -27,6 +28,7 @@ from tests.support.lobby import (
 )
 from tests.support.people import seed_user
 from tests.support.talk_support import (
+    A_BROWSER_ASKING_FOR_A_PAGE,
     A_DECK,
     B_DECK,
     MEMBER,
@@ -246,6 +248,27 @@ def test_the_talk_host_sends_the_issuer_the_talk_callback_and_a_pkce_challenge(
     assert query["redirect_uri"] == [f"{A_TALK_ADDRESS}/auth/callback"]
     assert query["code_challenge_method"] == ["S256"]
     assert query["code_challenge"]
+
+
+@pytest.mark.parametrize("started_at", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])
+@pytest.mark.parametrize(
+    ("browser", "asked"),
+    [("en", "en"), (None, SOURCE_LANGUAGE)],
+    ids=["a browser in English", "a browser naming no language"],
+)
+def test_both_hosts_ask_the_issuer_for_the_language_the_browser_reads(
+    hosts: Hosts, started_at: str, browser: str | None, asked: str
+) -> None:
+    headers = {
+        **A_BROWSER_ASKING_FOR_A_PAGE,
+        **({} if browser is None else {"accept-language": browser}),
+    }
+
+    started = hosts.browser(started_at, headers=headers).get("/login/oidc")
+
+    assert parse_qs(urlsplit(started.headers["location"]).query)["ui_locales"] == [
+        asked
+    ]
 
 
 # T6.

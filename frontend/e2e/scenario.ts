@@ -16,9 +16,13 @@ export type { Words };
 export const SIGN_IN_START = '/login/oidc';
 export const MENU = '#account-menu';
 
+// The page's browser names its language; a request made outside the page carries none.
 export async function sessionOf(page: Page): Promise<SessionView> {
 	const answer = await page.request.get('/api/session', {
-		headers: { Accept: 'application/json' }
+		headers: {
+			Accept: 'application/json',
+			'Accept-Language': await page.evaluate(() => navigator.language)
+		}
 	});
 	return (await answer.json()) as SessionView;
 }

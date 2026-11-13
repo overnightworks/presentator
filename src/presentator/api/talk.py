@@ -40,6 +40,7 @@ from presentator.api.auth import (
 from presentator.api.copresenter import CoPresenterSurface, add_copresenter_routes
 from presentator.api.decks import add_talk_mount
 from presentator.api.health import HEALTH_IS_PUBLIC, add_health_route
+from presentator.api.session_api import language_of
 from presentator.application.decks import Decks
 
 TALK_PERMISSIONS_POLICY: Final = "camera=(), microphone=(self), geolocation=()"
@@ -122,7 +123,7 @@ def create_talk(
         refused=refused,
         keeps_id_token=False,
         max_sessions=None,
-        ui_language=lambda _request: None,
+        ui_language=lambda request: language_of(request, sessions),
         logout_page_text=None,
     )
     add_talk_mount(talk, decks=decks)

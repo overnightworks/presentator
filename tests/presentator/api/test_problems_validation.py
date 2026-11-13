@@ -72,12 +72,12 @@ def test_a_theme_outside_the_set_is_answered_without_the_value_and_stores_nothin
     )
 
 
-def test_a_language_of_the_wrong_json_type_is_answered_without_the_value() -> None:
+def test_a_name_of_the_wrong_json_type_is_answered_without_the_value() -> None:
     lobby = an_admin_lobby()
 
     answer = lobby.client.put(
         _SETTINGS,
-        json={"name": "", "language_tag": _NUMBER_MARKER},
+        json={"name": _NUMBER_MARKER},
         headers=_JSON,
     )
 

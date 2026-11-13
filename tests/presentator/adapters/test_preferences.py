@@ -16,13 +16,14 @@ from presentator.adapters.preferences import (
 from presentator.adapters.schema import create_tables
 from presentator.application.preferences import Preferences
 from presentator.contracts.preferences import (
-    DEFAULT_LANGUAGE,
     InstanceSettings,
     PersonPreferences,
     ThemeChoice,
 )
+from presentator.contracts.words import SOURCE_LANGUAGE
 from tests.presentator.adapters.support.person_instance_support import (
     a_file_where_people_chose_a_language,
+    a_file_where_the_instance_still_had_a_language,
 )
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -50,7 +51,7 @@ def test_an_instance_nobody_configured_has_no_settings_row(database: Path) -> No
 
 def test_the_instance_defaults_survive_a_round_trip(database: Path) -> None:
     store = SqliteInstanceSettingsStore(database)
-    saved = InstanceSettings(name="Heim", language_tag="de")
+    saved = InstanceSettings(name="Heim")
 
     store.write(saved)
 
@@ -59,11 +60,11 @@ def test_the_instance_defaults_survive_a_round_trip(database: Path) -> None:
 
 def test_saving_the_instance_defaults_again_replaces_them(database: Path) -> None:
     store = SqliteInstanceSettingsStore(database)
-    store.write(InstanceSettings(name="Heim", language_tag="de"))
+    store.write(InstanceSettings(name="Heim"))
 
-    store.write(InstanceSettings(name="Werkstatt", language_tag="en"))
+    store.write(InstanceSettings(name="Werkstatt"))
 
-    assert store.read() == InstanceSettings(name="Werkstatt", language_tag="en")
+    assert store.read() == InstanceSettings(name="Werkstatt")
 
 
 def test_a_person_who_chose_nothing_has_no_preference_row(database: Path) -> None:
@@ -176,7 +177,7 @@ def test_a_second_start_changes_nothing(tmp_path: Path) -> None:
         everything_in(database, _THE_INSTANCE_ROW),
     ]
     assert after_the_second == after_the_first
-    assert columns_of(database, "instance_settings") == ["id", "name", "language_tag"]
+    assert columns_of(database, "instance_settings") == ["id", "name"]
 
 
 def test_a_theme_the_release_before_wrote_as_nothing_is_folded_at_the_next_start(
@@ -192,15 +193,31 @@ def test_a_theme_the_release_before_wrote_as_nothing_is_folded_at_the_next_start
     assert themes[_WHO_CHOSE_ONLY_A_THEME] == ThemeChoice.FOLLOW_SYSTEM.value
 
 
-def test_the_start_drops_the_instance_theme_and_keeps_the_instance_words(
+def test_the_start_drops_the_instance_theme_and_language_and_keeps_the_instance_name(
     tmp_path: Path,
 ) -> None:
     database = an_old_file(tmp_path)
 
     create_tables(database)
 
-    assert columns_of(database, "instance_settings") == ["id", "name", "language_tag"]
-    assert everything_in(database, _THE_INSTANCE_ROW) == [(1, "Heim", "en")]
+    assert columns_of(database, "instance_settings") == ["id", "name"]
+    assert everything_in(database, _THE_INSTANCE_ROW) == [(1, "Heim")]
+
+
+def test_the_start_drops_only_the_instance_language_and_a_second_start_changes_nothing(
+    tmp_path: Path,
+) -> None:
+    database = a_file_where_the_instance_still_had_a_language(
+        tmp_path, name="Heim", language="en"
+    )
+
+    create_tables(database)
+    after_the_first = everything_in(database, _THE_INSTANCE_ROW)
+    create_tables(database)
+
+    assert columns_of(database, "instance_settings") == ["id", "name"]
+    assert after_the_first == [(1, "Heim")]
+    assert everything_in(database, _THE_INSTANCE_ROW) == after_the_first
 
 
 def test_a_fresh_file_and_a_migrated_one_have_the_same_instance_columns(
@@ -221,18 +238,18 @@ def test_a_save_over_the_instance_row_changes_its_words(tmp_path: Path) -> None:
     database = an_old_file(tmp_path)
     create_tables(database)
     store = SqliteInstanceSettingsStore(database)
-    assert store.read() == InstanceSettings(name="Heim", language_tag="en")
+    assert store.read() == InstanceSettings(name="Heim")
 
-    store.write(InstanceSettings(name="Werkstatt", language_tag="de"))
+    store.write(InstanceSettings(name="Werkstatt"))
 
-    assert store.read() == InstanceSettings(name="Werkstatt", language_tag="de")
+    assert store.read() == InstanceSettings(name="Werkstatt")
 
 
 def test_the_first_save_without_a_row_inserts_it(tmp_path: Path) -> None:
     database = tmp_path / "fresh.sqlite3"
     create_tables(database)
     store = SqliteInstanceSettingsStore(database)
-    saved = InstanceSettings(name="Heim", language_tag="de")
+    saved = InstanceSettings(name="Heim")
 
     store.write(saved)
 
@@ -259,7 +276,7 @@ def test_everybody_reads_the_instances_words_and_their_own_theme_after_the_start
         browser.sign_in(username=user_id.removeprefix("id-of-"))
         body = browser.client.get("/api/session").json()
         themes[user_id] = ThemeChoice(body["theme"])
-        assert body["language"] == DEFAULT_LANGUAGE
+        assert body["language"] == SOURCE_LANGUAGE
 
     assert themes == sign_in_as
     assert lobby.client.get("/api/session").json()["theme"] == (
@@ -273,9 +290,7 @@ def test_an_admin_saves_the_settings_over_the_migrated_file(tmp_path: Path) -> N
     lobby = a_lobby_over(database)
     lobby.sign_in()
 
-    saved = lobby.client.put(
-        "/api/settings", json={"name": "Werkstatt", "language_tag": "en"}
-    )
+    saved = lobby.client.put("/api/settings", json={"name": "Werkstatt"})
 
     assert saved.status_code == HTTPStatus.OK
     assert lobby.client.get("/api/settings").json()["name"] == "Werkstatt"
@@ -286,9 +301,7 @@ def test_everybody_reads_the_instances_words_and_their_own_theme(
 ) -> None:
     database = tmp_path / "fresh.sqlite3"
     create_tables(database)
-    SqliteInstanceSettingsStore(database).write(
-        InstanceSettings(name="Heim", language_tag=DEFAULT_LANGUAGE)
-    )
+    SqliteInstanceSettingsStore(database).write(InstanceSettings(name="Heim"))
     chosen = {
         "felix": ThemeChoice.DARK,
         "berta": ThemeChoice.LIGHT,
@@ -305,7 +318,7 @@ def test_everybody_reads_the_instances_words_and_their_own_theme(
         browser.sign_in(username=username)
         body = browser.client.get("/api/session").json()
         themes[username] = ThemeChoice(body["theme"])
-        assert body["language"] == DEFAULT_LANGUAGE
+        assert body["language"] == SOURCE_LANGUAGE
 
     assert themes == {**chosen, "dora": ThemeChoice.FOLLOW_SYSTEM}
 
@@ -313,15 +326,11 @@ def test_everybody_reads_the_instances_words_and_their_own_theme(
 def test_an_admin_saves_the_settings_over_the_created_file(tmp_path: Path) -> None:
     database = tmp_path / "fresh.sqlite3"
     create_tables(database)
-    SqliteInstanceSettingsStore(database).write(
-        InstanceSettings(name="Heim", language_tag="en")
-    )
+    SqliteInstanceSettingsStore(database).write(InstanceSettings(name="Heim"))
     lobby = a_lobby_over(database)
     lobby.sign_in()
 
-    saved = lobby.client.put(
-        "/api/settings", json={"name": "Werkstatt", "language_tag": "en"}
-    )
+    saved = lobby.client.put("/api/settings", json={"name": "Werkstatt"})
 
     assert saved.status_code == HTTPStatus.OK
     assert lobby.client.get("/api/settings").json()["name"] == "Werkstatt"

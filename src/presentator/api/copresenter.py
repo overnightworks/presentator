@@ -56,7 +56,6 @@ if TYPE_CHECKING:
         CoPresenterUse,
         PreparedAsk,
     )
-    from presentator.application.preferences import Preferences
     from presentator.contracts.models import Role, User
     from presentator.contracts.words import Language
 
@@ -96,7 +95,6 @@ class CoPresenterSurface:
 
     use: CoPresenterUse
     limiter: AskLimiter
-    preferences: Preferences
     browser_origin: str
     delay: Delay = asyncio.sleep
 
@@ -167,9 +165,7 @@ def add_copresenter_routes(
         _who_route(
             use,
             admission=admission,
-            interface_language=lambda request: language_of(
-                request, surface.preferences, sessions
-            ),
+            interface_language=lambda request: language_of(request, sessions),
         ),
         methods=["GET"],
     )

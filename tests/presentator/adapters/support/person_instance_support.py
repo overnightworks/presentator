@@ -443,3 +443,27 @@ def a_file_where_people_chose_a_language(
             chosen,
         )
     return database
+
+
+_INSTANCE_SETTINGS_BEFORE_THE_LANGUAGE_WENT = """
+CREATE TABLE instance_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    name TEXT NOT NULL,
+    language_tag TEXT NOT NULL
+)
+"""
+
+
+def a_file_where_the_instance_still_had_a_language(
+    directory: Path, *, name: str, language: str
+) -> Path:
+    """A file as the release before the instance language went made it."""
+    database = directory / "presentator.sqlite3"
+    create_identity_tables(database)
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute(_INSTANCE_SETTINGS_BEFORE_THE_LANGUAGE_WENT)
+        connection.execute(
+            "INSERT INTO instance_settings (id, name, language_tag) VALUES (1, ?, ?)",
+            (name, language),
+        )
+    return database

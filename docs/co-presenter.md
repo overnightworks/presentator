@@ -61,14 +61,14 @@ the cluster, and that hop's trust sentence is in
   moves the slide and takes no clicks; the band covers the slide's bottom strip
   only for its ten seconds.
 - **CP10** The presenter's own controls and fault words follow the presenter's
-  account language (German or English, English as fallback); the room notice and
-  pills keep following the deck's language, as [decks](decks.md) DK3 rules, and
-  so does the hearing request; a question carries the language its utterance was
-  heard in. `/who` names the account language beside
-  the deck's. Until it has answered the overlay shows only the switch. The
-  overlay loads the words of the language the first `/who` answer names, at start
-  or at switch-on if the start's `/who` failed, and keeps them; a fault word is
-  English only while no `/who` has ever answered.
+  account language (German or English), else the browser's, else German, as the
+  lobby's [LB1](lobby.md); the room notice and pills keep following the deck's
+  language, as [decks](decks.md) DK3 rules, and so does the hearing request; a
+  question carries the language its utterance was heard in. `/who` names the
+  language of the controls beside the deck's. Until it has answered the overlay
+  shows only the switch. The overlay loads the words of the language the first
+  `/who` answer names, at start or at switch-on if the start's `/who` failed, and
+  keeps them; a fault word is English only while no `/who` has ever answered.
 - **CP11** The notice names no provider. In German it ends „… an einen
   KI-Dienst gesendet. Welcher, steht in der Datenschutzerklärung.“ and in
   English „… sent with the slides to an AI service. The Datenschutzerklärung
