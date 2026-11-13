@@ -1,8 +1,0 @@
-claim_id = "0003ffc16b2748f8b0bd0620b627b8cc"
-agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
-role = "builder"
-base = "edbb4f53e3f2b183962cb5cd05b42d05b18d2b96"
-branch = "fix/speech-pillow-advisories"
-scope = ["quality/config.toml", "slidev/pnpm-lock.yaml", "slidev/pnpm-workspace.yaml", "speech/providers/chatterbox/pyproject.toml", "speech/providers/chatterbox/uv.lock", "speech/providers/qwen/pyproject.toml", "speech/providers/qwen/uv.lock", "speech/providers/voxcpm/uv.lock"]
-opened_commit = "3bb2aebc8b200ea16667ef5d808f17da1cdd6336"
-whole_reason = "main's dependency gate goes green only when the pillow bump, its stale exceptions and the hono bump land together"
