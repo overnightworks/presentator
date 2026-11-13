@@ -80,11 +80,6 @@ them and the defaults above do not apply.
 | `PRESENTATOR_LOBBY_BUILD` | `/app/lobby` |
 | `PRESENTATOR_HOST` | `0.0.0.0`, reached through a proxy |
 
-## Speech (host process)
-
-`SPEECH_*` settings of the host process are named in
-[run the speech service](runbooks/run-the-speech-service-on-the-host.md).
-
 ## Ruled sentences
 
 This section holds the configuration rulings, each with the ID its test cites.
