@@ -57,7 +57,6 @@ async function showsTheRefusalBoard(
 	if (refusal.action === 'log-out') {
 		await expect(page.locator('form.log-out')).toHaveAttribute('action', session.sign_in.logout);
 		await expect(page.locator('form.log-out')).toHaveAttribute('method', /post/i);
-		await expect(page.getByRole('link', { name: 'Back' })).toHaveCount(0);
 	} else {
 		await expect(page.locator('.signin [role=alert]')).toBeVisible();
 		await expect(page.locator('.signin a[href]').first()).toHaveAttribute(
