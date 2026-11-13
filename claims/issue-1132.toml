@@ -1,0 +1,8 @@
+claim_id = "033ae0a35f8d41cf9a8349d411547b26"
+agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
+role = "builder"
+base = "7d5172020799dc681100fbdccffd86ab1e176a7d"
+branch = "claude/issue-1132-review-follow-ups-cleanup"
+scope = ["docs/ARCHITECTURE.md", "docs/configuration.md", "frontend/e2e", "frontend/src/routes/(lobby)/settings/sources", "src/presentator/api/auth.py", "src/presentator/api/lobby_shell.py", "src/presentator/contracts/decks.py", "tests"]
+opened_commit = "b17114fa9687e02b525cea05b85d2844bae2a696"
+whole_reason = "The operator asked for fewer, larger lanes: these are small follow-ups without a shared owner, each reviewed in one reading, and splitting them would cost one review and CI round each."
