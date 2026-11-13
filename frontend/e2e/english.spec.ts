@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import type { Page } from '@playwright/test';
 
 import { loadWords } from '../src/lib/words/index.ts';
@@ -18,16 +21,28 @@ const admin: Person = {
 
 const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// The German source words that the English catalog words differently; any of them on
-// an English page is a page defect. Catalog completeness is design-catalogs --check's.
-async function germanWordsDifferingFromEnglish(english: Words): Promise<RegExp[]> {
-	const german = await loadWords('de');
-	const strings = Object.entries(german).filter(
-		(entry): entry is [string, string] => typeof entry[1] === 'string'
+// The English catalog's own pairs: the German source word and its English word.
+const ENGLISH_CATALOG = readFileSync(join(import.meta.dirname, '../src/lib/catalogs/en.po'), 'utf8');
+const ENGLISH_PAIRS = [...ENGLISH_CATALOG.matchAll(/^msgid "(.+)"\nmsgstr "(.+)"$/gm)].map(
+	([, german = '', english = '']) => ({ german, english })
+);
+
+// The German source words the English catalog words differently; any of them on an English
+// page is a page defect, also where the generated English word fell back to the German one.
+function germanWordsDifferingFromEnglish(): RegExp[] {
+	return ENGLISH_PAIRS.filter(({ german, english }) => german !== english).map(
+		({ german }) => new RegExp(`(?<!\\p{L})${escaped(german)}(?!\\p{L})`, 'u')
 	);
-	return strings
-		.filter(([key, word]) => word !== english[key as keyof Words])
-		.map(([, word]) => new RegExp(`(?<!\\p{L})${escaped(word)}(?!\\p{L})`, 'u'));
+}
+
+// Every German key has an English word, and none is blank.
+async function expectsEveryKeyWorded(english: Words): Promise<void> {
+	const german = await loadWords('de');
+	for (const key of Object.keys(german) as (keyof Words)[]) {
+		const word = english[key];
+		expect(word, `no English word for ${key}`).toBeDefined();
+		if (typeof word === 'string') expect(word.trim(), `a blank English word for ${key}`).not.toBe('');
+	}
 }
 
 // The refusal boards answer 403 by design, and the browser logs that for the document itself.
@@ -50,11 +65,12 @@ async function rendersInEnglish(
 	ready: () => Promise<void>,
 	words: Words
 ) {
+	await expectsEveryKeyWorded(words);
 	await ready();
 
 	await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 	const shown = await page.locator('body').innerText();
-	for (const german of await germanWordsDifferingFromEnglish(words)) {
+	for (const german of germanWordsDifferingFromEnglish()) {
 		expect(shown, `a German word on the page: ${german}`).not.toMatch(german);
 	}
 	for (const key of Object.keys(words)) {
