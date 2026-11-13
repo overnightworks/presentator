@@ -34,10 +34,6 @@ presentator is a self-hosted web service for giving a Slidev talk from any brows
 
 - [Vision](docs/VISION.md), [architecture](docs/ARCHITECTURE.md), [AGENTS.md](AGENTS.md).
 
-**Speech**
-
-- [Run the speech service on the host](docs/runbooks/run-the-speech-service-on-the-host.md) and [`speech/README.md`](speech/README.md).
-
 ## Contributing
 
 CI on the pull request is the gate; the [workflow](.github/workflows/ci.yml) defines every check. How a change is proven is stated in [Crosscutting Concepts](docs/ARCHITECTURE.md#5-crosscutting-concepts).
