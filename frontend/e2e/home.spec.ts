@@ -62,7 +62,6 @@ const fourStates = [
 	})
 ];
 
-
 for (const colorScheme of ['light', 'dark'] as const) {
 	for (const width of [390, 1280]) {
 		test.describe(`the deck list at ${width} px, ${colorScheme}`, () => {

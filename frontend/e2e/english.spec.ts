@@ -94,31 +94,43 @@ async function rendersInEnglish(
 	expect(problems).toEqual([]);
 }
 
+// The signed-in surfaces: each names its address and the heading it shows.
+const SIGNED_IN_SURFACES: Record<
+	string,
+	(words: Words, page: Page, slug: string) => Promise<[address: string, heading: string]>
+> = {
+	home: async (words) => ['/', words['decks.title']],
+	deck: async (_words, _page, slug) => [`/deck/${slug}`, DECK_TITLE],
+	settings: async (words) => ['/settings', words['settings.title']],
+	sources: async (words) => [SOURCES_LIST, words['sources.title']],
+	'new source': async (words) => [NEW_ADDRESS, words['sourceNew.title']],
+	source: async (_words, page) => {
+		const name = await ownSourceName(page, OWN_SOURCE);
+		return [sourceAddress(name), name];
+	}
+};
+
 test.describe('the signed-in surfaces in English', () => {
 	test.use({ person: admin });
 
-	test('render home, deck, settings and its source pages', async ({ page, signedIn }) => {
-		const words = await wordsOf(page);
-		const problems = watchesErrors(page);
-		await page.clock.setFixedTime(NOW);
-		const heading = (text: string) => () => expect(page.locator('main h1')).toHaveText(text);
-		const opens = (address: string, ready: () => Promise<void>) => async () => {
-			await page.goto(address);
-			await ready();
-		};
-		const name = await ownSourceName(page, OWN_SOURCE);
-		const surfaces = [
-			opens('/', heading(words['decks.title'])),
-			opens(`/deck/${signedIn?.slugs[0]}`, heading(DECK_TITLE)),
-			opens('/settings', heading(words['settings.title'])),
-			opens(SOURCES_LIST, heading(words['sources.title'])),
-			opens(NEW_ADDRESS, heading(words['sourceNew.title'])),
-			opens(sourceAddress(name), heading(name))
-		];
-		for (const surface of surfaces) {
-			await rendersInEnglish(page, problems, surface, words);
-		}
-	});
+	for (const [surface, locate] of Object.entries(SIGNED_IN_SURFACES)) {
+		test(`render ${surface}`, async ({ page, signedIn }) => {
+			const words = await wordsOf(page);
+			const problems = watchesErrors(page);
+			await page.clock.setFixedTime(NOW);
+			const [address, heading] = await locate(words, page, signedIn?.slugs[0] ?? '');
+
+			await rendersInEnglish(
+				page,
+				problems,
+				async () => {
+					await page.goto(address);
+					await expect(page.locator('main h1')).toHaveText(heading);
+				},
+				words
+			);
+		});
+	}
 
 	test('render the not-found board', async ({ page }) => {
 		const words = await wordsOf(page);
@@ -136,16 +148,19 @@ test.describe('the signed-in surfaces in English', () => {
 });
 
 test.describe('the sign-in boards in English', () => {
-	test('render the sign-in, its failure and its refusal', async ({ page }) => {
-		const words = await wordsOf(page);
-		const problems = watchesErrors(page);
-		const board = (address: string) => async () => {
-			await page.goto(address);
-			await expect(page.locator('.signin .wordmark')).toHaveText(words['app.name']);
-		};
+	for (const address of ['/login', ...REFUSALS]) {
+		test(`render ${address}`, async ({ page }) => {
+			const words = await wordsOf(page);
 
-		for (const address of ['/login', ...REFUSALS]) {
-			await rendersInEnglish(page, problems, board(address), words);
-		}
-	});
+			await rendersInEnglish(
+				page,
+				watchesErrors(page),
+				async () => {
+					await page.goto(address);
+					await expect(page.locator('.signin .wordmark')).toHaveText(words['app.name']);
+				},
+				words
+			);
+		});
+	}
 });
