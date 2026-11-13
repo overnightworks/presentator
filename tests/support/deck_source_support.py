@@ -131,4 +131,5 @@ def a_build(tmp_path: Path, *, commit: str = COMMIT) -> Build:
         pdf=tmp_path / "builds" / "kundenfeedback" / commit / "deck.pdf",
         commit=commit,
         built_at=BUILT_AT,
+        toolchain=None,
     )

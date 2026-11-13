@@ -74,6 +74,7 @@ def an_attempt(failure: BuildFailure | None) -> BuildAttempt:
         started_at=_TRIED_AT,
         outcome=BuildOutcome.RUNNING if failure is None else BuildOutcome.FAILED,
         failure=failure,
+        toolchain=None,
     )
 
 

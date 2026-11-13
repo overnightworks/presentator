@@ -70,7 +70,9 @@ def _store_of_built_decks(
         )
         store.put_build(
             slug,
-            Build(directory=talk, pdf=pdf, commit=_COMMIT, built_at=NOW),
+            Build(
+                directory=talk, pdf=pdf, commit=_COMMIT, built_at=NOW, toolchain=None
+            ),
         )
     return store
 

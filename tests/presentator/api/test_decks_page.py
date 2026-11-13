@@ -340,7 +340,9 @@ def test_a_deck_removed_by_reconciliation_answers_not_found_until_it_returns(
 
 def an_attempt(outcome: BuildOutcome) -> BuildAttempt:
     """A build that ran after the one that stands, with no words of its own."""
-    return BuildAttempt(commit=COMMIT, started_at=NOW, outcome=outcome, failure=None)
+    return BuildAttempt(
+        commit=COMMIT, started_at=NOW, outcome=outcome, failure=None, toolchain=None
+    )
 
 
 # C13.

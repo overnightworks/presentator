@@ -59,6 +59,7 @@ def an_attempt(outcome: BuildOutcome, *, failure: BuildFailure | None) -> BuildA
         started_at=NOW - timedelta(minutes=3),
         outcome=outcome,
         failure=failure,
+        toolchain=None,
     )
 
 

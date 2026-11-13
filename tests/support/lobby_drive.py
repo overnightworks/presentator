@@ -211,6 +211,7 @@ class _Newcomers:
                     pdf=_A_PDF_NOBODY_WROTE if record.pdf else EXPORTED_PDF,
                     commit=_SOME_COMMIT,
                     built_at=record.built_at or NOW,
+                    toolchain=None,
                 ),
             )
         if record.state in {DeckState.BUILDING, DeckState.FAILED}:
@@ -226,6 +227,7 @@ class _Newcomers:
                     failure=None
                     if attempt.failure is None
                     else BuildFailure(**attempt.failure.model_dump()),
+                    toolchain=None,
                 ),
             )
         return slug

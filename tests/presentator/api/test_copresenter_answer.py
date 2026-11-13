@@ -125,6 +125,7 @@ def the_asked_decks_words_at_its_built_commit(
                 pdf=tmp_path / "deck.pdf",
                 commit=built_at,
                 built_at=NOW,
+                toolchain=None,
             ),
         )
 

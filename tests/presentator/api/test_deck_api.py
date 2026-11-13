@@ -47,6 +47,7 @@ def an_attempt(
         started_at=NOW - timedelta(minutes=26),
         outcome=outcome,
         failure=failure,
+        toolchain=None,
     )
 
 
