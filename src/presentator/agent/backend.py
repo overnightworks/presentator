@@ -65,6 +65,27 @@ _MILLISECONDS: Final = 1000
 _SLIDE_NUMBER: Final = "number"
 
 
+class _WarningsOnly(logging.Filter):
+    """Drops the transports' DEBUG and INFO lines, which hold upgrade headers."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno >= logging.WARNING
+
+
+_TRANSPORT_TRACES: Final = _WarningsOnly()
+
+
+def silence_transport_traces() -> None:
+    """Keep the transports' traces of a call out of every log, for the process.
+
+    httpcore2 traces a response's headers at DEBUG and httpx2 the response line
+    at INFO, whatever level an operator set; those carry what the called service
+    answered.
+    """
+    for name in ("httpx2", "httpcore2.http11"):
+        logging.getLogger(name).addFilter(_TRANSPORT_TRACES)
+
+
 def _slide_number(arguments: JsonObject) -> int | None:
     """The 1-based slide a call names, or nothing when it names no whole number."""
     number = arguments.get(_SLIDE_NUMBER)

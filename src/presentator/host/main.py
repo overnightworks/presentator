@@ -67,10 +67,9 @@ from presentator.adapters.session_access import SessionAccess
 from presentator.adapters.speech import (
     SpeechHearing,
     SpeechSpeaking,
-    silence_transport_traces,
 )
 from presentator.adapters.toolchain_identity import toolchain_identity_of
-from presentator.agent.backend import gateway_answerer
+from presentator.agent.backend import gateway_answerer, silence_transport_traces
 from presentator.agent.mcp import (
     install_mcp_front,
 )

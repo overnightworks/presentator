@@ -24,9 +24,8 @@ from presentator.adapters.session_access import SessionAccess
 from presentator.adapters.speech import (
     SpeechHearing,
     SpeechSpeaking,
-    silence_transport_traces,
 )
-from presentator.agent.backend import gateway_answerer
+from presentator.agent.backend import gateway_answerer, silence_transport_traces
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import CoPresenterUse
 from presentator.contracts.copresenter import HearingTranscript, SpeechTokens
