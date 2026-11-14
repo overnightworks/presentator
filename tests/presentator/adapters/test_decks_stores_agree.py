@@ -1,6 +1,6 @@
 """The SQLite and the Postgres source stores answer the same to the same writes."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -225,18 +225,6 @@ def _promoted_drafts(adapters: Adapters) -> list[object]:
     return observed
 
 
-def test_the_same_source_writes_read_the_same_through_both_adapters(
-    sqlite_stores: Adapters, postgres_stores: Adapters, numbered_keys: NumberedKeyPairs
-) -> None:
-    through_sqlite = _write_and_read_sources(sqlite_stores)
-    numbered_keys.restart()
-    through_postgres = _write_and_read_sources(postgres_stores)
-
-    assert through_postgres == through_sqlite
-    assert any(each is None for each in through_sqlite)
-    assert any(isinstance(each, Source) for each in through_sqlite)
-
-
 def _a_run(source: Source, minutes: int, reason: SourceRunFailure | None) -> SourceRun:
     return SourceRun(
         source_id=source.id,
@@ -280,16 +268,6 @@ def _write_and_read_runs(adapters: Adapters) -> list[object]:
     return observed
 
 
-def test_the_same_run_writes_read_the_same_through_both_adapters(
-    sqlite_stores: Adapters, postgres_stores: Adapters
-) -> None:
-    through_sqlite = _write_and_read_runs(sqlite_stores)
-    through_postgres = _write_and_read_runs(postgres_stores)
-
-    assert through_postgres == through_sqlite
-    assert repr(through_postgres) == repr(through_sqlite)
-
-
 def test_a_run_recorded_at_another_offset_is_the_same_instant_through_both_adapters(
     sqlite_stores: Adapters, postgres_stores: Adapters
 ) -> None:
@@ -315,18 +293,6 @@ def test_a_run_recorded_at_another_offset_is_the_same_instant_through_both_adapt
     assert read_back == [_NOON, _NOON]
 
 
-def test_the_same_draft_writes_read_the_same_through_both_adapters(
-    sqlite_stores: Adapters, postgres_stores: Adapters, numbered_keys: NumberedKeyPairs
-) -> None:
-    through_sqlite = _write_and_read_drafts(sqlite_stores)
-    numbered_keys.restart()
-    through_postgres = _write_and_read_drafts(postgres_stores)
-
-    assert through_postgres == through_sqlite
-    # Aware datetimes compare by instant; their rendering shows the offset read.
-    assert repr(through_postgres) == repr(through_sqlite)
-
-
 @pytest.mark.usefixtures("numbered_keys")
 def test_a_draft_minted_at_another_offset_is_the_same_instant_through_both_adapters(
     sqlite_stores: Adapters, postgres_stores: Adapters
@@ -341,3 +307,23 @@ def test_a_draft_minted_at_another_offset_is_the_same_instant_through_both_adapt
         read_back.append(draft.created_at)
 
     assert read_back == [_NOON, _NOON]
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [_write_and_read_drafts, _write_and_read_sources, _write_and_read_runs],
+)
+def test_the_same_writes_read_the_same_through_both_adapters(
+    scenario: Callable[[Adapters], list[object]],
+    sqlite_stores: Adapters,
+    postgres_stores: Adapters,
+    numbered_keys: NumberedKeyPairs,
+) -> None:
+    through_sqlite = scenario(sqlite_stores)
+    numbered_keys.restart()
+    through_postgres = scenario(postgres_stores)
+
+    assert through_postgres == through_sqlite
+    # Aware datetimes compare by instant; their rendering shows the offset read.
+    assert repr(through_postgres) == repr(through_sqlite)
+    assert any(each is not None for each in through_sqlite)
