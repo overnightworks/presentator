@@ -48,6 +48,8 @@ _NOT_A_DRAFT = "not-a-draft"
 _MARKING_ROUNDS = 12
 _MARKED_DECKS = 12
 _REBUILDS = 4
+_OPENINGS = 80
+_DRAFT_IDS = "SELECT id FROM source_key_drafts ORDER BY id"
 _BUILD_OF_THE_DECK = "SELECT active_build, pdf_export, built_commit FROM decks"
 # Stands in for the ssh git starts: it runs the upload-pack the remote command
 # names on this machine, so an scp-form address reaches a repository on disk.
@@ -356,28 +358,44 @@ def test_a_key_draft_replaced_at_both_processes_at_once_leaves_one_new_draft(
     assert reopened == [kept, kept]
 
 
+def _opened_beside_a_replacement(
+    admin: Browser, opening: App, replacing: App
+) -> list[httpx2.Response]:
+    return _at_once(
+        [
+            lambda: admin.request(opening, "POST", KEY_DRAFT),
+            lambda: _create_with_a_stale_draft(admin, replacing),
+        ]
+    )
+
+
 @pytest.mark.usefixtures("environment")
-def test_a_key_draft_opened_beside_its_replacement_is_the_old_or_the_new_one(
+def test_a_key_draft_opened_beside_its_replacement_never_overwrites_it(
     database_url: str, tmp_path: Path, engine: Engine
 ) -> None:
     with serving_apps(database_url, tmp_path) as apps:
         admin = _admin(apps[0])
-        original = _opened_draft(admin, apps[0])["id"]
+        for round_number in range(_OPENINGS):
+            # No draft, so the opening reads none and then writes.
+            with engine.begin() as connection:
+                connection.execute(text("DELETE FROM source_key_drafts"))
+            opening, replacing = apps if round_number % 2 == 0 else (apps[1], apps[0])
 
-        opened, replaced = _at_once(
-            [
-                lambda: admin.request(apps[0], "POST", KEY_DRAFT),
-                lambda: _create_with_a_stale_draft(admin, apps[1]),
-            ]
-        )
+            with _watching(engine, _DRAFT_IDS) as seen:
+                opened, replaced = _opened_beside_a_replacement(
+                    admin, opening, replacing
+                )
+                reopened = [_opened_draft(admin, app)["id"] for app in apps]
 
-        reopened = [_opened_draft(admin, app)["id"] for app in apps]
-
-    assert replaced.json()["reason"] == SourceRefusal.DEPLOY_KEY_UNAVAILABLE
-    kept = _only_draft(engine)
-    assert kept != original
-    assert opened.json()["id"] in {original, kept}
-    assert reopened == [kept, kept]
+            assert replaced.json()["reason"] == SourceRefusal.DEPLOY_KEY_UNAVAILABLE
+            kept = _only_draft(engine)
+            assert reopened == [kept, kept]
+            # An opening that answers with the draft the database ends with has
+            # either found the replacement or been the only one ever stored;
+            # having stored its own after the replacement is the overwrite.
+            if opened.json()["id"] == kept:
+                stored = {each[0] for observation in seen for each in observation}
+                assert stored == {kept}
 
 
 @pytest.mark.usefixtures("environment")
