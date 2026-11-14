@@ -1,0 +1,8 @@
+claim_id = "c2656bac70d448e6886a58cc24531f25"
+agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
+role = "builder"
+base = "ed72bfa1cdb22d4dcd6503bc6812895c895861e1"
+branch = "claude/issue-1164-adopt-webauth-0-39"
+scope = ["pyproject.toml", "src/presentator", "src/presentator/adapters/identity.py", "tests", "uv.lock"]
+opened_commit = "cf602220e97c6ed0e932f8758770deb103c0134e"
+whole_reason = "One slice: a port signature change in a pinned library moves the adapter, every caller and every test double at once, or the tree does not type-check."
