@@ -8,6 +8,7 @@ down_revision = None
 
 # Paths stay text: they are the places on the machine that wrote them.
 _PERSON_OR_AGENT = "kind IN ('person', 'agent')"
+_USER_ID = "users.id"
 
 
 def upgrade() -> None:
@@ -37,7 +38,7 @@ def _create_sessions() -> None:
     op.create_table(
         "sessions",
         sa.Column("id", sa.Text(), primary_key=True),
-        sa.Column("user_id", sa.Text(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("user_id", sa.Text(), sa.ForeignKey(_USER_ID), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
         sa.Column("expires_at", sa.TIMESTAMP(timezone=True), nullable=False),
         sa.Column("refresh_token", sa.Text()),
@@ -58,7 +59,7 @@ def _create_instance_settings() -> None:
 def _create_person_preferences() -> None:
     op.create_table(
         "person_preferences",
-        sa.Column("user_id", sa.Text(), sa.ForeignKey("users.id"), primary_key=True),
+        sa.Column("user_id", sa.Text(), sa.ForeignKey(_USER_ID), primary_key=True),
         sa.Column("theme", sa.Text()),
     )
 
@@ -72,7 +73,7 @@ def _create_sources() -> None:
         sa.Column("ref", sa.Text(), nullable=False),
         sa.Column("encrypted_secret", sa.LargeBinary(), nullable=False),
         sa.Column("hook_secret_hash", sa.LargeBinary()),
-        sa.Column("owner_id", sa.Text(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("owner_id", sa.Text(), sa.ForeignKey(_USER_ID), nullable=False),
         sa.Column("ssh_public_key", sa.Text()),
         sa.Column("folder", sa.Text(), nullable=False, server_default=""),
     )
@@ -85,7 +86,7 @@ def _create_source_key_drafts() -> None:
         sa.Column(
             "owner_id",
             sa.Text(),
-            sa.ForeignKey("users.id"),
+            sa.ForeignKey(_USER_ID),
             nullable=False,
             unique=True,
         ),
@@ -101,7 +102,7 @@ def _create_decks() -> None:
         sa.Column("slug", sa.Text(), primary_key=True),
         sa.Column("title", sa.Text(), nullable=False),
         sa.Column("changed_at", sa.TIMESTAMP(timezone=True), nullable=False),
-        sa.Column("owner_id", sa.Text(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("owner_id", sa.Text(), sa.ForeignKey(_USER_ID), nullable=False),
         sa.Column("source_id", sa.Text(), sa.ForeignKey("sources.id"), nullable=False),
         sa.Column("commit_sha", sa.Text(), nullable=False),
         sa.Column("active_build", sa.Text()),
