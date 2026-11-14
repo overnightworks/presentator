@@ -10,11 +10,13 @@ product-wide key is needed.
 
 from dataclasses import dataclass
 from enum import IntEnum
+from hashlib import sha256
 from typing import Final
 
 from sqlalchemy import Connection, text
 
 _ONLY_ONE = 0
+_INSTANCE_BYTES: Final = 4
 _TAKE_UNTIL_TRANSACTION_ENDS: Final = text(
     "SELECT pg_advisory_xact_lock(:lock_class, :instance)"
 )
@@ -25,6 +27,8 @@ class LockClass(IntEnum):
 
     MIGRATION = 1
     SIGN_IN = 2
+    DEPLOY_KEY_DRAFT = 3
+    SOURCE_RUNS = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +43,17 @@ class AdvisoryLock:
 MIGRATION_LOCK: Final = AdvisoryLock(LockClass.MIGRATION, _ONLY_ONE)
 # Held by one sign-in entry or account deletion at a time, across processes.
 SIGN_IN_LOCK: Final = AdvisoryLock(LockClass.SIGN_IN, _ONLY_ONE)
+
+
+def lock_of(lock_class: LockClass, subject: str) -> AdvisoryLock:
+    """The lock of one subject in `lock_class`.
+
+    A hash collision only makes two subjects wait for each other.
+    """
+    digest = sha256(subject.encode()).digest()
+    return AdvisoryLock(
+        lock_class, int.from_bytes(digest[:_INSTANCE_BYTES], "big", signed=True)
+    )
 
 
 def parameters(lock: AdvisoryLock) -> dict[str, int]:

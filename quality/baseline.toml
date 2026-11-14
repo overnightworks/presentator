@@ -14,7 +14,7 @@
 "build_instance" = 62
 
 [function_lines."tests/presentator/adapters/test_decks.py"]
-"test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair" = 67
+"test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair" = 66
 
 [clones."src/presentator/adapters/deck_store.py"]
 "SqliteDeckStore.all" = [["src/presentator/adapters/decks.py", "SqliteSourceStore.all"]]

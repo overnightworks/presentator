@@ -1,7 +1,7 @@
 """The sessions table on Postgres, behind webauth's `SessionRecordStore`."""
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Final
 
 from pydantic import SecretStr
@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from presentator.adapters.identity import StoredSession, stored_account
 from presentator.adapters.postgres.accounts import read_account
-from presentator.adapters.postgres.engine import connection_or_inside
+from presentator.adapters.postgres.engine import connection_or_inside, in_utc
 from presentator.contracts.people import SessionExport, SessionSecretsHeld
 
 _INSERT_SESSION: Final = text(
@@ -56,11 +56,6 @@ def _secret(token: str | None) -> SecretStr | None:
 
 def _revealed(token: SecretStr | None) -> str | None:
     return None if token is None else token.get_secret_value()
-
-
-def _utc(instant: datetime) -> datetime:
-    """The instant in UTC, whatever time zone the connection reads timestamps in."""
-    return instant.astimezone(UTC)
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,8 +140,8 @@ class PostgresSessionRecordStore:
         return StoredSession(
             id=stored_id,
             user=stored_account(account),
-            created_at=_utc(created_at),
-            expires_at=_utc(expires_at),
+            created_at=in_utc(created_at),
+            expires_at=in_utc(expires_at),
             refresh_token=_secret(refresh_token),
             id_token=_secret(id_token),
             account_language=account_language,
@@ -194,8 +189,8 @@ class PostgresSessionRecordStore:
             found = connection.execute(_SELECT_OF_USER, {"user_id": user_id}).all()
         return tuple(
             SessionExport(
-                created_at=_utc(created_at),
-                expires_at=_utc(expires_at),
+                created_at=in_utc(created_at),
+                expires_at=in_utc(expires_at),
                 account_language=account_language,
             )
             for created_at, expires_at, account_language in found
