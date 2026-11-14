@@ -12,6 +12,17 @@ _PERSON_OR_AGENT = "kind IN ('person', 'agent')"
 
 def upgrade() -> None:
     """Create every table; a migration only adds, so there is no downgrade."""
+    _create_users()
+    _create_sessions()
+    _create_instance_settings()
+    _create_person_preferences()
+    _create_sources()
+    _create_source_key_drafts()
+    _create_decks()
+    _create_source_runs()
+
+
+def _create_users() -> None:
     op.create_table(
         "users",
         sa.Column("id", sa.Text(), primary_key=True),
@@ -20,6 +31,9 @@ def upgrade() -> None:
         sa.Column("kind", sa.Text(), nullable=False, server_default="person"),
         sa.CheckConstraint(_PERSON_OR_AGENT),
     )
+
+
+def _create_sessions() -> None:
     op.create_table(
         "sessions",
         sa.Column("id", sa.Text(), primary_key=True),
@@ -30,17 +44,26 @@ def upgrade() -> None:
         sa.Column("id_token", sa.Text()),
         sa.Column("account_language", sa.Text()),
     )
+
+
+def _create_instance_settings() -> None:
     op.create_table(
         "instance_settings",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=False),
         sa.Column("name", sa.Text(), nullable=False),
         sa.CheckConstraint("id = 1"),
     )
+
+
+def _create_person_preferences() -> None:
     op.create_table(
         "person_preferences",
         sa.Column("user_id", sa.Text(), sa.ForeignKey("users.id"), primary_key=True),
         sa.Column("theme", sa.Text()),
     )
+
+
+def _create_sources() -> None:
     op.create_table(
         "sources",
         sa.Column("id", sa.Text(), primary_key=True),
@@ -53,6 +76,9 @@ def upgrade() -> None:
         sa.Column("ssh_public_key", sa.Text()),
         sa.Column("folder", sa.Text(), nullable=False, server_default=""),
     )
+
+
+def _create_source_key_drafts() -> None:
     op.create_table(
         "source_key_drafts",
         sa.Column("id", sa.Text(), primary_key=True),
@@ -67,6 +93,9 @@ def upgrade() -> None:
         sa.Column("encrypted_private_key", sa.LargeBinary(), nullable=False),
         sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
     )
+
+
+def _create_decks() -> None:
     op.create_table(
         "decks",
         sa.Column("slug", sa.Text(), primary_key=True),
@@ -91,6 +120,9 @@ def upgrade() -> None:
         sa.Column("attempt_toolchain", sa.Text()),
         sa.Column("removed_at", sa.TIMESTAMP(timezone=True)),
     )
+
+
+def _create_source_runs() -> None:
     op.create_table(
         "source_runs",
         sa.Column("id", sa.Integer(), sa.Identity(), primary_key=True),
