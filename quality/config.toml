@@ -61,6 +61,9 @@ item = "#1130"
 date = 2026-11-13
 reason = "the host speech service under speech/ is deleted (P1b of #512); presentator speaks and hears through the shared speech service, so its job checks code that no longer exists"
 
+[languages]
+render_pass = "Lobby: lint, types, tests, drive"
+
 [[size.generated]]
 path = "frontend/src/lib/api/types.ts"
 job = "Lobby: lint, types, tests, drive"
