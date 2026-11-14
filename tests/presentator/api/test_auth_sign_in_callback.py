@@ -444,6 +444,7 @@ def test_a_store_failure_inside_the_callback_leaves_no_account_no_session_and_no
         store: SqliteSessionRecordStore,
         user_id: str,
         *,
+        session_id: str,
         now: datetime,
         expires_at: datetime,
         refresh_token: SecretStr | None,
@@ -455,6 +456,7 @@ def test_a_store_failure_inside_the_callback_leaves_no_account_no_session_and_no
         return create(
             store,
             user_id,
+            session_id=session_id,
             now=now,
             expires_at=expires_at,
             refresh_token=refresh_token,

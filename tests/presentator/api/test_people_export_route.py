@@ -41,6 +41,7 @@ from tests.support.lobby import (
     an_admin_people,
     an_installed_auth,
 )
+from tests.support.people import a_session_id
 
 _HAL: Final = "hal-client"
 _ADMINS: Final = ["/apps/presentator", "/apps/presentator/admin"]
@@ -95,6 +96,7 @@ def a_scene() -> Scene:
     )
     instance.sessions.create(
         THE_PERSON.id,
+        session_id=a_session_id(),
         now=NOW,
         expires_at=NOW + timedelta(hours=1),
         refresh_token=SecretStr(_A_REFRESH_WORD),

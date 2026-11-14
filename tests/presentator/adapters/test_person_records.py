@@ -21,7 +21,7 @@ from presentator.contracts.models import Role, User
 from presentator.contracts.people import SessionExport
 from presentator.contracts.preferences import PersonPreferences, ThemeChoice
 from tests.presentator.adapters.support.key_draft_support import a_key_drafts_store
-from tests.support.people import seed_user
+from tests.support.people import a_session_id, seed_user
 
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _THE_PERSON = User(id="the-person", username="pia", role=Role.USER)
@@ -47,6 +47,7 @@ def test_deleting_an_account_takes_its_sessions_and_leaves_another_account(
     for person in (_THE_PERSON, _ANOTHER):
         sessions.create(
             person.id,
+            session_id=a_session_id(),
             now=_NOW,
             expires_at=_NOW + timedelta(hours=1),
             refresh_token=None,
@@ -81,6 +82,7 @@ def test_the_sessions_of_a_person_carry_their_times_and_no_secret(
     sessions = SqliteSessionRecordStore(database)
     sessions.create(
         _THE_PERSON.id,
+        session_id=a_session_id(),
         now=_NOW,
         expires_at=_NOW + timedelta(hours=1),
         refresh_token=SecretStr(_A_REFRESH_WORD),
@@ -108,6 +110,7 @@ def test_a_persons_session_carries_the_account_language_stored_at_its_sign_in(
     sessions = SqliteSessionRecordStore(database)
     sessions.create(
         _THE_PERSON.id,
+        session_id=a_session_id(),
         now=_NOW,
         expires_at=_NOW + timedelta(hours=1),
         refresh_token=None,
@@ -128,6 +131,7 @@ def test_only_sessions_holding_a_refresh_token_are_counted_as_holding_one(
     for token in (SecretStr(_A_REFRESH_WORD), None):
         sessions.create(
             _THE_PERSON.id,
+            session_id=a_session_id(),
             now=_NOW,
             expires_at=_NOW + timedelta(hours=1),
             refresh_token=token,
@@ -201,6 +205,7 @@ def test_deleting_an_account_cannot_split_a_sign_in_that_has_read_the_account(
         assert watched.contended.wait(timeout=10)
         sessions.create(
             _THE_PERSON.id,
+            session_id=a_session_id(),
             now=_NOW,
             expires_at=_NOW + timedelta(hours=1),
             refresh_token=None,

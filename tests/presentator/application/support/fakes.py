@@ -39,6 +39,7 @@ from presentator.contracts.models import User
 from presentator.contracts.people import SessionExport, SessionSecretsHeld
 from presentator.contracts.preferences import InstanceSettings, PersonPreferences
 from presentator.ports.decks import BuildRun
+from tests.support.people import a_session_id
 
 # How long one thread waits for another before a test calls the run stuck.
 PATIENCE: Final = timedelta(seconds=5)
@@ -101,7 +102,6 @@ class FakeSessionRecordStore:
 
     users: FakeUserStore
     rows: dict[str, FakeSession] = field(default_factory=dict[str, FakeSession])
-    minted: int = 0
     loads: int = 0
     touches: int = 0
 
@@ -109,15 +109,18 @@ class FakeSessionRecordStore:
         self,
         user_id: str,
         *,
+        session_id: str,
         now: datetime,
         expires_at: datetime,
         refresh_token: SecretStr | None,
         id_token: SecretStr | None,
         account_language: str | None,
     ) -> FakeSession:
-        self.minted += 1
+        if session_id in self.rows:
+            message = "a session with that id is already stored"
+            raise ValueError(message)
         session = FakeSession(
-            id=f"session-{self.minted}",
+            id=session_id,
             user=FakeAccount.of(self.users.users[user_id]),
             created_at=now,
             expires_at=expires_at,
@@ -217,6 +220,7 @@ class FakePeople:
         now = self.clock.now()
         return self.sessions.create(
             person.id,
+            session_id=a_session_id(),
             now=now,
             expires_at=now + SESSION_LIFETIME,
             refresh_token=None,

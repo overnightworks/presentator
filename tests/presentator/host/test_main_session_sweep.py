@@ -17,7 +17,7 @@ from presentator.contracts.models import Role, User
 from presentator.host import main
 from presentator.host.config import load_settings
 from tests.presentator.application.support.fakes import PATIENCE, FrozenClock
-from tests.support.people import seed_user
+from tests.support.people import a_session_id, seed_user
 
 _STARTED = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _ADMIN = User(id="id-of-felix", username="felix", role=Role.ADMIN)
@@ -43,6 +43,7 @@ def test_the_sweep_reads_the_clock_on_every_run_and_not_once_at_the_start(
     seed_user(database, _ADMIN)
     session = SqliteSessionRecordStore(database).create(
         _ADMIN.id,
+        session_id=a_session_id(),
         now=clock.now(),
         expires_at=clock.now() + SESSION_LIFETIME,
         refresh_token=None,
@@ -91,6 +92,7 @@ def test_the_sweep_runs_while_the_server_serves(
             seed_user(database, _ADMIN)
             SqliteSessionRecordStore(database).create(
                 _ADMIN.id,
+                session_id=a_session_id(),
                 now=clock.now() - SESSION_LIFETIME,
                 expires_at=clock.now() - timedelta(seconds=1),
                 refresh_token=None,

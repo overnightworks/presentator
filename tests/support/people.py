@@ -6,6 +6,7 @@ owner or a session holder put the row there themselves.
 
 import shutil
 import sqlite3
+import uuid
 from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
@@ -14,6 +15,11 @@ from webauth.ports import AccountKind
 
 from presentator.adapters.sqlite import rows
 from presentator.contracts.models import User
+
+
+def a_session_id() -> str:
+    """An id no other call of the test run returns."""
+    return uuid.uuid4().hex
 
 
 def seed_user(database: Path, person: User) -> None:
