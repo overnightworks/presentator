@@ -6,6 +6,7 @@ import fcntl
 import os
 import subprocess
 from collections.abc import Callable, Iterator, Sequence
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO
@@ -176,14 +177,17 @@ def spawn_exited_child() -> subprocess.Popen[bytes]:
     return child
 
 
-def unreaped_children() -> None:
-    os.waitid(os.P_ALL, 0, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+def an_exited_child_is_left() -> bool:
+    """Whether an exited child waits to be collected; running ones do not count."""
+    found = None
+    with suppress(ChildProcessError):
+        found = os.waitid(os.P_ALL, 0, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+    return found is not None
 
 
 @pytest.fixture
 def owns_every_child() -> Iterator[list[subprocess.Popen[bytes]]]:
-    with pytest.raises(ChildProcessError):
-        unreaped_children()
+    assert not an_exited_child_is_left()
     children: list[subprocess.Popen[bytes]] = []
     try:
         yield children
@@ -200,8 +204,7 @@ def test_reaping_collects_every_exited_child_and_stops_at_none(
 
     reap_children()
 
-    with pytest.raises(ChildProcessError):
-        unreaped_children()
+    assert not an_exited_child_is_left()
 
 
 def test_reaping_leaves_a_running_child_alone(
@@ -223,8 +226,7 @@ def test_a_round_whose_kill_has_no_target_still_reaps_and_lists(
 
     assert sweep(table.effects(reap_children), DEADLINE)
 
-    with pytest.raises(ChildProcessError):
-        unreaped_children()
+    assert not an_exited_child_is_left()
 
 
 @dataclass
