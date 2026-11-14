@@ -22,7 +22,6 @@ from tests.presentator.adapters.support.source_stores_support import (
     NumberedKeyPairs,
     postgres_adapters,
     sqlite_adapters,
-    use_numbered_keys,
 )
 
 _NOON = datetime(2026, 11, 14, 12, 0, 0, 123456, tzinfo=UTC)
@@ -34,18 +33,20 @@ _THIRD_ADMIN = "third-admin"
 
 
 @pytest.fixture
-def numbered_keys(monkeypatch: pytest.MonkeyPatch) -> NumberedKeyPairs:
-    return use_numbered_keys(monkeypatch)
+def numbered_keys() -> NumberedKeyPairs:
+    return NumberedKeyPairs()
 
 
 @pytest.fixture
-def sqlite_stores(tmp_path: Path) -> Adapters:
-    return sqlite_adapters(tmp_path)
+def sqlite_stores(tmp_path: Path, numbered_keys: NumberedKeyPairs) -> Adapters:
+    return sqlite_adapters(tmp_path, numbered_keys)
 
 
 @pytest.fixture
-def postgres_stores(database_url: str) -> Iterator[Adapters]:
-    with postgres_adapters(database_url) as adapters:
+def postgres_stores(
+    database_url: str, numbered_keys: NumberedKeyPairs
+) -> Iterator[Adapters]:
+    with postgres_adapters(database_url, numbered_keys) as adapters:
         yield adapters
 
 
@@ -293,7 +294,6 @@ def test_a_run_recorded_at_another_offset_is_the_same_instant_through_both_adapt
     assert read_back == [_NOON, _NOON]
 
 
-@pytest.mark.usefixtures("numbered_keys")
 def test_a_draft_minted_at_another_offset_is_the_same_instant_through_both_adapters(
     sqlite_stores: Adapters, postgres_stores: Adapters
 ) -> None:

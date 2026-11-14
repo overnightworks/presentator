@@ -9,7 +9,7 @@ is in `deck_store.py`.
 import logging
 import shutil
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from hashlib import sha256
@@ -32,7 +32,7 @@ from presentator.adapters.key_drafts import (
     REMOVE_DRAFT,
     draft_of_row,
 )
-from presentator.adapters.secrets import SecretBox, generate_deploy_key
+from presentator.adapters.secrets import DeployKeyPair, SecretBox, generate_deploy_key
 from presentator.adapters.sqlite import apply_schema, rows
 from presentator.contracts.decks import (
     MANIFEST_FILE,
@@ -200,6 +200,7 @@ class SqliteSourceStore:
     database: Path
     identifiers: IdentifierFactory
     box: SecretBox
+    new_key_pair: Callable[[], DeployKeyPair] = generate_deploy_key
 
     def add(self, write: SourceWrite) -> Source | None:
         """Write a new source with its secrets, leaving every existing row alone.
@@ -286,7 +287,7 @@ class SqliteSourceStore:
 
     def renew_deploy_key(self, source_id: str) -> bool:
         """Replace one source's generated pair without touching its Add draft."""
-        pair = generate_deploy_key()
+        pair = self.new_key_pair()
         encrypted_private_key = self.box.encrypt(pair.private_key)
         with rows(self.database) as cursor:
             written = cursor.execute(

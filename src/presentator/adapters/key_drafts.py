@@ -1,11 +1,12 @@
 """Where an admin's unbound deploy key waits before it becomes a source."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Final
 
-from presentator.adapters.secrets import SecretBox, generate_deploy_key
+from presentator.adapters.secrets import DeployKeyPair, SecretBox, generate_deploy_key
 from presentator.adapters.sqlite import rows
 from presentator.contracts.decks import DeployKeyDraft
 from presentator.ports.identity import IdentifierFactory
@@ -41,6 +42,7 @@ class SqliteSourceKeyDrafts:
     database: Path
     identifiers: IdentifierFactory
     box: SecretBox
+    new_key_pair: Callable[[], DeployKeyPair] = generate_deploy_key
 
     def unconsumed_for(
         self,
@@ -56,7 +58,7 @@ class SqliteSourceKeyDrafts:
 
     def mint(self, owner_id: str, *, at: datetime) -> DeployKeyDraft:
         """Generate a fresh keypair and store it as this admin's own new draft."""
-        pair = generate_deploy_key()
+        pair = self.new_key_pair()
         identifier = self.identifiers.new_id()
         with rows(self.database) as cursor:
             cursor.execute(
@@ -92,7 +94,7 @@ class SqliteSourceKeyDrafts:
             if draft is not None and draft.created_at >= newer_than:
                 cursor.execute("COMMIT")
                 return draft
-            pair = generate_deploy_key()
+            pair = self.new_key_pair()
             identifier = self.identifiers.new_id()
             cursor.execute(
                 _ADD_DRAFT,

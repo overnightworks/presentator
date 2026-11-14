@@ -3,6 +3,7 @@
 import logging
 import sqlite3
 import subprocess
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -712,7 +713,6 @@ def test_adding_an_ssh_source_stores_its_public_key_in_clear(tmp_path: Path) -> 
 
 
 def test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair(
-    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     database = an_instance_that_was_set_up(tmp_path)
@@ -734,7 +734,7 @@ def test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair(
         private_key="-----BEGIN OPENSSH PRIVATE KEY-----\nreplacement",
         public_key="ssh-ed25519 AAAAreplacement presentator",
     )
-    monkeypatch.setattr("presentator.adapters.decks.generate_deploy_key", lambda: pair)
+    sources = replace(sources, new_key_pair=lambda: pair)
     with rows(database) as cursor:
         target_before = cursor.execute(
             "SELECT encrypted_secret, ssh_public_key FROM sources WHERE id = ?",
@@ -781,7 +781,6 @@ def test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair(
 
 
 def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
-    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     database = an_instance_that_was_set_up(tmp_path)
@@ -808,10 +807,12 @@ def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
                 "SELECT id, public_key, encrypted_private_key FROM source_key_drafts",
             ).fetchall(),
         )
-    monkeypatch.setattr(
-        "presentator.adapters.decks.generate_deploy_key",
-        lambda: (_ for _ in ()).throw(RuntimeError("key generation failed")),
-    )
+
+    def fail_to_generate() -> DeployKeyPair:
+        message = "key generation failed"
+        raise RuntimeError(message)
+
+    sources = replace(sources, new_key_pair=fail_to_generate)
 
     with pytest.raises(RuntimeError, match="key generation failed"):
         sources.renew_deploy_key(target.id)

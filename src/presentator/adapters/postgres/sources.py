@@ -1,5 +1,6 @@
 """The sources table on Postgres, behind `SourceStore`."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final
 
@@ -9,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from presentator.adapters.decks import stored_source, written_source
 from presentator.adapters.postgres.key_drafts import locked_owned_draft, remove_in
-from presentator.adapters.secrets import SecretBox, generate_deploy_key
+from presentator.adapters.secrets import DeployKeyPair, SecretBox, generate_deploy_key
 from presentator.contracts.decks import Source, SourceWrite
 from presentator.ports.identity import IdentifierFactory
 
@@ -57,6 +58,7 @@ class PostgresSourceStore:
     engine: Engine
     identifiers: IdentifierFactory
     box: SecretBox
+    new_key_pair: Callable[[], DeployKeyPair] = generate_deploy_key
 
     def add(self, write: SourceWrite) -> Source | None:
         """Write a new source with its secrets, leaving every existing row alone.
@@ -122,7 +124,7 @@ class PostgresSourceStore:
 
     def renew_deploy_key(self, source_id: str) -> bool:
         """Replace one source's generated pair without touching its Add draft."""
-        pair = generate_deploy_key()
+        pair = self.new_key_pair()
         with self.engine.begin() as connection:
             written = connection.execute(
                 _PUT_DEPLOY_KEY,

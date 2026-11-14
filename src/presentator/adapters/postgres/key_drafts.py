@@ -1,6 +1,6 @@
 """The source_key_drafts table on Postgres, behind `DeployKeyDrafts`."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Final
@@ -14,7 +14,7 @@ from presentator.adapters.postgres.locks import (
     hold_until_transaction_ends,
     lock_of,
 )
-from presentator.adapters.secrets import SecretBox, generate_deploy_key
+from presentator.adapters.secrets import DeployKeyPair, SecretBox, generate_deploy_key
 from presentator.contracts.decks import DeployKeyDraft
 from presentator.ports.identity import IdentifierFactory
 
@@ -66,6 +66,7 @@ class PostgresSourceKeyDrafts:
     engine: Engine
     identifiers: IdentifierFactory
     box: SecretBox
+    new_key_pair: Callable[[], DeployKeyPair] = generate_deploy_key
 
     def unconsumed_for(
         self,
@@ -135,7 +136,7 @@ class PostgresSourceKeyDrafts:
     def _store_new(
         self, connection: Connection, owner_id: str, *, at: datetime
     ) -> DeployKeyDraft:
-        pair = generate_deploy_key()
+        pair = self.new_key_pair()
         identifier = self.identifiers.new_id()
         connection.execute(
             _REPLACE_DRAFT,

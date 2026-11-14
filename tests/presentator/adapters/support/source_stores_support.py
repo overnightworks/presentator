@@ -7,11 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-import pytest
 from sqlalchemy import Engine, text
 from webauth.ports import AccountKind
 
-from presentator.adapters import decks, key_drafts
 from presentator.adapters.decks import (
     SqliteSourceRunStore,
     SqliteSourceStore,
@@ -19,8 +17,6 @@ from presentator.adapters.decks import (
 )
 from presentator.adapters.identity import create_identity_tables
 from presentator.adapters.key_drafts import SqliteSourceKeyDrafts
-from presentator.adapters.postgres import key_drafts as postgres_key_drafts
-from presentator.adapters.postgres import sources as postgres_sources
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
 from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
 from presentator.adapters.postgres.sources import PostgresSourceStore
@@ -76,15 +72,7 @@ class NumberedKeyPairs:
         )
 
 
-def use_numbered_keys(monkeypatch: pytest.MonkeyPatch) -> NumberedKeyPairs:
-    """Every deploy key an adapter generates is the next numbered pair."""
-    pairs = NumberedKeyPairs()
-    for module in (key_drafts, decks, postgres_key_drafts, postgres_sources):
-        monkeypatch.setattr(module, "generate_deploy_key", pairs)
-    return pairs
-
-
-def sqlite_adapters(directory: Path) -> Adapters:
+def sqlite_adapters(directory: Path, key_pairs: NumberedKeyPairs) -> Adapters:
     database = directory / "presentator.sqlite3"
     create_identity_tables(database)
     create_deck_tables(database)
@@ -103,6 +91,7 @@ def sqlite_adapters(directory: Path) -> Adapters:
             database=database,
             identifiers=identifiers,
             box=secret_box(instance_key),
+            new_key_pair=key_pairs,
         )
 
     def sources_opened_with(instance_key: str) -> SourceStore:
@@ -110,6 +99,7 @@ def sqlite_adapters(directory: Path) -> Adapters:
             database=database,
             identifiers=identifiers,
             box=secret_box(instance_key),
+            new_key_pair=key_pairs,
         )
 
     def secret_of(source_id: str) -> str | None:
@@ -131,7 +121,9 @@ def sqlite_adapters(directory: Path) -> Adapters:
 
 
 @contextmanager
-def postgres_adapters(database_url: str) -> Generator[Adapters]:
+def postgres_adapters(
+    database_url: str, key_pairs: NumberedKeyPairs
+) -> Generator[Adapters]:
     engine = engine_on(database_url)
     identifiers = NumberedIdentifiers()
 
@@ -140,6 +132,7 @@ def postgres_adapters(database_url: str) -> Generator[Adapters]:
             engine=engine,
             identifiers=identifiers,
             box=secret_box(instance_key),
+            new_key_pair=key_pairs,
         )
 
     def sources_opened_with(instance_key: str) -> SourceStore:
@@ -147,6 +140,7 @@ def postgres_adapters(database_url: str) -> Generator[Adapters]:
             engine=engine,
             identifiers=identifiers,
             box=secret_box(instance_key),
+            new_key_pair=key_pairs,
         )
 
     def secret_of(source_id: str) -> str | None:
