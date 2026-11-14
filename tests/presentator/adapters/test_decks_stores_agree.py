@@ -313,8 +313,10 @@ def test_a_draft_minted_at_another_offset_is_the_same_instant_through_both_adapt
 def test_a_postgres_source_of_an_owner_that_does_not_exist_is_an_error_not_a_taken_name(
     postgres_stores: Adapters,
 ) -> None:
+    orphan = _a_write("orphan")
+
     with pytest.raises(IntegrityError):
-        postgres_stores.sources.add(_a_write("orphan"))
+        postgres_stores.sources.add(orphan)
 
 
 @pytest.mark.parametrize(
