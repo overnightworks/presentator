@@ -12,17 +12,22 @@ from sqlalchemy import Engine, text
 from webauth.ports import AccountKind
 
 from presentator.adapters import decks, key_drafts
-from presentator.adapters.decks import SqliteSourceStore, create_deck_tables
+from presentator.adapters.decks import (
+    SqliteSourceRunStore,
+    SqliteSourceStore,
+    create_deck_tables,
+)
 from presentator.adapters.identity import create_identity_tables
 from presentator.adapters.key_drafts import SqliteSourceKeyDrafts
 from presentator.adapters.postgres import key_drafts as postgres_key_drafts
 from presentator.adapters.postgres import sources as postgres_sources
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
+from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
 from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import DeployKeyPair, secret_box
 from presentator.adapters.sqlite import rows
 from presentator.contracts.models import Role
-from presentator.ports.decks import DeployKeyDrafts, SourceStore
+from presentator.ports.decks import DeployKeyDrafts, SourceRuns, SourceStore
 from tests.support.postgres import engine_on
 
 INSTANCE_KEY: Final = "an instance key of thirty-two ch"
@@ -46,6 +51,7 @@ class Adapters:
 
     drafts: DeployKeyDrafts
     sources: SourceStore
+    runs: SourceRuns
     seed_owner: Callable[[str], None]
     drafts_opened_with: Callable[[str], DeployKeyDrafts]
     sources_opened_with: Callable[[str], SourceStore]
@@ -116,6 +122,7 @@ def sqlite_adapters(directory: Path) -> Adapters:
     return Adapters(
         drafts=drafts_opened_with(INSTANCE_KEY),
         sources=sources_opened_with(INSTANCE_KEY),
+        runs=SqliteSourceRunStore(database=database),
         seed_owner=seed_owner,
         drafts_opened_with=drafts_opened_with,
         sources_opened_with=sources_opened_with,
@@ -154,6 +161,7 @@ def postgres_adapters(database_url: str) -> Generator[Adapters]:
         yield Adapters(
             drafts=drafts_opened_with(INSTANCE_KEY),
             sources=sources_opened_with(INSTANCE_KEY),
+            runs=PostgresSourceRunStore(engine=engine),
             seed_owner=lambda owner_id: seed_postgres_owner(engine, owner_id),
             drafts_opened_with=drafts_opened_with,
             sources_opened_with=sources_opened_with,

@@ -6,7 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from presentator.contracts.decks import DeployKeyDraft, Source, SourceWrite
+from presentator.contracts.decks import (
+    RECENT_SOURCE_RUNS,
+    DeployKeyDraft,
+    Source,
+    SourceRun,
+    SourceRunFailure,
+    SourceRunOutcome,
+    SourceWrite,
+)
 from presentator.ports.decks import DeployKeyDrafts
 from tests.presentator.adapters.support.source_stores_support import (
     ANOTHER_INSTANCE_KEY,
@@ -227,6 +235,84 @@ def test_the_same_source_writes_read_the_same_through_both_adapters(
     assert through_postgres == through_sqlite
     assert any(each is None for each in through_sqlite)
     assert any(isinstance(each, Source) for each in through_sqlite)
+
+
+def _a_run(source: Source, minutes: int, reason: SourceRunFailure | None) -> SourceRun:
+    return SourceRun(
+        source_id=source.id,
+        at=_NOON + timedelta(minutes=minutes),
+        outcome=SourceRunOutcome.SUCCESS
+        if reason is None
+        else SourceRunOutcome.FAILURE,
+        commit=None if reason else f"commit-{minutes}",
+        reason=reason,
+    )
+
+
+def _write_and_read_runs(adapters: Adapters) -> list[object]:
+    """Every `SourceRuns` method, each observed by what it answers and leaves."""
+    adapters.seed_owner(_ADMIN)
+    polled = adapters.sources.add(_a_write("polled"))
+    quiet = adapters.sources.add(_a_write("quiet"))
+    assert polled is not None
+    assert quiet is not None
+    runs = adapters.runs
+    observed: list[object] = [runs.newest(polled.id), runs.recent(polled.id)]
+
+    for minutes, reason in (
+        (0, None),
+        (1, SourceRunFailure.REFUSED),
+        (1, SourceRunFailure.CREDENTIAL_UNRESOLVABLE),
+        (1, None),
+        (2, SourceRunFailure.FAILED),
+    ):
+        runs.record(_a_run(polled, minutes, reason))
+        observed.append(runs.newest(polled.id))
+        observed.append(runs.recent(polled.id))
+    assert len(runs.recent(polled.id)) == RECENT_SOURCE_RUNS
+    runs.record(_a_run(quiet, 9, SourceRunFailure.UNREACHABLE))
+    observed.append(runs.recent(quiet.id))
+
+    runs.remove_for_source(polled.id)
+    runs.remove_for_source("no-such-source")
+    observed.extend((runs.newest(polled.id), runs.recent(polled.id)))
+    observed.append(runs.recent(quiet.id))
+    return observed
+
+
+def test_the_same_run_writes_read_the_same_through_both_adapters(
+    sqlite_stores: Adapters, postgres_stores: Adapters
+) -> None:
+    through_sqlite = _write_and_read_runs(sqlite_stores)
+    through_postgres = _write_and_read_runs(postgres_stores)
+
+    assert through_postgres == through_sqlite
+    assert repr(through_postgres) == repr(through_sqlite)
+
+
+def test_a_run_recorded_at_another_offset_is_the_same_instant_through_both_adapters(
+    sqlite_stores: Adapters, postgres_stores: Adapters
+) -> None:
+    at = _NOON.astimezone(_TWO_HOURS_EAST)
+    read_back: list[datetime] = []
+    for adapters in (sqlite_stores, postgres_stores):
+        adapters.seed_owner(_ADMIN)
+        source = adapters.sources.add(_a_write("polled"))
+        assert source is not None
+        adapters.runs.record(
+            SourceRun(
+                source_id=source.id,
+                at=at,
+                outcome=SourceRunOutcome.SUCCESS,
+                commit="c",
+                reason=None,
+            )
+        )
+        newest = adapters.runs.newest(source.id)
+        assert newest is not None
+        read_back.append(newest.at)
+
+    assert read_back == [_NOON, _NOON]
 
 
 def test_the_same_draft_writes_read_the_same_through_both_adapters(
