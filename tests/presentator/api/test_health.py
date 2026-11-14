@@ -4,7 +4,10 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from presentator.api.health import add_health_route
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
@@ -80,3 +83,26 @@ def test_the_lobby_reads_no_session_store_to_answer() -> None:
 
     assert answer.status_code == HTTPStatus.OK
     assert (people.sessions.loads, people.sessions.touches) == (0, 0)
+
+
+def test_an_instance_that_is_not_ready_answers_unavailable_with_a_fixed_body() -> None:
+    """The refusal says nothing of why."""
+    app = FastAPI()
+    add_health_route(app, readiness=lambda: False)
+
+    answer = TestClient(app).get("/health")
+
+    assert answer.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert answer.json() == {"status": "unavailable"}
+
+
+def test_readiness_is_asked_on_every_request() -> None:
+    """An instance that becomes ready is answered 200 without a restart."""
+    states = iter([False, True])
+    app = FastAPI()
+    add_health_route(app, readiness=lambda: next(states))
+    client = TestClient(app)
+
+    statuses = [client.get("/health").status_code for _ in range(2)]
+
+    assert statuses == [HTTPStatus.SERVICE_UNAVAILABLE, HTTPStatus.OK]
