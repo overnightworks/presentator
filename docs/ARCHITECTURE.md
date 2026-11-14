@@ -97,18 +97,18 @@ One process serves the lobby and the talk host and tells them apart by the `Host
 host gets a 404, except the lobby's back-channel logout path ([sign-in](sign-in.md)), which ignores
 forwarded headers and trusts only the signed Logout Token. The platform's realm registers no logout
 URL for presentator, so its safety does not depend on the call. `GET /health` answers 200 while the
-database passes the revision rule, else a fixed 503; the port opens once it has and the worker answers.
+Postgres database passes the revision rule (SQLite: always), else a fixed 503; the port opens once the worker answers.
 
 The worker's pod holds `lo` alone because the init container `remove-link` deletes its network link
 first; its container never restarts, so each life ends the pod and the StatefulSet makes a fresh one.
 
 ## 5. Crosscutting Concepts
 
-**Persistence.** With `PRESENTATOR_DATABASE_URL` set, Postgres holds the state and serves every store
-port over one engine per process; unset, the SQLite file serves. Files hold mirrors and builds, caches
-the rows rebuild. `serve` creates no table; `presentator migrate` runs the additive migrations of
-`adapters/postgres` under a lock. No revision row or one behind this release is refused at start and
-unready; an unknown revision is a newer release's and is served, so a rollout or rollback overlaps.
+**Persistence.** With `PRESENTATOR_DATABASE_URL` set, Postgres holds the state over one engine per process;
+unset, the SQLite file serves, creates its tables at start and is always ready. Files hold mirrors and
+builds, caches the rows rebuild. On Postgres `serve` creates no table; `presentator migrate` runs the
+additive migrations of `adapters/postgres` under a lock. No revision row or one behind this release is
+refused at start and unready; an unknown revision is a newer release's and is served.
 
 **Authentication and wire.** Keycloak groups admit people ([sign-in](sign-in.md)). There is no
 session cache: rate limits are per process, and identity writes run in one transaction under a

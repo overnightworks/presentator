@@ -36,7 +36,8 @@ every store is served from Postgres and the SQLite file below is not opened;
 without both, the SQLite file serves. Setting only one of the two refuses the
 start. `presentator migrate` brings a Postgres database to the newest revision
 and exits; it runs apart from serving, as a step before it, and needs only
-these two settings. Serving creates no table.
+these two settings. Serving from Postgres creates no table; serving from the
+SQLite file creates its tables at start.
 
 | Setting | Meaning |
 | --- | --- |
@@ -46,10 +47,11 @@ these two settings. Serving creates no table.
 Concurrent `migrate` runs wait for one another on an advisory lock, and each
 ends at the newest revision. A database whose revision this release does not
 know was migrated by a newer release: `migrate` leaves it as it is and exits 0,
-and serving works on it. Serving refuses a database with no revision row and
-one behind this release's head, and `GET /health` answers 503 while the
-database does not answer or fails that rule. The refusals and the log name the
-kind of failure and never the URL or the password.
+and serving works on it. Serving from Postgres refuses a database with no
+revision row and one behind this release's head, and `GET /health` answers 503
+while the database does not answer or fails that rule; from the SQLite file it
+always answers 200. The refusals and the log name the kind of failure and never
+the URL or the password.
 The tests find their server in `PRESENTATOR_TEST_POSTGRES_URL`, a URL of a
 server whose user may create databases; every test creates one of its own.
 
