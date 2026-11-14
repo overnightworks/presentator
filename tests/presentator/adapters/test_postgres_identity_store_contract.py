@@ -11,25 +11,20 @@ from presentator.adapters.identity import StoredAccount
 from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
 from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
-from presentator.contracts.models import Role
+from tests.presentator.adapters.support.kit_role import role_stored_for
 from tests.support.postgres import engine_on
-
-_ROLE_THE_KIT_WRITES = "member"
 
 
 @dataclass(frozen=True, slots=True)
 class _AccountsStoringTheKitsRole(PostgresSubjectUserStore):
-    """The accounts, with the kit's role word read as the one role a member has here.
-
-    The kit creates its accounts with the role "member", which this product's
-    closed `Role` refuses; webauth itself only ever writes "admin" and "user".
-    """
+    """The accounts, with the kit's role word read as the role a member has here."""
 
     def create_for_subject(
         self, subject: str, username: str, role: str, kind: AccountKind
     ) -> StoredAccount:
-        stored_role = Role.USER.value if role == _ROLE_THE_KIT_WRITES else role
-        return super().create_for_subject(subject, username, stored_role, kind)
+        return super().create_for_subject(
+            subject, username, role_stored_for(role), kind
+        )
 
 
 @dataclass(frozen=True, slots=True)
