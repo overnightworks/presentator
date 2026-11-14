@@ -18,6 +18,7 @@ from tests.presentator.adapters.support.person_instance_support import (
     an_instance_with_both_people,
     tables_reaching_accounts,
 )
+from tests.support.people import a_session_id
 
 _TWO_SESSIONS = 2
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
@@ -93,6 +94,7 @@ def test_the_secret_columns_are_counted_withheld_over_real_rows(
 def _another_session(instance: Instance, *, id_token: SecretStr | None) -> None:
     SqliteSessionRecordStore(instance.database).create(
         THE_PERSON.id,
+        session_id=a_session_id(),
         now=_NOW,
         expires_at=_NOW + timedelta(hours=1),
         refresh_token=None,

@@ -31,7 +31,7 @@ from tests.support.lobby import (
     A_TALK_ADDRESS,
     hand_over_session_cookies,
 )
-from tests.support.people import seed_user
+from tests.support.people import a_session_id, seed_user
 from tests.support.talk_support import (
     A_DECK,
     B_DECK,
@@ -199,6 +199,7 @@ def test_the_composition_root_serves_the_copresenter_at_the_talk_host_only() -> 
     now = datetime.now(UTC)
     session = SqliteSessionRecordStore(settings.database).create(
         _ADMIN.id,
+        session_id=a_session_id(),
         now=now,
         expires_at=now + SESSION_LIFETIME,
         refresh_token=None,

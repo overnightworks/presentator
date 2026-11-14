@@ -16,6 +16,7 @@ from presentator.contracts.people import (
 )
 from tests.presentator.application.support.fakes import FakeSourceStore
 from tests.presentator.application.support.person_instance_support import an_instance
+from tests.support.people import a_session_id
 
 _THE_PERSON = "the-person"
 _ANOTHER = "another-person"
@@ -54,6 +55,7 @@ def _exported(subject: str = _THE_PERSON) -> PersonExport:
     )
     instance.sessions.create(
         _THE_PERSON,
+        session_id=a_session_id(),
         now=_NOW,
         expires_at=_NOW + timedelta(hours=1),
         refresh_token=SecretStr(_A_REFRESH_WORD),

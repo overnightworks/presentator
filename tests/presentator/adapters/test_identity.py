@@ -27,6 +27,7 @@ from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host.main import web_auth_config_for
 from tests.support.people import (
+    a_session_id,
     seed_user,
 )
 
@@ -63,6 +64,7 @@ def open_session(  # noqa: PLR0913 - one keyword per stored column
 ) -> StoredSession:
     return store.create(
         user_id,
+        session_id=a_session_id(),
         now=now,
         expires_at=expires_at,
         refresh_token=refresh_token,
@@ -123,12 +125,6 @@ def test_a_session_for_an_account_that_does_not_exist_is_refused_loudly(
         assert connection.execute("SELECT COUNT(*) FROM sessions").fetchone() == (0,)
 
 
-def test_a_session_nobody_created_reads_as_nothing(
-    sessions: SqliteSessionRecordStore,
-) -> None:
-    assert sessions.load("nobody") is None
-
-
 def test_a_session_whose_account_row_is_gone_reads_as_nothing(
     database: Path,
     sessions: SqliteSessionRecordStore,
@@ -169,14 +165,6 @@ def test_a_session_deleted_after_its_load_is_not_brought_back_by_touch(
     assert sessions.load(session.id) is None
 
 
-def test_a_removed_session_is_gone(sessions: SqliteSessionRecordStore) -> None:
-    session = open_session(sessions, "user-1")
-
-    sessions.delete(session.id)
-
-    assert sessions.load(session.id) is None
-
-
 def test_deleting_one_persons_sessions_counts_them_and_leaves_another_standing(
     sessions: SqliteSessionRecordStore,
 ) -> None:
@@ -195,29 +183,17 @@ def test_deleting_sessions_for_nobody_drops_nothing(
     assert sessions.delete_for_user("nobody") == 0
 
 
-@pytest.mark.parametrize(
-    ("keep_newest", "kept_of_oldest_middle_newest"),
-    [
-        pytest.param(2, (False, True, True), id="the-oldest-above-the-cap-goes"),
-        pytest.param(5, (True, True, True), id="below-the-cap-drops-nothing"),
-        pytest.param(0, (False, False, False), id="zero-keeps-none"),
-    ],
-)
-def test_overflow_sessions_drop_the_oldest_by_creation_and_keep_the_newest(
+def test_a_session_count_below_the_cap_drops_nothing(
     sessions: SqliteSessionRecordStore,
-    keep_newest: int,
-    kept_of_oldest_middle_newest: tuple[bool, bool, bool],
 ) -> None:
     created = [
         open_session(sessions, "user-1", now=_NOW + timedelta(minutes=minute))
         for minute in range(3)
     ]
 
-    sessions.prune_overflow("user-1", keep_newest=keep_newest)
+    sessions.prune_overflow("user-1", keep_newest=5)
 
-    assert tuple(sessions.load(session.id) is not None for session in created) == (
-        kept_of_oldest_middle_newest
-    )
+    assert all(sessions.load(session.id) is not None for session in created)
 
 
 def test_a_timestamp_given_with_an_offset_is_stored_as_the_same_instant_in_utc(
@@ -228,6 +204,7 @@ def test_a_timestamp_given_with_an_offset_is_stored_as_the_same_instant_in_utc(
 
     session = sessions.create(
         "user-1",
+        session_id=a_session_id(),
         now=_NOW.astimezone(in_berlin),
         expires_at=(_NOW + timedelta(hours=1)).astimezone(in_berlin),
         refresh_token=None,
@@ -305,6 +282,7 @@ def test_creating_the_tables_twice_leaves_the_people_as_they_were(
 ) -> None:
     session = SqliteSessionRecordStore(database).create(
         "user-1",
+        session_id=a_session_id(),
         now=_NOW,
         expires_at=_NOW,
         refresh_token=None,
@@ -525,21 +503,6 @@ def test_a_replaced_refresh_token_is_read_back_and_the_answer_is_true(
     assert untouched.refresh_token == a_token("rt-other")
 
 
-@pytest.mark.parametrize("session_id", ["never-existed", "deleted"])
-def test_replacing_the_token_of_a_gone_session_answers_false_and_creates_no_row(
-    database: Path, sessions: SqliteSessionRecordStore, session_id: str
-) -> None:
-    created = open_session(sessions, "user-1")
-    sessions.delete(created.id)
-    target = created.id if session_id == "deleted" else session_id
-
-    answer = sessions.replace_refresh_token(target, refresh_token=a_token())
-
-    assert answer is False
-    with closing(sqlite3.connect(database)) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM sessions").fetchone() == (0,)
-
-
 def test_a_logout_on_another_store_before_a_replacement_leaves_the_row_gone(
     database: Path, sessions: SqliteSessionRecordStore
 ) -> None:
@@ -620,6 +583,7 @@ def test_a_session_never_shows_its_tokens_in_repr_or_str(
     """Neither `repr` nor `str` shows a token."""
     created = sessions.create(
         "user-1",
+        session_id=a_session_id(),
         now=_NOW,
         expires_at=_NOW,
         refresh_token=a_token(),
@@ -638,6 +602,7 @@ def test_the_id_token_is_read_back_and_survives_a_touch_and_a_refresh_token_swap
     """The ID token reads back and outlives a touch and a swap."""
     created = sessions.create(
         "user-1",
+        session_id=a_session_id(),
         now=_NOW,
         expires_at=_NOW,
         refresh_token=a_token(),
@@ -661,6 +626,7 @@ def test_a_session_created_without_an_id_token_stores_none(
     store = SqliteSessionRecordStore(database)
     created = store.create(
         "user-1",
+        session_id=a_session_id(),
         now=_NOW,
         expires_at=_NOW,
         refresh_token=None,

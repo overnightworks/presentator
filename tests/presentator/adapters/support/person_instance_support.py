@@ -55,7 +55,7 @@ from tests.presentator.application.support.fakes import (
     FakeToolchainThemes,
     FrozenClock,
 )
-from tests.support.people import seed_user
+from tests.support.people import a_session_id, seed_user
 
 _ACCOUNTS = "users"
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
@@ -122,6 +122,7 @@ def _seed_person(
     seed_user(stores.database, person)
     stores.sessions.create(
         person.id,
+        session_id=a_session_id(),
         now=_NOW,
         expires_at=_NOW + timedelta(hours=1),
         refresh_token=SecretStr("a-refresh-token"),

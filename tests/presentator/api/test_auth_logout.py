@@ -27,6 +27,7 @@ from tests.support.lobby import (
     a_settings,
     hand_over_session_cookies,
 )
+from tests.support.people import a_session_id
 from tests.support.sign_in_support import Scene, TransactionDouble, a_scene
 
 _A_FORM = {"content-type": "application/x-www-form-urlencoded"}
@@ -54,6 +55,7 @@ class SessionsThatBreakOnDelete:
         self,
         user_id: str,
         *,
+        session_id: str,
         now: datetime,
         expires_at: datetime,
         refresh_token: SecretStr | None,
@@ -62,6 +64,7 @@ class SessionsThatBreakOnDelete:
     ) -> SessionRecord:
         return self.real.create(
             user_id,
+            session_id=session_id,
             now=now,
             expires_at=expires_at,
             refresh_token=refresh_token,
@@ -232,6 +235,7 @@ def test_the_logout_page_follows_the_account_language_where_a_catalog_has_it(
     scene.sessions.delete_for_user("subject-1")
     session = scene.sessions.create(
         "subject-1",
+        session_id=a_session_id(),
         now=scene.clock.now(),
         expires_at=scene.clock.now() + SESSION_LIFETIME,
         refresh_token=None,

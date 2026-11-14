@@ -25,6 +25,7 @@ from tests.presentator.application.support.fakes import (
     FakeUserStore,
     FrozenClock,
 )
+from tests.support.people import a_session_id
 
 THE_PERSON = User(id="the-person", username="pia", role=Role.ADMIN)
 ANOTHER = User(id="another-person", username="ben", role=Role.USER)
@@ -98,6 +99,7 @@ def an_instance(
     for person in (THE_PERSON, ANOTHER):
         sessions.create(
             person.id,
+            session_id=a_session_id(),
             now=clock.now(),
             expires_at=clock.now() + timedelta(hours=1),
             refresh_token=None,

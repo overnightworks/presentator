@@ -48,6 +48,7 @@ from tests.support.lobby import (
 )
 from tests.support.lobby_reads import deck_list, listed_titles, signed_in_username
 from tests.support.people import (
+    a_session_id,
     copy_of_a_crashed_database,
     seed_user,
 )
@@ -84,6 +85,7 @@ def signed_in(
     now = datetime.now(UTC)
     session = SqliteSessionRecordStore(database).create(
         _ADMIN.id,
+        session_id=a_session_id(),
         now=now,
         expires_at=now + SESSION_LIFETIME,
         refresh_token=None,
@@ -721,6 +723,7 @@ def test_an_instance_restarts_on_a_crash_that_left_only_current_frames_in_the_lo
         now = datetime.now(UTC)
         opened = SqliteSessionRecordStore(database).create(
             _ADMIN.id,
+            session_id=a_session_id(),
             now=now,
             expires_at=now + SESSION_LIFETIME,
             refresh_token=None,

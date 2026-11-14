@@ -207,34 +207,44 @@ class SqliteSessionRecordStore:
         self,
         user_id: str,
         *,
+        session_id: str,
         now: datetime,
         expires_at: datetime,
         refresh_token: SecretStr | None,
         id_token: SecretStr | None,
         account_language: str | None,
     ) -> StoredSession:
-        """Open a session created at `now` that stands until `expires_at`."""
-        session_id = secrets.token_urlsafe(_IDENTIFIER_BYTES)
+        """Open the session `session_id`, created at `now`, standing until `expires_at`.
+
+        Raises `ValueError` for an id the table holds, expired rows included, and
+        leaves that row as it was.
+        """
         with self.cursor() as cursor:
             account = cursor.execute(_SELECT_ACCOUNT, (user_id,)).fetchone()
             if account is None:
                 message = f"no account {user_id} to open a session for"
                 raise LookupError(message)
-            cursor.execute(
-                "INSERT INTO sessions"
-                " (id, user_id, created_at, expires_at, refresh_token, id_token,"
-                " account_language)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    session_id,
-                    user_id,
-                    _stored(now),
-                    _stored(expires_at),
-                    None if refresh_token is None else refresh_token.get_secret_value(),
-                    None if id_token is None else id_token.get_secret_value(),
-                    account_language,
-                ),
-            )
+            try:
+                cursor.execute(
+                    "INSERT INTO sessions"
+                    " (id, user_id, created_at, expires_at, refresh_token, id_token,"
+                    " account_language)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        session_id,
+                        user_id,
+                        _stored(now),
+                        _stored(expires_at),
+                        None
+                        if refresh_token is None
+                        else refresh_token.get_secret_value(),
+                        None if id_token is None else id_token.get_secret_value(),
+                        account_language,
+                    ),
+                )
+            except sqlite3.IntegrityError as refused:
+                message = "a session with that id is already stored"
+                raise ValueError(message) from refused
         return StoredSession(
             id=session_id,
             user=_account(account),
