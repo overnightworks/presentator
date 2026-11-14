@@ -7,6 +7,7 @@ type Words = typeof english | typeof german
 
 interface ControlsWords {
   controlWords: { value: Words | null }
+  controlLanguage: { value: string }
   currentWords: () => Words
   useAccountLanguage: (language: string) => Promise<void>
 }
@@ -25,17 +26,19 @@ beforeEach(() => {
 
 describe('the presenter controls words', () => {
   it('shows English until the account language is known', async () => {
-    const { controlWords, currentWords } = await freshControlsWords()
+    const { controlWords, controlLanguage, currentWords } = await freshControlsWords()
 
     expect(controlWords.value).toBeNull()
+    expect(controlLanguage.value).toBe('en')
     expect(currentWords()['controls.home']).toBe(english['controls.home'])
   })
 
   it('shows the words of the first language the server names', async () => {
-    const { controlWords, currentWords, useAccountLanguage } = await freshControlsWords()
+    const { controlWords, controlLanguage, currentWords, useAccountLanguage } = await freshControlsWords()
 
     await useAccountLanguage('de')
 
+    expect(controlLanguage.value).toBe('de')
     expect(controlWords.value?.['controls.home']).toBe(german['controls.home'])
     expect(currentWords()['controls.home']).toBe(german['controls.home'])
   })
@@ -49,11 +52,12 @@ describe('the presenter controls words', () => {
   })
 
   it('keeps the first language when a later answer names another', async () => {
-    const { currentWords, useAccountLanguage } = await freshControlsWords()
+    const { controlLanguage, currentWords, useAccountLanguage } = await freshControlsWords()
 
     await useAccountLanguage('de')
     await useAccountLanguage('en')
 
+    expect(controlLanguage.value).toBe('de')
     expect(currentWords()['controls.home']).toBe(german['controls.home'])
   })
 
@@ -78,14 +82,16 @@ describe('the presenter controls words', () => {
   })
 
   it('shows English and stays open for a later language when the named one cannot be loaded', async () => {
-    const { controlWords, currentWords, useAccountLanguage } = await freshControlsWords()
+    const { controlWords, controlLanguage, currentWords, useAccountLanguage } = await freshControlsWords()
 
     await useAccountLanguage('xx')
 
     expect(controlWords.value?.['controls.home']).toBe(english['controls.home'])
+    expect(controlLanguage.value).toBe('en')
 
     await useAccountLanguage('de')
 
+    expect(controlLanguage.value).toBe('de')
     expect(currentWords()['controls.home']).toBe(german['controls.home'])
   })
 })

@@ -11,6 +11,7 @@ const notice = useRoomNotice()
   <div
     v-if="notice"
     class="room-notice"
+    :lang="notice.language"
     :class="{ dark: isDark }"
   >
     <p

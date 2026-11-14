@@ -113,6 +113,11 @@ rule = "test-layout"
 reason = "it exercises the addon's overlay in a browser through a built deck, which no single addon source file mirrors"
 
 [[layout.allow]]
+path = "slidev/tests/overlay-render-pass.browser.test.ts"
+rule = "test-layout"
+reason = "it renders the addon's overlay in a browser through a built deck, which no single addon source file mirrors"
+
+[[layout.allow]]
 path = "slidev/tests/presenter-controls.browser.test.ts"
 rule = "test-layout"
 reason = "it exercises the addon's overlay in a browser through a built deck, which no single addon source file mirrors"

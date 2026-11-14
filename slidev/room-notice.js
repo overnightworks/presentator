@@ -97,6 +97,6 @@ export function useRoomNotice() {
     const { phase, language } = sync.state
     const inBand = !isPresenter.value && now.value - liveSince.value < BAND_MILLISECONDS
     const shown = inBand ? BAND : phase
-    return { shown, text: WORDS_BY_LANGUAGE[language][`roomNotice.${shown}`] }
+    return { shown, language, text: WORDS_BY_LANGUAGE[language][`roomNotice.${shown}`] }
   })
 }
