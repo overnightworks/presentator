@@ -128,7 +128,7 @@ def _stores_over(database: Path) -> Stores:
     )
 
 
-def seed_person(
+def _seed_person(
     person: User,
     stores: Stores,
     mirrors: SourceMirrors,
@@ -205,7 +205,7 @@ def _seed_deck(stores: Stores, person: User, source: Source, build: Path) -> Non
     )
 
 
-def decks_application(
+def _decks_application(
     stores: Stores,
     mirrors: SourceMirrors,
     builds: Path,
@@ -248,10 +248,10 @@ def directories_with_both_people(stores: Stores, tmp_path: Path) -> Directories:
     )
     builds = tmp_path / "builds"
     kept_by = {
-        person.id: seed_person(person, stores, mirrors, builds)
+        person.id: _seed_person(person, stores, mirrors, builds)
         for person in (THE_PERSON, ANOTHER)
     }
-    decks = decks_application(stores, mirrors, builds, tmp_path)
+    decks = _decks_application(stores, mirrors, builds, tmp_path)
     return Directories(
         mirrors=mirrors,
         builds=builds,
