@@ -29,6 +29,23 @@ secret does not land in the startup output.
 
 There is no `/setup` and no first admin ([sign-in](sign-in.md), SI2).
 
+## The database `presentator migrate` reaches
+
+`presentator migrate` brings a Postgres database to the newest revision and
+exits; plain `presentator` does not read these two settings yet. It runs apart
+from serving, as a step before it, and needs only these:
+
+| Setting | Meaning |
+| --- | --- |
+| `PRESENTATOR_DATABASE_URL` | A `postgresql://` URL naming a host, a user and a database, with no password, query or fragment. |
+| `PRESENTATOR_DATABASE_PASSWORD_FILE` | Absolute path of a file holding the user's password, read once at start, minus one trailing newline. |
+
+Concurrent runs wait for one another on an advisory lock, and each ends at the
+newest revision. A database whose revision this release does not know was
+migrated by a newer release: `migrate` leaves it as it is and exits 0.
+The tests find their server in `PRESENTATOR_TEST_POSTGRES_URL`, a URL of a
+server whose user may create databases; every test creates one of its own.
+
 ## Defaults
 
 The value in brackets is what a direct run uses; the container image replaces
