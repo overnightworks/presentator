@@ -559,8 +559,8 @@ def test_a_deck_rebuilt_at_both_processes_at_once_is_delivered_from_one_build(
             assert talk is not None
             assert pdf is not None
             assert Path(talk).parent == Path(pdf).parent
-            assert commit in pushed
             assert commit is not None
+            assert commit in pushed
             commits_of_a_directory[str(Path(talk).parent)].add(commit)
     assert all(len(commits) == 1 for commits in commits_of_a_directory.values())
     assert seen[-1][0][2] == remote.head
