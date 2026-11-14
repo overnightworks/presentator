@@ -52,12 +52,17 @@ def test_two_concurrent_migrations_wait_for_one_another_and_both_end_at_head(
     engine = engine_on(unmigrated_database_url)
     try:
         with engine.connect() as holder:
-            lock = {"namespace": MIGRATION_LOCK.namespace, "key": MIGRATION_LOCK.key}
-            holder.execute(text("SELECT pg_advisory_lock(:namespace, :key)"), lock)
+            lock = {
+                "lock_class": int(MIGRATION_LOCK.lock_class),
+                "instance": MIGRATION_LOCK.instance,
+            }
+            holder.execute(
+                text("SELECT pg_advisory_lock(:lock_class, :instance)"), lock
+            )
             with two_presentators(["migrate"], environment) as processes:
                 _wait_until_both_wait_for_the_lock(engine)
                 holder.execute(
-                    text("SELECT pg_advisory_unlock(:namespace, :key)"), lock
+                    text("SELECT pg_advisory_unlock(:lock_class, :instance)"), lock
                 )
                 finished = processes.finish()
 

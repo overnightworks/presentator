@@ -13,8 +13,8 @@ from sqlalchemy import Connection, Engine, text
 from presentator.adapters.postgres.locks import MIGRATION_LOCK, AdvisoryLock
 
 MIGRATIONS_DIRECTORY: Final = Path(__file__).parent / "migrations"
-_TAKE_LOCK: Final = text("SELECT pg_advisory_lock(:namespace, :key)")
-_RELEASE_LOCK: Final = text("SELECT pg_advisory_unlock(:namespace, :key)")
+_TAKE_LOCK: Final = text("SELECT pg_advisory_lock(:lock_class, :instance)")
+_RELEASE_LOCK: Final = text("SELECT pg_advisory_unlock(:lock_class, :instance)")
 _log = logging.getLogger(__name__)
 
 
@@ -52,7 +52,7 @@ def _is_from_a_newer_release(connection: Connection, config: Config) -> bool:
 
 
 def _parameters(lock: AdvisoryLock) -> dict[str, int]:
-    return {"namespace": lock.namespace, "key": lock.key}
+    return {"lock_class": int(lock.lock_class), "instance": lock.instance}
 
 
 def _hold(connection: Connection, lock: AdvisoryLock) -> None:

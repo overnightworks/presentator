@@ -1,21 +1,33 @@
 """The advisory locks this product takes on its database.
 
 Every lock is the two-key form, so it can never collide with a lock a tool takes
-by the single-key form. The first key names this product, the second the lock.
+by the single-key form. The first key is the lock's class, one id per kind of
+lock in `LockClass`; the second is the instance within the class: 0 for a lock
+there is one of, a hash for a lock per subject. Two classes never share a key
+pair whatever a hash comes to, and each database is the product's alone, so no
+product-wide key is needed.
 """
 
 from dataclasses import dataclass
+from enum import IntEnum
 from typing import Final
+
+_ONLY_ONE = 0
+
+
+class LockClass(IntEnum):
+    """One id per kind of lock, 32-bit."""
+
+    MIGRATION = 1
 
 
 @dataclass(frozen=True, slots=True)
 class AdvisoryLock:
-    """A lock `pg_advisory_lock(namespace, key)` takes, both keys 32-bit."""
+    """A lock `pg_advisory_lock(lock_class, instance)` takes, both keys 32-bit."""
 
-    namespace: int
-    key: int
+    lock_class: LockClass
+    instance: int
 
 
-PRODUCT_NAMESPACE: Final = 1_886_352_980
 # Held by one `presentator migrate` at a time.
-MIGRATION_LOCK: Final = AdvisoryLock(PRODUCT_NAMESPACE, 1)
+MIGRATION_LOCK: Final = AdvisoryLock(LockClass.MIGRATION, _ONLY_ONE)
