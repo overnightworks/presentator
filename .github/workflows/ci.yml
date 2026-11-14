@@ -506,7 +506,7 @@ jobs:
       - image
       - build-worker-k3d
     if: always()
-    uses: overnightworks/quality/.github/workflows/gate.yml@24c8484f86eccd5da41f9e7177ebabe52ccf3fd1 # v0.16.0
+    uses: overnightworks/quality/.github/workflows/gate.yml@853a9545c26aaa884896223b87a2505d2b918e31 # v0.17.0
     permissions:
       contents: read
       actions: read
