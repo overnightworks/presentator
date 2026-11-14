@@ -103,8 +103,7 @@ def _read_builds(stores: Stores) -> object:
         deck = stores.decks.get(SWITCHED_TALK)
         assert deck is not None
         build = deck.build
-        if build is None:
-            continue
+        assert build is not None
         number = int(build.commit.removeprefix("commit-"))
         if build != a_build(number):
             torn.append(f"{build}")
