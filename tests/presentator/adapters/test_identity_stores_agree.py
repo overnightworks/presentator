@@ -139,7 +139,11 @@ def stores(request: pytest.FixtureRequest, sqlite_stores: _Stores) -> _Stores:
 
 def _write_and_read_a_household(stores: _Stores) -> list[object]:
     """Write accounts and sessions that stress every column, reading after each step."""
-    accounts, sessions = stores.accounts, stores.sessions
+    return [*_write_and_read_accounts(stores), *_write_and_read_sessions(stores)]
+
+
+def _write_and_read_accounts(stores: _Stores) -> list[object]:
+    accounts = stores.accounts
     observed: list[object] = []
     for subject, username, role, kind in (
         ("Sub-é", "Änne", Role.ADMIN, AccountKind.PERSON),
@@ -154,7 +158,12 @@ def _write_and_read_a_household(stores: _Stores) -> list[object]:
     observed.extend(
         accounts.get(asked) for asked in ("Sub-é", "sub-é", "Sub-é ", "sub-b", "none")
     )
+    return observed
 
+
+def _write_and_read_sessions(stores: _Stores) -> list[object]:
+    sessions = stores.sessions
+    observed: list[object] = []
     for session_id, user_id, created_at, lifetime, tokens, language in (
         ("s1", "Sub-é", _NOON, timedelta(hours=1), ("refresh", "identity"), "de"),
         (
