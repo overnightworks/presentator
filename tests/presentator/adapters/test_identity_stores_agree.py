@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 from pydantic import SecretStr
-from webauth.ports import AccountKind, UsernameTakenError
+from sqlalchemy import Engine, text
+from webauth.ports import (
+    AccountEvent,
+    AccountEventKind,
+    AccountKind,
+    UsernameTakenError,
+)
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import (
@@ -18,6 +24,7 @@ from presentator.adapters.identity import (
     create_identity_tables,
 )
 from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
+from presentator.adapters.postgres.locks import SIGN_IN_LOCK, parameters
 from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.contracts.models import Role
@@ -26,6 +33,44 @@ from tests.support.postgres import engine_on
 
 _TWO_HOURS_EAST = timezone(timedelta(hours=2))
 _NOON = datetime(2026, 11, 14, 12, 0, 0, 123456, tzinfo=UTC)
+_AN_EVENT = AccountEvent(
+    kind=AccountEventKind.BACKCHANNEL_LOGOUT, actor_id=None, subject_id="subject-1"
+)
+_TRY_SIGN_IN_LOCK = text("SELECT pg_try_advisory_xact_lock(:lock_class, :instance)")
+
+
+class _Refused(Exception):
+    pass
+
+
+class _RecordingSink:
+    def __init__(self) -> None:
+        self.events: list[AccountEvent] = []
+
+    def account_event(self, event: AccountEvent) -> None:
+        self.events.append(event)
+
+
+class _LockProbingSink(_RecordingSink):
+    """Records, for each event, whether another connection could take the lock."""
+
+    def __init__(self, other_engine: Engine) -> None:
+        super().__init__()
+        self.other_engine = other_engine
+        self.lock_free_when_delivered: list[bool] = []
+
+    def account_event(self, event: AccountEvent) -> None:
+        super().account_event(event)
+        self.lock_free_when_delivered.append(_sign_in_lock_is_free(self.other_engine))
+
+
+def _sign_in_lock_is_free(other_engine: Engine) -> bool:
+    with other_engine.begin() as other_connection:
+        return bool(
+            other_connection.execute(
+                _TRY_SIGN_IN_LOCK, parameters(SIGN_IN_LOCK)
+            ).scalar_one()
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,3 +257,51 @@ def test_deleting_an_account_ends_its_sessions_and_leaves_the_others(
     assert stores.sessions.load("leaver-session") is None
     assert stores.writes.get("stayer") is not None
     assert stores.sessions.load("stayer-session") is not None
+
+
+def test_a_postgres_entry_still_holds_the_sign_in_lock_while_its_events_reach_the_sink(
+    postgres_stores: _Stores, database_url: str
+) -> None:
+    other_engine = engine_on(database_url)
+    sink = _LockProbingSink(other_engine)
+    writes = PostgresIdentityWrites(postgres_stores.writes.engine, sink)
+    try:
+        with writes() as entry:
+            entry.audit.account_event(_AN_EVENT)
+    finally:
+        other_engine.dispose()
+
+    assert sink.events == [_AN_EVENT]
+    assert sink.lock_free_when_delivered == [False]
+
+
+def test_a_postgres_entry_that_raises_rolls_back_drops_its_events_and_frees_the_lock(
+    postgres_stores: _Stores, database_url: str
+) -> None:
+    sink = _RecordingSink()
+    writes = PostgresIdentityWrites(postgres_stores.writes.engine, sink)
+
+    with pytest.raises(_Refused), writes() as entry:
+        entry.accounts.create_for_subject(
+            "rolled-back", "rolled-back", Role.USER.value, AccountKind.PERSON
+        )
+        entry.sessions.create(
+            "rolled-back",
+            session_id="rolled-back-session",
+            now=_NOON,
+            expires_at=_NOON + timedelta(hours=1),
+            refresh_token=None,
+            id_token=None,
+            account_language=None,
+        )
+        entry.audit.account_event(_AN_EVENT)
+        raise _Refused
+
+    assert writes.get("rolled-back") is None
+    assert postgres_stores.sessions.load("rolled-back-session") is None
+    assert sink.events == []
+    other_engine = engine_on(database_url)
+    try:
+        assert _sign_in_lock_is_free(other_engine)
+    finally:
+        other_engine.dispose()

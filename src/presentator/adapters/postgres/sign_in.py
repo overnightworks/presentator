@@ -27,10 +27,11 @@ class PostgresIdentityWrites:
 
     Calling it enters webauth's `SignInTransaction`: one transaction over accounts
     and sessions that first takes the sign-in advisory lock, so entries of any
-    number of processes run one after another, and that rolls back when the block
-    raises. The audit events of the entry reach the sink only after COMMIT, so the
-    log names nothing that was rolled back. Deleting an account takes the same lock
-    and transaction.
+    number of processes run one after another until the entry has left, and that
+    rolls back when the block raises. The audit events of the entry reach the sink
+    when the block returns, still under the lock and before COMMIT, so a block that
+    raises leaves no line; a sink that raises rolls the entry back. Deleting an
+    account takes the same lock and transaction.
     """
 
     engine: Engine
@@ -50,7 +51,8 @@ class PostgresIdentityWrites:
                 sessions=PostgresSessionRecordStore(self.engine, connection),
                 audit=buffered,
             )
-        buffered.flush_to(self.audit)
+            # The transaction lock ends with COMMIT, so the events go out before it.
+            buffered.flush_to(self.audit)
 
     def get(self, user_id: str) -> User | None:
         """The account of that id; a read needs no entry."""
