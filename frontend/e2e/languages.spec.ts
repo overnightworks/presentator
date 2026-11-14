@@ -36,25 +36,32 @@ function watchesErrors(page: Page): string[] {
 	return problems;
 }
 
-// The visible text elements whose text is cut off or spills out, unless they scroll by design.
+// The visible text whose box is cut off or spills out, unless it scrolls by design, and the page
+// itself when it scrolls sideways. An inline element has no box of its own, so its nearest block
+// ancestor is measured.
 function overflowingTextElements(): string[] {
 	const scrollsByDesign = new Set(['auto', 'scroll']);
-	const overflowing: string[] = [];
+	const overflowing = new Set<string>();
+	const root = document.documentElement;
+	if (root.scrollWidth > root.clientWidth) {
+		overflowing.add(`page: ${root.scrollWidth} > ${root.clientWidth}`);
+	}
 	for (const element of document.body.querySelectorAll('*')) {
 		const hasText = [...element.childNodes].some(
 			(node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim() !== ''
 		);
 		const style = getComputedStyle(element);
 		const shown = element.getClientRects().length > 0 && style.visibility === 'visible';
-		if (!hasText || !shown || element.clientWidth === 0) continue;
-		if (element.scrollWidth > element.clientWidth && !scrollsByDesign.has(style.overflowX)) {
-			const classes = [...element.classList].map((name) => `.${name}`).join('');
-			overflowing.push(
-				`${element.tagName.toLowerCase()}${classes}: ${element.scrollWidth} > ${element.clientWidth}`
-			);
+		if (!hasText || !shown) continue;
+		let box: Element | null = element;
+		while (box && box.clientWidth === 0) box = box.parentElement;
+		if (!box || box === root) continue;
+		if (box.scrollWidth > box.clientWidth && !scrollsByDesign.has(getComputedStyle(box).overflowX)) {
+			const classes = [...box.classList].map((name) => `.${name}`).join('');
+			overflowing.add(`${box.tagName.toLowerCase()}${classes}: ${box.scrollWidth} > ${box.clientWidth}`);
 		}
 	}
-	return overflowing;
+	return [...overflowing];
 }
 
 async function rendersWell(
@@ -101,7 +108,7 @@ for (const { language, locale } of LANGUAGES) {
 				test.use({ person: admin });
 
 				for (const [surface, locate] of Object.entries(SIGNED_IN_SURFACES)) {
-					test(`render ${surface}`, async ({ page, signedIn }) => {
+					test(`shows ${surface} in its language without cut-off or unworded text`, async ({ page, signedIn }) => {
 						const words = await wordsOf(page);
 						const problems = watchesErrors(page);
 						await page.clock.setFixedTime(NOW);
@@ -120,7 +127,7 @@ for (const { language, locale } of LANGUAGES) {
 					});
 				}
 
-				test('render the not-found board', async ({ page }) => {
+				test('shows the not-found board in its language without cut-off or unworded text', async ({ page }) => {
 					const words = await wordsOf(page);
 
 					await rendersWell(
@@ -138,7 +145,7 @@ for (const { language, locale } of LANGUAGES) {
 
 			test.describe('the sign-in boards', () => {
 				for (const address of ['/login', ...REFUSALS]) {
-					test(`render ${address}`, async ({ page }) => {
+					test(`shows ${address} in its language without cut-off or unworded text`, async ({ page }) => {
 						const words = await wordsOf(page);
 
 						await rendersWell(
