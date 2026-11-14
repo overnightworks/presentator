@@ -61,6 +61,20 @@ jobs:
     name: "Python: tests"
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # The throwaway server of the Postgres tests: each test creates a database of
+    # its own on it.
+    services:
+      postgres:
+        image: postgres:18.6-alpine3.24@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - name: Check out the event commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -77,6 +91,8 @@ jobs:
         run: uv sync --locked --all-groups
 
       - name: Test
+        env:
+          PRESENTATOR_TEST_POSTGRES_URL: postgresql://postgres@localhost:5432/postgres
         run: uv run --locked pytest -q -n auto --cov=src --cov-report=xml:reports/coverage.xml
 
       - name: Upload the coverage report

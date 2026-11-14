@@ -154,6 +154,29 @@ def _an_https_realm_url(given: str) -> str:
     return given
 
 
+def _a_postgres_url_without_a_password(given: str) -> str:
+    """Require a postgresql URL of a host, a user and a database, and no password.
+
+    The password lives in a file, and libpq lets a query parameter redirect it.
+    """
+    try:
+        parsed = urlsplit(given)
+        _port = parsed.port
+    except ValueError:
+        # The parser's message quotes the URL.
+        message = "is a postgresql URL"
+        raise ValueError(message) from None
+    if parsed.scheme != "postgresql" or not (
+        parsed.hostname and parsed.username and parsed.path.removeprefix("/")
+    ):
+        message = "is a postgresql URL naming a host, a user and a database"
+        raise ValueError(message)
+    if parsed.password is not None or parsed.query or parsed.fragment:
+        message = "is a postgresql URL without a password, query or fragment"
+        raise ValueError(message)
+    return given
+
+
 def _an_absolute_path(given: Path) -> Path:
     if not given.is_absolute():
         message = "is an absolute path"
@@ -289,6 +312,26 @@ class WorkerSettings(BaseSettings):
     build_output_megabytes: int = Field(default=DEFAULT_BUILD_OUTPUT_MEGABYTES, gt=0)
 
 
+class DatabaseSettings(BaseSettings):
+    """What `presentator migrate` reads, so it needs no other setting."""
+
+    model_config = SettingsConfigDict(
+        env_prefix=ENVIRONMENT_PREFIX, hide_input_in_errors=True
+    )
+
+    # The URL names no password: the file is its one owner, and it is read once
+    # at start, so it never rides the environment.
+    database_url: Annotated[str, AfterValidator(_a_postgres_url_without_a_password)]
+    database_password_file: Annotated[Path, AfterValidator(_an_absolute_path)]
+
+    @cached_property
+    def database_password(self) -> SecretStr:
+        """The database's password, read once from its file."""
+        return read_secret_file(
+            self.database_password_file, setting="database_password_file"
+        )
+
+
 def variable_of(field_name: str) -> str:
     """The environment variable that carries a settings field."""
     return f"{ENVIRONMENT_PREFIX}{field_name}".upper()
@@ -357,6 +400,16 @@ def load_settings() -> Settings:
     # Reading the key here refuses a bad key file at start, after the other
     # settings validated, and binds it for every later use.
     _ = settings.secret_key
+    return settings
+
+
+def load_database_settings() -> DatabaseSettings:
+    """Read what the environment carries for the database, refusing what is wrong."""
+    try:
+        settings = DatabaseSettings.model_validate({})
+    except ValidationError as refused:
+        raise cannot_start(_what_is_wrong(refused)) from None
+    _ = settings.database_password
     return settings
 
 

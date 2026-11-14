@@ -102,6 +102,6 @@ def test_the_sweep_runs_while_the_server_serves(
 
     monkeypatch.setattr(main.uvicorn, "Server", ServerThatWaitsForTheSweep)
 
-    main.main()
+    main.main([])
 
     assert swept == [True]

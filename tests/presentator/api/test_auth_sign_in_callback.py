@@ -535,7 +535,7 @@ def test_an_audit_record_reaches_stderr_after_the_hosts_and_uvicorns_logging_set
 
     monkeypatch.setattr(main, "_serve", configure_uvicorn)
 
-    main.main()
+    main.main([])
     LoggingAuditSink().account_event(
         AccountEvent(
             kind=AccountEventKind.USER_CREATED,

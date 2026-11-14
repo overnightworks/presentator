@@ -8,13 +8,16 @@ version = "0.0.0"
 requires-python = ">=3.14"
 license = "MIT"
 dependencies = [
+    "alembic==1.20.1",
     "cryptography==50.0.2",
     "fastapi==0.162.0",
     "httpx2==2.16.0",
     "overnightworks-agents[backend,mcp-server] @ git+https://github.com/overnightworks/agents@v0.33.0",
     "overnightworks-speech-client @ git+https://github.com/overnightworks/speech@v0.11.0#subdirectory=packages/client",
     "overnightworks-webauth @ git+https://github.com/overnightworks/webauth@v0.37.0",
+    "psycopg[binary]==3.3.9",
     "pydantic-settings==2.16.2",
+    "sqlalchemy==2.1.8",
     "syntok==1.4.4",
     "uvicorn==0.54.0",
     "wsproto==1.3.2",
@@ -150,6 +153,8 @@ convention = "google"
 "tests/presentator/host/test_worker_termination.py" = ["S603"]
 # Drives that toolchain and that client as the stand-in scripts it puts on PATH.
 "tests/presentator/adapters/test_builds.py" = ["S603"]
+# Starts the installed console script, with the environment the test gives it.
+"tests/support/two_processes.py" = ["S603"]
 # Builds the temporary git repositories every layer that reads one is proven on.
 "tests/support/git_remote.py" = ["S603", "S607"]
 # Asks the real `git` whether it accepts the credential configuration it is given.
@@ -304,8 +309,9 @@ id = "database-library"
 name = "Only adapters import the database library"
 type = "forbidden"
 # A third-party library lives in the adapter that owns it, and its
-# contract is written with its first import. `sqlite3` is the store, so a layer
-# above must ask a port instead.
+# contract is written with its first import. `sqlite3` is the store, and
+# `sqlalchemy`, `psycopg` and `alembic` its successor Postgres, so a layer above
+# must ask a port instead.
 source_modules = [
     "presentator.host",
     "presentator.api",
@@ -313,7 +319,7 @@ source_modules = [
     "presentator.ports",
     "presentator.contracts",
 ]
-forbidden_modules = ["sqlite3"]
+forbidden_modules = ["sqlite3", "sqlalchemy", "psycopg", "alembic"]
 as_packages = true
 # The host composes the adapter that owns it, so the legal chain runs through
 # it; only naming the library in a layer above is the violation.

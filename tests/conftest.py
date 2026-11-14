@@ -21,6 +21,7 @@ from tests.support.lobby import (
     configure_oidc,
     configure_secret_key,
 )
+from tests.support.postgres import created_database, migrated_template
 from tests.support.worker_support import WAIT_SECONDS, listening_socket
 
 
@@ -125,3 +126,24 @@ def environment(
     # worker, whose default the tests about the sandbox say so themselves.
     bare_environment.setenv("PRESENTATOR_BUILD_RUNNER", "host")
     return bare_environment
+
+
+@pytest.fixture(scope="session")
+def postgres_template() -> Iterator[str]:
+    """The name of a migrated database, created by the first test that asks."""
+    with migrated_template() as name:
+        yield name
+
+
+@pytest.fixture
+def database_url(postgres_template: str) -> Iterator[str]:
+    """A migrated database of this test's own."""
+    with created_database(postgres_template) as url:
+        yield url
+
+
+@pytest.fixture
+def unmigrated_database_url() -> Iterator[str]:
+    """An empty database of this test's own."""
+    with created_database() as url:
+        yield url
