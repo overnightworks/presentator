@@ -19,7 +19,7 @@ from typing import Final
 
 from webauth.oidc import OidcRelyingParty
 
-from presentator.adapters.postgres import migrate as migrations
+from presentator.adapters.postgres.migrate import MIGRATIONS_DIRECTORY
 from presentator.host.main import main
 from tests.support.fake_issuer import FakeIssuer
 
@@ -38,11 +38,13 @@ def _answer_the_parent(issuer: FakeIssuer) -> None:
         print(ANSWER_PREFIX + query, flush=True)  # noqa: T201 - the parent reads this line
 
 
+def _migrations_directory() -> Path:
+    return Path(sys.argv[2]) if len(sys.argv) > 2 else MIGRATIONS_DIRECTORY  # noqa: PLR2004 - the optional second argument
+
+
 def run() -> None:
     """Serve on the given port until killed."""
     os.environ["PRESENTATOR_PORT"] = sys.argv[1]
-    if len(sys.argv) > 2:  # noqa: PLR2004 - the optional second argument
-        migrations.MIGRATIONS_DIRECTORY = Path(sys.argv[2])
     issuer = FakeIssuer(
         issuer=os.environ["PRESENTATOR_OIDC_ISSUER"],
         client_id=os.environ["PRESENTATOR_OIDC_CLIENT_ID"],
@@ -51,6 +53,7 @@ def run() -> None:
     threading.Thread(target=_answer_the_parent, args=(issuer,), daemon=True).start()
     main(
         [],
+        migrations_directory=_migrations_directory(),
         relying_party_for=lambda config: OidcRelyingParty(
             config,
             post_token_request=issuer.post_token_request,

@@ -33,11 +33,12 @@ def migrate(engine: Engine) -> None:
     was migrated by a newer release: it stays as it is, which lets a rollback of
     the release run its migration step without harm.
     """
-    config = _config()
+    config = _config(MIGRATIONS_DIRECTORY)
+    history = ScriptDirectory.from_config(config)
     with engine.connect() as connection:
         _hold(connection, MIGRATION_LOCK)
         try:
-            if _is_from_a_newer_release(connection, config):
+            if _is_from_a_newer_release(connection, history):
                 _log.warning("The database is newer than this release; left as it is")
                 return
             config.attributes["connection"] = connection
@@ -47,18 +48,22 @@ def migrate(engine: Engine) -> None:
             _release(connection, MIGRATION_LOCK)
 
 
-def serving_refusal(engine: Engine) -> str | None:
+def migration_history(directory: Path = MIGRATIONS_DIRECTORY) -> ScriptDirectory:
+    """The revisions the migration scripts in `directory` make, read once."""
+    return ScriptDirectory.from_config(_config(directory))
+
+
+def serving_refusal(engine: Engine, history: ScriptDirectory) -> str | None:
     """Why this release must not serve the database, or None when it may.
 
     A database that does not answer is refused. So is one with no revision row,
     which was never migrated, and one at a revision of this release's own
-    history other than its head, which an older release migrated: serving
+    `history` other than its head, which an older release migrated: serving
     either would read tables or columns that may not exist. A revision this
     release does not know is a newer release's, which only added, so it is
     served. The reasons name the kind of failure and never what the driver says,
     which may quote the address the connection used.
     """
-    config = _config()
     try:
         with engine.connect() as connection:
             held = set(MigrationContext.configure(connection).get_current_heads())
@@ -66,41 +71,34 @@ def serving_refusal(engine: Engine) -> str | None:
         return NOT_ANSWERING.format(failure=type(failure).__name__)
     if not held:
         return NO_REVISION
-    if _head_of(config) in held or not held <= _known_revisions(config):
+    if history.get_current_head() in held or not held <= _known_revisions(history):
         return None
     return BEHIND_THIS_RELEASE
 
 
-def database_is_ready(engine: Engine) -> bool:
+def database_is_ready(engine: Engine, history: ScriptDirectory) -> bool:
     """Whether the database answers and this release may serve it; a no is logged."""
-    refusal = serving_refusal(engine)
+    refusal = serving_refusal(engine, history)
     if refusal is not None:
         _log.warning("The database is not ready: %s", refusal)
     return refusal is None
 
 
-def _config() -> Config:
+def _config(directory: Path) -> Config:
     config = Config()
-    config.set_main_option("script_location", str(MIGRATIONS_DIRECTORY))
+    config.set_main_option("script_location", str(directory))
     return config
 
 
-def _known_revisions(config: Config) -> set[str]:
-    return {
-        script.revision
-        for script in ScriptDirectory.from_config(config).walk_revisions()
-    }
+def _known_revisions(history: ScriptDirectory) -> set[str]:
+    return {script.revision for script in history.walk_revisions()}
 
 
-def _head_of(config: Config) -> str | None:
-    return ScriptDirectory.from_config(config).get_current_head()
-
-
-def _is_from_a_newer_release(connection: Connection, config: Config) -> bool:
+def _is_from_a_newer_release(connection: Connection, history: ScriptDirectory) -> bool:
     held = MigrationContext.configure(connection).get_current_heads()
     # The read opened a transaction, which would stop the migration from owning its own.
     connection.rollback()
-    return not set(held) <= _known_revisions(config)
+    return not set(held) <= _known_revisions(history)
 
 
 def _hold(connection: Connection, lock: AdvisoryLock) -> None:

@@ -57,8 +57,10 @@ from presentator.adapters.postgres.deck_store import PostgresDeckStore
 from presentator.adapters.postgres.engine import create_database_engine
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
 from presentator.adapters.postgres.migrate import (
+    MIGRATIONS_DIRECTORY,
     database_is_ready,
     migrate,
+    migration_history,
     serving_refusal,
 )
 from presentator.adapters.postgres.preferences import (
@@ -194,10 +196,15 @@ class Stores:
 def build_instance(
     settings: Settings,
     relying_party_for: RelyingPartyFor = relying_party,
+    migrations_directory: Path = MIGRATIONS_DIRECTORY,
 ) -> Instance:
-    """Choose the adapter behind every port and hand the routes their use cases."""
+    """Choose the adapter behind every port and hand the routes their use cases.
+
+    A Postgres database is served only at the head of the history in
+    `migrations_directory` or newer.
+    """
     shell = _lobby_shell(settings)
-    stores = _stores(settings)
+    stores = _stores(settings, migrations_directory)
     local_mount = FilesystemLocalMount(mount=settings.local_sources_mount)
     # The one mounted directory a file-kind source's address may resolve
     # under, real filesystem and all: shared by every use, since a symlink or
@@ -228,7 +235,7 @@ def build_instance(
     )
 
 
-def _stores(settings: Settings) -> Stores:
+def _stores(settings: Settings, migrations_directory: Path) -> Stores:
     """The stores of the database the settings name: Postgres, else the SQLite file."""
     # One box for both directions: what the store writes down is what the
     # resolver opens at the pull, and neither picks its own key.
@@ -236,7 +243,7 @@ def _stores(settings: Settings) -> Stores:
     identifiers = TokenIdentifierFactory()
     if settings.postgres is None:
         return _sqlite_stores(settings.database, box, identifiers)
-    return _postgres_stores(settings.postgres, box, identifiers)
+    return _postgres_stores(settings.postgres, box, identifiers, migrations_directory)
 
 
 def _sqlite_stores(
@@ -265,11 +272,15 @@ def _sqlite_stores(
 
 
 def _postgres_stores(
-    database: PostgresDatabase, box: SecretBox, identifiers: IdentifierFactory
+    database: PostgresDatabase,
+    box: SecretBox,
+    identifiers: IdentifierFactory,
+    migrations_directory: Path,
 ) -> Stores:
     """The stores over the one engine this process opens; serve creates no table."""
+    history = migration_history(migrations_directory)
     engine = create_database_engine(database.url, database.password)
-    refusal = serving_refusal(engine)
+    refusal = serving_refusal(engine, history)
     if refusal is not None:
         engine.dispose()
         raise cannot_start(refusal)
@@ -285,7 +296,7 @@ def _postgres_stores(
         identity_writes=PostgresIdentityWrites(engine, LoggingAuditSink()),
         instance_settings=PostgresInstanceSettingsStore(engine),
         person_preferences=PostgresPersonPreferencesStore(engine),
-        readiness=partial(database_is_ready, engine),
+        readiness=partial(database_is_ready, engine, history),
         close=engine.dispose,
     )
 
@@ -615,6 +626,7 @@ def web_auth_config_for(
 def main(
     arguments: Sequence[str] | None = None,
     relying_party_for: RelyingPartyFor = relying_party,
+    migrations_directory: Path = MIGRATIONS_DIRECTORY,
 ) -> None:
     """Migrate the database when asked to, else serve the lobby.
 
@@ -627,7 +639,11 @@ def main(
         _migrate_the_database()
         return
     settings = load_settings()
-    asyncio.run(_serve(build_instance(settings, relying_party_for), settings))
+    asyncio.run(
+        _serve(
+            build_instance(settings, relying_party_for, migrations_directory), settings
+        )
+    )
 
 
 def _migrate_the_database() -> None:
