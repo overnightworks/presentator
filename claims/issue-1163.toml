@@ -1,8 +1,0 @@
-claim_id = "857225526ff04b22880742e82c8fc9f8"
-agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
-role = "builder"
-base = "a4acd3503ac70885221411998e8fac2fc9076bda"
-branch = "claude/issue-1163-identity-stores-on-postgres"
-scope = [".aco/ahead-of-caller.toml", "src/presentator/adapters/audit.py", "src/presentator/adapters/identity.py", "src/presentator/adapters/postgres", "tests/conftest.py", "tests/presentator/adapters", "tests/presentator/host/test_worker_termination.py", "tests/support/postgres.py", "tests/support/two_processes.py", "tests/support/vulture_allowlist.py"]
-opened_commit = "6b87062e0d655ae153c5f08a12f345348e39336f"
-whole_reason = "One slice: the three identity stores share one transaction and one fixture, so their Postgres adapters are proven together."
