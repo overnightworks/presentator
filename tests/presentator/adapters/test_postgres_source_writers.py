@@ -113,8 +113,9 @@ def test_two_processes_replacing_the_same_drafts_in_place_leave_one_each(
         assert kept[owner] in {*first[owner], *second[owner]}
 
 
+@pytest.mark.usefixtures("owners")
 def test_a_draft_minted_beside_an_opening_of_add_is_not_overwritten(
-    database_url: str, tmp_path: Path, engine: Engine, owners: tuple[str, ...]
+    database_url: str, tmp_path: Path, engine: Engine
 ) -> None:
     _, minted = _both_write(
         "get-or-mint",
