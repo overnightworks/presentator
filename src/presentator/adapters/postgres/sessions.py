@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
 
-from psycopg.errors import UniqueViolation
 from pydantic import SecretStr
 from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import IntegrityError
@@ -114,8 +113,6 @@ class PostgresSessionRecordStore:
                         },
                     )
             except IntegrityError as refused:
-                if not isinstance(refused.orig, UniqueViolation):
-                    raise
                 message = "a session with that id is already stored"
                 raise ValueError(message) from refused
         return StoredSession(

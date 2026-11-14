@@ -187,3 +187,28 @@ def test_a_subject_that_exists_is_not_reported_as_a_taken_username(
         )
 
     assert not isinstance(refused.value, UsernameTakenError)
+
+
+def test_deleting_an_account_ends_its_sessions_and_leaves_the_others(
+    stores: _Stores,
+) -> None:
+    for subject in ("leaver", "stayer"):
+        stores.accounts.create_for_subject(
+            subject, subject, Role.USER.value, AccountKind.PERSON
+        )
+        stores.sessions.create(
+            subject,
+            session_id=f"{subject}-session",
+            now=_NOON,
+            expires_at=_NOON + timedelta(hours=1),
+            refresh_token=None,
+            id_token=None,
+            account_language=None,
+        )
+
+    stores.writes.delete_account("leaver")
+
+    assert stores.writes.get("leaver") is None
+    assert stores.sessions.load("leaver-session") is None
+    assert stores.writes.get("stayer") is not None
+    assert stores.sessions.load("stayer-session") is not None
