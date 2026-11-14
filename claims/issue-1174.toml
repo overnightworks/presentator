@@ -3,6 +3,6 @@ agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
 role = "builder"
 base = "94f01e3c2bb2c27dea9209ccbc69226eb8897172"
 branch = "claude/issue-1174-s4-serve-from-postgres"
-scope = [".aco/ahead-of-caller.toml", "docs/ARCHITECTURE.md", "docs/configuration.md", "pyproject.toml", "src/presentator/adapters/postgres", "src/presentator/api/health.py", "src/presentator/host/config.py", "src/presentator/host/main.py", "tests/conftest.py", "tests/presentator/api", "tests/presentator/host", "tests/support/two_processes.py", "tests/support/vulture_allowlist.py", "uv.lock"]
+scope = [".aco/ahead-of-caller.toml", "docs/ARCHITECTURE.md", "docs/configuration.md", "pyproject.toml", "quality/baseline.toml", "src/presentator/adapters/postgres", "src/presentator/api/auth.py", "src/presentator/api/health.py", "src/presentator/api/talk.py", "src/presentator/host/config.py", "src/presentator/host/main.py", "tests/conftest.py", "tests/presentator/adapters/test_postgres_source_credentials.py", "tests/presentator/api", "tests/presentator/host", "tests/support/git_remote.py", "tests/support/two_processes.py", "tests/support/vulture_allowlist.py", "uv.lock"]
 opened_commit = "6dc46b766324eab8b5b5d3339abf0d424ec4fc1c"
 whole_reason = "One slice: the switch of every store port at once, because the foreign keys span every store and no per-store switch exists; the folded webauth pin move is one line beside it."
