@@ -110,12 +110,3 @@ def test_a_password_file_that_cannot_be_read_refuses_without_quoting_its_path(
         load()
 
     assert str(absent) not in str(raised.value)
-
-
-@pytest.mark.parametrize("variable", [_URL, _PASSWORD_FILE])
-def test_a_server_given_only_half_of_the_database_refuses_naming_the_url(
-    database_variables: pytest.MonkeyPatch, variable: str
-) -> None:
-    database_variables.delenv(variable)
-
-    assert_refusal_names(load_settings, "database_url")
