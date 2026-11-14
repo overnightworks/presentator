@@ -2,14 +2,15 @@
 
 import json
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, Protocol
 
 from pydantic import SecretStr
+from webauth.ports import SessionRecordStore
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.builds import HostToolchain, SlidevBuilds
@@ -28,7 +29,6 @@ from presentator.adapters.identity import (
     TokenIdentifierFactory,
     create_identity_tables,
 )
-from presentator.adapters.key_drafts import SqliteSourceKeyDrafts
 from presentator.adapters.preferences import SqlitePersonPreferencesStore
 from presentator.adapters.schema import create_tables
 from presentator.adapters.secrets import TokenWebhookSecrets, secret_box
@@ -44,6 +44,9 @@ from presentator.contracts.decks import (
 )
 from presentator.contracts.models import Role, User
 from presentator.contracts.preferences import PersonPreferences, ThemeChoice
+from presentator.ports.decks import DeckStore, DeployKeyDrafts, SourceRuns, SourceStore
+from presentator.ports.identity import PersonAccounts, PersonSessions
+from presentator.ports.preferences import PersonPreferencesStore
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
 from tests.presentator.adapters.support.key_draft_support import (
     INSTANCE_KEY,
@@ -67,10 +70,9 @@ _COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 
 
 @dataclass
-class Instance:
-    """A database and the directories beside it, holding two people's rows."""
+class Directories:
+    """The directories and use cases around a database holding two people's rows."""
 
-    database: Path
     mirrors: SourceMirrors
     builds: Path
     decks: Decks
@@ -84,21 +86,34 @@ class Instance:
         return self.kept_by[owner.id][2]
 
 
-@dataclass(frozen=True)
-class _Stores:
+@dataclass
+class Instance(Directories):
+    """A SQLite file and the directories beside it, holding two people's rows."""
+
     database: Path
-    sources: SqliteSourceStore
-    decks: SqliteDeckStore
-    runs: SqliteSourceRunStore
-    key_drafts: SqliteSourceKeyDrafts
-    accounts: SqliteIdentityWrites
-    sessions: SqliteSessionRecordStore
-    preferences: SqlitePersonPreferencesStore
 
 
-def _stores_over(database: Path) -> _Stores:
-    return _Stores(
-        database=database,
+class SessionStore(SessionRecordStore, PersonSessions, Protocol):
+    """A session store as the seeding writes it and the erasure reads it."""
+
+
+@dataclass(frozen=True)
+class Stores:
+    """Every store two people's rows are written through and erased from."""
+
+    seed_user: Callable[[User], None]
+    sources: SourceStore
+    decks: DeckStore
+    runs: SourceRuns
+    key_drafts: DeployKeyDrafts
+    accounts: PersonAccounts
+    sessions: SessionStore
+    preferences: PersonPreferencesStore
+
+
+def _stores_over(database: Path) -> Stores:
+    return Stores(
+        seed_user=lambda person: seed_user(database, person),
         sources=SqliteSourceStore(
             database=database,
             identifiers=TokenIdentifierFactory(),
@@ -113,13 +128,13 @@ def _stores_over(database: Path) -> _Stores:
     )
 
 
-def _seed_person(
+def seed_person(
     person: User,
-    stores: _Stores,
+    stores: Stores,
     mirrors: SourceMirrors,
     builds: Path,
 ) -> tuple[Source, Path, Path]:
-    seed_user(stores.database, person)
+    stores.seed_user(person)
     stores.sessions.create(
         person.id,
         session_id=a_session_id(),
@@ -155,7 +170,7 @@ def _seed_person(
     return source, mirror, build
 
 
-def _seed_deck(stores: _Stores, person: User, source: Source, build: Path) -> None:
+def _seed_deck(stores: Stores, person: User, source: Source, build: Path) -> None:
     slug = f"{person.username}-talk"
     assert stores.decks.put(
         Deck(
@@ -190,8 +205,8 @@ def _seed_deck(stores: _Stores, person: User, source: Source, build: Path) -> No
     )
 
 
-def _decks_application(
-    stores: _Stores,
+def decks_application(
+    stores: Stores,
     mirrors: SourceMirrors,
     builds: Path,
     tmp_path: Path,
@@ -219,14 +234,12 @@ def _decks_application(
     )
 
 
-def an_instance_with_both_people(tmp_path: Path) -> Instance:
+def directories_with_both_people(stores: Stores, tmp_path: Path) -> Directories:
     """Each person has an account, a session, preferences, a draft and a source.
 
     The source carries a deck with a build, a run, a mirror and a build
     directory on disk.
     """
-    database = tmp_path / "presentator.sqlite3"
-    create_tables(database)
     mirrors = SourceMirrors(
         directory=tmp_path / "mirrors",
         credentials=OpenCredentials(),
@@ -234,14 +247,12 @@ def an_instance_with_both_people(tmp_path: Path) -> Instance:
         local_mount=FilesystemLocalMount(mount=tmp_path),
     )
     builds = tmp_path / "builds"
-    stores = _stores_over(database)
     kept_by = {
-        person.id: _seed_person(person, stores, mirrors, builds)
+        person.id: seed_person(person, stores, mirrors, builds)
         for person in (THE_PERSON, ANOTHER)
     }
-    decks = _decks_application(stores, mirrors, builds, tmp_path)
-    return Instance(
-        database=database,
+    decks = decks_application(stores, mirrors, builds, tmp_path)
+    return Directories(
         mirrors=mirrors,
         builds=builds,
         decks=decks,
@@ -253,6 +264,21 @@ def an_instance_with_both_people(tmp_path: Path) -> Instance:
             key_drafts=stores.key_drafts,
         ),
         kept_by=kept_by,
+    )
+
+
+def an_instance_with_both_people(tmp_path: Path) -> Instance:
+    """Both people's rows in a SQLite file, and the directories beside it."""
+    database = tmp_path / "presentator.sqlite3"
+    create_tables(database)
+    around = directories_with_both_people(_stores_over(database), tmp_path)
+    return Instance(
+        database=database,
+        mirrors=around.mirrors,
+        builds=around.builds,
+        decks=around.decks,
+        people=around.people,
+        kept_by=around.kept_by,
     )
 
 
