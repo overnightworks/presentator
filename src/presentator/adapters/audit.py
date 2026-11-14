@@ -27,12 +27,17 @@ class LoggingAuditSink:
 
 @dataclass(slots=True)
 class BufferedAudit:
-    """Collects the events of one transaction, so a rolled-back one leaves no line."""
+    """Holds the account events of one transaction until its caller flushes them.
+
+    The caller picks the moment. Flushing after COMMIT means a rollback leaves no
+    line. Flushing before COMMIT means the events are delivered even if the commit
+    then fails, so they cannot be retracted.
+    """
 
     events: list[AccountEvent] = field(default_factory=list[AccountEvent])
 
     def account_event(self, event: AccountEvent) -> None:
-        """Hold the event until the transaction has committed."""
+        """Hold the event until flush_to hands it to the sink."""
         self.events.append(event)
 
     def flush_to(self, sink: AuditSink) -> None:

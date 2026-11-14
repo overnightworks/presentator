@@ -10,7 +10,7 @@ from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import Connection, Engine, text
 
-from presentator.adapters.postgres.locks import MIGRATION_LOCK, AdvisoryLock
+from presentator.adapters.postgres.locks import MIGRATION_LOCK, AdvisoryLock, parameters
 
 MIGRATIONS_DIRECTORY: Final = Path(__file__).parent / "migrations"
 _TAKE_LOCK: Final = text("SELECT pg_advisory_lock(:lock_class, :instance)")
@@ -51,16 +51,12 @@ def _is_from_a_newer_release(connection: Connection, config: Config) -> bool:
     return not set(held) <= known
 
 
-def _parameters(lock: AdvisoryLock) -> dict[str, int]:
-    return {"lock_class": int(lock.lock_class), "instance": lock.instance}
-
-
 def _hold(connection: Connection, lock: AdvisoryLock) -> None:
-    connection.execute(_TAKE_LOCK, _parameters(lock))
+    connection.execute(_TAKE_LOCK, parameters(lock))
     # The lock outlives the commit: it belongs to the session, not the transaction.
     connection.commit()
 
 
 def _release(connection: Connection, lock: AdvisoryLock) -> None:
-    connection.execute(_RELEASE_LOCK, _parameters(lock))
+    connection.execute(_RELEASE_LOCK, parameters(lock))
     connection.commit()
