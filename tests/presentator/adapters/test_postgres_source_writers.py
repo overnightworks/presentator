@@ -51,11 +51,22 @@ def owners(engine: Engine) -> tuple[str, ...]:
 
 
 def _both_write[Reported](
-    action: str, database_url: str, directory: Path, shape: TypeAdapter[Reported]
+    action: str,
+    database_url: str,
+    directory: Path,
+    shape: TypeAdapter[Reported],
+    *,
+    other_action: str | None = None,
 ) -> tuple[Reported, Reported]:
-    """What each of two processes doing `action` at once reported, both exiting 0."""
+    """What two processes at once reported, both exiting 0.
+
+    The first does `action`; the second does `other_action`, or `action` too.
+    """
     environment = database_environment(database_url, directory)
-    with two_modules(_CHILD, [action], environment) as processes:
+    other = None if other_action is None else [other_action]
+    with two_modules(
+        _CHILD, [action], environment, second_arguments=other
+    ) as processes:
         release_together(processes)
         finished = processes.finish()
     assert [each.exit_code for each in finished] == [0, 0], finished
@@ -100,6 +111,24 @@ def test_two_processes_replacing_the_same_drafts_in_place_leave_one_each(
     assert sorted(kept) == sorted(owners)
     for owner in owners:
         assert kept[owner] in {*first[owner], *second[owner]}
+
+
+def test_a_draft_minted_beside_an_opening_of_add_is_not_overwritten(
+    database_url: str, tmp_path: Path, engine: Engine, owners: tuple[str, ...]
+) -> None:
+    _, minted = _both_write(
+        "get-or-mint",
+        database_url,
+        tmp_path,
+        TypeAdapter(dict[str, str]),
+        other_action="mint-once",
+    )
+
+    with engine.connect() as connection:
+        kept = dict(
+            connection.execute(text("SELECT owner_id, id FROM source_key_drafts")).all()
+        )
+    assert kept == minted
 
 
 def test_two_processes_binding_the_same_drafts_consume_each_once(

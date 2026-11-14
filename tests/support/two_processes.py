@@ -44,11 +44,26 @@ def two_presentators(
 
 
 def two_modules(
-    module: str, arguments: Sequence[str], environment: Mapping[str, str]
+    module: str,
+    arguments: Sequence[str],
+    environment: Mapping[str, str],
+    *,
+    second_arguments: Sequence[str] | None = None,
 ) -> AbstractContextManager[TwoProcesses]:
-    """Start two processes of `python -m <module>` that can import `tests`."""
-    return two_processes(
-        [sys.executable, "-m", module, *arguments],
+    """Start two processes of `python -m <module>` that can import `tests`.
+
+    The second takes `second_arguments` when given, so the two do different things.
+    """
+    return _processes(
+        [
+            [sys.executable, "-m", module, *arguments],
+            [
+                sys.executable,
+                "-m",
+                module,
+                *(arguments if second_arguments is None else second_arguments),
+            ],
+        ],
         {"PYTHONPATH": str(_REPOSITORY_ROOT), **environment},
     )
 
@@ -70,13 +85,20 @@ def release_together(processes: TwoProcesses) -> None:
         each.stdin.flush()
 
 
-@contextmanager
 def two_processes(
     command: Sequence[str], environment: Mapping[str, str]
-) -> Generator[TwoProcesses]:
-    """Start two processes of `command` with only `environment`; each can be written to.
+) -> AbstractContextManager[TwoProcesses]:
+    """Start two processes of `command` with only `environment`."""
+    return _processes([command, command], environment)
 
-    None outlives the block: whatever still runs is killed and reaped.
+
+@contextmanager
+def _processes(
+    commands: Sequence[Sequence[str]], environment: Mapping[str, str]
+) -> Generator[TwoProcesses]:
+    """Start one process per command; none outlives the block.
+
+    Whatever still runs is killed and reaped.
     """
     with ExitStack() as processes:
         started = [
@@ -90,7 +112,7 @@ def two_processes(
                     text=True,
                 )
             )
-            for _ in range(2)
+            for command in commands
         ]
         # Runs before the processes are waited for.
         processes.callback(lambda: [each.kill() for each in started])

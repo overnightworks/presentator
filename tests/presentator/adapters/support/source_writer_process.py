@@ -67,6 +67,10 @@ def _mint(stores: Stores) -> object:
     }
 
 
+def _mint_once(stores: Stores) -> object:
+    return {owner: stores.drafts.mint(owner, at=_NOON).id for owner in OWNERS}
+
+
 def _bind(stores: Stores) -> object:
     drafts = stores.drafts
     won: list[str] = []
@@ -139,6 +143,7 @@ ACTIONS: Final[dict[str, Callable[[Stores], object]]] = {
     "record-runs": _record_runs,
     "get-or-mint": _get_or_mint,
     "mint": _mint,
+    "mint-once": _mint_once,
     "bind": _bind,
 }
 

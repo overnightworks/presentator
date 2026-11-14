@@ -57,9 +57,10 @@ class PostgresSourceKeyDrafts:
     """The `source_key_drafts` table: at most one live keypair per admin.
 
     The owner column is unique, so replacing a draft in place is one atomic
-    statement. Reusing a young draft or minting the next one reads before it
-    writes, so it first takes the owner's own advisory lock, which makes
-    concurrent opens of Add in any number of processes agree on one draft.
+    statement. Reusing a young draft and minting the next one both take the
+    owner's own advisory lock first, so a mint never lands between another
+    process's read of no draft and its write, and concurrent opens of Add in
+    any number of processes agree on one draft.
     """
 
     engine: Engine
@@ -83,6 +84,7 @@ class PostgresSourceKeyDrafts:
     def mint(self, owner_id: str, *, at: datetime) -> DeployKeyDraft:
         """Generate a fresh keypair and store it as this admin's own new draft."""
         with self.engine.begin() as connection:
+            _hold_owner(connection, owner_id)
             return self._store_new(connection, owner_id, at=at)
 
     def get_or_mint(
@@ -94,9 +96,7 @@ class PostgresSourceKeyDrafts:
     ) -> DeployKeyDraft:
         """Reuse one young draft or mint this owner's next one, one at a time."""
         with self.engine.begin() as connection:
-            hold_until_transaction_ends(
-                connection, lock_of(LockClass.DEPLOY_KEY_DRAFT, owner_id)
-            )
+            _hold_owner(connection, owner_id)
             found = connection.execute(
                 _DRAFT_OF_OWNER, {"owner_id": owner_id}
             ).fetchone()
@@ -154,6 +154,12 @@ class PostgresSourceKeyDrafts:
             private_key=pair.private_key,
             created_at=at,
         )
+
+
+def _hold_owner(connection: Connection, owner_id: str) -> None:
+    hold_until_transaction_ends(
+        connection, lock_of(LockClass.DEPLOY_KEY_DRAFT, owner_id)
+    )
 
 
 def locked_owned_draft(
