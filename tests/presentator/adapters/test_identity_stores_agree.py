@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 from sqlalchemy import Engine, text
+from sqlalchemy.engine import make_url
 from webauth.ports import (
     AccountEvent,
     AccountEventKind,
@@ -33,6 +34,8 @@ from tests.support.postgres import engine_on
 
 _TWO_HOURS_EAST = timezone(timedelta(hours=2))
 _NOON = datetime(2026, 11, 14, 12, 0, 0, 123456, tzinfo=UTC)
+# Not UTC, so a read that skips the conversion to UTC renders a different offset.
+_SERVER_TIME_ZONE = "Asia/Tokyo"
 _AN_EVENT = AccountEvent(
     kind=AccountEventKind.BACKCHANNEL_LOGOUT, actor_id=None, subject_id="subject-1"
 )
@@ -92,8 +95,15 @@ def _sqlite_stores(directory: Path) -> _Stores:
     )
 
 
+def _in_server_time_zone(database_url: str) -> str:
+    url = make_url(database_url).update_query_dict(
+        {"options": f"-c TimeZone={_SERVER_TIME_ZONE}"}
+    )
+    return url.render_as_string(hide_password=False)
+
+
 def _postgres_stores(database_url: str) -> Iterator[_Stores]:
-    engine = engine_on(database_url)
+    engine = engine_on(_in_server_time_zone(database_url))
     try:
         yield _Stores(
             accounts=PostgresSubjectUserStore(engine),
@@ -197,6 +207,8 @@ def test_the_same_writes_read_the_same_through_both_adapters(
     through_postgres = _write_and_read_a_household(postgres_stores)
 
     assert through_postgres == through_sqlite
+    # Aware datetimes compare by instant; their rendering shows the offset read.
+    assert repr(through_postgres) == repr(through_sqlite)
 
 
 def test_a_taken_username_is_refused_and_the_entry_stays_usable(

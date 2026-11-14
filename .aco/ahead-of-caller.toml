@@ -12,3 +12,13 @@ reason = "The Postgres session store waits for the switch slice that composes it
 path = "src/presentator/adapters/postgres/sign_in.py"
 item = "#1160"
 reason = "The Postgres sign-in transaction waits for the switch slice that composes it."
+
+[[code]]
+path = "src/presentator/adapters/postgres/locks.py"
+item = "#1160"
+reason = "LockClass.SIGN_IN, SIGN_IN_LOCK and hold_until_transaction_ends are reached only by the Postgres sign-in transaction, which waits for the switch slice that composes it."
+
+[[code]]
+path = "src/presentator/adapters/postgres/engine.py"
+item = "#1160"
+reason = "connection_or_inside is reached only by the Postgres identity stores, which wait for the switch slice that composes them."
