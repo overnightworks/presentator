@@ -1,8 +1,0 @@
-claim_id = "190036137f8249a6b77ec09fd1dbab1a"
-agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
-role = "builder"
-base = "de10bc2946786962604cf211603273fedd6a9336"
-branch = "claude/issue-1153-render-pass-quality-0-17"
-scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "frontend/e2e", "quality/config.toml"]
-opened_commit = "ec4c60c086f2e853f10bd40d4c5ec5100605c019"
-whole_reason = "The pin bump and the render-pass declaration must land together, and the declared job must already hold the render pass."
