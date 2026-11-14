@@ -4,7 +4,6 @@ Each case sends the same kind of request to both processes at once, as a load
 balancer does, and judges the one database and what either process answers.
 """
 
-import stat
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -30,7 +29,7 @@ from tests.presentator.host.support.app_processes import (
     Browser,
     serving_apps,
 )
-from tests.support.git_remote import EXAMPLE_SLUG, GitRemote, a_path_carrying
+from tests.support.git_remote import EXAMPLE_SLUG, GitRemote, with_the_program
 from tests.support.postgres import engine_on
 
 _AT = datetime(2026, 11, 14, 12, tzinfo=UTC)
@@ -44,10 +43,8 @@ _ROUNDS = RECENT_SOURCE_RUNS + 1
 # taken, by the pre-check when the winner was already stored, else by the store.
 _TAKEN = {SourceRefusal.DUPLICATE_NAME, SourceRefusal.DUPLICATE_URL}
 _NOT_A_DRAFT = "not-a-draft"
-# Few rounds and decks: an app's log goes to a pipe the test reads only for the
-# issuer's answers, so a long log would block the app on a full pipe.
-_MARKING_ROUNDS = 6
-_MARKED_DECKS = 6
+_MARKING_ROUNDS = 12
+_MARKED_DECKS = 12
 # Stands in for the ssh git starts: it runs the upload-pack the remote command
 # names on this machine, so an scp-form address reaches a repository on disk.
 _SSH_ON_THIS_MACHINE = """#!/bin/sh
@@ -76,18 +73,6 @@ def engine(database_url: str) -> Iterator[Engine]:
         each.dispose()
 
 
-def _programs_on_path(
-    environment: pytest.MonkeyPatch, tmp_path: Path, **scripts: str
-) -> None:
-    programs = tmp_path / "programs"
-    programs.mkdir()
-    for name, script in scripts.items():
-        program = programs / name
-        program.write_text(script, encoding="utf-8")
-        program.chmod(program.stat().st_mode | stat.S_IEXEC)
-    environment.setenv("PATH", a_path_carrying(programs))
-
-
 @pytest.fixture
 def committed_remotes(
     remote: GitRemote, another_remote: GitRemote
@@ -105,7 +90,7 @@ def remotes_over_ssh(
     committed_remotes: tuple[GitRemote, GitRemote],
 ) -> tuple[GitRemote, GitRemote]:
     """Two repositories git reaches through an ssh that runs on this machine."""
-    _programs_on_path(environment, tmp_path, ssh=_SSH_ON_THIS_MACHINE)
+    with_the_program(environment, tmp_path, "ssh", _SSH_ON_THIS_MACHINE)
     return committed_remotes
 
 
@@ -114,12 +99,13 @@ def routes(environment: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """The directory naming, per app, the repository its ssh reaches; builds succeed."""
     directory = tmp_path / "routes"
     directory.mkdir()
-    _programs_on_path(
+    with_the_program(
         environment,
         tmp_path,
-        ssh=_SSH_TO_THE_ROUTE_OF_THE_CALLER.format(routes=directory),
-        pnpm=A_TOOLCHAIN_THAT_BUILDS,
+        "ssh",
+        _SSH_TO_THE_ROUTE_OF_THE_CALLER.format(routes=directory),
     )
+    with_the_toolchain(environment, tmp_path, A_TOOLCHAIN_THAT_BUILDS)
     return directory
 
 
@@ -482,7 +468,6 @@ def test_fetches_of_trees_missing_each_others_decks_mark_what_one_fetch_would(
     assert all(each in (set(decks_of[0]), set(decks_of[1])) for each in visible_after)
 
 
-@pytest.mark.usefixtures("environment")
 def test_a_deck_rebuilt_at_both_processes_at_once_is_delivered_from_one_build(
     environment: pytest.MonkeyPatch,
     database_url: str,

@@ -2,6 +2,7 @@
 
 import json
 import os
+import queue
 import socket
 import subprocess
 import threading
@@ -45,8 +46,24 @@ class App:
 
     process: subprocess.Popen[str]
     port: int
-    # One answer is read per question, so questions go one at a time.
+    # One answer is taken per question, so questions go one at a time.
     asking: threading.Lock = field(default_factory=threading.Lock, compare=False)
+    # The issuer's answers, read off the output as it comes; None ends the output.
+    answers: queue.Queue[str | None] = field(
+        default_factory=queue.Queue[str | None], compare=False
+    )
+
+    def __post_init__(self) -> None:
+        """Start reading the output, so a long log never fills the pipe."""
+        threading.Thread(target=self._drain_output, daemon=True).start()
+
+    def _drain_output(self) -> None:
+        """Keep the issuer's answers until the output ends."""
+        assert self.process.stdout is not None
+        for line in self.process.stdout:
+            if line.startswith(ANSWER_PREFIX):
+                self.answers.put(line.removeprefix(ANSWER_PREFIX).strip())
+        self.answers.put(None)
 
     def request(
         self,
@@ -74,7 +91,6 @@ class App:
 
     def _ask(self, authorization_url: str, subject: str, groups: list[str]) -> str:
         assert self.process.stdin is not None
-        assert self.process.stdout is not None
         self.process.stdin.write(
             json.dumps(
                 {
@@ -86,11 +102,11 @@ class App:
             + "\n"
         )
         self.process.stdin.flush()
-        for line in self.process.stdout:
-            if line.startswith(ANSWER_PREFIX):
-                return line.removeprefix(ANSWER_PREFIX).strip()
-        message = "the app process ended without answering the issuer"
-        raise AssertionError(message)
+        answer = self.answers.get(timeout=_REQUEST_SECONDS)
+        if answer is None:
+            message = "the app process ended without answering the issuer"
+            raise AssertionError(message)
+        return answer
 
 
 @dataclass(slots=True)
