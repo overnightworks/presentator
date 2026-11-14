@@ -6,6 +6,8 @@ way. Every entry names the site that reaches it; an entry without one is an
 excuse.
 """
 
+from importlib import import_module
+
 from presentator.api.copresenter import AskRequest
 from presentator.api.decks import TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
@@ -62,3 +64,8 @@ DeckRecord.builds_fit_the_state
 # The generated words module names the language its catalog is written in; the
 # server reads only its offered languages and texts.
 words.SOURCE_LANGUAGE
+
+# Alembic reads `down_revision` off each revision module by name.
+import_module(
+    "presentator.adapters.postgres.migrations.versions.0001_baseline"
+).down_revision

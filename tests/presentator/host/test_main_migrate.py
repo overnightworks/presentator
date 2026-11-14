@@ -1,0 +1,110 @@
+"""`presentator migrate` brings the database to head, alone or twice at once."""
+
+import time
+from pathlib import Path
+
+import pytest
+from sqlalchemy import inspect, text
+from sqlalchemy.engine import Engine
+
+from presentator.adapters.postgres.locks import MIGRATION_LOCK
+from presentator.host import main
+from tests.support.postgres import database_environment, engine_on
+from tests.support.two_processes import two_presentators
+
+_A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS = "9999"
+_WAITING_FOR_A_LOCK = """
+SELECT count(*) FROM pg_locks
+WHERE locktype = 'advisory' AND NOT granted
+  AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+"""
+_BOTH_MIGRATIONS = 2
+_WAIT_SECONDS = 30
+_POLL_SECONDS = 0.05
+_REVISIONS = text("SELECT version_num FROM alembic_version")
+
+
+def _revisions(engine: Engine) -> list[str]:
+    with engine.connect() as connection:
+        return [revision for (revision,) in connection.execute(_REVISIONS)]
+
+
+def test_migrate_brings_an_empty_database_to_head(
+    unmigrated_database_url: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name, value in database_environment(unmigrated_database_url, tmp_path).items():
+        monkeypatch.setenv(name, value)
+
+    main.main(["migrate"])
+
+    engine = engine_on(unmigrated_database_url)
+    try:
+        assert "decks" in inspect(engine).get_table_names()
+        assert len(_revisions(engine)) == 1
+    finally:
+        engine.dispose()
+
+
+def test_two_concurrent_migrations_wait_for_one_another_and_both_end_at_head(
+    unmigrated_database_url: str, tmp_path: Path
+) -> None:
+    environment = database_environment(unmigrated_database_url, tmp_path)
+    engine = engine_on(unmigrated_database_url)
+    try:
+        with engine.connect() as holder:
+            lock = {
+                "lock_class": int(MIGRATION_LOCK.lock_class),
+                "instance": MIGRATION_LOCK.instance,
+            }
+            holder.execute(
+                text("SELECT pg_advisory_lock(:lock_class, :instance)"), lock
+            )
+            with two_presentators(["migrate"], environment) as processes:
+                _wait_until_both_wait_for_the_lock(engine)
+                holder.execute(
+                    text("SELECT pg_advisory_unlock(:lock_class, :instance)"), lock
+                )
+                finished = processes.finish()
+
+        assert [each.exit_code for each in finished] == [0, 0], finished
+        assert len(_revisions(engine)) == 1
+    finally:
+        engine.dispose()
+
+
+def test_two_migrations_of_a_database_a_newer_release_made_exit_zero_and_leave_it(
+    unmigrated_database_url: str, tmp_path: Path
+) -> None:
+    environment = database_environment(unmigrated_database_url, tmp_path)
+    engine = engine_on(unmigrated_database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("CREATE TABLE alembic_version (version_num varchar(32) NOT NULL)")
+            )
+            connection.execute(
+                text("INSERT INTO alembic_version VALUES (:revision)"),
+                {"revision": _A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS},
+            )
+
+        with two_presentators(["migrate"], environment) as processes:
+            finished = processes.finish()
+
+        assert [each.exit_code for each in finished] == [0, 0], finished
+        assert _revisions(engine) == [_A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS]
+        assert inspect(engine).get_table_names() == ["alembic_version"]
+    finally:
+        engine.dispose()
+
+
+def _wait_until_both_wait_for_the_lock(engine: Engine) -> None:
+    deadline = time.monotonic() + _WAIT_SECONDS
+    while time.monotonic() < deadline:
+        with engine.connect() as connection:
+            if (
+                connection.execute(text(_WAITING_FOR_A_LOCK)).scalar_one()
+                == _BOTH_MIGRATIONS
+            ):
+                return
+        time.sleep(_POLL_SECONDS)
+    pytest.fail("the two migrations never both waited for the lock")

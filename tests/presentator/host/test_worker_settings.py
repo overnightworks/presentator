@@ -16,6 +16,7 @@ from presentator.host.config import (
     worker_settings_variables,
 )
 from presentator.host.worker_self_check import TOOLCHAIN_PROJECT
+from tests.presentator.host.support.config_refusals import assert_refusal_never_quotes
 
 TIMEOUT_VARIABLE = "PRESENTATOR_BUILD_TIMEOUT_SECONDS"
 MEGABYTES_VARIABLE = "PRESENTATOR_BUILD_OUTPUT_MEGABYTES"
@@ -117,10 +118,7 @@ def test_a_refusal_of_the_megabytes_never_quotes_the_value_it_refuses(
 ) -> None:
     monkeypatch.setenv(MEGABYTES_VARIABLE, value)
 
-    with pytest.raises(ConfigurationError) as refused:
-        load_worker_settings()
-
-    assert value not in str(refused.value)
+    assert_refusal_never_quotes(load_worker_settings, value)
 
 
 def test_a_refusal_never_quotes_the_value_it_refuses(

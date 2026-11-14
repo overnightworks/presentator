@@ -4,10 +4,11 @@ Imports every other layer, because it is the one place that decides which
 adapter satisfies which port.
 """
 
+import argparse
 import asyncio
 import logging
 import os
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import timedelta
@@ -51,6 +52,8 @@ from presentator.adapters.identity import (
     TokenIdentifierFactory,
 )
 from presentator.adapters.key_drafts import SqliteSourceKeyDrafts
+from presentator.adapters.postgres.engine import create_database_engine
+from presentator.adapters.postgres.migrate import migrate
 from presentator.adapters.preferences import (
     SqliteInstanceSettingsStore,
     SqlitePersonPreferencesStore,
@@ -96,6 +99,7 @@ from presentator.host.config import (
     Settings,
     WhereBuildsRun,
     cannot_start,
+    load_database_settings,
     load_settings,
     variable_of,
 )
@@ -117,6 +121,8 @@ WAITING_FOR_THE_WORKER = (
 )
 
 _log = logging.getLogger(__name__)
+
+MIGRATE_COMMAND = "migrate"
 
 RelyingPartyFor = Callable[[OidcClientConfig], OidcRelyingParty]
 
@@ -523,13 +529,37 @@ def web_auth_config_for(
     )
 
 
-def main() -> None:
-    """Serve the lobby with the configuration the environment carries."""
+def main(arguments: Sequence[str] | None = None) -> None:
+    """Migrate the database when asked to, else serve the lobby.
+
+    Both run on the configuration the environment carries.
+    """
     # The root logger drops INFO unless configured, and with it the sign-in
     # audit lines; uvicorn disables propagation only for its own loggers.
     logging.basicConfig(level=logging.INFO)
+    if _command_line().parse_args(arguments).command == MIGRATE_COMMAND:
+        _migrate_the_database()
+        return
     settings = load_settings()
     asyncio.run(_serve(build_instance(settings), settings))
+
+
+def _migrate_the_database() -> None:
+    database = load_database_settings()
+    engine = create_database_engine(database.database_url, database.database_password)
+    try:
+        migrate(engine)
+    finally:
+        engine.dispose()
+
+
+def _command_line() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="presentator")
+    commands = parser.add_subparsers(dest="command")
+    commands.add_parser(
+        MIGRATE_COMMAND, help="bring the database to the newest revision, then exit"
+    )
+    return parser
 
 
 def served_by_host(instance: Instance, settings: Settings) -> Router:

@@ -108,7 +108,8 @@ first; its container never restarts, so each life ends the pod and the StatefulS
 caches the rows rebuild, so a restore of the database alone is enough. A column goes in two
 releases, the second dropping it in `create_tables` (`adapters/schema.py`), so a restorable older
 backup starts; the drop waits until a release with the first step has been live, since the
-platform's bump may skip releases.
+platform's bump may skip releases. `adapters/postgres` owns the migrations of the Postgres that will
+replace SQLite; `presentator migrate` runs them under a lock, and they only add. Nothing reads it yet.
 
 **Authentication and wire.** Keycloak groups admit people ([sign-in](sign-in.md)). There is no
 session cache: rate limits are single-process, and identity writes run in one transaction under a
@@ -169,8 +170,7 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
 
 ## 7. Not chosen
 
-- Redis or Postgres: one operator and no long job do not earn a second service. Reopens with a
-  second writing process.
+- Redis: one operator and no long job do not earn a second service. Reopens with a second writer.
 - Cloudflare Access in front, or an own password login: Keycloak is the one door and owns accounts
   and groups. Reopens if Keycloak leaves the fleet.
 - A right in the cluster's API for the web pod: deck code runs only in the sealed worker. Reopens if

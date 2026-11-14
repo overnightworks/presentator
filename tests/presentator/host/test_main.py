@@ -124,7 +124,7 @@ def served_by_main(
 
     environment.setattr(main.uvicorn, "Server", ServerThatOnlyRecordsWhatItGot)
 
-    main.main()
+    main.main([])
 
     return served, configs
 
