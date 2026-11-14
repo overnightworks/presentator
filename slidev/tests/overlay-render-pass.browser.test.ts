@@ -129,7 +129,7 @@ describe('the overlay render pass', () => {
     { notice: 'band', projected: true, heardOnConnect: false },
     { notice: 'listening', projected: false, heardOnConnect: false },
     { notice: 'answering', projected: false, heardOnConnect: true },
-  ]
+  ] as const
   it.each(NOTICES.flatMap((notice) => CASES.map((shown) => ({ ...notice, ...shown }))))(
     'shows the $notice room notice in $language at $width px without cut-off or unworded text',
     async ({ notice, projected, heardOnConnect, language, width }) => {
