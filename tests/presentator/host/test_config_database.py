@@ -72,5 +72,7 @@ def test_a_password_file_that_cannot_be_read_refuses_without_quoting_its_path(
     absent = tmp_path / "absent"
     database_variables.setenv(_PASSWORD_FILE, str(absent))
 
-    with pytest.raises(ConfigurationError, match="database_password_file"):
+    with pytest.raises(ConfigurationError, match="database_password_file") as raised:
         load_database_settings()
+
+    assert str(absent) not in str(raised.value)
