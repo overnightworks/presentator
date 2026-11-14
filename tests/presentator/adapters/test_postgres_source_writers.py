@@ -23,15 +23,10 @@ from tests.presentator.adapters.support.source_writer_process import (
     RUNS_RECORDED_EACH,
     a_source_write,
 )
-from tests.support.postgres import database_environment, engine_on
-from tests.support.two_processes import (
-    Finished,
-    release_together,
-    two_modules,
-)
+from tests.support.postgres import ChildModule, engine_on
 
 _NOW = datetime(2026, 11, 14, 12, tzinfo=UTC)
-_CHILD = "tests.presentator.adapters.support.source_writer_process"
+_CHILD = ChildModule("tests.presentator.adapters.support.source_writer_process")
 
 
 @pytest.fixture
@@ -58,24 +53,9 @@ def _both_write[Reported](
     *,
     other_action: str | None = None,
 ) -> tuple[Reported, Reported]:
-    """What two processes at once reported, both exiting 0.
-
-    The first does `action`; the second does `other_action`, or `action` too.
-    """
-    environment = database_environment(database_url, directory)
-    other = None if other_action is None else [other_action]
-    with two_modules(
-        _CHILD, [action], environment, second_arguments=other
-    ) as processes:
-        release_together(processes)
-        finished = processes.finish()
-    assert [each.exit_code for each in finished] == [0, 0], finished
-    first, second = (_reported(each, shape) for each in finished)
-    return first, second
-
-
-def _reported[Reported](finished: Finished, shape: TypeAdapter[Reported]) -> Reported:
-    return shape.validate_json(finished.output.strip().splitlines()[-1])
+    return _CHILD.both_report(
+        database_url, directory, shape, first=action, second=other_action
+    )
 
 
 def _drafts_per_owner(engine: Engine) -> dict[str, int]:

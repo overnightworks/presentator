@@ -1,4 +1,4 @@
-"""The source stores over SQLite or Postgres, for tests that compare the two."""
+"""The stores over SQLite or Postgres, for tests that compare the two."""
 
 import itertools
 from collections.abc import Callable, Generator
@@ -8,8 +8,10 @@ from pathlib import Path
 from typing import Final
 
 from sqlalchemy import Engine, text
+from sqlalchemy.engine import make_url
 from webauth.ports import AccountKind
 
+from presentator.adapters.deck_store import SqliteDeckStore
 from presentator.adapters.decks import (
     SqliteSourceRunStore,
     SqliteSourceStore,
@@ -17,17 +19,34 @@ from presentator.adapters.decks import (
 )
 from presentator.adapters.identity import create_identity_tables
 from presentator.adapters.key_drafts import SqliteSourceKeyDrafts
+from presentator.adapters.postgres.deck_store import PostgresDeckStore
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
+from presentator.adapters.postgres.preferences import (
+    PostgresInstanceSettingsStore,
+    PostgresPersonPreferencesStore,
+)
 from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
 from presentator.adapters.postgres.sources import PostgresSourceStore
+from presentator.adapters.preferences import (
+    SqliteInstanceSettingsStore,
+    SqlitePersonPreferencesStore,
+    create_preference_tables,
+)
 from presentator.adapters.secrets import DeployKeyPair, secret_box
 from presentator.adapters.sqlite import rows
 from presentator.contracts.models import Role
-from presentator.ports.decks import DeployKeyDrafts, SourceRuns, SourceStore
+from presentator.ports.decks import DeckStore, DeployKeyDrafts, SourceRuns, SourceStore
+from presentator.ports.preferences import (
+    InstanceSettingsStore,
+    PersonPreferencesStore,
+)
 from tests.support.postgres import engine_on
 
 INSTANCE_KEY: Final = "an instance key of thirty-two ch"
 ANOTHER_INSTANCE_KEY: Final = "another instance key of thirty-2"
+# A zone far from UTC, so a store that reads an instant in the session's zone
+# shows it.
+_SESSION_TIME_ZONE: Final = "Pacific/Auckland"
 
 
 class NumberedIdentifiers:
@@ -48,6 +67,9 @@ class Adapters:
     drafts: DeployKeyDrafts
     sources: SourceStore
     runs: SourceRuns
+    decks: DeckStore
+    settings: InstanceSettingsStore
+    preferences: PersonPreferencesStore
     seed_owner: Callable[[str], None]
     drafts_opened_with: Callable[[str], DeployKeyDrafts]
     sources_opened_with: Callable[[str], SourceStore]
@@ -76,6 +98,7 @@ def sqlite_adapters(directory: Path, key_pairs: NumberedKeyPairs) -> Adapters:
     database = directory / "presentator.sqlite3"
     create_identity_tables(database)
     create_deck_tables(database)
+    create_preference_tables(database)
 
     def seed_owner(owner_id: str) -> None:
         with rows(database) as cursor:
@@ -113,6 +136,9 @@ def sqlite_adapters(directory: Path, key_pairs: NumberedKeyPairs) -> Adapters:
         drafts=drafts_opened_with(INSTANCE_KEY),
         sources=sources_opened_with(INSTANCE_KEY),
         runs=SqliteSourceRunStore(database=database),
+        decks=SqliteDeckStore(database=database),
+        settings=SqliteInstanceSettingsStore(database),
+        preferences=SqlitePersonPreferencesStore(database),
         seed_owner=seed_owner,
         drafts_opened_with=drafts_opened_with,
         sources_opened_with=sources_opened_with,
@@ -124,6 +150,8 @@ def sqlite_adapters(directory: Path, key_pairs: NumberedKeyPairs) -> Adapters:
 def postgres_adapters(
     database_url: str, key_pairs: NumberedKeyPairs
 ) -> Generator[Adapters]:
+    """The stores on a database whose sessions read timestamps in a far zone."""
+    _read_timestamps_in_a_far_zone(database_url)
     engine = engine_on(database_url)
     identifiers = NumberedIdentifiers()
 
@@ -156,11 +184,28 @@ def postgres_adapters(
             drafts=drafts_opened_with(INSTANCE_KEY),
             sources=sources_opened_with(INSTANCE_KEY),
             runs=PostgresSourceRunStore(engine=engine),
+            decks=PostgresDeckStore(engine=engine),
+            settings=PostgresInstanceSettingsStore(engine),
+            preferences=PostgresPersonPreferencesStore(engine),
             seed_owner=lambda owner_id: seed_postgres_owner(engine, owner_id),
             drafts_opened_with=drafts_opened_with,
             sources_opened_with=sources_opened_with,
             secret_of=secret_of,
         )
+    finally:
+        engine.dispose()
+
+
+def _read_timestamps_in_a_far_zone(database_url: str) -> None:
+    engine = engine_on(database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    f'ALTER DATABASE "{make_url(database_url).database}"'
+                    f" SET timezone TO '{_SESSION_TIME_ZONE}'"
+                )
+            )
     finally:
         engine.dispose()
 

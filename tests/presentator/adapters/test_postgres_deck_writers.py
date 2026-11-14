@@ -27,10 +27,9 @@ from tests.presentator.adapters.support.source_stores_support import (
     INSTANCE_KEY,
     seed_postgres_owner,
 )
-from tests.support.postgres import database_environment, engine_on
-from tests.support.two_processes import Finished, release_together, two_modules
+from tests.support.postgres import ChildModule, engine_on
 
-_CHILD = "tests.presentator.adapters.support.deck_writer_process"
+_CHILD = ChildModule("tests.presentator.adapters.support.deck_writer_process")
 
 
 @pytest.fixture
@@ -71,33 +70,10 @@ def source_ids(engine: Engine) -> tuple[str, str]:
     return first, second
 
 
-def _both_do[Reported](
-    database_url: str,
-    directory: Path,
-    shape: TypeAdapter[Reported],
-    *,
-    first: str,
-    second: str | None = None,
-) -> tuple[Reported, Reported]:
-    """What two processes at once reported, both exiting 0."""
-    environment = database_environment(database_url, directory)
-    other = None if second is None else [second]
-    with two_modules(_CHILD, [first], environment, second_arguments=other) as both:
-        release_together(both)
-        finished = both.finish()
-    assert [each.exit_code for each in finished] == [0, 0], finished
-    one, other_one = (_reported(each, shape) for each in finished)
-    return one, other_one
-
-
-def _reported[Reported](finished: Finished, shape: TypeAdapter[Reported]) -> Reported:
-    return shape.validate_json(finished.output.strip().splitlines()[-1])
-
-
 def test_two_sources_putting_the_same_slugs_at_once_get_each_slug_once(
     database_url: str, tmp_path: Path, engine: Engine, source_ids: tuple[str, str]
 ) -> None:
-    won_by_first, won_by_second = _both_do(
+    won_by_first, won_by_second = _CHILD.both_report(
         database_url,
         tmp_path,
         TypeAdapter(list[str]),
@@ -121,7 +97,7 @@ def test_a_reader_beside_a_writer_switching_builds_never_sees_half_a_switch(
     PostgresDeckStore(engine=engine).put(a_deck(SWITCHED_TALK, source_ids[0]))
     PostgresDeckStore(engine=engine).put_build(SWITCHED_TALK, a_build(0))
 
-    switched, torn = _both_do(
+    switched, torn = _CHILD.both_report(
         database_url,
         tmp_path,
         TypeAdapter(object),
@@ -150,7 +126,7 @@ def test_two_processes_marking_one_source_leave_what_one_of_them_would_alone(
         for slug in slugs:
             decks.put(a_deck(slug, source_id))
 
-    _both_do(
+    _CHILD.both_report(
         database_url,
         tmp_path,
         TypeAdapter(int),
@@ -174,7 +150,7 @@ def test_two_processes_marking_one_source_leave_what_one_of_them_would_alone(
 def test_two_processes_saving_the_settings_and_a_theme_leave_one_row_each(
     database_url: str, tmp_path: Path, engine: Engine
 ) -> None:
-    first, second = _both_do(
+    first, second = _CHILD.both_report(
         database_url,
         tmp_path,
         TypeAdapter(dict[str, str]),

@@ -1,10 +1,11 @@
 """The decks table on Postgres, behind `DeckStore`."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Final, cast
 
-from sqlalchemy import Engine, Row, Text, bindparam, text
+from sqlalchemy import Engine, Row, Text, TextClause, bindparam, text
 from sqlalchemy.dialects.postgresql import ARRAY
 
 from presentator.adapters.deck_store import (
@@ -175,20 +176,23 @@ class PostgresDeckStore:
 
     def all(self) -> tuple[Deck, ...]:
         """Read every deck row whose folder is still at its source."""
-        with self.engine.connect() as connection:
-            found = connection.execute(_ALL_DECKS).all()
-        return tuple(_deck(row) for row in found)
+        return self._read(_ALL_DECKS, {})
 
     def for_source(self, source_id: str) -> tuple[Deck, ...]:
         """Read every deck row this source has ever carried, marked removed or not."""
-        with self.engine.connect() as connection:
-            found = connection.execute(_DECKS_OF_SOURCE, {"source_id": source_id}).all()
-        return tuple(_deck(row) for row in found)
+        return self._read(_DECKS_OF_SOURCE, {"source_id": source_id})
 
     def remove_for_source(self, source_id: str) -> None:
         """Delete every deck row this source has ever carried, marked removed or not."""
         with self.engine.begin() as connection:
             connection.execute(_REMOVE_DECKS_OF_SOURCE, {"source_id": source_id})
+
+    def _read(
+        self, statement: TextClause, parameters: Mapping[str, str]
+    ) -> tuple[Deck, ...]:
+        with self.engine.connect() as connection:
+            found = connection.execute(statement, parameters).all()
+        return tuple(_deck(row) for row in found)
 
 
 def _deck(row: Row[Any]) -> Deck:

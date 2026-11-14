@@ -193,7 +193,7 @@ def _following(
     keys: dict[str, str],
 ) -> set[str]:
     query = text(
-        f'SELECT "{keys[link.child]}"::text FROM "{link.child}"'  # noqa: S608
+        f'SELECT "{keys[link.child]}"::text FROM "{link.child}"'  # noqa: S608 - names read from the catalog
         f' WHERE "{link.column}"::text IN'
         f' (SELECT "{link.target}"::text FROM "{link.parent}"'
         f' WHERE "{keys[link.parent]}"::text = ANY(:parent_keys))'
@@ -212,7 +212,7 @@ def rows_still_there(
     return {
         table: connection.execute(
             text(
-                f'SELECT COUNT(*) FROM "{table}"'  # noqa: S608
+                f'SELECT COUNT(*) FROM "{table}"'  # noqa: S608 - names read from the catalog
                 f' WHERE "{keys[table]}"::text = ANY(:owned)'
             ),
             {"owned": sorted(ids)},
