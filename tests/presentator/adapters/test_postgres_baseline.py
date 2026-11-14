@@ -4,7 +4,6 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import closing
 from pathlib import Path
-from typing import NamedTuple
 
 import pytest
 from sqlalchemy import Connection, inspect, text
@@ -16,10 +15,8 @@ from tests.support.postgres import engine_on
 _HAS_NO_SQLITE_COUNTERPART = {"alembic_version"}
 
 
-class _Column(NamedTuple):
-    refuses_null: bool
-    type_name: str
-    default: str | None
+# Whether the column refuses NULL, its Postgres type and its default.
+_Column = tuple[bool, str, str | None]
 
 
 def _is_an_instant(column: str) -> bool:
@@ -57,10 +54,10 @@ def _sqlite_shape(database: Path) -> dict[str, dict[str, _Column]]:
         }
     return {
         table: {
-            name: _Column(
-                refuses_null=bool(not_null or in_key),
-                type_name=_postgres_type_of(name, sqlite_type),
-                default=default,
+            name: (
+                bool(not_null or in_key),
+                _postgres_type_of(name, sqlite_type),
+                default,
             )
             for _, name, sqlite_type, not_null, default, in_key in rows
         }
@@ -141,10 +138,10 @@ def test_a_migrated_database_has_the_columns_types_and_defaults_of_the_sqlite_st
         tables = set(inspector.get_table_names()) - _HAS_NO_SQLITE_COUNTERPART
         shape = {
             table: {
-                column["name"]: _Column(
-                    refuses_null=not column["nullable"],
-                    type_name=column["type"].compile(dialect=engine.dialect),
-                    default=_postgres_default(column["default"]),
+                column["name"]: (
+                    not column["nullable"],
+                    column["type"].compile(dialect=engine.dialect),
+                    _postgres_default(column["default"]),
                 )
                 for column in inspector.get_columns(table)
             }
