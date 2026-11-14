@@ -43,8 +43,16 @@ def _migrations_directory() -> Path:
 
 
 def run() -> None:
-    """Serve on the given port until killed."""
+    """Serve on the given port until killed.
+
+    The mirrors and builds are this process's own directories, as each pod has
+    its own disk; only the database is shared.
+    """
     os.environ["PRESENTATOR_PORT"] = sys.argv[1]
+    for name in ("mirrors", "builds"):
+        os.environ[f"PRESENTATOR_{name.upper()}"] = str(
+            Path.cwd() / f"port-{sys.argv[1]}" / name
+        )
     issuer = FakeIssuer(
         issuer=os.environ["PRESENTATOR_OIDC_ISSUER"],
         client_id=os.environ["PRESENTATOR_OIDC_CLIENT_ID"],

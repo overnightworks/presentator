@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Final
 
 import httpx2
+from pydantic import JsonValue
 
 from presentator.api.auth import (
     LOGOUT_PATH,
@@ -48,13 +49,18 @@ class App:
     asking: threading.Lock = field(default_factory=threading.Lock, compare=False)
 
     def request(
-        self, method: str, path: str, headers: Mapping[str, str]
+        self,
+        method: str,
+        path: str,
+        headers: Mapping[str, str],
+        body: JsonValue | None = None,
     ) -> httpx2.Response:
         """One request for the lobby's hostname, redirects left alone."""
         return httpx2.request(
             method,
             f"http://127.0.0.1:{self.port}{path}",
             headers={"host": _HOST, **headers},
+            json=body,
             timeout=_REQUEST_SECONDS,
             follow_redirects=False,
         )
@@ -99,6 +105,7 @@ class Browser:
         method: str,
         path: str,
         headers: Mapping[str, str] | None = None,
+        body: JsonValue | None = None,
     ) -> httpx2.Response:
         """Send the cookies held, keep the ones the answer sets."""
         cookie = "; ".join(f"{name}={value}" for name, value in self.cookies.items())
@@ -111,6 +118,7 @@ class Browser:
                 **({"cookie": cookie} if cookie else {}),
                 **(headers or {}),
             },
+            body,
         )
         for header in answer.headers.get_list("set-cookie"):
             for name, morsel in SimpleCookie(header).items():
