@@ -27,3 +27,8 @@ reason = "connection_or_inside is reached only by the Postgres identity stores, 
 path = "src/presentator/adapters/postgres/key_drafts.py"
 item = "#1160"
 reason = "The Postgres deploy-key drafts wait for the switch slice that composes them."
+
+[[code]]
+path = "src/presentator/adapters/postgres/sources.py"
+item = "#1160"
+reason = "The Postgres source store waits for the switch slice that composes it."

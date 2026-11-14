@@ -12,15 +12,17 @@ from sqlalchemy import Engine, text
 from webauth.ports import AccountKind
 
 from presentator.adapters import decks, key_drafts
-from presentator.adapters.decks import create_deck_tables
+from presentator.adapters.decks import SqliteSourceStore, create_deck_tables
 from presentator.adapters.identity import create_identity_tables
 from presentator.adapters.key_drafts import SqliteSourceKeyDrafts
 from presentator.adapters.postgres import key_drafts as postgres_key_drafts
+from presentator.adapters.postgres import sources as postgres_sources
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
+from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import DeployKeyPair, secret_box
 from presentator.adapters.sqlite import rows
 from presentator.contracts.models import Role
-from presentator.ports.decks import DeployKeyDrafts
+from presentator.ports.decks import DeployKeyDrafts, SourceStore
 from tests.support.postgres import engine_on
 
 INSTANCE_KEY: Final = "an instance key of thirty-two ch"
@@ -43,8 +45,12 @@ class Adapters:
     """One adapter's stores over a database of its own."""
 
     drafts: DeployKeyDrafts
+    sources: SourceStore
     seed_owner: Callable[[str], None]
     drafts_opened_with: Callable[[str], DeployKeyDrafts]
+    sources_opened_with: Callable[[str], SourceStore]
+    # The secret a source's row holds, opened with the instance key.
+    secret_of: Callable[[str], str | None]
 
 
 class NumberedKeyPairs:
@@ -67,7 +73,7 @@ class NumberedKeyPairs:
 def use_numbered_keys(monkeypatch: pytest.MonkeyPatch) -> NumberedKeyPairs:
     """Every deploy key an adapter generates is the next numbered pair."""
     pairs = NumberedKeyPairs()
-    for module in (key_drafts, decks, postgres_key_drafts):
+    for module in (key_drafts, decks, postgres_key_drafts, postgres_sources):
         monkeypatch.setattr(module, "generate_deploy_key", pairs)
     return pairs
 
@@ -93,10 +99,27 @@ def sqlite_adapters(directory: Path) -> Adapters:
             box=secret_box(instance_key),
         )
 
+    def sources_opened_with(instance_key: str) -> SourceStore:
+        return SqliteSourceStore(
+            database=database,
+            identifiers=identifiers,
+            box=secret_box(instance_key),
+        )
+
+    def secret_of(source_id: str) -> str | None:
+        with rows(database) as cursor:
+            found = cursor.execute(
+                "SELECT encrypted_secret FROM sources WHERE id = ?", (source_id,)
+            ).fetchone()
+        return None if found is None else secret_box(INSTANCE_KEY).decrypt(found[0])
+
     return Adapters(
         drafts=drafts_opened_with(INSTANCE_KEY),
+        sources=sources_opened_with(INSTANCE_KEY),
         seed_owner=seed_owner,
         drafts_opened_with=drafts_opened_with,
+        sources_opened_with=sources_opened_with,
+        secret_of=secret_of,
     )
 
 
@@ -112,11 +135,29 @@ def postgres_adapters(database_url: str) -> Generator[Adapters]:
             box=secret_box(instance_key),
         )
 
+    def sources_opened_with(instance_key: str) -> SourceStore:
+        return PostgresSourceStore(
+            engine=engine,
+            identifiers=identifiers,
+            box=secret_box(instance_key),
+        )
+
+    def secret_of(source_id: str) -> str | None:
+        with engine.connect() as connection:
+            found = connection.execute(
+                text("SELECT encrypted_secret FROM sources WHERE id = :source_id"),
+                {"source_id": source_id},
+            ).fetchone()
+        return None if found is None else secret_box(INSTANCE_KEY).decrypt(found[0])
+
     try:
         yield Adapters(
             drafts=drafts_opened_with(INSTANCE_KEY),
+            sources=sources_opened_with(INSTANCE_KEY),
             seed_owner=lambda owner_id: seed_postgres_owner(engine, owner_id),
             drafts_opened_with=drafts_opened_with,
+            sources_opened_with=sources_opened_with,
+            secret_of=secret_of,
         )
     finally:
         engine.dispose()

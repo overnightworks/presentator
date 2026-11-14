@@ -5,14 +5,18 @@ its action when the parent lets it go, and prints what it saw as one JSON line.
 """
 
 import json
+import os
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Final
 
 from presentator.adapters.identity import TokenIdentifierFactory
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
+from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
+from presentator.contracts.decks import SourceWrite
 from tests.presentator.adapters.support.source_stores_support import INSTANCE_KEY
 from tests.support.postgres import engine_from_environment
 from tests.support.two_processes import announce_ready_and_wait_for_go
@@ -20,9 +24,30 @@ from tests.support.two_processes import announce_ready_and_wait_for_go
 OWNERS: Final = tuple(f"concurrent-owner-{number}" for number in range(20))
 _NOON: Final = datetime(2026, 11, 14, 12, tzinfo=UTC)
 _REPEATS: Final = 5
+NAMES: Final = tuple(f"concurrent-source-{number}" for number in range(20))
 
 
-def _get_or_mint(drafts: PostgresSourceKeyDrafts) -> object:
+@dataclass(frozen=True, slots=True)
+class Stores:
+    """The stores a child writes through."""
+
+    drafts: PostgresSourceKeyDrafts
+    sources: PostgresSourceStore
+
+
+def _a_write(name: str, url: str, owner_id: str) -> SourceWrite:
+    return SourceWrite(
+        name=name,
+        url=url,
+        ref="main",
+        owner_id=owner_id,
+        access_secret=f"token of {name}",
+        hook_secret_hash=b"digest",
+    )
+
+
+def _get_or_mint(stores: Stores) -> object:
+    drafts = stores.drafts
     return {
         owner: drafts.get_or_mint(
             owner, newer_than=_NOON - timedelta(days=1), at=_NOON
@@ -31,14 +56,16 @@ def _get_or_mint(drafts: PostgresSourceKeyDrafts) -> object:
     }
 
 
-def _mint(drafts: PostgresSourceKeyDrafts) -> object:
+def _mint(stores: Stores) -> object:
+    drafts = stores.drafts
     return {
         owner: [drafts.mint(owner, at=_NOON).id for _ in range(_REPEATS)]
         for owner in OWNERS
     }
 
 
-def _bind(drafts: PostgresSourceKeyDrafts) -> object:
+def _bind(stores: Stores) -> object:
+    drafts = stores.drafts
     won: list[str] = []
     for owner in OWNERS:
         draft = drafts.unconsumed_for(owner, newer_than=_NOON - timedelta(days=1))
@@ -47,7 +74,48 @@ def _bind(drafts: PostgresSourceKeyDrafts) -> object:
     return won
 
 
-ACTIONS: Final[dict[str, Callable[[PostgresSourceKeyDrafts], object]]] = {
+def _add_with_one_name(stores: Stores) -> object:
+    return [
+        name
+        for name in NAMES
+        if stores.sources.add(
+            _a_write(name, f"https://{os.getpid()}/{name}", OWNERS[0])
+        )
+        is not None
+    ]
+
+
+def _add_with_one_url(stores: Stores) -> object:
+    return [
+        name
+        for name in NAMES
+        if stores.sources.add(
+            _a_write(f"{name}-by-{os.getpid()}", f"https://shared/{name}", OWNERS[0])
+        )
+        is not None
+    ]
+
+
+def _promote(stores: Stores) -> object:
+    won: list[str] = []
+    for owner in OWNERS:
+        draft = stores.drafts.unconsumed_for(
+            owner, newer_than=_NOON - timedelta(days=1)
+        )
+        if draft is None:
+            continue
+        written = _a_write(
+            f"{owner}-by-{os.getpid()}", f"https://{owner}/{os.getpid()}", owner
+        )
+        if stores.sources.add_from_draft(written, draft_id=draft.id) is not None:
+            won.append(owner)
+    return won
+
+
+ACTIONS: Final[dict[str, Callable[[Stores], object]]] = {
+    "add-with-one-name": _add_with_one_name,
+    "add-with-one-url": _add_with_one_url,
+    "promote": _promote,
     "get-or-mint": _get_or_mint,
     "mint": _mint,
     "bind": _bind,
@@ -58,13 +126,20 @@ def main() -> None:
     """Connect, wait for the go-ahead, do the action, and print its result."""
     action = ACTIONS[sys.argv[1]]
     engine = engine_from_environment()
-    drafts = PostgresSourceKeyDrafts(
-        engine=engine,
-        identifiers=TokenIdentifierFactory(),
-        box=secret_box(INSTANCE_KEY),
+    stores = Stores(
+        drafts=PostgresSourceKeyDrafts(
+            engine=engine,
+            identifiers=TokenIdentifierFactory(),
+            box=secret_box(INSTANCE_KEY),
+        ),
+        sources=PostgresSourceStore(
+            engine=engine,
+            identifiers=TokenIdentifierFactory(),
+            box=secret_box(INSTANCE_KEY),
+        ),
     )
     announce_ready_and_wait_for_go()
-    print(json.dumps(action(drafts)))  # noqa: T201 - the parent reads this line
+    print(json.dumps(action(stores)))  # noqa: T201 - the parent reads this line
     engine.dispose()
 
 

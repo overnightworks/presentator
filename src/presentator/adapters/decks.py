@@ -9,11 +9,12 @@ is in `deck_store.py`.
 import logging
 import shutil
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
-from typing import Final
+from typing import Any, Final
 
 from gitmirror.mirror import GitMirror, check_connection
 from gitmirror.model import (
@@ -137,7 +138,6 @@ _PUT_HOOK_HASH: Final = "UPDATE sources SET hook_secret_hash = ? WHERE name = ?"
 _ONE_ROW: Final = 1
 # What a pull needs and nothing else: the ciphertext this instance can open.
 _SOURCE_ANCHOR: Final = "SELECT encrypted_secret FROM sources WHERE id = ?"
-_SourceRow = tuple[str, str, str, str, str, str | None, str]
 _UNREADABLE_SOURCE: Final = "source %s cannot be read: %s"
 _UNREADABLE_MANIFEST: Final = "folder %s has no readable title, keeps its listing: %s"
 _OUTSIDE_MOUNT: Final = (
@@ -226,15 +226,7 @@ class SqliteSourceStore:
                 )
         except sqlite3.IntegrityError:
             return None
-        return Source(
-            id=identifier,
-            name=write.name,
-            url=write.url,
-            ref=write.ref,
-            owner_id=write.owner_id,
-            public_key=write.public_key,
-            folder=write.folder,
-        )
+        return written_source(identifier, write, public_key=write.public_key)
 
     def add_from_draft(self, write: SourceWrite, *, draft_id: str) -> Source | None:
         """Promote an owned draft only if its source row can be written too."""
@@ -271,15 +263,7 @@ class SqliteSourceStore:
                 cursor.execute("COMMIT")
         except sqlite3.IntegrityError:
             return None
-        return Source(
-            id=identifier,
-            name=write.name,
-            url=write.url,
-            ref=write.ref,
-            owner_id=write.owner_id,
-            public_key=draft.public_key,
-            folder=write.folder,
-        )
+        return written_source(identifier, write, public_key=draft.public_key)
 
     def hook_secret_hash(self, name: str) -> bytes | None:
         """The stored hash of that source's webhook secret, if this name exists."""
@@ -321,7 +305,7 @@ class SqliteSourceStore:
         """Read every source this instance mirrors decks from."""
         with rows(self.database) as cursor:
             found = cursor.execute(_ALL_SOURCES).fetchall()
-        return tuple(_source(row) for row in found)
+        return tuple(stored_source(row) for row in found)
 
     def remove(self, source_id: str) -> None:
         """Delete that source's own row."""
@@ -661,7 +645,23 @@ class SqliteSourceRunStore:
             cursor.execute(_REMOVE_SOURCE_RUNS, (source_id,))
 
 
-def _source(row: _SourceRow) -> Source:
+def written_source(
+    identifier: str, write: SourceWrite, *, public_key: str | None
+) -> Source:
+    """The source a write became under that identifier."""
+    return Source(
+        id=identifier,
+        name=write.name,
+        url=write.url,
+        ref=write.ref,
+        owner_id=write.owner_id,
+        public_key=public_key,
+        folder=write.folder,
+    )
+
+
+def stored_source(row: Sequence[Any]) -> Source:
+    """The source of one row read as id, name, URL, ref, owner, public key, folder."""
     identifier, name, url, ref, owner_id, public_key, folder = row
     return Source(
         id=identifier,
@@ -676,9 +676,22 @@ def _source(row: _SourceRow) -> Source:
 
 def _source_run(row: _SourceRunRow) -> SourceRun:
     source_id, at, outcome, commit, reason = row
+    return stored_source_run(
+        source_id, datetime.fromisoformat(at), outcome, commit, reason
+    )
+
+
+def stored_source_run(
+    source_id: str,
+    at: datetime,
+    outcome: str,
+    commit: str | None,
+    reason: str | None,
+) -> SourceRun:
+    """The run of one row's columns, its words read as this product's enums."""
     return SourceRun(
         source_id=source_id,
-        at=datetime.fromisoformat(at),
+        at=at,
         outcome=SourceRunOutcome(outcome),
         commit=commit,
         reason=None if reason is None else SourceRunFailure(reason),

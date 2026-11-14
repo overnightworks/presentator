@@ -15,7 +15,7 @@ from tests.presentator.adapters.support.source_stores_support import (
     INSTANCE_KEY,
     seed_postgres_owner,
 )
-from tests.presentator.adapters.support.source_writer_process import OWNERS
+from tests.presentator.adapters.support.source_writer_process import NAMES, OWNERS
 from tests.support.postgres import database_environment, engine_on
 from tests.support.two_processes import (
     Finished,
@@ -109,4 +109,54 @@ def test_two_processes_binding_the_same_drafts_consume_each_once(
     first, second = _both_write("bind", database_url, tmp_path, TypeAdapter(list[str]))
 
     assert sorted([*first, *second]) == sorted(owners)
+    assert _drafts_per_owner(engine) == {}
+
+
+def _sources_per_owner(engine: Engine) -> dict[str, int]:
+    with engine.connect() as connection:
+        found = connection.execute(
+            text("SELECT owner_id, COUNT(*) FROM sources GROUP BY owner_id")
+        ).all()
+    return dict(found)
+
+
+def test_two_processes_adding_the_same_names_at_once_get_one_source_each(
+    database_url: str, tmp_path: Path, engine: Engine, owners: tuple[str, ...]
+) -> None:
+    first, second = _both_write(
+        "add-with-one-name", database_url, tmp_path, TypeAdapter(list[str])
+    )
+
+    assert sorted([*first, *second]) == sorted(NAMES)
+    assert _sources_per_owner(engine) == {owners[0]: len(NAMES)}
+
+
+def test_two_processes_adding_the_same_urls_at_once_get_one_source_each(
+    database_url: str, tmp_path: Path, engine: Engine, owners: tuple[str, ...]
+) -> None:
+    first, second = _both_write(
+        "add-with-one-url", database_url, tmp_path, TypeAdapter(list[str])
+    )
+
+    assert sorted([*first, *second]) == sorted(NAMES)
+    assert _sources_per_owner(engine) == {owners[0]: len(NAMES)}
+
+
+def test_two_processes_promoting_the_same_drafts_make_one_source_from_each(
+    database_url: str, tmp_path: Path, engine: Engine, owners: tuple[str, ...]
+) -> None:
+    drafts = PostgresSourceKeyDrafts(
+        engine=engine,
+        identifiers=TokenIdentifierFactory(),
+        box=secret_box(INSTANCE_KEY),
+    )
+    for owner in owners:
+        drafts.get_or_mint(owner, newer_than=_NOW - timedelta(days=1), at=_NOW)
+
+    first, second = _both_write(
+        "promote", database_url, tmp_path, TypeAdapter(list[str])
+    )
+
+    assert sorted([*first, *second]) == sorted(owners)
+    assert _sources_per_owner(engine) == dict.fromkeys(owners, 1)
     assert _drafts_per_owner(engine) == {}
