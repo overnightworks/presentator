@@ -5,7 +5,7 @@ import shutil
 import stat
 import subprocess
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -227,7 +227,12 @@ class GitRemote:
 
     def commit_example_deck(self, *, at: datetime, into: str = EXAMPLE_SLUG) -> None:
         """Copy the repository's own example deck in and push it."""
-        shutil.copytree(EXAMPLE_DECK, self.work / into, dirs_exist_ok=True)
+        self.commit_example_decks(at=at, into=(into,))
+
+    def commit_example_decks(self, *, at: datetime, into: Iterable[str]) -> None:
+        """Copy the example deck in under each name and push them as one commit."""
+        for folder in into:
+            shutil.copytree(EXAMPLE_DECK, self.work / folder, dirs_exist_ok=True)
         self._push(at=at)
 
     def _push(self, *, at: datetime) -> None:

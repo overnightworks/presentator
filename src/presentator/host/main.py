@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import timedelta
 from functools import partial
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import uvicorn
@@ -52,14 +53,34 @@ from presentator.adapters.identity import (
     TokenIdentifierFactory,
 )
 from presentator.adapters.key_drafts import SqliteSourceKeyDrafts
+from presentator.adapters.postgres.deck_store import PostgresDeckStore
 from presentator.adapters.postgres.engine import create_database_engine
-from presentator.adapters.postgres.migrate import migrate
+from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
+from presentator.adapters.postgres.migrate import (
+    MIGRATIONS_DIRECTORY,
+    database_is_ready,
+    migrate,
+    migration_history,
+    serving_refusal,
+)
+from presentator.adapters.postgres.preferences import (
+    PostgresInstanceSettingsStore,
+    PostgresPersonPreferencesStore,
+)
+from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
+from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
+from presentator.adapters.postgres.sources import (
+    PostgresSourceCredentials,
+    PostgresSourceStore,
+)
 from presentator.adapters.preferences import (
     SqliteInstanceSettingsStore,
     SqlitePersonPreferencesStore,
 )
 from presentator.adapters.schema import create_tables
 from presentator.adapters.secrets import (
+    SecretBox,
     TokenWebhookSecrets,
     connection_fingerprint_key,
     secret_box,
@@ -85,6 +106,7 @@ from presentator.api.auth import (
     create_lobby,
 )
 from presentator.api.copresenter import CoPresenterSurface
+from presentator.api.health import Readiness, always_ready
 from presentator.api.lobby_shell import LobbyBuildError, LobbyShell
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_content_security_policy
@@ -96,6 +118,7 @@ from presentator.application.people import People
 from presentator.application.preferences import Preferences
 from presentator.contracts.decks import ToolchainIdentity
 from presentator.host.config import (
+    PostgresDatabase,
     Settings,
     WhereBuildsRun,
     cannot_start,
@@ -110,6 +133,12 @@ from presentator.host.oidc import (
 )
 from presentator.host.polling import Schedule
 from presentator.host.worker_serving import emergency_end
+from presentator.ports.decks import DeckStore, DeployKeyDrafts, SourceRuns, SourceStore
+from presentator.ports.identity import IdentifierFactory
+from presentator.ports.preferences import (
+    InstanceSettingsStore,
+    PersonPreferencesStore,
+)
 
 _WORKER_NOT_ANSWERING = (
     "The build worker did not answer within {window:g} seconds. Check that the"
@@ -127,6 +156,10 @@ MIGRATE_COMMAND = "migrate"
 RelyingPartyFor = Callable[[OidcClientConfig], OidcRelyingParty]
 
 
+def _nothing_to_close() -> None:
+    """What an instance holds open when its state lives in one file."""
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Instance:
     """What a running instance is: the addresses, and the schedules beside them."""
@@ -135,69 +168,136 @@ class Instance:
     talk: FastAPI
     poller: Schedule
     session_sweep: Schedule
+    close: Callable[[], None] = _nothing_to_close
+
+
+type SessionStore = SqliteSessionRecordStore | PostgresSessionRecordStore
+type IdentityWrites = SqliteIdentityWrites | PostgresIdentityWrites
+type Credentials = SourceCredentials | PostgresSourceCredentials
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Stores:
+    """The adapter behind every store port, all of one database."""
+
+    sources: SourceStore
+    key_drafts: DeployKeyDrafts
+    deck_store: DeckStore
+    source_runs: SourceRuns
+    credentials: Credentials
+    sessions: SessionStore
+    identity_writes: IdentityWrites
+    instance_settings: InstanceSettingsStore
+    person_preferences: PersonPreferencesStore
+    readiness: Readiness
+    close: Callable[[], None]
 
 
 def build_instance(
     settings: Settings,
     relying_party_for: RelyingPartyFor = relying_party,
+    migrations_directory: Path = MIGRATIONS_DIRECTORY,
 ) -> Instance:
-    """Choose the adapter behind every port and hand the routes their use cases."""
-    create_tables(settings.database)
+    """Choose the adapter behind every port and hand the routes their use cases.
+
+    A Postgres database is served only at the head of the history in
+    `migrations_directory` or newer.
+    """
     shell = _lobby_shell(settings)
-    # One box for both directions: what the store writes down is what the
-    # resolver opens at the pull, and neither picks its own key.
-    box = secret_box(settings.secret_key.get_secret_value())
-    identifiers = TokenIdentifierFactory()
-    sources = SqliteSourceStore(
-        database=settings.database,
-        identifiers=identifiers,
-        box=box,
-    )
-    key_drafts = SqliteSourceKeyDrafts(
-        database=settings.database,
-        identifiers=identifiers,
-        box=box,
-    )
+    stores = _stores(settings, migrations_directory)
+    local_mount = FilesystemLocalMount(mount=settings.local_sources_mount)
     # The one mounted directory a file-kind source's address may resolve
     # under, real filesystem and all: shared by every use, since a symlink or
     # a remount between them must be caught the same way each time.
-    local_mount = FilesystemLocalMount(mount=settings.local_sources_mount)
     mirrors = SourceMirrors(
         directory=settings.mirrors,
-        credentials=SourceCredentials(database=settings.database, box=box),
+        credentials=stores.credentials,
         pull_timeout=_source_timeout(settings),
         local_mount=local_mount,
     )
-    decks = _decks(
-        settings,
-        sources=sources,
-        key_drafts=key_drafts,
-        mirrors=mirrors,
-        local_mount=local_mount,
-    )
-    sessions = SqliteSessionRecordStore(settings.database)
-    # One use case object serves both callers, so the hook and the poll share
-    # the one refresh that runs at a time.
-    identity_writes = SqliteIdentityWrites(
-        settings.database, ProcessWriteLock(), LoggingAuditSink()
-    )
+    decks = _decks(settings, stores, mirrors=mirrors, local_mount=local_mount)
     lobby_auth, talk_auth = installed_auths(
-        settings, shell, identity_writes, relying_party_for
+        settings, shell, stores.identity_writes, relying_party_for
     )
     return Instance(
         lobby=_lobby(
             settings,
+            stores,
             decks=decks,
-            sessions=sessions,
-            key_drafts=key_drafts,
-            identity_writes=identity_writes,
             auth=lobby_auth,
             mirrors=mirrors,
             shell=shell,
         ),
-        talk=_talk(settings, decks, sessions, talk_auth, mirrors),
+        talk=_talk(settings, stores, decks, talk_auth, mirrors),
         poller=_poller(settings, decks),
-        session_sweep=_session_sweep(sessions, SystemClock()),
+        session_sweep=_session_sweep(stores.sessions, SystemClock()),
+        close=stores.close,
+    )
+
+
+def _stores(settings: Settings, migrations_directory: Path) -> Stores:
+    """The stores of the database the settings name: Postgres, else the SQLite file."""
+    # One box for both directions: what the store writes down is what the
+    # resolver opens at the pull, and neither picks its own key.
+    box = secret_box(settings.secret_key.get_secret_value())
+    identifiers = TokenIdentifierFactory()
+    if settings.postgres is None:
+        return _sqlite_stores(settings.database, box, identifiers)
+    return _postgres_stores(settings.postgres, box, identifiers, migrations_directory)
+
+
+def _sqlite_stores(
+    database: Path, box: SecretBox, identifiers: IdentifierFactory
+) -> Stores:
+    create_tables(database)
+    return Stores(
+        sources=SqliteSourceStore(database=database, identifiers=identifiers, box=box),
+        key_drafts=SqliteSourceKeyDrafts(
+            database=database, identifiers=identifiers, box=box
+        ),
+        deck_store=SqliteDeckStore(database=database),
+        source_runs=SqliteSourceRunStore(database=database),
+        credentials=SourceCredentials(database=database, box=box),
+        sessions=SqliteSessionRecordStore(database),
+        # One use case object serves both callers, so the hook and the poll share
+        # the one refresh that runs at a time.
+        identity_writes=SqliteIdentityWrites(
+            database, ProcessWriteLock(), LoggingAuditSink()
+        ),
+        instance_settings=SqliteInstanceSettingsStore(database),
+        person_preferences=SqlitePersonPreferencesStore(database),
+        readiness=always_ready,
+        close=_nothing_to_close,
+    )
+
+
+def _postgres_stores(
+    database: PostgresDatabase,
+    box: SecretBox,
+    identifiers: IdentifierFactory,
+    migrations_directory: Path,
+) -> Stores:
+    """The stores over the one engine this process opens; serve creates no table."""
+    history = migration_history(migrations_directory)
+    engine = create_database_engine(database.url, database.password)
+    refusal = serving_refusal(engine, history)
+    if refusal is not None:
+        engine.dispose()
+        raise cannot_start(refusal)
+    return Stores(
+        sources=PostgresSourceStore(engine=engine, identifiers=identifiers, box=box),
+        key_drafts=PostgresSourceKeyDrafts(
+            engine=engine, identifiers=identifiers, box=box
+        ),
+        deck_store=PostgresDeckStore(engine=engine),
+        source_runs=PostgresSourceRunStore(engine=engine),
+        credentials=PostgresSourceCredentials(engine=engine, box=box),
+        sessions=PostgresSessionRecordStore(engine),
+        identity_writes=PostgresIdentityWrites(engine, LoggingAuditSink()),
+        instance_settings=PostgresInstanceSettingsStore(engine),
+        person_preferences=PostgresPersonPreferencesStore(engine),
+        readiness=partial(database_is_ready, engine, history),
+        close=engine.dispose,
     )
 
 
@@ -211,22 +311,20 @@ def _poller(settings: Settings, decks: Decks) -> Schedule:
 
 def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
     settings: Settings,
+    stores: Stores,
     *,
     decks: Decks,
-    sessions: SqliteSessionRecordStore,
-    key_drafts: SqliteSourceKeyDrafts,
-    identity_writes: SqliteIdentityWrites,
     auth: InstalledAuth,
     mirrors: SourceMirrors,
     shell: LobbyShell,
 ) -> FastAPI:
     """The lobby over the use cases, the sign-in wiring and the agent's front."""
     return create_lobby(
-        sessions=sessions,
+        sessions=stores.sessions,
         decks=decks,
-        preferences=_preferences(settings),
+        preferences=_preferences(stores),
         auth=auth,
-        private=_lobby_private(settings, decks, sessions, key_drafts, identity_writes),
+        private=_lobby_private(settings, stores, decks),
         agent=agent_front(
             origin=settings.public_origin,
             issuer=settings.oidc_issuer,
@@ -238,6 +336,7 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
             texts=MirroredDeckTexts(mirrors=mirrors),
         ),
         shell=shell,
+        readiness=stores.readiness,
     )
 
 
@@ -273,19 +372,18 @@ def _source_timeout(settings: Settings) -> timedelta:
 
 def _decks(
     settings: Settings,
+    stores: Stores,
     *,
-    sources: SqliteSourceStore,
-    key_drafts: SqliteSourceKeyDrafts,
     mirrors: SourceMirrors,
     local_mount: FilesystemLocalMount,
 ) -> Decks:
     """The deck use cases over the adapters the instance chose."""
     build_bound = build_bound_of(settings)
     return Decks(
-        sources=sources,
-        key_drafts=key_drafts,
+        sources=stores.sources,
+        key_drafts=stores.key_drafts,
         folders=MirroredDeckFolders(mirrors=mirrors),
-        store=SqliteDeckStore(database=settings.database),
+        store=stores.deck_store,
         builder=SlidevBuilds(
             builds=settings.builds,
             identity=_identity_of_the_toolchain(settings),
@@ -293,7 +391,7 @@ def _decks(
             mirrors=mirrors,
             output_megabytes=settings.build_output_megabytes,
         ),
-        source_runs=SqliteSourceRunStore(database=settings.database),
+        source_runs=stores.source_runs,
         # The same bound a scheduled pull takes: Check connection asks the
         # same remote for the same one thing, just without writing it down.
         checker=MirroredConnectionChecker(
@@ -316,24 +414,27 @@ def _decks(
 
 def _talk(
     settings: Settings,
+    stores: Stores,
     decks: Decks,
-    sessions: SqliteSessionRecordStore,
     auth: InstalledAuth,
     mirrors: SourceMirrors,
 ) -> FastAPI:
     """The talk host, with the co-presenter it speaks to."""
     return create_talk(
-        sessions=sessions,
+        sessions=stores.sessions,
         decks=decks,
         auth=auth,
         lobby_origin=settings.public_origin,
-        copresenter=_copresenter_surface(settings, sessions, decks, auth, mirrors),
+        copresenter=_copresenter_surface(
+            settings, stores.sessions, decks, auth, mirrors
+        ),
+        readiness=stores.readiness,
     )
 
 
 def _copresenter_surface(
     settings: Settings,
-    sessions: SqliteSessionRecordStore,
+    sessions: SessionStore,
     decks: Decks,
     auth: InstalledAuth,
     mirrors: SourceMirrors,
@@ -365,13 +466,7 @@ def _copresenter_surface(
     )
 
 
-def _lobby_private(
-    settings: Settings,
-    decks: Decks,
-    sessions: SqliteSessionRecordStore,
-    key_drafts: SqliteSourceKeyDrafts,
-    identity_writes: SqliteIdentityWrites,
-) -> LobbyPrivate:
+def _lobby_private(settings: Settings, stores: Stores, decks: Decks) -> LobbyPrivate:
     """What only an admin of the lobby may reach: the people route.
 
     The people route exists only while a client is named to call it. Its
@@ -382,10 +477,10 @@ def _lobby_private(
         admin_people=AdminPeople(
             people=People(
                 decks=decks,
-                accounts=identity_writes,
-                sessions=sessions,
-                preferences=SqlitePersonPreferencesStore(settings.database),
-                key_drafts=key_drafts,
+                accounts=stores.identity_writes,
+                sessions=stores.sessions,
+                preferences=stores.person_preferences,
+                key_drafts=stores.key_drafts,
             ),
             admitted_clients=clients,
             clock=SystemClock().now,
@@ -398,7 +493,7 @@ def _lobby_private(
 def installed_auths(
     settings: Settings,
     shell: LobbyShell,
-    identity_writes: SqliteIdentityWrites,
+    identity_writes: IdentityWrites,
     relying_party_for: RelyingPartyFor = relying_party,
 ) -> tuple[InstalledAuth, InstalledAuth]:
     """The lobby's sign-in wiring and the talk host's, over one identity-writes owner.
@@ -435,14 +530,13 @@ def installed_auths(
     return lobby, talk
 
 
-def _preferences(settings: Settings) -> Preferences:
+def _preferences(stores: Stores) -> Preferences:
     return Preferences(
-        instance=SqliteInstanceSettingsStore(settings.database),
-        people=SqlitePersonPreferencesStore(settings.database),
+        instance=stores.instance_settings, people=stores.person_preferences
     )
 
 
-def _session_sweep(sessions: SqliteSessionRecordStore, clock: SystemClock) -> Schedule:
+def _session_sweep(sessions: SessionStore, clock: SystemClock) -> Schedule:
     """Delete expired sessions on a schedule, reading the clock on every run."""
     return Schedule(
         chore=lambda: sessions.delete_expired(clock.now()),
@@ -529,7 +623,11 @@ def web_auth_config_for(
     )
 
 
-def main(arguments: Sequence[str] | None = None) -> None:
+def main(
+    arguments: Sequence[str] | None = None,
+    relying_party_for: RelyingPartyFor = relying_party,
+    migrations_directory: Path = MIGRATIONS_DIRECTORY,
+) -> None:
     """Migrate the database when asked to, else serve the lobby.
 
     Both run on the configuration the environment carries.
@@ -541,12 +639,16 @@ def main(arguments: Sequence[str] | None = None) -> None:
         _migrate_the_database()
         return
     settings = load_settings()
-    asyncio.run(_serve(build_instance(settings), settings))
+    asyncio.run(
+        _serve(
+            build_instance(settings, relying_party_for, migrations_directory), settings
+        )
+    )
 
 
 def _migrate_the_database() -> None:
-    database = load_database_settings()
-    engine = create_database_engine(database.database_url, database.database_password)
+    database = load_database_settings().postgres
+    engine = create_database_engine(database.url, database.password)
     try:
         migrate(engine)
     finally:
@@ -609,5 +711,8 @@ async def _serve(instance: Instance, settings: Settings) -> None:
             log_level=logging.WARNING,
         ),
     )
-    async with instance.poller.polling(), instance.session_sweep.polling():
-        await server.serve()
+    try:
+        async with instance.poller.polling(), instance.session_sweep.polling():
+            await server.serve()
+    finally:
+        instance.close()

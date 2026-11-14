@@ -3,6 +3,7 @@
 import re
 import threading
 from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
@@ -36,6 +37,9 @@ _VOICE_SPEAKS_OTHER: Final = (
     "speech_voice_{language}: names a voice that does not speak it"
 )
 _ONE_HOSTNAME: Final = "talk_origin: is another hostname than public_origin"
+_DATABASE_NAMED_WHOLE: Final = (
+    "database_url: is set together with database_password_file, or neither is"
+)
 
 ENVIRONMENT_PREFIX: Final = "PRESENTATOR_"
 # What the web and the build worker both bound one build step by.
@@ -184,6 +188,25 @@ def _an_absolute_path(given: Path) -> Path:
     return given
 
 
+type PostgresUrl = Annotated[str, AfterValidator(_a_postgres_url_without_a_password)]
+type AbsolutePath = Annotated[Path, AfterValidator(_an_absolute_path)]
+
+
+@dataclass(frozen=True, slots=True)
+class PostgresDatabase:
+    """Where Postgres is and the password it is reached with."""
+
+    url: str
+    password: SecretStr
+
+
+def _postgres_database(url: str, password_file: Path) -> PostgresDatabase:
+    return PostgresDatabase(
+        url=url,
+        password=read_secret_file(password_file, setting="database_password_file"),
+    )
+
+
 class Settings(
     BaseSettings,
     env_prefix=ENVIRONMENT_PREFIX,
@@ -196,6 +219,11 @@ class Settings(
     # environment.
     secret_key_file: Annotated[Path, AfterValidator(_an_absolute_path)]
     database: Path = Path("presentator.sqlite3")
+    # Setting the URL is what makes Postgres the database: every store is then
+    # served from it and the SQLite file above is not opened. The password
+    # lives in a file, read once at start, so it never rides the environment.
+    database_url: PostgresUrl | None = None
+    database_password_file: AbsolutePath | None = None
     mirrors: Path = Path("mirrors")
     # The one directory a file-kind source's address may resolve under; the
     # image fixes it to the path a host directory is bound to, and a direct
@@ -270,6 +298,13 @@ class Settings(
             minimum_length=SECRET_LENGTH,
         )
 
+    @cached_property
+    def postgres(self) -> PostgresDatabase | None:
+        """The Postgres this instance serves from; nothing means the SQLite file."""
+        if self.database_url is None or self.database_password_file is None:
+            return None
+        return _postgres_database(self.database_url, self.database_password_file)
+
     def admitted_token_clients(self) -> frozenset[str]:
         """The client ids whose tokens `/api/` takes."""
         if not self.token_clients:
@@ -288,6 +323,12 @@ class Settings(
         for language, voice in self.speech_voices().items():
             if not voice_speaks(voice, language):
                 raise ValueError(_VOICE_SPEAKS_OTHER.format(language=language.value))
+        return self
+
+    @model_validator(mode="after")
+    def _database_is_named_whole(self) -> Self:
+        if (self.database_url is None) != (self.database_password_file is None):
+            raise ValueError(_DATABASE_NAMED_WHOLE)
         return self
 
     @model_validator(mode="after")
@@ -321,15 +362,13 @@ class DatabaseSettings(BaseSettings):
 
     # The URL names no password: the file is its one owner, and it is read once
     # at start, so it never rides the environment.
-    database_url: Annotated[str, AfterValidator(_a_postgres_url_without_a_password)]
-    database_password_file: Annotated[Path, AfterValidator(_an_absolute_path)]
+    database_url: PostgresUrl
+    database_password_file: AbsolutePath
 
     @cached_property
-    def database_password(self) -> SecretStr:
-        """The database's password, read once from its file."""
-        return read_secret_file(
-            self.database_password_file, setting="database_password_file"
-        )
+    def postgres(self) -> PostgresDatabase:
+        """The database, with its password read once from its file."""
+        return _postgres_database(self.database_url, self.database_password_file)
 
 
 def variable_of(field_name: str) -> str:
@@ -400,6 +439,7 @@ def load_settings() -> Settings:
     # Reading the key here refuses a bad key file at start, after the other
     # settings validated, and binds it for every later use.
     _ = settings.secret_key
+    _ = settings.postgres
     return settings
 
 
@@ -409,7 +449,7 @@ def load_database_settings() -> DatabaseSettings:
         settings = DatabaseSettings.model_validate({})
     except ValidationError as refused:
         raise cannot_start(_what_is_wrong(refused)) from None
-    _ = settings.database_password
+    _ = settings.postgres
     return settings
 
 

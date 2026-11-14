@@ -39,7 +39,12 @@ from presentator.api.auth import (
 )
 from presentator.api.copresenter import CoPresenterSurface, add_copresenter_routes
 from presentator.api.decks import add_talk_mount
-from presentator.api.health import HEALTH_IS_PUBLIC, add_health_route
+from presentator.api.health import (
+    HEALTH_IS_PUBLIC,
+    Readiness,
+    add_health_route,
+    always_ready,
+)
 from presentator.api.session_api import language_of
 from presentator.application.decks import Decks
 
@@ -87,13 +92,14 @@ def _install_talk_middleware(
     )
 
 
-def create_talk(
+def create_talk(  # noqa: PLR0913 - the composition root's one call names each owner
     *,
     sessions: SessionRecordStore,
     decks: Decks,
     auth: InstalledAuth,
     lobby_origin: str,
     copresenter: CoPresenterSurface | None = None,
+    readiness: Readiness = always_ready,
 ) -> FastAPI:
     """Build the talk host around the same stores and use cases as the lobby."""
 
@@ -112,7 +118,7 @@ def create_talk(
     talk = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(talk, auth.config)
     _install_talk_middleware(talk, auth, sessions)
-    add_health_route(talk)
+    add_health_route(talk, readiness)
     talk.add_api_route(_ROOT, to_the_lobby, methods=["GET"])
     install_sign_in_routes(
         talk,

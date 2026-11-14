@@ -58,7 +58,13 @@ from webauth.sign_in_routes import (
 from presentator.api.deck_list_api import deck_list_routes
 from presentator.api.deck_text_api import deck_text_routes
 from presentator.api.decks import add_deck_pages
-from presentator.api.health import HEALTH_IS_PUBLIC, HEALTH_PATH, add_health_route
+from presentator.api.health import (
+    HEALTH_IS_PUBLIC,
+    HEALTH_PATH,
+    Readiness,
+    add_health_route,
+    always_ready,
+)
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
 from presentator.api.lobby_shell import LobbyShell
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
@@ -453,6 +459,7 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     agent: AgentFront,
     own_decks: OwnDecks,
     shell: LobbyShell,
+    readiness: Readiness = always_ready,
 ) -> FastAPI:
     """Build the lobby around the use cases and the adapters the host chose.
 
@@ -467,7 +474,7 @@ def create_lobby(  # noqa: PLR0913 - the composition root's one call names each 
     lobby = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     install_web_auth_config(lobby, auth.config)
     _install_sign_in(lobby, surfaces)
-    add_health_route(lobby)
+    add_health_route(lobby, readiness)
     lobby.include_router(_session_routes(preferences, sessions, auth))
     lobby.include_router(deck_list_routes(decks=decks))
     lobby.include_router(deck_text_routes(own_decks=own_decks))

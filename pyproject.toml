@@ -14,7 +14,7 @@ dependencies = [
     "httpx2==2.16.0",
     "overnightworks-agents[backend,mcp-server] @ git+https://github.com/overnightworks/agents@v0.33.0",
     "overnightworks-speech-client @ git+https://github.com/overnightworks/speech@v0.11.0#subdirectory=packages/client",
-    "overnightworks-webauth @ git+https://github.com/overnightworks/webauth@v0.39.1",
+    "overnightworks-webauth @ git+https://github.com/overnightworks/webauth@v0.40.0",
     "psycopg[binary]==3.3.9",
     "pydantic-settings==2.16.2",
     "sqlalchemy==2.1.8",
@@ -197,6 +197,18 @@ source_modules = [
 ]
 forbidden_modules = ["presentator.adapters", "presentator.agent"]
 as_packages = true
+
+[[tool.importlinter.contracts]]
+id = "host-composes-postgres-stores"
+name = "The host names the Postgres engine, migrations and stores, not their locks or row readers"
+type = "forbidden"
+source_modules = ["presentator.host"]
+forbidden_modules = [
+    "presentator.adapters.postgres.locks",
+    "presentator.adapters.postgres.accounts",
+]
+# The stores the host composes use both; only naming them in the host is the violation.
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 id = "route-vocabulary"

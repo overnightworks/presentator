@@ -49,7 +49,7 @@ flowchart TD
 - **`src/gitmirror`** mirrors any remote read-only through `git` and does not import `presentator`.
   Only adapters import it, and `speech_client`, the pinned client that owns the speech wire.
 - **webauth** owns the sign-in routes, the gate, the origin check, the body caps and the cookies;
-  presentator's SQLite stores fill its ports.
+  presentator's stores fill its ports.
 - **`frontend/`** is a SvelteKit single-page shell built in the image; FastAPI serves it and no Node
   service runs.
 - **`slidev/`** owns every theme and addon a deck may name, among them the overlay addon
@@ -96,24 +96,23 @@ its restore test and the release; the [configuration](configuration.md) owns eac
 One process serves the lobby and the talk host and tells them apart by the `Host` header; any other
 host gets a 404, except the lobby's back-channel logout path ([sign-in](sign-in.md)), which ignores
 forwarded headers and trusts only the signed Logout Token. The platform's realm registers no logout
-URL for presentator, so its safety does not depend on the call. `GET /health` answers a fixed 200,
-and the port opens only after the database is migrated and the worker answers.
+URL for presentator, so its safety does not depend on the call. `GET /health` answers 200 while the
+Postgres database passes the revision rule (SQLite: always), else a fixed 503; the port opens once the worker answers.
 
 The worker's pod holds `lo` alone because the init container `remove-link` deletes its network link
 first; its container never restarts, so each life ends the pod and the StatefulSet makes a fresh one.
 
 ## 5. Crosscutting Concepts
 
-**Persistence.** SQLite holds the state; files hold mirrors and builds. `builds/` and `mirrors/` are
-caches the rows rebuild, so a restore of the database alone is enough. A column goes in two
-releases, the second dropping it in `create_tables` (`adapters/schema.py`), so a restorable older
-backup starts; the drop waits until a release with the first step has been live, since the
-platform's bump may skip releases. `adapters/postgres` owns the migrations of the Postgres that will
-replace SQLite; `presentator migrate` runs them under a lock, and they only add. Nothing reads it yet.
+**Persistence.** With `PRESENTATOR_DATABASE_URL` set, Postgres holds the state over one engine per process;
+unset, the SQLite file serves, creates its tables at start and is always ready. Files hold mirrors and
+builds, caches the rows rebuild. On Postgres `serve` creates no table; `presentator migrate` runs the
+additive migrations of `adapters/postgres` under a lock. No revision row or one behind this release is
+refused at start and unready; an unknown revision is a newer release's and is served.
 
 **Authentication and wire.** Keycloak groups admit people ([sign-in](sign-in.md)). There is no
-session cache: rate limits are single-process, and identity writes run in one transaction under a
-process lock. JSON lives under `/api/` as typed models. The one signed-out path is `GET
+session cache: rate limits are per process, and identity writes run in one transaction under a
+lock (advisory on Postgres). JSON lives under `/api/` as typed models. The one signed-out path is `GET
 /api/session`, and a store failure while resolving a reader is a 500, never a signed-out answer.
 Problems follow RFC 9457 with `tag:` URI types, as an https address breaks when its page moves.
 
@@ -152,8 +151,8 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
   pod.
 - The talk has its own origin: one cookie across both hosts would put deck code beside the
   credential it must not reach.
-- One process writes the database: a second would need a second write lock over the one SQLite file,
-  and the identity lock relies on one writer.
+- Processes share state only through Postgres: every write that needs one winner (sign-in, a draft
+  key, a source run, a deck mark) takes an advisory lock. The SQLite fallback relies on one process.
 - The speech origin must be plain `http` and the gateway's `http` or `https`, both at Service
   addresses inside the cluster. presentator sends its workload token and the person's token over
   that hop and relies on the deployment to keep it inside the cluster. The platform decides whom the
@@ -170,7 +169,7 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
 
 ## 7. Not chosen
 
-- Redis: one operator and no long job do not earn a second service. Reopens with a second writer.
+- Redis: rate limits and the ask lease stay per process. Reopens when a deployment runs several.
 - Cloudflare Access in front, or an own password login: Keycloak is the one door and owns accounts
   and groups. Reopens if Keycloak leaves the fleet.
 - A right in the cluster's API for the web pod: deck code runs only in the sealed worker. Reopens if
@@ -195,7 +194,7 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
   failing presenter-controls test shows a move.
 - A toolchain rollout can let one deck's build reach the old worker pod, its result recorded under
   the new identity until its next push; the update strategy must not be `OnDelete`.
-- An empty or older database is not guarded against: its retention pass deletes the runs only the
-  right database names.
+- SQLite does not guard against an empty or older file: its retention pass deletes the runs only
+  the right database names.
 - The claim root is born open: an entry the web made at the socket's name
   before the worker's first start is `stale-socket`.
