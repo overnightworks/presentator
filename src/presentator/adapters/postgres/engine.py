@@ -1,6 +1,7 @@
 """The one way this product opens a Postgres connection."""
 
 from contextlib import AbstractContextManager, nullcontext
+from datetime import UTC, datetime
 from typing import Final
 
 from pydantic import SecretStr
@@ -30,3 +31,8 @@ def connection_or_inside(
 ) -> AbstractContextManager[Connection]:
     """The open transaction's connection, or a fresh one that commits on its way out."""
     return engine.begin() if inside is None else nullcontext(inside)
+
+
+def in_utc(instant: datetime) -> datetime:
+    """The instant in UTC, whatever time zone the connection reads timestamps in."""
+    return instant.astimezone(UTC)

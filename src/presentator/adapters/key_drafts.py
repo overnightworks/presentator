@@ -153,6 +153,23 @@ class SqliteSourceKeyDrafts:
 def draft_of_row(row: DraftRow, *, box: SecretBox) -> DeployKeyDraft | None:
     """The draft a row holds, or nothing when the instance key cannot open it."""
     identifier, owner_id, public_key, encrypted_private_key, created_at = row
+    return opened_draft(
+        (
+            identifier,
+            owner_id,
+            public_key,
+            encrypted_private_key,
+            datetime.fromisoformat(created_at),
+        ),
+        box=box,
+    )
+
+
+def opened_draft(
+    stored: tuple[str, str, str, bytes, datetime], *, box: SecretBox
+) -> DeployKeyDraft | None:
+    """The draft whose columns these are, or nothing when the key cannot open it."""
+    identifier, owner_id, public_key, encrypted_private_key, created_at = stored
     private_key = box.decrypt(encrypted_private_key)
     if private_key is None:
         return None
@@ -161,5 +178,5 @@ def draft_of_row(row: DraftRow, *, box: SecretBox) -> DeployKeyDraft | None:
         owner_id=owner_id,
         public_key=public_key,
         private_key=private_key,
-        created_at=datetime.fromisoformat(created_at),
+        created_at=created_at,
     )

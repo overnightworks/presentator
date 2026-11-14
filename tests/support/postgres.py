@@ -84,3 +84,13 @@ def database_environment(database_url: str, directory: Path) -> Mapping[str, str
         "PRESENTATOR_DATABASE_URL": database_url,
         "PRESENTATOR_DATABASE_PASSWORD_FILE": str(password_file),
     }
+
+
+def engine_from_environment() -> Engine:
+    """In a child: the engine on the database `database_environment` pointed it at."""
+    password = Path(os.environ["PRESENTATOR_DATABASE_PASSWORD_FILE"]).read_text(
+        encoding="utf-8"
+    )
+    return create_database_engine(
+        os.environ["PRESENTATOR_DATABASE_URL"], SecretStr(password)
+    )

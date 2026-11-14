@@ -22,3 +22,8 @@ reason = "LockClass.SIGN_IN, SIGN_IN_LOCK and hold_until_transaction_ends are re
 path = "src/presentator/adapters/postgres/engine.py"
 item = "#1160"
 reason = "connection_or_inside is reached only by the Postgres identity stores, which wait for the switch slice that composes them."
+
+[[code]]
+path = "src/presentator/adapters/postgres/key_drafts.py"
+item = "#1160"
+reason = "The Postgres deploy-key drafts wait for the switch slice that composes them."

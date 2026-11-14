@@ -1,15 +1,14 @@
 """Two processes signing the same subjects in at once leave one account each."""
 
-import sys
 from pathlib import Path
 
 from sqlalchemy import text
 
-from tests.presentator.adapters.support.sign_in_process import READY, SUBJECTS
+from tests.presentator.adapters.support.sign_in_process import SUBJECTS
 from tests.support.postgres import database_environment, engine_on
-from tests.support.two_processes import two_processes
+from tests.support.two_processes import release_together, two_modules
 
-_CHILD = Path(__file__).parent / "support" / "sign_in_process.py"
+_CHILD = "tests.presentator.adapters.support.sign_in_process"
 
 
 def test_two_processes_signing_the_same_subjects_in_at_once_leave_one_account_each(
@@ -17,14 +16,8 @@ def test_two_processes_signing_the_same_subjects_in_at_once_leave_one_account_ea
 ) -> None:
     environment = database_environment(database_url, tmp_path)
 
-    with two_processes([sys.executable, str(_CHILD)], environment) as processes:
-        for each in (processes.first, processes.second):
-            assert each.stdout is not None
-            assert each.stdout.readline().strip() == READY
-        for each in (processes.first, processes.second):
-            assert each.stdin is not None
-            each.stdin.write("go\n")
-            each.stdin.flush()
+    with two_modules(_CHILD, [], environment) as processes:
+        release_together(processes)
         finished = processes.finish()
 
     engine = engine_on(database_url)
