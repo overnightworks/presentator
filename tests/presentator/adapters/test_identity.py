@@ -516,6 +516,16 @@ def test_a_logout_on_another_store_before_a_replacement_leaves_the_row_gone(
     assert occurrences_in_the_file(database, "rt-2") == 0
 
 
+def test_replacing_the_token_of_a_never_created_session_creates_no_row(
+    database: Path, sessions: SqliteSessionRecordStore
+) -> None:
+    answer = sessions.replace_refresh_token("never-existed", refresh_token=a_token())
+
+    assert answer is False
+    with closing(sqlite3.connect(database)) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM sessions").fetchone() == (0,)
+
+
 def end_by_delete(store: SqliteSessionRecordStore, session_id: str) -> None:
     store.delete(session_id)
 
