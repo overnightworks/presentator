@@ -17,7 +17,17 @@ def test_an_empty_database_gets_every_table(unmigrated_database_url: str) -> Non
     finally:
         engine.dispose()
 
-    assert {"users", "sessions", "decks", "sources", "source_runs"} <= tables
+    assert tables == {
+        "alembic_version",
+        "users",
+        "sessions",
+        "instance_settings",
+        "person_preferences",
+        "sources",
+        "source_key_drafts",
+        "decks",
+        "source_runs",
+    }
 
 
 def test_a_second_migration_changes_nothing(unmigrated_database_url: str) -> None:

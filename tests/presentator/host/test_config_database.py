@@ -32,13 +32,16 @@ def test_the_url_and_the_password_file_give_the_settings() -> None:
     assert settings.database_password.get_secret_value() == A_PASSWORD
 
 
-@pytest.mark.parametrize("variable", [_URL, _PASSWORD_FILE])
+@pytest.mark.parametrize(
+    ("variable", "field"),
+    [(_URL, "database_url"), (_PASSWORD_FILE, "database_password_file")],
+)
 def test_a_missing_value_refuses_naming_the_field(
-    database_variables: pytest.MonkeyPatch, variable: str
+    database_variables: pytest.MonkeyPatch, variable: str, field: str
 ) -> None:
     database_variables.delenv(variable)
 
-    with pytest.raises(ConfigurationError, match=re.escape(variable.lower()[13:])):
+    with pytest.raises(ConfigurationError, match=re.escape(field)):
         load_database_settings()
 
 
