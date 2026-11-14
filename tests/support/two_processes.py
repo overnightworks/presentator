@@ -1,10 +1,10 @@
-"""Two real `presentator` processes started together through the console entry point."""
+"""Two real processes of one command, started together."""
 
 import os
 import subprocess
 import sys
 from collections.abc import Generator, Mapping, Sequence
-from contextlib import ExitStack, contextmanager
+from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,11 +32,18 @@ class TwoProcesses:
         return _finished(self.first), _finished(self.second)
 
 
-@contextmanager
 def two_presentators(
     arguments: Sequence[str], environment: Mapping[str, str]
+) -> AbstractContextManager[TwoProcesses]:
+    """Start two processes of `presentator <arguments>` with only `environment`."""
+    return two_processes([str(_CONSOLE_ENTRY_POINT), *arguments], environment)
+
+
+@contextmanager
+def two_processes(
+    command: Sequence[str], environment: Mapping[str, str]
 ) -> Generator[TwoProcesses]:
-    """Start two processes of `presentator <arguments>` with only `environment`.
+    """Start two processes of `command` with only `environment`; each can be written to.
 
     None outlives the block: whatever still runs is killed and reaped.
     """
@@ -44,8 +51,9 @@ def two_presentators(
         started = [
             processes.enter_context(
                 subprocess.Popen(
-                    [str(_CONSOLE_ENTRY_POINT), *arguments],
+                    command,
                     env={"PATH": os.environ["PATH"], **environment},
+                    stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
