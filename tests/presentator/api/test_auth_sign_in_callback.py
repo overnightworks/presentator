@@ -525,8 +525,10 @@ def test_an_audit_record_reaches_stderr_after_the_hosts_and_uvicorns_logging_set
     monkeypatch.setattr(root, "level", root.level)
     monkeypatch.setattr(main, "load_settings", a_settings)
 
-    def an_instance_without_a_server(settings: object) -> SimpleNamespace:
-        del settings
+    def an_instance_without_a_server(
+        settings: object, relying_party_for: object, migrations_directory: object
+    ) -> SimpleNamespace:
+        del settings, relying_party_for, migrations_directory
         return SimpleNamespace(lobby=FastAPI())
 
     monkeypatch.setattr(main, "build_instance", an_instance_without_a_server)
