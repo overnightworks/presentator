@@ -13,6 +13,7 @@ from webauth.ports import (
     AccountEvent,
     AccountEventKind,
     AccountKind,
+    AuditSink,
     UsernameTakenError,
 )
 
@@ -42,8 +43,13 @@ _AN_EVENT = AccountEvent(
 _TRY_SIGN_IN_LOCK = text("SELECT pg_try_advisory_xact_lock(:lock_class, :instance)")
 
 
-class _Refused(Exception):
+class _RefusedError(Exception):
     pass
+
+
+def _postgres_writes(stores: _Stores, sink: AuditSink) -> PostgresIdentityWrites:
+    assert isinstance(stores.writes, PostgresIdentityWrites)
+    return PostgresIdentityWrites(stores.writes.engine, sink)
 
 
 class _RecordingSink:
@@ -276,7 +282,7 @@ def test_a_postgres_entry_still_holds_the_sign_in_lock_while_its_events_reach_th
 ) -> None:
     other_engine = engine_on(database_url)
     sink = _LockProbingSink(other_engine)
-    writes = PostgresIdentityWrites(postgres_stores.writes.engine, sink)
+    writes = _postgres_writes(postgres_stores, sink)
     try:
         with writes() as entry:
             entry.audit.account_event(_AN_EVENT)
@@ -287,13 +293,8 @@ def test_a_postgres_entry_still_holds_the_sign_in_lock_while_its_events_reach_th
     assert sink.lock_free_when_delivered == [False]
 
 
-def test_a_postgres_entry_that_raises_rolls_back_drops_its_events_and_frees_the_lock(
-    postgres_stores: _Stores, database_url: str
-) -> None:
-    sink = _RecordingSink()
-    writes = PostgresIdentityWrites(postgres_stores.writes.engine, sink)
-
-    with pytest.raises(_Refused), writes() as entry:
+def _enter_and_raise(writes: PostgresIdentityWrites) -> None:
+    with writes() as entry:
         entry.accounts.create_for_subject(
             "rolled-back", "rolled-back", Role.USER.value, AccountKind.PERSON
         )
@@ -307,7 +308,17 @@ def test_a_postgres_entry_that_raises_rolls_back_drops_its_events_and_frees_the_
             account_language=None,
         )
         entry.audit.account_event(_AN_EVENT)
-        raise _Refused
+        raise _RefusedError
+
+
+def test_a_postgres_entry_that_raises_rolls_back_drops_its_events_and_frees_the_lock(
+    postgres_stores: _Stores, database_url: str
+) -> None:
+    sink = _RecordingSink()
+    writes = _postgres_writes(postgres_stores, sink)
+
+    with pytest.raises(_RefusedError):
+        _enter_and_raise(writes)
 
     assert writes.get("rolled-back") is None
     assert postgres_stores.sessions.load("rolled-back-session") is None
