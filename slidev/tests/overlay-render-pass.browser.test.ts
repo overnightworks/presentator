@@ -71,9 +71,10 @@ function inspectRoot(selector: string): Inspection {
   return { language: root.getAttribute('lang'), text: words.join('\n'), overflowing: [...overflowing] }
 }
 
-async function expectRendersWell(page: Page, selector: string, language: Language) {
+async function expectRendersWell(page: Page, selector: string, language: Language, expectedWord: string) {
   const { language: rootLanguage, text, overflowing } = await page.evaluate(inspectRoot, selector)
   expect(rootLanguage, 'the root names the language of its words').toBe(language)
+  expect(text, `the root shows its own language's word: ${expectedWord}`).toContain(expectedWord)
   for (const key of Object.keys(wordsOf[language])) {
     expect(text, `a catalog key shows: ${key}`).not.toContain(key)
   }
@@ -83,14 +84,14 @@ async function expectRendersWell(page: Page, selector: string, language: Languag
 
 // The controls follow the account's language; the deck's is the other one,
 // so that a room notice or a control in the wrong language shows.
-async function inControls(language: Language, width: number, show: (page: Page) => Promise<void>) {
+async function inControls(language: Language, width: number, expectedWord: string, show: (page: Page) => Promise<void>) {
   state.interfaceLanguage = language
   state.whoLanguage = otherLanguage(language)
   const { browser, page } = await openPresenter(width)
   try {
     await page.locator(`${CONTROLS_ROOT}[aria-label]`).waitFor({ state: 'visible' })
     await show(page)
-    await expectRendersWell(page, CONTROLS_ROOT, language)
+    await expectRendersWell(page, CONTROLS_ROOT, language, expectedWord)
   } finally {
     await browser.close()
   }
@@ -101,11 +102,11 @@ const switchOn = (page: Page, language: Language) =>
 
 describe('the overlay render pass', () => {
   it.each(CASES)('shows the idle controls in $language at $width px without cut-off or unworded text', async ({ language, width }) => {
-    await inControls(language, width, async () => undefined)
+    await inControls(language, width, wordsOf[language]['controls.presenterOff'], async () => undefined)
   })
 
   it.each(CASES)('shows the listening panel in $language at $width px without cut-off or unworded text', async ({ language, width }) => {
-    await inControls(language, width, async (page) => {
+    await inControls(language, width, wordsOf[language]['controls.presenterOn'], async (page) => {
       await switchOn(page, language)
       await page.locator(`${CONTROLS_ROOT} .panel .heard`).waitFor({ state: 'visible' })
     })
@@ -114,7 +115,7 @@ describe('the overlay render pass', () => {
   it.each(CASES)('shows a fault with a number in $language at $width px without cut-off or unworded text', async ({ language, width }) => {
     state.answerMode = 'error-event'
     state.errorEvent = { reason: 'busy', retry_after_s: 7 }
-    await inControls(language, width, async (page) => {
+    await inControls(language, width, wordsOf[language]['controls.busyIn']({ seconds: '7' }), async (page) => {
       await switchOn(page, language)
       const fault = page.locator(`${CONTROLS_ROOT} .fault`)
       await fault.waitFor({ state: 'visible' })
@@ -142,7 +143,7 @@ describe('the overlay render pass', () => {
         await switchOn(presenter, otherLanguage(language))
         const window = projected ? projector : presenter
         await window.locator(`[data-room-notice="${notice}"]`).waitFor({ state: 'visible', timeout: 15_000 })
-        await expectRendersWell(window, NOTICE_ROOT, language)
+        await expectRendersWell(window, NOTICE_ROOT, language, wordsOf[language][`roomNotice.${notice}`])
       } finally {
         await browser.close()
       }
