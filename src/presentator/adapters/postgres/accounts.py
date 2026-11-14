@@ -71,12 +71,11 @@ class PostgresSubjectUserStore:
                         },
                     )
             except IntegrityError as refused:
-                if not isinstance(refused.orig, UniqueViolation):
-                    raise
-                if read_account(connection, subject) is not None:
-                    raise
-                message = "the username is held by another account"
-                raise UsernameTakenError(message) from None
+                is_unique_violation = isinstance(refused.orig, UniqueViolation)
+                if is_unique_violation and read_account(connection, subject) is None:
+                    message = "the username is held by another account"
+                    raise UsernameTakenError(message) from None
+                raise
         return StoredAccount(id=subject, username=username, role=Role(role), kind=kind)
 
     def set_role(self, user_id: str, role: str) -> StoredAccount:
