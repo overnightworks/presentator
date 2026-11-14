@@ -1,0 +1,8 @@
+claim_id = "d635c6c00678420a862e99000acfe8e0"
+agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
+role = "builder"
+base = "aa4ececd403ebf06d03fed637319a3c4339d20fa"
+branch = "claude/issue-1161-postgres-baseline-migrate"
+scope = [".github/workflows/ci.yml", "docs/ARCHITECTURE.md", "docs/configuration.md", "pyproject.toml", "src/presentator/adapters/postgres", "src/presentator/host/config.py", "src/presentator/host/main.py", "tests/presentator/adapters", "tests/presentator/host", "tests/support/two_processes.py", "tests/support/vulture_allowlist.py", "uv.lock"]
+opened_commit = "e2017ccb7a15bbb5b61129fa4ae24426d432acac"
+whole_reason = "One slice: a new database owner is only proven with its dependency, its command, its CI service and its documentation together."
