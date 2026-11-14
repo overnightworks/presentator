@@ -1,0 +1,14 @@
+[[code]]
+path = "src/presentator/adapters/postgres/accounts.py"
+item = "#1160"
+reason = "The Postgres accounts store waits for the switch slice that composes it."
+
+[[code]]
+path = "src/presentator/adapters/postgres/sessions.py"
+item = "#1160"
+reason = "The Postgres session store waits for the switch slice that composes it."
+
+[[code]]
+path = "src/presentator/adapters/postgres/sign_in.py"
+item = "#1160"
+reason = "The Postgres sign-in transaction waits for the switch slice that composes it."

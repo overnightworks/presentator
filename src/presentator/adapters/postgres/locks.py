@@ -12,13 +12,19 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import Final
 
+from sqlalchemy import Connection, text
+
 _ONLY_ONE = 0
+_TAKE_UNTIL_TRANSACTION_ENDS: Final = text(
+    "SELECT pg_advisory_xact_lock(:lock_class, :instance)"
+)
 
 
 class LockClass(IntEnum):
     """One id per kind of lock, 32-bit."""
 
     MIGRATION = 1
+    SIGN_IN = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,3 +37,15 @@ class AdvisoryLock:
 
 # Held by one `presentator migrate` at a time.
 MIGRATION_LOCK: Final = AdvisoryLock(LockClass.MIGRATION, _ONLY_ONE)
+# Held by one sign-in entry or account deletion at a time, across processes.
+SIGN_IN_LOCK: Final = AdvisoryLock(LockClass.SIGN_IN, _ONLY_ONE)
+
+
+def parameters(lock: AdvisoryLock) -> dict[str, int]:
+    """The two keys of `lock`, named as the lock statements take them."""
+    return {"lock_class": int(lock.lock_class), "instance": lock.instance}
+
+
+def hold_until_transaction_ends(connection: Connection, lock: AdvisoryLock) -> None:
+    """Wait for `lock`, then hold it until the transaction commits or rolls back."""
+    connection.execute(_TAKE_UNTIL_TRANSACTION_ENDS, parameters(lock))
