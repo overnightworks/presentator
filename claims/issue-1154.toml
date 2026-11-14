@@ -1,0 +1,7 @@
+claim_id = "0afce4a456454b769b91c0b4fe2b8f41"
+agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
+role = "builder"
+base = "de10bc2946786962604cf211603273fedd6a9336"
+branch = "claude/issue-1154-uv-sync-layer-repeats"
+scope = ["Dockerfile"]
+opened_commit = "2d1d03964e7144e49b1fbe7bc73385b776009fcd"
