@@ -1,0 +1,8 @@
+claim_id = "1d837449e7ca4dba80566b28767080b7"
+agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
+role = "builder"
+base = "287bc11ee7550051e27c17502a284cf4f00878d6"
+branch = "claude/issue-1167-s3a-sources-key-drafts-and-runs-on-postg"
+scope = [".aco/ahead-of-caller.toml", "src/presentator/adapters/decks.py", "src/presentator/adapters/key_drafts.py", "src/presentator/adapters/postgres", "tests/conftest.py", "tests/presentator/adapters", "tests/support/postgres.py", "tests/support/two_processes.py", "tests/support/vulture_allowlist.py"]
+opened_commit = "17911e47b845aada2f92109b3970538b34e79a5c"
+whole_reason = "One slice: sources, their drafts and their runs share foreign keys and one fixture, so their Postgres adapters are proven together."
