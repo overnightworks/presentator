@@ -1,8 +1,0 @@
-claim_id = "0c20d88991134dd882c3f9950e214660"
-agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
-role = "builder"
-base = "1e15b0894c3fa0c16e1747e009acf4c593d4c000"
-branch = "claude/issue-1168-s3b-decks-settings-prefs-on-postgres"
-scope = [".aco/ahead-of-caller.toml", "pyproject.toml", "src/presentator/adapters/deck_store.py", "src/presentator/adapters/postgres", "src/presentator/adapters/preferences.py", "src/presentator/application/people.py", "tests/conftest.py", "tests/presentator/adapters", "tests/presentator/application", "tests/support/postgres.py", "tests/support/two_processes.py", "tests/support/vulture_allowlist.py", "uv.lock"]
-opened_commit = "51997d56eca337f89a24fcfd399dc7c14f3e9fec"
-whole_reason = "One slice: decks, settings and preferences close the store set, and erasure can only be proven once every store has its Postgres adapter; the folded webauth pin move touches the same store-contract tests."
