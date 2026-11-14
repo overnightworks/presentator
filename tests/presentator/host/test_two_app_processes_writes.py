@@ -11,12 +11,13 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
-from threading import Barrier, Event, Thread
+from threading import Barrier, Event
 
 import httpx2
 import pytest
 from pydantic import JsonValue
 from sqlalchemy import Engine, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from presentator.application.decks import SourceRefusal
 from presentator.contracts.decks import RECENT_SOURCE_RUNS, SourceRunOutcome
@@ -171,13 +172,13 @@ def _watching(engine: Engine, statement: str) -> Generator[list[Observation]]:
                 if finished:
                     return
 
-    reader = Thread(target=read)
-    reader.start()
-    try:
-        yield seen
-    finally:
-        done.set()
-        reader.join()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        reading = pool.submit(read)
+        try:
+            yield seen
+        finally:
+            done.set()
+        reading.result()
 
 
 def _admin(app: App) -> Browser:
@@ -231,6 +232,14 @@ def _one_created_one_refused(
     refused = [each.json()["reason"] for each in answers if each.is_client_error]
     assert len(refused) == 1
     assert refused[0] in refused_as
+
+
+def test_a_failed_read_while_watching_fails_the_test(engine: Engine) -> None:
+    with (
+        pytest.raises(SQLAlchemyError),
+        _watching(engine, "SELECT 1 FROM a_table_that_does_not_exist"),
+    ):
+        pass
 
 
 @pytest.mark.usefixtures("environment")
