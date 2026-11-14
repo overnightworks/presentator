@@ -1,8 +1,0 @@
-claim_id = "73d48bfdbd03431eb7c2aede03ff1a2b"
-agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
-role = "builder"
-base = "37f094c55ef699b00c106c9bccd07e2e7b70ac9f"
-branch = "claude/issue-1157-overlay-render-pass"
-scope = ["quality/config.toml", "slidev/components/CoPresenter.vue", "slidev/controls-words.js", "slidev/global-top.vue", "slidev/room-notice.js", "slidev/tests/controls-words.test.ts", "slidev/tests/overlay-render-pass.browser.test.ts", "slidev/tests/presenter-overlay-harness.ts"]
-opened_commit = "4647470b9633c8c0fe2474c1d0451fbaa8d138c0"
-whole_reason = "One render pass and the language attribute it asserts, on the overlay's two roots, with the controls' language exposed where global-top hands it to the controls."
