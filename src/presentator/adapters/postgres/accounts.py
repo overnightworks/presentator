@@ -1,6 +1,5 @@
 """The accounts table on Postgres, behind webauth's `SubjectUserStore`."""
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
 
@@ -9,7 +8,7 @@ from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import IntegrityError
 from webauth.ports import AccountKind, UsernameTakenError
 
-from presentator.adapters.identity import StoredAccount
+from presentator.adapters.identity import StoredAccount, stored_account
 from presentator.adapters.postgres.engine import connection_or_inside
 from presentator.contracts.models import Role
 
@@ -28,14 +27,6 @@ _UPDATE_KIND: Final = text(
     "UPDATE users SET kind = :kind WHERE id = :user_id"
     " RETURNING id, username, role, kind"
 )
-
-
-def stored_account(row: Sequence[str]) -> StoredAccount:
-    """The record of one `users` row read as id, username, role, kind."""
-    user_id, username, role, kind = row
-    return StoredAccount(
-        id=user_id, username=username, role=Role(role), kind=AccountKind(kind)
-    )
 
 
 def read_account(connection: Connection, user_id: str) -> StoredAccount | None:
@@ -80,10 +71,11 @@ class PostgresSubjectUserStore:
                         },
                     )
             except IntegrityError as refused:
-                if (
+                username_is_held_by_another = (
                     isinstance(refused.orig, UniqueViolation)
                     and read_account(connection, subject) is None
-                ):
+                )
+                if username_is_held_by_another:
                     message = "the username is held by another account"
                     raise UsernameTakenError(message) from None
                 raise

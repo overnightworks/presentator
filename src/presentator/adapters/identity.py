@@ -120,7 +120,7 @@ class SqliteSubjectUserStore:
         """The account whose id is `user_id` character for character."""
         with self.cursor() as cursor:
             row = cursor.execute(_SELECT_ACCOUNT, (user_id,)).fetchone()
-        return None if row is None else _account(row)
+        return None if row is None else stored_account(row)
 
     def create_for_subject(
         self, subject: str, username: str, role: str, kind: AccountKind
@@ -147,7 +147,7 @@ class SqliteSubjectUserStore:
                 message = "no account to change the role of"
                 raise LookupError(message)
             row = cursor.execute(_SELECT_ACCOUNT, (user_id,)).fetchone()
-        return _account(row)
+        return stored_account(row)
 
     def set_kind(self, user_id: str, kind: AccountKind) -> StoredAccount:
         """Change the kind of one existing account; no such account raises."""
@@ -159,7 +159,7 @@ class SqliteSubjectUserStore:
                 message = "no account to change the kind of"
                 raise LookupError(message)
             row = cursor.execute(_SELECT_ACCOUNT, (user_id,)).fetchone()
-        return _account(row)
+        return stored_account(row)
 
 
 def _is_a_taken_username(refused: sqlite3.IntegrityError) -> bool:
@@ -247,7 +247,7 @@ class SqliteSessionRecordStore:
                 raise ValueError(message) from refused
         return StoredSession(
             id=session_id,
-            user=_account(account),
+            user=stored_account(account),
             created_at=now,
             expires_at=expires_at,
             refresh_token=refresh_token,
@@ -280,7 +280,7 @@ class SqliteSessionRecordStore:
         ) = row
         return StoredSession(
             id=stored_id,
-            user=_account(account),
+            user=stored_account(account),
             created_at=datetime.fromisoformat(created_at),
             expires_at=datetime.fromisoformat(expires_at),
             refresh_token=None if refresh_token is None else SecretStr(refresh_token),
@@ -407,16 +407,20 @@ class SqliteIdentityWrites:
 
     def get(self, user_id: str) -> User | None:
         """The account of that id; a read needs no entry."""
-        account = SqliteSubjectUserStore(self.database).get(user_id)
-        if account is None:
-            return None
-        return User(id=account.id, username=account.username, role=account.role)
+        return lobby_user(SqliteSubjectUserStore(self.database).get(user_id))
 
     def delete_account(self, user_id: str) -> None:
         """Delete the account and its sessions together."""
         with self.lock.hold(), immediate_transaction(self.database) as cursor:
             cursor.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
             cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+
+def lobby_user(account: StoredAccount | None) -> User | None:
+    """The lobby's view of an account, which has no kind."""
+    if account is None:
+        return None
+    return User(id=account.id, username=account.username, role=account.role)
 
 
 def _stored(instant: datetime) -> str:
@@ -432,7 +436,8 @@ class TokenIdentifierFactory:
         return secrets.token_urlsafe(_IDENTIFIER_BYTES)
 
 
-def _account(row: Sequence[str]) -> StoredAccount:
+def stored_account(row: Sequence[str]) -> StoredAccount:
+    """The record of one `users` row read as id, username, role, kind."""
     user_id, username, role, kind = row
     return StoredAccount(
         id=user_id, username=username, role=Role(role), kind=AccountKind(kind)

@@ -8,8 +8,8 @@ from pydantic import SecretStr
 from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import IntegrityError
 
-from presentator.adapters.identity import StoredSession
-from presentator.adapters.postgres.accounts import read_account, stored_account
+from presentator.adapters.identity import StoredSession, stored_account
+from presentator.adapters.postgres.accounts import read_account
 from presentator.adapters.postgres.engine import connection_or_inside
 from presentator.contracts.people import SessionExport, SessionSecretsHeld
 

@@ -9,6 +9,7 @@ from sqlalchemy import Engine, text
 from webauth.ports import AuditSink, SignInStores
 
 from presentator.adapters.audit import BufferedAudit
+from presentator.adapters.identity import lobby_user
 from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
 from presentator.adapters.postgres.locks import (
     SIGN_IN_LOCK,
@@ -56,10 +57,7 @@ class PostgresIdentityWrites:
 
     def get(self, user_id: str) -> User | None:
         """The account of that id; a read needs no entry."""
-        account = PostgresSubjectUserStore(self.engine).get(user_id)
-        if account is None:
-            return None
-        return User(id=account.id, username=account.username, role=account.role)
+        return lobby_user(PostgresSubjectUserStore(self.engine).get(user_id))
 
     def delete_account(self, user_id: str) -> None:
         """Delete the account and its sessions together."""
