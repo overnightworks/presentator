@@ -16,7 +16,7 @@ reason = "The Postgres sign-in transaction waits for the switch slice that compo
 [[code]]
 path = "src/presentator/adapters/postgres/locks.py"
 item = "#1160"
-reason = "The sign-in, deploy-key draft and source run lock classes, SIGN_IN_LOCK, lock_of and hold_until_transaction_ends are reached only by the Postgres stores, which wait for the switch slice that composes them."
+reason = "The sign-in, deploy-key draft, source run and deck mark lock classes, SIGN_IN_LOCK, lock_of and hold_until_transaction_ends are reached only by the Postgres stores, which wait for the switch slice that composes them."
 
 [[code]]
 path = "src/presentator/adapters/postgres/engine.py"
@@ -37,3 +37,13 @@ reason = "The Postgres source store waits for the switch slice that composes it.
 path = "src/presentator/adapters/postgres/source_runs.py"
 item = "#1160"
 reason = "The Postgres source run store waits for the switch slice that composes it."
+
+[[code]]
+path = "src/presentator/adapters/postgres/deck_store.py"
+item = "#1160"
+reason = "The Postgres deck store waits for the switch slice that composes it."
+
+[[code]]
+path = "src/presentator/adapters/postgres/preferences.py"
+item = "#1160"
+reason = "The Postgres settings and preference stores wait for the switch slice that composes them."

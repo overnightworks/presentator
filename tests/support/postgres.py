@@ -8,15 +8,17 @@ import os
 import uuid
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, TypeAdapter
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL, make_url
 
 from presentator.adapters.postgres.engine import create_database_engine
 from presentator.adapters.postgres.migrate import migrate
+from tests.support.two_processes import Finished, release_together, two_modules
 
 SERVER_VARIABLE = "PRESENTATOR_TEST_POSTGRES_URL"
 _NO_SERVER = (
@@ -94,3 +96,41 @@ def engine_from_environment() -> Engine:
     return create_database_engine(
         os.environ["PRESENTATOR_DATABASE_URL"], SecretStr(password)
     )
+
+
+@dataclass(frozen=True, slots=True)
+class ChildModule:
+    """A module whose children run beside the test against its throwaway database."""
+
+    name: str
+
+    def both_report[Reported](
+        self,
+        database_url: str,
+        directory: Path,
+        shape: TypeAdapter[Reported],
+        *,
+        first: str,
+        second: str | None = None,
+    ) -> tuple[Reported, Reported]:
+        """What two children at once reported, both exiting 0.
+
+        Each child reads the database from its environment, says it is ready,
+        and prints its result as the last line of its output. The first does
+        `first`; the second does `second`, or `first` too.
+        """
+        with two_modules(
+            self.name,
+            [first],
+            database_environment(database_url, directory),
+            second_arguments=None if second is None else [second],
+        ) as processes:
+            release_together(processes)
+            finished = processes.finish()
+        assert [each.exit_code for each in finished] == [0, 0], finished
+        one, other = (_reported(each, shape) for each in finished)
+        return one, other
+
+
+def _reported[Reported](finished: Finished, shape: TypeAdapter[Reported]) -> Reported:
+    return shape.validate_json(finished.output.strip().splitlines()[-1])

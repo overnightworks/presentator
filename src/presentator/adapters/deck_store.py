@@ -1,6 +1,7 @@
 """The deck table: a deck's row, its build and its last attempt."""
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -59,7 +60,8 @@ SET attempt_commit = ?, attempt_started_at = ?,
     attempt_allowed_entries = ?, attempt_toolchain = ?
 WHERE slug = ?
 """
-_ALL_DECKS: Final = """
+# The select every adapter reads a deck row by, in the order `DeckRow` holds.
+DECK_SELECT: Final = """
 SELECT slug, title, changed_at, owner_id, source_id, commit_sha,
        active_build, pdf_export, built_commit, built_at,
        attempt_commit, attempt_started_at, attempt_outcome, attempt_failure,
@@ -67,22 +69,13 @@ SELECT slug, title, changed_at, owner_id, source_id, commit_sha,
        attempt_written_megabytes, attempt_allowed_megabytes,
        attempt_allowed_entries, built_toolchain, attempt_toolchain
 FROM decks
-WHERE removed_at IS NULL
 """
+_ALL_DECKS: Final = f"{DECK_SELECT} WHERE removed_at IS NULL"
 _ONE_DECK: Final = f"{_ALL_DECKS} AND slug = ?"
 # Every row this source ever carried, marked removed or not: a source going
 # away takes the decks it stopped carrying with it too, not only the ones
 # still listed.
-_DECKS_OF_SOURCE: Final = """
-SELECT slug, title, changed_at, owner_id, source_id, commit_sha,
-       active_build, pdf_export, built_commit, built_at,
-       attempt_commit, attempt_started_at, attempt_outcome, attempt_failure,
-       attempt_reason,
-       attempt_written_megabytes, attempt_allowed_megabytes,
-       attempt_allowed_entries, built_toolchain, attempt_toolchain
-FROM decks
-WHERE source_id = ?
-"""
+_DECKS_OF_SOURCE: Final = f"{DECK_SELECT} WHERE source_id = ?"
 _REMOVE_DECKS_OF_SOURCE: Final = "DELETE FROM decks WHERE source_id = ?"
 _MARK_REMOVED: Final = """
 UPDATE decks SET removed_at = ?
@@ -100,31 +93,22 @@ UPDATE decks SET removed_at = NULL
 WHERE removed_at IS NOT NULL AND source_id = ?
   AND slug IN (SELECT value FROM json_each(?))
 """
-_AttemptColumns = tuple[
-    str | None,
-    str | None,
-    str | None,
-    str | None,
-    str | None,
-    int | None,
-    int | None,
-    int | None,
-]
-# The deck row as SQLite hands it back: what the source carries, then what the
-# build wrote, then the attempt beside it.
-_DeckRow = tuple[
+# The deck row as an adapter hands it back: what the source carries, then what
+# the build wrote, then the attempt beside it. `Instant` is how that adapter
+# stores a point in time.
+type DeckRow[Instant] = tuple[
     str,
     str,
-    str,
+    Instant,
     str,
     str,
     str,
     str | None,
     str | None,
     str | None,
+    Instant | None,
     str | None,
-    str | None,
-    str | None,
+    Instant | None,
     str | None,
     str | None,
     str | None,
@@ -176,7 +160,7 @@ class SqliteDeckStore:
                     str(build.pdf),
                     build.commit,
                     build.built_at.isoformat(),
-                    _stored_toolchain(build.commit, build.toolchain),
+                    toolchain_column(build.commit, build.toolchain),
                     slug,
                 ),
             )
@@ -184,7 +168,24 @@ class SqliteDeckStore:
     def put_attempt(self, slug: str, attempt: BuildAttempt | None) -> None:
         """Write down the build this deck last started, and how far it got."""
         with rows(self.database) as cursor:
-            cursor.execute(_PUT_ATTEMPT, (*_attempt_columns(attempt), slug))
+            columns = attempt_columns(attempt)
+            cursor.execute(
+                _PUT_ATTEMPT,
+                (
+                    columns.commit,
+                    None
+                    if columns.started_at is None
+                    else columns.started_at.isoformat(),
+                    columns.outcome,
+                    columns.failure_text,
+                    columns.reason,
+                    columns.written_megabytes,
+                    columns.allowed_megabytes,
+                    columns.allowed_entries,
+                    columns.toolchain,
+                    slug,
+                ),
+            )
 
     def get(self, slug: str) -> Deck | None:
         """Read the one deck row that slug names, while its folder is still there."""
@@ -233,41 +234,49 @@ class SqliteDeckStore:
             cursor.execute(_REMOVE_DECKS_OF_SOURCE, (source_id,))
 
 
-def _deck(row: _DeckRow) -> Deck:
+def _deck(row: DeckRow[str]) -> Deck:
+    return stored_deck(row, read_instant=datetime.fromisoformat)
+
+
+def stored_deck[Instant](
+    row: DeckRow[Instant], *, read_instant: Callable[[Instant], datetime]
+) -> Deck:
+    """The deck of one row, its instants read the way that adapter stores them."""
     slug, title, changed_at, owner_id, source_id, commit = row[:6]
     return Deck(
         slug=slug,
         title=title,
-        changed_at=datetime.fromisoformat(changed_at),
+        changed_at=read_instant(changed_at),
         owner_id=owner_id,
         source_id=source_id,
         commit=commit,
-        build=_build(*row[6:10], stored_toolchain=row[18]),
-        attempt=_attempt(row[10:18], stored_toolchain=row[19]),
+        build=_build(row[6:10], stored_toolchain=row[18], read_instant=read_instant),
+        attempt=_attempt(
+            row[10:18], stored_toolchain=row[19], read_instant=read_instant
+        ),
     )
 
 
-def _build(
-    directory: str | None,
-    pdf: str | None,
-    commit: str | None,
-    built_at: str | None,
+def _build[Instant](
+    columns: tuple[str | None, str | None, str | None, Instant | None],
     *,
     stored_toolchain: str | None,
+    read_instant: Callable[[Instant], datetime],
 ) -> Build | None:
     """What the row says its talk is, or nothing while no build has switched."""
+    directory, pdf, commit, built_at = columns
     if directory is None or pdf is None or commit is None or built_at is None:
         return None
     return Build(
         directory=Path(directory),
         pdf=Path(pdf),
         commit=commit,
-        built_at=datetime.fromisoformat(built_at),
+        built_at=read_instant(built_at),
         toolchain=_read_toolchain(stored_toolchain, commit),
     )
 
 
-def _stored_toolchain(commit: str, toolchain: ToolchainIdentity | None) -> str | None:
+def toolchain_column(commit: str, toolchain: ToolchainIdentity | None) -> str | None:
     """The one column value a toolchain is written as, with the commit it is for."""
     if toolchain is None:
         return None
@@ -291,38 +300,53 @@ def _read_toolchain(stored: str | None, commit: str) -> ToolchainIdentity | None
         return None
 
 
-def _attempt_columns(
-    attempt: BuildAttempt | None,
-) -> tuple[*_AttemptColumns, str | None]:
+@dataclass(frozen=True, slots=True)
+class AttemptColumns:
     """The columns an attempt is written as; no attempt is all of them empty."""
+
+    commit: str | None = None
+    started_at: datetime | None = None
+    outcome: str | None = None
+    failure_text: str | None = None
+    reason: str | None = None
+    written_megabytes: int | None = None
+    allowed_megabytes: int | None = None
+    allowed_entries: int | None = None
+    toolchain: str | None = None
+
+
+def attempt_columns(attempt: BuildAttempt | None) -> AttemptColumns:
+    """The columns that write this attempt, or put the row back to carrying none."""
     if attempt is None:
-        return (None, None, None, None, None, None, None, None, None)
-    return (
-        attempt.commit,
-        attempt.started_at.isoformat(),
-        attempt.outcome.value,
-        *_failure_columns(attempt.failure),
-        _stored_toolchain(attempt.commit, attempt.toolchain),
+        return AttemptColumns()
+    failure = attempt.failure
+    return AttemptColumns(
+        commit=attempt.commit,
+        started_at=attempt.started_at,
+        outcome=attempt.outcome.value,
+        failure_text=None if failure is None else failure.text,
+        reason=None if failure is None else failure.reason.value,
+        written_megabytes=None if failure is None else failure.written_megabytes,
+        allowed_megabytes=None if failure is None else failure.allowed_megabytes,
+        allowed_entries=None if failure is None else failure.allowed_entries,
+        toolchain=toolchain_column(attempt.commit, attempt.toolchain),
     )
 
 
-def _failure_columns(
-    failure: BuildFailure | None,
-) -> tuple[str | None, str | None, int | None, int | None, int | None]:
-    """The columns a failure is written as: text, reason, then the counts."""
-    if failure is None:
-        return (None, None, None, None, None)
-    return (
-        failure.text,
-        failure.reason.value,
-        failure.written_megabytes,
-        failure.allowed_megabytes,
-        failure.allowed_entries,
-    )
-
-
-def _attempt(
-    columns: _AttemptColumns, *, stored_toolchain: str | None
+def _attempt[Instant](
+    columns: tuple[
+        str | None,
+        Instant | None,
+        str | None,
+        str | None,
+        str | None,
+        int | None,
+        int | None,
+        int | None,
+    ],
+    *,
+    stored_toolchain: str | None,
+    read_instant: Callable[[Instant], datetime],
 ) -> BuildAttempt | None:
     """The build the row says ran last, or nothing while none is worth telling."""
     commit, started_at, outcome, text, reason = columns[:5]
@@ -343,7 +367,7 @@ def _attempt(
         )
     attempt = BuildAttempt(
         commit=commit,
-        started_at=datetime.fromisoformat(started_at),
+        started_at=read_instant(started_at),
         outcome=BuildOutcome(outcome),
         failure=failure,
         toolchain=_read_toolchain(stored_toolchain, commit),

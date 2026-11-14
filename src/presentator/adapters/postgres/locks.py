@@ -29,6 +29,7 @@ class LockClass(IntEnum):
     SIGN_IN = 2
     DEPLOY_KEY_DRAFT = 3
     SOURCE_RUNS = 4
+    DECK_MARKS = 5
 
 
 @dataclass(frozen=True, slots=True)
