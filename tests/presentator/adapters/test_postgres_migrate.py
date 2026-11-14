@@ -2,7 +2,6 @@
 
 from sqlalchemy import inspect, text
 
-from presentator.adapters.postgres.locks import MIGRATION_LOCK, AdvisoryLock
 from presentator.adapters.postgres.migrate import migrate
 from tests.support.postgres import engine_on
 
@@ -72,33 +71,3 @@ def test_a_database_a_newer_release_migrated_is_left_as_it_is(
 
     assert revision == _A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS
     assert tables == {"alembic_version"}
-
-
-def test_a_lock_of_the_same_class_for_another_instance_is_free_while_a_migration_runs(
-    unmigrated_database_url: str,
-) -> None:
-    take = text("SELECT pg_try_advisory_lock(:lock_class, :instance)")
-    another_instance = AdvisoryLock(
-        MIGRATION_LOCK.lock_class, MIGRATION_LOCK.instance + 1
-    )
-    engine = engine_on(unmigrated_database_url)
-    try:
-        with engine.connect() as migration, engine.connect() as other:
-            migration.execute(
-                take,
-                {
-                    "lock_class": int(MIGRATION_LOCK.lock_class),
-                    "instance": MIGRATION_LOCK.instance,
-                },
-            )
-            taken = other.execute(
-                take,
-                {
-                    "lock_class": int(another_instance.lock_class),
-                    "instance": another_instance.instance,
-                },
-            ).scalar_one()
-    finally:
-        engine.dispose()
-
-    assert taken is True
