@@ -797,7 +797,7 @@ def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
     )
     assert target is not None
     assert neighbour is not None
-    draft = a_key_drafts_store(database).mint(OWNER.id, at=PUSHED_AT)
+    a_key_drafts_store(database).mint(OWNER.id, at=PUSHED_AT)
     with rows(database) as cursor:
         before = (
             cursor.execute(
@@ -827,7 +827,6 @@ def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
             ).fetchall(),
         )
     assert after == before
-    assert draft.id
 
 
 def test_a_deploy_key_update_failure_keeps_every_source_and_draft(
