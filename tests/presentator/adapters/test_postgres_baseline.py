@@ -1,8 +1,10 @@
 """The migrated database holds the tables of the store a started instance has today."""
 
 import sqlite3
+from collections.abc import Iterator
 from contextlib import closing
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 from sqlalchemy import Connection, inspect, text
@@ -14,8 +16,26 @@ from tests.support.postgres import engine_on
 _HAS_NO_SQLITE_COUNTERPART = {"alembic_version"}
 
 
-def _sqlite_shape(database: Path) -> dict[str, dict[str, bool]]:
-    """Each table's columns, with whether the column refuses NULL.
+class _Column(NamedTuple):
+    refuses_null: bool
+    type_name: str
+    default: str | None
+
+
+def _is_an_instant(column: str) -> bool:
+    """SQLite keeps an instant as text; its columns are named `at` or `*_at`."""
+    return column == "at" or column.endswith("_at")
+
+
+def _postgres_type_of(column: str, sqlite_type: str) -> str:
+    """The Postgres type that keeps every value of the SQLite declaration."""
+    if _is_an_instant(column):
+        return "TIMESTAMP WITH TIME ZONE"
+    return {"TEXT": "TEXT", "BLOB": "BYTEA", "INTEGER": "BIGINT"}[sqlite_type]
+
+
+def _sqlite_shape(database: Path) -> dict[str, dict[str, _Column]]:
+    """Each table's columns as Postgres is to hold them.
 
     SQLite lets a text key hold NULL unless told not to, which no row relies on;
     Postgres never does, so a key counts as refusing it.
@@ -29,15 +49,28 @@ def _sqlite_shape(database: Path) -> dict[str, dict[str, bool]]:
                 " WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
             )
         ]
-        return {
-            table: {
-                name: bool(not_null or in_key)
-                for _, name, _, not_null, _, in_key in connection.execute(
-                    "SELECT * FROM pragma_table_info(?)", (table,)
-                )
-            }
+        columns = {
+            table: connection.execute(
+                "SELECT * FROM pragma_table_info(?)", (table,)
+            ).fetchall()
             for table in tables
         }
+    return {
+        table: {
+            name: _Column(
+                refuses_null=bool(not_null or in_key),
+                type_name=_postgres_type_of(name, sqlite_type),
+                default=default,
+            )
+            for _, name, sqlite_type, not_null, default, in_key in rows
+        }
+        for table, rows in columns.items()
+    }
+
+
+def _postgres_default(default: str | None) -> str | None:
+    """A default as SQLite writes it: Postgres adds the cast of the literal."""
+    return None if default is None else default.removesuffix("::text")
 
 
 def _sqlite_references(database: Path) -> set[tuple[str, str, str, str]]:
@@ -97,7 +130,7 @@ def sqlite_database(tmp_path: Path) -> Path:
     return database
 
 
-def test_a_migrated_database_has_the_tables_and_columns_of_the_sqlite_store(
+def test_a_migrated_database_has_the_columns_types_and_defaults_of_the_sqlite_store(
     database_url: str, sqlite_database: Path
 ) -> None:
     expected = _sqlite_shape(sqlite_database)
@@ -108,7 +141,11 @@ def test_a_migrated_database_has_the_tables_and_columns_of_the_sqlite_store(
         tables = set(inspector.get_table_names()) - _HAS_NO_SQLITE_COUNTERPART
         shape = {
             table: {
-                column["name"]: not column["nullable"]
+                column["name"]: _Column(
+                    refuses_null=not column["nullable"],
+                    type_name=column["type"].compile(dialect=engine.dialect),
+                    default=_postgres_default(column["default"]),
+                )
                 for column in inspector.get_columns(table)
             }
             for table in tables

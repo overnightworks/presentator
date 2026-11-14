@@ -49,7 +49,7 @@ def _create_sessions() -> None:
 def _create_instance_settings() -> None:
     op.create_table(
         "instance_settings",
-        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=False),
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=False),
         sa.Column("name", sa.Text(), nullable=False),
         sa.CheckConstraint("id = 1"),
     )
@@ -113,9 +113,9 @@ def _create_decks() -> None:
         sa.Column("attempt_outcome", sa.Text()),
         sa.Column("attempt_failure", sa.Text()),
         sa.Column("attempt_reason", sa.Text()),
-        sa.Column("attempt_written_megabytes", sa.Integer()),
-        sa.Column("attempt_allowed_megabytes", sa.Integer()),
-        sa.Column("attempt_allowed_entries", sa.Integer()),
+        sa.Column("attempt_written_megabytes", sa.BigInteger()),
+        sa.Column("attempt_allowed_megabytes", sa.BigInteger()),
+        sa.Column("attempt_allowed_entries", sa.BigInteger()),
         sa.Column("built_toolchain", sa.Text()),
         sa.Column("attempt_toolchain", sa.Text()),
         sa.Column("removed_at", sa.TIMESTAMP(timezone=True)),
@@ -125,7 +125,7 @@ def _create_decks() -> None:
 def _create_source_runs() -> None:
     op.create_table(
         "source_runs",
-        sa.Column("id", sa.Integer(), sa.Identity(), primary_key=True),
+        sa.Column("id", sa.BigInteger(), sa.Identity(), primary_key=True),
         sa.Column("source_id", sa.Text(), sa.ForeignKey("sources.id"), nullable=False),
         sa.Column("at", sa.TIMESTAMP(timezone=True), nullable=False),
         sa.Column("outcome", sa.Text(), nullable=False),
