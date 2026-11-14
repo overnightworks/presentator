@@ -1,11 +1,14 @@
 """The database settings: a URL without a password, the password in a file."""
 
-import re
 from pathlib import Path
 
 import pytest
 
 from presentator.host.config import ConfigurationError, load_database_settings
+from tests.presentator.host.support.config_refusals import (
+    assert_refusal_names,
+    assert_refusal_never_quotes,
+)
 
 _URL = "PRESENTATOR_DATABASE_URL"
 _PASSWORD_FILE = "PRESENTATOR_DATABASE_PASSWORD_FILE"  # noqa: S105 - a variable name
@@ -41,8 +44,7 @@ def test_a_missing_value_refuses_naming_the_field(
 ) -> None:
     database_variables.delenv(variable)
 
-    with pytest.raises(ConfigurationError, match=re.escape(field)):
-        load_database_settings()
+    assert_refusal_names(load_database_settings, field)
 
 
 @pytest.mark.parametrize(
@@ -62,11 +64,7 @@ def test_a_url_that_cannot_name_the_database_refuses_without_quoting_it(
 ) -> None:
     database_variables.setenv(_URL, refused)
 
-    with pytest.raises(ConfigurationError) as raised:
-        load_database_settings()
-
-    assert A_PASSWORD not in str(raised.value)
-    assert refused not in str(raised.value)
+    assert_refusal_never_quotes(load_database_settings, A_PASSWORD, refused)
 
 
 def test_a_password_file_that_cannot_be_read_refuses_without_quoting_its_path(

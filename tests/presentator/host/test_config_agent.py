@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from presentator.host.config import ConfigurationError, load_settings
 from presentator.host.main import build_instance
+from tests.presentator.host.support.config_refusals import assert_refusal_names
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
@@ -48,8 +49,7 @@ def test_a_missing_agent_value_refuses_the_start_naming_the_field(
     """CF5: none of the four has a default."""
     environment.delenv(variable)
 
-    with pytest.raises(ConfigurationError, match=re.escape(field)):
-        load_settings()
+    assert_refusal_names(load_settings, field)
 
 
 @pytest.mark.parametrize(
