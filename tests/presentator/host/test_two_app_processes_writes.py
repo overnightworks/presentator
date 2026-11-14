@@ -4,12 +4,14 @@ Each case sends the same kind of request to both processes at once, as a load
 balancer does, and judges the one database and what either process answers.
 """
 
-from collections.abc import Callable, Iterator
+from collections import defaultdict
+from collections.abc import Callable, Generator, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
-from threading import Barrier
+from threading import Barrier, Event, Thread
 
 import httpx2
 import pytest
@@ -45,6 +47,8 @@ _TAKEN = {SourceRefusal.DUPLICATE_NAME, SourceRefusal.DUPLICATE_URL}
 _NOT_A_DRAFT = "not-a-draft"
 _MARKING_ROUNDS = 12
 _MARKED_DECKS = 12
+_REBUILDS = 4
+_BUILD_OF_THE_DECK = "SELECT active_build, pdf_export, built_commit FROM decks"
 # Stands in for the ssh git starts: it runs the upload-pack the remote command
 # names on this machine, so an scp-form address reaches a repository on disk.
 _SSH_ON_THIS_MACHINE = """#!/bin/sh
@@ -140,6 +144,38 @@ def _at_once[Answer](calls: list[Callable[[], Answer]]) -> list[Answer]:
 
     with ThreadPoolExecutor(max_workers=len(calls)) as pool:
         return [each.result() for each in [pool.submit(go, call) for call in calls]]
+
+
+Observation = tuple[tuple[str | None, ...], ...]
+
+
+@contextmanager
+def _watching(engine: Engine, statement: str) -> Generator[list[Observation]]:
+    """Read `statement` again and again meanwhile; each answer that differs is kept."""
+    seen: list[Observation] = []
+    done = Event()
+
+    def read() -> None:
+        with engine.connect() as connection:
+            while True:
+                finished = done.is_set()
+                rows = connection.execute(text(statement)).all()
+                observation = tuple(
+                    tuple(None if each is None else str(each) for each in row)
+                    for row in rows
+                )
+                if not seen or seen[-1] != observation:
+                    seen.append(observation)
+                if finished:
+                    return
+
+    reader = Thread(target=read)
+    reader.start()
+    try:
+        yield seen
+    finally:
+        done.set()
+        reader.join()
 
 
 def _admin(app: App) -> Browser:
@@ -477,19 +513,30 @@ def test_a_deck_rebuilt_at_both_processes_at_once_is_delivered_from_one_build(
 ) -> None:
     with_the_toolchain(environment, tmp_path, A_TOOLCHAIN_THAT_BUILDS)
     remote.commit_example_deck(at=_AT)
+    pushed = {remote.head}
     with serving_apps(database_url, tmp_path) as apps:
         admin = _admin(apps[0])
         _added(admin, apps[0], "talks", remote)
-        remote.commit({f"{EXAMPLE_SLUG}/notes.md": "a new push"}, at=_AT)
 
-        _at_once([lambda app=app: _fetch(admin, app, "talks") for app in apps])
+        with _watching(engine, _BUILD_OF_THE_DECK) as seen:
+            for push in range(_REBUILDS):
+                remote.commit({f"{EXAMPLE_SLUG}/notes.md": f"push {push}"}, at=_AT)
+                pushed.add(remote.head)
+                _at_once([lambda app=app: _fetch(admin, app, "talks") for app in apps])
 
-    with engine.connect() as connection:
-        talk, pdf, built_commit = connection.execute(
-            text("SELECT active_build, pdf_export, built_commit FROM decks")
-        ).one()
-    assert built_commit == remote.head
-    assert Path(talk).parent == Path(pdf).parent
+    commits_of_a_directory = defaultdict[str, set[str]](set)
+    for observation in seen:
+        for talk, pdf, commit in observation:
+            if talk is None and pdf is None and commit is None:
+                continue
+            assert talk is not None
+            assert pdf is not None
+            assert Path(talk).parent == Path(pdf).parent
+            assert commit in pushed
+            assert commit is not None
+            commits_of_a_directory[str(Path(talk).parent)].add(commit)
+    assert all(len(commits) == 1 for commits in commits_of_a_directory.values())
+    assert seen[-1][0][2] == remote.head
 
 
 @pytest.mark.usefixtures("environment")
