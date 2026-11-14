@@ -129,7 +129,12 @@ COPY --from=uv /uv /usr/local/bin/uv
 # Bytecode stays in the image because the runtime's root is read-only. The two
 # syncs below set PYC_INVALIDATION_MODE for their compile alone, so the bytecode
 # records its source's hash, not the source's install time, and so repeats;
-# the runtime environment carries no such key.
+# the runtime environment carries no such key. The interpreter itself writes
+# timestamp bytecode for the standard library modules the sync imports, which
+# records the install time of their sources and which a release's reset file
+# times make stale anyway, so the syncs run with PYTHONDONTWRITEBYTECODE; uv's
+# own compile is unaffected. uv leaves lock files named by a hash that varies
+# in /tmp, which the same RUN removes.
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON_INSTALL_DIR=/opt/python \
     UV_COMPILE_BYTECODE=1 \
@@ -138,9 +143,11 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 
 WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
-RUN PYC_INVALIDATION_MODE=CHECKED_HASH uv sync --locked --no-dev --no-install-project
+RUN PYC_INVALIDATION_MODE=CHECKED_HASH PYTHONDONTWRITEBYTECODE=1 uv sync --locked --no-dev --no-install-project \
+    && find /tmp -mindepth 1 -delete
 COPY src ./src
-RUN PYC_INVALIDATION_MODE=CHECKED_HASH uv sync --locked --no-dev --no-editable
+RUN PYC_INVALIDATION_MODE=CHECKED_HASH PYTHONDONTWRITEBYTECODE=1 uv sync --locked --no-dev --no-editable \
+    && find /tmp -mindepth 1 -delete
 COPY --from=lobby /lobby/build /app/lobby
 
 # The directories the instance keeps its state in are made here so that an empty
