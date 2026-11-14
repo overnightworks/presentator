@@ -26,6 +26,11 @@ from tests.support.fake_issuer import FakeIssuer
 ANSWER_PREFIX: Final = "issuer-answer "
 
 
+def directory_name_of(port: str | int) -> str:
+    """The directory under the working directory that the app on `port` writes."""
+    return f"port-{port}"
+
+
 def _answer_the_parent(issuer: FakeIssuer) -> None:
     for line in sys.stdin:
         sign_in = json.loads(line)
@@ -51,7 +56,7 @@ def run() -> None:
     os.environ["PRESENTATOR_PORT"] = sys.argv[1]
     for name in ("mirrors", "builds"):
         os.environ[f"PRESENTATOR_{name.upper()}"] = str(
-            Path.cwd() / f"port-{sys.argv[1]}" / name
+            Path.cwd() / directory_name_of(sys.argv[1]) / name
         )
     issuer = FakeIssuer(
         issuer=os.environ["PRESENTATOR_OIDC_ISSUER"],
