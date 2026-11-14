@@ -1,10 +1,21 @@
-"""The database settings: a URL without a password, the password in a file."""
+"""The database settings: a URL without a password, the password in a file.
 
+The migrate command and the server read the same two variables, so each refusal
+holds for both.
+"""
+
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
-from presentator.host.config import ConfigurationError, load_database_settings
+from presentator.host.config import (
+    ConfigurationError,
+    DatabaseSettings,
+    Settings,
+    load_database_settings,
+    load_settings,
+)
 from tests.presentator.host.support.config_refusals import (
     assert_refusal_names,
     assert_refusal_never_quotes,
@@ -14,12 +25,15 @@ _URL = "PRESENTATOR_DATABASE_URL"
 _PASSWORD_FILE = "PRESENTATOR_DATABASE_PASSWORD_FILE"  # noqa: S105 - a variable name
 A_PASSWORD = "the-password-only-this-test-has"  # noqa: S105 - a marker the refusals must not quote
 A_DATABASE = "postgresql://presentator@postgres:5432/presentator"
+type Loader = Callable[[], Settings | DatabaseSettings]
+_LOADERS: list[Loader] = [load_database_settings, load_settings]
 
 
 @pytest.fixture
 def database_variables(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    environment: pytest.MonkeyPatch, tmp_path: Path
 ) -> pytest.MonkeyPatch:
+    monkeypatch = environment
     password_file = tmp_path / "password"
     password_file.write_text(f"{A_PASSWORD}\n", encoding="utf-8")
     monkeypatch.setenv(_URL, A_DATABASE)
@@ -28,23 +42,40 @@ def database_variables(
 
 
 @pytest.mark.usefixtures("database_variables")
-def test_the_url_and_the_password_file_give_the_settings() -> None:
-    settings = load_database_settings()
+@pytest.mark.parametrize("load", _LOADERS)
+def test_the_url_and_the_password_file_give_the_database(
+    load: Loader,
+) -> None:
+    database = load().postgres
 
-    assert settings.database_url == A_DATABASE
-    assert settings.database_password.get_secret_value() == A_PASSWORD
+    assert database is not None
+    assert database.url == A_DATABASE
+    assert database.password.get_secret_value() == A_PASSWORD
 
 
 @pytest.mark.parametrize(
     ("variable", "field"),
     [(_URL, "database_url"), (_PASSWORD_FILE, "database_password_file")],
 )
+@pytest.mark.parametrize("load", _LOADERS)
 def test_a_missing_value_refuses_naming_the_field(
-    database_variables: pytest.MonkeyPatch, variable: str, field: str
+    database_variables: pytest.MonkeyPatch,
+    load: Loader,
+    variable: str,
+    field: str,
 ) -> None:
     database_variables.delenv(variable)
 
-    assert_refusal_names(load_database_settings, field)
+    assert_refusal_names(load, field)
+
+
+def test_a_server_without_the_database_serves_from_sqlite(
+    database_variables: pytest.MonkeyPatch,
+) -> None:
+    database_variables.delenv(_URL)
+    database_variables.delenv(_PASSWORD_FILE)
+
+    assert load_settings().postgres is None
 
 
 @pytest.mark.parametrize(
@@ -59,21 +90,32 @@ def test_a_missing_value_refuses_naming_the_field(
         pytest.param("postgresql://presentator@db:port/p", id="port"),
     ],
 )
+@pytest.mark.parametrize("load", _LOADERS)
 def test_a_url_that_cannot_name_the_database_refuses_without_quoting_it(
-    database_variables: pytest.MonkeyPatch, refused: str
+    database_variables: pytest.MonkeyPatch, load: Loader, refused: str
 ) -> None:
     database_variables.setenv(_URL, refused)
 
-    assert_refusal_never_quotes(load_database_settings, A_PASSWORD, refused)
+    assert_refusal_never_quotes(load, A_PASSWORD, refused)
 
 
+@pytest.mark.parametrize("load", _LOADERS)
 def test_a_password_file_that_cannot_be_read_refuses_without_quoting_its_path(
-    database_variables: pytest.MonkeyPatch, tmp_path: Path
+    database_variables: pytest.MonkeyPatch, tmp_path: Path, load: Loader
 ) -> None:
     absent = tmp_path / "absent"
     database_variables.setenv(_PASSWORD_FILE, str(absent))
 
     with pytest.raises(ConfigurationError, match="database_password_file") as raised:
-        load_database_settings()
+        load()
 
     assert str(absent) not in str(raised.value)
+
+
+@pytest.mark.parametrize("variable", [_URL, _PASSWORD_FILE])
+def test_a_server_given_only_half_of_the_database_refuses_naming_the_url(
+    database_variables: pytest.MonkeyPatch, variable: str
+) -> None:
+    database_variables.delenv(variable)
+
+    assert_refusal_names(load_settings, "database_url")

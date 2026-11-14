@@ -10,7 +10,7 @@ from sqlalchemy import Engine, text
 
 from presentator.adapters.postgres import migrate as migrations
 from presentator.adapters.postgres.engine import create_database_engine
-from presentator.adapters.postgres.migrate import database_is_ready, revision_refusal
+from presentator.adapters.postgres.migrate import database_is_ready, serving_refusal
 from tests.presentator.host.support.revision_history import a_longer_history
 from tests.support.postgres import engine_on
 
@@ -72,7 +72,7 @@ def test_a_database_at_head_or_newer_is_served_and_ready(
 ) -> None:
     arrange(engine, tmp_path, monkeypatch)
 
-    assert revision_refusal(engine) is None
+    assert serving_refusal(engine) is None
     assert database_is_ready(engine)
 
 
@@ -85,7 +85,7 @@ def test_an_empty_or_older_database_is_refused_and_not_ready(
 ) -> None:
     arrange(engine, tmp_path, monkeypatch)
 
-    assert revision_refusal(engine)
+    assert serving_refusal(engine)
     assert not database_is_ready(engine)
 
 

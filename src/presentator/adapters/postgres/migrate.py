@@ -1,4 +1,4 @@
-"""Bring the database to the newest revision this release knows."""
+"""The migrations of the database, and the rule for serving what they made."""
 
 import logging
 from pathlib import Path
@@ -19,6 +19,7 @@ _RELEASE_LOCK: Final = text("SELECT pg_advisory_unlock(:lock_class, :instance)")
 NO_REVISION: Final = (
     "the database holds no revision row; run `presentator migrate` before serving"
 )
+NOT_ANSWERING: Final = "the database did not answer ({failure})"
 BEHIND_THIS_RELEASE: Final = (
     "the database is behind this release; run `presentator migrate` before serving"
 )
@@ -46,18 +47,23 @@ def migrate(engine: Engine) -> None:
             _release(connection, MIGRATION_LOCK)
 
 
-def revision_refusal(engine: Engine) -> str | None:
+def serving_refusal(engine: Engine) -> str | None:
     """Why this release must not serve the database, or None when it may.
 
-    A database with no revision row was never migrated, and one at a revision of
-    this release's own history other than its head was migrated by an older
-    release: serving either would read tables or columns that may not exist. A
-    revision this release does not know is a newer release's, which only added,
-    so it is served. The database answering nothing raises.
+    A database that does not answer is refused. So is one with no revision row,
+    which was never migrated, and one at a revision of this release's own
+    history other than its head, which an older release migrated: serving
+    either would read tables or columns that may not exist. A revision this
+    release does not know is a newer release's, which only added, so it is
+    served. The reasons name the kind of failure and never what the driver says,
+    which may quote the address the connection used.
     """
     config = _config()
-    with engine.connect() as connection:
-        held = set(MigrationContext.configure(connection).get_current_heads())
+    try:
+        with engine.connect() as connection:
+            held = set(MigrationContext.configure(connection).get_current_heads())
+    except SQLAlchemyError as failure:
+        return NOT_ANSWERING.format(failure=type(failure).__name__)
     if not held:
         return NO_REVISION
     if _head_of(config) in held or not held <= _known_revisions(config):
@@ -66,16 +72,8 @@ def revision_refusal(engine: Engine) -> str | None:
 
 
 def database_is_ready(engine: Engine) -> bool:
-    """Whether the database answers and this release may serve it.
-
-    The log names the refusal or the kind of failure and nothing the driver says,
-    which may quote the address the connection used.
-    """
-    try:
-        refusal = revision_refusal(engine)
-    except SQLAlchemyError as failure:
-        _log.warning("The database did not answer: %s", type(failure).__name__)
-        return False
+    """Whether the database answers and this release may serve it; a no is logged."""
+    refusal = serving_refusal(engine)
     if refusal is not None:
         _log.warning("The database is not ready: %s", refusal)
     return refusal is None

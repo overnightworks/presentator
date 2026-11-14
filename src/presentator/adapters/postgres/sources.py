@@ -8,6 +8,7 @@ from psycopg.errors import UniqueViolation
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import IntegrityError
 
+from gitmirror.model import CredentialReference
 from presentator.adapters.decks import stored_source, written_source
 from presentator.adapters.postgres.key_drafts import locked_owned_draft, remove_in
 from presentator.adapters.secrets import DeployKeyPair, SecretBox, generate_deploy_key
@@ -36,6 +37,9 @@ _PUT_DEPLOY_KEY: Final = text(
 )
 _PUT_HOOK_HASH: Final = text(
     "UPDATE sources SET hook_secret_hash = :digest WHERE name = :name"
+)
+_ENCRYPTED_VALUE_OF: Final = text(
+    "SELECT encrypted_secret FROM sources WHERE id = :source_id"
 )
 _ONE_ROW: Final = 1
 
@@ -174,3 +178,26 @@ class PostgresSourceStore:
             "public_key": public_key,
             "folder": write.folder,
         }
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PostgresSourceCredentials:
+    """Answers with the secret the source's own row stores, at the pull.
+
+    The one place a secret stands is the ciphertext column.
+    """
+
+    engine: Engine
+    box: SecretBox
+
+    def resolve(self, reference: CredentialReference) -> str | None:
+        """The secret of the source that reference anchors, or nothing.
+
+        Nothing is the honest answer to a source this instance no longer
+        carries and to ciphertext another instance key wrote.
+        """
+        with self.engine.connect() as connection:
+            found = connection.execute(
+                _ENCRYPTED_VALUE_OF, {"source_id": reference.name}
+            ).fetchone()
+        return None if found is None else self.box.decrypt(found[0])
