@@ -200,11 +200,13 @@ _A_USER = "INSERT INTO users (id, username, role) VALUES ('u1', 'ada', 'admin')"
 
 
 @pytest.fixture
-def connection(database_url: str):  # noqa: ANN201 - a generator fixture of the library's connection
+def connection(database_url: str) -> Iterator[Connection]:
     engine = engine_on(database_url)
-    with engine.begin() as open_connection:
-        yield open_connection
-    engine.dispose()
+    try:
+        with engine.begin() as open_connection:
+            yield open_connection
+    finally:
+        engine.dispose()
 
 
 @pytest.mark.parametrize(
