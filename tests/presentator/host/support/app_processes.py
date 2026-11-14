@@ -9,6 +9,7 @@ import time
 from collections.abc import Generator, Mapping
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
+from http import HTTPStatus
 from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import Final
@@ -90,7 +91,7 @@ class App:
 class Browser:
     """The cookies of one person, who may go to either process."""
 
-    cookies: dict[str, str] = field(default_factory=dict)
+    cookies: dict[str, str] = field(default_factory=dict[str, str])
 
     def request(
         self,
@@ -157,7 +158,7 @@ def _wait_until_ready(app: App) -> None:
     while time.monotonic() < deadline:
         assert app.process.poll() is None, "the app process ended while starting"
         try:
-            if app.request("GET", "/health", {}).status_code == httpx2.codes.OK:
+            if app.request("GET", "/health", {}).status_code == HTTPStatus.OK:
                 return
         except httpx2.TransportError:
             pass

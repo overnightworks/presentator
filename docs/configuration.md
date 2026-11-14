@@ -29,20 +29,27 @@ secret does not land in the startup output.
 
 There is no `/setup` and no first admin ([sign-in](sign-in.md), SI2).
 
-## The database `presentator migrate` reaches
+## The database
 
-`presentator migrate` brings a Postgres database to the newest revision and
-exits; plain `presentator` does not read these two settings yet. It runs apart
-from serving, as a step before it, and needs only these:
+`PRESENTATOR_DATABASE_URL` is the switch: with it (and its password file) set,
+every store is served from Postgres and the SQLite file below is not opened;
+without both, the SQLite file serves. Setting only one of the two refuses the
+start. `presentator migrate` brings a Postgres database to the newest revision
+and exits; it runs apart from serving, as a step before it, and needs only
+these two settings. Serving creates no table.
 
 | Setting | Meaning |
 | --- | --- |
 | `PRESENTATOR_DATABASE_URL` | A `postgresql://` URL naming a host, a user and a database, with no password, query or fragment. |
 | `PRESENTATOR_DATABASE_PASSWORD_FILE` | Absolute path of a file holding the user's password, read once at start, minus one trailing newline. |
 
-Concurrent runs wait for one another on an advisory lock, and each ends at the
-newest revision. A database whose revision this release does not know was
-migrated by a newer release: `migrate` leaves it as it is and exits 0.
+Concurrent `migrate` runs wait for one another on an advisory lock, and each
+ends at the newest revision. A database whose revision this release does not
+know was migrated by a newer release: `migrate` leaves it as it is and exits 0,
+and serving works on it. Serving refuses a database with no revision row and
+one behind this release's head, and `GET /health` answers 503 while the
+database does not answer or fails that rule. The refusals and the log name the
+kind of failure and never the URL or the password.
 The tests find their server in `PRESENTATOR_TEST_POSTGRES_URL`, a URL of a
 server whose user may create databases; every test creates one of its own.
 
@@ -53,7 +60,7 @@ some of them.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `PRESENTATOR_DATABASE` | `presentator.sqlite3` | The SQLite file. |
+| `PRESENTATOR_DATABASE` | `presentator.sqlite3` | The SQLite file, used while `PRESENTATOR_DATABASE_URL` is unset. |
 | `PRESENTATOR_MIRRORS` | `mirrors` | Where the bare mirrors of the deck sources live. |
 | `PRESENTATOR_HOST` | `127.0.0.1` | Listen address. |
 | `PRESENTATOR_PORT` | `8000` | Listen port. |

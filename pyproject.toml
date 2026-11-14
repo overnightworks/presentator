@@ -199,6 +199,18 @@ forbidden_modules = ["presentator.adapters", "presentator.agent"]
 as_packages = true
 
 [[tool.importlinter.contracts]]
+id = "host-composes-postgres-stores"
+name = "The host names the Postgres engine, migrations and stores, not their locks or row readers"
+type = "forbidden"
+source_modules = ["presentator.host"]
+forbidden_modules = [
+    "presentator.adapters.postgres.locks",
+    "presentator.adapters.postgres.accounts",
+]
+# The stores the host composes use both; only naming them in the host is the violation.
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
 id = "route-vocabulary"
 name = "Routes name no port type"
 type = "forbidden"
