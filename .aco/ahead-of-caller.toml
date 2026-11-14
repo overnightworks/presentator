@@ -21,7 +21,7 @@ reason = "The sign-in, deploy-key draft and source run lock classes, SIGN_IN_LOC
 [[code]]
 path = "src/presentator/adapters/postgres/engine.py"
 item = "#1160"
-reason = "connection_or_inside is reached only by the Postgres identity stores, which wait for the switch slice that composes them."
+reason = "connection_or_inside and in_utc are reached only by the Postgres stores, which wait for the switch slice that composes them."
 
 [[code]]
 path = "src/presentator/adapters/postgres/key_drafts.py"
