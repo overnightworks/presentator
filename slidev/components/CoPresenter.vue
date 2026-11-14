@@ -5,7 +5,7 @@ import { createPlayer, HopClose, startCapture } from 'overnightworks-speech-brow
 // `no-inline`: the file is under Vite's inline limit, and a `data:` URL would
 // break the production CSP.
 import WORKLET_URL from 'overnightworks-speech-browser/capture-worklet.js?url&no-inline'
-import { controlWords, currentWords, useAccountLanguage } from '../controls-words.js'
+import { controlLanguage, controlWords, currentWords, useAccountLanguage } from '../controls-words.js'
 import { publish } from '../room-notice.js'
 
 const { currentSlideNo, go, total } = useNav()
@@ -425,6 +425,7 @@ onUnmounted(() => {
 <template>
   <aside
     class="copresenter"
+    :lang="controlLanguage"
     :data-on="on"
     :aria-label="controlWords ? (on ? words['controls.presenterOn'] : words['controls.presenterOff']) : undefined"
   >

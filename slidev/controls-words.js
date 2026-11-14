@@ -9,6 +9,9 @@ import { words as english } from './words/en'
 // shows in the wrong language.
 export const controlWords = shallowRef(null)
 
+// The language of `currentWords()`, for the `lang` attribute of what shows them.
+export const controlLanguage = shallowRef('en')
+
 let languageKnown = false
 
 // The first language the server names is loaded and kept; a later answer does
@@ -20,6 +23,7 @@ export async function useAccountLanguage(language) {
     const words = await loadWords(language)
     if (languageKnown) return
     controlWords.value = words
+    controlLanguage.value = language
     languageKnown = true
   } catch {
     // English is the one module bundled with the overlay, so the controls are
