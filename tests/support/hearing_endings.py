@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final
 
@@ -48,28 +49,34 @@ def _marked_frames_the_parser_refuses() -> dict[str, Hear]:
 
 @dataclass(frozen=True)
 class Ending:
-    """How a service ends a hearing, and what the browser shows of it."""
+    """How a service ends a hearing, and what the browser shows of it.
 
-    hear: Hear
+    `hear` builds the service's handler anew for each scenario: a handler that
+    steps through upgrades keeps that state to one scenario.
+    """
+
+    hear: Callable[[], Hear]
     frames: list[dict[str, object]]
     close: HopClose
 
 
-def _refusing_after(cut: Hear) -> Hear:
+def _refusing_after(cut: Callable[[], Hear]) -> Callable[[], Hear]:
     """A session cut after its first audio, and an upgrade the service then refuses."""
-    return one_after_another(cut, denying(503))
+    return lambda: one_after_another(cut(), denying(503))
 
 
 HEARING_ENDS: Final[dict[str, Ending]] = {
     "closes-1000": Ending(
-        after_the_first_audio(close_code=1000, close_reason=PLANTED),
+        lambda: after_the_first_audio(close_code=1000, close_reason=PLANTED),
         [],
         HopClose.NORMAL,
     ),
     **{
         f"closes-{code}": Ending(
             _refusing_after(
-                after_the_first_audio(close_code=code, close_reason=PLANTED)
+                lambda code=code: after_the_first_audio(
+                    close_code=code, close_reason=PLANTED
+                )
             ),
             [],
             HopClose.SERVICE_FAILED,
@@ -77,12 +84,12 @@ HEARING_ENDS: Final[dict[str, Ending]] = {
         for code in (1009, 1011, 1013)
     },
     "peer-crashes-mid-session": Ending(
-        _refusing_after(crashing_after_the_first_audio()),
+        _refusing_after(crashing_after_the_first_audio),
         [],
         HopClose.SERVICE_FAILED,
     ),
     **{
-        name: Ending(hear, [], HopClose.SERVICE_FAILED)
+        name: Ending(lambda hear=hear: hear, [], HopClose.SERVICE_FAILED)
         for name, hear in _marked_frames_the_parser_refuses().items()
     },
 }
@@ -98,12 +105,14 @@ def _final(text: str, language: str = "de") -> dict[str, object]:
 
 BROWSER_ENDINGS: dict[str, Ending] = {
     "deltas-grow-and-completed-replaces": Ending(
-        after_the_first_audio(a_delta("Gu"), a_delta("ten"), a_completed("Guten Tag.")),
+        lambda: after_the_first_audio(
+            a_delta("Gu"), a_delta("ten"), a_completed("Guten Tag.")
+        ),
         [_interim("Gu"), _interim("Guten"), _final("Guten Tag.")],
         HopClose.NORMAL,
     ),
     "session-and-turn-events-skipped": Ending(
-        after_the_first_audio(
+        lambda: after_the_first_audio(
             wire.SessionCreated(
                 session=wire.TranscriptionSession(type="transcription")
             ),
@@ -123,27 +132,29 @@ BROWSER_ENDINGS: dict[str, Ending] = {
         HopClose.NORMAL,
     ),
     "failed-then-error": Ending(
-        after_the_first_audio(a_failed_item(), an_error_event()),
+        lambda: after_the_first_audio(a_failed_item(), an_error_event()),
         [],
         HopClose.SERVICE_FAILED,
     ),
     "error-alone": Ending(
-        after_the_first_audio(an_error_event()), [], HopClose.SERVICE_FAILED
+        lambda: after_the_first_audio(an_error_event()), [], HopClose.SERVICE_FAILED
     ),
     **HEARING_ENDS,
-    "busy-at-the-upgrade": Ending(busy_at_the_upgrade(), [], HopClose.BUSY),
+    "busy-at-the-upgrade": Ending(busy_at_the_upgrade, [], HopClose.BUSY),
     "drained-then-reopened": Ending(
-        one_after_another(draining(), sending(a_completed("Nach der Pause."))),
+        lambda: one_after_another(draining(), sending(a_completed("Nach der Pause."))),
         [_final("Nach der Pause.")],
         HopClose.NORMAL,
     ),
     "drained-then-no-session-opens": Ending(
-        one_after_another(draining(), busy_at_the_upgrade()),
+        lambda: one_after_another(draining(), busy_at_the_upgrade()),
         [],
         HopClose.SERVICE_FAILED,
     ),
     **{
-        f"refused-{status}": Ending(denying(status), [], HopClose.SERVICE_FAILED)
+        f"refused-{status}": Ending(
+            lambda status=status: denying(status), [], HopClose.SERVICE_FAILED
+        )
         for status in (401, 403, 503)
     },
 }

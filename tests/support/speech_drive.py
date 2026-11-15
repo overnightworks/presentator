@@ -547,8 +547,8 @@ def _with_speak_answer(answer: Answer) -> Callable[[], SpeechScenario]:
     return _with_service(lambda: FakeSpeechService(speak_answers=[answer]))
 
 
-def _with_realtime(realtime: Hear) -> Callable[[], SpeechScenario]:
-    return _with_service(lambda: FakeSpeechService(realtime=realtime))
+def _with_realtime(realtime: Callable[[], Hear]) -> Callable[[], SpeechScenario]:
+    return _with_service(lambda: FakeSpeechService(realtime=realtime()))
 
 
 def _with_health_answer(answer: Answer) -> Callable[[], SpeechScenario]:
@@ -603,15 +603,19 @@ LEAK_ASKS: Final[dict[str, Callable[[], SpeechScenario]]] = {
 
 
 LEAK_HEARINGS: Final[dict[str, Callable[[], SpeechScenario]]] = {
-    "good": _with_realtime(_hearing_the_words()),
-    "marked-error-event": _with_realtime(after_the_first_audio(a_marked_error_event())),
+    "good": _with_realtime(_hearing_the_words),
+    "marked-error-event": _with_realtime(
+        lambda: after_the_first_audio(a_marked_error_event())
+    ),
     "marked-failed-then-error": _with_realtime(
-        after_the_first_audio(a_marked_failed_item(), a_marked_error_event())
+        lambda: after_the_first_audio(a_marked_failed_item(), a_marked_error_event())
     ),
     **{name: _with_realtime(end.hear) for name, end in HEARING_ENDS.items()},
-    "busy-marked": _with_realtime(busy_at_the_upgrade(marked=True)),
+    "busy-marked": _with_realtime(lambda: busy_at_the_upgrade(marked=True)),
     **{
-        f"denied-{status}": _with_realtime(denying(status, marked=True))
+        f"denied-{status}": _with_realtime(
+            lambda status=status: denying(status, marked=True)
+        )
         for status in (401, 403, 503)
     },
     **_malformed_peer_cases(),

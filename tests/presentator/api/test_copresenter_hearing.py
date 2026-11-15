@@ -129,7 +129,7 @@ def test_the_browser_gets_each_transcript_then_the_close_the_service_ended_with(
     tmp_path: Path, case: str
 ) -> None:
     ending = BROWSER_ENDINGS[case]
-    service = FakeSpeechService(realtime=ending.hear)
+    service = FakeSpeechService(realtime=ending.hear())
     with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
         heard = hear_and_record(instance)
 
