@@ -85,8 +85,6 @@ def answering(
     def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
         request = read_request(connection)
         send_status(connection)
-        if not isinstance(request, StepHeader):
-            return
         seen.steps.append(request)
         upload = uploads / str(len(seen.steps))
         upload.mkdir()

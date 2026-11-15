@@ -174,12 +174,11 @@ def test_a_refused_hello_is_swept_and_the_watchdog_cancelled_before_the_next_acc
     assert life.events == 2 * ["arm 7.0", "sweep 104.0", "cancel"]
 
 
-@pytest.mark.parametrize("exit_status", [WireExit.CLOSED, WireExit.ANSWERED])
 def test_a_kept_life_connection_is_handed_to_a_gated_child_then_swept(
-    volume: Path, monkeypatch: pytest.MonkeyPatch, exit_status: WireExit
+    volume: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("PATH", ADMITTING_PATH)
-    life = ScriptedLife(exit_status=exit_status)
+    life = ScriptedLife(exit_status=WireExit.CLOSED)
     with listening_with(volume, accepts=2) as listener:
         clients = [connected(volume), connected(volume)]
         with pytest.raises(StopServingError):

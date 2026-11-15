@@ -20,7 +20,6 @@ from presentator.host.worker_termination import (
     Watchdog,
 )
 from presentator.host.worker_wire import (
-    KEPT_LIFE_EXITS,
     ReplyPlan,
     WireExit,
     WireRole,
@@ -589,7 +588,7 @@ def _hand_over_with_record(
     if header.exit_status is None:
         return header.life_end
     if header.exit_status != WireExit.ACCEPTED:
-        return None if header.exit_status in KEPT_LIFE_EXITS else LifeEnd.WIRE_EXIT
+        return None if header.exit_status == WireExit.CLOSED else LifeEnd.WIRE_EXIT
     life_ends_at = life_deadline(accepted_at, serving.build_timeout_seconds)
     upload_ends_at = _phase_end(serving, UPLOAD_SECONDS, life_ends_at)
     serving.watchdog.arm(

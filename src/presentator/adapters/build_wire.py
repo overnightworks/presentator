@@ -56,7 +56,6 @@ ANSWER_BYTES = 1 + NONCE_BYTES + TAG_BYTES
 class MessageKind(IntEnum):
     """The message kinds this end reads or writes."""
 
-    HELLO = 1
     STEP = 2
     STATUS = 3
     OUTCOME = 5
@@ -71,7 +70,7 @@ class RecordTag(IntEnum):
 
 
 class WireRefusedError(Exception):
-    """The peer sent something other than a valid HELLO, STEP or END."""
+    """The peer sent something other than a valid STEP or END."""
 
 
 class HelloRefusedError(WireRefusedError):
@@ -86,7 +85,7 @@ class HelloDirection(bytes, Enum):
 
 
 class EmptyHeader(BaseModel, extra="forbid", strict=True):
-    """The header of a HELLO or STATUS: exactly the empty object."""
+    """The header of a STATUS: exactly the empty object."""
 
 
 def _plain_folder_name(slug: str) -> str:
@@ -132,11 +131,6 @@ class RefusedOutcome(BaseModel, extra="forbid", strict=True):
 
 
 Outcome = BuiltOutcome | RefusedOutcome | FailedOutcome
-
-_HEADER_MODELS: dict[MessageKind, type[EmptyHeader | StepHeader]] = {
-    MessageKind.HELLO: EmptyHeader,
-    MessageKind.STEP: StepHeader,
-}
 
 
 def _preamble(kind: MessageKind) -> bytes:
@@ -257,10 +251,10 @@ def _validated[Header](adapter: TypeAdapter[Header], header: bytes) -> Header:
         raise WireRefusedError from error
 
 
-def read_request(connection: socket.socket) -> EmptyHeader | StepHeader:
-    """Read one HELLO or STEP preamble and header; raise WireRefusedError otherwise."""
-    kind, header = _read_message(connection, frozenset(_HEADER_MODELS))
-    return _validated(TypeAdapter(_HEADER_MODELS[kind]), header)
+def read_request(connection: socket.socket) -> StepHeader:
+    """Read one STEP preamble and header; raise WireRefusedError otherwise."""
+    _, header = _read_message(connection, frozenset({MessageKind.STEP}))
+    return _validated(TypeAdapter(StepHeader), header)
 
 
 def read_status(connection: socket.socket) -> None:
@@ -277,11 +271,6 @@ def read_outcome(connection: socket.socket) -> Outcome:
 
 def _send_message(connection: socket.socket, kind: MessageKind, header: bytes) -> None:
     connection.sendall(_preamble(kind) + LENGTH.pack(len(header)) + header)
-
-
-def send_hello(connection: socket.socket) -> None:
-    """Write the HELLO message: the preamble and the empty header."""
-    _send_message(connection, MessageKind.HELLO, b"{}")
 
 
 def send_step(connection: socket.socket, header: StepHeader) -> None:

@@ -73,7 +73,6 @@ def framed(header: bytes, preamble: bytes = b"PBW\x01\x01") -> bytes:
     return preamble + len(header).to_bytes(2, "big") + header
 
 
-HELLO = b"PBW\x01\x01\x00\x02{}"
 STATUS = b"PBW\x01\x03\x00\x02{}"
 OUTCOME_FAILED = b'PBW\x01\x05\x00\x20{"outcome":"failed","text":null}'
 OUTCOME_BUILT = framed(b'{"outcome":"built"}', b"PBW\x01\x05")
@@ -341,7 +340,7 @@ class ScriptedLife:
         if len(self.budgets_waited) <= self.headers_stalled:
             return None
         if self.answer:
-            self.write_answer_after_hello(self.spawned[-1].pass_fds[0])
+            self.write_answer_after_the_request(self.spawned[-1].pass_fds[0])
         return self.exit_status
 
     @property
@@ -387,7 +386,7 @@ class ScriptedLife:
         ):
             raise self.wait_error
 
-    def write_answer_after_hello(self, connection_fd: int) -> None:
+    def write_answer_after_the_request(self, connection_fd: int) -> None:
         with socket.socket(fileno=os.dup(connection_fd)) as connection:
             connection.settimeout(WAIT_SECONDS)
             read_request(connection)

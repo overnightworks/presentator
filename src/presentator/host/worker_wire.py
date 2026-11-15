@@ -1,4 +1,4 @@
-"""The wire child's entry: idle takes a HELLO or STEP, upload and send answer."""
+"""The wire child's entry: idle takes a STEP, upload and send answer."""
 
 import argparse
 import os
@@ -10,7 +10,6 @@ from enum import IntEnum, StrEnum
 from pathlib import Path
 
 from presentator.adapters.build_wire import (
-    EmptyHeader,
     WireRefusedError,
     read_record,
     read_request,
@@ -49,7 +48,6 @@ class WireExit(IntEnum):
     """The exit statuses the controller accepts from a wire child."""
 
     CLOSED = 3
-    ANSWERED = 4
     ACCEPTED = 5
     UPLOADED = 6
     SENT = 7
@@ -66,15 +64,10 @@ class WireArguments:
 
 
 STEP_ERROR_FILE = "step.err"
-KEPT_LIFE_EXITS = frozenset({WireExit.CLOSED, WireExit.ANSWERED})
 
 
 def _idle(connection: socket.socket, arguments: WireArguments) -> WireExit:
-    request = read_request(connection)
-    if isinstance(request, EmptyHeader):
-        send_status(connection)
-        return WireExit.ANSWERED
-    write_record(arguments.record_fd, request)
+    write_record(arguments.record_fd, read_request(connection))
     return WireExit.ACCEPTED
 
 
