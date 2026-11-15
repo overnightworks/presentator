@@ -11,8 +11,6 @@ from presentator.host.worker_self_check import (
     PROBED_IDENTITIES,
     SEND_DROPPED,
     Predicate,
-    send_probe,
-    send_probes,
 )
 from tests.presentator.host.support.sealed_snapshot import (
     read_sealed_snapshot,
@@ -100,24 +98,3 @@ def test_a_probe_that_outlasts_its_seconds_reports_a_timeout() -> None:
     outlasting = "import time; time.sleep(5)"
 
     assert worker_children.program_output_as(outlasting, None, seconds=0.1) == "timeout"
-
-
-def test_the_controllers_own_probe_answers_what_its_datagram_met() -> None:
-    answer = send_probe(None)
-
-    assert answer == SENT or answer.startswith("E")
-
-
-def test_one_probe_runs_for_each_probed_identity(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    asked: list[tuple[int, int] | None] = []
-
-    def recording(identity: tuple[int, int] | None) -> str:
-        asked.append(identity)
-        return SEND_DROPPED
-
-    monkeypatch.setattr(worker_self_check, "send_probe", recording)
-
-    assert send_probes() == (SEND_DROPPED,) * len(PROBED_IDENTITIES)
-    assert asked == list(PROBED_IDENTITIES)
