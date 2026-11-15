@@ -1,12 +1,23 @@
 """What the build worker client's test modules share."""
 
-from dataclasses import replace
+import os
+import socket
+import threading
+from collections.abc import Callable, Generator
+from contextlib import contextmanager, suppress
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from presentator.adapters.build_wire import (
     FailedOutcome,
     RefusalLimit,
     RefusedOutcome,
+    StepHeader,
+    WireRefusedError,
+    read_request,
+    receive_entries,
+    send_status,
+    verify_hello,
 )
 from presentator.adapters.build_worker import STAGED_PREFIX, WorkerToolchain
 from presentator.adapters.builds import BuildPlace, BuildStep
@@ -22,6 +33,7 @@ from tests.support.worker_support import KEY, LOCAL_ADDRESS, port_of
 
 MEGABYTES = 1
 WINDOW = 0.6
+HELLO_SECONDS = 1.0
 WITHOUT_A_REASON = BuildFailure.without_words()
 INDEX = b"<html>"
 PDF = b"%PDF"
@@ -79,3 +91,79 @@ def tree_of(root: Path) -> dict[str, bytes | None]:
 
 def staging_of(step: BuildStep) -> Path:
     return step.place.here / f"{STAGED_PREFIX}{step.name}"
+
+
+@dataclass
+class Seen:
+    """What the fake worker saw of its clients."""
+
+    steps: list[StepHeader] = field(default_factory=list[StepHeader])
+    uploads: list[Path] = field(default_factory=list[Path])
+
+
+type Script = Callable[[socket.socket, Seen, Path], None]
+
+
+def proven(script: Script, key: bytes = KEY) -> Script:
+    """A worker that runs the script only for a client whose hello verifies."""
+
+    def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
+        if verify_hello(connection, key, seconds=HELLO_SECONDS):
+            script(connection, seen, uploads)
+
+    return serve
+
+
+def answering(
+    reply: Callable[[socket.socket, StepHeader], None], key: bytes = KEY
+) -> Script:
+    """A worker that takes a STEP after the hello by answering and replying."""
+
+    def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
+        request = read_request(connection)
+        send_status(connection)
+        seen.steps.append(request)
+        upload = uploads / str(len(seen.steps))
+        upload.mkdir()
+        seen.uploads.append(upload)
+        descriptor = os.open(upload, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            receive_entries(connection, descriptor, MEGABYTES)
+        finally:
+            os.close(descriptor)
+        reply(connection, request)
+
+    return proven(serve, key)
+
+
+@contextmanager
+def fake_worker(volume: Path, script: Script, accepts: int = 4) -> Generator[Seen]:
+    """A thread serving the script on the volume's port."""
+    listener = support.listening_with(volume, accepts)
+    seen = Seen()
+    uploads = volume / "uploads"
+    uploads.mkdir()
+
+    stopped = threading.Event()
+
+    def serve() -> None:
+        while not stopped.is_set():
+            try:
+                connection, _ = listener.accept()
+            except support.StopServingError, OSError:
+                return
+            with connection, suppress(OSError, WireRefusedError):
+                if not stopped.is_set():
+                    script(connection, seen, uploads)
+
+    thread = threading.Thread(target=serve)
+    thread.start()
+    try:
+        yield seen
+    finally:
+        stopped.set()
+        listener.accepts_left = 1
+        with socket.create_connection((support.LOCAL_ADDRESS, support.port_of(volume))):
+            pass
+        thread.join()
+        listener.close()

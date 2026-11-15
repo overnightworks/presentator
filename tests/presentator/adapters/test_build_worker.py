@@ -4,11 +4,8 @@ import errno
 import logging
 import os
 import socket
-import threading
 import time
-from collections.abc import Callable, Generator
-from contextlib import contextmanager, suppress
-from dataclasses import dataclass, field
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -17,11 +14,8 @@ from presentator.adapters.build_wire import (
     MAXIMUM_ENTRIES,
     MEGABYTE,
     StepHeader,
-    WireRefusedError,
     read_request,
-    receive_entries,
     send_status,
-    verify_hello,
 )
 from presentator.adapters.build_worker import Fault
 from presentator.contracts.decks import (
@@ -42,61 +36,21 @@ from tests.presentator.adapters.support.build_worker_support import (
     PDF,
     WINDOW,
     WITHOUT_A_REASON,
+    Script,
+    Seen,
     a_step,
+    answering,
+    fake_worker,
+    proven,
     staging_of,
     toolchain,
     tree_of,
 )
 from tests.support import worker_support as support
-from tests.support.worker_support import KEY
 
 PROMPTLY = 10
 UNAVAILABLE = ToolchainUnavailable()
 WINDOW_TOLERANCE = 0.1
-HELLO_SECONDS = 1.0
-
-
-@dataclass
-class Seen:
-    """What the fake worker saw of its clients."""
-
-    steps: list[StepHeader] = field(default_factory=list[StepHeader])
-    uploads: list[Path] = field(default_factory=list[Path])
-
-
-type Script = Callable[[socket.socket, Seen, Path], None]
-
-
-def proven(script: Script, key: bytes = KEY) -> Script:
-    """A worker that runs the script only for a client whose hello verifies."""
-
-    def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
-        if verify_hello(connection, key, seconds=HELLO_SECONDS):
-            script(connection, seen, uploads)
-
-    return serve
-
-
-def answering(
-    reply: Callable[[socket.socket, StepHeader], None], key: bytes = KEY
-) -> Script:
-    """A worker that takes a STEP after the hello by answering and replying."""
-
-    def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
-        request = read_request(connection)
-        send_status(connection)
-        seen.steps.append(request)
-        upload = uploads / str(len(seen.steps))
-        upload.mkdir()
-        seen.uploads.append(upload)
-        descriptor = os.open(upload, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            receive_entries(connection, descriptor, MEGABYTES)
-        finally:
-            os.close(descriptor)
-        reply(connection, request)
-
-    return proven(serve, key)
 
 
 def nothing_to_reply(_connection: socket.socket, _step: StepHeader) -> None:
@@ -121,39 +75,6 @@ def closing_first(count: int, then: Script) -> Script:
         then(connection, seen, uploads)
 
     return serve
-
-
-@contextmanager
-def fake_worker(volume: Path, script: Script, accepts: int = 4) -> Generator[Seen]:
-    """A thread serving the script on the volume's port."""
-    listener = support.listening_with(volume, accepts)
-    seen = Seen()
-    uploads = volume / "uploads"
-    uploads.mkdir()
-
-    stopped = threading.Event()
-
-    def serve() -> None:
-        while not stopped.is_set():
-            try:
-                connection, _ = listener.accept()
-            except support.StopServingError, OSError:
-                return
-            with connection, suppress(OSError, WireRefusedError):
-                if not stopped.is_set():
-                    script(connection, seen, uploads)
-
-    thread = threading.Thread(target=serve)
-    thread.start()
-    try:
-        yield seen
-    finally:
-        stopped.set()
-        listener.accepts_left = 1
-        with socket.create_connection((support.LOCAL_ADDRESS, support.port_of(volume))):
-            pass
-        thread.join()
-        listener.close()
 
 
 def test_a_worker_that_is_not_there_is_retried_until_the_window_ends(

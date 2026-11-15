@@ -12,9 +12,10 @@ from presentator.contracts.decks import StepKind
 from tests.presentator.adapters.support.build_worker_support import (
     BUILT_BY_STEP,
     a_step,
+    answering,
+    fake_worker,
     toolchain,
 )
-from tests.presentator.adapters.test_build_worker import answering, fake_worker
 
 BUILD_SECONDS = 0.3
 
