@@ -8,31 +8,59 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import pytest
-from fastapi import WebSocket
 from speech_client import wire
 from speech_client.relay import HOP_FRAME_BYTES, HopClose
 
 from presentator.adapters.speech import SpeechHearing
-from presentator.contracts.copresenter import HearingTranscript, SpeechTokens
+from presentator.contracts.copresenter import (
+    CoPresenterUnavailableError,
+    HearingTranscript,
+    SpeechTokens,
+)
 from presentator.contracts.voice import SampleLanguage
 from tests.support.lobby import the_speech_voices
 from tests.support.speech_service import (
     AN_ITEM,
     FakeSpeechService,
     Hear,
+    RecordedRequest,
     a_completed,
     a_delta,
     a_failed_item,
     a_loopback_server,
     accept_and_hold,
     an_error_event,
+    busy_at_the_upgrade,
+    draining,
+    one_after_another,
     sending,
+    sending_then_reading,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-TOKENS = SpeechTokens(person="person-token-MARKER", workload="workload-token-MARKER")
+
+@dataclass
+class MintedTokens:
+    """A token source that mints a new pair per call, or fails on one call."""
+
+    failing_call: int | None = None
+    calls: int = 0
+
+    async def __call__(self) -> SpeechTokens:
+        self.calls += 1
+        if self.calls == self.failing_call:
+            raise CoPresenterUnavailableError
+        return self.pair(self.calls)
+
+    @staticmethod
+    def pair(call: int) -> SpeechTokens:
+        return SpeechTokens(
+            person=f"person-token-{call}", workload=f"workload-token-{call}"
+        )
+
+
 _CLOSE_WAIT_SECONDS = 10
 
 
@@ -57,9 +85,13 @@ class ASilentBrowser:
 
 
 async def _heard_through(
-    realtime: Hear, browser: ASilentBrowser | None = None
+    realtime: Hear,
+    browser: ASilentBrowser | None = None,
+    tokens: MintedTokens | None = None,
+    fake: FakeSpeechService | None = None,
 ) -> tuple[list[HearingTranscript], ASilentBrowser]:
-    fake = FakeSpeechService(realtime=realtime)
+    fake = fake or FakeSpeechService()
+    fake.realtime = realtime
     browser = browser or ASilentBrowser()
     transcripts: list[HearingTranscript] = []
 
@@ -68,7 +100,7 @@ async def _heard_through(
 
     async with a_loopback_server(fake.app()) as origin:
         await SpeechHearing(origin, voices=the_speech_voices()).relay(
-            browser, "de", TOKENS, ended=asyncio.Event(), heard=heard
+            browser, "de", tokens or MintedTokens(), ended=asyncio.Event(), heard=heard
         )
     return transcripts, browser
 
@@ -191,13 +223,7 @@ class _CallerFaultError(Exception):
 
 def test_a_fault_of_the_caller_passes_through_and_closes_the_service_side() -> None:
     fake = FakeSpeechService()
-
-    async def realtime(socket: WebSocket) -> None:
-        await socket.accept()
-        await socket.send_text(a_delta("Ha").model_dump_json())
-        await fake.read_events(socket)
-
-    fake.realtime = realtime
+    fake.realtime = sending_then_reading(fake, a_delta("Ha"))
 
     async def scenario() -> list[str]:
         async def heard(transcript: HearingTranscript) -> None:
@@ -207,7 +233,11 @@ def test_a_fault_of_the_caller_passes_through_and_closes_the_service_side() -> N
         async with a_loopback_server(fake.app()) as origin:
             hearing = SpeechHearing(origin, voices=the_speech_voices())
             relaying = hearing.relay(
-                ASilentBrowser(), "de", TOKENS, ended=asyncio.Event(), heard=heard
+                ASilentBrowser(),
+                "de",
+                MintedTokens(),
+                ended=asyncio.Event(),
+                heard=heard,
             )
             with pytest.raises(_CallerFaultError):
                 await relaying
@@ -215,3 +245,66 @@ def test_a_fault_of_the_caller_passes_through_and_closes_the_service_side() -> N
             return fake.closes
 
     assert asyncio.run(scenario()) == ["closed"]
+
+
+def _presented(upgrade: RecordedRequest) -> tuple[str, str]:
+    headers = upgrade.headers
+    return headers[wire.WORKLOAD_TOKEN_HEADER.lower()], headers[
+        wire.AUTHORIZATION_HEADER.lower()
+    ].removeprefix("Bearer ")
+
+
+def test_each_opening_presents_the_tokens_its_source_minted_for_it(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake = FakeSpeechService()
+    tokens = MintedTokens()
+    realtime = one_after_another(
+        draining(), draining(), sending(a_completed("Wieder da."))
+    )
+
+    with caplog.at_level(logging.WARNING, logger="presentator"):
+        transcripts, browser = asyncio.run(
+            _heard_through(realtime, tokens=tokens, fake=fake)
+        )
+
+    assert transcripts == [_final("Wieder da.")]
+    assert browser.closed_with == [HopClose.NORMAL]
+    assert caplog.records == []
+    assert [_presented(upgrade) for upgrade in fake.upgrades] == [
+        (minted.workload, minted.person) for minted in map(MintedTokens.pair, (1, 2, 3))
+    ]
+
+
+@pytest.mark.parametrize("failing_call", [1, 2], ids=["first-opening", "reopening"])
+def test_tokens_that_cannot_be_read_end_the_hearing_as_a_service_failure(
+    failing_call: int,
+) -> None:
+    fake = FakeSpeechService()
+
+    transcripts, browser = asyncio.run(
+        _heard_through(
+            one_after_another(draining(), sending(a_completed("Nie gehört."))),
+            tokens=MintedTokens(failing_call=failing_call),
+            fake=fake,
+        )
+    )
+
+    assert transcripts == []
+    assert browser.closed_with == [HopClose.SERVICE_FAILED]
+    assert len(fake.upgrades) == failing_call - 1
+
+
+def test_a_hearing_the_service_never_reopens_ends_as_a_service_failure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.WARNING, logger="presentator"):
+        transcripts, browser = asyncio.run(
+            _heard_through(one_after_another(draining(), busy_at_the_upgrade()))
+        )
+
+    assert transcripts == []
+    assert browser.closed_with == [HopClose.SERVICE_FAILED]
+    assert [record.getMessage() for record in caplog.records] == [
+        "hearing failed: ReconnectFailed"
+    ]

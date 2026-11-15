@@ -1,5 +1,6 @@
 """Provider-neutral values carried by the authenticated co-presenter path."""
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum, auto
 
@@ -64,6 +65,13 @@ class SpeechTokens:
 
     person: str = field(repr=False)
     workload: str = field(repr=False)
+
+
+type SpeechTokenSource = Callable[[], Awaitable[SpeechTokens]]
+"""Reads the tokens one opening of the speech service presents, fresh each call.
+
+Raises CoPresenterUnavailableError when they cannot be had.
+"""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

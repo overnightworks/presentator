@@ -66,6 +66,7 @@ def _a_voice_entry(*, ready: bool, sample_rate: object = 1) -> dict[str, object]
         "model": wire.SpeakingModel.PIPER,
         "name": "a-name",
         "languages": [wire.Language.DE],
+        "takes_instructions": False,
         "ready": ready,
         "sample_rate": sample_rate,
     }
@@ -253,8 +254,10 @@ async def _opened(socket_to_browser: WebSocket) -> None:
 
 
 async def accept_and_hold(socket_to_browser: WebSocket) -> None:
+    """Accept, take the `session.update`, then close in order."""
     await _opened(socket_to_browser)
     await socket_to_browser.receive()
+    await socket_to_browser.close()
 
 
 async def accept_and_stay_silent(socket_to_browser: WebSocket) -> None:
@@ -323,6 +326,28 @@ def sending(*events: wire.ServerEvent) -> Hear:
         for event in events:
             await socket_to_browser.send_text(event.model_dump_json())
         await socket_to_browser.close()
+
+    return realtime
+
+
+def draining() -> Hear:
+    """Accept, take the `session.update`, then close as a stopping service does."""
+
+    async def realtime(socket_to_browser: WebSocket) -> None:
+        await _opened(socket_to_browser)
+        await socket_to_browser.receive()
+        await socket_to_browser.close(code=wire.DRAIN_CLOSE_CODE)
+
+    return realtime
+
+
+def one_after_another(*openings: Hear) -> Hear:
+    """Serve each upgrade with the next handler; the last serves all that follow."""
+    remaining = list(openings)
+
+    async def realtime(socket_to_browser: WebSocket) -> None:
+        serving = remaining.pop(0) if len(remaining) > 1 else remaining[0]
+        await serving(socket_to_browser)
 
     return realtime
 

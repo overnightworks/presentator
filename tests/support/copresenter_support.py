@@ -36,6 +36,7 @@ from presentator.contracts.copresenter import (
     ShowSlide,
     SlideText,
     SpeechTokens,
+    SpeechTokenSource,
 )
 from presentator.contracts.decks import Source
 from presentator.contracts.voice import SampleLanguage
@@ -157,14 +158,14 @@ class RecordingSpeech:
         self,
         browser: HearingSocket,
         language: str,
-        tokens: SpeechTokens,
+        tokens: SpeechTokenSource,
         *,
         ended: asyncio.Event,
         heard: Callable[[HearingTranscript], Awaitable[None]],
     ) -> None:
         """Take frames, answer each with the next event, and end as the relay does."""
         assert language == "de"
-        self.heard_with.append(tokens)
+        self.heard_with.append(await tokens())
         self.hearing_opens += 1
         self.relaying.set()
         try:

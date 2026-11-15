@@ -28,7 +28,11 @@ from presentator.adapters.speech import (
 from presentator.agent.backend import gateway_answerer, silence_transport_traces
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import CoPresenterUse
-from presentator.contracts.copresenter import HearingTranscript, SpeechTokens
+from presentator.contracts.copresenter import (
+    HearingTranscript,
+    SpeechTokens,
+    SpeechTokenSource,
+)
 from tests.presentator.application.support.fakes import FakeSourceStore
 from tests.support.copresenter_support import (
     A_DECK_WORDS,
@@ -86,7 +90,10 @@ from tests.support.speech_service import (
     busy_at_the_upgrade,
     crashing_after_the_first_audio,
     denying,
+    draining,
     nobody_listens,
+    one_after_another,
+    sending,
 )
 from tests.support.talk_support import A, Hosts, two_hosts
 
@@ -217,7 +224,7 @@ class WitnessedSpeech:
         self,
         browser: HearingSocket,
         language: str,
-        tokens: SpeechTokens,
+        tokens: SpeechTokenSource,
         *,
         ended: asyncio.Event,
         heard: Callable[[HearingTranscript], Awaitable[None]],
@@ -631,6 +638,11 @@ class Ending:
     close: HopClose
 
 
+def _refusing_after(cut: Hear) -> Hear:
+    """A session cut after its first audio, and an upgrade the service then refuses."""
+    return one_after_another(cut, denying(503))
+
+
 _HEARING_ENDS: Final[dict[str, Ending]] = {
     "closes-1000": Ending(
         after_the_first_audio(close_code=1000, close_reason=PLANTED),
@@ -639,14 +651,18 @@ _HEARING_ENDS: Final[dict[str, Ending]] = {
     ),
     **{
         f"closes-{code}": Ending(
-            after_the_first_audio(close_code=code, close_reason=PLANTED),
+            _refusing_after(
+                after_the_first_audio(close_code=code, close_reason=PLANTED)
+            ),
             [],
             HopClose.SERVICE_FAILED,
         )
         for code in (1009, 1011, 1013)
     },
     "peer-crashes-mid-session": Ending(
-        crashing_after_the_first_audio(), [], HopClose.SERVICE_FAILED
+        _refusing_after(crashing_after_the_first_audio()),
+        [],
+        HopClose.SERVICE_FAILED,
     ),
     **{
         name: Ending(hear, [], HopClose.SERVICE_FAILED)
@@ -788,6 +804,16 @@ BROWSER_ENDINGS: dict[str, Ending] = {
     ),
     **_HEARING_ENDS,
     "busy-at-the-upgrade": Ending(busy_at_the_upgrade(), [], HopClose.BUSY),
+    "drained-then-reopened": Ending(
+        one_after_another(draining(), sending(a_completed("Nach der Pause."))),
+        [_final("Nach der Pause.")],
+        HopClose.NORMAL,
+    ),
+    "drained-then-no-session-opens": Ending(
+        one_after_another(draining(), busy_at_the_upgrade()),
+        [],
+        HopClose.SERVICE_FAILED,
+    ),
     **{
         f"refused-{status}": Ending(denying(status), [], HopClose.SERVICE_FAILED)
         for status in (401, 403, 503)

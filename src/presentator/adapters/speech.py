@@ -9,7 +9,13 @@ from typing import TYPE_CHECKING, Final, assert_never
 from pydantic import ValidationError
 from speech_client import wire
 from speech_client.health import UnexpectedStatus, fetch_health
-from speech_client.hearing import OPENING_SECONDS, Closed
+from speech_client.hearing import (
+    OPENING_SECONDS,
+    Closed,
+    NoToken,
+    ReconnectFailed,
+    SessionTokens,
+)
 from speech_client.hearing import Refused as HearingRefused
 from speech_client.outcomes import (
     Cut,
@@ -34,6 +40,7 @@ from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     HearingTranscript,
     SpeechTokens,
+    SpeechTokenSource,
 )
 from presentator.contracts.voice import SampleLanguage
 
@@ -175,7 +182,7 @@ class SpeechHearing:
         self,
         browser: HearingSocket,
         language: str,
-        tokens: SpeechTokens,
+        tokens: SpeechTokenSource,
         *,
         ended: asyncio.Event,
         heard: Callable[[HearingTranscript], Awaitable[None]],
@@ -200,19 +207,28 @@ class SpeechHearing:
         async def heard_partial(partial: Partial) -> None:
             await heard(HearingTranscript(text=partial.text, final=False))
 
-        outcome = await hear_utterances(
-            browser,
-            self._origin,
-            workload_token=tokens.workload,
-            person_token=tokens.person,
-            languages=_hearing_languages(hears),
-            deadline_seconds=self._hearing_deadline_seconds,
-            held_limit_bytes=_HELD_LIMIT_BYTES,
-            ended=ended,
-            on_utterance=heard_utterance,
-            on_partial=heard_partial,
-            opening_seconds=self._opening_seconds,
-        )
+        async def opening_tokens() -> SessionTokens:
+            read = await tokens()
+            return SessionTokens(workload_token=read.workload, person_token=read.person)
+
+        try:
+            outcome = await hear_utterances(
+                browser,
+                self._origin,
+                token_source=opening_tokens,
+                languages=_hearing_languages(hears),
+                deadline_seconds=self._hearing_deadline_seconds,
+                held_limit_bytes=_HELD_LIMIT_BYTES,
+                ended=ended,
+                on_utterance=heard_utterance,
+                on_partial=heard_partial,
+                opening_seconds=self._opening_seconds,
+            )
+        # The client leaves the browser socket to the app when the token source
+        # raises, so the hearing ends here as a service failure.
+        except CoPresenterUnavailableError:
+            await self.refuse(browser)
+            return
         _log_ending(outcome)
 
     async def refuse(self, browser: HearingSocket) -> None:
@@ -253,7 +269,16 @@ def _log_ending(outcome: UtteranceOutcome) -> None:
             _LOGGER.warning("hearing failed: ServiceFailed code=%s", outcome.code.value)
         case RuleBroken():
             _LOGGER.warning("hearing failed: RuleBroken close=%d", outcome.close.value)
-        case Busy() | OverCap() | Malformed() | PastDeadline() | Cut() | Unreachable():
+        case (
+            Busy()
+            | OverCap()
+            | Malformed()
+            | PastDeadline()
+            | Cut()
+            | Unreachable()
+            | NoToken()
+            | ReconnectFailed()
+        ):
             _LOGGER.warning(_HEARING_FAILED_LOG, type(outcome).__name__)
         case _:
             assert_never(outcome)
