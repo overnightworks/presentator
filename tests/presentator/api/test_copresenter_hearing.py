@@ -26,10 +26,10 @@ from tests.support.copresenter_support import (
     the_token_endpoint_goes_down,
     the_token_thread_fails,
 )
+from tests.support.hearing_endings import BROWSER_ENDINGS
 from tests.support.leak_support import everything_shown
 from tests.support.lobby import A_SPEECH_SCOPE, A_TALK_ADDRESS
 from tests.support.speech_drive import (
-    BROWSER_ENDINGS,
     LEAK_HEARINGS,
     ORIGIN,
     THREAD_WAIT_SECONDS,

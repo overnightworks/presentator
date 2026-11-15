@@ -14,9 +14,7 @@ from typing import TYPE_CHECKING, Final
 from urllib.parse import urlsplit
 
 from agents.backend.fake_gateway import FakeGateway, completion
-from speech_client import wire
 from speech_client.outcomes import PastDeadline
-from speech_client.relay import HopClose
 from starlette.websockets import WebSocketDisconnect
 
 from presentator.adapters.sentences import split_sentences
@@ -59,6 +57,7 @@ from tests.support.copresenter_support import (
     the_token_thread_fails,
 )
 from tests.support.deck_text_support import FakeDeckTexts
+from tests.support.hearing_endings import HEARING_ENDS
 from tests.support.leak_support import everything_shown
 from tests.support.lobby import (
     A_BROWSERS_HEADERS,
@@ -68,7 +67,6 @@ from tests.support.lobby import (
     the_speech_voices,
 )
 from tests.support.speech_service import (
-    AN_ITEM,
     HEALTH_FAILURES,
     MALFORMED_PEERS,
     PLANTED,
@@ -80,20 +78,14 @@ from tests.support.speech_service import (
     Served,
     a_completed,
     a_delta,
-    a_failed_item,
     a_loopback_server,
     a_marked_error_event,
     a_marked_failed_item,
     a_served_origin,
     after_the_first_audio,
-    an_error_event,
     busy_at_the_upgrade,
-    crashing_after_the_first_audio,
     denying,
-    draining,
     nobody_listens,
-    one_after_another,
-    sending,
 )
 from tests.support.talk_support import A, Hosts, two_hosts
 
@@ -610,74 +602,13 @@ LEAK_ASKS: Final[dict[str, Callable[[], SpeechScenario]]] = {
 }
 
 
-def _marked_frames_the_parser_refuses() -> dict[str, Hear]:
-    return {
-        "unknown-event": after_the_first_audio(
-            json.dumps({"type": "unknown.event", "event_id": PLANTED})
-        ),
-        "invalid-payload": after_the_first_audio(
-            json.dumps(
-                {
-                    "type": "conversation.item.input_audio_transcription.delta",
-                    "event_id": PLANTED,
-                    "item_id": AN_ITEM,
-                    "delta": [PLANTED],
-                }
-            )
-        ),
-        "non-json-frame": after_the_first_audio(f"not json at all {PLANTED}"),
-    }
-
-
-@dataclass(frozen=True)
-class Ending:
-    """How a service ends a hearing, and what the browser shows of it."""
-
-    hear: Hear
-    frames: list[dict[str, object]]
-    close: HopClose
-
-
-def _refusing_after(cut: Hear) -> Hear:
-    """A session cut after its first audio, and an upgrade the service then refuses."""
-    return one_after_another(cut, denying(503))
-
-
-_HEARING_ENDS: Final[dict[str, Ending]] = {
-    "closes-1000": Ending(
-        after_the_first_audio(close_code=1000, close_reason=PLANTED),
-        [],
-        HopClose.NORMAL,
-    ),
-    **{
-        f"closes-{code}": Ending(
-            _refusing_after(
-                after_the_first_audio(close_code=code, close_reason=PLANTED)
-            ),
-            [],
-            HopClose.SERVICE_FAILED,
-        )
-        for code in (1009, 1011, 1013)
-    },
-    "peer-crashes-mid-session": Ending(
-        _refusing_after(crashing_after_the_first_audio()),
-        [],
-        HopClose.SERVICE_FAILED,
-    ),
-    **{
-        name: Ending(hear, [], HopClose.SERVICE_FAILED)
-        for name, hear in _marked_frames_the_parser_refuses().items()
-    },
-}
-
-
 LEAK_HEARINGS: Final[dict[str, Callable[[], SpeechScenario]]] = {
     "good": _with_realtime(_hearing_the_words()),
     "marked-error-event": _with_realtime(after_the_first_audio(a_marked_error_event())),
     "marked-failed-then-error": _with_realtime(
         after_the_first_audio(a_marked_failed_item(), a_marked_error_event())
     ),
-    **{name: _with_realtime(end.hear) for name, end in _HEARING_ENDS.items()},
+    **{name: _with_realtime(end.hear) for name, end in HEARING_ENDS.items()},
     "busy-marked": _with_realtime(busy_at_the_upgrade(marked=True)),
     **{
         f"denied-{status}": _with_realtime(denying(status, marked=True))
@@ -758,64 +689,3 @@ async def ask_and_leave_at_the_first_speak(
         timeout=THREAD_WAIT_SECONDS,
     )
     release.set()
-
-
-def _interim(text: str) -> dict[str, object]:
-    return {"text": text, "final": False, "language": None}
-
-
-def _final(text: str, language: str = "de") -> dict[str, object]:
-    return {"text": text, "final": True, "language": language}
-
-
-BROWSER_ENDINGS: dict[str, Ending] = {
-    "deltas-grow-and-completed-replaces": Ending(
-        after_the_first_audio(a_delta("Gu"), a_delta("ten"), a_completed("Guten Tag.")),
-        [_interim("Gu"), _interim("Guten"), _final("Guten Tag.")],
-        HopClose.NORMAL,
-    ),
-    "session-and-turn-events-skipped": Ending(
-        after_the_first_audio(
-            wire.SessionCreated(
-                session=wire.TranscriptionSession(type="transcription")
-            ),
-            wire.SessionUpdated(
-                session=wire.TranscriptionSession(type="transcription")
-            ),
-            wire.SpeechStarted(audio_start_ms=0, item_id=AN_ITEM),
-            wire.SpeechStopped(audio_end_ms=1, item_id=AN_ITEM),
-            wire.AudioCommitted(item_id=AN_ITEM, previous_item_id=None),
-            wire.ItemCreated(
-                previous_item_id=None,
-                item=wire.UserMessageItem(id=AN_ITEM),
-            ),
-            a_completed("Ein Wort."),
-        ),
-        [_final("Ein Wort.")],
-        HopClose.NORMAL,
-    ),
-    "failed-then-error": Ending(
-        after_the_first_audio(a_failed_item(), an_error_event()),
-        [],
-        HopClose.SERVICE_FAILED,
-    ),
-    "error-alone": Ending(
-        after_the_first_audio(an_error_event()), [], HopClose.SERVICE_FAILED
-    ),
-    **_HEARING_ENDS,
-    "busy-at-the-upgrade": Ending(busy_at_the_upgrade(), [], HopClose.BUSY),
-    "drained-then-reopened": Ending(
-        one_after_another(draining(), sending(a_completed("Nach der Pause."))),
-        [_final("Nach der Pause.")],
-        HopClose.NORMAL,
-    ),
-    "drained-then-no-session-opens": Ending(
-        one_after_another(draining(), busy_at_the_upgrade()),
-        [],
-        HopClose.SERVICE_FAILED,
-    ),
-    **{
-        f"refused-{status}": Ending(denying(status), [], HopClose.SERVICE_FAILED)
-        for status in (401, 403, 503)
-    },
-}
