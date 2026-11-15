@@ -288,8 +288,9 @@ def test_a_hello_that_is_not_refused_or_spends_a_life_fails_cell_12(
     world: World,
     fragment: str,
 ) -> None:
+    fixture = make_fixture(world)
     with pytest.raises(SystemExit):
-        make_fixture(world).drive()
+        fixture.drive()
     output = capsys.readouterr()
     assert fragment in output.err
     assert "cell 12: FAILED" in output.out
