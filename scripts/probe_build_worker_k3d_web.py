@@ -3,15 +3,20 @@
 Cell 10 starts the web with no worker anywhere and expects it Ready, and a
 build in it to end as an outage. Cell 11 applies the workers' Service and two
 worker pods, runs two web pods and builds hello-deck in each through the one
-Service: the first build's two steps land on two different pods, so the second
-step reaches the idle worker while the first pod restarts. Cell 12 sends the
+Service: the first build's two steps land on two different pods, and the second
+step starts before the first pod is Ready again, so it reaches the idle worker
+while the first restarts. Cell 12 sends the
 workers a hello under a wrong key and one that reflects the worker's own
 direction, and expects both refused and no pod spent. Cell 13 shows, from inside
-a worker pod, that the build and wire users reach nothing off the loopback.
+a worker pod, that the build and wire users reach nothing off the loopback, and,
+from a web pod, that a port of the worker pod other than the worker's own drops
+what reaches it although a process listens there.
 """
 
 import json
 from collections.abc import Callable
+from datetime import datetime
+from typing import cast
 
 from probe_build_worker_harness import refuse, say
 from probe_build_worker_k3d_builds import (
@@ -23,13 +28,17 @@ from probe_build_worker_k3d_builds import (
 from probe_build_worker_k3d_cluster import IN_NAMESPACE, Completed, Document, Run
 from probe_build_worker_k3d_lives import (
     TERMINATION_WINDOW_SECONDS,
+    TIMESTAMP_RESOLUTION_SECONDS,
     WORKER_SELECTOR,
     poll,
 )
 from probe_build_worker_k3d_manifests import WEB_CONTAINER, WORKER_CONTAINER
 from probe_build_worker_web import (
     EGRESS_PROGRAM,
+    EGRESS_USERS,
     HELLO_PROGRAM,
+    INBOUND_PROGRAM,
+    Outcome,
     delivers_the_deck,
     is_an_outage,
 )
@@ -42,6 +51,7 @@ HELLOS = {"wrong key": False, "reflected": False, "true": True}
 LOOPBACK = "loopback"
 CONNECTED = "connected"
 DROPPED = "EPERM"
+TIMED_OUT = "timeout"
 
 
 def web_selector(deployment: Document) -> str:
@@ -86,6 +96,12 @@ def is_ready(pod: Document) -> bool:
 def uids_of(pods: list[Document]) -> frozenset[str]:
     """The uids of the Pods."""
     return frozenset(pod["metadata"]["uid"] for pod in pods)
+
+
+def ready_since(pod: Document) -> float:
+    """The epoch seconds at which the Pod's Ready condition last changed."""
+    (ready,) = [c for c in pod["status"]["conditions"] if c["type"] == "Ready"]
+    return datetime.fromisoformat(ready["lastTransitionTime"]).timestamp()
 
 
 def await_ready(
@@ -179,13 +195,49 @@ def two_ready_pods(
     return webs, f"two web pods and two worker pods were not Ready {waited}"
 
 
-def a_build_problem(run: Run, deployment: Document, web: Document) -> str | None:
-    """Why the web pod's build of hello-deck did not deliver it."""
+def delivering_outcome(run: Run, deployment: Document, web: Document) -> Outcome | str:
+    """The outcome of the web pod's build of hello-deck, or why it did not deliver."""
     name = web["metadata"]["name"]
     outcome = build_outcome(run, deployment, name)
+    if isinstance(outcome, str) or delivers_the_deck(outcome):
+        return outcome
+    return f"{name} did not deliver: {outcome}"
+
+
+def restart_overlap_problem(
+    outcome: Outcome, replacements: list[Document]
+) -> str | None:
+    """Why the second step did not start while the first worker restarted.
+
+    The first step ended its worker's life, so the earlier Ready of the two
+    replacement pods is the first worker's. The step is judged against the
+    node's one clock at the Ready condition's resolution: a pod Ready a whole
+    resolution before the step began cannot have been restarting.
+    """
+    second_started = outcome.steps[1].started
+    first_back = min(ready_since(pod) for pod in replacements)
+    if first_back + TIMESTAMP_RESOLUTION_SECONDS <= second_started:
+        return (
+            f"the first worker was Ready again {second_started - first_back:g} s "
+            "before the second step started"
+        )
+    return None
+
+
+def first_build_problem(run: Run, deployment: Document, first: Document) -> str | None:
+    """Why the first build did not take both workers, the second while one restarted."""
+    first_workers = uids_of(list_pods(run, WORKER_SELECTOR))
+    outcome = delivering_outcome(run, deployment, first)
     if isinstance(outcome, str):
         return outcome
-    return None if delivers_the_deck(outcome) else f"{name} did not deliver: {outcome}"
+    # One life ends with each step: both pods replaced means the second step
+    # reached the idle one.
+    replacements, replaced = await_ready(
+        run, WORKER_SELECTOR, WORKER_PODS, apart_from=first_workers
+    )
+    if not replaced:
+        return "the first build's two steps did not take both worker pods"
+    return restart_overlap_problem(outcome, replacements)
 
 
 def built_over_two_workers(
@@ -195,23 +247,13 @@ def built_over_two_workers(
     webs, problem = two_ready_pods(run, selector, workers)
     if problem:
         return problem
-    first_workers = uids_of(list_pods(run, WORKER_SELECTOR))
     first, second = webs
-    problem = a_build_problem(run, deployment, first)
-    if problem:
+    if problem := first_build_problem(run, deployment, first):
         return problem
-    # One life ends with each step: both pods replaced means the second step
-    # reached the idle one while the first restarted.
-    _, replaced = await_ready(
-        run, WORKER_SELECTOR, WORKER_PODS, apart_from=first_workers
-    )
-    if not replaced:
-        return "the first build's two steps did not take both worker pods"
-    problem = copy_deck(run, deployment, second["metadata"]["name"]) or a_build_problem(
-        run, deployment, second
-    )
-    if problem:
+    if problem := copy_deck(run, deployment, second["metadata"]["name"]):
         return problem
+    if isinstance(outcome := delivering_outcome(run, deployment, second), str):
+        return outcome
     say(
         f"cell 11: {first['metadata']['name']} and {second['metadata']['name']} built "
         f"and exported hello-deck through one Service; the first build's two steps "
@@ -244,26 +286,72 @@ def hellos_refused_unspent(run: Run, selector: str) -> str | None:
     return None
 
 
-def egress_problem(ends: dict[str, dict[str, str]]) -> str | None:
-    """Why a user's attempts did not end at the loopback and nowhere else."""
-    for user, attempts in ends.items():
-        loopback = attempts.get(LOOPBACK)
-        if loopback != CONNECTED:
+def attempts_of(said: dict[str, object], user: str) -> dict[str, str] | None:
+    """How the user's attempts ended, or None if the probe printed none of them."""
+    attempts = said.get(user)
+    if not isinstance(attempts, dict):
+        return None
+    return {
+        str(target): str(end)
+        for target, end in cast("dict[object, object]", attempts).items()
+    }
+
+
+def egress_problem(said: dict[str, object], targets: tuple[str, ...]) -> str | None:
+    """Why the users' attempts did not end at the loopback and nowhere else.
+
+    Both users must have tried the loopback and every target, so a probe that
+    printed less proves nothing.
+    """
+    for user in EGRESS_USERS:
+        attempts = attempts_of(said, user)
+        if attempts is None:
+            return f"the egress probe printed no attempts of the {user} user"
+        if missing := [name for name in (LOOPBACK, *targets) if name not in attempts]:
+            return f"the {user} user's attempts lack {missing}"
+        if (loopback := attempts[LOOPBACK]) != CONNECTED:
             return f"the {user} user's connection to the loopback ended {loopback}"
-        reached = {
-            target: end
-            for target, end in attempts.items()
-            if target != LOOPBACK and end != DROPPED
-        }
+        reached = {t: attempts[t] for t in targets if attempts[t] != DROPPED}
         if reached:
             return f"the {user} user's new sockets off the loopback ended {reached}"
+    return None
+
+
+def inbound_problem(run: Run, web: Document, worker: Document) -> str | None:
+    """Why a web pod's connection to a listener in the worker pod was not dropped.
+
+    The listener is on a port other than the worker's own, so only the pod's
+    packet filter stands between it and the web pod.
+    """
+    listening = printed_line(
+        run_program(
+            run, worker["metadata"]["name"], WORKER_CONTAINER, INBOUND_PROGRAM, "listen"
+        )
+    )
+    if isinstance(listening, str):
+        return listening
+    target = f"{worker['status']['podIP']}:{listening.get('port')}"
+    reached = printed_line(
+        run_program(
+            run,
+            web["metadata"]["name"],
+            WEB_CONTAINER,
+            INBOUND_PROGRAM,
+            "reach",
+            target,
+        )
+    )
+    if isinstance(reached, str):
+        return reached
+    if reached.get("end") != TIMED_OUT:
+        return f"a web pod's connection to {target} ended {reached.get('end')}"
     return None
 
 
 def reaches_only_the_loopback(
     run: Run, selector: str, web_port: int, worker_port: int
 ) -> str | None:
-    """Cell 13: the build and wire users' new sockets cannot leave the loopback."""
+    """Cell 13: the build and wire users stay on the loopback, no other port is open."""
     webs, ready = await_ready(run, selector, WEB_PODS)
     workers, settled = await_ready(run, WORKER_SELECTOR, WORKER_PODS)
     if not (ready and settled):
@@ -280,15 +368,14 @@ def reaches_only_the_loopback(
     )
     if isinstance(said, str):
         return said
-    ends: dict[str, dict[str, str]] = {
-        user: attempts for user, attempts in said.items() if isinstance(attempts, dict)
-    }
-    if problem := egress_problem(ends):
+    problem = egress_problem(said, targets) or inbound_problem(run, web, worker)
+    if problem:
         return problem
     say(
         f"cell 13: the build and wire users reached the loopback and got {DROPPED} "
         f"to {', '.join(targets)}; the replies of the accepted connections passed "
-        f"in cell 11's builds"
+        f"in cell 11's builds; a web pod's connection to a port of the worker pod "
+        f"where a process listens, other than the worker's, ended in a {TIMED_OUT}"
     )
     return None
 

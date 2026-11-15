@@ -3,7 +3,7 @@
 The client program `probe_build_worker/web_client.py` is sent into the web pod
 over stdin; it builds hello-deck through the very composition the web serves
 with and prints its outcome as its last line, which `outcome_in` reads. The
-hello and egress programs are sent the same way and print one JSON line.
+hello, egress and inbound programs are sent the same way and print one JSON line.
 """
 
 import json
@@ -15,16 +15,22 @@ WEB_PYTHON = "/opt/venv/bin/python"
 CLIENT_PROGRAM = PROBE_SOURCES / "web_client.py"
 HELLO_PROGRAM = PROBE_SOURCES / "hello_client.py"
 EGRESS_PROGRAM = PROBE_SOURCES / "egress_probe.py"
+INBOUND_PROGRAM = PROBE_SOURCES / "inbound_probe.py"
+EGRESS_USERS = ("build", "wire")
 HELLO_STEPS = ("build", "export")
 
 
 @dataclass(frozen=True, slots=True)
 class StepOutcome:
-    """How one step of a client run ended: the failure the build reported, if any."""
+    """How one step of a client run ended: the failure the build reported, if any.
+
+    `started` is the web pod's clock, in epoch seconds, when the step began.
+    """
 
     step: str
     failed: bool
     failure: dict[str, str | int | None] | None
+    started: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +52,9 @@ def outcome_in(stdout: str) -> Outcome:
     said = json.loads(lines[-1])
     return Outcome(
         steps=tuple(
-            StepOutcome(step["step"], step["failed"], step.get("failure"))
+            StepOutcome(
+                step["step"], step["failed"], step.get("failure"), step["started"]
+            )
             for step in said["steps"]
         ),
         out=tuple(said["out"]),

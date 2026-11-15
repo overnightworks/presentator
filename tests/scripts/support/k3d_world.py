@@ -15,6 +15,11 @@ from ruamel.yaml import YAML
 
 from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import Predicate
+from tests.scripts.support.web_client_output import (
+    client_output,
+    delivered_outcome,
+    outage_outcome,
+)
 
 DIGEST = "@sha256:" + "a" * 64
 OTHER_DIGEST = "@sha256:" + "c" * 64
@@ -37,6 +42,9 @@ WEB_PORT = 8000
 WORKER_PORT = 7100
 WEB_POD_NAMES = ("web-pod-a", "web-pod-b")
 WORKER_POD_NAMES = ("build-worker-0", "build-worker-1")
+INBOUND_PORT = 40123
+# How long after its creation a fake pod turns Ready.
+READY_AFTER_SECONDS = 5
 
 Document = dict[str, Any]
 Issued = tuple[tuple[str, ...], Mapping[str, str], str | None]
@@ -130,6 +138,11 @@ def as_yaml_stream(documents: list[Document]) -> str:
 
 def stamp(seconds: int) -> str:
     return (EPOCH + timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def at(seconds: int) -> float:
+    """The epoch seconds the fake's clock shows `seconds` after its start."""
+    return (EPOCH + timedelta(seconds=seconds)).timestamp()
 
 
 def terminated_state(
@@ -289,6 +302,12 @@ class World:
     client_stderr: str = ""
     hello_stdout: str = ""
     egress_stdout: str = ""
+    # How the egress probe's attempts end when egress_stdout is unset, and how a
+    # web pod's connection to the worker pod's other port ends.
+    egress_users: tuple[str, ...] = ("build", "wire")
+    egress_loopback: str = "connected"
+    egress_off_loopback: str = "EPERM"
+    inbound_end: str = "timeout"
     copy_exit: int = 0
     copy_stderr: str = ""
     # What a residue's twin Pod shows by the residue's name; the expected end if absent.
@@ -351,16 +370,22 @@ class World:
 
     def exec_answer(self, command: tuple[str, ...]) -> tuple[int, str, str]:
         """What a program sent into a pod prints, by its container and arguments."""
+        arguments = command[command.index("-") + 1 :]
         if command[command.index("--container") + 1] != "web":
+            if arguments == ("listen",):
+                return 0, json.dumps({"port": INBOUND_PORT}), ""
             ends = {
-                "loopback": "connected",
-                **dict.fromkeys(command[command.index("-") + 1 :], "EPERM"),
+                "loopback": self.egress_loopback,
+                **dict.fromkeys(arguments, self.egress_off_loopback),
             }
             return (
                 0,
-                self.egress_stdout or json.dumps({"build": ends, "wire": ends}),
+                self.egress_stdout
+                or json.dumps(dict.fromkeys(self.egress_users, ends)),
                 "",
             )
+        if arguments[:1] == ("reach",):
+            return 0, json.dumps({"end": self.inbound_end}), ""
         if command[-2:] != ("build", "export"):
             return 0, self.hello_stdout, ""
         shown = self.client_stdout if self.workers_up() else self.outage_stdout
@@ -516,7 +541,11 @@ class World:
 
     def pod(self, name: str, uid: str, created: int, *, ready: bool) -> Document:
         """A Pod as kubectl lists it: its uid, age, Ready condition and address."""
-        condition = {"type": "Ready", "status": "True" if ready else "False"}
+        condition = {
+            "type": "Ready",
+            "status": "True" if ready else "False",
+            "lastTransitionTime": stamp(created + READY_AFTER_SECONDS),
+        }
         web: Document = {"name": "web", "restartCount": self.web_restarts}
         return {
             "metadata": {"name": name, "uid": uid, "creationTimestamp": stamp(created)},
@@ -648,38 +677,6 @@ def residue_pods(
     }
 
 
-def outage_outcome(web_module: ModuleType) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
-    """The outcome of a client whose first step found no worker."""
-    step = web_module.StepOutcome("build", failed=True, failure=None)
-    return web_module.Outcome(steps=(step,), out=(), talk_page=False, pdf=False)
-
-
-def delivered_outcome(web_module: ModuleType) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
-    """The outcome of a client whose build and export delivered the talk and PDF."""
-    steps = tuple(
-        web_module.StepOutcome(step, failed=False, failure=None)
-        for step in web_module.HELLO_STEPS
-    )
-    return web_module.Outcome(
-        steps=steps, out=("deck.pdf", "talk"), talk_page=True, pdf=True
-    )
-
-
-def client_output(outcome: Any) -> str:  # noqa: ANN401 - the web probe's Outcome, loaded by name
-    """What the web's client prints: its outcome."""
-    steps = [
-        {"step": step.step, "failed": step.failed, "failure": step.failure}
-        for step in outcome.steps
-    ]
-    said = {
-        "steps": steps,
-        "out": list(outcome.out),
-        "talk_page": outcome.talk_page,
-        "pdf": outcome.pdf,
-    }
-    return f"{json.dumps(said)}\n"
-
-
 def fake_effects(
     cluster_module: ModuleType, world: World, *, head: str | None, missing: str | None
 ) -> object:
@@ -746,10 +743,10 @@ def fixture_maker(
         world.production_image, world.twin_pod = production_image, driver.TWIN_POD
         world.residue_pods = residue_pods(load_script, driver, world.outcomes)
         world.client_stdout = world.client_stdout or client_output(
-            delivered_outcome(web_module)
+            delivered_outcome(web_module, first_step_at=at(100), second_step_at=at(105))
         )
         world.outage_stdout = world.outage_stdout or client_output(
-            outage_outcome(web_module)
+            outage_outcome(web_module, started=at(0))
         )
         world.hello_stdout = world.hello_stdout or json.dumps(web_phase.HELLOS)
         world.streams = world.streams or [

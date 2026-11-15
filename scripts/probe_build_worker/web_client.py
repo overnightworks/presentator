@@ -6,12 +6,13 @@ directory that holds `hello-deck`.
 Run inside the web's container as its own user. It reads the settings
 with `load_settings()`, takes the worker from `the_build_worker` and runs the
 named steps of the deck in a fresh run directory under the builds root. It
-prints the outcome as its one line: each step's `BuildFailure` reason, text and
-counts, and what the run directory holds when the steps are over.
+prints the outcome as its one line: each step's start time and `BuildFailure`
+reason, text and counts, and what the run directory holds when the steps are over.
 """
 
 import json
 import sys
+import time
 from pathlib import Path
 from shutil import copytree
 from tempfile import mkdtemp
@@ -57,6 +58,7 @@ def main(decks: Path, kinds: list[StepKind]) -> None:
     place = prepared_run(decks, settings.builds)
     steps: list[dict[str, object]] = []
     for kind in kinds:
+        started = time.time()
         failure = toolchain.ran(
             BuildStep(
                 place=place,
@@ -66,7 +68,11 @@ def main(decks: Path, kinds: list[StepKind]) -> None:
                 watched=lambda: None,
             )
         )
-        step: dict[str, object] = {"step": kind.value, "failed": failure is not None}
+        step: dict[str, object] = {
+            "step": kind.value,
+            "failed": failure is not None,
+            "started": started,
+        }
         if isinstance(failure, BuildFailure):
             step["failure"] = {
                 "reason": failure.reason.value,

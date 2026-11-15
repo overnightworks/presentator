@@ -6,23 +6,25 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
 from tests.scripts.support.k3d_world import (
     GENERATED_VALUE,
+    INBOUND_PORT,
     SCRATCH_MOUNT,
     WEB_POD_NAMES,
     WORKER_POD_NAMES,
     Fixture,
     World,
     apply_positions,
-    client_output,
+    at,
     command_positions,
-    delivered_outcome,
     fixture_maker,
     issued_commands,
 )
+from tests.scripts.support.web_client_output import client_output, delivered_outcome
 
 
 @pytest.fixture
@@ -64,10 +66,16 @@ def execs(world: World) -> list[tuple[tuple[str, ...], str]]:
     ]
 
 
+def delivered(web_module: ModuleType, second_step_at: int = 105) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
+    return delivered_outcome(
+        web_module, first_step_at=at(100), second_step_at=at(second_step_at)
+    )
+
+
 def test_the_shared_parse_reads_the_outcome_the_fake_client_prints(
     web_module: ModuleType,
 ) -> None:
-    done = delivered_outcome(web_module)
+    done = delivered(web_module)
     assert web_module.outcome_in(client_output(done)) == done
 
 
@@ -142,7 +150,7 @@ def test_a_build_that_delivers_with_no_worker_is_not_an_outage(
     web_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    world = World(client_stdout=client_output(delivered_outcome(web_module)))
+    world = World(client_stdout=client_output(delivered(web_module)))
     world.outage_stdout = world.client_stdout
     with pytest.raises(SystemExit):
         make_fixture(world).drive()
@@ -209,12 +217,26 @@ def test_workers_that_are_not_ready_or_not_both_used_fail_cell_11(
     assert f"cell {cell}: FAILED" in output.out
 
 
+def test_a_first_worker_back_before_the_second_step_started_fails_cell_11(
+    make_fixture: Callable[..., Fixture],
+    web_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    after_the_restart = delivered(web_module, second_step_at=130)
+    world = World(client_stdout=client_output(after_the_restart))
+    with pytest.raises(SystemExit):
+        make_fixture(world).drive()
+    output = capsys.readouterr()
+    assert "was Ready again" in output.err
+    assert "cell 11: FAILED" in output.out
+
+
 def test_a_build_that_does_not_deliver_in_a_web_pod_fails_cell_11_naming_the_pod(
     make_fixture: Callable[..., Fixture],
     web_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    done = delivered_outcome(web_module)
+    done = delivered(web_module)
     failed = dataclasses.replace(done, pdf=False)
     world = World(client_stdout=client_output(failed))
     with pytest.raises(SystemExit):
@@ -284,21 +306,72 @@ def test_cell_13_runs_the_egress_probe_in_a_worker_pod_aimed_at_the_other_pods(
     assert "got EPERM" in line
 
 
-@pytest.mark.parametrize(
-    ("ends", "fragment"),
-    [
-        ({"build": {"loopback": "ECONNREFUSED"}}, "to the loopback ended"),
-        ({"wire": {"loopback": "connected", "10.0.0.1:1": "connected"}}, "off the"),
-    ],
-    ids=["loopback refused", "an address reached"],
-)
-def test_a_user_that_leaves_the_loopback_or_cannot_use_it_fails_cell_13(
+def test_cell_13_connects_from_a_web_pod_to_a_port_a_worker_pod_listens_on(
+    make_fixture: Callable[..., Fixture],
+    web_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    inbound = web_module.INBOUND_PROGRAM.read_text(encoding="utf-8")
+    listening, reaching = [
+        command for command, stdin in execs(fixture.world) if stdin == inbound
+    ]
+    assert listening[5] in WORKER_POD_NAMES
+    assert listening[-1] == "listen"
+    assert reaching[5] in WEB_POD_NAMES
+    assert reaching[-2] == "reach"
+    host, _, port = reaching[-1].rpartition(":")
+    assert host in {pod["status"]["podIP"] for pod in fixture.world.worker_pods()}
+    assert port == str(INBOUND_PORT)
+    (line,) = cell_lines(capsys.readouterr().out, 13)
+    assert "ended in a timeout" in line
+
+
+@pytest.mark.parametrize("end", ["connected", "ECONNREFUSED"])
+def test_a_worker_port_that_does_not_drop_a_web_pods_connection_fails_cell_13(
     make_fixture: Callable[..., Fixture],
     capsys: pytest.CaptureFixture[str],
-    ends: dict[str, dict[str, str]],
+    end: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        make_fixture(World(inbound_end=end)).drive()
+    output = capsys.readouterr()
+    assert f"ended {end}" in output.err
+    assert "cell 13: FAILED" in output.out
+
+
+@pytest.mark.parametrize(
+    ("world", "fragment"),
+    [
+        (World(egress_loopback="ECONNREFUSED"), "to the loopback ended"),
+        (World(egress_off_loopback="connected"), "off the loopback ended"),
+        (World(egress_users=()), "printed no attempts of the build user"),
+        (World(egress_users=("build",)), "printed no attempts of the wire user"),
+        (
+            World(egress_stdout=json.dumps({"build": {"loopback": "connected"}})),
+            "build user's attempts lack",
+        ),
+        (
+            World(egress_stdout=json.dumps({"build": "connected", "wire": {}})),
+            "printed no attempts of the build user",
+        ),
+    ],
+    ids=[
+        "loopback refused",
+        "an address reached",
+        "no user",
+        "no wire user",
+        "no target tried",
+        "attempts that are no object",
+    ],
+)
+def test_a_user_that_leaves_the_loopback_or_a_probe_that_tried_less_fails_cell_13(
+    make_fixture: Callable[..., Fixture],
+    capsys: pytest.CaptureFixture[str],
+    world: World,
     fragment: str,
 ) -> None:
-    world = World(egress_stdout=json.dumps(ends))
     with pytest.raises(SystemExit):
         make_fixture(world).drive()
     output = capsys.readouterr()
