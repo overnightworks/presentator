@@ -2,11 +2,10 @@
 
 `prove_render` renders the image-only overlay and proves it differs from
 platform's own render only in the production image fields of every pod
-template. `applied_documents` takes the overlay's documents the worker pod
-needs, `web_documents` those the web needs and `throwaway_secret` the Secret
-the web's Deployment names, with a value from an effect for each file its
-environment names under the Secret's mount. `namespace_document` takes
-production's Namespace for presentator.
+template. `applied_documents` takes the overlay's documents the worker pods
+need, `web_documents` those the web needs and `throwaway_secrets` the Secrets
+the web's Deployment projects, with a value from an effect for each file they
+hold. `namespace_document` takes production's Namespace for presentator.
 """
 
 import copy
@@ -21,12 +20,19 @@ from probe_build_worker_k3d_cluster import NAMESPACE, Document, Run, documents_o
 from probe_build_worker_starts import CHECK_ARGUMENT
 
 PRODUCTION_IMAGE = "ghcr.io/overnightworks/presentator"
-APPLIED_KINDS = ("PersistentVolumeClaim", "ServiceAccount", "StatefulSet")
+APPLIED_KINDS = ("PersistentVolumeClaim", "ServiceAccount")
+# What the workers are: their StatefulSet, their Service, their NetworkPolicy and
+# the ConfigMap holding the packet filter, each named for the workers; the base
+# renders other StatefulSets, Postgres among them, that the probe leaves out.
+WORKER_KINDS = ("ConfigMap", "NetworkPolicy", "Service", "StatefulSet")
+WORKERS = "build-worker"
+WORKER_LABEL = "app.kubernetes.io/name"
+INBOUND_PROBE_POLICY = "probe-inbound-any-port"
 WEB_KINDS = ("ConfigMap", "Deployment")
 WORKER_CONTAINER = "worker"
 WEB_CONTAINER = "web"
 SECRETS_VOLUME = "secrets"
-INIT_CONTAINER = "remove-link"
+INIT_CONTAINER = "nft-rules"
 TERMINATION_MESSAGE_POLICY = "FallbackToLogsOnError"
 
 
@@ -128,21 +134,32 @@ def prove_render(run: Run) -> list[Document]:
     return rendered
 
 
-def applied_documents(
-    overlay: list[Document], *, init_container: bool, check: bool = False
-) -> list[Document]:
-    """The overlay's documents the worker pod needs.
+def _of_the_workers(document: Document) -> bool:
+    return document["metadata"]["name"].startswith(WORKERS)
 
-    The worker's message policy is set, and its arguments are `--check` when `check`.
+
+def applied_documents(
+    overlay: list[Document],
+    *,
+    init_container: bool,
+    check: bool = False,
+    replicas: int = 1,
+) -> list[Document]:
+    """The overlay's documents the worker pods need.
+
+    The StatefulSet runs `replicas` pods; the worker's message policy is set, and
+    its arguments are `--check` when `check`.
     """
     documents = [
         copy.deepcopy(document)
         for document in overlay
         if document["kind"] in APPLIED_KINDS
+        or (document["kind"] in WORKER_KINDS and _of_the_workers(document))
     ]
     for document in documents:
         if document["kind"] != "StatefulSet":
             continue
+        document["spec"]["replicas"] = replicas
         spec = document["spec"]["template"]["spec"]
         if not init_container:
             del spec["initContainers"]
@@ -155,32 +172,66 @@ def applied_documents(
 
 
 def web_documents(overlay: list[Document]) -> list[Document]:
-    """The overlay's ConfigMap and Deployment, exactly as rendered."""
+    """The overlay's ConfigMaps and Deployment the web needs, exactly as rendered."""
     return [
-        copy.deepcopy(document) for document in overlay if document["kind"] in WEB_KINDS
+        copy.deepcopy(document)
+        for document in overlay
+        if document["kind"] in WEB_KINDS and not _of_the_workers(document)
     ]
 
 
-def throwaway_secret(deployment: Document, value: Callable[[], str]) -> Document:
-    """The Secret the Deployment's `secrets` volume projects, a `value()` per file.
+def _files_under(container: Document, mount: PurePosixPath) -> list[str]:
+    """The last parts of the container's environment values directly under the mount."""
+    files = (PurePosixPath(e["value"]) for e in container["env"] if "value" in e)
+    return [file.name for file in files if file.parent == mount]
 
-    Its keys are the last parts of the web container's environment values that
-    lie under the volume's mount path.
+
+def throwaway_secrets(deployment: Document, value: Callable[[], str]) -> list[Document]:
+    """The Secrets the Deployment's `secrets` volume projects, a `value()` per file.
+
+    A source that names its keys holds those; the one that names none holds the
+    last parts of the web container's environment values that lie directly under
+    the volume's mount path. The workers' Secret is the one source that names its
+    keys, so the web and the workers hold the one key.
     """
     pod = deployment["spec"]["template"]["spec"]
     volume = next(v for v in pod["volumes"] if v["name"] == SECRETS_VOLUME)
-    name = next(
-        s["secret"]["name"] for s in volume["projected"]["sources"] if "secret" in s
-    )
     container = next(c for c in pod["containers"] if c["name"] == WEB_CONTAINER)
-    mount = next(m for m in container["volumeMounts"] if m["name"] == SECRETS_VOLUME)
-    files = (PurePosixPath(e["value"]) for e in container["env"] if "value" in e)
-    keys = [file.name for file in files if file.is_relative_to(mount["mountPath"])]
+    mounted = next(m for m in container["volumeMounts"] if m["name"] == SECRETS_VOLUME)
+    under_mount = _files_under(container, PurePosixPath(mounted["mountPath"]))
+    sources = [s["secret"] for s in volume["projected"]["sources"] if "secret" in s]
+    return [
+        {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": source["name"], "namespace": NAMESPACE},
+            "stringData": {
+                key: value()
+                for key in [item["key"] for item in source.get("items", [])]
+                or under_mount
+            },
+        }
+        for source in sources
+    ]
+
+
+def inbound_probe_policy(deployment: Document) -> Document:
+    """A NetworkPolicy admitting the web's pods to every TCP port of the workers' pods.
+
+    Policies add up, so with this one applied beside the workers' own, which
+    admits the build port alone, the pod's packet filter is all that can drop a
+    web pod's connection to another port of a worker pod.
+    """
+    web_labels = deployment["spec"]["selector"]["matchLabels"]
     return {
-        "apiVersion": "v1",
-        "kind": "Secret",
-        "metadata": {"name": name, "namespace": NAMESPACE},
-        "stringData": {key: value() for key in keys},
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {"name": INBOUND_PROBE_POLICY, "namespace": NAMESPACE},
+        "spec": {
+            "podSelector": {"matchLabels": {WORKER_LABEL: WORKERS}},
+            "policyTypes": ["Ingress"],
+            "ingress": [{"from": [{"podSelector": {"matchLabels": web_labels}}]}],
+        },
     }
 
 

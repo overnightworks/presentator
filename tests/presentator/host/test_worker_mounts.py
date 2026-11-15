@@ -12,7 +12,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from presentator.adapters import build_wire
 from presentator.host import worker, worker_self_check
 from presentator.host.worker import Boundary
 from presentator.host.worker_scratch import (
@@ -27,6 +26,7 @@ from presentator.host.worker_self_check import (
     BUILD_IDENTITY,
     CONTAINERD_SOCKETS,
     DOCKER_SOCKETS,
+    KEY_MOUNT,
     MOUNT_ROOT_MODES,
     SERVICE_ACCOUNT_DIRECTORY,
     TERMINATION_LOG,
@@ -56,16 +56,19 @@ from tests.presentator.host.support.sealed_snapshot import (
     sealed_snapshot,
     write_pod_mountinfo,
 )
-from tests.presentator.host.support.worker_boundary import boundary_over
+from tests.presentator.host.support.worker_boundary import (
+    CHECK,
+    SERVE,
+    boundary_over,
+)
 
 MOUNTS = Predicate.MOUNTS
-SOCKET_DIRECTORY = build_wire.SOCKET_DIRECTORY
 MEMORY_MOUNTS = (WORK_MOUNT, TEMPORARY_MOUNT, SHARED_MEMORY_MOUNT)
 BORN_TERMINATION_LOG_MODE = 0o666
 CAP_MKNOD = 27
 OUTSIDE_MODE = 0o700
 RUNTIME_UID = sealed_snapshot().identity.runtime_uid
-CHECK_OR_START = [[], ["--check"]]
+CHECK_OR_START = [SERVE, CHECK]
 
 
 @pytest.fixture
@@ -190,21 +193,6 @@ def test_an_absent_termination_log_refuses(pod: Path) -> None:
     assert judged(pod) == MOUNTS
 
 
-def test_a_claim_directory_missing_from_the_mounts_refuses(pod: Path) -> None:
-    unmount(pod, SOCKET_DIRECTORY)
-
-    assert judged(pod) == MOUNTS
-
-
-@pytest.mark.parametrize("filesystem", ["ext4", "tmpfs"])
-def test_the_claim_directory_may_be_a_mount_of_any_filesystem(
-    pod: Path, filesystem: str
-) -> None:
-    remount(pod, SOCKET_DIRECTORY, filesystem=filesystem)
-
-    assert judged(pod) is None
-
-
 QUEUE_FAULTS: dict[str, Callable[[Path], None]] = {
     "missing": lambda root: unmount(root, QUEUE_MOUNT),
     "tmpfs": lambda root: remount(root, QUEUE_MOUNT, filesystem="tmpfs"),
@@ -290,6 +278,32 @@ def test_only_a_read_only_tmpfs_is_masked_under_proc(
     mount_extra(pod, PodMount("/proc/unmasked", options, filesystem))
 
     assert judged(pod) == MOUNTS
+
+
+KEY_VOLUME_FAULTS: dict[str, Callable[[Path], None]] = {
+    "read-write": lambda root: remount(root, KEY_MOUNT, options=READ_WRITE),
+    "ext4": lambda root: remount(root, KEY_MOUNT, filesystem="ext4"),
+}
+
+
+@pytest.mark.parametrize(
+    "fault", KEY_VOLUME_FAULTS.values(), ids=KEY_VOLUME_FAULTS.keys()
+)
+def test_a_key_volume_open_to_all_refuses_unless_it_is_a_read_only_tmpfs(
+    pod: Path, fault: Callable[[Path], None]
+) -> None:
+    fault(pod)
+
+    assert judged(pod) == MOUNTS
+
+
+def test_a_key_volume_owned_by_a_child_refuses(pod: Path) -> None:
+    snapshot = read_staged_root_as_sealed_process(pod)
+
+    assert (
+        first_failing_predicate(with_owner(snapshot, KEY_MOUNT, BUILD_IDENTITY[0]))
+        == MOUNTS
+    )
 
 
 @pytest.mark.parametrize("unread_field", [field.name for field in fields(Mounts)])
@@ -442,7 +456,7 @@ def test_a_start_fixes_up_the_born_pod_between_the_lowering_and_the_read(
 
     assert status == 0
     assert events[:5] == ["prctl", "umask", "lower", "fix-up", "read"]
-    assert ("serve" in events) is (not arguments)
+    assert ("serve" in events) is (arguments == SERVE)
     assert "start refused" not in caplog.text
     assert (
         stat.S_IMODE(path_in(pod, WORK_MOUNT).stat().st_mode)
@@ -529,7 +543,7 @@ def test_a_symlinked_table_root_refuses_and_its_target_keeps_its_mode(
     temporary.symlink_to(outside)
     events: list[str] = []
 
-    status = worker.main([], pod_boundary(pod, events))
+    status = worker.main(SERVE, pod_boundary(pod, events))
 
     assert status == worker.REFUSAL_EXIT_STATUS
     assert f"start refused: {MOUNTS}" in caplog.text
@@ -558,7 +572,7 @@ def test_the_fix_up_opens_the_table_paths_then_the_read_starts(
     scratch_reads = len(SYSV_HEADERS) + len(SCRATCH_ROOTS)
     assert not [event for event, _ in events if event in LAUNCH_EVENTS]
     assert sorted(reads[:fix_up_reads]) == sorted(("open", p) for p in table_paths)
-    assert reads[fix_up_reads] == ("open", Path("sys/fs/cgroup/pids.current"))
+    assert reads[fix_up_reads] == ("os.scandir", Path("proc"))
     assert sorted(reads[fix_up_reads + 1 : fix_up_reads + 1 + scratch_reads]) == sorted(
         [("os.scandir", Path(root.lstrip("/"))) for root in SCRATCH_ROOTS]
         + [("open", Path("proc/sysvipc") / table) for table in SYSV_HEADERS]

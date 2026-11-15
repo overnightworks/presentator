@@ -1,204 +1,126 @@
-"""The build worker binds its socket in the volume."""
+"""The build worker reads its key, binds its port and says when it is ready."""
 
 import errno
-import os
 import socket
-import stat
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from presentator.adapters import build_wire
 from presentator.host import worker
+from presentator.host.config import MINIMUM_KEY_LENGTH
 from presentator.host.worker import StartRefusal
-from tests.support.worker_support import (
-    FOREIGN_UID,
-    OWN_GID,
-    OWN_UID,
-    PRIVATE_MODE,
-    ScriptedLife,
-    connect,
-)
+from tests.presentator.host.support.worker_boundary import LOADED_SETTINGS
+from tests.support.worker_support import KEY, OWN_UID, ScriptedLife, free_port
 
-SUPPLEMENTARY_GIDS = tuple(gid for gid in os.getgroups() if gid != OWN_GID)
+PORT = 7100
+USAGE_EXIT_STATUS = 2
+TABLE_HEADER = "  sl  local_address rem_address   st tx_queue rx_queue\n"
 
 
-def make_regular_file(path: Path) -> None:
-    path.write_text("")
+def table_row(port: int, state: str) -> str:
+    return f"   0: 00000000:{port:04X} 00000000:0000 {state} 00000000:00000000\n"
 
 
-def make_symlink(path: Path) -> None:
-    path.symlink_to(path.parent)
+@pytest.fixture
+def key_file(tmp_path: Path) -> Path:
+    path = tmp_path / "key"
+    path.write_bytes(KEY + b"\n")
+    path.chmod(0o400)
+    return path
 
 
-def make_dangling_symlink(path: Path) -> None:
-    path.symlink_to(path.parent / "missing")
+def test_the_key_is_the_file_minus_its_one_newline(key_file: Path) -> None:
+    assert worker.read_key(key_file, controller_uid=OWN_UID) == KEY
 
 
-def make_directory(path: Path) -> None:
+def test_the_key_is_read_through_a_link_as_a_mounted_secret_is(
+    key_file: Path, tmp_path: Path
+) -> None:
+    link = tmp_path / "mounted"
+    link.symlink_to(key_file)
+
+    assert worker.read_key(link, controller_uid=OWN_UID) == KEY
+
+
+def a_key_file_of_another_owner(_path: Path) -> int:
+    return OWN_UID + 1
+
+
+def a_key_file_others_can_read(path: Path) -> int:
+    path.chmod(0o440)
+    return OWN_UID
+
+
+def a_key_file_that_is_a_directory(path: Path) -> int:
+    path.unlink()
     path.mkdir()
+    return OWN_UID
 
 
-@pytest.mark.parametrize(
-    "occupy", [make_regular_file, make_symlink, make_dangling_symlink, make_directory]
-)
-def test_refuses_a_non_socket_at_the_socket_path_and_leaves_it(
-    volume: Path, occupy: Callable[[Path], None]
+def a_key_file_that_is_too_short(path: Path) -> int:
+    path.chmod(0o600)
+    path.write_bytes(b"k" * (MINIMUM_KEY_LENGTH - 1))
+    path.chmod(0o400)
+    return OWN_UID
+
+
+def a_missing_key_file(path: Path) -> int:
+    path.unlink()
+    return OWN_UID
+
+
+KEY_FAULTS = {
+    "another owner": a_key_file_of_another_owner,
+    "readable by others": a_key_file_others_can_read,
+    "a directory": a_key_file_that_is_a_directory,
+    "too short": a_key_file_that_is_too_short,
+    "missing": a_missing_key_file,
+}
+
+
+@pytest.mark.parametrize("fault", KEY_FAULTS.values(), ids=KEY_FAULTS.keys())
+def test_a_key_file_that_is_not_the_controllers_secret_refuses(
+    key_file: Path, fault: Callable[[Path], int]
 ) -> None:
-    occupied = volume / build_wire.SOCKET_NAME
-    occupy(occupied)
+    controller_uid = fault(key_file)
 
     with pytest.raises(worker.StartRefusedError) as refused:
-        worker.prepare_socket_directory(volume, OWN_UID, OWN_GID)
+        worker.read_key(key_file, controller_uid=controller_uid)
 
-    assert refused.value.refusal == StartRefusal.STALE_SOCKET
-    assert occupied.is_symlink() or occupied.exists()
-
-
-def test_replaces_a_stale_socket_of_the_controller(volume: Path) -> None:
-    stale = socket.socket(socket.AF_UNIX)
-    stale.bind(str(volume / build_wire.SOCKET_NAME))
-    stale.close()
-
-    worker.prepare_socket_directory(volume, OWN_UID, OWN_GID)
-
-    assert not (volume / build_wire.SOCKET_NAME).exists()
+    assert refused.value.refusal == StartRefusal.KEY
 
 
-def test_refuses_a_foreign_socket_at_the_socket_path(volume: Path) -> None:
-    stale = socket.socket(socket.AF_UNIX)
-    stale.bind(str(volume / build_wire.SOCKET_NAME))
-    stale.close()
-
-    with pytest.raises(worker.StartRefusedError) as refused:
-        worker.remove_stale_socket(volume / build_wire.SOCKET_NAME, FOREIGN_UID)
-
-    assert refused.value.refusal == StartRefusal.STALE_SOCKET
-    assert (volume / build_wire.SOCKET_NAME).exists()
+def test_the_listener_accepts_a_connection_once_it_listens() -> None:
+    port = free_port()
+    with worker.bind_listener(port) as listener:
+        worker.start_listening(listener)
+        socket.create_connection(("127.0.0.1", port)).close()
 
 
-def test_refuses_a_volume_root_of_another_uid_and_leaves_its_mode(volume: Path) -> None:
-    with pytest.raises(worker.StartRefusedError) as refused:
-        worker.prepare_socket_directory(volume, FOREIGN_UID, OWN_GID)
-
-    assert refused.value.refusal == StartRefusal.SOCKET_DIRECTORY
-    assert stat.S_IMODE(volume.stat().st_mode) == PRIVATE_MODE
-
-
-def test_refuses_a_volume_root_that_is_a_symlink_or_a_file(volume: Path) -> None:
-    link = volume / "link"
-    link.symlink_to(volume)
-    plain_file = volume / "file"
-    plain_file.write_text("")
-
-    for root in (link, plain_file):
+def test_a_port_that_is_taken_refuses_as_bind() -> None:
+    with worker.bind_listener(0) as holder:
+        worker.start_listening(holder)
+        taken = holder.getsockname()[1]
         with pytest.raises(worker.StartRefusedError) as refused:
-            worker.prepare_socket_directory(root, OWN_UID, OWN_GID)
-        assert refused.value.refusal == StartRefusal.SOCKET_DIRECTORY
-    assert stat.S_IMODE(volume.stat().st_mode) == PRIVATE_MODE
-
-
-def test_refuses_a_missing_volume_root(volume: Path) -> None:
-    with pytest.raises(worker.StartRefusedError) as refused:
-        worker.prepare_socket_directory(volume / "missing", OWN_UID, OWN_GID)
-
-    assert refused.value.refusal == StartRefusal.SOCKET_DIRECTORY
-
-
-def test_binds_a_group_socket_in_a_group_directory(volume: Path) -> None:
-    worker.prepare_socket_directory(volume, OWN_UID, OWN_GID)
-    with worker.bind_socket(volume, OWN_UID, OWN_GID):
-        socket_status = (volume / build_wire.SOCKET_NAME).lstat()
-        directory_status = volume.stat()
-
-    assert stat.S_IMODE(socket_status.st_mode) == build_wire.SOCKET_MODE
-    assert (socket_status.st_uid, socket_status.st_gid) == (OWN_UID, OWN_GID)
-    assert stat.S_IMODE(directory_status.st_mode) == build_wire.SOCKET_DIRECTORY_MODE
-    assert directory_status.st_gid == OWN_GID
-
-
-@pytest.mark.parametrize(
-    ("controller_uid", "controller_gid", "bind_umask"),
-    [
-        (FOREIGN_UID, OWN_GID, worker.BIND_UMASK),
-        (OWN_UID, OWN_GID + 1, worker.BIND_UMASK),
-        (OWN_UID, OWN_GID, 0o077),
-    ],
-    ids=["foreign-uid", "foreign-gid", "wrong-mode"],
-)
-def test_refuses_a_socket_the_controller_does_not_own_after_bind(
-    volume: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    controller_uid: int,
-    controller_gid: int,
-    bind_umask: int,
-) -> None:
-    monkeypatch.setattr(worker, "BIND_UMASK", bind_umask)
-    with pytest.raises(worker.StartRefusedError) as refused:
-        worker.bind_socket(volume, controller_uid, controller_gid)
+            worker.bind_listener(taken)
 
     assert refused.value.refusal == StartRefusal.BIND
-    assert stat.S_ISSOCK((volume / build_wire.SOCKET_NAME).lstat().st_mode)
 
 
-def test_refuses_the_start_when_no_socket_can_be_allocated(
-    volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+def test_no_socket_can_be_allocated_refuses_the_start(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     def exhausted(*_arguments: object) -> socket.socket:
         raise OSError(errno.EMFILE, "too many open files")
 
     monkeypatch.setattr(worker.socket, "socket", exhausted)
 
-    status = worker.serve(
-        volume,
-        controller_uid=OWN_UID,
-        controller_gid=OWN_GID,
-        runtime_uid=OWN_UID,
-        serving=ScriptedLife().serving(),
-    )
+    status = worker.serve(port=PORT, key=KEY, serving=ScriptedLife().serving())
 
     assert status == worker.REFUSAL_EXIT_STATUS
     assert f"start refused: {StartRefusal.BIND}" in caplog.text
-
-
-@pytest.mark.skipif(
-    not SUPPLEMENTARY_GIDS, reason="the runner has no supplementary group"
-)
-def test_hands_the_volume_root_to_the_controller_group(volume: Path) -> None:
-    controller_gid = SUPPLEMENTARY_GIDS[0]
-
-    worker.prepare_socket_directory(volume, OWN_UID, controller_gid)
-
-    assert volume.stat().st_gid == controller_gid
-
-
-def test_connect_is_refused_between_bind_and_listen_and_succeeds_after(
-    volume: Path,
-) -> None:
-    worker.prepare_socket_directory(volume, OWN_UID, OWN_GID)
-    with worker.bind_socket(volume, OWN_UID, OWN_GID) as listener:
-        with pytest.raises(ConnectionRefusedError) as early:
-            connect(volume)
-        worker.start_listening(listener)
-        connect(volume).close()
-
-    assert early.value.errno == errno.ECONNREFUSED
-
-
-def test_umask_is_owner_only_after_a_successful_bind(volume: Path) -> None:
-    worker.prepare_socket_directory(volume, OWN_UID, OWN_GID)
-    worker.bind_socket(volume, OWN_UID, OWN_GID).close()
-
-    assert os.umask(0) == worker.ONLY_THE_OWNER
-
-
-def test_umask_is_owner_only_when_the_bind_raises(volume: Path) -> None:
-    with pytest.raises(worker.StartRefusedError) as refused:
-        worker.bind_socket(volume / "missing", OWN_UID, OWN_GID)
-
-    assert refused.value.refusal == StartRefusal.BIND
-    assert os.umask(0) == worker.ONLY_THE_OWNER
 
 
 def test_listen_failure_is_a_named_refusal() -> None:
@@ -210,43 +132,83 @@ def test_listen_failure_is_a_named_refusal() -> None:
 
 
 @pytest.mark.parametrize(
-    ("controller_uid", "controller_gid", "refusal"),
+    ("table", "ready"),
     [
-        (FOREIGN_UID, OWN_GID, StartRefusal.SOCKET_DIRECTORY),
-        (OWN_UID, OWN_GID, StartRefusal.BIND),
+        (TABLE_HEADER + table_row(PORT, worker.LISTENING), True),
+        (TABLE_HEADER, False),
+        (TABLE_HEADER + table_row(PORT + 1, worker.LISTENING), False),
+        (
+            TABLE_HEADER
+            + table_row(PORT, worker.LISTENING)
+            + table_row(PORT, worker.ESTABLISHED),
+            False,
+        ),
+        (
+            TABLE_HEADER
+            + table_row(PORT, worker.LISTENING)
+            + table_row(PORT + 1, worker.ESTABLISHED)
+            + table_row(PORT, "06"),
+            True,
+        ),
     ],
-    ids=["step-4", "step-5"],
+    ids=["listening", "empty", "another port", "serving a life", "other sockets"],
 )
-def test_serve_exits_two_and_logs_the_name_of_the_refused_step(
-    volume: Path,
-    caplog: pytest.LogCaptureFixture,
-    controller_uid: int,
-    controller_gid: int,
-    refusal: StartRefusal,
+def test_the_worker_is_ready_when_it_listens_and_holds_no_connection(
+    table: str, *, ready: bool
 ) -> None:
-    if refusal == StartRefusal.BIND:
-        volume = volume / ("d" * 120)
-        volume.mkdir()
-    status = worker.serve(
-        volume,
-        controller_uid=controller_uid,
-        controller_gid=controller_gid,
-        runtime_uid=OWN_UID,
-        serving=ScriptedLife().serving(),
+    assert worker.is_ready(PORT, table) is ready
+
+
+def raising(error: Exception) -> Callable[[], str]:
+    def read() -> str:
+        raise error
+
+    return read
+
+
+@pytest.mark.parametrize(
+    ("read_table", "status"),
+    [
+        (lambda: TABLE_HEADER + table_row(PORT, worker.LISTENING), 0),
+        (lambda: TABLE_HEADER, worker.NOT_READY_EXIT_STATUS),
+        (raising(OSError()), worker.NOT_READY_EXIT_STATUS),
+        (lambda: TABLE_HEADER + "garbled\n", worker.NOT_READY_EXIT_STATUS),
+    ],
+    ids=["listening", "not listening", "table unreadable", "table garbled"],
+)
+def test_the_readiness_probe_exits_zero_only_for_a_worker_that_listens(
+    read_table: Callable[[], str], status: int
+) -> None:
+    boundary = replace(worker.REAL_BOUNDARY, read_socket_table=read_table)
+
+    assert worker.main(["--ready", "--port", str(PORT)], boundary) == status
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--ready"],
+        ["--key-file", "/run/key"],
+        ["--port", str(PORT)],
+        [],
+    ],
+    ids=["ready without port", "serve without port", "serve without key", "bare"],
+)
+def test_a_start_names_the_port_and_key_file_it_serves_or_is_refused_as_usage(
+    arguments: list[str],
+) -> None:
+    with pytest.raises(SystemExit) as refused:
+        worker.main(arguments)
+
+    assert refused.value.code == USAGE_EXIT_STATUS
+
+
+def test_a_key_the_real_boundary_refuses_ends_the_start_before_binding(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    status = worker.REAL_BOUNDARY.serve(
+        port=PORT, key_file=tmp_path / "missing", settings=LOADED_SETTINGS
     )
 
     assert status == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {refusal}" in caplog.text
-
-
-def test_refuses_a_stale_socket_it_cannot_remove(volume: Path) -> None:
-    stale = socket.socket(socket.AF_UNIX)
-    stale.bind(str(volume / build_wire.SOCKET_NAME))
-    stale.close()
-    volume.chmod(0o500)
-
-    with pytest.raises(worker.StartRefusedError) as refused:
-        worker.remove_stale_socket(volume / build_wire.SOCKET_NAME, OWN_UID)
-    volume.chmod(0o700)
-
-    assert refused.value.refusal == StartRefusal.STALE_SOCKET
+    assert f"start refused: {StartRefusal.KEY}" in caplog.text

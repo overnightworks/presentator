@@ -271,7 +271,7 @@ def run_bounded(client: socket.socket, entry: Callable[[], object]) -> object:
     if thread.is_alive():
         client.close()
         thread.join(SECONDS_TO_WAIT)
-        pytest.fail("the entry waited for more input than a HELLO")
+        pytest.fail("the entry waited for more input than a STEP")
     return outcome[0]
 
 
@@ -348,17 +348,6 @@ def test_the_entry_closes_a_refused_input_with_no_reply(
 
     assert run_entry(client, descriptor, record) == WireExit.CLOSED
     assert read_to_end_or_reset(client) == b""
-    assert os.fstat(record).st_size == 0
-
-
-def test_the_entry_answers_a_hello_with_status_and_exits_answered(
-    client_and_descriptor: tuple[socket.socket, int], record: int
-) -> None:
-    client, descriptor = client_and_descriptor
-    client.sendall(support.HELLO + b"x")
-
-    assert run_entry(client, descriptor, record) == WireExit.ANSWERED
-    assert client.recv(64) == support.STATUS
     assert os.fstat(record).st_size == 0
 
 
@@ -621,23 +610,23 @@ def test_a_refused_memfd_surfaces_as_the_kernels_error(
     assert refused.value.errno == errno.EMFILE
 
 
-def test_the_entry_closes_when_the_client_hung_up_before_status(
+def test_the_entry_closes_when_the_client_hung_up_before_the_step_is_complete(
     client_and_descriptor: tuple[socket.socket, int], record: int
 ) -> None:
     client, descriptor = client_and_descriptor
-    client.sendall(support.HELLO)
+    client.sendall(support.VALID_STEP[:-1])
     client.close()
 
     assert run_entry(client, descriptor, record) == WireExit.CLOSED
 
 
-def test_run_as_a_program_the_entry_answers_a_hello(
+def test_run_as_a_program_the_entry_accepts_a_step(
     monkeypatch: pytest.MonkeyPatch, record: int
 ) -> None:
     controller_end, child_end = socket.socketpair()
     controller_end.settimeout(SECONDS_TO_WAIT)
     with controller_end, child_end:
-        controller_end.sendall(support.HELLO)
+        controller_end.sendall(support.VALID_STEP)
         descriptor = child_end.detach()
         monkeypatch.setattr(
             sys,
@@ -653,5 +642,4 @@ def test_run_as_a_program_the_entry_answers_a_hello(
             ),
         )
 
-        assert exit_code == WireExit.ANSWERED
-        assert controller_end.recv(64) == support.STATUS
+        assert exit_code == WireExit.ACCEPTED

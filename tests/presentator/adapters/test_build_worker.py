@@ -4,12 +4,8 @@ import errno
 import logging
 import os
 import socket
-import stat
-import threading
 import time
-from collections.abc import Callable, Generator
-from contextlib import contextmanager, suppress
-from dataclasses import dataclass, field
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -17,20 +13,11 @@ import pytest
 from presentator.adapters.build_wire import (
     MAXIMUM_ENTRIES,
     MEGABYTE,
-    SOCKET_DIRECTORY_MODE,
-    SOCKET_MODE,
-    SOCKET_NAME,
     StepHeader,
-    WireRefusedError,
     read_request,
-    receive_entries,
     send_status,
 )
-from presentator.adapters.build_worker import (
-    Fault,
-    SocketFault,
-    what_is_wrong,
-)
+from presentator.adapters.build_worker import Fault
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
     OUTPUT_DIRECTORY,
@@ -41,7 +28,6 @@ from presentator.contracts.decks import (
     StepKind,
     ToolchainUnavailable,
 )
-from presentator.host import worker
 from tests.presentator.adapters.support.build_worker_support import (
     BUILT_BY_STEP,
     BUILT_TALK,
@@ -50,53 +36,21 @@ from tests.presentator.adapters.support.build_worker_support import (
     PDF,
     WINDOW,
     WITHOUT_A_REASON,
+    Script,
+    Seen,
     a_step,
+    answering,
+    fake_worker,
+    proven,
     staging_of,
     toolchain,
     tree_of,
 )
 from tests.support import worker_support as support
-from tests.support.worker_support import OWN_GID, OWN_UID
 
 PROMPTLY = 10
 UNAVAILABLE = ToolchainUnavailable()
 WINDOW_TOLERANCE = 0.1
-AS_ROOT = pytest.mark.skipif(
-    os.geteuid() == 0, reason="root ignores file modes, so 000 refuses nothing"
-)
-
-
-@dataclass
-class Seen:
-    """What the fake worker saw of its clients."""
-
-    steps: list[StepHeader] = field(default_factory=list[StepHeader])
-    uploads: list[Path] = field(default_factory=list[Path])
-
-
-type Script = Callable[[socket.socket, Seen, Path], None]
-
-
-def answering(reply: Callable[[socket.socket, StepHeader], None]) -> Script:
-    """A worker that answers a HELLO, and a STEP by taking the upload and replying."""
-
-    def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
-        request = read_request(connection)
-        send_status(connection)
-        if not isinstance(request, StepHeader):
-            return
-        seen.steps.append(request)
-        upload = uploads / str(len(seen.steps))
-        upload.mkdir()
-        seen.uploads.append(upload)
-        descriptor = os.open(upload, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            receive_entries(connection, descriptor, MEGABYTES)
-        finally:
-            os.close(descriptor)
-        reply(connection, request)
-
-    return serve
 
 
 def nothing_to_reply(_connection: socket.socket, _step: StepHeader) -> None:
@@ -110,171 +64,56 @@ def replying(by_step: dict[StepKind, bytes]) -> Script:
     return answering(reply)
 
 
-def closing_first(count: int, then: Script, *, after_the_request: bool) -> Script:
-    """A worker that closes its first connections, as a busy or restarting one does."""
+def closing_first(count: int, then: Script) -> Script:
+    """A worker that closes its first connections unspoken, as a busy one does."""
     remaining = [count]
 
     def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
         if remaining[0]:
             remaining[0] -= 1
-            if after_the_request:
-                read_request(connection)
             return
         then(connection, seen, uploads)
 
     return serve
 
 
-@contextmanager
-def fake_worker(volume: Path, script: Script, accepts: int = 4) -> Generator[Seen]:
-    """A thread serving the script on the worker's real socket in the volume."""
-    listener = support.listening_with(volume, accepts)
-    seen = Seen()
-    uploads = volume / "uploads"
-    uploads.mkdir()
+def silent_first(count: int, then: Script) -> Script:
+    """A worker that holds its first connections silent until the peer leaves."""
+    remaining = [count]
 
-    stopped = threading.Event()
+    def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
+        if remaining[0]:
+            remaining[0] -= 1
+            connection.settimeout(PROMPTLY)
+            connection.recv(1)
+            return
+        then(connection, seen, uploads)
 
-    def serve() -> None:
-        while not stopped.is_set():
-            try:
-                connection, _ = listener.accept()
-            except support.StopServingError, OSError:
-                return
-            with connection, suppress(OSError, WireRefusedError):
-                if not stopped.is_set():
-                    script(connection, seen, uploads)
-
-    thread = threading.Thread(target=serve)
-    thread.start()
-    try:
-        yield seen
-    finally:
-        stopped.set()
-        listener.accepts_left = 1
-        with socket.socket(socket.AF_UNIX) as waker:
-            waker.connect(str(volume / SOCKET_NAME))
-        thread.join()
-        listener.close()
-
-
-def stat_result(
-    mode: int = stat.S_IFDIR | SOCKET_DIRECTORY_MODE, uid: int = 0, gid: int = 7
-) -> os.stat_result:
-    return os.stat_result((mode, 0, 0, 1, uid, gid, 0, 0, 0, 0))
-
-
-GOOD_DIRECTORY = stat_result()
-GOOD_SOCKET = stat_result(stat.S_IFSOCK | SOCKET_MODE, gid=0)
-
-
-@pytest.mark.parametrize(
-    ("directory", "socket_status", "peer_uid", "cause"),
-    [
-        pytest.param(stat_result(uid=5), GOOD_SOCKET, 0, SocketFault.DIRECTORY_OWNER),
-        pytest.param(
-            stat_result(stat.S_IFDIR | 0o755),
-            GOOD_SOCKET,
-            0,
-            SocketFault.DIRECTORY_MODE,
-        ),
-        pytest.param(
-            stat_result(stat.S_IFLNK | SOCKET_DIRECTORY_MODE),
-            GOOD_SOCKET,
-            0,
-            SocketFault.DIRECTORY_MODE,
-        ),
-        pytest.param(stat_result(gid=8), GOOD_SOCKET, 0, SocketFault.DIRECTORY_GROUP),
-        pytest.param(
-            GOOD_DIRECTORY,
-            stat_result(stat.S_IFREG | SOCKET_MODE, gid=0),
-            0,
-            SocketFault.SOCKET_TYPE,
-        ),
-        pytest.param(
-            GOOD_DIRECTORY,
-            stat_result(stat.S_IFSOCK | SOCKET_MODE, uid=5),
-            0,
-            SocketFault.SOCKET_OWNER,
-        ),
-        pytest.param(
-            GOOD_DIRECTORY,
-            stat_result(stat.S_IFSOCK | 0o666),
-            0,
-            SocketFault.SOCKET_MODE,
-        ),
-        pytest.param(GOOD_DIRECTORY, GOOD_SOCKET, 5, SocketFault.PEER),
-        pytest.param(GOOD_DIRECTORY, GOOD_SOCKET, 0, None),
-        pytest.param(GOOD_DIRECTORY, GOOD_SOCKET, None, None),
-    ],
-)
-def test_the_socket_check_names_the_first_thing_that_is_not_the_workers(
-    directory: os.stat_result,
-    socket_status: os.stat_result,
-    peer_uid: int | None,
-    cause: SocketFault | None,
-) -> None:
-    """Cell B3."""
-    assert what_is_wrong(directory, socket_status, peer_uid, uid=0, gid=7) is cause
+    return serve
 
 
 def test_a_worker_that_is_not_there_is_retried_until_the_window_ends(
-    volume: Path,
+    volume: Path, tmp_path: Path
 ) -> None:
-    """Cells B1 and B14: start without a worker is refused after W."""
     started = time.monotonic()
 
-    answering_at_start = toolchain(volume / "absent").is_answering()
+    result = toolchain(volume).ran(a_step(tmp_path))
 
-    assert not answering_at_start
+    assert result == UNAVAILABLE
     assert WINDOW <= time.monotonic() - started < WINDOW + 0.5
 
 
-@pytest.mark.parametrize("after_the_request", [False, True])
 def test_a_worker_that_keeps_closing_is_retried_until_the_window_ends(
-    volume: Path, *, after_the_request: bool
+    volume: Path, tmp_path: Path
 ) -> None:
-    """Cell B1: a close before STATUS is retried, and the failure comes at W."""
-    keeps_closing = closing_first(
-        50, answering(nothing_to_reply), after_the_request=after_the_request
-    )
+    keeps_closing = closing_first(50, answering(nothing_to_reply))
     started = time.monotonic()
 
     with fake_worker(volume, keeps_closing, accepts=50):
-        answering_at_start = toolchain(volume).is_answering()
+        result = toolchain(volume).ran(a_step(tmp_path))
 
-    assert not answering_at_start
+    assert result == UNAVAILABLE
     assert WINDOW <= time.monotonic() - started < WINDOW + 0.5
-
-
-def test_a_socket_not_yet_listening_is_retried_until_the_window_ends(
-    volume: Path,
-) -> None:
-    """Cell B1."""
-    worker.prepare_socket_directory(volume, OWN_UID, OWN_GID)
-    with worker.bind_socket(volume, OWN_UID, OWN_GID):
-        started = time.monotonic()
-
-        assert not toolchain(volume).is_answering()
-
-        assert WINDOW <= time.monotonic() - started < WINDOW + 0.5
-
-
-def test_a_worker_answering_a_hello_is_answering(volume: Path) -> None:
-    """Cell B14: a worker that answers the HELLO at start is answering."""
-    with fake_worker(volume, answering(nothing_to_reply)):
-        assert toolchain(volume).is_answering()
-
-
-def test_a_peer_that_does_not_speak_the_wire_is_not_answering(volume: Path) -> None:
-    """Cell B5 at start: a reply that breaks the grammar is no answer."""
-
-    def babbling(connection: socket.socket, _seen: Seen, _uploads: Path) -> None:
-        read_request(connection)
-        connection.sendall(b"nonsense")
-
-    with fake_worker(volume, babbling):
-        assert not toolchain(volume).is_answering()
 
 
 def a_peer_speaking_another_wire(
@@ -284,17 +123,26 @@ def a_peer_speaking_another_wire(
     connection.sendall(b"nonsense")
 
 
+def a_peer_without_the_key() -> Script:
+    return answering(nothing_to_reply, key=b"x" * 32)
+
+
 @pytest.mark.parametrize(
     ("script", "fault"),
     [
         pytest.param(None, Fault.DEADLINE, id="no worker within the window"),
         pytest.param(
-            closing_first(50, answering(nothing_to_reply), after_the_request=True),
+            closing_first(50, answering(nothing_to_reply)),
             Fault.DEADLINE,
-            id="a worker closing before its STATUS",
+            id="a worker closing before its hello",
         ),
         pytest.param(
-            a_peer_speaking_another_wire, Fault.REPLY_GRAMMAR, id="another wire"
+            proven(a_peer_speaking_another_wire),
+            Fault.REPLY_GRAMMAR,
+            id="another wire after the hello",
+        ),
+        pytest.param(
+            a_peer_without_the_key(), Fault.NOT_THE_WORKER, id="a peer without the key"
         ),
     ],
 )
@@ -305,12 +153,12 @@ def test_a_step_the_worker_never_answered_is_unavailable_and_names_the_fault(
     script: Script | None,
     fault: Fault,
 ) -> None:
-    """Cells B1, B5 and B22: nothing before the STATUS says anything about a deck."""
+    """Nothing before the STATUS says anything about a deck."""
     step = a_step(tmp_path)
 
     with caplog.at_level(logging.WARNING):
         if script is None:
-            result = toolchain(volume / "absent").ran(step)
+            result = toolchain(volume).ran(step)
         else:
             with fake_worker(volume, script, accepts=50):
                 result = toolchain(volume).ran(step)
@@ -319,164 +167,48 @@ def test_a_step_the_worker_never_answered_is_unavailable_and_names_the_fault(
     assert fault.value in caplog.text
 
 
-@pytest.mark.parametrize("closes", [1, 3])
-@pytest.mark.parametrize("after_the_request", [False, True])
-def test_a_worker_closing_then_answering_serves_start_build_and_export(
-    volume: Path, tmp_path: Path, closes: int, *, after_the_request: bool
-) -> None:
-    """Cell B12 (I): the next build succeeds once the worker's life has ended."""
-    script = closing_first(
-        closes, replying(BUILT_BY_STEP), after_the_request=after_the_request
-    )
-    with fake_worker(volume, script, accepts=closes + 3):
-        client = toolchain(volume, connect_window_seconds=5.0)
-
-        started = client.is_answering()
-        built = client.ran(a_step(tmp_path))
-        exported = client.ran(a_step(tmp_path, StepKind.EXPORT))
-
-    out = tmp_path / "builds" / "run" / OUTPUT_DIRECTORY
-    assert (started, built, exported) == (True, None, None)
-    assert (out / TALK_DIRECTORY / "index.html").read_bytes() == INDEX
-    assert (out / PDF_FILE).read_bytes() == PDF
-
-
-def test_a_directory_that_is_not_the_workers_is_refused_without_a_byte_or_a_retry(
-    volume: Path, tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Cell B3 (I): the log names that what answered is not the worker."""
-    started = time.monotonic()
-    with (
-        caplog.at_level(logging.WARNING),
-        fake_worker(volume, replying(BUILT_BY_STEP)) as seen,
-    ):
-        refused = toolchain(
-            volume, expected_uid=OWN_UID + 1, connect_window_seconds=30.0
-        ).ran(a_step(tmp_path))
-
-    assert refused == UNAVAILABLE
-    assert any(
-        record.levelno == logging.WARNING
-        and Fault.NOT_THE_WORKER.value in record.getMessage()
-        for record in caplog.records
-    )
-    assert not seen.steps
-    assert time.monotonic() - started < PROMPTLY
-
-
-@AS_ROOT
-def test_a_socket_directory_that_cannot_be_searched_is_refused_without_a_retry(
-    tmp_path: Path,
-) -> None:
-    """Cell B3: EACCES."""
-    (tmp_path / "outer" / "run").mkdir(parents=True)
-    (tmp_path / "outer").chmod(0)
-    started = time.monotonic()
-    try:
-        answering_at_start = toolchain(
-            tmp_path / "outer" / "run", connect_window_seconds=30.0
-        ).is_answering()
-    finally:
-        (tmp_path / "outer").chmod(0o755)
-
-    assert not answering_at_start
-    assert time.monotonic() - started < PROMPTLY
-
-
-@contextmanager
-def a_worker_arriving_after(volume: Path, seconds: float | None) -> Generator[None]:
-    """A volume the web cannot search until the worker fixes it up, after seconds."""
-    volume.chmod(0)
-    stopped = threading.Event()
-
-    def arrive() -> None:
-        if seconds is None or stopped.wait(seconds):
-            return
-        volume.chmod(SOCKET_DIRECTORY_MODE)
-        with fake_worker(volume, answering(nothing_to_reply)):
-            stopped.wait()
-
-    thread = threading.Thread(target=arrive)
-    thread.start()
-    try:
-        yield
-    finally:
-        stopped.set()
-        thread.join()
-        volume.chmod(0o700)
-
-
-@AS_ROOT
-def test_a_fresh_volume_is_waited_on_until_the_workers_fix_up_lets_the_web_in(
-    volume: Path,
-) -> None:
-    """Cell B23: an unsearchable directory of the worker's uid is retried within W."""
-    with a_worker_arriving_after(volume, WINDOW / 3):
-        assert toolchain(volume).is_answering()
-
-
-@AS_ROOT
-def test_a_volume_never_fixed_up_is_refused_at_the_window_naming_eacces(
-    volume: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Cell B23: refused at W, logging EACCES as the last cause."""
-    started = time.monotonic()
-
-    with a_worker_arriving_after(volume, None), caplog.at_level(logging.WARNING):
-        answering_at_start = toolchain(volume).is_answering()
-
-    assert not answering_at_start
-    assert WINDOW - WINDOW_TOLERANCE <= time.monotonic() - started < WINDOW + 0.5
-    assert "EACCES" in caplog.text
-
-
-@AS_ROOT
-def test_an_unsearchable_directory_of_another_owner_is_refused_at_once(
-    volume: Path,
-) -> None:
-    """Cell B23: another owner is not waited for."""
-    started = time.monotonic()
-
-    with a_worker_arriving_after(volume, None):
-        answering_at_start = toolchain(
-            volume, expected_uid=OWN_UID + 1, connect_window_seconds=30.0
-        ).is_answering()
-
-    assert not answering_at_start
-    assert time.monotonic() - started < PROMPTLY
-
-
-@AS_ROOT
-def test_a_step_against_an_unsearchable_directory_fails_at_once(
+def test_a_peer_that_cannot_prove_the_key_is_refused_without_a_retry_or_a_byte(
     volume: Path, tmp_path: Path
 ) -> None:
-    """Cell B23: only the start waits for the fix-up, a STEP fails at once."""
     started = time.monotonic()
 
-    with a_worker_arriving_after(volume, None):
+    with fake_worker(volume, a_peer_without_the_key(), accepts=50) as seen:
         result = toolchain(volume, connect_window_seconds=30.0).ran(a_step(tmp_path))
 
     assert result == UNAVAILABLE
     assert time.monotonic() - started < PROMPTLY
+    assert seen.steps == []
 
 
-def test_the_directory_is_read_after_the_socket_so_a_fix_up_between_them_counts(
-    volume: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("closes", [1, 3])
+def test_a_worker_closing_then_answering_serves_build_and_export(
+    volume: Path, tmp_path: Path, closes: int
 ) -> None:
-    """Cell B3: a stale directory stat is not judged once the socket is there."""
-    socket_path = volume / SOCKET_NAME
-    lstat = Path.lstat
+    """The next build succeeds once the worker's life has ended."""
+    script = closing_first(closes, replying(BUILT_BY_STEP))
+    with fake_worker(volume, script, accepts=closes + 3):
+        client = toolchain(volume, connect_window_seconds=5.0)
 
-    def lstat_after_the_fix_up(path: Path) -> os.stat_result:
-        if path == socket_path:
-            volume.chmod(SOCKET_DIRECTORY_MODE)
-        return lstat(path)
+        built = client.ran(a_step(tmp_path))
+        exported = client.ran(a_step(tmp_path, StepKind.EXPORT))
 
-    with fake_worker(volume, answering(nothing_to_reply)):
-        volume.chmod(0o770)
-        monkeypatch.setattr(Path, "lstat", lstat_after_the_fix_up)
+    out = tmp_path / "builds" / "run" / OUTPUT_DIRECTORY
+    assert (built, exported) == (None, None)
+    assert (out / TALK_DIRECTORY / "index.html").read_bytes() == INDEX
+    assert (out / PDF_FILE).read_bytes() == PDF
 
-        assert toolchain(volume).is_answering()
+
+def test_a_silent_connection_is_left_after_its_attempt_for_the_next_within_the_window(
+    volume: Path, tmp_path: Path
+) -> None:
+    """The Service may route an attempt to a pod that has ended and answers nothing."""
+    script = silent_first(1, replying(BUILT_BY_STEP))
+    with fake_worker(volume, script, accepts=5):
+        client = toolchain(volume, connect_window_seconds=5.0, attempt_seconds=0.2)
+
+        built = client.ran(a_step(tmp_path))
+
+    assert built is None
 
 
 def test_a_reply_dripped_past_the_last_deadline_fails_at_it(
@@ -511,7 +243,7 @@ def test_a_status_later_than_the_window_fails_at_it_with_no_upload_byte_sent(
         connection.settimeout(1)
         seen_late.append(connection.recv(1 << 16))
 
-    after_three_closings = closing_first(3, slow_status, after_the_request=False)
+    after_three_closings = closing_first(3, proven(slow_status))
     started = time.monotonic()
     with fake_worker(volume, after_three_closings):
         result = toolchain(volume).ran(a_step(tmp_path))
@@ -584,7 +316,7 @@ def test_a_deck_over_a_limit_or_breaking_a_rule_says_so_and_connects_to_nothing(
     make(step.place.here / DECK_DIRECTORY)
     started = time.monotonic()
 
-    result = toolchain(volume / "absent", connect_window_seconds=30.0).ran(step)
+    result = toolchain(volume, connect_window_seconds=30.0).ran(step)
 
     assert result == failure
     assert time.monotonic() - started < PROMPTLY
@@ -601,7 +333,7 @@ def test_a_deck_that_cannot_be_walked_fails_without_a_reason(
 
     monkeypatch.setattr(os, "stat", failing_stat)
 
-    assert toolchain(volume / "absent").ran(step) == WITHOUT_A_REASON
+    assert toolchain(volume).ran(step) == WITHOUT_A_REASON
 
 
 def test_a_run_without_its_deck_fails_without_a_reason(
@@ -612,7 +344,7 @@ def test_a_run_without_its_deck_fails_without_a_reason(
     (step.place.here / DECK_DIRECTORY / "slides.md").unlink()
     (step.place.here / DECK_DIRECTORY).rmdir()
 
-    assert toolchain(volume / "absent").ran(step) == WITHOUT_A_REASON
+    assert toolchain(volume).ran(step) == WITHOUT_A_REASON
 
 
 def test_a_deck_changing_after_the_survey_fails_without_a_reason(
@@ -628,7 +360,7 @@ def test_a_deck_changing_after_the_survey_fails_without_a_reason(
         (step.place.here / DECK_DIRECTORY / "link").symlink_to("slides.md")
         send_status(connection)
 
-    with fake_worker(volume, changing_the_deck):
+    with fake_worker(volume, proven(changing_the_deck)):
         result = toolchain(volume).ran(step)
 
     assert result == WITHOUT_A_REASON
@@ -648,7 +380,7 @@ def test_a_worker_closing_while_the_deck_is_uploaded_fails_without_a_reason(
         read_request(connection)
         send_status(connection)
 
-    with fake_worker(volume, closing_after_status) as _:
+    with fake_worker(volume, proven(closing_after_status)) as _:
         result = toolchain(volume).ran(step)
 
     assert result == WITHOUT_A_REASON

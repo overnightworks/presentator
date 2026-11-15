@@ -76,7 +76,7 @@ from presentator.contracts.decks import (
 )
 from presentator.contracts.models import Role, User
 from presentator.contracts.voice import SampleLanguage
-from presentator.host.config import Settings
+from presentator.host.config import Settings, WhereBuildsRun
 from presentator.host.main import agent_front, web_auth_config_for
 from presentator.host.oidc import admission_of, oidc_client_config
 from presentator.ports.copresenter import DeckTexts
@@ -312,6 +312,7 @@ def a_settings() -> Settings:
         speech_service=A_SPEECH_SERVICE,
         speech_service_scope=A_SPEECH_SCOPE,
         lobby_build=LOBBY_BUILD,
+        build_runner=WhereBuildsRun.HOST,
     )
 
 

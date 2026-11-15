@@ -11,17 +11,19 @@ import pytest
 from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
 from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import Predicate
-from tests.scripts.support.k3d_world import (
+from tests.scripts.support.k3d_pods import (
     Document,
-    Fixture,
     Version,
-    World,
-    fixture_maker,
     life_events,
     lives_stream,
     pod_version,
     terminated_state,
     watch_event,
+)
+from tests.scripts.support.k3d_world import (
+    Fixture,
+    World,
+    fixture_maker,
     workload_documents,
 )
 
@@ -57,7 +59,7 @@ def judge_cell(  # noqa: PLR0913 - each argument is one knob of the judged cell
     return fixture.driver.drive_cell(fixture.run, 8, documents, expectation), world
 
 
-REFUSED = Predicate.NO_ROUTE
+REFUSED = Predicate.EGRESS
 
 
 refused_life = partial(life_events, "one", REFUSED)
@@ -77,13 +79,14 @@ UNTERMINATED = [
         (REFUSED, passing_life(), "exit status 0"),
         (REFUSED, life_events("one", Predicate.ALONE), Predicate.ALONE),
         (REFUSED, refused_life(ended=terminated_state()), "start refused"),
-        (REFUSED, refused_life(version=Version(init_exit=1)), "remove-link ended as 1"),
+        (REFUSED, refused_life(version=Version(init_exit=1)), "nft-rules ended as 1"),
         (REFUSED, refused_life(version=Version(init=False)), "lacks an init container"),
         (REFUSED, refused_life(version=Version(restarts=1)), "restartCount is 1"),
         (REFUSED, refused_life(version=SECOND), "terminated 2 times"),
         (REFUSED, refused_life(ended=GONE), "ContainerStatusUnknown"),
         (REFUSED, UNTERMINATED, "deleted before its worker terminated"),
         (None, refused_life(), f"exit status {REFUSAL_EXIT_STATUS}"),
+        (None, refused_life(), f"start refused: {REFUSED}"),
         (None, passing_life(ended=terminated_state(1)), "exit status 1"),
     ],
     ids=[
@@ -91,13 +94,14 @@ UNTERMINATED = [
         "a passing life where a refusal is expected",
         "another predicate",
         "an empty message",
-        "remove-link not ended 0",
+        "nft-rules not ended 0",
         "the Pod has no init container",
         "a restart inside one uid",
         "a second termination inside one uid",
         "a lost sandbox",
         "deleted before the worker terminated",
         "a refusal where a pass is expected",
+        "a refusal where a pass is expected, named",
         "another exit status where a pass is expected",
     ],
 )

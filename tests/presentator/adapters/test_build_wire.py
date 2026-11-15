@@ -1,4 +1,4 @@
-"""The build wire's framing: what a HELLO or STEP may look like and what STATUS is."""
+"""The build wire's framing: what a STEP may look like and what STATUS is."""
 
 import json
 import socket
@@ -10,7 +10,6 @@ from presentator.adapters.build_wire import (
     MAGIC,
     MAXIMUM_HEADER_BYTES,
     BuiltOutcome,
-    EmptyHeader,
     FailedOutcome,
     MessageKind,
     RecordTag,
@@ -136,36 +135,6 @@ def test_an_end_without_entries_is_thirteen_bytes(
     assert reading_end.recv(64) == support.END
 
 
-def test_a_hello_with_the_empty_header_is_read(
-    wire: tuple[socket.socket, socket.socket],
-) -> None:
-    reading_end, writing_end = wire
-    writing_end.sendall(support.HELLO + b"tail")
-
-    assert read_request(reading_end) == EmptyHeader()
-    assert reading_end.recv(64) == b"tail"
-
-
-@pytest.mark.parametrize("length", [0, 1, 4097, 65535])
-def test_a_header_length_outside_two_to_4096_is_refused_before_any_body_read(
-    wire: tuple[socket.socket, socket.socket], length: int
-) -> None:
-    reading_end, writing_end = wire
-    writing_end.sendall(b"PBW\x01\x01" + length.to_bytes(2, "big"))
-
-    with pytest.raises(WireRefusedError):
-        read_request(reading_end)
-
-
-def test_a_header_of_4096_bytes_is_read_to_its_end_and_judged_by_content(
-    wire: tuple[socket.socket, socket.socket],
-) -> None:
-    reading_end, writing_end = wire
-    writing_end.sendall(b"PBW\x01\x01\x10\x00" + b" " * 4094 + b"{}")
-
-    assert read_request(reading_end) == EmptyHeader()
-
-
 STEP_SLUGS = {
     "a plain slug": "my-deck",
     "a unicode slug": "décor",
@@ -228,6 +197,16 @@ def test_a_step_header_length_outside_two_to_4096_is_refused_before_any_body_rea
 ) -> None:
     reading_end, writing_end = wire
     writing_end.sendall(b"PBW\x01\x02" + length.to_bytes(2, "big"))
+
+    with pytest.raises(WireRefusedError):
+        read_request(reading_end)
+
+
+def test_an_empty_header_under_kind_one_is_refused_as_a_request(
+    wire: tuple[socket.socket, socket.socket],
+) -> None:
+    reading_end, writing_end = wire
+    writing_end.sendall(support.framed(b"{}", b"PBW\x01\x01"))
 
     with pytest.raises(WireRefusedError):
         read_request(reading_end)

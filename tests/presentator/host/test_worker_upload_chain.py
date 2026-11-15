@@ -108,14 +108,11 @@ REJECTED_HEADERS = {
     "not JSON": support.framed(b"nope", support.STEP),
     "unknown step": support.framed(b'{"step":"x","slug":"my-deck"}', support.STEP),
     "slug ..": support.framed(b'{"step":"build","slug":".."}', support.STEP),
-    "a HELLO": support.HELLO,
 }
 
 
 @pytest.mark.parametrize("sent", REJECTED_HEADERS.values(), ids=REJECTED_HEADERS.keys())
-def test_a_rejected_or_answered_header_never_makes_the_deck(
-    sandbox: Path, sent: bytes
-) -> None:
+def test_a_rejected_header_never_makes_the_deck(sandbox: Path, sent: bytes) -> None:
     scenario = replace(on_deck(sandbox), reader=read_to_end_or_reset)
     life = run_life(sent, ChainSpawn(), scenario)
 

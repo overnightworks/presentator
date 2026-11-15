@@ -1,38 +1,34 @@
-"""The web's client of the build worker: one worker life per step, over its socket."""
+"""The web's client of the build workers: one worker life per step, over TCP."""
 
-import errno
 import logging
 import os
 import shutil
 import socket
-import stat
 import time
 from collections.abc import Buffer, Callable
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
 from presentator.adapters.build_wire import (
     MAXIMUM_ENTRIES,
-    SOCKET_DIRECTORY_MODE,
-    SOCKET_MODE,
     TOOLCHAIN_SCRATCH_NAME,
     BuiltOutcome,
+    HelloRefusedError,
     RefusalLimit,
     RefusedOutcome,
     StepHeader,
     TreeRefusedError,
     WireRefusedError,
+    answer_hello,
     check_step_tree,
     check_upload,
-    peer_uid,
     read_empty_end,
     read_outcome,
     read_status,
     receive_entries,
-    send_hello,
     send_step,
     send_tree,
 )
@@ -49,6 +45,7 @@ from presentator.contracts.decks import (
 )
 
 CONNECT_WINDOW_SECONDS: Final = 70.0
+ATTEMPT_SECONDS: Final = 2.0
 FIRST_RETRY_SECONDS: Final = 0.25
 LONGEST_RETRY_SECONDS: Final = 4.0
 REPLY_MARGIN_SECONDS: Final = 5.0
@@ -56,7 +53,6 @@ STAGED_PREFIX: Final = "staged-"
 STAGING_MODE: Final = 0o700
 
 _FAULTED: Final = "build %s of deck %s failed: %s"
-_ANSWERING: Final = "the build worker did not answer: %s (%s)"
 _NOT_REMOVED: Final = "the staging %s of a build reply could not be removed: %s"
 
 _log = logging.getLogger(__name__)
@@ -73,73 +69,13 @@ class Fault(StrEnum):
     LOCAL = "this machine refused a read or write"
 
 
-class SocketFault(StrEnum):
-    """What makes the directory, the socket or the peer not the worker's."""
-
-    DIRECTORY_OWNER = "directory owner"
-    DIRECTORY_MODE = "directory mode"
-    DIRECTORY_GROUP = "directory group"
-    SOCKET_TYPE = "socket type"
-    SOCKET_OWNER = "socket owner"
-    SOCKET_MODE = "socket mode"
-    PEER = "peer"
-
-
-class NotTheWorkerError(Exception):
-    """The socket directory, the socket or its peer is not what the worker makes."""
-
-    def __init__(self, cause: SocketFault) -> None:
-        """Carry what was wrong."""
-        super().__init__(cause)
-        self.cause = cause
-
-
 class _NotYetError(Exception):
     """The worker is not there yet; the attempt is retried within the window."""
 
 
-def what_is_wrong(
-    directory: os.stat_result,
-    socket_status: os.stat_result,
-    peer_uid: int | None,
-    *,
-    uid: int,
-    gid: int,
-) -> SocketFault | None:
-    """The first way the directory, the socket or the peer is not the worker's.
-
-    An unconnected socket has no peer yet; its peer is judged once it has one.
-    """
-    checks = (
-        (SocketFault.DIRECTORY_OWNER, directory.st_uid == uid),
-        (
-            SocketFault.DIRECTORY_MODE,
-            directory.st_mode == stat.S_IFDIR | SOCKET_DIRECTORY_MODE,
-        ),
-        (SocketFault.DIRECTORY_GROUP, directory.st_gid == gid),
-        (SocketFault.SOCKET_TYPE, stat.S_ISSOCK(socket_status.st_mode)),
-        (SocketFault.SOCKET_OWNER, socket_status.st_uid == uid),
-        (
-            SocketFault.SOCKET_MODE,
-            stat.S_IMODE(socket_status.st_mode) == SOCKET_MODE,
-        ),
-        (SocketFault.PEER, peer_uid in {None, uid}),
-    )
-    return next((cause for cause, holds in checks if not holds), None)
-
-
-def _cause_of(error: BaseException) -> str:
-    """The errno name of the first fault behind an error, else its class name."""
-    while error.__cause__ is not None:
-        error = error.__cause__
-    if isinstance(error, OSError) and error.errno is not None:
-        return errno.errorcode[error.errno]
-    return type(error).__name__
-
-
 def fault_of(error: Exception) -> Fault:
     """The class of fault an exchange's exception is."""
-    if isinstance(error, NotTheWorkerError):
+    if isinstance(error, HelloRefusedError):
         return Fault.NOT_THE_WORKER
     if isinstance(error, WireRefusedError):
         return Fault.REPLY_GRAMMAR
@@ -188,7 +124,7 @@ class _DeadlineSocket(socket.socket):
 
 
 def _begun_to_answer(connection: socket.socket) -> None:
-    """Peek the first reply byte; a close before it means the worker is not ready."""
+    """Peek the first byte of the hello; a close before it means no worker is ready."""
     if not connection.recv(1, socket.MSG_PEEK):
         raise _NotYetError
 
@@ -299,37 +235,27 @@ def exchange_with_worker(
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorkerToolchain:
-    """Runs a step by asking the build worker, which owns the sealed container.
+    """Runs a step by asking a build worker, which owns the sealed container.
 
-    One worker life serves one step: the web sends the step, uploads the deck
-    and takes the output back into out/. Before the worker's STATUS everything
-    waits only until the connect window ends; afterwards only until the
-    worker's own last deadline plus a margin has passed.
+    One worker life serves one step: the web proves the key in the hello,
+    sends the step, uploads the deck and takes the output back into out/.
+    Before the worker's STATUS everything waits only until the connect window
+    ends; afterwards only until the worker's own last deadline plus a margin
+    has passed. The address is a Service, so each step lands on a worker that
+    is ready.
     """
 
-    socket_path: Path
+    host: str
+    port: int
+    key: bytes = field(repr=False)
     megabytes: int
     reply_bound_seconds: float
-    expected_uid: int
-    expected_gid: int
     connect_window_seconds: float = CONNECT_WINDOW_SECONDS
+    attempt_seconds: float = ATTEMPT_SECONDS
     first_retry_seconds: float = FIRST_RETRY_SECONDS
     longest_retry_seconds: float = LONGEST_RETRY_SECONDS
     reply_margin_seconds: float = REPLY_MARGIN_SECONDS
     remove_staging: Callable[[Path], None] = shutil.rmtree
-
-    def is_answering(self) -> bool:
-        """Whether the worker answers a HELLO within the connect window."""
-        window_ends = time.monotonic() + self.connect_window_seconds
-        try:
-            with closing(
-                self._opened(send_hello, window_ends, at_start=True)
-            ) as connection:
-                read_status(connection)
-        except (OSError, WireRefusedError, NotTheWorkerError) as error:
-            _log.warning(_ANSWERING, fault_of(error), _cause_of(error))
-            return False
-        return True
 
     def ran(self, step: BuildStep) -> BuildFailure | ToolchainUnavailable | None:
         """Send the deck to the worker for that step and admit what it built.
@@ -372,7 +298,7 @@ class WorkerToolchain:
         header = StepHeader(step=step.name, slug=step.slug)
         try:
             connection = self._at_status(header, window_ends)
-        except (OSError, WireRefusedError, NotTheWorkerError) as error:
+        except (OSError, WireRefusedError) as error:
             _logged(error, step)
             return ToolchainUnavailable()
         with closing(connection):
@@ -388,98 +314,63 @@ class WorkerToolchain:
             )
 
     def _at_status(self, header: StepHeader, window_ends: float) -> _DeadlineSocket:
-        """A connection to the worker whose STATUS has been read."""
-        connection = self._opened(lambda sent: send_step(sent, header), window_ends)
+        """A connection whose hello is proven and whose STATUS has been read."""
+        connection = self._opened(window_ends)
         try:
+            send_step(connection, header)
             read_status(connection)
         except BaseException:
             connection.close()
             raise
         return connection
 
-    def _opened(
-        self,
-        first_message: Callable[[socket.socket], None],
-        window_ends: float,
-        *,
-        at_start: bool = False,
-    ) -> _DeadlineSocket:
-        """A connection to the worker that has begun to answer its first message.
+    def _opened(self, window_ends: float) -> _DeadlineSocket:
+        """A connection to a worker that has begun to answer and proved the key.
 
-        Retried within the window while the worker is not there yet; a socket
-        that is not the worker's is never retried. At start only, a socket the
-        web may not yet search for is "not yet" too: a fresh socket volume is
-        the worker's own until its fix-up gives it to the web's group.
+        Retried within the window while no worker is there yet, or the one the
+        Service chose is busy or restarting and closes or stays silent before
+        it speaks; a worker that speaks and does not prove the key is never
+        retried. Each attempt waits only `attempt_seconds` for the first byte, as
+        the Service may still route to a pod that has ended and answers nothing.
         """
         wait = self.first_retry_seconds
         while True:
             try:
-                return self._attempt(first_message, window_ends, at_start=at_start)
-            except _NotYetError as not_yet:
+                return self._attempt(window_ends)
+            except _NotYetError as error:
+                _log.debug("no worker answered this attempt: %r", error.__cause__)
                 remaining = window_ends - time.monotonic()
-                if remaining <= 0:
-                    raise TimeoutError from not_yet
-                time.sleep(min(wait, remaining))
+                time.sleep(max(0.0, min(wait, remaining)))
                 wait = min(2 * wait, self.longest_retry_seconds)
 
-    def _attempt(
-        self,
-        first_message: Callable[[socket.socket], None],
-        window_ends: float,
-        *,
-        at_start: bool,
-    ) -> _DeadlineSocket:
-        connection = _DeadlineSocket(socket.AF_UNIX, socket.SOCK_STREAM)
-        connection.until(window_ends)
+    def _attempt(self, window_ends: float) -> _DeadlineSocket:
+        family, _type, _protocol, _name, address = socket.getaddrinfo(
+            self.host, self.port, type=socket.SOCK_STREAM
+        )[0]
+        connection = _DeadlineSocket(family, socket.SOCK_STREAM)
+        connection.until(min(window_ends, time.monotonic() + self.attempt_seconds))
         try:
-            socket_status = self._socket_status(at_start=at_start)
-            directory = self.socket_path.parent.lstat()
-            self._judged(directory, socket_status, None)
-            connection.connect(str(self.socket_path))
-            self._judged(directory, socket_status, peer_uid(connection))
-            first_message(connection)
+            connection.connect(address)
             _begun_to_answer(connection)
         except (
-            FileNotFoundError,
             ConnectionRefusedError,
             ConnectionResetError,
             BrokenPipeError,
         ) as error:
             connection.close()
             raise _NotYetError from error
+        except TimeoutError as error:
+            connection.close()
+            if time.monotonic() >= window_ends:
+                raise
+            raise _NotYetError from error
+        except BaseException:
+            connection.close()
+            raise
+        connection.until(window_ends)
+        try:
+            answer_hello(connection, self.key)
         except BaseException:
             connection.close()
             raise
         return connection
-
-    def _socket_status(self, *, at_start: bool) -> os.stat_result:
-        """The socket's own status; read before the directory's.
-
-        A socket the web can read lies in a directory the worker's fix-up has
-        already given the web's group.
-        """
-        try:
-            return self.socket_path.lstat()
-        except PermissionError as error:
-            if not at_start:
-                raise
-            owner = self.socket_path.parent.lstat().st_uid
-            if owner != self.expected_uid:
-                raise NotTheWorkerError(SocketFault.DIRECTORY_OWNER) from error
-            raise _NotYetError from error
-
-    def _judged(
-        self,
-        directory: os.stat_result,
-        socket_status: os.stat_result,
-        peer_uid: int | None,
-    ) -> None:
-        cause = what_is_wrong(
-            directory,
-            socket_status,
-            peer_uid,
-            uid=self.expected_uid,
-            gid=self.expected_gid,
-        )
-        if cause is not None:
-            raise NotTheWorkerError(cause)

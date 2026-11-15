@@ -10,7 +10,6 @@ import pytest
 
 from presentator.adapters.build_wire import (
     BuiltOutcome,
-    EmptyHeader,
     FailedOutcome,
     StepHeader,
     WireRefusedError,
@@ -19,7 +18,6 @@ from presentator.adapters.build_wire import (
     read_status,
     receive_entries,
     send_failed,
-    send_hello,
     send_outcome,
     send_status,
     send_step,
@@ -40,17 +38,6 @@ def pair() -> Iterator[tuple[socket.socket, socket.socket]]:
 
 def open_directory(path: Path) -> int:
     return os.open(path, os.O_RDONLY | os.O_DIRECTORY)
-
-
-def test_a_hello_is_read_by_the_worker_as_the_empty_header(
-    pair: tuple[socket.socket, socket.socket],
-) -> None:
-    """54 (#431): the client's HELLO reaches the worker as the empty header."""
-    client, worker = pair
-
-    send_hello(client)
-
-    assert read_request(worker) == EmptyHeader()
 
 
 def test_a_step_is_read_by_the_worker_with_its_step_and_slug(

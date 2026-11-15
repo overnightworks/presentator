@@ -220,7 +220,6 @@ PATHS = {
     "a spawn failure": (lambda: ScriptedLife(spawn_error=OSError("no")), LifeEnd.SPAWN),
     "a gate mismatch": (lambda: ScriptedLife(gate_admits=False), LifeEnd.GATE),
     "a header expiry": (lambda: ScriptedLife(headers_stalled=1), None),
-    "a HELLO answered": (lambda: ScriptedLife(exit_status=WireExit.ANSWERED), None),
     "a rejection": (lambda: ScriptedLife(exit_status=WireExit.CLOSED), None),
     "a wire exit": (lambda: ScriptedLife(exit_status=1), LifeEnd.WIRE_EXIT),
     "a failing seal": (

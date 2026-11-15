@@ -59,6 +59,7 @@ INHERITED_DESCRIPTORS = {0, 1, 2}
 RELEASED_UMASK = 0o022
 CURRENT_DIRECTORY_KEY = "PWD"
 SECOND_CONNECTION = 2
+THIRD_CONNECTION = 3
 SHORT_BUDGET_SECONDS = 0.05
 STALLED_CONTROLLER = """
 import ctypes, os, sys, time
@@ -102,10 +103,8 @@ serving = worker_serving.Serving(
 )
 sys.exit(
     worker.serve(
-        Path(sys.argv[1]),
-        controller_uid=os.getuid(),
-        controller_gid=os.getgid(),
-        runtime_uid=os.getuid(),
+        port=int((Path(sys.argv[1]) / "port").read_text()),
+        key=(Path(sys.argv[1]) / "key").read_bytes(),
         serving=serving,
     )
 )
@@ -486,10 +485,8 @@ class RealServing:
         thread = threading.Thread(
             target=lambda: self.outcome.append(
                 worker.serve(
-                    self.directory,
-                    controller_uid=OWN_UID,
-                    controller_gid=OWN_GID,
-                    runtime_uid=OWN_UID,
+                    port=int((self.directory / "port").read_text()),
+                    key=(self.directory / "key").read_bytes(),
                     serving=serving,
                 )
             ),
@@ -514,6 +511,8 @@ class RealServing:
             return Reply(received, ended_by_reset=False)
 
 
+A_WHOLE_LIFE = support.VALID_STEP + support.END
+A_WHOLE_LIFE_REPLY = support.STATUS + support.OUTCOME_REFUSED_SHAPE + support.END
 REJECTED_STEPS = {
     "a slug leaving its folder": support.framed(
         b'{"step":"build","slug":"../x"}', support.STEP
@@ -525,7 +524,7 @@ REJECTED_STEPS = {
 }
 
 
-def test_the_real_entry_answers_a_hello_twice_in_one_process_within_the_header_deadline(
+def test_the_real_entry_closes_a_rejected_step_twice_in_one_process_within_the_deadline(
     volume: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("PATH", PATH)
@@ -533,11 +532,11 @@ def test_the_real_entry_answers_a_hello_twice_in_one_process_within_the_header_d
         serving = run.serving
         for _ in range(SECOND_CONNECTION):
             before = time.monotonic()
-            reply = serving.exchange(run.thread, support.HELLO)
+            reply = serving.exchange(run.thread, REJECTED_STEPS["an unknown step"])
             after = time.monotonic()
             serving.await_sweep()
 
-            assert reply.received == support.STATUS
+            assert reply.received == b""
             assert not reply.ended_by_reset
             assert after - before < HEADER_SECONDS
             assert before + SWEEP_SECONDS <= serving.sweep_deadlines[-1]
@@ -549,21 +548,21 @@ def test_the_real_entry_answers_a_hello_twice_in_one_process_within_the_header_d
 
 
 @pytest.mark.parametrize("sent", REJECTED_STEPS.values(), ids=REJECTED_STEPS.keys())
-def test_a_rejected_step_is_closed_unserved_and_the_same_process_then_answers_a_hello(
+def test_a_rejected_step_is_closed_and_the_same_process_then_serves_a_whole_life(
     volume: Path, monkeypatch: pytest.MonkeyPatch, sent: bytes
 ) -> None:
     monkeypatch.setenv("PATH", PATH)
-    with dripped_header(volume) as run:
+    with dripped_header(volume, THIRD_CONNECTION) as run:
         serving = run.serving
         assert serving.exchange(run.thread, sent).received == b""
-        second_reply = serving.exchange(run.thread, support.HELLO)
-        assert second_reply.received == support.STATUS
+        second_reply = serving.exchange(run.thread, A_WHOLE_LIFE)
+        assert second_reply.received == A_WHOLE_LIFE_REPLY
         assert not second_reply.ended_by_reset
         run.thread.join(WAIT_SECONDS)
 
     assert serving.outcome == [0]
     assert len(serving.sweep_deadlines) == SECOND_CONNECTION
-    assert serving.watchdog.events == ["arm", "cancel", "arm"]
+    assert serving.watchdog.events == ["arm", "cancel", "arm", "arm"]
 
 
 def test_a_valid_step_and_end_get_status_refused_shape_end_and_eof_and_end_the_life(
@@ -585,8 +584,7 @@ def test_a_valid_step_and_end_get_status_refused_shape_end_and_eof_and_end_the_l
     assert run.serving.watchdog.events == ["arm", "arm"]
 
 
-HELLO_PREAMBLE_AND_ONE_HEADER_BYTE = support.HELLO[:7] + support.HELLO[7:8]
-THREE_PREAMBLE_BYTES = support.HELLO[:3]
+THREE_PREAMBLE_BYTES = support.VALID_STEP[:3]
 STEP_PREAMBLE_AND_ONE_HEADER_BYTE = support.VALID_STEP[:7] + support.VALID_STEP[7:8]
 
 
@@ -675,11 +673,13 @@ class DrippedHeader:
 
 
 @contextmanager
-def dripped_header(directory: Path) -> Generator[DrippedHeader]:
+def dripped_header(
+    directory: Path, connections: int = SECOND_CONNECTION
+) -> Generator[DrippedHeader]:
     spawns = RecordingSpawn()
     serving = RealServing(
         directory,
-        connections=SECOND_CONNECTION,
+        connections=connections,
         spawn=spawns,
         step_spawn=spawns.step,
     )
@@ -697,12 +697,10 @@ def dripped_header(directory: Path) -> Generator[DrippedHeader]:
 @pytest.mark.parametrize(
     "dripped",
     [
-        HELLO_PREAMBLE_AND_ONE_HEADER_BYTE,
         STEP_PREAMBLE_AND_ONE_HEADER_BYTE,
         THREE_PREAMBLE_BYTES,
     ],
     ids=[
-        "a valid preamble and one header byte",
         "a valid STEP preamble and one header byte",
         "three preamble bytes",
     ],
@@ -711,19 +709,19 @@ def test_a_header_that_stops_midway_is_cut_off_at_the_deadline_and_serving_goes_
     volume: Path, monkeypatch: pytest.MonkeyPatch, dripped: bytes
 ) -> None:
     monkeypatch.setenv("PATH", PATH)
-    with dripped_header(volume) as run:
+    with dripped_header(volume, THIRD_CONNECTION) as run:
         received = run.drip_then_stop_writing(dripped)
         ended_at = time.monotonic()
         run.serving.await_sweep()
         [sweep_deadline] = run.serving.sweep_deadlines
         accepted_at = sweep_deadline - SWEEP_SECONDS
-        second_reply = run.serving.exchange(run.thread, support.HELLO)
+        second_reply = run.serving.exchange(run.thread, A_WHOLE_LIFE)
         run.thread.join(WAIT_SECONDS)
 
     assert received == b""
     assert accepted_at + HEADER_SECONDS <= ended_at < sweep_deadline
-    assert second_reply.received == support.STATUS
-    assert run.serving.watchdog.events == ["arm", "cancel", "arm"]
+    assert second_reply.received == A_WHOLE_LIFE_REPLY
+    assert run.serving.watchdog.events == ["arm", "cancel", "arm", "arm"]
     assert run.serving.outcome == [0]
 
 

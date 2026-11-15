@@ -11,23 +11,25 @@ import pytest
 from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
 from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import BUILD_IDENTITY, Predicate
+from tests.scripts.support.k3d_pods import (
+    Document,
+    Version,
+    lives_stream,
+    node,
+    pod_version,
+    terminated_state,
+    twin_answer,
+)
 from tests.scripts.support.k3d_world import (
     BROKEN_FORMS,
     OTHER_DIGEST,
-    Document,
     Fixture,
-    Version,
     World,
     command_positions,
     expected_ends,
     fixture_maker,
     issued_commands,
-    lives_stream,
     named,
-    node,
-    pod_version,
-    terminated_state,
-    twin_answer,
     workload_documents,
 )
 
@@ -142,9 +144,9 @@ def test_drive_passes_prints_every_life_and_interval_and_bounds_the_watch(
             7,
             1,
             "no init container",
-            f"exit {REFUSAL_EXIT_STATUS}, start refused: {Predicate.NO_ROUTE}",
+            f"exit {REFUSAL_EXIT_STATUS}, start refused: {Predicate.EGRESS}",
         ),
-        (8, lives_module.LIVES, "remove-link 0", "exit 0, self-check passed"),
+        (8, lives_module.LIVES, "nft-rules 0", "exit 0, self-check passed"),
     ):
         lives = [line for line in lines if line.startswith(f"cell {cell}: life")]
         assert len(lives) == count
@@ -157,7 +159,11 @@ def test_drive_passes_prints_every_life_and_interval_and_bounds_the_watch(
     intervals = [line for line in lines if line.startswith("cell 8: interval")]
     assert len(intervals) == lives_module.LIVES - 1
     assert all("3 s" in line and "resolution" in line for line in intervals)
-    *_, (_, budget, *_rest) = fixture.world.issued("timeout")
+    *_, (_, budget, *_rest) = [
+        command
+        for command in fixture.world.issued("timeout")
+        if command[2:5] == ("kubectl", "get", "pods")
+    ]
     assert int(budget) >= (
         lives_module.TERMINATION_WINDOW_SECONDS
         + (lives_module.LIVES - 1) * CONNECT_WINDOW_SECONDS
@@ -529,7 +535,7 @@ def test_cell_9_runs_and_prints_the_facts_when_cell_8_fails(
 ) -> None:
     world = World(
         streams=[
-            lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
+            lives_stream(1, Predicate.EGRESS, version=Version(init=False)),
             lives_stream(lives_module.LIVES, Predicate.MOUNTS),
         ]
     )
@@ -571,10 +577,10 @@ def a_failed_remove_link(refusal: Predicate | None) -> Document:
         (another_predicate, "no 'start refused"),
         (a_failed_end, "exit status 1"),
         (a_restart, "restartCount is 1"),
-        (a_failed_remove_link, "remove-link ended as 1"),
+        (a_failed_remove_link, "nft-rules ended as 1"),
         (an_unterminated_end, "before its worker terminated"),
     ],
-    ids=["another predicate", "a failed plant", "a restart", "remove-link", "no end"],
+    ids=["another predicate", "a failed plant", "a restart", "nft-rules", "no end"],
 )
 def test_a_residue_twin_that_does_not_end_as_expected_fails_the_cell_naming_it(
     make_fixture: Callable[..., Fixture],

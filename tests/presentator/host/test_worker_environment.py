@@ -19,7 +19,11 @@ from tests.presentator.host.support.sealed_snapshot import (
     sealed_snapshot,
     with_fields,
 )
-from tests.presentator.host.support.worker_boundary import boundary_over
+from tests.presentator.host.support.worker_boundary import (
+    CHECK,
+    SERVE,
+    boundary_over,
+)
 
 SEALED_KEYS = sealed_snapshot().environment_keys
 OTHER_SERVICE_LINK = "REDIS_SERVICE_HOST"
@@ -58,7 +62,7 @@ def test_an_unreadable_predicate_is_named(predicate: Predicate) -> None:
 
 
 @pytest.mark.parametrize("value", ["kubernetes", "compose", "COMPOSE", "k8s", ""])
-@pytest.mark.parametrize("arguments", [[], ["--check"]])
+@pytest.mark.parametrize("arguments", [SERVE, CHECK])
 def test_a_start_passes_with_the_unread_variable_set_to_any_value(
     sealed_root: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -83,5 +87,5 @@ def test_a_start_passes_with_the_unread_variable_set_to_any_value(
     status = worker.main(arguments, boundary)
 
     assert status == 0
-    assert ("serve" in events) is (not arguments)
+    assert ("serve" in events) is (arguments == SERVE)
     assert "start refused" not in caplog.text

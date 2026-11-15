@@ -1,14 +1,18 @@
 """The build wire's framing: requests and entries read, STATUS, OUTCOME, END sent."""
 
 import errno
+import hashlib
+import hmac
 import os
+import secrets
 import socket
 import stat
 import struct
+import time
 from collections.abc import Callable, Generator
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
-from enum import IntEnum, StrEnum
+from enum import Enum, IntEnum, StrEnum
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -39,20 +43,19 @@ MAXIMUM_HEADER_BYTES = 4096
 MAXIMUM_PATH_BYTES = 1024
 MAXIMUM_DEPTH = 32
 CHUNK_BYTES = 64 * 1024
-PEER_CREDENTIALS = struct.Struct("3i")
 MAXIMUM_ENTRIES = 100_000
 MEGABYTE = 1024 * 1024
 TOOLCHAIN_SCRATCH_NAME = TOOLCHAIN_SCRATCH_DIRECTORY.encode()
-SOCKET_DIRECTORY = "/run/presentator-build"
-SOCKET_NAME = "worker.sock"
-SOCKET_DIRECTORY_MODE = 0o750
-SOCKET_MODE = 0o660
+HELLO_VERSION = 1
+NONCE_BYTES = 32
+TAG_BYTES = hashlib.sha256().digest_size
+CHALLENGE_BYTES = 1 + NONCE_BYTES
+ANSWER_BYTES = 1 + NONCE_BYTES + TAG_BYTES
 
 
 class MessageKind(IntEnum):
     """The message kinds this end reads or writes."""
 
-    HELLO = 1
     STEP = 2
     STATUS = 3
     OUTCOME = 5
@@ -67,11 +70,22 @@ class RecordTag(IntEnum):
 
 
 class WireRefusedError(Exception):
-    """The peer sent something other than a valid HELLO, STEP or END."""
+    """The peer sent something other than a valid STEP or END."""
+
+
+class HelloRefusedError(WireRefusedError):
+    """The peer of a keyed hello did not prove that it holds the key."""
+
+
+class HelloDirection(bytes, Enum):
+    """The label a tag is computed under; it binds the tag to one direction."""
+
+    WEB_TO_WORKER = b"web to worker"
+    WORKER_TO_WEB = b"worker to web"
 
 
 class EmptyHeader(BaseModel, extra="forbid", strict=True):
-    """The header of a HELLO or STATUS: exactly the empty object."""
+    """The header of a STATUS: exactly the empty object."""
 
 
 def _plain_folder_name(slug: str) -> str:
@@ -118,11 +132,6 @@ class RefusedOutcome(BaseModel, extra="forbid", strict=True):
 
 Outcome = BuiltOutcome | RefusedOutcome | FailedOutcome
 
-_HEADER_MODELS: dict[MessageKind, type[EmptyHeader | StepHeader]] = {
-    MessageKind.HELLO: EmptyHeader,
-    MessageKind.STEP: StepHeader,
-}
-
 
 def _preamble(kind: MessageKind) -> bytes:
     return MAGIC + bytes([VERSION, kind])
@@ -154,6 +163,87 @@ def _read_message(
     return MessageKind(preamble[len(MAGIC) + 1]), _read_exactly(connection, length)
 
 
+def _arm(connection: socket.socket, deadline: float) -> None:
+    """Bound the next call by the monotonic deadline; a passed one times out."""
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError
+    connection.settimeout(remaining)
+
+
+def _read_exactly_by(connection: socket.socket, count: int, deadline: float) -> bytes:
+    received = bytearray()
+    while len(received) < count:
+        _arm(connection, deadline)
+        chunk = connection.recv(count - len(received))
+        if not chunk:
+            raise WireRefusedError
+        received += chunk
+    return bytes(received)
+
+
+def hello_tag(
+    key: bytes,
+    direction: HelloDirection,
+    controller_nonce: bytes,
+    web_nonce: bytes,
+) -> bytes:
+    """The HMAC-SHA256 of one direction's label and both nonces, under the key."""
+    return hmac.digest(key, direction + controller_nonce + web_nonce, hashlib.sha256)
+
+
+def verify_hello(connection: socket.socket, key: bytes, *, seconds: float) -> bool:
+    """Run the controller's side of the keyed hello within the seconds.
+
+    The controller sends a nonce; the web answers with its own and a tag over
+    the label "web to worker" and both; the controller answers with a tag under
+    the other label, so no tag of one direction passes for the other. True only
+    for a peer that holds the key, and only then is the connection blocking
+    again. Whatever the peer does, this reads nothing but the fixed lengths.
+    """
+    deadline = time.monotonic() + seconds
+    nonce = secrets.token_bytes(NONCE_BYTES)
+    try:
+        _arm(connection, deadline)
+        connection.sendall(bytes([HELLO_VERSION]) + nonce)
+        answer = _read_exactly_by(connection, ANSWER_BYTES, deadline)
+        web_nonce = answer[1 : 1 + NONCE_BYTES]
+        expected = hello_tag(key, HelloDirection.WEB_TO_WORKER, nonce, web_nonce)
+        if answer[0] != HELLO_VERSION or not hmac.compare_digest(
+            answer[1 + NONCE_BYTES :], expected
+        ):
+            return False
+        _arm(connection, deadline)
+        connection.sendall(
+            hello_tag(key, HelloDirection.WORKER_TO_WEB, nonce, web_nonce)
+        )
+    except OSError, WireRefusedError:
+        return False
+    connection.settimeout(None)
+    return True
+
+
+def answer_hello(connection: socket.socket, key: bytes) -> None:
+    """Run the web's side of the keyed hello; raise unless the peer proves the key."""
+    challenge = _read_exactly(connection, CHALLENGE_BYTES)
+    if challenge[0] != HELLO_VERSION:
+        raise HelloRefusedError
+    nonce = challenge[1:]
+    web_nonce = secrets.token_bytes(NONCE_BYTES)
+    connection.sendall(
+        bytes([HELLO_VERSION])
+        + web_nonce
+        + hello_tag(key, HelloDirection.WEB_TO_WORKER, nonce, web_nonce)
+    )
+    try:
+        proof = _read_exactly(connection, TAG_BYTES)
+    except WireRefusedError as closed:
+        raise HelloRefusedError from closed
+    expected = hello_tag(key, HelloDirection.WORKER_TO_WEB, nonce, web_nonce)
+    if not hmac.compare_digest(proof, expected):
+        raise HelloRefusedError
+
+
 def _validated[Header](adapter: TypeAdapter[Header], header: bytes) -> Header:
     try:
         return adapter.validate_json(header)
@@ -161,18 +251,10 @@ def _validated[Header](adapter: TypeAdapter[Header], header: bytes) -> Header:
         raise WireRefusedError from error
 
 
-def read_request(connection: socket.socket) -> EmptyHeader | StepHeader:
-    """Read one HELLO or STEP preamble and header; raise WireRefusedError otherwise."""
-    kind, header = _read_message(connection, frozenset(_HEADER_MODELS))
-    return _validated(TypeAdapter(_HEADER_MODELS[kind]), header)
-
-
-def peer_uid(connection: socket.socket) -> int:
-    """The uid of the process on the other end of a connected unix socket."""
-    credentials = connection.getsockopt(
-        socket.SOL_SOCKET, socket.SO_PEERCRED, PEER_CREDENTIALS.size
-    )
-    return PEER_CREDENTIALS.unpack(credentials)[1]
+def read_request(connection: socket.socket) -> StepHeader:
+    """Read one STEP preamble and header; raise WireRefusedError otherwise."""
+    _, header = _read_message(connection, frozenset({MessageKind.STEP}))
+    return _validated(TypeAdapter(StepHeader), header)
 
 
 def read_status(connection: socket.socket) -> None:
@@ -189,11 +271,6 @@ def read_outcome(connection: socket.socket) -> Outcome:
 
 def _send_message(connection: socket.socket, kind: MessageKind, header: bytes) -> None:
     connection.sendall(_preamble(kind) + LENGTH.pack(len(header)) + header)
-
-
-def send_hello(connection: socket.socket) -> None:
-    """Write the HELLO message: the preamble and the empty header."""
-    _send_message(connection, MessageKind.HELLO, b"{}")
 
 
 def send_step(connection: socket.socket, header: StepHeader) -> None:

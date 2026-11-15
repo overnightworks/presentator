@@ -7,12 +7,16 @@ from types import ModuleType
 
 import pytest
 
+from tests.scripts.support.k3d_pods import (
+    Document,
+)
 from tests.scripts.support.k3d_world import (
     DIGEST,
     PROJECTED_KEYS,
     PROJECTED_NAME,
     RUN_IDENTIFIER,
-    Document,
+    WORKER_KEY_NAME,
+    WORKER_POD_NAMES,
     Fixture,
     fixture_maker,
     named,
@@ -70,13 +74,21 @@ def test_a_cell_applies_only_the_worker_pods_kinds_and_the_cell_dependent_fields
     rendered = workload_documents(fixture.world.probe_image)
     namespaces = fixture.world.applied("Namespace")
     assert [d["metadata"]["name"] for d in namespaces] == ["presentator"]
-    cells = [d for d in fixture.world.applies() if d[0]["kind"] != "Namespace"]
+    cells = [
+        d
+        for d in fixture.world.applies()
+        if d[0]["kind"] not in {"Namespace", "Secret"}
+    ]
     documents = cells[cell]
-    assert {document["kind"] for document in documents} == {
-        "PersistentVolumeClaim",
-        "ServiceAccount",
-        "StatefulSet",
+    assert {(d["kind"], d["metadata"]["name"]) for d in documents} == {
+        ("PersistentVolumeClaim", "builds"),
+        ("ServiceAccount", "build-worker"),
+        ("Service", "build-worker"),
+        ("NetworkPolicy", "build-worker"),
+        ("ConfigMap", "build-worker-rules-0a1b2c"),
+        ("StatefulSet", "build-worker"),
     }
+    assert named(documents, "StatefulSet")["spec"]["replicas"] == 1
     spec = named(documents, "StatefulSet")["spec"]["template"]["spec"]
     (worker,) = spec["containers"]
     assert worker.pop("terminationMessagePolicy") == (
@@ -138,7 +150,7 @@ CHANGES: list[tuple[Change, str]] = [
     CHANGES,
     ids=[
         "another field changed",
-        "remove-link's digest changed",
+        "nft-rules's digest changed",
         "the web left at the production image",
         "the CronJob's container left at the production image",
         "a digest on the probe image",
@@ -168,18 +180,35 @@ def test_the_web_documents_are_the_overlays_config_map_and_deployment_as_rendere
     documents = manifests_module.web_documents(rendered)
     assert documents == [
         named(rendered, "Deployment"),
-        named(rendered, "ConfigMap"),
+        next(
+            d
+            for d in rendered
+            if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "sqlite"
+        ),
     ]
     assert documents[0] is not named(rendered, "Deployment")
 
 
-def test_the_throwaway_secret_reads_its_name_and_keys_from_the_deployment(
+def test_the_throwaway_secrets_read_their_names_and_keys_from_the_deployment(
     manifests_module: ModuleType, production_image: str
 ) -> None:
     deployment = named(workload_documents(production_image), "Deployment")
     values = iter(f"effect-{number}" for number in range(10))
-    secret = manifests_module.throwaway_secret(deployment, lambda: next(values))
-    assert secret["kind"] == "Secret"
-    assert secret["metadata"]["name"] == PROJECTED_NAME
-    assert set(secret["stringData"]) == set(PROJECTED_KEYS)
-    assert sorted(secret["stringData"].values()) == ["effect-0", "effect-1"]
+    secrets = manifests_module.throwaway_secrets(deployment, lambda: next(values))
+    assert {secret["kind"] for secret in secrets} == {"Secret"}
+    by_name = {secret["metadata"]["name"]: secret["stringData"] for secret in secrets}
+    assert set(by_name) == {PROJECTED_NAME, WORKER_KEY_NAME}
+    assert set(by_name[PROJECTED_NAME]) == set(PROJECTED_KEYS)
+    assert set(by_name[WORKER_KEY_NAME]) == {"key"}
+    shown = [value for held in by_name.values() for value in held.values()]
+    assert sorted(shown) == ["effect-0", "effect-1", "effect-2"]
+
+
+def test_the_workers_apply_at_the_replicas_asked_for(
+    manifests_module: ModuleType, production_image: str
+) -> None:
+    rendered = workload_documents(production_image)
+    documents = manifests_module.applied_documents(
+        rendered, init_container=True, replicas=len(WORKER_POD_NAMES)
+    )
+    assert named(documents, "StatefulSet")["spec"]["replicas"] == len(WORKER_POD_NAMES)

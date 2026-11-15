@@ -3,6 +3,7 @@
 import errno
 import logging
 import os
+import shutil
 import socket
 import stat
 from collections.abc import Callable
@@ -33,7 +34,6 @@ from tests.presentator.adapters.support.build_worker_support import (
     failed_reply,
     refused_reply,
     staging_of,
-    toolchain,
     tree_of,
 )
 from tests.support import worker_support as support
@@ -55,7 +55,7 @@ def exchanged_with(
             step=step,
             deck=deck,
             megabytes=MEGABYTES,
-            remove_staging=remove_staging or toolchain(Path("/")).remove_staging,
+            remove_staging=remove_staging or shutil.rmtree,
         )
     finally:
         os.close(deck)

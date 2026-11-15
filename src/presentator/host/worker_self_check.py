@@ -2,7 +2,6 @@
 
 import ctypes
 import grp
-import ipaddress
 import os
 import pwd
 import resource
@@ -13,7 +12,6 @@ from enum import StrEnum
 from functools import partial
 from pathlib import Path, PurePosixPath
 
-from presentator.adapters import build_wire, rtnetlink
 from presentator.host.config import worker_settings_variables
 from presentator.host.worker_scratch import (
     OPEN_DIRECTORY_MODE,
@@ -27,6 +25,7 @@ from presentator.host.worker_scratch import (
     read_scratch,
     scratch_empty,
 )
+from presentator.host.worker_termination import list_process_ids
 
 WORKER_CAPABILITIES = 0xE0
 MAXIMUM_PROCESSES = 512
@@ -37,6 +36,8 @@ BUILD_IDENTITY = (61001, 61001)
 WIRE_IDENTITY = (61002, 61002)
 NO_CAPABILITIES = "0" * 16
 CGROUP_DIRECTORY = "sys/fs/cgroup"
+PROCESS_TABLE = "proc"
+RUNTIME_PLACED_PARENT = "0"
 PROCESS_LIMITS_FILE = "proc/self/limits"
 PROCESS_LIMIT_ROW = "Max processes"
 GROUP_AND_OTHERS_WRITE = stat.S_IWGRP | stat.S_IWOTH
@@ -57,9 +58,9 @@ MOUNT_ROOT_MODES = {
     TERMINATION_LOG: TERMINATION_LOG_MODE,
 }
 MASKED_AREAS = ("/proc", "/sys")
-JUDGED_MOUNTS = frozenset(
-    {"/", build_wire.SOCKET_DIRECTORY, QUEUE_MOUNT, *MOUNT_ROOT_MODES}
-)
+# Where the pod mounts the Secret that holds the hello key.
+KEY_MOUNT = "/run/secrets/build-worker-key"
+JUDGED_MOUNTS = frozenset({"/", QUEUE_MOUNT, *MOUNT_ROOT_MODES})
 TOOLCHAIN_PROJECT = "app/slidev"
 SLIDEV_BINARY = f"{TOOLCHAIN_PROJECT}/node_modules/.bin/slidev"
 SLIDEV_PACKAGE = f"{TOOLCHAIN_PROJECT}/node_modules/@slidev/cli"
@@ -113,12 +114,26 @@ ALLOWED_ENVIRONMENT_KEYS = frozenset(
     | worker_settings_variables()
 )
 
-LOOPBACK_NAME = "lo"
-LOOPBACK_ADDRESSES = frozenset(
-    {
-        (ipaddress.IPv4Address("127.0.0.1"), 8),
-        (ipaddress.IPv6Address("::1"), 128),
-    }
+# The probe sends one datagram to a documentation address, off the loopback.
+SEND_PROBE_PROGRAM = """\
+import errno
+import socket
+
+with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+    try:
+        probe.sendto(b"probe", ("192.0.2.1", 9))
+    except OSError as refused:
+        print(errno.errorcode[refused.errno])
+    else:
+        print("sent")
+"""
+SEND_PROBE_SECONDS = 5.0
+SEND_DROPPED = "EPERM"
+# The controller and the two uids that run a deck's code, each in its own process.
+PROBED_IDENTITIES: tuple[tuple[int, int] | None, ...] = (
+    None,
+    BUILD_IDENTITY,
+    WIRE_IDENTITY,
 )
 PR_GET_DUMPABLE = 3
 PR_SET_DUMPABLE = 4
@@ -130,7 +145,7 @@ class Predicate(StrEnum):
     NON_DUMPABLE = "non-dumpable"
     CAPABILITIES = "capabilities"
     MOUNTS = "mounts"
-    NO_ROUTE = "no-route"
+    EGRESS = "egress"
     RESOURCE_BOUNDS = "resource-bounds"
     IDENTITIES = "identities"
     ENVIRONMENT = "environment"
@@ -199,11 +214,11 @@ class Snapshot:
     process_status: str
     mounts: Mounts
     resource_bounds: ResourceBounds
-    topology: rtnetlink.Topology
+    sends: tuple[str, ...]
     identity: Identity
     environment_keys: frozenset[str]
     pid: int
-    cgroup_tasks: str
+    descendants: int
     scratch: Scratch
     toolchain: Toolchain
     unreadable: frozenset[Predicate] = frozenset()
@@ -242,6 +257,20 @@ def _in_masked_area(mount: str) -> bool:
     return any(PurePosixPath(mount).is_relative_to(area) for area in MASKED_AREAS)
 
 
+def _is_key_volume(
+    mount: str, mounted: tuple[str, frozenset[str]], root: RootFacts
+) -> bool:
+    """The key's read-only tmpfs, whose root the kubelet opens to all."""
+    filesystem, options = mounted
+    return (
+        mount == KEY_MOUNT
+        and filesystem == "tmpfs"
+        and "ro" in options
+        and stat.S_ISDIR(root.mode)
+        and root.owner_uid == 0
+    )
+
+
 def _other_root_admitted(
     mount: str, mounted: tuple[str, frozenset[str]], root: RootFacts | None
 ) -> bool:
@@ -251,6 +280,8 @@ def _other_root_admitted(
     if _in_masked_area(mount) and (
         stat.S_ISCHR(root.mode) or (filesystem == "tmpfs" and "ro" in options)
     ):
+        return True
+    if _is_key_volume(mount, mounted, root):
         return True
     return (
         (stat.S_ISDIR(root.mode) or stat.S_ISREG(root.mode))
@@ -276,7 +307,6 @@ def _mount_table_sealed(mounts: Mounts) -> bool:
             for mount in MOUNT_ROOT_MODES
             if mount != TERMINATION_LOG
         )
-        and build_wire.SOCKET_DIRECTORY in table
         and table.get(QUEUE_MOUNT, ("", frozenset()))[0] == "mqueue"
         and all(
             _fixed_up(mounts.table_roots.get(mount), mode)
@@ -299,26 +329,8 @@ def _mounts_sealed(snapshot: Snapshot) -> bool:
     )
 
 
-def _no_route(snapshot: Snapshot) -> bool:
-    topology = snapshot.topology
-    if len(topology.links) != 1:
-        return False
-    [link] = topology.links
-    return (
-        link.name == LOOPBACK_NAME
-        and bool(link.flags & rtnetlink.IFF_LOOPBACK)
-        and all(
-            found.link_index == link.index
-            and (found.ip_address, found.prefix_length) in LOOPBACK_ADDRESSES
-            for found in topology.addresses
-        )
-        and all(
-            found.output_link_index == link.index
-            and found.destination_prefix_length > 0
-            and not found.has_next_hop
-            for found in topology.routes
-        )
-    )
+def _egress_dropped(snapshot: Snapshot) -> bool:
+    return snapshot.sends == (SEND_DROPPED,) * len(PROBED_IDENTITIES)
 
 
 def _within_maximum(value: str) -> bool:
@@ -340,8 +352,8 @@ def _identities_sealed(snapshot: Snapshot) -> bool:
     return (
         identity.uid == 0
         and identity.euid == 0
-        and identity.gid == identity.runtime_gid
-        and identity.supplementary_gids == (identity.runtime_gid,)
+        and identity.gid == 0
+        and set(identity.supplementary_gids) <= {0}
         and build_user == BUILD_IDENTITY
         and wire_user == WIRE_IDENTITY
         and not unusable & {*BUILD_IDENTITY, *WIRE_IDENTITY}
@@ -357,7 +369,7 @@ def _is_pid_one(snapshot: Snapshot) -> bool:
 
 
 def _is_alone(snapshot: Snapshot) -> bool:
-    return snapshot.cgroup_tasks == "1"
+    return snapshot.descendants == 0
 
 
 def _toolchain_present(snapshot: Snapshot) -> bool:
@@ -383,7 +395,7 @@ SELF_CHECK: tuple[tuple[Predicate, Callable[[Snapshot], bool]], ...] = (
     (Predicate.NON_DUMPABLE, lambda snapshot: snapshot.dumpable == 0),
     (Predicate.CAPABILITIES, _capabilities_sealed),
     (Predicate.MOUNTS, _mounts_sealed),
-    (Predicate.NO_ROUTE, _no_route),
+    (Predicate.EGRESS, _egress_dropped),
     (Predicate.RESOURCE_BOUNDS, _resources_bounded),
     (Predicate.IDENTITIES, _identities_sealed),
     (Predicate.ENVIRONMENT, _environment_allowed),
@@ -524,6 +536,24 @@ def _read_cgroup_file(root: Path, name: str) -> str:
     return (root / CGROUP_DIRECTORY / name).read_text().strip()
 
 
+def _count_descendants(root: Path) -> int:
+    """The processes with a parent inside the container.
+
+    The runtime places the container's init and every process it execs into it,
+    a readiness probe's among them, with no parent inside; any other process
+    descends from the worker or from one of those.
+    """
+    table = root / PROCESS_TABLE
+    descendants = 0
+    for process in list_process_ids(table):
+        try:
+            status = (table / process / "status").read_text()
+        except FileNotFoundError, ProcessLookupError:
+            continue  # the process ended since the listing
+        descendants += status_fields(status)["PPid"] != RUNTIME_PLACED_PARENT
+    return descendants
+
+
 def _read_process_limit(root: Path) -> tuple[str, str]:
     for line in (root / PROCESS_LIMITS_FILE).read_text().splitlines():
         if line.startswith(PROCESS_LIMIT_ROW):
@@ -552,7 +582,7 @@ UNREAD_RESOURCE_BOUNDS = ResourceBounds("", ("", ""))
 UNREAD_IDENTITY = Identity(-1, -1, -1, (), -1, -1, {})
 UNREAD_TOOLCHAIN = Toolchain(None, None, (), None)
 UNREAD_SCRATCH = Scratch(frozenset(), {})
-UNREAD_TOPOLOGY = rtnetlink.Topology((), (), ())
+UNREAD_SENDS: tuple[str, ...] = ()
 
 
 class _FactReader:
@@ -571,21 +601,32 @@ class _FactReader:
             return placeholder
 
 
-def read_snapshot(
-    root: Path, *, read_topology: Callable[[], rtnetlink.Topology]
-) -> Snapshot:
+def send_probes(
+    run_program: Callable[..., str],
+) -> tuple[str, ...]:
+    """What a new socket meets when it sends off the loopback, per probed identity.
+
+    Each probe runs the datagram program in a process of its own, as the
+    identity (the caller's own when None), so what is judged is what a deck's
+    code would meet. `run_program` is the runner of that process.
+    """
+    return tuple(
+        run_program(SEND_PROBE_PROGRAM, identity, seconds=SEND_PROBE_SECONDS)
+        for identity in PROBED_IDENTITIES
+    )
+
+
+def read_snapshot(root: Path, *, read_sends: Callable[[], tuple[str, ...]]) -> Snapshot:
     """Read the facts the predicates judge, from the filesystem under `root`.
 
     A fact that cannot be read or decoded marks its predicate unreadable, so the
-    self-check judges every predicate in order. The container's task count is
+    self-check judges every predicate in order. The container's process table is
     read first and the scratch places right after it: no other fact is read and
-    no child is launched in between. The network topology is read after both.
+    no child is launched in between. The probes launch children, so they follow.
     """
     facts = _FactReader()
     read = facts.read
-    cgroup_tasks = read(
-        Predicate.ALONE, partial(_read_cgroup_file, root, "pids.current"), ""
-    )
+    descendants = read(Predicate.ALONE, partial(_count_descendants, root), -1)
     scratch = read(Predicate.SCRATCH, partial(read_scratch, root), UNREAD_SCRATCH)
     dumpable = read(Predicate.NON_DUMPABLE, partial(libc_prctl, PR_GET_DUMPABLE, 0), -1)
     process_status = read(
@@ -602,11 +643,11 @@ def read_snapshot(
         process_status=process_status,
         mounts=mounts,
         resource_bounds=resource_bounds,
-        topology=read(Predicate.NO_ROUTE, read_topology, UNREAD_TOPOLOGY),
+        sends=read(Predicate.EGRESS, read_sends, UNREAD_SENDS),
         identity=read(Predicate.IDENTITIES, _read_identity, UNREAD_IDENTITY),
         environment_keys=frozenset(os.environ),
         pid=os.getpid(),
-        cgroup_tasks=cgroup_tasks,
+        descendants=descendants,
         scratch=scratch,
         toolchain=read(
             Predicate.TOOLCHAIN, partial(_read_toolchain, root), UNREAD_TOOLCHAIN

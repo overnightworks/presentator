@@ -6,16 +6,22 @@ directory that holds `hello-deck`.
 Run inside the web's container as its own user. It reads the settings
 with `load_settings()`, takes the worker from `the_build_worker` and runs the
 named steps of the deck in a fresh run directory under the builds root. It
-prints the outcome as its one line: each step's `BuildFailure` reason, text and
-counts, and what the run directory holds when the steps are over.
+prints the outcome as its one line: each step's admission time (when a worker
+had answered its header) and `BuildFailure` reason, text and counts, and what
+the run directory holds when the steps are over.
 """
 
 import json
+import logging
 import sys
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from shutil import copytree
 from tempfile import mkdtemp
 
+from presentator.adapters.build_worker import STAGED_PREFIX, WorkerToolchain
 from presentator.adapters.builds import BuildPlace, BuildStep, slidev_arguments
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
@@ -24,12 +30,42 @@ from presentator.contracts.decks import (
     TALK_DIRECTORY,
     BuildFailure,
     StepKind,
+    ToolchainUnavailable,
 )
 from presentator.host.config import load_settings
 from presentator.host.main import build_bound_of, the_build_worker
 
 HELLO_DECK = "hello-deck"
 SLUG = "hello"
+ADMISSION_POLL_SECONDS = 0.002
+
+
+def first_seen(directory: Path, *, until: threading.Event) -> float | None:
+    """The time `directory` first exists, polled until `until` is set."""
+    while not until.is_set():
+        if directory.is_dir():
+            return time.time()
+        until.wait(ADMISSION_POLL_SECONDS)
+    return None
+
+
+def ran_timed(
+    toolchain: WorkerToolchain, step: BuildStep
+) -> tuple[BuildFailure | ToolchainUnavailable | None, float | None]:
+    """The step's result, and the time a worker admitted it, or None.
+
+    The client makes its staging directory right after the worker's STATUS, so
+    the time that directory first shows in the run is the step's admission.
+    """
+    over = threading.Event()
+    staging = step.place.here / f"{STAGED_PREFIX}{step.name}"
+    with ThreadPoolExecutor(max_workers=1) as watcher:
+        admission = watcher.submit(first_seen, staging, until=over)
+        try:
+            result = toolchain.ran(step)
+        finally:
+            over.set()
+        return result, admission.result()
 
 
 def prepared_run(decks: Path, builds: Path) -> BuildPlace:
@@ -52,21 +88,28 @@ def delivered(place: BuildPlace) -> dict[str, bool]:
 
 def main(decks: Path, kinds: list[StepKind]) -> None:
     """Run the steps and print the outcome."""
+    logging.basicConfig()
+    logging.getLogger("presentator.adapters.build_worker").setLevel(logging.DEBUG)
     settings = load_settings()
     toolchain = the_build_worker(settings, bound=build_bound_of(settings))
     place = prepared_run(decks, settings.builds)
     steps: list[dict[str, object]] = []
     for kind in kinds:
-        failure = toolchain.ran(
+        failure, admitted = ran_timed(
+            toolchain,
             BuildStep(
                 place=place,
                 slug=SLUG,
                 name=kind,
                 arguments=slidev_arguments(kind, place=place, slug=SLUG),
                 watched=lambda: None,
-            )
+            ),
         )
-        step: dict[str, object] = {"step": kind.value, "failed": failure is not None}
+        step: dict[str, object] = {
+            "step": kind.value,
+            "failed": failure is not None,
+            "admitted": admitted,
+        }
         if isinstance(failure, BuildFailure):
             step["failure"] = {
                 "reason": failure.reason.value,
