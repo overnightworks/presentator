@@ -1,5 +1,6 @@
 """A talk and the policy around it name no host but this origin."""
 
+import logging
 import re
 from http import HTTPStatus
 from pathlib import Path
@@ -8,9 +9,10 @@ from typing import Final
 import pytest
 
 from presentator.api.talk import talk_content_security_policy
-from presentator.contracts.decks import talk_address
+from presentator.contracts.decks import DECK_PATH, talk_address
 from tests.support.lobby import A_TALK_ADDRESS, a_content_security_policy
-from tests.support.talk_support import A_DECK, two_hosts
+from tests.support.log_lines import request_lines
+from tests.support.talk_support import A_DECK, A, two_hosts
 
 # Outside `form-action`, a source names no host when it is 'self', 'none',
 # 'unsafe-inline', 'unsafe-hashes', a hash or nonce, or the data: or blob:
@@ -85,3 +87,17 @@ def test_a_built_talk_page_points_only_at_its_own_origin(
         if _AN_ADDRESS_ON_ANOTHER_HOST.match(address)
     ]
     assert foreign_addresses == []
+
+
+def test_a_built_talks_request_line_names_the_deck_address_never_the_file(
+    tmp_path: Path, json_logging: None, caplog: pytest.LogCaptureFixture
+) -> None:
+    del json_logging
+    caplog.set_level(logging.INFO)
+    talk_host = two_hosts(tmp_path).signed_in_at(A_TALK_ADDRESS)
+
+    talk_host.get(talk_address(A_DECK) + "404.html")
+    (line,) = request_lines(caplog)
+
+    assert line["route"] == f"{DECK_PATH}/{{slug}}"
+    assert line["sub"] == A.id

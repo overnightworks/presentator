@@ -6,6 +6,7 @@ calls with a bearer alone.
 """
 
 import json
+import logging
 from collections.abc import Iterator
 from datetime import timedelta
 from http import HTTPStatus
@@ -45,6 +46,7 @@ from tests.support.lobby import (
     a_settings,
     a_talk_app,
 )
+from tests.support.log_lines import request_lines
 from tests.support.sign_in_support import ADMIN, MEMBER, a_scene
 
 
@@ -515,6 +517,32 @@ def test_the_served_router_runs_the_front_for_the_lobby_it_serves(
             answer = post_mcp(lobby, world.bearer(), "tools/list")
 
         assert answer.status_code == HTTPStatus.OK
+
+
+def test_the_served_request_line_names_the_bearers_person_and_the_route_of_the_front(
+    tmp_path: Path, json_logging: None, caplog: pytest.LogCaptureFixture
+) -> None:
+    del json_logging
+    caplog.set_level(logging.INFO)
+    with a_world(tmp_path, entering_the_lifespan=False) as world:
+        instance = Instance(
+            lobby=world.scene.lobby.app,
+            talk=a_talk_app(people=a_crowd()),
+            poller=Schedule(chore=lambda: None, interval=timedelta(seconds=1)),
+            session_sweep=Schedule(chore=lambda: None, interval=timedelta(seconds=1)),
+        )
+
+        with TestClient(
+            served_by_host(instance, a_settings()),
+            base_url=A_BROWSERS_ADDRESS,
+            follow_redirects=False,
+        ) as lobby:
+            post_mcp(lobby, world.bearer(), "tools/list")
+            lobby.get(DECK_LIST_PATH, headers={**world.bearer(), **World.JSON})
+
+        lines = {line["route"]: line for line in request_lines(caplog)}
+        assert lines[MCP_ENDPOINT_PATH]["sub"] == World.FELIX
+        assert lines[DECK_LIST_PATH]["sub"] == World.FELIX
 
 
 @pytest.mark.parametrize(
