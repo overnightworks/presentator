@@ -17,11 +17,9 @@ def json_lines(output: str) -> list[LogLine]:
 
 def request_lines(caplog: pytest.LogCaptureFixture) -> list[LogLine]:
     """The request lines logline has written so far, as the records carry them."""
-    return [
-        cast("LogLine", record.msg)
-        for record in caplog.records
-        if isinstance(record.msg, dict) and record.msg.get("event") == REQUEST_EVENT
-    ]
+    carried = [cast("object", record.msg) for record in caplog.records]
+    lines = [cast("LogLine", msg) for msg in carried if isinstance(msg, dict)]
+    return [line for line in lines if line.get("event") == REQUEST_EVENT]
 
 
 class LoggedText:
