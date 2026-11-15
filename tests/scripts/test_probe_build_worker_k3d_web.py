@@ -428,8 +428,9 @@ def test_a_user_that_leaves_the_loopback_or_a_probe_that_tried_less_fails_cell_1
     world: World,
     fragment: str,
 ) -> None:
+    fixture = make_fixture(world)
     with pytest.raises(SystemExit):
-        make_fixture(world).drive()
+        fixture.drive()
     output = capsys.readouterr()
     assert fragment in output.err
     assert "cell 13: FAILED" in output.out
