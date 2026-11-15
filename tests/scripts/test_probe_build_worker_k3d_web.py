@@ -374,8 +374,9 @@ def test_cell_13_admits_every_worker_port_by_policy_only_while_the_web_pod_conne
 def test_a_listener_that_does_not_answer_on_the_pods_loopback_fails_cell_13(
     make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str]
 ) -> None:
+    fixture = make_fixture(World(listener_loopback_end="timeout"))
     with pytest.raises(SystemExit):
-        make_fixture(World(listener_loopback_end="timeout")).drive()
+        fixture.drive()
     output = capsys.readouterr()
     assert "did not answer on its loopback" in output.err
     assert "cell 13: FAILED" in output.out
