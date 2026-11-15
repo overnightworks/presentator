@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "04f58ae519669da7a7019cef6d5c42da5d837e65"
 branch = "claude/issue-1178-presentator-takes-speech-client-v0-17-0"
-scope = ["pyproject.toml", "src/presentator/adapters/speech.py", "tests/presentator/adapters", "uv.lock"]
+scope = ["pyproject.toml", "src/presentator/adapters/speech.py", "src/presentator/api/copresenter.py", "src/presentator/application/copresenter.py", "src/presentator/contracts/copresenter.py", "src/presentator/ports/copresenter.py", "tests/presentator/adapters", "tests/presentator/api/test_copresenter_hearing.py", "tests/support/copresenter_support.py", "tests/support/hearing_endings.py", "tests/support/speech_drive.py", "tests/support/speech_service.py", "uv.lock"]
 opened_commit = "d2e6ca75f0672edda023726688c66bc65207d6ff"
 whole_reason = "a dependency bump changes the pin, its lock, the one adapter that imports the client and that adapter's tests"
