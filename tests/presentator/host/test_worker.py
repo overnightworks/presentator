@@ -734,7 +734,7 @@ def test_prctl_failure_raises() -> None:
         worker_self_check.libc_prctl(0x7FFFFFFF, 0)
 
 
-def test_the_snapshot_reads_the_process_table_scratch_then_the_probes_and_launches_nothing(
+def test_the_snapshot_reads_processes_scratch_then_the_probes_and_launches_nothing(
     sealed_root: Path,
 ) -> None:
     def record_sends_read() -> tuple[str, ...]:
