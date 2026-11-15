@@ -10,8 +10,10 @@ from pydantic import ValidationError
 from speech_client import wire
 
 from presentator.contracts.voice import SampleLanguage
+from presentator.host import main
 from presentator.host.config import ConfigurationError, Settings, load_settings
 from tests.support.lobby import A_SPEECH_SCOPE, A_SPEECH_SERVICE, a_settings
+from tests.support.log_lines import json_lines
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -173,5 +175,8 @@ def test_the_hosts_logging_drops_the_transports_traces_below_a_warning(
 
     logger.debug("a-debug-trace-MARKER")
     logger.info("an-info-trace-MARKER")
+    logger.warning("a-warning-trace")
 
-    assert "MARKER" not in capsys.readouterr().out
+    written = json_lines(capsys.readouterr().out)
+    assert [line["event"] for line in written] == ["a-warning-trace"]
+    assert written[0]["service"] == main.SERVICE_NAME
