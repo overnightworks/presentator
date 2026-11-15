@@ -131,8 +131,8 @@ def web_restarts(web: Document) -> int:
     return next((s["restartCount"] for s in statuses if s["name"] == WEB_CONTAINER), 0)
 
 
-def web_logs(run: Run, selector: str, *options: str) -> Completed:
-    """What `kubectl logs` gives for the web's Pods."""
+def pod_logs(run: Run, selector: str, *options: str) -> Completed:
+    """What `kubectl logs` gives for the Pods the selector names."""
     return run(
         "kubectl logs --selector",
         selector,
@@ -144,9 +144,15 @@ def web_logs(run: Run, selector: str, *options: str) -> Completed:
 def print_web_logs(run: Run, number: int, selector: str) -> None:
     """Print the end of the web's log and of its previous life's."""
     for title, options in (("log", ()), ("previous log", ("--previous",))):
-        answer = web_logs(run, selector, *options)
+        answer = pod_logs(run, selector, *options)
         tail = (answer.stdout + answer.stderr)[-2000:]
         say(f"cell {number}: the web's {title}:\n{tail}")
+
+
+def print_worker_logs(run: Run, number: int) -> None:
+    """Print the end of the log of each worker Pod that exists."""
+    answer = pod_logs(run, WORKER_SELECTOR, "--prefix", "--container", WORKER_CONTAINER)
+    say(f"cell {number}: the workers' log:\n{(answer.stdout + answer.stderr)[-2000:]}")
 
 
 def container_port(workload: Document, container: str) -> int:

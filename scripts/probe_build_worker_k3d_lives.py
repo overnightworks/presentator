@@ -219,10 +219,11 @@ def _worker_reason(life: Life, expected: Expectation) -> str | None:
         )
     (ended,) = life.terminations
     status = PASSING_EXIT_STATUS if expected.refusal is None else REFUSAL_EXIT_STATUS
-    wrong_status = f"the worker ended with exit status {ended.exit_code}"
-    no_line = (
-        f"no 'start refused: {expected.refusal}' in {ended.message.strip()[-500:]}"
+    said = ended.message.strip()[-500:]
+    wrong_status = f"the worker ended with exit status {ended.exit_code}" + (
+        f": {said}" if said else ""
     )
+    no_line = f"no 'start refused: {expected.refusal}' in {said}"
     reasons = (
         (ended.reason == LOST_SANDBOX_REASON, f"the worker ended as {ended.reason}"),
         (bool(life.restarts), f"restartCount is {life.restarts}, expected 0"),

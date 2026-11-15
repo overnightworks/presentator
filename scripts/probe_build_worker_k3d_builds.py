@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from typing import cast
 
+from probe_build_worker_harness import say
 from probe_build_worker_k3d_cluster import IN_NAMESPACE, Completed, Document, Run
 from probe_build_worker_k3d_manifests import WEB_CONTAINER
 from probe_build_worker_web import (
@@ -106,4 +107,6 @@ def build_outcome(run: Run, deployment: Document, web_pod: str) -> Outcome | str
         stdin=CLIENT_PROGRAM.read_text(encoding="utf-8"),
         check=False,
     )
+    if client.stderr.strip():
+        say(f"the web client's log:\n{client.stderr[-TAIL_CHARACTERS:]}")
     return read_outcome(client)

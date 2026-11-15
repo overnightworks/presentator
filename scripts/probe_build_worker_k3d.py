@@ -166,6 +166,7 @@ from probe_build_worker_k3d_manifests import (
 from probe_build_worker_k3d_web import (
     apply_secrets,
     print_web_logs,
+    print_worker_logs,
     web_cells,
     web_selector,
 )
@@ -353,6 +354,7 @@ def drive_web(run: Run, overlay: list[Document]) -> str:
         if problem := judge():
             say(f"cell {number}: FAILED, {problem}")
             print_web_logs(run, number, web_selector(deployment))
+            print_worker_logs(run, number)
             diagnose(run, manifest)
             return f"cell {number}: {problem}"
     return ""

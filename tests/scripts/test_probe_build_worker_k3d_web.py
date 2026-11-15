@@ -253,6 +253,11 @@ def test_a_build_that_does_not_deliver_in_a_web_pod_fails_cell_11_naming_the_pod
     with pytest.raises(SystemExit):
         fixture.drive()
     assert f"{WEB_POD_NAMES[0]} did not deliver" in capsys.readouterr().err
+    assert [
+        command
+        for command in world.issued("kubectl", "logs", "--selector")
+        if command[3].startswith("app.kubernetes.io/name=build-worker")
+    ]
 
 
 def test_cell_12_runs_the_hello_program_in_a_web_pod_and_prints_one_line(

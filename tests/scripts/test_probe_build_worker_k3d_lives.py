@@ -86,6 +86,7 @@ UNTERMINATED = [
         (REFUSED, refused_life(ended=GONE), "ContainerStatusUnknown"),
         (REFUSED, UNTERMINATED, "deleted before its worker terminated"),
         (None, refused_life(), f"exit status {REFUSAL_EXIT_STATUS}"),
+        (None, refused_life(), f"start refused: {REFUSED}"),
         (None, passing_life(ended=terminated_state(1)), "exit status 1"),
     ],
     ids=[
@@ -100,6 +101,7 @@ UNTERMINATED = [
         "a lost sandbox",
         "deleted before the worker terminated",
         "a refusal where a pass is expected",
+        "a refusal where a pass is expected, named",
         "another exit status where a pass is expected",
     ],
 )
