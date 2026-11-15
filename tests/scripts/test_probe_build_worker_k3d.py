@@ -11,23 +11,25 @@ import pytest
 from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
 from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import BUILD_IDENTITY, Predicate
+from tests.scripts.support.k3d_pods import (
+    Document,
+    Version,
+    lives_stream,
+    node,
+    pod_version,
+    terminated_state,
+    twin_answer,
+)
 from tests.scripts.support.k3d_world import (
     BROKEN_FORMS,
     OTHER_DIGEST,
-    Document,
     Fixture,
-    Version,
     World,
     command_positions,
     expected_ends,
     fixture_maker,
     issued_commands,
-    lives_stream,
     named,
-    node,
-    pod_version,
-    terminated_state,
-    twin_answer,
     workload_documents,
 )
 

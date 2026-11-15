@@ -7,6 +7,9 @@ from types import ModuleType
 
 import pytest
 
+from tests.scripts.support.k3d_pods import (
+    Document,
+)
 from tests.scripts.support.k3d_world import (
     DIGEST,
     PROJECTED_KEYS,
@@ -14,7 +17,6 @@ from tests.scripts.support.k3d_world import (
     RUN_IDENTIFIER,
     WORKER_KEY_NAME,
     WORKER_POD_NAMES,
-    Document,
     Fixture,
     fixture_maker,
     named,

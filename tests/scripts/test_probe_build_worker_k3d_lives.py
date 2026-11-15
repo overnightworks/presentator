@@ -11,17 +11,19 @@ import pytest
 from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
 from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import Predicate
-from tests.scripts.support.k3d_world import (
+from tests.scripts.support.k3d_pods import (
     Document,
-    Fixture,
     Version,
-    World,
-    fixture_maker,
     life_events,
     lives_stream,
     pod_version,
     terminated_state,
     watch_event,
+)
+from tests.scripts.support.k3d_world import (
+    Fixture,
+    World,
+    fixture_maker,
     workload_documents,
 )
 
