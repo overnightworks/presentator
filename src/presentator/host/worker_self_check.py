@@ -12,7 +12,6 @@ from enum import StrEnum
 from functools import partial
 from pathlib import Path, PurePosixPath
 
-from presentator.adapters.worker_children import program_output_as
 from presentator.host.config import worker_settings_variables
 from presentator.host.worker_scratch import (
     OPEN_DIRECTORY_MODE,
@@ -563,18 +562,19 @@ class _FactReader:
             return placeholder
 
 
-def send_probe(identity: tuple[int, int] | None) -> str:
-    """What a new socket of the identity's process meets when it sends off the loopback.
+def send_probes(
+    run_program: Callable[..., str],
+) -> tuple[str, ...]:
+    """What a new socket meets when it sends off the loopback, per probed identity.
 
-    The probe runs the datagram in a process of its own, as the identity (the
-    caller's own when None), so what is judged is what a deck's code would meet.
+    Each probe runs the datagram program in a process of its own, as the
+    identity (the caller's own when None), so what is judged is what a deck's
+    code would meet. `run_program` is the runner of that process.
     """
-    return program_output_as(SEND_PROBE_PROGRAM, identity, seconds=SEND_PROBE_SECONDS)
-
-
-def send_probes() -> tuple[str, ...]:
-    """The send probe of the controller and of each uid that runs a deck's code."""
-    return tuple(map(send_probe, PROBED_IDENTITIES))
+    return tuple(
+        run_program(SEND_PROBE_PROGRAM, identity, seconds=SEND_PROBE_SECONDS)
+        for identity in PROBED_IDENTITIES
+    )
 
 
 def read_snapshot(root: Path, *, read_sends: Callable[[], tuple[str, ...]]) -> Snapshot:

@@ -19,6 +19,7 @@ from typing import Protocol
 
 from presentator.adapters.worker_children import (
     ChildIdentity,
+    program_output_as,
     readable_within,
     spawn_gated,
 )
@@ -344,7 +345,9 @@ REAL_BOUNDARY = Boundary(
         partial(resource.setrlimit, resource.RLIMIT_NPROC),
     ),
     partial(fix_up_mounts, Path("/")),
-    partial(read_snapshot, Path("/"), read_sends=send_probes),
+    partial(
+        read_snapshot, Path("/"), read_sends=partial(send_probes, program_output_as)
+    ),
     SOCKET_TABLE.read_text,
     load_worker_settings,
     _serve_on_this_machine,

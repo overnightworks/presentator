@@ -94,7 +94,27 @@ def test_a_second_link_listed_only_in_the_device_table_is_not_judged_by_mounts(
     assert worker_self_check.first_failing_predicate(snapshot) is None
 
 
-def test_a_probe_that_outlasts_its_seconds_reports_a_timeout() -> None:
-    outlasting = "import time; time.sleep(5)"
+@pytest.mark.parametrize(
+    ("program", "answer"),
+    [("print(' sent ')", "sent"), ("import time; time.sleep(5)", "timeout")],
+    ids=["its output", "outlasting its seconds"],
+)
+def test_a_program_run_for_a_probe_answers_what_it_printed_or_a_timeout(
+    program: str, answer: str
+) -> None:
+    assert worker_children.program_output_as(program, None, seconds=0.5) == answer
 
-    assert worker_children.program_output_as(outlasting, None, seconds=0.1) == "timeout"
+
+def test_one_probe_runs_for_each_probed_identity_and_answers_in_their_order() -> None:
+    asked: list[tuple[int, int] | None] = []
+
+    def run_program(
+        _program: str, identity: tuple[int, int] | None, **_limits: float
+    ) -> str:
+        asked.append(identity)
+        return f"answer {len(asked)}"
+
+    answers = worker_self_check.send_probes(run_program)
+
+    assert asked == list(PROBED_IDENTITIES)
+    assert answers == tuple(f"answer {n}" for n in range(1, len(asked) + 1))
