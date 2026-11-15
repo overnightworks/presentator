@@ -6,14 +6,13 @@ import os
 import pwd
 import resource
 import stat
-import subprocess
-import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import partial
 from pathlib import Path, PurePosixPath
 
+from presentator.adapters.worker_children import program_output_as
 from presentator.host.config import worker_settings_variables
 from presentator.host.worker_scratch import (
     OPEN_DIRECTORY_MODE,
@@ -570,23 +569,7 @@ def send_probe(identity: tuple[int, int] | None) -> str:
     The probe runs the datagram in a process of its own, as the identity (the
     caller's own when None), so what is judged is what a deck's code would meet.
     """
-    uid, gid = identity if identity is not None else (None, None)
-    try:
-        finished = subprocess.run(  # noqa: S603 - the interpreter and a fixed program
-            [sys.executable, "-I", "-c", SEND_PROBE_PROGRAM],
-            capture_output=True,
-            check=False,
-            cwd="/",
-            env={},
-            extra_groups=None if identity is None else [],
-            group=gid,
-            text=True,
-            timeout=SEND_PROBE_SECONDS,
-            user=uid,
-        )
-    except subprocess.TimeoutExpired:
-        return "timeout"
-    return finished.stdout.strip()
+    return program_output_as(SEND_PROBE_PROGRAM, identity, seconds=SEND_PROBE_SECONDS)
 
 
 def send_probes() -> tuple[str, ...]:

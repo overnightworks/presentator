@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from presentator.adapters import worker_children
 from presentator.host import worker_self_check
 from presentator.host.worker_self_check import (
     PROBED_IDENTITIES,
@@ -103,7 +104,7 @@ def test_a_probe_that_outlasts_its_seconds_reports_a_timeout(
         message = "probe"
         raise subprocess.TimeoutExpired(message, 0.0)
 
-    monkeypatch.setattr(worker_self_check.subprocess, "run", hanging)
+    monkeypatch.setattr(worker_children.subprocess, "run", hanging)
 
     assert send_probe(None) == "timeout"
 

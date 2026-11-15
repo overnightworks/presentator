@@ -5,6 +5,7 @@ import math
 import os
 import select
 import subprocess
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -152,3 +153,31 @@ def spawn_gated(
     finally:
         os.close(gate_read)
     return _gated_child(process, gate_write)
+
+
+def program_output_as(
+    program: str, identity: tuple[int, int] | None, *, seconds: float
+) -> str:
+    """What the interpreter prints running the program as the identity.
+
+    The program runs in a process of its own with no environment, as the
+    identity's user and group with no others (the caller's own when None), and
+    "timeout" stands for one that outlasts the seconds.
+    """
+    uid, gid = identity if identity is not None else (None, None)
+    try:
+        finished = subprocess.run(  # noqa: S603 - the interpreter and a fixed program
+            [sys.executable, "-I", "-c", program],
+            capture_output=True,
+            check=False,
+            cwd="/",
+            env={},
+            extra_groups=None if identity is None else [],
+            group=gid,
+            text=True,
+            timeout=seconds,
+            user=uid,
+        )
+    except subprocess.TimeoutExpired:
+        return "timeout"
+    return finished.stdout.strip()

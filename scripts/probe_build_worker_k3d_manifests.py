@@ -177,6 +177,12 @@ def web_documents(overlay: list[Document]) -> list[Document]:
     ]
 
 
+def _files_under(container: Document, mount: PurePosixPath) -> list[str]:
+    """The last parts of the container's environment values directly under the mount."""
+    files = (PurePosixPath(e["value"]) for e in container["env"] if "value" in e)
+    return [file.name for file in files if file.parent == mount]
+
+
 def throwaway_secrets(deployment: Document, value: Callable[[], str]) -> list[Document]:
     """The Secrets the Deployment's `secrets` volume projects, a `value()` per file.
 
@@ -188,13 +194,8 @@ def throwaway_secrets(deployment: Document, value: Callable[[], str]) -> list[Do
     pod = deployment["spec"]["template"]["spec"]
     volume = next(v for v in pod["volumes"] if v["name"] == SECRETS_VOLUME)
     container = next(c for c in pod["containers"] if c["name"] == WEB_CONTAINER)
-    mount = PurePosixPath(
-        next(m for m in container["volumeMounts"] if m["name"] == SECRETS_VOLUME)[
-            "mountPath"
-        ]
-    )
-    files = (PurePosixPath(e["value"]) for e in container["env"] if "value" in e)
-    under_mount = [file.name for file in files if file.parent == mount]
+    mounted = next(m for m in container["volumeMounts"] if m["name"] == SECRETS_VOLUME)
+    under_mount = _files_under(container, PurePosixPath(mounted["mountPath"]))
     sources = [s["secret"] for s in volume["projected"]["sources"] if "secret" in s]
     return [
         {
