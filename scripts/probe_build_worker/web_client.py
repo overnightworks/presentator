@@ -12,6 +12,7 @@ the run directory holds when the steps are over.
 """
 
 import json
+import logging
 import sys
 import threading
 import time
@@ -87,6 +88,8 @@ def delivered(place: BuildPlace) -> dict[str, bool]:
 
 def main(decks: Path, kinds: list[StepKind]) -> None:
     """Run the steps and print the outcome."""
+    logging.basicConfig()
+    logging.getLogger("presentator.adapters.build_worker").setLevel(logging.DEBUG)
     settings = load_settings()
     toolchain = the_build_worker(settings, bound=build_bound_of(settings))
     place = prepared_run(decks, settings.builds)

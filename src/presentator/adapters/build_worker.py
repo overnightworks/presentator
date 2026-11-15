@@ -45,6 +45,7 @@ from presentator.contracts.decks import (
 )
 
 CONNECT_WINDOW_SECONDS: Final = 70.0
+ATTEMPT_SECONDS: Final = 5.0
 FIRST_RETRY_SECONDS: Final = 0.25
 LONGEST_RETRY_SECONDS: Final = 4.0
 REPLY_MARGIN_SECONDS: Final = 5.0
@@ -250,6 +251,7 @@ class WorkerToolchain:
     megabytes: int
     reply_bound_seconds: float
     connect_window_seconds: float = CONNECT_WINDOW_SECONDS
+    attempt_seconds: float = ATTEMPT_SECONDS
     first_retry_seconds: float = FIRST_RETRY_SECONDS
     longest_retry_seconds: float = LONGEST_RETRY_SECONDS
     reply_margin_seconds: float = REPLY_MARGIN_SECONDS
@@ -326,14 +328,17 @@ class WorkerToolchain:
         """A connection to a worker that has begun to answer and proved the key.
 
         Retried within the window while no worker is there yet, or the one the
-        Service chose is busy or restarting and closes before it speaks; a
-        worker that speaks and does not prove the key is never retried.
+        Service chose is busy or restarting and closes or stays silent before
+        it speaks; a worker that speaks and does not prove the key is never
+        retried. Each attempt waits only `attempt_seconds` for the first byte, as
+        the Service may still route to a pod that has ended and answers nothing.
         """
         wait = self.first_retry_seconds
         while True:
             try:
                 return self._attempt(window_ends)
-            except _NotYetError:
+            except _NotYetError as error:
+                _log.debug("no worker answered this attempt: %r", error.__cause__)
                 remaining = window_ends - time.monotonic()
                 time.sleep(max(0.0, min(wait, remaining)))
                 wait = min(2 * wait, self.longest_retry_seconds)
@@ -343,7 +348,7 @@ class WorkerToolchain:
             self.host, self.port, type=socket.SOCK_STREAM
         )[0]
         connection = _DeadlineSocket(family, socket.SOCK_STREAM)
-        connection.until(window_ends)
+        connection.until(min(window_ends, time.monotonic() + self.attempt_seconds))
         try:
             connection.connect(address)
             _begun_to_answer(connection)
@@ -354,9 +359,15 @@ class WorkerToolchain:
         ) as error:
             connection.close()
             raise _NotYetError from error
+        except TimeoutError as error:
+            connection.close()
+            if time.monotonic() >= window_ends:
+                raise
+            raise _NotYetError from error
         except BaseException:
             connection.close()
             raise
+        connection.until(window_ends)
         try:
             answer_hello(connection, self.key)
         except BaseException:

@@ -77,6 +77,21 @@ def closing_first(count: int, then: Script) -> Script:
     return serve
 
 
+def silent_first(count: int, then: Script) -> Script:
+    """A worker that holds its first connections silent until the peer leaves."""
+    remaining = [count]
+
+    def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
+        if remaining[0]:
+            remaining[0] -= 1
+            connection.settimeout(PROMPTLY)
+            connection.recv(1)
+            return
+        then(connection, seen, uploads)
+
+    return serve
+
+
 def test_a_worker_that_is_not_there_is_retried_until_the_window_ends(
     volume: Path, tmp_path: Path
 ) -> None:
@@ -181,6 +196,19 @@ def test_a_worker_closing_then_answering_serves_build_and_export(
     assert (built, exported) == (None, None)
     assert (out / TALK_DIRECTORY / "index.html").read_bytes() == INDEX
     assert (out / PDF_FILE).read_bytes() == PDF
+
+
+def test_a_silent_connection_is_left_after_its_attempt_for_the_next_within_the_window(
+    volume: Path, tmp_path: Path
+) -> None:
+    """The Service may route an attempt to a pod that has ended and answers nothing."""
+    script = silent_first(1, replying(BUILT_BY_STEP))
+    with fake_worker(volume, script, accepts=5):
+        client = toolchain(volume, connect_window_seconds=5.0, attempt_seconds=0.2)
+
+        built = client.ran(a_step(tmp_path))
+
+    assert built is None
 
 
 def test_a_reply_dripped_past_the_last_deadline_fails_at_it(
