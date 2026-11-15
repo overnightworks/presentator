@@ -17,7 +17,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-import uvicorn
 from fastapi import FastAPI
 from httpx2 import Response as BrowserAnswer
 from pydantic import SecretStr
@@ -38,6 +37,7 @@ from tests.support.lobby import (
     a_settings,
 )
 from tests.support.lobby_reads import signed_in_username
+from tests.support.log_lines import json_lines
 from tests.support.sign_in_support import (
     ADMIN,
     MEMBER,
@@ -517,12 +517,10 @@ def test_the_audit_sink_logs_the_event_the_subject_and_the_roles_at_info(
         assert fact in record.getMessage()
 
 
-def test_an_audit_record_reaches_stderr_after_the_hosts_and_uvicorns_logging_setup(
+@pytest.mark.usefixtures("json_logging")
+def test_an_audit_record_reaches_stdout_as_json_after_the_hosts_logging_setup(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = logging.getLogger()
-    monkeypatch.setattr(root, "handlers", [])
-    monkeypatch.setattr(root, "level", root.level)
     monkeypatch.setattr(main, "load_settings", a_settings)
 
     def an_instance_without_a_server(
@@ -533,11 +531,10 @@ def test_an_audit_record_reaches_stderr_after_the_hosts_and_uvicorns_logging_set
 
     monkeypatch.setattr(main, "build_instance", an_instance_without_a_server)
 
-    async def configure_uvicorn(instance: SimpleNamespace, settings: object) -> None:
-        del settings
-        uvicorn.Config(instance.lobby)
+    async def without_serving(instance: SimpleNamespace, settings: object) -> None:
+        del instance, settings
 
-    monkeypatch.setattr(main, "_serve", configure_uvicorn)
+    monkeypatch.setattr(main, "_serve", without_serving)
 
     main.main([])
     LoggingAuditSink().account_event(
@@ -549,4 +546,10 @@ def test_an_audit_record_reaches_stderr_after_the_hosts_and_uvicorns_logging_set
         )
     )
 
-    assert "user_created" in capsys.readouterr().err
+    (audit,) = [
+        line
+        for line in json_lines(capsys.readouterr().out)
+        if "user_created" in str(line["event"])
+    ]
+    assert audit["service"] == "presentator"
+    assert audit["level"] == "info"

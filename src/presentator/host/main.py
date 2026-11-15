@@ -15,8 +15,10 @@ from functools import partial
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import logline
 import uvicorn
 from fastapi import FastAPI
+from logline import RequestLineMiddleware
 from pydantic import SecretStr
 from starlette.routing import Host, Route, Router
 from webauth.config import SessionLifetime, WebAuthConfig
@@ -92,7 +94,7 @@ from presentator.adapters.speech import (
     SpeechSpeaking,
 )
 from presentator.adapters.toolchain_identity import toolchain_identity_of
-from presentator.agent.backend import gateway_answerer, silence_transport_traces
+from presentator.agent.backend import gateway_answerer
 from presentator.agent.mcp import (
     install_mcp_front,
 )
@@ -141,6 +143,7 @@ from presentator.ports.preferences import (
 
 _log = logging.getLogger(__name__)
 
+SERVICE_NAME = "presentator"
 MIGRATE_COMMAND = "migrate"
 
 RelyingPartyFor = Callable[[OidcClientConfig], OidcRelyingParty]
@@ -430,7 +433,6 @@ def _copresenter_surface(
     mirrors: SourceMirrors,
 ) -> CoPresenterSurface:
     """What only a signed-in admin may reach at the talk host: the gateway's answers."""
-    silence_transport_traces()
     return CoPresenterSurface(
         use=CoPresenterUse(
             answers=gateway_answerer(settings.agent, auth.relying_party),
@@ -613,9 +615,7 @@ def main(
 
     Both run on the configuration the environment carries.
     """
-    # The root logger drops INFO unless configured, and with it the sign-in
-    # audit lines; uvicorn disables propagation only for its own loggers.
-    logging.basicConfig(level=logging.INFO)
+    logline.configure(SERVICE_NAME)
     if _command_line().parse_args(arguments).command == MIGRATE_COMMAND:
         _migrate_the_database()
         return
@@ -645,7 +645,7 @@ def _command_line() -> argparse.ArgumentParser:
     return parser
 
 
-def served_by_host(instance: Instance, settings: Settings) -> Router:
+def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddleware:
     """The app that answers each hostname, and one route for any other.
 
     The `Host` header alone chooses: a request for a hostname this instance does
@@ -666,14 +666,16 @@ def served_by_host(instance: Instance, settings: Settings) -> Router:
         async with instance.lobby.router.lifespan_context(instance.lobby):
             yield
 
-    return Router(
-        routes=[
-            Host(str(urlsplit(settings.public_origin).hostname), instance.lobby),
-            Host(str(urlsplit(settings.talk_origin).hostname), instance.talk),
-            Route(BACKCHANNEL_LOGOUT_PATH, instance.lobby, methods=["POST"]),
-        ],
-        redirect_slashes=False,
-        lifespan=lifespan,
+    return RequestLineMiddleware(
+        Router(
+            routes=[
+                Host(str(urlsplit(settings.public_origin).hostname), instance.lobby),
+                Host(str(urlsplit(settings.talk_origin).hostname), instance.talk),
+                Route(BACKCHANNEL_LOGOUT_PATH, instance.lobby, methods=["POST"]),
+            ],
+            redirect_slashes=False,
+            lifespan=lifespan,
+        )
     )
 
 
@@ -686,10 +688,10 @@ async def _serve(instance: Instance, settings: Settings) -> None:
             port=settings.port,
             proxy_headers=False,
             ws="wsproto",
-            # A path under /api/admin/ carries a subject, and a rejected WebSocket
-            # handshake logs its path as an INFO record of uvicorn.error.
-            access_log=False,
-            log_level=logging.WARNING,
+            # logline's configure owns uvicorn's loggers, the request line
+            # replaces its access log, and the rejected WebSocket handshake
+            # records that carry a path stay out of the log.
+            log_config=None,
         ),
     )
     try:

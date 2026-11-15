@@ -13,7 +13,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx2 import Response
 from pydantic import SecretStr
-from starlette.routing import Router
 from starlette.types import ASGIApp, Message, Scope
 from webauth.config import WebAuthConfig
 from webauth.oidc import OidcRelyingParty
@@ -77,7 +76,7 @@ def cookie_header(client: TestClient) -> str:
 class Hosts:
     """The lobby and the talk host behind the router, over one database."""
 
-    router: Router
+    router: ASGIApp
     lobby: FastAPI
     talk: FastAPI
     lobby_auth: InstalledAuth

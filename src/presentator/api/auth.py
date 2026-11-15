@@ -18,6 +18,7 @@ from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from logline import set_route
 from starlette.responses import RedirectResponse
 from starlette.types import Receive, Scope, Send
 from webauth.admission import AdmissionConfig
@@ -70,6 +71,7 @@ from presentator.api.lobby_shell import LobbyShell
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
 from presentator.api.preference_api import preference_api_routes
 from presentator.api.problems import install_error_answers
+from presentator.api.request_line import ClientAddressNoting, SignedInPersonNoting
 from presentator.api.session_api import (
     SESSION_PATH,
     SessionAddresses,
@@ -301,6 +303,15 @@ def _loads_the_lobby_app(request: Request) -> bool:
     )
 
 
+class _AppAssets(StaticFiles):
+    """The app's built files, named by their mount so no file path reaches a log."""
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Name the route, then serve the file."""
+        set_route(scope, _APP_ASSETS)
+        await super().__call__(scope, receive, send)
+
+
 def _install_lobby_app(lobby: FastAPI, surfaces: _Surfaces) -> None:
     """Answer a page load no route claims with the app's shell.
 
@@ -310,7 +321,7 @@ def _install_lobby_app(lobby: FastAPI, surfaces: _Surfaces) -> None:
     no page load still gets the framework's 404.
     """
     lobby.mount(
-        _APP_ASSETS, StaticFiles(directory=surfaces.shell.assets), name="lobby_app"
+        _APP_ASSETS, _AppAssets(directory=surfaces.shell.assets), name="lobby_app"
     )
     not_found = lobby.router.default
 
@@ -380,6 +391,8 @@ def _install_middleware(
     the routes marked as tools; its discovery document is public.
     """
     install_error_answers(lobby)
+    # Added before the library stack, this runs inside the gates.
+    lobby.add_middleware(SignedInPersonNoting)
     install_web_auth_middleware(
         lobby,
         sign_in_paths=LOBBY_SIGN_IN,
@@ -401,6 +414,8 @@ def _install_middleware(
             optional=PathRules(exact=frozenset({SESSION_PATH})),
         ),
     )
+    # Added after the library stack, this sees every request, a refused one included.
+    lobby.add_middleware(ClientAddressNoting)
 
 
 def _bearer_gate(

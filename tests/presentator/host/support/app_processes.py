@@ -7,7 +7,7 @@ import socket
 import subprocess
 import threading
 import time
-from collections.abc import Generator, Mapping
+from collections.abc import Callable, Generator, Mapping
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from http import HTTPStatus
@@ -25,6 +25,7 @@ from presentator.api.auth import (
 )
 from tests.presentator.host.support.app_process import ANSWER_PREFIX
 from tests.support.lobby import A_BROWSERS_ADDRESS
+from tests.support.log_lines import LogLine
 from tests.support.postgres import database_environment
 from tests.support.sign_in_support import ADMIN, MEMBER
 from tests.support.two_processes import TwoProcesses, two_modules
@@ -52,18 +53,35 @@ class App:
     answers: queue.Queue[str | None] = field(
         default_factory=queue.Queue[str | None], compare=False
     )
+    # The log lines it writes, in order; None ends the output.
+    logged: queue.Queue[LogLine | None] = field(
+        default_factory=queue.Queue[LogLine | None], compare=False
+    )
 
     def __post_init__(self) -> None:
         """Start reading the output, so a long log never fills the pipe."""
         threading.Thread(target=self._drain_output, daemon=True).start()
 
     def _drain_output(self) -> None:
-        """Keep the issuer's answers until the output ends."""
+        """Keep the issuer's answers and the log lines until the output ends."""
         assert self.process.stdout is not None
         for line in self.process.stdout:
             if line.startswith(ANSWER_PREFIX):
                 self.answers.put(line.removeprefix(ANSWER_PREFIX).strip())
+            elif line.startswith("{"):
+                self.logged.put(json.loads(line))
         self.answers.put(None)
+        self.logged.put(None)
+
+    def log_line_where(self, wanted: Callable[[LogLine], bool]) -> LogLine:
+        """The first log line from here on that `wanted` accepts."""
+        while True:
+            line = self.logged.get(timeout=_REQUEST_SECONDS)
+            if line is None:
+                message = "the app process ended without writing the line"
+                raise AssertionError(message)
+            if wanted(line):
+                return line
 
     def request(
         self,
@@ -168,13 +186,15 @@ def _two_free_ports() -> tuple[int, int]:
         return int(first.getsockname()[1]), int(second.getsockname()[1])
 
 
-def _environment(database_url: str, directory: Path) -> dict[str, str]:
+def _environment(
+    database_url: str, directory: Path, extra: Mapping[str, str]
+) -> dict[str, str]:
     app_settings = {
         name: value
         for name, value in os.environ.items()
         if name.startswith("PRESENTATOR_") and not name.startswith("PRESENTATOR_TEST_")
     }
-    return {**app_settings, **database_environment(database_url, directory)}
+    return {**app_settings, **database_environment(database_url, directory), **extra}
 
 
 def _wait_until_ready(app: App) -> None:
@@ -193,7 +213,11 @@ def _wait_until_ready(app: App) -> None:
 
 @contextmanager
 def starting_apps(
-    database_url: str, directory: Path, *, history: Path | None = None
+    database_url: str,
+    directory: Path,
+    *,
+    history: Path | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> Generator[tuple[TwoProcesses, tuple[int, int]]]:
     """Two app processes started on `database_url`, not waited for, and their ports.
 
@@ -205,16 +229,23 @@ def starting_apps(
     with two_modules(
         _CHILD,
         [str(ports[0]), *extra],
-        _environment(database_url, directory),
+        _environment(database_url, directory, environment or {}),
         second_arguments=[str(ports[1]), *extra],
     ) as processes:
         yield processes, ports
 
 
 @contextmanager
-def serving_apps(database_url: str, directory: Path) -> Generator[tuple[App, App]]:
-    """Two app processes answering on one database."""
-    with starting_apps(database_url, directory) as (processes, ports):
+def serving_apps(
+    database_url: str,
+    directory: Path,
+    environment: Mapping[str, str] | None = None,
+) -> Generator[tuple[App, App]]:
+    """Two app processes answering on one database, with `environment` added."""
+    with starting_apps(database_url, directory, environment=environment) as (
+        processes,
+        ports,
+    ):
         first = App(processes.first, ports[0])
         second = App(processes.second, ports[1])
         _wait_until_ready(first)

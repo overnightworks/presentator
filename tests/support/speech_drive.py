@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Final
 from urllib.parse import urlsplit
 
 from agents.backend.fake_gateway import FakeGateway, completion
+from logline.testing import configured
 from speech_client.outcomes import PastDeadline
 from starlette.websockets import WebSocketDisconnect
 
@@ -23,7 +24,7 @@ from presentator.adapters.speech import (
     SpeechHearing,
     SpeechSpeaking,
 )
-from presentator.agent.backend import gateway_answerer, silence_transport_traces
+from presentator.agent.backend import gateway_answerer
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import CoPresenterUse
 from presentator.contracts.copresenter import (
@@ -110,13 +111,13 @@ if TYPE_CHECKING:
     from presentator.ports.copresenter import SpeechHearing as SpeechHearingPort
     from tests.presentator.application.support.fakes import FakeDeckStore
 
+# The HTTP clients stay as logline's `configure` leaves them: it caps them below
+# the INFO lines that carry a response's headers.
 _WIDE_OPEN_LOGGERS = (
     "presentator",
     "webauth",
     "agents",
     "speech_client",
-    "httpx2",
-    "httpcore2",
     "websockets",
     "wsproto",
 )
@@ -240,7 +241,6 @@ class WitnessedSpeech:
 def _real_speech_adapters(
     origin: str, scenario: SpeechScenario
 ) -> tuple[SpeechHearing, SpeechSpeaking]:
-    silence_transport_traces()
     if scenario.bounded_calls_stall:
         return (
             SpeechHearing(
@@ -362,21 +362,21 @@ def a_speech_instance(
 
 @contextmanager
 def recorded_logs() -> Generator[list[logging.LogRecord]]:
-    """Every record any logger raises in the block, with every logger at DEBUG."""
+    """Every record raised in the block, the host's logging at DEBUG."""
     logs = RecordingLogs()
     root = logging.getLogger()
     named = [logging.getLogger(name) for name in _WIDE_OPEN_LOGGERS]
-    levels = [logger.level for logger in (root, *named)]
-    root.addHandler(logs)
-    root.setLevel(logging.DEBUG)
-    for logger in named:
-        logger.setLevel(logging.DEBUG)
-    try:
-        yield logs.records
-    finally:
-        root.removeHandler(logs)
-        for logger, level in zip((root, *named), levels, strict=True):
-            logger.setLevel(level)
+    levels = [logger.level for logger in named]
+    with configured("presentator"):
+        root.addHandler(logs)
+        root.setLevel(logging.DEBUG)
+        for logger in named:
+            logger.setLevel(logging.DEBUG)
+        try:
+            yield logs.records
+        finally:
+            for logger, level in zip(named, levels, strict=True):
+                logger.setLevel(level)
 
 
 def ask_over(

@@ -15,6 +15,7 @@ from presentator.api.problems import ValidationFault
 from presentator.contracts import words
 from presentator.host.config import Settings, WorkerSettings
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
+from tests.presentator.host.conftest import logging_undone_after_main
 from tests.presentator.host.test_worker_serving_loop import clients_closed_with_the_test
 from tests.presentator.host.test_worker_settings import no_worker_variables
 from tests.support.lobby_drive import AdmitEveryRequest, DeckRecord
@@ -49,6 +50,9 @@ Settings._database_is_named_whole  # noqa: SLF001 - pydantic, not Python code, i
 Settings._two_hostnames  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 Settings._worker_is_reached  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 Settings._voices_speak_their_language  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
+
+# pytest applies this autouse fixture to every host test by itself.
+logging_undone_after_main  # pyright: ignore[reportUnusedExpression]
 
 # pytest applies this autouse fixture to every worker-settings test by itself.
 no_worker_variables  # pyright: ignore[reportUnusedExpression]

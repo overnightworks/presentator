@@ -17,6 +17,8 @@ from functools import partial
 from pathlib import Path
 from typing import Protocol
 
+import logline
+
 from presentator.adapters.worker_children import (
     ChildIdentity,
     program_output_as,
@@ -70,6 +72,7 @@ from presentator.host.worker_termination import (
 
 logger = logging.getLogger(__name__)
 
+SERVICE_NAME = "presentator-worker"
 REFUSAL_EXIT_STATUS = 2
 NOT_READY_EXIT_STATUS = 1
 LISTEN_BACKLOG = 4
@@ -400,6 +403,7 @@ def _ready(port: int, boundary: Boundary) -> int:
 
 def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) -> int:
     """Run the start-up steps; exit status 2 names a refusal."""
+    logline.configure(SERVICE_NAME)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--check", action="store_true", help="exit after the self-check"

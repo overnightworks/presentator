@@ -2,12 +2,16 @@
 
 import os
 import socket
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import closing
+from functools import partial
 from pathlib import Path
 
 import pytest
+import uvicorn
+from logline.testing import configured
 
+from presentator.host import main
 from tests.support.git_remote import GitRemote, a_remote
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -21,6 +25,7 @@ from tests.support.lobby import (
     configure_oidc,
     configure_secret_key,
 )
+from tests.support.log_lines import LoggedText
 from tests.support.postgres import created_database, migrated_template
 from tests.support.worker_support import (
     KEY,
@@ -28,6 +33,35 @@ from tests.support.worker_support import (
     free_port,
     listening_socket,
 )
+
+
+@pytest.fixture
+def json_logging() -> Iterator[None]:
+    """Undo the logging a test's in-process `main()` configures, as it was before."""
+    with configured("test"):
+        yield
+
+
+@pytest.fixture
+def logged(json_logging: None, capsys: pytest.CaptureFixture[str]) -> LoggedText:
+    """What a test's in-process `main()` writes to the log, read as it goes."""
+    del json_logging
+    return LoggedText(capsys)
+
+
+class _ServerThatOnlyReturns:
+    def __init__(self, config: uvicorn.Config) -> None:
+        del config
+
+    async def serve(self) -> None:
+        return None
+
+
+@pytest.fixture
+def main_without_serving(environment: pytest.MonkeyPatch) -> Callable[[], None]:
+    """`main()` as far as serving, with a server that returns at once."""
+    environment.setattr(main.uvicorn, "Server", _ServerThatOnlyReturns)
+    return partial(main.main, [])
 
 
 @pytest.fixture

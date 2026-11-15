@@ -11,10 +11,10 @@ from speech_client import wire
 
 from presentator.contracts.voice import SampleLanguage
 from presentator.host.config import ConfigurationError, Settings, load_settings
-from presentator.host.main import build_instance
 from tests.support.lobby import A_SPEECH_SCOPE, A_SPEECH_SERVICE, a_settings
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 A_CREDENTIALED_ORIGIN = "http://user:pa55word-MARKER@speech:8080"
@@ -162,19 +162,16 @@ def test_the_removed_voice_variable_in_the_process_environment_is_ignored(
     assert load_settings().speech_voices() == a_settings().speech_voices()
 
 
-@pytest.mark.usefixtures("environment")
 @pytest.mark.parametrize("transport", ["httpx2", "httpcore2.http11"])
-def test_the_composed_instance_drops_the_transports_traces_below_a_warning(
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+def test_the_hosts_logging_drops_the_transports_traces_below_a_warning(
+    main_without_serving: Callable[[], None],
+    capsys: pytest.CaptureFixture[str],
     transport: str,
 ) -> None:
+    main_without_serving()
     logger = logging.getLogger(transport)
-    monkeypatch.setattr(logger, "filters", [])
 
-    build_instance(load_settings())
-    with caplog.at_level(logging.DEBUG, logger=transport):
-        logger.debug("a-debug-trace-MARKER")
-        logger.info("an-info-trace-MARKER")
+    logger.debug("a-debug-trace-MARKER")
+    logger.info("an-info-trace-MARKER")
 
-    assert "MARKER" not in caplog.text
+    assert "MARKER" not in capsys.readouterr().out

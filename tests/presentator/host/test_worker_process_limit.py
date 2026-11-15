@@ -27,6 +27,7 @@ from tests.presentator.host.support.worker_boundary import (
     SERVE,
     boundary_over,
 )
+from tests.support.log_lines import LoggedText
 
 UNLIMITED = "unlimited"
 MAXIMUM = str(MAXIMUM_PROCESSES)
@@ -186,12 +187,12 @@ def test_a_start_lowers_the_limit_before_the_snapshot_is_read(
 @pytest.mark.parametrize("failure", [OSError("denied"), ValueError("not allowed")])
 @pytest.mark.parametrize("arguments", [SERVE, CHECK])
 def test_a_failed_lowering_refuses_the_start_before_the_snapshot_is_read(
-    caplog: pytest.LogCaptureFixture, failure: Exception, arguments: list[str]
+    logged: LoggedText, failure: Exception, arguments: list[str]
 ) -> None:
     events: list[str] = []
 
     status = worker.main(arguments, recording_boundary(events, failure))
 
     assert status == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {BOUND}" in caplog.text
+    assert f"start refused: {BOUND}" in logged.text
     assert events == ["prctl", "umask", "lower"]
