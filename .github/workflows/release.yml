@@ -43,7 +43,7 @@ jobs:
     name: "Build worker: released image in a k3d pod"
     needs: [gate, image]
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: read

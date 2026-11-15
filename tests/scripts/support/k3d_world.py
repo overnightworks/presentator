@@ -661,10 +661,7 @@ def delivered_outcome(web_module: ModuleType) -> Any:  # noqa: ANN401 - the web 
         for step in web_module.HELLO_STEPS
     )
     return web_module.Outcome(
-        steps=steps,
-        out=("deck.pdf", "talk"),
-        talk_page=True,
-        pdf=True,
+        steps=steps, out=("deck.pdf", "talk"), talk_page=True, pdf=True
     )
 
 

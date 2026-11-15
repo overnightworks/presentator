@@ -185,16 +185,7 @@ def test_a_kept_life_connection_is_handed_to_a_gated_child_then_swept(
             accept_from(life, listener)
         assert [client.recv(1) for client in clients] == [b"", b""]
 
-    assert life.events == 2 * [
-        "arm 7.0",
-        "spawn",
-        "status",
-        "release",
-        "wait-within",
-        "close",
-        "sweep 104.0",
-        "cancel",
-    ]
+    assert life.events == 2 * ANSWERED_HEADER
     assert [spawned.environment for spawned in life.spawned] == 2 * [
         {"PATH": ADMITTING_PATH}
     ]
