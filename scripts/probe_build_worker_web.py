@@ -24,13 +24,15 @@ HELLO_STEPS = ("build", "export")
 class StepOutcome:
     """How one step of a client run ended: the failure the build reported, if any.
 
-    `started` is the web pod's clock, in epoch seconds, when the step began.
+    `admitted` is the web pod's clock, in epoch seconds, when a worker had
+    answered the step's header and the upload began; None for a step no worker
+    admitted.
     """
 
     step: str
     failed: bool
     failure: dict[str, str | int | None] | None
-    started: float
+    admitted: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,7 +55,7 @@ def outcome_in(stdout: str) -> Outcome:
     return Outcome(
         steps=tuple(
             StepOutcome(
-                step["step"], step["failed"], step.get("failure"), step["started"]
+                step["step"], step["failed"], step.get("failure"), step["admitted"]
             )
             for step in said["steps"]
         ),

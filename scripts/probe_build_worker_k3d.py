@@ -60,8 +60,9 @@ unavailable, an outage with no failure of its own. Cell 11 applies the workers'
 documents with two replicas, runs two web pods and builds hello-deck in each
 through the one Service; each web's client builds and exports, a worker's life
 ends with each step, and the first build's two steps must have replaced both
-worker pods, and its second step must have started before the first worker's
-replacement was Ready, so it reached the idle worker while the first restarted.
+worker pods, and its second step must have been admitted by a worker before the
+first worker's replacement was Ready, so it reached the idle worker while the
+first restarted.
 Cell 12 runs a program in a web pod that answers the workers'
 challenge under a wrong key and under the right key with the other direction's
 label: both are refused, a true hello is served, and both worker pods keep their
@@ -70,8 +71,10 @@ pod that, as the build user and as the wire user, opens a new connection to the
 loopback, which must connect, and to the web pod and the other worker pod, which
 must end in EPERM, and it refuses a result that lacks either user or a target;
 the replies of accepted connections passed in cell 11. A listener the cell opens
-in the worker pod on a port other than the worker's own must drop a connection
-from a web pod: it times out.
+in the worker pod on a port other than the worker's own must answer on the pod's
+loopback and, with a NetworkPolicy of the probe's own admitting the web's pods to
+every port, still drop a connection from a web pod: it times out. The policy is
+deleted when the connection ended.
 
 With `--image REF` the drive runs on the image `release.yml` published instead
 of one it builds, and only on a CI runner. REF is exactly

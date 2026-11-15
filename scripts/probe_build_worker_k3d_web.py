@@ -4,13 +4,14 @@ Cell 10 starts the web with no worker anywhere and expects it Ready, and a
 build in it to end as an outage. Cell 11 applies the workers' Service and two
 worker pods, runs two web pods and builds hello-deck in each through the one
 Service: the first build's two steps land on two different pods, and the second
-step starts before the first pod is Ready again, so it reaches the idle worker
-while the first restarts. Cell 12 sends the
+step is admitted before the first pod is Ready again, so it reaches the idle
+worker while the first restarts. Cell 12 sends the
 workers a hello under a wrong key and one that reflects the worker's own
 direction, and expects both refused and no pod spent. Cell 13 shows, from inside
 a worker pod, that the build and wire users reach nothing off the loopback, and,
 from a web pod, that a port of the worker pod other than the worker's own drops
-what reaches it although a process listens there.
+what reaches it although a process listens there and a policy of the probe's own
+admits the web's pods to every port.
 """
 
 import json
@@ -28,11 +29,15 @@ from probe_build_worker_k3d_builds import (
 from probe_build_worker_k3d_cluster import IN_NAMESPACE, Completed, Document, Run
 from probe_build_worker_k3d_lives import (
     TERMINATION_WINDOW_SECONDS,
-    TIMESTAMP_RESOLUTION_SECONDS,
     WORKER_SELECTOR,
     poll,
 )
-from probe_build_worker_k3d_manifests import WEB_CONTAINER, WORKER_CONTAINER
+from probe_build_worker_k3d_manifests import (
+    INBOUND_PROBE_POLICY,
+    WEB_CONTAINER,
+    WORKER_CONTAINER,
+    inbound_probe_policy,
+)
 from probe_build_worker_web import (
     EGRESS_PROGRAM,
     EGRESS_USERS,
@@ -47,8 +52,11 @@ WEB_PODS = 2
 WORKER_PODS = 2
 # Long enough for a pod that a spent life made terminal to show it.
 SETTLE_SECONDS = 5
+# Long enough for the cluster's policy controller to program an applied policy.
+POLICY_SETTLE_SECONDS = 15
 HELLOS = {"wrong key": False, "reflected": False, "true": True}
 LOOPBACK = "loopback"
+POD_LOOPBACK = "127.0.0.1"
 CONNECTED = "connected"
 DROPPED = "EPERM"
 TIMED_OUT = "timeout"
@@ -207,21 +215,21 @@ def delivering_outcome(run: Run, deployment: Document, web: Document) -> Outcome
 def restart_overlap_problem(
     outcome: Outcome, replacements: list[Document]
 ) -> str | None:
-    """Why the second step did not start while the first worker restarted.
+    """Why the second step was not admitted while the first worker restarted.
 
     The first step ended its worker's life, so the earlier Ready of the two
-    replacement pods is the first worker's. The step is judged against the
-    node's one clock at the Ready condition's resolution: a pod Ready a whole
-    resolution before the step began cannot have been restarting.
+    replacement pods is the first worker's. The Ready condition's time is cut to
+    the second, so the pod was Ready at or after it: only an admission before
+    that time is certainly before the first worker was Ready again.
     """
-    second_started = outcome.steps[1].started
+    admitted = outcome.steps[1].admitted
     first_back = min(ready_since(pod) for pod in replacements)
-    if first_back + TIMESTAMP_RESOLUTION_SECONDS <= second_started:
-        return (
-            f"the first worker was Ready again {second_started - first_back:g} s "
-            "before the second step started"
-        )
-    return None
+    if admitted is not None and admitted < first_back:
+        return None
+    return (
+        f"the second step was not admitted before the first worker was Ready "
+        f"again (admitted at {admitted}, Ready at {first_back:g})"
+    )
 
 
 def first_build_problem(run: Run, deployment: Document, first: Document) -> str | None:
@@ -317,11 +325,26 @@ def egress_problem(said: dict[str, object], targets: tuple[str, ...]) -> str | N
     return None
 
 
-def inbound_problem(run: Run, web: Document, worker: Document) -> str | None:
+def reach_end(run: Run, pod: Document, container: str, target: str) -> str:
+    """How a new connection from the pod's container to HOST:PORT ended, or why not."""
+    said = printed_line(
+        run_program(
+            run, pod["metadata"]["name"], container, INBOUND_PROGRAM, "reach", target
+        )
+    )
+    return said if isinstance(said, str) else str(said.get("end"))
+
+
+def inbound_problem(
+    run: Run, deployment: Document, web: Document, worker: Document
+) -> str | None:
     """Why a web pod's connection to a listener in the worker pod was not dropped.
 
-    The listener is on a port other than the worker's own, so only the pod's
-    packet filter stands between it and the web pod.
+    The listener is on a port other than the worker's own. The workers'
+    NetworkPolicy drops such a connection too, so a policy of the probe's own
+    admits the web's pods to every port while the connection is tried: only the
+    pod's packet filter can drop it then. The listener must answer on the pod's
+    loopback, or its timeout would say nothing.
     """
     listening = printed_line(
         run_program(
@@ -330,29 +353,35 @@ def inbound_problem(run: Run, web: Document, worker: Document) -> str | None:
     )
     if isinstance(listening, str):
         return listening
-    target = f"{worker['status']['podIP']}:{listening.get('port')}"
-    reached = printed_line(
-        run_program(
-            run,
-            web["metadata"]["name"],
-            WEB_CONTAINER,
-            INBOUND_PROGRAM,
-            "reach",
-            target,
-        )
+    port = listening.get("port")
+    if (own := reach_end(run, worker, WORKER_CONTAINER, f"{POD_LOOPBACK}:{port}")) != (
+        CONNECTED
+    ):
+        return f"the listener in the worker pod did not answer on its loopback: {own}"
+    target = f"{worker['status']['podIP']}:{port}"
+    run(
+        "kubectl apply --filename -", stdin=json.dumps(inbound_probe_policy(deployment))
     )
-    if isinstance(reached, str):
-        return reached
-    if reached.get("end") != TIMED_OUT:
-        return f"a web pod's connection to {target} ended {reached.get('end')}"
+    try:
+        run.effects.sleep(POLICY_SETTLE_SECONDS)
+        end = reach_end(run, web, WEB_CONTAINER, target)
+    finally:
+        run(
+            "kubectl delete networkpolicy --ignore-not-found",
+            INBOUND_PROBE_POLICY,
+            *IN_NAMESPACE,
+            check=False,
+        )
+    if end != TIMED_OUT:
+        return f"a web pod's connection to {target} ended {end}"
     return None
 
 
 def reaches_only_the_loopback(
-    run: Run, selector: str, web_port: int, worker_port: int
+    run: Run, deployment: Document, web_port: int, worker_port: int
 ) -> str | None:
     """Cell 13: the build and wire users stay on the loopback, no other port is open."""
-    webs, ready = await_ready(run, selector, WEB_PODS)
+    webs, ready = await_ready(run, web_selector(deployment), WEB_PODS)
     workers, settled = await_ready(run, WORKER_SELECTOR, WORKER_PODS)
     if not (ready and settled):
         return f"the pods were not Ready within {TERMINATION_WINDOW_SECONDS} s"
@@ -368,14 +397,17 @@ def reaches_only_the_loopback(
     )
     if isinstance(said, str):
         return said
-    problem = egress_problem(said, targets) or inbound_problem(run, web, worker)
+    problem = egress_problem(said, targets) or inbound_problem(
+        run, deployment, web, worker
+    )
     if problem:
         return problem
     say(
         f"cell 13: the build and wire users reached the loopback and got {DROPPED} "
         f"to {', '.join(targets)}; the replies of the accepted connections passed "
-        f"in cell 11's builds; a web pod's connection to a port of the worker pod "
-        f"where a process listens, other than the worker's, ended in a {TIMED_OUT}"
+        f"in cell 11's builds; with every port of the worker pod admitted by "
+        f"policy, a web pod's connection to a port where a process listens, "
+        f"other than the worker's, ended in a {TIMED_OUT}"
     )
     return None
 
@@ -394,5 +426,5 @@ def web_cells(
             lambda: built_over_two_workers(run, deployment, selector, worker_documents),
         ),
         (12, lambda: hellos_refused_unspent(run, selector)),
-        (13, lambda: reaches_only_the_loopback(run, selector, web_port, worker_port)),
+        (13, lambda: reaches_only_the_loopback(run, deployment, web_port, worker_port)),
     ]

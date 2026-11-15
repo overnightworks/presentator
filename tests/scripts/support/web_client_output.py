@@ -5,9 +5,9 @@ from types import ModuleType
 from typing import Any
 
 
-def outage_outcome(web_module: ModuleType, *, started: float) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
+def outage_outcome(web_module: ModuleType) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
     """The outcome of a client whose first step found no worker."""
-    step = web_module.StepOutcome("build", failed=True, failure=None, started=started)
+    step = web_module.StepOutcome("build", failed=True, failure=None, admitted=None)
     return web_module.Outcome(steps=(step,), out=(), talk_page=False, pdf=False)
 
 
@@ -16,8 +16,8 @@ def delivered_outcome(
 ) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
     """The outcome of a client whose build and export delivered the talk and PDF."""
     steps = tuple(
-        web_module.StepOutcome(step, failed=False, failure=None, started=started)
-        for step, started in zip(
+        web_module.StepOutcome(step, failed=False, failure=None, admitted=admitted)
+        for step, admitted in zip(
             web_module.HELLO_STEPS, (first_step_at, second_step_at), strict=True
         )
     )
@@ -33,7 +33,7 @@ def client_output(outcome: Any) -> str:  # noqa: ANN401 - the web probe's Outcom
             "step": step.step,
             "failed": step.failed,
             "failure": step.failure,
-            "started": step.started,
+            "admitted": step.admitted,
         }
         for step in outcome.steps
     ]

@@ -25,6 +25,8 @@ APPLIED_KINDS = ("PersistentVolumeClaim", "ServiceAccount", "StatefulSet")
 # ConfigMap holding the packet filter, each named for the workers.
 WORKER_KINDS = ("ConfigMap", "NetworkPolicy", "Service")
 WORKERS = "build-worker"
+WORKER_LABEL = "app.kubernetes.io/name"
+INBOUND_PROBE_POLICY = "probe-inbound-any-port"
 WEB_KINDS = ("ConfigMap", "Deployment")
 WORKER_CONTAINER = "worker"
 WEB_CONTAINER = "web"
@@ -210,6 +212,26 @@ def throwaway_secrets(deployment: Document, value: Callable[[], str]) -> list[Do
         }
         for source in sources
     ]
+
+
+def inbound_probe_policy(deployment: Document) -> Document:
+    """A NetworkPolicy admitting the web's pods to every TCP port of the workers' pods.
+
+    Policies add up, so with this one applied beside the workers' own, which
+    admits the build port alone, the pod's packet filter is all that can drop a
+    web pod's connection to another port of a worker pod.
+    """
+    web_labels = deployment["spec"]["selector"]["matchLabels"]
+    return {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {"name": INBOUND_PROBE_POLICY, "namespace": NAMESPACE},
+        "spec": {
+            "podSelector": {"matchLabels": {WORKER_LABEL: WORKERS}},
+            "policyTypes": ["Ingress"],
+            "ingress": [{"from": [{"podSelector": {"matchLabels": web_labels}}]}],
+        },
+    }
 
 
 def namespace_document(platform: Path) -> Document:

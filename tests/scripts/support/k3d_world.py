@@ -140,7 +140,7 @@ def stamp(seconds: int) -> str:
     return (EPOCH + timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def at(seconds: int) -> float:
+def at(seconds: float) -> float:
     """The epoch seconds the fake's clock shows `seconds` after its start."""
     return (EPOCH + timedelta(seconds=seconds)).timestamp()
 
@@ -308,6 +308,8 @@ class World:
     egress_loopback: str = "connected"
     egress_off_loopback: str = "EPERM"
     inbound_end: str = "timeout"
+    # How a connection to the listener ends from inside the worker pod itself.
+    listener_loopback_end: str = "connected"
     copy_exit: int = 0
     copy_stderr: str = ""
     # What a residue's twin Pod shows by the residue's name; the expected end if absent.
@@ -371,6 +373,10 @@ class World:
     def exec_answer(self, command: tuple[str, ...]) -> tuple[int, str, str]:
         """What a program sent into a pod prints, by its container and arguments."""
         arguments = command[command.index("-") + 1 :]
+        if arguments[:1] == ("reach",):
+            reached_inside = arguments[-1].startswith("127.0.0.1:")
+            end = self.listener_loopback_end if reached_inside else self.inbound_end
+            return 0, json.dumps({"end": end}), ""
         if command[command.index("--container") + 1] != "web":
             if arguments == ("listen",):
                 return 0, json.dumps({"port": INBOUND_PORT}), ""
@@ -384,8 +390,6 @@ class World:
                 or json.dumps(dict.fromkeys(self.egress_users, ends)),
                 "",
             )
-        if arguments[:1] == ("reach",):
-            return 0, json.dumps({"end": self.inbound_end}), ""
         if command[-2:] != ("build", "export"):
             return 0, self.hello_stdout, ""
         shown = self.client_stdout if self.workers_up() else self.outage_stdout
@@ -746,7 +750,7 @@ def fixture_maker(
             delivered_outcome(web_module, first_step_at=at(100), second_step_at=at(105))
         )
         world.outage_stdout = world.outage_stdout or client_output(
-            outage_outcome(web_module, started=at(0))
+            outage_outcome(web_module)
         )
         world.hello_stdout = world.hello_stdout or json.dumps(web_phase.HELLOS)
         world.streams = world.streams or [

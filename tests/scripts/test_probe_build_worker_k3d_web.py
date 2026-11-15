@@ -66,7 +66,7 @@ def execs(world: World) -> list[tuple[tuple[str, ...], str]]:
     ]
 
 
-def delivered(web_module: ModuleType, second_step_at: int = 105) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
+def delivered(web_module: ModuleType, second_step_at: float = 105) -> Any:  # noqa: ANN401 - the web probe's Outcome, loaded by name
     return delivered_outcome(
         web_module, first_step_at=at(100), second_step_at=at(second_step_at)
     )
@@ -217,12 +217,18 @@ def test_workers_that_are_not_ready_or_not_both_used_fail_cell_11(
     assert f"cell {cell}: FAILED" in output.out
 
 
-def test_a_first_worker_back_before_the_second_step_started_fails_cell_11(
+@pytest.mark.parametrize(
+    "admitted_at",
+    [125, 130],
+    ids=["in the second the first worker was Ready", "after the restart"],
+)
+def test_a_second_step_not_admitted_before_the_first_worker_was_ready_fails_cell_11(
     make_fixture: Callable[..., Fixture],
     web_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
+    admitted_at: int,
 ) -> None:
-    after_the_restart = delivered(web_module, second_step_at=130)
+    after_the_restart = delivered(web_module, second_step_at=admitted_at)
     world = World(client_stdout=client_output(after_the_restart))
     with pytest.raises(SystemExit):
         make_fixture(world).drive()
@@ -314,11 +320,13 @@ def test_cell_13_connects_from_a_web_pod_to_a_port_a_worker_pod_listens_on(
     fixture = make_fixture()
     fixture.drive()
     inbound = web_module.INBOUND_PROGRAM.read_text(encoding="utf-8")
-    listening, reaching = [
+    listening, inside, reaching = [
         command for command, stdin in execs(fixture.world) if stdin == inbound
     ]
     assert listening[5] in WORKER_POD_NAMES
     assert listening[-1] == "listen"
+    assert inside[5] == listening[5]
+    assert inside[-1] == f"127.0.0.1:{INBOUND_PORT}"
     assert reaching[5] in WEB_POD_NAMES
     assert reaching[-2] == "reach"
     host, _, port = reaching[-1].rpartition(":")
@@ -328,17 +336,60 @@ def test_cell_13_connects_from_a_web_pod_to_a_port_a_worker_pod_listens_on(
     assert "ended in a timeout" in line
 
 
+def test_cell_13_admits_every_worker_port_by_policy_only_while_the_web_pod_connects(
+    make_fixture: Callable[..., Fixture], web_module: ModuleType
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    inbound = web_module.INBOUND_PROGRAM.read_text(encoding="utf-8")
+    issued = issued_commands(fixture.world)
+    (reaching,) = [
+        at
+        for at, (command, stdin) in enumerate(issued)
+        if stdin == inbound
+        and command[-1] != f"127.0.0.1:{INBOUND_PORT}"
+        and command[-2] == "reach"
+    ]
+    (applying,) = [
+        at
+        for at in apply_positions(fixture.world, "NetworkPolicy")
+        if "\n---\n" not in issued[at][1]
+    ]
+    (deleting,) = [
+        at
+        for at, (command, _) in enumerate(issued)
+        if command[:3] == ("kubectl", "delete", "networkpolicy")
+    ]
+    assert applying < reaching < deleting
+    policy = json.loads(issued[applying][1])
+    assert policy["spec"]["policyTypes"] == ["Ingress"]
+    (rule,) = policy["spec"]["ingress"]
+    assert "ports" not in rule
+
+
+def test_a_listener_that_does_not_answer_on_the_pods_loopback_fails_cell_13(
+    make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit):
+        make_fixture(World(listener_loopback_end="timeout")).drive()
+    output = capsys.readouterr()
+    assert "did not answer on its loopback" in output.err
+    assert "cell 13: FAILED" in output.out
+
+
 @pytest.mark.parametrize("end", ["connected", "ECONNREFUSED"])
 def test_a_worker_port_that_does_not_drop_a_web_pods_connection_fails_cell_13(
     make_fixture: Callable[..., Fixture],
     capsys: pytest.CaptureFixture[str],
     end: str,
 ) -> None:
+    fixture = make_fixture(World(inbound_end=end))
     with pytest.raises(SystemExit):
-        make_fixture(World(inbound_end=end)).drive()
+        fixture.drive()
     output = capsys.readouterr()
     assert f"ended {end}" in output.err
     assert "cell 13: FAILED" in output.out
+    assert fixture.world.issued("kubectl", "delete", "networkpolicy") != []
 
 
 @pytest.mark.parametrize(

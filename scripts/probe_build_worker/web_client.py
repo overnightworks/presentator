@@ -6,17 +6,21 @@ directory that holds `hello-deck`.
 Run inside the web's container as its own user. It reads the settings
 with `load_settings()`, takes the worker from `the_build_worker` and runs the
 named steps of the deck in a fresh run directory under the builds root. It
-prints the outcome as its one line: each step's start time and `BuildFailure`
-reason, text and counts, and what the run directory holds when the steps are over.
+prints the outcome as its one line: each step's admission time (when a worker
+had answered its header) and `BuildFailure` reason, text and counts, and what
+the run directory holds when the steps are over.
 """
 
 import json
+import socket
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from shutil import copytree
 from tempfile import mkdtemp
 
+from presentator.adapters import build_worker
 from presentator.adapters.builds import BuildPlace, BuildStep, slidev_arguments
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
@@ -31,6 +35,30 @@ from presentator.host.main import build_bound_of, the_build_worker
 
 HELLO_DECK = "hello-deck"
 SLUG = "hello"
+
+
+def noting_admissions(admitted: list[float]) -> None:
+    """Note the time of each step's exchange with a worker, which follows its STATUS."""
+    exchange = build_worker.exchange_with_worker
+
+    def exchange_noting_the_time(
+        connection: socket.socket,
+        *,
+        step: BuildStep,
+        deck: int,
+        megabytes: int,
+        remove_staging: Callable[[Path], None],
+    ) -> BuildFailure | None:
+        admitted.append(time.time())
+        return exchange(
+            connection,
+            step=step,
+            deck=deck,
+            megabytes=megabytes,
+            remove_staging=remove_staging,
+        )
+
+    build_worker.exchange_with_worker = exchange_noting_the_time
 
 
 def prepared_run(decks: Path, builds: Path) -> BuildPlace:
@@ -57,8 +85,10 @@ def main(decks: Path, kinds: list[StepKind]) -> None:
     toolchain = the_build_worker(settings, bound=build_bound_of(settings))
     place = prepared_run(decks, settings.builds)
     steps: list[dict[str, object]] = []
+    admitted: list[float] = []
+    noting_admissions(admitted)
     for kind in kinds:
-        started = time.time()
+        admitted.clear()
         failure = toolchain.ran(
             BuildStep(
                 place=place,
@@ -71,7 +101,7 @@ def main(decks: Path, kinds: list[StepKind]) -> None:
         step: dict[str, object] = {
             "step": kind.value,
             "failed": failure is not None,
-            "started": started,
+            "admitted": admitted[0] if admitted else None,
         }
         if isinstance(failure, BuildFailure):
             step["failure"] = {
