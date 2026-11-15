@@ -45,7 +45,7 @@ from presentator.contracts.decks import (
 )
 
 CONNECT_WINDOW_SECONDS: Final = 70.0
-ATTEMPT_SECONDS: Final = 5.0
+ATTEMPT_SECONDS: Final = 2.0
 FIRST_RETRY_SECONDS: Final = 0.25
 LONGEST_RETRY_SECONDS: Final = 4.0
 REPLY_MARGIN_SECONDS: Final = 5.0

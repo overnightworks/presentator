@@ -234,7 +234,7 @@ def restart_overlap_problem(
         return None
     return (
         f"the second step was not admitted before the first worker was Ready "
-        f"again (admitted at {admitted}, Ready at {first_back:g})"
+        f"again (admitted at {admitted}, Ready at {first_back:.3f})"
     )
 
 
