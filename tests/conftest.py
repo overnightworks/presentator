@@ -22,7 +22,12 @@ from tests.support.lobby import (
     configure_secret_key,
 )
 from tests.support.postgres import created_database, migrated_template
-from tests.support.worker_support import WAIT_SECONDS, listening_socket
+from tests.support.worker_support import (
+    KEY,
+    WAIT_SECONDS,
+    free_port,
+    listening_socket,
+)
 
 
 @pytest.fixture
@@ -61,6 +66,8 @@ def volume(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
     os.umask(before)
     directory = tmp_path_factory.mktemp("v")
     directory.chmod(0o700)
+    (directory / "port").write_text(str(free_port()))
+    (directory / "key").write_bytes(KEY)
     yield directory
     os.umask(before)
 

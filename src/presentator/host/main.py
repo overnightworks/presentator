@@ -7,7 +7,6 @@ adapter satisfies which port.
 import argparse
 import asyncio
 import logging
-import os
 from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
@@ -138,15 +137,6 @@ from presentator.ports.identity import IdentifierFactory
 from presentator.ports.preferences import (
     InstanceSettingsStore,
     PersonPreferencesStore,
-)
-
-_WORKER_NOT_ANSWERING = (
-    "The build worker did not answer within {window:g} seconds. Check that the"
-    " build-worker service is running and shares the socket directory with this"
-    " service."
-)
-WAITING_FOR_THE_WORKER = (
-    "Waiting for the build worker to answer on %s, for up to %g seconds"
 )
 
 _log = logging.getLogger(__name__)
@@ -575,24 +565,15 @@ def build_bound_of(settings: Settings) -> timedelta:
 
 
 def the_build_worker(settings: Settings, *, bound: timedelta) -> WorkerToolchain:
-    """The sealed build worker, which has to answer before anything is served."""
-    toolchain = WorkerToolchain(
-        socket_path=settings.build_worker_socket,
+    """The client of the sealed build workers; no worker has to answer to start."""
+    link = settings.build_worker
+    return WorkerToolchain(
+        host=link.host,
+        port=link.port,
+        key=link.key.get_secret_value().encode(),
         megabytes=settings.build_output_megabytes,
         reply_bound_seconds=emergency_end(0.0, bound.total_seconds()),
-        expected_uid=0,
-        expected_gid=os.getegid(),
     )
-    _log.info(
-        WAITING_FOR_THE_WORKER,
-        settings.build_worker_socket,
-        toolchain.connect_window_seconds,
-    )
-    if not toolchain.is_answering():
-        raise cannot_start(
-            _WORKER_NOT_ANSWERING.format(window=toolchain.connect_window_seconds)
-        )
-    return toolchain
 
 
 def web_auth_config_for(

@@ -1,4 +1,4 @@
-"""The build worker's serving loop: accept, check the peer, hand over, sweep."""
+"""The build worker's serving loop: accept, verify the hello, hand over, sweep."""
 
 import logging
 import os
@@ -28,6 +28,8 @@ from presentator.host.worker_wire import (
 
 logger = logging.getLogger(__name__)
 
+# Inside HEADER_SECONDS: the hello ends first, so the web's step still has time.
+HELLO_SECONDS = 1.0
 HEADER_SECONDS = 2.0
 UPLOAD_SECONDS = 60.0
 GATE_SECONDS = 5.0
@@ -61,11 +63,6 @@ def emergency_end(accepted_at: float, build_timeout_seconds: float) -> float:
 def _phase_end(serving: Serving, budget: float, life_ends_at: float) -> float:
     """A phase starting now ends after its budget, never past the life's deadline."""
     return min(serving.clock() + budget, life_ends_at)
-
-
-def peer_admitted(peer_uid: int, runtime_uid: int) -> bool:
-    """Only the runtime uid may talk to the worker; uid 0 never."""
-    return peer_uid != 0 and peer_uid == runtime_uid
 
 
 class LifeEnd(StrEnum):
@@ -621,9 +618,13 @@ def hand_over(
 
 
 def accept_connections(
-    listener: socket.socket, runtime_uid: int, serving: Serving
+    listener: socket.socket, key: bytes, serving: Serving
 ) -> LifeEnd:
-    """Serve each connection in turn; return what ended the life."""
+    """Serve each connection in turn; return what ended the life.
+
+    Only a peer whose hello verifies under the key starts a life; any other
+    connection is closed and the accepting goes on.
+    """
     while True:
         try:
             connection, _address = listener.accept()
@@ -633,15 +634,9 @@ def accept_connections(
         accepted_at = serving.clock()
         serving.watchdog.arm(accepted_at + WATCHDOG_SECONDS - serving.clock())
         with connection:
-            try:
-                peer_uid = build_wire.peer_uid(connection)
-            except OSError:
-                logger.exception("peer credentials unreadable")
-                return LifeEnd.ACCEPT
-            admitted = peer_admitted(peer_uid, runtime_uid)
             life_end = (
                 hand_over(connection, serving, accepted_at, listener=listener)
-                if admitted
+                if build_wire.verify_hello(connection, key, seconds=HELLO_SECONDS)
                 else None
             )
         if life_end is not None:

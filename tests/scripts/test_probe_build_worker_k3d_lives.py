@@ -57,7 +57,7 @@ def judge_cell(  # noqa: PLR0913 - each argument is one knob of the judged cell
     return fixture.driver.drive_cell(fixture.run, 8, documents, expectation), world
 
 
-REFUSED = Predicate.NO_ROUTE
+REFUSED = Predicate.EGRESS
 
 
 refused_life = partial(life_events, "one", REFUSED)

@@ -78,18 +78,17 @@ flowchart LR
     traefik[Traefik] --> web
     subgraph namespace[presentator Namespace]
         web[web<br/>Deployment]
-        worker[build worker<br/>StatefulSet, lo only]
-        web <-- socket on a shared claim --> worker
+        worker[build workers x2<br/>StatefulSet, TCP behind kernel filters]
+        web <-- keyed hello over TCP --> worker
     end
     web -- http --> speech[speech-runtime]
     web -- http --> gateway[LiteLLM front]
     web -- https --> keycloak[Keycloak]
 ```
 
-presentator has one deployment on the platform's k3s cluster. One image runs as two one-replica
-workloads in its own Namespace: the web, a Deployment that recreates instead of rolling, and the
-build worker, a StatefulSet, both on the node of one claim mounted at `/run/presentator-build`,
-where the worker's socket lies. The platform's manifest (`apps/presentator` in
+presentator has one deployment on the platform's k3s cluster. One image runs as two workloads in
+its own Namespace: the web, a Deployment that recreates instead of rolling, and the build workers,
+a StatefulSet of two pods behind one Service that share nothing and each serve one life at a time. The platform's manifest (`apps/presentator` in
 overnightworks/platform) owns the pod specs, network policy, edge, secrets, the database backup with
 its restore test and the release; the [configuration](configuration.md) owns each setting's meaning.
 
@@ -97,10 +96,13 @@ One process serves the lobby and the talk host and tells them apart by the `Host
 host gets a 404, except the lobby's back-channel logout path ([sign-in](sign-in.md)), which ignores
 forwarded headers and trusts only the signed Logout Token. The platform's realm registers no logout
 URL for presentator, so its safety does not depend on the call. `GET /health` answers 200 while the
-Postgres database passes the revision rule (SQLite: always), else a fixed 503; the port opens once the worker answers.
+Postgres database passes the revision rule (SQLite: always), else a fixed 503; the web starts without a worker.
 
-The worker's pod holds `lo` alone because the init container `remove-link` deletes its network link
-first; its container never restarts, so each life ends the pod and the StatefulSet makes a fresh one.
+A worker pod keeps a link that reaches only the web: its init container loads nftables rules that
+accept only the worker's port in and let nothing leave but the loopback and the accepted
+connections' replies, so a deck's code (the build and wire uids) reaches only the pod. The self-check sends as each uid and requires `EPERM`. The root controller verifies a keyed hello
+(nonces, HMAC-SHA256 under a direction label, a deadline) before it spawns anything; a failed hello
+spends no life. Each life ends the pod and the StatefulSet makes a fresh one.
 
 ## 5. Crosscutting Concepts
 
@@ -196,5 +198,3 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
   the new identity until its next push; the update strategy must not be `OnDelete`.
 - SQLite does not guard against an empty or older file: its retention pass deletes the runs only
   the right database names.
-- The claim root is born open: an entry the web made at the socket's name
-  before the worker's first start is `stale-socket`.

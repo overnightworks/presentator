@@ -12,7 +12,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from presentator.adapters import build_wire
 from presentator.host import worker, worker_self_check
 from presentator.host.worker import Boundary
 from presentator.host.worker_scratch import (
@@ -56,16 +55,19 @@ from tests.presentator.host.support.sealed_snapshot import (
     sealed_snapshot,
     write_pod_mountinfo,
 )
-from tests.presentator.host.support.worker_boundary import boundary_over
+from tests.presentator.host.support.worker_boundary import (
+    CHECK,
+    SERVE,
+    boundary_over,
+)
 
 MOUNTS = Predicate.MOUNTS
-SOCKET_DIRECTORY = build_wire.SOCKET_DIRECTORY
 MEMORY_MOUNTS = (WORK_MOUNT, TEMPORARY_MOUNT, SHARED_MEMORY_MOUNT)
 BORN_TERMINATION_LOG_MODE = 0o666
 CAP_MKNOD = 27
 OUTSIDE_MODE = 0o700
 RUNTIME_UID = sealed_snapshot().identity.runtime_uid
-CHECK_OR_START = [[], ["--check"]]
+CHECK_OR_START = [SERVE, CHECK]
 
 
 @pytest.fixture
@@ -188,21 +190,6 @@ def test_an_absent_termination_log_refuses(pod: Path) -> None:
     path_in(pod, TERMINATION_LOG).unlink()
 
     assert judged(pod) == MOUNTS
-
-
-def test_a_claim_directory_missing_from_the_mounts_refuses(pod: Path) -> None:
-    unmount(pod, SOCKET_DIRECTORY)
-
-    assert judged(pod) == MOUNTS
-
-
-@pytest.mark.parametrize("filesystem", ["ext4", "tmpfs"])
-def test_the_claim_directory_may_be_a_mount_of_any_filesystem(
-    pod: Path, filesystem: str
-) -> None:
-    remount(pod, SOCKET_DIRECTORY, filesystem=filesystem)
-
-    assert judged(pod) is None
 
 
 QUEUE_FAULTS: dict[str, Callable[[Path], None]] = {
@@ -442,7 +429,7 @@ def test_a_start_fixes_up_the_born_pod_between_the_lowering_and_the_read(
 
     assert status == 0
     assert events[:5] == ["prctl", "umask", "lower", "fix-up", "read"]
-    assert ("serve" in events) is (not arguments)
+    assert ("serve" in events) is (arguments == SERVE)
     assert "start refused" not in caplog.text
     assert (
         stat.S_IMODE(path_in(pod, WORK_MOUNT).stat().st_mode)
@@ -529,7 +516,7 @@ def test_a_symlinked_table_root_refuses_and_its_target_keeps_its_mode(
     temporary.symlink_to(outside)
     events: list[str] = []
 
-    status = worker.main([], pod_boundary(pod, events))
+    status = worker.main(SERVE, pod_boundary(pod, events))
 
     assert status == worker.REFUSAL_EXIT_STATUS
     assert f"start refused: {MOUNTS}" in caplog.text

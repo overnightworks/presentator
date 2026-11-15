@@ -1,0 +1,120 @@
+"""The keyed hello: only a peer that holds the key and the direction is verified."""
+
+import socket
+import threading
+from collections.abc import Callable
+
+import pytest
+
+from presentator.adapters.build_wire import (
+    CHALLENGE_BYTES,
+    HELLO_VERSION,
+    NONCE_BYTES,
+    HelloDirection,
+    HelloRefusedError,
+    answer_hello,
+    hello_tag,
+    verify_hello,
+)
+from tests.support.worker_support import KEY
+
+SECONDS = 0.5
+OTHER_KEY = b"x" * len(KEY)
+WEB_NONCE = b"w" * NONCE_BYTES
+
+
+def run_worker_side(
+    connection: socket.socket, key: bytes, verdicts: list[bool]
+) -> threading.Thread:
+    def verify() -> None:
+        verdicts.append(verify_hello(connection, key, seconds=SECONDS))
+        if not verdicts[-1]:
+            connection.close()
+
+    thread = threading.Thread(target=verify)
+    thread.start()
+    return thread
+
+
+def web_answering_as(
+    direction: HelloDirection, key: bytes, version: int = HELLO_VERSION
+) -> Callable[[socket.socket], None]:
+    def answer(connection: socket.socket) -> None:
+        challenge = connection.recv(CHALLENGE_BYTES, socket.MSG_WAITALL)
+        tag = hello_tag(key, direction, challenge[1:], WEB_NONCE)
+        connection.sendall(bytes([version]) + WEB_NONCE + tag)
+
+    return answer
+
+
+def test_a_web_with_the_key_is_verified_and_verifies_the_worker(
+    wire: tuple[socket.socket, socket.socket],
+) -> None:
+    worker, web = wire
+    verdicts: list[bool] = []
+
+    thread = run_worker_side(worker, KEY, verdicts)
+    answer_hello(web, KEY)
+    thread.join()
+
+    assert verdicts == [True]
+    assert worker.gettimeout() is None
+
+
+def no_answer(connection: socket.socket) -> None:
+    connection.recv(CHALLENGE_BYTES)
+
+
+REFUSED: dict[str, Callable[[socket.socket], None]] = {
+    "another key": web_answering_as(HelloDirection.WEB_TO_WORKER, OTHER_KEY),
+    "the reflected direction": web_answering_as(HelloDirection.WORKER_TO_WEB, KEY),
+    "another version": web_answering_as(
+        HelloDirection.WEB_TO_WORKER, KEY, version=HELLO_VERSION + 1
+    ),
+    "no answer": no_answer,
+}
+
+
+@pytest.mark.parametrize("answer", REFUSED.values(), ids=REFUSED.keys())
+def test_a_web_that_does_not_prove_the_key_and_direction_is_not_verified(
+    wire: tuple[socket.socket, socket.socket], answer: Callable[[socket.socket], None]
+) -> None:
+    worker, web = wire
+    verdicts: list[bool] = []
+
+    thread = run_worker_side(worker, KEY, verdicts)
+    answer(web)
+    thread.join()
+
+    assert verdicts == [False]
+
+
+def test_a_worker_that_does_not_prove_the_key_is_refused_by_the_web(
+    wire: tuple[socket.socket, socket.socket],
+) -> None:
+    worker, web = wire
+    verdicts: list[bool] = []
+
+    thread = run_worker_side(worker, OTHER_KEY, verdicts)
+    with pytest.raises(HelloRefusedError):
+        answer_hello(web, KEY)
+    thread.join()
+
+    assert verdicts == [False]
+
+
+def test_a_worker_of_another_version_is_refused_by_the_web(
+    wire: tuple[socket.socket, socket.socket],
+) -> None:
+    worker, web = wire
+    worker.sendall(bytes([HELLO_VERSION + 1]) + b"n" * NONCE_BYTES)
+
+    with pytest.raises(HelloRefusedError):
+        answer_hello(web, KEY)
+
+
+def test_a_tag_of_one_direction_is_not_the_tag_of_the_other() -> None:
+    nonce = b"n" * NONCE_BYTES
+    forward = hello_tag(KEY, HelloDirection.WEB_TO_WORKER, nonce, WEB_NONCE)
+
+    assert forward != hello_tag(KEY, HelloDirection.WORKER_TO_WEB, nonce, WEB_NONCE)

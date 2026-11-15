@@ -214,10 +214,8 @@ serving = Serving(
 )
 sys.exit(
     worker.serve(
-        Path(sys.argv[1]),
-        controller_uid=os.getuid(),
-        controller_gid=os.getgid(),
-        runtime_uid=os.getuid(),
+        port=int((Path(sys.argv[1]) / "port").read_text()),
+        key=(Path(sys.argv[1]) / "key").read_bytes(),
         serving=serving,
     )
 )

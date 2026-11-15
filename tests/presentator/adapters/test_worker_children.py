@@ -102,10 +102,8 @@ serving = worker_serving.Serving(
 )
 sys.exit(
     worker.serve(
-        Path(sys.argv[1]),
-        controller_uid=os.getuid(),
-        controller_gid=os.getgid(),
-        runtime_uid=os.getuid(),
+        port=int((Path(sys.argv[1]) / "port").read_text()),
+        key=(Path(sys.argv[1]) / "key").read_bytes(),
         serving=serving,
     )
 )
@@ -486,10 +484,8 @@ class RealServing:
         thread = threading.Thread(
             target=lambda: self.outcome.append(
                 worker.serve(
-                    self.directory,
-                    controller_uid=OWN_UID,
-                    controller_gid=OWN_GID,
-                    runtime_uid=OWN_UID,
+                    port=int((self.directory / "port").read_text()),
+                    key=(self.directory / "key").read_bytes(),
                     serving=serving,
                 )
             ),

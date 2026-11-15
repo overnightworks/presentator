@@ -4,7 +4,6 @@ from dataclasses import replace
 from pathlib import Path
 
 from presentator.adapters.build_wire import (
-    SOCKET_NAME,
     FailedOutcome,
     RefusalLimit,
     RefusedOutcome,
@@ -19,7 +18,7 @@ from presentator.contracts.decks import (
     StepKind,
 )
 from tests.support import worker_support as support
-from tests.support.worker_support import OWN_GID, OWN_UID
+from tests.support.worker_support import KEY, LOCAL_ADDRESS, port_of
 
 MEGABYTES = 1
 WINDOW = 0.6
@@ -46,12 +45,13 @@ def failed_reply(text: str | None) -> bytes:
 
 
 def toolchain(volume: Path, **overrides: object) -> WorkerToolchain:
+    """A client of the worker the volume names, whose port nothing serves yet."""
     base = WorkerToolchain(
-        socket_path=volume / SOCKET_NAME,
+        host=LOCAL_ADDRESS,
+        port=port_of(volume),
+        key=KEY,
         megabytes=MEGABYTES,
         reply_bound_seconds=2.0,
-        expected_uid=OWN_UID,
-        expected_gid=OWN_GID,
         connect_window_seconds=WINDOW,
         first_retry_seconds=0.02,
         longest_retry_seconds=0.1,

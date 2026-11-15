@@ -20,7 +20,6 @@ from pydantic import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from webauth.proxies import TrustedProxies
 
-from presentator.adapters.build_wire import SOCKET_DIRECTORY, SOCKET_NAME
 from presentator.adapters.speech import VoiceId, voice_speaks
 from presentator.agent.settings import AgentSettings
 from presentator.contracts.voice import SampleLanguage
@@ -37,11 +36,17 @@ _VOICE_SPEAKS_OTHER: Final = (
     "speech_voice_{language}: names a voice that does not speak it"
 )
 _ONE_HOSTNAME: Final = "talk_origin: is another hostname than public_origin"
+_WORKER_REACHED: Final = (
+    "build_worker_address: is set together with build_worker_key_file, and both"
+    " are set when builds run in the worker"
+)
 _DATABASE_NAMED_WHOLE: Final = (
     "database_url: is set together with database_password_file, or neither is"
 )
 
 ENVIRONMENT_PREFIX: Final = "PRESENTATOR_"
+# The shortest key of the build worker's hello, the web's file and the worker's alike.
+MINIMUM_KEY_LENGTH: Final = 32
 # What the web and the build worker both bound one build step by.
 DEFAULT_BUILD_TIMEOUT_SECONDS: Final = 300.0
 # What the web and the build worker both bound one build's output by.
@@ -54,8 +59,8 @@ LONGEST_BUILD_TIMEOUT_SECONDS: Final = threading.TIMEOUT_MAX / 2
 class WhereBuildsRun(StrEnum):
     """Where the toolchain that builds a deck runs (line 14a).
 
-    The worker is the sealed build worker service, reached over its socket and
-    what an instance is; this machine itself is a development run, and a
+    The worker is the sealed build worker service, reached over TCP and what an
+    instance is; this machine itself is a development run, and a
     deployment gets it only by saying so.
     """
 
@@ -65,6 +70,25 @@ class WhereBuildsRun(StrEnum):
 
 class ConfigurationError(ValueError):
     """What the environment carries is not a configuration to run on."""
+
+
+def worker_endpoint(address: str) -> tuple[str, int]:
+    """The host and port of a `host:port` address; refuse any other form."""
+    parsed = urlsplit(f"//{address}")
+    try:
+        port = parsed.port
+    except ValueError as refused:
+        message = _INVALID_PORT
+        raise ValueError(message) from refused
+    if not parsed.hostname or not port or parsed.netloc != address or "@" in address:
+        message = "is a host and a port, as host:port"
+        raise ValueError(message)
+    return parsed.hostname, port
+
+
+def _a_worker_address(given: str) -> str:
+    worker_endpoint(given)
+    return given
 
 
 def _a_proxy_list(given: str) -> str:
@@ -193,6 +217,15 @@ type AbsolutePath = Annotated[Path, AfterValidator(_an_absolute_path)]
 
 
 @dataclass(frozen=True, slots=True)
+class BuildWorkerLink:
+    """Where the build workers answer and the key that proves this instance to them."""
+
+    host: str
+    port: int
+    key: SecretStr
+
+
+@dataclass(frozen=True, slots=True)
 class PostgresDatabase:
     """Where Postgres is and the password it is reached with."""
 
@@ -243,10 +276,12 @@ class Settings(
     # the toolchain on this machine instead is a development run, and it takes
     # saying so.
     build_runner: WhereBuildsRun = WhereBuildsRun.WORKER
-    # Where the build worker listens; the default is where it binds.
-    build_worker_socket: Annotated[Path, AfterValidator(_an_absolute_path)] = (
-        Path(SOCKET_DIRECTORY) / SOCKET_NAME
+    # Where the build workers answer, and the file holding the key that proves
+    # this instance to them; the instance starts without a worker answering.
+    build_worker_address: Annotated[str, AfterValidator(_a_worker_address)] | None = (
+        None
     )
+    build_worker_key_file: AbsolutePath | None = None
     # What one build may leave behind, in whole megabytes for its talk.
     build_output_megabytes: int = DEFAULT_BUILD_OUTPUT_MEGABYTES
     # Polling is what makes a push arrive at all, so it runs whether or not any
@@ -299,6 +334,22 @@ class Settings(
         )
 
     @cached_property
+    def build_worker(self) -> BuildWorkerLink:
+        """The build workers' address and the key read once from its file."""
+        if self.build_worker_address is None or self.build_worker_key_file is None:
+            raise cannot_start(_WORKER_REACHED)
+        host, port = worker_endpoint(self.build_worker_address)
+        return BuildWorkerLink(
+            host=host,
+            port=port,
+            key=read_secret_file(
+                self.build_worker_key_file,
+                setting="build_worker_key_file",
+                minimum_length=MINIMUM_KEY_LENGTH,
+            ),
+        )
+
+    @cached_property
     def postgres(self) -> PostgresDatabase | None:
         """The Postgres this instance serves from; nothing means the SQLite file."""
         if self.database_url is None or self.database_password_file is None:
@@ -329,6 +380,18 @@ class Settings(
     def _database_is_named_whole(self) -> Self:
         if (self.database_url is None) != (self.database_password_file is None):
             raise ValueError(_DATABASE_NAMED_WHOLE)
+        return self
+
+    @model_validator(mode="after")
+    def _worker_is_reached(self) -> Self:
+        named = (self.build_worker_address is None) == (
+            self.build_worker_key_file is None
+        )
+        if not named or (
+            self.build_runner is WhereBuildsRun.WORKER
+            and self.build_worker_address is None
+        ):
+            raise ValueError(_WORKER_REACHED)
         return self
 
     @model_validator(mode="after")

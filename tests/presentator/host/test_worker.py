@@ -9,8 +9,6 @@ from pathlib import Path
 
 import pytest
 
-from presentator.adapters import build_wire
-from presentator.adapters.rtnetlink import Topology
 from presentator.host import worker, worker_self_check
 from presentator.host.config import (
     load_worker_settings,
@@ -35,19 +33,21 @@ from tests.presentator.host.support.sealed_snapshot import (
     SYSV_HEADERS,
     read_sealed_snapshot,
     read_staged_root_as_sealed_process,
+    sealed_sends,
     sealed_snapshot,
-    sealed_topology,
     with_fields,
     with_mounts,
     with_resource_bounds,
 )
 from tests.presentator.host.support.worker_boundary import (
     LOADED_SETTINGS,
+    SERVE,
     boundary_over,
 )
 
-TOPOLOGY_READ = "topology read"
-READS_BEFORE_TOPOLOGY = 8
+SENDS_READ = "probes read"
+KEY = b"k" * 32
+READS_BEFORE_SENDS = 8
 
 
 def with_status(**changes: str) -> Callable[[Snapshot], Snapshot]:
@@ -154,9 +154,9 @@ FAILURES = {
         with_users(**{"presentator-wire": worker_self_check.BUILD_IDENTITY}),
         Predicate.IDENTITIES,
     ),
-    "wrong controller gid": (with_identity(gid=0), Predicate.IDENTITIES),
+    "wrong controller gid": (with_identity(gid=1000), Predicate.IDENTITIES),
     "extra supplementary group": (
-        with_identity(supplementary_gids=(1000, 4)),
+        with_identity(supplementary_gids=(0, 4)),
         Predicate.IDENTITIES,
     ),
     "not root": (with_identity(uid=1000, euid=1000), Predicate.IDENTITIES),
@@ -223,7 +223,7 @@ def test_self_check_names_the_failing_predicate(
 
 
 def test_double_fault_names_the_first_predicate_in_refusal_order() -> None:
-    snapshot = with_identity(gid=0)(with_status(Seccomp="0")(sealed_snapshot()))
+    snapshot = with_identity(gid=1000)(with_status(Seccomp="0")(sealed_snapshot()))
 
     assert worker_self_check.first_failing_predicate(snapshot) == Predicate.CAPABILITIES
 
@@ -238,19 +238,18 @@ def test_sealed_check_exits_zero_without_serving() -> None:
 def test_sealed_start_serves_and_returns_the_serving_status() -> None:
     events: list[str] = []
 
-    assert worker.main([], boundary_over(sealed_snapshot(), events)) == 0
+    assert worker.main(SERVE, boundary_over(sealed_snapshot(), events)) == 0
     assert events[-1] == "serve"
 
 
-def test_start_serves_for_the_runtime_uid_and_the_controller_group() -> None:
+def test_start_serves_the_port_and_key_file_bounded_by_the_settings() -> None:
     served: dict[str, object] = {}
-    snapshot = with_identity(runtime_uid=1001)(sealed_snapshot())
 
-    worker.main([], boundary_over(snapshot, [], served))
+    worker.main(SERVE, boundary_over(sealed_snapshot(), [], served))
 
     assert served == {
-        "controller_gid": 1000,
-        "runtime_uid": 1001,
+        "port": int(SERVE[1]),
+        "key_file": Path(SERVE[3]),
         "settings": LOADED_SETTINGS,
     }
 
@@ -281,7 +280,7 @@ def test_start_up_makes_the_process_non_dumpable_before_reading_anything() -> No
 def test_a_start_loads_the_settings_after_the_self_check_and_before_serving() -> None:
     events: list[str] = []
 
-    worker.main([], boundary_over(sealed_snapshot(), events))
+    worker.main(SERVE, boundary_over(sealed_snapshot(), events))
 
     assert events == ["prctl", "umask", "read", "settings", "serve"]
 
@@ -291,7 +290,8 @@ def test_a_refused_self_check_never_loads_the_settings() -> None:
     snapshot = with_fields(pid=7)(sealed_snapshot())
 
     assert (
-        worker.main([], boundary_over(snapshot, events)) == worker.REFUSAL_EXIT_STATUS
+        worker.main(SERVE, boundary_over(snapshot, events))
+        == worker.REFUSAL_EXIT_STATUS
     )
     assert "settings" not in events
 
@@ -304,7 +304,7 @@ def test_a_start_refused_for_alone_or_scratch_never_loads_settings_or_serves(
 ) -> None:
     events: list[str] = []
 
-    status = worker.main([], boundary_over(occupied(sealed_snapshot()), events))
+    status = worker.main(SERVE, boundary_over(occupied(sealed_snapshot()), events))
 
     assert (status, events) == (worker.REFUSAL_EXIT_STATUS, ["prctl", "umask", "read"])
 
@@ -320,7 +320,7 @@ def test_an_invalid_setting_refuses_by_variable_name_never_the_value(
     monkeypatch.setenv(variable, "unique-bad-value-4711")
 
     status = worker.main(
-        [],
+        SERVE,
         boundary_over(
             sealed_snapshot(), events, None, load_settings=load_worker_settings
         ),
@@ -341,28 +341,28 @@ def test_the_settings_keys_pass_the_environment_predicate() -> None:
     assert worker_self_check.first_failing_predicate(snapshot) is None
 
 
-def test_the_real_boundary_serves_the_socket_directory_bounded_by_the_settings(
-    monkeypatch: pytest.MonkeyPatch,
+def test_the_real_boundary_serves_the_port_with_the_key_bounded_by_the_settings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     served: dict[str, object] = {}
 
-    def recording_serve(directory: Path, **arguments: object) -> int:
-        served.update(arguments, directory=directory)
+    def recording_serve(**arguments: object) -> int:
+        served.update(arguments)
         return 0
 
+    def reading(_key_file: Path, *, controller_uid: int) -> bytes:
+        assert controller_uid == 0
+        return KEY
+
+    monkeypatch.setattr(worker, "read_key", reading)
     monkeypatch.setattr(worker, "serve", recording_serve)
 
     status = worker.REAL_BOUNDARY.serve(
-        controller_gid=1000, runtime_uid=1001, settings=LOADED_SETTINGS
+        port=7100, key_file=tmp_path / "key", settings=LOADED_SETTINGS
     )
 
     assert status == 0
-    assert served["directory"] == Path(build_wire.SOCKET_DIRECTORY)
-    assert (
-        served["controller_uid"],
-        served["controller_gid"],
-        served["runtime_uid"],
-    ) == (0, 1000, 1001)
+    assert (served["port"], served["key"]) == (7100, KEY)
     assert isinstance(served["serving"], Serving)
     assert (
         served["serving"].build_timeout_seconds,
@@ -710,16 +710,16 @@ def test_prctl_failure_raises() -> None:
         worker_self_check.libc_prctl(0x7FFFFFFF, 0)
 
 
-def test_the_snapshot_reads_task_count_scratch_then_topology_and_launches_nothing(
+def test_the_snapshot_reads_task_count_scratch_then_the_probes_and_launches_nothing(
     sealed_root: Path,
 ) -> None:
-    def record_topology_read() -> Topology:
-        audit_recording.events.append((TOPOLOGY_READ, None))
-        return sealed_topology()
+    def record_sends_read() -> tuple[str, ...]:
+        audit_recording.events.append((SENDS_READ, None))
+        return sealed_sends()
 
     audit_recording.start()
     try:
-        read_sealed_snapshot(sealed_root, record_topology_read)
+        read_sealed_snapshot(sealed_root, record_sends_read)
     finally:
         audit_recording.stop()
     events = audit_recording.events
@@ -736,14 +736,12 @@ def test_the_snapshot_reads_task_count_scratch_then_topology_and_launches_nothin
     ]
     assert not [event for event, _ in events if event in LAUNCH_EVENTS]
     assert reads[0] == ("open", Path("sys/fs/cgroup/pids.current"))
-    assert sorted(reads[1:READS_BEFORE_TOPOLOGY]) == sorted(
+    assert sorted(reads[1:READS_BEFORE_SENDS]) == sorted(
         [
             ("os.scandir", Path(root))
             for root in ("work", "tmp", "dev/shm", "dev/mqueue")
         ]
         + [("open", Path("proc/sysvipc") / table) for table in SYSV_HEADERS]
     )
-    ordered = [
-        event for event in events if below_root(event) or event[0] == TOPOLOGY_READ
-    ]
-    assert ordered.index((TOPOLOGY_READ, None)) >= READS_BEFORE_TOPOLOGY
+    ordered = [event for event in events if below_root(event) or event[0] == SENDS_READ]
+    assert ordered.index((SENDS_READ, None)) >= READS_BEFORE_SENDS

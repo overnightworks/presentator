@@ -17,13 +17,13 @@ from functools import partial
 from pathlib import Path
 from typing import Protocol
 
-from presentator.adapters import build_wire, rtnetlink
 from presentator.adapters.worker_children import (
     ChildIdentity,
     readable_within,
     spawn_gated,
 )
 from presentator.host.config import (
+    MINIMUM_KEY_LENGTH,
     ConfigurationError,
     WorkerSettings,
     load_worker_settings,
@@ -50,8 +50,8 @@ from presentator.host.worker_self_check import (
     first_failing_predicate,
     libc_prctl,
     lowered_process_limit,
-    lstat_if_present,
     read_snapshot,
+    send_probes,
     status_fields,
 )
 from presentator.host.worker_serving import (
@@ -70,16 +70,20 @@ from presentator.host.worker_termination import (
 logger = logging.getLogger(__name__)
 
 REFUSAL_EXIT_STATUS = 2
-BIND_UMASK = 0o117
+NOT_READY_EXIT_STATUS = 1
 LISTEN_BACKLOG = 4
 ONLY_THE_OWNER = 0o077
+KEY_MODE_MASK = 0o077
+MAXIMUM_KEY_BYTES = 4096
+SOCKET_TABLE = Path("/proc/net/tcp")
+LISTENING = "0A"
+ESTABLISHED = "01"
 
 
 class StartRefusal(StrEnum):
     """A serving step that refused the start."""
 
-    SOCKET_DIRECTORY = "socket-directory"
-    STALE_SOCKET = "stale-socket"
+    KEY = "key"
     BIND = "bind"
     LISTEN = "listen"
     SETTINGS = "settings"
@@ -95,11 +99,9 @@ class StartRefusedError(Exception):
 
 
 class Server(Protocol):
-    """Serves the socket for the runtime uid and the controller group."""
+    """Serves the port to the peers that hold the key."""
 
-    def __call__(
-        self, *, controller_gid: int, runtime_uid: int, settings: WorkerSettings
-    ) -> int:
+    def __call__(self, *, port: int, key_file: Path, settings: WorkerSettings) -> int:
         """Run until a refusal and return its exit status."""
         ...
 
@@ -113,6 +115,7 @@ class Boundary:
     lower_process_limit: Callable[[], None]
     fix_up_mounts: Callable[[], None]
     read_snapshot: Callable[[], Snapshot]
+    read_socket_table: Callable[[], str]
     load_settings: Callable[[], WorkerSettings]
     serve: Server
 
@@ -149,79 +152,67 @@ def _set_umask() -> None:
     os.umask(ONLY_THE_OWNER)
 
 
-def _fix_up_socket_directory(
-    directory: Path, controller_uid: int, controller_gid: int
-) -> None:
+def read_key(key_file: Path, *, controller_uid: int) -> bytes:
+    """The key file's bytes minus the one newline an editor leaves, as the web reads it.
+
+    The file must be the controller's own and no group or other can read it; a mounted
+    secret is a link to it, which opening follows.
+    """
     try:
-        descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        descriptor = os.open(key_file, os.O_RDONLY | os.O_CLOEXEC)
         try:
-            if os.fstat(descriptor).st_uid != controller_uid:
-                raise StartRefusedError(StartRefusal.SOCKET_DIRECTORY)
-            os.fchown(descriptor, -1, controller_gid)
-            os.fchmod(descriptor, build_wire.SOCKET_DIRECTORY_MODE)
+            status = os.fstat(descriptor)
+            if not (
+                stat.S_ISREG(status.st_mode)
+                and status.st_uid == controller_uid
+                and not status.st_mode & KEY_MODE_MASK
+            ):
+                raise StartRefusedError(StartRefusal.KEY)
+            key = os.read(descriptor, MAXIMUM_KEY_BYTES + 1).removesuffix(b"\n")
+            if not MINIMUM_KEY_LENGTH <= len(key) <= MAXIMUM_KEY_BYTES:
+                raise StartRefusedError(StartRefusal.KEY)
+            return key
         finally:
             os.close(descriptor)
     except OSError as error:
-        raise StartRefusedError(StartRefusal.SOCKET_DIRECTORY) from error
+        raise StartRefusedError(StartRefusal.KEY) from error
 
 
-def remove_stale_socket(socket_path: Path, controller_uid: int) -> None:
-    """Unlink a socket the controller owns; refuse any other entry."""
+def bind_listener(port: int) -> socket.socket:
+    """Bind the port on every address of the pod; the packet filter admits the rest."""
     try:
-        status = lstat_if_present(socket_path)
-        if status is None:
-            return
-        if not (stat.S_ISSOCK(status.st_mode) and status.st_uid == controller_uid):
-            raise StartRefusedError(StartRefusal.STALE_SOCKET)
-        socket_path.unlink()
-    except OSError as error:
-        raise StartRefusedError(StartRefusal.STALE_SOCKET) from error
-
-
-def prepare_socket_directory(
-    directory: Path, controller_uid: int, controller_gid: int
-) -> None:
-    """Step 4: fix up the volume root and clear a stale socket."""
-    _fix_up_socket_directory(directory, controller_uid, controller_gid)
-    remove_stale_socket(directory / build_wire.SOCKET_NAME, controller_uid)
-
-
-def bind_socket(
-    directory: Path, controller_uid: int, controller_gid: int
-) -> socket.socket:
-    """Step 5: bind under a narrow umask and check what the bind created."""
-    try:
-        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     except OSError as error:
         raise StartRefusedError(StartRefusal.BIND) from error
-    socket_path = directory / build_wire.SOCKET_NAME
     try:
-        os.umask(BIND_UMASK)
-        try:
-            listener.bind(str(socket_path))
-        finally:
-            _set_umask()
-        status = socket_path.lstat()
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("", port))
     except OSError as error:
         listener.close()
         raise StartRefusedError(StartRefusal.BIND) from error
-    created_as_expected = (
-        stat.S_ISSOCK(status.st_mode)
-        and (status.st_uid, status.st_gid) == (controller_uid, controller_gid)
-        and stat.S_IMODE(status.st_mode) == build_wire.SOCKET_MODE
-    )
-    if not created_as_expected:
-        listener.close()
-        raise StartRefusedError(StartRefusal.BIND)
     return listener
 
 
 def start_listening(listener: socket.socket) -> None:
-    """Step 6: from here on a connect is queued rather than refused."""
+    """From here on a connect is queued rather than refused."""
     try:
         listener.listen(LISTEN_BACKLOG)
     except OSError as error:
         raise StartRefusedError(StartRefusal.LISTEN) from error
+
+
+def is_ready(port: int, socket_table: str) -> bool:
+    """Whether the worker listens on the port and no connection is open on it.
+
+    A worker that holds a connection serves its life, so it is not ready; the
+    table is the kernel's, read without connecting, which would spend the life.
+    """
+    states = [
+        fields[3]
+        for fields in map(str.split, socket_table.splitlines()[1:])
+        if int(fields[1].rpartition(":")[2], 16) == port
+    ]
+    return LISTENING in states and ESTABLISHED not in states
 
 
 def child_gate_admits(process_status: str, identity: tuple[int, int]) -> bool:
@@ -241,21 +232,13 @@ def child_gate_admits(process_status: str, identity: tuple[int, int]) -> bool:
     )
 
 
-def serve(
-    directory: Path,
-    *,
-    controller_uid: int,
-    controller_gid: int,
-    runtime_uid: int,
-    serving: Serving,
-) -> int:
-    """Run start-up steps 4 to 6, then accept until the life ends."""
+def serve(*, port: int, key: bytes, serving: Serving) -> int:
+    """Bind and listen, then accept until the life ends."""
     try:
-        prepare_socket_directory(directory, controller_uid, controller_gid)
-        listener = bind_socket(directory, controller_uid, controller_gid)
+        listener = bind_listener(port)
         with listener:
             start_listening(listener)
-            life_end = accept_connections(listener, runtime_uid, serving)
+            life_end = accept_connections(listener, key, serving)
     except StartRefusedError as refused:
         return _refuse(refused.refusal)
     logger.log(life_end.log_level, "life ended: %s", life_end)
@@ -343,15 +326,13 @@ def real_serving(settings: WorkerSettings) -> Serving:
 
 
 def _serve_on_this_machine(
-    *, controller_gid: int, runtime_uid: int, settings: WorkerSettings
+    *, port: int, key_file: Path, settings: WorkerSettings
 ) -> int:
-    return serve(
-        Path(build_wire.SOCKET_DIRECTORY),
-        controller_uid=0,
-        controller_gid=controller_gid,
-        runtime_uid=runtime_uid,
-        serving=real_serving(settings),
-    )
+    try:
+        key = read_key(key_file, controller_uid=0)
+    except StartRefusedError as refused:
+        return _refuse(refused.refusal)
+    return serve(port=port, key=key, serving=real_serving(settings))
 
 
 REAL_BOUNDARY = Boundary(
@@ -363,7 +344,8 @@ REAL_BOUNDARY = Boundary(
         partial(resource.setrlimit, resource.RLIMIT_NPROC),
     ),
     partial(fix_up_mounts, Path("/")),
-    partial(read_snapshot, Path("/"), read_topology=rtnetlink.read_topology),
+    partial(read_snapshot, Path("/"), read_sends=send_probes),
+    SOCKET_TABLE.read_text,
     load_worker_settings,
     _serve_on_this_machine,
 )
@@ -395,14 +377,22 @@ def _mounts_fixed_up(boundary: Boundary) -> bool:
     return True
 
 
-def _self_checked(boundary: Boundary) -> Snapshot | Predicate:
-    """The snapshot of a start that passes the self-check, else the predicate."""
+def _self_check_failure(boundary: Boundary) -> Predicate | None:
+    """The predicate a start fails, in refusal order, else None."""
     if not _process_limit_lowered(boundary):
         return Predicate.RESOURCE_BOUNDS
     if not _mounts_fixed_up(boundary):
         return Predicate.MOUNTS
-    snapshot = boundary.read_snapshot()
-    return first_failing_predicate(snapshot) or snapshot
+    return first_failing_predicate(boundary.read_snapshot())
+
+
+def _ready(port: int, boundary: Boundary) -> int:
+    """The readiness probe's exit status: it reads the socket table and nothing else."""
+    try:
+        ready = is_ready(port, boundary.read_socket_table())
+    except OSError, ValueError, IndexError:
+        ready = False
+    return 0 if ready else NOT_READY_EXIT_STATUS
 
 
 def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) -> int:
@@ -411,15 +401,28 @@ def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) 
     parser.add_argument(
         "--check", action="store_true", help="exit after the self-check"
     )
+    parser.add_argument(
+        "--ready",
+        action="store_true",
+        help="exit 0 when the worker listens on --port and serves no life",
+    )
+    parser.add_argument("--port", type=int, help="the TCP port the worker serves")
+    parser.add_argument("--key-file", type=Path, help="the file holding the hello key")
     arguments = parser.parse_args(argv)
+    if arguments.ready:
+        if arguments.port is None:
+            parser.error("--ready needs --port")
+        return _ready(arguments.port, boundary)
+    if not arguments.check and (arguments.port is None or arguments.key_file is None):
+        parser.error("serving needs --port and --key-file")
     try:
         boundary.set_non_dumpable()
     except OSError:
         return _refuse(Predicate.NON_DUMPABLE)
     boundary.set_umask()
-    snapshot = _self_checked(boundary)
-    if isinstance(snapshot, Predicate):
-        return _refuse(snapshot)
+    failed = _self_check_failure(boundary)
+    if failed is not None:
+        return _refuse(failed)
     if arguments.check:
         return 0
     try:
@@ -427,7 +430,5 @@ def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) 
     except ConfigurationError as error:
         return _refuse_settings(error)
     return boundary.serve(
-        controller_gid=snapshot.identity.runtime_gid,
-        runtime_uid=snapshot.identity.runtime_uid,
-        settings=settings,
+        port=arguments.port, key_file=arguments.key_file, settings=settings
     )

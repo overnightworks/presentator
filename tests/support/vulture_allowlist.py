@@ -47,6 +47,7 @@ WorkerSettings.model_config
 # Pydantic runs this `model_validator` after every `Settings` validation.
 Settings._database_is_named_whole  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 Settings._two_hostnames  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
+Settings._worker_is_reached  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 Settings._voices_speak_their_language  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 
 # pytest applies this autouse fixture to every worker-settings test by itself.

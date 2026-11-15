@@ -1,8 +1,6 @@
 """The sealed snapshot the self-check passes, its staged root and its alterations."""
 
-import ipaddress
 import os
-import socket
 import stat
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
@@ -11,7 +9,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from presentator.adapters import build_wire, rtnetlink
 from presentator.host import worker_self_check
 from presentator.host.worker_scratch import (
     OPEN_DIRECTORY_MODE,
@@ -66,8 +63,7 @@ GUARDED = "rw,nosuid,nodev,noexec,relatime"
 POD_MASKED_DIRECTORY = "/proc/acpi"
 POD_NULL_BIND = "/proc/masked/null"
 POD_HOSTNAME = "/etc/hostname"
-LOOPBACK_INDEX = 1
-LINK_UP = 0x1
+KEY_MOUNT = "/run/secrets/build-worker-key"
 
 
 @dataclass(frozen=True)
@@ -86,7 +82,7 @@ POD_MOUNTS = (
         PodMount(mount, READ_WRITE, "tmpfs")
         for mount in (WORK_MOUNT, TEMPORARY_MOUNT, SHARED_MEMORY_MOUNT)
     ),
-    PodMount(build_wire.SOCKET_DIRECTORY, READ_WRITE, "ext4"),
+    PodMount(KEY_MOUNT, READ_ONLY, "tmpfs"),
     PodMount(TERMINATION_LOG, READ_WRITE, "ext4"),
     PodMount(QUEUE_MOUNT, GUARDED, "mqueue"),
     PodMount(POD_HOSTNAME, READ_ONLY, "ext4"),
@@ -121,37 +117,17 @@ def limits_file(soft: str, hard: str) -> str:
     )
 
 
-def sealed_topology() -> rtnetlink.Topology:
-    """The loopback with its two addresses and the routes the kernel adds for it."""
-    return rtnetlink.Topology(
-        links=(rtnetlink.Link(LOOPBACK_INDEX, "lo", rtnetlink.IFF_LOOPBACK | LINK_UP),),
-        addresses=(
-            rtnetlink.Address(
-                socket.AF_INET, 8, LOOPBACK_INDEX, ipaddress.IPv4Address("127.0.0.1")
-            ),
-            rtnetlink.Address(
-                socket.AF_INET6, 128, LOOPBACK_INDEX, ipaddress.IPv6Address("::1")
-            ),
-        ),
-        routes=tuple(
-            rtnetlink.Route(
-                family, 255, prefix_length, LOOPBACK_INDEX, has_next_hop=False
-            )
-            for family, prefix_length in (
-                (socket.AF_INET, 8),
-                (socket.AF_INET6, 128),
-                (socket.AF_INET6, 8),
-            )
-        ),
-    )
+def sealed_sends() -> tuple[str, ...]:
+    """What each probed identity meets: its datagram off the loopback is dropped."""
+    return (worker_self_check.SEND_DROPPED,) * len(worker_self_check.PROBED_IDENTITIES)
 
 
 def read_sealed_snapshot(
     root: Path,
-    read_topology: Callable[[], rtnetlink.Topology] = sealed_topology,
+    read_sends: Callable[[], tuple[str, ...]] = sealed_sends,
 ) -> Snapshot:
-    """Read the staged root, with the topology `read_topology` gives."""
-    return read_snapshot(root, read_topology=read_topology)
+    """Read the staged root, with the probes' results `read_sends` gives."""
+    return read_snapshot(root, read_sends=read_sends)
 
 
 def _owned_by_root(roots: Mapping[str, RootFacts]) -> dict[str, RootFacts]:
@@ -196,6 +172,7 @@ def _admitted_other_roots() -> dict[str, RootFacts]:
         POD_HOSTNAME: RootFacts(mode=stat.S_IFREG | 0o644, owner_uid=0),
         POD_MASKED_DIRECTORY: RootFacts(mode=stat.S_IFDIR | 0o755, owner_uid=0),
         POD_NULL_BIND: RootFacts(mode=stat.S_IFCHR | 0o666, owner_uid=0),
+        KEY_MOUNT: RootFacts(mode=stat.S_IFDIR | 0o755, owner_uid=0),
     }
 
 
@@ -215,12 +192,12 @@ def sealed_snapshot() -> Snapshot:
             memory_max="1073741824",
             process_limit=(str(MAXIMUM_PROCESSES), str(MAXIMUM_PROCESSES)),
         ),
-        topology=sealed_topology(),
+        sends=sealed_sends(),
         identity=Identity(
             uid=0,
             euid=0,
-            gid=1000,
-            supplementary_gids=(1000,),
+            gid=0,
+            supplementary_gids=(0,),
             runtime_uid=1000,
             runtime_gid=1000,
             users={
@@ -281,9 +258,9 @@ def _stage_pod_roots(root: Path) -> None:
     for path, mode in MOUNT_ROOT_MODES.items():
         (root / path.lstrip("/")).chmod(mode)
     (root / QUEUE_MOUNT.lstrip("/")).chmod(OPEN_DIRECTORY_MODE)
-    claim = root / build_wire.SOCKET_DIRECTORY.lstrip("/")
-    claim.mkdir(parents=True)
-    claim.chmod(0o777)
+    key_mount = root / KEY_MOUNT.lstrip("/")
+    key_mount.mkdir(parents=True)
+    key_mount.chmod(WORLD_READABLE_EXECUTABLE)
     (root / "proc").chmod(WORLD_READABLE_EXECUTABLE)
     hostname = root / POD_HOSTNAME.lstrip("/")
     hostname.parent.mkdir()

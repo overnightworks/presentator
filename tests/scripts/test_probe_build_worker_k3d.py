@@ -142,7 +142,7 @@ def test_drive_passes_prints_every_life_and_interval_and_bounds_the_watch(
             7,
             1,
             "no init container",
-            f"exit {REFUSAL_EXIT_STATUS}, start refused: {Predicate.NO_ROUTE}",
+            f"exit {REFUSAL_EXIT_STATUS}, start refused: {Predicate.EGRESS}",
         ),
         (8, lives_module.LIVES, "remove-link 0", "exit 0, self-check passed"),
     ):
@@ -529,7 +529,7 @@ def test_cell_9_runs_and_prints_the_facts_when_cell_8_fails(
 ) -> None:
     world = World(
         streams=[
-            lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
+            lives_stream(1, Predicate.EGRESS, version=Version(init=False)),
             lives_stream(lives_module.LIVES, Predicate.MOUNTS),
         ]
     )

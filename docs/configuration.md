@@ -75,8 +75,9 @@ some of them.
 | `PRESENTATOR_BUILDS` | `builds` | Where built talks and PDFs are kept. |
 | `PRESENTATOR_BUILD_TIMEOUT_SECONDS` | `300` | Bound of each build step; the build worker reads it too. |
 | `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves; the build worker reads it too. |
-| `PRESENTATOR_BUILD_RUNNER` | `worker` | Builds through the build worker's socket and refuses to start unless the worker answers within 70 seconds. `host` builds on this machine instead, for a development run (without the sandbox, whose reason is in [constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons)). |
-| `PRESENTATOR_BUILD_WORKER_SOCKET` | `/run/presentator-build/worker.sock` | Where the web reaches the build worker; the default is where the worker binds, so set it only where the socket volume is mounted elsewhere. |
+| `PRESENTATOR_BUILD_RUNNER` | `worker` | Builds through the build workers and starts whether or not one answers; a build that finds none within 70 seconds fails as a worker outage. `host` builds on this machine instead, for a development run (without the sandbox, whose reason is in [constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons)). |
+| `PRESENTATOR_BUILD_WORKER_ADDRESS` | none | `host:port` of the build workers' Service; required with the `worker` runner and set together with the key file. |
+| `PRESENTATOR_BUILD_WORKER_KEY_FILE` | none | File holding the key (at least 32 characters, minus one trailing newline) that proves the web in the worker's hello; the worker reads the same secret through `--key-file`, as root only. |
 
 The build worker tolerates `PRESENTATOR_WORKER_SEAL` in its environment and reads it nowhere; the platform's manifest still sets it.
 

@@ -21,7 +21,7 @@ worker container's `args`, which are `--check`.
 
 Platform replaces a used pod and its log with it, so cells 7 and 8 judge their
 lives from one bounded watch of the worker pod. Cell 7 reads one life without
-init container and expects the self-check to refuse with no-route. Cell 8 reads
+init container and expects the self-check to refuse with egress. Cell 8 reads
 LIVES lives, each passing the whole self-check under `--check`, and expects,
 per life, a new uid, remove-link ending 0, one termination of the worker with
 exit 0 and restartCount 0; it prints each interval from a life's end to its
@@ -514,7 +514,7 @@ def drive_web(run: Run, overlay: list[Document]) -> str:
 
 def drive_cells(run: Run, overlay: list[Document]) -> list[str]:
     """Drive the control, its init-container twin, the residues, then the web."""
-    bare = Expectation(Predicate.NO_ROUTE, init_container=False, lives=1)
+    bare = Expectation(Predicate.EGRESS, init_container=False, lives=1)
     control = applied_documents(overlay, init_container=False)
     problems = [drive_cell(run, 7, control, bare)]
     stop_worker(run)

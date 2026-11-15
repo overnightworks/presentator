@@ -2,18 +2,18 @@
 
 import ctypes
 import grp
-import ipaddress
 import os
 import pwd
 import resource
 import stat
+import subprocess
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import partial
 from pathlib import Path, PurePosixPath
 
-from presentator.adapters import build_wire, rtnetlink
 from presentator.host.config import worker_settings_variables
 from presentator.host.worker_scratch import (
     OPEN_DIRECTORY_MODE,
@@ -57,9 +57,7 @@ MOUNT_ROOT_MODES = {
     TERMINATION_LOG: TERMINATION_LOG_MODE,
 }
 MASKED_AREAS = ("/proc", "/sys")
-JUDGED_MOUNTS = frozenset(
-    {"/", build_wire.SOCKET_DIRECTORY, QUEUE_MOUNT, *MOUNT_ROOT_MODES}
-)
+JUDGED_MOUNTS = frozenset({"/", QUEUE_MOUNT, *MOUNT_ROOT_MODES})
 TOOLCHAIN_PROJECT = "app/slidev"
 SLIDEV_BINARY = f"{TOOLCHAIN_PROJECT}/node_modules/.bin/slidev"
 SLIDEV_PACKAGE = f"{TOOLCHAIN_PROJECT}/node_modules/@slidev/cli"
@@ -113,12 +111,26 @@ ALLOWED_ENVIRONMENT_KEYS = frozenset(
     | worker_settings_variables()
 )
 
-LOOPBACK_NAME = "lo"
-LOOPBACK_ADDRESSES = frozenset(
-    {
-        (ipaddress.IPv4Address("127.0.0.1"), 8),
-        (ipaddress.IPv6Address("::1"), 128),
-    }
+# The probe sends one datagram to a documentation address, off the loopback.
+SEND_PROBE_PROGRAM = """\
+import errno
+import socket
+
+with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+    try:
+        probe.sendto(b"probe", ("192.0.2.1", 9))
+    except OSError as refused:
+        print(errno.errorcode[refused.errno])
+    else:
+        print("sent")
+"""
+SEND_PROBE_SECONDS = 5.0
+SEND_DROPPED = "EPERM"
+# The controller and the two uids that run a deck's code, each in its own process.
+PROBED_IDENTITIES: tuple[tuple[int, int] | None, ...] = (
+    None,
+    BUILD_IDENTITY,
+    WIRE_IDENTITY,
 )
 PR_GET_DUMPABLE = 3
 PR_SET_DUMPABLE = 4
@@ -130,7 +142,7 @@ class Predicate(StrEnum):
     NON_DUMPABLE = "non-dumpable"
     CAPABILITIES = "capabilities"
     MOUNTS = "mounts"
-    NO_ROUTE = "no-route"
+    EGRESS = "egress"
     RESOURCE_BOUNDS = "resource-bounds"
     IDENTITIES = "identities"
     ENVIRONMENT = "environment"
@@ -199,7 +211,7 @@ class Snapshot:
     process_status: str
     mounts: Mounts
     resource_bounds: ResourceBounds
-    topology: rtnetlink.Topology
+    sends: tuple[str, ...]
     identity: Identity
     environment_keys: frozenset[str]
     pid: int
@@ -276,7 +288,6 @@ def _mount_table_sealed(mounts: Mounts) -> bool:
             for mount in MOUNT_ROOT_MODES
             if mount != TERMINATION_LOG
         )
-        and build_wire.SOCKET_DIRECTORY in table
         and table.get(QUEUE_MOUNT, ("", frozenset()))[0] == "mqueue"
         and all(
             _fixed_up(mounts.table_roots.get(mount), mode)
@@ -299,26 +310,8 @@ def _mounts_sealed(snapshot: Snapshot) -> bool:
     )
 
 
-def _no_route(snapshot: Snapshot) -> bool:
-    topology = snapshot.topology
-    if len(topology.links) != 1:
-        return False
-    [link] = topology.links
-    return (
-        link.name == LOOPBACK_NAME
-        and bool(link.flags & rtnetlink.IFF_LOOPBACK)
-        and all(
-            found.link_index == link.index
-            and (found.ip_address, found.prefix_length) in LOOPBACK_ADDRESSES
-            for found in topology.addresses
-        )
-        and all(
-            found.output_link_index == link.index
-            and found.destination_prefix_length > 0
-            and not found.has_next_hop
-            for found in topology.routes
-        )
-    )
+def _egress_dropped(snapshot: Snapshot) -> bool:
+    return snapshot.sends == (SEND_DROPPED,) * len(PROBED_IDENTITIES)
 
 
 def _within_maximum(value: str) -> bool:
@@ -340,8 +333,8 @@ def _identities_sealed(snapshot: Snapshot) -> bool:
     return (
         identity.uid == 0
         and identity.euid == 0
-        and identity.gid == identity.runtime_gid
-        and identity.supplementary_gids == (identity.runtime_gid,)
+        and identity.gid == 0
+        and set(identity.supplementary_gids) <= {0}
         and build_user == BUILD_IDENTITY
         and wire_user == WIRE_IDENTITY
         and not unusable & {*BUILD_IDENTITY, *WIRE_IDENTITY}
@@ -383,7 +376,7 @@ SELF_CHECK: tuple[tuple[Predicate, Callable[[Snapshot], bool]], ...] = (
     (Predicate.NON_DUMPABLE, lambda snapshot: snapshot.dumpable == 0),
     (Predicate.CAPABILITIES, _capabilities_sealed),
     (Predicate.MOUNTS, _mounts_sealed),
-    (Predicate.NO_ROUTE, _no_route),
+    (Predicate.EGRESS, _egress_dropped),
     (Predicate.RESOURCE_BOUNDS, _resources_bounded),
     (Predicate.IDENTITIES, _identities_sealed),
     (Predicate.ENVIRONMENT, _environment_allowed),
@@ -552,7 +545,7 @@ UNREAD_RESOURCE_BOUNDS = ResourceBounds("", ("", ""))
 UNREAD_IDENTITY = Identity(-1, -1, -1, (), -1, -1, {})
 UNREAD_TOOLCHAIN = Toolchain(None, None, (), None)
 UNREAD_SCRATCH = Scratch(frozenset(), {})
-UNREAD_TOPOLOGY = rtnetlink.Topology((), (), ())
+UNREAD_SENDS: tuple[str, ...] = ()
 
 
 class _FactReader:
@@ -571,15 +564,43 @@ class _FactReader:
             return placeholder
 
 
-def read_snapshot(
-    root: Path, *, read_topology: Callable[[], rtnetlink.Topology]
-) -> Snapshot:
+def send_probe(identity: tuple[int, int] | None) -> str:
+    """What a new socket of the identity's process meets when it sends off the loopback.
+
+    The probe runs the datagram in a process of its own, as the identity (the
+    caller's own when None), so what is judged is what a deck's code would meet.
+    """
+    uid, gid = identity if identity is not None else (None, None)
+    try:
+        finished = subprocess.run(  # noqa: S603 - the interpreter and a fixed program
+            [sys.executable, "-I", "-c", SEND_PROBE_PROGRAM],
+            capture_output=True,
+            check=False,
+            cwd="/",
+            env={},
+            extra_groups=None if identity is None else [],
+            group=gid,
+            text=True,
+            timeout=SEND_PROBE_SECONDS,
+            user=uid,
+        )
+    except subprocess.TimeoutExpired:
+        return "timeout"
+    return finished.stdout.strip()
+
+
+def send_probes() -> tuple[str, ...]:
+    """The send probe of the controller and of each uid that runs a deck's code."""
+    return tuple(map(send_probe, PROBED_IDENTITIES))
+
+
+def read_snapshot(root: Path, *, read_sends: Callable[[], tuple[str, ...]]) -> Snapshot:
     """Read the facts the predicates judge, from the filesystem under `root`.
 
     A fact that cannot be read or decoded marks its predicate unreadable, so the
     self-check judges every predicate in order. The container's task count is
     read first and the scratch places right after it: no other fact is read and
-    no child is launched in between. The network topology is read after both.
+    no child is launched in between. The probes launch children, so they follow.
     """
     facts = _FactReader()
     read = facts.read
@@ -602,7 +623,7 @@ def read_snapshot(
         process_status=process_status,
         mounts=mounts,
         resource_bounds=resource_bounds,
-        topology=read(Predicate.NO_ROUTE, read_topology, UNREAD_TOPOLOGY),
+        sends=read(Predicate.EGRESS, read_sends, UNREAD_SENDS),
         identity=read(Predicate.IDENTITIES, _read_identity, UNREAD_IDENTITY),
         environment_keys=frozenset(os.environ),
         pid=os.getpid(),

@@ -710,7 +710,7 @@ def fixture_maker(
             delivered_outcome(web_module)
         )
         world.streams = world.streams or [
-            lives_stream(1, Predicate.NO_ROUTE, version=Version(init=False)),
+            lives_stream(1, Predicate.EGRESS, version=Version(init=False)),
             lives_stream(lives_module.LIVES, None),
         ]
         reference = f"{manifests_module.PRODUCTION_IMAGE}:{RELEASED_VERSION}{DIGEST}"

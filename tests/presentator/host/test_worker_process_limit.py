@@ -22,7 +22,11 @@ from tests.presentator.host.support.sealed_snapshot import (
     sealed_snapshot,
     with_resource_bounds,
 )
-from tests.presentator.host.support.worker_boundary import boundary_over
+from tests.presentator.host.support.worker_boundary import (
+    CHECK,
+    SERVE,
+    boundary_over,
+)
 
 UNLIMITED = "unlimited"
 MAXIMUM = str(MAXIMUM_PROCESSES)
@@ -165,8 +169,8 @@ def recording_boundary(
 @pytest.mark.parametrize(
     ("arguments", "events"),
     [
-        ([], ["prctl", "umask", "lower", "read", "settings", "serve"]),
-        (["--check"], ["prctl", "umask", "lower", "read"]),
+        (SERVE, ["prctl", "umask", "lower", "read", "settings", "serve"]),
+        (CHECK, ["prctl", "umask", "lower", "read"]),
     ],
 )
 def test_a_start_lowers_the_limit_before_the_snapshot_is_read(
@@ -180,7 +184,7 @@ def test_a_start_lowers_the_limit_before_the_snapshot_is_read(
 
 
 @pytest.mark.parametrize("failure", [OSError("denied"), ValueError("not allowed")])
-@pytest.mark.parametrize("arguments", [[], ["--check"]])
+@pytest.mark.parametrize("arguments", [SERVE, CHECK])
 def test_a_failed_lowering_refuses_the_start_before_the_snapshot_is_read(
     caplog: pytest.LogCaptureFixture, failure: Exception, arguments: list[str]
 ) -> None:

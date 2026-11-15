@@ -6,6 +6,8 @@ from presentator.host.config import WorkerSettings
 from presentator.host.worker import Boundary
 from presentator.host.worker_self_check import Snapshot
 
+SERVE = ["--port", "7100", "--key-file", "/run/secrets/key"]
+CHECK = ["--check"]
 LOADED_SETTINGS = WorkerSettings(build_timeout_seconds=45.0, build_output_megabytes=7)
 
 
@@ -37,6 +39,7 @@ def boundary_over(
         lower_process_limit=lambda: None,
         fix_up_mounts=lambda: None,
         read_snapshot=read_snapshot,
+        read_socket_table=lambda: "",
         load_settings=settings,
         serve=serve,
     )

@@ -38,14 +38,15 @@ from tests.support.step_support import (
 
 OWN_UID = os.getuid()
 
+# The hello key every test worker holds, written beside the port it serves.
+KEY = b"k" * 32
+LOCAL_ADDRESS = "127.0.0.1"
+
 
 UNUSED_WORK = Path("/unused/work")
 
 
 OWN_GID = os.getgid()
-
-
-FOREIGN_UID = OWN_UID + 1
 
 
 PRIVATE_MODE = 0o700
@@ -488,9 +489,21 @@ class ScriptedLife:
         )
 
 
+def free_port() -> int:
+    """A TCP port nothing listens on, as far as the kernel knows."""
+    with socket.socket() as probe:
+        probe.bind((LOCAL_ADDRESS, 0))
+        return probe.getsockname()[1]
+
+
+def port_of(volume: Path) -> int:
+    """The port the volume's worker serves."""
+    return int((volume / "port").read_text())
+
+
 @contextmanager
 def serving(
-    volume: Path, runtime_uid: int, admitted: int
+    volume: Path, admitted: int
 ) -> Generator[tuple[threading.Thread, list[Spawned], list[object]]]:
     life = ScriptedLife(connections_served_before_sweep_fails=admitted)
     handled = life.spawned
@@ -499,10 +512,8 @@ def serving(
     def run() -> None:
         outcome.append(
             worker.serve(
-                volume,
-                controller_uid=OWN_UID,
-                controller_gid=OWN_GID,
-                runtime_uid=runtime_uid,
+                port=int((volume / "port").read_text()),
+                key=(volume / "key").read_bytes(),
                 serving=life.serving(),
             )
         )
@@ -548,11 +559,25 @@ def wake_until_ended(volume: Path, thread: threading.Thread) -> None:
             thread.join(min(0.05, time_left))
 
 
-def connect(volume: Path, timeout: float = WAIT_SECONDS) -> socket.socket:
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+def connect(
+    volume: Path, timeout: float = WAIT_SECONDS, key: bytes = KEY
+) -> socket.socket:
+    """A connection to the volume's worker whose hello is proven under the key."""
+    client = connect_unproven(volume, timeout)
+    try:
+        build_wire.answer_hello(client, key)
+    except BaseException:
+        client.close()
+        raise
+    client.settimeout(timeout)
+    return client
+
+
+def connect_unproven(volume: Path, timeout: float = WAIT_SECONDS) -> socket.socket:
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         client.settimeout(timeout)
-        client.connect(str(volume / build_wire.SOCKET_NAME))
+        client.connect((LOCAL_ADDRESS, port_of(volume)))
     except BaseException:
         client.close()
         raise
@@ -569,7 +594,7 @@ def connect_when_bound(
     while still_serving() and time.monotonic() < deadline:
         try:
             return connect(volume, timeout)
-        except FileNotFoundError, ConnectionRefusedError:
+        except FileNotFoundError, ConnectionRefusedError, ConnectionResetError:
             continue
     pytest.fail("the worker did not start serving")
 
@@ -629,8 +654,7 @@ class BoundedListener(socket.socket):
 def listening_with(
     volume: Path, accepts: int, listener_class: type[BoundedListener] = BoundedListener
 ) -> BoundedListener:
-    worker.prepare_socket_directory(volume, OWN_UID, OWN_GID)
-    plain = worker.bind_socket(volume, OWN_UID, OWN_GID)
+    plain = worker.bind_listener(port_of(volume))
     listener = listener_class(fileno=plain.detach())
     listener.accepts_left = accepts
     worker.start_listening(listener)
