@@ -26,10 +26,10 @@ from tests.support.copresenter_support import (
     the_token_endpoint_goes_down,
     the_token_thread_fails,
 )
+from tests.support.hearing_endings import BROWSER_ENDINGS
 from tests.support.leak_support import everything_shown
 from tests.support.lobby import A_SPEECH_SCOPE, A_TALK_ADDRESS
 from tests.support.speech_drive import (
-    BROWSER_ENDINGS,
     LEAK_HEARINGS,
     ORIGIN,
     THREAD_WAIT_SECONDS,
@@ -47,15 +47,19 @@ from tests.support.speech_service import (
     FakeSpeechService,
     RawPeer,
     Served,
+    a_completed,
     a_failed_item,
     a_loopback_server,
     a_served_origin,
     accept_and_stay_silent,
     an_error_event,
     denying,
+    draining,
     never_answers,
     nobody_listens,
+    one_after_another,
     reading,
+    sending,
     sending_then_reading,
 )
 from tests.support.talk_support import Hosts
@@ -125,7 +129,7 @@ def test_the_browser_gets_each_transcript_then_the_close_the_service_ended_with(
     tmp_path: Path, case: str
 ) -> None:
     ending = BROWSER_ENDINGS[case]
-    service = FakeSpeechService(realtime=ending.hear)
+    service = FakeSpeechService(realtime=ending.hear())
     with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
         heard = hear_and_record(instance)
 
@@ -368,6 +372,22 @@ def test_one_hearing_makes_one_refresh_grant_and_one_workload_grant(
 
     assert grants == ["refresh_token", "client_credentials"]
     assert instance.hosts.issuer.workload_scopes == [A_SPEECH_SCOPE]
+
+
+def test_a_hearing_the_service_drained_reopens_on_tokens_granted_again(
+    tmp_path: Path,
+) -> None:
+    service = FakeSpeechService(
+        realtime=one_after_another(draining(), sending(a_completed("Wieder da.")))
+    )
+    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+        before = len(instance.hosts.issuer.grant_types)
+        heard = hear_and_record(instance)
+        grants = instance.hosts.issuer.grant_types[before:]
+
+    assert heard.closed_with == HopClose.NORMAL
+    assert len(service.upgrades) > 1
+    assert grants == ["refresh_token", "client_credentials"] * len(service.upgrades)
 
 
 def test_a_second_hearing_the_service_finds_busy_closes_4429_on_the_second_only(

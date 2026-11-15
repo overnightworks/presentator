@@ -26,6 +26,7 @@ from presentator.contracts.copresenter import (
     HearingTranscript,
     Question,
     SpeechTokens,
+    SpeechTokenSource,
 )
 from presentator.contracts.models import Role
 from presentator.contracts.voice import SampleLanguage
@@ -139,11 +140,17 @@ class CoPresenterUse:
                 _LOGGER.info("co-presenter first audio: ms=%d", elapsed * _MILLISECONDS)
             yield event
 
-    async def hearing_tokens(self, session_id: str) -> SpeechTokens:
-        """The session's speech tokens, for the route to hold while it hears.
+    async def hearing_tokens(self, session_id: str) -> SpeechTokenSource:
+        """The session's speech tokens, read now, for the route to hold while it hears.
 
-        Raises CoPresenterUnavailableError when they cannot be had.
+        The source gives these for the first opening of the service and tokens read
+        afresh for each later one. Raises CoPresenterUnavailableError when they
+        cannot be had.
         """
+        first = await self._read_tokens(session_id)
+        return _OpeningTokens(first, lambda: self._read_tokens(session_id))
+
+    async def _read_tokens(self, session_id: str) -> SpeechTokens:
         tokens = await self.person_access.speech_tokens_of(session_id)
         if isinstance(tokens, AccessRefusal):
             raise CoPresenterUnavailableError
@@ -153,17 +160,31 @@ class CoPresenterUse:
         self,
         browser: HearingSocket,
         language: str,
-        tokens: SpeechTokens,
+        tokens: SpeechTokenSource,
         *,
         ended: asyncio.Event,
         heard: Callable[[HearingTranscript], Awaitable[None]],
     ) -> None:
-        """Hear for the person these tokens name until the hearing ends."""
+        """Hear for the person whose tokens these are until the hearing ends."""
         await self.speech.relay(browser, language, tokens, ended=ended, heard=heard)
 
     async def refuse_hearing(self, browser: HearingSocket) -> None:
         """Close the browser as a hearing the service cannot give."""
         await self.speech.refuse(browser)
+
+
+@dataclass(slots=True)
+class _OpeningTokens:
+    """The tokens of each opening of a hearing: the one in hand, then fresh ones."""
+
+    first: SpeechTokens | None
+    read_fresh: Callable[[], Awaitable[SpeechTokens]]
+
+    async def __call__(self) -> SpeechTokens:
+        if self.first is None:
+            return await self.read_fresh()
+        tokens, self.first = self.first, None
+        return tokens
 
 
 BUSY_RETRY_SECONDS = 1

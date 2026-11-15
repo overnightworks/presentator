@@ -42,7 +42,7 @@ from presentator.contracts.copresenter import (
     Question,
     Sentence,
     ShowSlide,
-    SpeechTokens,
+    SpeechTokenSource,
 )
 from presentator.contracts.decks import MAXIMUM_NAME_BYTES
 from presentator.contracts.voice import SampleLanguage
@@ -406,7 +406,7 @@ async def _read_tokens(
     session_id: str,
     use: CoPresenterUse,
     session_watch: asyncio.Task[None],
-) -> SpeechTokens | None:
+) -> SpeechTokenSource | None:
     """The session's tokens, or None once the socket has been closed instead."""
     read = asyncio.create_task(use.hearing_tokens(session_id))
     try:
@@ -428,7 +428,7 @@ async def _relay(
     socket: WebSocket,
     *,
     language: str,
-    tokens: SpeechTokens,
+    tokens: SpeechTokenSource,
     use: CoPresenterUse,
     session_watch: asyncio.Task[None],
 ) -> None:

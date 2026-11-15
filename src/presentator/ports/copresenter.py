@@ -18,6 +18,7 @@ if TYPE_CHECKING:
         HearingTranscript,
         ShowSlide,
         SpeechTokens,
+        SpeechTokenSource,
     )
     from presentator.contracts.decks import Deck, Source
 
@@ -59,16 +60,18 @@ class SpeechHearing(Protocol):
         self,
         browser: HearingSocket,
         language: str,
-        tokens: SpeechTokens,
+        tokens: SpeechTokenSource,
         *,
         ended: asyncio.Event,
         heard: Callable[[HearingTranscript], Awaitable[None]],
     ) -> None:
-        """Hear for the person these tokens name until the hearing ends.
+        """Hear for the person whose tokens `tokens` reads until the hearing ends.
 
         Relays the browser's audio to the service and hands each transcript to
-        `heard`. Closes the browser socket with the code of how the hearing
-        ended, and ends it at once when `ended` is set. A browser that left,
+        `heard`. The service is reopened after a drain or a cut and `tokens` is
+        read again for each opening. Closes the browser socket with the code of
+        how the hearing ended, and ends it at once when `ended` is set; tokens
+        that cannot be read end it as a service failure. A browser that left,
         or an unexpected failure, passes to the caller.
         """
         ...
