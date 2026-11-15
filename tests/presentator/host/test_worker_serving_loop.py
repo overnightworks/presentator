@@ -25,12 +25,12 @@ from tests.support.worker_support import (
     ACCEPT_TIME,
     CHILD_LEG,
     CONNECTIONS,
-    HELLO,
     IDLE_LEG,
     KEY,
     SENDER_LEG,
     STATUS,
     UNUSED_WORK,
+    VALID_STEP,
     WAIT_SECONDS,
     BoundedListener,
     ScriptedLife,
@@ -69,6 +69,26 @@ def helloing(volume: Path, hello: Callable[[socket.socket], None]) -> socket.soc
 
 def a_proven_hello(client: socket.socket) -> None:
     build_wire.answer_hello(client, KEY)
+
+
+def reading_after_a_proven_hello(volume: Path) -> Callable[[], bytes]:
+    """A client that proves the hello in a thread, then reads; the call is its read."""
+    client = connected(volume)
+    read: list[bytes] = []
+
+    def prove_then_read() -> None:
+        a_proven_hello(client)
+        read.append(client.recv(1))
+
+    thread = threading.Thread(target=prove_then_read, daemon=True)
+    thread.start()
+    _CLIENTS.callback(thread.join)
+
+    def what_the_client_read() -> bytes:
+        thread.join(WAIT_SECONDS)
+        return read[0]
+
+    return what_the_client_read
 
 
 def connected_when_bound(
@@ -409,9 +429,9 @@ def test_a_failing_step_ends_the_life_and_leaves_the_watchdog_armed(
 ) -> None:
     life = make_life()
     with listening_with(volume, accepts=1) as listener:
-        client = connected(volume)
+        what_the_client_read = reading_after_a_proven_hello(volume)
         outcome = accept_from(life, listener, real_hello=True)
-        assert client.recv(1) == b""
+        assert what_the_client_read() == b""
 
     assert outcome == life_end
     assert life.events == events
@@ -684,8 +704,8 @@ def test_serve_cuts_a_stalled_header_off_and_serves_the_next_connection_in_one_l
     try:
         first = connected_when_bound(volume, thread.is_alive)
         assert first.recv(1) == b""
-        second = connected(volume)
-        second.sendall(HELLO)
+        second = connected_when_bound(volume, thread.is_alive)
+        second.sendall(VALID_STEP)
         assert second.recv(len(STATUS)) == STATUS
         thread.join(WAIT_SECONDS)
     finally:
@@ -721,10 +741,10 @@ def test_the_header_budget_covers_the_gate_and_the_release_as_well_as_the_wait(
 ) -> None:
     life = ScriptedLife(inspection_takes=inspection_takes, release_takes=release_takes)
     with listening_with(volume, accepts=1) as listener:
-        client = connected(volume)
+        what_the_client_read = reading_after_a_proven_hello(volume)
         with pytest.raises(StopServingError):
             accept_from(life, listener, real_hello=True)
-        assert client.recv(1) == b""
+        assert what_the_client_read() == b""
 
     assert life.events == events
     assert life.budgets_waited == budgets

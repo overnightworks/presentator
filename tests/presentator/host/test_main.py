@@ -183,11 +183,17 @@ def test_the_public_origin_must_be_one_canonical_https_origin(
         load_settings()
 
 
+def a_worker_to_reach(environment: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    environment.setenv("PRESENTATOR_BUILD_WORKER_ADDRESS", "build-worker:7100")
+    environment.setenv("PRESENTATOR_BUILD_WORKER_KEY_FILE", str(tmp_path / "key"))
+
+
 def test_an_instance_that_says_nothing_about_where_builds_run_builds_in_the_worker(
-    environment: pytest.MonkeyPatch,
+    environment: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Cell B26: an unset runner builds in the worker."""
     environment.delenv("PRESENTATOR_BUILD_RUNNER")
+    a_worker_to_reach(environment, tmp_path)
 
     assert load_settings().build_runner is WhereBuildsRun.WORKER
 
@@ -198,10 +204,12 @@ def test_an_instance_that_says_nothing_about_where_builds_run_builds_in_the_work
 )
 def test_a_runner_an_instance_names_is_the_one_it_builds_with(
     environment: pytest.MonkeyPatch,
+    tmp_path: Path,
     given: str,
     runs: WhereBuildsRun,
 ) -> None:
     """Cell B26: the worker and the host are the runners an instance may name."""
+    a_worker_to_reach(environment, tmp_path)
     environment.setenv("PRESENTATOR_BUILD_RUNNER", given)
 
     assert load_settings().build_runner is runs

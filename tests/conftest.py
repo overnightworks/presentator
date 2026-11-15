@@ -120,6 +120,10 @@ def bare_environment(
     monkeypatch.setenv("PRESENTATOR_AGENT__API_GROUP", AN_API_GROUP)
     monkeypatch.setenv("PRESENTATOR_SPEECH_SERVICE", A_SPEECH_SERVICE)
     monkeypatch.setenv("PRESENTATOR_SPEECH_SERVICE_SCOPE", A_SPEECH_SCOPE)
+    # These tests are about the lobby this root composes, not about where a
+    # deck's code runs; the development run is what asks nothing of the build
+    # worker, whose default the tests about the sandbox say so themselves.
+    monkeypatch.setenv("PRESENTATOR_BUILD_RUNNER", "host")
     return monkeypatch
 
 
@@ -128,10 +132,6 @@ def environment(
     bare_environment: pytest.MonkeyPatch, tmp_path: Path
 ) -> pytest.MonkeyPatch:
     configure_secret_key(bare_environment, tmp_path, INSTANCE_KEY)
-    # These tests are about the lobby this root composes, not about where a
-    # deck's code runs; the development run is what asks nothing of the build
-    # worker, whose default the tests about the sandbox say so themselves.
-    bare_environment.setenv("PRESENTATOR_BUILD_RUNNER", "host")
     return bare_environment
 
 
