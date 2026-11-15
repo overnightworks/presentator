@@ -152,8 +152,9 @@ def test_a_build_that_delivers_with_no_worker_is_not_an_outage(
 ) -> None:
     world = World(client_stdout=client_output(delivered(web_module)))
     world.outage_stdout = world.client_stdout
+    fixture = make_fixture(world)
     with pytest.raises(SystemExit):
-        make_fixture(world).drive()
+        fixture.drive()
     assert "did not end as an outage" in capsys.readouterr().err
 
 
