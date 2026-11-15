@@ -342,6 +342,14 @@ def test_the_settings_keys_pass_the_environment_predicate() -> None:
     assert worker_self_check.first_failing_predicate(snapshot) is None
 
 
+def test_the_loglines_release_and_level_keys_pass_the_environment_predicate() -> None:
+    snapshot = with_fields(
+        environment_keys=frozenset({"PATH", "SERVICE_VERSION", "LOG_LEVEL"})
+    )(sealed_snapshot())
+
+    assert worker_self_check.first_failing_predicate(snapshot) is None
+
+
 def test_the_real_boundary_serves_the_port_with_the_key_bounded_by_the_settings(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
