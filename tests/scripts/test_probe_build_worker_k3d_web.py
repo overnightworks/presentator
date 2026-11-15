@@ -476,8 +476,9 @@ def test_a_failing_secret_apply_refuses_without_the_value_its_stderr_echoes(
     effects = dataclasses.replace(fixture.run.effects, run=echoing)
     run = dataclasses.replace(fixture.run, effects=effects)
     secret = {"kind": "Secret", "stringData": {"key": f"{GENERATED_VALUE}x"}}
+    apply_secrets = load_script("probe_build_worker_k3d_web").apply_secrets
     with pytest.raises(SystemExit):
-        load_script("probe_build_worker_k3d_web").apply_secrets(run, [secret])
+        apply_secrets(run, [secret])
     err = capsys.readouterr().err
     assert "Secret" in err
     assert GENERATED_VALUE not in err
