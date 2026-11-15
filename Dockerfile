@@ -165,6 +165,10 @@ ENV PRESENTATOR_DATABASE=/data/database/presentator.sqlite3 \
     PRESENTATOR_LOBBY_BUILD=/app/lobby \
     PRESENTATOR_HOST=0.0.0.0 \
     PRESENTATOR_LOCAL_SOURCES_MOUNT=/data/local-sources
+# logline writes this release as the version of every log line; the release
+# workflow passes it.
+ARG SERVICE_VERSION
+ENV SERVICE_VERSION=$SERVICE_VERSION
 USER ${PRESENTATOR_RUNTIME_UID}
 WORKDIR /app
 EXPOSE 8000

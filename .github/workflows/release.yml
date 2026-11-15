@@ -36,6 +36,7 @@ jobs:
     uses: overnightworks/quality/.github/workflows/image.yml@853a9545c26aaa884896223b87a2505d2b918e31 # v0.17.0
     with:
       version: ${{ inputs.version }}
+      build-args: SERVICE_VERSION=${{ inputs.version }}
       push: true
       reproducible-layers: true
 
