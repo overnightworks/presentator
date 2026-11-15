@@ -129,10 +129,13 @@ convention = "google"
 "scripts/probe_build_worker_k3d_cluster.py" = ["INP001"]
 "scripts/probe_build_worker_k3d_lives.py" = ["INP001"]
 "scripts/probe_build_worker_k3d_manifests.py" = ["INP001"]
+"scripts/probe_build_worker_k3d_web.py" = ["INP001"]
 "scripts/probe_build_worker_starts.py" = ["INP001"]
 "scripts/probe_build_worker_web.py" = ["INP001"]
 "scripts/probe_build_worker/plant_residue.py" = ["INP001"]
 "scripts/probe_build_worker/web_client.py" = ["INP001"]
+"scripts/probe_build_worker/hello_client.py" = ["INP001"]
+"scripts/probe_build_worker/egress_probe.py" = ["INP001"]
 "scripts/render_probe/probe_judge.py" = ["INP001"]
 "scripts/render_probe/probe_client.py" = ["INP001"]
 # design-catalogs writes this module and design --check holds it current, so its

@@ -144,7 +144,7 @@ def test_drive_passes_prints_every_life_and_interval_and_bounds_the_watch(
             "no init container",
             f"exit {REFUSAL_EXIT_STATUS}, start refused: {Predicate.EGRESS}",
         ),
-        (8, lives_module.LIVES, "remove-link 0", "exit 0, self-check passed"),
+        (8, lives_module.LIVES, "nft-rules 0", "exit 0, self-check passed"),
     ):
         lives = [line for line in lines if line.startswith(f"cell {cell}: life")]
         assert len(lives) == count
@@ -157,7 +157,11 @@ def test_drive_passes_prints_every_life_and_interval_and_bounds_the_watch(
     intervals = [line for line in lines if line.startswith("cell 8: interval")]
     assert len(intervals) == lives_module.LIVES - 1
     assert all("3 s" in line and "resolution" in line for line in intervals)
-    *_, (_, budget, *_rest) = fixture.world.issued("timeout")
+    *_, (_, budget, *_rest) = [
+        command
+        for command in fixture.world.issued("timeout")
+        if command[2:5] == ("kubectl", "get", "pods")
+    ]
     assert int(budget) >= (
         lives_module.TERMINATION_WINDOW_SECONDS
         + (lives_module.LIVES - 1) * CONNECT_WINDOW_SECONDS
@@ -571,10 +575,10 @@ def a_failed_remove_link(refusal: Predicate | None) -> Document:
         (another_predicate, "no 'start refused"),
         (a_failed_end, "exit status 1"),
         (a_restart, "restartCount is 1"),
-        (a_failed_remove_link, "remove-link ended as 1"),
+        (a_failed_remove_link, "nft-rules ended as 1"),
         (an_unterminated_end, "before its worker terminated"),
     ],
-    ids=["another predicate", "a failed plant", "a restart", "remove-link", "no end"],
+    ids=["another predicate", "a failed plant", "a restart", "nft-rules", "no end"],
 )
 def test_a_residue_twin_that_does_not_end_as_expected_fails_the_cell_naming_it(
     make_fixture: Callable[..., Fixture],

@@ -3,7 +3,7 @@
 A cell's worker pods are replaced by platform, so a cell judges its lives from
 one watch. `read_lives` folds the watch's events into `Life` records, the
 judgements name the first life or interval that is not what the cell expects,
-and `report_lives` prints each life's uid, remove-link's exit, restart count and
+and `report_lives` prints each life's uid, nft-rules exit, restart count and
 how it ended.
 """
 
@@ -25,6 +25,7 @@ from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import Predicate
 
 WORKER_POD = "build-worker-0"
+WORKER_SELECTOR = "app.kubernetes.io/name=build-worker"
 # What the kubelet reports for a container whose sandbox was lost.
 LOST_SANDBOX_REASON = "ContainerStatusUnknown"
 TERMINATION_WINDOW_SECONDS = 180
@@ -142,8 +143,8 @@ def await_pod(
     return poll(run, lambda: read_pod(run, name), done, {})
 
 
-def remove_link_problem(life: Life) -> str | None:
-    """Why the life's remove-link did not end with exit status 0."""
+def rules_problem(life: Life) -> str | None:
+    """Why the life's nft-rules init container did not end with exit status 0."""
     if life.init_exit != 0:
         return f"{INIT_CONTAINER} ended as {life.init_exit}, expected exit status 0"
     return None
@@ -279,11 +280,11 @@ def interval_problem(number: int, lives: list[Life]) -> str | None:
 
 
 def report_lives(number: int, lives: list[Life], refusal: Predicate | None) -> None:
-    """Print every life's uid, remove-link's exit, restart count and worker end."""
+    """Print every life's uid, nft-rules exit, restart count and worker end."""
     for position, life in enumerate(lives, start=1):
-        link = f"remove-link {life.init_exit}" if life.has_init else "no init container"
+        init = f"nft-rules {life.init_exit}" if life.has_init else "no init container"
         who = (
-            f"cell {number}: life {position}, uid {life.uid}, {link}, "
+            f"cell {number}: life {position}, uid {life.uid}, {init}, "
             f"restarts {life.restarts}"
         )
         if refusal is None:

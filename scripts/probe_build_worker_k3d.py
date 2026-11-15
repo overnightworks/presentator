@@ -13,19 +13,22 @@ that commit and k3d, kubectl and docker are on PATH, proves that the overlay
 rendering the probe image differs from platform's own render only in the
 production image fields of every pod template, then drives its cells in a
 single-server k3d cluster at platform's K3S_VERSION. Cells 7 and 8 apply the
-PersistentVolumeClaims, ServiceAccounts and worker StatefulSet of
-`apps/presentator`; the applied copy differs from the render only in the worker
-container's `terminationMessagePolicy` (so a refusal reaches the terminated
-state's message), in cell 7 in the deleted init container, and in cell 8 in the
-worker container's `args`, which are `--check`.
+PersistentVolumeClaims, ServiceAccounts, the workers' Service, NetworkPolicy and
+packet-filter ConfigMap and the worker StatefulSet of `apps/presentator`; the
+applied copy differs from the render only in the worker container's
+`terminationMessagePolicy` (so a refusal reaches the terminated state's
+message), in its replicas (one until cell 11), in cell 7 in the deleted init
+container, and in cell 8 in the worker container's `args`, which are `--check`.
 
 Platform replaces a used pod and its log with it, so cells 7 and 8 judge their
 lives from one bounded watch of the worker pod. Cell 7 reads one life without
 init container and expects the self-check to refuse with egress. Cell 8 reads
 LIVES lives, each passing the whole self-check under `--check`, and expects,
-per life, a new uid, remove-link ending 0, one termination of the worker with
-exit 0 and restartCount 0; it prints each interval from a life's end to its
-successor's start, which must stay below the web's HELLO retry window.
+per life, a new uid, nft-rules ending 0, one termination of the worker with
+exit 0 and restartCount 0, which includes the self-check's egress probe: a new
+socket of root, the build user and the wire user gets EPERM. It prints each
+interval from a life's end to its successor's start, which must stay below the
+web's connect window.
 
 Cell 9 runs after cell 8, whether or not it failed, on the StatefulSet's pod
 spec of cell 8 with the StatefulSet deleted and its pod gone. It prints the
@@ -35,32 +38,36 @@ control `nothing`, which plants no residue and ends 0 with the self-check
 passed under `--check`, and one twin per residue of
 REFUSALS. Each twin plants its residue with the planter, passed as
 `python -I -c`, and becomes the worker; it must end with exit 2 and refuse with
-the predicate its residue belongs to, with remove-link 0 and restartCount 0,
+the predicate its residue belongs to, with nft-rules 0 and restartCount 0,
 judged from its terminated state. A twin that does not end within the
 termination window fails the cell and no later twin starts. Every twin is
 deleted before the cell returns.
 
-Cell 10 runs after cell 9 and starts the web as platform renders it, at the
-pin: the render's ConfigMap and Deployment, applied unaltered, and a Secret the
-driver generates. The Secret's name and keys come from the Deployment's
-`secrets` volume and the files its environment names under that volume's mount,
-and each value comes from the effect `secret`, 64 hex characters from `secrets`
-in a real run. The values go to `kubectl apply` on stdin only and never to a
-printed line, an error, an argument or a file; they live in the run's cluster.
-The cell awaits the web's log with the text its composition root logs while it
-waits for the worker, reads the Pod once (not Ready, its container not
-terminated), then applies the worker's documents as cell 8 does but without
-`--check`. It awaits the web's Ready condition and judges the web's restartCount
-(0), the worker pod's remove-link (exit 0) and that Ready came after the worker
-container started. A failure prints the web's log and its previous life's.
+Cells 10 to 13 run after cell 9 on the web as platform renders it, at the pin:
+the render's ConfigMap and Deployment, applied unaltered, and Secrets the driver
+generates. The Secrets' names and keys come from the Deployment's `secrets`
+volume (the files its environment names under the mount, and the workers' key
+that the volume projects), each value from the effect `secret`, 64 hex
+characters from `secrets` in a real run. The values go to `kubectl apply` on
+stdin only and never to a printed line, an error, an argument or a file; they
+live in the run's cluster. The Secrets go in before cell 7, as the worker pods
+mount the workers' key.
 
-Cell 11 runs after cell 10 passed, with the web Ready and the worker serving:
-it copies `examples/hello-deck` into the web pod's `emptyDir` with `kubectl cp`
-and runs the web's own client there with `kubectl exec`, so the deck and the
-client cross no network but the run's own API server. The web's composition
-builds and exports the deck through the worker, whose life ends with each step;
-the client reads the talk's page and the PDF in the web pod. The cell is judged
-by the client's outcome and by a new worker pod with remove-link 0 and restarts 0.
+Cell 10 awaits the web Ready with no worker pod and no Service, restartCount 0,
+copies `examples/hello-deck` into the web pod's `emptyDir` with `kubectl cp` and
+runs the web's own client there with `kubectl exec`: its first step must end
+unavailable, an outage with no failure of its own. Cell 11 applies the workers'
+documents with two replicas, runs two web pods and builds hello-deck in each
+through the one Service; each web's client builds and exports, a worker's life
+ends with each step, and the first build's two steps must have replaced both
+worker pods, so its second step reached the idle worker while the first
+restarted. Cell 12 runs a program in a web pod that answers the workers'
+challenge under a wrong key and under the right key with the other direction's
+label: both are refused, a true hello is served, and both worker pods keep their
+uids and stay Ready, so no life was spent. Cell 13 runs a program in a worker
+pod that, as the build user and as the wire user, opens a new connection to the
+loopback, which must connect, and to the web pod and the other worker pod, which
+must end in EPERM; the replies of accepted connections passed in cell 11.
 
 With `--image REF` the drive runs on the image `release.yml` published instead
 of one it builds, and only on a CI runner. REF is exactly
@@ -107,16 +114,13 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 from probe_build_worker_harness import REPOSITORY, refuse, say
-from probe_build_worker_k3d_builds import drive_build
 from probe_build_worker_k3d_cluster import (
     IN_NAMESPACE,
     NAMESPACE,
     PLATFORM_COMMIT,
-    Completed,
     Document,
     Effects,
     Run,
@@ -137,25 +141,26 @@ from probe_build_worker_k3d_lives import (
     Expectation,
     Life,
     await_pod,
-    container_status,
     interval_problem,
     life_problem,
     lives_problem,
-    poll,
-    read_pod,
-    remove_link_problem,
     report_lives,
     watch_lives,
 )
 from probe_build_worker_k3d_manifests import (
     PRODUCTION_IMAGE,
-    WEB_CONTAINER,
     WORKER_CONTAINER,
     applied_documents,
     namespace_document,
     prove_render,
-    throwaway_secret,
+    throwaway_secrets,
     web_documents,
+)
+from probe_build_worker_k3d_web import (
+    apply_secrets,
+    print_web_logs,
+    web_cells,
+    web_selector,
 )
 from probe_build_worker_starts import (
     CHECK_ARGUMENT,
@@ -163,7 +168,6 @@ from probe_build_worker_starts import (
     RESIDUE_SOURCE,
 )
 
-from presentator.host.main import WAITING_FOR_THE_WORKER
 from presentator.host.worker import REFUSAL_EXIT_STATUS
 from presentator.host.worker_self_check import BUILD_IDENTITY, Predicate
 
@@ -327,193 +331,30 @@ def drive_residues(run: Run, overlay: list[Document]) -> list[str]:
     return [f"cell 9: {problem}" for problem in problems]
 
 
-def web_selector(deployment: Document) -> str:
-    """The Deployment's `spec.selector.matchLabels` as a label selector."""
-    labels = deployment["spec"]["selector"]["matchLabels"]
-    return ",".join(f"{key}={value}" for key, value in labels.items())
-
-
-def apply_secret(run: Run, secret: Document) -> None:
-    """Apply the Secret from stdin; a failure names only the exit status.
-
-    The command's stderr is not quoted: a rejected object may be echoed in it.
-    """
-    done = run("kubectl apply --filename -", stdin=json.dumps(secret), check=False)
-    if done.returncode:
-        refuse(f"applying the Secret ended {done.returncode}")
-
-
-def web_pod(run: Run, selector: str) -> Document | None:
-    """The web's Pod, or none while there is no Pod or kubectl cannot list it."""
-    answer = run(
-        "kubectl get pods --output json",
-        *("--selector", selector, *IN_NAMESPACE),
-        check=False,
-    )
-    items: list[Document] = (
-        json.loads(answer.stdout)["items"] if answer.returncode == 0 else []
-    )
-    return items[0] if items else None
-
-
-def web_logs(run: Run, selector: str, *options: str) -> Completed:
-    """What `kubectl logs` gives for the web's Pod."""
-    return run(
-        "kubectl logs --selector",
-        selector,
-        *("--tail=-1", *options, *IN_NAMESPACE),
-        check=False,
-    )
-
-
-def web_log(run: Run, selector: str) -> str | None:
-    """The web's log, or none while kubectl has none to give."""
-    answer = web_logs(run, selector)
-    return answer.stdout if answer.returncode == 0 else None
-
-
-def ready_since(pod: Document) -> str | None:
-    """When the Pod's Ready condition last turned True; none if it is not Ready."""
-    conditions = pod.get("status", {}).get("conditions", [])
-    ready = next((c for c in conditions if c["type"] == "Ready"), Document())
-    return ready.get("lastTransitionTime") if ready.get("status") == "True" else None
-
-
-def control_problem(pod: Document | None) -> str | None:
-    """Why the web that logged its wait is not waiting, not Ready and alive."""
-    if pod is None:
-        return "no web Pod could be read after its wait was logged"
-    if ready_since(pod):
-        return "the web was Ready before the worker started"
-    if "terminated" in container_status(pod, WEB_CONTAINER).get("state", {}):
-        return "the web's container terminated before the worker started"
-    return None
-
-
-def seconds_after_start(web: Document, worker: Document) -> float | None:
-    """How long after the worker container started the web turned Ready."""
-    state = container_status(worker, WORKER_CONTAINER).get("state", Document())
-    began: Document = state.get("running") or state.get("terminated") or Document()
-    started: str | None = began.get("startedAt")
-    ready = ready_since(web)
-    if started is None or ready is None:
-        return None
-    return (
-        datetime.fromisoformat(ready) - datetime.fromisoformat(started)
-    ).total_seconds()
-
-
-def ready_problem(web: Document, worker: Document | None) -> str | None:
-    """Why the Ready web is not one that never refused and followed the worker."""
-    restarts = web_restarts(web)
-    if restarts:
-        return f"the web's restartCount is {restarts}, expected 0"
-    if worker is None:
-        return f"the worker Pod {WORKER_POD} cannot be read"
-    if problem := remove_link_problem(
-        Life(worker["metadata"]["uid"]).after(worker, deleted=False)
-    ):
-        return problem
-    after = seconds_after_start(web, worker)
-    if after is None:
-        return "the worker container has not started"
-    if after < 0:
-        return f"the web was Ready {-after:g} s before the worker started"
-    return None
-
-
-def web_restarts(web: Document) -> int:
-    """The web container's restartCount."""
-    return container_status(web, WEB_CONTAINER).get("restartCount", 0)
-
-
-def report_control(web: Document) -> None:
-    """Print what the web's Pod shows while it waits for the worker."""
-    (state, *_) = container_status(web, WEB_CONTAINER).get("state", {"unknown": {}})
-    say(
-        f"cell 10: control: the web logged its wait, Ready False, "
-        f"container {state}, restarts {web_restarts(web)}"
-    )
-
-
-def report_web(web: Document, worker: Document) -> None:
-    """Print how long after the worker started the web was Ready."""
-    life = Life(worker["metadata"]["uid"]).after(worker, deleted=False)
-    say(
-        f"cell 10: the web waited, then was Ready "
-        f"{seconds_after_start(web, worker):g} s after the worker started "
-        f"(web restarts {web_restarts(web)}; worker pod {life.uid}, "
-        f"{worker['status']['phase']}, restarts {life.restarts})"
-    )
-
-
-def judge_web(run: Run, selector: str, worker: str) -> str | None:
-    """Judge the web's wait as the control, start the worker, judge the web's Ready."""
-    waiting = WAITING_FOR_THE_WORKER.split("%", 1)[0]
-    _, logged = poll(
-        run, lambda: web_log(run, selector), lambda log: waiting in log, ""
-    )
-    if not logged:
-        return f"the web did not log its wait within {TERMINATION_WINDOW_SECONDS} s"
-    waiting_pod = web_pod(run, selector)
-    if problem := control_problem(waiting_pod):
-        return problem
-    if waiting_pod is not None:
-        report_control(waiting_pod)
-    run("kubectl apply --filename -", stdin=worker)
-    web, ready = poll(
-        run, lambda: web_pod(run, selector), lambda pod: bool(ready_since(pod)), {}
-    )
-    if not ready:
-        return f"the web was not Ready within {TERMINATION_WINDOW_SECONDS} s"
-    pod = read_pod(run, WORKER_POD)
-    problem = ready_problem(web, pod)
-    if problem is None and pod is not None:
-        report_web(web, pod)
-    return problem
-
-
-def print_web_logs(run: Run, number: int, selector: str) -> None:
-    """Print the end of the web's log and of its previous life's."""
-    for title, options in (("log", ()), ("previous log", ("--previous",))):
-        answer = web_logs(run, selector, *options)
-        tail = (answer.stdout + answer.stderr)[-2000:]
-        say(f"cell {number}: the web's {title}:\n{tail}")
-
-
-def build_through_web(run: Run, deployment: Document, selector: str) -> str | None:
-    """Cell 11 in the web's Pod; give the problem."""
-    pod = web_pod(run, selector)
-    if pod is None:
-        return "no web Pod could be read to build in"
-    return drive_build(run, deployment, pod["metadata"]["name"])
-
-
 def drive_web(run: Run, overlay: list[Document]) -> str:
-    """Cells 10 and 11: the web waits, is Ready once the worker runs, then builds.
+    """Cells 10 to 13: the web without a worker, then two webs over two workers.
 
-    A Secret of generated values goes in first, from stdin only. Cell 11 runs
-    only when cell 10 passed; give the problem of the one that failed.
+    The cells run in order and stop at the first that fails; give its problem.
     """
     documents = web_documents(overlay)
     deployment = next(d for d in documents if d["kind"] == "Deployment")
-    apply_secret(run, throwaway_secret(deployment, run.effects.secret))
+    worker_documents = applied_documents(overlay, init_container=True, replicas=2)
+    manifest = as_stream(worker_documents)
     run("kubectl apply --filename -", stdin=as_stream(documents))
-    selector = web_selector(deployment)
-    worker = as_stream(applied_documents(overlay, init_container=True))
-    number, problem = 10, judge_web(run, selector, worker)
-    if problem is None:
-        number, problem = 11, build_through_web(run, deployment, selector)
-    if problem is None:
-        return ""
-    say(f"cell {number}: FAILED, {problem}")
-    print_web_logs(run, number, selector)
-    diagnose(run, worker)
-    return f"cell {number}: {problem}"
+    statefulset = next(d for d in worker_documents if d["kind"] == "StatefulSet")
+    for number, judge in web_cells(run, deployment, statefulset, manifest):
+        if problem := judge():
+            say(f"cell {number}: FAILED, {problem}")
+            print_web_logs(run, number, web_selector(deployment))
+            diagnose(run, manifest)
+            return f"cell {number}: {problem}"
+    return ""
 
 
 def drive_cells(run: Run, overlay: list[Document]) -> list[str]:
     """Drive the control, its init-container twin, the residues, then the web."""
+    deployment = next(d for d in web_documents(overlay) if d["kind"] == "Deployment")
+    apply_secrets(run, throwaway_secrets(deployment, run.effects.secret))
     bare = Expectation(Predicate.EGRESS, init_container=False, lives=1)
     control = applied_documents(overlay, init_container=False)
     problems = [drive_cell(run, 7, control, bare)]
