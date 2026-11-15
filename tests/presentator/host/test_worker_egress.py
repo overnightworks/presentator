@@ -1,6 +1,5 @@
 """The build worker refuses to start while a process of it can send off the loopback."""
 
-import subprocess
 from dataclasses import replace
 from pathlib import Path
 
@@ -97,16 +96,10 @@ def test_a_second_link_listed_only_in_the_device_table_is_not_judged_by_mounts(
     assert worker_self_check.first_failing_predicate(snapshot) is None
 
 
-def test_a_probe_that_outlasts_its_seconds_reports_a_timeout(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def hanging(*_arguments: object, **_options: object) -> None:
-        message = "probe"
-        raise subprocess.TimeoutExpired(message, 0.0)
+def test_a_probe_that_outlasts_its_seconds_reports_a_timeout() -> None:
+    outlasting = "import time; time.sleep(5)"
 
-    monkeypatch.setattr(worker_children.subprocess, "run", hanging)
-
-    assert send_probe(None) == "timeout"
+    assert worker_children.program_output_as(outlasting, None, seconds=0.1) == "timeout"
 
 
 def test_the_controllers_own_probe_answers_what_its_datagram_met() -> None:
