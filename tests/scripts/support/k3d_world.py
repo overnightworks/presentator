@@ -111,6 +111,7 @@ def workload_documents(image: str) -> list[Document]:
             replicas=2,
             template=template("worker", init=True),
         ),
+        document("StatefulSet", "postgres", replicas=1, template=template("postgres")),
         document("CronJob", "restore-test", jobTemplate=job),
         document("PersistentVolumeClaim", "builds"),
         document("ServiceAccount", "build-worker"),

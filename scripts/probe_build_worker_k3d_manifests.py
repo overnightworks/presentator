@@ -20,10 +20,11 @@ from probe_build_worker_k3d_cluster import NAMESPACE, Document, Run, documents_o
 from probe_build_worker_starts import CHECK_ARGUMENT
 
 PRODUCTION_IMAGE = "ghcr.io/overnightworks/presentator"
-APPLIED_KINDS = ("PersistentVolumeClaim", "ServiceAccount", "StatefulSet")
-# What the workers add to the pod: their Service, their NetworkPolicy and the
-# ConfigMap holding the packet filter, each named for the workers.
-WORKER_KINDS = ("ConfigMap", "NetworkPolicy", "Service")
+APPLIED_KINDS = ("PersistentVolumeClaim", "ServiceAccount")
+# What the workers are: their StatefulSet, their Service, their NetworkPolicy and
+# the ConfigMap holding the packet filter, each named for the workers; the base
+# renders other StatefulSets, Postgres among them, that the probe leaves out.
+WORKER_KINDS = ("ConfigMap", "NetworkPolicy", "Service", "StatefulSet")
 WORKERS = "build-worker"
 WORKER_LABEL = "app.kubernetes.io/name"
 INBOUND_PROBE_POLICY = "probe-inbound-any-port"
