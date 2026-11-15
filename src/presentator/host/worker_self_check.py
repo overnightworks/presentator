@@ -25,6 +25,7 @@ from presentator.host.worker_scratch import (
     read_scratch,
     scratch_empty,
 )
+from presentator.host.worker_termination import list_process_ids
 
 WORKER_CAPABILITIES = 0xE0
 MAXIMUM_PROCESSES = 512
@@ -35,6 +36,8 @@ BUILD_IDENTITY = (61001, 61001)
 WIRE_IDENTITY = (61002, 61002)
 NO_CAPABILITIES = "0" * 16
 CGROUP_DIRECTORY = "sys/fs/cgroup"
+PROCESS_TABLE = "proc"
+RUNTIME_PLACED_PARENT = "0"
 PROCESS_LIMITS_FILE = "proc/self/limits"
 PROCESS_LIMIT_ROW = "Max processes"
 GROUP_AND_OTHERS_WRITE = stat.S_IWGRP | stat.S_IWOTH
@@ -215,7 +218,7 @@ class Snapshot:
     identity: Identity
     environment_keys: frozenset[str]
     pid: int
-    cgroup_tasks: str
+    descendants: int
     scratch: Scratch
     toolchain: Toolchain
     unreadable: frozenset[Predicate] = frozenset()
@@ -366,7 +369,7 @@ def _is_pid_one(snapshot: Snapshot) -> bool:
 
 
 def _is_alone(snapshot: Snapshot) -> bool:
-    return snapshot.cgroup_tasks == "1"
+    return snapshot.descendants == 0
 
 
 def _toolchain_present(snapshot: Snapshot) -> bool:
@@ -533,6 +536,24 @@ def _read_cgroup_file(root: Path, name: str) -> str:
     return (root / CGROUP_DIRECTORY / name).read_text().strip()
 
 
+def _count_descendants(root: Path) -> int:
+    """The processes with a parent inside the container.
+
+    The runtime places the container's init and every process it execs into it,
+    a readiness probe's among them, with no parent inside; any other process
+    descends from the worker or from one of those.
+    """
+    table = root / PROCESS_TABLE
+    descendants = 0
+    for process in list_process_ids(table):
+        try:
+            status = (table / process / "status").read_text()
+        except FileNotFoundError, ProcessLookupError:
+            continue  # the process ended since the listing
+        descendants += status_fields(status)["PPid"] != RUNTIME_PLACED_PARENT
+    return descendants
+
+
 def _read_process_limit(root: Path) -> tuple[str, str]:
     for line in (root / PROCESS_LIMITS_FILE).read_text().splitlines():
         if line.startswith(PROCESS_LIMIT_ROW):
@@ -599,15 +620,13 @@ def read_snapshot(root: Path, *, read_sends: Callable[[], tuple[str, ...]]) -> S
     """Read the facts the predicates judge, from the filesystem under `root`.
 
     A fact that cannot be read or decoded marks its predicate unreadable, so the
-    self-check judges every predicate in order. The container's task count is
+    self-check judges every predicate in order. The container's process table is
     read first and the scratch places right after it: no other fact is read and
     no child is launched in between. The probes launch children, so they follow.
     """
     facts = _FactReader()
     read = facts.read
-    cgroup_tasks = read(
-        Predicate.ALONE, partial(_read_cgroup_file, root, "pids.current"), ""
-    )
+    descendants = read(Predicate.ALONE, partial(_count_descendants, root), -1)
     scratch = read(Predicate.SCRATCH, partial(read_scratch, root), UNREAD_SCRATCH)
     dumpable = read(Predicate.NON_DUMPABLE, partial(libc_prctl, PR_GET_DUMPABLE, 0), -1)
     process_status = read(
@@ -628,7 +647,7 @@ def read_snapshot(root: Path, *, read_sends: Callable[[], tuple[str, ...]]) -> S
         identity=read(Predicate.IDENTITIES, _read_identity, UNREAD_IDENTITY),
         environment_keys=frozenset(os.environ),
         pid=os.getpid(),
-        cgroup_tasks=cgroup_tasks,
+        descendants=descendants,
         scratch=scratch,
         toolchain=read(
             Predicate.TOOLCHAIN, partial(_read_toolchain, root), UNREAD_TOOLCHAIN

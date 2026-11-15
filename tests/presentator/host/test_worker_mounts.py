@@ -572,7 +572,7 @@ def test_the_fix_up_opens_the_table_paths_then_the_read_starts(
     scratch_reads = len(SYSV_HEADERS) + len(SCRATCH_ROOTS)
     assert not [event for event, _ in events if event in LAUNCH_EVENTS]
     assert sorted(reads[:fix_up_reads]) == sorted(("open", p) for p in table_paths)
-    assert reads[fix_up_reads] == ("open", Path("sys/fs/cgroup/pids.current"))
+    assert reads[fix_up_reads] == ("os.scandir", Path("proc"))
     assert sorted(reads[fix_up_reads + 1 : fix_up_reads + 1 + scratch_reads]) == sorted(
         [("os.scandir", Path(root.lstrip("/"))) for root in SCRATCH_ROOTS]
         + [("open", Path("proc/sysvipc") / table) for table in SYSV_HEADERS]

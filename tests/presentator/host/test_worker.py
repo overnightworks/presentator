@@ -165,7 +165,7 @@ FAILURES = {
         Predicate.ENVIRONMENT,
     ),
     "not pid one": (with_fields(pid=7), Predicate.PID_ONE),
-    "another task in the container": (with_fields(cgroup_tasks="2"), Predicate.ALONE),
+    "another process in the container": (with_fields(descendants=1), Predicate.ALONE),
     "entry in work": (with_occupied_roots(WORK_MOUNT), Predicate.SCRATCH),
     "entry in the message queue directory": (
         with_occupied_roots(QUEUE_MOUNT),
@@ -297,7 +297,7 @@ def test_a_refused_self_check_never_loads_the_settings() -> None:
 
 
 @pytest.mark.parametrize(
-    "occupied", [with_fields(cgroup_tasks="2"), with_occupied_roots(WORK_MOUNT)]
+    "occupied", [with_fields(descendants=1), with_occupied_roots(WORK_MOUNT)]
 )
 def test_a_start_refused_for_alone_or_scratch_never_loads_settings_or_serves(
     occupied: Callable[[Snapshot], Snapshot],
@@ -397,7 +397,7 @@ def test_reads_the_sealed_facts_from_the_filesystem(sealed_root: Path) -> None:
     assert snapshot.toolchain.vite_link_target == "/work/vite"
     assert len(snapshot.toolchain.headless_shell_modes) == 1
     assert snapshot.toolchain.corepack_mode is not None
-    assert snapshot.cgroup_tasks == "1"
+    assert snapshot.descendants == 0
     assert scratch_empty(snapshot.scratch)
     assert snapshot.unreadable == frozenset()
 
@@ -499,15 +499,16 @@ def fail_dumpable_read(_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(worker_self_check, "libc_prctl", failing)
 
 
-def set_task_count(count: str) -> Callable[[Path, pytest.MonkeyPatch], None]:
+def plant_process(status: str) -> Callable[[Path, pytest.MonkeyPatch], None]:
     def arrange(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
-        (root / "sys/fs/cgroup/pids.current").write_text(count)
+        (root / "proc/7").mkdir()
+        (root / "proc/7/status").write_text(status)
 
     return arrange
 
 
-def remove_task_count(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
-    (root / "sys/fs/cgroup/pids.current").unlink()
+def end_process(root: Path, _monkeypatch: pytest.MonkeyPatch) -> None:
+    (root / "proc/7").mkdir()
 
 
 def remove_message_queue_directory(
@@ -556,10 +557,15 @@ REFUSED_FACTS = {
         Predicate.CAPABILITIES,
     ),
     "dumpable unreadable": (fail_dumpable_read, Predicate.NON_DUMPABLE),
-    "task count missing": (remove_task_count, Predicate.ALONE),
-    "task count empty": (set_task_count(""), Predicate.ALONE),
-    "task count not decimal": (set_task_count("one\n"), Predicate.ALONE),
-    "task count two": (set_task_count("2\n"), Predicate.ALONE),
+    "process without a parent": (plant_process("Name:\tdeck\n"), Predicate.ALONE),
+    "process with a parent not a number": (
+        plant_process("PPid:\tone\n"),
+        Predicate.ALONE,
+    ),
+    "process with a parent in the container": (
+        plant_process("PPid:\t1\n"),
+        Predicate.ALONE,
+    ),
     "entry in work": (fill_work, Predicate.SCRATCH),
     "message queue directory missing": (
         remove_message_queue_directory,
@@ -592,6 +598,24 @@ def test_a_failing_or_unreadable_fact_refuses_through_main_naming_its_predicate(
 
     assert worker.main(["--check"], boundary) == worker.REFUSAL_EXIT_STATUS
     assert f"start refused: {refused}" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "arrange",
+    [plant_process("PPid:\t0\n"), end_process],
+    ids=["process the runtime placed", "process that ended since the listing"],
+)
+def test_a_process_with_no_parent_in_the_container_leaves_the_worker_alone(
+    sealed_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    arrange: Callable[[Path, pytest.MonkeyPatch], None],
+) -> None:
+    arrange(sealed_root, monkeypatch)
+
+    snapshot = read_sealed_snapshot(sealed_root)
+
+    assert snapshot.unreadable == frozenset()
+    assert snapshot.descendants == 0
 
 
 @pytest.fixture(params=["/run/docker.sock", "/var/run/docker.sock"])
@@ -710,7 +734,7 @@ def test_prctl_failure_raises() -> None:
         worker_self_check.libc_prctl(0x7FFFFFFF, 0)
 
 
-def test_the_snapshot_reads_task_count_scratch_then_the_probes_and_launches_nothing(
+def test_the_snapshot_reads_the_process_table_scratch_then_the_probes_and_launches_nothing(
     sealed_root: Path,
 ) -> None:
     def record_sends_read() -> tuple[str, ...]:
@@ -735,7 +759,7 @@ def test_the_snapshot_reads_task_count_scratch_then_the_probes_and_launches_noth
         if below_root((event, path))
     ]
     assert not [event for event, _ in events if event in LAUNCH_EVENTS]
-    assert reads[0] == ("open", Path("sys/fs/cgroup/pids.current"))
+    assert reads[0] == ("os.scandir", Path("proc"))
     assert sorted(reads[1:READS_BEFORE_SENDS]) == sorted(
         [
             ("os.scandir", Path(root))

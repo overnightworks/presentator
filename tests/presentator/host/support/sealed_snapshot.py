@@ -209,7 +209,7 @@ def sealed_snapshot() -> Snapshot:
         ),
         environment_keys=frozenset({"PATH", "HOME", "HOSTNAME"}),
         pid=1,
-        cgroup_tasks="1",
+        descendants=0,
         scratch=Scratch(occupied_roots=frozenset(), sysv_tables=SYSV_HEADERS),
         toolchain=Toolchain(
             slidev_mode=stat.S_IFREG | WORLD_READABLE_EXECUTABLE,
@@ -299,7 +299,6 @@ def stage_sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     file_at(
         "proc/self/limits", limits_file(str(MAXIMUM_PROCESSES), str(MAXIMUM_PROCESSES))
     )
-    file_at("sys/fs/cgroup/pids.current", "1\n")
     file_at("sys/fs/cgroup/memory.max", "1073741824\n")
     (tmp_path / "work").mkdir()
     (tmp_path / "work").chmod(0o755)
