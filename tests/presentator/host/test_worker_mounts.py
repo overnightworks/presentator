@@ -26,6 +26,7 @@ from presentator.host.worker_self_check import (
     BUILD_IDENTITY,
     CONTAINERD_SOCKETS,
     DOCKER_SOCKETS,
+    KEY_MOUNT,
     MOUNT_ROOT_MODES,
     SERVICE_ACCOUNT_DIRECTORY,
     TERMINATION_LOG,
@@ -277,6 +278,32 @@ def test_only_a_read_only_tmpfs_is_masked_under_proc(
     mount_extra(pod, PodMount("/proc/unmasked", options, filesystem))
 
     assert judged(pod) == MOUNTS
+
+
+KEY_VOLUME_FAULTS: dict[str, Callable[[Path], None]] = {
+    "read-write": lambda root: remount(root, KEY_MOUNT, options=READ_WRITE),
+    "ext4": lambda root: remount(root, KEY_MOUNT, filesystem="ext4"),
+}
+
+
+@pytest.mark.parametrize(
+    "fault", KEY_VOLUME_FAULTS.values(), ids=KEY_VOLUME_FAULTS.keys()
+)
+def test_a_key_volume_open_to_all_refuses_unless_it_is_a_read_only_tmpfs(
+    pod: Path, fault: Callable[[Path], None]
+) -> None:
+    fault(pod)
+
+    assert judged(pod) == MOUNTS
+
+
+def test_a_key_volume_owned_by_a_child_refuses(pod: Path) -> None:
+    snapshot = read_staged_root_as_sealed_process(pod)
+
+    assert (
+        first_failing_predicate(with_owner(snapshot, KEY_MOUNT, BUILD_IDENTITY[0]))
+        == MOUNTS
+    )
 
 
 @pytest.mark.parametrize("unread_field", [field.name for field in fields(Mounts)])

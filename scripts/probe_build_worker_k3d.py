@@ -176,7 +176,7 @@ from probe_build_worker_starts import (
 )
 
 from presentator.host.worker import REFUSAL_EXIT_STATUS
-from presentator.host.worker_self_check import BUILD_IDENTITY, Predicate
+from presentator.host.worker_self_check import BUILD_IDENTITY, KEY_MOUNT, Predicate
 
 TWIN_POD = "build-worker-twin"
 RESIDUE_POD_PREFIX = "build-worker-residue-"
@@ -185,10 +185,10 @@ CONTROL = "nothing"
 ENDED_PHASES = frozenset({"Succeeded", "Failed"})
 # The environment names come from python: `env` would print the later lines of
 # a multi-line value.
-TWIN_SCRIPT = r"""cat /proc/self/mountinfo /proc/self/status /proc/self/limits
+TWIN_SCRIPT = rf"""cat /proc/self/mountinfo /proc/self/status /proc/self/limits
 cat /sys/fs/cgroup/memory.max
 id
-stat --format '%n %U:%G %a' /etc/hosts /dev/pts /sys/fs/cgroup
+stat --format '%n %U:%G %a' /etc/hosts /dev/pts /sys/fs/cgroup {KEY_MOUNT}
 python -c 'import os; print("\n".join(sorted(os.environ)))'"""
 
 

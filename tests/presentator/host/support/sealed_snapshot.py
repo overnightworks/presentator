@@ -19,6 +19,7 @@ from presentator.host.worker_scratch import (
     Scratch,
 )
 from presentator.host.worker_self_check import (
+    KEY_MOUNT,
     MAXIMUM_PROCESSES,
     MOUNT_ROOT_MODES,
     TERMINATION_LOG,
@@ -57,13 +58,14 @@ SYSV_HEADERS = {
     ),
 }
 WORLD_READABLE_EXECUTABLE = 0o755
+# The root of the tmpfs a kubelet mounts for a Secret: sticky and open to all.
+SECRET_VOLUME_ROOT_MODE = 0o1777
 READ_WRITE = "rw,relatime"
 READ_ONLY = "ro,relatime"
 GUARDED = "rw,nosuid,nodev,noexec,relatime"
 POD_MASKED_DIRECTORY = "/proc/acpi"
 POD_NULL_BIND = "/proc/masked/null"
 POD_HOSTNAME = "/etc/hostname"
-KEY_MOUNT = "/run/secrets/build-worker-key"
 
 
 @dataclass(frozen=True)
@@ -172,7 +174,7 @@ def _admitted_other_roots() -> dict[str, RootFacts]:
         POD_HOSTNAME: RootFacts(mode=stat.S_IFREG | 0o644, owner_uid=0),
         POD_MASKED_DIRECTORY: RootFacts(mode=stat.S_IFDIR | 0o755, owner_uid=0),
         POD_NULL_BIND: RootFacts(mode=stat.S_IFCHR | 0o666, owner_uid=0),
-        KEY_MOUNT: RootFacts(mode=stat.S_IFDIR | 0o755, owner_uid=0),
+        KEY_MOUNT: RootFacts(mode=stat.S_IFDIR | SECRET_VOLUME_ROOT_MODE, owner_uid=0),
     }
 
 
@@ -260,7 +262,7 @@ def _stage_pod_roots(root: Path) -> None:
     (root / QUEUE_MOUNT.lstrip("/")).chmod(OPEN_DIRECTORY_MODE)
     key_mount = root / KEY_MOUNT.lstrip("/")
     key_mount.mkdir(parents=True)
-    key_mount.chmod(WORLD_READABLE_EXECUTABLE)
+    key_mount.chmod(SECRET_VOLUME_ROOT_MODE)
     (root / "proc").chmod(WORLD_READABLE_EXECUTABLE)
     hostname = root / POD_HOSTNAME.lstrip("/")
     hostname.parent.mkdir()

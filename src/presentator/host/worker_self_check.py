@@ -55,6 +55,8 @@ MOUNT_ROOT_MODES = {
     TERMINATION_LOG: TERMINATION_LOG_MODE,
 }
 MASKED_AREAS = ("/proc", "/sys")
+# Where the pod mounts the Secret that holds the hello key.
+KEY_MOUNT = "/run/secrets/build-worker-key"
 JUDGED_MOUNTS = frozenset({"/", QUEUE_MOUNT, *MOUNT_ROOT_MODES})
 TOOLCHAIN_PROJECT = "app/slidev"
 SLIDEV_BINARY = f"{TOOLCHAIN_PROJECT}/node_modules/.bin/slidev"
@@ -252,6 +254,20 @@ def _in_masked_area(mount: str) -> bool:
     return any(PurePosixPath(mount).is_relative_to(area) for area in MASKED_AREAS)
 
 
+def _is_key_volume(
+    mount: str, mounted: tuple[str, frozenset[str]], root: RootFacts
+) -> bool:
+    """The key's read-only tmpfs, whose root the kubelet opens to all."""
+    filesystem, options = mounted
+    return (
+        mount == KEY_MOUNT
+        and filesystem == "tmpfs"
+        and "ro" in options
+        and stat.S_ISDIR(root.mode)
+        and root.owner_uid == 0
+    )
+
+
 def _other_root_admitted(
     mount: str, mounted: tuple[str, frozenset[str]], root: RootFacts | None
 ) -> bool:
@@ -261,6 +277,8 @@ def _other_root_admitted(
     if _in_masked_area(mount) and (
         stat.S_ISCHR(root.mode) or (filesystem == "tmpfs" and "ro" in options)
     ):
+        return True
+    if _is_key_volume(mount, mounted, root):
         return True
     return (
         (stat.S_ISDIR(root.mode) or stat.S_ISREG(root.mode))
