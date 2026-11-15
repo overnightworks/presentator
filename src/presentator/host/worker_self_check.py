@@ -85,7 +85,8 @@ KUBERNETES_ENVIRONMENT_KEYS = frozenset(
         "KUBERNETES_PORT_443_TCP_ADDR",
     }
 )
-# The image's and its base's keys, logline's two, the runtime's HOSTNAME, Python's own LC_CTYPE.
+# The image's and its base's keys, logline's two, the runtime's HOSTNAME, Python's
+# own LC_CTYPE.
 ALLOWED_ENVIRONMENT_KEYS = frozenset(
     {
         "HOME",
