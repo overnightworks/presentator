@@ -10,6 +10,7 @@ from presentator.adapters.build_wire import (
     CHALLENGE_BYTES,
     HELLO_VERSION,
     NONCE_BYTES,
+    TAG_BYTES,
     HelloDirection,
     HelloRefusedError,
     answer_hello,
@@ -65,6 +66,11 @@ def no_answer(connection: socket.socket) -> None:
     connection.recv(CHALLENGE_BYTES)
 
 
+def closed_after_the_challenge(connection: socket.socket) -> None:
+    connection.recv(CHALLENGE_BYTES)
+    connection.close()
+
+
 REFUSED: dict[str, Callable[[socket.socket], None]] = {
     "another key": web_answering_as(HelloDirection.WEB_TO_WORKER, OTHER_KEY),
     "the reflected direction": web_answering_as(HelloDirection.WORKER_TO_WEB, KEY),
@@ -72,6 +78,7 @@ REFUSED: dict[str, Callable[[socket.socket], None]] = {
         HelloDirection.WEB_TO_WORKER, KEY, version=HELLO_VERSION + 1
     ),
     "no answer": no_answer,
+    "closed after the challenge": closed_after_the_challenge,
 }
 
 
@@ -101,6 +108,25 @@ def test_a_worker_that_does_not_prove_the_key_is_refused_by_the_web(
     thread.join()
 
     assert verdicts == [False]
+
+
+def test_a_worker_that_proves_with_a_wrong_tag_is_refused_by_the_web(
+    wire: tuple[socket.socket, socket.socket],
+) -> None:
+    worker, web = wire
+    worker.sendall(bytes([HELLO_VERSION]) + b"n" * NONCE_BYTES)
+    worker.sendall(b"t" * TAG_BYTES)
+
+    with pytest.raises(HelloRefusedError):
+        answer_hello(web, KEY)
+
+
+def test_a_hello_given_no_time_is_not_verified(
+    wire: tuple[socket.socket, socket.socket],
+) -> None:
+    worker, _web = wire
+
+    assert not verify_hello(worker, KEY, seconds=0)
 
 
 def test_a_worker_of_another_version_is_refused_by_the_web(

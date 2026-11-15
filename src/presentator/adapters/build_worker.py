@@ -333,11 +333,9 @@ class WorkerToolchain:
         while True:
             try:
                 return self._attempt(window_ends)
-            except _NotYetError as not_yet:
+            except _NotYetError:
                 remaining = window_ends - time.monotonic()
-                if remaining <= 0:
-                    raise TimeoutError from not_yet
-                time.sleep(min(wait, remaining))
+                time.sleep(max(0.0, min(wait, remaining)))
                 wait = min(2 * wait, self.longest_retry_seconds)
 
     def _attempt(self, window_ends: float) -> _DeadlineSocket:

@@ -3,6 +3,7 @@
 import errno
 import socket
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -10,9 +11,11 @@ import pytest
 from presentator.host import worker
 from presentator.host.config import MINIMUM_KEY_LENGTH
 from presentator.host.worker import StartRefusal
+from tests.presentator.host.support.worker_boundary import LOADED_SETTINGS
 from tests.support.worker_support import KEY, OWN_UID, ScriptedLife, free_port
 
 PORT = 7100
+USAGE_EXIT_STATUS = 2
 TABLE_HEADER = "  sl  local_address rem_address   st tx_queue rx_queue\n"
 
 
@@ -154,3 +157,58 @@ def test_the_worker_is_ready_when_it_listens_and_holds_no_connection(
     table: str, *, ready: bool
 ) -> None:
     assert worker.is_ready(PORT, table) is ready
+
+
+def raising(error: Exception) -> Callable[[], str]:
+    def read() -> str:
+        raise error
+
+    return read
+
+
+@pytest.mark.parametrize(
+    ("read_table", "status"),
+    [
+        (lambda: TABLE_HEADER + table_row(PORT, worker.LISTENING), 0),
+        (lambda: TABLE_HEADER, worker.NOT_READY_EXIT_STATUS),
+        (raising(OSError()), worker.NOT_READY_EXIT_STATUS),
+        (lambda: TABLE_HEADER + "garbled\n", worker.NOT_READY_EXIT_STATUS),
+    ],
+    ids=["listening", "not listening", "table unreadable", "table garbled"],
+)
+def test_the_readiness_probe_exits_zero_only_for_a_worker_that_listens(
+    read_table: Callable[[], str], status: int
+) -> None:
+    boundary = replace(worker.REAL_BOUNDARY, read_socket_table=read_table)
+
+    assert worker.main(["--ready", "--port", str(PORT)], boundary) == status
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--ready"],
+        ["--key-file", "/run/key"],
+        ["--port", str(PORT)],
+        [],
+    ],
+    ids=["ready without port", "serve without port", "serve without key", "bare"],
+)
+def test_a_start_names_the_port_and_key_file_it_serves_or_is_refused_as_usage(
+    arguments: list[str],
+) -> None:
+    with pytest.raises(SystemExit) as refused:
+        worker.main(arguments)
+
+    assert refused.value.code == USAGE_EXIT_STATUS
+
+
+def test_a_key_the_real_boundary_refuses_ends_the_start_before_binding(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    status = worker.REAL_BOUNDARY.serve(
+        port=PORT, key_file=tmp_path / "missing", settings=LOADED_SETTINGS
+    )
+
+    assert status == worker.REFUSAL_EXIT_STATUS
+    assert f"start refused: {StartRefusal.KEY}" in caplog.text
