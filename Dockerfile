@@ -13,9 +13,9 @@
 # The runtime user's uid is named by number in the final USER, because a pod
 # with runAsNonRoot can verify a number but not a name.
 ARG PRESENTATOR_RUNTIME_UID=1001
-FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 AS uv
 
-FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS runtime-user
+FROM node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS runtime-user
 
 # The two identities a build worker runs steps as: one builds, one only reads
 # what the build wrote. They are made before the runtime user so that a runtime
