@@ -247,8 +247,9 @@ def test_a_build_that_does_not_deliver_in_a_web_pod_fails_cell_11_naming_the_pod
     done = delivered(web_module)
     failed = dataclasses.replace(done, pdf=False)
     world = World(client_stdout=client_output(failed))
+    fixture = make_fixture(world)
     with pytest.raises(SystemExit):
-        make_fixture(world).drive()
+        fixture.drive()
     assert f"{WEB_POD_NAMES[0]} did not deliver" in capsys.readouterr().err
 
 
