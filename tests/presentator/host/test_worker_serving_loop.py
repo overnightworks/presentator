@@ -5,12 +5,11 @@ import logging
 import socket
 import threading
 from collections.abc import Callable, Iterator
-from contextlib import ExitStack
+from contextlib import ExitStack, suppress
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from typing import NoReturn
-from unittest.mock import patch
 
 import pytest
 
@@ -51,9 +50,6 @@ def clients_closed_with_the_test() -> Iterator[None]:
     _CLIENTS.close()
 
 
-REAL_VERIFY: Callable[..., bool] = build_wire.verify_hello
-
-
 def connected(volume: Path) -> socket.socket:
     return _CLIENTS.enter_context(connect_unproven(volume))
 
@@ -69,6 +65,17 @@ def helloing(volume: Path, hello: Callable[[socket.socket], None]) -> socket.soc
 
 def a_proven_hello(client: socket.socket) -> None:
     build_wire.answer_hello(client, KEY)
+
+
+def a_proven_hello_the_worker_may_not_serve(client: socket.socket) -> None:
+    """A hello of a client the worker may close before it answers."""
+    with suppress(build_wire.WireRefusedError, build_wire.HelloRefusedError, OSError):
+        a_proven_hello(client)
+
+
+def proven(volume: Path) -> socket.socket:
+    """A client that proves the hello in a thread and then holds its connection."""
+    return helloing(volume, a_proven_hello_the_worker_may_not_serve)
 
 
 def reading_after_a_proven_hello(volume: Path) -> Callable[[], bytes]:
@@ -140,7 +147,7 @@ def test_a_refused_hello_is_closed_and_never_spawns_a_child(
     with listening_with(volume, accepts=1) as listener:
         client = helloing(volume, hello)
         with pytest.raises(StopServingError):
-            accept_from(life, listener, real_hello=True)
+            accept_from(life, listener)
         assert client.recv(1) == b""
 
     assert life.spawned == []
@@ -155,7 +162,7 @@ def test_a_refused_hello_spends_no_life_and_the_next_verified_one_is_served(
         helloing(volume, a_wrong_key_hello)
         helloing(volume, a_proven_hello)
         with pytest.raises(StopServingError):
-            accept_from(life, listener, real_hello=True)
+            accept_from(life, listener)
 
     assert len(life.spawned) == 1
     assert life.events[:3] == ["arm 7.0", "sweep 104.0", "cancel"]
@@ -169,7 +176,7 @@ def test_a_refused_hello_is_swept_and_the_watchdog_cancelled_before_the_next_acc
         for _ in range(2):
             helloing(volume, a_wrong_key_hello)
         with pytest.raises(StopServingError):
-            accept_from(life, listener, real_hello=True)
+            accept_from(life, listener)
 
     assert life.events == 2 * ["arm 7.0", "sweep 104.0", "cancel"]
 
@@ -180,10 +187,13 @@ def test_a_kept_life_connection_is_handed_to_a_gated_child_then_swept(
     monkeypatch.setenv("PATH", ADMITTING_PATH)
     life = ScriptedLife(exit_status=WireExit.CLOSED)
     with listening_with(volume, accepts=2) as listener:
-        clients = [connected(volume), connected(volume)]
+        reads = [
+            reading_after_a_proven_hello(volume),
+            reading_after_a_proven_hello(volume),
+        ]
         with pytest.raises(StopServingError):
             accept_from(life, listener)
-        assert [client.recv(1) for client in clients] == [b"", b""]
+        assert [read() for read in reads] == [b"", b""]
 
     assert life.events == 2 * ANSWERED_HEADER
     assert [spawned.environment for spawned in life.spawned] == 2 * [
@@ -196,7 +206,7 @@ def test_the_child_is_told_the_descriptor_of_its_connection_and_inherits_only_it
 ) -> None:
     life = ScriptedLife()
     with listening_with(volume, accepts=1) as listener:
-        connected(volume)
+        proven(volume)
         with pytest.raises(StopServingError):
             accept_from(life, listener)
 
@@ -218,23 +228,13 @@ def test_the_child_is_told_the_descriptor_of_its_connection_and_inherits_only_it
     ]
 
 
-def verified(*_arguments: object, **_named: object) -> bool:
-    return True
-
-
 def accept_from(
     life: ScriptedLife,
     listener: socket.socket,
     serving: Serving | None = None,
-    *,
-    real_hello: bool = False,
 ) -> LifeEnd:
-    """Run the accept loop in this thread; clients without a thread are verified."""
-    verify = REAL_VERIFY if real_hello else verified
-    with patch.object(worker_serving.build_wire, "verify_hello", verify):
-        return worker_serving.accept_connections(
-            listener, KEY, serving or life.serving()
-        )
+    """Run the accept loop in this thread."""
+    return worker_serving.accept_connections(listener, KEY, serving or life.serving())
 
 
 def test_a_sweep_that_is_quiet_only_after_its_deadline_ends_the_life_armed(
@@ -251,8 +251,8 @@ def test_a_sweep_that_is_quiet_only_after_its_deadline_ends_the_life_armed(
     )
     late_serving = replace(life.serving(), sweep=partial(sweep, late))
     with listening_with(volume, accepts=2) as listener:
-        connected(volume)
-        connected(volume)
+        proven(volume)
+        proven(volume)
         outcome = accept_from(life, listener, late_serving)
 
     assert outcome == LifeEnd.SWEEP
@@ -289,7 +289,7 @@ def test_an_accepted_step_re_arms_the_watchdog_to_the_emergency_end_from_the_acc
         inspection_takes=inspection_takes,
     )
     with listening_with(volume, accepts=1) as listener:
-        connected(volume)
+        proven(volume)
         accept_from(life, listener)
 
     assert life.events == [
@@ -308,7 +308,7 @@ def test_an_accepted_step_re_arms_the_watchdog_to_the_emergency_end_from_the_acc
 
 def consume_an_accepted_step(volume: Path, life: ScriptedLife) -> None:
     with listening_with(volume, accepts=1) as listener:
-        connected(volume)
+        proven(volume)
         accept_from(life, listener)
 
 
@@ -420,7 +420,7 @@ def test_a_failing_step_ends_the_life_and_leaves_the_watchdog_armed(
     life = make_life()
     with listening_with(volume, accepts=1) as listener:
         what_the_client_read = reading_after_a_proven_hello(volume)
-        outcome = accept_from(life, listener, real_hello=True)
+        outcome = accept_from(life, listener)
         assert what_the_client_read() == b""
 
     assert outcome == life_end
@@ -470,7 +470,7 @@ def test_a_sweep_that_fails_for_another_reason_surfaces_with_its_error(
 ) -> None:
     life = ScriptedLife(sweep_error=PermissionError("kill refused"))
     with listening_with(volume, accepts=1) as listener:
-        connected(volume)
+        proven(volume)
         with pytest.raises(PermissionError, match="kill refused"):
             accept_from(life, listener)
 
@@ -519,11 +519,12 @@ def test_serve_returns_zero_and_names_the_accept_fault(
 def test_the_runtime_uid_gets_one_gated_child_per_connection(volume: Path) -> None:
     life = ScriptedLife()
     with listening_with(volume, accepts=CONNECTIONS) as listener:
-        clients = [connected(volume), connected(volume)]
+        proven(volume)
+        proven(volume)
         with pytest.raises(StopServingError):
             accept_from(life, listener)
 
-    assert len(life.spawned) == len(clients)
+    assert len(life.spawned) == CONNECTIONS
 
 
 def test_serve_binds_listens_and_hands_over_connections_until_the_life_ends(
@@ -640,10 +641,13 @@ EXPIRED_AT_RELEASE = [
 
 def accept_twice_from(life: ScriptedLife, volume: Path) -> list[bytes]:
     with listening_with(volume, accepts=2) as listener:
-        clients = [connected(volume), connected(volume)]
+        reads = [
+            reading_after_a_proven_hello(volume),
+            reading_after_a_proven_hello(volume),
+        ]
         with pytest.raises(StopServingError):
             accept_from(life, listener)
-        return [client.recv(1) for client in clients]
+        return [read() for read in reads]
 
 
 def test_a_header_that_outlasts_its_budget_is_cut_off_and_the_next_connection_is_served(
@@ -663,8 +667,8 @@ def test_a_stalled_header_never_ends_the_life_while_the_sweep_is_quiet(
 ) -> None:
     life = ScriptedLife(headers_stalled=2)
     with listening_with(volume, accepts=2) as listener:
-        connected(volume)
-        connected(volume)
+        proven(volume)
+        proven(volume)
         with pytest.raises(StopServingError):
             accept_from(life, listener)
 
@@ -733,7 +737,7 @@ def test_the_header_budget_covers_the_gate_and_the_release_as_well_as_the_wait(
     with listening_with(volume, accepts=1) as listener:
         what_the_client_read = reading_after_a_proven_hello(volume)
         with pytest.raises(StopServingError):
-            accept_from(life, listener, real_hello=True)
+            accept_from(life, listener)
         assert what_the_client_read() == b""
 
     assert life.events == events
@@ -746,7 +750,7 @@ def test_the_life_is_kept_after_an_expiry_only_when_the_sweep_is_quiet(
 ) -> None:
     life = ScriptedLife(inspection_takes=HEADER_SECONDS, sweep_quiet=sweep_quiet)
     with listening_with(volume, accepts=1) as listener:
-        connected(volume)
+        proven(volume)
         if sweep_quiet:
             with pytest.raises(StopServingError):
                 accept_from(life, listener)
@@ -762,13 +766,13 @@ def test_a_stall_that_spends_the_header_budget_before_the_launch_spawns_no_idle_
 ) -> None:
     life = ScriptedLife(arm_takes=HEADER_SECONDS, sweep_quiet=sweep_quiet)
     with listening_with(volume, accepts=1) as listener:
-        client = connected(volume)
+        what_the_client_read = reading_after_a_proven_hello(volume)
         if sweep_quiet:
             with pytest.raises(StopServingError):
                 accept_from(life, listener)
         else:
             assert accept_from(life, listener) == LifeEnd.SWEEP
-        assert client.recv(1) == b""
+        assert what_the_client_read() == b""
 
     assert life.spawned == []
     assert ("cancel" in life.events) == sweep_quiet
@@ -777,7 +781,7 @@ def test_a_stall_that_spends_the_header_budget_before_the_launch_spawns_no_idle_
 def test_a_gate_mismatch_is_a_gate_end_whatever_the_clock_says(volume: Path) -> None:
     life = ScriptedLife(gate_admits=False, inspection_takes=HEADER_SECONDS)
     with listening_with(volume, accepts=1) as listener:
-        connected(volume)
+        proven(volume)
         outcome = accept_from(life, listener)
 
     assert outcome == LifeEnd.GATE
