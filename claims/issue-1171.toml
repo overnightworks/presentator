@@ -1,8 +1,0 @@
-claim_id = "b7a425d4b5a44611937100113d46a2e8"
-agent = "Claude de6f7274-808a-482f-8463-66d7cad29366"
-role = "builder"
-base = "a9d5c884d29e0a41826b0fb8f38c0c2c029613c6"
-branch = "claude/issue-1171-s10-build-worker-over-tcp"
-scope = [".github/actions/k3d-probe-tools", ".github/workflows/ci.yml", ".github/workflows/release.yml", "docs/ARCHITECTURE.md", "docs/configuration.md", "docs/runbooks", "pyproject.toml", "quality/baseline.toml", "scripts", "src/presentator/adapters/build_wire.py", "src/presentator/adapters/build_worker.py", "src/presentator/adapters/rtnetlink.py", "src/presentator/adapters/worker_children.py", "src/presentator/api/health.py", "src/presentator/host", "tests"]
-opened_commit = "56b640bb8a88a924055766183ab91628ddc5ebe1"
-whole_reason = "One boundary change: the link, its filters, the keyed hello and the two-pod proof only hold together; a link without filters unseals the worker."
