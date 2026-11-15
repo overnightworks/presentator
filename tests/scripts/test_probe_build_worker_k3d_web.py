@@ -231,8 +231,9 @@ def test_a_second_step_not_admitted_before_the_first_worker_was_ready_fails_cell
 ) -> None:
     after_the_restart = delivered(web_module, second_step_at=admitted_at)
     world = World(client_stdout=client_output(after_the_restart))
+    fixture = make_fixture(world)
     with pytest.raises(SystemExit):
-        make_fixture(world).drive()
+        fixture.drive()
     output = capsys.readouterr()
     assert "was Ready again" in output.err
     assert "cell 11: FAILED" in output.out
