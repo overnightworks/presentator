@@ -92,9 +92,10 @@ def test_an_address_that_is_not_a_host_and_a_port_refuses_to_start(
 @pytest.mark.usefixtures("environment")
 def test_a_host_run_that_names_no_worker_has_no_worker_link() -> None:
     settings = load_settings()
+    bound = main.build_bound_of(settings)
 
     with pytest.raises(ConfigurationError, match="build_worker_address"):
-        main.the_build_worker(settings, bound=main.build_bound_of(settings))
+        main.the_build_worker(settings, bound=bound)
 
 
 def test_a_key_file_that_is_too_short_refuses_to_start(
