@@ -121,6 +121,10 @@ lock (advisory on Postgres). JSON lives under `/api/` as typed models. The one s
 /api/session`, and a store failure while resolving a reader is a 500, never a signed-out answer.
 Problems follow RFC 9457 with `tag:` URI types, as an https address breaks when its page moves.
 
+**Logging.** logline owns it: each process calls `configure` first (`presentator`, `presentator-worker`),
+so every line is one JSON object. One request line per HTTP request names the route template, never
+the path, with `sub` and the client address from webauth's decisions (`api/request_line.py`).
+
 **Words and look.** Every lobby word comes from one gettext catalog per language
 (`frontend/src/lib/catalogs`), generated into typed modules for page and server; the session answer
 carries a language tag, no sentence. The overlay owns its pair ([co-presenter](co-presenter.md)).
@@ -165,7 +169,7 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
 - The fetch-now webhook holds a per-source secret, not a login: a git host has no browser
   ([hook](runbooks/call-the-fetch-now-hook.md)). `/api/admin/` takes a Keycloak access token, not a
   session cookie, so a forged browser session cannot erase a person; the path carries the subject,
-  so the server keeps no access log ([people](people.md)).
+  so no log line holds a request path ([people](people.md)).
 - The refresh token is plain text because Keycloak renews it only with the client secret, outside
   the database. The instance key is a secret file outside the database and its backup; a restore
   needs both.
