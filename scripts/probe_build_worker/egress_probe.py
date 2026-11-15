@@ -5,8 +5,12 @@ Usage: `python -I - HOST:PORT...`, the program on stdin.
 Run inside the worker's container as root, which keeps the capabilities to
 change user. For the build user and for the wire user it forks, drops to that
 user and tries one new TCP connection to the loopback address of a listener
-this program opened and one to each HOST:PORT, then prints one JSON line naming
-how every attempt ended, `connected` or the errno's name.
+this program opened and sends one datagram to each HOST:PORT, then prints one
+JSON line naming how every attempt ended: `connected` or `sent`, or the errno's
+name. The pod's packet filter drops a new socket's packets off the loopback in
+its output hook, which refuses a datagram's send with EPERM at the source, where
+a dropped TCP connection only times out and so does not tell the filter from a
+drop at the target.
 """
 
 import errno
@@ -14,6 +18,8 @@ import json
 import os
 import socket
 import sys
+from collections.abc import Callable
+from functools import partial
 
 from presentator.host.worker_self_check import BUILD_IDENTITY, WIRE_IDENTITY
 
@@ -23,7 +29,7 @@ USERS = {"build": BUILD_IDENTITY, "wire": WIRE_IDENTITY}
 FIRST_ATTEMPT = "loopback"
 
 
-def attempt(address: tuple[str, int]) -> str:
+def connect(address: tuple[str, int]) -> str:
     """How a new TCP connection to the address ended."""
     with socket.socket() as probe:
         probe.settimeout(SECONDS)
@@ -34,8 +40,18 @@ def attempt(address: tuple[str, int]) -> str:
     return "connected"
 
 
+def send_datagram(address: tuple[str, int]) -> str:
+    """How sending one datagram to the address ended."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        try:
+            probe.sendto(b"probe", address)
+        except OSError as refused:
+            return errno.errorcode.get(refused.errno or 0, type(refused).__name__)
+    return "sent"
+
+
 def as_user(
-    identity: tuple[int, int], addresses: dict[str, tuple[str, int]]
+    identity: tuple[int, int], attempts: dict[str, Callable[[], str]]
 ) -> dict[str, str]:
     """The attempts' ends, as a child that dropped to the identity, read over a pipe."""
     reader, writer = os.pipe()
@@ -45,7 +61,7 @@ def as_user(
         uid, gid = identity
         os.setgid(gid)
         os.setuid(uid)
-        ends = {name: attempt(address) for name, address in addresses.items()}
+        ends = {name: attempt() for name, attempt in attempts.items()}
         os.write(writer, json.dumps(ends).encode())
         os._exit(0)
     os.close(writer)
@@ -60,11 +76,13 @@ def main(targets: list[str]) -> None:
     with socket.socket() as listener:
         listener.bind((LOOPBACK, 0))
         listener.listen()
-        addresses = {FIRST_ATTEMPT: (LOOPBACK, listener.getsockname()[1])}
+        attempts: dict[str, Callable[[], str]] = {
+            FIRST_ATTEMPT: partial(connect, (LOOPBACK, listener.getsockname()[1]))
+        }
         for target in targets:
             host, _, port = target.rpartition(":")
-            addresses[target] = (host, int(port))
-        said = {name: as_user(who, addresses) for name, who in USERS.items()}
+            attempts[target] = partial(send_datagram, (host, int(port)))
+        said = {name: as_user(who, attempts) for name, who in USERS.items()}
     sys.stdout.write(json.dumps(said) + "\n")
 
 
