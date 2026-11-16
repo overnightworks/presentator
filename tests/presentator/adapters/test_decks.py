@@ -321,6 +321,15 @@ def test_an_unreachable_check_names_its_own_failure_without_a_commit() -> None:
     assert checked.commit is None
 
 
+def test_a_reachable_check_answers_the_full_commit(remote: GitRemote) -> None:
+    remote.commit_example_deck(at=PUSHED_AT)
+
+    checked = a_checker().check(url=remote.url, ref=MAIN_BRANCH, secret="")
+
+    assert checked.failure is None
+    assert checked.commit == remote.head
+
+
 def test_a_check_of_an_access_kind_it_does_not_probe_is_refused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
