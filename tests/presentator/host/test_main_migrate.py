@@ -3,12 +3,12 @@
 import time
 from pathlib import Path
 
+import psycopg
 import pytest
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 from presentator.adapters.postgres.locks import MIGRATION_LOCK
-from presentator.adapters.postgres.migrate import DatabaseRefusedError
 from presentator.host import main
 from tests.support.log_lines import json_logged
 from tests.support.postgres import database_environment, engine_on
@@ -81,7 +81,7 @@ def test_a_migrate_against_a_database_that_does_not_answer_ends_in_one_failed_li
     assert (failed["event"], failed["level"]) == ("process.failed", "error")
     assert (failed["reason"], failed["error_type"]) == (
         "not_answering",
-        DatabaseRefusedError.__name__,
+        psycopg.OperationalError.__name__,
     )
     assert "127.0.0.1" not in logged.text
 

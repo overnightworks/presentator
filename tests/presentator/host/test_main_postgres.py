@@ -3,6 +3,7 @@
 from http import HTTPStatus
 from pathlib import Path
 
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect, text
@@ -61,7 +62,7 @@ def test_a_database_that_does_not_answer_ends_the_start_in_one_failed_line(
     assert (connection["outcome"], connection["reason"]) == ("failed", "not_answering")
     (failed,) = [one for one in logged.lines if one["event"] == "process.failed"]
     assert (failed["level"], failed["reason"]) == ("error", "not_answering")
-    assert failed["error_type"] == DatabaseRefusedError.__name__
+    assert failed["error_type"] == psycopg.OperationalError.__name__
     assert "127.0.0.1" not in logged.text
 
 

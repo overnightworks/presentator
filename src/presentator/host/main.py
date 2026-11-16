@@ -13,10 +13,9 @@ from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
-from typing import Final, NoReturn
+from typing import Final
 from urllib.parse import urlsplit
 
-import logline
 from fastapi import FastAPI
 from logline import RequestLineMiddleware
 from pydantic import SecretStr
@@ -122,6 +121,7 @@ from presentator.host.command_line import (
     migrate_the_database,
 )
 from presentator.host.config import (
+    ConfigurationError,
     PostgresDatabase,
     Settings,
     WhereBuildsRun,
@@ -135,7 +135,13 @@ from presentator.host.oidc import (
     relying_party,
 )
 from presentator.host.polling import ChoreCode, Schedule
-from presentator.host.stopping_server import StoppingServer, served_config
+from presentator.host.stopping_server import (
+    ServerReason,
+    StoppingServer,
+    configure_logging,
+    end_failed,
+    served_config,
+)
 from presentator.host.store_connection import (
     StoreFailure,
     StoreKind,
@@ -336,13 +342,13 @@ def _postgres_stores(
     with timed_connection(StoreKind.POSTGRES) as step:
         refusal = serving_refusal(engine, history)
         if refusal is not None:
-            if refusal is RefusalReason.NOT_ANSWERING:
+            if refusal.reason is RefusalReason.NOT_ANSWERING:
                 step.fail(StoreFailure.NOT_ANSWERING)
             else:
-                step.refuse(refusal)
+                step.refuse(refusal.reason)
     if refusal is not None:
         engine.dispose()
-        raise DatabaseRefusedError(refusal)
+        raise refusal
     toolchain, bound = refresh
     ownership = PostgresRefreshOwnership(
         engine, toolchain=toolchain, lock_timeout=bound
@@ -437,7 +443,9 @@ def _lobby_shell(settings: Settings) -> LobbyShell:
     try:
         return LobbyShell.read(settings.lobby_build)
     except LobbyBuildError as refused:
-        raise cannot_start(str(refused)) from None
+        raise cannot_start(
+            str(refused), variables=(variable_of("lobby_build"),)
+        ) from None
 
 
 def _source_timeout(settings: Settings) -> timedelta:
@@ -645,7 +653,7 @@ def _identity_of_the_toolchain(settings: Settings) -> ToolchainIdentity:
     except OSError as unreadable:
         setting = variable_of("toolchain")
         reason = f"{setting}: the project cannot be read: {unreadable}"
-        raise cannot_start(reason) from None
+        raise cannot_start(reason, variables=(setting,)) from None
 
 
 def _what_builds_a_deck(settings: Settings, *, bound: timedelta) -> DeckToolchain:
@@ -712,10 +720,10 @@ def main(
 ) -> None:
     """Migrate the database when asked to, else serve the lobby.
 
-    Both run on the configuration the environment carries; a refused database
-    ends either in one line and exit status 1.
+    Both run on the configuration the environment carries; a refused
+    configuration or database ends either in one line and exit status 1.
     """
-    logline.configure(SERVICE_NAME)
+    configure_logging(SERVICE_NAME)
     cap_alembic_logging()
     try:
         if command_line().parse_args(arguments).command == MIGRATE_COMMAND:
@@ -725,21 +733,15 @@ def main(
         settings = load_settings()
         instance = build_instance(settings, relying_party_for, migrations_directory)
     except DatabaseRefusedError as refused:
-        _end_refused(refused)
+        driver_error = refused.driver_error
+        codes = {} if driver_error is None else {"error_type": driver_error}
+        end_failed(refused.reason, **codes)
+    except ConfigurationError as refused:
+        # The settings by their variables; the message may name a path.
+        end_failed(
+            ServerReason.CONFIGURATION_REFUSED, setting=",".join(refused.variables)
+        )
     asyncio.run(_serve(instance, settings))
-
-
-def _end_refused(refused: DatabaseRefusedError) -> NoReturn:
-    """End the process in one line naming the refusal, without its traceback.
-
-    The traceback would name the database's host and port, so the line carries
-    only the reason code and the error's class name.
-    """
-    error_type = type(refused).__name__
-    _log.error(
-        "process.failed", extra={"reason": refused.reason, "error_type": error_type}
-    )
-    raise SystemExit(1) from None
 
 
 def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddleware:
@@ -761,13 +763,7 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
         # Starlette runs only this router's lifespan, never a `Host` sub-app's, so
         # the lobby's own is entered here.
         async with instance.lobby.router.lifespan_context(instance.lobby):
-            _log.info("process.ready")
-            try:
-                yield
-            finally:
-                # uvicorn re-raises the signal that stopped it once serving
-                # returns, so the process ends before any line after `serve`.
-                _log.info("process.stopped")
+            yield
 
     return RequestLineMiddleware(
         Router(

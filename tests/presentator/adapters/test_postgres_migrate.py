@@ -1,9 +1,17 @@
 """`migrate` brings a database to head and leaves a newer one alone."""
 
-import pytest
-from sqlalchemy import Engine, inspect, text
+from collections.abc import Callable
 
-from presentator.adapters.postgres.migrate import migrate
+import psycopg
+import pytest
+from sqlalchemy import Engine, inspect, make_url, text
+
+from presentator.adapters.postgres.migrate import (
+    DatabaseRefusedError,
+    migrate,
+    migration_history,
+    serving_refusal,
+)
 from tests.support.log_lines import json_logged
 from tests.support.postgres import engine_on
 
@@ -111,3 +119,86 @@ def test_a_database_a_newer_release_migrated_is_left_as_it_is(
     (refusal,) = [one for one in logged.lines if one["event"] == "migration.refused"]
     assert refusal["reason"] == "newer_than_this_release"
     assert refusal["level"] == "info"
+
+
+def _refusal_of_migrating(engine: Engine) -> DatabaseRefusedError | None:
+    try:
+        migrate(engine)
+    except DatabaseRefusedError as refused:
+        return refused
+    return None
+
+
+def _refusal_of_serving(engine: Engine) -> DatabaseRefusedError | None:
+    return serving_refusal(engine, migration_history())
+
+
+type RefusalOf = Callable[[Engine], DatabaseRefusedError | None]
+_ENTRIES = pytest.mark.parametrize(
+    "refusal_of", [_refusal_of_migrating, _refusal_of_serving]
+)
+
+
+def _refusal_on(url: str, refusal_of: RefusalOf) -> DatabaseRefusedError | None:
+    engine = engine_on(url)
+    try:
+        return refusal_of(engine)
+    finally:
+        engine.dispose()
+
+
+@_ENTRIES
+def test_a_server_that_refuses_the_login_is_refused_as_login_refused(
+    unmigrated_database_url: str, refusal_of: RefusalOf
+) -> None:
+    # The server answers, but holds no database of this name.
+    absent = make_url(unmigrated_database_url).set(database="presentator_absent")
+
+    refused = _refusal_on(absent.render_as_string(), refusal_of)
+
+    assert refused is not None
+    assert (refused.reason, refused.driver_error) == (
+        "login_refused",
+        psycopg.OperationalError.__name__,
+    )
+
+
+@_ENTRIES
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql://nobody@127.0.0.1:1/nothing",
+        # RFC 6761 keeps `.invalid` from ever resolving.
+        "postgresql://nobody@database.invalid/nothing",
+    ],
+)
+def test_a_server_that_is_not_there_is_refused_as_not_answering(
+    url: str, refusal_of: RefusalOf
+) -> None:
+    refused = _refusal_on(url, refusal_of)
+
+    assert refused is not None
+    assert (refused.reason, refused.driver_error) == (
+        "not_answering",
+        psycopg.OperationalError.__name__,
+    )
+
+
+def test_a_database_whose_revision_cannot_be_read_is_refused_as_not_answering(
+    unmigrated_database_url: str,
+) -> None:
+    engine = engine_on(unmigrated_database_url)
+    try:
+        with engine.begin() as connection:
+            # The revision table is there, but without the column alembic reads.
+            connection.execute(text("CREATE TABLE alembic_version (other integer)"))
+
+        refused = _refusal_of_serving(engine)
+    finally:
+        engine.dispose()
+
+    assert refused is not None
+    assert (refused.reason, refused.driver_error) == (
+        "not_answering",
+        psycopg.errors.UndefinedColumn.__name__,
+    )

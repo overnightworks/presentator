@@ -3,9 +3,10 @@
 Audience: the operator whose deployment supplies the settings, and an
 engineer looking one up. Settings are environment variables with the prefix
 `PRESENTATOR_`, read from the process environment and, in development, from a
-gitignored `.env` at the repository root. A refusal at start names the
-setting and what is wrong with it, never a secret's value, so a mistyped
-secret does not land in the startup output.
+gitignored `.env` at the repository root. A refused setting ends the start
+in one `process.failed` line with exit status 1, `reason`
+`configuration_refused` and the refused variables in `setting`, never a value
+or a path, so a mistyped secret does not land in the startup output.
 
 ## Every run names
 
@@ -54,9 +55,13 @@ revision row and one behind this release's head, and `GET /health` answers 503
 while the database does not answer or fails that rule; from the SQLite file the
 database never makes it unready. With either database it answers 503 while Redis
 does not answer. A start the database refuses, and a `migrate` whose database
-does not answer, end in one `process.failed` line with exit status 1; its
-`reason` is `not_answering`, `no_revision` or `behind_this_release`, and the
-last two are cured by `presentator migrate`. The refusals and the log name the
+does not answer or refuses the login, end in one `process.failed` line with
+exit status 1; its `reason` is `not_answering`, `login_refused`, `no_revision`
+or `behind_this_release`, and the last two are cured by `presentator migrate`.
+`login_refused` means the server's port accepted a connection but the server
+refused the password, the role or the database; `not_answering` means the host
+did not resolve or its port did not accept. Both carry the driver's error class
+in `error_type`. The refusals and the log name the
 kind of failure and never the URL or the password.
 The tests find their server in `PRESENTATOR_TEST_POSTGRES_URL`, a URL of a
 server whose user may create databases; every test creates one of its own.
@@ -73,7 +78,7 @@ some of them.
 | `PRESENTATOR_DATABASE` | `presentator.sqlite3` | The SQLite file, used while `PRESENTATOR_DATABASE_URL` is unset. |
 | `PRESENTATOR_MIRRORS` | `mirrors` | Where the bare mirrors of the deck sources live. |
 | `PRESENTATOR_HOST` | `127.0.0.1` | Listen address. |
-| `PRESENTATOR_PORT` | `8000` | Listen port. |
+| `PRESENTATOR_PORT` | `8000` | Listen port, 0 to 65535; another number refuses the start, and a start that cannot listen on it ends in one `process.failed` line with `reason` `port_taken` (or `bind_refused`) and exit status 3. |
 | `PRESENTATOR_TRUSTED_PROXIES` | empty | Comma-separated addresses or networks; see below. |
 | `LOG_LEVEL` | `info` | The root log level (`debug`, `info`, `warning`, `error`, `critical`); the request line is written at `info` whatever it says, and anything else refuses the start. |
 | `PRESENTATOR_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/` as the person and `/api/admin/` as an admin; empty serves no route for a token client's token. See [people](people.md). |
