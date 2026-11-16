@@ -765,7 +765,7 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
     )
 
 
-class _StoppingServer(uvicorn.Server):
+class StoppingServer(uvicorn.Server):
     """A server whose signal marks the stop as begun before uvicorn starts it.
 
     uvicorn closes each open WebSocket with 1012 and lets a running answer
@@ -774,17 +774,19 @@ class _StoppingServer(uvicorn.Server):
     """
 
     def __init__(self, config: uvicorn.Config, stopping: Stopping) -> None:
+        """Serve `config`, marking `stopping` when a signal ends the server."""
         super().__init__(config)
         self._stopping = stopping
 
     def handle_exit(self, sig: int, frame: FrameType | None) -> None:
+        """Mark the stop as begun, then let uvicorn start it."""
         self._stopping.begin()
         super().handle_exit(sig, frame)
 
 
 async def _serve(instance: Instance, settings: Settings) -> None:
     """Poll and sweep for as long as the server answers, and stop with it."""
-    server = _StoppingServer(
+    server = StoppingServer(
         uvicorn.Config(
             served_by_host(instance, settings),
             host=settings.host,
