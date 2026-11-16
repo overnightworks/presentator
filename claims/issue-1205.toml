@@ -1,8 +1,0 @@
-claim_id = "8778ba6cd6cd420cba0ef469ddb18025"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "6b645ce45f23e66f7deb397a53fca52b7bd5ef41"
-branch = "claude/issue-1205-source-fetches-polling-refresh-and-reten"
-scope = ["src/gitmirror", "src/presentator/adapters/decks.py", "src/presentator/application/build_retention.py", "src/presentator/application/deck_builds.py", "src/presentator/application/deck_take_in.py", "src/presentator/application/decks.py", "src/presentator/host/polling.py", "tests/gitmirror", "tests/presentator/adapters/test_decks.py", "tests/presentator/adapters/test_decks_source_fetch_lines.py", "tests/presentator/adapters/test_decks_source_read_failures.py", "tests/presentator/application", "tests/presentator/host/test_polling.py", "tests/support/log_lines.py"]
-opened_commit = "77553cb5b1b21554f306332dcbab7ef404e4b122"
-whole_reason = "a logging slice of #1183 spans its call sites and their tests"
