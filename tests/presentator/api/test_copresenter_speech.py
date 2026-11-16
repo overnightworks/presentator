@@ -196,7 +196,7 @@ def test_an_ask_writes_its_hops_and_its_answer_under_the_requests_trace(
         assert marker not in logged.text
 
 
-def test_a_failed_speech_call_writes_one_error_speak_line_and_one_warning_answer_line(
+def test_a_failed_speech_call_ends_the_answer_as_a_warning_on_the_request_trace(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     service = FakeSpeechService(speak_answers=[SPEAK_FAILURES["cut-body"]])
