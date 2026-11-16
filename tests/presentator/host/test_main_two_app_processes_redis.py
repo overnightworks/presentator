@@ -66,7 +66,7 @@ def test_both_processes_refuse_a_sign_in_visibly_while_redis_cannot_be_reached(
 
 
 @pytest.mark.usefixtures("environment")
-def test_no_log_line_of_either_process_quotes_the_redis_url_through_an_outage(
+def test_no_log_line_or_answer_of_either_process_quotes_the_redis_url_through_an_outage(
     database_url: str, redis_url: str, tmp_path: Path
 ) -> None:
     with (
@@ -77,10 +77,17 @@ def test_no_log_line_of_either_process_quotes_the_redis_url_through_an_outage(
     ):
         authority = urlsplit(redis.url).netloc
         redis.sever()
-        for app in apps:
-            Browser().request(app, "GET", HEALTH_PATH)
-            Browser().request(app, "GET", START_SIGN_IN_PATH)
+        answers = [
+            Browser().request(app, "GET", path)
+            for app in apps
+            for path in (HEALTH_PATH, START_SIGN_IN_PATH)
+        ]
     written = [app.output_after_exit() for app in apps]
 
     assert all('"event"' in output for output in written)
     assert not [output for output in written if authority in output]
+    assert not [
+        each
+        for each in answers
+        if authority in each.text or authority in str(each.headers)
+    ]
