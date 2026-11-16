@@ -14,6 +14,7 @@ import subprocess
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from errno import ELOOP
 from pathlib import Path, PurePosixPath
@@ -23,7 +24,6 @@ import pytest
 from presentator.adapters import builds as builds_module
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
 from presentator.adapters.builds import SlidevBuilds
-from presentator.adapters.decks import FilesystemLocalMount
 from presentator.contracts.decks import (
     FAILURE_TEXT_LIMIT,
     OUTPUT_DIRECTORY,
@@ -368,22 +368,14 @@ def test_a_builds_run_directory_lets_others_read_and_enter_it(
     assert others == stat.S_IROTH | stat.S_IXOTH
 
 
-def test_a_build_of_a_source_that_left_its_mount_is_not_attempted(
+def test_a_build_of_a_source_whose_address_names_no_access_is_not_attempted(
     remote: GitRemote,
     source: Source,
     tmp_path: Path,
 ) -> None:
-    """A file-kind source that left its mount is unreadable at build time too.
-
-    Moved, deleted, or swapped for a symlink since it was fetched, no git
-    process is asked to open wherever the address now points — the same
-    refusal a poll makes.
-    """
-    builds = builds_under(
-        tmp_path,
-        toolchain=on_this_machine(tmp_path),
-        local_mount=FilesystemLocalMount(mount=tmp_path / "elsewhere"),
-    )
+    """No git process is asked to open an address no access names."""
+    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
+    source = replace(source, url="ftp://git.example.invalid/talks.git")
 
     built = builds.build(a_deck(remote), source=source)
 

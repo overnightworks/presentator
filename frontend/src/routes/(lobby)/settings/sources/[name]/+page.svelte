@@ -35,6 +35,9 @@
 	const words = $derived(data.words);
 	const tag = $derived(languageTag());
 	const access = $derived(accessView(source.access, words));
+	const hint = $derived(
+		access.control === 'token' ? words['source.accessRenewInfo'] : words['source.deployKeyInfo']
+	);
 	const runs = $derived(
 		source.runs.map((run) => ({ ...runRow(run, words), age: ageInWords(run.at, Date.now(), tag) }))
 	);
@@ -202,16 +205,13 @@
 		{#if access.control === 'token'}
 			<samp class="dots">{words['source.secretMask']}</samp>
 		{/if}
-		{#if access.control !== 'none'}
-			{@const hint = access.control === 'token' ? words['source.accessRenewInfo'] : words['source.deployKeyInfo']}
-			<button class="info" type="button" popovertarget="access-hint" aria-label={hint} disabled={pending}>
-				<svg viewBox="0 0 24 24" aria-hidden="true">
-					<circle cx="12" cy="12" r="9" />
-					<path d="M12 11v5M12 7.5v.01" />
-				</svg>
-			</button>
-			<span id="access-hint" class="hint" popover="auto">{hint}</span>
-		{/if}
+		<button class="info" type="button" popovertarget="access-hint" aria-label={hint} disabled={pending}>
+			<svg viewBox="0 0 24 24" aria-hidden="true">
+				<circle cx="12" cy="12" r="9" />
+				<path d="M12 11v5M12 7.5v.01" />
+			</svg>
+		</button>
+		<span id="access-hint" class="hint" popover="auto">{hint}</span>
 	</div>
 	{#if access.control === 'deploy-key'}
 		{#if source.public_key !== null}
@@ -237,7 +237,7 @@
 			/>
 			{#if outcome?.request === 'renewKey'}<StatusLine shape={outcome.shape} text={outcome.text} />{/if}
 		</div>
-	{:else if access.control === 'token'}
+	{:else}
 		<form class="form" onsubmit={renewToken}>
 			<div class="fld">
 				<label for="renew-secret">{words['source.secret']}</label>

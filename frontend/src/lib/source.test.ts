@@ -26,7 +26,6 @@ describe('refusalWords', () => {
 		{ reason: 'unknown-access', worded: words['source.refusedUnknownAccess'] },
 		{ reason: 'not-checked', worded: words['source.refusedNotChecked'] },
 		{ reason: 'credential-not-allowed', worded: words['source.refusedSecretNotAllowed'] },
-		{ reason: 'outside-local-mount', worded: words['source.refusedOutsideMount'] },
 		{ reason: 'deploy-key-unavailable', worded: words['source.refusedDeployKey'] }
 	])('words $reason by its sentence', ({ reason, worded }) => {
 		expect(refusalWords(reason, words)).toBe(worded);
@@ -197,7 +196,6 @@ describe('fetchOutcome', () => {
 describe('accessView', () => {
 	it.each<{ access: AccessKind | null; control: string; tag: string | null }>([
 		{ access: 'ssh-deploy-key', control: 'deploy-key', tag: words['source.accessDeployKey'] },
-		{ access: 'local-folder', control: 'none', tag: words['source.accessLocal'] },
 		{ access: 'https-token', control: 'token', tag: words['source.accessToken'] },
 		{ access: null, control: 'token', tag: null }
 	])('shows the $control control for $access', ({ access, control, tag }) => {

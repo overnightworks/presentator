@@ -132,8 +132,7 @@ the path, with `sub` and the client address from webauth's decisions (`api/reque
 carries a language tag, no sentence. The overlay owns its pair ([co-presenter](co-presenter.md)).
 
 **Trust.** A deck author's code, git remotes and people's input are untrusted. The operator's
-settings, his local sources folder (its repositories, metadata and everyone who can write there) and
-hal's token clients are trusted. The shared speech service gets readiness, PCM, transcripts, spoken
+settings and hal's token clients are trusted. The shared speech service gets readiness, PCM, transcripts, spoken
 sentences and two tokens (the person's access token and presentator's workload token) over its plain
 `http` origin; cookies are not forwarded, and what the service keeps is the shared section
 `#sprachdienst`. No operator blessing narrows this model, so an audit keeps the default. The

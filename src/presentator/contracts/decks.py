@@ -1,15 +1,13 @@
 """What a deck and its source are, everywhere in this product."""
 
-import posixpath
 import re
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from ipaddress import IPv6Address
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Final
-from urllib.parse import unquote, urlparse
 
 MANIFEST_FILE: Final = "deck.toml"
 SLIDES_FILE: Final = "slides.md"
@@ -22,7 +20,6 @@ PDF_FILE: Final = "deck.pdf"
 # The directory the toolchain writes into the deck it reads.
 TOOLCHAIN_SCRATCH_DIRECTORY: Final = "node_modules"
 DECK_PATH: Final = "/deck"
-_FILE_SCHEME: Final = "file"
 # What a failed build may say on a page: the end of what its toolchain printed,
 # where the reason stands. A deck's own build can print without limit, and a
 # page is read by a person shortly before they speak.
@@ -99,52 +96,12 @@ RECENT_SOURCE_RUNS: Final = 3
 class AccessKind(StrEnum):
     """How a source is read, derived from its URL's scheme and nothing else.
 
-    HTTPS may carry a token; SSH and the scp form are a deploy key; a `file://`
-    address or a bare absolute path is this box's own mount, and carries no
-    secret at all. An address naming none of them is refused rather than stored
-    as a fourth kind.
+    HTTPS may carry a token; SSH and the scp form are a deploy key. An address
+    naming neither is refused rather than stored as a third kind.
     """
 
     HTTPS = "https-token"
     SSH = "ssh-deploy-key"
-    FILE = "local-folder"
-
-
-# `file://` names no host but the machine that opens it; anything else in the
-# authority is a different machine's address wearing a local scheme, and git
-# itself ignores whatever stands there rather than refusing it, so this
-# refuses it instead of inheriting that silent ambiguity.
-_LOCAL_AUTHORITIES: Final = frozenset({"", "localhost"})
-
-
-def local_mount_path_of(url: str) -> PurePosixPath | None:
-    """The address's path, normalized, when it names a file-kind source.
-
-    A file-kind address is either the `file://` scheme, whose authority must
-    be empty or `localhost`, or a bare absolute path. A `file://` path is
-    percent-decoded first, the way git itself decodes one before it opens it
-    — a bare path is not, because git never decodes one either. `..` is
-    collapsed lexically after that, so a caller judging whether the result
-    still stands under the mount sees the path the address actually reaches
-    rather than one a `..` component, encoded or not, could hide behind.
-    This is still a lexical answer: the one place that asks the real
-    filesystem — the only place a symlink or a mount that has since changed
-    can be caught — is the adapter that resolves it against the mount at
-    every use.
-    """
-    try:
-        parsed = urlparse(url)
-    except ValueError:
-        return None
-    if parsed.scheme == _FILE_SCHEME:
-        if parsed.netloc not in _LOCAL_AUTHORITIES:
-            return None
-        raw = unquote(parsed.path)
-    elif not parsed.scheme and url.startswith("/"):
-        raw = url
-    else:
-        return None
-    return PurePosixPath(posixpath.normpath(raw))
 
 
 # Only these spellings of a remote address are an access. Every other
@@ -200,16 +157,13 @@ def access_kind_of(url: str) -> AccessKind | None:
     """The access the URL's scheme names, or nothing when it names none.
 
     HTTPS may carry a token; SSH and the scp form (`git@host:path`) are a
-    deploy key; `file://` or a bare absolute path is this box's own mount.
-    Anything else is not an access this product has, and that includes a remote
-    address whose host could be read two ways and any address holding a
-    control character.
+    deploy key. Anything else is not an access this product has, and that
+    includes `file://` and bare paths, a remote address whose host could be read
+    two ways and any address holding a control character.
     """
     if any(unicodedata.category(character) == "Cc" for character in url):
         return None
-    if (kind := _remote_access_kind_of(url)) is not None:
-        return kind
-    return AccessKind.FILE if local_mount_path_of(url) is not None else None
+    return _remote_access_kind_of(url)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

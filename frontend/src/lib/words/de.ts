@@ -117,7 +117,6 @@ export type Words = {
     readonly "source.stateNeverFetched": string;
     readonly "source.accessToken": string;
     readonly "source.accessDeployKey": string;
-    readonly "source.accessLocal": string;
     readonly "source.refusedName": string;
     readonly "source.refusedFolder": string;
     readonly "source.refusedDuplicateName": string;
@@ -126,7 +125,6 @@ export type Words = {
     readonly "source.refusedNotChecked": string;
     readonly "source.checkReachable": (gaps: { readonly commit: string }) => string;
     readonly "source.refusedSecretNotAllowed": string;
-    readonly "source.refusedOutsideMount": string;
     readonly "source.refusedDeployKey": string;
     readonly "source.fetchNothingNew": string;
     readonly "source.fetchChanged": string;
@@ -287,16 +285,14 @@ export const words: Words = {
     "source.stateNeverFetched": "nie abgerufen",
     "source.accessToken": "Token",
     "source.accessDeployKey": "Deploy-Key",
-    "source.accessLocal": "Auf diesem Rechner",
     "source.refusedName": "Ein Name besteht aus Kleinbuchstaben, Ziffern und Bindestrichen, beginnt mit einem Buchstaben oder einer Ziffer und ist höchstens 64 Zeichen lang.",
     "source.refusedFolder": "Ein Ordner ist ein Pfad im Repository, etwa examples oder talks/2026, ohne führenden Schrägstrich und ohne .. darin.",
     "source.refusedDuplicateName": "Eine Quelle mit diesem Namen gibt es schon.",
     "source.refusedDuplicateUrl": "Eine Quelle mit dieser Git-URL gibt es schon.",
-    "source.refusedUnknownAccess": "Nutze https://host/pfad, user@host:pfad, ssh://user@host/pfad oder einen Ordner auf diesem Rechner, ohne Benutzername und Passwort darin.",
+    "source.refusedUnknownAccess": "Nutze https://host/pfad, user@host:pfad oder ssh://user@host/pfad, ohne Benutzername und Passwort darin.",
     "source.refusedNotChecked": "Prüfe die Verbindung noch einmal – die URL oder das Secret hat sich seit der letzten Prüfung geändert.",
     "source.checkReachable": (gaps: { readonly commit: string }) => "Repository gelesen, Head " + gaps.commit + ".",
-    "source.refusedSecretNotAllowed": "Ein Schlüssel oder ein Ordner auf diesem Rechner braucht kein Token – lass das Feld leer.",
-    "source.refusedOutsideMount": "Die Adresse muss einen Pfad unter /data/local-sources nennen, wo das Host-Verzeichnis eingebunden ist.",
+    "source.refusedSecretNotAllowed": "Ein Schlüssel braucht kein Token – lass das Feld leer.",
     "source.refusedDeployKey": "Dieser Deploy-Key gehört dir nicht mehr – hier ist ein neuer zum Eintragen.",
     "source.fetchNothingNew": "Abgerufen, nichts Neues.",
     "source.fetchChanged": "Abgerufen.",

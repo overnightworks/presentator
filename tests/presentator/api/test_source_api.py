@@ -29,7 +29,6 @@ from tests.presentator.api.support.source_api_support import (
     decks_over,
 )
 from tests.presentator.application.support.fakes import (
-    LOCAL_MOUNT_EXAMPLE,
     FakeDeckStore,
 )
 from tests.support.lobby import (
@@ -198,7 +197,6 @@ def test_a_source_page_has_its_newest_three_runs_newest_first() -> None:
     [
         (_ADDRESS, AccessKind.SSH),
         ("https://git.example.invalid/talks.git", AccessKind.HTTPS),
-        (f"{LOCAL_MOUNT_EXAMPLE}/talks.git", AccessKind.FILE),
     ],
 )
 def test_a_source_page_names_the_access_and_carries_no_secret(

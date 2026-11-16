@@ -5,7 +5,6 @@ from pathlib import Path
 
 from gitmirror.model import CredentialResolver
 from presentator.adapters.decks import (
-    FilesystemLocalMount,
     MirroredDeckFolders,
     SourceMirrors,
     SqliteSourceStore,
@@ -77,14 +76,12 @@ def folders_under(
     *,
     pull_timeout: timedelta = A_GENEROUS_BOUND,
     credentials: CredentialResolver | None = None,
-    local_mount: FilesystemLocalMount | None = None,
 ) -> MirroredDeckFolders:
     return MirroredDeckFolders(
         mirrors=mirrors_under(
             tmp_path,
             timeout=pull_timeout,
             credentials=credentials,
-            local_mount=local_mount,
         ),
     )
 
@@ -94,15 +91,11 @@ def mirrors_under(
     *,
     timeout: timedelta = A_GENEROUS_BOUND,
     credentials: CredentialResolver | None = None,
-    local_mount: FilesystemLocalMount | None = None,
 ) -> SourceMirrors:
     return SourceMirrors(
         directory=tmp_path / "mirrors",
         credentials=OpenCredentials() if credentials is None else credentials,
         pull_timeout=timeout,
-        local_mount=(
-            FilesystemLocalMount(mount=tmp_path) if local_mount is None else local_mount
-        ),
     )
 
 

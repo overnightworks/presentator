@@ -62,7 +62,6 @@ from presentator.ports.decks import (
     DeckFolders,
     DeckStore,
     DeployKeyDrafts,
-    LocalMount,
     SourceRuns,
     SourceStore,
     ToolchainThemes,
@@ -99,7 +98,6 @@ class SourceRefusal(StrEnum):
     UNKNOWN_ACCESS = "unknown-access"
     NOT_CHECKED = "not-checked"
     CREDENTIAL_NOT_ALLOWED = "credential-not-allowed"
-    OUTSIDE_MOUNT = "outside-local-mount"
     DEPLOY_KEY_UNAVAILABLE = "deploy-key-unavailable"
 
 
@@ -179,7 +177,7 @@ def _refusal_for(
         (not is_a_folder_path(folder), SourceRefusal.MALFORMED_FOLDER),
         (kind is None, SourceRefusal.UNKNOWN_ACCESS),
         (
-            kind in (AccessKind.FILE, AccessKind.SSH) and bool(secret.strip()),
+            kind is AccessKind.SSH and bool(secret.strip()),
             SourceRefusal.CREDENTIAL_NOT_ALLOWED,
         ),
         (any(source.name == name for source in existing), SourceRefusal.DUPLICATE_NAME),
@@ -227,7 +225,6 @@ class Decks:
     checker: ConnectionChecker
     toolchain_themes: ToolchainThemes
     clock: Clock
-    local_mount: LocalMount
     webhook_secrets: WebhookSecrets
     # How long a build may take before the refresh stops believing it is still
     # running: a process that died with the server leaves its attempt behind,
@@ -516,10 +513,6 @@ class Decks:
         )
         if not proven:
             return SourceRefusal.NOT_CHECKED
-        canonical = self._canonical_address(address, existing)
-        if isinstance(canonical, SourceRefusal):
-            return canonical
-        address = canonical
         webhook_secret = self.webhook_secrets.new_secret()
         write = SourceWrite(
             name=named,
@@ -553,22 +546,6 @@ class Decks:
             newer_than=self.clock.now() - DRAFT_MAX_AGE,
         )
         return draft if draft is not None and draft.id == draft_id else None
-
-    def _canonical_address(
-        self,
-        address: str,
-        existing: tuple[Source, ...],
-    ) -> str | SourceRefusal:
-        """The local address the source row keeps, or its precise refusal."""
-        if access_kind_of(address) is not AccessKind.FILE:
-            return address
-        canonical = self.local_mount.canonical_repository(address)
-        if canonical is None:
-            return SourceRefusal.OUTSIDE_MOUNT
-        normalized = str(canonical)
-        if any(source.url == normalized for source in existing):
-            return SourceRefusal.DUPLICATE_URL
-        return normalized
 
     def accept_hook(self, name: str, offered: str) -> bool:
         """Refresh that source when the offered secret matches the stored hash.

@@ -24,7 +24,6 @@ export const KEY_DRAFT_API = `${SOURCES_API}/new/key-draft`;
 export const JSON_ACCEPT = { Accept: 'application/json' };
 export const SAME_ORIGIN = { ...JSON_ACCEPT, 'Sec-Fetch-Site': 'same-origin' };
 export const ACCESS_TOKEN = 'a-read-only-token-of-this-drive';
-const LOCAL_MOUNT_ROUTE = '/drive/local-mount';
 const SSH_ADDRESS = 'git@git.example.invalid';
 
 // Chromium and Firefox share the default stack, so every name and address is
@@ -34,13 +33,6 @@ let counter = 0;
 export const aName = (testInfo: TestInfo, label = 'talks'): string =>
 	`${label}-${testInfo.project.name}-${startedAt}-${counter++}`;
 export const anHttpsAddress = (name: string): string => `https://git.example.invalid/${name}.git`;
-// The folder the drive's lobby accepts local sources under is the harness's to say.
-export const aLocalAddress = async (page: Page, name: string): Promise<string> => {
-	const mount = (await (await page.request.get(LOCAL_MOUNT_ROUTE)).json()) as {
-		path: string;
-	};
-	return `${mount.path}/${name}`;
-};
 export const anSshAddress = (name: string): string => `${SSH_ADDRESS}:${name}.git`;
 
 // Holds the matching requests on their route until released; `seen` lists their addresses.
@@ -192,27 +184,6 @@ export async function opensAnHttpsSource(
 		name,
 		url: anHttpsAddress(name)
 	});
-	await page.goto(sourceAddress(name));
-	await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
-	return { name, created };
-}
-
-/** A local-folder source made through the Add page, then opened at its own address. */
-export async function opensALocalSource(
-	page: Page,
-	words: Words,
-	testInfo: TestInfo
-): Promise<{ name: string; created: CreatedSourceView }> {
-	const name = aName(testInfo);
-	// The folder the drive's lobby accepts local sources under is the harness's to say.
-	const mount = (await (await page.request.get(LOCAL_MOUNT_ROUTE)).json()) as {
-		path: string;
-	};
-	await opensTheForm(page);
-	await fillsTheForm(page, words, { name, url: `${mount.path}/${name}` });
-	await checks(page, words);
-	await expect(page.getByRole('button', { name: words['sourceNew.create'] })).toBeEnabled();
-	const created = await creates(page, words);
 	await page.goto(sourceAddress(name));
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
 	return { name, created };

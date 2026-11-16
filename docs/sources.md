@@ -18,8 +18,9 @@ about sources stand in [configuration](configuration.md) and the runbook to
   without one fails Check connection as unreachable.
 - **SR7** The address decides how a source is read: one parser on the server
   names the access, and the Add form shows only what that address needs. The
-  token is for https only, and a key or folder address never sends one. A key
-  or web address also offers an optional folder, a server folder none.
+  token is for https only, and a key address never sends one. Only https and
+  ssh addresses are sources; `file://` and a bare path are refused like any
+  unknown address. Either kind also offers an optional folder.
 - **SR8** A source may name a folder of its repository, written with `/`, no
   leading slash, no `..`, no empty part, each part at most 255 bytes. A
   malformed one is refused, and a trailing `/` or surrounding space is dropped.

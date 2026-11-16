@@ -41,7 +41,6 @@ from tests.presentator.api.support.source_api_support import (
     without_raising,
 )
 from tests.presentator.application.support.fakes import (
-    LOCAL_MOUNT_EXAMPLE,
     FakeSourceStore,
 )
 from tests.support.sign_in_support import ADMIN as ADMIN_GROUPS
@@ -49,14 +48,12 @@ from tests.support.sign_in_support import MEMBER, Scene
 
 _NAME = A_SOURCE_NAME
 _SSH = "git@git.example.invalid:talks.git"
-_FOLDER = f"{LOCAL_MOUNT_EXAMPLE}/talks.git"
 _CREATED_AND_RENEWED = 2
 _OWN_ORIGIN = {"sec-fetch-site": "same-site", "origin": "https://testserver"}
 _MALFORMED_JSON = '{"webhook_secret": '
 _NOT_FOUND_NAMES = ("unknown", RESERVED_SOURCE_NAME)
 _SOURCES_BY_KIND = {
     AccessKind.SSH: {"url": _SSH, "secret": None},
-    AccessKind.FILE: {"url": _FOLDER, "secret": None},
 }
 _CHOSEN = "a-value-the-caller-chose-for-the-secret"
 _ANSWERS_THAT_HAND_A_SECRET_OUT = (HTTPStatus.OK, HTTPStatus.CREATED)

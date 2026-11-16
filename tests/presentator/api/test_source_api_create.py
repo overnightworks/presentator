@@ -55,9 +55,7 @@ from tests.presentator.api.support.source_api_support import (
     without_raising,
 )
 from tests.presentator.application.support.fakes import (
-    LOCAL_MOUNT_EXAMPLE,
     FakeDeckFolders,
-    FakeLocalMount,
     FakeSourceStore,
 )
 from tests.support.lobby import Lobby
@@ -67,10 +65,8 @@ from tests.support.sign_in_support import MEMBER, Scene
 _NAME = A_SOURCE_NAME
 _OTHER_URL = "https://git.example.invalid/other.git"
 _SSH = "git@git.example.invalid:talks.git"
-_FOLDER = f"{LOCAL_MOUNT_EXAMPLE}/talks.git"
 _NO_PROOF = ""
 _NOT_A_NAME = "not a name"
-_NOT_THE_MOUNT = "/etc/talks.git"
 _USER_PART = "https://user:pw@git.example.invalid/talks.git"
 
 
@@ -313,18 +309,17 @@ _REFUSALS = {
     "unknown access": _Refused(
         SourceRefusal.UNKNOWN_ACCESS, {"url": "http://git.example.invalid/talks.git"}
     ),
+    "file scheme": _Refused(
+        SourceRefusal.UNKNOWN_ACCESS, {"url": "file:///srv/talks.git", "secret": None}
+    ),
+    "bare path": _Refused(
+        SourceRefusal.UNKNOWN_ACCESS, {"url": "/srv/talks.git", "secret": None}
+    ),
     "not checked": _Refused(
         SourceRefusal.NOT_CHECKED, {"fingerprint": "a-proof-for-nothing"}
     ),
-    "credential not allowed": _Refused(
-        SourceRefusal.CREDENTIAL_NOT_ALLOWED, {"url": _FOLDER}
-    ),
     "credential for a key": _Refused(
         SourceRefusal.CREDENTIAL_NOT_ALLOWED, {"url": _SSH}
-    ),
-    "outside the mount": _Refused(
-        SourceRefusal.OUTSIDE_MOUNT,
-        {"url": _NOT_THE_MOUNT, "secret": None},
     ),
     "deploy key unavailable": _Refused(
         SourceRefusal.DEPLOY_KEY_UNAVAILABLE,
@@ -445,19 +440,6 @@ def test_an_ssh_create_binds_the_own_draft_and_the_next_draft_is_new() -> None:
     assert draft(client).json()["id"] != drafted["id"]
     assert_no_store(answer)
     assert_nothing_returned(answer, *world.drafts.private_keys)
-
-
-# 16
-def test_a_local_folder_under_the_mount_is_stored_by_its_canonical_address() -> None:
-    world = a_world()
-    client = an_admin_over(world.decks).client
-
-    answer = create(client, url=_FOLDER, secret=None)
-
-    (stored,) = world.store.sources
-    assert answer.status_code == HTTPStatus.CREATED
-    assert stored.url == str(FakeLocalMount().canonical_repository(_FOLDER))
-    assert_no_store(answer)
 
 
 def test_a_leftover_access_in_the_request_is_ignored_and_the_address_decides() -> None:

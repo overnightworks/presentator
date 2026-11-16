@@ -1,14 +1,14 @@
 # Measured by `quality check --fix`. Entries only ever go down.
 
 [file_lines]
-"src/presentator/application/decks.py" = 824
+"src/presentator/application/decks.py" = 801
 "tests/gitmirror/test_mirror.py" = 1112
-"tests/presentator/adapters/test_builds.py" = 1106
-"tests/presentator/adapters/test_decks.py" = 1338
-"tests/presentator/application/test_decks.py" = 1856
+"tests/presentator/adapters/test_builds.py" = 1098
+"tests/presentator/adapters/test_decks.py" = 1225
+"tests/presentator/application/test_decks.py" = 1835
 
 [function_lines."src/presentator/application/decks.py"]
-"Decks.add_source" = 80
+"Decks.add_source" = 76
 
 [function_lines."tests/presentator/adapters/test_decks.py"]
 "test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair" = 66
@@ -44,5 +44,3 @@ test_a_nested_upload_over_a_controller_gets_status_built_talk_entries_end_and_eo
 
 [clones."tests/presentator/host/test_worker_record_life.py"]
 test_the_upload_wait_is_what_remains_of_the_budget_taken_at_the_accepted_exit = [["tests/presentator/host/test_worker_reply.py", "test_the_sender_wait_is_what_remains_of_the_reply_budget"]]
-
-[literal_text]

@@ -18,7 +18,6 @@ import {
 	answersWith,
 	givenADeployKey,
 	JSON_ACCEPT,
-	opensALocalSource,
 	opensAnHttpsSource,
 	OWN_SOURCE,
 	ownSourceName,
@@ -70,8 +69,8 @@ const notInThePage = (page: Page, secret: string) =>
 test.describe('as an admin', () => {
 	test.use({ person: { role: 'admin', source: OWN_SOURCE } });
 
-	// Cells 1 to 3: the three kinds of source at both widths and both schemes.
-	const kinds = ['https', 'ssh', 'local'] as const;
+	// Cells 1 and 2: the two kinds of source at both widths and both schemes.
+	const kinds = ['https', 'ssh'] as const;
 	for (const kind of kinds) {
 		for (const colorScheme of ['light', 'dark'] as const) {
 			for (const width of [390, 1280]) {
@@ -87,8 +86,6 @@ test.describe('as an admin', () => {
 						if (kind === 'ssh') {
 							name = await ownSourceName(page, OWN_SOURCE);
 							await givenADeployKey(page, name);
-						} else if (kind === 'local') {
-							({ name } = await opensALocalSource(page, words, testInfo));
 						} else {
 							({ name } = await opensAnHttpsSource(page, words, testInfo));
 						}
@@ -105,18 +102,13 @@ test.describe('as an admin', () => {
 							await expect(access.locator('input[type="password"]')).toHaveCount(1);
 							await expect(dots).toHaveCount(2);
 							await expect(page.getByRole('heading', { name: words['source.decks'] })).toHaveCount(0);
-						} else if (kind === 'ssh') {
+						} else {
 							await expect(access.locator('.tag')).toHaveText(words['source.accessDeployKey']);
 							await expect(access.locator('input')).toHaveCount(0);
 							await expect(access.getByRole('button', { name: words['source.copy'] })).toBeVisible();
 							await expect(
 								access.getByRole('button', { name: words['source.deployKeyRenew'], exact: true })
 							).toBeVisible();
-							await expect(dots).toHaveCount(1);
-						} else {
-							await expect(access.locator('.tag')).toHaveText(words['source.accessLocal']);
-							await expect(access.locator('input')).toHaveCount(0);
-							await expect(access.getByRole('button')).toHaveCount(0);
 							await expect(dots).toHaveCount(1);
 						}
 						await expect(webhook.getByRole('group', { name: words['source.webhookAddress'] })).toBeVisible();

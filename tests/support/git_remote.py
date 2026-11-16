@@ -19,6 +19,8 @@ EXAMPLE_TITLE: str = tomllib.loads(
     (EXAMPLE_DECK / "deck.toml").read_text(encoding="utf-8")
 )["title"]
 MAIN_BRANCH = "main"
+_SHIM = str(Path(__file__).parent / "git_shim")
+_FIXTURE_HOST = "https://fixtures.invalid"
 # A submodule entry names a commit of another repository; nothing here holds it.
 _A_COMMIT_NOBODY_HOLDS = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 
@@ -30,12 +32,55 @@ _AUTHORSHIP = {
 }
 
 
+def _the_git_beyond_the_shim() -> str:
+    elsewhere = os.pathsep.join(
+        entry for entry in os.environ["PATH"].split(os.pathsep) if entry != _SHIM
+    )
+    git = shutil.which("git", path=elsewhere)
+    assert git is not None
+    return git
+
+
 def a_path_carrying(*directories: Path) -> str:
     """A PATH with git on it, because reading a deck is still spawning git."""
-    git = shutil.which("git")
-    assert git is not None
-    beside_git = Path(git).parent
-    return os.pathsep.join(str(directory) for directory in (*directories, beside_git))
+    git = _the_git_beyond_the_shim()
+    return os.pathsep.join(
+        (*map(str, directories), _SHIM, str(Path(git).parent)),
+    )
+
+
+def recording_every_git_launch(machine: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Log each git launch to the returned file, on a PATH where the shim stays first.
+
+    The recorder sits behind the shim and runs the real git by absolute path,
+    so no program on PATH can lead back to itself.
+    """
+    log = tmp_path / "git-launches.log"
+    recorder = tmp_path / "recording-bin" / "git"
+    recorder.parent.mkdir()
+    recorder.write_text(
+        f'#!/bin/sh\nprintf \'%s\\n\' "$PWD $*" >> "{log}"\n'
+        f'exec "{_the_git_beyond_the_shim()}" "$@"\n',
+        encoding="utf-8",
+    )
+    recorder.chmod(0o755)
+    _put_ahead_on_path(machine, _SHIM, str(recorder.parent))
+    return log
+
+
+def reading_fixture_remotes(machine: pytest.MonkeyPatch) -> None:
+    """Put the git that opens a fixture remote's https address ahead on PATH."""
+    _put_ahead_on_path(machine, _SHIM)
+
+
+def _put_ahead_on_path(machine: pytest.MonkeyPatch, *directories: str) -> None:
+    """Put directories first on the PATH as it stands, keeping the rest of it."""
+    kept = [
+        entry
+        for entry in os.environ["PATH"].split(os.pathsep)
+        if entry not in directories
+    ]
+    machine.setenv("PATH", os.pathsep.join((*directories, *kept)))
 
 
 def with_the_program(
@@ -81,7 +126,7 @@ class GitRemote:
     @property
     def url(self) -> str:
         """The address a source is configured with."""
-        return self.bare.as_uri()
+        return f"{_FIXTURE_HOST}{self.bare.as_posix()}"
 
     @property
     def head(self) -> str:

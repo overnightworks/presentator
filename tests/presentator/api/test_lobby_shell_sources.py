@@ -14,7 +14,6 @@ from tests.presentator.api.support.source_api_support import (
     a_created_source,
     renew,
 )
-from tests.presentator.application.support.fakes import LOCAL_MOUNT_EXAMPLE
 from tests.support.lobby import (
     A_LOBBY_ASSET,
     NEIGHBOUR,
@@ -29,10 +28,6 @@ from tests.support.lobby import (
 
 SOURCES_PAGE = "/settings/sources"
 _ADDRESS = "git@heimserver:decks.git"
-_A_BOX_FOLDER: dict[str, object] = {
-    "url": f"{LOCAL_MOUNT_EXAMPLE}/talks.git",
-    "secret": None,
-}
 
 
 def an_instance_of_two_people(*, given: GivenDecks = NO_DECKS) -> Lobby:
@@ -83,7 +78,6 @@ def test_the_form_addresses_of_the_old_removal_and_fetch_are_gone_and_change_not
     ("changes", "name", "access", "state"),
     [
         (None, "talks", "https-token", "reachable"),
-        (_A_BOX_FOLDER, "talks", "local-folder", "reachable"),
     ],
 )
 def test_a_created_source_is_listed_with_its_address_state_and_access(

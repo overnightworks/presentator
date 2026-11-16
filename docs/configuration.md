@@ -108,7 +108,6 @@ them and the defaults above do not apply.
 | `PRESENTATOR_DATABASE` | `/data/database/presentator.sqlite3` |
 | `PRESENTATOR_MIRRORS` | `/data/mirrors` |
 | `PRESENTATOR_BUILDS` | `/data/builds` |
-| `PRESENTATOR_LOCAL_SOURCES_MOUNT` | `/data/local-sources` |
 | `PRESENTATOR_TOOLCHAIN` | `/app/slidev` |
 | `PRESENTATOR_LOBBY_BUILD` | `/app/lobby` |
 | `PRESENTATOR_HOST` | `0.0.0.0`, reached through a proxy |

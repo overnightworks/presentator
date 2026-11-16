@@ -16,7 +16,6 @@ export const created = {
 export const addresses = {
 	https: { url: 'https://git.test/talks.git', access: 'https-token' },
 	ssh: { url: 'git@git.test:talks.git', access: 'ssh-deploy-key' },
-	folder: { url: '/srv/talks', access: 'local-folder' },
 	none: { url: 'ftp://git.test/talks.git', access: null }
 } as const satisfies Record<string, { url: string; access: AccessKind | null }>;
 

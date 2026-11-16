@@ -98,6 +98,11 @@ rule = "file-suffix"
 reason = "a fixture copy of the file the frontend build emits under this name and the lobby shell reads by it; the name is the contract between the two"
 
 [[layout.allow]]
+path = "tests/presentator/adapters/test_fixture_remote_path.py"
+rule = "test-layout"
+reason = "its subject is the test-only remote fixture in tests/support, which no adapter module mirrors"
+
+[[layout.allow]]
 path = "slidev/tests/addon-package.test.ts"
 rule = "test-layout"
 reason = "its subject is a deck built by the addon's name, which no addon source file mirrors"

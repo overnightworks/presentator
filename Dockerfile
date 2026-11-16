@@ -163,8 +163,7 @@ ENV PRESENTATOR_DATABASE=/data/database/presentator.sqlite3 \
     PRESENTATOR_BUILDS=/data/builds \
     PRESENTATOR_TOOLCHAIN=/app/slidev \
     PRESENTATOR_LOBBY_BUILD=/app/lobby \
-    PRESENTATOR_HOST=0.0.0.0 \
-    PRESENTATOR_LOCAL_SOURCES_MOUNT=/data/local-sources
+    PRESENTATOR_HOST=0.0.0.0
 # logline writes this release as the version of every log line; the release
 # workflow passes it.
 ARG SERVICE_VERSION

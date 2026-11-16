@@ -40,7 +40,6 @@ describe('what the address shows of the folder', () => {
 	it.each([
 		['https', true],
 		['ssh', true],
-		['folder', false],
 		['none', false]
 	] as const)('shows for a %s address the folder field %s', async (which, shown) => {
 		open();
@@ -100,13 +99,13 @@ describe('the folder on the wire', () => {
 		expect(createButton()?.disabled).toBe(false);
 	});
 
-	it('sends an empty folder once a folder typed for https meets a server folder', async () => {
+	it('sends an empty folder once a folder typed for https meets an address with no access', async () => {
 		const fetched = open();
 		type(URL_FIELD, addresses.https.url);
 		await vi.waitFor(() => expect(folderField()).not.toBeNull());
 		type('source-folder', 'examples');
 
-		type(URL_FIELD, addresses.folder.url);
+		type(URL_FIELD, addresses.none.url);
 		await vi.waitFor(() => expect(folderField()).toBeNull());
 		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
 		checkButton()?.click();
@@ -116,20 +115,6 @@ describe('the folder on the wire', () => {
 
 		await vi.waitFor(() => expect(sentTo(fetched, CREATE)).toHaveLength(1));
 		expect(sentTo(fetched, CREATE)).toEqual([expect.objectContaining({ folder: '' })]);
-	});
-
-	it('shows a fresh empty field when a key address returns after a server folder', async () => {
-		open();
-		type(URL_FIELD, addresses.ssh.url);
-		await vi.waitFor(() => expect(folderField()).not.toBeNull());
-		type('source-folder', 'examples');
-		type(URL_FIELD, addresses.folder.url);
-		await vi.waitFor(() => expect(folderField()).toBeNull());
-
-		type(URL_FIELD, addresses.ssh.url);
-
-		await vi.waitFor(() => expect(folderField()).not.toBeNull());
-		expect(folderField()?.value).toBe('');
 	});
 
 	it('words a refused folder at Create', async () => {

@@ -33,7 +33,6 @@ from presentator.contracts.decks import (
     SourceWrite,
     ToolchainIdentity,
     ToolchainUnavailable,
-    local_mount_path_of,
 )
 from presentator.contracts.models import User
 from presentator.contracts.people import SessionExport, SessionSecretsHeld
@@ -459,32 +458,6 @@ class FakeSourceRunStore:
 
     def remove_for_source(self, source_id: str) -> None:
         self.recorded = [run for run in self.recorded if run.source_id != source_id]
-
-
-# The example every test and the runbook shares for "the mount", so a test
-# reads the same address the documentation does.
-LOCAL_MOUNT_EXAMPLE: Final = PurePosixPath("/data/local-sources")
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FakeLocalMount:
-    """Trusts the lexical path, for an application test with no real disk.
-
-    The real containment — a symlink, a mount that has since changed — is an
-    adapter's own proof (`tests/presentator/adapters/test_decks.py`); this fake only
-    repeats the same lexical parse the form's own refusal already ran, so an
-    application test can still tell an in-mount address from one outside it.
-    """
-
-    mount: PurePosixPath = LOCAL_MOUNT_EXAMPLE
-
-    def canonical_repository(self, address: str) -> Path | None:
-        path = local_mount_path_of(address)
-        if path is None:
-            return None
-        if path != self.mount and self.mount not in path.parents:
-            return None
-        return Path(path)
 
 
 @dataclass
