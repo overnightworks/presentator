@@ -7,10 +7,16 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import Engine, text
+from sqlalchemy.exc import DBAPIError
 
 from presentator.adapters.identity import TokenIdentifierFactory
 from presentator.adapters.postgres.deck_store import PostgresDeckStore
-from presentator.adapters.postgres.locks import REFRESH_LOCK, LockClass, parameters
+from presentator.adapters.postgres.locks import (
+    REFRESH_LOCK,
+    LockClass,
+    lock_of,
+    parameters,
+)
 from presentator.adapters.postgres.refresh_owner import PostgresRefreshOwnership
 from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
 from presentator.adapters.postgres.sources import PostgresSourceStore
@@ -248,3 +254,89 @@ def test_a_holder_whose_connection_ended_leaves_its_block_without_failing(
         _until(lambda: _the_refresh_lock_is_free(engine))
 
     assert held
+
+
+def test_a_pinned_connection_that_ended_outside_a_hold_is_replaced_by_recovery(
+    engine: Engine, owners: Callable[..., PostgresRefreshOwnership]
+) -> None:
+    owner = owners()
+
+    end_connections_holding(engine, LockClass.TOOLCHAIN_PRESENCE)
+    asking = owners(_ANOTHER_TOOLCHAIN)
+    _until(lambda: not asking.toolchain_is_present(_THE_TOOLCHAIN))
+    owner.recover()
+
+    assert asking.toolchain_is_present(_THE_TOOLCHAIN)
+    assert _holds(owner)
+
+
+def test_a_sweep_that_still_holds_the_refresh_keeps_another_from_taking_it_over(
+    engine: Engine, owners: Callable[..., PostgresRefreshOwnership]
+) -> None:
+    sweeping, taking_over = owners(), owners(_ANOTHER_TOOLCHAIN)
+
+    with sweeping.try_hold():
+        end_connections_holding(engine, LockClass.REFRESH)
+        _until(lambda: _the_refresh_lock_is_free(engine))
+        with sweeping.fenced():
+            taken_over_meanwhile = _holds(taking_over)
+    taken_over_after = _holds(taking_over)
+
+    assert (taken_over_meanwhile, taken_over_after) == (False, True)
+
+
+def test_a_take_that_ended_with_its_connection_fails_and_the_next_one_reconnects(
+    engine: Engine, owners: Callable[..., PostgresRefreshOwnership]
+) -> None:
+    owner = owners()
+
+    end_connections_holding(engine, LockClass.TOOLCHAIN_PRESENCE)
+    with pytest.raises(DBAPIError):
+        _holds(owner)
+
+    assert _holds(owner)
+
+
+def test_an_epoch_that_cannot_grow_fails_the_take_and_lets_the_lock_go(
+    engine: Engine, owners: Callable[..., PostgresRefreshOwnership]
+) -> None:
+    owner = owners()
+    largest_epoch = 2**63 - 1
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE refresh_owner SET epoch = :epoch"), {"epoch": largest_epoch}
+        )
+
+    with pytest.raises(DBAPIError):
+        _holds(owner)
+
+    assert _the_refresh_lock_is_free(engine)
+
+
+def test_a_holder_whose_connection_failed_inside_its_block_lets_go_of_nothing_more(
+    engine: Engine, owners: Callable[..., PostgresRefreshOwnership]
+) -> None:
+    owner = owners()
+
+    with owner.try_hold() as held:
+        end_connections_holding(engine, LockClass.REFRESH, LockClass.TOOLCHAIN_PRESENCE)
+        with pytest.raises(DBAPIError):
+            owner.toolchain_is_present(_ANOTHER_TOOLCHAIN)
+
+    assert held
+    assert _the_refresh_lock_is_free(engine)
+
+
+def test_an_owner_whose_toolchain_key_is_held_exclusively_is_not_made(
+    engine: Engine,
+) -> None:
+    key = parameters(lock_of(LockClass.TOOLCHAIN_PRESENCE, _THE_TOOLCHAIN.digest))
+    with engine.connect() as another_process:
+        another_process.execute(
+            text("SELECT pg_advisory_lock(:lock_class, :instance)"), key
+        )
+
+        with pytest.raises(DBAPIError):
+            PostgresRefreshOwnership(
+                engine, toolchain=_THE_TOOLCHAIN, lock_timeout=_BOUND
+            )
