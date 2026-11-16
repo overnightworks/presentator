@@ -78,6 +78,7 @@ def _serving_in_a_thread() -> Generator[int]:
         server.should_exit = True
         thread.join(_END_SECONDS)
         listening.close()
+    assert not thread.is_alive(), "the server thread outlived its stop"
 
 
 def _sent(port: int, data: bytes) -> None:

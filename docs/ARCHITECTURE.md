@@ -133,7 +133,8 @@ writes `process.started`, `process.ready`, `process.stopped` and one `store_conn
 the same process lines with one `connection.ended` per connection and one `wire_phase.ended` per phase, and a
 co-presenter ask `access_token.ended`, `speak.ended` and `answer.ended` (with `first_output_ms`) under the request's
 trace. A start refused by its settings, its port or its database ends in one `process.failed` with a `reason` code; a
-filter on `uvicorn.error` makes uvicorn's records `server.refused`, `request.failed` or `server.reported`, codes only.
+filter on `uvicorn.error` makes uvicorn's warnings and errors `server.refused`, `request.failed` or `server.reported`,
+codes only; its info records stay below the warning level and never reach the log.
 
 **Words and look.** Every lobby word comes from one gettext catalog per language
 (`frontend/src/lib/catalogs`), generated into typed modules for page and server; the session answer
