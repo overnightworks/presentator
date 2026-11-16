@@ -60,6 +60,11 @@ class _UvicornRecordsAsEvents(logging.Filter):
 
     uvicorn's messages quote the bound address and its tracebacks name paths;
     a record this filter does not know keeps only its level and logger.
+
+    It is a stopgap until logline#41 ships, which names these records in
+    logline's own configure; it is removed then. Its risk: it matches
+    uvicorn's message constants, so a uvicorn release that rewords one turns
+    that record into `server.reported`, which the tests of these events show.
     """
 
     @override
