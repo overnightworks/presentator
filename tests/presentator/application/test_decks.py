@@ -35,8 +35,8 @@ from presentator.contracts.decks import (
     SourceState,
     SourceWrite,
 )
+from presentator.ports.decks import BuildRun, RefreshOwnershipTimedOutError
 from tests.presentator.application.support.decks_support import (
-    BUILD_BOUND,
     COMMIT,
     NOW,
     OWNER,
@@ -66,6 +66,7 @@ from tests.presentator.application.support.fakes import (
     FakeConnectionChecker,
     FakeDeckFolders,
     FakeDeckStore,
+    FakeRefreshOwnership,
     FakeSourceRunStore,
     FakeSourceStore,
     FakeToolchainThemes,
@@ -459,12 +460,19 @@ def test_a_revert_to_the_talk_that_stands_is_ready_again_without_building() -> N
     assert _listed_states(decks) == [DeckState.READY]
 
 
-def test_a_build_that_died_with_the_server_is_failed_at_the_next_refresh() -> None:
+@pytest.mark.parametrize(
+    "started_ago",
+    [timedelta(hours=1), timedelta(seconds=1)],
+    ids=["long ago", "a moment ago"],
+)
+def test_an_attempt_the_holder_finds_running_is_failed_however_recent(
+    started_ago: timedelta,
+) -> None:
     builder = FakeBuildRunner()
     decks = decks_over(
         a_folder("kundenfeedback"),
         fakes=DecksFakes(
-            store=a_store_that_was_left_building(started_ago=BUILD_BOUND * 2),
+            store=a_store_that_was_left_building(started_ago=started_ago),
             builder=builder,
         ),
     )
@@ -475,22 +483,6 @@ def test_a_build_that_died_with_the_server_is_failed_at_the_next_refresh() -> No
     assert page.state is DeckState.FAILED
     assert page.attempt is not None
     assert page.attempt.failure == BuildFailure.without_words()
-    assert builder.built == []
-
-
-def test_a_build_still_inside_its_bound_keeps_saying_it_is_building() -> None:
-    builder = FakeBuildRunner()
-    decks = decks_over(
-        a_folder("kundenfeedback"),
-        fakes=DecksFakes(
-            store=a_store_that_was_left_building(started_ago=BUILD_BOUND / 2),
-            builder=builder,
-        ),
-    )
-
-    decks.refresh()
-
-    assert page_of(decks, "kundenfeedback").state is DeckState.BUILDING
     assert builder.built == []
 
 
@@ -1833,3 +1825,73 @@ def test_an_address_naming_no_access_is_refused_whatever_an_earlier_check_proved
     assert checked is SourceRefusal.UNKNOWN_ACCESS
     assert created is SourceRefusal.UNKNOWN_ACCESS
     assert store.all() == ()
+
+
+def test_a_refresh_another_process_holds_takes_nothing_in_and_a_fetch_says_so() -> None:
+    fakes = DecksFakes(ownership=FakeRefreshOwnership(held_elsewhere=True))
+    decks = decks_over(a_folder("kundenfeedback"), fakes=fakes)
+
+    decks.refresh()
+    fetched = decks.refresh_named(SOURCE.name)
+
+    assert fakes.source_runs.recent(SOURCE.id) == ()
+    assert fetched is not None
+    assert fetched.run is None
+
+
+def test_a_refresh_checks_the_link_to_other_processes_and_a_fetch_does_not() -> None:
+    fakes = DecksFakes()
+    decks = decks_over(a_folder("kundenfeedback"), fakes=fakes)
+
+    decks.refresh_named(SOURCE.name)
+    decks.refresh()
+
+    assert fakes.ownership.recoveries == 1
+
+
+def test_a_refresh_that_lost_the_refresh_before_its_sweep_sweeps_nothing() -> None:
+    fakes = DecksFakes(ownership=FakeRefreshOwnership(lost_to_another=True))
+    decks = decks_over(a_folder("kundenfeedback"), fakes=fakes)
+    fakes.builder.on_disk.add(BuildRun("a-run-nobody-names"))
+
+    decks.refresh()
+
+    assert fakes.builder.removed == []
+
+
+def test_a_source_polled_within_the_interval_is_left_to_the_next_refresh() -> None:
+    clock = FrozenClock(instant=NOW)
+    fakes = DecksFakes(clock=clock, poll_interval=timedelta(minutes=5))
+    decks = decks_over(a_folder("kundenfeedback"), fakes=fakes)
+    decks.refresh()
+
+    clock.advance(by=timedelta(minutes=4))
+    decks.refresh()
+    runs_inside_the_interval = len(fakes.source_runs.recent(SOURCE.id))
+    clock.advance(by=timedelta(minutes=1))
+    decks.refresh()
+
+    assert runs_inside_the_interval == 1
+    assert len(fakes.source_runs.recent(SOURCE.id)) == 2  # noqa: PLR2004 - two polls
+
+
+def test_a_source_polled_within_the_interval_is_still_fetched_by_name() -> None:
+    fakes = DecksFakes(poll_interval=timedelta(minutes=5))
+    decks = decks_over(a_folder("kundenfeedback"), fakes=fakes)
+    decks.refresh()
+
+    fetched = decks.refresh_named(SOURCE.name)
+
+    assert fetched is not None
+    assert fetched.run is not None
+    assert len(fakes.source_runs.recent(SOURCE.id)) == 2  # noqa: PLR2004 - two polls
+
+
+def test_a_removal_that_waits_past_its_bound_for_the_refresh_deletes_nothing() -> None:
+    fakes = DecksFakes(ownership=FakeRefreshOwnership(held_elsewhere=True))
+    decks = decks_over(a_folder("kundenfeedback"), fakes=fakes)
+
+    with pytest.raises(RefreshOwnershipTimedOutError):
+        decks.remove_source(SOURCE.name, expected_deck_count=0, expected_run_count=0)
+
+    assert [source.name for source in decks.sources.all()] == [SOURCE.name]

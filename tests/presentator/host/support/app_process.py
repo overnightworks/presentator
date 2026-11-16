@@ -51,12 +51,14 @@ def run() -> None:
     """Serve on the given port until killed.
 
     The mirrors and builds are this process's own directories, as each pod has
-    its own disk; only the database is shared.
+    its own disk, unless the environment names the builds directory the pods
+    share; only the database is shared otherwise.
     """
     os.environ["PRESENTATOR_PORT"] = sys.argv[1]
     for name in ("mirrors", "builds"):
-        os.environ[f"PRESENTATOR_{name.upper()}"] = str(
-            Path.cwd() / directory_name_of(sys.argv[1]) / name
+        os.environ.setdefault(
+            f"PRESENTATOR_{name.upper()}",
+            str(Path.cwd() / directory_name_of(sys.argv[1]) / name),
         )
     issuer = FakeIssuer(
         issuer=os.environ["PRESENTATOR_OIDC_ISSUER"],

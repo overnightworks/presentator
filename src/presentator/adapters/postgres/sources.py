@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from gitmirror.model import CredentialReference
 from presentator.adapters.decks import stored_source, written_source
 from presentator.adapters.postgres.key_drafts import locked_owned_draft, remove_in
+from presentator.adapters.postgres.refresh_owner import RefreshFence
 from presentator.adapters.secrets import DeployKeyPair, SecretBox, generate_deploy_key
 from presentator.contracts.decks import Source, SourceWrite
 from presentator.ports.identity import IdentifierFactory
@@ -56,12 +57,14 @@ class PostgresSourceStore:
 
     A name and a URL are each unique, so two processes adding the same one get
     one source and one refusal. Promoting a draft locks the draft's row first,
-    so two processes promoting it get one source and one refusal.
+    so two processes promoting it get one source and one refusal. Removing a
+    source is the refresh holder's and asks the fence first.
     """
 
     engine: Engine
     identifiers: IdentifierFactory
     box: SecretBox
+    fence: RefreshFence
     new_key_pair: Callable[[], DeployKeyPair] = generate_deploy_key
 
     def add(self, write: SourceWrite) -> Source | None:
@@ -157,6 +160,7 @@ class PostgresSourceStore:
     def remove(self, source_id: str) -> None:
         """Delete that source's own row."""
         with self.engine.begin() as connection:
+            self.fence.check(connection)
             connection.execute(_REMOVE_SOURCE, {"source_id": source_id})
 
     def _parameters(

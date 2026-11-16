@@ -27,7 +27,7 @@ from tests.presentator.adapters.support.source_stores_support import (
     INSTANCE_KEY,
     seed_postgres_owner,
 )
-from tests.support.postgres import ChildModule, engine_on
+from tests.support.postgres import NO_FENCE, ChildModule, engine_on
 
 _CHILD = ChildModule("tests.presentator.adapters.support.deck_writer_process")
 
@@ -47,6 +47,7 @@ def _sources_named(engine: Engine, names: tuple[str, ...]) -> tuple[str, ...]:
         engine=engine,
         identifiers=TokenIdentifierFactory(),
         box=secret_box(INSTANCE_KEY),
+        fence=NO_FENCE,
     )
     written = [
         sources.add(
@@ -94,8 +95,12 @@ def test_two_sources_putting_the_same_slugs_at_once_get_each_slug_once(
 def test_a_reader_beside_a_writer_switching_builds_never_sees_half_a_switch(
     database_url: str, tmp_path: Path, engine: Engine, source_ids: tuple[str, str]
 ) -> None:
-    PostgresDeckStore(engine=engine).put(a_deck(SWITCHED_TALK, source_ids[0]))
-    PostgresDeckStore(engine=engine).put_build(SWITCHED_TALK, a_build(0))
+    PostgresDeckStore(engine=engine, fence=NO_FENCE).put(
+        a_deck(SWITCHED_TALK, source_ids[0])
+    )
+    PostgresDeckStore(engine=engine, fence=NO_FENCE).put_build(
+        SWITCHED_TALK, a_build(0)
+    )
 
     switched, torn = _CHILD.both_report(
         database_url,
@@ -112,7 +117,7 @@ def test_a_reader_beside_a_writer_switching_builds_never_sees_half_a_switch(
 def test_two_processes_marking_one_source_leave_what_one_of_them_would_alone(
     database_url: str, tmp_path: Path, engine: Engine
 ) -> None:
-    decks = PostgresDeckStore(engine=engine)
+    decks = PostgresDeckStore(engine=engine, fence=NO_FENCE)
     carried = {
         source_id: marked_slugs(name, first_half=True)
         + marked_slugs(name, first_half=False)

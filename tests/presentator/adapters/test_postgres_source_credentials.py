@@ -18,7 +18,7 @@ from tests.presentator.adapters.support.source_stores_support import (
     seed_postgres_owner,
 )
 from tests.presentator.adapters.support.source_writer_process import a_source_write
-from tests.support.postgres import engine_on
+from tests.support.postgres import NO_FENCE, engine_on
 
 _OWNER = "the-owner"
 
@@ -42,6 +42,7 @@ def _a_stored_source(engine: Engine) -> str:
         engine=engine,
         identifiers=TokenIdentifierFactory(),
         box=secret_box(INSTANCE_KEY),
+        fence=NO_FENCE,
     ).add(a_source_write("kept", "https://git.example.test/kept.git", _OWNER))
     assert source is not None
     return source.id

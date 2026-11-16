@@ -26,7 +26,6 @@ from presentator.contracts.decks import (
     SourceRunOutcome,
 )
 from tests.presentator.application.support.decks_support import (
-    BUILD_BOUND,
     FINGERPRINT_KEY,
     HTTPS_URL,
     READ_ONLY,
@@ -40,6 +39,7 @@ from tests.presentator.application.support.fakes import (
     FakeBuildRunner,
     FakeConnectionChecker,
     FakeDeployKeyDrafts,
+    FakeRefreshOwnership,
     FakeToolchainThemes,
     FakeWebhookSecrets,
     FrozenClock,
@@ -97,7 +97,8 @@ def wired(tmp_path: Path) -> Wired:
         toolchain_themes=FakeToolchainThemes(),
         clock=clock,
         webhook_secrets=FakeWebhookSecrets(),
-        build_bound=BUILD_BOUND,
+        ownership=FakeRefreshOwnership(),
+        poll_interval=timedelta(0),
         fingerprint_key=FINGERPRINT_KEY,
     )
     return Wired(

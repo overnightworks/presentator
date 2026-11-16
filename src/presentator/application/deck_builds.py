@@ -5,8 +5,8 @@ toolchain that builds now need a build, and what the deck's attempt says about
 it. The deck store, the build runner and the clock stay outside.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import timedelta
 
 from presentator.application import build_retention
 from presentator.contracts.decks import (
@@ -53,12 +53,13 @@ def _made_for(
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DeckBuilds:
-    """The build walk of one instance, over its store, build runner, clock and bound."""
+    """The build walk of one instance, over its store, build runner and clock."""
 
     store: DeckStore
     builder: BuildRunner
     clock: Clock
-    build_bound: timedelta
+    # Whether a process of that toolchain runs now, in this instance or another.
+    toolchain_is_present: Callable[[ToolchainIdentity], bool]
 
     def build_what_changed(self, source: Source, *, building: bool) -> BuildWalk:
         """Build that source's decks whose commit and toolchain nothing has tried yet.
@@ -68,7 +69,10 @@ class DeckBuilds:
         only that deck is rebuilt, and a toolchain change moves every deck's. A
         folder at a standing talk's commit and toolchain whose run is on disk needs
         no build. A commit and toolchain tried are not tried again, so a deck that
-        cannot build costs one build, not one per refresh. A vanished run is rebuilt:
+        cannot build costs one build, not one per refresh. A commit another
+        toolchain built or tried is left to it while a process of that toolchain
+        runs, so a rollout and a rollback never rebuild each other's decks; once
+        none runs, this toolchain builds it. A vanished run is rebuilt:
         `builds/` and `mirrors/` are caches the rows rebuild; a gone mirror is cloned
         again at the next take-in. Answers, per build this pass started, whether it
         delivered the deck, and whether building may go on: a build that met a
@@ -80,10 +84,12 @@ class DeckBuilds:
         for stored in self.store.all():
             if stored.source_id != source.id:
                 continue
-            deck = self._give_up_on_a_build_that_never_returned(stored)
+            deck = self._fail_an_orphaned_attempt(stored)
             standing = build_retention.standing_build(self.builder, deck)
             if standing is not None and _made_for(standing, deck, toolchain):
                 self._deliver_the_standing_talk_again(deck, standing)
+                continue
+            if self._is_left_to_a_present_toolchain(deck, standing, toolchain):
                 continue
             if building and not self._was_already_tried(deck, toolchain):
                 built = self._switch_over(deck, source, toolchain)
@@ -111,21 +117,29 @@ class DeckBuilds:
         """Whether a build was already started for this commit under this toolchain."""
         return deck.attempt is not None and _made_for(deck.attempt, deck, toolchain)
 
-    def _give_up_on_a_build_that_never_returned(self, deck: Deck) -> Deck:
-        """Call an attempt that outlived the build bound failed, not running.
+    def _is_left_to_a_present_toolchain(
+        self, deck: Deck, standing: Build | None, toolchain: ToolchainIdentity
+    ) -> bool:
+        """Whether a toolchain a process still runs built or tried this commit."""
+        return any(
+            made is not None
+            and made.commit == deck.commit
+            and made.toolchain is not None
+            and made.toolchain != toolchain
+            and self.toolchain_is_present(made.toolchain)
+            for made in (standing, deck.attempt)
+        )
 
-        Builds follow one another inside one refresh, so an attempt still
-        saying it runs when the next refresh reads it belongs to a process that
-        is gone — the server was restarted while it built. Nobody may read that
-        as a deck building for ever, and it left no words to show. The bound is
-        one toolchain step's, not the whole walk's, on purpose: no live build
-        is ever read here, so the bound only has to be too long for a leftover
-        to be mistaken for one that just began.
+    def _fail_an_orphaned_attempt(self, deck: Deck) -> Deck:
+        """Call an attempt that still says it runs failed: the holder builds alone.
+
+        Builds follow one another inside the one refresh that holds the lock, so
+        an attempt the walk reads as running belongs to a holder that is gone,
+        however recently it began. Nobody may read that as a deck building for
+        ever, and it left no words to show.
         """
         attempt = deck.attempt
         if attempt is None or attempt.outcome is not BuildOutcome.RUNNING:
-            return deck
-        if self.clock.now() - attempt.started_at <= self.build_bound:
             return deck
         failed = self._failed(deck, attempt, BuildFailure.without_words())
         return deck.carrying(failed)

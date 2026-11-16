@@ -12,7 +12,8 @@ from sqlalchemy.exc import IntegrityError
 from presentator.adapters.schema import create_tables
 from tests.support.postgres import engine_on
 
-_HAS_NO_SQLITE_COUNTERPART = {"alembic_version"}
+# `refresh_owner` fences the refresh of several processes, which one file never has.
+_HAS_NO_SQLITE_COUNTERPART = {"alembic_version", "refresh_owner"}
 
 
 # Whether the column refuses NULL, its Postgres type and its default.

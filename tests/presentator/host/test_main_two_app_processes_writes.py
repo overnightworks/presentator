@@ -332,7 +332,8 @@ def test_runs_recorded_at_both_processes_at_once_keep_exactly_the_bound(
             answers = at_once(
                 [lambda app=app: fetched(admin, app, "talks") for app in apps]
             )
-            assert all(each.json()["run"] is not None for each in answers)
+            # One process refreshes at a time: the other answers without a run.
+            assert any(each.json()["run"] is not None for each in answers)
 
     assert scalar(engine, "SELECT count(*) FROM source_runs") == RECENT_SOURCE_RUNS
     assert _ROUNDS * len(apps) > RECENT_SOURCE_RUNS
@@ -433,12 +434,17 @@ def test_fetches_of_trees_missing_each_others_decks_mark_what_one_fetch_would(
             answers = at_once(
                 [lambda app=app: fetched(admin, app, "talks") for app in apps]
             )
-            outcomes += [each.json()["run"]["outcome"] for each in answers]
+            outcomes += [
+                each.json()["run"]["outcome"]
+                for each in answers
+                if each.json()["run"] is not None
+            ]
             visible_after.append(
                 texts(engine, "SELECT slug FROM decks WHERE removed_at IS NULL")
             )
 
-    assert outcomes == [SourceRunOutcome.SUCCESS] * (_MARKING_ROUNDS * len(apps))
+    assert set(outcomes) == {SourceRunOutcome.SUCCESS}
+    assert len(outcomes) >= _MARKING_ROUNDS
     assert scalar(engine, "SELECT count(*) FROM decks") == 2 * _MARKED_DECKS
     assert all(each in (set(decks_of[0]), set(decks_of[1])) for each in visible_after)
 

@@ -21,6 +21,7 @@ from presentator.adapters.postgres.locks import (
     hold_until_transaction_ends,
     lock_of,
 )
+from presentator.adapters.postgres.refresh_owner import RefreshFence
 from presentator.contracts.decks import Build, BuildAttempt, Deck
 
 # A slug already written by another source stays that source's: the conflict
@@ -83,14 +84,17 @@ class PostgresDeckStore:
     sources get one winner and one refusal. Marking a source's decks removed
     reads and writes the same rows twice, so it takes the source's own advisory
     lock first: two processes marking one source leave what one of them would
-    alone, where interleaved statements could leave a mixture of the two.
+    alone, where interleaved statements could leave a mixture of the two. Every
+    write is the refresh holder's and asks the fence first.
     """
 
     engine: Engine
+    fence: RefreshFence
 
     def put(self, deck: Deck) -> bool:
         """Write the deck under its slug unless another source already carries it."""
         with self.engine.begin() as connection:
+            self.fence.check(connection)
             written = connection.execute(
                 _PUT_DECK,
                 {
@@ -107,6 +111,7 @@ class PostgresDeckStore:
     def put_build(self, slug: str, build: Build) -> None:
         """Switch everything the deck says about its talk over, in one write."""
         with self.engine.begin() as connection:
+            self.fence.check(connection)
             connection.execute(
                 _PUT_BUILD,
                 {
@@ -123,6 +128,7 @@ class PostgresDeckStore:
         """Write down the build this deck last started, and how far it got."""
         columns = attempt_columns(attempt)
         with self.engine.begin() as connection:
+            self.fence.check(connection)
             connection.execute(
                 _PUT_ATTEMPT,
                 {
@@ -155,6 +161,7 @@ class PostgresDeckStore:
         """Mark that source's decks outside `present` removed, clear it inside."""
         carried = sorted(present)
         with self.engine.begin() as connection:
+            self.fence.check(connection)
             hold_until_transaction_ends(
                 connection, lock_of(LockClass.DECK_MARKS, source_id)
             )
@@ -169,6 +176,7 @@ class PostgresDeckStore:
     def remove_marked_before(self, source_id: str, *, before: datetime) -> int:
         """Delete that source's decks marked removed at or before `before`."""
         with self.engine.begin() as connection:
+            self.fence.check(connection)
             removed = connection.execute(
                 _REMOVE_MARKED_BEFORE, {"source_id": source_id, "before": before}
             )
@@ -185,6 +193,7 @@ class PostgresDeckStore:
     def remove_for_source(self, source_id: str) -> None:
         """Delete every deck row this source has ever carried, marked removed or not."""
         with self.engine.begin() as connection:
+            self.fence.check(connection)
             connection.execute(_REMOVE_DECKS_OF_SOURCE, {"source_id": source_id})
 
     def _read(

@@ -19,7 +19,7 @@ from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
 from presentator.contracts.decks import SourceRun, SourceRunOutcome, SourceWrite
 from tests.presentator.adapters.support.source_stores_support import INSTANCE_KEY
-from tests.support.postgres import engine_from_environment
+from tests.support.postgres import NO_FENCE, engine_from_environment
 from tests.support.two_processes import announce_ready_and_wait_for_go
 
 OWNERS: Final = tuple(f"concurrent-owner-{number}" for number in range(20))
@@ -162,8 +162,9 @@ def main() -> None:
             engine=engine,
             identifiers=TokenIdentifierFactory(),
             box=secret_box(INSTANCE_KEY),
+            fence=NO_FENCE,
         ),
-        runs=PostgresSourceRunStore(engine=engine),
+        runs=PostgresSourceRunStore(engine=engine, fence=NO_FENCE),
     )
     announce_ready_and_wait_for_go()
     print(json.dumps(action(stores)))  # noqa: T201 - the parent reads this line

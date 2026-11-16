@@ -54,6 +54,7 @@ from tests.presentator.adapters.support.key_draft_support import (
 from tests.presentator.application.support.fakes import (
     THE_TOOLCHAIN,
     FakeConnectionChecker,
+    FakeRefreshOwnership,
     FakeToolchainThemes,
     FrozenClock,
 )
@@ -226,7 +227,8 @@ def _decks_application(
         checker=FakeConnectionChecker(),
         toolchain_themes=FakeToolchainThemes(),
         clock=FrozenClock(instant=_NOW),
-        build_bound=_A_BOUND,
+        ownership=FakeRefreshOwnership(),
+        poll_interval=timedelta(0),
         fingerprint_key=b"a fingerprint key of some length",
         webhook_secrets=TokenWebhookSecrets(),
     )

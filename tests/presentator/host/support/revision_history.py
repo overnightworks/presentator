@@ -8,8 +8,8 @@ from presentator.adapters.postgres.migrate import MIGRATIONS_DIRECTORY
 
 _NEXT_REVISION: Final = '''"""A revision a database made by an older release lacks."""
 
-revision = "0002"
-down_revision = "0001"
+revision = "0003"
+down_revision = "0002"
 
 
 def upgrade() -> None:
@@ -23,5 +23,5 @@ def a_longer_history(directory: Path) -> Path:
     shutil.copytree(
         MIGRATIONS_DIRECTORY, history, ignore=shutil.ignore_patterns("__pycache__")
     )
-    (history / "versions" / "0002_next.py").write_text(_NEXT_REVISION, encoding="utf-8")
+    (history / "versions" / "0003_next.py").write_text(_NEXT_REVISION, encoding="utf-8")
     return history

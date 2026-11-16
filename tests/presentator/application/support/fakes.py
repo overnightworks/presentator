@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, BinaryIO, Final
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
 
 
 from pydantic import SecretStr
@@ -37,7 +38,11 @@ from presentator.contracts.decks import (
 from presentator.contracts.models import User
 from presentator.contracts.people import SessionExport, SessionSecretsHeld
 from presentator.contracts.preferences import InstanceSettings, PersonPreferences
-from presentator.ports.decks import BuildRun
+from presentator.ports.decks import (
+    BuildRun,
+    RefreshOwnershipLostError,
+    RefreshOwnershipTimedOutError,
+)
 from tests.support.people import a_session_id
 
 # How long one thread waits for another before a test calls the run stuck.
@@ -748,3 +753,47 @@ class FakeToolchainThemes:
 
     def names(self) -> tuple[str, ...] | None:
         return self.names_to_return
+
+
+@dataclass(kw_only=True)
+class FakeRefreshOwnership:
+    """The refresh owner of an instance whose other processes a test arranges."""
+
+    held_elsewhere: bool = False
+    lost_to_another: bool = False
+    present: frozenset[ToolchainIdentity] = frozenset()
+    recoveries: int = 0
+    holding: bool = field(default=False, init=False)
+
+    @contextmanager
+    def try_hold(self) -> Generator[bool]:
+        if self.held_elsewhere:
+            yield False
+            return
+        self.holding = True
+        try:
+            yield True
+        finally:
+            self.holding = False
+
+    @contextmanager
+    def hold(self) -> Generator[None]:
+        if self.held_elsewhere:
+            raise RefreshOwnershipTimedOutError
+        self.holding = True
+        try:
+            yield
+        finally:
+            self.holding = False
+
+    def recover(self) -> None:
+        self.recoveries += 1
+
+    @contextmanager
+    def fenced(self) -> Generator[None]:
+        if self.lost_to_another:
+            raise RefreshOwnershipLostError
+        yield
+
+    def toolchain_is_present(self, toolchain: ToolchainIdentity) -> bool:
+        return toolchain in self.present

@@ -9,11 +9,13 @@ import uuid
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from enum import IntEnum
 from pathlib import Path
+from typing import Final
 
 import pytest
 from pydantic import SecretStr, TypeAdapter
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Connection, Engine, create_engine, text
 from sqlalchemy.engine import URL, make_url
 
 from presentator.adapters.postgres.engine import create_database_engine
@@ -27,6 +29,16 @@ _NO_SERVER = (
 )
 # A trust-authenticated test server asks for no password, so any text will do.
 _ANY_PASSWORD = SecretStr("not-checked-by-the-test-server")
+
+
+class _AnyWriteStands:
+    """A fence that refuses nothing, for the tests of what a store writes."""
+
+    def check(self, connection: Connection) -> None:
+        """Take every write for the holder's."""
+
+
+NO_FENCE: Final = _AnyWriteStands()
 
 
 def _server() -> URL:
@@ -76,6 +88,44 @@ def migrated_template() -> Generator[str]:
         name = make_url(database_url).database
         assert name is not None
         yield name
+
+
+# The server's lock table covers every database on it, so a test counts only its own.
+_THIS_DATABASE: Final = (
+    "database = (SELECT oid FROM pg_database WHERE datname = current_database())"
+)
+_GRANTED_ADVISORY: Final = (
+    "FROM pg_locks WHERE locktype = 'advisory' AND granted"
+    f" AND {_THIS_DATABASE} AND classid::int = ANY(:classes)"
+)
+_COUNT_GRANTED: Final = text(f"SELECT count(*) {_GRANTED_ADVISORY}")
+_END_HOLDERS: Final = text(f"SELECT pg_terminate_backend(pid) {_GRANTED_ADVISORY}")
+_COUNT_WAITING: Final = text(
+    "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
+    " AND database = (SELECT oid FROM pg_database WHERE datname = current_database())"
+)
+
+
+def granted_advisory_locks(engine: Engine, *classes: IntEnum) -> int:
+    """How many advisory locks of these classes the database holds now."""
+    with engine.connect() as connection:
+        return int(
+            connection.execute(
+                _COUNT_GRANTED, {"classes": [int(each) for each in classes]}
+            ).scalar_one()
+        )
+
+
+def waiting_advisory_locks(engine: Engine) -> int:
+    """How many advisory lock requests of the database wait now."""
+    with engine.connect() as connection:
+        return int(connection.execute(_COUNT_WAITING).scalar_one())
+
+
+def end_connections_holding(engine: Engine, *classes: IntEnum) -> None:
+    """End every connection that holds an advisory lock of these classes."""
+    with engine.begin() as connection:
+        connection.execute(_END_HOLDERS, {"classes": [int(each) for each in classes]})
 
 
 def database_environment(database_url: str, directory: Path) -> Mapping[str, str]:
