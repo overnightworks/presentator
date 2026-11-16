@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
+from pydantic import SecretStr
 from redis import Redis
 from redis.backoff import ExponentialBackoff
 from redis.exceptions import RedisError
@@ -90,13 +91,14 @@ class _RedisAskLimiter:
 
 
 class SharedRedis:
-    """The client of the one Redis the pods share; the URL names no credentials."""
+    """The client of the one Redis the pods share; the password never rides the URL."""
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, password: SecretStr | None = None) -> None:
         """Connect lazily: nothing is asked of Redis until a limit or a lease is."""
         # redis-py's `from_url` leaves its keyword arguments untyped.
         self._redis = Redis.from_url(  # pyright: ignore[reportUnknownMemberType]
             url,
+            password=None if password is None else password.get_secret_value(),
             socket_timeout=_TIMEOUT_SECONDS,
             socket_connect_timeout=_TIMEOUT_SECONDS,
             retry=Retry(ExponentialBackoff(), _RETRIES),

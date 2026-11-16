@@ -1,14 +1,17 @@
 """The Redis setting: a URL without credentials, and one the log never quotes."""
 
+from pathlib import Path
+
 import pytest
 
-from presentator.host.config import load_settings
+from presentator.host.config import ConfigurationError, load_settings
 from tests.presentator.host.support.config_refusals import (
     assert_refusal_names,
     assert_refusal_never_quotes,
 )
 
 _URL = "PRESENTATOR_REDIS_URL"
+_PASSWORD_FILE = "PRESENTATOR_REDIS_PASSWORD_FILE"  # noqa: S105 - a variable name
 _A_PASSWORD = "the-password-only-this-test-has"  # noqa: S105 - a marker the refusals must not quote
 
 
@@ -26,6 +29,45 @@ def test_a_redis_url_of_a_host_and_at_most_a_database_is_served(
     environment.setenv(_URL, given)
 
     assert load_settings().redis_url == given
+
+
+def test_a_user_named_in_the_url_is_served(environment: pytest.MonkeyPatch) -> None:
+    environment.setenv(_URL, "redis://presentator@redis:6379/0")
+
+    assert load_settings().redis_url == "redis://presentator@redis:6379/0"
+
+
+def test_the_password_comes_from_its_file_minus_one_trailing_newline(
+    environment: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    password_file = tmp_path / "redis-password"
+    password_file.write_text(f"{_A_PASSWORD}\n", encoding="utf-8")
+    environment.setenv(_PASSWORD_FILE, str(password_file))
+
+    password = load_settings().redis_password
+
+    assert password is not None
+    assert password.get_secret_value() == _A_PASSWORD
+
+
+def test_a_redis_that_asks_for_no_password_has_none(
+    environment: pytest.MonkeyPatch,
+) -> None:
+    environment.delenv(_PASSWORD_FILE, raising=False)
+
+    assert load_settings().redis_password is None
+
+
+def test_a_password_file_that_cannot_be_read_refuses_without_quoting_its_path(
+    environment: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    absent = tmp_path / "absent"
+    environment.setenv(_PASSWORD_FILE, str(absent))
+
+    with pytest.raises(ConfigurationError, match="redis_password_file") as raised:
+        _ = load_settings().redis_password
+
+    assert str(absent) not in str(raised.value)
 
 
 def test_a_missing_url_refuses_naming_the_field(

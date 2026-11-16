@@ -208,10 +208,11 @@ def _a_postgres_url_without_a_password(given: str) -> str:
 _REDIS_DATABASE_PATH: Final = re.compile(r"(/\d+)?", re.ASCII)
 
 
-def _a_redis_url_without_credentials(given: str) -> str:
-    """Require a redis URL of a host and at most a database number, and no credentials.
+def _a_redis_url_without_a_password(given: str) -> str:
+    """Require a redis URL of a host and at most a database number, and no password.
 
-    The client reads its own options from a query, so none is allowed.
+    The password lives in a file, and the client reads its own options from a
+    query, so none is allowed.
     """
     try:
         parsed = urlsplit(given)
@@ -224,13 +225,13 @@ def _a_redis_url_without_credentials(given: str) -> str:
         message = "is a redis or rediss URL naming a host"
         raise ValueError(message)
     if (
-        "@" in parsed.netloc
+        parsed.password is not None
         or parsed.query
         or parsed.fragment
         or _REDIS_DATABASE_PATH.fullmatch(parsed.path) is None
     ):
         message = (
-            "is a redis URL without credentials, query or fragment,"
+            "is a redis URL without a password, query or fragment,"
             " ending in at most a database number"
         )
         raise ValueError(message)
@@ -245,7 +246,7 @@ def _an_absolute_path(given: Path) -> Path:
 
 
 type PostgresUrl = Annotated[str, AfterValidator(_a_postgres_url_without_a_password)]
-type RedisUrl = Annotated[str, AfterValidator(_a_redis_url_without_credentials)]
+type RedisUrl = Annotated[str, AfterValidator(_a_redis_url_without_a_password)]
 type AbsolutePath = Annotated[Path, AfterValidator(_an_absolute_path)]
 
 
@@ -291,9 +292,11 @@ class Settings(
     database_url: PostgresUrl | None = None
     database_password_file: AbsolutePath | None = None
     # The Redis every pod shares for its limits and its ask lease; it keeps
-    # nothing durable and its URL names no credentials. A deployment fact: no
-    # default.
+    # nothing durable and its URL names no password: when the server asks for
+    # one, it lives in a file, read once at start, like the database's. A
+    # deployment fact: no default.
     redis_url: RedisUrl = Field(repr=False)
+    redis_password_file: AbsolutePath | None = None
     mirrors: Path = Path("mirrors")
     # The one directory a file-kind source's address may resolve under; the
     # image fixes it to the path a host directory is bound to, and a direct
@@ -392,6 +395,13 @@ class Settings(
         if self.database_url is None or self.database_password_file is None:
             return None
         return _postgres_database(self.database_url, self.database_password_file)
+
+    @cached_property
+    def redis_password(self) -> SecretStr | None:
+        """The password of the shared Redis, read from its file; none when unset."""
+        if self.redis_password_file is None:
+            return None
+        return read_secret_file(self.redis_password_file, setting="redis_password_file")
 
     def admitted_token_clients(self) -> frozenset[str]:
         """The client ids whose tokens `/api/` takes."""

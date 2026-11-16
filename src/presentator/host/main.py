@@ -198,7 +198,7 @@ def build_instance(
     `migrations_directory` or newer.
     """
     shell = _lobby_shell(settings)
-    redis = SharedRedis(settings.redis_url)
+    redis = SharedRedis(settings.redis_url, settings.redis_password)
     stores = _with_redis(_stores(settings, migrations_directory), redis)
     local_mount = FilesystemLocalMount(mount=settings.local_sources_mount)
     # The one mounted directory a file-kind source's address may resolve

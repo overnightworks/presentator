@@ -1,11 +1,13 @@
 """The Redis every pod shares holds the ask lease and the request budgets."""
 
+import socket
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from threading import Barrier
+from threading import Barrier, Thread
 
 import pytest
+from pydantic import SecretStr
 from redis import Redis
 
 from presentator.adapters.shared_redis import (
@@ -216,6 +218,29 @@ def test_a_redis_that_cannot_be_reached_is_not_ready_and_cannot_tell_the_lease()
         redis.close()
 
     assert not ready
+
+
+def test_the_password_is_sent_to_the_server_on_connect() -> None:
+    password = "the-password-only-this-test-has"  # noqa: S105 - a marker the server must receive
+    with socket.create_server(("127.0.0.1", 0)) as listener:
+        port = listener.getsockname()[1]
+        received: list[bytes] = []
+
+        def listen() -> None:
+            connection, _ = listener.accept()
+            with connection:
+                received.append(connection.recv(4096))
+
+        thread = Thread(target=listen)
+        thread.start()
+        redis = SharedRedis(f"redis://127.0.0.1:{port}/0", SecretStr(password))
+        try:
+            redis.is_ready()
+        finally:
+            redis.close()
+            thread.join()
+
+    assert password.encode() in received[0]
 
 
 def test_a_ticket_released_while_redis_is_out_raises_nothing(
