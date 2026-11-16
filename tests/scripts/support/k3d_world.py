@@ -163,6 +163,9 @@ class World:
     web_restarts: int = 0
     workers_never_ready: bool = False
     workers_keep_uids: bool = False
+    # The seconds after the fake's start at which the first worker's replacement
+    # is Ready again; the worker pods are sampled as not all Ready until then.
+    first_worker_ready_at: float = 110
     hello_spends_a_life: bool = False
     # What the programs sent into the pods print and how the copy ends: the web's
     # client with no worker and with workers (set up with the driver if empty),
@@ -356,6 +359,8 @@ class World:
     ) -> Generator[str]:
         """The lines kubectl's watch prints; a closed stream is counted."""
         self.commands.append((command, environment, None))
+        if command[0] == "timeout" and command[2:4] == ("sh", "-c"):
+            return self.worker_samples()
         if not (
             command[0] == "timeout"
             and command[1].isdigit()
@@ -364,6 +369,16 @@ class World:
             message = f"the fake does not understand the watch {command}"
             raise AssertionError(message)
         return self.stream(self.streams[self.cell])
+
+    def worker_samples(self) -> Generator[str]:
+        """The stamped Ready statuses of the worker pods, every tenth of a second."""
+        try:
+            for tenth in range(950, 2000):
+                seconds = tenth / 10
+                down = seconds < self.first_worker_ready_at
+                yield f"{at(seconds):.6f} {'False' if down else 'True'} True \n"
+        finally:
+            self.watches_closed += 1
 
     def stream(self, events: list[Document]) -> Generator[str]:
         try:

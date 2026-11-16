@@ -4,8 +4,9 @@ Cell 10 starts the web with no worker anywhere and expects it Ready, and a
 build in it to end as an outage. Cell 11 applies the workers' Service and two
 worker pods, runs two web pods and builds hello-deck in each through the one
 Service: the first build's two steps land on two different pods, and the second
-step is not admitted after the first pod is Ready again, so it reaches the idle
-worker while the first restarts. Cell 12 sends the
+step is admitted while the first pod is not Ready, proven by a sample of the
+pods taken at or after the admission, so it reaches the idle worker while the
+first restarts. Cell 12 sends the
 workers a hello under a wrong key and one that reflects the worker's own
 direction, and expects both refused and no pod spent. Cell 13 shows, from inside
 a worker pod, that the build and wire users reach nothing off the loopback, and,
@@ -14,19 +15,26 @@ what reaches it although a process listens there and a policy of the probe's own
 admits the web's pods to every port.
 """
 
+import contextlib
 import json
-from collections.abc import Callable
-from datetime import datetime
+from collections.abc import Callable, Generator, Iterator
 from typing import cast
 
 from probe_build_worker_harness import refuse, say
 from probe_build_worker_k3d_builds import (
+    CLIENT_SECONDS,
     build_outcome,
     copy_deck,
     printed_line,
     run_program,
 )
-from probe_build_worker_k3d_cluster import IN_NAMESPACE, Completed, Document, Run
+from probe_build_worker_k3d_cluster import (
+    IN_NAMESPACE,
+    NAMESPACE,
+    Completed,
+    Document,
+    Run,
+)
 from probe_build_worker_k3d_lives import (
     TERMINATION_WINDOW_SECONDS,
     WORKER_SELECTOR,
@@ -55,6 +63,10 @@ SETTLE_SECONDS = 5
 # Long enough for the cluster's policy controller to program an applied policy.
 POLICY_SETTLE_SECONDS = 15
 HELLOS = {"wrong key": False, "reflected": False, "true": True}
+READY = "True"
+READY_STATUSES = (
+    """'{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{" "}{end}'"""
+)
 LOOPBACK = "loopback"
 POD_LOOPBACK = "127.0.0.1"
 CONNECTED = "connected"
@@ -104,12 +116,6 @@ def is_ready(pod: Document) -> bool:
 def uids_of(pods: list[Document]) -> frozenset[str]:
     """The uids of the Pods."""
     return frozenset(pod["metadata"]["uid"] for pod in pods)
-
-
-def ready_since(pod: Document) -> float:
-    """The epoch seconds at which the Pod's Ready condition last changed."""
-    (ready,) = [c for c in pod["status"]["conditions"] if c["type"] == "Ready"]
-    return datetime.fromisoformat(ready["lastTransitionTime"]).timestamp()
 
 
 def await_ready(
@@ -218,41 +224,65 @@ def delivering_outcome(run: Run, deployment: Document, web: Document) -> Outcome
     return f"{name} did not deliver: {outcome}"
 
 
-def restart_overlap_problem(
-    outcome: Outcome, replacements: list[Document]
-) -> str | None:
-    """Why the second step was admitted after the first worker was Ready again.
+def sampled_while_building(run: Run) -> Generator[str]:
+    """Stamped, readied samples of the worker pods that run beside a build.
 
-    The first step ended its worker's life, so the earlier Ready of the two
-    replacement pods is the first worker's. The Ready condition's time is cut to
-    the second, so the pod became Ready within the second that follows it: an
-    admission before that second ends is not proven after the restart, and only
-    one at or after it is. The two-pod replacement proves which workers served.
+    Each line is the host's epoch time, taken before kubectl reads the pods, then
+    the Ready status of each worker pod listed: the reading is no older than the
+    stamp, and a failed reading prints nothing.
     """
-    admitted = outcome.steps[1].admitted
-    first_back_by = min(ready_since(pod) for pod in replacements) + 1
-    if admitted is not None and admitted < first_back_by:
-        return None
-    return (
-        f"the second step was admitted after the first worker was Ready again "
-        f"(admitted at {admitted}, Ready by {first_back_by:.3f})"
+    read = (
+        f"kubectl get pods --selector {WORKER_SELECTOR} --namespace {NAMESPACE} "
+        f"--output jsonpath={READY_STATUSES}"
     )
+    loop = (
+        f"while :; do now=$(date +%s.%N); ready=$({read}) || continue; "
+        'echo "$now $ready"; sleep 0.1; done'
+    )
+    return run.watch(
+        f"timeout {CLIENT_SECONDS + TERMINATION_WINDOW_SECONDS} sh -c", loop
+    )
+
+
+def restart_overlap_problem(
+    samples: Iterator[str], admitted: float | None
+) -> str | None:
+    """Why the second step was not admitted while a worker restarted.
+
+    The first sample taken at or after the admission, on the host's clock that the
+    web pod shares, must show a worker pod not Ready: the Ready condition's own
+    time is cut to the second, a sample's stamp is not.
+    """
+    if admitted is None:
+        return "the second step was never admitted by a worker"
+    for line in samples:
+        stamp, *statuses = line.split()
+        if float(stamp) >= admitted:
+            if statuses == [READY] * WORKER_PODS:
+                return (
+                    f"the second step was admitted after the first worker was "
+                    f"Ready again (admitted at {admitted}, both Ready at {stamp})"
+                )
+            return None
+    return "no sample of the worker pods was taken after the second step's admission"
 
 
 def first_build_problem(run: Run, deployment: Document, first: Document) -> str | None:
     """Why the first build did not take both workers, the second while one restarted."""
     first_workers = uids_of(list_pods(run, WORKER_SELECTOR))
-    outcome = delivering_outcome(run, deployment, first)
-    if isinstance(outcome, str):
-        return outcome
-    # One life ends with each step: both pods replaced means the second step
-    # reached the idle one.
-    replacements, replaced = await_ready(
-        run, WORKER_SELECTOR, WORKER_PODS, apart_from=first_workers
-    )
-    if not replaced:
-        return "the first build's two steps did not take both worker pods"
-    return restart_overlap_problem(outcome, replacements)
+    with contextlib.closing(sampled_while_building(run)) as samples:
+        next(samples, None)
+        outcome = delivering_outcome(run, deployment, first)
+        if isinstance(outcome, str):
+            return outcome
+        # One life ends with each step: both pods replaced means the second step
+        # reached the idle one.
+        _, replaced = await_ready(
+            run, WORKER_SELECTOR, WORKER_PODS, apart_from=first_workers
+        )
+        if not replaced:
+            return "the first build's two steps did not take both worker pods"
+        return restart_overlap_problem(samples, outcome.steps[1].admitted)
 
 
 def built_over_two_workers(

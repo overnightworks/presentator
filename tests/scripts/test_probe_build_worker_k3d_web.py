@@ -220,32 +220,49 @@ def test_workers_that_are_not_ready_or_not_both_used_fail_cell_11(
     assert f"cell {cell}: FAILED" in output.out
 
 
+def drive_with_second_step(
+    make_fixture: Callable[..., Fixture],
+    web_module: ModuleType,
+    admitted_at: float,
+    ready_at: float,
+) -> Fixture:
+    done = delivered(web_module, second_step_at=admitted_at)
+    world = World(client_stdout=client_output(done), first_worker_ready_at=ready_at)
+    return make_fixture(world)
+
+
 @pytest.mark.parametrize(
-    "admitted_at",
-    [130, 160],
-    ids=["after the second the first worker was Ready in", "long after the restart"],
+    ("admitted_at", "ready_at"),
+    [(105, 110), (125.2, 125.5)],
+    ids=["while the first worker restarts", "in the second it is Ready in, before"],
+)
+def test_a_second_step_admitted_before_the_first_worker_was_ready_again_passes_cell_11(
+    make_fixture: Callable[..., Fixture],
+    web_module: ModuleType,
+    admitted_at: float,
+    ready_at: float,
+) -> None:
+    drive_with_second_step(make_fixture, web_module, admitted_at, ready_at).drive()
+
+
+@pytest.mark.parametrize(
+    ("admitted_at", "ready_at"),
+    [(125.8, 125.5), (110.5, 110), (160, 110)],
+    ids=["in the second it is Ready in, after", "just after", "long after"],
 )
 def test_a_second_step_admitted_after_the_first_worker_was_ready_again_fails_cell_11(
     make_fixture: Callable[..., Fixture],
     web_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
-    admitted_at: int,
+    admitted_at: float,
+    ready_at: float,
 ) -> None:
-    after_the_restart = delivered(web_module, second_step_at=admitted_at)
-    world = World(client_stdout=client_output(after_the_restart))
-    fixture = make_fixture(world)
+    fixture = drive_with_second_step(make_fixture, web_module, admitted_at, ready_at)
     with pytest.raises(SystemExit):
         fixture.drive()
     output = capsys.readouterr()
     assert "after the first worker was Ready again" in output.err
     assert "cell 11: FAILED" in output.out
-
-
-def test_a_second_step_admitted_in_the_second_of_the_first_ready_passes_cell_11(
-    make_fixture: Callable[..., Fixture], web_module: ModuleType
-) -> None:
-    same_second = delivered(web_module, second_step_at=125.9)
-    make_fixture(World(client_stdout=client_output(same_second))).drive()
 
 
 def test_a_build_that_does_not_deliver_in_a_web_pod_fails_cell_11_naming_the_pod(
