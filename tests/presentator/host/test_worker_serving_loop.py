@@ -22,8 +22,12 @@ from tests.presentator.host.support.sealed_snapshot import sealed_snapshot, with
 from tests.support.step_support import ADMITTING_PATH, STEP_LEG
 from tests.support.worker_support import (
     ACCEPT_TIME,
+    ANSWERED_HEADER,
     CHILD_LEG,
     CONNECTIONS,
+    CUT_OFF_HEADER,
+    EXPIRED_AT_RELEASE,
+    EXPIRED_BEFORE_RELEASE,
     IDLE_LEG,
     KEY,
     SENDER_LEG,
@@ -617,49 +621,6 @@ def test_a_body_failure_carries_the_serving_error_as_a_note(
 
     assert surfaced.value is body_failure
     assert any("serving broke" in note for note in body_failure.__notes__)
-
-
-CUT_OFF_HEADER = [
-    "arm 7.0",
-    "spawn",
-    "status",
-    "release",
-    "wait-within",
-    "kill",
-    "wait",
-    "close",
-    "sweep 104.0",
-    "cancel",
-]
-ANSWERED_HEADER = [
-    "arm 7.0",
-    "spawn",
-    "status",
-    "release",
-    "wait-within",
-    "close",
-    "sweep 104.0",
-    "cancel",
-]
-EXPIRED_BEFORE_RELEASE = [
-    "arm 7.0",
-    "spawn",
-    "status",
-    "kill",
-    "wait",
-    "close",
-    "sweep 104.0",
-]
-EXPIRED_AT_RELEASE = [
-    "arm 7.0",
-    "spawn",
-    "status",
-    "release",
-    "kill",
-    "wait",
-    "close",
-    "sweep 104.0",
-]
 
 
 def accept_twice_from(life: ScriptedLife, volume: Path) -> list[bytes]:
