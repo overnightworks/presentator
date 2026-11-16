@@ -306,6 +306,14 @@ class World:
                 self.tools_up = False
             case ("docker", "volume", "rm", "--force", _):
                 self.volume_up = False
+            case ("docker", *_):
+                self.image_effect(command)
+            case _:
+                pass
+
+    def image_effect(self, command: tuple[str, ...]) -> None:
+        """What a docker image command changes: the probe image and the Redis image."""
+        match command:
             case ("docker", "build", *_):
                 self.image_built = True
             case ("docker", "tag", _, name) if name == self.probe_image:
