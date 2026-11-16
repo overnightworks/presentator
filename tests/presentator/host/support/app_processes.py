@@ -34,6 +34,8 @@ from tests.support.two_processes import TwoProcesses, two_modules
 _CHILD: Final = "tests.presentator.host.support.app_process"
 _START_SECONDS: Final = 60
 _REQUEST_SECONDS: Final = 30
+_OUTPUT_END_SECONDS: Final = 30
+_LAST_LINES: Final = 10
 _POLL_SECONDS: Final = 0.1
 _HOST: Final = A_BROWSERS_ADDRESS.removeprefix("https://")
 _FROM_THE_SAME_ORIGIN: Final = {"sec-fetch-site": "same-origin"}
@@ -70,15 +72,32 @@ class App:
     def _drain_output(self) -> None:
         """Keep the issuer's answers and the log lines until the output ends."""
         assert self.process.stdout is not None
-        for line in self.process.stdout:
-            self.written.append(line)
-            if line.startswith(ANSWER_PREFIX):
-                self.answers.put(line.removeprefix(ANSWER_PREFIX).strip())
-            elif line.startswith("{"):
-                self.logged.put(json.loads(line))
-        self.answers.put(None)
-        self.logged.put(None)
-        self.ended.set()
+        try:
+            for line in self.process.stdout:
+                self.written.append(line)
+                if line.startswith(ANSWER_PREFIX):
+                    self.answers.put(line.removeprefix(ANSWER_PREFIX).strip())
+                elif line.startswith("{"):
+                    self.logged.put(json.loads(line))
+        finally:
+            self.answers.put(None)
+            self.logged.put(None)
+            self.ended.set()
+
+    def stop(self, within: float = _OUTPUT_END_SECONDS) -> None:
+        """Kill the process, then wait until its output has been read to the end.
+
+        The pipe stays open until then, so the drain never reads a closed file.
+        """
+        self.process.kill()
+        self.process.wait(timeout=within)
+        if not self.ended.wait(timeout=within):
+            last = "".join(self.written[-_LAST_LINES:])
+            message = (
+                f"the output of the app process on port {self.port} never ended;"
+                f" its last lines:\n{last}"
+            )
+            raise AssertionError(message)
 
     def output_after_exit(self) -> str:
         """Everything the process wrote, once it has exited and its output ended."""
@@ -288,6 +307,10 @@ def serving_apps(
     ) as (processes, ports):
         first = App(processes.first, ports[0])
         second = App(processes.second, ports[1])
-        _wait_until_ready(first)
-        _wait_until_ready(second)
-        yield first, second
+        try:
+            _wait_until_ready(first)
+            _wait_until_ready(second)
+            yield first, second
+        finally:
+            first.stop()
+            second.stop()
