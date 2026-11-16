@@ -61,7 +61,7 @@ unavailable, an outage with no failure of its own. Cell 11 applies the workers'
 documents with two replicas, runs two web pods and builds hello-deck in each
 through the one Service; each web's client builds and exports, a worker's life
 ends with each step, and the first build's two steps must have replaced both
-worker pods, and its second step must have been admitted by a worker before the
+worker pods, and its second step must not have been admitted by a worker after the
 first worker's replacement was Ready, so it reached the idle worker while the
 first restarted.
 Cell 12 runs a program in a web pod that answers the workers'

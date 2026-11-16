@@ -4,7 +4,7 @@ Cell 10 starts the web with no worker anywhere and expects it Ready, and a
 build in it to end as an outage. Cell 11 applies the workers' Service and two
 worker pods, runs two web pods and builds hello-deck in each through the one
 Service: the first build's two steps land on two different pods, and the second
-step is admitted before the first pod is Ready again, so it reaches the idle
+step is not admitted after the first pod is Ready again, so it reaches the idle
 worker while the first restarts. Cell 12 sends the
 workers a hello under a wrong key and one that reflects the worker's own
 direction, and expects both refused and no pod spent. Cell 13 shows, from inside
@@ -221,20 +221,21 @@ def delivering_outcome(run: Run, deployment: Document, web: Document) -> Outcome
 def restart_overlap_problem(
     outcome: Outcome, replacements: list[Document]
 ) -> str | None:
-    """Why the second step was not admitted while the first worker restarted.
+    """Why the second step was admitted after the first worker was Ready again.
 
     The first step ended its worker's life, so the earlier Ready of the two
     replacement pods is the first worker's. The Ready condition's time is cut to
-    the second, so the pod was Ready at or after it: only an admission before
-    that time is certainly before the first worker was Ready again.
+    the second, so the pod became Ready within the second that follows it: an
+    admission before that second ends is not proven after the restart, and only
+    one at or after it is. The two-pod replacement proves which workers served.
     """
     admitted = outcome.steps[1].admitted
-    first_back = min(ready_since(pod) for pod in replacements)
-    if admitted is not None and admitted < first_back:
+    first_back_by = min(ready_since(pod) for pod in replacements) + 1
+    if admitted is not None and admitted < first_back_by:
         return None
     return (
-        f"the second step was not admitted before the first worker was Ready "
-        f"again (admitted at {admitted}, Ready at {first_back:.3f})"
+        f"the second step was admitted after the first worker was Ready again "
+        f"(admitted at {admitted}, Ready by {first_back_by:.3f})"
     )
 
 

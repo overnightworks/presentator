@@ -222,10 +222,10 @@ def test_workers_that_are_not_ready_or_not_both_used_fail_cell_11(
 
 @pytest.mark.parametrize(
     "admitted_at",
-    [125, 130],
-    ids=["in the second the first worker was Ready", "after the restart"],
+    [130, 160],
+    ids=["after the second the first worker was Ready in", "long after the restart"],
 )
-def test_a_second_step_not_admitted_before_the_first_worker_was_ready_fails_cell_11(
+def test_a_second_step_admitted_after_the_first_worker_was_ready_again_fails_cell_11(
     make_fixture: Callable[..., Fixture],
     web_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
@@ -237,8 +237,15 @@ def test_a_second_step_not_admitted_before_the_first_worker_was_ready_fails_cell
     with pytest.raises(SystemExit):
         fixture.drive()
     output = capsys.readouterr()
-    assert "was Ready again" in output.err
+    assert "after the first worker was Ready again" in output.err
     assert "cell 11: FAILED" in output.out
+
+
+def test_a_second_step_admitted_in_the_second_of_the_first_ready_passes_cell_11(
+    make_fixture: Callable[..., Fixture], web_module: ModuleType
+) -> None:
+    same_second = delivered(web_module, second_step_at=125.9)
+    make_fixture(World(client_stdout=client_output(same_second))).drive()
 
 
 def test_a_build_that_does_not_deliver_in_a_web_pod_fails_cell_11_naming_the_pod(
