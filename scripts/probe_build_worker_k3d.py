@@ -157,7 +157,6 @@ from probe_build_worker_k3d_lives import (
 )
 from probe_build_worker_k3d_manifests import (
     PRODUCTION_IMAGE,
-    REDIS_IMAGE,
     REDIS_PINNED,
     WORKER_CONTAINER,
     applied_documents,
@@ -352,7 +351,10 @@ def drive_web(run: Run, overlay: list[Document]) -> str:
     deployment = next(d for d in documents if d["kind"] == "Deployment")
     worker_documents = applied_documents(overlay, init_container=True, replicas=2)
     manifest = as_stream(worker_documents)
-    run("kubectl apply --filename -", stdin=as_stream([*redis_documents(), *documents]))
+    run(
+        "kubectl apply --filename -",
+        stdin=as_stream([*redis_documents(run.redis_image), *documents]),
+    )
     statefulset = next(d for d in worker_documents if d["kind"] == "StatefulSet")
     for number, judge in web_cells(run, deployment, statefulset, manifest):
         if problem := judge():
@@ -435,23 +437,20 @@ def pull_redis(run: Run) -> None:
     if pulled.returncode:
         refuse(f"Redis image {REDIS_PINNED} did not pull: {pulled.stderr[-2000:]}")
     try:
-        run("docker tag", REDIS_PINNED, REDIS_IMAGE)
+        run("docker tag", REDIS_PINNED, run.redis_image)
     finally:
         run("docker image rm", REDIS_PINNED, check=False)
 
 
 def import_redis(run: Run) -> None:
-    """Put the probe Redis into the cluster; the local name goes once it is in."""
-    try:
-        imported = run(
-            "k3d image import", REDIS_IMAGE, "--cluster", run.name, check=False
+    """Put the probe Redis into the cluster; teardown removes the local name."""
+    imported = run(
+        "k3d image import", run.redis_image, "--cluster", run.name, check=False
+    )
+    if imported.returncode:
+        refuse(
+            f"Redis image {run.redis_image} did not import: {imported.stderr[-2000:]}"
         )
-        if imported.returncode:
-            refuse(
-                f"Redis image {REDIS_IMAGE} did not import: {imported.stderr[-2000:]}"
-            )
-    finally:
-        run("docker image rm", REDIS_IMAGE, check=False)
 
 
 def drive(run: Run, released: ReleasedImage | None = None) -> None:

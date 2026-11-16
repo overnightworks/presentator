@@ -181,12 +181,13 @@ def test_a_failure_still_removes_what_the_run_made_then_the_directory(
     with pytest.raises(RuntimeError):
         fixture.drive(released=released)
     run = fixture.run
-    steps = fixture.world.commands[-4:]
+    steps = fixture.world.commands[-5:]
     assert [command for command, _, _ in steps] == [
         ("k3d", "cluster", "delete", run.name),
         ("docker", "rm", "--force", run.tools),
         ("docker", "volume", "rm", "--force", run.images_volume),
         ("docker", "image", "rm", "--force", run.tag),
+        ("docker", "image", "rm", "--force", run.redis_image),
     ]
     for _, environment, _ in steps:
         assert environment["KUBECONFIG"] == str(fixture.run.kubeconfig)
@@ -194,7 +195,7 @@ def test_a_failure_still_removes_what_the_run_made_then_the_directory(
         assert environment["KUBERC"] == "off"
     assert fixture.world.directory_present_at_last_command
     assert not fixture.run.directory.exists()
-    assert fixture.world.holds[-1] == len(fixture.world.commands) - 4
+    assert fixture.world.holds[-1] == len(fixture.world.commands) - 5
 
 
 def test_an_ordinary_teardown_holds_signals_then_says_so_then_deletes(
@@ -781,7 +782,7 @@ def test_the_probe_redis_is_pulled_by_the_runner_and_imported_before_the_pod_exi
 ) -> None:
     fixture = make_fixture()
     fixture.drive()
-    pinned, local = manifests_module.REDIS_PINNED, manifests_module.REDIS_IMAGE
+    pinned, local = manifests_module.REDIS_PINNED, fixture.run.redis_image
     steps = [
         ("docker", "pull", pinned),
         ("docker", "tag", pinned, local),
@@ -811,17 +812,31 @@ def test_a_redis_pull_that_fails_names_the_image_and_creates_no_cluster(
 
 def test_a_redis_import_that_fails_names_the_image_then_tears_down(
     make_fixture: Callable[..., Fixture],
-    manifests_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     fixture = make_fixture(World(redis_import_error="no space left"))
     with pytest.raises(SystemExit):
         fixture.drive()
     refusal = capsys.readouterr().err
-    assert manifests_module.REDIS_IMAGE in refusal
+    assert fixture.run.redis_image in refusal
     assert "no space left" in refusal
     assert fixture.world.issued("kubectl", "apply") == []
     assert fixture.world.issued("k3d", "cluster", "delete") != []
+
+
+@pytest.mark.parametrize(
+    "failing", [("k3d", "cluster", "create"), ("k3d", "image", "import")]
+)
+def test_a_probe_ended_after_the_redis_pull_leaves_no_redis_image(
+    make_fixture: Callable[..., Fixture],
+    driver_module: ModuleType,
+    failing: tuple[str, ...],
+) -> None:
+    fixture = make_fixture(World(failing_command=failing))
+    with pytest.raises(RuntimeError):
+        fixture.drive()
+    assert not fixture.world.redis_image_present
+    driver_module.check_leftovers(fixture.world.lister)
 
 
 def test_the_cells_and_the_commands_from_the_cluster_on_are_the_same_for_either_source(
