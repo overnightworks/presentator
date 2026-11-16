@@ -396,12 +396,12 @@ def test_a_request_line_may_carry_the_admitted_persons_id_as_its_sub(
 def test_a_request_line_whose_sub_is_any_other_value_is_still_checked(
     tmp_path: Path,
 ) -> None:
-    line = {"event": REQUEST_EVENT, "sub": ACCESS}
+    leaking = _a_record({"event": REQUEST_EVENT, "sub": ACCESS})
     with (
         a_speech_instance(tmp_path, next(iter(LEAK_ASKS.values()))()) as instance,
         pytest.raises(AssertionError),
     ):
-        assert_nothing_shows(instance, [_a_record(line)])
+        assert_nothing_shows(instance, [leaking])
 
 
 def test_a_request_line_record_keeps_its_exception_text_when_its_sub_is_exempt(
