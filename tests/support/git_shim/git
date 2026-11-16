@@ -1,0 +1,13 @@
+#!/bin/sh
+# Stands in for git on PATH: a fixture remote answers to an https address, and
+# this opens it from the disk it lives on. A config file cannot do that, the
+# mirror starts git with no global config, so the rewrite rides on the command.
+here=$(dirname "$0")
+IFS=:
+for directory in $PATH; do
+    if [ "$directory" != "$here" ] && [ -x "$directory/git" ]; then
+        exec "$directory/git" -c "url.file:///.insteadOf=https://fixtures.invalid/" "$@"
+    fi
+done
+echo "no git beyond the shim" >&2
+exit 127

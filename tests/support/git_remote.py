@@ -13,15 +13,14 @@ from typing import Literal
 
 import pytest
 
-from presentator.adapters import decks as deck_adapters
-from presentator.contracts.decks import AccessKind
-
 EXAMPLE_DECK = Path(__file__).parents[2] / "examples" / "hello-deck"
 EXAMPLE_SLUG = EXAMPLE_DECK.name
 EXAMPLE_TITLE: str = tomllib.loads(
     (EXAMPLE_DECK / "deck.toml").read_text(encoding="utf-8")
 )["title"]
 MAIN_BRANCH = "main"
+_SHIM = str(Path(__file__).parent / "git_shim")
+_FIXTURE_HOST = "https://fixtures.invalid"
 # A submodule entry names a commit of another repository; nothing here holds it.
 _A_COMMIT_NOBODY_HOLDS = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 
@@ -35,10 +34,19 @@ _AUTHORSHIP = {
 
 def a_path_carrying(*directories: Path) -> str:
     """A PATH with git on it, because reading a deck is still spawning git."""
-    git = shutil.which("git")
+    elsewhere = os.pathsep.join(
+        entry for entry in os.environ["PATH"].split(os.pathsep) if entry != _SHIM
+    )
+    git = shutil.which("git", path=elsewhere)
     assert git is not None
-    beside_git = Path(git).parent
-    return os.pathsep.join(str(directory) for directory in (*directories, beside_git))
+    return os.pathsep.join(
+        (*map(str, directories), _SHIM, str(Path(git).parent)),
+    )
+
+
+def reading_fixture_remotes(machine: pytest.MonkeyPatch) -> None:
+    """Put the git that opens a fixture remote's https address ahead on PATH."""
+    machine.setenv("PATH", a_path_carrying())
 
 
 def with_the_program(
@@ -84,7 +92,7 @@ class GitRemote:
     @property
     def url(self) -> str:
         """The address a source is configured with."""
-        return self.bare.as_uri()
+        return f"{_FIXTURE_HOST}{self.bare.as_posix()}"
 
     @property
     def head(self) -> str:
@@ -252,20 +260,3 @@ def a_remote(under: Path, named: str) -> GitRemote:
     _git(work, "init", "--quiet", "--initial-branch", MAIN_BRANCH)
     _git(work, "remote", "add", "origin", str(bare))
     return GitRemote(bare=bare, work=work)
-
-
-def read_local_remotes_as_https(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Let the mirrors open a `file://` fixture remote as if it were a web one.
-
-    The product reads no address that is not https or ssh; a test that drives
-    a real git needs a remote on disk, so only the adapter's own judgement of
-    an address is widened, never the form's.
-    """
-    named_by_the_product = deck_adapters.access_kind_of
-
-    def named(url: str) -> AccessKind | None:
-        if url.startswith("file://"):
-            return AccessKind.HTTPS
-        return named_by_the_product(url)
-
-    monkeypatch.setattr(deck_adapters, "access_kind_of", named)

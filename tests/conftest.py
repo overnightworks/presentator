@@ -15,7 +15,7 @@ from presentator.host import main
 from tests.support.git_remote import (
     GitRemote,
     a_remote,
-    read_local_remotes_as_https,
+    reading_fixture_remotes,
 )
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -72,14 +72,14 @@ def main_without_serving(environment: pytest.MonkeyPatch) -> Callable[[], None]:
 @pytest.fixture
 def remote(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> GitRemote:
     """An empty bare repository with a working tree that pushes into it."""
-    read_local_remotes_as_https(monkeypatch)
+    reading_fixture_remotes(monkeypatch)
     return a_remote(tmp_path, "remote")
 
 
 @pytest.fixture
 def another_remote(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> GitRemote:
     """A second one, for what two sources of one instance do to one another."""
-    read_local_remotes_as_https(monkeypatch)
+    reading_fixture_remotes(monkeypatch)
     return a_remote(tmp_path, "another-remote")
 
 
