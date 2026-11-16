@@ -121,17 +121,13 @@ class SharedRedis:
         return _RedisAskLimiter(self._redis, round(lease_seconds * _MILLISECONDS))
 
     def is_ready(self) -> bool:
-        """Whether Redis answers; a pod that cannot count its limits serves nobody."""
+        """Whether Redis answers; a pod that cannot count its limits serves nobody.
+
+        It writes no line: the start line and the readiness answer carry the failure.
+        """
         try:
             return bool(self._redis.ping())  # pyright: ignore[reportUnknownMemberType] - redis-py leaves its keyword arguments untyped
-        except RedisError as failure:
-            _LOGGER.warning(
-                "redis_readiness.refused",
-                extra={
-                    "reason": "not_answering",
-                    "error_type": type(failure).__name__,
-                },
-            )
+        except RedisError:
             return False
 
     def close(self) -> None:

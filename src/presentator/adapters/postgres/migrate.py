@@ -45,6 +45,11 @@ class ServingRefusal:
     message: str
 
 
+def cap_alembic_logging() -> None:
+    """Keep alembic's own progress text out of the JSON log; it is free text there."""
+    logging.getLogger("alembic").setLevel(logging.WARNING)
+
+
 def migrate(engine: Engine) -> None:
     """Bring the database to head; concurrent runs wait for one another.
 

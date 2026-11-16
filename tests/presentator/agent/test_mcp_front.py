@@ -27,7 +27,7 @@ from presentator.api.preference_api import ACCOUNT_PATH, SETTINGS_PATH
 from presentator.contracts.models import Role
 from presentator.contracts.preferences import ThemeChoice
 from presentator.host.main import Instance, served_by_host
-from presentator.host.polling import Schedule
+from presentator.host.polling import ChoreCode, Schedule
 from tests.presentator.agent.support.mcp_world import (
     MARKED_PATHS,
     MarkedPath,
@@ -61,8 +61,16 @@ def an_instance(world: World) -> Instance:
     return Instance(
         lobby=world.scene.lobby.app,
         talk=a_talk_app(people=a_crowd()),
-        poller=Schedule(chore=lambda: None, interval=timedelta(seconds=1)),
-        session_sweep=Schedule(chore=lambda: None, interval=timedelta(seconds=1)),
+        poller=Schedule(
+            chore=lambda: None,
+            chore_code=ChoreCode.SOURCE_POLL,
+            interval=timedelta(seconds=1),
+        ),
+        session_sweep=Schedule(
+            chore=lambda: None,
+            chore_code=ChoreCode.SOURCE_POLL,
+            interval=timedelta(seconds=1),
+        ),
     )
 
 

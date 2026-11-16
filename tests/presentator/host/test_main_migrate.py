@@ -9,6 +9,7 @@ from sqlalchemy.engine import Engine
 
 from presentator.adapters.postgres.locks import MIGRATION_LOCK
 from presentator.host import main
+from tests.support.log_lines import json_logged
 from tests.support.postgres import database_environment, engine_on
 from tests.support.two_processes import two_presentators
 
@@ -43,6 +44,23 @@ def test_migrate_brings_an_empty_database_to_head(
         assert len(_revisions(engine)) == 1
     finally:
         engine.dispose()
+
+
+def test_migrate_writes_no_free_text_line_of_alembic(
+    unmigrated_database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    for name, value in database_environment(unmigrated_database_url, tmp_path).items():
+        monkeypatch.setenv(name, value)
+
+    with json_logged(capsys) as logged:
+        main.main(["migrate"])
+
+    assert not [
+        line for line in logged.lines if str(line["logger"]).startswith("alembic")
+    ]
 
 
 def test_two_concurrent_migrations_wait_for_one_another_and_both_end_at_head(
