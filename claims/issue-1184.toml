@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "8923e7e2fb6191d0683103bcf71eb6d031a8ad38"
 branch = "claude/issue-1184-presentator-writes-its-request-line-and"
-scope = [".github/workflows/release.yml", "Dockerfile", "docs/ARCHITECTURE.md", "docs/configuration.md", "pyproject.toml", "src/presentator/agent/backend.py", "src/presentator/agent/mcp.py", "src/presentator/api/auth.py", "src/presentator/api/decks.py", "src/presentator/host/main.py", "src/presentator/host/request_line.py", "src/presentator/host/worker.py", "tests", "uv.lock"]
+scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "Dockerfile", "docs/ARCHITECTURE.md", "docs/configuration.md", "pyproject.toml", "src/presentator/agent/backend.py", "src/presentator/agent/mcp.py", "src/presentator/api/auth.py", "src/presentator/api/decks.py", "src/presentator/host/main.py", "src/presentator/host/request_line.py", "src/presentator/host/worker.py", "tests", "uv.lock"]
 opened_commit = "6c61ecf31dba40435c7bde5bf455a770dd4dcfeb"
 whole_reason = "One logging owner switch: the pin, both entry points, the request line and the tests that call main() only hold together; a half switch leaves two log formats."
