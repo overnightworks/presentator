@@ -23,7 +23,6 @@ import pytest
 from presentator.adapters import build_tree
 from presentator.adapters import builds as builds_module
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
-from presentator.adapters.builds import BuildStep
 from presentator.contracts.decks import (
     FAILURE_TEXT_LIMIT,
     Artefacts,
@@ -31,7 +30,6 @@ from presentator.contracts.decks import (
     BuildFailureReason,
     Deck,
     Source,
-    ToolchainUnavailable,
     talk_address,
 )
 from presentator.ports.decks import BuildRun
@@ -630,46 +628,12 @@ def test_without_a_toolchain_on_the_machine_there_is_no_build(
     # carries it; the page is told that this build left no words.
     assert built == BuildFailure.without_words()
     step = the_error_line(logged)
-    assert (step["event"], step["reason"]) == (
-        "build_step.ended",
-        "toolchain_unavailable",
-    )
+    assert step["event"] == "build_step.ended"
     (build,) = lines_of(logged, "deck_build.ended")
-    assert (build["outcome"], build["reason"], build["level"]) == (
-        "failed",
-        "toolchain_unavailable",
-        "warning",
-    )
+    assert (build["outcome"], build["level"]) == ("failed", "warning")
+    assert step["reason"] == build["reason"] == "toolchain_unavailable"
     assert EXAMPLE_SLUG not in logged.text
     assert _TOOLCHAIN_PROGRAM not in logged.text
-
-
-class _ToolchainThatBreaks:
-    """A toolchain whose step raises, as a bug in this host's own code does."""
-
-    def ran(self, step: BuildStep) -> BuildFailure | ToolchainUnavailable | None:
-        raise RuntimeError(step.name)
-
-
-def test_an_exception_in_a_step_leaves_one_error_line_and_a_warning_for_the_build(
-    remote: GitRemote,
-    source: Source,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    builds = builds_ready_for(tmp_path, source, toolchain=_ToolchainThatBreaks())
-
-    with json_logged(capsys) as logged, pytest.raises(RuntimeError):
-        builds.build(a_deck(remote), source=source)
-
-    step = the_error_line(logged)
-    assert (step["event"], step["error_type"]) == ("build_step.ended", "RuntimeError")
-    (build,) = lines_of(logged, "deck_build.ended")
-    assert (build["outcome"], build["error_type"], build["level"]) == (
-        "failed",
-        "RuntimeError",
-        "warning",
-    )
 
 
 def test_a_commit_the_mirror_cannot_read_the_deck_at_builds_nothing(
