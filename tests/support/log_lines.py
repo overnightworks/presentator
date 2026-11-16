@@ -47,7 +47,7 @@ class LoggedText:
 
 @contextmanager
 def json_logged(capsys: pytest.CaptureFixture[str]) -> Iterator[LoggedText]:
-    """Logging as the hosts set it up, on the output `capsys` holds, until the block ends.
+    """JSON logging on the output `capsys` holds, until the block ends.
 
     The handler binds the output as it is when `configure` runs, which a fixture
     cannot do for a test: pytest swaps the captured streams after the fixtures.
