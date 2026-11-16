@@ -1,77 +1,195 @@
-"""Two processes on one Redis: the lease of a session is held by one at a time."""
+"""Two processes of the ask route on one Redis: one answer per session at a time."""
 
-import subprocess
+import time
 from collections.abc import Iterator
-from threading import Event
+from contextlib import contextmanager
+from dataclasses import dataclass
+from http import HTTPStatus
+from urllib.parse import urlsplit
 
-import pytest
+import httpx2
 
 from tests.presentator.adapters.support.ask_lease_process import (
-    BUSY,
+    FINISH_PATH,
+    HEALTH_PATH,
     LEASE_VARIABLE,
-    RELEASED,
-    TAKEN,
     URL_VARIABLE,
 )
+from tests.presentator.host.support.app_processes import two_free_ports
+from tests.support.copresenter_support import ASK, QUESTION
+from tests.support.redis import relay_in_front_of
 from tests.support.two_processes import TwoProcesses, two_modules
 
+_MODULE = "tests.presentator.adapters.support.ask_lease_process"
 _LEASE_MILLISECONDS = 2000
-_WAIT_FOR_EXPIRY_SECONDS = 30
+_REQUEST_SECONDS = 30
+_START_SECONDS = 60
 _POLL_SECONDS = 0.1
 
 
-def _say(process: subprocess.Popen[str], command: str) -> str:
-    assert process.stdin is not None
-    assert process.stdout is not None
-    process.stdin.write(f"{command}\n")
-    process.stdin.flush()
-    return process.stdout.readline().strip()
+@dataclass(frozen=True, slots=True)
+class _Process:
+    """One running process of the ask route."""
+
+    port: int
+
+    def post(self, path: str) -> httpx2.Response:
+        return httpx2.post(
+            f"http://127.0.0.1:{self.port}{path}",
+            json=QUESTION if path == ASK else None,
+            timeout=_REQUEST_SECONDS,
+        )
+
+    def stream_ask(self) -> httpx2.Response:
+        """The answer's whole body, read until the process ends it."""
+        with httpx2.stream(
+            "POST",
+            f"http://127.0.0.1:{self.port}{ASK}",
+            json=QUESTION,
+            timeout=_REQUEST_SECONDS,
+        ) as response:
+            response.read()
+            return response
+
+    def let_answers_finish(self) -> None:
+        assert self.post(FINISH_PATH).status_code == HTTPStatus.OK
 
 
-@pytest.fixture
-def processes(redis_url: str) -> Iterator[TwoProcesses]:
+def _wait_until_serving(port: int, process: object) -> None:
+    deadline = time.monotonic() + _START_SECONDS
+    while time.monotonic() < deadline:
+        try:
+            if httpx2.get(f"http://127.0.0.1:{port}{HEALTH_PATH}").is_success:
+                return
+        except httpx2.TransportError:
+            pass
+        time.sleep(_POLL_SECONDS)
+    message = f"the process {process!r} never served"
+    raise AssertionError(message)
+
+
+@contextmanager
+def _serving(redis_url: str) -> Iterator[tuple[_Process, _Process, TwoProcesses]]:
+    first_port, second_port = two_free_ports()
     with two_modules(
-        "tests.presentator.adapters.support.ask_lease_process",
-        [],
+        _MODULE,
+        [str(first_port)],
         {URL_VARIABLE: redis_url, LEASE_VARIABLE: str(_LEASE_MILLISECONDS)},
-    ) as started:
-        yield started
+        second_arguments=[str(second_port)],
+    ) as processes:
+        _wait_until_serving(first_port, processes.first)
+        _wait_until_serving(second_port, processes.second)
+        yield _Process(first_port), _Process(second_port), processes
 
 
-def test_an_ask_taken_at_one_process_makes_the_other_busy(
-    processes: TwoProcesses,
+def _output_of(processes: TwoProcesses) -> str:
+    written = []
+    for each in (processes.first, processes.second):
+        each.kill()
+        written.append(each.communicate(timeout=_REQUEST_SECONDS)[0])
+    return "".join(written)
+
+
+def test_an_ask_streaming_at_one_process_makes_the_other_busy(
+    redis_url: str,
 ) -> None:
-    taken = _say(processes.first, "admit")
+    with _serving(redis_url) as (first, second, _processes):
+        with httpx2.stream(
+            "POST", f"http://127.0.0.1:{first.port}{ASK}", json=QUESTION
+        ) as streaming:
+            busy = second.post(ASK)
+        first.let_answers_finish()
 
-    other = _say(processes.second, "admit")
+    assert streaming.status_code == HTTPStatus.OK
+    assert busy.status_code == HTTPStatus.TOO_MANY_REQUESTS
+    assert busy.headers["retry-after"] == "1"
 
-    assert (taken, other) == (TAKEN, BUSY)
 
-
-def test_the_lease_is_free_at_the_other_process_once_its_holder_releases(
-    processes: TwoProcesses,
+def test_the_other_process_answers_once_the_streaming_one_ends(
+    redis_url: str,
 ) -> None:
-    _say(processes.first, "admit")
-    released = _say(processes.first, "release")
+    with _serving(redis_url) as (first, second, _processes):
+        second.let_answers_finish()
+        with httpx2.stream(
+            "POST", f"http://127.0.0.1:{first.port}{ASK}", json=QUESTION
+        ) as streaming:
+            busy = second.post(ASK)
+            first.let_answers_finish()
+            streaming.read()
+        after_the_release = second.stream_ask()
 
-    other = _say(processes.second, "admit")
-
-    assert (released, other) == (RELEASED, TAKEN)
+    assert busy.status_code == HTTPStatus.TOO_MANY_REQUESTS
+    assert after_the_release.status_code == HTTPStatus.OK
 
 
 def test_the_lease_of_a_holder_that_died_expires_at_the_other_process(
-    processes: TwoProcesses,
+    redis_url: str,
 ) -> None:
-    _say(processes.first, "admit")
-    processes.first.kill()
-    processes.first.wait()
+    with _serving(redis_url) as (first, second, processes):
+        second.let_answers_finish()
+        with httpx2.stream(
+            "POST", f"http://127.0.0.1:{first.port}{ASK}", json=QUESTION
+        ):
+            processes.first.kill()
+            processes.first.wait()
+            statuses = [second.post(ASK).status_code]
+            deadline = time.monotonic() + _START_SECONDS
+            while statuses[-1] != HTTPStatus.OK and time.monotonic() < deadline:
+                time.sleep(_POLL_SECONDS)
+                statuses.append(second.post(ASK).status_code)
 
-    answers = [_say(processes.second, "admit")]
-    waited = 0.0
-    while answers[-1] == BUSY and waited < _WAIT_FOR_EXPIRY_SECONDS:
-        Event().wait(_POLL_SECONDS)
-        waited += _POLL_SECONDS
-        answers.append(_say(processes.second, "admit"))
+    assert statuses[0] == HTTPStatus.TOO_MANY_REQUESTS
+    assert statuses[-1] == HTTPStatus.OK
 
-    assert answers[0] == BUSY
-    assert answers[-1] == TAKEN
+
+def test_an_ask_while_redis_cannot_be_reached_is_refused_visibly_and_leaks_nothing(
+    redis_url: str,
+) -> None:
+    with (
+        relay_in_front_of(redis_url) as redis,
+        _serving(redis.url) as (
+            first,
+            second,
+            processes,
+        ),
+    ):
+        authority = urlsplit(redis.url).netloc
+        redis.sever()
+        refused = [first.post(ASK), second.post(ASK)]
+        written = _output_of(processes)
+
+    assert [each.status_code for each in refused] == [
+        HTTPStatus.SERVICE_UNAVAILABLE
+    ] * 2
+    assert not [each for each in refused if authority in each.text]
+    assert "ask lease failed" in written
+    assert authority not in written
+
+
+def test_an_answer_whose_lease_cannot_be_renewed_ends_visibly_and_leaks_nothing(
+    redis_url: str,
+) -> None:
+    with (
+        relay_in_front_of(redis_url) as redis,
+        _serving(redis.url) as (
+            first,
+            _second,
+            processes,
+        ),
+    ):
+        with httpx2.stream(
+            "POST",
+            f"http://127.0.0.1:{first.port}{ASK}",
+            json=QUESTION,
+            timeout=_REQUEST_SECONDS,
+        ) as streaming:
+            authority = urlsplit(redis.url).netloc
+            redis.sever()
+            body = "".join(streaming.iter_text())
+        written = _output_of(processes)
+
+    assert "event: error" in body
+    assert authority not in body
+    assert "ask lease renewal failed" in written
+    assert "ask lease release failed" in written
+    assert authority not in written

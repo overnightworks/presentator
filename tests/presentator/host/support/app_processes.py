@@ -191,7 +191,8 @@ class Browser:
         return None if person is None else person["username"]
 
 
-def _two_free_ports() -> tuple[int, int]:
+def two_free_ports() -> tuple[int, int]:
+    """Two loopback ports no listener holds now."""
     with closing(socket.socket()) as first, closing(socket.socket()) as second:
         first.bind(("127.0.0.1", 0))
         second.bind(("127.0.0.1", 0))
@@ -242,7 +243,7 @@ def starting_apps(
     `history` replaces the migration history both know, as a release with a
     longer one would.
     """
-    ports = _two_free_ports()
+    ports = two_free_ports()
     extra = [] if history is None else [str(history)]
     with two_modules(
         _CHILD,
