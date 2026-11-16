@@ -126,9 +126,10 @@ Problems follow RFC 9457 with `tag:` URI types, as an https address breaks when 
 
 **Logging.** logline owns it: each process calls `configure` first (`presentator`, `presentator-worker`),
 so every line is one JSON object. One request line per HTTP request names the route template, never
-the path, with `sub` and the client address from webauth's decisions (`api/request_line.py`). Every other line
-is a literal `<noun>.<verb_past>` event with id, count and code fields; the web writes
-`process.started`, `process.ready`, `process.stopped` and one `store_connection.ended` per store.
+the path, with `sub` and the client address from webauth's decisions (`api/request_line.py`). The audit, person
+erasure and export, migrate, refresh-lock and process lines are literal `<noun>.<verb_past>` events with id, count
+and code fields; the web writes `process.started`, `process.ready`, `process.stopped` and one
+`store_connection.ended` per store. Other lines are still free text.
 
 **Words and look.** Every lobby word comes from one gettext catalog per language
 (`frontend/src/lib/catalogs`), generated into typed modules for page and server; the session answer
