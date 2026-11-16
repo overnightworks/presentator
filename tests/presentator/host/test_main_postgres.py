@@ -7,8 +7,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect, text
 
+from presentator.adapters.postgres.migrate import DatabaseRefusedError
 from presentator.host import main
-from presentator.host.config import ConfigurationError, load_settings
+from presentator.host.config import load_settings
 from tests.support.lobby import A_BROWSERS_ADDRESS, A_BROWSERS_HEADERS, A_TALK_ADDRESS
 from tests.support.log_lines import json_logged
 from tests.support.postgres import database_environment, engine_on
@@ -27,9 +28,10 @@ def test_an_empty_database_is_refused_at_start_and_left_without_a_table(
 ) -> None:
     _point_at(environment, unmigrated_database_url, tmp_path)
 
-    with pytest.raises(ConfigurationError, match="migrate"):
+    with pytest.raises(DatabaseRefusedError) as refused:
         main.build_instance(load_settings())
 
+    assert refused.value.reason == "no_revision"
     engine = engine_on(unmigrated_database_url)
     try:
         assert inspect(engine).get_table_names() == []
@@ -38,7 +40,7 @@ def test_an_empty_database_is_refused_at_start_and_left_without_a_table(
     assert not (tmp_path / "presentator.sqlite3").exists()
 
 
-def test_a_database_that_does_not_answer_at_start_ends_its_line_failed(
+def test_a_database_that_does_not_answer_ends_the_start_in_one_failed_line(
     environment: pytest.MonkeyPatch,
     redis_url: str,
     tmp_path: Path,
@@ -47,15 +49,20 @@ def test_a_database_that_does_not_answer_at_start_ends_its_line_failed(
     _point_at(environment, "postgresql://nobody@127.0.0.1:1/nothing", tmp_path)
     environment.setenv("PRESENTATOR_REDIS_URL", redis_url)
 
-    with json_logged(capsys) as logged, pytest.raises(ConfigurationError):
-        main.build_instance(load_settings())
+    with json_logged(capsys) as logged, pytest.raises(SystemExit) as ended:
+        main.main([])
 
-    (line,) = [
+    assert ended.value.code == 1
+    (connection,) = [
         one
         for one in logged.lines
         if one["event"] == "store_connection.ended" and one["kind"] == "postgres"
     ]
-    assert (line["outcome"], line["reason"]) == ("failed", "not_answering")
+    assert (connection["outcome"], connection["reason"]) == ("failed", "not_answering")
+    (failed,) = [one for one in logged.lines if one["event"] == "process.failed"]
+    assert (failed["level"], failed["reason"]) == ("error", "not_answering")
+    assert failed["error_type"] == DatabaseRefusedError.__name__
+    assert "127.0.0.1" not in logged.text
 
 
 @pytest.mark.parametrize("address", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])
