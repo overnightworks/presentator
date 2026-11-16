@@ -40,6 +40,7 @@ from tests.support.postgres import (
 _BOUND = timedelta(milliseconds=300)
 _WAIT_SECONDS = 30
 _NOW = datetime(2026, 11, 16, 9, tzinfo=UTC)
+_SERVER_DEFAULT_LOCK_TIMEOUT = "0"
 _THE_TOOLCHAIN = ToolchainIdentity("a" * 64)
 _ANOTHER_TOOLCHAIN = ToolchainIdentity("b" * 64)
 _TAKE_AND_LET_GO_OF_THE_REFRESH_LOCK = text(
@@ -342,3 +343,8 @@ def test_an_owner_whose_toolchain_key_is_held_exclusively_is_not_made(
             PostgresRefreshOwnership(
                 engine, toolchain=_THE_TOOLCHAIN, lock_timeout=_BOUND
             )
+
+        with engine.connect() as checked_out:
+            lock_timeout = checked_out.execute(text("SHOW lock_timeout")).scalar_one()
+
+    assert lock_timeout == _SERVER_DEFAULT_LOCK_TIMEOUT
