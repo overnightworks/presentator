@@ -25,6 +25,8 @@ from presentator.host.main import main
 from tests.support.fake_issuer import FakeIssuer
 
 ANSWER_PREFIX: Final = "issuer-answer "
+# Names the refresh token the issuer hands every sign-in, so a session can renew.
+REFRESH_TOKEN_VARIABLE: Final = "PRESENTATOR_TEST_REFRESH_TOKEN"  # noqa: S105 - a variable name
 
 
 def directory_name_of(port: str | int) -> str:
@@ -73,6 +75,9 @@ def run() -> None:
         client_id=os.environ["PRESENTATOR_OIDC_CLIENT_ID"],
         now=datetime.now(UTC),
     )
+    refresh_token = os.environ.pop(REFRESH_TOKEN_VARIABLE, None)
+    if refresh_token:
+        issuer.issue_refresh_token(refresh_token)
     threading.Thread(target=_answer_the_parent, args=(issuer,), daemon=True).start()
     main(
         [],

@@ -20,6 +20,7 @@ from presentator.api.copresenter import (
     CoPresenterSurface,
     add_copresenter_routes,
 )
+from presentator.api.health import Stopping
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
@@ -42,6 +43,7 @@ from tests.support.copresenter_support import (
     INTERNAL_ERROR,
     POLICY_VIOLATION,
     QUESTION,
+    SERVICE_RESTART,
     TALK_ORIGIN,
     ManualDeadline,
     PrivateFakes,
@@ -731,3 +733,24 @@ def test_busy_local_hearing_stops_before_more_pcm_after_authoritative_loss(
     assert ended.value.code == HopClose.NORMAL
     assert private.speech.hearing.frames == frames_before_loss
     assert private.speech.hearing.closed == 1
+
+
+def test_a_stopping_instance_takes_no_new_ask_and_closes_a_hearing_with_1012() -> None:
+    stopping = Stopping()
+    lobby, private, _clock = a_copresenter_talk_host(stopping=stopping)
+    lobby.sign_in(role=Role.ADMIN)
+    stopping.begin()
+
+    answer = ask(lobby.client)
+    with (
+        lobby.client.websocket_connect(
+            HEARING, headers={"origin": TALK_ORIGIN}
+        ) as socket,
+        pytest.raises(WebSocketDisconnect) as closed,
+    ):
+        socket.receive_text()
+
+    assert answer.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert private.answers.messages == []
+    assert closed.value.code == SERVICE_RESTART
+    assert private.speech.hearing_opens == 0

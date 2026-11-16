@@ -25,6 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.requests import HTTPConnection
 from starlette.responses import Response
 
+from presentator.api.health import never_stopping
 from presentator.api.session_api import language_of
 from presentator.contracts.copresenter import (
     AccessRefusal,
@@ -63,6 +64,7 @@ if TYPE_CHECKING:
 _CHECK_INTERVAL_SECONDS: Final = 0.5
 _POLICY_VIOLATION: Final = 1008
 _INTERNAL_ERROR: Final = 1011
+_SERVICE_RESTART: Final = 1012
 _GENERIC_ANSWER_FAILURE: Final = "the answer could not be spoken"
 MAX_SAID_LENGTH: Final = 2_000
 
@@ -99,6 +101,7 @@ class CoPresenterSurface:
     browser_origin: str
     deadline_seconds: float
     delay: Delay = asyncio.sleep
+    stopping: Callable[[], bool] = never_stopping
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -154,6 +157,9 @@ def add_copresenter_routes(
             await socket.close(code=_POLICY_VIOLATION)
             return
         await socket.accept()
+        if surface.stopping():
+            await socket.close(code=_SERVICE_RESTART)
+            return
         await _hearing_lease(
             socket,
             language=language,
@@ -223,6 +229,8 @@ def _ask_route(
     surface: CoPresenterSurface, *, admission: Admission, guard: _SessionGuard
 ) -> Callable[[Request, AskRequest], Awaitable[Response]]:
     async def _ask(request: Request, question: AskRequest) -> Response:
+        if surface.stopping():
+            return _unavailable()
         deadline = asyncio.get_running_loop().time() + surface.deadline_seconds
         admitted = await run_in_threadpool(
             _admit, surface, admission, request, question, deadline

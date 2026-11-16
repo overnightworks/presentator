@@ -10,10 +10,11 @@ import copy
 import logging
 from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
+from types import FrameType
 from typing import Final
 from urllib.parse import urlsplit
 
@@ -110,7 +111,7 @@ from presentator.api.auth import (
     create_lobby,
 )
 from presentator.api.copresenter import CoPresenterSurface
-from presentator.api.health import Readiness, always_ready
+from presentator.api.health import Readiness, Stopping, always_ready
 from presentator.api.lobby_shell import LobbyBuildError, LobbyShell
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_content_security_policy
@@ -177,6 +178,7 @@ class Instance:
     poller: Schedule
     session_sweep: Schedule
     close: Callable[[], None] = _nothing_to_close
+    stopping: Stopping = field(default_factory=Stopping)
 
 
 type SessionStore = SqliteSessionRecordStore | PostgresSessionRecordStore
@@ -215,7 +217,9 @@ def build_instance(
     shell = _lobby_shell(settings)
     redis = SharedRedis(settings.redis_url.get_secret_value(), settings.redis_password)
     toolchain = _identity_of_the_toolchain(settings)
+    stopping = Stopping()
     stores = _with_redis(_stores(settings, migrations_directory, toolchain), redis)
+    stores = copy.replace(stores, readiness=stopping.unready(stores.readiness))
     mirrors = SourceMirrors(
         directory=settings.mirrors,
         credentials=stores.credentials,
@@ -234,10 +238,19 @@ def build_instance(
             mirrors=mirrors,
             shell=shell,
         ),
-        talk=_talk(settings, stores, decks, talk_auth, mirrors, redis=redis),
+        talk=_talk(
+            settings,
+            stores,
+            decks,
+            talk_auth,
+            mirrors,
+            redis=redis,
+            stopping=stopping,
+        ),
         poller=_poller(settings, decks),
         session_sweep=_session_sweep(stores.sessions, SystemClock()),
         close=stores.close,
+        stopping=stopping,
     )
 
 
@@ -467,6 +480,7 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
     mirrors: SourceMirrors,
     *,
     redis: SharedRedis,
+    stopping: Stopping,
 ) -> FastAPI:
     """The talk host, with the co-presenter it speaks to."""
     return create_talk(
@@ -475,7 +489,7 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
         auth=auth,
         lobby_origin=settings.public_origin,
         copresenter=_copresenter_surface(
-            settings, stores.sessions, decks, auth, mirrors, redis
+            settings, stores.sessions, decks, auth, mirrors, redis, stopping
         ),
         readiness=stores.readiness,
     )
@@ -488,6 +502,7 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
     auth: InstalledAuth,
     mirrors: SourceMirrors,
     redis: SharedRedis,
+    stopping: Stopping,
 ) -> CoPresenterSurface:
     """What only a signed-in admin may reach at the talk host: the gateway's answers."""
     answers = gateway_answerer(settings.agent, auth.relying_party)
@@ -514,6 +529,7 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
         limiter=ask_limiter_of(redis, deadline_seconds=answers.deadline_seconds),
         browser_origin=settings.talk_origin,
         deadline_seconds=answers.deadline_seconds,
+        stopping=stopping,
     )
 
 
@@ -749,9 +765,26 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
     )
 
 
+class _StoppingServer(uvicorn.Server):
+    """A server whose signal marks the stop as begun before uvicorn starts it.
+
+    uvicorn closes each open WebSocket with 1012 and lets a running answer
+    finish; the mark makes `/health` unready and refuses new asks and hearings
+    from the signal on.
+    """
+
+    def __init__(self, config: uvicorn.Config, stopping: Stopping) -> None:
+        super().__init__(config)
+        self._stopping = stopping
+
+    def handle_exit(self, sig: int, frame: FrameType | None) -> None:
+        self._stopping.begin()
+        super().handle_exit(sig, frame)
+
+
 async def _serve(instance: Instance, settings: Settings) -> None:
     """Poll and sweep for as long as the server answers, and stop with it."""
-    server = uvicorn.Server(
+    server = _StoppingServer(
         uvicorn.Config(
             served_by_host(instance, settings),
             host=settings.host,
@@ -763,6 +796,7 @@ async def _serve(instance: Instance, settings: Settings) -> None:
             # records that carry a path stay out of the log.
             log_config=None,
         ),
+        instance.stopping,
     )
     try:
         async with instance.poller.polling(), instance.session_sweep.polling():
