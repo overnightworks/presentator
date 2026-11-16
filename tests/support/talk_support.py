@@ -286,11 +286,13 @@ def two_hosts(
     talk = _talk_over(
         SqliteSessionRecordStore(database), decks, decks_store, talk_auth, copresenter
     )
-    never = Schedule(
-        chore=lambda: None, chore_code=ChoreCode.SOURCE_POLL, interval=timedelta(days=1)
-    )
     router = served_by_host(
-        Instance(lobby=lobby, talk=talk, poller=never, session_sweep=never),
+        Instance(
+            lobby=lobby,
+            talk=talk,
+            poller=_never(ChoreCode.SOURCE_POLL),
+            session_sweep=_never(ChoreCode.SESSION_SWEEP),
+        ),
         a_settings(),
     )
     return Hosts(
@@ -305,6 +307,13 @@ def two_hosts(
         database=database,
         clock=clock,
         store=decks_store,
+    )
+
+
+def _never(chore_code: ChoreCode) -> Schedule:
+    """A schedule of that chore that no test lives long enough to see run."""
+    return Schedule(
+        chore=lambda: None, chore_code=chore_code, interval=timedelta(days=1)
     )
 
 
