@@ -31,6 +31,15 @@ INBOUND_PROBE_POLICY = "probe-inbound-any-port"
 WEB_KINDS = ("ConfigMap", "Deployment")
 WORKER_CONTAINER = "worker"
 WEB_CONTAINER = "web"
+# The web needs a Redis the platform's render does not yet hold; the probe runs a
+# throwaway one in its namespace, the image CI's Redis service container uses.
+REDIS = "probe-redis"
+REDIS_IMAGE = (
+    "redis:7.4.12-alpine"
+    "@sha256:338fbfc036dc5517ac0b04d6de21521085935336e565f223406180e9d84166e2"
+)
+REDIS_PORT = 6379
+REDIS_URL_VARIABLE = "PRESENTATOR_REDIS_URL"
 SECRETS_VOLUME = "secrets"
 INIT_CONTAINER = "nft-rules"
 TERMINATION_MESSAGE_POLICY = "FallbackToLogsOnError"
@@ -172,11 +181,61 @@ def applied_documents(
 
 
 def web_documents(overlay: list[Document]) -> list[Document]:
-    """The overlay's ConfigMaps and Deployment the web needs, exactly as rendered."""
-    return [
+    """The overlay's ConfigMaps and Deployment the web needs, as rendered.
+
+    The web container's environment gains the URL of the probe's Redis; no worker
+    pod gets it.
+    """
+    documents = [
         copy.deepcopy(document)
         for document in overlay
         if document["kind"] in WEB_KINDS and not _of_the_workers(document)
+    ]
+    for document in documents:
+        if document["kind"] != "Deployment":
+            continue
+        for container in document["spec"]["template"]["spec"]["containers"]:
+            if container["name"] == WEB_CONTAINER:
+                url = f"redis://{REDIS}.{NAMESPACE}.svc.cluster.local:{REDIS_PORT}/0"
+                container["env"].append({"name": REDIS_URL_VARIABLE, "value": url})
+    return documents
+
+
+def redis_documents() -> list[Document]:
+    """The Deployment and Service of the probe's throwaway Redis."""
+    labels = {"app.kubernetes.io/name": REDIS}
+    metadata = {"name": REDIS, "namespace": NAMESPACE, "labels": labels}
+    return [
+        {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": metadata,
+            "spec": {
+                "replicas": 1,
+                "selector": {"matchLabels": labels},
+                "template": {
+                    "metadata": {"labels": labels},
+                    "spec": {
+                        "containers": [
+                            {
+                                "name": "redis",
+                                "image": REDIS_IMAGE,
+                                "ports": [{"containerPort": REDIS_PORT}],
+                            }
+                        ]
+                    },
+                },
+            },
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Service",
+            "metadata": metadata,
+            "spec": {
+                "selector": labels,
+                "ports": [{"port": REDIS_PORT, "targetPort": REDIS_PORT}],
+            },
+        },
     ]
 
 
