@@ -70,6 +70,28 @@ def test_a_source_that_cannot_be_read_says_nothing_about_its_folders(
     assert fetch["event"] == "source_fetch.ended"
     assert fetch["source_id"] == unreachable.id
     assert fetch["outcome"] == "failed"
+    assert fetch["reason"] == SourceRunFailure.UNREACHABLE.value
+    assert "error_type" not in fetch
     assert fetch["level"] == "warning"
     assert isinstance(fetch["duration_ms"], float)
     assert unreachable.url not in logged.text
+
+
+def test_a_credential_git_cannot_send_ends_the_fetch_refused_with_its_code(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class _Unsendable:
+        def resolve(self, reference: CredentialReference) -> str | None:
+            return "not\nsendable"
+
+    source = a_source("https://host.example.invalid/repo.git")
+
+    with json_logged(capsys) as logged:
+        poll = folders_under(tmp_path, credentials=_Unsendable()).folders(source)
+
+    assert poll.failure is SourceRunFailure.CREDENTIAL_UNRESOLVABLE
+    [fetch] = logged.lines
+    assert fetch["outcome"] == "refused"
+    assert fetch["reason"] == SourceRunFailure.CREDENTIAL_UNRESOLVABLE.value
+    assert fetch["level"] == "info"

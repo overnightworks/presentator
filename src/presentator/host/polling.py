@@ -11,6 +11,7 @@ from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import timedelta
+from enum import StrEnum
 from typing import Final
 
 _RUN_FAILED: Final = "scheduled_run.failed"
@@ -19,11 +20,19 @@ _RUN_RECOVERED: Final = "scheduled_run.recovered"
 _logger = logging.getLogger(__name__)
 
 
+class ChoreCode(StrEnum):
+    """The chores the server schedules: the closed set of `chore` codes in a line."""
+
+    SOURCE_POLL = "source_poll"
+    SESSION_SWEEP = "session_sweep"
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Schedule:
     """Runs a chore once every interval, on a task beside the routes."""
 
     chore: Callable[[], object]
+    chore_code: ChoreCode
     interval: timedelta
 
     @asynccontextmanager
@@ -61,11 +70,18 @@ class Schedule:
                     _logger.warning(
                         _RUN_FAILED,
                         exc_info=True,
-                        extra={"failed_run_count": failed_run_count},
+                        extra={
+                            "chore": self.chore_code,
+                            "failed_run_count": failed_run_count,
+                        },
                     )
             else:
                 if failed_run_count:
                     _logger.info(
-                        _RUN_RECOVERED, extra={"failed_run_count": failed_run_count}
+                        _RUN_RECOVERED,
+                        extra={
+                            "chore": self.chore_code,
+                            "failed_run_count": failed_run_count,
+                        },
                     )
                 failed_run_count = 0

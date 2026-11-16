@@ -7,7 +7,7 @@ from datetime import timedelta
 
 import pytest
 
-from presentator.host.polling import Schedule
+from presentator.host.polling import ChoreCode, Schedule
 from tests.presentator.application.support.fakes import PATIENCE
 from tests.support.log_lines import json_logged
 
@@ -51,7 +51,7 @@ class HeldRefresh:
 
 
 def a_schedule(refresh: HeldRefresh) -> Schedule:
-    return Schedule(chore=refresh, interval=_TIGHT)
+    return Schedule(chore=refresh, chore_code=ChoreCode.SOURCE_POLL, interval=_TIGHT)
 
 
 def test_the_poll_refreshes_again_and_again_while_it_runs() -> None:
@@ -120,7 +120,9 @@ def test_a_chore_that_keeps_raising_writes_its_first_failure_and_its_recovery(
     chore = ChoreThatFailsTwiceThenWorks()
 
     async def run_through_the_failures() -> bool:
-        async with Schedule(chore=chore, interval=_TIGHT).polling():
+        async with Schedule(
+            chore=chore, chore_code=ChoreCode.SESSION_SWEEP, interval=_TIGHT
+        ).polling():
             # The fourth call begins after the third one's recovery line.
             return await asyncio.to_thread(chore.wait_for_calls, 4)
 
@@ -142,11 +144,14 @@ def test_a_chore_that_keeps_raising_writes_its_first_failure_and_its_recovery(
         "info",
         2,
     )
+    assert failed["chore"] == recovered["chore"] == ChoreCode.SESSION_SWEEP.value
 
 
 def test_a_schedule_leaves_no_task_running_after_its_block() -> None:
     async def run_and_leave() -> int:
-        async with Schedule(chore=lambda: None, interval=_TIGHT).polling():
+        async with Schedule(
+            chore=lambda: None, chore_code=ChoreCode.SOURCE_POLL, interval=_TIGHT
+        ).polling():
             pass
         return len(asyncio.all_tasks())
 
