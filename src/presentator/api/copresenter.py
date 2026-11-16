@@ -405,7 +405,7 @@ async def _answer_events(
         _watch_session(request, session_id=ask.ticket.session_id, guard=guard)
     )
     try:
-        with step:
+        async with step:
             try:
                 async with AsyncExitStack() as opened:
                     async with asyncio.timeout_at(ask.deadline):
@@ -439,13 +439,7 @@ async def _answer_events(
                             next_event = asyncio.create_task(_next_answer_event(events))
                     finally:
                         await _finish_tasks((next_event,))
-            except (
-                NotEnabledError,
-                GatewayBusyError,
-                BudgetSpentError,
-                CoPresenterUnavailableError,
-                TimeoutError,
-            ) as stop:
+            except (CoPresenterUnavailableError, TimeoutError) as stop:
                 yield _stopped(step, stop)
     finally:
         await _release_off_the_loop(ask.ticket)
