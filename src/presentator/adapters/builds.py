@@ -451,25 +451,33 @@ class SlidevBuilds:
         # The walk stops at the first step that failed, so a deck that does not
         # build is never exported either.
         for kind in StepKind:
-            with StepTimer(
+            step_line = _RememberedStepTimer(
                 _STEP_EVENT, _log, deck_id=deck_id_of(deck.slug), step=kind.value
-            ) as step_line:
-                broke = self.toolchain.ran(
-                    BuildStep(
-                        place=place,
-                        slug=deck.slug,
-                        name=kind,
-                        arguments=slidev_arguments(kind, place=place, slug=deck.slug),
-                        watched=lambda: self._more_than_it_may_leave(place, step_line),
-                        line=step_line,
-                    ),
-                )
+            )
+            try:
+                with step_line:
+                    broke = self.toolchain.ran(
+                        BuildStep(
+                            place=place,
+                            slug=deck.slug,
+                            name=kind,
+                            arguments=slidev_arguments(
+                                kind, place=place, slug=deck.slug
+                            ),
+                            watched=lambda: self._more_than_it_may_leave(
+                                place, step_line
+                            ),
+                            line=step_line,
+                        ),
+                    )
+            except Exception:
+                # The step's line is the exception's one error line.
+                line.handled()
+                raise
             if isinstance(broke, ToolchainUnavailable) and kind is not StepKind.BUILD:
                 broke = BuildFailure.without_words()
             if broke is not None:
-                # The step's line is the fault's one error line.
-                line.handled()
-                stopped_by(line, broke)
+                step_line.ends(line)
                 return broke
         return self._more_than_it_may_leave(place, line)
 
@@ -539,6 +547,37 @@ _REFUSALS: Final = frozenset(
         BuildFailureReason.DECK_PATHS,
     }
 )
+
+
+class _RememberedStepTimer(StepTimer):
+    """A step's line that can hand its ending on to the build's own line."""
+
+    def __init__(self, event: str, logger: logging.Logger, /, **fields: str) -> None:
+        super().__init__(event, logger, **fields)
+        self._refusal: str | None = None
+        self._failure: str | None = None
+
+    def refuse(self, reason: str) -> None:
+        """End the step as refused, and remember why."""
+        self._refusal = reason
+        super().refuse(reason)
+
+    def fail(self, reason: str) -> None:
+        """End the step as failed, and remember why."""
+        self._failure = reason
+        super().fail(reason)
+
+    def ends(self, build: StepTimer) -> None:
+        """End the build's line for the very reason this step stopped.
+
+        A failed step has written the one error line of its fault, so the build's
+        line is a warning: it names the reason and adds no second error.
+        """
+        if self._failure is not None:
+            build.handled()
+            build.fail(self._failure)
+        elif self._refusal is not None:
+            build.refuse(self._refusal)
 
 
 def stopped_by(line: StepTimer, broke: BuildFailure | ToolchainUnavailable) -> None:
