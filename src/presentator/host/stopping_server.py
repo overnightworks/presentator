@@ -6,6 +6,7 @@ ends in.
 
 import errno
 import logging
+import os
 import socket
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -26,6 +27,8 @@ _UVICORN_LOGGER: Final = "uvicorn.error"
 # The format strings of the uvicorn records named here are constants in
 # uvicorn's protocols and carry no value.
 _ASGI_EXCEPTION: Final = "Exception in ASGI application\n"
+# The variable logline reads the root log level from.
+_LOG_LEVEL: Final = "LOG_LEVEL"
 
 
 class ServerEvent(StrEnum):
@@ -140,8 +143,19 @@ def name_uvicorn_records() -> None:
 
 
 def configure_logging(service: str) -> None:
-    """Make every line of this process one JSON object, uvicorn's as its events."""
-    logline.configure(service)
+    """Make every line of this process one JSON object, uvicorn's as its events.
+
+    A `LOG_LEVEL` that logline does not name refuses the start, in the one
+    `process.failed` line written at logline's default level.
+    """
+    try:
+        logline.configure(service)
+    except ValueError:
+        # logline refuses an unknown level before it changes anything, and its
+        # message quotes the value; the process ends right after this line.
+        del os.environ[_LOG_LEVEL]
+        logline.configure(service)
+        end_failed(ServerReason.CONFIGURATION_REFUSED, setting=_LOG_LEVEL)
     name_uvicorn_records()
 
 

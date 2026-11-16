@@ -67,6 +67,15 @@ def _a_port_no_socket_binds(unbindable: str) -> Arrangement:
     return arrange
 
 
+def _a_log_level_logline_does_not_name(
+    environment: pytest.MonkeyPatch, directory: Path
+) -> str:
+    del directory
+    unnamed = "chatty"
+    environment.setenv("LOG_LEVEL", unnamed)
+    return unnamed
+
+
 def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
     del environment
     return str(directory)
@@ -82,6 +91,8 @@ def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
         ([], _an_unknown_agent_backend, "PRESENTATOR_AGENT__BACKEND"),
         ([], _a_port_no_socket_binds("1000000"), "PRESENTATOR_PORT"),
         ([], _a_port_no_socket_binds("-5"), "PRESENTATOR_PORT"),
+        ([], _a_log_level_logline_does_not_name, "LOG_LEVEL"),
+        (["migrate"], _a_log_level_logline_does_not_name, "LOG_LEVEL"),
         (
             [],
             _an_issuer_the_sign_in_client_refuses,
