@@ -6,6 +6,7 @@ adapter satisfies which port.
 
 import argparse
 import asyncio
+import copy
 import logging
 from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import asynccontextmanager
@@ -250,8 +251,7 @@ def _with_redis(stores: Stores, redis: SharedRedis) -> Stores:
         finally:
             redis.close()
 
-    with_redis: Stores = replace(stores, readiness=ready, close=close)
-    return with_redis
+    return copy.replace(stores, readiness=ready, close=close)
 
 
 def _stores(settings: Settings, migrations_directory: Path) -> Stores:
