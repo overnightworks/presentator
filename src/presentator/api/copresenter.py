@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Final, Protocol, assert_never
 
+import anyio
 from fastapi import APIRouter, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
@@ -242,7 +243,7 @@ def _ask_route(
             return response
         finally:
             if not streaming:
-                admitted.ticket.release()
+                await _release_off_the_loop(admitted.ticket)
 
     return _ask
 
@@ -323,6 +324,13 @@ def _not_authenticated() -> JSONResponse:
     return JSONResponse({"detail": "Not authenticated"}, HTTPStatus.UNAUTHORIZED)
 
 
+async def _release_off_the_loop(ticket: AskTicket) -> None:
+    # The release asks the shared Redis, which can hold its thread for a second;
+    # the shield lets it finish when the browser's leaving cancels the stream.
+    with anyio.CancelScope(shield=True):
+        await run_in_threadpool(ticket.release)
+
+
 async def _answer_events(
     request: Request,
     *,
@@ -363,7 +371,7 @@ async def _answer_events(
         except CoPresenterUnavailableError:
             yield _error_sse()
     finally:
-        ask.ticket.release()
+        await _release_off_the_loop(ask.ticket)
         await _finish_tasks((session_watch,))
 
 

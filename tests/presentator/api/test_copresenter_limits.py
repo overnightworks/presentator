@@ -18,9 +18,8 @@ from presentator.api.copresenter import (
     CoPresenterSurface,
     add_copresenter_routes,
 )
-from presentator.contracts.copresenter import DeckText
+from presentator.contracts.copresenter import DeckText, RetryAfter
 from presentator.contracts.models import Role, User
-from presentator.ports.copresenter import AskLimiter
 from tests.presentator.agent.support.transports import HeldTransport
 from tests.presentator.application.support.fakes import (
     FakeAskLimiter,
@@ -55,6 +54,8 @@ if TYPE_CHECKING:
 
     from httpx2 import Response
     from starlette.types import ASGIApp, Message, Scope
+
+    from presentator.ports.copresenter import AskLimiter, AskTicket
 
 
 @pytest.mark.parametrize(
@@ -231,13 +232,14 @@ def _a_hanging_app(
     gateway: HeldTransport,
     limiter: AskLimiter,
     admission: Callable[[object], FixedSession],
+    fakes: PrivateFakes | None = None,
 ) -> FastAPI:
     app = FastAPI()
     add_copresenter_routes(
         app,
         surface=CoPresenterSurface(
             use=replace(
-                a_use(PrivateFakes(), the_admins_decks()),
+                a_use(fakes or PrivateFakes(), the_admins_decks()),
                 answers=gateway_answerer(
                     an_agent_config(),
                     a_relying_party(FrozenClock(instant=NOW)),
@@ -283,6 +285,63 @@ def test_the_admission_runs_off_the_event_loop_thread() -> None:
 
     assert admitted_on
     assert threading.get_ident() not in admitted_on
+
+
+@dataclass
+class _ThreadRecordingLimiter:
+    """The in-memory lease, noting the thread each release runs on."""
+
+    released_on: list[int] = field(default_factory=list[int])
+    _inner: FakeAskLimiter = field(default_factory=FakeAskLimiter)
+
+    def admit(self, session_id: str) -> AskTicket | RetryAfter:
+        admitted = self._inner.admit(session_id)
+        if isinstance(admitted, RetryAfter):
+            return admitted
+        return _RecordingTicket(admitted, self.released_on)
+
+
+@dataclass(frozen=True)
+class _RecordingTicket:
+    _inner: FakeAskTicket
+    _released_on: list[int]
+
+    @property
+    def session_id(self) -> str:
+        return self._inner.session_id
+
+    def release(self) -> None:
+        self._released_on.append(threading.get_ident())
+        self._inner.release()
+
+
+def test_the_release_of_an_answer_a_browser_leaves_runs_off_the_event_loop_thread() -> (
+    None
+):
+    """The release asks the shared Redis, which holds its thread while it is slow."""
+    gateway = HeldTransport()
+    limiter = _ThreadRecordingLimiter()
+    app = _a_hanging_app(gateway, limiter, lambda _connection: FixedSession())
+
+    asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
+
+    assert limiter.released_on
+    assert threading.get_ident() not in limiter.released_on
+
+
+def test_the_release_of_an_ask_that_never_streams_runs_off_the_event_loop_thread() -> (
+    None
+):
+    gateway = HeldTransport()
+    limiter = _ThreadRecordingLimiter()
+    fakes = PrivateFakes()
+    fakes.person_access.unavailable = True
+    app = _a_hanging_app(gateway, limiter, lambda _connection: FixedSession(), fakes)
+
+    asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
+
+    assert limiter.released_on
+    assert threading.get_ident() not in limiter.released_on
 
 
 async def _ask_and_leave_while_the_gateway_holds(
