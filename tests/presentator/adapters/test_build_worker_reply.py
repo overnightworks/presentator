@@ -1,7 +1,6 @@
 """The build worker client over a socket pair with the reply already sent."""
 
 import errno
-import logging
 import os
 import shutil
 import socket
@@ -31,12 +30,14 @@ from tests.presentator.adapters.support.build_worker_support import (
     MEGABYTES,
     WITHOUT_A_REASON,
     a_step,
+    ended_line,
     failed_reply,
     refused_reply,
     staging_of,
     tree_of,
 )
 from tests.support import worker_support as support
+from tests.support.log_lines import json_logged
 
 
 def exchanged_with(
@@ -172,7 +173,7 @@ def test_a_receiver_that_runs_out_of_space_fails_without_a_reason(
 
 
 def test_a_staging_that_cannot_be_removed_leaves_the_result_and_logs_the_fault(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Cell B8."""
     step = a_step(tmp_path)
@@ -180,14 +181,19 @@ def test_a_staging_that_cannot_be_removed_leaves_the_result_and_logs_the_fault(
     def failing_to_remove(_staged: Path) -> None:
         raise OSError(errno.EBUSY, "device or resource busy")
 
-    with caplog.at_level(logging.WARNING):
+    with json_logged(capsys) as logged:
         result = exchanged_with(step, BUILT_TALK, failing_to_remove)
 
     assert result is None
     assert (
         step.place.here / OUTPUT_DIRECTORY / TALK_DIRECTORY / "index.html"
     ).read_bytes() == INDEX
-    assert [record.levelno for record in caplog.records] == [logging.WARNING]
+    (line,) = logged.lines
+    assert (line["event"], line["level"], line["error_type"]) == (
+        "build_staging_removal.failed",
+        "warning",
+        "OSError",
+    )
 
 
 def test_a_staging_left_over_from_before_is_a_fault_and_is_not_removed(
@@ -202,7 +208,7 @@ def test_a_staging_left_over_from_before_is_a_fault_and_is_not_removed(
 
 
 @pytest.mark.parametrize(
-    ("reply", "failure"),
+    ("reply", "failure", "ended"),
     [
         pytest.param(
             refused_reply(RefusalLimit.MEGABYTES, 2),
@@ -211,6 +217,7 @@ def test_a_staging_left_over_from_before_is_a_fault_and_is_not_removed(
                 written_megabytes=2,
                 allowed_megabytes=MEGABYTES,
             ),
+            ("refused", None, "info"),
             id="megabytes",
         ),
         pytest.param(
@@ -219,33 +226,51 @@ def test_a_staging_left_over_from_before_is_a_fault_and_is_not_removed(
                 reason=BuildFailureReason.OUTPUT_ENTRIES,
                 allowed_entries=MAXIMUM_ENTRIES,
             ),
+            ("refused", None, "info"),
             id="entries",
         ),
         pytest.param(
             refused_reply(RefusalLimit.SHAPE),
             BuildFailure(reason=BuildFailureReason.OUTPUT_SHAPE),
+            ("refused", None, "info"),
             id="shape",
         ),
         pytest.param(
             failed_reply("it broke"),
             BuildFailure.said("it broke"),
+            ("failed", "toolchain_failed", "warning"),
             id="failed with text",
         ),
         pytest.param(
             failed_reply("e" * FAILURE_TEXT_LIMIT),
             BuildFailure.said("e" * FAILURE_TEXT_LIMIT),
+            ("failed", "toolchain_failed", "warning"),
             id="failed with the longest text",
         ),
         pytest.param(
-            failed_reply(None), BuildFailure.without_words(), id="failed without text"
+            failed_reply(None),
+            BuildFailure.without_words(),
+            ("failed", "toolchain_failed", "warning"),
+            id="failed without text",
         ),
     ],
 )
 def test_a_refused_or_failed_reply_is_the_reason_the_deck_page_words(
-    tmp_path: Path, reply: bytes, failure: BuildFailure
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    reply: bytes,
+    failure: BuildFailure,
+    ended: tuple[str, str | None, str],
 ) -> None:
     """Cell B9."""
     step = a_step(tmp_path)
 
-    assert exchanged_with(step, reply) == failure
+    with json_logged(capsys) as logged:
+        assert exchanged_with(step, reply) == failure
+        line = ended_line(step, logged)
+
     assert not staging_of(step).exists()
+    outcome, reason, level = ended
+    assert (line["outcome"], line["level"]) == (outcome, level)
+    assert line["reason"] == (reason or failure.reason.value)
+    assert failure.text is None or failure.text not in logged.text

@@ -20,16 +20,19 @@ import logging
 import os
 import select
 import signal
-import stat
 import subprocess
 from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
+from enum import StrEnum
+from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from tempfile import mkdtemp
 from time import monotonic
 from typing import IO, BinaryIO, Final, Protocol, cast
+
+from logline import StepTimer
 
 from gitmirror.model import MirrorError, Revision
 from presentator.adapters.build_runs import (
@@ -39,6 +42,7 @@ from presentator.adapters.build_runs import (
     run_name_of,
     taken_away,
 )
+from presentator.adapters.build_tree import added_up, opened_without_a_link
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
 from presentator.adapters.decks import SourceMirrors
 from presentator.contracts.decks import (
@@ -73,13 +77,11 @@ _PACKAGE_JSON: Final = "package.json"
 _THEME_PACKAGE_PREFIX: Final = "@slidev/theme-"
 _DEFAULT_THEME: Final = "default"
 _DEPENDENCY_SECTIONS: Final = ("dependencies", "devDependencies")
-_UP: Final = ".."
 # Only what a Node toolchain needs to run; a step inherits nothing else, so
 # neither a source's read-only secret nor this instance's key is in reach of a
 # deck's own build-time code.
 _INHERITED: Final = ("PATH", "HOME")
 _READ_AT_ONCE: Final = 64 * 1024
-_A_MEGABYTE: Final = 1024 * 1024
 # Adding up what a build wrote is walking a tree that build filled, so it is
 # bounded like everything else it touches: a talk is hundreds of files, and
 # adding up even a hundred thousand of them is a moment's work. Past either
@@ -88,34 +90,32 @@ _ADDING_UP_WITHIN: Final = timedelta(seconds=10)
 # How often a step is asked what it has written by now, so a build that fills
 # this machine is stopped while it runs rather than found out afterwards.
 _ACCOUNTED_EVERY: Final = timedelta(seconds=2)
-_UNREADABLE_DECK: Final = "deck %s cannot be read at %s: %s"
-_TOOLCHAIN_FAILED: Final = "%s of deck %s failed: %s"
-_TOOLCHAIN_UNAVAILABLE: Final = "%s of deck %s could not be run: %s"
-_TOOLCHAIN_TIMED_OUT: Final = "%s of deck %s ran past %s and was given up"
-_NOT_AS_WRITTEN: Final = (
-    "the talk at %s is refused: %s is not a file reached without a link under the root"
-)
-_TOO_MUCH_WRITTEN: Final = "deck %s wrote %s MB, which is more than a build may leave"
-_UNACCOUNTABLE: Final = "what the build of deck %s wrote could not be added up: %s"
-_TOOK_TOO_LONG_TO_ADD_UP: Final = (
-    "what the build of deck %s wrote could not be added up inside %s"
-)
+_DECK_ID_LENGTH: Final = 12
+_BUILD_EVENT: Final = "deck_build.ended"
+_STEP_EVENT: Final = "build_step.ended"
+_ARTEFACTS_REFUSED_EVENT: Final = "build_artefacts.refused"
 
 _log = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _Added:
-    """What adding up one run's talk found, and what stopped the adding up.
+class BuildFault(StrEnum):
+    """Why a build or one of its steps stopped, where its `reason` is not a refusal.
 
-    A pass that was stopped carries no size: it says how far it came, and the
-    caller refuses the build rather than believing a number nobody counted.
+    A refusal names a `BuildFailureReason` instead.
     """
 
-    entries: int
-    megabytes: int = 0
-    unreadable: str | None = None
-    in_time: bool = True
+    TOOLCHAIN_UNAVAILABLE = "toolchain_unavailable"
+    TOOLCHAIN_FAILED = "toolchain_failed"
+    TIMED_OUT = "timed_out"
+    UNREADABLE_DECK = "unreadable_deck"
+    UNACCOUNTABLE = "unaccountable"
+    ADDING_UP_TIMED_OUT = "adding_up_timed_out"
+    NOT_AS_WRITTEN = "not_as_written"
+
+
+def deck_id_of(slug: str) -> str:
+    """The id a line names a deck by: a talk's folder name is its author's text."""
+    return sha256(slug.encode()).hexdigest()[:_DECK_ID_LENGTH]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -189,6 +189,8 @@ class BuildStep:
     # may leave is stopped there, because by the time it ends this machine is
     # full. It answers with what the deck's page will say, or with nothing.
     watched: Callable[[], BuildFailure | None]
+    # The step's one `build_step.ended` line: the runner names why it stopped.
+    line: StepTimer
 
 
 class DeckToolchain(Protocol):
@@ -348,16 +350,24 @@ class SlidevBuilds:
         """
         place = self._a_place_of_its_own()
         delivered = False
-        try:
-            broke = self._what_broke(deck, source=source, place=place)
-            if broke is not None:
-                return broke
-            written = place.here / OUTPUT_DIRECTORY
-            delivered = True
-            return Artefacts(directory=written / TALK_DIRECTORY, pdf=written / PDF_FILE)
-        finally:
-            if not delivered:
-                taken_away(place.here)
+        with StepTimer(
+            _BUILD_EVENT,
+            _log,
+            deck_id=deck_id_of(deck.slug),
+            source_id=deck.source_id,
+        ) as line:
+            try:
+                broke = self._what_broke(deck, source=source, place=place, line=line)
+                if broke is not None:
+                    return broke
+                written = place.here / OUTPUT_DIRECTORY
+                delivered = True
+                return Artefacts(
+                    directory=written / TALK_DIRECTORY, pdf=written / PDF_FILE
+                )
+            finally:
+                if not delivered:
+                    taken_away(place.here)
 
     def holds(self, artefacts: Artefacts) -> bool:
         """Whether the talk's page and the PDF really stand under the root as files.
@@ -373,7 +383,10 @@ class SlidevBuilds:
         for written in (artefacts.directory / TALK_PAGE, artefacts.pdf):
             found = opened_without_a_link(written, under=root, how=os.O_PATH)
             if found is None:
-                _log.warning(_NOT_AS_WRITTEN, artefacts.directory, written)
+                _log.info(
+                    _ARTEFACTS_REFUSED_EVENT,
+                    extra={"reason": BuildFault.NOT_AS_WRITTEN},
+                )
                 return False
             os.close(found)
         return True
@@ -427,34 +440,43 @@ class SlidevBuilds:
         *,
         source: Source,
         place: BuildPlace,
+        line: StepTimer,
     ) -> BuildFailure | ToolchainUnavailable | None:
         """Write the deck out, build the talk, export the PDF, or say what broke."""
         if not self._exported(deck, source=source, into=place.here / DECK_DIRECTORY):
             # A tree this server cannot read out of its own mirror is a fault
             # of this host, not words a deck's author could act on.
+            line.fail(BuildFault.UNREADABLE_DECK)
             return BuildFailure.without_words()
         # The walk stops at the first step that failed, so a deck that does not
         # build is never exported either.
         for kind in StepKind:
-            broke = self.toolchain.ran(
-                BuildStep(
-                    place=place,
-                    slug=deck.slug,
-                    name=kind,
-                    arguments=slidev_arguments(kind, place=place, slug=deck.slug),
-                    watched=lambda: self._more_than_it_may_leave(deck, place),
-                ),
-            )
+            with StepTimer(
+                _STEP_EVENT, _log, deck_id=deck_id_of(deck.slug), step=kind.value
+            ) as step_line:
+                broke = self.toolchain.ran(
+                    BuildStep(
+                        place=place,
+                        slug=deck.slug,
+                        name=kind,
+                        arguments=slidev_arguments(kind, place=place, slug=deck.slug),
+                        watched=lambda: self._more_than_it_may_leave(place, step_line),
+                        line=step_line,
+                    ),
+                )
             if isinstance(broke, ToolchainUnavailable) and kind is not StepKind.BUILD:
-                return BuildFailure.without_words()
+                broke = BuildFailure.without_words()
             if broke is not None:
+                # The step's line is the fault's one error line.
+                line.handled()
+                stopped_by(line, broke)
                 return broke
-        return self._more_than_it_may_leave(deck, place)
+        return self._more_than_it_may_leave(place, line)
 
     def _more_than_it_may_leave(
         self,
-        deck: Deck,
         place: BuildPlace,
+        line: StepTimer,
     ) -> BuildFailure | None:
         """Refuse a build whose talk is more than one build may leave here.
 
@@ -463,27 +485,29 @@ class SlidevBuilds:
         while the build runs and once more when it is over, because a build
         that fills this machine has filled it long before it ends. No toolchain
         failed, so the reason a page words here is this server's own; what only
-        this host can act on stays in the log.
+        this host can act on is the reason its line carries.
         """
-        added = _added_up(
+        added = added_up(
             place.here / OUTPUT_DIRECTORY,
             ends_by=monotonic() + _ADDING_UP_WITHIN.total_seconds(),
         )
+        line.add(entry_count=added.entries)
         if added.unreadable is not None:
-            _log.warning(_UNACCOUNTABLE, deck.slug, added.unreadable)
+            line.fail(BuildFault.UNACCOUNTABLE)
             return BuildFailure.without_words()
         if not added.in_time:
-            _log.warning(_TOOK_TOO_LONG_TO_ADD_UP, deck.slug, _ADDING_UP_WITHIN)
+            line.fail(BuildFault.ADDING_UP_TIMED_OUT)
             return BuildFailure.without_words()
+        line.add(written_megabytes=added.megabytes)
         if added.entries > MAXIMUM_ENTRIES:
-            _log.warning(_TOO_MUCH_WRITTEN, deck.slug, added.entries)
+            line.refuse(BuildFailureReason.OUTPUT_ENTRIES)
             return BuildFailure(
                 reason=BuildFailureReason.OUTPUT_ENTRIES,
                 allowed_entries=MAXIMUM_ENTRIES,
             )
         if added.megabytes <= self.output_megabytes:
             return None
-        _log.warning(_TOO_MUCH_WRITTEN, deck.slug, added.megabytes)
+        line.refuse(BuildFailureReason.OUTPUT_MEGABYTES)
         return BuildFailure(
             reason=BuildFailureReason.OUTPUT_MEGABYTES,
             written_megabytes=added.megabytes,
@@ -494,12 +518,6 @@ class SlidevBuilds:
         """Write the deck's tree at its commit out of the mirror, as files."""
         mirror = self.mirrors.of(source)
         if mirror is None:
-            _log.warning(
-                _UNREADABLE_DECK,
-                deck.slug,
-                deck.commit,
-                "the source no longer resolves to a readable repository",
-            )
             return False
         try:
             mirror.export(
@@ -507,10 +525,37 @@ class SlidevBuilds:
                 source.deck_path(deck.slug),
                 into=into,
             )
-        except MirrorError as unreadable:
-            _log.warning(_UNREADABLE_DECK, deck.slug, deck.commit, unreadable)
+        except MirrorError:
             return False
         return True
+
+
+_REFUSALS: Final = frozenset(
+    {
+        BuildFailureReason.OUTPUT_MEGABYTES,
+        BuildFailureReason.OUTPUT_ENTRIES,
+        BuildFailureReason.OUTPUT_SHAPE,
+        BuildFailureReason.DECK_MEGABYTES,
+        BuildFailureReason.DECK_PATHS,
+    }
+)
+
+
+def stopped_by(line: StepTimer, broke: BuildFailure | ToolchainUnavailable) -> None:
+    """End a line as what a step handed back says: a refusal or a fault.
+
+    A deck whose own build fails is no fault of this host, so its line is a
+    handled warning, not an error.
+    """
+    if isinstance(broke, ToolchainUnavailable):
+        line.fail(BuildFault.TOOLCHAIN_UNAVAILABLE)
+    elif broke.reason in _REFUSALS:
+        line.refuse(broke.reason)
+    else:
+        # What is no refusal is the deck's own failure, with words or none: a
+        # host fault wrote its own line before it handed the failure back.
+        line.handled()
+        line.fail(BuildFault.TOOLCHAIN_FAILED)
 
 
 def _what_a_step_said(
@@ -535,12 +580,11 @@ def _what_a_step_said(
                 # child this call started directly.
                 start_new_session=True,
             )
-        except OSError as unavailable:
+        except OSError:
             # A toolchain that cannot be started is this host's fault, and what
             # the operating system says about it names paths of this host; the
-            # deck's page is told that no words came back, and the log keeps
-            # them.
-            _log.exception(_TOOLCHAIN_UNAVAILABLE, step.name, step.slug, unavailable)
+            # deck's page and the line are told no words, only the reason.
+            step.line.fail(BuildFault.TOOLCHAIN_UNAVAILABLE)
             return BuildFailure.without_words()
         finally:
             # The child holds the writing end now, and only this process
@@ -553,14 +597,16 @@ def _what_a_step_said(
         if went.refused is not None:
             # What it wrote is the reason, and the watcher has said it.
             return went.refused
-        _log.warning(_TOOLCHAIN_TIMED_OUT, step.name, step.slug, how.bound)
+        step.line.handled()
+        step.line.fail(BuildFault.TIMED_OUT)
         # What a step that was killed had printed is not shown: it is the words
         # of a run nobody waited for, and the page says so in its own sentence.
         return BuildFailure.without_words()
     if process.returncode != 0:
         words = failure_text(went.said)
-        _log.warning(_TOOLCHAIN_FAILED, step.name, step.slug, words)
-        return BuildFailure.said(words)
+        failure = BuildFailure.said(words)
+        stopped_by(step.line, failure)
+        return failure
     return None
 
 
@@ -613,127 +659,6 @@ def _ended_within(process: subprocess.Popen[bytes], ends_by: float) -> bool:
     except subprocess.TimeoutExpired:
         return False
     return True
-
-
-def _added_up(directory: Path, *, ends_by: float) -> _Added:
-    """Add up what one run has written into that directory, so far.
-
-    Every name in it was written by a deck's own build, so nothing here is
-    reached by its path: the root is opened once, and every directory inside
-    it is opened from the descriptor of the one that holds it, as a directory
-    and never through a link. A name that is not a real directory by the time
-    it is opened is refused rather than followed — between one look and the
-    next a build can make a name into anything, and a descriptor is the one
-    thing it cannot exchange. A link is counted as the name it is, the walk
-    stops at the first entry it cannot read, and it stops at the entry and at
-    the moment it may not go past: a talk this server could not add up is one
-    it refuses, never one it guesses at.
-    """
-    root = _a_directory_of_its_own(directory)
-    if root is None:
-        return _Added(entries=0, unreadable=str(directory))
-    still_open = [root]
-    try:
-        return _walked(still_open, ends_by=ends_by)
-    finally:
-        for holder in still_open:
-            os.close(holder)
-
-
-def _walked(still_open: list[int], *, ends_by: float) -> _Added:
-    held, entries = 0, 0
-    while still_open:
-        holder = still_open.pop()
-        try:
-            with os.scandir(holder) as listing:
-                for entry in listing:
-                    entries += 1
-                    stopped = _stopped_at(entries, ends_by=ends_by)
-                    if stopped is not None:
-                        return stopped
-                    held += _size_of(entry, held_by=holder, still_open=still_open)
-        except OSError as unreadable:
-            return _Added(entries=entries, unreadable=str(unreadable))
-        finally:
-            os.close(holder)
-    return _Added(entries=entries, megabytes=held // _A_MEGABYTE)
-
-
-def _stopped_at(entries: int, *, ends_by: float) -> _Added | None:
-    if entries > MAXIMUM_ENTRIES:
-        return _Added(entries=entries)
-    if monotonic() > ends_by:
-        return _Added(entries=entries, in_time=False)
-    return None
-
-
-def _size_of(entry: os.DirEntry[str], *, held_by: int, still_open: list[int]) -> int:
-    if entry.is_dir(follow_symlinks=False):
-        still_open.append(_opened_within(entry.name, held_by=held_by))
-        return 0
-    return 0 if entry.is_symlink() else entry.stat(follow_symlinks=False).st_size
-
-
-def _opened_within(name: str, *, held_by: int) -> int:
-    """That name as a directory of its own, opened from the one holding it.
-
-    The open is the whole check: it refuses a link and it refuses anything
-    that is not a directory, at the moment it happens, so nothing a build does
-    in between can turn the name it read into a way out of this run.
-    """
-    return os.open(
-        name,
-        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-        dir_fd=held_by,
-    )
-
-
-def opened_without_a_link(
-    written: Path,
-    *,
-    under: Path,
-    how: int = os.O_RDONLY,
-) -> int | None:
-    """That path as a descriptor, if it is a regular file and no name on it a link.
-
-    The root is this deployment's own and opened as it is configured; from
-    there on each directory is opened from the descriptor of the one holding
-    it, and the last name is looked at itself rather than at what it may point
-    to. A name that is not a regular file is closed again, and never read: it
-    is opened without waiting, so a pipe a build left cannot hold a request.
-    """
-    if not written.is_relative_to(under):
-        return None
-    names = written.relative_to(under).parts
-    if not names or _UP in names:
-        return None
-    *directories, name = names
-    try:
-        holder = os.open(under, os.O_RDONLY | os.O_DIRECTORY)
-    except OSError:
-        return None
-    try:
-        for directory in directories:
-            inner = _opened_within(directory, held_by=holder)
-            os.close(holder)
-            holder = inner
-        found = os.open(name, how | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=holder)
-    except OSError, ValueError:
-        return None
-    finally:
-        os.close(holder)
-    if stat.S_ISREG(os.fstat(found).st_mode):
-        return found
-    os.close(found)
-    return None
-
-
-def _a_directory_of_its_own(directory: Path) -> int | None:
-    """That directory as a descriptor, or nothing where it is not one."""
-    try:
-        return os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    except OSError:
-        return None
 
 
 def _the_environment_of_this_server() -> dict[str, str]:

@@ -1,6 +1,5 @@
 """The runs of the build on disk, against a real temporary root."""
 
-import logging
 import shutil
 import stat
 from pathlib import Path
@@ -19,6 +18,7 @@ from tests.presentator.adapters.support.person_instance_support import (
     THE_PERSON,
     an_instance_with_both_people,
 )
+from tests.support.log_lines import json_logged
 
 
 def a_run(root: Path, name: str) -> Path:
@@ -79,7 +79,7 @@ def test_a_path_outside_the_root_belongs_to_no_run(root: Path, tmp_path: Path) -
 
 
 def test_only_real_runs_are_listed_and_everything_else_is_left_alone(
-    root: Path, tmp_path: Path
+    root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """#505 matrix: foreign file and directory in the root, symlinked run."""
     a_run(root, "real")
@@ -90,7 +90,11 @@ def test_only_real_runs_are_listed_and_everything_else_is_left_alone(
     (root / "linked-out").mkdir()
     (root / "linked-out" / "out").symlink_to(tmp_path)
 
-    assert listed_runs(root) == {"real"}
+    with json_logged(capsys) as logged:
+        assert listed_runs(root) == {"real"}
+    (strays,) = logged.lines
+    assert (strays["event"], strays["stray_count"]) == ("build_root_strays.found", 4)
+    assert "no-output" not in logged.text
     assert sorted(path.name for path in root.iterdir()) == [
         "a-file",
         "linked-out",
@@ -129,9 +133,19 @@ def test_a_removal_that_stopped_halfway_is_finished_by_the_next_attempt(
     assert not (root / "halfway").exists()
 
 
-def test_a_root_that_cannot_be_listed_lists_nothing_at_all(tmp_path: Path) -> None:
+def test_a_root_that_cannot_be_listed_lists_nothing_at_all(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """#505 matrix: root unlisted or missing."""
-    assert listed_runs(tmp_path / "missing") is None
+    with json_logged(capsys) as logged:
+        assert listed_runs(tmp_path / "missing") is None
+
+    (line,) = logged.lines
+    assert (line["event"], line["error_type"]) == (
+        "build_root_listing.failed",
+        "FileNotFoundError",
+    )
+    assert "missing" not in logged.text
 
 
 def test_removing_a_run_takes_its_whole_directory_even_where_a_deck_closed_it(
@@ -170,18 +184,23 @@ def test_a_removal_that_stops_halfway_leaves_no_directory_closed_to_others(
 
 def test_a_run_that_cannot_be_looked_at_is_not_reported_gone(
     root: Path,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """#505 invariant: a removal that could not be confirmed is not believed."""
     a_run(root, "unseen")
     root.chmod(0o600)
     try:
-        with caplog.at_level(logging.WARNING):
+        with json_logged(capsys) as logged:
             assert not taken_away(root / "unseen")
     finally:
         root.chmod(0o700)
 
-    assert "unseen" in caplog.text
+    (line,) = logged.lines
+    assert (line["event"], line["reason"], line["run_id"]) == (
+        "build_run_removal.failed",
+        "stayed",
+        "unseen",
+    )
 
 
 def test_a_directory_that_cannot_be_read_is_not_taken_for_an_empty_run(
@@ -215,15 +234,19 @@ def test_removing_leaves_the_other_runs_alone(root: Path) -> None:
 
 
 def test_removing_refuses_a_directory_that_is_not_shaped_like_a_run(
-    root: Path,
+    root: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """#505 invariant: remove refuses a foreign directory."""
     (root / "foreign").mkdir()
     (root / "foreign" / "keep").write_text("x", encoding="utf-8")
 
-    assert not removed_run(root, "foreign")
+    with json_logged(capsys) as logged:
+        assert not removed_run(root, "foreign")
 
     assert (root / "foreign" / "keep").exists()
+    (line,) = logged.lines
+    assert (line["event"], line["reason"]) == ("build_run_removal.refused", "not_a_run")
+    assert "foreign" not in logged.text
 
 
 def test_removing_a_link_to_a_run_leaves_the_directory_it_points_at(

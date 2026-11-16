@@ -17,6 +17,7 @@ from presentator.contracts.decks import (
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
 from tests.presentator.application.support.fakes import THE_TOOLCHAIN
 from tests.support.git_remote import with_the_program
+from tests.support.log_lines import LoggedText, LogLine
 
 A_GENEROUS_BOUND = timedelta(seconds=30)
 
@@ -114,3 +115,14 @@ def with_the_toolchain(
 ) -> None:
     """Put a `pnpm` this test wrote on PATH, for a build on this machine."""
     with_the_program(machine, tmp_path, TOOLCHAIN_PROGRAM, script)
+
+
+def lines_of(logged: LoggedText, event: str) -> list[LogLine]:
+    """The lines of one event a build has written so far."""
+    return [one for one in logged.lines if one["event"] == event]
+
+
+def the_error_line(logged: LoggedText) -> LogLine:
+    """The one line at error level a build's fault left, wherever it stopped."""
+    (line,) = [one for one in logged.lines if one["level"] == "error"]
+    return line
