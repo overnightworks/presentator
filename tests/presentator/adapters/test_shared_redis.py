@@ -334,7 +334,10 @@ def test_a_redis_that_cannot_be_reached_is_not_ready_and_cannot_tell_the_lease()
     assert not ready
 
 
-def test_the_password_is_sent_to_the_server_on_connect() -> None:
+@pytest.mark.parametrize(
+    "in_the_url", [False, True], ids=["from-its-file", "in-the-url"]
+)
+def test_the_password_is_sent_to_the_server_on_connect(*, in_the_url: bool) -> None:
     password = "the-password-only-this-test-has"  # noqa: S105 - a marker the server must receive
     with socket.create_server(("127.0.0.1", 0)) as listener:
         port = listener.getsockname()[1]
@@ -347,7 +350,11 @@ def test_the_password_is_sent_to_the_server_on_connect() -> None:
 
         thread = Thread(target=listen)
         thread.start()
-        redis = SharedRedis(f"redis://127.0.0.1:{port}/0", SecretStr(password))
+        redis = (
+            SharedRedis(f"redis://:{password}@127.0.0.1:{port}/0")
+            if in_the_url
+            else SharedRedis(f"redis://127.0.0.1:{port}/0", SecretStr(password))
+        )
         try:
             redis.is_ready()
         finally:

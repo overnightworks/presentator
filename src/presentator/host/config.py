@@ -208,14 +208,14 @@ def _a_postgres_url_without_a_password(given: str) -> str:
 _REDIS_DATABASE_PATH: Final = re.compile(r"(/\d+)?", re.ASCII)
 
 
-def _a_redis_url_without_a_password(given: str) -> str:
-    """Require a redis URL of a host and at most a database number, and no password.
+def _a_redis_url(given: SecretStr) -> SecretStr:
+    """Require a redis URL of a host and at most a database number.
 
-    The password lives in a file, and the client reads its own options from a
-    query, so none is allowed.
+    The URL may carry the password, so it is a secret and no message quotes it;
+    the client reads its own options from a query, so none is allowed.
     """
     try:
-        parsed = urlsplit(given)
+        parsed = urlsplit(given.get_secret_value())
         _port = parsed.port
     except ValueError:
         # The parser's message quotes the URL.
@@ -225,13 +225,12 @@ def _a_redis_url_without_a_password(given: str) -> str:
         message = "is a redis or rediss URL naming a host"
         raise ValueError(message)
     if (
-        parsed.password is not None
-        or parsed.query
+        parsed.query
         or parsed.fragment
         or _REDIS_DATABASE_PATH.fullmatch(parsed.path) is None
     ):
         message = (
-            "is a redis URL without a password, query or fragment,"
+            "is a redis URL without a query or fragment,"
             " ending in at most a database number"
         )
         raise ValueError(message)
@@ -246,7 +245,7 @@ def _an_absolute_path(given: Path) -> Path:
 
 
 type PostgresUrl = Annotated[str, AfterValidator(_a_postgres_url_without_a_password)]
-type RedisUrl = Annotated[str, AfterValidator(_a_redis_url_without_a_password)]
+type RedisUrl = Annotated[SecretStr, AfterValidator(_a_redis_url)]
 type AbsolutePath = Annotated[Path, AfterValidator(_an_absolute_path)]
 
 
@@ -292,8 +291,8 @@ class Settings(
     database_url: PostgresUrl | None = None
     database_password_file: AbsolutePath | None = None
     # The Redis every pod shares for its limits and its ask lease; it keeps
-    # nothing durable and its URL names no password: when the server asks for
-    # one, it lives in a file, read once at start, like the database's. A
+    # nothing durable. A password may ride the URL, which is why it is a secret,
+    # or live in a file, read once at start, like the database's. A
     # deployment fact: no default.
     redis_url: RedisUrl = Field(repr=False)
     redis_password_file: AbsolutePath | None = None

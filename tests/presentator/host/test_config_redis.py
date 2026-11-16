@@ -1,4 +1,4 @@
-"""The Redis setting: a URL without credentials, and one the log never quotes."""
+"""The Redis setting: a URL that may carry its password and no log quotes."""
 
 import os
 import subprocess
@@ -31,13 +31,35 @@ def test_a_redis_url_of_a_host_and_at_most_a_database_is_served(
 ) -> None:
     environment.setenv(_URL, given)
 
-    assert load_settings().redis_url == given
+    assert load_settings().redis_url.get_secret_value() == given
 
 
 def test_a_user_named_in_the_url_is_served(environment: pytest.MonkeyPatch) -> None:
     environment.setenv(_URL, "redis://presentator@redis:6379/0")
 
-    assert load_settings().redis_url == "redis://presentator@redis:6379/0"
+    assert (
+        load_settings().redis_url.get_secret_value()
+        == "redis://presentator@redis:6379/0"
+    )
+
+
+@pytest.mark.parametrize(
+    "given",
+    [
+        f"redis://:{_A_PASSWORD}@redis:6379/0",
+        f"redis://presentator:{_A_PASSWORD}@redis/0",
+    ],
+    ids=["password", "user and password"],
+)
+def test_a_url_carrying_the_password_is_served_and_never_shown(
+    environment: pytest.MonkeyPatch, given: str
+) -> None:
+    environment.setenv(_URL, given)
+
+    settings = load_settings()
+
+    assert settings.redis_url.get_secret_value() == given
+    assert _A_PASSWORD not in repr(settings) + str(settings.redis_url)
 
 
 def test_the_password_comes_from_its_file_minus_one_trailing_newline(
@@ -84,8 +106,7 @@ def test_a_missing_url_refuses_naming_the_field(
 @pytest.mark.parametrize(
     "refused",
     [
-        pytest.param(f"redis://:{_A_PASSWORD}@redis:6379/0", id="password"),
-        pytest.param(f"redis://user:{_A_PASSWORD}@redis/0", id="user and password"),
+        pytest.param(f"redis://:{_A_PASSWORD}@redis:6379/0?x=1", id="password query"),
         pytest.param("http://redis:6379/0", id="another scheme"),
         pytest.param("redis:///0", id="no host"),
         pytest.param(f"redis://redis/0?password={_A_PASSWORD}", id="query"),
@@ -105,7 +126,7 @@ def test_a_url_that_cannot_name_the_redis_refuses_without_quoting_it(
 def test_a_refused_start_writes_neither_the_url_nor_its_password_anywhere(
     environment: pytest.MonkeyPatch,
 ) -> None:
-    environment.setenv(_URL, f"redis://user:{_A_PASSWORD}@redis:6379/0")
+    environment.setenv(_URL, f"redis://user:{_A_PASSWORD}@redis:6379/0?db=1")
     settings = {
         name: value
         for name, value in os.environ.items()
