@@ -182,3 +182,23 @@ def test_a_server_that_is_not_there_is_refused_as_not_answering(
         "not_answering",
         psycopg.OperationalError.__name__,
     )
+
+
+def test_a_database_whose_revision_cannot_be_read_is_refused_as_not_answering(
+    unmigrated_database_url: str,
+) -> None:
+    engine = engine_on(unmigrated_database_url)
+    try:
+        with engine.begin() as connection:
+            # The revision table is there, but without the column alembic reads.
+            connection.execute(text("CREATE TABLE alembic_version (other integer)"))
+
+        refused = _refusal_of_serving(engine)
+    finally:
+        engine.dispose()
+
+    assert refused is not None
+    assert (refused.reason, refused.driver_error) == (
+        "not_answering",
+        psycopg.errors.UndefinedColumn.__name__,
+    )

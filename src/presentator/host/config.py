@@ -587,11 +587,11 @@ def _refused_by(refused: ValidationError) -> ConfigurationError:
     for fault in refused.errors():
         # A rule over several fields has no location; its error names the field.
         error = fault.get("ctx", {}).get("error")
-        if fault["loc"]:
+        if isinstance(error, _FieldRefusedError):
+            fields.append(error.field)
+        else:
             # A nested setting's variable joins its path as the environment does.
             fields.append(_NESTED.join(str(part) for part in fault["loc"]))
-        elif isinstance(error, _FieldRefusedError):
-            fields.append(error.field)
     variables = tuple(variable_of(field) for field in dict.fromkeys(fields))
     return cannot_start(_what_is_wrong(refused), variables=variables)
 

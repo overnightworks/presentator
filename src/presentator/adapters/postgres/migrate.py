@@ -72,9 +72,10 @@ def _refused_at_connect(engine: Engine, error: SQLAlchemyError) -> DatabaseRefus
 
 
 def _port_accepts(url: URL) -> bool:
-    """Whether the host and port of `url` accept a TCP connection."""
-    if url.host is None:
-        return False
+    """Whether the host and port of `url` accept a TCP connection.
+
+    The settings refuse a database URL without a host.
+    """
     address = (url.host, url.port or _POSTGRES_PORT)
     try:
         with socket.create_connection(address, timeout=CONNECT_TIMEOUT_SECONDS):
