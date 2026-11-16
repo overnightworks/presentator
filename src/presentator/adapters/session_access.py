@@ -150,6 +150,5 @@ def _refusal_of(refusal: AccessTokenRefusal, step: StepTimer) -> AccessRefusal:
 
 def _issuer_unavailable(issuer: OidcRefusal | None, step: StepTimer) -> AccessRefusal:
     step.fail(TokenFailure.ISSUER_UNAVAILABLE)
-    if issuer is not None:
-        step.add(issuer_reason=issuer.reason.value)
+    step.add(issuer_reason=None if issuer is None else issuer.reason.value)
     return AccessRefusal.ISSUER_UNAVAILABLE

@@ -513,22 +513,32 @@ def _payloads_by_event(stream: str) -> dict[str, list[dict[str, object]]]:
     return by_event
 
 
-def test_an_ask_cancelled_while_it_is_prepared_still_writes_its_answer_line(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("raised", "surfaced", "outcome", "reason"),
+    [
+        (asyncio.CancelledError(), CancelledError, "cancelled", None),
+        (RuntimeError("broken"), RuntimeError, "failed", "unexpected"),
+    ],
+    ids=["cancelled", "unexpected"],
+)
+def test_an_ask_that_breaks_while_it_is_prepared_still_writes_its_answer_line(
+    raised: BaseException,
+    surfaced: type[BaseException],
+    outcome: str,
+    reason: str | None,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    async def cancelled(_session_id: str) -> frozenset[str]:
-        raise asyncio.CancelledError
-
     limiter = RecordingLimiter()
     talk, private, _clock = a_copresenter_talk_host(limiter=limiter)
-    monkeypatch.setattr(private.person_access, "groups_of", cancelled)
+    private.person_access.raises = raised
     talk.sign_in()
 
-    with json_logged(capsys) as logged, pytest.raises(CancelledError):
+    with json_logged(capsys) as logged, pytest.raises(surfaced):
         ask(talk.client)
 
     (line,) = [one for one in logged.lines if one["event"] == "answer.ended"]
-    assert line["outcome"] == "cancelled"
+    assert line["outcome"] == outcome
+    assert line.get("reason") == reason
     (session_id,) = set(limiter.session_ids)
     ticket = limiter.admit(session_id)
     assert not isinstance(ticket, RetryAfter)
