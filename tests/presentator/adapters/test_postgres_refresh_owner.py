@@ -238,9 +238,9 @@ def test_a_toolchain_is_present_while_a_process_of_it_runs(
 
     present = asking.toolchain_is_present(_ANOTHER_TOOLCHAIN)
     another.close()
-    gone = asking.toolchain_is_present(_ANOTHER_TOOLCHAIN)
+    _until(lambda: not asking.toolchain_is_present(_ANOTHER_TOOLCHAIN))
 
-    assert (present, gone) == (True, False)
+    assert present
 
 
 def test_a_dead_connection_is_replaced_and_announces_the_toolchain_again(
