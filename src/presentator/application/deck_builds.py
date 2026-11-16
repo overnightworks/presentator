@@ -5,8 +5,10 @@ toolchain that builds now need a build, and what the deck's attempt says about
 it. The deck store, the build runner and the clock stay outside.
 """
 
-from collections.abc import Callable
+import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Final
 
 from presentator.application import build_retention
 from presentator.contracts.decks import (
@@ -23,6 +25,30 @@ from presentator.contracts.decks import (
 )
 from presentator.ports.clock import Clock
 from presentator.ports.decks import BuildRunner, DeckStore
+
+_log = logging.getLogger(__name__)
+
+_REFRESH_COMPLETED: Final = "refresh.completed"
+_REFRESH_REFUSED: Final = "refresh.refused"
+_OWNERSHIP_LOST: Final = "ownership_lost"
+
+
+def log_refresh(fetches: Sequence[SourceFetch]) -> None:
+    """Write the refresh's one line with its counts, or none where nothing changed."""
+    counts = {
+        "decks_built_count": sum(fetch.decks_built for fetch in fetches),
+        "builds_failed_count": sum(fetch.builds_failed for fetch in fetches),
+        "decks_removed_count": sum(fetch.decks_removed for fetch in fetches),
+    }
+    if any(counts.values()):
+        _log.info(
+            _REFRESH_COMPLETED, extra={"sources_fetched_count": len(fetches), **counts}
+        )
+
+
+def log_refresh_ownership_lost() -> None:
+    """Say a refresh stopped because another process took it over."""
+    _log.info(_REFRESH_REFUSED, extra={"reason": _OWNERSHIP_LOST})
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
