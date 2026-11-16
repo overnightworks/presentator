@@ -1,0 +1,8 @@
+claim_id = "5711fc2690df4a67b0e6f1601e65c7c4"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "ff9b703b6fb273de2a07bdd943c7a59982bc2936"
+branch = "claude/issue-1188-local-folder-sources-leave-s12"
+scope = [".github/workflows/ci.yml", "README.md", "docs", "frontend/src", "scripts", "src/presentator", "tests"]
+opened_commit = "b87c2131e2bb8b88c07edc644934d7dfe37be088"
+whole_reason = "one kind removed end to end across contract, host, page and docs; the paths are only where it lives"
