@@ -169,6 +169,8 @@ class World:
     web_restarts: int = 0
     workers_never_ready: bool = False
     workers_keep_uids: bool = False
+    # The workers' logs hold one ok line from the first build, and no later one.
+    workers_log_only_the_first_build: bool = False
     # The seconds after the fake's start at which the first worker's replacement
     # is Ready again; the worker pods are sampled as not all Ready until then.
     first_worker_ready_at: float = 110
@@ -424,13 +426,15 @@ class World:
         if verb == "logs":
             if target == "--selector":
                 if command[3].startswith("app.kubernetes.io/name=build-worker"):
-                    return json.dumps(
-                        {
-                            "event": CONNECTION_EVENT,
-                            "service": SERVICE_NAME,
-                            "outcome": Outcome.OK,
-                        }
-                    )
+                    ended = {
+                        "event": CONNECTION_EVENT,
+                        "service": SERVICE_NAME,
+                        "outcome": Outcome.OK,
+                    }
+                    lives = self.spent_lives()
+                    if self.workers_log_only_the_first_build:
+                        lives = min(lives, 1)
+                    return "\n".join(json.dumps(ended) for _ in range(lives))
                 return "the web's previous life" if "--previous" in command else "log"
             self.pod_named(target)
             return self.twin_log

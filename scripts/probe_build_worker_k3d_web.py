@@ -179,16 +179,29 @@ def worker_lines(run: Run) -> list[dict[str, object]]:
     return lines
 
 
-def connection_line_problem(lines: list[dict[str, object]]) -> str | None:
-    """Why the worker lines hold no finished connection of one build, else None."""
-    ended = [
+def ended_ok(lines: list[dict[str, object]]) -> list[dict[str, object]]:
+    """The finished connections of the worker service that ended ok."""
+    return [
         line
         for line in lines
-        if line.get("event") == CONNECTION_EVENT and line.get("service") == SERVICE_NAME
+        if line.get("event") == CONNECTION_EVENT
+        and line.get("service") == SERVICE_NAME
+        and line.get("outcome") == LineOutcome.OK
     ]
-    if any(line.get("outcome") == LineOutcome.OK for line in ended):
+
+
+def connection_line_problem(lines: list[dict[str, object]], before: int) -> str | None:
+    """Why the worker lines show no connection ended ok since `before` did, else None.
+
+    A replaced worker pod takes its log with it, so a build's connection is an ok
+    count that grew past the one read just before the build.
+    """
+    if len(ended_ok(lines)) > before:
         return None
-    return f"the workers wrote no {CONNECTION_EVENT} line that ended ok: {ended}"
+    return (
+        f"the workers wrote no new {CONNECTION_EVENT} line that ended ok "
+        f"(ok lines before the build: {before}): {lines}"
+    )
 
 
 def container_port(workload: Document, container: str) -> int:
@@ -245,15 +258,29 @@ def two_ready_pods(
     return webs, f"two web pods and two worker pods were not Ready {waited}"
 
 
-def delivering_outcome(run: Run, deployment: Document, web: Document) -> Outcome | str:
-    """The outcome of the web pod's build of hello-deck, or why it did not deliver."""
+def ok_connections(run: Run) -> int:
+    """How many connections the live worker pods' logs show ended ok."""
+    return len(ended_ok(worker_lines(run)))
+
+
+def delivering_outcome(
+    run: Run, deployment: Document, web: Document, before: int
+) -> Outcome | str:
+    """The outcome of the web pod's build, or why it did not deliver.
+
+    `before` is the ok count read before the build; the worker writes its line
+    after the hand-over and the sweep, so the line is polled for.
+    """
     name = web["metadata"]["name"]
     outcome = build_outcome(run, deployment, name)
     if isinstance(outcome, str):
         return outcome
     if not delivers_the_deck(outcome):
         return f"{name} did not deliver: {outcome}"
-    problem = connection_line_problem(worker_lines(run))
+    lines, _ = poll(
+        run, lambda: worker_lines(run), lambda got: len(ended_ok(got)) > before, []
+    )
+    problem = connection_line_problem(lines, before)
     return f"{name} delivered, but {problem}" if problem else outcome
 
 
@@ -314,9 +341,10 @@ def restart_overlap_problem(
 def first_build_problem(run: Run, deployment: Document, first: Document) -> str | None:
     """Why the first build did not take both workers, the second while one restarted."""
     first_workers = uids_of(list_pods(run, WORKER_SELECTOR))
+    before = ok_connections(run)
     with contextlib.closing(sampled_while_building(run)) as samples:
         next(samples, None)
-        outcome = delivering_outcome(run, deployment, first)
+        outcome = delivering_outcome(run, deployment, first, before)
         if isinstance(outcome, str):
             return outcome
         # One life ends with each step: both pods replaced means the second step
@@ -341,7 +369,8 @@ def built_over_two_workers(
         return problem
     if problem := copy_deck(run, deployment, second["metadata"]["name"]):
         return problem
-    if isinstance(outcome := delivering_outcome(run, deployment, second), str):
+    before = ok_connections(run)
+    if isinstance(outcome := delivering_outcome(run, deployment, second, before), str):
         return outcome
     say(
         f"cell 11: {first['metadata']['name']} and {second['metadata']['name']} built "

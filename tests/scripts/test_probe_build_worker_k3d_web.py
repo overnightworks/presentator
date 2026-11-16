@@ -202,8 +202,13 @@ def test_the_workers_apply_with_two_replicas_and_the_cells_before_with_one(
         (World(workers_never_ready=True), "were not Ready within", 11),
         (World(workers_keep_uids=True), "did not take both worker pods", 11),
         (World(client_exit=1, client_stderr="boom"), "cell 10", 10),
+        (
+            World(workers_log_only_the_first_build=True),
+            "the workers wrote no new connection.ended line",
+            11,
+        ),
     ],
-    ids=["workers not ready", "workers not replaced", "client ended"],
+    ids=["workers not ready", "workers not replaced", "client ended", "stale line"],
 )
 def test_workers_that_are_not_ready_or_not_both_used_fail_cell_11(
     make_fixture: Callable[..., Fixture],
