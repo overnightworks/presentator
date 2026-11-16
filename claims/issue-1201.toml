@@ -1,8 +1,0 @@
-claim_id = "eb6fec0c572e4814b7b3a2d64702076d"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "fa108298f068301e1130ae77b0a4e0c57be07d74"
-branch = "claude/issue-1201-the-two-process-harness-closes-an-app-s"
-scope = ["tests/presentator/host/support", "tests/presentator/host/test_main_two_app_processes_stop.py"]
-opened_commit = "d6a98334399596b4db8b307529da763f911116c8"
-whole_reason = "the harness support directory is the flake's single owner"
