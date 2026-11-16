@@ -363,6 +363,34 @@ def test_stopping_the_stream_kills_and_reaps_its_child(
     assert runner.child is None
 
 
+def test_a_stream_starts_its_command_before_its_first_line_is_asked_for(
+    cluster_module: ModuleType,
+) -> None:
+    runner = cluster_module.SubprocessRunner()
+    lines = runner.stream((sys.executable, "-c", "import time; time.sleep(60)"), {})
+    child = runner.child
+    assert child is not None
+    assert child.poll() is None
+    lines.close()
+    assert child.returncode < 0
+
+
+def test_closing_one_stream_leaves_the_command_of_another_running(
+    cluster_module: ModuleType,
+) -> None:
+    runner = cluster_module.SubprocessRunner()
+    program = (sys.executable, "-c", "import time; time.sleep(60)")
+    first = runner.stream(program, {})
+    first_child = runner.child
+    second = runner.stream(program, {})
+    second_child = runner.child
+    second.close()
+    assert second_child.returncode < 0
+    assert first_child.poll() is None
+    first.close()
+    assert first_child.returncode < 0
+
+
 def test_the_runner_hands_the_run_environment_to_the_child(
     cluster_module: ModuleType,
 ) -> None:

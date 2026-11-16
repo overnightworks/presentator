@@ -170,7 +170,8 @@ def followed_worker_lines(run: Run) -> Generator[str]:
 
     A replaced worker pod takes its log with it, so the lines are followed from
     before a build starts rather than read from the pods the build left; the
-    follow ends with the pods it started on, or at the build's own bound.
+    runner starts the follow when `watch` is called, and it ends with the pods
+    it started on, or at the build's own bound.
     """
     bound = CLIENT_SECONDS + TERMINATION_WINDOW_SECONDS
     return run.watch(
