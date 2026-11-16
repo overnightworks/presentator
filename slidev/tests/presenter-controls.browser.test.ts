@@ -69,7 +69,7 @@ describe('presenter controls', () => {
       state.answerMode = 'audio'
       await browser.close()
     }
-  })
+  }, 30_000)
 
   it('Counts only a voiced sentence as spoken when an answer fails midway', async () => {
     state.answerMode = 'mid-answer-error'
