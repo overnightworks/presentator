@@ -42,7 +42,7 @@ describe('what the address shows', () => {
 	] as const)('shows for a %s address the token field %s and the key %s', async (which, token, key) => {
 		open();
 
-		type(URL_FIELD, addresses.ssh.url);
+		type(URL_FIELD, addresses[which].url);
 
 		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
 		expect(secretField() !== null).toBe(token);
@@ -97,8 +97,8 @@ describe('the secret on the wire', () => {
 		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
 		checkButton()?.click();
 
-	await vi.waitFor(() => expect(sentTo(fetched, CHECK)).toHaveLength(1));
-			expect(sentTo(fetched, CHECK)).toEqual([expect.objectContaining({ secret: null })]);
+		await vi.waitFor(() => expect(sentTo(fetched, CHECK)).toHaveLength(1));
+		expect(sentTo(fetched, CHECK)).toEqual([expect.objectContaining({ secret: null })]);
 	});
 
 	it('shows an empty token field when https returns after a key address', async () => {
