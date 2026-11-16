@@ -199,6 +199,35 @@ def test_a_redis_import_that_fails_names_the_image_then_tears_down(
 
 
 @pytest.mark.parametrize(
+    ("found", "cells_printed"),
+    [(0, {"5"}), (1, {"5", "7", "8", "9"})],
+    ids=["right after its import", "when the web cells would apply it"],
+)
+def test_a_redis_image_the_node_lacks_is_named_and_never_applied(
+    make_fixture: Callable[..., Fixture],
+    manifests_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    found: int,
+    cells_printed: set[str],
+) -> None:
+    fixture = make_fixture(World(redis_found_in_node=found))
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    output = capsys.readouterr()
+    assert fixture.run.redis_image in output.err
+    assert "is not in the cluster's node" in output.err
+    printed = {
+        line.split(":")[0].removeprefix("cell ")
+        for line in output.out.splitlines()
+        if line.startswith("cell ")
+    }
+    assert printed == cells_printed
+    applied = [d["metadata"]["name"] for d in fixture.world.applied("Deployment")]
+    assert manifests_module.REDIS not in applied
+    assert fixture.world.issued("k3d", "cluster", "delete") != []
+
+
+@pytest.mark.parametrize(
     "failing", [("k3d", "cluster", "create"), ("k3d", "image", "import")]
 )
 def test_a_probe_ended_after_the_redis_pull_leaves_no_redis_image(

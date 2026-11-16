@@ -351,6 +351,7 @@ def drive_web(run: Run, overlay: list[Document]) -> str:
     deployment = next(d for d in documents if d["kind"] == "Deployment")
     worker_documents = applied_documents(overlay, init_container=True, replicas=2)
     manifest = as_stream(worker_documents)
+    require_redis_in_node(run)
     run(
         "kubectl apply --filename -",
         stdin=as_stream([*redis_documents(run.redis_image), *documents]),
@@ -442,6 +443,25 @@ def pull_redis(run: Run) -> None:
         run("docker image rm", REDIS_PINNED, check=False)
 
 
+def require_redis_in_node(run: Run) -> None:
+    """Refuse unless the node's runtime holds the probe Redis under its local name.
+
+    The Redis pod never pulls, so a missing image would only show as a web that
+    never turns Ready; the runtime resolves the name the way the kubelet does.
+    The node is asked right after the import, and again before the web cells
+    apply the pod: the cluster starts with image garbage collection held off,
+    and this look proves it held.
+    """
+    found = run(
+        "docker exec", run.node, "crictl", "inspecti", run.redis_image, check=False
+    )
+    if found.returncode:
+        refuse(
+            f"Redis image {run.redis_image} is not in the cluster's node {run.node}: "
+            f"{found.stderr[-2000:]}"
+        )
+
+
 def import_redis(run: Run) -> None:
     """Put the probe Redis into the cluster; teardown removes the local name."""
     imported = run(
@@ -451,6 +471,7 @@ def import_redis(run: Run) -> None:
         refuse(
             f"Redis image {run.redis_image} did not import: {imported.stderr[-2000:]}"
         )
+    require_redis_in_node(run)
 
 
 def drive(run: Run, released: ReleasedImage | None = None) -> None:

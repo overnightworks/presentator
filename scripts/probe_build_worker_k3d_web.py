@@ -308,9 +308,10 @@ def restart_overlap_problem(
 
     The first sample taken at or after the admission, on the host's clock that the
     web pod shares, must show a worker pod not Ready: the Ready condition's own
-    time is cut to the second, a sample's stamp is not. That sample must list
-    exactly the expected worker pods with exactly one not Ready, the restarting
-    one; an empty or odd listing fails with its reading.
+    time is cut to the second, a sample's stamp is not. That sample must list no
+    more than the expected worker pods with exactly one of them not Ready, the
+    restarting one: listed not Ready, or not listed at all while the StatefulSet
+    replaces its spent pod. An empty or odd listing fails with its reading.
     """
     if admitted is None:
         return "the second step was never admitted by a worker"
@@ -322,7 +323,7 @@ def restart_overlap_problem(
                     f"the second step was admitted after the first worker was "
                     f"Ready again (admitted at {admitted}, both Ready at {stamp})"
                 )
-            if len(statuses) != WORKER_PODS or statuses.count(READY) != WORKER_PODS - 1:
+            if len(statuses) > WORKER_PODS or statuses.count(READY) != WORKER_PODS - 1:
                 return (
                     f"the worker pods at the second step's admission were not one "
                     f"restarting beside {WORKER_PODS - 1} Ready (admitted at "
