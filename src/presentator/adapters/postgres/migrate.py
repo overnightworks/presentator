@@ -1,6 +1,7 @@
 """The migrations of the database, and the rule for serving what they made."""
 
 import logging
+import socket
 from enum import StrEnum
 from pathlib import Path
 from typing import Final
@@ -9,14 +10,17 @@ from alembic import command
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import Connection, Engine, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import URL, Connection, Engine, text
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
+from presentator.adapters.postgres.engine import CONNECT_TIMEOUT_SECONDS
 from presentator.adapters.postgres.locks import MIGRATION_LOCK, AdvisoryLock, parameters
 
 MIGRATIONS_DIRECTORY: Final = Path(__file__).parent / "migrations"
 _TAKE_LOCK: Final = text("SELECT pg_advisory_lock(:lock_class, :instance)")
 _RELEASE_LOCK: Final = text("SELECT pg_advisory_unlock(:lock_class, :instance)")
+# The port libpq connects to when the URL names none.
+_POSTGRES_PORT: Final = 5432
 _log = logging.getLogger(__name__)
 
 
@@ -24,6 +28,7 @@ class RefusalReason(StrEnum):
     """Why a database is not served or migrated: the closed set of `reason` codes."""
 
     NOT_ANSWERING = "not_answering"
+    LOGIN_REFUSED = "login_refused"
     NO_REVISION = "no_revision"
     BEHIND_THIS_RELEASE = "behind_this_release"
     NEWER_THAN_THIS_RELEASE = "newer_than_this_release"
@@ -47,11 +52,40 @@ class DatabaseRefusedError(Exception):
 
 
 def _not_answering(error: SQLAlchemyError) -> DatabaseRefusedError:
-    # SQLAlchemy wraps the driver's own error, whose class names the failure.
-    driver_error = getattr(error, "orig", None) or error
     return DatabaseRefusedError(
-        RefusalReason.NOT_ANSWERING, driver_error=type(driver_error).__name__
+        RefusalReason.NOT_ANSWERING, driver_error=_driver_error_name(error)
     )
+
+
+def _refused_at_connect(engine: Engine, error: SQLAlchemyError) -> DatabaseRefusedError:
+    """A login the server refused, or a server that is not there to answer.
+
+    libpq gives a failed connect no SQLSTATE and words its message in the
+    server's language, so whether the server's port accepts a plain connection
+    tells a refused login (password, role or database) from no server at all.
+    """
+    if isinstance(error, OperationalError) and _port_accepts(engine.url):
+        return DatabaseRefusedError(
+            RefusalReason.LOGIN_REFUSED, driver_error=_driver_error_name(error)
+        )
+    return _not_answering(error)
+
+
+def _port_accepts(url: URL) -> bool:
+    """Whether the host and port of `url` accept a TCP connection."""
+    if url.host is None:
+        return False
+    address = (url.host, url.port or _POSTGRES_PORT)
+    try:
+        with socket.create_connection(address, timeout=CONNECT_TIMEOUT_SECONDS):
+            return True
+    except OSError:
+        return False
+
+
+def _driver_error_name(error: SQLAlchemyError) -> str:
+    # SQLAlchemy wraps the driver's own error, whose class names the failure.
+    return type(getattr(error, "orig", None) or error).__name__
 
 
 def cap_alembic_logging() -> None:
@@ -65,14 +99,14 @@ def migrate(engine: Engine) -> None:
     Migrations only add, so a database whose revision this release does not know
     was migrated by a newer release: it stays as it is, which lets a rollback of
     the release run its migration step without harm. A database that does not
-    answer is refused.
+    answer, or refuses the login, is refused.
     """
     config = _config(MIGRATIONS_DIRECTORY)
     history = ScriptDirectory.from_config(config)
     try:
         connection = engine.connect()
     except SQLAlchemyError as error:
-        raise _not_answering(error) from None
+        raise _refused_at_connect(engine, error) from None
     with connection:
         _hold(connection, MIGRATION_LOCK)
         try:
@@ -99,16 +133,20 @@ def serving_refusal(
 ) -> DatabaseRefusedError | None:
     """Why this release must not serve the database, or None when it may.
 
-    A database that does not answer is refused. So is one with no revision row,
-    which was never migrated, and one at a revision of this release's own
-    `history` other than its head, which an older release migrated: serving
-    either would read tables or columns that may not exist. A revision this
-    release does not know is a newer release's, which only added, so it is
-    served. The reasons name the kind of failure and never what the driver says,
-    which may quote the address the connection used.
+    A database that does not answer, or refuses the login, is refused. So is
+    one with no revision row, which was never migrated, and one at a revision
+    of this release's own `history` other than its head, which an older
+    release migrated: serving either would read tables or columns that may not
+    exist. A revision this release does not know is a newer release's, which
+    only added, so it is served. The reasons name the kind of failure and never
+    what the driver says, which may quote the address the connection used.
     """
     try:
-        with engine.connect() as connection:
+        connection = engine.connect()
+    except SQLAlchemyError as error:
+        return _refused_at_connect(engine, error)
+    try:
+        with connection:
             held = set(MigrationContext.configure(connection).get_current_heads())
     except SQLAlchemyError as error:
         return _not_answering(error)
