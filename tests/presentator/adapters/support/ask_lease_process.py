@@ -78,14 +78,8 @@ def _app(redis: SharedRedis) -> FastAPI:
         sessions=FakeSessionRecordStore(users=FakeUserStore()),
     )
 
-    @app.get(HEALTH_PATH)
-    def _health() -> None:
-        return None
-
-    @app.post(FINISH_PATH)
-    def _finish() -> None:
-        answers.finish.set()
-
+    app.add_api_route(HEALTH_PATH, lambda: None, methods=["GET"])
+    app.add_api_route(FINISH_PATH, answers.finish.set, methods=["POST"])
     return app
 
 

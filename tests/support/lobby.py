@@ -313,7 +313,7 @@ def a_settings() -> Settings:
     """The settings of an instance at the test origin, signing in at a fake issuer."""
     return Settings(
         secret_key_file=_KEY_FILE,
-        redis_url=NOTHING_LISTENS_HERE,
+        redis_url=SecretStr(NOTHING_LISTENS_HERE),
         public_origin=A_BROWSERS_ADDRESS,
         talk_origin=A_TALK_ADDRESS,
         agent=an_agent_config(),

@@ -1,7 +1,7 @@
 """Two processes of the ask route on one Redis: one answer per session at a time."""
 
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -69,7 +69,7 @@ def _wait_until_serving(port: int, process: object) -> None:
 
 
 @contextmanager
-def _serving(redis_url: str) -> Iterator[tuple[_Process, _Process, TwoProcesses]]:
+def _serving(redis_url: str) -> Generator[tuple[_Process, _Process, TwoProcesses]]:
     first_port, second_port = two_free_ports()
     with two_modules(
         _MODULE,
@@ -83,7 +83,7 @@ def _serving(redis_url: str) -> Iterator[tuple[_Process, _Process, TwoProcesses]
 
 
 def _output_of(processes: TwoProcesses) -> str:
-    written = []
+    written: list[str] = []
     for each in (processes.first, processes.second):
         each.kill()
         written.append(each.communicate(timeout=_REQUEST_SECONDS)[0])

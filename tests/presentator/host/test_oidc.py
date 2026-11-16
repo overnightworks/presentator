@@ -299,7 +299,10 @@ def test_both_hosts_share_the_one_identity_writes_owner(
     )
 
     lobby, talk = main.installed_auths(
-        settings, LOBBY_SHELL, writes, SharedRedis(settings.redis_url)
+        settings,
+        LOBBY_SHELL,
+        writes,
+        SharedRedis(settings.redis_url.get_secret_value()),
     )
 
     assert talk.transaction is lobby.transaction is writes
