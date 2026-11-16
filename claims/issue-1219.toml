@@ -1,8 +1,0 @@
-claim_id = "07cecd0f7d294f12becba98a2026ec12"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "521255a8f3ff5cbd5c4892c8f6e1f451949753d5"
-branch = "claude/issue-1219-no-free-text-or-raw-traceback-reaches-th"
-scope = ["docs/configuration.md", "src/presentator/adapters/postgres/migrate.py", "src/presentator/host/main.py", "src/presentator/host/polling.py", "src/presentator/host/stopping_server.py", "tests/conftest.py", "tests/presentator/agent/test_mcp_front.py", "tests/presentator/host", "tests/support/talk_support.py"]
-opened_commit = "5c091c43ca071089a4639643f2f1c4835f5175c3"
-whole_reason = "One slice closes the remaining free-text and traceback paths into the JSON log, with their test fixtures."
