@@ -31,7 +31,7 @@ from presentator.application.decks import Decks
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host.main import Instance, served_by_host
-from presentator.host.polling import Schedule
+from presentator.host.polling import ChoreCode, Schedule
 from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
 from tests.support.fake_issuer import FakeIssuer
 from tests.support.lobby import (
@@ -286,7 +286,9 @@ def two_hosts(
     talk = _talk_over(
         SqliteSessionRecordStore(database), decks, decks_store, talk_auth, copresenter
     )
-    never = Schedule(chore=lambda: None, interval=timedelta(days=1))
+    never = Schedule(
+        chore=lambda: None, chore_code=ChoreCode.SOURCE_POLL, interval=timedelta(days=1)
+    )
     router = served_by_host(
         Instance(lobby=lobby, talk=talk, poller=never, session_sweep=never),
         a_settings(),

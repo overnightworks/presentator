@@ -58,6 +58,8 @@ from presentator.adapters.postgres.engine import create_database_engine
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
 from presentator.adapters.postgres.migrate import (
     MIGRATIONS_DIRECTORY,
+    RefusalReason,
+    cap_alembic_logging,
     database_is_ready,
     migration_history,
     serving_refusal,
@@ -137,9 +139,10 @@ from presentator.host.oidc import (
     client_configs_of,
     relying_party,
 )
-from presentator.host.polling import Schedule
+from presentator.host.polling import ChoreCode, Schedule
 from presentator.host.stopping_server import StoppingServer
 from presentator.host.store_connection import (
+    StoreFailure,
     StoreKind,
     reach_redis,
     timed_connection,
@@ -338,7 +341,10 @@ def _postgres_stores(
     with timed_connection(StoreKind.POSTGRES) as step:
         refusal = serving_refusal(engine, history)
         if refusal is not None:
-            step.refuse(refusal.reason)
+            if refusal.reason is RefusalReason.NOT_ANSWERING:
+                step.fail(StoreFailure.NOT_ANSWERING)
+            else:
+                step.refuse(refusal.reason)
     if refusal is not None:
         engine.dispose()
         raise cannot_start(refusal.message)
@@ -378,6 +384,7 @@ def _poller(settings: Settings, decks: Decks) -> Schedule:
     """The schedule that takes in what every source carries now."""
     return Schedule(
         chore=decks.refresh,
+        chore_code=ChoreCode.SOURCE_POLL,
         interval=timedelta(seconds=settings.source_poll_seconds),
     )
 
@@ -627,6 +634,7 @@ def _session_sweep(sessions: SessionStore, clock: SystemClock) -> Schedule:
     """Delete expired sessions on a schedule, reading the clock on every run."""
     return Schedule(
         chore=lambda: sessions.delete_expired(clock.now()),
+        chore_code=ChoreCode.SESSION_SWEEP,
         interval=SESSION_SWEEP_INTERVAL,
     )
 
@@ -712,6 +720,7 @@ def main(
     Both run on the configuration the environment carries.
     """
     logline.configure(SERVICE_NAME)
+    cap_alembic_logging()
     if command_line().parse_args(arguments).command == MIGRATE_COMMAND:
         migrate_the_database()
         return

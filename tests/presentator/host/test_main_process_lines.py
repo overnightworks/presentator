@@ -63,7 +63,7 @@ def test_no_line_of_a_served_process_carries_a_store_address(app: App) -> None:
     assert "postgresql://" not in output
 
 
-def test_a_redis_that_does_not_answer_ends_its_line_failed_and_names_no_address(
+def test_a_redis_that_does_not_answer_writes_one_failed_line_and_names_no_address(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     redis = SharedRedis(
@@ -75,12 +75,8 @@ def test_a_redis_that_does_not_answer_ends_its_line_failed_and_names_no_address(
         reach_redis(redis)
     redis.close()
 
-    (line,) = [one for one in logged.lines if one["event"] == "store_connection.ended"]
+    (line,) = logged.lines
     assert (line["kind"], line["outcome"]) == ("redis", "failed")
     assert (line["reason"], line["level"]) == ("not_answering", "warning")
-    (readiness,) = [
-        one for one in logged.lines if one["event"] == "redis_readiness.refused"
-    ]
-    assert readiness["reason"] == "not_answering"
     assert _A_PASSWORD not in logged.text
     assert "127.0.0.1" not in logged.text

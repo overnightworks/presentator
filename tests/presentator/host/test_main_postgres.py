@@ -10,6 +10,7 @@ from sqlalchemy import inspect, text
 from presentator.host import main
 from presentator.host.config import ConfigurationError, load_settings
 from tests.support.lobby import A_BROWSERS_ADDRESS, A_BROWSERS_HEADERS, A_TALK_ADDRESS
+from tests.support.log_lines import json_logged
 from tests.support.postgres import database_environment, engine_on
 from tests.support.redis import relay_in_front_of
 
@@ -35,6 +36,26 @@ def test_an_empty_database_is_refused_at_start_and_left_without_a_table(
     finally:
         engine.dispose()
     assert not (tmp_path / "presentator.sqlite3").exists()
+
+
+def test_a_database_that_does_not_answer_at_start_ends_its_line_failed(
+    environment: pytest.MonkeyPatch,
+    redis_url: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _point_at(environment, "postgresql://nobody@127.0.0.1:1/nothing", tmp_path)
+    environment.setenv("PRESENTATOR_REDIS_URL", redis_url)
+
+    with json_logged(capsys) as logged, pytest.raises(ConfigurationError):
+        main.build_instance(load_settings())
+
+    (line,) = [
+        one
+        for one in logged.lines
+        if one["event"] == "store_connection.ended" and one["kind"] == "postgres"
+    ]
+    assert (line["outcome"], line["reason"]) == ("failed", "not_answering")
 
 
 @pytest.mark.parametrize("address", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])

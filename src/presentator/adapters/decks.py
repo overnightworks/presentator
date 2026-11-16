@@ -193,12 +193,13 @@ _REFUSALS: Final = frozenset(
 _log = logging.getLogger(__name__)
 
 
-class _SourceUnreadableError(Exception):
-    """A source whose reading fails for a reason the poll reports as its failure."""
-
-    def __init__(self, failure: SourceRunFailure) -> None:
-        super().__init__(failure.value)
-        self.failure = failure
+def _unread(fetch: StepTimer, failure: SourceRunFailure) -> SourcePoll:
+    """End the fetch step for a source that could not be read, with its code."""
+    if failure in _REFUSALS:
+        fetch.refuse(failure.value)
+    else:
+        fetch.fail(failure.value)
+    return SourcePoll(folders=None, commit=None, failure=failure)
 
 
 def create_deck_tables(database: Path) -> None:
@@ -475,30 +476,24 @@ class MirroredDeckFolders:
         The reading is one `source_fetch.ended` step: it is a warning where the
         source could not be read and the refresh goes on to the next one.
         """
-        try:
-            with StepTimer(_SOURCE_FETCH_ENDED, _log, source_id=source.id) as fetch:
-                fetch.handled()
+        with StepTimer(_SOURCE_FETCH_ENDED, _log, source_id=source.id) as fetch:
+            fetch.handled()
+            try:
                 return self._read(source, fetch)
-        except _SourceUnreadableError as unreadable:
-            failure = unreadable.failure
-        except InvalidCredentialError:
-            failure = SourceRunFailure.CREDENTIAL_UNRESOLVABLE
-        except MirrorError:
-            failure = SourceRunFailure.FAILED
-        return SourcePoll(folders=None, commit=None, failure=failure)
+            except InvalidCredentialError:
+                failure = SourceRunFailure.CREDENTIAL_UNRESOLVABLE
+            except MirrorError:
+                failure = SourceRunFailure.FAILED
+            return _unread(fetch, failure)
 
     def _read(self, source: Source, fetch: StepTimer) -> SourcePoll:
         mirror = self.mirrors.of(source)
         if mirror is None:
-            raise _SourceUnreadableError(SourceRunFailure.FAILED)
+            return _unread(fetch, SourceRunFailure.FAILED)
         connection = mirror.connect()
         revision = connection.revision
         if revision is None:
-            failure = _FAILURE_BY_CONNECTION_STATE[connection.state]
-            if failure in _REFUSALS:
-                fetch.refuse(failure.value)
-                return SourcePoll(folders=None, commit=None, failure=failure)
-            raise _SourceUnreadableError(failure)
+            return _unread(fetch, _FAILURE_BY_CONNECTION_STATE[connection.state])
         folders = tuple(
             self._folder(mirror, revision, source, entry.name)
             for entry in mirror.entries(revision, inside=source.folder)
