@@ -398,8 +398,9 @@ describe('presenter controls', () => {
     try {
       const ai = page.getByRole('switch', { name: en['controls.switch'] })
       await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      const hearingsBefore = state.hearingOpened
       await ai.click({ timeout: 2_000 })
-      await expect.poll(() => state.hearingOpened).toBeGreaterThan(0)
+      await expect.poll(() => state.hearingOpened).toBeGreaterThan(hearingsBefore)
       const openedBefore = state.hearingOpened
       endHearings(code)
       if (shownAsFault) {
