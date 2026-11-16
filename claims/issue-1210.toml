@@ -1,0 +1,8 @@
+claim_id = "459428b534fb4feea8c2e9f0f4dfd1dc"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "417b7934da713349b7b35ad597efabb11dc241fa"
+branch = "claude/issue-1210-store-source-and-polling-lines-one-line"
+scope = ["src/presentator/adapters/decks.py", "src/presentator/adapters/postgres/migrate.py", "src/presentator/adapters/shared_redis.py", "src/presentator/host/main.py", "src/presentator/host/polling.py", "src/presentator/host/store_connection.py", "tests/presentator/adapters", "tests/presentator/host"]
+opened_commit = "f44c4563c9afefb57a43cae32fe1dc7de64e7ac7"
+whole_reason = "One follow-up slice across the store, source and polling log lines that S2 and S6 left."
