@@ -208,16 +208,13 @@ def test_a_failed_speech_call_writes_one_error_speak_line_and_one_warning_answer
 
     (spoken,) = [one for one in logged.lines if one["event"] == "speak.ended"]
     (answer,) = [one for one in logged.lines if one["event"] == "answer.ended"]
-    assert (spoken["level"], spoken["outcome"], spoken["reason"]) == (
-        "error",
-        "failed",
-        "cut",
-    )
+    (request,) = [one for one in logged.lines if one["event"] == REQUEST_EVENT]
     assert (answer["level"], answer["outcome"], answer["reason"]) == (
         "warning",
         "failed",
         "unavailable",
     )
+    assert spoken["trace_id"] == answer["trace_id"] == request["trace_id"]
 
 
 def _who_status(instance: SpeechInstance) -> HTTPStatus:
