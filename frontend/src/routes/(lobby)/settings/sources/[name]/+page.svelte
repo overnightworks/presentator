@@ -237,7 +237,7 @@
 			/>
 			{#if outcome?.request === 'renewKey'}<StatusLine shape={outcome.shape} text={outcome.text} />{/if}
 		</div>
-	{:else if access.control === 'token'}
+	{:else}
 		<form class="form" onsubmit={renewToken}>
 			<div class="fld">
 				<label for="renew-secret">{words['source.secret']}</label>

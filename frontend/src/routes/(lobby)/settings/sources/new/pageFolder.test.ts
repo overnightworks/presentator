@@ -99,6 +99,24 @@ describe('the folder on the wire', () => {
 		expect(createButton()?.disabled).toBe(false);
 	});
 
+	it('sends an empty folder once a folder typed for https meets an address with no access', async () => {
+		const fetched = open();
+		type(URL_FIELD, addresses.https.url);
+		await vi.waitFor(() => expect(folderField()).not.toBeNull());
+		type('source-folder', 'examples');
+
+		type(URL_FIELD, addresses.none.url);
+		await vi.waitFor(() => expect(folderField()).toBeNull());
+		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
+		checkButton()?.click();
+		await vi.waitFor(() => expect(createButton()?.disabled).toBe(false));
+		type('source-name', 'talks');
+		createButton()?.click();
+
+		await vi.waitFor(() => expect(sentTo(fetched, CREATE)).toHaveLength(1));
+		expect(sentTo(fetched, CREATE)).toEqual([expect.objectContaining({ folder: '' })]);
+	});
+
 	it('words a refused folder at Create', async () => {
 		const fetched = await checked('https');
 		fetched.mockImplementationOnce(async () =>
