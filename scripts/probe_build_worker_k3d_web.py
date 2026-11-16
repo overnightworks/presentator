@@ -284,8 +284,8 @@ def sampled_while_building(run: Run) -> Generator[str]:
     Each line is the host's epoch time, taken before kubectl reads the pods, then
     the Ready status of each worker pod listed: the reading is no older than the
     stamp, and a failed reading prints nothing and is retried after a pause. The
-    sampler's own timeout is its explicit bound: the runner tracks one child, so
-    the stream ends by that timeout or by SIGPIPE when it is closed.
+    sampler's own timeout is its explicit bound, so the stream ends by that
+    timeout, by SIGPIPE when it is closed, or when the runner kills its children.
     """
     read = (
         f"kubectl get pods --selector {WORKER_SELECTOR} --namespace {NAMESPACE} "

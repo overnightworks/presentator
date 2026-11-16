@@ -237,7 +237,7 @@ def test_a_signal_makes_further_signals_ignored_before_it_kills_and_exits(
 ) -> None:
     calls: list[str] = []
 
-    runner = SimpleNamespace(kill_child=lambda: calls.append("kill"))
+    runner = SimpleNamespace(kill_children=lambda: calls.append("kill"))
     handler = driver_module.stop_on_signal(runner, lambda: calls.append("hold"))
     with pytest.raises(SystemExit) as stopped:
         handler(signal.SIGTERM, None)
@@ -348,7 +348,7 @@ def test_the_process_listing_gives_a_commands_output_and_refuses_its_failure(
     assert "false" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("stop", ["kill_child", "close"])
+@pytest.mark.parametrize("stop", ["kill_children", "close"])
 def test_stopping_the_stream_kills_and_reaps_its_child(
     cluster_module: ModuleType, stop: str
 ) -> None:
@@ -356,11 +356,11 @@ def test_stopping_the_stream_kills_and_reaps_its_child(
     program = "import time; print('ready', flush=True); time.sleep(60)"
     lines = runner.stream((sys.executable, "-c", program), {})
     assert next(lines) == "ready\n"
-    child = runner.child
-    getattr(runner if stop == "kill_child" else lines, stop)()
+    (child,) = runner.children
+    getattr(runner if stop == "kill_children" else lines, stop)()
     assert child.returncode < 0
     lines.close()
-    assert runner.child is None
+    assert runner.children == []
 
 
 def test_a_stream_starts_its_command_before_its_first_line_is_asked_for(
@@ -368,8 +368,7 @@ def test_a_stream_starts_its_command_before_its_first_line_is_asked_for(
 ) -> None:
     runner = cluster_module.SubprocessRunner()
     lines = runner.stream((sys.executable, "-c", "import time; time.sleep(60)"), {})
-    child = runner.child
-    assert child is not None
+    (child,) = runner.children
     assert child.poll() is None
     lines.close()
     assert child.returncode < 0
@@ -381,14 +380,30 @@ def test_closing_one_stream_leaves_the_command_of_another_running(
     runner = cluster_module.SubprocessRunner()
     program = (sys.executable, "-c", "import time; time.sleep(60)")
     first = runner.stream(program, {})
-    first_child = runner.child
+    (first_child,) = runner.children
     second = runner.stream(program, {})
-    second_child = runner.child
+    second_child = runner.children[-1]
     second.close()
     assert second_child.returncode < 0
     assert first_child.poll() is None
     first.close()
     assert first_child.returncode < 0
+
+
+def test_killing_the_children_stops_every_stream_the_runner_started(
+    cluster_module: ModuleType,
+) -> None:
+    runner = cluster_module.SubprocessRunner()
+    program = (sys.executable, "-c", "import time; time.sleep(60)")
+    streams = [runner.stream(program, {}), runner.stream(program, {})]
+    started = list(runner.children)
+
+    runner.kill_children()
+
+    assert [child.returncode < 0 for child in started] == [True, True]
+    for stream in streams:
+        stream.close()
+    assert runner.children == []
 
 
 def test_the_runner_hands_the_run_environment_to_the_child(
