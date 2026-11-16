@@ -163,6 +163,48 @@ SENDER_LEG = [
 
 IDLE_LEG = ["spawn", "status", "release", "wait-within", "close"]
 
+CUT_OFF_HEADER = [
+    "arm 7.0",
+    "spawn",
+    "status",
+    "release",
+    "wait-within",
+    "kill",
+    "wait",
+    "close",
+    "sweep 104.0",
+    "cancel",
+]
+ANSWERED_HEADER = [
+    "arm 7.0",
+    "spawn",
+    "status",
+    "release",
+    "wait-within",
+    "close",
+    "sweep 104.0",
+    "cancel",
+]
+EXPIRED_BEFORE_RELEASE = [
+    "arm 7.0",
+    "spawn",
+    "status",
+    "kill",
+    "wait",
+    "close",
+    "sweep 104.0",
+]
+EXPIRED_AT_RELEASE = [
+    "arm 7.0",
+    "spawn",
+    "status",
+    "release",
+    "kill",
+    "wait",
+    "close",
+    "sweep 104.0",
+]
+
 
 @dataclass(frozen=True)
 class Spawned:

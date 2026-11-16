@@ -77,14 +77,14 @@ def fault_of(error: Exception) -> Fault:
     """The class of fault an exchange's exception is."""
     if isinstance(error, HelloRefusedError):
         return Fault.NOT_THE_WORKER
-    if isinstance(error, WireRefusedError):
-        return Fault.REPLY_GRAMMAR
     if isinstance(error, TreeRefusedError):
         return Fault.STEP_CONTRACT
     if isinstance(error, TimeoutError):
         return Fault.DEADLINE
     if isinstance(error, ConnectionError):
         return Fault.CONNECTION
+    if isinstance(error, WireRefusedError):
+        return Fault.REPLY_GRAMMAR
     return Fault.LOCAL
 
 

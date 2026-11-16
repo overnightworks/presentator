@@ -2,7 +2,7 @@
 
 import os
 import socket
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import closing
 from pathlib import Path
 
@@ -12,6 +12,7 @@ from presentator.adapters.build_wire import (
     BuiltOutcome,
     FailedOutcome,
     StepHeader,
+    WireClosedError,
     WireRefusedError,
     read_outcome,
     read_request,
@@ -142,3 +143,50 @@ def test_an_output_tree_answered_built_is_read_by_the_client_and_received(
 
     assert outcome == BuiltOutcome()
     assert (received / "talk" / "index.html").read_bytes() == b"<html>"
+
+
+MESSAGE_READERS = {
+    "a STATUS": (read_status, b"\x03"),
+    "an OUTCOME": (read_outcome, b"\x05"),
+    "a STEP": (read_request, b"\x02"),
+}
+CUT_AFTER = {
+    "before any byte": 0,
+    "inside the preamble": 3,
+    "before the header length": 5,
+    "inside the header length": 6,
+    "inside the header": 8,
+}
+
+
+@pytest.mark.parametrize("cut_after", CUT_AFTER.values(), ids=CUT_AFTER.keys())
+@pytest.mark.parametrize(
+    "reader_and_kind", MESSAGE_READERS.values(), ids=MESSAGE_READERS.keys()
+)
+def test_an_end_of_stream_inside_a_message_is_a_closed_connection_not_a_grammar_fault(
+    pair: tuple[socket.socket, socket.socket],
+    reader_and_kind: tuple[Callable[[socket.socket], object], bytes],
+    cut_after: int,
+) -> None:
+    read, kind = reader_and_kind
+    reader, writer = pair
+    writer.sendall((b"PBW\x01" + kind + b"\x00\x02{}")[:cut_after])
+    writer.shutdown(socket.SHUT_WR)
+
+    with pytest.raises(WireClosedError) as closed:
+        read(reader)
+
+    assert isinstance(closed.value, ConnectionError)
+    assert isinstance(closed.value, WireRefusedError)
+
+
+def test_bytes_that_break_the_grammar_are_not_a_closed_connection(
+    pair: tuple[socket.socket, socket.socket],
+) -> None:
+    reader, writer = pair
+    writer.sendall(b"XBW\x01\x03\x00\x02{}")
+
+    with pytest.raises(WireRefusedError) as refused:
+        read_status(reader)
+
+    assert not isinstance(refused.value, WireClosedError)
