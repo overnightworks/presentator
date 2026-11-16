@@ -1,4 +1,8 @@
-"""The uvicorn server that marks a stop as begun the moment its signal arrives."""
+"""The uvicorn server that marks a stop as begun the moment its signal arrives.
+
+It also owns the process's JSON log lines and the one line a failed start
+ends in.
+"""
 
 import errno
 import logging
@@ -7,11 +11,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import FrameType
-from typing import Final, override
+from typing import Final, NoReturn, override
 
+import logline
 import uvicorn
 from starlette.types import ASGIApp
 
+from presentator.adapters.postgres.migrate import RefusalReason
 from presentator.api.health import Stopping
 
 _log = logging.getLogger(__name__)
@@ -131,6 +137,22 @@ _UVICORN_RECORDS_AS_EVENTS: Final = _UvicornRecordsAsEvents()
 def name_uvicorn_records() -> None:
     """Write uvicorn's warnings and errors as literal events; call after `configure`."""
     logging.getLogger(_UVICORN_LOGGER).addFilter(_UVICORN_RECORDS_AS_EVENTS)
+
+
+def configure_logging(service: str) -> None:
+    """Make every line of this process one JSON object, uvicorn's as its events."""
+    logline.configure(service)
+    name_uvicorn_records()
+
+
+def end_failed(reason: RefusalReason | ServerReason, **codes: str) -> NoReturn:
+    """End the process in one line naming the refusal, without its traceback.
+
+    The traceback would name the database's host and port or a file's path, so
+    the line carries only codes, such as the class name of the driver's error.
+    """
+    _log.error(ServerEvent.PROCESS_FAILED, extra={"reason": reason, **codes})
+    raise SystemExit(1) from None
 
 
 class StoppingServer(uvicorn.Server):

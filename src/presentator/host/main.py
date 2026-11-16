@@ -13,10 +13,9 @@ from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
-from typing import Final, NoReturn
+from typing import Final
 from urllib.parse import urlsplit
 
-import logline
 from fastapi import FastAPI
 from logline import RequestLineMiddleware
 from pydantic import SecretStr
@@ -137,10 +136,10 @@ from presentator.host.oidc import (
 )
 from presentator.host.polling import ChoreCode, Schedule
 from presentator.host.stopping_server import (
-    ServerEvent,
     ServerReason,
     StoppingServer,
-    name_uvicorn_records,
+    configure_logging,
+    end_failed,
     served_config,
 )
 from presentator.host.store_connection import (
@@ -724,9 +723,8 @@ def main(
     Both run on the configuration the environment carries; a refused
     configuration or database ends either in one line and exit status 1.
     """
-    logline.configure(SERVICE_NAME)
+    configure_logging(SERVICE_NAME)
     cap_alembic_logging()
-    name_uvicorn_records()
     try:
         if command_line().parse_args(arguments).command == MIGRATE_COMMAND:
             migrate_the_database()
@@ -737,23 +735,13 @@ def main(
     except DatabaseRefusedError as refused:
         driver_error = refused.driver_error
         codes = {} if driver_error is None else {"error_type": driver_error}
-        _end_failed(refused.reason, **codes)
+        end_failed(refused.reason, **codes)
     except ConfigurationError as refused:
         # The settings by their variables; the message may name a path.
-        _end_failed(
+        end_failed(
             ServerReason.CONFIGURATION_REFUSED, setting=",".join(refused.variables)
         )
     asyncio.run(_serve(instance, settings))
-
-
-def _end_failed(reason: RefusalReason | ServerReason, **codes: str) -> NoReturn:
-    """End the process in one line naming the refusal, without its traceback.
-
-    The traceback would name the database's host and port or a file's path, so
-    the line carries only codes, such as the class name of the driver's error.
-    """
-    _log.error(ServerEvent.PROCESS_FAILED, extra={"reason": reason, **codes})
-    raise SystemExit(1) from None
 
 
 def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddleware:
