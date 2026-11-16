@@ -7,7 +7,7 @@ import json
 import threading
 from dataclasses import dataclass, field, replace
 from http import HTTPStatus
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 from fastapi import FastAPI
@@ -396,3 +396,92 @@ async def _ask_and_leave_while_the_gateway_holds(
         "state": {},
     }
     await asyncio.wait_for(app(scope, receive, send), timeout=5)
+
+
+class _SteppedLoop(asyncio.SelectorEventLoop):
+    """An event loop whose clock moves only when a test moves it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.now = 1000.0
+
+    def time(self) -> float:
+        return self.now
+
+
+@pytest.mark.parametrize("deltas", [["Eins ", "Zwei "], ["Eins "]])
+def test_a_send_that_stalls_past_the_deadline_ends_with_the_failure_and_frees_lease(
+    deltas: list[str],
+) -> None:
+    """The next event is already available when the stalled send resumes."""
+    limiter = FakeAskLimiter()
+    private = PrivateFakes()
+    private.answers.deltas = deltas
+    app = FastAPI()
+    add_copresenter_routes(
+        app,
+        surface=CoPresenterSurface(
+            use=a_use(private, the_admins_decks()),
+            limiter=limiter,
+            browser_origin=A_TALK_ADDRESS,
+            deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
+        ),
+        admission=lambda _connection: FixedSession(),
+        sessions=FakeSessionRecordStore(users=FakeUserStore()),
+    )
+
+    with asyncio.Runner(loop_factory=_SteppedLoop) as runner:
+        loop = cast("_SteppedLoop", runner.get_loop())
+        body = runner.run(_ask_while_the_first_send_outlasts_the_deadline(app, loop))
+
+    assert body.count("event: text") == 1
+    assert "Zwei" not in body
+    assert "event: done" not in body
+    assert body.count("event: error") == 1
+    assert private.answers.exits == 1
+    assert private.answers.reader_closed
+    assert isinstance(limiter.admit(FixedSession().session_id), FakeAskTicket)
+
+
+async def _ask_while_the_first_send_outlasts_the_deadline(
+    app: ASGIApp, loop: _SteppedLoop
+) -> str:
+    messages: list[Message] = [
+        {
+            "type": "http.request",
+            "body": json.dumps({**SPOKEN_QUESTION, "deck": A_DECK}).encode(),
+        }
+    ]
+    sent: list[bytes] = []
+
+    async def receive() -> Message:
+        if messages:
+            return messages.pop(0)
+        return await asyncio.Future()
+
+    async def send(message: Message) -> None:
+        if message["type"] != "http.response.body":
+            return
+        sent.append(message.get("body", b""))
+        if len(sent) == 1:
+            loop.now += AN_ANSWER_DEADLINE_SECONDS + 1
+
+    scope: Scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "https",
+        "path": ASK,
+        "raw_path": ASK.encode(),
+        "query_string": b"",
+        "headers": [
+            (b"host", b"talk.testserver"),
+            (b"content-type", b"application/json"),
+        ],
+        "client": ("testclient", 50000),
+        "server": ("testserver", 443),
+        "state": {},
+    }
+    await app(scope, receive, send)
+    return b"".join(sent).decode()

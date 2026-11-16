@@ -371,12 +371,16 @@ async def _answer_events(
                         if session_watch in done:
                             _observe_session_end(session_watch)
                             return
-                        if next_event not in done:
+                        if next_event not in done or loop.time() >= ask.deadline:
                             raise TimeoutError
                         event = next_event.result()
                         yield _sse(event)
                         if isinstance(event, Done):
                             return
+                        # A stalled send suspends the stream past the deadline;
+                        # the lease expires with it, so no further event starts.
+                        if loop.time() >= ask.deadline:
+                            raise TimeoutError
                         next_event = asyncio.create_task(_next_answer_event(events))
                 finally:
                     await _finish_tasks((next_event,))
