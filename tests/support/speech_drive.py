@@ -10,10 +10,11 @@ import sqlite3
 import threading
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, cast
 from urllib.parse import urlsplit
 
 from agents.backend.fake_gateway import FakeGateway, completion
+from logline import REQUEST_EVENT
 from logline.testing import configured
 from speech_client.outcomes import PastDeadline
 from starlette.websockets import WebSocketDisconnect
@@ -442,6 +443,25 @@ def _absent(text: str, markers: Sequence[str]) -> None:
         assert marker not in text
 
 
+def _without_the_request_lines_sub(
+    logged: Sequence[logging.LogRecord],
+) -> list[logging.LogRecord]:
+    """The records, a request line without its `sub`: the person's id belongs there."""
+    return [_without_its_sub(record) for record in logged]
+
+
+def _without_its_sub(record: logging.LogRecord) -> logging.LogRecord:
+    carried = cast("object", record.msg)
+    if not isinstance(carried, dict):
+        return record
+    line = cast("dict[str, object]", carried)
+    if line.get("event") != REQUEST_EVENT:
+        return record
+    return logging.makeLogRecord(
+        {"msg": {key: value for key, value in line.items() if key != "sub"}}
+    )
+
+
 def _sse_events(text: str) -> list[tuple[str, str]]:
     return [
         (event["name"], json.dumps(json.loads(event["data"]), ensure_ascii=False))
@@ -507,7 +527,10 @@ def assert_nothing_shows(
     """No marker in a log, a caught error, the browser or a stored row."""
     markers = _every_marker(instance)
     words = (*ANSWER_SENTENCES, *HEARD_WORDS)
-    _absent(everything_shown(logged, instance.errors), (*markers, *words))
+    _absent(
+        everything_shown(_without_the_request_lines_sub(logged), instance.errors),
+        (*markers, *words),
+    )
     _assert_rows_keep_only_their_own_values(instance.hosts, (*markers, *words))
     if response is not None:
         _absent("\n".join(response.headers.values()), (*markers, *words))
