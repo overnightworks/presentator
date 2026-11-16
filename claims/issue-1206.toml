@@ -1,8 +1,0 @@
-claim_id = "ecc19ba6b05741afb9f19135cdc4b97f"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "6b645ce45f23e66f7deb397a53fca52b7bd5ef41"
-branch = "claude/issue-1206-a-stopping-web-pod-drains-asks-finish-he"
-scope = ["docs/ARCHITECTURE.md", "docs/co-presenter.md", "slidev", "src/presentator/api/admission.py", "src/presentator/api/copresenter.py", "src/presentator/api/health.py", "src/presentator/host/command_line.py", "src/presentator/host/main.py", "src/presentator/host/stopping_server.py", "src/presentator/ports/copresenter.py", "tests/conftest.py", "tests/presentator/api", "tests/presentator/host", "tests/support/copresenter_support.py"]
-opened_commit = "56f38354ebaf603873e1c155ca201e3424ac90ff"
-whole_reason = "drain spans the host, the hearing socket, the overlay's reconnect and their tests"
