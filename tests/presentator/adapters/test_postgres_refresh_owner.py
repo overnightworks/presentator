@@ -313,15 +313,17 @@ def test_an_epoch_that_cannot_grow_fails_the_take_and_lets_the_lock_go(
     assert _the_refresh_lock_is_free(engine)
 
 
-def test_a_holder_whose_connection_failed_inside_its_block_lets_go_of_nothing_more(
+def test_a_holder_that_lost_its_connection_inside_its_block_announces_nothing_more(
     engine: Engine, owners: Callable[..., PostgresRefreshOwnership]
 ) -> None:
     owner = owners()
 
     with owner.try_hold() as held:
         end_connections_holding(engine, LockClass.REFRESH, LockClass.TOOLCHAIN_PRESENCE)
+        asking = owners(_ANOTHER_TOOLCHAIN)
         with pytest.raises(DBAPIError):
             owner.toolchain_is_present(_ANOTHER_TOOLCHAIN)
+    _until(lambda: not asking.toolchain_is_present(_THE_TOOLCHAIN))
 
     assert held
     assert _the_refresh_lock_is_free(engine)

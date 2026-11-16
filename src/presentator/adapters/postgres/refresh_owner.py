@@ -12,7 +12,7 @@ pinned connection to one user at a time.
 
 import logging
 from collections.abc import Callable, Generator, Mapping
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, contextmanager, suppress
 from datetime import timedelta
 from math import ceil
 from typing import Any, Final, Protocol
@@ -110,11 +110,12 @@ class PostgresRefreshOwnership:
             yield
 
     def recover(self) -> None:
-        """Check the pinned connection; a dead one is replaced and announces again."""
-        try:
+        """Check the pinned connection; a dead one is replaced and announces again.
+
+        A failed check has already ended its connection, so only the reconnect remains.
+        """
+        with suppress(DBAPIError):
             self._run(_PING)
-        except DBAPIError:
-            self._discard()
         self._pinned_connection()
 
     @contextmanager
