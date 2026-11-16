@@ -10,9 +10,12 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from logline import Outcome
 from ruamel.yaml import YAML
 
 from presentator.host.worker_self_check import Predicate
+from presentator.host.worker_serving import CONNECTION_EVENT
+from presentator.host.worker_wire import SERVICE_NAME
 from tests.scripts.support.k3d_pods import (
     K3S_VERSION,
     OWN,
@@ -420,6 +423,14 @@ class World:
         verb, target = command[1], command[2]
         if verb == "logs":
             if target == "--selector":
+                if command[3].startswith("app.kubernetes.io/name=build-worker"):
+                    return json.dumps(
+                        {
+                            "event": CONNECTION_EVENT,
+                            "service": SERVICE_NAME,
+                            "outcome": Outcome.OK,
+                        }
+                    )
                 return "the web's previous life" if "--previous" in command else "log"
             self.pod_named(target)
             return self.twin_log

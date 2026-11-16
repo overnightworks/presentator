@@ -14,14 +14,14 @@ import math
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Self
+from typing import Self, cast
 
 from probe_build_worker_harness import say
 from probe_build_worker_k3d_cluster import IN_NAMESPACE, Document, Run
 from probe_build_worker_k3d_manifests import INIT_CONTAINER, WORKER_CONTAINER
 
 from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
-from presentator.host.worker import REFUSAL_EXIT_STATUS
+from presentator.host.worker import REFUSAL_EXIT_STATUS, START_REFUSED_EVENT
 from presentator.host.worker_self_check import Predicate
 
 WORKER_POD = "build-worker-0"
@@ -200,9 +200,20 @@ def watch_lives(run: Run, expected: Expectation) -> list[Life]:
 
 
 def refusal_line(message: str, refusal: Predicate) -> str | None:
-    """The message's line that names the refusal, if one does."""
-    needle = f"start refused: {refusal}"
-    return next((line.strip() for line in message.splitlines() if needle in line), None)
+    """The message's `start.refused` line that carries the refusal's reason, if any."""
+    for line in message.splitlines():
+        try:
+            written: object = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(written, dict):
+            fields = cast("dict[str, object]", written)
+            if (
+                fields.get("event") == START_REFUSED_EVENT
+                and fields.get("reason") == refusal
+            ):
+                return line.strip()
+    return None
 
 
 def _refusal_missing(ended: Termination, refusal: Predicate | None) -> bool:
@@ -223,7 +234,7 @@ def _worker_reason(life: Life, expected: Expectation) -> str | None:
     wrong_status = f"the worker ended with exit status {ended.exit_code}" + (
         f": {said}" if said else ""
     )
-    no_line = f"no 'start refused: {expected.refusal}' in {said}"
+    no_line = f"no {START_REFUSED_EVENT} line for {expected.refusal} in {said}"
     reasons = (
         (ended.reason == LOST_SANDBOX_REASON, f"the worker ended as {ended.reason}"),
         (bool(life.restarts), f"restartCount is {life.restarts}, expected 0"),
@@ -291,5 +302,6 @@ def report_lives(number: int, lives: list[Life], refusal: Predicate | None) -> N
         if refusal is None:
             say(f"{who}, exit {PASSING_EXIT_STATUS}, self-check passed")
         else:
-            line = refusal_line(_worker_end(life).message, refusal)
-            say(f"{who}, exit {REFUSAL_EXIT_STATUS}, {line}")
+            found = refusal_line(_worker_end(life).message, refusal) is not None
+            said = f"start refused: {refusal}" if found else "no refusal line"
+            say(f"{who}, exit {REFUSAL_EXIT_STATUS}, {said}")

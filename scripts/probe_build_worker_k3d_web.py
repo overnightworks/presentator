@@ -20,6 +20,7 @@ import json
 from collections.abc import Callable, Generator, Iterator
 from typing import cast
 
+from logline import Outcome as LineOutcome
 from probe_build_worker_harness import refuse, say
 from probe_build_worker_k3d_builds import (
     CLIENT_SECONDS,
@@ -55,6 +56,9 @@ from probe_build_worker_web import (
     delivers_the_deck,
     is_an_outage,
 )
+
+from presentator.host.worker_serving import CONNECTION_EVENT
+from presentator.host.worker_wire import SERVICE_NAME
 
 WEB_PODS = 2
 WORKER_PODS = 2
@@ -161,6 +165,32 @@ def print_worker_logs(run: Run, number: int) -> None:
     say(f"cell {number}: the workers' log:\n{(answer.stdout + answer.stderr)[-2000:]}")
 
 
+def worker_lines(run: Run) -> list[dict[str, object]]:
+    """The JSON lines the worker pods have written, whatever pod wrote them."""
+    answer = pod_logs(run, WORKER_SELECTOR, "--container", WORKER_CONTAINER)
+    lines: list[dict[str, object]] = []
+    for text in answer.stdout.splitlines():
+        try:
+            line: object = json.loads(text)
+        except ValueError:
+            continue
+        if isinstance(line, dict):
+            lines.append(cast("dict[str, object]", line))
+    return lines
+
+
+def connection_line_problem(lines: list[dict[str, object]]) -> str | None:
+    """Why the worker lines hold no finished connection of one build, else None."""
+    ended = [
+        line
+        for line in lines
+        if line.get("event") == CONNECTION_EVENT and line.get("service") == SERVICE_NAME
+    ]
+    if any(line.get("outcome") == LineOutcome.OK for line in ended):
+        return None
+    return f"the workers wrote no {CONNECTION_EVENT} line that ended ok: {ended}"
+
+
 def container_port(workload: Document, container: str) -> int:
     """The first port the workload's container of that name declares."""
     spec = workload["spec"]["template"]["spec"]
@@ -219,9 +249,12 @@ def delivering_outcome(run: Run, deployment: Document, web: Document) -> Outcome
     """The outcome of the web pod's build of hello-deck, or why it did not deliver."""
     name = web["metadata"]["name"]
     outcome = build_outcome(run, deployment, name)
-    if isinstance(outcome, str) or delivers_the_deck(outcome):
+    if isinstance(outcome, str):
         return outcome
-    return f"{name} did not deliver: {outcome}"
+    if not delivers_the_deck(outcome):
+        return f"{name} did not deliver: {outcome}"
+    problem = connection_line_problem(worker_lines(run))
+    return f"{name} delivered, but {problem}" if problem else outcome
 
 
 def sampled_while_building(run: Run) -> Generator[str]:

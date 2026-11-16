@@ -22,6 +22,7 @@ from pathlib import Path
 from shutil import copytree
 from tempfile import mkdtemp
 
+import logline
 from logline import StepTimer
 
 from presentator.adapters.build_worker import STAGED_PREFIX, WorkerToolchain
@@ -36,7 +37,7 @@ from presentator.contracts.decks import (
     ToolchainUnavailable,
 )
 from presentator.host.config import load_settings
-from presentator.host.main import build_bound_of, the_build_worker
+from presentator.host.main import SERVICE_NAME, build_bound_of, the_build_worker
 
 HELLO_DECK = "hello-deck"
 SLUG = "hello"
@@ -91,7 +92,7 @@ def delivered(place: BuildPlace) -> dict[str, bool]:
 
 def main(decks: Path, kinds: list[StepKind]) -> None:
     """Run the steps and print the outcome."""
-    logging.basicConfig()
+    logline.configure(SERVICE_NAME)
     logging.getLogger("presentator.adapters.build_worker").setLevel(logging.DEBUG)
     # The probe only reads the build worker's link and never reaches Redis; the
     # pod's manifest names the URL once platform runs one, and then this line goes.
