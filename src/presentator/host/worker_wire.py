@@ -1,6 +1,7 @@
 """The wire child's entry: idle takes a STEP, upload and send answer."""
 
 import argparse
+import logging
 import os
 import socket
 import sys
@@ -26,6 +27,8 @@ from presentator.contracts.decks import (
     OUTPUT_DIRECTORY,
     failure_text,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class WireRole(StrEnum):
@@ -151,7 +154,12 @@ def main(argv: Sequence[str]) -> int:
                     arguments.plan,
                 ),
             )
-        except WireRefusedError, OSError:
+        except (WireRefusedError, OSError) as error:
+            logger.warning(
+                "wire role %s closed without an outcome: %s",
+                arguments.role,
+                type(error).__name__,
+            )
             return WireExit.CLOSED
 
 

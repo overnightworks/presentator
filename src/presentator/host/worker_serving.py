@@ -616,6 +616,20 @@ def hand_over(
         os.close(record)
 
 
+def _served_after_hello(
+    connection: socket.socket,
+    key: bytes,
+    serving: Serving,
+    accepted_at: float,
+    listener: socket.socket,
+) -> LifeEnd | None:
+    """Hand a verified connection over; a refused hello is closed and logged."""
+    if build_wire.verify_hello(connection, key, seconds=HELLO_SECONDS):
+        return hand_over(connection, serving, accepted_at, listener=listener)
+    logger.warning("connection closed: the hello was not proven")
+    return None
+
+
 def accept_connections(
     listener: socket.socket, key: bytes, serving: Serving
 ) -> LifeEnd:
@@ -633,10 +647,8 @@ def accept_connections(
         accepted_at = serving.clock()
         serving.watchdog.arm(accepted_at + WATCHDOG_SECONDS - serving.clock())
         with connection:
-            life_end = (
-                hand_over(connection, serving, accepted_at, listener=listener)
-                if build_wire.verify_hello(connection, key, seconds=HELLO_SECONDS)
-                else None
+            life_end = _served_after_hello(
+                connection, key, serving, accepted_at, listener
             )
         if life_end is not None:
             return life_end
