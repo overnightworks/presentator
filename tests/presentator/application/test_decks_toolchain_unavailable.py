@@ -13,7 +13,6 @@ from presentator.contracts.decks import (
     ToolchainIdentity,
 )
 from tests.presentator.application.support.decks_support import (
-    BUILD_BOUND,
     OWNER,
     SHORT_COMMIT,
     SOURCE,
@@ -29,6 +28,7 @@ from tests.presentator.application.support.fakes import (
     FakeBuildRunner,
     FakeDeckFolders,
     FakeDeckStore,
+    FakeRefreshOwnership,
 )
 
 _ANOTHER_SOURCE = a_source("talks", identifier="a-second-source")
@@ -147,7 +147,7 @@ def test_a_deck_page_says_building_only_while_the_worker_is_asked() -> None:
 def test_an_attempt_given_up_on_stays_failed_when_its_next_build_never_started() -> (
     None
 ):
-    store = a_store_that_was_left_building(started_ago=BUILD_BOUND * 2)
+    store = a_store_that_was_left_building()
     builder = FakeBuildRunner(unavailable=True)
     decks = decks_over(
         a_folder("kundenfeedback", commit=_A_LATER_COMMIT),
@@ -289,3 +289,22 @@ def test_a_revert_to_a_talk_built_under_another_toolchain_builds_it_anew() -> No
     assert len(builder.built) - built_so_far == 1
     assert page_of(decks, _SLUG).state is DeckState.READY
     assert standing_build(store).toolchain == _AFTER
+
+
+@pytest.mark.parametrize("fails", [False, True], ids=["a standing talk", "a failure"])
+@pytest.mark.parametrize("present", [True, False], ids=["present", "gone"])
+def test_a_commit_another_toolchain_made_is_rebuilt_only_once_none_runs_it(
+    *, fails: bool, present: bool
+) -> None:
+    builder = FakeBuildRunner(identity=_BEFORE, fails=fails)
+    ownership = FakeRefreshOwnership(present=frozenset({_BEFORE} if present else ()))
+    decks = decks_over(
+        a_folder(_SLUG), fakes=DecksFakes(builder=builder, ownership=ownership)
+    )
+    decks.refresh()
+    builder.identity = _AFTER
+    builder.fails = False
+
+    decks.refresh()
+
+    assert len(builder.built) == (1 if present else 2)

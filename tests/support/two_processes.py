@@ -49,11 +49,14 @@ def two_modules(
     environment: Mapping[str, str],
     *,
     second_arguments: Sequence[str] | None = None,
+    second_environment: Mapping[str, str] | None = None,
 ) -> AbstractContextManager[TwoProcesses]:
     """Start two processes of `python -m <module>` that can import `tests`.
 
-    The second takes `second_arguments` when given, so the two do different things.
+    The second takes `second_arguments` and `second_environment` on top of
+    `environment` when given, so the two do different things.
     """
+    shared = {"PYTHONPATH": str(_REPOSITORY_ROOT), **environment}
     return _processes(
         [
             [sys.executable, "-m", module, *arguments],
@@ -64,7 +67,8 @@ def two_modules(
                 *(arguments if second_arguments is None else second_arguments),
             ],
         ],
-        {"PYTHONPATH": str(_REPOSITORY_ROOT), **environment},
+        shared,
+        second_environment={**shared, **(second_environment or {})},
     )
 
 
@@ -94,25 +98,30 @@ def two_processes(
 
 @contextmanager
 def _processes(
-    commands: Sequence[Sequence[str]], environment: Mapping[str, str]
+    commands: Sequence[Sequence[str]],
+    environment: Mapping[str, str],
+    *,
+    second_environment: Mapping[str, str] | None = None,
 ) -> Generator[TwoProcesses]:
     """Start one process per command; none outlives the block.
 
-    Whatever still runs is killed and reaped.
+    The second command runs in `second_environment` when given. Whatever still
+    runs is killed and reaped.
     """
+    environments = [environment, second_environment or environment]
     with ExitStack() as processes:
         started = [
             processes.enter_context(
                 subprocess.Popen(
                     command,
-                    env={"PATH": os.environ["PATH"], **environment},
+                    env={"PATH": os.environ["PATH"], **each_environment},
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
                 )
             )
-            for command in commands
+            for command, each_environment in zip(commands, environments, strict=True)
         ]
         # Runs before the processes are waited for.
         processes.callback(lambda: [each.kill() for each in started])

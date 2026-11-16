@@ -39,3 +39,8 @@ about sources stand in [configuration](configuration.md) and the runbook to
   start.
 - **SR10** A source button shows that its request runs and, after it ends,
   how it ended.
+- **SR11** One process of the instance takes sources in, builds and removes at a
+  time. A fetch that meets another process's refresh does nothing and answers
+  without a run. A removal waits for that refresh as long as a build step may
+  take, then fails like any other error, deletes nothing, and a retry removes.
+  A source taken in within the poll interval waits for the next tick.

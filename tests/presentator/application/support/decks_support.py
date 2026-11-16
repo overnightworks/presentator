@@ -22,6 +22,7 @@ from tests.presentator.application.support.fakes import (
     FakeDeckFolders,
     FakeDeckStore,
     FakeDeployKeyDrafts,
+    FakeRefreshOwnership,
     FakeSourceRunStore,
     FakeSourceStore,
     FakeToolchainThemes,
@@ -47,9 +48,6 @@ SOURCE = a_source("decks", identifier="the-configured-source")
 A_DECK = frozenset({MANIFEST_FILE, SLIDES_FILE})
 COMMIT = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 SHORT_COMMIT = "a3f19c2"
-# Long enough that no test's build reaches it by accident, so an attempt is
-# only ever given up on where a test says so.
-BUILD_BOUND = timedelta(minutes=5)
 FINGERPRINT_KEY = b"what only this test's instance signs a fingerprint with"
 READ_ONLY = "a-read-only-token"
 HTTPS_URL = "https://git.example.invalid/talks.git"
@@ -99,6 +97,10 @@ class DecksFakes:
     clock: FrozenClock = field(default_factory=lambda: FrozenClock(instant=NOW))
     key_drafts: FakeDeployKeyDrafts = field(default_factory=FakeDeployKeyDrafts)
     webhook_secrets: FakeWebhookSecrets = field(default_factory=FakeWebhookSecrets)
+    ownership: FakeRefreshOwnership = field(default_factory=FakeRefreshOwnership)
+    # How often the schedule asks for a refresh; none by default, so every
+    # refresh polls every source.
+    poll_interval: timedelta = timedelta(0)
 
 
 def decks_over(
@@ -119,7 +121,8 @@ def decks_over(
         source_runs=resolved.source_runs,
         checker=resolved.checker,
         toolchain_themes=resolved.toolchain_themes,
-        build_bound=BUILD_BOUND,
+        ownership=resolved.ownership,
+        poll_interval=resolved.poll_interval,
         fingerprint_key=FINGERPRINT_KEY,
         clock=resolved.clock,
         webhook_secrets=resolved.webhook_secrets,
@@ -143,7 +146,9 @@ def probed(
     return found
 
 
-def a_store_that_was_left_building(*, started_ago: timedelta) -> FakeDeckStore:
+def a_store_that_was_left_building(
+    *, started_ago: timedelta = timedelta(hours=1)
+) -> FakeDeckStore:
     """A deck whose build said it began and never reported back.
 
     What a server that was restarted mid-build leaves behind.

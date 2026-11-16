@@ -73,3 +73,8 @@ Authors outside this repository rely on these rules. Local assets,
 - **DK18** A source's decks are the folders directly under its folder, or
   directly under the repository's top when it names none. The folder's own name
   stays the deck's address.
+- **DK19** A build a refresh finds still running was left by a process that
+  ended, and the refresh fails it. A commit that another toolchain built or
+  tried is not built again while a process of that toolchain runs, so a rollout
+  and a rollback never rebuild each other's decks; once none runs, the commit
+  builds under the toolchain that remains.

@@ -21,6 +21,7 @@ from typing import BinaryIO, Final
 
 from presentator.application import build_retention
 from presentator.application.deck_builds import DeckBuilds, TakenIn
+from presentator.application.deck_take_in import take_in
 from presentator.application.source_state import (
     SHORT_COMMIT,
     deck_state_of,
@@ -28,12 +29,10 @@ from presentator.application.source_state import (
     source_state_of,
 )
 from presentator.contracts.decks import (
-    SLIDES_FILE,
     AccessKind,
     BuildAttempt,
     ConnectionCheckResult,
     Deck,
-    DeckFolder,
     DeckPage,
     DeployKeyDraft,
     ListedDeck,
@@ -62,6 +61,8 @@ from presentator.ports.decks import (
     DeckFolders,
     DeckStore,
     DeployKeyDrafts,
+    RefreshOwnership,
+    RefreshOwnershipLostError,
     SourceRuns,
     SourceStore,
     ToolchainThemes,
@@ -70,10 +71,7 @@ from presentator.ports.decks import (
 
 _log = logging.getLogger(__name__)
 
-_NOT_A_FOLDERS_OWN_NAME: Final = "folder %r is not a folder's own name, skipped"
-_NAME_BELONGS_TO_ANOTHER_SOURCE: Final = (
-    "folder %r is already carried by another source, skipped for source %s"
-)
+_REFRESH_TAKEN_OVER: Final = "another process took the refresh over, this one stopped"
 # A source name is one path element of the webhook address, never a path
 # itself: lowercase, digits, hyphens, starting with a letter or digit.
 _SOURCE_NAME: Final = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
@@ -226,10 +224,11 @@ class Decks:
     toolchain_themes: ToolchainThemes
     clock: Clock
     webhook_secrets: WebhookSecrets
-    # How long a build may take before the refresh stops believing it is still
-    # running: a process that died with the server leaves its attempt behind,
-    # and nobody may read that as building for ever.
-    build_bound: timedelta
+    # Which process refreshes and removes, across every process of the instance.
+    ownership: RefreshOwnership
+    # How often the schedule asks for a refresh: a source another process took in
+    # within this time is not taken in again.
+    poll_interval: timedelta
     # Signs a Check-connection fingerprint, so a form cannot forge one for a
     # URL and secret it never actually proved reachable.
     fingerprint_key: bytes
@@ -245,26 +244,28 @@ class Decks:
                 store=self.store,
                 builder=self.builder,
                 clock=self.clock,
-                build_bound=self.build_bound,
+                toolchain_is_present=self.ownership.toolchain_is_present,
             ),
         )
 
     def refresh(self) -> None:
         """Take the sources in and build what changed, one refresh at a time.
 
-        Whoever noticed the push calls this. A further request while one runs is
-        already served by it, so a flood of them pulls once rather than once
-        each, and the builds of one refresh follow one another instead of
-        competing for the machine.
+        The schedule calls this. A further request while one runs, in this
+        process or in another, is already served by it, so a flood of them pulls
+        once rather than once each, and the builds of one refresh follow one
+        another instead of competing for the machine. It first makes sure the
+        link to the other processes works.
         """
-        self._run_one_at_a_time(self._take_in_and_build, busy=None)
+        self._run_one_at_a_time(self._take_in_and_build, busy=None, recovering=True)
 
     def refresh_named(self, name: str) -> SourceFetch | None:
         """Take that one source in, build what changed and say what that was.
 
         A name nobody stored, or one removed before the lock is taken, answers
-        None. A refresh already running holds the lock, so this call does
-        nothing and answers a fetch without a run, which is not "nothing new".
+        None. A refresh already running, here or in another process, holds the
+        lock, so this call does nothing and answers a fetch without a run, which
+        is not "nothing new".
         """
         if self._named(name) is None:
             return None
@@ -351,16 +352,21 @@ class Decks:
     ) -> SourceRemoval | SourceRemovalRefused | SourceRemovalStale | None:
         """Delete that source, its decks, its runs, and everything they built.
 
-        Waits for a refresh under way, so nothing of this source is still
-        building when its directories go (R1). Name and counts are read inside
-        the lock: a source removed meanwhile is unknown, and changed counts are
-        handed back rather than deleted under a number nobody confirmed. Disk
-        goes first: if the mirror or a run survives, or a build lies where no
-        run can be placed, no row is deleted and the refusal names what stayed,
-        so the source stays taken rather than a leftover becoming an address a
-        later add reopens with a new secret (R3); a clean disk frees the URL (R2).
+        Waits for a refresh under way, in this process or another, so nothing of
+        this source is still building when its directories go (R1); a refresh
+        that outlasts the build bound raises `RefreshOwnershipTimedOutError` and
+        deletes nothing. The whole removal runs fenced: a process that lost the
+        refresh meanwhile raises `RefreshOwnershipLostError` before it deletes
+        a file, and none takes the refresh over until the removal ended. Name
+        and counts are read inside the lock: a source removed meanwhile is
+        unknown, and changed counts are handed back rather than deleted under a
+        number nobody confirmed. Disk goes first: if the
+        mirror or a run survives, or a build lies where no run can be placed, no
+        row is deleted and the refusal names what stayed, so the source stays
+        taken rather than a leftover becoming an address a later add reopens
+        with a new secret (R3); a clean disk frees the URL (R2).
         """
-        with self.one_at_a_time:
+        with self.one_at_a_time, self.ownership.hold(), self.ownership.fenced():
             source = self._named(name)
             if source is None:
                 return None
@@ -689,17 +695,35 @@ class Decks:
         )
 
     def _run_one_at_a_time[Answer](
-        self, work: Callable[[], Answer], *, busy: Answer
+        self, work: Callable[[], Answer], *, busy: Answer, recovering: bool = False
     ) -> Answer:
-        """Run that work, or answer `busy` while another refresh holds the lock."""
+        """Run that work, or answer `busy` while another refresh holds the lock.
+
+        The lock of this process is taken first, so the one connection to the
+        other processes is never used by two refreshes at once.
+        """
         if not self.one_at_a_time.acquire(blocking=False):
             return busy
         try:
-            answer = work()
-            build_retention.sweep(self.builder, self.sources, self.store)
-            return answer
+            if recovering:
+                self.ownership.recover()
+            with self.ownership.try_hold() as held:
+                return self._work_as_holder(work, busy=busy) if held else busy
         finally:
             self.one_at_a_time.release()
+
+    def _work_as_holder[Answer](
+        self, work: Callable[[], Answer], *, busy: Answer
+    ) -> Answer:
+        """Run the work and the sweep; answer `busy` once another process took over."""
+        try:
+            answer = work()
+            with self.ownership.fenced():
+                build_retention.sweep(self.builder, self.sources, self.store)
+        except RefreshOwnershipLostError:
+            _log.warning(_REFRESH_TAKEN_OVER)
+            return busy
+        return answer
 
     def _named(self, name: str) -> Source | None:
         """The stored source that answers to this name, if this instance has one."""
@@ -710,12 +734,20 @@ class Decks:
 
         A source is taken in and built before the next one is read, so a
         refresh costs its sources' pull bounds one after another instead of
-        opening as many pulls at once as the instance has sources.
+        opening as many pulls at once as the instance has sources. A source
+        taken in within the poll interval waits for the next one.
         """
         self.key_drafts.sweep(older_than=self.clock.now() - DRAFT_MAX_AGE)
         building = True
         for source in self.sources.all():
+            if self._polled_recently(source):
+                continue
             building = self._take_in_and_count(source, building=building).still_building
+
+    def _polled_recently(self, source: Source) -> bool:
+        """Whether that source's newest run is younger than the poll interval."""
+        newest = self.source_runs.newest(source.id)
+        return newest is not None and self.clock.now() - newest.at < self.poll_interval
 
     def _take_in_and_build_named(self, name: str) -> SourceFetch | None:
         """Take that source in, read again now that nobody can remove it."""
@@ -729,7 +761,7 @@ class Decks:
         poll = self.folders.folders(source)
         run = self._record_run(source, poll, at)
         if poll.folders is not None:
-            self._take_in(source, poll.folders, at)
+            take_in(self.store, source, poll.folders, at)
         walk = self.builds.build_what_changed(source, building=building)
         fetch = SourceFetch(
             run=shown_run(run),
@@ -760,42 +792,3 @@ class Decks:
         )
         self.source_runs.record(run)
         return run
-
-    def _take_in(
-        self, source: Source, folders: tuple[DeckFolder, ...], at: datetime
-    ) -> None:
-        """Store every folder that carries both a manifest and slides.
-
-        The folder name becomes the slug, so a changed title reaches no address.
-        A folder whose name is not a folder's own name — such as `..`, planted as a git
-        tree entry — is skipped here rather than stored, so it is never a path
-        component. A folder the source has stopped carrying is marked as removed, and
-        its deck deleted once the folder has been missing for `REMOVED_DECK_KEPT`; a
-        folder that comes back under its old name before then loses that mark, so it is
-        the deck it was. A folder whose name another source already carries is skipped
-        too: the slug is one deck's address here, and the first source keeps it.
-        """
-        for folder in folders:
-            if not is_a_plain_folder_name(folder.name):
-                _log.warning(_NOT_A_FOLDERS_OWN_NAME, folder.name)
-                continue
-            if folder.title is None or SLIDES_FILE not in folder.file_names:
-                continue
-            taken_in = self.store.put(
-                Deck(
-                    slug=folder.name,
-                    title=folder.title,
-                    changed_at=folder.changed_at,
-                    owner_id=source.owner_id,
-                    source_id=source.id,
-                    commit=folder.commit,
-                    build=None,
-                    attempt=None,
-                ),
-            )
-            if not taken_in:
-                _log.warning(_NAME_BELONGS_TO_ANOTHER_SOURCE, folder.name, source.name)
-        present = frozenset(folder.name for folder in folders)
-        build_retention.delete_absent(
-            self.store, present=present, source_id=source.id, at=at
-        )

@@ -30,6 +30,8 @@ class LockClass(IntEnum):
     DEPLOY_KEY_DRAFT = 3
     SOURCE_RUNS = 4
     DECK_MARKS = 5
+    REFRESH = 6
+    TOOLCHAIN_PRESENCE = 7
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +46,8 @@ class AdvisoryLock:
 MIGRATION_LOCK: Final = AdvisoryLock(LockClass.MIGRATION, _ONLY_ONE)
 # Held by one sign-in entry or account deletion at a time, across processes.
 SIGN_IN_LOCK: Final = AdvisoryLock(LockClass.SIGN_IN, _ONLY_ONE)
+# Held by the one process that takes sources in, builds and removes at a time.
+REFRESH_LOCK: Final = AdvisoryLock(LockClass.REFRESH, _ONLY_ONE)
 
 
 def lock_of(lock_class: LockClass, subject: str) -> AdvisoryLock:

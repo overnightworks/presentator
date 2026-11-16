@@ -4,7 +4,7 @@ import sqlite3
 from collections.abc import Callable
 from contextlib import closing
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -287,7 +287,7 @@ def a_walk_over(store: SqliteDeckStore, builder: FakeBuildRunner) -> DeckBuilds:
         store=store,
         builder=builder,
         clock=FrozenClock(instant=BUILT_AT),
-        build_bound=timedelta(minutes=5),
+        toolchain_is_present=lambda _: False,
     )
 
 

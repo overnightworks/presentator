@@ -26,7 +26,7 @@ from tests.presentator.adapters.support.person_instance_support import (
     Stores,
     directories_with_both_people,
 )
-from tests.support.postgres import engine_on
+from tests.support.postgres import NO_FENCE, engine_on
 
 _ACCOUNTS = "users"
 
@@ -65,9 +65,10 @@ def _stores_over(engine: Engine) -> Stores:
             engine=engine,
             identifiers=TokenIdentifierFactory(),
             box=secret_box(INSTANCE_KEY),
+            fence=NO_FENCE,
         ),
-        decks=PostgresDeckStore(engine=engine),
-        runs=PostgresSourceRunStore(engine=engine),
+        decks=PostgresDeckStore(engine=engine, fence=NO_FENCE),
+        runs=PostgresSourceRunStore(engine=engine, fence=NO_FENCE),
         key_drafts=PostgresSourceKeyDrafts(
             engine=engine,
             identifiers=TokenIdentifierFactory(),

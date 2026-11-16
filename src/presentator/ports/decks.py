@@ -5,6 +5,7 @@ is a different thing entirely.
 """
 
 from abc import abstractmethod
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -377,3 +378,55 @@ class WebhookSecrets(Protocol):
     @abstractmethod
     def new_secret(self) -> str:
         """A fresh unguessable webhook secret, URL-safe, never drawn twice."""
+
+
+class RefreshOwnershipLostError(Exception):
+    """Another process holds the refresh now, so what this one writes is refused."""
+
+
+class RefreshOwnershipTimedOutError(Exception):
+    """The refresh did not become free within the wait a removal allows."""
+
+
+class RefreshOwnership(Protocol):
+    """Which process takes sources in, builds and removes them, one at a time.
+
+    The holder is the only one whose writes to decks, runs and sources count: a
+    holder that lost the right, because its link to the database ended and
+    another process took over, is refused at its next write.
+    """
+
+    @abstractmethod
+    def try_hold(self) -> AbstractContextManager[bool]:
+        """Hold the refresh while the block runs, or answer False at once.
+
+        False is another process holding it, or this one failing to take
+        ownership within the bound a build has.
+        """
+
+    @abstractmethod
+    def hold(self) -> AbstractContextManager[None]:
+        """Wait for the refresh, then hold it while the block runs.
+
+        Raises `RefreshOwnershipTimedOutError` when it is not free within the
+        bound a build has.
+        """
+
+    @abstractmethod
+    def recover(self) -> None:
+        """Check the link that carries the refresh and the presence; replace a dead one.
+
+        Called before each tick, never while the refresh is held.
+        """
+
+    @abstractmethod
+    def fenced(self) -> AbstractContextManager[None]:
+        """Run the block as the holder, refused with `RefreshOwnershipLostError`.
+
+        No other process takes the refresh over while the block runs, so what it
+        reads of the rows and the disk stays true until it ends.
+        """
+
+    @abstractmethod
+    def toolchain_is_present(self, toolchain: ToolchainIdentity, /) -> bool:
+        """Whether a process builds with that toolchain now."""

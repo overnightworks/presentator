@@ -119,18 +119,31 @@ class App:
         with self.asking:
             return self._ask(authorization_url, subject, groups)
 
-    def _ask(self, authorization_url: str, subject: str, groups: list[str]) -> str:
-        assert self.process.stdin is not None
-        self.process.stdin.write(
-            json.dumps(
+    def ask_access_token(
+        self, subject: str, groups: list[str], authorized_party: str
+    ) -> str:
+        """An access token `authorized_party` holds for `subject`, from the issuer."""
+        with self.asking:
+            return self._send(
                 {
-                    "authorization_url": authorization_url,
                     "subject": subject,
                     "groups": groups,
+                    "authorized_party": authorized_party,
                 }
             )
-            + "\n"
+
+    def _ask(self, authorization_url: str, subject: str, groups: list[str]) -> str:
+        return self._send(
+            {
+                "authorization_url": authorization_url,
+                "subject": subject,
+                "groups": groups,
+            }
         )
+
+    def _send(self, question: dict[str, str | list[str]]) -> str:
+        assert self.process.stdin is not None
+        self.process.stdin.write(json.dumps(question) + "\n")
         self.process.stdin.flush()
         answer = self.answers.get(timeout=_REQUEST_SECONDS)
         if answer is None:
@@ -237,11 +250,12 @@ def starting_apps(
     *,
     history: Path | None = None,
     environment: Mapping[str, str] | None = None,
+    second_environment: Mapping[str, str] | None = None,
 ) -> Generator[tuple[TwoProcesses, tuple[int, int]]]:
     """Two app processes started on `database_url`, not waited for, and their ports.
 
     `history` replaces the migration history both know, as a release with a
-    longer one would.
+    longer one would; `second_environment` is added for the second process alone.
     """
     ports = two_free_ports()
     extra = [] if history is None else [str(history)]
@@ -250,6 +264,7 @@ def starting_apps(
         [str(ports[0]), *extra],
         _environment(database_url, directory, environment or {}),
         second_arguments=[str(ports[1]), *extra],
+        second_environment=second_environment,
     ) as processes:
         yield processes, ports
 
@@ -259,12 +274,18 @@ def serving_apps(
     database_url: str,
     directory: Path,
     environment: Mapping[str, str] | None = None,
+    second_environment: Mapping[str, str] | None = None,
 ) -> Generator[tuple[App, App]]:
-    """Two app processes answering on one database, with `environment` added."""
-    with starting_apps(database_url, directory, environment=environment) as (
-        processes,
-        ports,
-    ):
+    """Two app processes answering on one database, with `environment` added.
+
+    `second_environment` is added for the second process alone.
+    """
+    with starting_apps(
+        database_url,
+        directory,
+        environment=environment,
+        second_environment=second_environment,
+    ) as (processes, ports):
         first = App(processes.first, ports[0])
         second = App(processes.second, ports[1])
         _wait_until_ready(first)

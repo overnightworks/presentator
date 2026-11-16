@@ -68,6 +68,7 @@ from presentator.adapters.postgres.preferences import (
     PostgresInstanceSettingsStore,
     PostgresPersonPreferencesStore,
 )
+from presentator.adapters.postgres.refresh_owner import PostgresRefreshOwnership
 from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
@@ -79,6 +80,7 @@ from presentator.adapters.preferences import (
     SqliteInstanceSettingsStore,
     SqlitePersonPreferencesStore,
 )
+from presentator.adapters.refresh_ownership import SingleProcessRefreshOwnership
 from presentator.adapters.schema import create_tables
 from presentator.adapters.secrets import (
     SecretBox,
@@ -136,7 +138,13 @@ from presentator.host.oidc import (
 from presentator.host.polling import Schedule
 from presentator.host.worker_serving import emergency_end
 from presentator.ports.copresenter import AskLimiter
-from presentator.ports.decks import DeckStore, DeployKeyDrafts, SourceRuns, SourceStore
+from presentator.ports.decks import (
+    DeckStore,
+    DeployKeyDrafts,
+    RefreshOwnership,
+    SourceRuns,
+    SourceStore,
+)
 from presentator.ports.identity import IdentifierFactory
 from presentator.ports.preferences import (
     InstanceSettingsStore,
@@ -184,6 +192,7 @@ class Stores:
     key_drafts: DeployKeyDrafts
     deck_store: DeckStore
     source_runs: SourceRuns
+    refresh_ownership: RefreshOwnership
     credentials: Credentials
     sessions: SessionStore
     identity_writes: IdentityWrites
@@ -205,13 +214,14 @@ def build_instance(
     """
     shell = _lobby_shell(settings)
     redis = SharedRedis(settings.redis_url.get_secret_value(), settings.redis_password)
-    stores = _with_redis(_stores(settings, migrations_directory), redis)
+    toolchain = _identity_of_the_toolchain(settings)
+    stores = _with_redis(_stores(settings, migrations_directory, toolchain), redis)
     mirrors = SourceMirrors(
         directory=settings.mirrors,
         credentials=stores.credentials,
         pull_timeout=_source_timeout(settings),
     )
-    decks = _decks(settings, stores, mirrors=mirrors)
+    decks = _decks(settings, stores, mirrors=mirrors, toolchain=toolchain)
     lobby_auth, talk_auth = installed_auths(
         settings, shell, stores.identity_writes, redis, relying_party_for
     )
@@ -234,21 +244,20 @@ def build_instance(
 def _with_redis(stores: Stores, redis: SharedRedis) -> Stores:
     """The stores, ready only while Redis answers too and closed with its client."""
     database_ready = stores.readiness
-    database_close = stores.close
 
     def ready() -> bool:
         return database_ready() and redis.is_ready()
 
-    def close() -> None:
-        try:
-            database_close()
-        finally:
-            redis.close()
-
-    return copy.replace(stores, readiness=ready, close=close)
+    return copy.replace(
+        stores,
+        readiness=ready,
+        close=partial(_closed_in_turn, stores.close, redis.close),
+    )
 
 
-def _stores(settings: Settings, migrations_directory: Path) -> Stores:
+def _stores(
+    settings: Settings, migrations_directory: Path, toolchain: ToolchainIdentity
+) -> Stores:
     """The stores of the database the settings name: Postgres, else the SQLite file."""
     # One box for both directions: what the store writes down is what the
     # resolver opens at the pull, and neither picks its own key.
@@ -256,7 +265,13 @@ def _stores(settings: Settings, migrations_directory: Path) -> Stores:
     identifiers = TokenIdentifierFactory()
     if settings.postgres is None:
         return _sqlite_stores(settings.database, box, identifiers)
-    return _postgres_stores(settings.postgres, box, identifiers, migrations_directory)
+    return _postgres_stores(
+        settings.postgres,
+        box,
+        identifiers,
+        migrations_directory,
+        refresh=(toolchain, build_bound_of(settings)),
+    )
 
 
 def _sqlite_stores(
@@ -270,6 +285,7 @@ def _sqlite_stores(
         ),
         deck_store=SqliteDeckStore(database=database),
         source_runs=SqliteSourceRunStore(database=database),
+        refresh_ownership=SingleProcessRefreshOwnership(),
         credentials=SourceCredentials(database=database, box=box),
         sessions=SqliteSessionRecordStore(database),
         # One use case object serves both callers, so the hook and the poll share
@@ -289,29 +305,50 @@ def _postgres_stores(
     box: SecretBox,
     identifiers: IdentifierFactory,
     migrations_directory: Path,
+    *,
+    refresh: tuple[ToolchainIdentity, timedelta],
 ) -> Stores:
-    """The stores over the one engine this process opens; serve creates no table."""
+    """The stores over the one engine this process opens; serve creates no table.
+
+    `refresh` is the toolchain this process announces and the bound of every wait
+    for the refresh.
+    """
     history = migration_history(migrations_directory)
     engine = create_database_engine(database.url, database.password)
     refusal = serving_refusal(engine, history)
     if refusal is not None:
         engine.dispose()
         raise cannot_start(refusal)
+    toolchain, bound = refresh
+    ownership = PostgresRefreshOwnership(
+        engine, toolchain=toolchain, lock_timeout=bound
+    )
     return Stores(
-        sources=PostgresSourceStore(engine=engine, identifiers=identifiers, box=box),
+        sources=PostgresSourceStore(
+            engine=engine, identifiers=identifiers, box=box, fence=ownership
+        ),
         key_drafts=PostgresSourceKeyDrafts(
             engine=engine, identifiers=identifiers, box=box
         ),
-        deck_store=PostgresDeckStore(engine=engine),
-        source_runs=PostgresSourceRunStore(engine=engine),
+        deck_store=PostgresDeckStore(engine=engine, fence=ownership),
+        source_runs=PostgresSourceRunStore(engine=engine, fence=ownership),
+        refresh_ownership=ownership,
         credentials=PostgresSourceCredentials(engine=engine, box=box),
         sessions=PostgresSessionRecordStore(engine),
         identity_writes=PostgresIdentityWrites(engine, LoggingAuditSink()),
         instance_settings=PostgresInstanceSettingsStore(engine),
         person_preferences=PostgresPersonPreferencesStore(engine),
         readiness=partial(database_is_ready, engine, history),
-        close=engine.dispose,
+        close=partial(_closed_in_turn, ownership.close, engine.dispose),
     )
+
+
+def _closed_in_turn(first: Callable[[], None], then: Callable[[], None]) -> None:
+    """Close the first, and the then even where the first fails."""
+    try:
+        first()
+    finally:
+        then()
 
 
 def _poller(settings: Settings, decks: Decks) -> Schedule:
@@ -388,6 +425,7 @@ def _decks(
     stores: Stores,
     *,
     mirrors: SourceMirrors,
+    toolchain: ToolchainIdentity,
 ) -> Decks:
     """The deck use cases over the adapters the instance chose."""
     build_bound = build_bound_of(settings)
@@ -398,7 +436,7 @@ def _decks(
         store=stores.deck_store,
         builder=SlidevBuilds(
             builds=settings.builds,
-            identity=_identity_of_the_toolchain(settings),
+            identity=toolchain,
             toolchain=_what_builds_a_deck(settings, bound=build_bound),
             mirrors=mirrors,
             output_megabytes=settings.build_output_megabytes,
@@ -411,9 +449,8 @@ def _decks(
             known_hosts=settings.mirrors / "known_hosts",
         ),
         toolchain_themes=PackageJsonThemes(project=settings.toolchain),
-        # One toolchain step's bound, which is what the refresh needs: it never
-        # reads a live build, only what a process that is gone left behind.
-        build_bound=build_bound,
+        ownership=stores.refresh_ownership,
+        poll_interval=timedelta(seconds=settings.source_poll_seconds),
         fingerprint_key=connection_fingerprint_key(
             settings.secret_key.get_secret_value(),
         ),

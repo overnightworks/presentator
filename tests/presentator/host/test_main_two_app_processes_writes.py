@@ -5,17 +5,12 @@ balancer does, and judges the one database and what either process answers.
 """
 
 from collections import defaultdict
-from collections.abc import Callable, Generator, Iterator
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
-from datetime import UTC, datetime
+from collections.abc import Iterator
 from http import HTTPStatus
 from pathlib import Path
-from threading import Barrier, Event
 
 import httpx2
 import pytest
-from pydantic import JsonValue
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -32,13 +27,23 @@ from tests.presentator.host.support.app_processes import (
     Browser,
     serving_apps,
 )
+from tests.presentator.host.support.app_requests import (
+    AT,
+    added,
+    admin_of,
+    at_once,
+    checked,
+    create_source,
+    fetched,
+    listed_slugs,
+    scalar,
+    scalar_text,
+    texts,
+    watching,
+)
 from tests.support.git_remote import EXAMPLE_SLUG, GitRemote, with_the_program
 from tests.support.postgres import engine_on
 
-_AT = datetime(2026, 11, 14, 12, tzinfo=UTC)
-_SOURCES = "/api/sources"
-_CHECK = "/api/sources/new/check"
-_DECKS = "/api/decks"
 _SETTINGS = "/api/settings"
 _ACCOUNT = "/api/account"
 _ROUNDS = RECENT_SOURCE_RUNS + 1
@@ -86,7 +91,7 @@ def committed_remotes(
 ) -> tuple[GitRemote, GitRemote]:
     """Two repositories that each carry a commit."""
     for each in (remote, another_remote):
-        each.commit({"README.md": "talks"}, at=_AT)
+        each.commit({"README.md": "talks"}, at=AT)
     return remote, another_remote
 
 
@@ -123,103 +128,10 @@ def _route(routes: Path, app: App, remote: GitRemote) -> None:
     )
 
 
-def _scalar(engine: Engine, statement: str, **parameters: str) -> int:
-    with engine.connect() as connection:
-        return int(connection.execute(text(statement), parameters).scalar_one())
-
-
-def _text(engine: Engine, statement: str) -> str:
-    with engine.connect() as connection:
-        return str(connection.execute(text(statement)).scalar_one())
-
-
-def _texts(engine: Engine, statement: str) -> set[str]:
-    with engine.connect() as connection:
-        return {str(each) for each in connection.execute(text(statement)).scalars()}
-
-
-def _at_once[Answer](calls: list[Callable[[], Answer]]) -> list[Answer]:
-    start = Barrier(len(calls))
-
-    def go(call: Callable[[], Answer]) -> Answer:
-        start.wait()
-        return call()
-
-    with ThreadPoolExecutor(max_workers=len(calls)) as pool:
-        return [each.result() for each in [pool.submit(go, call) for call in calls]]
-
-
-Observation = tuple[tuple[str | None, ...], ...]
-
-
-@contextmanager
-def _watching(engine: Engine, statement: str) -> Generator[list[Observation]]:
-    """Read `statement` again and again meanwhile; each answer that differs is kept."""
-    seen: list[Observation] = []
-    done = Event()
-
-    def read() -> None:
-        with engine.connect() as connection:
-            while True:
-                finished = done.is_set()
-                rows = connection.execute(text(statement)).all()
-                observation = tuple(
-                    tuple(None if each is None else str(each) for each in row)
-                    for row in rows
-                )
-                if not seen or seen[-1] != observation:
-                    seen.append(observation)
-                if finished:
-                    return
-
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        reading = pool.submit(read)
-        try:
-            yield seen
-        finally:
-            done.set()
-        reading.result()
-
-
-def _admin(app: App) -> Browser:
-    admin = Browser()
-    admin.sign_in(app, "admin", admin=True)
-    return admin
-
-
-def _checked(admin: Browser, app: App, **fields: JsonValue) -> dict[str, JsonValue]:
-    """The body of a source whose address the app has probed."""
-    body: dict[str, JsonValue] = {"secret": None, "key_draft_id": None, **fields}
-    answer = admin.request(app, "POST", _CHECK, body=body)
-    assert answer.status_code == HTTPStatus.OK, answer.text
-    return {**body, "fingerprint": answer.json()["fingerprint"]}
-
-
-def _create(admin: Browser, app: App, body: dict[str, JsonValue]) -> httpx2.Response:
-    return admin.request(app, "POST", _SOURCES, body=body)
-
-
-def _added(admin: Browser, app: App, name: str, remote: GitRemote) -> None:
-    created = _create(admin, app, _checked(admin, app, name=name, url=remote.url))
-    assert created.status_code == HTTPStatus.CREATED, created.text
-
-
-def _fetch(admin: Browser, app: App, name: str) -> httpx2.Response:
-    answer = admin.request(app, "POST", f"{_SOURCES}/{name}/fetch")
-    assert answer.status_code == HTTPStatus.OK, answer.text
-    return answer
-
-
 def _opened_draft(admin: Browser, app: App) -> dict[str, str]:
     answer = admin.request(app, "POST", KEY_DRAFT)
     assert answer.status_code == HTTPStatus.OK, answer.text
     return answer.json()
-
-
-def _listed_slugs(admin: Browser, app: App) -> list[str]:
-    answer = admin.request(app, "GET", _DECKS)
-    assert answer.status_code == HTTPStatus.OK
-    return [deck["slug"] for deck in answer.json()["decks"]]
 
 
 def _one_created_one_refused(
@@ -237,7 +149,7 @@ def _one_created_one_refused(
 def test_a_failed_read_while_watching_fails_the_test(engine: Engine) -> None:
     with (
         pytest.raises(SQLAlchemyError),
-        _watching(engine, "SELECT 1 FROM a_table_that_does_not_exist"),
+        watching(engine, "SELECT 1 FROM a_table_that_does_not_exist"),
     ):
         pass
 
@@ -257,21 +169,21 @@ def test_a_source_created_at_both_processes_at_once_is_stored_once(
 ) -> None:
     second_name, second_remote = second
     with serving_apps(database_url, tmp_path) as apps:
-        admin = _admin(apps[0])
-        first = _checked(admin, apps[0], name="talks", url=committed_remotes[0].url)
-        second_body = _checked(
+        admin = admin_of(apps[0])
+        first = checked(admin, apps[0], name="talks", url=committed_remotes[0].url)
+        second_body = checked(
             admin, apps[0], name=second_name, url=committed_remotes[second_remote].url
         )
 
-        answers = _at_once(
+        answers = at_once(
             [
-                lambda: _create(admin, apps[0], first),
-                lambda: _create(admin, apps[1], second_body),
+                lambda: create_source(admin, apps[0], first),
+                lambda: create_source(admin, apps[1], second_body),
             ]
         )
 
     _one_created_one_refused(answers, refused_as=_TAKEN)
-    assert _scalar(engine, "SELECT count(*) FROM sources") == 1
+    assert scalar(engine, "SELECT count(*) FROM sources") == 1
 
 
 @pytest.mark.usefixtures("environment")
@@ -282,10 +194,10 @@ def test_a_key_draft_promoted_at_both_processes_at_once_makes_one_source(
     remotes_over_ssh: tuple[GitRemote, GitRemote],
 ) -> None:
     with serving_apps(database_url, tmp_path) as apps:
-        admin = _admin(apps[0])
+        admin = admin_of(apps[0])
         draft = _opened_draft(admin, apps[0])
         bodies = [
-            _checked(
+            checked(
                 admin,
                 apps[0],
                 name=name,
@@ -295,10 +207,10 @@ def test_a_key_draft_promoted_at_both_processes_at_once_makes_one_source(
             for name, each in zip(("first", "second"), remotes_over_ssh, strict=True)
         ]
 
-        answers = _at_once(
+        answers = at_once(
             [
-                lambda: _create(admin, apps[0], bodies[0]),
-                lambda: _create(admin, apps[1], bodies[1]),
+                lambda: create_source(admin, apps[0], bodies[0]),
+                lambda: create_source(admin, apps[1], bodies[1]),
             ]
         )
 
@@ -308,15 +220,15 @@ def test_a_key_draft_promoted_at_both_processes_at_once_makes_one_source(
         answers, refused_as={*_TAKEN, SourceRefusal.DEPLOY_KEY_UNAVAILABLE}
     )
     key = draft["public_key"]
-    assert _scalar(engine, "SELECT count(*) FROM sources") == 1
+    assert scalar(engine, "SELECT count(*) FROM sources") == 1
     assert (
-        _scalar(
+        scalar(
             engine, "SELECT count(*) FROM sources WHERE ssh_public_key = :key", key=key
         )
         == 1
     )
     assert (
-        _scalar(
+        scalar(
             engine,
             "SELECT count(*) FROM source_key_drafts WHERE public_key = :key",
             key=key,
@@ -327,7 +239,7 @@ def test_a_key_draft_promoted_at_both_processes_at_once_makes_one_source(
 
 def _create_with_a_stale_draft(admin: Browser, app: App) -> httpx2.Response:
     """A creation whose draft is not the admin's current one, which replaces it."""
-    return _create(
+    return create_source(
         admin,
         app,
         {
@@ -341,8 +253,8 @@ def _create_with_a_stale_draft(admin: Browser, app: App) -> httpx2.Response:
 
 
 def _only_draft(engine: Engine) -> str:
-    assert _scalar(engine, "SELECT count(*) FROM source_key_drafts") == 1
-    return _text(engine, "SELECT id FROM source_key_drafts")
+    assert scalar(engine, "SELECT count(*) FROM source_key_drafts") == 1
+    return scalar_text(engine, "SELECT id FROM source_key_drafts")
 
 
 @pytest.mark.usefixtures("environment")
@@ -350,10 +262,10 @@ def test_a_key_draft_replaced_at_both_processes_at_once_leaves_one_new_draft(
     database_url: str, tmp_path: Path, engine: Engine
 ) -> None:
     with serving_apps(database_url, tmp_path) as apps:
-        admin = _admin(apps[0])
+        admin = admin_of(apps[0])
         original = _opened_draft(admin, apps[0])["id"]
 
-        answers = _at_once(
+        answers = at_once(
             [lambda app=app: _create_with_a_stale_draft(admin, app) for app in apps]
         )
 
@@ -370,7 +282,7 @@ def test_a_key_draft_replaced_at_both_processes_at_once_leaves_one_new_draft(
 def _opened_beside_a_replacement(
     admin: Browser, opening: App, replacing: App
 ) -> list[httpx2.Response]:
-    return _at_once(
+    return at_once(
         [
             lambda: admin.request(opening, "POST", KEY_DRAFT),
             lambda: _create_with_a_stale_draft(admin, replacing),
@@ -383,14 +295,14 @@ def test_a_key_draft_opened_beside_its_replacement_never_overwrites_it(
     database_url: str, tmp_path: Path, engine: Engine
 ) -> None:
     with serving_apps(database_url, tmp_path) as apps:
-        admin = _admin(apps[0])
+        admin = admin_of(apps[0])
         for round_number in range(_OPENINGS):
             # No draft, so the opening reads none and then writes.
             with engine.begin() as connection:
                 connection.execute(text("DELETE FROM source_key_drafts"))
             opening, replacing = apps if round_number % 2 == 0 else (apps[1], apps[0])
 
-            with _watching(engine, _DRAFT_IDS) as seen:
+            with watching(engine, _DRAFT_IDS) as seen:
                 opened, replaced = _opened_beside_a_replacement(
                     admin, opening, replacing
                 )
@@ -411,18 +323,19 @@ def test_a_key_draft_opened_beside_its_replacement_never_overwrites_it(
 def test_runs_recorded_at_both_processes_at_once_keep_exactly_the_bound(
     database_url: str, tmp_path: Path, engine: Engine, remote: GitRemote
 ) -> None:
-    remote.commit({"README.md": "talks"}, at=_AT)
+    remote.commit({"README.md": "talks"}, at=AT)
     with serving_apps(database_url, tmp_path) as apps:
-        admin = _admin(apps[0])
-        _added(admin, apps[0], "talks", remote)
+        admin = admin_of(apps[0])
+        added(admin, apps[0], "talks", remote)
 
         for _ in range(_ROUNDS):
-            answers = _at_once(
-                [lambda app=app: _fetch(admin, app, "talks") for app in apps]
+            answers = at_once(
+                [lambda app=app: fetched(admin, app, "talks") for app in apps]
             )
-            assert all(each.json()["run"] is not None for each in answers)
+            # One process refreshes at a time: the other answers without a run.
+            assert any(each.json()["run"] is not None for each in answers)
 
-    assert _scalar(engine, "SELECT count(*) FROM source_runs") == RECENT_SOURCE_RUNS
+    assert scalar(engine, "SELECT count(*) FROM source_runs") == RECENT_SOURCE_RUNS
     assert _ROUNDS * len(apps) > RECENT_SOURCE_RUNS
 
 
@@ -435,47 +348,47 @@ def test_two_sources_carrying_one_deck_fetched_at_both_processes_give_it_to_one(
     another_remote: GitRemote,
 ) -> None:
     for each in (remote, another_remote):
-        each.commit_example_deck(at=_AT)
+        each.commit_example_deck(at=AT)
     carrier = "SELECT s.name FROM decks d JOIN sources s ON s.id = d.source_id"
     with serving_apps(database_url, tmp_path) as apps:
-        admin = _admin(apps[0])
-        _added(admin, apps[0], "first", remote)
-        _added(admin, apps[0], "second", another_remote)
+        admin = admin_of(apps[0])
+        added(admin, apps[0], "first", remote)
+        added(admin, apps[0], "second", another_remote)
 
-        _at_once(
+        at_once(
             [
-                lambda: _fetch(admin, apps[0], "first"),
-                lambda: _fetch(admin, apps[1], "second"),
+                lambda: fetched(admin, apps[0], "first"),
+                lambda: fetched(admin, apps[1], "second"),
             ]
         )
-        keeper = _text(engine, carrier)
-        listed = [_listed_slugs(admin, app) for app in apps]
-        _fetch(admin, apps[1], ({"first", "second"} - {keeper}).pop())
+        keeper = scalar_text(engine, carrier)
+        listed = [listed_slugs(admin, app) for app in apps]
+        fetched(admin, apps[1], ({"first", "second"} - {keeper}).pop())
 
-    assert _scalar(engine, "SELECT count(*) FROM decks") == 1
+    assert scalar(engine, "SELECT count(*) FROM decks") == 1
     assert listed == [[EXAMPLE_SLUG], [EXAMPLE_SLUG]]
-    assert _text(engine, carrier) == keeper
+    assert scalar_text(engine, carrier) == keeper
 
 
 @pytest.mark.usefixtures("environment")
 def test_a_deck_removed_upstream_is_marked_by_fetches_at_both_processes(
     database_url: str, tmp_path: Path, engine: Engine, remote: GitRemote
 ) -> None:
-    remote.commit_example_deck(at=_AT)
+    remote.commit_example_deck(at=AT)
     with serving_apps(database_url, tmp_path) as apps:
-        admin = _admin(apps[0])
-        _added(admin, apps[0], "talks", remote)
-        _fetch(admin, apps[0], "talks")
-        assert _listed_slugs(admin, apps[1]) == [EXAMPLE_SLUG]
-        remote.remove(EXAMPLE_SLUG, at=_AT)
+        admin = admin_of(apps[0])
+        added(admin, apps[0], "talks", remote)
+        fetched(admin, apps[0], "talks")
+        assert listed_slugs(admin, apps[1]) == [EXAMPLE_SLUG]
+        remote.remove(EXAMPLE_SLUG, at=AT)
 
-        _at_once([lambda app=app: _fetch(admin, app, "talks") for app in apps])
+        at_once([lambda app=app: fetched(admin, app, "talks") for app in apps])
 
-        listed = [_listed_slugs(admin, app) for app in apps]
+        listed = [listed_slugs(admin, app) for app in apps]
 
     assert listed == [[], []]
-    assert _scalar(engine, "SELECT count(*) FROM decks WHERE removed_at IS NULL") == 0
-    assert _scalar(engine, "SELECT count(*) FROM decks") == 1
+    assert scalar(engine, "SELECT count(*) FROM decks WHERE removed_at IS NULL") == 0
+    assert scalar(engine, "SELECT count(*) FROM decks") == 1
 
 
 @pytest.mark.usefixtures("environment")
@@ -492,15 +405,15 @@ def test_fetches_of_trees_missing_each_others_decks_mark_what_one_fetch_would(
         [f"second-{number}" for number in range(_MARKED_DECKS)],
     )
     for tree, slugs in zip(committed_remotes, decks_of, strict=True):
-        tree.commit_example_decks(at=_AT, into=slugs)
+        tree.commit_example_decks(at=AT, into=slugs)
     with serving_apps(database_url, tmp_path) as apps:
-        admin = _admin(apps[0])
+        admin = admin_of(apps[0])
         draft = _opened_draft(admin, apps[0])
         _route(routes, apps[0], first_tree)
-        created = _create(
+        created = create_source(
             admin,
             apps[0],
-            _checked(
+            checked(
                 admin,
                 apps[0],
                 name="talks",
@@ -509,25 +422,30 @@ def test_fetches_of_trees_missing_each_others_decks_mark_what_one_fetch_would(
             ),
         )
         assert created.status_code == HTTPStatus.CREATED, created.text
-        _fetch(admin, apps[0], "talks")
+        fetched(admin, apps[0], "talks")
         _route(routes, apps[0], second_tree)
-        _fetch(admin, apps[0], "talks")
+        fetched(admin, apps[0], "talks")
         _route(routes, apps[0], first_tree)
         _route(routes, apps[1], second_tree)
 
         outcomes: list[str] = []
         visible_after: list[set[str]] = []
         for _ in range(_MARKING_ROUNDS):
-            answers = _at_once(
-                [lambda app=app: _fetch(admin, app, "talks") for app in apps]
+            answers = at_once(
+                [lambda app=app: fetched(admin, app, "talks") for app in apps]
             )
-            outcomes += [each.json()["run"]["outcome"] for each in answers]
+            outcomes += [
+                each.json()["run"]["outcome"]
+                for each in answers
+                if each.json()["run"] is not None
+            ]
             visible_after.append(
-                _texts(engine, "SELECT slug FROM decks WHERE removed_at IS NULL")
+                texts(engine, "SELECT slug FROM decks WHERE removed_at IS NULL")
             )
 
-    assert outcomes == [SourceRunOutcome.SUCCESS] * (_MARKING_ROUNDS * len(apps))
-    assert _scalar(engine, "SELECT count(*) FROM decks") == 2 * _MARKED_DECKS
+    assert set(outcomes) == {SourceRunOutcome.SUCCESS}
+    assert len(outcomes) >= _MARKING_ROUNDS
+    assert scalar(engine, "SELECT count(*) FROM decks") == 2 * _MARKED_DECKS
     assert all(each in (set(decks_of[0]), set(decks_of[1])) for each in visible_after)
 
 
@@ -539,17 +457,17 @@ def test_a_deck_rebuilt_at_both_processes_at_once_is_delivered_from_one_build(
     remote: GitRemote,
 ) -> None:
     with_the_toolchain(environment, tmp_path, A_TOOLCHAIN_THAT_BUILDS)
-    remote.commit_example_deck(at=_AT)
+    remote.commit_example_deck(at=AT)
     pushed = {remote.head}
     with serving_apps(database_url, tmp_path) as apps:
-        admin = _admin(apps[0])
-        _added(admin, apps[0], "talks", remote)
+        admin = admin_of(apps[0])
+        added(admin, apps[0], "talks", remote)
 
-        with _watching(engine, _BUILD_OF_THE_DECK) as seen:
+        with watching(engine, _BUILD_OF_THE_DECK) as seen:
             for push in range(_REBUILDS):
-                remote.commit({f"{EXAMPLE_SLUG}/notes.md": f"push {push}"}, at=_AT)
+                remote.commit({f"{EXAMPLE_SLUG}/notes.md": f"push {push}"}, at=AT)
                 pushed.add(remote.head)
-                _at_once([lambda app=app: _fetch(admin, app, "talks") for app in apps])
+                at_once([lambda app=app: fetched(admin, app, "talks") for app in apps])
 
     commits_of_a_directory = defaultdict[str, set[str]](set)
     for observation in seen:
@@ -573,9 +491,9 @@ def test_settings_and_a_theme_saved_at_both_processes_at_once_leave_one_row_each
     names = ["Atelier North", "Atelier South"]
     themes = ["light", "dark"]
     with serving_apps(database_url, tmp_path) as apps:
-        admin = _admin(apps[0])
+        admin = admin_of(apps[0])
 
-        answers = _at_once(
+        answers = at_once(
             [
                 lambda: admin.request(
                     apps[0], "PUT", _SETTINGS, body={"name": names[0]}
@@ -600,8 +518,8 @@ def test_settings_and_a_theme_saved_at_both_processes_at_once_leave_one_row_each
         ]
 
     assert [each.status_code for each in answers] == [HTTPStatus.OK] * 4
-    assert _scalar(engine, "SELECT count(*) FROM instance_settings") == 1
-    assert _scalar(engine, "SELECT count(*) FROM person_preferences") == 1
+    assert scalar(engine, "SELECT count(*) FROM instance_settings") == 1
+    assert scalar(engine, "SELECT count(*) FROM person_preferences") == 1
     assert read_names[0] == read_names[1]
     assert read_names[0] in names
     assert read_themes[0] == read_themes[1]

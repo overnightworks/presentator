@@ -109,6 +109,12 @@ def signed_in(
     return client
 
 
+@pytest.fixture(autouse=True)
+def every_tick_polls_every_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A tick takes in each source, however shortly after its last run."""
+    monkeypatch.setenv("PRESENTATOR_SOURCE_POLL_SECONDS", "0")
+
+
 @pytest.fixture
 def served_by_main(
     environment: pytest.MonkeyPatch, json_logging: None

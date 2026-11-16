@@ -13,6 +13,7 @@ from presentator.adapters.postgres.locks import (
     hold_until_transaction_ends,
     lock_of,
 )
+from presentator.adapters.postgres.refresh_owner import RefreshFence, fenced_write
 from presentator.contracts.decks import RECENT_SOURCE_RUNS, SourceRun
 
 _RECORD_RUN: Final = text(
@@ -41,14 +42,17 @@ class PostgresSourceRunStore:
     Recording is an insert and a prune that must see each other's work, so it
     takes the source's own advisory lock first: two processes recording the same
     source's runs one after another keep exactly the bound, where two prunes
-    that cannot see each other's insert would keep one more.
+    that cannot see each other's insert would keep one more. Every write is the
+    refresh holder's and asks the fence first.
     """
 
     engine: Engine
+    fence: RefreshFence
 
     def record(self, run: SourceRun) -> None:
         """Add the run and drop older ones of that source past the bound."""
         with self.engine.begin() as connection:
+            self.fence.check(connection)
             hold_until_transaction_ends(
                 connection, lock_of(LockClass.SOURCE_RUNS, run.source_id)
             )
@@ -78,8 +82,7 @@ class PostgresSourceRunStore:
 
     def remove_for_source(self, source_id: str) -> None:
         """Delete every run this source has ever recorded."""
-        with self.engine.begin() as connection:
-            connection.execute(_REMOVE_RUNS, {"source_id": source_id})
+        fenced_write(self.engine, self.fence, _REMOVE_RUNS, {"source_id": source_id})
 
     def _newest_first(self, source_id: str, count: int) -> tuple[SourceRun, ...]:
         with self.engine.connect() as connection:

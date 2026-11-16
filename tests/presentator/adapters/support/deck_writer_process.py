@@ -30,7 +30,7 @@ from presentator.contracts.preferences import (
     ThemeChoice,
 )
 from tests.presentator.adapters.support.source_stores_support import INSTANCE_KEY
-from tests.support.postgres import engine_from_environment
+from tests.support.postgres import NO_FENCE, engine_from_environment
 from tests.support.two_processes import announce_ready_and_wait_for_go
 
 OWNER: Final = "deck-writer-owner"
@@ -155,11 +155,12 @@ ACTIONS: Final[dict[str, Callable[[Stores], object]]] = {
 
 def _stores_on(engine: Engine) -> Stores:
     return Stores(
-        decks=PostgresDeckStore(engine=engine),
+        decks=PostgresDeckStore(engine=engine, fence=NO_FENCE),
         sources=PostgresSourceStore(
             engine=engine,
             identifiers=TokenIdentifierFactory(),
             box=secret_box(INSTANCE_KEY),
+            fence=NO_FENCE,
         ),
         settings=PostgresInstanceSettingsStore(engine),
         preferences=PostgresPersonPreferencesStore(engine),

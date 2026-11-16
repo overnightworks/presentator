@@ -23,7 +23,7 @@ from tests.presentator.adapters.support.source_writer_process import (
     RUNS_RECORDED_EACH,
     a_source_write,
 )
-from tests.support.postgres import ChildModule, engine_on
+from tests.support.postgres import NO_FENCE, ChildModule, engine_on
 
 _NOW = datetime(2026, 11, 14, 12, tzinfo=UTC)
 _CHILD = ChildModule("tests.presentator.adapters.support.source_writer_process")
@@ -186,6 +186,7 @@ def test_two_processes_recording_runs_of_one_source_keep_exactly_the_bound(
         engine=engine,
         identifiers=TokenIdentifierFactory(),
         box=secret_box(INSTANCE_KEY),
+        fence=NO_FENCE,
     ).add(a_source_write("polled", "https://git.example.test/polled.git", owners[0]))
     assert source is not None
 

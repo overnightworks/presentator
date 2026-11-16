@@ -40,7 +40,7 @@ from presentator.ports.preferences import (
     InstanceSettingsStore,
     PersonPreferencesStore,
 )
-from tests.support.postgres import engine_on
+from tests.support.postgres import NO_FENCE, engine_on
 
 INSTANCE_KEY: Final = "an instance key of thirty-two ch"
 ANOTHER_INSTANCE_KEY: Final = "another instance key of thirty-2"
@@ -169,6 +169,7 @@ def postgres_adapters(
             identifiers=identifiers,
             box=secret_box(instance_key),
             new_key_pair=key_pairs,
+            fence=NO_FENCE,
         )
 
     def secret_of(source_id: str) -> str | None:
@@ -183,8 +184,8 @@ def postgres_adapters(
         yield Adapters(
             drafts=drafts_opened_with(INSTANCE_KEY),
             sources=sources_opened_with(INSTANCE_KEY),
-            runs=PostgresSourceRunStore(engine=engine),
-            decks=PostgresDeckStore(engine=engine),
+            runs=PostgresSourceRunStore(engine=engine, fence=NO_FENCE),
+            decks=PostgresDeckStore(engine=engine, fence=NO_FENCE),
             settings=PostgresInstanceSettingsStore(engine),
             preferences=PostgresPersonPreferencesStore(engine),
             seed_owner=lambda owner_id: seed_postgres_owner(engine, owner_id),

@@ -36,7 +36,6 @@ from presentator.contracts.decks import (
     SourceWrite,
 )
 from tests.presentator.application.support.decks_support import (
-    BUILD_BOUND,
     COMMIT,
     NOW,
     OWNER,
@@ -459,12 +458,19 @@ def test_a_revert_to_the_talk_that_stands_is_ready_again_without_building() -> N
     assert _listed_states(decks) == [DeckState.READY]
 
 
-def test_a_build_that_died_with_the_server_is_failed_at_the_next_refresh() -> None:
+@pytest.mark.parametrize(
+    "started_ago",
+    [timedelta(hours=1), timedelta(seconds=1)],
+    ids=["long ago", "a moment ago"],
+)
+def test_an_attempt_the_holder_finds_running_is_failed_however_recent(
+    started_ago: timedelta,
+) -> None:
     builder = FakeBuildRunner()
     decks = decks_over(
         a_folder("kundenfeedback"),
         fakes=DecksFakes(
-            store=a_store_that_was_left_building(started_ago=BUILD_BOUND * 2),
+            store=a_store_that_was_left_building(started_ago=started_ago),
             builder=builder,
         ),
     )
@@ -475,22 +481,6 @@ def test_a_build_that_died_with_the_server_is_failed_at_the_next_refresh() -> No
     assert page.state is DeckState.FAILED
     assert page.attempt is not None
     assert page.attempt.failure == BuildFailure.without_words()
-    assert builder.built == []
-
-
-def test_a_build_still_inside_its_bound_keeps_saying_it_is_building() -> None:
-    builder = FakeBuildRunner()
-    decks = decks_over(
-        a_folder("kundenfeedback"),
-        fakes=DecksFakes(
-            store=a_store_that_was_left_building(started_ago=BUILD_BOUND / 2),
-            builder=builder,
-        ),
-    )
-
-    decks.refresh()
-
-    assert page_of(decks, "kundenfeedback").state is DeckState.BUILDING
     assert builder.built == []
 
 

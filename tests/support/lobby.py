@@ -94,6 +94,7 @@ from tests.presentator.application.support.fakes import (
     FakeInstanceSettingsStore,
     FakePeople,
     FakePersonPreferencesStore,
+    FakeRefreshOwnership,
     FakeSessionRecordStore,
     FakeSourceRunStore,
     FakeSourceStore,
@@ -131,9 +132,6 @@ _KEY_FILE: Final = _write_throwaway_file("k3Tq9xVb2LmZ7wRc5NdH8sYa4PfJ6uEg\n")
 A_GATEWAY_KEY: Final = "gateway-key-MARKER"
 A_GATEWAY_KEY_FILE: Final = _write_throwaway_file(f"{A_GATEWAY_KEY}\n")
 _BUILT_DECK_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
-# No route test waits for a build, so the bound only has to be longer than the
-# ages the tests arrange.
-BUILD_BOUND: Final = timedelta(minutes=5)
 # What this lobby signs a Check connection fingerprint with; no test reads
 # this value, only the fingerprint a real Check response carries.
 _FINGERPRINT_KEY: Final = b"what only this test's lobby signs a fingerprint with"
@@ -542,7 +540,8 @@ def a_decks(given: GivenDecks, clock: FrozenClock) -> Decks:
             if given.toolchain_project is not None
             else FakeToolchainThemes(names_to_return=given.themes)
         ),
-        build_bound=BUILD_BOUND,
+        ownership=FakeRefreshOwnership(),
+        poll_interval=timedelta(0),
         fingerprint_key=_FINGERPRINT_KEY,
         clock=clock,
         webhook_secrets=FakeWebhookSecrets(),
