@@ -1,5 +1,6 @@
 """The fixtures every layer shares."""
 
+import logging
 import os
 import socket
 from collections.abc import Callable, Iterator
@@ -43,9 +44,15 @@ from tests.support.worker_support import (
 
 @pytest.fixture
 def json_logging() -> Iterator[None]:
-    """Undo the logging a test's in-process `main()` configures, as it was before."""
+    """Undo the logging a test's in-process `main()` configures, as it was before.
+
+    `main()` also caps alembic's logger, which logline's undo does not know.
+    """
+    alembic = logging.getLogger("alembic")
+    level = alembic.level
     with configured("test"):
         yield
+    alembic.setLevel(level)
 
 
 @pytest.fixture

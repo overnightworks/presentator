@@ -1,6 +1,5 @@
 """Fixtures the worker's host tests share."""
 
-import logging
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -16,16 +15,9 @@ def sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.fixture(autouse=True)
-def logging_undone_after_main(json_logging: None) -> Iterator[None]:
-    """Every `main()` a host test runs configures the process's logging.
-
-    `main()` caps alembic's logger too, which logline's undo does not know.
-    """
+def logging_undone_after_main(json_logging: None) -> None:
+    """Every `main()` a host test runs configures the process's logging."""
     del json_logging
-    alembic = logging.getLogger("alembic")
-    level = alembic.level
-    yield
-    alembic.setLevel(level)
 
 
 @pytest.fixture(autouse=True)
