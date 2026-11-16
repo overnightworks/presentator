@@ -24,7 +24,7 @@ is `{subject}`. `?dry_run=true` counts and changes nothing.
 | PE3 | 200 | Erased, previewed, or the subject is unknown (zero counts, no row made). A repeat answers zero. |
 | PE4 | 401 | No token, or any verification failure. |
 | PE5 | 403 | A valid token without the admin group or a group below it. |
-| PE6 | 409 | A refresh or build in this process holds the lock for longer than 60 seconds; nothing was deleted. `Retry-After` is the wait in whole seconds, and `busy` lists the running work. A refresh in another process is waited for up to the build timeout (300 seconds by default) and then answers 500 (PE15). hal's timeout must exceed the build timeout. |
+| PE6 | 409 | A refresh or build in this process holds the lock for longer than 60 seconds; nothing was deleted. `Retry-After` is the wait in whole seconds, and `busy` lists the running work. A refresh in another process is waited for up to the build timeout (300 seconds by default) and then answers 500 (PE15). hal's timeout must exceed 60 seconds plus the build timeout. |
 | PE7 | 422 | `dry_run` is not a boolean; nothing was deleted. |
 | PE8 | 500 | A mirror or build directory could not be removed; the body is the 200's plus `leftover` (below). The person remains and a repeat finishes it. A plain 500 without `leftover` is a failed step (below). |
 
