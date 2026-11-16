@@ -2,8 +2,9 @@
 
 import time
 from collections.abc import Callable, Generator
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 from sqlalchemy import Engine, text
@@ -22,13 +23,25 @@ from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
 from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
 from presentator.contracts.decks import (
+    Build,
     SourceRun,
     SourceRunOutcome,
     ToolchainIdentity,
 )
 from presentator.ports.decks import (
+    BuildRun,
     RefreshOwnershipLostError,
     RefreshOwnershipTimedOutError,
+)
+from tests.presentator.application.support.decks_support import (
+    SOURCE,
+    DecksFakes,
+    decks_over,
+)
+from tests.presentator.application.support.fakes import (
+    BUILDS_ROOT,
+    FakeBuildRunner,
+    FakeDeckStore,
 )
 from tests.support.deck_source_support import a_build, a_deck
 from tests.support.lobby import INSTANCE_KEY
@@ -348,3 +361,68 @@ def test_an_owner_whose_toolchain_key_is_held_exclusively_is_not_made(
             lock_timeout = checked_out.execute(text("SHOW lock_timeout")).scalar_one()
 
     assert lock_timeout == _SERVER_DEFAULT_LOCK_TIMEOUT
+
+
+@dataclass
+class _BuildRunnerWatched(FakeBuildRunner):
+    """Calls `during_cleanup` as each run is about to leave the disk."""
+
+    during_cleanup: Callable[[], None] = lambda: None
+
+    def remove(self, run: BuildRun) -> PurePosixPath | None:
+        self.during_cleanup()
+        return super().remove(run)
+
+
+@dataclass
+class _DeckStoreWatched(FakeDeckStore):
+    """Calls `during_cleanup` as the rows of a source are about to go."""
+
+    during_cleanup: Callable[[], None] = lambda: None
+
+    def remove_for_source(self, source_id: str) -> None:
+        self.during_cleanup()
+        super().remove_for_source(source_id)
+
+
+def test_a_removal_keeps_every_takeover_out_until_its_rows_are_gone(
+    engine: Engine, owners: Callable[..., PostgresRefreshOwnership]
+) -> None:
+    remover, taking_over = owners(), owners(_ANOTHER_TOOLCHAIN)
+    taken_over_during_cleanup: list[bool] = []
+
+    def cleaning_up_after_the_connection_ended() -> None:
+        end_connections_holding(engine, LockClass.REFRESH)
+        _until(lambda: _the_refresh_lock_is_free(engine))
+        taken_over_during_cleanup.append(_holds(taking_over))
+
+    run = BuildRun("a-run")
+    builder = _BuildRunnerWatched(during_cleanup=cleaning_up_after_the_connection_ended)
+    builder.on_disk.add(run)
+    store = _DeckStoreWatched(during_cleanup=cleaning_up_after_the_connection_ended)
+    deck = replace(
+        a_deck(source_id=SOURCE.id),
+        build=Build(
+            directory=BUILDS_ROOT / run.name / "out" / "talk",
+            pdf=BUILDS_ROOT / run.name / "out" / "deck.pdf",
+            commit=a_deck().commit,
+            built_at=_NOW,
+            toolchain=None,
+        ),
+    )
+    store.kept[deck.slug] = deck
+    decks = replace(
+        decks_over(fakes=DecksFakes(builder=builder, store=store)), ownership=remover
+    )
+    preview = decks.removal(SOURCE.name)
+    assert preview is not None
+
+    decks.remove_source(
+        SOURCE.name,
+        expected_deck_count=preview.deck_count,
+        expected_run_count=preview.run_count,
+    )
+
+    assert (builder.on_disk, store.kept) == (set(), {})
+    assert taken_over_during_cleanup == [False, False]
+    assert _holds(taking_over)
