@@ -542,9 +542,11 @@ def test_the_server_logs_no_request_path(
     )
     server_log.error("the server failed")
 
-    assert [line["event"] for line in json_lines(capsys.readouterr().out)] == [
-        "the server failed"
-    ]
+    assert [
+        line["event"]
+        for line in json_lines(capsys.readouterr().out)
+        if line["logger"] == "uvicorn.error"
+    ] == ["the server failed"]
 
 
 @pytest.mark.parametrize(

@@ -18,6 +18,13 @@ def json_lines(output: str) -> list[LogLine]:
     return [json.loads(line) for line in output.splitlines() if line.strip()]
 
 
+def json_lines_among(output: str) -> list[LogLine]:
+    """The JSON lines of an output that holds other text too, such as a traceback."""
+    return json_lines(
+        "\n".join(one for one in output.splitlines() if one.startswith("{"))
+    )
+
+
 def request_lines(caplog: pytest.LogCaptureFixture) -> list[LogLine]:
     """The request lines logline has written so far, as the records carry them."""
     carried = [cast("object", record.msg) for record in caplog.records]
