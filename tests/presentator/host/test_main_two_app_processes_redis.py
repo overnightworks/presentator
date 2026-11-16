@@ -44,3 +44,21 @@ def test_both_processes_are_unready_while_redis_cannot_be_reached(
 
     assert [each.status_code for each in before] == [HTTPStatus.OK] * 2
     assert [each.status_code for each in after] == [HTTPStatus.SERVICE_UNAVAILABLE] * 2
+
+
+@pytest.mark.usefixtures("environment")
+def test_both_processes_refuse_a_sign_in_visibly_while_redis_cannot_be_reached(
+    database_url: str, redis_url: str, tmp_path: Path
+) -> None:
+    with (
+        relay_in_front_of(redis_url) as redis,
+        serving_apps(
+            database_url, tmp_path, {"PRESENTATOR_REDIS_URL": redis.url}
+        ) as apps,
+    ):
+        redis.sever()
+        refused = [Browser().request(app, "GET", START_SIGN_IN_PATH) for app in apps]
+
+    assert [each.status_code for each in refused] == [
+        HTTPStatus.SERVICE_UNAVAILABLE
+    ] * 2
