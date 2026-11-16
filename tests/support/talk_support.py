@@ -286,17 +286,8 @@ def two_hosts(
     talk = _talk_over(
         SqliteSessionRecordStore(database), decks, decks_store, talk_auth, copresenter
     )
-    router = served_by_host(
-        Instance(
-            lobby=lobby,
-            talk=talk,
-            poller=_never(ChoreCode.SOURCE_POLL),
-            session_sweep=_never(ChoreCode.SESSION_SWEEP),
-        ),
-        a_settings(),
-    )
     return Hosts(
-        router=router,
+        router=_served_by_host(lobby, talk),
         lobby=lobby,
         talk=talk,
         lobby_auth=lobby_auth,
@@ -307,6 +298,19 @@ def two_hosts(
         database=database,
         clock=clock,
         store=decks_store,
+    )
+
+
+def _served_by_host(lobby: FastAPI, talk: FastAPI) -> ASGIApp:
+    """The host's router over both apps, with chores that never run."""
+    return served_by_host(
+        Instance(
+            lobby=lobby,
+            talk=talk,
+            poller=_never(ChoreCode.SOURCE_POLL),
+            session_sweep=_never(ChoreCode.SESSION_SWEEP),
+        ),
+        a_settings(),
     )
 
 
