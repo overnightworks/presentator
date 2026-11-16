@@ -22,6 +22,7 @@ from tests.presentator.application.support.decks_support import DecksFakes, deck
 from tests.presentator.application.support.fakes import FakeSourceStore
 from tests.support.deck_source_support import a_source, folders_under, mirrors_under
 from tests.support.git_remote import GitRemote, recording_every_git_launch
+from tests.support.log_lines import logged_as_json
 
 _FIRST_PUSH = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _NEXT_PUSH = _FIRST_PUSH + timedelta(hours=1)
@@ -273,23 +274,20 @@ def test_a_new_folder_whose_manifest_is_a_submodule_takes_no_deck_and_stops_noth
     assert_the_siblings_and_the_other_source_were_taken_in(instance)
 
 
-def test_a_stored_address_with_userinfo_that_resolves_to_no_mirror_logs_the_name_only(
-    caplog: pytest.LogCaptureFixture, tmp_path: Path
+def test_a_stored_address_with_userinfo_that_resolves_to_no_mirror_logs_the_id_only(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
     address = "https://a-user:its-password@git.example.invalid/talks.git"
     name = "the-talks-source"
     source = replace(a_source(address), name=name)
 
-    with caplog.at_level(logging.DEBUG):
+    with logged_as_json(capsys) as logged:
         poll = folders_under(tmp_path).folders(source)
 
     assert poll.folders is None
-    warnings = [
-        record.getMessage()
-        for record in caplog.records
-        if record.levelno == logging.WARNING
-    ]
-    assert any(name in message for message in warnings)
-    assert "its-password" not in caplog.text
-    assert "a-user" not in caplog.text
-    assert "git.example.invalid" not in caplog.text
+    [fetch] = logged.lines
+    assert fetch["event"] == "source_fetch.ended"
+    assert fetch["source_id"] == source.id
+    assert fetch["outcome"] == "failed"
+    for kept_private in (name, "its-password", "a-user", "git.example.invalid"):
+        assert kept_private not in logged.text

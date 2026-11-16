@@ -5,7 +5,6 @@ prompt suppression an unattended server needs, so this package spawns it rather
 than binding a second git implementation.
 """
 
-import logging
 import os
 import re
 import shutil
@@ -124,8 +123,6 @@ _UNREACHABLE_WORDS: Final = (
 # git reflects a redirect target or the remote's own reply verbatim, so this
 # runs over the whole diagnostic, not only the source's own URL.
 _USERINFO: Final = re.compile(r"://[^/@]*@")
-
-_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -258,11 +255,6 @@ class GitMirror:
             return _UNREACHABLE
         if pulled.returncode != 0:
             stderr = pulled.stderr.decode(errors="replace").strip()
-            _log.warning(
-                "git fetch of %s failed: %s",
-                _without_userinfo(self.source.url),
-                _sanitized(stderr, secret=secret),
-            )
             return Connection(
                 state=connection_state_for_failure(
                     stderr, credential_offered=secret is not None

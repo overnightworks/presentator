@@ -1,6 +1,5 @@
 """Deck folders read out of a real repository, and deck rows in a real file."""
 
-import logging
 import sqlite3
 import subprocess
 from dataclasses import replace
@@ -58,6 +57,7 @@ from tests.support.deck_source_support import (
     mirrors_under,
 )
 from tests.support.git_remote import EXAMPLE_SLUG, EXAMPLE_TITLE, MAIN_BRANCH, GitRemote
+from tests.support.log_lines import logged_as_json
 from tests.support.people import seed_user
 
 _NOTICED_GONE_AT = datetime(2026, 1, 20, 9, tzinfo=UTC)
@@ -239,7 +239,7 @@ def test_a_folder_without_a_manifest_is_read_without_a_title(
 def test_a_folder_whose_manifest_is_unreadable_is_still_there_without_a_title(
     broken: str,
     manifest: str,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
@@ -249,14 +249,20 @@ def test_a_folder_whose_manifest_is_unreadable_is_still_there_without_a_title(
         at=PUSHED_AT,
     )
 
-    with caplog.at_level(logging.WARNING):
-        folders = folders_read(tmp_path, a_source(remote.url))
+    source = a_source(remote.url)
+
+    with logged_as_json(capsys) as logged:
+        folders = folders_read(tmp_path, source)
 
     assert {folder.name: folder.title for folder in folders} == {
         EXAMPLE_SLUG: EXAMPLE_TITLE,
         broken: None,
     }
-    assert broken in caplog.text
+    [refusal] = [line for line in logged.lines if line["event"] == "manifest.refused"]
+    assert refusal["source_id"] == source.id
+    assert refusal["reason"] == "unreadable"
+    assert refusal["folder_count"] == 1
+    assert broken not in logged.text
 
 
 def test_a_poll_that_reaches_a_source_carries_its_newest_commit(
@@ -269,6 +275,25 @@ def test_a_poll_that_reaches_a_source_carries_its_newest_commit(
 
     assert poll.commit == remote.head
     assert poll.failure is None
+
+
+def test_a_poll_that_reaches_a_source_writes_one_ok_fetch_line_with_its_duration(
+    remote: GitRemote,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    remote.commit_example_deck(at=PUSHED_AT)
+    source = a_source(remote.url)
+
+    with logged_as_json(capsys) as logged:
+        folders_under(tmp_path).folders(source)
+
+    [fetch] = logged.lines
+    assert fetch["event"] == "source_fetch.ended"
+    assert fetch["source_id"] == source.id
+    assert fetch["outcome"] == "ok"
+    assert fetch["level"] == "info"
+    assert isinstance(fetch["duration_ms"], float)
 
 
 def test_a_pull_that_runs_past_its_bound_says_nothing_rather_than_waiting(
@@ -287,7 +312,7 @@ def test_a_pull_that_runs_past_its_bound_says_nothing_rather_than_waiting(
 
 
 def test_a_source_that_cannot_be_read_says_nothing_about_its_folders(
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
     # A host that never answers, not a local path that merely does not exist:
@@ -295,12 +320,18 @@ def test_a_source_that_cannot_be_read_says_nothing_about_its_folders(
     # the one a dead host earns.
     unreachable = a_source("https://host.example.invalid/repo.git")
 
-    with caplog.at_level(logging.WARNING):
+    with logged_as_json(capsys) as logged:
         poll = folders_under(tmp_path).folders(unreachable)
 
     assert poll.folders is None
     assert poll.failure is SourceRunFailure.UNREACHABLE
-    assert "unreachable" in caplog.text
+    [fetch] = logged.lines
+    assert fetch["event"] == "source_fetch.ended"
+    assert fetch["source_id"] == unreachable.id
+    assert fetch["outcome"] == "failed"
+    assert fetch["level"] == "warning"
+    assert isinstance(fetch["duration_ms"], float)
+    assert unreachable.url not in logged.text
 
 
 def a_checker() -> MirroredConnectionChecker:
@@ -424,7 +455,7 @@ def test_removing_a_mirror_that_was_never_fetched_deletes_nothing_calmly(
 def test_a_mirror_whose_parent_refuses_the_delete_is_reported_not_gone(
     remote: GitRemote,
     tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The one signal a caller that must not drop a row while this stands needs.
 
@@ -444,17 +475,19 @@ def test_a_mirror_whose_parent_refuses_the_delete_is_reported_not_gone(
     # write bit a delete needs is closed.
     parent.chmod(0o500)
     try:
-        with caplog.at_level(logging.WARNING):
+        with logged_as_json(capsys) as logged:
             left = mirrors.remove(source)
     finally:
         parent.chmod(0o700)
 
     assert mirror.directory.exists()
     assert str(left) == f"{mirrors.directory.name}/{mirror.directory.name}"
-    warned = " ".join(caplog.messages)
-    assert source.id in warned
+    [warning] = [
+        line for line in logged.lines if line["event"] == "mirror_removal.failed"
+    ]
+    assert warning["source_id"] == source.id
     for kept_private in (source.name, source.url):
-        assert kept_private not in f"{warned} {left}"
+        assert kept_private not in [*warning.values(), str(left)]
 
 
 def test_a_real_git_source_can_be_added_removed_and_added_again(

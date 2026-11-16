@@ -16,6 +16,8 @@ from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from typing import Any, Final
 
+from logline import StepTimer
+
 from gitmirror.mirror import GitMirror, check_connection
 from gitmirror.model import (
     ConnectionState,
@@ -136,12 +138,10 @@ _PUT_HOOK_HASH: Final = "UPDATE sources SET hook_secret_hash = ? WHERE name = ?"
 _ONE_ROW: Final = 1
 # What a pull needs and nothing else: the ciphertext this instance can open.
 _SOURCE_ANCHOR: Final = "SELECT encrypted_secret FROM sources WHERE id = ?"
-_UNREADABLE_SOURCE: Final = "source %s cannot be read: %s"
-_UNREADABLE_MANIFEST: Final = "folder %s has no readable title, keeps its listing: %s"
-_UNRESOLVABLE_SOURCE: Final = (
-    "source %s no longer resolves to a readable repository, treated as unreadable"
-)
-_MIRROR_STAYED: Final = "the mirror of source %s could not be taken away"
+_SOURCE_FETCH_ENDED: Final = "source_fetch.ended"
+_MANIFEST_REFUSED: Final = "manifest.refused"
+_MIRROR_FAILED: Final = "mirror_removal.failed"
+_MANIFEST_UNREADABLE: Final = "unreadable"
 _RECORD_SOURCE_RUN: Final = """
 INSERT INTO source_runs (source_id, at, outcome, commit_sha, reason)
 VALUES (?, ?, ?, ?, ?)
@@ -183,7 +183,21 @@ _FAILURE_BY_CONNECTION_STATE: Final[dict[ConnectionState, SourceRunFailure]] = {
     ConnectionState.UNREACHABLE: SourceRunFailure.UNREACHABLE,
 }
 
+# A connection the far end or the credential turned down is a refusal of the
+# fetch; every other failure to read a source is a failed step.
+_REFUSALS: Final = frozenset(
+    {SourceRunFailure.REFUSED, SourceRunFailure.CREDENTIAL_UNRESOLVABLE}
+)
+
 _log = logging.getLogger(__name__)
+
+
+class _SourceUnreadableError(Exception):
+    """A source whose reading fails for a reason the poll reports as its failure."""
+
+    def __init__(self, failure: SourceRunFailure) -> None:
+        super().__init__(failure.value)
+        self.failure = failure
 
 
 def create_deck_tables(database: Path) -> None:
@@ -383,7 +397,7 @@ class SourceMirrors:
         directory = self._directory_of(source)
         shutil.rmtree(directory, ignore_errors=True)
         if directory.exists():
-            _log.warning(_MIRROR_STAYED, source.id)
+            _log.warning(_MIRROR_FAILED, extra={"source_id": source.id})
             return PurePosixPath(self.directory.absolute().name, directory.name)
         return None
 
@@ -452,44 +466,55 @@ class MirroredDeckFolders:
         return self.mirrors.remove(source)
 
     def folders(self, source: Source) -> SourcePoll:
-        """Poll for every top-level folder at the newest commit, or why not."""
-        mirror = self.mirrors.of(source)
-        if mirror is None:
-            _log.warning(_UNRESOLVABLE_SOURCE, source.name)
-            return SourcePoll(
-                folders=None,
-                commit=None,
-                failure=SourceRunFailure.FAILED,
-            )
+        """Poll for every top-level folder at the newest commit, or why not.
+
+        The reading is one `source_fetch.ended` step: it is a warning where the
+        source could not be read and the refresh goes on to the next one.
+        """
         try:
-            return self._poll(source, mirror)
-        except InvalidCredentialError as unsendable:
-            _log.warning(_UNREADABLE_SOURCE, source.name, unsendable)
+            with StepTimer(_SOURCE_FETCH_ENDED, _log, source_id=source.id) as fetch:
+                fetch.handled()
+                return self._read(source, fetch)
+        except _SourceUnreadableError as unreadable:
+            failure = unreadable.failure
+        except InvalidCredentialError:
             failure = SourceRunFailure.CREDENTIAL_UNRESOLVABLE
-        except MirrorError as unreadable:
-            _log.warning(_UNREADABLE_SOURCE, source.name, unreadable)
+        except MirrorError:
             failure = SourceRunFailure.FAILED
         return SourcePoll(folders=None, commit=None, failure=failure)
 
-    def _poll(self, source: Source, mirror: GitMirror) -> SourcePoll:
+    def _read(self, source: Source, fetch: StepTimer) -> SourcePoll:
+        mirror = self.mirrors.of(source)
+        if mirror is None:
+            raise _SourceUnreadableError(SourceRunFailure.FAILED)
         connection = mirror.connect()
         revision = connection.revision
         if revision is None:
-            _log.warning(_UNREADABLE_SOURCE, source.name, connection.state)
-            return SourcePoll(
-                folders=None,
-                commit=None,
-                failure=_FAILURE_BY_CONNECTION_STATE[connection.state],
-            )
-        return SourcePoll(
-            folders=tuple(
-                self._folder(mirror, revision, source, entry.name)
-                for entry in mirror.entries(revision, inside=source.folder)
-                if entry.is_directory
-            ),
-            commit=revision.commit,
-            failure=None,
+            failure = _FAILURE_BY_CONNECTION_STATE[connection.state]
+            if failure in _REFUSALS:
+                fetch.refuse(failure.value)
+                return SourcePoll(folders=None, commit=None, failure=failure)
+            raise _SourceUnreadableError(failure)
+        folders = tuple(
+            self._folder(mirror, revision, source, entry.name)
+            for entry in mirror.entries(revision, inside=source.folder)
+            if entry.is_directory
         )
+        unreadable_manifests = sum(
+            1
+            for folder in folders
+            if MANIFEST_FILE in folder.file_names and folder.title is None
+        )
+        if unreadable_manifests:
+            _log.info(
+                _MANIFEST_REFUSED,
+                extra={
+                    "source_id": source.id,
+                    "reason": _MANIFEST_UNREADABLE,
+                    "folder_count": unreadable_manifests,
+                },
+            )
+        return SourcePoll(folders=folders, commit=revision.commit, failure=None)
 
     def _folder(
         self,
@@ -537,8 +562,7 @@ class MirroredDeckFolders:
                 mirror.read(revision, f"{source.deck_path(name)}/{MANIFEST_FILE}"),
                 folder=name,
             )
-        except (MalformedManifestError, MirrorError) as unreadable:
-            _log.warning(_UNREADABLE_MANIFEST, name, unreadable)
+        except MalformedManifestError, MirrorError:
             return None
 
 
