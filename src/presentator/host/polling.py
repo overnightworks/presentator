@@ -60,7 +60,7 @@ class Schedule:
             # once, and the fetch's own bound is what ends the one that hangs.
             try:
                 await self.tick()
-            except Exception as failure:
+            except Exception as failure:  # noqa: BLE001 - any failure waits for the next interval
                 # The next interval is the retry; ending the loop would stop
                 # the chore for good without a word. Only the first failure of a
                 # row of them is written, so a chore that stays broken is one
