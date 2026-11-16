@@ -163,8 +163,8 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
 - The talk has its own origin: one cookie across both hosts would put deck code beside the
   credential it must not reach.
 - Processes share state only through Postgres and Redis. Every write that needs one winner takes an
-  advisory lock. The ask lease is a Redis key taken with `SET NX PX` and freed only by its holder's
-  token, so a dead pod's lease expires. Redis keeps nothing durable and its keys start `presentator:v1:`,
+  advisory lock. The ask lease is a Redis key taken with `SET NX PX`, renewed while its answer runs and
+  freed only by its holder's token, so a dead pod's lease expires. Redis keeps nothing durable and its keys start `presentator:v1:`,
   a version read beside the next for one release. While it cannot answer, every request but `/health`
   is a 503, since webauth's limiter fails closed. The SQLite fallback relies on one process.
 - The speech origin must be plain `http` and the gateway's `http` or `https`, both at Service

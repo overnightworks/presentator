@@ -4,12 +4,13 @@ import socket
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from threading import Barrier, Thread
+from threading import Barrier, Event, Thread
 
 import pytest
 from pydantic import SecretStr
 from redis import Redis
 
+from presentator.adapters import shared_redis
 from presentator.adapters.shared_redis import (
     KEY_ROOT,
     LEASE_MILLISECONDS,
@@ -167,6 +168,22 @@ def test_a_running_answers_lease_has_a_bounded_life_and_an_ended_one_leaves_no_k
 
     (key,) = stored_keys(server)
     assert 0 < server.pttl(key) <= LEASE_MILLISECONDS
+
+
+def test_an_answer_that_outlives_the_lease_keeps_its_session(
+    shared: SharedRedis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lease_milliseconds = 600
+    monkeypatch.setattr(shared_redis, "LEASE_MILLISECONDS", lease_milliseconds)
+    ticket = shared.ask_limiter().admit(_A_SESSION)
+    assert not isinstance(ticket, RetryAfter)
+
+    Event().wait(timeout=3 * lease_milliseconds / 1000)
+
+    refused = shared.ask_limiter().admit(_A_SESSION)
+    ticket.release()
+    assert refused == RetryAfter(BUSY_RETRY_SECONDS)
+    assert not isinstance(shared.ask_limiter().admit(_A_SESSION), RetryAfter)
 
 
 def test_every_key_starts_with_the_versioned_root(

@@ -6,6 +6,7 @@ beside the old one for one release.
 """
 
 import logging
+import threading
 import uuid
 from dataclasses import dataclass
 from enum import StrEnum
@@ -29,7 +30,8 @@ from presentator.ports.copresenter import AskLimiter, AskTicket
 KEY_VERSION: Final = "v1"
 KEY_ROOT: Final = f"presentator:{KEY_VERSION}"
 # A pod that dies mid-answer leaves its lease behind, and this is how long a
-# session waits for it; a pod that lives frees it at the end of the answer.
+# session waits for it; a pod that lives renews it while it answers and frees it
+# at the end.
 LEASE_MILLISECONDS: Final = 120_000
 
 # A check holds its worker thread until the client gives up, so the timeouts
@@ -43,6 +45,15 @@ if redis.call('GET', KEYS[1]) == ARGV[1] then
 end
 return 0
 """
+# Extends the lease only while it still holds this ticket's token, in one step.
+_RENEW_IF_OWN: Final = """
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+    return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+end
+return 0
+"""
+# A renewal that fails once still leaves two more before the lease runs out.
+_RENEWALS_PER_LEASE: Final = 3
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -53,24 +64,45 @@ class RateLimitedHost(StrEnum):
     TALK = "talk"
 
 
-@dataclass(frozen=True, slots=True)
 class _LeaseTicket:
-    """The lease one answer holds, freed only by the token it was taken with."""
+    """The lease one answer holds, freed only by the token it was taken with.
 
-    session_id: str
-    _redis: Redis
-    _key: str
-    _token: str
+    The lease is renewed for as long as the ticket lives, so a long answer keeps
+    its session; a pod that dies stops renewing and the lease expires.
+    """
+
+    def __init__(self, session_id: str, redis: Redis, key: str, token: str) -> None:
+        """Hold the lease at `key` and start renewing it."""
+        self.session_id = session_id
+        self._redis = redis
+        self._key = key
+        self._token = token
+        self._released = threading.Event()
+        threading.Thread(target=self._renew_until_released, daemon=True).start()
 
     def release(self) -> None:
         """Free the session if this ticket still holds it; later calls do nothing.
 
         A Redis that does not answer leaves the lease to expire on its own.
         """
+        self._released.set()
         try:
             self._redis.eval(_RELEASE_IF_OWN, 1, self._key, self._token)
         except RedisError as failure:
             _LOGGER.warning("ask lease release failed: %s", type(failure).__name__)
+
+    def _renew_until_released(self) -> None:
+        interval = LEASE_MILLISECONDS / _RENEWALS_PER_LEASE / 1000
+        while not self._released.wait(interval):
+            try:
+                holds = self._redis.eval(
+                    _RENEW_IF_OWN, 1, self._key, self._token, LEASE_MILLISECONDS
+                )
+            except RedisError as failure:
+                _LOGGER.warning("ask lease renewal failed: %s", type(failure).__name__)
+                continue
+            if not holds:
+                return
 
 
 @dataclass(frozen=True, slots=True)
