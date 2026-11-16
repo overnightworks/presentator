@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
-from typing import Final
+from typing import Final, NoReturn
 from urllib.parse import urlsplit
 
 import logline
@@ -726,12 +726,21 @@ def main(
         settings = load_settings()
         instance = build_instance(settings, relying_party_for, migrations_directory)
     except DatabaseRefusedError as refused:
-        error_type = type(refused).__name__
-        _log.error(
-            "process.failed", extra={"reason": refused.reason, "error_type": error_type}
-        )
-        raise SystemExit(1) from None
+        _end_refused(refused)
     asyncio.run(_serve(instance, settings))
+
+
+def _end_refused(refused: DatabaseRefusedError) -> NoReturn:
+    """End the process in one line naming the refusal, without its traceback.
+
+    The traceback would name the database's host and port, so the line carries
+    only the reason code and the error's class name.
+    """
+    error_type = type(refused).__name__
+    _log.error(
+        "process.failed", extra={"reason": refused.reason, "error_type": error_type}
+    )
+    raise SystemExit(1) from None
 
 
 def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddleware:
