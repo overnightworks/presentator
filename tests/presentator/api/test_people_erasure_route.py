@@ -16,6 +16,7 @@ from httpx2 import Response
 from presentator.application.people import People
 from presentator.host import main
 from presentator.host.config import ConfigurationError, load_settings
+from presentator.host.stopping_server import ServerEvent
 from tests.presentator.application.support.decks_support import (
     a_folder,
     a_source,
@@ -546,7 +547,7 @@ def test_the_server_logs_no_request_path(
         line["event"]
         for line in json_lines(capsys.readouterr().out)
         if line["logger"] == "uvicorn.error"
-    ] == ["the server failed"]
+    ] == [ServerEvent.SERVER_REPORTED]
 
 
 @pytest.mark.parametrize(

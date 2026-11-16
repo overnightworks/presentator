@@ -32,19 +32,18 @@ _INVALID_PORT: Final = "has an invalid port"
 _SCOPE_TOKEN: Final = re.compile(r"[\x21\x23-\x5B\x5D-\x7E]+")
 _REFUSED: Final = "this environment cannot start an instance"
 _EMPTY_CLIENT_ID: Final = "token_clients: names an empty client id"
-_VOICE_SPEAKS_OTHER: Final = (
-    "speech_voice_{language}: names a voice that does not speak it"
-)
-_ONE_HOSTNAME: Final = "talk_origin: is another hostname than public_origin"
+_VOICE_SPEAKS_OTHER: Final = "names a voice that does not speak it"
+_ONE_HOSTNAME: Final = "is another hostname than public_origin"
 _WORKER_REACHED: Final = (
-    "build_worker_address: is set together with build_worker_key_file, and both"
-    " are set when builds run in the worker"
+    "is set together with build_worker_key_file, and both are set when builds"
+    " run in the worker"
 )
 _DATABASE_NAMED_WHOLE: Final = (
-    "database_url: is set together with database_password_file, or neither is"
+    "is set together with database_password_file, or neither is"
 )
 
 ENVIRONMENT_PREFIX: Final = "PRESENTATOR_"
+_NESTED: Final = "__"
 # The shortest key of the build worker's hello, the web's file and the worker's alike.
 MINIMUM_KEY_LENGTH: Final = 32
 # What the web and the build worker both bound one build step by.
@@ -66,6 +65,15 @@ class WhereBuildsRun(StrEnum):
 
     HOST = "host"
     WORKER = "worker"
+
+
+class _FieldRefusedError(ValueError):
+    """A rule over several settings refused them; `field` is the one it names."""
+
+    def __init__(self, rule: str, *, field: str) -> None:
+        """Refuse `field` by `rule`."""
+        super().__init__(f"{field}: {rule}")
+        self.field = field
 
 
 class ConfigurationError(ValueError):
@@ -286,7 +294,7 @@ class Settings(
     BaseSettings,
     env_prefix=ENVIRONMENT_PREFIX,
     env_file=".env",
-    env_nested_delimiter="__",
+    env_nested_delimiter=_NESTED,
 ):
     """Read from `PRESENTATOR_*` in the environment, or from a local `.env`."""
 
@@ -381,7 +389,9 @@ class Settings(
     def build_worker(self) -> BuildWorkerLink:
         """The build workers' address and the key read once from its file."""
         if self.build_worker_address is None or self.build_worker_key_file is None:
-            raise cannot_start(_WORKER_REACHED)
+            field = "build_worker_address"
+            unreached = f"{field}: {_WORKER_REACHED}"
+            raise cannot_start(unreached, variables=(variable_of(field),))
         host, port = worker_endpoint(self.build_worker_address)
         return BuildWorkerLink(
             host=host,
@@ -424,13 +434,14 @@ class Settings(
     def _voices_speak_their_language(self) -> Self:
         for language, voice in self.speech_voices().items():
             if not voice_speaks(voice, language):
-                raise ValueError(_VOICE_SPEAKS_OTHER.format(language=language.value))
+                field = f"speech_voice_{language.value}"
+                raise _FieldRefusedError(_VOICE_SPEAKS_OTHER, field=field)
         return self
 
     @model_validator(mode="after")
     def _database_is_named_whole(self) -> Self:
         if (self.database_url is None) != (self.database_password_file is None):
-            raise ValueError(_DATABASE_NAMED_WHOLE)
+            raise _FieldRefusedError(_DATABASE_NAMED_WHOLE, field="database_url")
         return self
 
     @model_validator(mode="after")
@@ -442,14 +453,14 @@ class Settings(
             self.build_runner is WhereBuildsRun.WORKER
             and self.build_worker_address is None
         ):
-            raise ValueError(_WORKER_REACHED)
+            raise _FieldRefusedError(_WORKER_REACHED, field="build_worker_address")
         return self
 
     @model_validator(mode="after")
     def _two_hostnames(self) -> Self:
         # The cookies of the two origins stay apart only on two hostnames.
         if urlsplit(self.talk_origin).hostname == urlsplit(self.public_origin).hostname:
-            raise ValueError(_ONE_HOSTNAME)
+            raise _FieldRefusedError(_ONE_HOSTNAME, field="talk_origin")
         return self
 
 
@@ -519,18 +530,19 @@ def read_secret_file(
     The refusals name the setting and never what the file holds or what the
     operating system says of it, which may quote either.
     """
+    variables = (variable_of(setting),)
     try:
         content = secret_file.read_text(encoding="utf-8")
     except OSError, UnicodeDecodeError:
         unreadable = f"{setting}: is a file this instance can read"
-        raise cannot_start(unreadable) from None
+        raise cannot_start(unreadable, variables=variables) from None
     secret = content.removesuffix("\n")
     if not secret.strip():
         empty = f"{setting}: is a file that holds the secret"
-        raise cannot_start(empty)
+        raise cannot_start(empty, variables=variables)
     if len(secret) < minimum_length:
         short = f"{setting}: is a file that holds at least {minimum_length} characters"
-        raise cannot_start(short)
+        raise cannot_start(short, variables=variables)
     return SecretStr(secret)
 
 
@@ -551,7 +563,7 @@ def load_settings() -> Settings:
     except ValidationError as refused:
         # A refused value is often a real secret, and the library's own message
         # quotes it; only the field and the reason may leave this call.
-        raise cannot_start(_what_is_wrong(refused)) from None
+        raise _refused_by(refused) from None
     # Reading the key here refuses a bad key file at start, after the other
     # settings validated, and binds it for every later use.
     _ = settings.secret_key
@@ -564,9 +576,24 @@ def load_database_settings() -> DatabaseSettings:
     try:
         settings = DatabaseSettings.model_validate({})
     except ValidationError as refused:
-        raise cannot_start(_what_is_wrong(refused)) from None
+        raise _refused_by(refused) from None
     _ = settings.postgres
     return settings
+
+
+def _refused_by(refused: ValidationError) -> ConfigurationError:
+    """The refusal of a validation, naming the variables of the fields it refused."""
+    fields: list[str] = []
+    for fault in refused.errors():
+        # A rule over several fields has no location; its error names the field.
+        error = fault.get("ctx", {}).get("error")
+        if fault["loc"]:
+            # A nested setting's variable joins its path as the environment does.
+            fields.append(_NESTED.join(str(part) for part in fault["loc"]))
+        elif isinstance(error, _FieldRefusedError):
+            fields.append(error.field)
+    variables = tuple(variable_of(field) for field in dict.fromkeys(fields))
+    return cannot_start(_what_is_wrong(refused), variables=variables)
 
 
 def _what_is_wrong(refused: ValidationError) -> str:

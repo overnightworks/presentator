@@ -122,6 +122,7 @@ from presentator.host.command_line import (
     migrate_the_database,
 )
 from presentator.host.config import (
+    ConfigurationError,
     PostgresDatabase,
     Settings,
     WhereBuildsRun,
@@ -164,6 +165,8 @@ from presentator.ports.preferences import (
 _log = logging.getLogger(__name__)
 
 SERVICE_NAME = "presentator"
+# The `reason` of the line a start ends in when the environment is refused.
+CONFIGURATION_REFUSED: Final = "configuration_refused"
 
 RelyingPartyFor = Callable[[OidcClientConfig], OidcRelyingParty]
 
@@ -441,7 +444,9 @@ def _lobby_shell(settings: Settings) -> LobbyShell:
     try:
         return LobbyShell.read(settings.lobby_build)
     except LobbyBuildError as refused:
-        raise cannot_start(str(refused)) from None
+        raise cannot_start(
+            str(refused), variables=(variable_of("lobby_build"),)
+        ) from None
 
 
 def _source_timeout(settings: Settings) -> timedelta:
@@ -649,7 +654,7 @@ def _identity_of_the_toolchain(settings: Settings) -> ToolchainIdentity:
     except OSError as unreadable:
         setting = variable_of("toolchain")
         reason = f"{setting}: the project cannot be read: {unreadable}"
-        raise cannot_start(reason) from None
+        raise cannot_start(reason, variables=(setting,)) from None
 
 
 def _what_builds_a_deck(settings: Settings, *, bound: timedelta) -> DeckToolchain:
@@ -716,8 +721,8 @@ def main(
 ) -> None:
     """Migrate the database when asked to, else serve the lobby.
 
-    Both run on the configuration the environment carries; a refused database
-    ends either in one line and exit status 1.
+    Both run on the configuration the environment carries; a refused
+    configuration or database ends either in one line and exit status 1.
     """
     logline.configure(SERVICE_NAME)
     cap_alembic_logging()
@@ -730,19 +735,23 @@ def main(
         settings = load_settings()
         instance = build_instance(settings, relying_party_for, migrations_directory)
     except DatabaseRefusedError as refused:
-        _end_refused(refused)
+        _end_failed(refused.reason, refused)
+    except ConfigurationError as refused:
+        # The settings by their variables; the message may name a path.
+        setting = ",".join(refused.variables)
+        _end_failed(CONFIGURATION_REFUSED, refused, setting=setting)
     asyncio.run(_serve(instance, settings))
 
 
-def _end_refused(refused: DatabaseRefusedError) -> NoReturn:
+def _end_failed(reason: str, error: Exception, **codes: str) -> NoReturn:
     """End the process in one line naming the refusal, without its traceback.
 
-    The traceback would name the database's host and port, so the line carries
-    only the reason code and the error's class name.
+    The traceback would name the database's host and port or a file's path, so
+    the line carries only codes and the error's class name.
     """
-    error_type = type(refused).__name__
+    error_type = type(error).__name__
     _log.error(
-        "process.failed", extra={"reason": refused.reason, "error_type": error_type}
+        "process.failed", extra={"reason": reason, "error_type": error_type, **codes}
     )
     raise SystemExit(1) from None
 

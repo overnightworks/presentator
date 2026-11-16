@@ -143,6 +143,7 @@ def test_a_refused_start_writes_neither_the_url_nor_its_password_anywhere(
     )
 
     assert started.returncode != 0
-    assert "redis_url" in started.stdout + started.stderr
+    assert not started.stderr
+    assert f'"setting": "{_URL}"' in started.stdout
     assert _A_PASSWORD not in started.stdout + started.stderr
     assert "redis:6379" not in started.stdout + started.stderr
