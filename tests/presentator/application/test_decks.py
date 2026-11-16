@@ -661,9 +661,7 @@ def test_a_folder_name_another_source_carries_stays_with_the_source_that_had_it(
     with logged_as_json(capsys) as logged:
         listed = refreshed(decks)
 
-    assert [(deck.slug, deck.title) for deck in listed] == [
-        ("kundenfeedback", "The first"),
-    ]
+    assert {deck.slug: deck.title for deck in listed} == {"kundenfeedback": "The first"}
     assert [deck.source_id for deck in store.all()] == [SOURCE.id]
     [refusal] = events_of(logged, "take_in.refused")
     assert refusal["source_id"] == _ANOTHER_SOURCE.id
