@@ -135,7 +135,11 @@ from presentator.host.oidc import (
     relying_party,
 )
 from presentator.host.polling import ChoreCode, Schedule
-from presentator.host.stopping_server import StoppingServer, served_config
+from presentator.host.stopping_server import (
+    StoppingServer,
+    name_uvicorn_records,
+    served_config,
+)
 from presentator.host.store_connection import (
     StoreFailure,
     StoreKind,
@@ -717,6 +721,7 @@ def main(
     """
     logline.configure(SERVICE_NAME)
     cap_alembic_logging()
+    name_uvicorn_records()
     try:
         if command_line().parse_args(arguments).command == MIGRATE_COMMAND:
             migrate_the_database()
@@ -761,13 +766,7 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
         # Starlette runs only this router's lifespan, never a `Host` sub-app's, so
         # the lobby's own is entered here.
         async with instance.lobby.router.lifespan_context(instance.lobby):
-            _log.info("process.ready")
-            try:
-                yield
-            finally:
-                # uvicorn re-raises the signal that stopped it once serving
-                # returns, so the process ends before any line after `serve`.
-                _log.info("process.stopped")
+            yield
 
     return RequestLineMiddleware(
         Router(
