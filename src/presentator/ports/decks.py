@@ -428,5 +428,5 @@ class RefreshOwnership(Protocol):
         """
 
     @abstractmethod
-    def toolchain_is_present(self, toolchain: ToolchainIdentity) -> bool:
+    def toolchain_is_present(self, toolchain: ToolchainIdentity, /) -> bool:
         """Whether a process builds with that toolchain now."""
