@@ -315,9 +315,32 @@ def test_a_build_that_does_not_deliver_in_a_web_pod_fails_cell_11_naming_the_pod
     assert f"{WEB_POD_NAMES[0]} did not deliver" in capsys.readouterr().err
     assert [
         command
-        for command in world.issued("kubectl", "logs", "--selector")
-        if command[3].startswith("app.kubernetes.io/name=build-worker")
+        for command, _, _ in world.commands
+        if command[2:5] == ("kubectl", "logs", "--selector") and "--follow" in command
     ]
+
+
+def test_each_build_follows_the_worker_lines_from_before_it_starts(
+    make_fixture: Callable[..., Fixture],
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    commands = [command for command, _, _ in fixture.world.commands]
+    follows = [
+        index
+        for index, command in enumerate(commands)
+        if command[2:5] == ("kubectl", "logs", "--selector") and "--follow" in command
+    ]
+    builds = [
+        index
+        for index, command in enumerate(commands)
+        if command[2:4] == ("kubectl", "exec") and command[-2:] == ("build", "export")
+    ]
+    assert len(follows) > 1
+    assert all(
+        follow < build
+        for follow, build in zip(follows, builds[-len(follows) :], strict=True)
+    )
 
 
 def test_cell_12_runs_the_hello_program_in_a_web_pod_and_prints_one_line(
