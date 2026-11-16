@@ -429,6 +429,38 @@ def test_a_build_no_run_owns_answers_a_plain_500_without_a_leftover() -> None:
     assert store.for_source("talks-id")
 
 
+def test_a_removal_timed_out_by_another_process_answers_500_and_a_repeat_erases() -> (
+    None
+):
+    """PE15: the timeout fails the erasure; the person stays until a repeat."""
+    scene = a_scene()
+    ownership = scene.instance.fakes.ownership
+    ownership.held_elsewhere = True
+    sources_before = tuple(scene.instance.decks.sources.all())
+    client = TestClient(
+        scene.lobby.app,
+        base_url=A_BROWSERS_ADDRESS,
+        headers=A_BROWSERS_HEADERS,
+        raise_server_exceptions=False,
+    )
+
+    answer = client.delete(
+        f"{_PATH}{THE_PERSON.id}?dry_run=false", headers=scene.token()
+    )
+    person_kept = THE_PERSON.id in scene.instance.users.users
+    sources_kept = tuple(scene.instance.decks.sources.all())
+    ownership.held_elsewhere = False
+    repeat = scene.erase(query="?dry_run=false")
+
+    assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert "leftover" not in answer.text
+    assert person_kept
+    assert sources_kept == sources_before
+    assert repeat.status_code == HTTPStatus.OK
+    assert THE_PERSON.id not in scene.instance.users.users
+    assert ANOTHER.id in scene.instance.users.users
+
+
 def test_an_empty_setting_serves_no_such_route() -> None:
     """PE28: with no client named the prefix falls to the session gate like any path."""
     scene = a_scene(clients=None)
