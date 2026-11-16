@@ -214,8 +214,9 @@ def test_a_redis_that_cannot_be_reached_is_not_ready_and_cannot_tell_the_lease()
     redis = SharedRedis(NOTHING_LISTENS_HERE)
     try:
         ready = redis.is_ready()
+        limiter = redis.ask_limiter(lease_seconds=_LEASE_SECONDS)
         with pytest.raises(CoPresenterUnavailableError):
-            redis.ask_limiter(lease_seconds=_LEASE_SECONDS).admit(_A_SESSION)
+            limiter.admit(_A_SESSION)
     finally:
         redis.close()
 

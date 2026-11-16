@@ -250,7 +250,8 @@ def _with_redis(stores: Stores, redis: SharedRedis) -> Stores:
         finally:
             redis.close()
 
-    return replace(stores, readiness=ready, close=close)
+    with_redis: Stores = replace(stores, readiness=ready, close=close)
+    return with_redis
 
 
 def _stores(settings: Settings, migrations_directory: Path) -> Stores:
