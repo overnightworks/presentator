@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import re
@@ -446,7 +447,7 @@ def _absent(text: str, markers: Sequence[str]) -> None:
 def _without_the_request_lines_sub(
     logged: Sequence[logging.LogRecord],
 ) -> list[logging.LogRecord]:
-    """The records, a request line without its `sub`: the person's id belongs there."""
+    """The records, a request line without its `sub` where it is the person's id."""
     return [_without_its_sub(record) for record in logged]
 
 
@@ -455,11 +456,11 @@ def _without_its_sub(record: logging.LogRecord) -> logging.LogRecord:
     if not isinstance(carried, dict):
         return record
     line = cast("dict[str, object]", carried)
-    if line.get("event") != REQUEST_EVENT:
+    if line.get("event") != REQUEST_EVENT or line.get("sub") != A.id:
         return record
-    return logging.makeLogRecord(
-        {"msg": {key: value for key, value in line.items() if key != "sub"}}
-    )
+    shown = copy.copy(record)
+    shown.msg = {key: value for key, value in line.items() if key != "sub"}
+    return shown
 
 
 def _sse_events(text: str) -> list[tuple[str, str]]:
