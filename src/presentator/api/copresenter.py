@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from base64 import b64encode
 from collections.abc import (
     AsyncIterator,
@@ -13,12 +14,14 @@ from collections.abc import (
 )
 from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass
+from enum import StrEnum
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Final, Protocol, assert_never
 
 import anyio
 from fastapi import APIRouter, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
+from logline import StepTimer
 from pydantic import BaseModel, Field, field_validator
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
@@ -65,6 +68,27 @@ _POLICY_VIOLATION: Final = 1008
 _INTERNAL_ERROR: Final = 1011
 _GENERIC_ANSWER_FAILURE: Final = "the answer could not be spoken"
 MAX_SAID_LENGTH: Final = 2_000
+
+_log = logging.getLogger(__name__)
+
+
+class AnswerFailure(StrEnum):
+    """Why an `answer.ended` line is failed: the closed set of its `reason` codes.
+
+    The hop that failed (the token, the speech call) wrote its own line, an error
+    line unless it was a busy or cancelled step; this one carries only how the
+    answer ended.
+    """
+
+    UNAVAILABLE = "unavailable"
+    DEADLINE = "deadline"
+    UNEXPECTED = "unexpected"
+
+
+class AnswerRefusal(StrEnum):
+    """Why an `answer.ended` line is refused after the answer began."""
+
+    SESSION_ENDED = "session_ended"
 
 
 class SignedIn(Protocol):
@@ -217,6 +241,7 @@ class _Ask:
     subject: str
     role: Role
     deadline: float
+    step: StepTimer
 
 
 def _ask_route(
@@ -233,7 +258,7 @@ def _ask_route(
         try:
             prepared = await _prepare(surface.use, admitted)
             if isinstance(prepared, Response):
-                return prepared
+                return _answer_ended_with(admitted.step, prepared)
             response = StreamingResponse(
                 _answer_events(
                     request,
@@ -246,6 +271,14 @@ def _ask_route(
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
                 background=BackgroundTask(admitted.ticket.release),
             )
+        except Exception:
+            admitted.step.fail(AnswerFailure.UNEXPECTED)
+            admitted.step.end()
+            raise
+        except BaseException:
+            admitted.step.end_cancelled()
+            raise
+        else:
             streaming = True
             return response
         finally:
@@ -255,6 +288,18 @@ def _ask_route(
     return _ask
 
 
+def _answer_ended_with(step: StepTimer, response: Response) -> Response:
+    """End the answer's line on a response sent instead of a stream."""
+    reason = HTTPStatus(response.status_code).name.lower()
+    if response.status_code == HTTPStatus.SERVICE_UNAVAILABLE:
+        step.handled()
+        step.fail(reason)
+    else:
+        step.refuse(reason)
+    step.end()
+    return response
+
+
 def _admit(
     surface: CoPresenterSurface,
     admission: Admission,
@@ -262,21 +307,25 @@ def _admit(
     question: AskRequest,
     deadline: float,
 ) -> _Ask | Response:
+    step = StepTimer("answer.ended", _log)
     connection = admission(request)
     if connection is None:
-        return _not_authenticated()
+        return _answer_ended_with(step, _not_authenticated())
     asked = surface.use.asked_deck(question.deck, viewer=connection.user_id)
     if asked is None:
-        return _deck_not_found()
+        return _answer_ended_with(step, _deck_not_found())
     try:
         ticket = surface.limiter.admit(connection.session_id)
     except CoPresenterUnavailableError:
-        return _unavailable()
+        return _answer_ended_with(step, _unavailable())
     if isinstance(ticket, RetryAfter):
-        return JSONResponse(
-            {"detail": "Too many questions"},
-            HTTPStatus.TOO_MANY_REQUESTS,
-            headers={"Retry-After": str(ticket.seconds)},
+        return _answer_ended_with(
+            step,
+            JSONResponse(
+                {"detail": "Too many questions"},
+                HTTPStatus.TOO_MANY_REQUESTS,
+                headers={"Retry-After": str(ticket.seconds)},
+            ),
         )
     return _Ask(
         asked=asked,
@@ -289,6 +338,7 @@ def _admit(
         subject=connection.user_id,
         role=connection.person.role,
         deadline=deadline,
+        step=step,
     )
 
 
@@ -349,49 +399,48 @@ async def _answer_events(
     use: CoPresenterUse,
     guard: _SessionGuard,
 ) -> AsyncIterator[bytes]:
+    step = ask.step
     loop = asyncio.get_running_loop()
     session_watch = asyncio.create_task(
         _watch_session(request, session_id=ask.ticket.session_id, guard=guard)
     )
     try:
-        try:
-            async with AsyncExitStack() as opened:
-                async with asyncio.timeout_at(ask.deadline):
-                    events = await opened.enter_async_context(
-                        use.answer(prepared, ask.question)
-                    )
-                next_event = asyncio.create_task(_next_answer_event(events))
-                try:
-                    while True:
-                        done, _pending = await asyncio.wait(
-                            {next_event, session_watch},
-                            timeout=max(ask.deadline - loop.time(), 0),
-                            return_when=asyncio.FIRST_COMPLETED,
+        async with step:
+            try:
+                async with AsyncExitStack() as opened:
+                    async with asyncio.timeout_at(ask.deadline):
+                        events = await opened.enter_async_context(
+                            use.answer(prepared, ask.question)
                         )
-                        if session_watch in done:
-                            _observe_session_end(session_watch)
-                            return
-                        if next_event not in done or loop.time() >= ask.deadline:
-                            raise TimeoutError
-                        event = next_event.result()
-                        yield _sse(event)
-                        if isinstance(event, Done):
-                            return
-                        # A stalled send suspends the stream past the deadline;
-                        # the lease expires with it, so no further event starts.
-                        if loop.time() >= ask.deadline:
-                            raise TimeoutError
-                        next_event = asyncio.create_task(_next_answer_event(events))
-                finally:
-                    await _finish_tasks((next_event,))
-        except NotEnabledError:
-            yield _error_sse(AnswerStopReason.NOT_ENABLED)
-        except GatewayBusyError as busy:
-            yield _error_sse(AnswerStopReason.BUSY, retry_after_s=busy.retry_after_s)
-        except BudgetSpentError:
-            yield _error_sse(AnswerStopReason.BUDGET_SPENT)
-        except CoPresenterUnavailableError, TimeoutError:
-            yield _error_sse()
+                    next_event = asyncio.create_task(_next_answer_event(events))
+                    try:
+                        while True:
+                            done, _pending = await asyncio.wait(
+                                {next_event, session_watch},
+                                timeout=max(ask.deadline - loop.time(), 0),
+                                return_when=asyncio.FIRST_COMPLETED,
+                            )
+                            if session_watch in done:
+                                _observe_session_end(session_watch)
+                                step.refuse(AnswerRefusal.SESSION_ENDED)
+                                return
+                            if next_event not in done or loop.time() >= ask.deadline:
+                                raise TimeoutError
+                            event = next_event.result()
+                            if isinstance(event, Audio):
+                                step.first_output()
+                            yield _sse(event)
+                            if isinstance(event, Done):
+                                return
+                            # A stalled send suspends the stream past the deadline;
+                            # the lease expires with it, so no further event starts.
+                            if loop.time() >= ask.deadline:
+                                raise TimeoutError
+                            next_event = asyncio.create_task(_next_answer_event(events))
+                    finally:
+                        await _finish_tasks((next_event,))
+            except (CoPresenterUnavailableError, TimeoutError) as stop:
+                yield _stopped(step, stop)
     finally:
         await _release_off_the_loop(ask.ticket)
         await _finish_tasks((session_watch,))
@@ -536,6 +585,26 @@ def _sse(event: AnswerEvent) -> bytes:
 
 def _generated_sse(event: str, payload: dict[str, object]) -> bytes:
     return _encoded_sse(event, {**payload, "ai_generated": True})
+
+
+def _stopped(step: StepTimer, stop: Exception) -> bytes:
+    """End the answer's line on the error that stopped it, and give its event."""
+    match stop:
+        case NotEnabledError():
+            step.refuse(AnswerStopReason.NOT_ENABLED.name.lower())
+            return _error_sse(AnswerStopReason.NOT_ENABLED)
+        case GatewayBusyError():
+            step.refuse(AnswerStopReason.BUSY.name.lower())
+            return _error_sse(AnswerStopReason.BUSY, retry_after_s=stop.retry_after_s)
+        case BudgetSpentError():
+            step.refuse(AnswerStopReason.BUDGET_SPENT.name.lower())
+            return _error_sse(AnswerStopReason.BUDGET_SPENT)
+        case TimeoutError():
+            step.fail(AnswerFailure.DEADLINE)
+        case _:
+            step.fail(AnswerFailure.UNAVAILABLE)
+    step.handled()
+    return _error_sse()
 
 
 def _error_sse(

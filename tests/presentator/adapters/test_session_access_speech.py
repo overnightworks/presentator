@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 import pytest
@@ -11,6 +10,7 @@ import pytest
 from presentator.adapters.session_access import SessionAccess
 from presentator.contracts.copresenter import AccessRefusal, SpeechTokens
 from tests.support.lobby import A_SPEECH_SCOPE
+from tests.support.log_lines import json_logged
 from tests.support.sign_in_support import Scene, a_scene
 
 if TYPE_CHECKING:
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 REFRESH = "refresh-MARKER"
 ROTATED = "rotated-MARKER"
 ACCESS = "access-MARKER"
-LOGGER = "presentator.adapters.session_access"
+ACCESS_LINE = "access_token.ended"
 
 
 class Arranged:
@@ -74,19 +74,18 @@ def test_the_workload_grant_asks_for_exactly_the_configured_scope(
 
 
 @pytest.mark.parametrize("error", ["invalid_scope", "invalid_client"])
-def test_a_refused_workload_grant_is_unavailable_with_a_closed_warning(
-    arranged: Arranged, error: str, caplog: pytest.LogCaptureFixture
+def test_a_refused_workload_grant_is_unavailable_with_a_closed_reason(
+    arranged: Arranged, error: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     arranged.scene.issuer.workload_refusal = (error, "description-MARKER")
-    caplog.set_level(logging.DEBUG)
 
-    assert arranged.read() is AccessRefusal.ISSUER_UNAVAILABLE
+    with json_logged(capsys) as logged:
+        assert arranged.read() is AccessRefusal.ISSUER_UNAVAILABLE
 
-    (warning,) = [
-        record.getMessage() for record in caplog.records if record.name == LOGGER
-    ]
-    assert warning.endswith("token-request-refused")
-    assert "description-MARKER" not in caplog.text
+    (line,) = [one for one in logged.lines if one["event"] == ACCESS_LINE]
+    assert line["issuer_reason"] == "token-request-refused"
+    assert line["purpose"] == "speech_tokens"
+    assert "description-MARKER" not in logged.text
 
 
 def test_a_refused_refresh_makes_no_workload_grant(arranged: Arranged) -> None:

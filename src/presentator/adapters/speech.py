@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from enum import StrEnum
 from typing import TYPE_CHECKING, Final, assert_never
 
+from logline import StepTimer
 from pydantic import ValidationError
 from speech_client import wire
 from speech_client.health import UnexpectedStatus, fetch_health
@@ -98,47 +100,73 @@ class SpeechSpeaking:
     async def speak(self, text: str, language: str, tokens: SpeechTokens) -> bytes:
         """The sentence as one whole WAV, exactly as the service sent it."""
         spoken = SampleLanguage(language)
-        try:
-            outcome: SpeakOutcome | None = await asyncio.to_thread(
-                self._bounded_speak,
-                self._origin,
-                text,
-                self._voices[spoken],
-                language=_client_language(spoken),
-                response_format=wire.ResponseFormat.WAV,
-                workload_token=tokens.workload,
-                person_token=tokens.person,
-                deadline_seconds=_SPEAK_DEADLINE_SECONDS,
-                cap_bytes=_SPEAK_CAP_BYTES,
-            )
-        # Start refuses a voice outside the catalogue, and the origin is checked
-        # apart, so what the request can still refuse here is the sentence.
-        except ValidationError:
-            outcome = None
-        if outcome is None:
-            _LOGGER.warning("speaking refused a sentence the wire cannot carry")
+        with StepTimer(
+            "speak.ended", _LOGGER, language=language, character_count=len(text)
+        ) as step:
+            try:
+                outcome: SpeakOutcome | None = await asyncio.to_thread(
+                    self._bounded_speak,
+                    self._origin,
+                    text,
+                    self._voices[spoken],
+                    language=_client_language(spoken),
+                    response_format=wire.ResponseFormat.WAV,
+                    workload_token=tokens.workload,
+                    person_token=tokens.person,
+                    deadline_seconds=_SPEAK_DEADLINE_SECONDS,
+                    cap_bytes=_SPEAK_CAP_BYTES,
+                )
+            # Start refuses a voice outside the catalogue, and the origin is
+            # checked apart, so what the request can still refuse here is the
+            # sentence.
+            except ValidationError:
+                outcome = None
+            audio = _audio_of(outcome, step)
+        if audio is None:
             raise CoPresenterUnavailableError
-        return _audio_of(outcome)
+        return audio
 
 
-def _audio_of(outcome: SpeakOutcome) -> bytes:
+class SpeakFailure(StrEnum):
+    """Why a `speak.ended` line is not `ok`: the closed set of its `reason` codes."""
+
+    SENTENCE_UNSENDABLE = "sentence_unsendable"
+    REFUSED = "refused"
+    BUSY = "busy"
+    CUT = "cut"
+    PAST_DEADLINE = "past_deadline"
+    OVER_CAP = "over_cap"
+    MALFORMED = "malformed"
+    UNREACHABLE = "unreachable"
+
+
+def _audio_of(outcome: SpeakOutcome | None, step: StepTimer) -> bytes | None:
+    """The audio, or nothing after the step has recorded why there is none."""
     match outcome:
+        case None:
+            step.fail(SpeakFailure.SENTENCE_UNSENDABLE)
         case Spoken():
+            step.add(audio_bytes=len(outcome.audio))
             return outcome.audio
         case Refused():
-            _LOGGER.warning(
-                "speaking refused: status=%d code=%s param=%s",
-                outcome.status,
-                outcome.code.value,
-                outcome.param,
-            )
+            step.add(status=outcome.status, code=outcome.code.value)
+            step.fail(SpeakFailure.REFUSED)
         case Busy():
-            _LOGGER.warning("speaking busy: wait=%ds", outcome.wait.retry_after_seconds)
-        case Cut() | PastDeadline() | OverCap() | Malformed() | Unreachable():
-            _LOGGER.warning("speaking failed: %s", type(outcome).__name__)
+            step.add(retry_after_s=outcome.wait.retry_after_seconds)
+            step.refuse(SpeakFailure.BUSY)
+        case Cut():
+            step.fail(SpeakFailure.CUT)
+        case PastDeadline():
+            step.fail(SpeakFailure.PAST_DEADLINE)
+        case OverCap():
+            step.fail(SpeakFailure.OVER_CAP)
+        case Malformed():
+            step.fail(SpeakFailure.MALFORMED)
+        case Unreachable():
+            step.fail(SpeakFailure.UNREACHABLE)
         case _:
             assert_never(outcome)
-    raise CoPresenterUnavailableError
+    return None
 
 
 class SpeechHearing:
