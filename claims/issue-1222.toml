@@ -1,8 +1,0 @@
-claim_id = "7da65e8d27e5450fa7c62210e928d598"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "c277afe12fa1677ae44345fcf9fcbcc0b60185b6"
-branch = "claude/issue-1222-the-k3d-build-worker-probe-is-flaky-web"
-scope = ["scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_cluster.py", "scripts/probe_build_worker_k3d_web.py", "tests/scripts/support/k3d_world.py", "tests/scripts/test_probe_build_worker_k3d.py", "tests/scripts/test_probe_build_worker_k3d_published.py", "tests/scripts/test_probe_build_worker_k3d_web.py"]
-opened_commit = "eed5e30e5ed7683281bc8eefafd27783f6521cdd"
-whole_reason = "One probe and its runner hold both flaky cells"
