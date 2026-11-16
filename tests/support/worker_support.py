@@ -22,9 +22,9 @@ from presentator.adapters.build_wire import (
     RecordTag,
     read_request,
 )
-from presentator.host import worker, worker_serving
+from presentator.host import worker
 from presentator.host.worker import create_request_record
-from presentator.host.worker_serving import LifeEnd, Serving, StepEffects, WireChild
+from presentator.host.worker_serving import Serving, StepEffects, WireChild
 from presentator.host.worker_wire import WireExit, WireRole
 from tests.support.step_support import (
     EXIT_DESCRIPTOR,
@@ -779,32 +779,3 @@ def a_proven_hello_the_worker_may_not_serve(client: socket.socket) -> None:
 def proven(volume: Path) -> socket.socket:
     """A client that proves the hello in a thread and then holds its connection."""
     return helloing(volume, a_proven_hello_the_worker_may_not_serve)
-
-
-def reading_after_a_proven_hello(volume: Path) -> Callable[[], bytes]:
-    """A client that proves the hello in a thread, then reads; the call is its read."""
-    client = connected(volume)
-    read: list[bytes] = []
-
-    def prove_then_read() -> None:
-        a_proven_hello(client)
-        read.append(client.recv(1))
-
-    thread = threading.Thread(target=prove_then_read, daemon=True)
-    thread.start()
-    CLIENTS.callback(thread.join)
-
-    def what_the_client_read() -> bytes:
-        thread.join(WAIT_SECONDS)
-        return read[0]
-
-    return what_the_client_read
-
-
-def accept_from(
-    life: ScriptedLife,
-    listener: socket.socket,
-    serving: Serving | None = None,
-) -> LifeEnd:
-    """Run the accept loop in this thread."""
-    return worker_serving.accept_connections(listener, KEY, serving or life.serving())
