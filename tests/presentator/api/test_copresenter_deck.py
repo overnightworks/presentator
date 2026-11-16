@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 import pytest
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
-from presentator.application.copresenter import AskLimiter
 from presentator.contracts.copresenter import DeckText
 from presentator.contracts.models import Role
 from presentator.contracts.words import SOURCE_LANGUAGE
@@ -56,7 +55,6 @@ def an_instance(
     decks.removed.update(dict.fromkeys(removed, NOW))
     lobby, private, _clock = a_copresenter_talk_host(
         decks=decks,
-        limiter=AskLimiter(),
     )
     lobby.sign_in(role=role, account_language=account_language)
     return lobby, private
@@ -151,9 +149,7 @@ def test_an_owner_with_the_user_role_is_answered_and_another_users_deck_is_not()
 
 def test_a_signed_out_asker_is_refused_and_leaves_the_session_free() -> None:
     """A signed-out asker is refused 401, no port, no answer held."""
-    lobby, private, _clock = a_copresenter_talk_host(
-        limiter=AskLimiter(),
-    )
+    lobby, private, _clock = a_copresenter_talk_host()
 
     lobby.sign_in(role=Role.ADMIN)
     session = lobby.client.cookies[DEFAULT_SESSION_COOKIE_NAME]

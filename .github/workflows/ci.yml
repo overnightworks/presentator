@@ -75,6 +75,17 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
+      # The throwaway server of the Redis tests: each test worker empties a
+      # database of its own on it.
+      redis:
+        image: redis:7.4.12-alpine@sha256:338fbfc036dc5517ac0b04d6de21521085935336e565f223406180e9d84166e2
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - name: Check out the event commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -93,6 +104,7 @@ jobs:
       - name: Test
         env:
           PRESENTATOR_TEST_POSTGRES_URL: postgresql://postgres@localhost:5432/postgres
+          PRESENTATOR_TEST_REDIS_URL: redis://localhost:6379/0
         run: uv run --locked pytest -q -n auto --cov=src --cov-report=xml:reports/coverage.xml
 
       - name: Upload the coverage report

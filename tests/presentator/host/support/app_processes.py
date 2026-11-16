@@ -27,6 +27,7 @@ from tests.presentator.host.support.app_process import ANSWER_PREFIX
 from tests.support.lobby import A_BROWSERS_ADDRESS
 from tests.support.log_lines import LogLine
 from tests.support.postgres import database_environment
+from tests.support.redis import emptied_database_url
 from tests.support.sign_in_support import ADMIN, MEMBER
 from tests.support.two_processes import TwoProcesses, two_modules
 
@@ -194,7 +195,13 @@ def _environment(
         for name, value in os.environ.items()
         if name.startswith("PRESENTATOR_") and not name.startswith("PRESENTATOR_TEST_")
     }
-    return {**app_settings, **database_environment(database_url, directory), **extra}
+    return {
+        **app_settings,
+        **database_environment(database_url, directory),
+        # Both processes count their budgets in the one Redis database of this worker.
+        "PRESENTATOR_REDIS_URL": emptied_database_url(),
+        **extra,
+    }
 
 
 def _wait_until_ready(app: App) -> None:

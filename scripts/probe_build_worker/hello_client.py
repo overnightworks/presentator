@@ -12,6 +12,7 @@ worker proved itself to the end of the hello.
 """
 
 import json
+import os
 import socket
 import sys
 
@@ -44,6 +45,9 @@ def proven(host: str, port: int, key: bytes, direction: HelloDirection) -> bool:
 
 def main() -> None:
     """Run the three hellos and print what the worker did with each."""
+    # The probe only reads the build worker's link and never reaches Redis; the
+    # pod's manifest names the URL once platform runs one, and then this line goes.
+    os.environ.setdefault("PRESENTATOR_REDIS_URL", "redis://127.0.0.1:6379/0")
     link = load_settings().build_worker
     key = link.key.get_secret_value().encode()
     answers = {

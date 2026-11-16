@@ -26,6 +26,7 @@ from presentator.adapters.identity import (
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host.main import web_auth_config_for
+from tests.support.lobby import in_process_rate_limits
 from tests.support.people import (
     a_session_id,
     seed_user,
@@ -272,6 +273,7 @@ def a_config_reading(now: datetime) -> WebAuthConfig:
             SecretStr("t" * 32),
             trusted_proxies="",
             origin="https://testserver",
+            rate_limits=in_process_rate_limits(),
         ),
         wall_clock=now.timestamp,
     )

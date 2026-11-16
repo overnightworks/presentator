@@ -2,7 +2,7 @@
 
 ## Commands
 
-- `uv run --locked pytest <module or -k expression>` from the root: runs the Python tests; run one module, CI runs the rest. A test that needs Postgres finds the server in `PRESENTATOR_TEST_POSTGRES_URL` ([configuration](docs/configuration.md)) and fails without it.
+- `uv run --locked pytest <module or -k expression>` from the root: runs the Python tests; run one module, CI runs the rest. A test that needs Postgres or Redis finds the server in `PRESENTATOR_TEST_POSTGRES_URL` or `PRESENTATOR_TEST_REDIS_URL` ([configuration](docs/configuration.md)) and fails without it.
 - `pnpm exec vitest run <file>` from `slidev/` or `frontend/`: runs one front-end test file; needs `pnpm install --frozen-lockfile` there first.
 - `uv run --locked ruff check` and `uv run --locked ruff format --check` from the root: lint and format.
 - `uv run --locked pyright` and `uv run --locked vulture` from the root: types and dead code.

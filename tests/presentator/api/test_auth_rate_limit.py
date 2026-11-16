@@ -27,6 +27,7 @@ from tests.support.lobby import (
     a_crowd,
     a_lobby_app,
     an_installed_auth,
+    in_process_rate_limits,
 )
 from tests.support.talk_support import Hosts, two_hosts
 
@@ -108,6 +109,7 @@ def test_behind_a_trusted_proxy_each_forwarded_address_has_its_own_budget() -> N
             auth.config.session_secret,
             trusted_proxies=_PROXY_NETWORK,
             origin=A_BROWSERS_ADDRESS,
+            rate_limits=in_process_rate_limits(),
         ),
     )
     app, _ = a_lobby_app(

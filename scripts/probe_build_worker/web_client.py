@@ -13,6 +13,7 @@ the run directory holds when the steps are over.
 
 import json
 import logging
+import os
 import sys
 import threading
 import time
@@ -90,6 +91,9 @@ def main(decks: Path, kinds: list[StepKind]) -> None:
     """Run the steps and print the outcome."""
     logging.basicConfig()
     logging.getLogger("presentator.adapters.build_worker").setLevel(logging.DEBUG)
+    # The probe only reads the build worker's link and never reaches Redis; the
+    # pod's manifest names the URL once platform runs one, and then this line goes.
+    os.environ.setdefault("PRESENTATOR_REDIS_URL", "redis://127.0.0.1:6379/0")
     settings = load_settings()
     toolchain = the_build_worker(settings, bound=build_bound_of(settings))
     place = prepared_run(decks, settings.builds)

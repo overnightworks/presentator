@@ -15,7 +15,7 @@ dependencies = [
     "overnightworks-agents[backend,mcp-server] @ git+https://github.com/overnightworks/agents@v0.33.0",
     "overnightworks-logline @ git+https://github.com/overnightworks/logline@v0.3.0",
     "overnightworks-speech-client @ git+https://github.com/overnightworks/speech@v0.17.0#subdirectory=packages/client",
-    "overnightworks-webauth @ git+https://github.com/overnightworks/webauth@v0.40.1",
+    "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@v0.40.1",
     "psycopg[binary]==3.3.9",
     "pydantic-settings==2.16.2",
     "sqlalchemy==2.1.8",
@@ -114,6 +114,9 @@ runtime-evaluated-decorators = ["fastapi.APIRouter.get", "fastapi.APIRouter.dele
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"webauth.rate_limit.SingleProcessRateLimitBackend".msg = "Limits live in the Redis every pod shares: use presentator.adapters.shared_redis."
+
 [tool.ruff.lint.per-file-ignores]
 # pytest states its expectations with bare `assert`; a test's name already states
 # the behaviour a docstring would repeat, and a double's method repeats the
@@ -122,7 +125,8 @@ convention = "google"
 # canned answer has no use for an argument.
 # Test directories are namespace packages on purpose: pytest imports them by path
 # (importlib mode), so duplicate basenames across layers do not collide.
-"tests/**" = ["S101", "D102", "D103", "ARG002", "INP001"]
+# A test may use webauth's in-memory limiter as a double of the shared Redis.
+"tests/**" = ["S101", "D102", "D103", "ARG002", "INP001", "TID251"]
 # Standalone probes, run by path, not packages.
 "scripts/probe_build_worker_harness.py" = ["INP001"]
 "scripts/probe_build_worker_k3d.py" = ["INP001"]
@@ -358,6 +362,23 @@ source_modules = [
     "presentator.contracts",
 ]
 forbidden_modules = ["webauth"]
+as_packages = true
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+id = "redis-library"
+name = "Only adapters import the Redis client"
+type = "forbidden"
+# The Redis every pod shares is reached through the adapter that owns its
+# clients and keys; a layer above is handed the limits and the lease.
+source_modules = [
+    "presentator.host",
+    "presentator.api",
+    "presentator.application",
+    "presentator.ports",
+    "presentator.contracts",
+]
+forbidden_modules = ["redis"]
 as_packages = true
 allow_indirect_imports = true
 

@@ -27,6 +27,7 @@ from tests.support.lobby import (
 )
 from tests.support.log_lines import LoggedText
 from tests.support.postgres import created_database, migrated_template
+from tests.support.redis import NOTHING_LISTENS_HERE, emptied_database_url
 from tests.support.worker_support import (
     KEY,
     WAIT_SECONDS,
@@ -147,6 +148,7 @@ def bare_environment(
     # every such test naming the mount for itself.
     monkeypatch.setenv("PRESENTATOR_LOCAL_SOURCES_MOUNT", str(tmp_path))
     monkeypatch.setenv("PRESENTATOR_PUBLIC_ORIGIN", A_BROWSERS_ADDRESS)
+    monkeypatch.setenv("PRESENTATOR_REDIS_URL", NOTHING_LISTENS_HERE)
     configure_oidc(monkeypatch, tmp_path)
     monkeypatch.setenv("PRESENTATOR_AGENT__BACKEND", "litellm")
     monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__ORIGIN", A_GATEWAY_ORIGIN)
@@ -188,3 +190,18 @@ def unmigrated_database_url() -> Iterator[str]:
     """An empty database of this test's own."""
     with created_database() as url:
         yield url
+
+
+@pytest.fixture
+def redis_url() -> str:
+    """The URL of a Redis database of this worker's own, emptied for this test."""
+    return emptied_database_url()
+
+
+@pytest.fixture
+def redis_environment(
+    bare_environment: pytest.MonkeyPatch, redis_url: str
+) -> pytest.MonkeyPatch:
+    """An instance that spends its request budgets in a Redis of this test's own."""
+    bare_environment.setenv("PRESENTATOR_REDIS_URL", redis_url)
+    return bare_environment

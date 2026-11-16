@@ -25,7 +25,6 @@ from starlette.requests import HTTPConnection
 from starlette.responses import Response
 
 from presentator.api.session_api import language_of
-from presentator.application.copresenter import RetryAfter
 from presentator.contracts.copresenter import (
     AccessRefusal,
     AnswerEvent,
@@ -40,6 +39,7 @@ from presentator.contracts.copresenter import (
     HearingTranscript,
     NotEnabledError,
     Question,
+    RetryAfter,
     Sentence,
     ShowSlide,
     SpeechTokenSource,
@@ -50,14 +50,10 @@ from presentator.contracts.voice import SampleLanguage
 if TYPE_CHECKING:
     from webauth.ports import SessionRecordStore
 
-    from presentator.application.copresenter import (
-        AskLimiter,
-        AskTicket,
-        CoPresenterUse,
-        PreparedAsk,
-    )
+    from presentator.application.copresenter import CoPresenterUse, PreparedAsk
     from presentator.contracts.models import Role, User
     from presentator.contracts.words import Language
+    from presentator.ports.copresenter import AskLimiter, AskTicket
 
 _CHECK_INTERVAL_SECONDS: Final = 0.5
 _POLICY_VIOLATION: Final = 1008
@@ -263,7 +259,10 @@ def _admit(
     asked = surface.use.asked_deck(question.deck, viewer=connection.user_id)
     if asked is None:
         return _deck_not_found()
-    ticket = surface.limiter.admit(connection.session_id)
+    try:
+        ticket = surface.limiter.admit(connection.session_id)
+    except CoPresenterUnavailableError:
+        return _unavailable()
     if isinstance(ticket, RetryAfter):
         return JSONResponse(
             {"detail": "Too many questions"},

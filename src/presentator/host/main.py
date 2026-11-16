@@ -23,9 +23,8 @@ from pydantic import SecretStr
 from starlette.routing import Host, Route, Router
 from webauth.config import SessionLifetime, WebAuthConfig
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
-from webauth.ports import SignInTransaction
+from webauth.ports import RateLimitBackend, SignInTransaction
 from webauth.proxies import TrustedProxies
-from webauth.rate_limit import SingleProcessRateLimitBackend
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.build_worker import WorkerToolchain
@@ -89,6 +88,7 @@ from presentator.adapters.secrets import (
 )
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.session_access import SessionAccess
+from presentator.adapters.shared_redis import RateLimitedHost, SharedRedis
 from presentator.adapters.speech import (
     SpeechHearing,
     SpeechSpeaking,
@@ -111,7 +111,7 @@ from presentator.api.health import Readiness, always_ready
 from presentator.api.lobby_shell import LobbyBuildError, LobbyShell
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_content_security_policy
-from presentator.application.copresenter import AskLimiter, CoPresenterUse
+from presentator.application.copresenter import CoPresenterUse
 from presentator.application.decks import Decks
 from presentator.application.identity import SESSION_LIFETIME, SESSION_SWEEP_INTERVAL
 from presentator.application.own_decks import OwnDecks
@@ -134,6 +134,7 @@ from presentator.host.oidc import (
 )
 from presentator.host.polling import Schedule
 from presentator.host.worker_serving import emergency_end
+from presentator.ports.copresenter import AskLimiter
 from presentator.ports.decks import DeckStore, DeployKeyDrafts, SourceRuns, SourceStore
 from presentator.ports.identity import IdentifierFactory
 from presentator.ports.preferences import (
@@ -197,7 +198,8 @@ def build_instance(
     `migrations_directory` or newer.
     """
     shell = _lobby_shell(settings)
-    stores = _stores(settings, migrations_directory)
+    redis = SharedRedis(settings.redis_url)
+    stores = _with_redis(_stores(settings, migrations_directory), redis)
     local_mount = FilesystemLocalMount(mount=settings.local_sources_mount)
     # The one mounted directory a file-kind source's address may resolve
     # under, real filesystem and all: shared by every use, since a symlink or
@@ -210,7 +212,7 @@ def build_instance(
     )
     decks = _decks(settings, stores, mirrors=mirrors, local_mount=local_mount)
     lobby_auth, talk_auth = installed_auths(
-        settings, shell, stores.identity_writes, relying_party_for
+        settings, shell, stores.identity_writes, redis, relying_party_for
     )
     return Instance(
         lobby=_lobby(
@@ -221,11 +223,30 @@ def build_instance(
             mirrors=mirrors,
             shell=shell,
         ),
-        talk=_talk(settings, stores, decks, talk_auth, mirrors),
+        talk=_talk(
+            settings, stores, decks, talk_auth, mirrors, limiter=redis.ask_limiter()
+        ),
         poller=_poller(settings, decks),
         session_sweep=_session_sweep(stores.sessions, SystemClock()),
         close=stores.close,
     )
+
+
+def _with_redis(stores: Stores, redis: SharedRedis) -> Stores:
+    """The stores, ready only while Redis answers too and closed with its client."""
+    database_ready = stores.readiness
+    database_close = stores.close
+
+    def ready() -> bool:
+        return database_ready() and redis.is_ready()
+
+    def close() -> None:
+        try:
+            database_close()
+        finally:
+            redis.close()
+
+    return replace(stores, readiness=ready, close=close)
 
 
 def _stores(settings: Settings, migrations_directory: Path) -> Stores:
@@ -405,12 +426,14 @@ def _decks(
     )
 
 
-def _talk(
+def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owner
     settings: Settings,
     stores: Stores,
     decks: Decks,
     auth: InstalledAuth,
     mirrors: SourceMirrors,
+    *,
+    limiter: AskLimiter,
 ) -> FastAPI:
     """The talk host, with the co-presenter it speaks to."""
     return create_talk(
@@ -419,18 +442,19 @@ def _talk(
         auth=auth,
         lobby_origin=settings.public_origin,
         copresenter=_copresenter_surface(
-            settings, stores.sessions, decks, auth, mirrors
+            settings, stores.sessions, decks, auth, mirrors, limiter
         ),
         readiness=stores.readiness,
     )
 
 
-def _copresenter_surface(
+def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands the surface each owner
     settings: Settings,
     sessions: SessionStore,
     decks: Decks,
     auth: InstalledAuth,
     mirrors: SourceMirrors,
+    limiter: AskLimiter,
 ) -> CoPresenterSurface:
     """What only a signed-in admin may reach at the talk host: the gateway's answers."""
     return CoPresenterSurface(
@@ -453,7 +477,7 @@ def _copresenter_surface(
                 speech_scope=settings.speech_service_scope,
             ),
         ),
-        limiter=AskLimiter(),
+        limiter=limiter,
         browser_origin=settings.talk_origin,
     )
 
@@ -486,9 +510,12 @@ def installed_auths(
     settings: Settings,
     shell: LobbyShell,
     identity_writes: IdentityWrites,
+    redis: SharedRedis,
     relying_party_for: RelyingPartyFor = relying_party,
 ) -> tuple[InstalledAuth, InstalledAuth]:
     """The lobby's sign-in wiring and the talk host's, over one identity-writes owner.
+
+    Each host spends its own budgets in the Redis every pod shares.
 
     Each host has its own relying party and its own signing key, so neither
     accepts the other's cookies or pending logins; both write the one
@@ -501,6 +528,7 @@ def installed_auths(
             settings.secret_key,
             trusted_proxies=settings.trusted_proxies,
             origin=settings.public_origin,
+            rate_limits=redis.rate_limits(RateLimitedHost.LOBBY),
         ),
         relying_party=relying_party_for(lobby_client),
         admission=admission_of(settings),
@@ -515,6 +543,7 @@ def installed_auths(
             SecretStr(talk_session_secret(settings.secret_key.get_secret_value())),
             trusted_proxies=settings.trusted_proxies,
             origin=settings.talk_origin,
+            rate_limits=redis.rate_limits(RateLimitedHost.TALK),
         ),
         relying_party=relying_party_for(talk_client),
         content_security_policy=talk_content_security_policy(),
@@ -583,8 +612,9 @@ def web_auth_config_for(
     *,
     trusted_proxies: str,
     origin: str,
+    rate_limits: RateLimitBackend,
 ) -> WebAuthConfig:
-    """The library configuration one origin of this host runs: no Redis, a 12 hour cap.
+    """The library configuration one origin of this host runs: a 12 hour cap.
 
     The cookies carry `Secure`, and the library's `__Host-` names: the origin
     is https, and a browser would not send a `Secure` cookie back over plain
@@ -595,7 +625,7 @@ def web_auth_config_for(
     return WebAuthConfig(
         session_secret=secret,
         trusted_proxies=TrustedProxies.parse(trusted_proxies),
-        rate_limits=SingleProcessRateLimitBackend(),
+        rate_limits=rate_limits,
         allowed_hosts_exact=frozenset({str(urlsplit(origin).hostname)}),
         session_lifetime=SessionLifetime(
             idle_seconds=lifetime_seconds,

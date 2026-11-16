@@ -12,8 +12,8 @@ from starlette.websockets import WebSocketDisconnect
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.api.copresenter import CoPresenterSurface
-from presentator.application.copresenter import AskLimiter
 from presentator.contracts.models import Role, User
+from tests.presentator.application.support.fakes import FakeAskLimiter
 from tests.support.copresenter_support import (
     HEARING,
     POLICY_VIOLATION,
@@ -205,7 +205,7 @@ def _talk_host_with_a_signed_in_admin(
     private = PrivateFakes()
     surface = CoPresenterSurface(
         use=a_use(private, the_admins_decks()),
-        limiter=AskLimiter(),
+        limiter=FakeAskLimiter(),
         browser_origin=TALK_ORIGIN,
         delay=asyncio.sleep if deadline is None else deadline.wait,
     )

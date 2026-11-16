@@ -13,6 +13,7 @@ secret does not land in the startup output.
 | --- | --- |
 | `PRESENTATOR_SECRET_KEY_FILE` | Absolute path of a file holding the master key, read once at start, minus one trailing newline; at least 32 characters. `webauth` signs the lobby's session cookie with it, signs the talk host's through a derivation of its own, and, through another, encrypts what a source's row holds. Without a readable key file the process refuses to start. Keep it in the deployment's secret store, apart from the database backup: an instance restored without it lists its decks and can pull none of them, and a source's secret is [renewed](runbooks/renew-a-source-secret.md) if it is unreadable. |
 | `PRESENTATOR_PUBLIC_ORIGIN` | The one canonical https origin. An `http://` origin refuses the start, because a browser does not send a `Secure` cookie back over plain http. |
+| `PRESENTATOR_REDIS_URL` | The `redis://` or `rediss://` URL of the Redis every pod shares, with a host, at most a database number and no credentials, query or fragment. It holds the request budgets and the ask lease, nothing durable, and every key starts `presentator:v1:`. The start does not need it to answer, but `GET /health` answers 503 and every request but that one is refused while it does not. No default. |
 | `PRESENTATOR_TALK_ORIGIN` | The talk host's canonical https origin, on another hostname than `PRESENTATOR_PUBLIC_ORIGIN`; talks are served and signed in there. |
 | `PRESENTATOR_AGENT__BACKEND` | Which backend answers the co-presenter: `litellm`, the one value; any other, `service` included, refuses the start. No default. |
 | `PRESENTATOR_AGENT__GATEWAY__ORIGIN` | Where the LiteLLM gateway answers: one `http` or `https` origin, scheme, host and optional port, without a path, credentials, query or fragment. No default. |
@@ -54,6 +55,8 @@ always answers 200. The refusals and the log name the kind of failure and never
 the URL or the password.
 The tests find their server in `PRESENTATOR_TEST_POSTGRES_URL`, a URL of a
 server whose user may create databases; every test creates one of its own.
+The tests that reach Redis find theirs in `PRESENTATOR_TEST_REDIS_URL`; each
+test worker empties a database of its own on it.
 
 ## Defaults
 

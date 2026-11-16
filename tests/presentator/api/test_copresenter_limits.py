@@ -18,14 +18,17 @@ from presentator.api.copresenter import (
     CoPresenterSurface,
     add_copresenter_routes,
 )
-from presentator.application.copresenter import AskLimiter, AskTicket
 from presentator.contracts.copresenter import DeckText
 from presentator.contracts.models import Role, User
+from presentator.ports.copresenter import AskLimiter
 from tests.presentator.agent.support.transports import HeldTransport
 from tests.presentator.application.support.fakes import (
+    FakeAskLimiter,
+    FakeAskTicket,
     FakeSessionRecordStore,
     FakeUserStore,
     FrozenClock,
+    UnavailableAskLimiter,
 )
 from tests.support.copresenter_support import (
     A_DECK,
@@ -123,6 +126,16 @@ def test_the_answer_is_spoken_in_the_language_the_question_was_heard_in(
     assert [language for _text, language in private.speaking.spoken] == [heard_language]
 
 
+def test_a_question_whose_lease_cannot_be_told_gets_503_and_no_turn() -> None:
+    lobby, private, _clock = a_copresenter_talk_host(limiter=UnavailableAskLimiter())
+    lobby.sign_in()
+
+    response = ask(lobby.client)
+
+    assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert private.answers.messages == []
+
+
 def test_a_second_question_while_the_first_streams_gets_429_and_no_turn() -> None:
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
@@ -160,7 +173,7 @@ class FixedSession:
 
 
 def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> None:
-    limiter = AskLimiter()
+    limiter = FakeAskLimiter()
     private = PrivateFakes()
     app = FastAPI()
     add_copresenter_routes(
@@ -177,7 +190,7 @@ def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> Non
     asyncio.run(_ask_and_disconnect_before_the_body_is_sent(app))
 
     assert private.answers.messages == []
-    assert isinstance(limiter.admit(FixedSession().session_id), AskTicket)
+    assert isinstance(limiter.admit(FixedSession().session_id), FakeAskTicket)
 
 
 async def _ask_and_disconnect_before_the_body_is_sent(app: ASGIApp) -> None:
@@ -245,14 +258,14 @@ def test_a_browser_that_leaves_mid_answer_closes_the_backend_and_calls_no_more()
 ):
     """C9: the held gateway call is cancelled, none follows, and the ticket is freed."""
     gateway = HeldTransport()
-    limiter = AskLimiter()
+    limiter = FakeAskLimiter()
     app = _a_hanging_app(gateway, limiter, lambda _connection: FixedSession())
 
     asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
 
     assert gateway.cancelled
     assert len(gateway.requests) == 1
-    assert isinstance(limiter.admit(FixedSession().session_id), AskTicket)
+    assert isinstance(limiter.admit(FixedSession().session_id), FakeAskTicket)
 
 
 def test_the_admission_runs_off_the_event_loop_thread() -> None:
@@ -264,7 +277,7 @@ def test_the_admission_runs_off_the_event_loop_thread() -> None:
         return FixedSession()
 
     gateway = HeldTransport()
-    app = _a_hanging_app(gateway, AskLimiter(), admission)
+    app = _a_hanging_app(gateway, FakeAskLimiter(), admission)
 
     asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
 

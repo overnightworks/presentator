@@ -20,7 +20,6 @@ from presentator.api.copresenter import (
     CoPresenterSurface,
     add_copresenter_routes,
 )
-from presentator.application.copresenter import AskLimiter
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
@@ -30,6 +29,7 @@ from presentator.contracts.models import Role, User
 from presentator.contracts.voice import SampleLanguage
 from presentator.contracts.words import SOURCE_LANGUAGE
 from tests.presentator.application.support.fakes import (
+    FakeAskLimiter,
     FakeDeckStore,
     FakeSessionRecordStore,
     FakeUserStore,
@@ -93,7 +93,7 @@ def test_copresenter_routes_refuse_unauthenticated_http_before_private_use() -> 
         app,
         surface=CoPresenterSurface(
             use=a_use(private, FakeDeckStore()),
-            limiter=AskLimiter(),
+            limiter=FakeAskLimiter(),
             browser_origin=TALK_ORIGIN,
         ),
         admission=no_session,

@@ -19,12 +19,7 @@ from presentator.adapters.sentences import split_sentences
 from presentator.adapters.session_access import SessionAccess
 from presentator.agent.backend import gateway_answerer
 from presentator.api.copresenter import CoPresenterSurface
-from presentator.application.copresenter import (
-    AskLimiter,
-    AskTicket,
-    CoPresenterUse,
-    RetryAfter,
-)
+from presentator.application.copresenter import CoPresenterUse
 from presentator.contracts.copresenter import (
     AccessRefusal,
     AskedDeck,
@@ -33,6 +28,7 @@ from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     DeckText,
     HearingTranscript,
+    RetryAfter,
     ShowSlide,
     SlideText,
     SpeechTokens,
@@ -40,8 +36,11 @@ from presentator.contracts.copresenter import (
 )
 from presentator.contracts.decks import Source
 from presentator.contracts.voice import SampleLanguage
+from presentator.ports.copresenter import AskLimiter
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
 from tests.presentator.application.support.fakes import (
+    FakeAskLimiter,
+    FakeAskTicket,
     FakeDeckStore,
     FakeSourceStore,
     FakeUserStore,
@@ -349,7 +348,7 @@ def a_copresenter_talk_host(
         people=people,
         copresenter=CoPresenterSurface(
             use=a_use(private, decks or the_admins_decks()),
-            limiter=limiter or AskLimiter(),
+            limiter=limiter or FakeAskLimiter(),
             browser_origin=TALK_ORIGIN,
             delay=delay,
         ),
@@ -422,13 +421,15 @@ def a_good_gateway() -> Gateway:
     return FakeGateway(completion("Ein Satz. Noch einer."))
 
 
-@dataclass
-class RecordingLimiter(AskLimiter):
-    """The real limiter, remembering which sessions asked it for a ticket."""
+class RecordingLimiter(FakeAskLimiter):
+    """The limiter in memory, remembering which sessions asked it for a ticket."""
 
-    session_ids: list[str] = field(default_factory=list[str])
+    def __init__(self) -> None:
+        """Start with no session having asked."""
+        super().__init__()
+        self.session_ids: list[str] = []
 
-    def admit(self, session_id: str) -> AskTicket | RetryAfter:
+    def admit(self, session_id: str) -> FakeAskTicket | RetryAfter:
         self.session_ids.append(session_id)
         return super().admit(session_id)
 

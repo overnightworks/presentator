@@ -34,11 +34,13 @@ from webauth.oidc import (
 )
 from webauth.ports import (
     AccountKind,
+    RateLimitBackend,
     SessionRecordStore,
     SignInStores,
     SignInTransaction,
     UserRecord,
 )
+from webauth.rate_limit import SingleProcessRateLimitBackend
 
 from gitmirror.model import CredentialReference
 from presentator.adapters.audit import LoggingAuditSink
@@ -104,6 +106,7 @@ from tests.presentator.application.support.fakes import (
     FrozenClock,
 )
 from tests.support.deck_text_support import FakeDeckTexts
+from tests.support.redis import NOTHING_LISTENS_HERE
 
 
 def _write_throwaway_file(content: str) -> Path:
@@ -242,8 +245,14 @@ def a_web_auth(clock: FrozenClock) -> WebAuthConfig:
         SecretStr("t" * 32),
         trusted_proxies="",
         origin=A_BROWSERS_ADDRESS,
+        rate_limits=in_process_rate_limits(),
     )
     return replace(host_config, wall_clock=lambda: clock.now().timestamp())
+
+
+def in_process_rate_limits() -> RateLimitBackend:
+    """Budgets that live in this test's memory, a double of the shared Redis."""
+    return SingleProcessRateLimitBackend()
 
 
 def a_talk_web_auth(clock: FrozenClock) -> WebAuthConfig:
@@ -252,6 +261,7 @@ def a_talk_web_auth(clock: FrozenClock) -> WebAuthConfig:
         SecretStr(talk_session_secret(a_settings().secret_key.get_secret_value())),
         trusted_proxies="",
         origin=A_TALK_ADDRESS,
+        rate_limits=in_process_rate_limits(),
     )
     return replace(host_config, wall_clock=lambda: clock.now().timestamp())
 
@@ -303,6 +313,7 @@ def a_settings() -> Settings:
     """The settings of an instance at the test origin, signing in at a fake issuer."""
     return Settings(
         secret_key_file=_KEY_FILE,
+        redis_url=NOTHING_LISTENS_HERE,
         public_origin=A_BROWSERS_ADDRESS,
         talk_origin=A_TALK_ADDRESS,
         agent=an_agent_config(),

@@ -3,6 +3,7 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum, auto
+from typing import Final
 
 from presentator.contracts.decks import Deck, Source
 from presentator.contracts.models import Role
@@ -89,6 +90,16 @@ class Question:
     said: str
     slide: int
     language: str | None
+
+
+BUSY_RETRY_SECONDS: Final = 1
+
+
+@dataclass(frozen=True, slots=True)
+class RetryAfter:
+    """A refused question and the whole seconds until it may be asked again."""
+
+    seconds: int
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
