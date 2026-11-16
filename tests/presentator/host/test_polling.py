@@ -147,6 +147,29 @@ def test_a_chore_that_keeps_raising_writes_its_first_failure_and_its_recovery(
     assert failed["chore"] == recovered["chore"] == ChoreCode.SESSION_SWEEP.value
 
 
+def test_a_failed_run_names_its_error_type_and_carries_no_traceback(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    chore = ChoreThatFailsTwiceThenWorks()
+
+    async def run_into_the_first_failure() -> bool:
+        async with Schedule(
+            chore=chore, chore_code=ChoreCode.SESSION_SWEEP, interval=_TIGHT
+        ).polling():
+            # The second call begins after the first one's failure line.
+            return await asyncio.to_thread(chore.wait_for_calls, 2)
+
+    with json_logged(capsys) as logged:
+        assert asyncio.run(run_into_the_first_failure())
+
+    (failed,) = [
+        line for line in logged.lines if line["event"] == "scheduled_run.failed"
+    ]
+    assert failed["error_type"] == ChoreBrokeError.__name__
+    assert "exception" not in failed
+    assert "Traceback" not in logged.text
+
+
 def test_a_schedule_leaves_no_task_running_after_its_block() -> None:
     async def run_and_leave() -> int:
         async with Schedule(

@@ -68,7 +68,7 @@ def an_instance(world: World) -> Instance:
         ),
         session_sweep=Schedule(
             chore=lambda: None,
-            chore_code=ChoreCode.SOURCE_POLL,
+            chore_code=ChoreCode.SESSION_SWEEP,
             interval=timedelta(seconds=1),
         ),
     )

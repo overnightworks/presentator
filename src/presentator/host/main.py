@@ -13,11 +13,10 @@ from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
-from typing import Final
+from typing import Final, NoReturn
 from urllib.parse import urlsplit
 
 import logline
-import uvicorn
 from fastapi import FastAPI
 from logline import RequestLineMiddleware
 from pydantic import SecretStr
@@ -58,6 +57,7 @@ from presentator.adapters.postgres.engine import create_database_engine
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
 from presentator.adapters.postgres.migrate import (
     MIGRATIONS_DIRECTORY,
+    DatabaseRefusedError,
     RefusalReason,
     cap_alembic_logging,
     database_is_ready,
@@ -92,15 +92,10 @@ from presentator.adapters.secrets import (
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.session_access import SessionAccess
 from presentator.adapters.shared_redis import RateLimitedHost, SharedRedis
-from presentator.adapters.speech import (
-    SpeechHearing,
-    SpeechSpeaking,
-)
+from presentator.adapters.speech import SpeechHearing, SpeechSpeaking
 from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.agent.backend import gateway_answerer
-from presentator.agent.mcp import (
-    install_mcp_front,
-)
+from presentator.agent.mcp import install_mcp_front
 from presentator.api.auth import (
     BACKCHANNEL_LOGOUT_PATH,
     AgentFront,
@@ -140,7 +135,7 @@ from presentator.host.oidc import (
     relying_party,
 )
 from presentator.host.polling import ChoreCode, Schedule
-from presentator.host.stopping_server import StoppingServer
+from presentator.host.stopping_server import StoppingServer, served_config
 from presentator.host.store_connection import (
     StoreFailure,
     StoreKind,
@@ -341,13 +336,13 @@ def _postgres_stores(
     with timed_connection(StoreKind.POSTGRES) as step:
         refusal = serving_refusal(engine, history)
         if refusal is not None:
-            if refusal.reason is RefusalReason.NOT_ANSWERING:
+            if refusal is RefusalReason.NOT_ANSWERING:
                 step.fail(StoreFailure.NOT_ANSWERING)
             else:
-                step.refuse(refusal.reason)
+                step.refuse(refusal)
     if refusal is not None:
         engine.dispose()
-        raise cannot_start(refusal.message)
+        raise DatabaseRefusedError(refusal)
     toolchain, bound = refresh
     ownership = PostgresRefreshOwnership(
         engine, toolchain=toolchain, lock_timeout=bound
@@ -717,20 +712,34 @@ def main(
 ) -> None:
     """Migrate the database when asked to, else serve the lobby.
 
-    Both run on the configuration the environment carries.
+    Both run on the configuration the environment carries; a refused database
+    ends either in one line and exit status 1.
     """
     logline.configure(SERVICE_NAME)
     cap_alembic_logging()
-    if command_line().parse_args(arguments).command == MIGRATE_COMMAND:
-        migrate_the_database()
-        return
-    _log.info("process.started")
-    settings = load_settings()
-    asyncio.run(
-        _serve(
-            build_instance(settings, relying_party_for, migrations_directory), settings
-        )
+    try:
+        if command_line().parse_args(arguments).command == MIGRATE_COMMAND:
+            migrate_the_database()
+            return
+        _log.info("process.started")
+        settings = load_settings()
+        instance = build_instance(settings, relying_party_for, migrations_directory)
+    except DatabaseRefusedError as refused:
+        _end_refused(refused)
+    asyncio.run(_serve(instance, settings))
+
+
+def _end_refused(refused: DatabaseRefusedError) -> NoReturn:
+    """End the process in one line naming the refusal, without its traceback.
+
+    The traceback would name the database's host and port, so the line carries
+    only the reason code and the error's class name.
+    """
+    error_type = type(refused).__name__
+    _log.error(
+        "process.failed", extra={"reason": refused.reason, "error_type": error_type}
     )
+    raise SystemExit(1) from None
 
 
 def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddleware:
@@ -775,20 +784,10 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
 
 async def _serve(instance: Instance, settings: Settings) -> None:
     """Poll and sweep for as long as the server answers, and stop with it."""
-    server = StoppingServer(
-        uvicorn.Config(
-            served_by_host(instance, settings),
-            host=settings.host,
-            port=settings.port,
-            proxy_headers=False,
-            ws="wsproto",
-            # logline's configure owns uvicorn's loggers, the request line
-            # replaces its access log, and the rejected WebSocket handshake
-            # records that carry a path stay out of the log.
-            log_config=None,
-        ),
-        instance.stopping,
+    served = served_config(
+        served_by_host(instance, settings), host=settings.host, port=settings.port
     )
+    server = StoppingServer(served, instance.stopping)
     try:
         async with instance.poller.polling(), instance.session_sweep.polling():
             await server.serve()

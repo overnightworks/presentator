@@ -60,7 +60,7 @@ class Schedule:
             # once, and the fetch's own bound is what ends the one that hangs.
             try:
                 await self.tick()
-            except Exception:
+            except Exception as failure:  # noqa: BLE001 - any failure waits for the next interval
                 # The next interval is the retry; ending the loop would stop
                 # the chore for good without a word. Only the first failure of a
                 # row of them is written, so a chore that stays broken is one
@@ -69,9 +69,9 @@ class Schedule:
                 if failed_run_count == 1:
                     _logger.warning(
                         _RUN_FAILED,
-                        exc_info=True,
                         extra={
                             "chore": self.chore_code,
+                            "error_type": type(failure).__name__,
                             "failed_run_count": failed_run_count,
                         },
                     )

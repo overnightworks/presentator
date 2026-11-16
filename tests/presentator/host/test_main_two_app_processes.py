@@ -8,7 +8,6 @@ from threading import Barrier
 import pytest
 from sqlalchemy import text
 
-from presentator.adapters.postgres.migrate import BEHIND_THIS_RELEASE, NO_REVISION
 from tests.presentator.host.support.app_processes import (
     KEY_DRAFT,
     App,
@@ -17,7 +16,7 @@ from tests.presentator.host.support.app_processes import (
     starting_apps,
 )
 from tests.presentator.host.support.revision_history import a_longer_history
-from tests.support.log_lines import json_lines_among
+from tests.support.log_lines import json_lines, json_lines_among
 from tests.support.postgres import engine_on
 
 _A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS = "9999"
@@ -115,6 +114,12 @@ def test_an_admin_opening_add_at_both_processes_at_once_is_given_one_draft_key(
     assert _scalar(database_url, "SELECT count(*) FROM source_key_drafts") == 1
 
 
+def _start_failure(output: str) -> object:
+    """The reason of the one line a refused start ends in; any other text fails."""
+    (line,) = [one for one in json_lines(output) if one["event"] == "process.failed"]
+    return line["reason"]
+
+
 @pytest.mark.usefixtures("environment")
 def test_an_empty_database_is_refused_at_start_by_both_processes(
     unmigrated_database_url: str, tmp_path: Path
@@ -123,7 +128,7 @@ def test_an_empty_database_is_refused_at_start_by_both_processes(
         finished = processes.finish()
 
     assert all(each.exit_code != 0 for each in finished), finished
-    assert all(NO_REVISION in each.output for each in finished), finished
+    assert all(_start_failure(each.output) == "no_revision" for each in finished)
     for each in finished:
         (line,) = [
             one
@@ -155,7 +160,9 @@ def test_an_older_database_is_refused_at_start_by_both_processes(
         finished = processes.finish()
 
     assert all(each.exit_code != 0 for each in finished), finished
-    assert all(BEHIND_THIS_RELEASE in each.output for each in finished), finished
+    assert all(
+        _start_failure(each.output) == "behind_this_release" for each in finished
+    )
     for each in finished:
         (line,) = [
             one
