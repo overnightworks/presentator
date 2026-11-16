@@ -1,7 +1,7 @@
 """The JSON lines a process writes through logline."""
 
 import json
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from typing import cast
 
@@ -46,7 +46,7 @@ class LoggedText:
 
 
 @contextmanager
-def json_logged(capsys: pytest.CaptureFixture[str]) -> Iterator[LoggedText]:
+def json_logged(capsys: pytest.CaptureFixture[str]) -> Generator[LoggedText]:
     """JSON logging on the output `capsys` holds, until the block ends.
 
     The handler binds the output as it is when `configure` runs, which a fixture

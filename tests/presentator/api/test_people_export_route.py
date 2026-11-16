@@ -2,7 +2,6 @@
 
 import io
 import json
-import logging
 import zipfile
 from dataclasses import dataclass
 from datetime import timedelta, timezone
@@ -41,6 +40,7 @@ from tests.support.lobby import (
     an_admin_people,
     an_installed_auth,
 )
+from tests.support.log_lines import json_logged
 from tests.support.people import a_session_id
 
 _HAL: Final = "hal-client"
@@ -277,14 +277,16 @@ def test_no_token_gets_401_and_no_archive() -> None:
 
 
 def test_an_export_audit_line_names_nobody_and_no_secret(
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """PE24: one INFO line on the route's logger, counts only."""
+    """PE24: one info line of the export event, counts only."""
     scene = a_scene()
-    caplog.set_level(logging.DEBUG)
 
-    scene.export(THE_PERSON.id)
+    with json_logged(capsys) as logged:
+        scene.export(THE_PERSON.id)
 
-    ours = [r for r in caplog.records if r.name == "presentator.api.people"]
-    assert [r.levelno for r in ours] == [logging.INFO]
-    assert THE_PERSON.id not in ours[0].getMessage()
+    (line,) = [one for one in logged.lines if one["event"] == "person_export.ended"]
+    assert (line["level"], line["outcome"]) == ("info", "ok")
+    assert THE_PERSON.id not in logged.text
+    for word in _SECRET_WORDS:
+        assert word not in logged.text
