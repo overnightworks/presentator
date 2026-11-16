@@ -229,8 +229,8 @@ def _noting_cleanup_failure(
 ) -> None:
     try:
         cleanup()
-    except (Exception, KeyboardInterrupt) as cleanup_failure:
-        logger.exception(
+    except (Exception, KeyboardInterrupt) as cleanup_failure:  # noqa: BLE001 - logged as a code, noted on the original
+        logger.error(  # noqa: TRY400 - the traceback carries paths and failure words
             "cleanup.failed",
             extra={"step": step, "error_type": type(cleanup_failure).__name__},
         )
@@ -397,7 +397,7 @@ def _side_connection_closed(listener: socket.socket) -> bool:
     except BlockingIOError:
         return True
     except OSError as error:
-        logger.exception(
+        logger.error(  # noqa: TRY400 - the traceback carries paths and failure words
             "side_connection.failed", extra={"error_type": type(error).__name__}
         )
         return False
@@ -688,7 +688,7 @@ def accept_connections(
         try:
             connection, _address = listener.accept()
         except OSError as error:
-            logger.exception(
+            logger.error(  # noqa: TRY400 - the traceback carries paths and failure words
                 "connection.failed", extra={"error_type": type(error).__name__}
             )
             return LifeEnd.ACCEPT

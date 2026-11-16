@@ -1,6 +1,7 @@
 """The deck's two effects, and how the controller runs them."""
 
 import errno
+import json
 import os
 import socket
 import stat
@@ -197,7 +198,7 @@ def test_a_deck_that_cannot_be_closed_is_not_swallowed_after_the_original_is_not
     life = accepted_life(
         wait_error=OSError("lost"),
         wait_error_at=1,
-        deck_close_error=OSError("no chmod"),
+        deck_close_error=OSError("no chmod /work/my-deck/slides.md"),
     )
 
     serving = life.serving()
@@ -215,6 +216,7 @@ def test_a_deck_that_cannot_be_closed_is_not_swallowed_after_the_original_is_not
         CleanupStep.CLOSE_DECK,
         "OSError",
     )
+    assert "my-deck" not in json.dumps(line)
 
 
 def test_a_deck_that_cannot_be_closed_after_a_clean_run_raises(
