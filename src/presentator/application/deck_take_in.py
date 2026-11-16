@@ -5,6 +5,7 @@ a folder is a deck at all. The deck store stays outside.
 """
 
 import logging
+from collections import Counter
 from datetime import datetime
 from typing import Final
 
@@ -20,10 +21,9 @@ from presentator.ports.decks import DeckStore
 
 _log = logging.getLogger(__name__)
 
-_NOT_A_FOLDERS_OWN_NAME: Final = "folder %r is not a folder's own name, skipped"
-_NAME_BELONGS_TO_ANOTHER_SOURCE: Final = (
-    "folder %r is already carried by another source, skipped for source %s"
-)
+_TAKE_IN_REFUSED: Final = "take_in.refused"
+_NOT_A_FOLDERS_OWN_NAME: Final = "not_a_folders_own_name"
+_NAME_HELD_BY_ANOTHER_SOURCE: Final = "name_held_by_another_source"
 
 
 def take_in(
@@ -39,10 +39,13 @@ def take_in(
     folder that comes back under its old name before then loses that mark, so it is
     the deck it was. A folder whose name another source already carries is skipped
     too: the slug is one deck's address here, and the first source keeps it.
+    Each reason a folder was skipped for is one `take_in.refused` line carrying how
+    many folders it skipped and no name.
     """
+    skipped = Counter[str]()
     for folder in folders:
         if not is_a_plain_folder_name(folder.name):
-            _log.warning(_NOT_A_FOLDERS_OWN_NAME, folder.name)
+            skipped[_NOT_A_FOLDERS_OWN_NAME] += 1
             continue
         if folder.title is None or SLIDES_FILE not in folder.file_names:
             continue
@@ -59,6 +62,15 @@ def take_in(
             ),
         )
         if not taken_in:
-            _log.warning(_NAME_BELONGS_TO_ANOTHER_SOURCE, folder.name, source.name)
+            skipped[_NAME_HELD_BY_ANOTHER_SOURCE] += 1
+    for reason, folder_count in skipped.items():
+        _log.info(
+            _TAKE_IN_REFUSED,
+            extra={
+                "source_id": source.id,
+                "reason": reason,
+                "folder_count": folder_count,
+            },
+        )
     present = frozenset(folder.name for folder in folders)
     build_retention.delete_absent(store, present=present, source_id=source.id, at=at)

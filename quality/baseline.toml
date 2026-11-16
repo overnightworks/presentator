@@ -1,9 +1,9 @@
 # Measured by `quality check --fix`. Entries only ever go down.
 
 [file_lines]
-"tests/gitmirror/test_mirror.py" = 1112
+"tests/gitmirror/test_mirror.py" = 1042
 "tests/presentator/adapters/test_builds.py" = 1098
-"tests/presentator/adapters/test_decks.py" = 1225
+"tests/presentator/adapters/test_decks.py" = 1217
 "tests/presentator/application/test_decks.py" = 1825
 
 [function_lines."src/presentator/application/decks.py"]

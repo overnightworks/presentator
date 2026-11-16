@@ -11,6 +11,10 @@ from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Final
+
+_RUN_FAILED: Final = "scheduled_run.failed"
+_RUN_RECOVERED: Final = "scheduled_run.recovered"
 
 _logger = logging.getLogger(__name__)
 
@@ -40,6 +44,7 @@ class Schedule:
         await asyncio.to_thread(self.chore)
 
     async def _every_interval(self) -> None:
+        failed_run_count = 0
         while True:
             await asyncio.sleep(self.interval.total_seconds())
             # Awaiting the whole tick is what keeps two of them from running at
@@ -48,7 +53,19 @@ class Schedule:
                 await self.tick()
             except Exception:
                 # The next interval is the retry; ending the loop would stop
-                # the chore for good without a word.
-                _logger.exception(
-                    "A scheduled chore failed; it runs again next interval"
-                )
+                # the chore for good without a word. Only the first failure of a
+                # row of them is written, so a chore that stays broken is one
+                # line, not one per interval.
+                failed_run_count += 1
+                if failed_run_count == 1:
+                    _logger.warning(
+                        _RUN_FAILED,
+                        exc_info=True,
+                        extra={"failed_run_count": failed_run_count},
+                    )
+            else:
+                if failed_run_count:
+                    _logger.info(
+                        _RUN_RECOVERED, extra={"failed_run_count": failed_run_count}
+                    )
+                failed_run_count = 0
