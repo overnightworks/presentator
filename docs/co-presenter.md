@@ -90,3 +90,8 @@ the cluster, and that hop's trust sentence is in
 - **CP14** Signing out, an expired session or a lost account ends the hearing
   and a running answer, queued and playing audio included, within one second,
   with no fault word.
+- **CP16** A stopping web pod turns unready, takes no new answer or hearing,
+  lets a running answer finish and closes each hearing with 1012 (service
+  restart); the half-heard sentence is lost and the speaker repeats it. The
+  overlay opens the hearing again at the same address, which any ready pod
+  answers, with no fault word; any other close shows "No hearing".

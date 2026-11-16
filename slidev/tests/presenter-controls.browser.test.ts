@@ -392,7 +392,7 @@ describe('presenter controls', () => {
   it.each([
     ['a restarting server (1012) reconnects with no fault word', 1012, false],
     ['a server that closes for another reason (1011) shows the fault', 1011, true],
-  ] as const)('CP14: after %s', async (_situation, code, shownAsFault) => {
+  ] as const)('CP16: after %s', async (_situation, code, shownAsFault) => {
     state.media = createMediaObservation()
     const { browser, page } = await openPresenter(1024)
     try {
