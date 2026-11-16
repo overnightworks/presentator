@@ -22,6 +22,8 @@ from pathlib import Path
 from shutil import copytree
 from tempfile import mkdtemp
 
+from logline import StepTimer
+
 from presentator.adapters.build_worker import STAGED_PREFIX, WorkerToolchain
 from presentator.adapters.builds import BuildPlace, BuildStep, slidev_arguments
 from presentator.contracts.decks import (
@@ -107,6 +109,7 @@ def main(decks: Path, kinds: list[StepKind]) -> None:
                 name=kind,
                 arguments=slidev_arguments(kind, place=place, slug=SLUG),
                 watched=lambda: None,
+                line=StepTimer("build_step.ended", logging.getLogger(__name__)),
             ),
         )
         step: dict[str, object] = {

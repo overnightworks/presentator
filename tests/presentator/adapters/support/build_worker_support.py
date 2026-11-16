@@ -1,5 +1,6 @@
 """What the build worker client's test modules share."""
 
+import logging
 import os
 import socket
 import threading
@@ -7,6 +8,8 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+
+from logline import StepTimer
 
 from presentator.adapters.build_wire import (
     FailedOutcome,
@@ -29,6 +32,7 @@ from presentator.contracts.decks import (
     StepKind,
 )
 from tests.support import worker_support as support
+from tests.support.log_lines import LoggedText, LogLine
 from tests.support.worker_support import KEY, LOCAL_ADDRESS, port_of
 
 MEGABYTES = 1
@@ -78,8 +82,20 @@ def a_step(root: Path, kind: StepKind = StepKind.BUILD) -> BuildStep:
     (place.here / DECK_DIRECTORY / "slides.md").write_text("# hello")
     (place.here / OUTPUT_DIRECTORY).mkdir(exist_ok=True)
     return BuildStep(
-        place=place, slug="my-deck", name=kind, arguments=(), watched=lambda: None
+        place=place,
+        slug="my-deck",
+        name=kind,
+        arguments=(),
+        watched=lambda: None,
+        line=StepTimer("build_step.ended", logging.getLogger(__name__)),
     )
+
+
+def ended_line(step: BuildStep, logged: LoggedText) -> LogLine:
+    """The one `build_step.ended` line of a step a runner has finished with."""
+    step.line.end()
+    (line,) = [one for one in logged.lines if one["event"] == "build_step.ended"]
+    return line
 
 
 def tree_of(root: Path) -> dict[str, bytes | None]:

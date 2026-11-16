@@ -17,6 +17,7 @@ import os
 import shutil
 import stat
 from contextlib import suppress
+from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
@@ -31,12 +32,19 @@ RUN_DIRECTORY_MODE: Final = 0o755
 _THE_DESCRIPTOR_ITSELF: Final = "/proc/self/fd/{descriptor}"
 _HERE: Final = "."
 _UP: Final = ".."
-_RUN_STAYED: Final = "what build %s left could not be taken away"
-_NOT_A_RUN: Final = "%s under the builds root is not a run and is left alone"
-_ROOT_NOT_LISTED: Final = "the builds root %s could not be listed: %s"
-_REFUSED: Final = "run %s is not shaped like a run and is not removed"
+_ROOT_UNLISTED_EVENT: Final = "build_root_listing.failed"
+_STRAYS_EVENT: Final = "build_root_strays.found"
+_RUN_REFUSED_EVENT: Final = "build_run_removal.refused"
+_RUN_STAYED_EVENT: Final = "build_run_removal.failed"
 
 _log = logging.getLogger(__name__)
+
+
+class RunRemovalReason(StrEnum):
+    """Why a run is not taken away: the closed set of its `reason` codes."""
+
+    NOT_A_RUN = "not_a_run"
+    STAYED = "stayed"
 
 
 def run_name_of(root: Path, stored: Path) -> str | None:
@@ -59,11 +67,11 @@ def listed_runs(root: Path) -> frozenset[str] | None:
         with os.scandir(root) as entries:
             names = [entry.name for entry in entries]
     except OSError as problem:
-        _log.warning(_ROOT_NOT_LISTED, root, problem)
+        _log.warning(_ROOT_UNLISTED_EVENT, extra={"error_type": type(problem).__name__})
         return None
     runs = {name for name in names if _is_a_run(root / name)}
-    for name in sorted(set(names) - runs):
-        _log.warning(_NOT_A_RUN, name)
+    if strays := set(names) - runs:
+        _log.warning(_STRAYS_EVENT, extra={"stray_count": len(strays)})
     return frozenset(runs)
 
 
@@ -73,7 +81,7 @@ def removed_run(root: Path, name: str) -> bool:
     if not _still_stands(directory):
         return True
     if not _is_a_run(directory):
-        _log.warning(_REFUSED, name)
+        _log.info(_RUN_REFUSED_EVENT, extra={"reason": RunRemovalReason.NOT_A_RUN})
         return False
     return taken_away(directory)
 
@@ -134,7 +142,10 @@ def taken_away(directory: Path) -> bool:
     _opened_again(directory)
     shutil.rmtree(directory, ignore_errors=True)
     if _still_stands(directory):
-        _log.warning(_RUN_STAYED, directory.name)
+        _log.warning(
+            _RUN_STAYED_EVENT,
+            extra={"run_id": directory.name, "reason": RunRemovalReason.STAYED},
+        )
         return False
     return True
 

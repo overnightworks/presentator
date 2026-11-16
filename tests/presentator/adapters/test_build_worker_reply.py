@@ -1,7 +1,6 @@
 """The build worker client over a socket pair with the reply already sent."""
 
 import errno
-import logging
 import os
 import shutil
 import socket
@@ -37,6 +36,7 @@ from tests.presentator.adapters.support.build_worker_support import (
     tree_of,
 )
 from tests.support import worker_support as support
+from tests.support.log_lines import json_logged
 
 
 def exchanged_with(
@@ -172,7 +172,7 @@ def test_a_receiver_that_runs_out_of_space_fails_without_a_reason(
 
 
 def test_a_staging_that_cannot_be_removed_leaves_the_result_and_logs_the_fault(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Cell B8."""
     step = a_step(tmp_path)
@@ -180,14 +180,19 @@ def test_a_staging_that_cannot_be_removed_leaves_the_result_and_logs_the_fault(
     def failing_to_remove(_staged: Path) -> None:
         raise OSError(errno.EBUSY, "device or resource busy")
 
-    with caplog.at_level(logging.WARNING):
+    with json_logged(capsys) as logged:
         result = exchanged_with(step, BUILT_TALK, failing_to_remove)
 
     assert result is None
     assert (
         step.place.here / OUTPUT_DIRECTORY / TALK_DIRECTORY / "index.html"
     ).read_bytes() == INDEX
-    assert [record.levelno for record in caplog.records] == [logging.WARNING]
+    (line,) = logged.lines
+    assert (line["event"], line["level"], line["error_type"]) == (
+        "build_staging_removal.failed",
+        "warning",
+        "OSError",
+    )
 
 
 def test_a_staging_left_over_from_before_is_a_fault_and_is_not_removed(

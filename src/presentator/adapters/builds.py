@@ -26,10 +26,14 @@ from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
+from enum import StrEnum
+from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from tempfile import mkdtemp
 from time import monotonic
 from typing import IO, BinaryIO, Final, Protocol, cast
+
+from logline import StepTimer
 
 from gitmirror.model import MirrorError, Revision
 from presentator.adapters.build_runs import (
@@ -88,20 +92,32 @@ _ADDING_UP_WITHIN: Final = timedelta(seconds=10)
 # How often a step is asked what it has written by now, so a build that fills
 # this machine is stopped while it runs rather than found out afterwards.
 _ACCOUNTED_EVERY: Final = timedelta(seconds=2)
-_UNREADABLE_DECK: Final = "deck %s cannot be read at %s: %s"
-_TOOLCHAIN_FAILED: Final = "%s of deck %s failed: %s"
-_TOOLCHAIN_UNAVAILABLE: Final = "%s of deck %s could not be run: %s"
-_TOOLCHAIN_TIMED_OUT: Final = "%s of deck %s ran past %s and was given up"
-_NOT_AS_WRITTEN: Final = (
-    "the talk at %s is refused: %s is not a file reached without a link under the root"
-)
-_TOO_MUCH_WRITTEN: Final = "deck %s wrote %s MB, which is more than a build may leave"
-_UNACCOUNTABLE: Final = "what the build of deck %s wrote could not be added up: %s"
-_TOOK_TOO_LONG_TO_ADD_UP: Final = (
-    "what the build of deck %s wrote could not be added up inside %s"
-)
+_DECK_ID_LENGTH: Final = 12
+_BUILD_EVENT: Final = "deck_build.ended"
+_STEP_EVENT: Final = "build_step.ended"
+_ARTEFACTS_REFUSED_EVENT: Final = "build_artefacts.refused"
 
 _log = logging.getLogger(__name__)
+
+
+class BuildFault(StrEnum):
+    """Why a build or one of its steps stopped, where its `reason` is not a refusal.
+
+    A refusal names a `BuildFailureReason` instead.
+    """
+
+    TOOLCHAIN_UNAVAILABLE = "toolchain_unavailable"
+    TOOLCHAIN_FAILED = "toolchain_failed"
+    TIMED_OUT = "timed_out"
+    UNREADABLE_DECK = "unreadable_deck"
+    UNACCOUNTABLE = "unaccountable"
+    ADDING_UP_TIMED_OUT = "adding_up_timed_out"
+    NOT_AS_WRITTEN = "not_as_written"
+
+
+def deck_id_of(slug: str) -> str:
+    """The id a line names a deck by: a talk's folder name is its author's text."""
+    return sha256(slug.encode()).hexdigest()[:_DECK_ID_LENGTH]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -189,6 +205,8 @@ class BuildStep:
     # may leave is stopped there, because by the time it ends this machine is
     # full. It answers with what the deck's page will say, or with nothing.
     watched: Callable[[], BuildFailure | None]
+    # The step's one `build_step.ended` line: the runner names why it stopped.
+    line: StepTimer
 
 
 class DeckToolchain(Protocol):
@@ -348,16 +366,24 @@ class SlidevBuilds:
         """
         place = self._a_place_of_its_own()
         delivered = False
-        try:
-            broke = self._what_broke(deck, source=source, place=place)
-            if broke is not None:
-                return broke
-            written = place.here / OUTPUT_DIRECTORY
-            delivered = True
-            return Artefacts(directory=written / TALK_DIRECTORY, pdf=written / PDF_FILE)
-        finally:
-            if not delivered:
-                taken_away(place.here)
+        with StepTimer(
+            _BUILD_EVENT,
+            _log,
+            deck_id=deck_id_of(deck.slug),
+            source_id=deck.source_id,
+        ) as line:
+            try:
+                broke = self._what_broke(deck, source=source, place=place, line=line)
+                if broke is not None:
+                    return broke
+                written = place.here / OUTPUT_DIRECTORY
+                delivered = True
+                return Artefacts(
+                    directory=written / TALK_DIRECTORY, pdf=written / PDF_FILE
+                )
+            finally:
+                if not delivered:
+                    taken_away(place.here)
 
     def holds(self, artefacts: Artefacts) -> bool:
         """Whether the talk's page and the PDF really stand under the root as files.
@@ -373,7 +399,10 @@ class SlidevBuilds:
         for written in (artefacts.directory / TALK_PAGE, artefacts.pdf):
             found = opened_without_a_link(written, under=root, how=os.O_PATH)
             if found is None:
-                _log.warning(_NOT_AS_WRITTEN, artefacts.directory, written)
+                _log.info(
+                    _ARTEFACTS_REFUSED_EVENT,
+                    extra={"reason": BuildFault.NOT_AS_WRITTEN},
+                )
                 return False
             os.close(found)
         return True
@@ -427,34 +456,43 @@ class SlidevBuilds:
         *,
         source: Source,
         place: BuildPlace,
+        line: StepTimer,
     ) -> BuildFailure | ToolchainUnavailable | None:
         """Write the deck out, build the talk, export the PDF, or say what broke."""
         if not self._exported(deck, source=source, into=place.here / DECK_DIRECTORY):
             # A tree this server cannot read out of its own mirror is a fault
             # of this host, not words a deck's author could act on.
+            line.fail(BuildFault.UNREADABLE_DECK)
             return BuildFailure.without_words()
         # The walk stops at the first step that failed, so a deck that does not
         # build is never exported either.
         for kind in StepKind:
-            broke = self.toolchain.ran(
-                BuildStep(
-                    place=place,
-                    slug=deck.slug,
-                    name=kind,
-                    arguments=slidev_arguments(kind, place=place, slug=deck.slug),
-                    watched=lambda: self._more_than_it_may_leave(deck, place),
-                ),
-            )
+            with StepTimer(
+                _STEP_EVENT, _log, deck_id=deck_id_of(deck.slug), step=kind.value
+            ) as step_line:
+                broke = self.toolchain.ran(
+                    BuildStep(
+                        place=place,
+                        slug=deck.slug,
+                        name=kind,
+                        arguments=slidev_arguments(kind, place=place, slug=deck.slug),
+                        watched=lambda: self._more_than_it_may_leave(place, step_line),
+                        line=step_line,
+                    ),
+                )
             if isinstance(broke, ToolchainUnavailable) and kind is not StepKind.BUILD:
-                return BuildFailure.without_words()
+                broke = BuildFailure.without_words()
             if broke is not None:
+                # The step's line is the fault's one error line.
+                line.handled()
+                stopped_by(line, broke)
                 return broke
-        return self._more_than_it_may_leave(deck, place)
+        return self._more_than_it_may_leave(place, line)
 
     def _more_than_it_may_leave(
         self,
-        deck: Deck,
         place: BuildPlace,
+        line: StepTimer,
     ) -> BuildFailure | None:
         """Refuse a build whose talk is more than one build may leave here.
 
@@ -463,27 +501,29 @@ class SlidevBuilds:
         while the build runs and once more when it is over, because a build
         that fills this machine has filled it long before it ends. No toolchain
         failed, so the reason a page words here is this server's own; what only
-        this host can act on stays in the log.
+        this host can act on is the reason its line carries.
         """
         added = _added_up(
             place.here / OUTPUT_DIRECTORY,
             ends_by=monotonic() + _ADDING_UP_WITHIN.total_seconds(),
         )
+        line.add(entry_count=added.entries)
         if added.unreadable is not None:
-            _log.warning(_UNACCOUNTABLE, deck.slug, added.unreadable)
+            line.fail(BuildFault.UNACCOUNTABLE)
             return BuildFailure.without_words()
         if not added.in_time:
-            _log.warning(_TOOK_TOO_LONG_TO_ADD_UP, deck.slug, _ADDING_UP_WITHIN)
+            line.fail(BuildFault.ADDING_UP_TIMED_OUT)
             return BuildFailure.without_words()
+        line.add(written_megabytes=added.megabytes)
         if added.entries > MAXIMUM_ENTRIES:
-            _log.warning(_TOO_MUCH_WRITTEN, deck.slug, added.entries)
+            line.refuse(BuildFailureReason.OUTPUT_ENTRIES)
             return BuildFailure(
                 reason=BuildFailureReason.OUTPUT_ENTRIES,
                 allowed_entries=MAXIMUM_ENTRIES,
             )
         if added.megabytes <= self.output_megabytes:
             return None
-        _log.warning(_TOO_MUCH_WRITTEN, deck.slug, added.megabytes)
+        line.refuse(BuildFailureReason.OUTPUT_MEGABYTES)
         return BuildFailure(
             reason=BuildFailureReason.OUTPUT_MEGABYTES,
             written_megabytes=added.megabytes,
@@ -494,12 +534,6 @@ class SlidevBuilds:
         """Write the deck's tree at its commit out of the mirror, as files."""
         mirror = self.mirrors.of(source)
         if mirror is None:
-            _log.warning(
-                _UNREADABLE_DECK,
-                deck.slug,
-                deck.commit,
-                "the source no longer resolves to a readable repository",
-            )
             return False
         try:
             mirror.export(
@@ -507,10 +541,37 @@ class SlidevBuilds:
                 source.deck_path(deck.slug),
                 into=into,
             )
-        except MirrorError as unreadable:
-            _log.warning(_UNREADABLE_DECK, deck.slug, deck.commit, unreadable)
+        except MirrorError:
             return False
         return True
+
+
+_REFUSALS: Final = frozenset(
+    {
+        BuildFailureReason.OUTPUT_MEGABYTES,
+        BuildFailureReason.OUTPUT_ENTRIES,
+        BuildFailureReason.OUTPUT_SHAPE,
+        BuildFailureReason.DECK_MEGABYTES,
+        BuildFailureReason.DECK_PATHS,
+    }
+)
+
+
+def stopped_by(line: StepTimer, broke: BuildFailure | ToolchainUnavailable) -> None:
+    """End a line as what a step handed back says: a refusal or a fault.
+
+    A deck whose own build fails is no fault of this host, so its line is a
+    handled warning, not an error.
+    """
+    if isinstance(broke, ToolchainUnavailable):
+        line.fail(BuildFault.TOOLCHAIN_UNAVAILABLE)
+    elif broke.reason in _REFUSALS:
+        line.refuse(broke.reason)
+    elif broke.reason is BuildFailureReason.TOOLCHAIN:
+        line.handled()
+        line.fail(BuildFault.TOOLCHAIN_FAILED)
+    else:
+        line.fail(broke.reason)
 
 
 def _what_a_step_said(
@@ -535,12 +596,11 @@ def _what_a_step_said(
                 # child this call started directly.
                 start_new_session=True,
             )
-        except OSError as unavailable:
+        except OSError:
             # A toolchain that cannot be started is this host's fault, and what
             # the operating system says about it names paths of this host; the
-            # deck's page is told that no words came back, and the log keeps
-            # them.
-            _log.exception(_TOOLCHAIN_UNAVAILABLE, step.name, step.slug, unavailable)
+            # deck's page and the line are told no words, only the reason.
+            step.line.fail(BuildFault.TOOLCHAIN_UNAVAILABLE)
             return BuildFailure.without_words()
         finally:
             # The child holds the writing end now, and only this process
@@ -553,14 +613,16 @@ def _what_a_step_said(
         if went.refused is not None:
             # What it wrote is the reason, and the watcher has said it.
             return went.refused
-        _log.warning(_TOOLCHAIN_TIMED_OUT, step.name, step.slug, how.bound)
+        step.line.handled()
+        step.line.fail(BuildFault.TIMED_OUT)
         # What a step that was killed had printed is not shown: it is the words
         # of a run nobody waited for, and the page says so in its own sentence.
         return BuildFailure.without_words()
     if process.returncode != 0:
         words = failure_text(went.said)
-        _log.warning(_TOOLCHAIN_FAILED, step.name, step.slug, words)
-        return BuildFailure.said(words)
+        failure = BuildFailure.said(words)
+        stopped_by(step.line, failure)
+        return failure
     return None
 
 

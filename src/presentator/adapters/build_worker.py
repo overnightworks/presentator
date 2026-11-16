@@ -32,7 +32,7 @@ from presentator.adapters.build_wire import (
     send_step,
     send_tree,
 )
-from presentator.adapters.builds import BuildPlace, BuildStep
+from presentator.adapters.builds import BuildPlace, BuildStep, stopped_by
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
     OUTPUT_DIRECTORY,
@@ -52,21 +52,21 @@ REPLY_MARGIN_SECONDS: Final = 5.0
 STAGED_PREFIX: Final = "staged-"
 STAGING_MODE: Final = 0o700
 
-_FAULTED: Final = "build %s of deck %s failed: %s"
-_NOT_REMOVED: Final = "the staging %s of a build reply could not be removed: %s"
+_STAGING_EVENT: Final = "build_staging_removal.failed"
+_ATTEMPT_EVENT: Final = "worker_attempt.failed"
 
 _log = logging.getLogger(__name__)
 
 
 class Fault(StrEnum):
-    """The class of a fault of one exchange, named in its log line."""
+    """The class of a fault of one exchange: the closed set of its `reason` codes."""
 
-    NOT_THE_WORKER = "what answered is not the worker"
-    DEADLINE = "a deadline passed"
-    CONNECTION = "the connection broke"
-    REPLY_GRAMMAR = "the reply broke the wire grammar"
-    STEP_CONTRACT = "the reply broke the step contract or a deck rule"
-    LOCAL = "this machine refused a read or write"
+    NOT_THE_WORKER = "not_the_worker"
+    DEADLINE = "deadline"
+    CONNECTION = "connection"
+    REPLY_GRAMMAR = "reply_grammar"
+    STEP_CONTRACT = "step_contract"
+    LOCAL = "local"
 
 
 class _NotYetError(Exception):
@@ -188,15 +188,28 @@ def _answer(
     )
     read_empty_end(connection)
     _nothing_follows(connection)
+    stopped_by(step.line, failure)
     return failure
 
 
-def _logged(error: Exception, step: BuildStep) -> None:
-    _log.warning(_FAULTED, step.name, step.slug, fault_of(error))
+def _refused_upload(
+    refusal: TreeRefusedError, step: BuildStep, megabytes: int
+) -> BuildFailure:
+    """The failure of a deck the upload check refuses, noted on the step's line."""
+    if refusal.outcome.limit is RefusalLimit.SHAPE:
+        failure = BuildFailure(reason=BuildFailureReason.DECK_PATHS)
+    else:
+        failure = BuildFailure(
+            reason=BuildFailureReason.DECK_MEGABYTES,
+            allowed_megabytes=megabytes,
+            allowed_entries=MAXIMUM_ENTRIES,
+        )
+    stopped_by(step.line, failure)
+    return failure
 
 
 def _failure_of(error: Exception, step: BuildStep) -> BuildFailure:
-    _logged(error, step)
+    step.line.fail(fault_of(error))
     return BuildFailure.without_words()
 
 
@@ -204,7 +217,7 @@ def _cleared(staged: Path, remove_staging: Callable[[Path], None]) -> None:
     try:
         remove_staging(staged)
     except OSError as error:
-        _log.warning(_NOT_REMOVED, staged.name, error)
+        _log.warning(_STAGING_EVENT, extra={"error_type": type(error).__name__})
 
 
 def exchange_with_worker(
@@ -217,9 +230,9 @@ def exchange_with_worker(
 ) -> BuildFailure | None:
     """Upload the deck and take the worker's reply for a step it has answered.
 
-    Every fault of the exchange comes back as a BuildFailure with one log line,
-    and the staging is gone afterwards; nothing but the step's one admitted
-    entry reaches out/.
+    Every fault of the exchange comes back as a BuildFailure whose reason is on
+    the step's one line, and the staging is gone afterwards; nothing but the
+    step's one admitted entry reaches out/.
     """
     staged = step.place.here / f"{STAGED_PREFIX}{step.name}"
     try:
@@ -280,13 +293,7 @@ class WorkerToolchain:
         try:
             check_upload(deck, self.megabytes)
         except TreeRefusedError as refusal:
-            if refusal.outcome.limit is RefusalLimit.SHAPE:
-                return BuildFailure(reason=BuildFailureReason.DECK_PATHS)
-            return BuildFailure(
-                reason=BuildFailureReason.DECK_MEGABYTES,
-                allowed_megabytes=self.megabytes,
-                allowed_entries=MAXIMUM_ENTRIES,
-            )
+            return _refused_upload(refusal, step, self.megabytes)
         except OSError as error:
             return _failure_of(error, step)
         return None
@@ -299,7 +306,7 @@ class WorkerToolchain:
         try:
             connection = self._at_status(header, window_ends)
         except (OSError, WireRefusedError) as error:
-            _logged(error, step)
+            step.line.fail(fault_of(error))
             return ToolchainUnavailable()
         with closing(connection):
             connection.until(
@@ -338,7 +345,10 @@ class WorkerToolchain:
             try:
                 return self._attempt(window_ends)
             except _NotYetError as error:
-                _log.debug("no worker answered this attempt: %r", error.__cause__)
+                _log.debug(
+                    _ATTEMPT_EVENT,
+                    extra={"error_type": type(error.__cause__ or error).__name__},
+                )
                 remaining = window_ends - time.monotonic()
                 time.sleep(max(0.0, min(wait, remaining)))
                 wait = min(2 * wait, self.longest_retry_seconds)
