@@ -21,7 +21,7 @@ from presentator.contracts.copresenter import (
     RetryAfter,
 )
 from presentator.ports.copresenter import AskLimiter
-from tests.presentator.application.support.fakes import FakeAskLimiter
+from tests.presentator.application.support.ask_leases import FakeAskLimiter
 from tests.support.redis import (
     NOTHING_LISTENS_HERE,
     empty,

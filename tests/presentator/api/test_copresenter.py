@@ -28,8 +28,10 @@ from presentator.contracts.copresenter import (
 from presentator.contracts.models import Role, User
 from presentator.contracts.voice import SampleLanguage
 from presentator.contracts.words import SOURCE_LANGUAGE
-from tests.presentator.application.support.fakes import (
+from tests.presentator.application.support.ask_leases import (
     FakeAskLimiter,
+)
+from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeSessionRecordStore,
     FakeUserStore,

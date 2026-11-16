@@ -21,13 +21,15 @@ from presentator.api.copresenter import (
 from presentator.contracts.copresenter import DeckText, RetryAfter
 from presentator.contracts.models import Role, User
 from tests.presentator.agent.support.transports import HeldTransport
-from tests.presentator.application.support.fakes import (
+from tests.presentator.application.support.ask_leases import (
     FakeAskLimiter,
     FakeAskTicket,
+    UnavailableAskLimiter,
+)
+from tests.presentator.application.support.fakes import (
     FakeSessionRecordStore,
     FakeUserStore,
     FrozenClock,
-    UnavailableAskLimiter,
 )
 from tests.support.copresenter_support import (
     A_DECK,

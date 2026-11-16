@@ -38,9 +38,11 @@ from presentator.contracts.decks import Source
 from presentator.contracts.voice import SampleLanguage
 from presentator.ports.copresenter import AskLimiter
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
-from tests.presentator.application.support.fakes import (
+from tests.presentator.application.support.ask_leases import (
     FakeAskLimiter,
     FakeAskTicket,
+)
+from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeSourceStore,
     FakeUserStore,

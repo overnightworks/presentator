@@ -13,7 +13,7 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.contracts.models import Role, User
-from tests.presentator.application.support.fakes import FakeAskLimiter
+from tests.presentator.application.support.ask_leases import FakeAskLimiter
 from tests.support.copresenter_support import (
     AN_ANSWER_DEADLINE_SECONDS,
     HEARING,
