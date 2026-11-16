@@ -32,10 +32,10 @@ RUN_DIRECTORY_MODE: Final = 0o755
 _THE_DESCRIPTOR_ITSELF: Final = "/proc/self/fd/{descriptor}"
 _HERE: Final = "."
 _UP: Final = ".."
-_ROOT_UNLISTED_EVENT: Final = "build_root_listing.failed"
+_ROOT_UNLISTED_EVENT: Final = "build_root_listing.refused"
+_ROOT_UNLISTED_REASON: Final = "unlistable"
 _STRAYS_EVENT: Final = "build_root_strays.found"
 _RUN_REFUSED_EVENT: Final = "build_run_removal.refused"
-_RUN_STAYED_EVENT: Final = "build_run_removal.failed"
 
 _log = logging.getLogger(__name__)
 
@@ -67,7 +67,13 @@ def listed_runs(root: Path) -> frozenset[str] | None:
         with os.scandir(root) as entries:
             names = [entry.name for entry in entries]
     except OSError as problem:
-        _log.warning(_ROOT_UNLISTED_EVENT, extra={"error_type": type(problem).__name__})
+        _log.warning(
+            _ROOT_UNLISTED_EVENT,
+            extra={
+                "reason": _ROOT_UNLISTED_REASON,
+                "error_type": type(problem).__name__,
+            },
+        )
         return None
     runs = {name for name in names if _is_a_run(root / name)}
     if strays := set(names) - runs:
@@ -143,7 +149,7 @@ def taken_away(directory: Path) -> bool:
     shutil.rmtree(directory, ignore_errors=True)
     if _still_stands(directory):
         _log.warning(
-            _RUN_STAYED_EVENT,
+            _RUN_REFUSED_EVENT,
             extra={"run_id": directory.name, "reason": RunRemovalReason.STAYED},
         )
         return False

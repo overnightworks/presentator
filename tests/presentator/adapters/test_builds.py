@@ -998,7 +998,7 @@ def test_a_run_that_could_not_be_taken_away_is_logged_and_answered_as_its_volume
     with _opened_again_afterwards(builds.builds), json_logged(capsys) as logged:
         built = builds.build(a_deck(remote), source=source)
         (left,) = builds.builds.iterdir()
-        stayed = lines_of(logged, "build_run_removal.failed")
+        stayed = lines_of(logged, "build_run_removal.refused")
         named = builds.remove(BuildRun(left.name))
 
     assert isinstance(built, BuildFailure)
