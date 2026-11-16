@@ -1,11 +1,9 @@
 """The serving loop admits only a verified hello and ends the life by name."""
 
 import errno
-import logging
 import socket
 import threading
-from collections.abc import Callable, Iterator
-from contextlib import ExitStack, suppress
+from collections.abc import Callable
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
@@ -15,19 +13,27 @@ import pytest
 
 from presentator.adapters import build_wire
 from presentator.host import worker, worker_self_check, worker_serving
-from presentator.host.worker_serving import HEADER_SECONDS, LifeEnd, Serving
+from presentator.host.worker_serving import (
+    HEADER_SECONDS,
+    HelloRefusal,
+    LifeEnd,
+)
 from presentator.host.worker_termination import SWEEP_SECONDS, SweepEffects, sweep
 from presentator.host.worker_wire import WireExit
 from tests.presentator.host.support.sealed_snapshot import sealed_snapshot, with_fields
+from tests.support.log_lines import events_of, json_logged
 from tests.support.step_support import ADMITTING_PATH, STEP_LEG
+from tests.support.worker_accept_support import (
+    accept_from,
+    reading_after_a_proven_hello,
+)
 from tests.support.worker_support import (
     ACCEPT_TIME,
     ANSWERED_HEADER,
     CHILD_LEG,
+    CLIENTS,
     CONNECTIONS,
     CUT_OFF_HEADER,
-    EXPIRED_AT_RELEASE,
-    EXPIRED_BEFORE_RELEASE,
     IDLE_LEG,
     KEY,
     SENDER_LEG,
@@ -38,74 +44,20 @@ from tests.support.worker_support import (
     BoundedListener,
     ScriptedLife,
     StopServingError,
-    connect_unproven,
+    a_proven_hello,
     connect_when_bound,
+    helloing,
     listening_with,
+    proven,
     serving,
     wake_until_ended,
 )
-
-_CLIENTS = ExitStack()
-
-
-@pytest.fixture(autouse=True)
-def clients_closed_with_the_test() -> Iterator[None]:
-    yield
-    _CLIENTS.close()
-
-
-def connected(volume: Path) -> socket.socket:
-    return _CLIENTS.enter_context(connect_unproven(volume))
-
-
-def helloing(volume: Path, hello: Callable[[socket.socket], None]) -> socket.socket:
-    """A client whose hello runs in a thread, as the real web's does."""
-    client = connected(volume)
-    thread = threading.Thread(target=hello, args=(client,), daemon=True)
-    thread.start()
-    _CLIENTS.callback(thread.join)
-    return client
-
-
-def a_proven_hello(client: socket.socket) -> None:
-    build_wire.answer_hello(client, KEY)
-
-
-def a_proven_hello_the_worker_may_not_serve(client: socket.socket) -> None:
-    """A hello of a client the worker may close before it answers."""
-    with suppress(build_wire.WireRefusedError, build_wire.HelloRefusedError, OSError):
-        a_proven_hello(client)
-
-
-def proven(volume: Path) -> socket.socket:
-    """A client that proves the hello in a thread and then holds its connection."""
-    return helloing(volume, a_proven_hello_the_worker_may_not_serve)
-
-
-def reading_after_a_proven_hello(volume: Path) -> Callable[[], bytes]:
-    """A client that proves the hello in a thread, then reads; the call is its read."""
-    client = connected(volume)
-    read: list[bytes] = []
-
-    def prove_then_read() -> None:
-        a_proven_hello(client)
-        read.append(client.recv(1))
-
-    thread = threading.Thread(target=prove_then_read, daemon=True)
-    thread.start()
-    _CLIENTS.callback(thread.join)
-
-    def what_the_client_read() -> bytes:
-        thread.join(WAIT_SECONDS)
-        return read[0]
-
-    return what_the_client_read
 
 
 def connected_when_bound(
     volume: Path, still_serving: Callable[[], bool]
 ) -> socket.socket:
-    return _CLIENTS.enter_context(connect_when_bound(volume, still_serving))
+    return CLIENTS.enter_context(connect_when_bound(volume, still_serving))
 
 
 def read_challenge(client: socket.socket) -> bytes:
@@ -158,26 +110,26 @@ def test_a_refused_hello_is_closed_and_never_spawns_a_child(
 
 
 @pytest.mark.parametrize("hello", REFUSED_HELLOS.values(), ids=REFUSED_HELLOS.keys())
-def test_a_refused_hello_logs_one_line_naming_it_and_never_the_key(
+def test_a_refused_hello_writes_one_refused_connection_line_and_never_the_key(
     volume: Path,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
     hello: Callable[[socket.socket], None],
 ) -> None:
     monkeypatch.setattr(worker_serving, "HELLO_SECONDS", 0.2)
     life = ScriptedLife()
     with (
-        caplog.at_level(logging.WARNING, logger=worker_serving.logger.name),
+        json_logged(capsys) as logged,
         listening_with(volume, accepts=1) as listener,
     ):
         helloing(volume, hello)
         with pytest.raises(StopServingError):
             accept_from(life, listener)
 
-    (line,) = caplog.records
-    assert "hello" in line.getMessage()
-    assert KEY.hex() not in caplog.text
-    assert repr(KEY) not in caplog.text
+    (line,) = events_of(logged, "connection.ended")
+    assert (line["outcome"], line["reason"]) == ("refused", HelloRefusal.NOT_PROVEN)
+    assert KEY.hex() not in logged.text
+    assert repr(KEY) not in logged.text
 
 
 def test_a_refused_hello_spends_no_life_and_the_next_verified_one_is_served(
@@ -253,15 +205,6 @@ def test_the_child_is_told_the_descriptor_of_its_connection_and_inherits_only_it
         "--megabytes",
         "300",
     ]
-
-
-def accept_from(
-    life: ScriptedLife,
-    listener: socket.socket,
-    serving: Serving | None = None,
-) -> LifeEnd:
-    """Run the accept loop in this thread."""
-    return worker_serving.accept_connections(listener, KEY, serving or life.serving())
 
 
 def test_a_sweep_that_is_quiet_only_after_its_deadline_ends_the_life_armed(
@@ -457,51 +400,113 @@ def test_a_failing_step_ends_the_life_and_leaves_the_watchdog_armed(
 @pytest.mark.parametrize(
     ("make_life", "life_end", "_events"), LIFE_ENDS.values(), ids=LIFE_ENDS.keys()
 )
-def test_serve_returns_zero_and_logs_the_name_of_what_ended_the_life_at_its_level(
+def test_serve_returns_zero_and_writes_the_one_connection_line_of_what_ended_the_life(
     volume: Path,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
     make_life: Callable[[], ScriptedLife],
     life_end: LifeEnd,
     _events: list[str],
 ) -> None:
-    """D3 (#431): each life end logs at its level."""
-    caplog.set_level(logging.INFO)
     life = make_life()
     outcome: list[int] = []
-    thread = threading.Thread(
-        target=lambda: outcome.append(
-            worker.serve(
-                port=int((volume / "port").read_text()),
-                key=(volume / "key").read_bytes(),
-                serving=life.serving(),
+    with json_logged(capsys) as logged:
+        thread = threading.Thread(
+            target=lambda: outcome.append(
+                worker.serve(
+                    port=int((volume / "port").read_text()),
+                    key=(volume / "key").read_bytes(),
+                    serving=life.serving(),
+                ),
             ),
-        ),
-        daemon=True,
-    )
-    thread.start()
-    try:
-        connected_when_bound(volume, thread.is_alive).close()
-        thread.join(WAIT_SECONDS)
-    finally:
-        life.spawn_error = OSError("stop")
-        wake_until_ended(volume, thread)
+            daemon=True,
+        )
+        thread.start()
+        try:
+            connected_when_bound(volume, thread.is_alive).close()
+            thread.join(WAIT_SECONDS)
+        finally:
+            life.spawn_error = OSError("stop")
+            wake_until_ended(volume, thread)
 
     assert outcome == [0]
-    ended = [r for r in caplog.records if r.getMessage() == f"life ended: {life_end}"]
-    expected = logging.INFO if life_end is LifeEnd.CONSUMED else logging.ERROR
-    assert [r.levelno for r in ended] == [expected]
+    (ended,) = events_of(logged, "connection.ended")
+    expected = (
+        ("info", "ok", None)
+        if life_end is LifeEnd.CONSUMED
+        else ("error", "failed", life_end)
+    )
+    actual = (ended["level"], ended["outcome"], ended.get("reason"))
+    assert actual == expected
+    assert [
+        line["event"] for line in logged.lines if "process" in str(line["event"])
+    ] == [
+        "process.ready",
+        "process.stopped",
+    ]
 
 
-def test_a_sweep_that_fails_for_another_reason_surfaces_with_its_error(
+@pytest.mark.parametrize(
+    ("make_life", "fields"),
+    [
+        (
+            lambda: ScriptedLife(exit_status=1),
+            {"level": "info", "outcome": "ok", "exit_code": 1},
+        ),
+        (
+            lambda: ScriptedLife(spawn_error=OSError("no process")),
+            {"level": "warning", "outcome": "failed", "reason": LifeEnd.SPAWN},
+        ),
+    ],
+    ids=["a child that exited", "a spawn that failed"],
+)
+def test_a_phase_writes_one_timed_line_with_its_role_and_how_it_ended(
     volume: Path,
+    capsys: pytest.CaptureFixture[str],
+    make_life: Callable[[], ScriptedLife],
+    fields: dict[str, object],
 ) -> None:
-    life = ScriptedLife(sweep_error=PermissionError("kill refused"))
+    with listening_with(volume, accepts=1) as listener:
+        reading = reading_after_a_proven_hello(volume)
+        with json_logged(capsys) as logged:
+            accept_from(make_life(), listener)
+        reading()
+
+    (line,) = events_of(logged, "wire_phase.ended")
+    assert line["phase"] == "idle"
+    assert {key: line[key] for key in fields} == fields
+
+
+@pytest.mark.parametrize(
+    "make_life",
+    [
+        lambda: ScriptedLife(sweep_error=PermissionError("kill refused")),
+        lambda: ScriptedLife(wait_error=PermissionError("wait refused")),
+    ],
+    ids=["a sweep that failed", "a hand-over that failed"],
+)
+def test_a_step_that_fails_for_another_reason_surfaces_with_its_error(
+    volume: Path,
+    capsys: pytest.CaptureFixture[str],
+    make_life: Callable[[], ScriptedLife],
+) -> None:
+    life = make_life()
     with listening_with(volume, accepts=1) as listener:
         proven(volume)
-        with pytest.raises(PermissionError, match="kill refused"):
+        with (
+            json_logged(capsys) as logged,
+            pytest.raises(PermissionError, match="refused"),
+        ):
             accept_from(life, listener)
 
     assert "cancel" not in life.events
+    (line,) = events_of(logged, "connection.ended")
+    assert (line["level"], line["outcome"], line["error_type"]) == (
+        "error",
+        "failed",
+        "PermissionError",
+    )
+    assert "refused" not in logged.text
+    assert "Traceback" not in logged.text
 
 
 class FailingAcceptListener(BoundedListener):
@@ -522,8 +527,8 @@ def test_a_failing_accept_ends_the_life_before_anything_is_armed_spawned_or_swep
     assert life.events == []
 
 
-def test_serve_returns_zero_and_names_the_accept_fault(
-    volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+def test_serve_returns_zero_and_writes_one_error_line_for_the_accept_fault(
+    volume: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     bind_listener = worker.bind_listener
 
@@ -533,14 +538,19 @@ def test_serve_returns_zero_and_names_the_accept_fault(
 
     monkeypatch.setattr(worker, "bind_listener", bind_failing_accept)
 
-    status = worker.serve(
-        port=int((volume / "port").read_text()),
-        key=(volume / "key").read_bytes(),
-        serving=ScriptedLife().serving(),
-    )
+    with json_logged(capsys) as logged:
+        status = worker.serve(
+            port=int((volume / "port").read_text()),
+            key=(volume / "key").read_bytes(),
+            serving=ScriptedLife().serving(),
+        )
 
     assert status == 0
-    assert f"life ended: {LifeEnd.ACCEPT}" in caplog.text
+    (fault,) = events_of(logged, "connection.failed")
+    assert (fault["level"], fault["error_type"]) == ("error", "OSError")
+    assert "too many open files" not in logged.text
+    assert "Traceback" not in logged.text
+    assert events_of(logged, "connection.ended") == []
 
 
 def test_the_runtime_uid_gets_one_gated_child_per_connection(volume: Path) -> None:
@@ -693,73 +703,6 @@ def test_serve_cuts_a_stalled_header_off_and_serves_the_next_connection_in_one_l
     assert outcome == [0]
     assert len(life.spawned) == CONNECTIONS
     assert life.events == CUT_OFF_HEADER + ANSWERED_HEADER[:-1]
-
-
-@pytest.mark.parametrize(
-    ("inspection_takes", "release_takes", "events", "budgets"),
-    [
-        (HEADER_SECONDS, 0.0, [*EXPIRED_BEFORE_RELEASE, "cancel"], []),
-        (HEADER_SECONDS + 1, 0.0, [*EXPIRED_BEFORE_RELEASE, "cancel"], []),
-        (0.0, HEADER_SECONDS, [*EXPIRED_AT_RELEASE, "cancel"], []),
-        (HEADER_SECONDS * 0.25, 0.0, ANSWERED_HEADER, [HEADER_SECONDS * 0.75]),
-    ],
-    ids=[
-        "an inspection that spends the whole budget",
-        "an inspection that overruns the budget",
-        "a release that spends the rest of the budget",
-        "an inspection that leaves a quarter of the budget spent",
-    ],
-)
-def test_the_header_budget_covers_the_gate_and_the_release_as_well_as_the_wait(
-    volume: Path,
-    inspection_takes: float,
-    release_takes: float,
-    events: list[str],
-    budgets: list[float],
-) -> None:
-    life = ScriptedLife(inspection_takes=inspection_takes, release_takes=release_takes)
-    with listening_with(volume, accepts=1) as listener:
-        what_the_client_read = reading_after_a_proven_hello(volume)
-        with pytest.raises(StopServingError):
-            accept_from(life, listener)
-        assert what_the_client_read() == b""
-
-    assert life.events == events
-    assert life.budgets_waited == budgets
-
-
-@pytest.mark.parametrize("sweep_quiet", [True, False], ids=["quiet", "not quiet"])
-def test_the_life_is_kept_after_an_expiry_only_when_the_sweep_is_quiet(
-    volume: Path, *, sweep_quiet: bool
-) -> None:
-    life = ScriptedLife(inspection_takes=HEADER_SECONDS, sweep_quiet=sweep_quiet)
-    with listening_with(volume, accepts=1) as listener:
-        proven(volume)
-        if sweep_quiet:
-            with pytest.raises(StopServingError):
-                accept_from(life, listener)
-        else:
-            assert accept_from(life, listener) == LifeEnd.SWEEP
-
-    assert ("cancel" in life.events) == sweep_quiet
-
-
-@pytest.mark.parametrize("sweep_quiet", [True, False], ids=["quiet", "not quiet"])
-def test_a_stall_that_spends_the_header_budget_before_the_launch_spawns_no_idle_child(
-    volume: Path, *, sweep_quiet: bool
-) -> None:
-    life = ScriptedLife(arm_takes=HEADER_SECONDS, sweep_quiet=sweep_quiet)
-    with listening_with(volume, accepts=1) as listener:
-        what_the_client_read = reading_after_a_proven_hello(volume)
-        if sweep_quiet:
-            with pytest.raises(StopServingError):
-                accept_from(life, listener)
-        else:
-            assert accept_from(life, listener) == LifeEnd.SWEEP
-        assert what_the_client_read() == b""
-
-    assert life.spawned == []
-    assert ("cancel" in life.events) == sweep_quiet
 
 
 def test_a_gate_mismatch_is_a_gate_end_whatever_the_clock_says(volume: Path) -> None:

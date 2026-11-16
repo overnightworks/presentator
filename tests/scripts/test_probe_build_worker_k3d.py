@@ -9,7 +9,7 @@ from types import ModuleType, SimpleNamespace
 import pytest
 
 from presentator.adapters.build_worker import CONNECT_WINDOW_SECONDS
-from presentator.host.worker import REFUSAL_EXIT_STATUS
+from presentator.host.worker import REFUSAL_EXIT_STATUS, START_REFUSED_EVENT
 from presentator.host.worker_self_check import BUILD_IDENTITY, Predicate
 from tests.scripts.support.k3d_pods import (
     Document,
@@ -363,6 +363,34 @@ def test_stopping_the_stream_kills_and_reaps_its_child(
     assert runner.child is None
 
 
+def test_a_stream_starts_its_command_before_its_first_line_is_asked_for(
+    cluster_module: ModuleType,
+) -> None:
+    runner = cluster_module.SubprocessRunner()
+    lines = runner.stream((sys.executable, "-c", "import time; time.sleep(60)"), {})
+    child = runner.child
+    assert child is not None
+    assert child.poll() is None
+    lines.close()
+    assert child.returncode < 0
+
+
+def test_closing_one_stream_leaves_the_command_of_another_running(
+    cluster_module: ModuleType,
+) -> None:
+    runner = cluster_module.SubprocessRunner()
+    program = (sys.executable, "-c", "import time; time.sleep(60)")
+    first = runner.stream(program, {})
+    first_child = runner.child
+    second = runner.stream(program, {})
+    second_child = runner.child
+    second.close()
+    assert second_child.returncode < 0
+    assert first_child.poll() is None
+    first.close()
+    assert first_child.returncode < 0
+
+
 def test_the_runner_hands_the_run_environment_to_the_child(
     cluster_module: ModuleType,
 ) -> None:
@@ -572,7 +600,7 @@ def a_failed_remove_link(refusal: Predicate | None) -> Document:
 @pytest.mark.parametrize(
     ("end", "fragment"),
     [
-        (another_predicate, "no 'start refused"),
+        (another_predicate, f"no {START_REFUSED_EVENT} line"),
         (a_failed_end, "exit status 1"),
         (a_restart, "restartCount is 1"),
         (a_failed_remove_link, "nft-rules ended as 1"),

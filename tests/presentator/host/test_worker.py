@@ -40,11 +40,13 @@ from tests.presentator.host.support.sealed_snapshot import (
     with_resource_bounds,
 )
 from tests.presentator.host.support.worker_boundary import (
+    CHECK,
     LOADED_SETTINGS,
     SERVE,
     boundary_over,
 )
-from tests.support.log_lines import LoggedText
+from tests.presentator.host.support.worker_lines import refusal_reasons
+from tests.support.log_lines import LoggedText, events_of
 
 SENDS_READ = "probes read"
 KEY = b"k" * 32
@@ -266,7 +268,7 @@ def test_refusal_exits_two_and_logs_the_predicate_without_environment_values(
         worker.main(["--check"], boundary_over(snapshot, []))
         == worker.REFUSAL_EXIT_STATUS
     )
-    assert Predicate.ENVIRONMENT in logged.text
+    assert refusal_reasons(logged) == [Predicate.ENVIRONMENT]
     assert "PRESENTATOR_SECRET_KEY" not in logged.text
 
 
@@ -314,7 +316,7 @@ def test_a_start_refused_for_alone_or_scratch_never_loads_settings_or_serves(
     "variable",
     ["PRESENTATOR_BUILD_TIMEOUT_SECONDS", "PRESENTATOR_BUILD_OUTPUT_MEGABYTES"],
 )
-def test_an_invalid_setting_refuses_by_variable_name_never_the_value(
+def test_an_invalid_setting_refuses_as_settings_and_never_writes_its_value(
     logged: LoggedText, monkeypatch: pytest.MonkeyPatch, variable: str
 ) -> None:
     events: list[str] = []
@@ -329,9 +331,20 @@ def test_an_invalid_setting_refuses_by_variable_name_never_the_value(
 
     assert status == worker.REFUSAL_EXIT_STATUS
     assert events[-1] == "settings"
-    assert variable in logged.text
-    assert worker.StartRefusal.SETTINGS in logged.text
+    assert refusal_reasons(logged) == [worker.StartRefusal.SETTINGS]
     assert "unique-bad-value-4711" not in logged.text
+
+
+@pytest.mark.parametrize("arguments", [SERVE, CHECK])
+def test_a_serving_start_writes_process_started_and_a_check_does_not(
+    logged: LoggedText, arguments: list[str]
+) -> None:
+    worker.main(arguments, boundary_over(sealed_snapshot(), []))
+
+    started = events_of(logged, "process.started")
+    assert [line["service"] for line in started] == (
+        [worker.SERVICE_NAME] if arguments == SERVE else []
+    )
 
 
 def test_the_settings_keys_pass_the_environment_predicate() -> None:
@@ -606,7 +619,7 @@ def test_a_failing_or_unreadable_fact_refuses_through_main_naming_its_predicate(
     )
 
     assert worker.main(["--check"], boundary) == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {refused}" in logged.text
+    assert refusal_reasons(logged) == [refused]
 
 
 @pytest.mark.parametrize(

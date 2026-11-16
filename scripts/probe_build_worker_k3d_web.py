@@ -17,9 +17,10 @@ admits the web's pods to every port.
 
 import contextlib
 import json
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import Callable, Generator, Iterable, Iterator
 from typing import cast
 
+from logline import Outcome as LineOutcome
 from probe_build_worker_harness import refuse, say
 from probe_build_worker_k3d_builds import (
     CLIENT_SECONDS,
@@ -55,6 +56,9 @@ from probe_build_worker_web import (
     delivers_the_deck,
     is_an_outage,
 )
+
+from presentator.host.worker_serving import CONNECTION_EVENT
+from presentator.host.worker_wire import SERVICE_NAME
 
 WEB_PODS = 2
 WORKER_PODS = 2
@@ -161,6 +165,46 @@ def print_worker_logs(run: Run, number: int) -> None:
     say(f"cell {number}: the workers' log:\n{(answer.stdout + answer.stderr)[-2000:]}")
 
 
+def followed_worker_lines(run: Run) -> Generator[str]:
+    """The lines the worker pods write from now on, each as it is written.
+
+    A replaced worker pod takes its log with it, so the lines are followed from
+    before a build starts rather than read from the pods the build left; the
+    runner starts the follow when `watch` is called, and it ends with the pods
+    it started on, or at the build's own bound.
+    """
+    bound = CLIENT_SECONDS + TERMINATION_WINDOW_SECONDS
+    return run.watch(
+        f"timeout {bound} kubectl logs --selector",
+        WORKER_SELECTOR,
+        *("--container", WORKER_CONTAINER, "--follow", "--tail=0"),
+        *("--max-log-requests", str(WORKER_PODS), *IN_NAMESPACE),
+    )
+
+
+def ended_ok(text: str) -> bool:
+    """Whether the log line is a connection of the worker service that ended ok."""
+    try:
+        line: object = json.loads(text)
+    except ValueError:
+        return False
+    if not isinstance(line, dict):
+        return False
+    fields = cast("dict[str, object]", line)
+    return (
+        fields.get("event") == CONNECTION_EVENT
+        and fields.get("service") == SERVICE_NAME
+        and fields.get("outcome") == LineOutcome.OK
+    )
+
+
+def connection_line_problem(lines: Iterable[str]) -> str | None:
+    """Why the followed worker lines show no connection that ended ok, else None."""
+    if any(ended_ok(text) for text in lines):
+        return None
+    return f"the workers wrote no new {CONNECTION_EVENT} line that ended ok"
+
+
 def container_port(workload: Document, container: str) -> int:
     """The first port the workload's container of that name declares."""
     spec = workload["spec"]["template"]["spec"]
@@ -215,13 +259,23 @@ def two_ready_pods(
     return webs, f"two web pods and two worker pods were not Ready {waited}"
 
 
-def delivering_outcome(run: Run, deployment: Document, web: Document) -> Outcome | str:
-    """The outcome of the web pod's build of hello-deck, or why it did not deliver."""
+def delivering_outcome(
+    run: Run, deployment: Document, web: Document, worker_lines: Iterable[str]
+) -> Outcome | str:
+    """The outcome of the web pod's build, or why it did not deliver.
+
+    `worker_lines` was followed from before the build, so a line it yields is the
+    build's own; the worker writes it after the hand-over and the sweep, so it is
+    awaited.
+    """
     name = web["metadata"]["name"]
     outcome = build_outcome(run, deployment, name)
-    if isinstance(outcome, str) or delivers_the_deck(outcome):
+    if isinstance(outcome, str):
         return outcome
-    return f"{name} did not deliver: {outcome}"
+    if not delivers_the_deck(outcome):
+        return f"{name} did not deliver: {outcome}"
+    problem = connection_line_problem(worker_lines)
+    return f"{name} delivered, but {problem}" if problem else outcome
 
 
 def sampled_while_building(run: Run) -> Generator[str]:
@@ -281,9 +335,12 @@ def restart_overlap_problem(
 def first_build_problem(run: Run, deployment: Document, first: Document) -> str | None:
     """Why the first build did not take both workers, the second while one restarted."""
     first_workers = uids_of(list_pods(run, WORKER_SELECTOR))
-    with contextlib.closing(sampled_while_building(run)) as samples:
+    with (
+        contextlib.closing(followed_worker_lines(run)) as worker_lines,
+        contextlib.closing(sampled_while_building(run)) as samples,
+    ):
         next(samples, None)
-        outcome = delivering_outcome(run, deployment, first)
+        outcome = delivering_outcome(run, deployment, first, worker_lines)
         if isinstance(outcome, str):
             return outcome
         # One life ends with each step: both pods replaced means the second step
@@ -308,7 +365,9 @@ def built_over_two_workers(
         return problem
     if problem := copy_deck(run, deployment, second["metadata"]["name"]):
         return problem
-    if isinstance(outcome := delivering_outcome(run, deployment, second), str):
+    with contextlib.closing(followed_worker_lines(run)) as worker_lines:
+        outcome = delivering_outcome(run, deployment, second, worker_lines)
+    if isinstance(outcome, str):
         return outcome
     say(
         f"cell 11: {first['metadata']['name']} and {second['metadata']['name']} built "

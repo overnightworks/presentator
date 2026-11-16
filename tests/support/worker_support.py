@@ -7,7 +7,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable, Generator, Mapping, Sequence
-from contextlib import contextmanager, suppress
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -747,3 +747,35 @@ def descriptors_left_open_since(before: dict[int, str]) -> dict[int, str]:
         for descriptor, target in open_descriptor_targets().items()
         if before.get(descriptor) != target
     }
+
+
+CLIENTS = ExitStack()
+"""The clients of the running test; the host conftest closes them after it."""
+
+
+def connected(volume: Path) -> socket.socket:
+    return CLIENTS.enter_context(connect_unproven(volume))
+
+
+def helloing(volume: Path, hello: Callable[[socket.socket], None]) -> socket.socket:
+    """A client whose hello runs in a thread, as the real web's does."""
+    client = connected(volume)
+    thread = threading.Thread(target=hello, args=(client,), daemon=True)
+    thread.start()
+    CLIENTS.callback(thread.join)
+    return client
+
+
+def a_proven_hello(client: socket.socket) -> None:
+    build_wire.answer_hello(client, KEY)
+
+
+def a_proven_hello_the_worker_may_not_serve(client: socket.socket) -> None:
+    """A hello of a client the worker may close before it answers."""
+    with suppress(build_wire.WireRefusedError, build_wire.HelloRefusedError, OSError):
+        a_proven_hello(client)
+
+
+def proven(volume: Path) -> socket.socket:
+    """A client that proves the hello in a thread and then holds its connection."""
+    return helloing(volume, a_proven_hello_the_worker_may_not_serve)

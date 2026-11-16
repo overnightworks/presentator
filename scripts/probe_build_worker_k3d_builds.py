@@ -109,4 +109,8 @@ def build_outcome(run: Run, deployment: Document, web_pod: str) -> Outcome | str
     )
     if client.stderr.strip():
         say(f"the web client's log:\n{client.stderr[-TAIL_CHARACTERS:]}")
+    # The client's lines come before its one outcome line.
+    web_lines = client.stdout.splitlines()[:-1]
+    if web_lines:
+        say(f"the web client's lines:\n{chr(10).join(web_lines)[-TAIL_CHARACTERS:]}")
     return read_outcome(client)

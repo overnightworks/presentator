@@ -202,8 +202,13 @@ def test_the_workers_apply_with_two_replicas_and_the_cells_before_with_one(
         (World(workers_never_ready=True), "were not Ready within", 11),
         (World(workers_keep_uids=True), "did not take both worker pods", 11),
         (World(client_exit=1, client_stderr="boom"), "cell 10", 10),
+        (
+            World(workers_log_only_the_first_build=True),
+            "the workers wrote no new connection.ended line",
+            11,
+        ),
     ],
-    ids=["workers not ready", "workers not replaced", "client ended"],
+    ids=["workers not ready", "workers not replaced", "client ended", "stale line"],
 )
 def test_workers_that_are_not_ready_or_not_both_used_fail_cell_11(
     make_fixture: Callable[..., Fixture],
@@ -310,9 +315,32 @@ def test_a_build_that_does_not_deliver_in_a_web_pod_fails_cell_11_naming_the_pod
     assert f"{WEB_POD_NAMES[0]} did not deliver" in capsys.readouterr().err
     assert [
         command
-        for command in world.issued("kubectl", "logs", "--selector")
-        if command[3].startswith("app.kubernetes.io/name=build-worker")
+        for command, _, _ in world.commands
+        if command[2:5] == ("kubectl", "logs", "--selector") and "--follow" in command
     ]
+
+
+def test_each_build_follows_the_worker_lines_from_before_it_starts(
+    make_fixture: Callable[..., Fixture],
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    commands = [command for command, _, _ in fixture.world.commands]
+    follows = [
+        index
+        for index, command in enumerate(commands)
+        if command[2:5] == ("kubectl", "logs", "--selector") and "--follow" in command
+    ]
+    builds = [
+        index
+        for index, command in enumerate(commands)
+        if command[2:4] == ("kubectl", "exec") and command[-2:] == ("build", "export")
+    ]
+    assert len(follows) > 1
+    assert all(
+        follow < build
+        for follow, build in zip(follows, builds[-len(follows) :], strict=True)
+    )
 
 
 def test_cell_12_runs_the_hello_program_in_a_web_pod_and_prints_one_line(

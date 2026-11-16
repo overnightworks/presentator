@@ -1,10 +1,11 @@
 """The k3d driver tests' pods: the events kubectl prints for worker lives, and nodes."""
 
+import json
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from presentator.host.worker import REFUSAL_EXIT_STATUS
+from presentator.host.worker import REFUSAL_EXIT_STATUS, START_REFUSED_EVENT
 from presentator.host.worker_self_check import Predicate
 
 K3S_VERSION = "v1.37.2+k3s1"
@@ -86,7 +87,11 @@ def ending(refusal: Predicate | None, *, started: int = 0) -> Document:
     """The terminated state of a worker that refuses or, with none, exits 0."""
     if refusal is None:
         return terminated_state(0, reason="Completed", started=started)
-    said = f"worker started\nstart refused: {refusal}\n"
+    said = (
+        '{"event": "process.started", "service": "presentator-worker"}\n'
+        + json.dumps({"event": START_REFUSED_EVENT, "reason": refusal})
+        + "\n"
+    )
     return terminated_state(message=said, started=started)
 
 

@@ -131,7 +131,8 @@ so every line is one JSON object. One request line per HTTP request names the ro
 the path, with `sub` and the client address from webauth's decisions (`api/request_line.py`). The audit, person
 erasure and export, migrate, refresh-lock and process lines are literal `<noun>.<verb_past>` events with id, count
 and code fields; the web writes `process.started`, `process.ready`, `process.stopped` and one
-`store_connection.ended` per store. A co-presenter ask writes `access_token.ended`, `speak.ended` and
+`store_connection.ended` per store, and the worker the same process lines with one `connection.ended` per
+connection and one `wire_phase.ended` per phase. A co-presenter ask writes `access_token.ended`, `speak.ended` and
 `answer.ended` (with `first_output_ms`) under the request's trace. Other lines are still free text.
 
 **Words and look.** Every lobby word comes from one gettext catalog per language

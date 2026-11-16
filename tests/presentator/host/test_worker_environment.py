@@ -24,6 +24,7 @@ from tests.presentator.host.support.worker_boundary import (
     SERVE,
     boundary_over,
 )
+from tests.presentator.host.support.worker_lines import refusal_reasons
 from tests.support.log_lines import LoggedText
 
 SEALED_KEYS = sealed_snapshot().environment_keys
@@ -89,4 +90,4 @@ def test_a_start_passes_with_the_unread_variable_set_to_any_value(
 
     assert status == 0
     assert ("serve" in events) is (arguments == SERVE)
-    assert "start refused" not in logged.text
+    assert refusal_reasons(logged) == []

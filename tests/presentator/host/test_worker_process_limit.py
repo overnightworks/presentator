@@ -27,6 +27,7 @@ from tests.presentator.host.support.worker_boundary import (
     SERVE,
     boundary_over,
 )
+from tests.presentator.host.support.worker_lines import refusal_reasons
 from tests.support.log_lines import LoggedText
 
 UNLIMITED = "unlimited"
@@ -194,5 +195,5 @@ def test_a_failed_lowering_refuses_the_start_before_the_snapshot_is_read(
     status = worker.main(arguments, recording_boundary(events, failure))
 
     assert status == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {BOUND}" in logged.text
+    assert refusal_reasons(logged) == [BOUND]
     assert events == ["prctl", "umask", "lower"]

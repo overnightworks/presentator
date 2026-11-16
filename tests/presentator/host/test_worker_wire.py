@@ -2,7 +2,6 @@
 
 import errno
 import json
-import logging
 import os
 import runpy
 import socket
@@ -30,6 +29,7 @@ from presentator.host.config import WorkerSettings
 from presentator.host.worker import create_request_record
 from presentator.host.worker_wire import ReplyPlan, WireExit, WireRole
 from tests.support import worker_support as support
+from tests.support.log_lines import events_of, json_logged
 from tests.support.worker_support import (
     UNUSED_WORK,
     directory_entry,
@@ -368,7 +368,7 @@ CLOSED_REASONS = {
 def test_the_entry_logs_one_line_with_the_reason_it_closed_without_a_reply(
     client_and_descriptor: tuple[socket.socket, int],
     record: int,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
     sent: bytes,
     reason: str,
 ) -> None:
@@ -376,12 +376,15 @@ def test_the_entry_logs_one_line_with_the_reason_it_closed_without_a_reply(
     client.sendall(sent)
     client.shutdown(socket.SHUT_WR)
 
-    with caplog.at_level(logging.WARNING, logger=worker_wire.logger.name):
+    with json_logged(capsys) as logged:
         run_entry(client, descriptor, record)
 
-    (line,) = caplog.records
-    assert reason in line.getMessage()
-    assert WireRole.IDLE.value in line.getMessage()
+    (line,) = events_of(logged, "wire_role.closed")
+    assert (line["level"], line["error_type"], line["role"]) == (
+        "warning",
+        reason,
+        WireRole.IDLE,
+    )
 
 
 def test_the_entry_exits_accepted_on_a_valid_step_writing_the_record_and_no_reply(

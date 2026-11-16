@@ -90,22 +90,38 @@ class SubprocessRunner:
     ) -> Generator[str]:
         """The lines a command prints as it prints them; closing it kills the command.
 
-        The command's own errors go to this process's stderr.
+        The command starts when this is called, not when its first line is asked
+        for: a caller that follows a log before an action must not miss the
+        action's lines. The command's own errors go to this process's stderr.
         """
+        lines = self._lines(command, environment)
+        next(lines)
+        return lines
+
+    def _lines(
+        self, command: tuple[str, ...], environment: Mapping[str, str]
+    ) -> Generator[str]:
         with self._start(command, environment, subprocess.DEVNULL, None) as child:
             self.child = child
             try:
+                yield ""  # the hand-over `stream` waits for: the child runs
                 yield from child.stdout or ()
             finally:
-                self.kill_child()
-                self.child = None
+                self._kill(child)
+                if self.child is child:
+                    self.child = None
 
     def kill_child(self) -> None:
         """Kill the running child's process group and reap the child."""
-        if self.child is not None and self.child.poll() is None:
+        if self.child is not None:
+            self._kill(self.child)
+
+    @staticmethod
+    def _kill(child: subprocess.Popen[str]) -> None:
+        if child.poll() is None:
             with contextlib.suppress(ProcessLookupError):
-                os.killpg(self.child.pid, signal.SIGKILL)
-            self.child.wait()
+                os.killpg(child.pid, signal.SIGKILL)
+            child.wait()
 
 
 @dataclass(frozen=True)
