@@ -132,9 +132,8 @@ def test_every_refusal_or_broken_answer_is_unavailable(
         speak_against(fake)
 
     (line,) = [one for one in logged.lines if one["event"] == "speak.ended"]
-    assert (line["outcome"], line["reason"], line["level"]) == a_speak_failure_line(
-        case
-    )
+    actual = (line["outcome"], line["reason"], line["level"])
+    assert actual == a_speak_failure_line(case)
     assert TOKENS.person not in logged.text
     assert TOKENS.workload not in logged.text
     assert SENTENCE not in logged.text
