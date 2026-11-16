@@ -312,5 +312,7 @@ def serving_apps(
             _wait_until_ready(second)
             yield first, second
         finally:
-            first.stop()
-            second.stop()
+            try:
+                first.stop()
+            finally:
+                second.stop()
