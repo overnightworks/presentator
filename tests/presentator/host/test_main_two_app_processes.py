@@ -17,6 +17,7 @@ from tests.presentator.host.support.app_processes import (
     starting_apps,
 )
 from tests.presentator.host.support.revision_history import a_longer_history
+from tests.support.log_lines import json_lines_among
 from tests.support.postgres import engine_on
 
 _A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS = "9999"
@@ -123,6 +124,14 @@ def test_an_empty_database_is_refused_at_start_by_both_processes(
 
     assert all(each.exit_code != 0 for each in finished), finished
     assert all(NO_REVISION in each.output for each in finished), finished
+    for each in finished:
+        (line,) = [
+            one
+            for one in json_lines_among(each.output)
+            if one["event"] == "store_connection.ended" and one["kind"] == "postgres"
+        ]
+        assert (line["kind"], line["outcome"]) == ("postgres", "refused")
+        assert line["reason"] == "no_revision"
     assert (
         _scalar(
             unmigrated_database_url,
@@ -147,6 +156,13 @@ def test_an_older_database_is_refused_at_start_by_both_processes(
 
     assert all(each.exit_code != 0 for each in finished), finished
     assert all(BEHIND_THIS_RELEASE in each.output for each in finished), finished
+    for each in finished:
+        (line,) = [
+            one
+            for one in json_lines_among(each.output)
+            if one["event"] == "store_connection.ended" and one["kind"] == "postgres"
+        ]
+        assert line["reason"] == "behind_this_release"
 
 
 @pytest.mark.usefixtures("environment")

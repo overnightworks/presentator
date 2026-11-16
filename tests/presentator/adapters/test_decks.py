@@ -57,7 +57,7 @@ from tests.support.deck_source_support import (
     mirrors_under,
 )
 from tests.support.git_remote import EXAMPLE_SLUG, EXAMPLE_TITLE, MAIN_BRANCH, GitRemote
-from tests.support.log_lines import logged_as_json
+from tests.support.log_lines import json_logged
 from tests.support.people import seed_user
 
 _NOTICED_GONE_AT = datetime(2026, 1, 20, 9, tzinfo=UTC)
@@ -251,7 +251,7 @@ def test_a_folder_whose_manifest_is_unreadable_is_still_there_without_a_title(
 
     source = a_source(remote.url)
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         folders = folders_read(tmp_path, source)
 
     assert {folder.name: folder.title for folder in folders} == {
@@ -433,7 +433,7 @@ def test_a_mirror_whose_parent_refuses_the_delete_is_reported_not_gone(
     # write bit a delete needs is closed.
     parent.chmod(0o500)
     try:
-        with logged_as_json(capsys) as logged:
+        with json_logged(capsys) as logged:
             left = mirrors.remove(source)
     finally:
         parent.chmod(0o700)

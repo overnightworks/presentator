@@ -9,7 +9,7 @@ import pytest
 
 from presentator.host.polling import Schedule
 from tests.presentator.application.support.fakes import PATIENCE
-from tests.support.log_lines import logged_as_json
+from tests.support.log_lines import json_logged
 
 _TIGHT = timedelta(0)
 
@@ -124,7 +124,7 @@ def test_a_chore_that_keeps_raising_writes_its_first_failure_and_its_recovery(
             # The fourth call begins after the third one's recovery line.
             return await asyncio.to_thread(chore.wait_for_calls, 4)
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         assert asyncio.run(run_through_the_failures())
 
     failed, recovered = [

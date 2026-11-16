@@ -70,7 +70,7 @@ from tests.presentator.application.support.fakes import (
     FrozenClock,
     HeldDeckFolders,
 )
-from tests.support.log_lines import events_of, logged_as_json
+from tests.support.log_lines import events_of, json_logged
 
 _ANOTHER_SOURCE = a_source("talks", identifier="a-second-source")
 _HTTPS_SOURCE = Source(
@@ -658,7 +658,7 @@ def test_a_folder_name_another_source_carries_stays_with_the_source_that_had_it(
         fakes=DecksFakes(store=store),
     )
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         listed = refreshed(decks)
 
     assert {deck.slug: deck.title for deck in listed} == {"kundenfeedback": "The first"}

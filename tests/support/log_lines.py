@@ -23,6 +23,13 @@ def events_of(logged: LoggedText, event: str) -> list[LogLine]:
     return [line for line in logged.lines if line["event"] == event]
 
 
+def json_lines_among(output: str) -> list[LogLine]:
+    """The JSON lines of an output that holds other text too, such as a traceback."""
+    return json_lines(
+        "\n".join(one for one in output.splitlines() if one.startswith("{"))
+    )
+
+
 def request_lines(caplog: pytest.LogCaptureFixture) -> list[LogLine]:
     """The request lines logline has written so far, as the records carry them."""
     carried = [cast("object", record.msg) for record in caplog.records]
@@ -51,11 +58,11 @@ class LoggedText:
 
 
 @contextmanager
-def logged_as_json(capsys: pytest.CaptureFixture[str]) -> Generator[LoggedText]:
-    """Write every log line of the block as logline does, to the test's own output.
+def json_logged(capsys: pytest.CaptureFixture[str]) -> Generator[LoggedText]:
+    """JSON logging on the output `capsys` holds, until the block ends.
 
-    A fixture cannot do this: pytest swaps the captured stream between a
-    fixture's setup and the test body, and logline binds the stream it finds.
+    The handler binds the output as it is when `configure` runs, which a fixture
+    cannot do for a test: pytest swaps the captured streams after the fixtures.
     """
     with configured("test"):
         yield LoggedText(capsys)

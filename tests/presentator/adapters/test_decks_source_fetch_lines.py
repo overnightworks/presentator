@@ -8,7 +8,7 @@ from gitmirror.model import CredentialReference
 from presentator.contracts.decks import SourceRunFailure
 from tests.support.deck_source_support import PUSHED_AT, a_source, folders_under
 from tests.support.git_remote import GitRemote
-from tests.support.log_lines import logged_as_json
+from tests.support.log_lines import json_logged
 
 
 def test_a_poll_that_reaches_a_source_writes_one_ok_fetch_line_with_its_duration(
@@ -19,7 +19,7 @@ def test_a_poll_that_reaches_a_source_writes_one_ok_fetch_line_with_its_duration
     remote.commit_example_deck(at=PUSHED_AT)
     source = a_source(remote.url)
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         folders_under(tmp_path).folders(source)
 
     [fetch] = logged.lines
@@ -40,7 +40,7 @@ def test_a_credential_nobody_can_resolve_ends_the_fetch_refused_with_its_code(
 
     source = a_source("https://host.example.invalid/repo.git")
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         poll = folders_under(tmp_path, credentials=_Unsendable()).folders(source)
 
     assert poll.failure is SourceRunFailure.CREDENTIAL_UNRESOLVABLE
@@ -61,7 +61,7 @@ def test_a_source_that_cannot_be_read_says_nothing_about_its_folders(
     # the one a dead host earns.
     unreachable = a_source("https://host.example.invalid/repo.git")
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         poll = folders_under(tmp_path).folders(unreachable)
 
     assert poll.folders is None

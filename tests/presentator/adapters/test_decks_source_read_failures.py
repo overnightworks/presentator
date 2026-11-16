@@ -22,7 +22,7 @@ from tests.presentator.application.support.decks_support import DecksFakes, deck
 from tests.presentator.application.support.fakes import FakeSourceStore
 from tests.support.deck_source_support import a_source, folders_under, mirrors_under
 from tests.support.git_remote import GitRemote, recording_every_git_launch
-from tests.support.log_lines import logged_as_json
+from tests.support.log_lines import json_logged
 
 _FIRST_PUSH = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _NEXT_PUSH = _FIRST_PUSH + timedelta(hours=1)
@@ -281,7 +281,7 @@ def test_a_stored_address_with_userinfo_that_resolves_to_no_mirror_logs_the_id_o
     name = "the-talks-source"
     source = replace(a_source(address), name=name)
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         poll = folders_under(tmp_path).folders(source)
 
     assert poll.folders is None

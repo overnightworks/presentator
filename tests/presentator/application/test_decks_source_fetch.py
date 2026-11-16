@@ -30,7 +30,7 @@ from tests.presentator.application.support.fakes import (
     FrozenClock,
     HeldDeckFolders,
 )
-from tests.support.log_lines import events_of, logged_as_json
+from tests.support.log_lines import events_of, json_logged
 
 
 def _fetched(mirror: FakeDeckFolders, builder: FakeBuildRunner) -> Decks:
@@ -185,7 +185,7 @@ def test_a_refresh_that_built_a_deck_writes_one_line_with_its_counts(
 ) -> None:
     decks = _fetched(carrying(a_folder("kundenfeedback")), FakeBuildRunner())
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         decks.refresh()
 
     [refreshed] = events_of(logged, "refresh.completed")
@@ -203,7 +203,7 @@ def test_a_refresh_that_found_no_work_writes_no_line(
     decks = _fetched(carrying(a_folder("kundenfeedback")), FakeBuildRunner())
     decks.refresh()
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         decks.refresh()
         decks.refresh_named(SOURCE.name)
 
@@ -215,7 +215,7 @@ def test_fetching_one_source_that_changed_writes_one_line_with_its_counts(
 ) -> None:
     decks = _fetched(carrying(a_folder("kundenfeedback")), FakeBuildRunner())
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         _fetch(decks)
 
     [refreshed] = events_of(logged, "refresh.completed")
@@ -233,7 +233,7 @@ def test_a_fetch_that_lost_the_refresh_writes_one_refusal_and_answers_busy(
         fakes=DecksFakes(ownership=FakeRefreshOwnership(lost_to_another=True)),
     )
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         fetched = _fetch(decks)
 
     assert fetched.run is None

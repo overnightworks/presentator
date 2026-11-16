@@ -46,7 +46,7 @@ from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeSourceStore,
 )
-from tests.support.log_lines import LoggedText, LogLine, events_of, logged_as_json
+from tests.support.log_lines import LoggedText, LogLine, events_of, json_logged
 
 _ANOTHER_SOURCE = a_source("talks", identifier="a-second-source")
 _A_LATER_COMMIT = "b7c1d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80"
@@ -223,7 +223,7 @@ def test_a_row_naming_a_path_no_run_owns_stops_the_sweep_without_deleting(
     stored: Build, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Row outside the root, wrongly shaped path inside it."""
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         left = swept(
             a_row("odd", build=stored),
             a_row("fine", build=a_build_in("delivered")),
@@ -237,7 +237,7 @@ def test_a_row_naming_a_path_no_run_owns_stops_the_sweep_without_deleting(
 def test_a_sweep_that_took_runs_off_disk_writes_one_line_with_its_counts(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         left = swept(
             a_row("fine", build=a_build_in("delivered")),
             on_disk=("delivered", "one", "two"),
@@ -251,7 +251,7 @@ def test_a_sweep_that_took_runs_off_disk_writes_one_line_with_its_counts(
 def test_a_sweep_that_found_no_run_to_take_writes_no_line(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         swept(a_row("fine", build=a_build_in("delivered")), on_disk=("delivered",))
 
     assert events_of(logged, "build_sweep.completed") == []
@@ -269,7 +269,7 @@ def test_a_listing_that_did_not_finish_deletes_nothing(
         fakes=DecksFakes(builder=builder, store=store),
     )
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         decks.refresh()
 
     assert runs_left(builder) == {"one"}
@@ -653,7 +653,7 @@ def test_another_source_takes_a_purged_address_and_not_before(
     at_expiry: str | None,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         instance = a_name_both_sources_carry(*order)
         instance.on_day(_KEPT - 1)
     assert all(
@@ -679,7 +679,7 @@ def test_a_re_push_after_another_source_took_the_address_is_skipped(
     instance.on_day(_KEPT)
     instance.carries(a_folder(_A_DECK))
 
-    with logged_as_json(capsys) as logged:
+    with json_logged(capsys) as logged:
         instance.on_day(_KEPT + 1)
 
     [refusal] = events_of(logged, "take_in.refused")
@@ -714,7 +714,7 @@ def test_a_purge_writes_one_line_with_its_source_id_and_deck_count(
     instance = missed_on_day_zero()
 
     def purges_on(day: int) -> list[LogLine]:
-        with logged_as_json(capsys) as logged:
+        with json_logged(capsys) as logged:
             instance.on_day(day)
         return events_of(logged, "deck_retention.completed")
 
