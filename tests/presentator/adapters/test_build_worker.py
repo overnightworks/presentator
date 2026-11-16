@@ -257,9 +257,11 @@ def test_a_status_later_than_the_window_fails_at_it_with_no_upload_byte_sent(
         seen_late.append(connection.recv(1 << 16))
 
     after_three_closings = closing_first(3, proven(slow_status))
-    started = time.monotonic()
+    client = toolchain(volume)
+    step = a_step(tmp_path)
     with fake_worker(volume, after_three_closings):
-        result = toolchain(volume).ran(a_step(tmp_path))
+        started = time.monotonic()
+        result = client.ran(step)
         elapsed = time.monotonic() - started
 
     assert result == UNAVAILABLE

@@ -93,8 +93,19 @@ class Scene:
         *,
         headers: dict[str, str] | None = None,
         query: str = "",
+        raise_server_exceptions: bool = True,
     ) -> Response:
-        return self.lobby.client.delete(
+        client = (
+            self.lobby.client
+            if raise_server_exceptions
+            else TestClient(
+                self.lobby.app,
+                base_url=A_BROWSERS_ADDRESS,
+                headers=A_BROWSERS_HEADERS,
+                raise_server_exceptions=False,
+            )
+        )
+        return client.delete(
             f"{_PATH}{subject}{query}",
             headers=self.token() if headers is None else headers,
         )
@@ -414,14 +425,8 @@ def test_a_build_no_run_owns_answers_a_plain_500_without_a_leftover() -> None:
     store = scene.instance.fakes.store
     (talk,) = store.for_source("talks-id")
     store.misplace_build(talk.slug, talk=Path("/nowhere/a-run/out/talk"))
-    client = TestClient(
-        scene.lobby.app,
-        base_url=A_BROWSERS_ADDRESS,
-        headers=A_BROWSERS_HEADERS,
-        raise_server_exceptions=False,
-    )
 
-    answer = client.delete(f"{_PATH}{THE_PERSON.id}", headers=scene.token())
+    answer = scene.erase(raise_server_exceptions=False)
 
     assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert "leftover" not in answer.text
@@ -437,16 +442,8 @@ def test_a_removal_timed_out_by_another_process_answers_500_and_a_repeat_erases(
     ownership = scene.instance.fakes.ownership
     ownership.held_elsewhere = True
     sources_before = tuple(scene.instance.decks.sources.all())
-    client = TestClient(
-        scene.lobby.app,
-        base_url=A_BROWSERS_ADDRESS,
-        headers=A_BROWSERS_HEADERS,
-        raise_server_exceptions=False,
-    )
 
-    answer = client.delete(
-        f"{_PATH}{THE_PERSON.id}?dry_run=false", headers=scene.token()
-    )
+    answer = scene.erase(query="?dry_run=false", raise_server_exceptions=False)
     person_kept = THE_PERSON.id in scene.instance.users.users
     sources_kept = tuple(scene.instance.decks.sources.all())
     ownership.held_elsewhere = False
