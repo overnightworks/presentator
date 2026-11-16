@@ -1,0 +1,8 @@
+claim_id = "a475d6b05d1843d689f3e7df1da8dd6f"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "f44614fb9a8b158dc366caa1ab6f5377d338708f"
+branch = "claude/issue-1223-the-last-free-text-lines-uvicorn-s-warni"
+scope = ["docs/ARCHITECTURE.md", "src/presentator/adapters/postgres/migrate.py", "src/presentator/host/config.py", "src/presentator/host/main.py", "src/presentator/host/stopping_server.py", "tests/presentator/host"]
+opened_commit = "fd2913e87a1b7d0ca3004f04ddeeb8eddad67267"
+whole_reason = "One slice closes the remaining free-text and mislabelled start lines of the web process."
