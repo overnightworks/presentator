@@ -1,0 +1,8 @@
+claim_id = "d3c386d6b3984f3ba430c9c009d762b7"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "32c81897acb312afe824637af203b81209f087cf"
+branch = "claude/issue-1186-rate-limits-and-the-ask-lease-live-in-re"
+scope = [".github/workflows/ci.yml", "docs/ARCHITECTURE.md", "docs/configuration.md", "pyproject.toml", "src/presentator/adapters", "src/presentator/api/auth.py", "src/presentator/api/copresenter.py", "src/presentator/api/health.py", "src/presentator/application/copresenter.py", "src/presentator/host", "src/presentator/ports/copresenter.py", "tests", "uv.lock"]
+opened_commit = "332cad31e46df8cc36656b9ab051dd80258763cf"
+whole_reason = "Redis replaces two pieces of pod-only state through the host, one adapter and the tests that run two processes; a half move leaves pods disagreeing."
