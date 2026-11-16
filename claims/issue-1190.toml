@@ -1,8 +1,0 @@
-claim_id = "e16bb083f24a4a51afbd64a635c00f62"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "92f60af713f4e41cfd89e76e454a280cd216a3f5"
-branch = "claude/issue-1190-refresh-ownership-on-postgres-fenced-s7"
-scope = ["docs/ARCHITECTURE.md", "docs/configuration.md", "docs/decks.md", "docs/people.md", "docs/sources.md", "quality/config.toml", "src/presentator/adapters", "src/presentator/api/source_api.py", "src/presentator/application", "src/presentator/host", "src/presentator/ports/decks.py", "tests"]
-opened_commit = "068dd196357de94aee91909e6d5db79a85c9cac8"
-whole_reason = "the fence wraps every refresh and removal write across adapters, application and host; tests prove it with two processes"
