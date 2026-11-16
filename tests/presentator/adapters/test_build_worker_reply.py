@@ -64,10 +64,6 @@ def exchanged_with(
         theirs.close()
 
 
-REFUSED = ("refused", None, "info")
-FAILED = ("failed", "toolchain_failed", "warning")
-
-
 BAD_REPLIES = [
     pytest.param(b"nonsense", id="a reply that is not the wire"),
     pytest.param(b"", id="end of file before the outcome"),
@@ -221,7 +217,7 @@ def test_a_staging_left_over_from_before_is_a_fault_and_is_not_removed(
                 written_megabytes=2,
                 allowed_megabytes=MEGABYTES,
             ),
-            REFUSED,
+            ("refused", None, "info"),
             id="megabytes",
         ),
         pytest.param(
@@ -230,31 +226,31 @@ def test_a_staging_left_over_from_before_is_a_fault_and_is_not_removed(
                 reason=BuildFailureReason.OUTPUT_ENTRIES,
                 allowed_entries=MAXIMUM_ENTRIES,
             ),
-            REFUSED,
+            ("refused", None, "info"),
             id="entries",
         ),
         pytest.param(
             refused_reply(RefusalLimit.SHAPE),
             BuildFailure(reason=BuildFailureReason.OUTPUT_SHAPE),
-            REFUSED,
+            ("refused", None, "info"),
             id="shape",
         ),
         pytest.param(
             failed_reply("it broke"),
             BuildFailure.said("it broke"),
-            FAILED,
+            ("failed", "toolchain_failed", "warning"),
             id="failed with text",
         ),
         pytest.param(
             failed_reply("e" * FAILURE_TEXT_LIMIT),
             BuildFailure.said("e" * FAILURE_TEXT_LIMIT),
-            FAILED,
+            ("failed", "toolchain_failed", "warning"),
             id="failed with the longest text",
         ),
         pytest.param(
             failed_reply(None),
             BuildFailure.without_words(),
-            FAILED,
+            ("failed", "toolchain_failed", "warning"),
             id="failed without text",
         ),
     ],
@@ -277,4 +273,4 @@ def test_a_refused_or_failed_reply_is_the_reason_the_deck_page_words(
     outcome, reason, level = ended
     assert (line["outcome"], line["level"]) == (outcome, level)
     assert line["reason"] == (reason or failure.reason.value)
-    assert "it broke" not in logged.text
+    assert failure.text is None or failure.text not in logged.text
