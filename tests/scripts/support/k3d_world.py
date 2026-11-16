@@ -161,6 +161,8 @@ class World:
     pull_error: str = ""
     # The error `k3d image import` ends with for the probe Redis; passes if empty.
     redis_import_error: str = ""
+    # How many looks into the node find the probe Redis; every look if None.
+    redis_found_in_node: int | None = None
     twin_pod: str = ""
     twin_log: str = "the twin's mount list"
     # What the web and the workers do: whether they become Ready, the web's
@@ -249,6 +251,8 @@ class World:
                 self.redis_import_error and image == self.redis_image
             ):
                 return 1, "", self.redis_import_error
+            case ("docker", "exec", _, "crictl", "inspecti", image):
+                return self.node_image_answer(image)
             case ("timeout", _, "kubectl", "cp", *_):
                 return self.copy_exit, "", self.copy_stderr
             case ("timeout", _, "kubectl", "exec", *_):
@@ -256,6 +260,14 @@ class World:
             case _:
                 answer = self.answer(command)
                 return (1, "", "") if answer is None else (0, answer, "")
+
+    def node_image_answer(self, image: str) -> tuple[int, str, str]:
+        """How the node's runtime answers a look for the image, by the looks so far."""
+        looks = len(self.issued("docker", "exec", self.node_name, "crictl"))
+        found = self.redis_found_in_node
+        if image == self.redis_image and found is not None and looks > found:
+            return 1, "", f'no such image "{image}" present'
+        return 0, "{}", ""
 
     def exec_answer(self, command: tuple[str, ...]) -> tuple[int, str, str]:
         """What a program sent into a pod prints, by its container and arguments."""
