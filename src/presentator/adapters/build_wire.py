@@ -73,6 +73,14 @@ class WireRefusedError(Exception):
     """The peer sent something other than a valid STEP or END."""
 
 
+class WireClosedError(WireRefusedError, ConnectionError):
+    """The peer ended the stream in the middle of a message.
+
+    A WireRefusedError too, so every caller that refuses a bad message refuses
+    this as before; a ConnectionError, so it is named as the connection ending.
+    """
+
+
 class HelloRefusedError(WireRefusedError):
     """The peer of a keyed hello did not prove that it holds the key."""
 
@@ -142,7 +150,7 @@ def _read_exactly(connection: socket.socket, count: int) -> bytes:
     while len(received) < count:
         chunk = connection.recv(count - len(received))
         if not chunk:
-            raise WireRefusedError
+            raise WireClosedError
         received += chunk
     return bytes(received)
 
@@ -177,7 +185,7 @@ def _read_exactly_by(connection: socket.socket, count: int, deadline: float) -> 
         _arm(connection, deadline)
         chunk = connection.recv(count - len(received))
         if not chunk:
-            raise WireRefusedError
+            raise WireClosedError
         received += chunk
     return bytes(received)
 

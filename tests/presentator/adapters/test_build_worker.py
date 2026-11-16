@@ -167,6 +167,19 @@ def test_a_step_the_worker_never_answered_is_unavailable_and_names_the_fault(
     assert fault.value in caplog.text
 
 
+def test_a_worker_closing_after_the_status_is_logged_as_the_connection_ending(
+    volume: Path, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    with (
+        caplog.at_level(logging.WARNING),
+        fake_worker(volume, answering(nothing_to_reply), accepts=1),
+    ):
+        toolchain(volume).ran(a_step(tmp_path))
+
+    assert Fault.CONNECTION.value in caplog.text
+    assert Fault.REPLY_GRAMMAR.value not in caplog.text
+
+
 def test_a_peer_that_cannot_prove_the_key_is_refused_without_a_retry_or_a_byte(
     volume: Path, tmp_path: Path
 ) -> None:
