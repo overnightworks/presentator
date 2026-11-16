@@ -1,8 +1,0 @@
-claim_id = "f8646e2ade5746b9bf58a9094a20d119"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "6b645ce45f23e66f7deb397a53fca52b7bd5ef41"
-branch = "claude/issue-1204-untimed-lines-process-lifecycle-and-stor"
-scope = ["docs/ARCHITECTURE.md", "docs/people.md", "pyproject.toml", "src/presentator/adapters/audit.py", "src/presentator/adapters/postgres/migrate.py", "src/presentator/adapters/postgres/refresh_owner.py", "src/presentator/adapters/shared_redis.py", "src/presentator/agent/backend.py", "src/presentator/api/people.py", "src/presentator/host/main.py", "src/presentator/host/store_connection.py", "tests/presentator/adapters", "tests/presentator/api", "tests/presentator/host", "tests/support", "uv.lock"]
-opened_commit = "96310c7f56e2f6899b49251c50070b639cb22f8a"
-whole_reason = "a logging slice of #1183 spans its call sites and their tests"
