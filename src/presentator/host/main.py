@@ -4,7 +4,6 @@ Imports every other layer, because it is the one place that decides which
 adapter satisfies which port.
 """
 
-import argparse
 import asyncio
 import copy
 import logging
@@ -14,7 +13,6 @@ from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
-from types import FrameType
 from typing import Final
 from urllib.parse import urlsplit
 
@@ -61,7 +59,6 @@ from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
 from presentator.adapters.postgres.migrate import (
     MIGRATIONS_DIRECTORY,
     database_is_ready,
-    migrate,
     migration_history,
     serving_refusal,
 )
@@ -122,12 +119,16 @@ from presentator.application.own_decks import OwnDecks
 from presentator.application.people import People
 from presentator.application.preferences import Preferences
 from presentator.contracts.decks import ToolchainIdentity
+from presentator.host.command_line import (
+    MIGRATE_COMMAND,
+    command_line,
+    migrate_the_database,
+)
 from presentator.host.config import (
     PostgresDatabase,
     Settings,
     WhereBuildsRun,
     cannot_start,
-    load_database_settings,
     load_settings,
     variable_of,
 )
@@ -137,6 +138,7 @@ from presentator.host.oidc import (
     relying_party,
 )
 from presentator.host.polling import Schedule
+from presentator.host.stopping_server import StoppingServer
 from presentator.host.store_connection import (
     StoreKind,
     reach_redis,
@@ -160,7 +162,6 @@ from presentator.ports.preferences import (
 _log = logging.getLogger(__name__)
 
 SERVICE_NAME = "presentator"
-MIGRATE_COMMAND = "migrate"
 
 RelyingPartyFor = Callable[[OidcClientConfig], OidcRelyingParty]
 
@@ -711,8 +712,8 @@ def main(
     Both run on the configuration the environment carries.
     """
     logline.configure(SERVICE_NAME)
-    if _command_line().parse_args(arguments).command == MIGRATE_COMMAND:
-        _migrate_the_database()
+    if command_line().parse_args(arguments).command == MIGRATE_COMMAND:
+        migrate_the_database()
         return
     _log.info("process.started")
     settings = load_settings()
@@ -721,24 +722,6 @@ def main(
             build_instance(settings, relying_party_for, migrations_directory), settings
         )
     )
-
-
-def _migrate_the_database() -> None:
-    database = load_database_settings().postgres
-    engine = create_database_engine(database.url, database.password)
-    try:
-        migrate(engine)
-    finally:
-        engine.dispose()
-
-
-def _command_line() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="presentator")
-    commands = parser.add_subparsers(dest="command")
-    commands.add_parser(
-        MIGRATE_COMMAND, help="bring the database to the newest revision, then exit"
-    )
-    return parser
 
 
 def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddleware:
@@ -779,25 +762,6 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
             lifespan=lifespan,
         )
     )
-
-
-class StoppingServer(uvicorn.Server):
-    """A server whose signal marks the stop as begun before uvicorn starts it.
-
-    uvicorn closes each open WebSocket with 1012 and lets a running answer
-    finish; the mark makes `/health` unready and refuses new asks and hearings
-    from the signal on.
-    """
-
-    def __init__(self, config: uvicorn.Config, stopping: Stopping) -> None:
-        """Serve `config`, marking `stopping` when a signal ends the server."""
-        super().__init__(config)
-        self._stopping = stopping
-
-    def handle_exit(self, sig: int, frame: FrameType | None) -> None:
-        """Mark the stop as begun, then let uvicorn start it."""
-        self._stopping.begin()
-        super().handle_exit(sig, frame)
 
 
 async def _serve(instance: Instance, settings: Settings) -> None:
