@@ -177,6 +177,10 @@ def test_the_hosts_logging_drops_the_transports_traces_below_a_warning(
     logger.info("an-info-trace-MARKER")
     logger.warning("a-warning-trace")
 
-    written = json_lines(capsys.readouterr().out)
+    written = [
+        line
+        for line in json_lines(capsys.readouterr().out)
+        if line["logger"] == transport
+    ]
     assert [line["event"] for line in written] == ["a-warning-trace"]
     assert written[0]["service"] == main.SERVICE_NAME

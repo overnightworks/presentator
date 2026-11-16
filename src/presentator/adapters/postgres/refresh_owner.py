@@ -14,6 +14,7 @@ import logging
 from collections.abc import Callable, Generator, Mapping
 from contextlib import AbstractContextManager, contextmanager, suppress
 from datetime import timedelta
+from enum import StrEnum
 from math import ceil
 from typing import Any, Final, Protocol
 
@@ -46,12 +47,16 @@ _BUMP: Final = text(
 _READ_EPOCH: Final = text("SELECT epoch FROM refresh_owner WHERE id = 1 FOR SHARE")
 _PING: Final = text("SELECT 1")
 _MILLISECONDS: Final = 1000
-_BUMP_TIMED_OUT: Final = (
-    "the refresh lock was let go: taking over the epoch waited past its bound"
-)
-_RELEASE_FAILED: Final = "the refresh lock was not released: its connection is gone"
+_LET_GO: Final = "refresh_lock.let_go"
 
 _log = logging.getLogger(__name__)
+
+
+class LetGoReason(StrEnum):
+    """Why the refresh lock was let go: the closed set of `reason` codes."""
+
+    BUMP_TIMED_OUT = "bump_timed_out"
+    CONNECTION_GONE = "connection_gone"
 
 
 class RefreshFence(Protocol):
@@ -174,7 +179,7 @@ class PostgresRefreshOwnership:
             self._release()
             if not _waited_too_long(failure):
                 raise
-            _log.warning(_BUMP_TIMED_OUT)
+            _log.warning(_LET_GO, extra={"reason": LetGoReason.BUMP_TIMED_OUT})
             return False
         return True
 
@@ -185,7 +190,7 @@ class PostgresRefreshOwnership:
         try:
             self._run(_UNLOCK, parameters(REFRESH_LOCK))
         except DBAPIError:
-            _log.warning(_RELEASE_FAILED)
+            _log.warning(_LET_GO, extra={"reason": LetGoReason.CONNECTION_GONE})
 
     def _run(
         self, statement: TextClause, arguments: Mapping[str, int] | None = None

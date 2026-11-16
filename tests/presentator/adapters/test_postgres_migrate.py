@@ -1,8 +1,10 @@
 """`migrate` brings a database to head and leaves a newer one alone."""
 
+import pytest
 from sqlalchemy import Engine, inspect, text
 
 from presentator.adapters.postgres.migrate import migrate
+from tests.support.log_lines import json_logged
 from tests.support.postgres import engine_on
 
 _A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS = "9999"
@@ -79,7 +81,7 @@ def test_a_second_migration_changes_nothing(unmigrated_database_url: str) -> Non
 
 
 def test_a_database_a_newer_release_migrated_is_left_as_it_is(
-    unmigrated_database_url: str,
+    unmigrated_database_url: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     engine = engine_on(unmigrated_database_url)
     try:
@@ -92,7 +94,8 @@ def test_a_database_a_newer_release_migrated_is_left_as_it_is(
                 {"revision": _A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS},
             )
 
-        migrate(engine)
+        with json_logged(capsys) as logged:
+            migrate(engine)
 
         inspector = inspect(engine)
         with engine.connect() as connection:
@@ -105,3 +108,6 @@ def test_a_database_a_newer_release_migrated_is_left_as_it_is(
 
     assert revision == _A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS
     assert tables == {"alembic_version"}
+    (refusal,) = [one for one in logged.lines if one["event"] == "migration.refused"]
+    assert refusal["reason"] == "newer_than_this_release"
+    assert refusal["level"] == "info"

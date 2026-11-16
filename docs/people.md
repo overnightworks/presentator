@@ -56,7 +56,7 @@ is `{subject}`. `?dry_run=true` counts and changes nothing.
   A source's removal that waits out the build timeout for another process's
   refresh fails with a plain 500 when that wait ends, and a repeat resumes the
   erasure.
-- **PE16** The log line of a leftover holds the kinds and counts left over and
+- **PE16** The `person_erasure.ended` line of a leftover holds the kinds and counts left over and
   removed, never a path or a name; the mirror's own warning names the source's
   internal id.
 - **PE17** A dry run never lists a leftover.
@@ -83,7 +83,7 @@ is `{subject}`. `?dry_run=true` counts and changes nothing.
   `data` exactly `{}`, `files` `[]` and `withheld` `[]`; no account is made. The
   answers 401 and 403 are the erase route's, and every answer carries
   `Cache-Control: no-store`.
-- **PE24** The log line holds the withheld counts and names nobody.
+- **PE24** The `person_export.ended` line holds the withheld counts and names nobody.
 - **PE31** Each exported session carries the account language stored at its
   sign-in, `null` where the account named none; the language is not withheld.
 

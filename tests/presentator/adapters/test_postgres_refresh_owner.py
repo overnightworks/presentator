@@ -45,6 +45,7 @@ from tests.presentator.application.support.fakes import (
 )
 from tests.support.deck_source_support import a_build, a_deck
 from tests.support.lobby import INSTANCE_KEY
+from tests.support.log_lines import LoggedText, LogLine, json_logged
 from tests.support.postgres import (
     end_connections_holding,
     engine_on,
@@ -97,6 +98,10 @@ def _until(accepted: Callable[[], bool]) -> None:
     while not accepted():
         assert time.monotonic() < deadline, "the database never reached the state"
         time.sleep(0.02)
+
+
+def _let_go_lines(logged: LoggedText) -> list[LogLine]:
+    return [one for one in logged.lines if one["event"] == "refresh_lock.let_go"]
 
 
 def _holds(owner: PostgresRefreshOwnership) -> bool:
@@ -216,11 +221,13 @@ def test_a_holder_writes_while_it_holds_and_nothing_once_it_let_go(
 
 
 def test_a_bump_blocked_by_a_stale_transaction_gives_up_at_its_bound_and_succeeds_later(
-    engine: Engine, owners: Callable[..., PostgresRefreshOwnership]
+    engine: Engine,
+    owners: Callable[..., PostgresRefreshOwnership],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     owner = owners()
 
-    with engine.connect() as stale:
+    with engine.connect() as stale, json_logged(capsys) as logged:
         stale.execute(text("SELECT epoch FROM refresh_owner FOR SHARE"))
         held_while_blocked = _holds(owner)
         lock_free_after_giving_up = _the_refresh_lock_is_free(engine)
@@ -228,6 +235,8 @@ def test_a_bump_blocked_by_a_stale_transaction_gives_up_at_its_bound_and_succeed
     assert not held_while_blocked
     assert lock_free_after_giving_up
     assert _holds(owner)
+    (line,) = _let_go_lines(logged)
+    assert (line["level"], line["reason"]) == ("warning", "bump_timed_out")
 
 
 def test_a_toolchain_is_present_while_a_process_of_it_runs(
@@ -259,15 +268,19 @@ def test_a_dead_connection_is_replaced_and_announces_the_toolchain_again(
 
 
 def test_a_holder_whose_connection_ended_leaves_its_block_without_failing(
-    engine: Engine, owners: Callable[..., PostgresRefreshOwnership]
+    engine: Engine,
+    owners: Callable[..., PostgresRefreshOwnership],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     owner = owners()
 
-    with owner.try_hold() as held:
+    with json_logged(capsys) as logged, owner.try_hold() as held:
         end_connections_holding(engine, LockClass.REFRESH)
         _until(lambda: _the_refresh_lock_is_free(engine))
 
     assert held
+    (line,) = _let_go_lines(logged)
+    assert line["reason"] == "connection_gone"
 
 
 def test_a_pinned_connection_that_ended_outside_a_hold_is_replaced_by_recovery(
