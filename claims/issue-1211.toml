@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "deb63de9eaf6a9aaaaa4fb102393f91ab3f08696"
 branch = "claude/issue-1211-the-co-presenter-s-answer-hop-logs-acces"
-scope = ["src/presentator/adapters/session_access.py", "src/presentator/adapters/speech.py", "src/presentator/api/copresenter.py", "src/presentator/application", "tests/presentator/adapters", "tests/presentator/api", "tests/presentator/application"]
+scope = ["docs/ARCHITECTURE.md", "src/presentator/adapters/session_access.py", "src/presentator/adapters/speech.py", "src/presentator/api/copresenter.py", "src/presentator/application", "tests/presentator/adapters", "tests/presentator/api", "tests/presentator/application", "tests/presentator/contracts/test_copresenter.py", "tests/support/copresenter_support.py", "tests/support/leak_support.py"]
 opened_commit = "ddc9666355739d526e8b7bf0cd45f9e24b40604f"
 whole_reason = "the answer hop spans token, speech and the ask route with their tests"
