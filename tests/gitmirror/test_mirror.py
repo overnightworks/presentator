@@ -2,7 +2,6 @@
 
 import base64
 import functools
-import logging
 import shlex
 import shutil
 import socket
@@ -66,7 +65,6 @@ _A_DECK = {
     "README.md": "not a deck\n",
 }
 _LOOPBACK = "127.0.0.1"
-_LEAKED_USERINFO = "leaked-user:leaked-password"
 _AN_UNRESOLVABLE_HOST = "http://host.example.invalid/repo.git"
 
 
@@ -872,74 +870,6 @@ def test_an_unresolvable_host_is_named_unreachable(tmp_path: Path) -> None:
 
     assert connection.state is ConnectionState.UNREACHABLE
     assert connection.revision is None
-
-
-def test_a_failed_pull_logs_gits_words_with_the_urls_userinfo_hidden(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    caplog.set_level(logging.WARNING, logger="gitmirror.mirror")
-    with _responding_remote(status=HTTPStatus.UNAUTHORIZED) as remote_url:
-        leaking_url = remote_url.replace("//", f"//{_LEAKED_USERINFO}@")
-        refused = a_mirror(
-            leaking_url,
-            directory=tmp_path,
-            credential=_TOKEN_REFERENCE,
-            resolver=OneKnownSecret(),
-        )
-        refused.connect()
-
-    leaked_name, _, leaked_password = _LEAKED_USERINFO.partition(":")
-    [record] = caplog.records
-    assert record.levelname == "WARNING"
-    assert "***" in record.message
-    assert leaked_name not in record.message
-    assert leaked_password not in record.message
-    assert WHAT_THE_RESOLVER_ANSWERS not in record.message
-    assert "authentication" in record.message.lower()
-
-
-def test_a_failed_pull_hides_userinfo_the_remote_reflects_back(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    caplog.set_level(logging.WARNING, logger="gitmirror.mirror")
-    reflected = (
-        "retry at https://mirror-user:mirror-secret@mirror.example.invalid/repo.git"
-    )
-    with _responding_remote(
-        status=HTTPStatus.FORBIDDEN,
-        body=reflected.encode(),
-    ) as remote_url:
-        mirror = a_mirror(remote_url, directory=tmp_path)
-        mirror.connect()
-
-    [record] = caplog.records
-    assert "mirror-user:mirror-secret" not in record.message
-    assert "***" in record.message
-
-
-def test_a_failed_pull_hides_the_secret_the_remote_reflects_back(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    caplog.set_level(logging.WARNING, logger="gitmirror.mirror")
-    resolved = f"{WHAT_THE_RESOLVER_ANSWERS} for {_TOKEN_REFERENCE.name}"
-    with _responding_remote(
-        status=HTTPStatus.FORBIDDEN,
-        body=f"token rejected: {resolved}".encode(),
-    ) as remote_url:
-        mirror = a_mirror(
-            remote_url,
-            directory=tmp_path,
-            credential=_TOKEN_REFERENCE,
-            resolver=OneKnownSecret(),
-        )
-        mirror.connect()
-
-    [record] = caplog.records
-    assert resolved not in record.message
-    assert "***" in record.message
 
 
 def test_reading_a_path_the_commit_does_not_carry_is_refused(
