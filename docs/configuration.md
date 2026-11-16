@@ -74,12 +74,12 @@ some of them.
 | `PRESENTATOR_TRUSTED_PROXIES` | empty | Comma-separated addresses or networks; see below. |
 | `LOG_LEVEL` | `info` | The root log level (`debug`, `info`, `warning`, `error`, `critical`); the request line is written at `info` whatever it says, and anything else refuses the start. |
 | `PRESENTATOR_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/` as the person and `/api/admin/` as an admin; empty serves no route for a token client's token. See [people](people.md). |
-| `PRESENTATOR_SOURCE_POLL_SECONDS` | `300` | Interval of the source poll. |
+| `PRESENTATOR_SOURCE_POLL_SECONDS` | `300` | Interval of the source poll; a source another process took in within it waits for the next tick. |
 | `PRESENTATOR_SOURCE_TIMEOUT_SECONDS` | `180` | Bound of one pull and of one Check connection. |
 | `PRESENTATOR_TOOLCHAIN` | `slidev` | The project carrying Slidev. Read once at start under either runner; a project that cannot be read refuses to start. |
 | `PRESENTATOR_LOBBY_BUILD` | `frontend/build` | The lobby app's `pnpm build` output; an instance without a build it can serve refuses to start. |
 | `PRESENTATOR_BUILDS` | `builds` | Where built talks and PDFs are kept. |
-| `PRESENTATOR_BUILD_TIMEOUT_SECONDS` | `300` | Bound of each build step; the build worker reads it too. |
+| `PRESENTATOR_BUILD_TIMEOUT_SECONDS` | `300` | Bound of each build step; the build worker reads it too. A removal waits for a refresh this long, and so does a new refresh holder for the writes the old one has open. |
 | `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves; the build worker reads it too. |
 | `PRESENTATOR_BUILD_RUNNER` | `worker` | Builds through the build workers and starts whether or not one answers; a build that finds none within 70 seconds fails as a worker outage. `host` builds on this machine instead, for a development run (without the sandbox, whose reason is in [constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons)). |
 | `PRESENTATOR_BUILD_WORKER_ADDRESS` | none | `host:port` of the build workers' Service; required with the `worker` runner and set together with the key file. |

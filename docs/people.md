@@ -53,6 +53,8 @@ is `{subject}`. `?dry_run=true` counts and changes nothing.
   other source, keeps the account, and fails with a plain 500. No
   `person erase:` line is written for that call; the server logs the exception
   with the source's internal id.
+  A source's removal that waits past the build timeout for another process's
+  refresh fails with a plain 500 at once, and a repeat resumes the erasure.
 - **PE16** The log line of a leftover holds the kinds and counts left over and
   removed, never a path or a name; the mirror's own warning names the source's
   internal id.
