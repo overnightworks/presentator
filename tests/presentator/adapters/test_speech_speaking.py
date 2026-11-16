@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 from speech_client import wire
@@ -108,23 +108,35 @@ def test_the_request_carries_both_tokens_in_the_clients_headers() -> None:
         assert request.headers[name.lower()] == value
 
 
-def a_speak_failure_line(case: str) -> tuple[str, str, str]:
-    """The `(outcome, reason, level)` of the `speak.ended` line of a failure."""
-    if case == "busy-with-a-wait":
-        return ("refused", "busy", "info")
-    reasons = {
-        "marked-refusal": "malformed",
-        "non-json-500": "malformed",
-        "empty-body": "malformed",
-        "cut-body": "cut",
-        "past-the-cap": "over_cap",
-    }
-    return ("failed", reasons.get(case, "refused"), "error")
+_REFUSED: Final = ("failed", "refused", "error")
+_MALFORMED: Final = ("failed", "malformed", "error")
+
+# The `(outcome, reason, level)` of the `speak.ended` line of every failure.
+_SPEAK_FAILURE_LINES: Final[dict[str, tuple[str, str, str]]] = {
+    "unsupported_version": _REFUSED,
+    "not_found": _REFUSED,
+    "unauthorized": _REFUSED,
+    "forbidden": _REFUSED,
+    "invalid_request": _REFUSED,
+    "too_large": _REFUSED,
+    "unavailable": _REFUSED,
+    "unavailable-voice": _REFUSED,
+    "busy-with-a-wait": ("refused", "busy", "info"),
+    "marked-refusal": _MALFORMED,
+    "non-json-500": _MALFORMED,
+    "empty-body": _MALFORMED,
+    "cut-body": ("failed", "cut", "error"),
+    "past-the-cap": ("failed", "over_cap", "error"),
+}
 
 
-@pytest.mark.parametrize("case", SPEAK_FAILURES)
+def test_the_table_of_speak_failure_lines_names_every_failure() -> None:
+    assert _SPEAK_FAILURE_LINES.keys() == SPEAK_FAILURES.keys()
+
+
+@pytest.mark.parametrize(("case", "expected"), _SPEAK_FAILURE_LINES.items())
 def test_every_refusal_or_broken_answer_is_unavailable(
-    case: str, capsys: pytest.CaptureFixture[str]
+    case: str, expected: tuple[str, str, str], capsys: pytest.CaptureFixture[str]
 ) -> None:
     fake = FakeSpeechService(speak_answers=[SPEAK_FAILURES[case]])
 
@@ -133,7 +145,7 @@ def test_every_refusal_or_broken_answer_is_unavailable(
 
     (line,) = [one for one in logged.lines if one["event"] == "speak.ended"]
     actual = (line["outcome"], line["reason"], line["level"])
-    assert actual == a_speak_failure_line(case)
+    assert actual == expected
     assert TOKENS.person not in logged.text
     assert TOKENS.workload not in logged.text
     assert SENTENCE not in logged.text

@@ -141,8 +141,9 @@ def test_a_root_that_cannot_be_listed_lists_nothing_at_all(
         assert listed_runs(tmp_path / "missing") is None
 
     (line,) = logged.lines
-    assert (line["event"], line["error_type"]) == (
-        "build_root_listing.failed",
+    assert (line["event"], line["reason"], line["error_type"]) == (
+        "build_root_listing.refused",
+        "unlistable",
         "FileNotFoundError",
     )
     assert "missing" not in logged.text
@@ -197,7 +198,7 @@ def test_a_run_that_cannot_be_looked_at_is_not_reported_gone(
 
     (line,) = logged.lines
     assert (line["event"], line["reason"], line["run_id"]) == (
-        "build_run_removal.failed",
+        "build_run_removal.refused",
         "stayed",
         "unseen",
     )

@@ -52,7 +52,8 @@ REPLY_MARGIN_SECONDS: Final = 5.0
 STAGED_PREFIX: Final = "staged-"
 STAGING_MODE: Final = 0o700
 
-_STAGING_EVENT: Final = "build_staging_removal.failed"
+_STAGING_EVENT: Final = "build_staging_removal.refused"
+_STAGING_REASON: Final = "staging_stayed"
 _ATTEMPT_EVENT: Final = "worker_attempt.failed"
 
 _log = logging.getLogger(__name__)
@@ -217,7 +218,10 @@ def _cleared(staged: Path, remove_staging: Callable[[Path], None]) -> None:
     try:
         remove_staging(staged)
     except OSError as error:
-        _log.warning(_STAGING_EVENT, extra={"error_type": type(error).__name__})
+        _log.warning(
+            _STAGING_EVENT,
+            extra={"reason": _STAGING_REASON, "error_type": type(error).__name__},
+        )
 
 
 def exchange_with_worker(

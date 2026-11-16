@@ -189,9 +189,10 @@ def test_a_staging_that_cannot_be_removed_leaves_the_result_and_logs_the_fault(
         step.place.here / OUTPUT_DIRECTORY / TALK_DIRECTORY / "index.html"
     ).read_bytes() == INDEX
     (line,) = logged.lines
-    assert (line["event"], line["level"], line["error_type"]) == (
-        "build_staging_removal.failed",
+    assert (line["event"], line["level"], line["reason"], line["error_type"]) == (
+        "build_staging_removal.refused",
         "warning",
+        "staging_stayed",
         "OSError",
     )
 

@@ -69,7 +69,16 @@ class WhereBuildsRun(StrEnum):
 
 
 class ConfigurationError(ValueError):
-    """What the environment carries is not a configuration to run on."""
+    """What the environment carries is not a configuration to run on.
+
+    `variables` names the environment variables that were refused, when it is
+    known which; they are setting names, never values.
+    """
+
+    def __init__(self, message: str, *, variables: tuple[str, ...] = ()) -> None:
+        """Say why, and which variables."""
+        super().__init__(message)
+        self.variables = variables
 
 
 def worker_endpoint(address: str) -> tuple[str, int]:
@@ -492,11 +501,13 @@ def load_worker_settings() -> WorkerSettings:
         return WorkerSettings.model_validate({})
     except ValidationError as refused:
         # `msg` states the rule that failed and never quotes the value.
+        faults = [
+            (variable_of(str(fault["loc"][0])), fault["msg"])
+            for fault in refused.errors()
+        ]
         raise cannot_start(
-            ", ".join(
-                f"{variable_of(str(fault['loc'][0]))}: {fault['msg']}"
-                for fault in refused.errors()
-            )
+            ", ".join(f"{variable}: {rule}" for variable, rule in faults),
+            variables=tuple(variable for variable, _ in faults),
         ) from None
 
 
@@ -523,9 +534,9 @@ def read_secret_file(
     return SecretStr(secret)
 
 
-def cannot_start(reason: str) -> ConfigurationError:
+def cannot_start(reason: str, *, variables: tuple[str, ...] = ()) -> ConfigurationError:
     """The refusal an environment no instance can run on is answered with."""
-    return ConfigurationError(f"{_REFUSED}: {reason}")
+    return ConfigurationError(f"{_REFUSED}: {reason}", variables=variables)
 
 
 def load_settings() -> Settings:

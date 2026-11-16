@@ -628,12 +628,10 @@ def test_without_a_toolchain_on_the_machine_there_is_no_build(
     # carries it; the page is told that this build left no words.
     assert built == BuildFailure.without_words()
     step = the_error_line(logged)
-    assert (step["event"], step["reason"]) == (
-        "build_step.ended",
-        "toolchain_unavailable",
-    )
+    assert step["event"] == "build_step.ended"
     (build,) = lines_of(logged, "deck_build.ended")
     assert (build["outcome"], build["level"]) == ("failed", "warning")
+    assert step["reason"] == build["reason"] == "toolchain_unavailable"
     assert EXAMPLE_SLUG not in logged.text
     assert _TOOLCHAIN_PROGRAM not in logged.text
 
@@ -964,7 +962,7 @@ def test_a_run_that_could_not_be_taken_away_is_logged_and_answered_as_its_volume
     with _opened_again_afterwards(builds.builds), json_logged(capsys) as logged:
         built = builds.build(a_deck(remote), source=source)
         (left,) = builds.builds.iterdir()
-        stayed = lines_of(logged, "build_run_removal.failed")
+        stayed = lines_of(logged, "build_run_removal.refused")
         named = builds.remove(BuildRun(left.name))
 
     assert isinstance(built, BuildFailure)
