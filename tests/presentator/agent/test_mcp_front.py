@@ -7,7 +7,8 @@ calls with a bearer alone.
 
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
@@ -54,6 +55,25 @@ from tests.support.sign_in_support import ADMIN, MEMBER, a_scene
 def world(tmp_path: Path) -> Iterator[World]:
     with a_world(tmp_path) as running:
         yield running
+
+
+def an_instance(world: World) -> Instance:
+    return Instance(
+        lobby=world.scene.lobby.app,
+        talk=a_talk_app(people=a_crowd()),
+        poller=Schedule(chore=lambda: None, interval=timedelta(seconds=1)),
+        session_sweep=Schedule(chore=lambda: None, interval=timedelta(seconds=1)),
+    )
+
+
+@contextmanager
+def the_served_lobby(world: World) -> Generator[TestClient]:
+    with TestClient(
+        served_by_host(an_instance(world), a_settings()),
+        base_url=A_BROWSERS_ADDRESS,
+        follow_redirects=False,
+    ) as lobby:
+        yield lobby
 
 
 def test_one_world_answers_several_requests_through_its_one_running_front(
@@ -464,13 +484,7 @@ def test_the_production_hostname_routing_keeps_the_front_at_the_lobby_alone(
     world: World,
 ) -> None:
     """The talk host answers neither the front nor the discovery document."""
-    instance = Instance(
-        lobby=world.scene.lobby.app,
-        talk=a_talk_app(people=a_crowd()),
-        poller=Schedule(chore=lambda: None, interval=timedelta(seconds=1)),
-        session_sweep=Schedule(chore=lambda: None, interval=timedelta(seconds=1)),
-    )
-    served = served_by_host(instance, a_settings())
+    served = served_by_host(an_instance(world), a_settings())
     lobby = TestClient(served, base_url=A_BROWSERS_ADDRESS, follow_redirects=False)
     talk = TestClient(served, base_url=A_TALK_ADDRESS, follow_redirects=False)
 
@@ -502,18 +516,7 @@ def test_the_served_router_runs_the_front_for_the_lobby_it_serves(
     tmp_path: Path,
 ) -> None:
     with a_world(tmp_path, entering_the_lifespan=False) as world:
-        instance = Instance(
-            lobby=world.scene.lobby.app,
-            talk=a_talk_app(people=a_crowd()),
-            poller=Schedule(chore=lambda: None, interval=timedelta(seconds=1)),
-            session_sweep=Schedule(chore=lambda: None, interval=timedelta(seconds=1)),
-        )
-
-        with TestClient(
-            served_by_host(instance, a_settings()),
-            base_url=A_BROWSERS_ADDRESS,
-            follow_redirects=False,
-        ) as lobby:
+        with the_served_lobby(world) as lobby:
             answer = post_mcp(lobby, world.bearer(), "tools/list")
 
         assert answer.status_code == HTTPStatus.OK
@@ -525,18 +528,7 @@ def test_the_served_request_line_names_the_bearers_person_and_the_route_of_the_f
     del json_logging
     caplog.set_level(logging.INFO)
     with a_world(tmp_path, entering_the_lifespan=False) as world:
-        instance = Instance(
-            lobby=world.scene.lobby.app,
-            talk=a_talk_app(people=a_crowd()),
-            poller=Schedule(chore=lambda: None, interval=timedelta(seconds=1)),
-            session_sweep=Schedule(chore=lambda: None, interval=timedelta(seconds=1)),
-        )
-
-        with TestClient(
-            served_by_host(instance, a_settings()),
-            base_url=A_BROWSERS_ADDRESS,
-            follow_redirects=False,
-        ) as lobby:
+        with the_served_lobby(world) as lobby:
             post_mcp(lobby, world.bearer(), "tools/list")
             lobby.get(DECK_LIST_PATH, headers={**world.bearer(), **World.JSON})
 
