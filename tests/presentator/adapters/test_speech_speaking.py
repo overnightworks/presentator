@@ -108,6 +108,20 @@ def test_the_request_carries_both_tokens_in_the_clients_headers() -> None:
         assert request.headers[name.lower()] == value
 
 
+def a_speak_failure_line(case: str) -> tuple[str, str, str]:
+    """The `(outcome, reason, level)` of the `speak.ended` line of a failure."""
+    if case == "busy-with-a-wait":
+        return ("refused", "busy", "info")
+    reasons = {
+        "marked-refusal": "malformed",
+        "non-json-500": "malformed",
+        "empty-body": "malformed",
+        "cut-body": "cut",
+        "past-the-cap": "over_cap",
+    }
+    return ("failed", reasons.get(case, "refused"), "error")
+
+
 @pytest.mark.parametrize("case", SPEAK_FAILURES)
 def test_every_refusal_or_broken_answer_is_unavailable(
     case: str, capsys: pytest.CaptureFixture[str]
@@ -118,7 +132,9 @@ def test_every_refusal_or_broken_answer_is_unavailable(
         speak_against(fake)
 
     (line,) = [one for one in logged.lines if one["event"] == "speak.ended"]
-    assert line["outcome"] in {"failed", "refused"}
+    assert (line["outcome"], line["reason"], line["level"]) == a_speak_failure_line(
+        case
+    )
     assert TOKENS.person not in logged.text
     assert TOKENS.workload not in logged.text
     assert SENTENCE not in logged.text

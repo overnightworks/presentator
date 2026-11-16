@@ -196,6 +196,30 @@ def test_an_ask_writes_its_hops_and_its_answer_under_the_requests_trace(
         assert marker not in logged.text
 
 
+def test_a_failed_speech_call_writes_one_error_speak_line_and_one_warning_answer_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    service = FakeSpeechService(speak_answers=[SPEAK_FAILURES["cut-body"]])
+    scenario = SpeechScenario(gateway=_say("Erster Satz."), service=service)
+    with a_speech_instance(tmp_path, scenario) as instance:
+        capsys.readouterr()
+        with json_logged(capsys) as logged:
+            instance.talk.post("/copresenter/ask", json=THE_ASKED_DECK)
+
+    (spoken,) = [one for one in logged.lines if one["event"] == "speak.ended"]
+    (answer,) = [one for one in logged.lines if one["event"] == "answer.ended"]
+    assert (spoken["level"], spoken["outcome"], spoken["reason"]) == (
+        "error",
+        "failed",
+        "cut",
+    )
+    assert (answer["level"], answer["outcome"], answer["reason"]) == (
+        "warning",
+        "failed",
+        "unavailable",
+    )
+
+
 def _who_status(instance: SpeechInstance) -> HTTPStatus:
     response, _logged = who_over(instance)
     return HTTPStatus(response.status_code)
