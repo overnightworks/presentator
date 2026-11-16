@@ -1,8 +1,0 @@
-claim_id = "843cc1d85f0b4c9f9a35212497e3be25"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "a2ce1df40bc536c296b02db6713e6261dd5ae85d"
-branch = "claude/issue-1215-the-build-worker-process-logs-its-connec"
-scope = ["docs/ARCHITECTURE.md", "scripts/probe_build_worker", "scripts/probe_build_worker_k3d_builds.py", "scripts/probe_build_worker_k3d_cluster.py", "scripts/probe_build_worker_k3d_lives.py", "scripts/probe_build_worker_k3d_web.py", "src/presentator/adapters/build_wire.py", "src/presentator/host/worker.py", "src/presentator/host/worker_serving.py", "src/presentator/host/worker_wire.py", "tests/presentator/adapters", "tests/presentator/host", "tests/scripts/support/k3d_pods.py", "tests/scripts/support/k3d_world.py", "tests/scripts/test_probe_build_worker_k3d.py", "tests/scripts/test_probe_build_worker_k3d_lives.py", "tests/scripts/test_probe_build_worker_k3d_web.py", "tests/support/vulture_allowlist.py", "tests/support/worker_accept_support.py", "tests/support/worker_support.py"]
-opened_commit = "80bef5b5d250b0cb8fc805324431d4e83959359e"
-whole_reason = "One slice converts the worker process's log calls, their tests and the k3d probe that reads them."
