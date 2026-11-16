@@ -11,6 +11,7 @@ import pytest
 import uvicorn
 from logline.testing import configured
 
+from presentator.api.health import Stopping
 from presentator.host import main
 from tests.support.git_remote import (
     GitRemote,
@@ -55,8 +56,8 @@ def logged(json_logging: None, capsys: pytest.CaptureFixture[str]) -> LoggedText
 
 
 class _ServerThatOnlyReturns:
-    def __init__(self, config: uvicorn.Config) -> None:
-        del config
+    def __init__(self, config: uvicorn.Config, stopping: Stopping) -> None:
+        del config, stopping
 
     async def serve(self) -> None:
         return None
@@ -65,7 +66,7 @@ class _ServerThatOnlyReturns:
 @pytest.fixture
 def main_without_serving(environment: pytest.MonkeyPatch) -> Callable[[], None]:
     """`main()` as far as serving, with a server that returns at once."""
-    environment.setattr(main.uvicorn, "Server", _ServerThatOnlyReturns)
+    environment.setattr(main, "StoppingServer", _ServerThatOnlyReturns)
     return partial(main.main, [])
 
 

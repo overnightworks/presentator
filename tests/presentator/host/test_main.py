@@ -25,6 +25,7 @@ from presentator.adapters.identity import (
     create_identity_tables,
 )
 from presentator.adapters.sqlite import rows
+from presentator.api.health import Stopping
 from presentator.api.hooks import hook_address
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
@@ -120,41 +121,59 @@ def every_tick_polls_every_source(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PRESENTATOR_SOURCE_POLL_SECONDS", "0")
 
 
+type ServedByMain = tuple[
+    list[RequestLineMiddleware], list[uvicorn.Config], list[Stopping]
+]
+
+
 @pytest.fixture
-def served_by_main(
-    environment: pytest.MonkeyPatch, json_logging: None
-) -> tuple[list[RequestLineMiddleware], list[uvicorn.Config]]:
+def served_by_main(environment: pytest.MonkeyPatch, json_logging: None) -> ServedByMain:
     """What the composition root hands the server, recorded instead of served."""
     del json_logging
     served: list[RequestLineMiddleware] = []
     configs: list[uvicorn.Config] = []
+    stoppings: list[Stopping] = []
 
     class ServerThatOnlyRecordsWhatItGot:
-        def __init__(self, config: uvicorn.Config) -> None:
+        def __init__(self, config: uvicorn.Config, stopping: Stopping) -> None:
             assert isinstance(config.app, RequestLineMiddleware)
             configs.append(config)
+            stoppings.append(stopping)
             self.app = config.app
 
         async def serve(self) -> None:
             served.append(self.app)
 
-    environment.setattr(main.uvicorn, "Server", ServerThatOnlyRecordsWhatItGot)
+    environment.setattr(main, "StoppingServer", ServerThatOnlyRecordsWhatItGot)
 
     main.main([])
 
-    return served, configs
+    return served, configs, stoppings
 
 
 def test_the_composition_root_serves_a_lobby_that_answers_the_login(
-    served_by_main: tuple[list[RequestLineMiddleware], list[uvicorn.Config]],
+    served_by_main: ServedByMain,
 ) -> None:
-    served, _ = served_by_main
+    served, _, _ = served_by_main
 
     assert len(served) == 1
     browser = TestClient(
         served[0], base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS
     )
     assert browser.get("/login").is_success
+
+
+def test_the_composition_root_hands_the_server_the_stopping_its_app_answers_by(
+    served_by_main: ServedByMain,
+) -> None:
+    served, _, stoppings = served_by_main
+    browser = TestClient(
+        served[0], base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS
+    )
+
+    stoppings[0].begin()
+
+    assert browser.get("/health").status_code == HTTPStatus.SERVICE_UNAVAILABLE
 
 
 def test_a_sigterm_turns_the_built_instance_unready_and_refuses_asks(
@@ -187,9 +206,9 @@ def test_a_sigterm_turns_the_built_instance_unready_and_refuses_asks(
 
 
 def test_the_composition_root_serves_websockets_through_wsproto(
-    served_by_main: tuple[list[RequestLineMiddleware], list[uvicorn.Config]],
+    served_by_main: ServedByMain,
 ) -> None:
-    _, configs = served_by_main
+    _, configs, _ = served_by_main
 
     assert configs[0].ws == "wsproto"
 
