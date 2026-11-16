@@ -257,9 +257,18 @@ def _ask_route(
         if surface.stopping():
             return _unavailable()
         deadline = asyncio.get_running_loop().time() + surface.deadline_seconds
-        admitted = await run_in_threadpool(
-            _admit, surface, admission, request, question, deadline
-        )
+        step = StepTimer("answer.ended", _log)
+        try:
+            admitted = await run_in_threadpool(
+                _admit, surface, admission, request, question, deadline, step
+            )
+        except Exception:
+            step.fail(AnswerFailure.UNEXPECTED)
+            step.end()
+            raise
+        except BaseException:
+            step.end_cancelled()
+            raise
         if isinstance(admitted, Response):
             return admitted
         streaming = False
@@ -314,8 +323,8 @@ def _admit(
     request: Request,
     question: AskRequest,
     deadline: float,
+    step: StepTimer,
 ) -> _Ask | Response:
-    step = StepTimer("answer.ended", _log)
     connection = admission(request)
     if connection is None:
         return _answer_ended_with(step, _not_authenticated())

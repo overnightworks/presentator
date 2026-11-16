@@ -542,3 +542,42 @@ def test_an_ask_that_breaks_while_it_is_prepared_still_writes_its_answer_line(
     (session_id,) = set(limiter.session_ids)
     ticket = limiter.admit(session_id)
     assert not isinstance(ticket, RetryAfter)
+
+
+class _LimiterThatRaises:
+    """An ask limiter whose admission breaks with what it is given."""
+
+    def __init__(self, raised: BaseException) -> None:
+        self._raised = raised
+
+    def admit(self, session_id: str) -> RetryAfter:
+        """Raise, as admission does when the lease store breaks."""
+        raise self._raised
+
+
+@pytest.mark.parametrize(
+    ("raised", "surfaced", "outcome", "reason"),
+    [
+        (asyncio.CancelledError(), CancelledError, "cancelled", None),
+        (RuntimeError("broken"), RuntimeError, "failed", "unexpected"),
+    ],
+    ids=["cancelled", "unexpected"],
+)
+def test_an_ask_whose_admission_breaks_still_writes_its_answer_line(
+    raised: BaseException,
+    surfaced: type[BaseException],
+    outcome: str,
+    reason: str | None,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    talk, _private, _clock = a_copresenter_talk_host(
+        limiter=_LimiterThatRaises(raised)
+    )
+    talk.sign_in()
+
+    with json_logged(capsys) as logged, pytest.raises(surfaced):
+        ask(talk.client)
+
+    (line,) = [one for one in logged.lines if one["event"] == "answer.ended"]
+    assert line["outcome"] == outcome
+    assert line.get("reason") == reason
