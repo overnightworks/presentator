@@ -449,7 +449,8 @@ def require_redis_in_node(run: Run) -> None:
     The Redis pod never pulls, so a missing image would only show as a web that
     never turns Ready; the runtime resolves the name the way the kubelet does.
     The node is asked right after the import, and again before the web cells
-    apply the pod, because the kubelet may remove an image no pod uses.
+    apply the pod: the cluster starts with image garbage collection held off,
+    and this look proves it held.
     """
     found = run(
         "docker exec", run.node, "crictl", "inspecti", run.redis_image, check=False
