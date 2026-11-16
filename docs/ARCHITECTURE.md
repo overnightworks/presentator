@@ -105,8 +105,8 @@ A worker pod keeps a link that reaches only the web: its init container loads nf
 accept only the worker's port in and let nothing leave but the loopback and the accepted
 connections' replies, so a deck's code (the build and wire uids) reaches only the pod. The
 self-check sends as each uid and requires `EPERM`. The root controller verifies a keyed hello
-(nonces, HMAC-SHA256 under a direction label, a deadline) before it spawns anything; a failed hello
-spends no life. Each life ends the pod and the StatefulSet makes a fresh one.
+(nonces, HMAC-SHA256 under a direction label, a deadline) before it spawns anything; a failed hello is logged and
+spends no life; a wire child that closes without an outcome logs its reason. Each life ends the pod and the StatefulSet makes a fresh one.
 
 ## 5. Crosscutting Concepts
 

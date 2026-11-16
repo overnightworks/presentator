@@ -153,6 +153,29 @@ def test_a_refused_hello_is_closed_and_never_spawns_a_child(
     assert life.spawned == []
 
 
+@pytest.mark.parametrize("hello", REFUSED_HELLOS.values(), ids=REFUSED_HELLOS.keys())
+def test_a_refused_hello_logs_one_line_naming_it_and_never_the_key(
+    volume: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    hello: Callable[[socket.socket], None],
+) -> None:
+    monkeypatch.setattr(worker_serving, "HELLO_SECONDS", 0.2)
+    life = ScriptedLife()
+    with (
+        caplog.at_level(logging.WARNING, logger=worker_serving.logger.name),
+        listening_with(volume, accepts=1) as listener,
+    ):
+        helloing(volume, hello)
+        with pytest.raises(StopServingError):
+            accept_from(life, listener)
+
+    (line,) = caplog.records
+    assert "hello" in line.getMessage()
+    assert KEY.hex() not in caplog.text
+    assert repr(KEY) not in caplog.text
+
+
 def test_a_refused_hello_spends_no_life_and_the_next_verified_one_is_served(
     volume: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -2,6 +2,7 @@
 
 import errno
 import json
+import logging
 import os
 import runpy
 import socket
@@ -349,6 +350,38 @@ def test_the_entry_closes_a_refused_input_with_no_reply(
     assert run_entry(client, descriptor, record) == WireExit.CLOSED
     assert read_to_end_or_reset(client) == b""
     assert os.fstat(record).st_size == 0
+
+
+CLOSED_REASONS = {
+    "an end of stream before any byte": (b"", "WireClosedError"),
+    "an end of stream inside the preamble": (b"PBW", "WireClosedError"),
+    "bytes that break the grammar": (
+        REFUSED_INPUTS["wrong magic X"],
+        "WireRefusedError",
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    ("sent", "reason"), CLOSED_REASONS.values(), ids=CLOSED_REASONS.keys()
+)
+def test_the_entry_logs_one_line_with_the_reason_it_closed_without_a_reply(
+    client_and_descriptor: tuple[socket.socket, int],
+    record: int,
+    caplog: pytest.LogCaptureFixture,
+    sent: bytes,
+    reason: str,
+) -> None:
+    client, descriptor = client_and_descriptor
+    client.sendall(sent)
+    client.shutdown(socket.SHUT_WR)
+
+    with caplog.at_level(logging.WARNING, logger=worker_wire.logger.name):
+        run_entry(client, descriptor, record)
+
+    (line,) = caplog.records
+    assert reason in line.getMessage()
+    assert WireRole.IDLE.value in line.getMessage()
 
 
 def test_the_entry_exits_accepted_on_a_valid_step_writing_the_record_and_no_reply(
