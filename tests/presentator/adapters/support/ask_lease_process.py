@@ -17,7 +17,7 @@ import logline
 import uvicorn
 from fastapi import FastAPI
 
-from presentator.adapters.shared_redis import LeaseTiming, SharedRedis
+from presentator.adapters.shared_redis import SharedRedis
 from presentator.api.admission import SignedInConnection
 from presentator.api.copresenter import CoPresenterSurface, add_copresenter_routes
 from presentator.contracts.copresenter import AskingPerson
@@ -27,6 +27,7 @@ from tests.presentator.application.support.fakes import (
     FakeUserStore,
 )
 from tests.support.copresenter_support import (
+    AN_ANSWER_DEADLINE_SECONDS,
     TALK_ORIGIN,
     PrivateFakes,
     a_use,
@@ -38,6 +39,7 @@ URL_VARIABLE: Final = "ASK_LEASE_REDIS_URL"
 LEASE_VARIABLE: Final = "ASK_LEASE_MILLISECONDS"
 HEALTH_PATH: Final = "/health"
 FINISH_PATH: Final = "/finish"
+_MILLISECONDS: Final = 1000
 SESSION: Final = "session-two-processes-ask"
 
 
@@ -61,15 +63,16 @@ class _HeldAnswers:
         yield sentences()
 
 
-def _app(redis: SharedRedis) -> FastAPI:
+def _app(redis: SharedRedis, *, lease_seconds: float) -> FastAPI:
     answers = _HeldAnswers()
     app = FastAPI()
     add_copresenter_routes(
         app,
         surface=CoPresenterSurface(
             use=replace(a_use(PrivateFakes(), the_admins_decks()), answers=answers),
-            limiter=redis.ask_limiter(),
+            limiter=redis.ask_limiter(lease_seconds=lease_seconds),
             browser_origin=TALK_ORIGIN,
+            deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
         ),
         admission=lambda _connection: SignedInConnection(
             person=User(id=ADMIN, username="admin", role=Role.ADMIN),
@@ -86,11 +89,14 @@ def _app(redis: SharedRedis) -> FastAPI:
 def run() -> None:
     """Serve the ask route on the given port until killed."""
     logline.configure("presentator")
-    redis = SharedRedis(
-        os.environ[URL_VARIABLE],
-        lease=LeaseTiming(milliseconds=int(os.environ[LEASE_VARIABLE])),
+    redis = SharedRedis(os.environ[URL_VARIABLE])
+    lease_seconds = int(os.environ[LEASE_VARIABLE]) / _MILLISECONDS
+    uvicorn.run(
+        _app(redis, lease_seconds=lease_seconds),
+        host="127.0.0.1",
+        port=int(sys.argv[1]),
+        log_config=None,
     )
-    uvicorn.run(_app(redis), host="127.0.0.1", port=int(sys.argv[1]), log_config=None)
 
 
 if __name__ == "__main__":

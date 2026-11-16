@@ -35,6 +35,7 @@ from tests.presentator.application.support.fakes import (
     FakeUserStore,
 )
 from tests.support.copresenter_support import (
+    AN_ANSWER_DEADLINE_SECONDS,
     HEARING,
     INTERNAL_ERROR,
     POLICY_VIOLATION,
@@ -95,6 +96,7 @@ def test_copresenter_routes_refuse_unauthenticated_http_before_private_use() -> 
             use=a_use(private, FakeDeckStore()),
             limiter=FakeAskLimiter(),
             browser_origin=TALK_ORIGIN,
+            deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
         ),
         admission=no_session,
         sessions=FakeSessionRecordStore(users=FakeUserStore()),

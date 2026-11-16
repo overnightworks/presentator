@@ -31,6 +31,7 @@ from tests.presentator.application.support.fakes import (
 )
 from tests.support.copresenter_support import (
     A_DECK,
+    AN_ANSWER_DEADLINE_SECONDS,
     ASK,
     QUESTION,
     SPOKEN_QUESTION,
@@ -162,6 +163,9 @@ def test_a_second_question_while_the_first_streams_gets_429_and_no_turn() -> Non
     assert len(private.answers.messages) == len([first, after])
 
 
+_A_SHORT_DEADLINE_SECONDS = 0.05
+
+
 @dataclass(frozen=True)
 class FixedSession:
     """The admitted session of a browser."""
@@ -183,6 +187,7 @@ def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> Non
             use=a_use(private, the_admins_decks()),
             limiter=limiter,
             browser_origin=TALK_ORIGIN,
+            deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
         ),
         admission=lambda _connection: FixedSession(),
         sessions=FakeSessionRecordStore(users=FakeUserStore()),
@@ -248,6 +253,7 @@ def _a_hanging_app(
             ),
             limiter=limiter,
             browser_origin=A_TALK_ADDRESS,
+            deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
         ),
         admission=admission,
         sessions=FakeSessionRecordStore(users=FakeUserStore()),
@@ -310,9 +316,6 @@ class _RecordingTicket:
     def session_id(self) -> str:
         return self._inner.session_id
 
-    def still_holds(self) -> bool:
-        return self._inner.still_holds()
-
     def release(self) -> None:
         self._released_on.append(threading.get_ident())
         self._inner.release()
@@ -337,23 +340,21 @@ def test_the_release_of_an_ask_runs_off_the_event_loop_thread(
     assert threading.get_ident() not in limiter.released_on
 
 
-def test_an_answer_whose_lease_is_lost_mid_stream_ends_with_a_visible_error() -> None:
+def test_an_answer_that_outruns_the_deadline_ends_visibly_and_frees_the_lease() -> None:
     limiter = FakeAskLimiter()
-    lobby, private, _clock = a_copresenter_talk_host(limiter=limiter)
+    lobby, private, _clock = a_copresenter_talk_host(
+        limiter=limiter, deadline_seconds=_A_SHORT_DEADLINE_SECONDS
+    )
     lobby.sign_in()
+    private.answers.hold = True
 
-    def lose_the_lease_after_the_first_event(index: int) -> None:
-        if index == 1:
-            limiter.lose_every_lease()
+    outrun = ask(lobby.client)
+    private.answers.hold = False
+    next_answer = ask(lobby.client)
 
-    private.answers.busy_events = 3
-    private.answers.event_hook = lose_the_lease_after_the_first_event
-
-    response = ask(lobby.client)
-
-    assert response.status_code == HTTPStatus.OK
-    assert "event: error" in response.text
-    assert "Antwort 2" not in response.text
+    assert outrun.status_code == HTTPStatus.OK
+    assert "event: error" in outrun.text
+    assert "event: done" in next_answer.text
 
 
 async def _ask_and_leave_while_the_gateway_holds(

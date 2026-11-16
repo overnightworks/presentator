@@ -90,21 +90,6 @@ def _output_of(processes: TwoProcesses) -> str:
     return "".join(written)
 
 
-def test_an_ask_streaming_at_one_process_makes_the_other_busy(
-    redis_url: str,
-) -> None:
-    with _serving(redis_url) as (first, second, _processes):
-        with httpx2.stream(
-            "POST", f"http://127.0.0.1:{first.port}{ASK}", json=QUESTION
-        ) as streaming:
-            busy = second.post(ASK)
-        first.let_answers_finish()
-
-    assert streaming.status_code == HTTPStatus.OK
-    assert busy.status_code == HTTPStatus.TOO_MANY_REQUESTS
-    assert busy.headers["retry-after"] == "1"
-
-
 def test_the_other_process_answers_once_the_streaming_one_ends(
     redis_url: str,
 ) -> None:
@@ -118,7 +103,9 @@ def test_the_other_process_answers_once_the_streaming_one_ends(
             streaming.read()
         after_the_release = second.stream_ask()
 
+    assert streaming.status_code == HTTPStatus.OK
     assert busy.status_code == HTTPStatus.TOO_MANY_REQUESTS
+    assert busy.headers["retry-after"] == "1"
     assert after_the_release.status_code == HTTPStatus.OK
 
 
@@ -166,7 +153,7 @@ def test_an_ask_while_redis_cannot_be_reached_is_refused_visibly_and_leaks_nothi
     assert authority not in written
 
 
-def test_an_answer_whose_lease_cannot_be_renewed_ends_visibly_and_leaks_nothing(
+def test_an_answer_finishing_while_redis_is_out_ends_whole_and_leaks_nothing(
     redis_url: str,
 ) -> None:
     with (
@@ -185,11 +172,11 @@ def test_an_answer_whose_lease_cannot_be_renewed_ends_visibly_and_leaks_nothing(
         ) as streaming:
             authority = urlsplit(redis.url).netloc
             redis.sever()
+            first.let_answers_finish()
             body = "".join(streaming.iter_text())
         written = _output_of(processes)
 
-    assert "event: error" in body
+    assert "event: done" in body
     assert authority not in body
-    assert "ask lease renewal failed" in written
     assert "ask lease release failed" in written
     assert authority not in written

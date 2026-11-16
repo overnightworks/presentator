@@ -11,7 +11,7 @@ from collections.abc import (
     Callable,
     Iterable,
 )
-from contextlib import suppress
+from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Final, Protocol, assert_never
@@ -93,6 +93,7 @@ class CoPresenterSurface:
     use: CoPresenterUse
     limiter: AskLimiter
     browser_origin: str
+    deadline_seconds: float
     delay: Delay = asyncio.sleep
 
 
@@ -211,14 +212,16 @@ class _Ask:
     ticket: AskTicket
     subject: str
     role: Role
+    deadline: float
 
 
 def _ask_route(
     surface: CoPresenterSurface, *, admission: Admission, guard: _SessionGuard
 ) -> Callable[[Request, AskRequest], Awaitable[Response]]:
     async def _ask(request: Request, question: AskRequest) -> Response:
+        deadline = asyncio.get_running_loop().time() + surface.deadline_seconds
         admitted = await run_in_threadpool(
-            _admit, surface, admission, request, question
+            _admit, surface, admission, request, question, deadline
         )
         if isinstance(admitted, Response):
             return admitted
@@ -253,6 +256,7 @@ def _admit(
     admission: Admission,
     request: Request,
     question: AskRequest,
+    deadline: float,
 ) -> _Ask | Response:
     connection = admission(request)
     if connection is None:
@@ -280,18 +284,20 @@ def _admit(
         ticket=ticket,
         subject=connection.user_id,
         role=connection.person.role,
+        deadline=deadline,
     )
 
 
 async def _prepare(use: CoPresenterUse, ask: _Ask) -> PreparedAsk | Response:
     try:
-        prepared = await use.prepare(
-            ask.asked,
-            session_id=ask.ticket.session_id,
-            subject=ask.subject,
-            role=ask.role,
-        )
-    except CoPresenterUnavailableError:
+        async with asyncio.timeout_at(ask.deadline):
+            prepared = await use.prepare(
+                ask.asked,
+                session_id=ask.ticket.session_id,
+                subject=ask.subject,
+                role=ask.role,
+            )
+    except CoPresenterUnavailableError, TimeoutError:
         return _unavailable()
     if isinstance(prepared, AccessRefusal):
         return _access_refusal(prepared)
@@ -339,28 +345,30 @@ async def _answer_events(
     use: CoPresenterUse,
     guard: _SessionGuard,
 ) -> AsyncIterator[bytes]:
+    loop = asyncio.get_running_loop()
     session_watch = asyncio.create_task(
         _watch_session(request, session_id=ask.ticket.session_id, guard=guard)
     )
     try:
         try:
-            async with use.answer(prepared, ask.question) as events:
+            async with AsyncExitStack() as opened:
+                async with asyncio.timeout_at(ask.deadline):
+                    events = await opened.enter_async_context(
+                        use.answer(prepared, ask.question)
+                    )
                 next_event = asyncio.create_task(_next_answer_event(events))
                 try:
                     while True:
                         done, _pending = await asyncio.wait(
                             {next_event, session_watch},
-                            timeout=_CHECK_INTERVAL_SECONDS,
+                            timeout=max(ask.deadline - loop.time(), 0),
                             return_when=asyncio.FIRST_COMPLETED,
                         )
                         if session_watch in done:
                             _observe_session_end(session_watch)
                             return
-                        if not ask.ticket.still_holds():
-                            yield _error_sse()
-                            return
                         if next_event not in done:
-                            continue
+                            raise TimeoutError
                         event = next_event.result()
                         yield _sse(event)
                         if isinstance(event, Done):
@@ -374,7 +382,7 @@ async def _answer_events(
             yield _error_sse(AnswerStopReason.BUSY, retry_after_s=busy.retry_after_s)
         except BudgetSpentError:
             yield _error_sse(AnswerStopReason.BUDGET_SPENT)
-        except CoPresenterUnavailableError:
+        except CoPresenterUnavailableError, TimeoutError:
             yield _error_sse()
     finally:
         await _release_off_the_loop(ask.ticket)

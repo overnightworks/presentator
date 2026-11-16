@@ -13,6 +13,7 @@ from dataclasses import dataclass, replace
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
+from typing import Final
 from urllib.parse import urlsplit
 
 import logline
@@ -154,6 +155,11 @@ def _nothing_to_close() -> None:
     """What an instance holds open when its state lives in one file."""
 
 
+# The wait between taking the lease and the answer's clock starting, so the lease
+# outlives the whole answer.
+ASK_LEASE_MARGIN_SECONDS: Final = 30
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Instance:
     """What a running instance is: the addresses, and the schedules beside them."""
@@ -223,9 +229,7 @@ def build_instance(
             mirrors=mirrors,
             shell=shell,
         ),
-        talk=_talk(
-            settings, stores, decks, talk_auth, mirrors, limiter=redis.ask_limiter()
-        ),
+        talk=_talk(settings, stores, decks, talk_auth, mirrors, redis=redis),
         poller=_poller(settings, decks),
         session_sweep=_session_sweep(stores.sessions, SystemClock()),
         close=stores.close,
@@ -433,7 +437,7 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
     auth: InstalledAuth,
     mirrors: SourceMirrors,
     *,
-    limiter: AskLimiter,
+    redis: SharedRedis,
 ) -> FastAPI:
     """The talk host, with the co-presenter it speaks to."""
     return create_talk(
@@ -442,7 +446,7 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
         auth=auth,
         lobby_origin=settings.public_origin,
         copresenter=_copresenter_surface(
-            settings, stores.sessions, decks, auth, mirrors, limiter
+            settings, stores.sessions, decks, auth, mirrors, redis
         ),
         readiness=stores.readiness,
     )
@@ -454,12 +458,13 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
     decks: Decks,
     auth: InstalledAuth,
     mirrors: SourceMirrors,
-    limiter: AskLimiter,
+    redis: SharedRedis,
 ) -> CoPresenterSurface:
     """What only a signed-in admin may reach at the talk host: the gateway's answers."""
+    answers = gateway_answerer(settings.agent, auth.relying_party)
     return CoPresenterSurface(
         use=CoPresenterUse(
-            answers=gateway_answerer(settings.agent, auth.relying_party),
+            answers=answers,
             speech=SpeechHearing(
                 settings.speech_service, voices=settings.speech_voices()
             ),
@@ -477,9 +482,15 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
                 speech_scope=settings.speech_service_scope,
             ),
         ),
-        limiter=limiter,
+        limiter=ask_limiter_of(redis, deadline_seconds=answers.deadline_seconds),
         browser_origin=settings.talk_origin,
+        deadline_seconds=answers.deadline_seconds,
     )
+
+
+def ask_limiter_of(redis: SharedRedis, *, deadline_seconds: float) -> AskLimiter:
+    """The ask lease: the answer's deadline plus a margin, never renewed."""
+    return redis.ask_limiter(lease_seconds=deadline_seconds + ASK_LEASE_MARGIN_SECONDS)
 
 
 def _lobby_private(settings: Settings, stores: Stores, decks: Decks) -> LobbyPrivate:

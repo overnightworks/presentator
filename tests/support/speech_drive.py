@@ -39,6 +39,7 @@ from tests.support.copresenter_support import (
     A_DECK_WORDS,
     A_SOURCE,
     ACCESS,
+    AN_ANSWER_DEADLINE_SECONDS,
     API_MEMBER_GROUPS,
     HEARING,
     REFRESH,
@@ -312,6 +313,7 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
             ),
             limiter=limiter,
             browser_origin=A_TALK_ADDRESS,
+            deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
             delay=deadline.wait,
         )
 

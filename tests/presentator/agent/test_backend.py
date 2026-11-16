@@ -147,6 +147,14 @@ async def test_the_request_names_the_agent_files_model_the_words_and_the_key() -
         assert identity not in json.dumps(body, ensure_ascii=False)
 
 
+def test_the_answers_deadline_is_the_agent_files_duration() -> None:
+    agent = load_agent(COPRESENTER_AGENT_FILE, [SHOW_SLIDE.declaration])
+
+    assert answerer_over(FakeGateway(completion("Ja."))).deadline_seconds == (
+        agent.max_duration_seconds
+    )
+
+
 @on_an_event_loop
 async def test_the_person_goes_out_as_the_wire_vector_with_the_issuer_as_held() -> None:
     """The vector of docs/wire.md, and another one for a trailing slash."""

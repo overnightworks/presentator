@@ -89,6 +89,7 @@ if TYPE_CHECKING:
     )
 
 TALK_ORIGIN = A_TALK_ADDRESS
+AN_ANSWER_DEADLINE_SECONDS = 30.0
 A_DECK = "kundenfeedback"
 QUESTION = {"said": "Was ist wichtig?", "slide": 2, "language": "de", "deck": A_DECK}
 ASK = "/copresenter/ask"
@@ -341,6 +342,7 @@ def a_copresenter_talk_host(
     delay: Callable[[float], Awaitable[None]] = asyncio.sleep,
     limiter: AskLimiter | None = None,
     decks: FakeDeckStore | None = None,
+    deadline_seconds: float = AN_ANSWER_DEADLINE_SECONDS,
 ) -> tuple[Lobby, PrivateFakes, FrozenClock]:
     private = PrivateFakes()
     people = a_crowd(users)
@@ -350,6 +352,7 @@ def a_copresenter_talk_host(
             use=a_use(private, decks or the_admins_decks()),
             limiter=limiter or FakeAskLimiter(),
             browser_origin=TALK_ORIGIN,
+            deadline_seconds=deadline_seconds,
             delay=delay,
         ),
     )
@@ -624,6 +627,7 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
             ),
             limiter=limiter,
             browser_origin=A_TALK_ADDRESS,
+            deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
             delay=wait,
         )
 

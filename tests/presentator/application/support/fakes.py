@@ -790,11 +790,6 @@ class FakeAskTicket:
     _holders: dict[str, FakeAskTicket]
     _guard: threading.Lock
 
-    def still_holds(self) -> bool:
-        """Whether this ticket is still the session's holder."""
-        with self._guard:
-            return self._holders.get(self.session_id) is self
-
     def release(self) -> None:
         """Free the session if this ticket still holds it; later calls do nothing."""
         with self._guard:
