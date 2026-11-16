@@ -88,7 +88,6 @@ _RECORDED_ENVIRONMENT = "environment"
 _A_BUILT_PAGE = "index.html"
 _WHAT_A_TALK_SAYS = "a talk"
 
-
 # Builds as above, then its export step turns one name of what was written
 # into a link, the way a deck's own `vite.config.ts` could.
 _A_TOOLCHAIN_THAT_PLANTS_A_LINK = (
