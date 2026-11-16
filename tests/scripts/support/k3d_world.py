@@ -149,12 +149,15 @@ class World:
     nodes: list[Document] = field(default_factory=lambda: [node()])
     node_name: str = ""
     probe_image: str = ""
+    redis_image: str = ""
     production_image: str = ""
     # The repo digests the probe tag shows once the published image is tagged;
     # the published image's own if unset.
     repo_digests: list[str] | None = None
     # The error `docker pull` ends with; the pull passes if empty.
     pull_error: str = ""
+    # The error `k3d image import` ends with for the probe Redis; passes if empty.
+    redis_import_error: str = ""
     twin_pod: str = ""
     twin_log: str = "the twin's mount list"
     # What the web and the workers do: whether they become Ready, the web's
@@ -205,6 +208,7 @@ class World:
     cluster_name: str = ""
     cluster_up: bool = False
     image_built: bool = False
+    redis_image_present: bool = False
     # The images volume lives from the cluster's creation until it is removed;
     # `k3d cluster delete` cannot remove it while the import's tools container uses it.
     volume_up: bool = False
@@ -236,6 +240,10 @@ class World:
         match command:
             case ("docker", "pull", *_) if self.pull_error:
                 return 1, "", self.pull_error
+            case ("k3d", "image", "import", image, *_) if (
+                self.redis_import_error and image == self.redis_image
+            ):
+                return 1, "", self.redis_import_error
             case ("timeout", _, "kubectl", "cp", *_):
                 return self.copy_exit, "", self.copy_stderr
             case ("timeout", _, "kubectl", "exec", *_):
@@ -298,12 +306,24 @@ class World:
                 self.tools_up = False
             case ("docker", "volume", "rm", "--force", _):
                 self.volume_up = False
+            case ("docker", *_):
+                self.image_effect(command)
+            case _:
+                pass
+
+    def image_effect(self, command: tuple[str, ...]) -> None:
+        """What a docker image command changes: the probe image and the Redis image."""
+        match command:
             case ("docker", "build", *_):
                 self.image_built = True
             case ("docker", "tag", _, name) if name == self.probe_image:
                 self.image_built = True
             case ("docker", "image", "rm", *_, name) if name == self.probe_image:
                 self.image_built = False
+            case ("docker", "tag", _, name) if name == self.redis_image:
+                self.redis_image_present = True
+            case ("docker", "image", "rm", *_, name) if name == self.redis_image:
+                self.redis_image_present = False
             case _:
                 pass
 
@@ -332,8 +352,11 @@ class World:
                 return json.dumps([self.production_image] if shown is None else shown)
             case ("docker", "image", "ls", *_, repository):
                 probe = repository == self.probe_image.split(":")[0]
-                own = self.probe_image if probe else ""
-                return self.listing("tag", own, exists=self.image_built)
+                own = self.listing("tag", self.probe_image, exists=self.image_built)
+                redis = self.listing(
+                    "tag", self.redis_image, exists=self.redis_image_present
+                )
+                return (own + redis) if probe else ""
             case _:
                 pass
         return ""
@@ -629,6 +652,7 @@ def fixture_maker(
             effects=effects,
         )
         world.node_name, world.probe_image = run.node, run.tag
+        world.redis_image = run.redis_image
         world.cluster_name = run.name
         world.production_image, world.twin_pod = production_image, driver.TWIN_POD
         world.residue_pods = residue_pods(load_script, driver, world.outcomes)

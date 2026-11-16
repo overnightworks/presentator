@@ -144,6 +144,11 @@ class Run:
         return f"{PROBE_REPOSITORY}:{self.identifier}"
 
     @property
+    def redis_image(self) -> str:
+        """The local name of the probe's Redis image, in the probe's repository."""
+        return f"{PROBE_REPOSITORY}:redis-{self.identifier}"
+
+    @property
     def node(self) -> str:
         """The name k3d gives the cluster's one server node."""
         return f"k3d-{self.name}-server-0"
@@ -338,6 +343,7 @@ def teardown(run: Run) -> None:
         ("docker rm --force", run.tools),
         ("docker volume rm --force", run.images_volume),
         ("docker image rm --force", run.tag),
+        ("docker image rm --force", run.redis_image),
     )
     with contextlib.ExitStack() as cleanup:
         cleanup.callback(shutil.rmtree, run.directory, ignore_errors=True)

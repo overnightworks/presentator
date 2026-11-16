@@ -33,9 +33,11 @@ WORKER_CONTAINER = "worker"
 WEB_CONTAINER = "web"
 # The web needs a Redis the platform's render does not yet hold; the probe runs a
 # throwaway one in its namespace, the image CI's Redis service container uses.
+# The runner pulls the pinned digest from a mirror without Docker Hub's anonymous
+# rate limit and imports it under a local name; the cluster never pulls it.
 REDIS = "probe-redis"
-REDIS_IMAGE = (
-    "redis:7.4.12-alpine"
+REDIS_PINNED = (
+    "mirror.gcr.io/library/redis:7.4.12-alpine"
     "@sha256:338fbfc036dc5517ac0b04d6de21521085935336e565f223406180e9d84166e2"
 )
 REDIS_PORT = 6379
@@ -201,8 +203,8 @@ def web_documents(overlay: list[Document]) -> list[Document]:
     return documents
 
 
-def redis_documents() -> list[Document]:
-    """The Deployment and Service of the probe's throwaway Redis."""
+def redis_documents(image: str) -> list[Document]:
+    """The Deployment and Service of the probe's throwaway Redis, from `image`."""
     labels = {"app.kubernetes.io/name": REDIS}
     metadata = {"name": REDIS, "namespace": NAMESPACE, "labels": labels}
     return [
@@ -219,7 +221,8 @@ def redis_documents() -> list[Document]:
                         "containers": [
                             {
                                 "name": "redis",
-                                "image": REDIS_IMAGE,
+                                "image": image,
+                                "imagePullPolicy": "Never",
                                 "ports": [{"containerPort": REDIS_PORT}],
                             }
                         ]
