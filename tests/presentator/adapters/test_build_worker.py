@@ -327,17 +327,28 @@ def a_deck_with_a_deep_path(deck: Path) -> None:
     ],
 )
 def test_a_deck_over_a_limit_or_breaking_a_rule_says_so_and_connects_to_nothing(
-    volume: Path, tmp_path: Path, make: Callable[[Path], None], failure: BuildFailure
+    volume: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    make: Callable[[Path], None],
+    failure: BuildFailure,
 ) -> None:
     """Cell B10: no socket exists, so a connect would have retried until W."""
     step = a_step(tmp_path)
     make(step.place.here / DECK_DIRECTORY)
     started = time.monotonic()
 
-    result = toolchain(volume, connect_window_seconds=30.0).ran(step)
+    with json_logged(capsys) as logged:
+        result = toolchain(volume, connect_window_seconds=30.0).ran(step)
+        line = ended_line(step, logged)
 
     assert result == failure
     assert time.monotonic() - started < PROMPTLY
+    assert (line["outcome"], line["reason"], line["level"]) == (
+        "refused",
+        failure.reason.value,
+        "info",
+    )
 
 
 def test_a_deck_that_cannot_be_walked_fails_without_a_reason(

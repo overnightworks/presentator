@@ -30,6 +30,7 @@ from tests.presentator.adapters.support.build_worker_support import (
     MEGABYTES,
     WITHOUT_A_REASON,
     a_step,
+    ended_line,
     failed_reply,
     refused_reply,
     staging_of,
@@ -61,6 +62,9 @@ def exchanged_with(
         os.close(deck)
         ours.close()
         theirs.close()
+
+REFUSED = ("refused", None, "info")
+FAILED = ("failed", "toolchain_failed", "warning")
 
 
 BAD_REPLIES = [
@@ -207,7 +211,7 @@ def test_a_staging_left_over_from_before_is_a_fault_and_is_not_removed(
 
 
 @pytest.mark.parametrize(
-    ("reply", "failure"),
+    ("reply", "failure", "ended"),
     [
         pytest.param(
             refused_reply(RefusalLimit.MEGABYTES, 2),
@@ -216,6 +220,7 @@ def test_a_staging_left_over_from_before_is_a_fault_and_is_not_removed(
                 written_megabytes=2,
                 allowed_megabytes=MEGABYTES,
             ),
+            REFUSED,
             id="megabytes",
         ),
         pytest.param(
@@ -224,33 +229,51 @@ def test_a_staging_left_over_from_before_is_a_fault_and_is_not_removed(
                 reason=BuildFailureReason.OUTPUT_ENTRIES,
                 allowed_entries=MAXIMUM_ENTRIES,
             ),
+            REFUSED,
             id="entries",
         ),
         pytest.param(
             refused_reply(RefusalLimit.SHAPE),
             BuildFailure(reason=BuildFailureReason.OUTPUT_SHAPE),
+            REFUSED,
             id="shape",
         ),
         pytest.param(
             failed_reply("it broke"),
             BuildFailure.said("it broke"),
+            FAILED,
             id="failed with text",
         ),
         pytest.param(
             failed_reply("e" * FAILURE_TEXT_LIMIT),
             BuildFailure.said("e" * FAILURE_TEXT_LIMIT),
+            FAILED,
             id="failed with the longest text",
         ),
         pytest.param(
-            failed_reply(None), BuildFailure.without_words(), id="failed without text"
+            failed_reply(None),
+            BuildFailure.without_words(),
+            FAILED,
+            id="failed without text",
         ),
     ],
 )
 def test_a_refused_or_failed_reply_is_the_reason_the_deck_page_words(
-    tmp_path: Path, reply: bytes, failure: BuildFailure
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    reply: bytes,
+    failure: BuildFailure,
+    ended: tuple[str, str | None, str],
 ) -> None:
     """Cell B9."""
     step = a_step(tmp_path)
 
-    assert exchanged_with(step, reply) == failure
+    with json_logged(capsys) as logged:
+        assert exchanged_with(step, reply) == failure
+        line = ended_line(step, logged)
+
     assert not staging_of(step).exists()
+    outcome, reason, level = ended
+    assert (line["outcome"], line["level"]) == (outcome, level)
+    assert line["reason"] == (reason or failure.reason.value)
+    assert "it broke" not in logged.text
