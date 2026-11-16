@@ -7,7 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from presentator.api.health import add_health_route
+from presentator.api.health import Stopping, add_health_route, always_ready
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
@@ -106,3 +106,17 @@ def test_readiness_is_asked_on_every_request() -> None:
     statuses = [client.get("/health").status_code for _ in range(2)]
 
     assert statuses == [HTTPStatus.SERVICE_UNAVAILABLE, HTTPStatus.OK]
+
+
+def test_an_instance_that_has_begun_to_stop_answers_unavailable_though_ready() -> None:
+    """A stop turns the answer from 200 to 503 and never back."""
+    stopping = Stopping()
+    app = FastAPI()
+    add_health_route(app, readiness=stopping.unready(always_ready))
+    client = TestClient(app)
+
+    before = client.get("/health").status_code
+    stopping.begin()
+    after = [client.get("/health").status_code for _ in range(2)]
+
+    assert [before, *after] == [HTTPStatus.OK, *[HTTPStatus.SERVICE_UNAVAILABLE] * 2]

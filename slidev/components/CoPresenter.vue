@@ -24,6 +24,8 @@ const VOICE_OFFLINE = 'controls.voiceOffline'
 const SIGN_IN_AGAIN = 'controls.signInAgain'
 const BUSY_SOON = 'controls.busySoon'
 const BUDGET_USED_UP = 'controls.budgetUsedUp'
+// WebSocket close code 1012: the server is restarting and another one serves.
+const SERVICE_RESTART = 1012
 const HEARING_NOT_READY = 'controls.hearingNotReady'
 const NO_HEARING = 'controls.noHearing'
 const NO_SPEECH = 'controls.noSpeech'
@@ -221,29 +223,39 @@ async function startLocalHear(generation) {
       return
     }
     mediaStream = stream
-    const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const running = startCapture({
-      stream,
-      hopUrl: `${scheme}//${window.location.host}${COPRESENTER}/hear?language=${deckLanguage}`,
-      workletUrl: WORKLET_URL,
-      onMessage: (data) => onHeard(data, generation),
-    })
-    capture = running
-    void running.ended.then((end) => endHearing(generation, end))
-    if (await running.started === 'streaming' && stillActive(generation) && capture === running) {
-      capturing.value = true
-    }
+    await openHearing(stream, generation)
   } catch {
-    endHearing(generation, null)
+    endHearing(generation, null, null)
+  }
+}
+
+// One hearing connection on the microphone the switch holds. The same URL
+// serves a reconnect, which the platform routes to any ready pod.
+async function openHearing(stream, generation) {
+  const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const running = startCapture({
+    stream,
+    hopUrl: `${scheme}//${window.location.host}${COPRESENTER}/hear?language=${deckLanguage}`,
+    workletUrl: WORKLET_URL,
+    onMessage: (data) => onHeard(data, generation),
+  })
+  capture = running
+  void running.ended.then((end) => endHearing(generation, end, stream))
+  if (await running.started === 'streaming' && stillActive(generation) && capture === running) {
+    capturing.value = true
   }
 }
 
 // The one place that says what a lost hearing shows: nothing for the server's
-// orderly close, "No hearing" for every other end. `end` is what the capture
-// reports, or null when no capture ran to report one.
-function endHearing(generation, end) {
+// orderly close, nothing but a new connection for a pod that restarts (the
+// sentence being heard is lost), "No hearing" for every other end. `end` is
+// what the capture reports, or null when no capture ran to report one.
+function endHearing(generation, end, stream) {
   if (!stillActive(generation)) return
-  if (end?.kind === 'hop' && end.close === HopClose.NORMAL) turnOff()
+  if (end?.kind === 'socket' && end.code === SERVICE_RESTART) {
+    capturing.value = false
+    void openHearing(stream, generation)
+  } else if (end?.kind === 'hop' && end.close === HopClose.NORMAL) turnOff()
   else fail(faultLine(NO_HEARING))
 }
 

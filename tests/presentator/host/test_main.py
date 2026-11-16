@@ -2,6 +2,7 @@
 
 import asyncio
 import shutil
+import signal
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
@@ -10,8 +11,8 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 from httpx2 import Response
-from logline import RequestLineMiddleware
 from pydantic import SecretStr
+from starlette.types import ASGIApp
 from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.ports import AccountKind
@@ -34,6 +35,7 @@ from presentator.host.config import (
     load_settings,
 )
 from presentator.host.main import Instance
+from tests.support.copresenter_support import QUESTION
 from tests.support.git_remote import (
     EXAMPLE_SLUG,
     EXAMPLE_TITLE,
@@ -42,6 +44,7 @@ from tests.support.git_remote import (
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_BROWSERS_HEADERS,
+    A_TALK_ADDRESS,
     INSTANCE_KEY,
     configure_secret_key,
     hand_over_session_cookies,
@@ -80,8 +83,9 @@ def signed_in(
     *,
     base_url: str = A_BROWSERS_ADDRESS,
     peer: str = "testclient",
+    app: ASGIApp | None = None,
 ) -> TestClient:
-    """A browser at that stack, signed in as the admin the database carries."""
+    """A browser at that stack, or at `app` over it, signed in as the admin."""
     database = load_settings().database
     seed_user(database, _ADMIN)
     now = datetime.now(UTC)
@@ -95,7 +99,7 @@ def signed_in(
         account_language=None,
     )
     client = TestClient(
-        instance.lobby,
+        app or instance.lobby,
         base_url=base_url,
         follow_redirects=False,
         client=(peer, 50000),
@@ -104,7 +108,7 @@ def signed_in(
     hand_over_session_cookies(
         client,
         session.id,
-        installed_web_auth_config(instance.lobby),
+        installed_web_auth_config(instance.lobby if app is None else instance.talk),
     )
     return client
 
@@ -115,49 +119,33 @@ def every_tick_polls_every_source(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PRESENTATOR_SOURCE_POLL_SECONDS", "0")
 
 
-@pytest.fixture
-def served_by_main(
-    environment: pytest.MonkeyPatch, json_logging: None
-) -> tuple[list[RequestLineMiddleware], list[uvicorn.Config]]:
-    """What the composition root hands the server, recorded instead of served."""
-    del json_logging
-    served: list[RequestLineMiddleware] = []
-    configs: list[uvicorn.Config] = []
-
-    class ServerThatOnlyRecordsWhatItGot:
-        def __init__(self, config: uvicorn.Config) -> None:
-            assert isinstance(config.app, RequestLineMiddleware)
-            configs.append(config)
-            self.app = config.app
-
-        async def serve(self) -> None:
-            served.append(self.app)
-
-    environment.setattr(main.uvicorn, "Server", ServerThatOnlyRecordsWhatItGot)
-
-    main.main([])
-
-    return served, configs
-
-
-def test_the_composition_root_serves_a_lobby_that_answers_the_login(
-    served_by_main: tuple[list[RequestLineMiddleware], list[uvicorn.Config]],
+def test_a_sigterm_turns_the_built_instance_unready_and_refuses_asks(
+    environment: pytest.MonkeyPatch,
 ) -> None:
-    served, _ = served_by_main
-
-    assert len(served) == 1
-    browser = TestClient(
-        served[0], base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS
+    del environment
+    instance = a_real_instance()
+    settings = load_settings()
+    server = main.StoppingServer(
+        uvicorn.Config(main.served_by_host(instance, settings)), instance.stopping
     )
-    assert browser.get("/login").is_success
+    talk = signed_in(
+        instance,
+        base_url=A_TALK_ADDRESS,
+        app=main.served_by_host(instance, settings),
+    )
+    assert talk.get("/health").status_code == HTTPStatus.OK
+    assert talk.post("/copresenter/ask", json=QUESTION).status_code != (
+        HTTPStatus.SERVICE_UNAVAILABLE
+    )
 
+    server.handle_exit(signal.SIGTERM, None)
 
-def test_the_composition_root_serves_websockets_through_wsproto(
-    served_by_main: tuple[list[RequestLineMiddleware], list[uvicorn.Config]],
-) -> None:
-    _, configs = served_by_main
-
-    assert configs[0].ws == "wsproto"
+    assert instance.stopping()
+    assert server.should_exit
+    assert talk.get("/health").status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert talk.post("/copresenter/ask", json=QUESTION).status_code == (
+        HTTPStatus.SERVICE_UNAVAILABLE
+    )
 
 
 def test_a_trusted_proxy_list_that_is_not_addresses_refuses_to_start(

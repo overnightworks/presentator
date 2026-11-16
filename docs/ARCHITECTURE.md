@@ -99,7 +99,9 @@ forwarded headers and trusts only the signed Logout Token. The platform's realm 
 URL for presentator, so its safety does not depend on the call. `GET /health`, the readiness probe,
 answers 200 while the Postgres database passes the revision rule (SQLite: always) and Redis answers
 a ping, else a fixed 503; liveness asks neither, since a restart cures neither. The web starts
-without a worker.
+without a worker. On SIGTERM it turns unready first, takes no new ask or hearing, lets a running
+answer finish and closes each hearing with 1012; the half-heard sentence is lost and the overlay
+reconnects to any ready pod.
 
 A worker pod keeps a link that reaches only the web: its init container loads nftables rules that
 accept only the worker's port in and let nothing leave but the loopback and the accepted
