@@ -229,14 +229,17 @@ def sampled_while_building(run: Run) -> Generator[str]:
 
     Each line is the host's epoch time, taken before kubectl reads the pods, then
     the Ready status of each worker pod listed: the reading is no older than the
-    stamp, and a failed reading prints nothing.
+    stamp, and a failed reading prints nothing and is retried after a pause. The
+    sampler's own timeout is its explicit bound: the runner tracks one child, so
+    the stream ends by that timeout or by SIGPIPE when it is closed.
     """
     read = (
         f"kubectl get pods --selector {WORKER_SELECTOR} --namespace {NAMESPACE} "
         f"--output jsonpath={READY_STATUSES}"
     )
     loop = (
-        f"while :; do now=$(date +%s.%N); ready=$({read}) || continue; "
+        f"while :; do now=$(date +%s.%N); "
+        f"ready=$({read}) || {{ sleep 0.1; continue; }}; "
         'echo "$now $ready"; sleep 0.1; done'
     )
     return run.watch(
@@ -251,7 +254,9 @@ def restart_overlap_problem(
 
     The first sample taken at or after the admission, on the host's clock that the
     web pod shares, must show a worker pod not Ready: the Ready condition's own
-    time is cut to the second, a sample's stamp is not.
+    time is cut to the second, a sample's stamp is not. That sample must list
+    exactly the expected worker pods with exactly one not Ready, the restarting
+    one; an empty or odd listing fails with its reading.
     """
     if admitted is None:
         return "the second step was never admitted by a worker"
@@ -262,6 +267,12 @@ def restart_overlap_problem(
                 return (
                     f"the second step was admitted after the first worker was "
                     f"Ready again (admitted at {admitted}, both Ready at {stamp})"
+                )
+            if len(statuses) != WORKER_PODS or statuses.count(READY) != WORKER_PODS - 1:
+                return (
+                    f"the worker pods at the second step's admission were not one "
+                    f"restarting beside {WORKER_PODS - 1} Ready (admitted at "
+                    f"{admitted}, read at {stamp}: {statuses})"
                 )
             return None
     return "no sample of the worker pods was taken after the second step's admission"
