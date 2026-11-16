@@ -9,7 +9,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from functools import partial
 from pathlib import Path
-from typing import Protocol
+from typing import Final, Protocol
+
+from logline import StepTimer
 
 from presentator.adapters import build_wire
 from presentator.adapters.worker_children import ChildSurroundings
@@ -26,6 +28,9 @@ from presentator.host.worker_wire import (
 )
 
 logger = logging.getLogger(__name__)
+
+CONNECTION_EVENT: Final = "connection.ended"
+_PHASE_EVENT: Final = "wire_phase.ended"
 
 # Inside HEADER_SECONDS: the hello ends first, so the web's step still has time.
 HELLO_SECONDS = 1.0
@@ -65,24 +70,38 @@ def _phase_end(serving: Serving, budget: float, life_ends_at: float) -> float:
 
 
 class LifeEnd(StrEnum):
-    """What ended a serving life, named for the log."""
+    """What ended a serving life: the closed set of its `reason` codes."""
 
     SPAWN = "spawn"
     GATE = "gate"
     CONSUMED = "consumed"
-    WIRE_EXIT = "wire-exit"
+    WIRE_EXIT = "wire_exit"
     SWEEP = "sweep"
     ACCEPT = "accept"
-    SEAL_FAILED = "seal-failed"
-    UPLOAD_EXPIRED = "upload-expired"
-    REPLY_EXPIRED = "reply-expired"
-    DECK_FAILED = "deck-failed"
+    SEAL_FAILED = "seal_failed"
+    UPLOAD_EXPIRED = "upload_expired"
+    REPLY_EXPIRED = "reply_expired"
+    DECK_FAILED = "deck_failed"
     CANCELLED = "cancelled"
 
-    @property
-    def log_level(self) -> int:
-        """The normal end is information; every other end is an error."""
-        return logging.INFO if self is LifeEnd.CONSUMED else logging.ERROR
+
+class HelloRefusal(StrEnum):
+    """Why a connection's hello did not start a life."""
+
+    NOT_PROVEN = "hello_not_proven"
+
+
+class PhaseFailure(StrEnum):
+    """Why a phase's child never reached an exit and no life end names it."""
+
+    DEADLINE = "deadline"
+
+
+class CleanupStep(StrEnum):
+    """The cleanups whose failure is logged: the closed set of their codes."""
+
+    KILL_CHILD = "kill_child"
+    CLOSE_DECK = "close_deck"
 
 
 class WireChild(Protocol):
@@ -206,18 +225,21 @@ def _killed(child: WireChild, life_end: LifeEnd | None) -> LifeEnd | None:
 
 
 def _noting_cleanup_failure(
-    cleanup: Callable[[], object], original: BaseException, what: str
+    cleanup: Callable[[], object], original: BaseException, step: CleanupStep
 ) -> None:
     try:
         cleanup()
     except (Exception, KeyboardInterrupt) as cleanup_failure:
-        logger.exception("%s failed", what)
-        original.add_note(f"{what} failed: {cleanup_failure!r}")
+        logger.exception(
+            "cleanup.failed",
+            extra={"step": step, "error_type": type(cleanup_failure).__name__},
+        )
+        original.add_note(f"{step} failed: {cleanup_failure!r}")
 
 
 def _killed_noting_failure(child: WireChild, original: BaseException) -> None:
     _noting_cleanup_failure(
-        partial(_killed, child, None), original, "killing and reaping the child"
+        partial(_killed, child, None), original, CleanupStep.KILL_CHILD
     )
 
 
@@ -295,11 +317,26 @@ def _wire_launch(
 
 
 def _expired_run(phase: _Phase) -> _ChildRun:
-    logger.warning("%s deadline", phase.launch.name)
     return _ChildRun(None, phase.expired)
 
 
 def _run_gated(serving: Serving, phase: _Phase) -> _ChildRun:
+    """One timed phase: its child spawned, released and waited on, each in turn.
+
+    The phase's line is a warning when the child reached no exit, because the
+    connection's line is the fault's one error line.
+    """
+    with StepTimer(_PHASE_EVENT, logger, phase=phase.launch.name) as line:
+        line.handled()
+        run = _run_child(serving, phase)
+        if run.exit_status is None:
+            line.fail(run.life_end or PhaseFailure.DEADLINE)
+        else:
+            line.add(exit_code=run.exit_status)
+        return run
+
+
+def _run_child(serving: Serving, phase: _Phase) -> _ChildRun:
     """Spawn behind the gate, release and wait until the phase ends; kill on expiry.
 
     A phase whose end has already come spawns nothing, before or during its launch.
@@ -328,7 +365,7 @@ def _refused_before_release(
     if not _admitted_at_gate(child, phase.launch.gate_admits):
         return _ChildRun(None, _killed(child, LifeEnd.GATE))
     if serving.clock() >= phase.ends_at:
-        return _ChildRun(None, _expired(child, phase.launch.name, phase.expired))
+        return _ChildRun(None, _killed(child, phase.expired))
     if phase.cancelled_by is not None and serving.readable((phase.cancelled_by,), 0.0):
         return _ChildRun(None, _killed(child, LifeEnd.CANCELLED))
     return None
@@ -341,7 +378,7 @@ def _released_run(child: WireChild, serving: Serving, phase: _Phase) -> _ChildRu
         return _ChildRun(None, _killed(child, LifeEnd.GATE))
     outcome = phase.wait(child, phase.ends_at)
     if outcome is None:
-        return _ChildRun(None, _expired(child, phase.launch.name, phase.expired))
+        return _ChildRun(None, _killed(child, phase.expired))
     if isinstance(outcome, LifeEnd):
         return _ChildRun(None, _killed(child, outcome))
     return _ChildRun(outcome)
@@ -359,8 +396,10 @@ def _side_connection_closed(listener: socket.socket) -> bool:
         side_connection, _address = listener.accept()
     except BlockingIOError:
         return True
-    except OSError:
-        logger.exception("side connection accept failed")
+    except OSError as error:
+        logger.exception(
+            "side_connection.failed", extra={"error_type": type(error).__name__}
+        )
         return False
     else:
         with side_connection:
@@ -397,16 +436,10 @@ def _watched_exit(
     return None
 
 
-def _expired(child: WireChild, name: str, life_end: LifeEnd | None) -> LifeEnd | None:
-    logger.warning("%s deadline", name)
-    return _killed(child, life_end)
-
-
 def _sealed(serving: Serving, record: int) -> bool:
     try:
         serving.seal(record)
     except OSError:
-        logger.exception("request record not sealed")
         return False
     return True
 
@@ -415,7 +448,6 @@ def _opened_deck(serving: Serving) -> bool:
     try:
         serving.open_deck(serving.work / DECK_DIRECTORY)
     except OSError:
-        logger.exception("deck not opened")
         return False
     return True
 
@@ -426,7 +458,7 @@ def _run_upload_with_deck(serving: Serving, phase: _Phase) -> _ChildRun:
         upload = _run_gated(serving, phase)
     except BaseException as original:
         _noting_cleanup_failure(
-            partial(serving.close_deck, deck), original, "closing the deck"
+            partial(serving.close_deck, deck), original, CleanupStep.CLOSE_DECK
         )
         raise
     serving.close_deck(deck)
@@ -616,18 +648,32 @@ def hand_over(
         os.close(record)
 
 
-def _served_after_hello(
+def _served_connection(
     connection: socket.socket,
     key: bytes,
     serving: Serving,
     accepted_at: float,
     listener: socket.socket,
 ) -> LifeEnd | None:
-    """Hand a verified connection over; a refused hello is closed and logged."""
-    if build_wire.verify_hello(connection, key, seconds=HELLO_SECONDS):
-        return hand_over(connection, serving, accepted_at, listener=listener)
-    logger.warning("connection closed: the hello was not proven")
-    return None
+    """Serve one accepted connection and sweep after it; None keeps the life.
+
+    The connection's line carries what ended the life, and a refused hello as
+    its refusal; the consumed end is the line's success.
+    """
+    with StepTimer(CONNECTION_EVENT, logger) as line:
+        with connection:
+            life_end = None
+            if build_wire.verify_hello(connection, key, seconds=HELLO_SECONDS):
+                life_end = hand_over(
+                    connection, serving, accepted_at, listener=listener
+                )
+            else:
+                line.refuse(HelloRefusal.NOT_PROVEN)
+        if life_end is None and not serving.sweep(accepted_at + SWEEP_SECONDS):
+            life_end = LifeEnd.SWEEP
+        if life_end not in (None, LifeEnd.CONSUMED):
+            line.fail(life_end)
+    return life_end
 
 
 def accept_connections(
@@ -641,17 +687,14 @@ def accept_connections(
     while True:
         try:
             connection, _address = listener.accept()
-        except OSError:
-            logger.exception("accept failed")
+        except OSError as error:
+            logger.exception(
+                "connection.failed", extra={"error_type": type(error).__name__}
+            )
             return LifeEnd.ACCEPT
         accepted_at = serving.clock()
         serving.watchdog.arm(accepted_at + WATCHDOG_SECONDS - serving.clock())
-        with connection:
-            life_end = _served_after_hello(
-                connection, key, serving, accepted_at, listener
-            )
+        life_end = _served_connection(connection, key, serving, accepted_at, listener)
         if life_end is not None:
             return life_end
-        if not serving.sweep(accepted_at + SWEEP_SECONDS):
-            return LifeEnd.SWEEP
         serving.watchdog.cancel()

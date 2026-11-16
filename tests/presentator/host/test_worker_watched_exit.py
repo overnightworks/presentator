@@ -1,7 +1,6 @@
 """The U and R waits as one loop over the child's exit and the listener, on a fake."""
 
 import errno
-import logging
 import socket
 from collections.abc import Iterator
 from contextlib import closing
@@ -16,6 +15,7 @@ from presentator.host.worker_serving import (
     hand_over,
 )
 from presentator.host.worker_wire import WireExit, WireRole
+from tests.support.log_lines import events_of, json_logged
 from tests.support.worker_support import (
     ACCEPT_TIME,
     IDLE_LEG,
@@ -189,19 +189,18 @@ def test_nothing_pending_on_the_listener_closes_nothing_and_the_wait_goes_on(
 def test_a_failing_accept_is_logged_once_ends_the_listening_for_that_wait_only(
     connection: socket.socket,
     recording: RecordingListener,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     recording.refusal = OSError(errno.EMFILE, "too many open files")
     life = accepted_life(listener_wakes=4, scripted_roles=BOTH_PHASES)
 
-    with caplog.at_level(logging.ERROR):
+    with json_logged(capsys) as logged:
         outcome = hand_over(connection, life.serving(), ACCEPT_TIME, listener=recording)
 
     assert outcome == LifeEnd.CONSUMED
     assert recording.accept_calls == len(BOTH_PHASES)
-    assert len([record for record in caplog.records if record.exc_info]) == len(
-        BOTH_PHASES
-    )
+    faults = events_of(logged, "side_connection.failed")
+    assert [fault["level"] for fault in faults] == ["error"] * len(BOTH_PHASES)
 
 
 def test_a_side_connection_is_closed_even_when_the_listener_cannot_be_restored(

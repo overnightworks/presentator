@@ -61,6 +61,7 @@ from tests.presentator.host.support.worker_boundary import (
     SERVE,
     boundary_over,
 )
+from tests.presentator.host.support.worker_lines import refusal_reasons
 from tests.support.log_lines import LoggedText
 
 MOUNTS = Predicate.MOUNTS
@@ -458,7 +459,7 @@ def test_a_start_fixes_up_the_born_pod_between_the_lowering_and_the_read(
     assert status == 0
     assert events[:5] == ["prctl", "umask", "lower", "fix-up", "read"]
     assert ("serve" in events) is (arguments == SERVE)
-    assert "start refused" not in logged.text
+    assert refusal_reasons(logged) == []
     assert (
         stat.S_IMODE(path_in(pod, WORK_MOUNT).stat().st_mode)
         == (MOUNT_ROOT_MODES[WORK_MOUNT])
@@ -502,7 +503,7 @@ def test_a_failed_fix_up_refuses_the_start_as_mounts_before_the_read(
     status = worker.main(arguments, pod_boundary(pod, events, fix_up))
 
     assert status == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {MOUNTS}" in logged.text
+    assert refusal_reasons(logged) == [MOUNTS]
     assert events == ["prctl", "umask", "lower", "fix-up"]
 
 
@@ -527,7 +528,7 @@ def test_a_malformed_mountinfo_refuses_the_pod_as_mounts_without_a_traceback(
     status = worker.main(arguments, pod_boundary(pod, []))
 
     assert status == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {MOUNTS}" in logged.text
+    assert refusal_reasons(logged) == [MOUNTS]
     assert "Traceback" not in logged.text
 
 
@@ -547,7 +548,7 @@ def test_a_symlinked_table_root_refuses_and_its_target_keeps_its_mode(
     status = worker.main(SERVE, pod_boundary(pod, events))
 
     assert status == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {MOUNTS}" in logged.text
+    assert refusal_reasons(logged) == [MOUNTS]
     assert events == ["prctl", "umask", "lower", "fix-up"]
     assert stat.S_IMODE(outside.stat().st_mode) == OUTSIDE_MODE
 

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import IntFlag, StrEnum
 from functools import partial
 from pathlib import Path
-from typing import Protocol
+from typing import Final, Protocol
 
 import logline
 
@@ -69,10 +69,11 @@ from presentator.host.worker_termination import (
     reap_children,
     sweep,
 )
+from presentator.host.worker_wire import SERVICE_NAME
 
 logger = logging.getLogger(__name__)
 
-SERVICE_NAME = "presentator-worker"
+START_REFUSED_EVENT: Final = "start.refused"
 REFUSAL_EXIT_STATUS = 2
 NOT_READY_EXIT_STATUS = 1
 LISTEN_BACKLOG = 4
@@ -242,10 +243,11 @@ def serve(*, port: int, key: bytes, serving: Serving) -> int:
         listener = bind_listener(port)
         with listener:
             start_listening(listener)
-            life_end = accept_connections(listener, key, serving)
+            logger.info("process.ready")
+            accept_connections(listener, key, serving)
     except StartRefusedError as refused:
         return _refuse(refused.refusal)
-    logger.log(life_end.log_level, "life ended: %s", life_end)
+    logger.info("process.stopped")
     return 0
 
 
@@ -358,12 +360,11 @@ REAL_BOUNDARY = Boundary(
 
 
 def _refuse(refused: Predicate | StartRefusal) -> int:
-    logger.error("start refused: %s", refused)
+    logger.error(START_REFUSED_EVENT, extra={"reason": refused})
     return REFUSAL_EXIT_STATUS
 
 
-def _refuse_settings(error: ConfigurationError) -> int:
-    logger.error("settings refused", exc_info=error)
+def _refuse_settings() -> int:
     return _refuse(StartRefusal.SETTINGS)
 
 
@@ -422,6 +423,8 @@ def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) 
         return _ready(arguments.port, boundary)
     if not arguments.check and (arguments.port is None or arguments.key_file is None):
         parser.error("serving needs --port and --key-file")
+    if not arguments.check:
+        logger.info("process.started")
     try:
         boundary.set_non_dumpable()
     except OSError:
@@ -434,8 +437,8 @@ def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) 
         return 0
     try:
         settings = boundary.load_settings()
-    except ConfigurationError as error:
-        return _refuse_settings(error)
+    except ConfigurationError:
+        return _refuse_settings()
     return boundary.serve(
         port=arguments.port, key_file=arguments.key_file, settings=settings
     )

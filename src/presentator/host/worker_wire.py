@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 from pathlib import Path
 
+import logline
+
 from presentator.adapters.build_wire import (
     WireRefusedError,
     read_record,
@@ -29,6 +31,8 @@ from presentator.contracts.decks import (
 )
 
 logger = logging.getLogger(__name__)
+
+SERVICE_NAME = "presentator-worker"
 
 
 class WireRole(StrEnum):
@@ -143,6 +147,7 @@ def main(argv: Sequence[str]) -> int:
     parser.add_argument("--megabytes", type=int, required=True)
     parser.add_argument("--plan", type=ReplyPlan, choices=list(ReplyPlan))
     arguments = parser.parse_args(argv)
+    logline.configure(SERVICE_NAME)
     with socket.socket(fileno=arguments.connection_fd) as connection:
         try:
             return _ROLES[arguments.role](
@@ -156,9 +161,8 @@ def main(argv: Sequence[str]) -> int:
             )
         except (WireRefusedError, OSError) as error:
             logger.warning(
-                "wire role %s closed without an outcome: %s",
-                arguments.role,
-                type(error).__name__,
+                "wire_role.closed",
+                extra={"role": arguments.role, "error_type": type(error).__name__},
             )
             return WireExit.CLOSED
 

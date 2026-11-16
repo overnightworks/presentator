@@ -12,6 +12,8 @@ from presentator.host import worker
 from presentator.host.config import MINIMUM_KEY_LENGTH
 from presentator.host.worker import StartRefusal
 from tests.presentator.host.support.worker_boundary import LOADED_SETTINGS
+from tests.presentator.host.support.worker_lines import refusal_reasons
+from tests.support.log_lines import json_logged
 from tests.support.worker_support import KEY, OWN_UID, ScriptedLife, free_port
 
 PORT = 7100
@@ -110,17 +112,18 @@ def test_a_port_that_is_taken_refuses_as_bind() -> None:
 
 
 def test_no_socket_can_be_allocated_refuses_the_start(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     def exhausted(*_arguments: object) -> socket.socket:
         raise OSError(errno.EMFILE, "too many open files")
 
     monkeypatch.setattr(worker.socket, "socket", exhausted)
 
-    status = worker.serve(port=PORT, key=KEY, serving=ScriptedLife().serving())
+    with json_logged(capsys) as logged:
+        status = worker.serve(port=PORT, key=KEY, serving=ScriptedLife().serving())
 
     assert status == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {StartRefusal.BIND}" in caplog.text
+    assert refusal_reasons(logged) == [StartRefusal.BIND]
 
 
 def test_listen_failure_is_a_named_refusal() -> None:
@@ -204,11 +207,12 @@ def test_a_start_names_the_port_and_key_file_it_serves_or_is_refused_as_usage(
 
 
 def test_a_key_the_real_boundary_refuses_ends_the_start_before_binding(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    status = worker.REAL_BOUNDARY.serve(
-        port=PORT, key_file=tmp_path / "missing", settings=LOADED_SETTINGS
-    )
+    with json_logged(capsys) as logged:
+        status = worker.REAL_BOUNDARY.serve(
+            port=PORT, key_file=tmp_path / "missing", settings=LOADED_SETTINGS
+        )
 
     assert status == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {StartRefusal.KEY}" in caplog.text
+    assert refusal_reasons(logged) == [StartRefusal.KEY]

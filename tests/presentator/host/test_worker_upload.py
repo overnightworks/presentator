@@ -11,8 +11,9 @@ from pathlib import Path
 import pytest
 
 from presentator.host import worker_scratch
-from presentator.host.worker_serving import LifeEnd, hand_over
+from presentator.host.worker_serving import CleanupStep, LifeEnd, hand_over
 from presentator.host.worker_wire import WireExit
+from tests.support.log_lines import events_of, json_logged
 from tests.support.worker_support import (
     ACCEPT_TIME,
     DECK_CLOSED_MODE,
@@ -191,6 +192,7 @@ def test_the_deck_is_closed_when_the_upload_run_raises_and_the_original_propagat
 def test_a_deck_that_cannot_be_closed_is_not_swallowed_after_the_original_is_noted(
     connection: socket.socket,
     listener: socket.socket,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     life = accepted_life(
         wait_error=OSError("lost"),
@@ -200,10 +202,19 @@ def test_a_deck_that_cannot_be_closed_is_not_swallowed_after_the_original_is_not
 
     serving = life.serving()
 
-    with pytest.raises(OSError, match="lost") as raised:
+    with (
+        json_logged(capsys) as logged,
+        pytest.raises(OSError, match="lost") as raised,
+    ):
         hand_over(connection, serving, ACCEPT_TIME, listener=listener)
 
     assert any("no chmod" in note for note in raised.value.__notes__)
+    (line,) = events_of(logged, "cleanup.failed")
+    assert (line["level"], line["step"], line["error_type"]) == (
+        "error",
+        CleanupStep.CLOSE_DECK,
+        "OSError",
+    )
 
 
 def test_a_deck_that_cannot_be_closed_after_a_clean_run_raises(
