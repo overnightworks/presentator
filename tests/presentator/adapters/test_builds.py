@@ -8,7 +8,6 @@ interface.
 """
 
 import os
-import shutil
 import stat
 import subprocess
 import time
@@ -21,12 +20,11 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
+from presentator.adapters import build_tree
 from presentator.adapters import builds as builds_module
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
-from presentator.adapters.builds import SlidevBuilds
 from presentator.contracts.decks import (
     FAILURE_TEXT_LIMIT,
-    OUTPUT_DIRECTORY,
     Artefacts,
     BuildFailure,
     BuildFailureReason,
@@ -70,9 +68,6 @@ _ONLY_A_MEGABYTE_MAY_BE_LEFT = 1
 _MEGABYTES_A_GREEDY_BUILD_WRITES = 3
 _WATCHED_OFTEN = timedelta(milliseconds=50)
 _CLOSED_TO_EVERYONE = 0o000
-_TALK = "talk"
-_PDF_FILE = "deck.pdf"
-_A_DATABASE_FILE = "presentator.sqlite3"
 _A_SLUG_OF_SPACES = "a deck of spaces"
 # What a command line may carry beside a space: nothing here reads any of it as
 # grammar, so nothing here may lose it.
@@ -667,50 +662,6 @@ def test_a_commit_the_mirror_cannot_read_the_deck_at_builds_nothing(
     assert "never-pushed" not in logged.text
 
 
-_A_REAL_TALK_UNDER_THE_ROOT = Path("builds/a-run/real-out/talk")
-
-
-@pytest.mark.parametrize(
-    ("talk", "pdf"),
-    [
-        (Path("outside"), Path("outside/deck.pdf")),
-        (Path("builds/through-a-link"), Path("builds/through-a-link/deck.pdf")),
-        (Path("builds/a-run/out/talk"), Path("builds/a-run/out/talk/deck.pdf")),
-        (Path("builds/../outside"), Path("builds/../outside/deck.pdf")),
-        (_A_REAL_TALK_UNDER_THE_ROOT, Path("builds")),
-    ],
-    ids=[
-        "a place outside the root",
-        "a link out of the root",
-        "a run whose out is a link inside the root",
-        "a way up out of the root",
-        "the root itself as the PDF",
-    ],
-)
-def test_artefacts_that_do_not_stand_under_the_root_are_not_held(
-    tmp_path: Path,
-    talk: Path,
-    pdf: Path,
-) -> None:
-    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
-    builds.builds.mkdir(parents=True)
-    outside = a_written_talk(tmp_path / "outside")
-    (builds.builds / "through-a-link").symlink_to(outside)
-    run = builds.builds / "a-run"
-    a_written_talk(tmp_path / _A_REAL_TALK_UNDER_THE_ROOT)
-    (run / OUTPUT_DIRECTORY).symlink_to("real-out")
-
-    assert not builds.holds(Artefacts(directory=tmp_path / talk, pdf=tmp_path / pdf))
-
-
-def a_written_talk(directory: Path) -> Path:
-    """A talk's page and a PDF beside it, as real files in that directory."""
-    directory.mkdir(parents=True)
-    (directory / _A_BUILT_PAGE).write_text(_WHAT_A_TALK_SAYS, encoding="utf-8")
-    (directory / _PDF_FILE).write_bytes(b"%PDF-1.7")
-    return directory
-
-
 @pytest.mark.parametrize(
     "planted",
     [
@@ -755,105 +706,6 @@ def test_a_build_that_leaves_a_link_on_the_way_to_an_artefact_is_not_held(
     artefacts = what_it_built(builds.build(a_deck(remote), source=source))
 
     assert not builds.holds(artefacts)
-
-
-def test_a_file_of_a_build_is_read_as_it_was_written(tmp_path: Path) -> None:
-    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
-    run = a_run_with_an_asset(builds)
-
-    file = builds.read(run / _TALK / "assets" / "app.js")
-
-    assert file is not None
-    with file:
-        assert file.read() == b"console.log(1)"
-
-
-@pytest.mark.parametrize(
-    ("replaced", "read"),
-    [
-        (_PDF_FILE, _PDF_FILE),
-        ("talk/assets/app.js", "talk/assets/app.js"),
-        ("talk/assets", "talk/assets/app.js"),
-        ("talk", "talk/index.html"),
-    ],
-    ids=["the PDF", "an asset", "a directory on the way", "the talk itself"],
-)
-def test_a_file_replaced_by_a_link_after_the_build_was_held_is_not_read(
-    tmp_path: Path,
-    replaced: str,
-    read: str,
-) -> None:
-    """The link comes after `holds` said yes, which is the gap `read` closes."""
-    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
-    run = a_run_with_an_asset(builds)
-    assert builds.holds(Artefacts(directory=run / _TALK, pdf=run / _PDF_FILE))
-    secret = a_secret_beside_the_root(tmp_path)
-    target = run / replaced
-    if target.is_dir():
-        shutil.rmtree(target)
-        target.symlink_to(secret.parent)
-    else:
-        target.unlink()
-        target.symlink_to(secret)
-
-    assert builds.read(run / read) is None
-
-
-@pytest.mark.parametrize("nothing_there", ["no-such-file", "talk"])
-def test_a_name_that_is_no_file_of_a_build_is_not_read(
-    tmp_path: Path,
-    nothing_there: str,
-) -> None:
-    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
-    run = a_run_with_an_asset(builds)
-
-    assert builds.read(run / nothing_there) is None
-
-
-def test_a_path_that_leaves_the_root_is_not_read(tmp_path: Path) -> None:
-    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
-    builds.builds.mkdir(parents=True)
-
-    assert builds.read(a_secret_beside_the_root(tmp_path)) is None
-    assert builds.read(builds.builds / ".." / _A_DATABASE_FILE) is None
-
-
-def a_secret_beside_the_root(tmp_path: Path) -> Path:
-    """Something this server keeps to itself, named like every file a build has."""
-    secret = tmp_path / "secret" / _A_DATABASE_FILE
-    secret.parent.mkdir(exist_ok=True)
-    secret.write_bytes(b"what this server keeps to itself")
-    (secret.parent / "app.js").write_bytes(secret.read_bytes())
-    (secret.parent / _A_BUILT_PAGE).write_bytes(secret.read_bytes())
-    return secret
-
-
-def a_run_with_an_asset(builds: SlidevBuilds) -> Path:
-    """A run holding a talk with one asset, and its PDF, as real files."""
-    run = builds.builds / "a-run"
-    talk = a_written_talk(run / _TALK)
-    (run / _PDF_FILE).write_bytes((talk / _PDF_FILE).read_bytes())
-    (talk / _PDF_FILE).unlink()
-    (talk / "assets").mkdir()
-    (talk / "assets" / "app.js").write_text("console.log(1)", encoding="utf-8")
-    return run
-
-
-def test_artefacts_that_were_never_written_are_not_held(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
-    never_written = builds.builds / "a-run-that-never-was" / _TALK
-
-    with json_logged(capsys) as logged:
-        held = builds.holds(
-            Artefacts(directory=never_written, pdf=never_written / "deck.pdf"),
-        )
-
-    assert not held
-    (line,) = lines_of(logged, "build_artefacts.refused")
-    assert line["reason"] == "not_as_written"
-    assert "a-run-that-never-was" not in logged.text
 
 
 def test_a_talk_larger_than_a_build_may_leave_is_refused_with_that_reason(
@@ -1183,7 +1035,7 @@ def test_a_name_that_is_no_longer_a_directory_when_it_is_opened_is_refused(
         del name, held_by
         raise OSError(ELOOP, "the name is a link now")
 
-    machine.setattr(builds_module, "_opened_within", a_link_by_now)
+    machine.setattr(build_tree, "opened_within", a_link_by_now)
     with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_BUILDS)
     builds = builds_ready_for(tmp_path, source)
 
