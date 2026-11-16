@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import re
 import threading
 from http import HTTPStatus
@@ -14,6 +15,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from agents.backend.fake_gateway import FakeGateway, completion
 from fastapi.responses import JSONResponse
+from logline import REQUEST_EVENT
 from speech_client import wire
 
 from tests.support.copresenter_support import (
@@ -56,7 +58,7 @@ from tests.support.speech_service import (
     a_held_wav,
     nobody_listens,
 )
-from tests.support.talk_support import Hosts
+from tests.support.talk_support import A, Hosts
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -377,3 +379,39 @@ def test_a_health_read_shows_no_marker_in_any_log_error_or_answer(
     with a_speech_instance(tmp_path, LEAK_HEALTH[case]()) as instance:
         response, logged = who_over(instance)
         assert_nothing_shows(instance, logged, response=response)
+
+
+def _a_record(message: object) -> logging.LogRecord:
+    return logging.LogRecord("probe", logging.INFO, __file__, 0, message, (), None)
+
+
+def test_a_request_line_may_carry_the_admitted_persons_id_as_its_sub(
+    tmp_path: Path,
+) -> None:
+    line = {"event": REQUEST_EVENT, "sub": A.id}
+    with a_speech_instance(tmp_path, next(iter(LEAK_ASKS.values()))()) as instance:
+        assert_nothing_shows(instance, [_a_record(line)])
+
+
+def test_a_request_line_whose_sub_is_any_other_value_is_still_checked(
+    tmp_path: Path,
+) -> None:
+    leaking = _a_record({"event": REQUEST_EVENT, "sub": ACCESS})
+    with (
+        a_speech_instance(tmp_path, next(iter(LEAK_ASKS.values()))()) as instance,
+        pytest.raises(AssertionError),
+    ):
+        assert_nothing_shows(instance, [leaking])
+
+
+def test_a_request_line_record_keeps_its_exception_text_when_its_sub_is_exempt(
+    tmp_path: Path,
+) -> None:
+    line = {"event": REQUEST_EVENT, "sub": A.id}
+    leaking = _a_record(line)
+    leaking.exc_text = ACCESS
+    with (
+        a_speech_instance(tmp_path, next(iter(LEAK_ASKS.values()))()) as instance,
+        pytest.raises(AssertionError),
+    ):
+        assert_nothing_shows(instance, [leaking])

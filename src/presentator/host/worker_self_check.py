@@ -85,7 +85,8 @@ KUBERNETES_ENVIRONMENT_KEYS = frozenset(
         "KUBERNETES_PORT_443_TCP_ADDR",
     }
 )
-# The image's and its base's keys, the runtime's HOSTNAME, Python's own LC_CTYPE.
+# The image's and its base's keys, logline's two, the runtime's HOSTNAME, Python's
+# own LC_CTYPE.
 ALLOWED_ENVIRONMENT_KEYS = frozenset(
     {
         "HOME",
@@ -105,6 +106,8 @@ ALLOWED_ENVIRONMENT_KEYS = frozenset(
         "PRESENTATOR_LOCAL_SOURCES_MOUNT",
         "NODE_VERSION",
         "YARN_VERSION",
+        "SERVICE_VERSION",
+        "LOG_LEVEL",
     }
     | {"HOSTNAME", "LC_CTYPE"}
     # The platform's manifest still sets this name and nothing reads it; the

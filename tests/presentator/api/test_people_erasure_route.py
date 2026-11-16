@@ -9,7 +9,6 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
-import uvicorn
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
@@ -50,6 +49,7 @@ from tests.support.lobby import (
     an_admin_people,
     an_installed_auth,
 )
+from tests.support.log_lines import json_lines
 
 HAL = "hal-client"
 A_SECOND_CLIENT = "hal-second-client"
@@ -504,35 +504,23 @@ def test_one_call_writes_one_audit_line_naming_nobody(
     assert subject not in everything
 
 
-def test_the_server_logs_no_request_path(environment: pytest.MonkeyPatch) -> None:
+@pytest.mark.usefixtures("json_logging")
+def test_the_server_logs_no_request_path(
+    main_without_serving: Callable[[], None], capsys: pytest.CaptureFixture[str]
+) -> None:
     """PE30: a path under the admin prefix carries a subject; no log line may."""
-    configs: list[uvicorn.Config] = []
-
-    class ServerThatOnlyRecordsItsConfig:
-        def __init__(self, config: uvicorn.Config) -> None:
-            configs.append(config)
-
-        async def serve(self) -> None:
-            return None
-
+    main_without_serving()
     server_log = logging.getLogger("uvicorn.error")
-    for attribute in ("level", "propagate"):
-        environment.setattr(server_log, attribute, getattr(server_log, attribute))
-    environment.setattr(main.uvicorn, "Server", ServerThatOnlyRecordsItsConfig)
-    main.main()
-    [config] = configs
-    emitted: list[str] = []
 
-    class Emitted(logging.Handler):
-        def emit(self, record: logging.LogRecord) -> None:
-            emitted.append(record.getMessage())
-
-    config.configure_logging()
-    environment.setattr(server_log, "handlers", [Emitted()])
-    server_log.info('127.0.0.1 - "WebSocket /api/admin/people/subject-id" 403')
+    # The rejected handshake, as the server writes it.
+    server_log.info(
+        '%s - "WebSocket %s" 403', "127.0.0.1", "/api/admin/people/subject-id"
+    )
     server_log.error("the server failed")
 
-    assert emitted == ["the server failed"]
+    assert [line["event"] for line in json_lines(capsys.readouterr().out)] == [
+        "the server failed"
+    ]
 
 
 @pytest.mark.parametrize(

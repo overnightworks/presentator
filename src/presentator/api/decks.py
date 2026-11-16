@@ -21,6 +21,7 @@ from typing import BinaryIO, Final
 from agents.tools import not_an_agent_tool
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
+from logline import set_route
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
@@ -86,6 +87,8 @@ class _BuiltTalk:
         if scope["type"] != "http":
             await send({"type": "websocket.close"})
             return
+        # The request line names the deck's address, never the path of a file.
+        set_route(scope, _DECK_PAGE)
         viewer = gated_person(Request(scope)).id
         directory = self.decks.built_talk(scope["path_params"]["slug"], viewer=viewer)
         if directory is None:

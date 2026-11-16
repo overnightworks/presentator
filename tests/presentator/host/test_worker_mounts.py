@@ -61,6 +61,7 @@ from tests.presentator.host.support.worker_boundary import (
     SERVE,
     boundary_over,
 )
+from tests.support.log_lines import LoggedText
 
 MOUNTS = Predicate.MOUNTS
 MEMORY_MOUNTS = (WORK_MOUNT, TEMPORARY_MOUNT, SHARED_MEMORY_MOUNT)
@@ -447,7 +448,7 @@ def born_pod(root: Path) -> None:
 
 @pytest.mark.parametrize("arguments", CHECK_OR_START)
 def test_a_start_fixes_up_the_born_pod_between_the_lowering_and_the_read(
-    pod: Path, caplog: pytest.LogCaptureFixture, arguments: list[str]
+    pod: Path, logged: LoggedText, arguments: list[str]
 ) -> None:
     born_pod(pod)
     events: list[str] = []
@@ -457,7 +458,7 @@ def test_a_start_fixes_up_the_born_pod_between_the_lowering_and_the_read(
     assert status == 0
     assert events[:5] == ["prctl", "umask", "lower", "fix-up", "read"]
     assert ("serve" in events) is (arguments == SERVE)
-    assert "start refused" not in caplog.text
+    assert "start refused" not in logged.text
     assert (
         stat.S_IMODE(path_in(pod, WORK_MOUNT).stat().st_mode)
         == (MOUNT_ROOT_MODES[WORK_MOUNT])
@@ -491,7 +492,7 @@ FIX_UP_FAILURES = {
 @pytest.mark.parametrize("arguments", CHECK_OR_START)
 def test_a_failed_fix_up_refuses_the_start_as_mounts_before_the_read(
     pod: Path,
-    caplog: pytest.LogCaptureFixture,
+    logged: LoggedText,
     arguments: list[str],
     failure: Callable[[Path], Callable[[], None] | None],
 ) -> None:
@@ -501,7 +502,7 @@ def test_a_failed_fix_up_refuses_the_start_as_mounts_before_the_read(
     status = worker.main(arguments, pod_boundary(pod, events, fix_up))
 
     assert status == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {MOUNTS}" in caplog.text
+    assert f"start refused: {MOUNTS}" in logged.text
     assert events == ["prctl", "umask", "lower", "fix-up"]
 
 
@@ -517,7 +518,7 @@ def break_mountinfo_encoding(root: Path) -> None:
 @pytest.mark.parametrize("break_it", [break_mountinfo_line, break_mountinfo_encoding])
 def test_a_malformed_mountinfo_refuses_the_pod_as_mounts_without_a_traceback(
     pod: Path,
-    caplog: pytest.LogCaptureFixture,
+    logged: LoggedText,
     arguments: list[str],
     break_it: Callable[[Path], None],
 ) -> None:
@@ -526,13 +527,13 @@ def test_a_malformed_mountinfo_refuses_the_pod_as_mounts_without_a_traceback(
     status = worker.main(arguments, pod_boundary(pod, []))
 
     assert status == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {MOUNTS}" in caplog.text
-    assert "Traceback" not in caplog.text
+    assert f"start refused: {MOUNTS}" in logged.text
+    assert "Traceback" not in logged.text
 
 
 def test_a_symlinked_table_root_refuses_and_its_target_keeps_its_mode(
     pod: Path,
-    caplog: pytest.LogCaptureFixture,
+    logged: LoggedText,
     tmp_path: Path,
 ) -> None:
     outside = tmp_path / "outside"
@@ -546,7 +547,7 @@ def test_a_symlinked_table_root_refuses_and_its_target_keeps_its_mode(
     status = worker.main(SERVE, pod_boundary(pod, events))
 
     assert status == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {MOUNTS}" in caplog.text
+    assert f"start refused: {MOUNTS}" in logged.text
     assert events == ["prctl", "umask", "lower", "fix-up"]
     assert stat.S_IMODE(outside.stat().st_mode) == OUTSIDE_MODE
 

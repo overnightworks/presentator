@@ -10,8 +10,8 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from logline import RequestLineMiddleware
 from pydantic import SecretStr
-from starlette.routing import Router
 from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.ports import AccountKind
@@ -109,15 +109,16 @@ def signed_in(
 
 @pytest.fixture
 def served_by_main(
-    environment: pytest.MonkeyPatch,
-) -> tuple[list[Router], list[uvicorn.Config]]:
+    environment: pytest.MonkeyPatch, json_logging: None
+) -> tuple[list[RequestLineMiddleware], list[uvicorn.Config]]:
     """What the composition root hands the server, recorded instead of served."""
-    served: list[Router] = []
+    del json_logging
+    served: list[RequestLineMiddleware] = []
     configs: list[uvicorn.Config] = []
 
     class ServerThatOnlyRecordsWhatItGot:
         def __init__(self, config: uvicorn.Config) -> None:
-            assert isinstance(config.app, Router)
+            assert isinstance(config.app, RequestLineMiddleware)
             configs.append(config)
             self.app = config.app
 
@@ -132,7 +133,7 @@ def served_by_main(
 
 
 def test_the_composition_root_serves_a_lobby_that_answers_the_login(
-    served_by_main: tuple[list[Router], list[uvicorn.Config]],
+    served_by_main: tuple[list[RequestLineMiddleware], list[uvicorn.Config]],
 ) -> None:
     served, _ = served_by_main
 
@@ -144,7 +145,7 @@ def test_the_composition_root_serves_a_lobby_that_answers_the_login(
 
 
 def test_the_composition_root_serves_websockets_through_wsproto(
-    served_by_main: tuple[list[Router], list[uvicorn.Config]],
+    served_by_main: tuple[list[RequestLineMiddleware], list[uvicorn.Config]],
 ) -> None:
     _, configs = served_by_main
 

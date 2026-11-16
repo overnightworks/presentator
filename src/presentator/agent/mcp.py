@@ -8,14 +8,16 @@ again, so it meets the same middleware as any request.
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 
 from agents.mcp_server import McpPersonFront, RouteTools, route_tools
 from agents.mcp_wire import MCP_ENDPOINT_PATH
 from agents.tools import Principal
 from fastapi import FastAPI
+from logline import set_route
 from starlette.requests import HTTPConnection
 from starlette.routing import Route
-from starlette.types import Scope
+from starlette.types import Receive, Scope, Send
 from webauth.middleware.bearer_gate import (
     MarkedRoute,
     ProtectedResource,
@@ -33,6 +35,17 @@ MCP_GROUP = "/apps/presentator/mcp"
 AGENT_GROUP = "/agents"
 # The one public client whose tokens act as the person who signed in.
 MCP_CLIENT_ID = "agents"
+
+
+@dataclass(frozen=True, slots=True)
+class _NamedFront:
+    """The front, answering as the route `/mcp` in the request line."""
+
+    front: McpPersonFront
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        set_route(scope, MCP_ENDPOINT_PATH)
+        await self.front(scope, receive, send)
 
 
 def marked_tools(lobby: FastAPI) -> RouteTools[MarkedRoute]:
@@ -75,7 +88,7 @@ def install_mcp_front(
 
     front = McpPersonFront(tools.tools, resolve_person=person_of)
     # An exact route, never a mount: the gate decides by the path it sees.
-    lobby.router.routes.append(Route(MCP_ENDPOINT_PATH, front))
+    lobby.router.routes.append(Route(MCP_ENDPOINT_PATH, _NamedFront(front)))
     _run_front_with_the_lobby(lobby, front)
     return ProtectedResource(
         url=f"{origin}{MCP_ENDPOINT_PATH}",

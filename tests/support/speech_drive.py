@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import re
@@ -10,10 +11,12 @@ import sqlite3
 import threading
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, cast
 from urllib.parse import urlsplit
 
 from agents.backend.fake_gateway import FakeGateway, completion
+from logline import REQUEST_EVENT
+from logline.testing import configured
 from speech_client.outcomes import PastDeadline
 from starlette.websockets import WebSocketDisconnect
 
@@ -23,7 +26,7 @@ from presentator.adapters.speech import (
     SpeechHearing,
     SpeechSpeaking,
 )
-from presentator.agent.backend import gateway_answerer, silence_transport_traces
+from presentator.agent.backend import gateway_answerer
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.application.copresenter import CoPresenterUse
 from presentator.contracts.copresenter import (
@@ -110,13 +113,13 @@ if TYPE_CHECKING:
     from presentator.ports.copresenter import SpeechHearing as SpeechHearingPort
     from tests.presentator.application.support.fakes import FakeDeckStore
 
+# The HTTP clients stay as logline's `configure` leaves them: it caps them below
+# the INFO lines that carry a response's headers.
 _WIDE_OPEN_LOGGERS = (
     "presentator",
     "webauth",
     "agents",
     "speech_client",
-    "httpx2",
-    "httpcore2",
     "websockets",
     "wsproto",
 )
@@ -240,7 +243,6 @@ class WitnessedSpeech:
 def _real_speech_adapters(
     origin: str, scenario: SpeechScenario
 ) -> tuple[SpeechHearing, SpeechSpeaking]:
-    silence_transport_traces()
     if scenario.bounded_calls_stall:
         return (
             SpeechHearing(
@@ -362,21 +364,21 @@ def a_speech_instance(
 
 @contextmanager
 def recorded_logs() -> Generator[list[logging.LogRecord]]:
-    """Every record any logger raises in the block, with every logger at DEBUG."""
+    """Every record raised in the block, the host's logging at DEBUG."""
     logs = RecordingLogs()
     root = logging.getLogger()
     named = [logging.getLogger(name) for name in _WIDE_OPEN_LOGGERS]
-    levels = [logger.level for logger in (root, *named)]
-    root.addHandler(logs)
-    root.setLevel(logging.DEBUG)
-    for logger in named:
-        logger.setLevel(logging.DEBUG)
-    try:
-        yield logs.records
-    finally:
-        root.removeHandler(logs)
-        for logger, level in zip((root, *named), levels, strict=True):
-            logger.setLevel(level)
+    levels = [logger.level for logger in named]
+    with configured("presentator"):
+        root.addHandler(logs)
+        root.setLevel(logging.DEBUG)
+        for logger in named:
+            logger.setLevel(logging.DEBUG)
+        try:
+            yield logs.records
+        finally:
+            for logger, level in zip(named, levels, strict=True):
+                logger.setLevel(level)
 
 
 def ask_over(
@@ -440,6 +442,25 @@ def _every_marker(instance: SpeechInstance) -> tuple[str, ...]:
 def _absent(text: str, markers: Sequence[str]) -> None:
     for marker in markers:
         assert marker not in text
+
+
+def _without_the_request_lines_sub(
+    logged: Sequence[logging.LogRecord],
+) -> list[logging.LogRecord]:
+    """The records, a request line without its `sub` where it is the person's id."""
+    return [_without_its_sub(record) for record in logged]
+
+
+def _without_its_sub(record: logging.LogRecord) -> logging.LogRecord:
+    carried = cast("object", record.msg)
+    if not isinstance(carried, dict):
+        return record
+    line = cast("dict[str, object]", carried)
+    if line.get("event") != REQUEST_EVENT or line.get("sub") != A.id:
+        return record
+    shown = copy.copy(record)
+    shown.msg = {key: value for key, value in line.items() if key != "sub"}
+    return shown
 
 
 def _sse_events(text: str) -> list[tuple[str, str]]:
@@ -507,7 +528,10 @@ def assert_nothing_shows(
     """No marker in a log, a caught error, the browser or a stored row."""
     markers = _every_marker(instance)
     words = (*ANSWER_SENTENCES, *HEARD_WORDS)
-    _absent(everything_shown(logged, instance.errors), (*markers, *words))
+    _absent(
+        everything_shown(_without_the_request_lines_sub(logged), instance.errors),
+        (*markers, *words),
+    )
     _assert_rows_keep_only_their_own_values(instance.hosts, (*markers, *words))
     if response is not None:
         _absent("\n".join(response.headers.values()), (*markers, *words))

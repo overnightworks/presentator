@@ -44,6 +44,7 @@ from tests.presentator.host.support.worker_boundary import (
     SERVE,
     boundary_over,
 )
+from tests.support.log_lines import LoggedText
 
 SENDS_READ = "probes read"
 KEY = b"k" * 32
@@ -255,7 +256,7 @@ def test_start_serves_the_port_and_key_file_bounded_by_the_settings() -> None:
 
 
 def test_refusal_exits_two_and_logs_the_predicate_without_environment_values(
-    caplog: pytest.LogCaptureFixture,
+    logged: LoggedText,
 ) -> None:
     snapshot = with_fields(
         pid=7, environment_keys=frozenset({"PRESENTATOR_SECRET_KEY"})
@@ -265,8 +266,8 @@ def test_refusal_exits_two_and_logs_the_predicate_without_environment_values(
         worker.main(["--check"], boundary_over(snapshot, []))
         == worker.REFUSAL_EXIT_STATUS
     )
-    assert Predicate.ENVIRONMENT in caplog.text
-    assert "PRESENTATOR_SECRET_KEY" not in caplog.text
+    assert Predicate.ENVIRONMENT in logged.text
+    assert "PRESENTATOR_SECRET_KEY" not in logged.text
 
 
 def test_start_up_makes_the_process_non_dumpable_before_reading_anything() -> None:
@@ -314,7 +315,7 @@ def test_a_start_refused_for_alone_or_scratch_never_loads_settings_or_serves(
     ["PRESENTATOR_BUILD_TIMEOUT_SECONDS", "PRESENTATOR_BUILD_OUTPUT_MEGABYTES"],
 )
 def test_an_invalid_setting_refuses_by_variable_name_never_the_value(
-    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, variable: str
+    logged: LoggedText, monkeypatch: pytest.MonkeyPatch, variable: str
 ) -> None:
     events: list[str] = []
     monkeypatch.setenv(variable, "unique-bad-value-4711")
@@ -328,15 +329,23 @@ def test_an_invalid_setting_refuses_by_variable_name_never_the_value(
 
     assert status == worker.REFUSAL_EXIT_STATUS
     assert events[-1] == "settings"
-    assert variable in caplog.text
-    assert worker.StartRefusal.SETTINGS in caplog.text
-    assert "unique-bad-value-4711" not in caplog.text
+    assert variable in logged.text
+    assert worker.StartRefusal.SETTINGS in logged.text
+    assert "unique-bad-value-4711" not in logged.text
 
 
 def test_the_settings_keys_pass_the_environment_predicate() -> None:
     snapshot = with_fields(environment_keys=worker_settings_variables())(
         sealed_snapshot()
     )
+
+    assert worker_self_check.first_failing_predicate(snapshot) is None
+
+
+def test_the_loglines_release_and_level_keys_pass_the_environment_predicate() -> None:
+    snapshot = with_fields(
+        environment_keys=frozenset({"PATH", "SERVICE_VERSION", "LOG_LEVEL"})
+    )(sealed_snapshot())
 
     assert worker_self_check.first_failing_predicate(snapshot) is None
 
@@ -583,7 +592,7 @@ REFUSED_FACTS = {
 def test_a_failing_or_unreadable_fact_refuses_through_main_naming_its_predicate(
     sealed_root: Path,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+    logged: LoggedText,
     arrange: Callable[[Path, pytest.MonkeyPatch], None],
     refused: Predicate,
 ) -> None:
@@ -597,7 +606,7 @@ def test_a_failing_or_unreadable_fact_refuses_through_main_naming_its_predicate(
     )
 
     assert worker.main(["--check"], boundary) == worker.REFUSAL_EXIT_STATUS
-    assert f"start refused: {refused}" in caplog.text
+    assert f"start refused: {refused}" in logged.text
 
 
 @pytest.mark.parametrize(

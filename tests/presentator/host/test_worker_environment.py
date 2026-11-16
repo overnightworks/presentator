@@ -24,6 +24,7 @@ from tests.presentator.host.support.worker_boundary import (
     SERVE,
     boundary_over,
 )
+from tests.support.log_lines import LoggedText
 
 SEALED_KEYS = sealed_snapshot().environment_keys
 OTHER_SERVICE_LINK = "REDIS_SERVICE_HOST"
@@ -66,7 +67,7 @@ def test_an_unreadable_predicate_is_named(predicate: Predicate) -> None:
 def test_a_start_passes_with_the_unread_variable_set_to_any_value(
     sealed_root: Path,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+    logged: LoggedText,
     value: str,
     arguments: list[str],
 ) -> None:
@@ -88,4 +89,4 @@ def test_a_start_passes_with_the_unread_variable_set_to_any_value(
 
     assert status == 0
     assert ("serve" in events) is (arguments == SERVE)
-    assert "start refused" not in caplog.text
+    assert "start refused" not in logged.text

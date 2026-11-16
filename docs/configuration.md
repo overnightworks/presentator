@@ -67,6 +67,7 @@ some of them.
 | `PRESENTATOR_HOST` | `127.0.0.1` | Listen address. |
 | `PRESENTATOR_PORT` | `8000` | Listen port. |
 | `PRESENTATOR_TRUSTED_PROXIES` | empty | Comma-separated addresses or networks; see below. |
+| `LOG_LEVEL` | `info` | The root log level (`debug`, `info`, `warning`, `error`, `critical`); the request line is written at `info` whatever it says, and anything else refuses the start. |
 | `PRESENTATOR_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/` as the person and `/api/admin/` as an admin; empty serves no route for a token client's token. See [people](people.md). |
 | `PRESENTATOR_SOURCE_POLL_SECONDS` | `300` | Interval of the source poll. |
 | `PRESENTATOR_SOURCE_TIMEOUT_SECONDS` | `180` | Bound of one pull and of one Check connection. |
@@ -106,6 +107,7 @@ them and the defaults above do not apply.
 | `PRESENTATOR_TOOLCHAIN` | `/app/slidev` |
 | `PRESENTATOR_LOBBY_BUILD` | `/app/lobby` |
 | `PRESENTATOR_HOST` | `0.0.0.0`, reached through a proxy |
+| `SERVICE_VERSION` | The release the image is built from, written as `version` on every log line; a direct run leaves it unset and the line says `null`. |
 
 ## Ruled sentences
 

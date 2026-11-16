@@ -108,7 +108,8 @@ part; a secret typed into a path or query is exported as typed.
 
 - **PE29** One line per call: the operation, the outcome and the counts. It
   names neither the caller nor the person.
-- **PE30** The server writes no access log.
+- **PE30** No log line holds a request path: the request line names the route
+  template.
 
 ## Known gap: builds that outlive an erasure
 
