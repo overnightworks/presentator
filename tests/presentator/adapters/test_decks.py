@@ -296,6 +296,28 @@ def test_a_poll_that_reaches_a_source_writes_one_ok_fetch_line_with_its_duration
     assert isinstance(fetch["duration_ms"], float)
 
 
+def test_a_credential_nobody_can_resolve_ends_the_fetch_refused_with_its_code(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class _Unsendable:
+        def resolve(self, reference: CredentialReference) -> str | None:
+            return None
+
+    source = a_source("https://host.example.invalid/repo.git")
+
+    with logged_as_json(capsys) as logged:
+        poll = folders_under(tmp_path, credentials=_Unsendable()).folders(source)
+
+    assert poll.failure is SourceRunFailure.CREDENTIAL_UNRESOLVABLE
+    [fetch] = logged.lines
+    assert fetch["event"] == "source_fetch.ended"
+    assert fetch["outcome"] == "refused"
+    assert fetch["reason"] == SourceRunFailure.CREDENTIAL_UNRESOLVABLE.value
+    assert fetch["level"] == "info"
+    assert isinstance(fetch["duration_ms"], float)
+
+
 def test_a_pull_that_runs_past_its_bound_says_nothing_rather_than_waiting(
     remote: GitRemote,
     tmp_path: Path,
@@ -483,9 +505,10 @@ def test_a_mirror_whose_parent_refuses_the_delete_is_reported_not_gone(
     assert mirror.directory.exists()
     assert str(left) == f"{mirrors.directory.name}/{mirror.directory.name}"
     [warning] = [
-        line for line in logged.lines if line["event"] == "mirror_removal.failed"
+        line for line in logged.lines if line["event"] == "mirror_removal.refused"
     ]
     assert warning["source_id"] == source.id
+    assert warning["reason"] == "directory_not_removable"
     for kept_private in (source.name, source.url):
         assert kept_private not in [*warning.values(), str(left)]
 

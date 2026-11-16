@@ -140,7 +140,8 @@ _ONE_ROW: Final = 1
 _SOURCE_ANCHOR: Final = "SELECT encrypted_secret FROM sources WHERE id = ?"
 _SOURCE_FETCH_ENDED: Final = "source_fetch.ended"
 _MANIFEST_REFUSED: Final = "manifest.refused"
-_MIRROR_FAILED: Final = "mirror_removal.failed"
+_MIRROR_REFUSED: Final = "mirror_removal.refused"
+_MIRROR_STAYED: Final = "directory_not_removable"
 _MANIFEST_UNREADABLE: Final = "unreadable"
 _RECORD_SOURCE_RUN: Final = """
 INSERT INTO source_runs (source_id, at, outcome, commit_sha, reason)
@@ -397,7 +398,10 @@ class SourceMirrors:
         directory = self._directory_of(source)
         shutil.rmtree(directory, ignore_errors=True)
         if directory.exists():
-            _log.warning(_MIRROR_FAILED, extra={"source_id": source.id})
+            _log.warning(
+                _MIRROR_REFUSED,
+                extra={"source_id": source.id, "reason": _MIRROR_STAYED},
+            )
             return PurePosixPath(self.directory.absolute().name, directory.name)
         return None
 

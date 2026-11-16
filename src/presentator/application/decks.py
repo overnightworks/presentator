@@ -72,7 +72,7 @@ from presentator.ports.decks import (
 _log = logging.getLogger(__name__)
 
 _REFRESH_REFUSED: Final = "refresh.refused"
-_REFRESH_ENDED: Final = "refresh.ended"
+_REFRESH_COMPLETED: Final = "refresh.completed"
 _OWNERSHIP_LOST: Final = "ownership_lost"
 # A source name is one path element of the webhook address, never a path
 # itself: lowercase, digits, hyphens, starting with a letter or digit.
@@ -154,12 +154,14 @@ def hash_webhook_secret(secret: str) -> bytes:
 def _log_refresh(fetches: Sequence[SourceFetch]) -> None:
     """Write the refresh's one line with its counts, or none where nothing changed."""
     counts = {
-        "decks_built": sum(fetch.decks_built for fetch in fetches),
-        "builds_failed": sum(fetch.builds_failed for fetch in fetches),
-        "decks_removed": sum(fetch.decks_removed for fetch in fetches),
+        "decks_built_count": sum(fetch.decks_built for fetch in fetches),
+        "builds_failed_count": sum(fetch.builds_failed for fetch in fetches),
+        "decks_removed_count": sum(fetch.decks_removed for fetch in fetches),
     }
     if any(counts.values()):
-        _log.info(_REFRESH_ENDED, extra={"sources_fetched": len(fetches), **counts})
+        _log.info(
+            _REFRESH_COMPLETED, extra={"sources_fetched_count": len(fetches), **counts}
+        )
 
 
 def _credential_of(posted: str, deploy_key: DeployKeyDraft | None) -> str:

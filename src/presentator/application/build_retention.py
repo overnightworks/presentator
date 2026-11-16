@@ -23,8 +23,8 @@ from presentator.contracts.decks import Build, Deck
 from presentator.ports.decks import BuildRun, BuildRunner, DeckStore, SourceStore
 
 _RETENTION_REFUSED: Final = "build_retention.refused"
-_SWEEP_ENDED: Final = "build_sweep.ended"
-_DECK_RETENTION_ENDED: Final = "deck_retention.ended"
+_SWEEP_COMPLETED: Final = "build_sweep.completed"
+_DECK_RETENTION_COMPLETED: Final = "deck_retention.completed"
 _UNPLACED: Final = "run_not_under_the_builds_root"
 _NOT_LISTED: Final = "runs_not_listed"
 # How long a deck stays after a pass first missed its folder; the privacy
@@ -37,7 +37,7 @@ _log = logging.getLogger(__name__)
 def sweep(builder: BuildRunner, sources: SourceStore, store: DeckStore) -> None:
     """Take every run no deck row names off disk; a failed removal is tried next pass.
 
-    A sweep that removed or left a run is one `build_sweep.ended` line with the
+    A sweep that removed or left a run is one `build_sweep.completed` line with the
     counts; one that found nothing to take is silent.
 
     Every row of every source counts, because a deck row is only written under a
@@ -56,10 +56,10 @@ def sweep(builder: BuildRunner, sources: SourceStore, store: DeckStore) -> None:
     if attempts:
         stayed = sum(1 for left in attempts if left is not None)
         _log.info(
-            _SWEEP_ENDED,
+            _SWEEP_COMPLETED,
             extra={
-                "runs_removed": len(attempts) - stayed,
-                "runs_stayed": stayed,
+                "runs_removed_count": len(attempts) - stayed,
+                "runs_stayed_count": stayed,
             },
         )
 
@@ -92,8 +92,8 @@ def delete_absent(
     deleted = store.remove_marked_before(source_id, before=at - REMOVED_DECK_KEPT)
     if deleted:
         _log.info(
-            _DECK_RETENTION_ENDED,
-            extra={"source_id": source_id, "decks_deleted": deleted},
+            _DECK_RETENTION_COMPLETED,
+            extra={"source_id": source_id, "decks_deleted_count": deleted},
         )
 
 

@@ -26,6 +26,7 @@ from tests.presentator.application.support.fakes import (
     PATIENCE,
     FakeBuildRunner,
     FakeDeckFolders,
+    FakeRefreshOwnership,
     FrozenClock,
     HeldDeckFolders,
 )
@@ -187,12 +188,12 @@ def test_a_refresh_that_built_a_deck_writes_one_line_with_its_counts(
     with logged_as_json(capsys) as logged:
         decks.refresh()
 
-    [refreshed] = events_of(logged, "refresh.ended")
+    [refreshed] = events_of(logged, "refresh.completed")
     assert refreshed["level"] == "info"
-    assert refreshed["sources_fetched"] == 1
-    assert refreshed["decks_built"] == 1
-    assert refreshed["builds_failed"] == 0
-    assert refreshed["decks_removed"] == 0
+    assert refreshed["sources_fetched_count"] == 1
+    assert refreshed["decks_built_count"] == 1
+    assert refreshed["builds_failed_count"] == 0
+    assert refreshed["decks_removed_count"] == 0
     assert "kundenfeedback" not in logged.text
 
 
@@ -206,7 +207,7 @@ def test_a_refresh_that_found_no_work_writes_no_line(
         decks.refresh()
         decks.refresh_named(SOURCE.name)
 
-    assert events_of(logged, "refresh.ended") == []
+    assert events_of(logged, "refresh.completed") == []
 
 
 def test_fetching_one_source_that_changed_writes_one_line_with_its_counts(
@@ -217,5 +218,25 @@ def test_fetching_one_source_that_changed_writes_one_line_with_its_counts(
     with logged_as_json(capsys) as logged:
         _fetch(decks)
 
-    [refreshed] = events_of(logged, "refresh.ended")
-    assert (refreshed["sources_fetched"], refreshed["decks_built"]) == (1, 1)
+    [refreshed] = events_of(logged, "refresh.completed")
+    assert (
+        refreshed["sources_fetched_count"],
+        refreshed["decks_built_count"],
+    ) == (1, 1)
+
+
+def test_a_fetch_that_lost_the_refresh_writes_one_refusal_and_answers_busy(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    decks = decks_over(
+        mirror=carrying(a_folder("kundenfeedback")),
+        fakes=DecksFakes(ownership=FakeRefreshOwnership(lost_to_another=True)),
+    )
+
+    with logged_as_json(capsys) as logged:
+        fetched = _fetch(decks)
+
+    assert fetched.run is None
+    [refusal] = events_of(logged, "refresh.refused")
+    assert refusal["level"] == "info"
+    assert refusal["reason"] == "ownership_lost"

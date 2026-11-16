@@ -244,8 +244,8 @@ def test_a_sweep_that_took_runs_off_disk_writes_one_line_with_its_counts(
         )
 
     assert left == {"delivered"}
-    [sweep] = events_of(logged, "build_sweep.ended")
-    assert (sweep["runs_removed"], sweep["runs_stayed"]) == (2, 0)
+    [sweep] = events_of(logged, "build_sweep.completed")
+    assert (sweep["runs_removed_count"], sweep["runs_stayed_count"]) == (2, 0)
 
 
 def test_a_sweep_that_found_no_run_to_take_writes_no_line(
@@ -254,7 +254,7 @@ def test_a_sweep_that_found_no_run_to_take_writes_no_line(
     with logged_as_json(capsys) as logged:
         swept(a_row("fine", build=a_build_in("delivered")), on_disk=("delivered",))
 
-    assert events_of(logged, "build_sweep.ended") == []
+    assert events_of(logged, "build_sweep.completed") == []
 
 
 def test_a_listing_that_did_not_finish_deletes_nothing(
@@ -716,10 +716,10 @@ def test_a_purge_writes_one_line_with_its_source_id_and_deck_count(
     def purges_on(day: int) -> list[LogLine]:
         with logged_as_json(capsys) as logged:
             instance.on_day(day)
-        return events_of(logged, "deck_retention.ended")
+        return events_of(logged, "deck_retention.completed")
 
     assert purges_on(_KEPT - 1) == []
     [purge] = purges_on(_KEPT)
     assert purge["source_id"] == THE_SOURCE.id
-    assert purge["decks_deleted"] == 1
+    assert purge["decks_deleted_count"] == 1
     assert purge["level"] == "info"
