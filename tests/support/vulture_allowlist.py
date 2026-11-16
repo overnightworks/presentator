@@ -14,8 +14,10 @@ from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[report
 from presentator.api.problems import ValidationFault
 from presentator.contracts import words
 from presentator.host.config import Settings, WorkerSettings
+from tests.conftest import redis_environment
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
 from tests.presentator.host.conftest import logging_undone_after_main
+from tests.presentator.host.test_main import pytestmark
 from tests.presentator.host.test_worker_serving_loop import clients_closed_with_the_test
 from tests.presentator.host.test_worker_settings import no_worker_variables
 from tests.support.lobby_drive import AdmitEveryRequest, DeckRecord
@@ -53,6 +55,10 @@ Settings._voices_speak_their_language  # noqa: SLF001 - pydantic, not Python cod
 
 # pytest applies this autouse fixture to every host test by itself.
 logging_undone_after_main  # pyright: ignore[reportUnusedExpression]
+
+# pytest reads `pytestmark` of each module and finds the fixture it names by its string.
+pytestmark  # pyright: ignore[reportUnusedExpression]
+redis_environment  # pyright: ignore[reportUnusedExpression]
 
 # pytest applies this autouse fixture to every worker-settings test by itself.
 no_worker_variables  # pyright: ignore[reportUnusedExpression]

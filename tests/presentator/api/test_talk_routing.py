@@ -42,6 +42,8 @@ from tests.support.talk_support import (
     two_hosts,
 )
 
+pytestmark = pytest.mark.usefixtures("redis_environment")
+
 _LOBBY_HOST = str(urlsplit(A_BROWSERS_ADDRESS).hostname)
 _TALK_HOST = str(urlsplit(A_TALK_ADDRESS).hostname)
 _SOMEONE_ELSES = "elsewhere.example.test"

@@ -30,6 +30,7 @@ from tests.support.people import (
     a_session_id,
     seed_user,
 )
+from tests.support.redis import in_process_rate_limits
 
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _ID_MARKER = "id-MARKER-4f7c1e"
@@ -272,6 +273,7 @@ def a_config_reading(now: datetime) -> WebAuthConfig:
             SecretStr("t" * 32),
             trusted_proxies="",
             origin="https://testserver",
+            rate_limits=in_process_rate_limits(),
         ),
         wall_clock=now.timestamp,
     )

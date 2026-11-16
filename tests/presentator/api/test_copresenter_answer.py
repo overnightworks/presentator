@@ -30,9 +30,7 @@ from agents.backend.fake_gateway import (
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.adapters.deck_texts import MirroredDeckTexts
-from presentator.application.copresenter import (
-    AskTicket,
-)
+from presentator.contracts.copresenter import RetryAfter
 from presentator.contracts.decks import Build, Deck
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
 from tests.support.copresenter_support import (
@@ -163,7 +161,7 @@ def the_ticket_was_released(run: Run) -> bool:
     assert run.limiter.session_ids
     for session_id in set(run.limiter.session_ids):
         ticket = run.limiter.admit(session_id)
-        if not isinstance(ticket, AskTicket):
+        if isinstance(ticket, RetryAfter):
             return False
         ticket.release()
     return True

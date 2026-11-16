@@ -262,8 +262,12 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
     clock = people.clock
     shell = LobbyShell.read(build)
     config = replace(
-        web_auth_config_for(_SECRET, trusted_proxies="", origin=origin),
-        rate_limits=AdmitEveryRequest(),
+        web_auth_config_for(
+            _SECRET,
+            trusted_proxies="",
+            origin=origin,
+            rate_limits=AdmitEveryRequest(),
+        ),
         wall_clock=lambda: clock.now().timestamp(),
     )
     auth = replace(

@@ -67,6 +67,8 @@ _WHAT_THE_GIT_HOST_EXPECTS = "the read-only words only this test made up"
 _CREDENTIAL_VARIABLE = "A_READ_ONLY_TOKEN"
 _ANOTHER_INSTANCE_KEY = "the key another instance carries"
 
+pytestmark = pytest.mark.usefixtures("redis_environment")
+
 
 def a_real_instance() -> Instance:
     """The whole stack the composition root builds, on the configured database."""

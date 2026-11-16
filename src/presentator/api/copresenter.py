@@ -11,11 +11,12 @@ from collections.abc import (
     Callable,
     Iterable,
 )
-from contextlib import suppress
+from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Final, Protocol, assert_never
 
+import anyio
 from fastapi import APIRouter, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
@@ -25,7 +26,6 @@ from starlette.requests import HTTPConnection
 from starlette.responses import Response
 
 from presentator.api.session_api import language_of
-from presentator.application.copresenter import RetryAfter
 from presentator.contracts.copresenter import (
     AccessRefusal,
     AnswerEvent,
@@ -40,6 +40,7 @@ from presentator.contracts.copresenter import (
     HearingTranscript,
     NotEnabledError,
     Question,
+    RetryAfter,
     Sentence,
     ShowSlide,
     SpeechTokenSource,
@@ -96,6 +97,7 @@ class CoPresenterSurface:
     use: CoPresenterUse
     limiter: AskLimiter
     browser_origin: str
+    deadline_seconds: float
     delay: Delay = asyncio.sleep
 
 
@@ -214,14 +216,16 @@ class _Ask:
     ticket: AskTicket
     subject: str
     role: Role
+    deadline: float
 
 
 def _ask_route(
     surface: CoPresenterSurface, *, admission: Admission, guard: _SessionGuard
 ) -> Callable[[Request, AskRequest], Awaitable[Response]]:
     async def _ask(request: Request, question: AskRequest) -> Response:
+        deadline = asyncio.get_running_loop().time() + surface.deadline_seconds
         admitted = await run_in_threadpool(
-            _admit, surface, admission, request, question
+            _admit, surface, admission, request, question, deadline
         )
         if isinstance(admitted, Response):
             return admitted
@@ -246,7 +250,7 @@ def _ask_route(
             return response
         finally:
             if not streaming:
-                admitted.ticket.release()
+                await _release_off_the_loop(admitted.ticket)
 
     return _ask
 
@@ -256,6 +260,7 @@ def _admit(
     admission: Admission,
     request: Request,
     question: AskRequest,
+    deadline: float,
 ) -> _Ask | Response:
     connection = admission(request)
     if connection is None:
@@ -263,7 +268,10 @@ def _admit(
     asked = surface.use.asked_deck(question.deck, viewer=connection.user_id)
     if asked is None:
         return _deck_not_found()
-    ticket = surface.limiter.admit(connection.session_id)
+    try:
+        ticket = surface.limiter.admit(connection.session_id)
+    except CoPresenterUnavailableError:
+        return _unavailable()
     if isinstance(ticket, RetryAfter):
         return JSONResponse(
             {"detail": "Too many questions"},
@@ -280,18 +288,20 @@ def _admit(
         ticket=ticket,
         subject=connection.user_id,
         role=connection.person.role,
+        deadline=deadline,
     )
 
 
 async def _prepare(use: CoPresenterUse, ask: _Ask) -> PreparedAsk | Response:
     try:
-        prepared = await use.prepare(
-            ask.asked,
-            session_id=ask.ticket.session_id,
-            subject=ask.subject,
-            role=ask.role,
-        )
-    except CoPresenterUnavailableError:
+        async with asyncio.timeout_at(ask.deadline):
+            prepared = await use.prepare(
+                ask.asked,
+                session_id=ask.ticket.session_id,
+                subject=ask.subject,
+                role=ask.role,
+            )
+    except CoPresenterUnavailableError, TimeoutError:
         return _unavailable()
     if isinstance(prepared, AccessRefusal):
         return _access_refusal(prepared)
@@ -324,6 +334,13 @@ def _not_authenticated() -> JSONResponse:
     return JSONResponse({"detail": "Not authenticated"}, HTTPStatus.UNAUTHORIZED)
 
 
+async def _release_off_the_loop(ticket: AskTicket) -> None:
+    # The release asks the shared Redis, which can hold its thread for a second;
+    # the shield lets it finish when the browser's leaving cancels the stream.
+    with anyio.CancelScope(shield=True):
+        await run_in_threadpool(ticket.release)
+
+
 async def _answer_events(
     request: Request,
     *,
@@ -332,26 +349,38 @@ async def _answer_events(
     use: CoPresenterUse,
     guard: _SessionGuard,
 ) -> AsyncIterator[bytes]:
+    loop = asyncio.get_running_loop()
     session_watch = asyncio.create_task(
         _watch_session(request, session_id=ask.ticket.session_id, guard=guard)
     )
     try:
         try:
-            async with use.answer(prepared, ask.question) as events:
+            async with AsyncExitStack() as opened:
+                async with asyncio.timeout_at(ask.deadline):
+                    events = await opened.enter_async_context(
+                        use.answer(prepared, ask.question)
+                    )
                 next_event = asyncio.create_task(_next_answer_event(events))
                 try:
                     while True:
                         done, _pending = await asyncio.wait(
                             {next_event, session_watch},
+                            timeout=max(ask.deadline - loop.time(), 0),
                             return_when=asyncio.FIRST_COMPLETED,
                         )
                         if session_watch in done:
                             _observe_session_end(session_watch)
                             return
+                        if next_event not in done or loop.time() >= ask.deadline:
+                            raise TimeoutError
                         event = next_event.result()
                         yield _sse(event)
                         if isinstance(event, Done):
                             return
+                        # A stalled send suspends the stream past the deadline;
+                        # the lease expires with it, so no further event starts.
+                        if loop.time() >= ask.deadline:
+                            raise TimeoutError
                         next_event = asyncio.create_task(_next_answer_event(events))
                 finally:
                     await _finish_tasks((next_event,))
@@ -361,10 +390,10 @@ async def _answer_events(
             yield _error_sse(AnswerStopReason.BUSY, retry_after_s=busy.retry_after_s)
         except BudgetSpentError:
             yield _error_sse(AnswerStopReason.BUDGET_SPENT)
-        except CoPresenterUnavailableError:
+        except CoPresenterUnavailableError, TimeoutError:
             yield _error_sse()
     finally:
-        ask.ticket.release()
+        await _release_off_the_loop(ask.ticket)
         await _finish_tasks((session_watch,))
 
 

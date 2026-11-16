@@ -27,6 +27,7 @@ from tests.presentator.host.support.app_process import ANSWER_PREFIX
 from tests.support.lobby import A_BROWSERS_ADDRESS
 from tests.support.log_lines import LogLine
 from tests.support.postgres import database_environment
+from tests.support.redis import emptied_database_url
 from tests.support.sign_in_support import ADMIN, MEMBER
 from tests.support.two_processes import TwoProcesses, two_modules
 
@@ -58,6 +59,10 @@ class App:
         default_factory=queue.Queue[LogLine | None], compare=False
     )
 
+    # Every line the process wrote, in order, and whether its output has ended.
+    written: list[str] = field(default_factory=list[str], compare=False)
+    ended: threading.Event = field(default_factory=threading.Event, compare=False)
+
     def __post_init__(self) -> None:
         """Start reading the output, so a long log never fills the pipe."""
         threading.Thread(target=self._drain_output, daemon=True).start()
@@ -66,12 +71,19 @@ class App:
         """Keep the issuer's answers and the log lines until the output ends."""
         assert self.process.stdout is not None
         for line in self.process.stdout:
+            self.written.append(line)
             if line.startswith(ANSWER_PREFIX):
                 self.answers.put(line.removeprefix(ANSWER_PREFIX).strip())
             elif line.startswith("{"):
                 self.logged.put(json.loads(line))
         self.answers.put(None)
         self.logged.put(None)
+        self.ended.set()
+
+    def output_after_exit(self) -> str:
+        """Everything the process wrote, once it has exited and its output ended."""
+        assert self.ended.wait(timeout=_REQUEST_SECONDS), "the output never ended"
+        return "".join(self.written)
 
     def log_line_where(self, wanted: Callable[[LogLine], bool]) -> LogLine:
         """The first log line from here on that `wanted` accepts."""
@@ -179,7 +191,8 @@ class Browser:
         return None if person is None else person["username"]
 
 
-def _two_free_ports() -> tuple[int, int]:
+def two_free_ports() -> tuple[int, int]:
+    """Two loopback ports no listener holds now."""
     with closing(socket.socket()) as first, closing(socket.socket()) as second:
         first.bind(("127.0.0.1", 0))
         second.bind(("127.0.0.1", 0))
@@ -194,7 +207,13 @@ def _environment(
         for name, value in os.environ.items()
         if name.startswith("PRESENTATOR_") and not name.startswith("PRESENTATOR_TEST_")
     }
-    return {**app_settings, **database_environment(database_url, directory), **extra}
+    return {
+        **app_settings,
+        **database_environment(database_url, directory),
+        # Both processes count their budgets in the one Redis database of this worker.
+        "PRESENTATOR_REDIS_URL": emptied_database_url(),
+        **extra,
+    }
 
 
 def _wait_until_ready(app: App) -> None:
@@ -224,7 +243,7 @@ def starting_apps(
     `history` replaces the migration history both know, as a release with a
     longer one would.
     """
-    ports = _two_free_ports()
+    ports = two_free_ports()
     extra = [] if history is None else [str(history)]
     with two_modules(
         _CHILD,

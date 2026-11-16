@@ -7,7 +7,7 @@ import json
 import threading
 from dataclasses import dataclass, field, replace
 from http import HTTPStatus
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 from fastapi import FastAPI
@@ -18,10 +18,14 @@ from presentator.api.copresenter import (
     CoPresenterSurface,
     add_copresenter_routes,
 )
-from presentator.application.copresenter import AskLimiter, AskTicket
-from presentator.contracts.copresenter import DeckText
+from presentator.contracts.copresenter import DeckText, RetryAfter
 from presentator.contracts.models import Role, User
 from tests.presentator.agent.support.transports import HeldTransport
+from tests.presentator.application.support.ask_leases import (
+    FakeAskLimiter,
+    FakeAskTicket,
+    UnavailableAskLimiter,
+)
 from tests.presentator.application.support.fakes import (
     FakeSessionRecordStore,
     FakeUserStore,
@@ -29,6 +33,7 @@ from tests.presentator.application.support.fakes import (
 )
 from tests.support.copresenter_support import (
     A_DECK,
+    AN_ANSWER_DEADLINE_SECONDS,
     ASK,
     QUESTION,
     SPOKEN_QUESTION,
@@ -52,6 +57,8 @@ if TYPE_CHECKING:
 
     from httpx2 import Response
     from starlette.types import ASGIApp, Message, Scope
+
+    from presentator.ports.copresenter import AskLimiter, AskTicket
 
 
 @pytest.mark.parametrize(
@@ -123,6 +130,16 @@ def test_the_answer_is_spoken_in_the_language_the_question_was_heard_in(
     assert [language for _text, language in private.speaking.spoken] == [heard_language]
 
 
+def test_a_question_whose_lease_cannot_be_told_gets_503_and_no_turn() -> None:
+    lobby, private, _clock = a_copresenter_talk_host(limiter=UnavailableAskLimiter())
+    lobby.sign_in()
+
+    response = ask(lobby.client)
+
+    assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert private.answers.messages == []
+
+
 def test_a_second_question_while_the_first_streams_gets_429_and_no_turn() -> None:
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
@@ -148,6 +165,9 @@ def test_a_second_question_while_the_first_streams_gets_429_and_no_turn() -> Non
     assert len(private.answers.messages) == len([first, after])
 
 
+_A_SHORT_DEADLINE_SECONDS = 0.05
+
+
 @dataclass(frozen=True)
 class FixedSession:
     """The admitted session of a browser."""
@@ -160,7 +180,7 @@ class FixedSession:
 
 
 def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> None:
-    limiter = AskLimiter()
+    limiter = FakeAskLimiter()
     private = PrivateFakes()
     app = FastAPI()
     add_copresenter_routes(
@@ -169,6 +189,7 @@ def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> Non
             use=a_use(private, the_admins_decks()),
             limiter=limiter,
             browser_origin=TALK_ORIGIN,
+            deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
         ),
         admission=lambda _connection: FixedSession(),
         sessions=FakeSessionRecordStore(users=FakeUserStore()),
@@ -177,7 +198,7 @@ def test_a_disconnect_before_the_answer_streams_still_frees_the_session() -> Non
     asyncio.run(_ask_and_disconnect_before_the_body_is_sent(app))
 
     assert private.answers.messages == []
-    assert isinstance(limiter.admit(FixedSession().session_id), AskTicket)
+    assert isinstance(limiter.admit(FixedSession().session_id), FakeAskTicket)
 
 
 async def _ask_and_disconnect_before_the_body_is_sent(app: ASGIApp) -> None:
@@ -218,13 +239,14 @@ def _a_hanging_app(
     gateway: HeldTransport,
     limiter: AskLimiter,
     admission: Callable[[object], FixedSession],
+    fakes: PrivateFakes | None = None,
 ) -> FastAPI:
     app = FastAPI()
     add_copresenter_routes(
         app,
         surface=CoPresenterSurface(
             use=replace(
-                a_use(PrivateFakes(), the_admins_decks()),
+                a_use(fakes or PrivateFakes(), the_admins_decks()),
                 answers=gateway_answerer(
                     an_agent_config(),
                     a_relying_party(FrozenClock(instant=NOW)),
@@ -233,6 +255,7 @@ def _a_hanging_app(
             ),
             limiter=limiter,
             browser_origin=A_TALK_ADDRESS,
+            deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
         ),
         admission=admission,
         sessions=FakeSessionRecordStore(users=FakeUserStore()),
@@ -245,14 +268,14 @@ def test_a_browser_that_leaves_mid_answer_closes_the_backend_and_calls_no_more()
 ):
     """C9: the held gateway call is cancelled, none follows, and the ticket is freed."""
     gateway = HeldTransport()
-    limiter = AskLimiter()
+    limiter = FakeAskLimiter()
     app = _a_hanging_app(gateway, limiter, lambda _connection: FixedSession())
 
     asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
 
     assert gateway.cancelled
     assert len(gateway.requests) == 1
-    assert isinstance(limiter.admit(FixedSession().session_id), AskTicket)
+    assert isinstance(limiter.admit(FixedSession().session_id), FakeAskTicket)
 
 
 def test_the_admission_runs_off_the_event_loop_thread() -> None:
@@ -264,12 +287,76 @@ def test_the_admission_runs_off_the_event_loop_thread() -> None:
         return FixedSession()
 
     gateway = HeldTransport()
-    app = _a_hanging_app(gateway, AskLimiter(), admission)
+    app = _a_hanging_app(gateway, FakeAskLimiter(), admission)
 
     asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
 
     assert admitted_on
     assert threading.get_ident() not in admitted_on
+
+
+@dataclass
+class _ThreadRecordingLimiter:
+    """The in-memory lease, noting the thread each release runs on."""
+
+    released_on: list[int] = field(default_factory=list[int])
+    _inner: FakeAskLimiter = field(default_factory=FakeAskLimiter)
+
+    def admit(self, session_id: str) -> AskTicket | RetryAfter:
+        admitted = self._inner.admit(session_id)
+        if isinstance(admitted, RetryAfter):
+            return admitted
+        return _RecordingTicket(admitted, self.released_on)
+
+
+@dataclass(frozen=True)
+class _RecordingTicket:
+    _inner: FakeAskTicket
+    _released_on: list[int]
+
+    @property
+    def session_id(self) -> str:
+        return self._inner.session_id
+
+    def release(self) -> None:
+        self._released_on.append(threading.get_ident())
+        self._inner.release()
+
+
+@pytest.mark.parametrize(
+    "person_access_unavailable", [False, True], ids=["streams", "never-streams"]
+)
+def test_the_release_of_an_ask_runs_off_the_event_loop_thread(
+    *, person_access_unavailable: bool
+) -> None:
+    """The release asks the shared Redis, which holds its thread while it is slow."""
+    gateway = HeldTransport()
+    limiter = _ThreadRecordingLimiter()
+    fakes = PrivateFakes()
+    fakes.person_access.unavailable = person_access_unavailable
+    app = _a_hanging_app(gateway, limiter, lambda _connection: FixedSession(), fakes)
+
+    asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
+
+    assert limiter.released_on
+    assert threading.get_ident() not in limiter.released_on
+
+
+def test_an_answer_that_outruns_the_deadline_ends_visibly_and_frees_the_lease() -> None:
+    limiter = FakeAskLimiter()
+    lobby, private, _clock = a_copresenter_talk_host(
+        limiter=limiter, deadline_seconds=_A_SHORT_DEADLINE_SECONDS
+    )
+    lobby.sign_in()
+    private.answers.hold = True
+
+    outrun = ask(lobby.client)
+    private.answers.hold = False
+    next_answer = ask(lobby.client)
+
+    assert outrun.status_code == HTTPStatus.OK
+    assert "event: error" in outrun.text
+    assert "event: done" in next_answer.text
 
 
 async def _ask_and_leave_while_the_gateway_holds(
@@ -309,3 +396,92 @@ async def _ask_and_leave_while_the_gateway_holds(
         "state": {},
     }
     await asyncio.wait_for(app(scope, receive, send), timeout=5)
+
+
+class _SteppedLoop(asyncio.SelectorEventLoop):
+    """An event loop whose clock moves only when a test moves it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.now = 1000.0
+
+    def time(self) -> float:
+        return self.now
+
+
+@pytest.mark.parametrize("deltas", [["Eins ", "Zwei "], ["Eins "]])
+def test_a_send_that_stalls_past_the_deadline_ends_with_the_failure_and_frees_lease(
+    deltas: list[str],
+) -> None:
+    """The next event is already available when the stalled send resumes."""
+    limiter = FakeAskLimiter()
+    private = PrivateFakes()
+    private.answers.deltas = deltas
+    app = FastAPI()
+    add_copresenter_routes(
+        app,
+        surface=CoPresenterSurface(
+            use=a_use(private, the_admins_decks()),
+            limiter=limiter,
+            browser_origin=A_TALK_ADDRESS,
+            deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
+        ),
+        admission=lambda _connection: FixedSession(),
+        sessions=FakeSessionRecordStore(users=FakeUserStore()),
+    )
+
+    with asyncio.Runner(loop_factory=_SteppedLoop) as runner:
+        loop = cast("_SteppedLoop", runner.get_loop())
+        body = runner.run(_ask_while_the_first_send_outlasts_the_deadline(app, loop))
+
+    assert body.count("event: text") == 1
+    assert "Zwei" not in body
+    assert "event: done" not in body
+    assert body.count("event: error") == 1
+    assert private.answers.exits == 1
+    assert private.answers.reader_closed
+    assert isinstance(limiter.admit(FixedSession().session_id), FakeAskTicket)
+
+
+async def _ask_while_the_first_send_outlasts_the_deadline(
+    app: ASGIApp, loop: _SteppedLoop
+) -> str:
+    messages: list[Message] = [
+        {
+            "type": "http.request",
+            "body": json.dumps({**SPOKEN_QUESTION, "deck": A_DECK}).encode(),
+        }
+    ]
+    sent: list[bytes] = []
+
+    async def receive() -> Message:
+        if messages:
+            return messages.pop(0)
+        return await asyncio.Future()
+
+    async def send(message: Message) -> None:
+        if message["type"] != "http.response.body":
+            return
+        sent.append(message.get("body", b""))
+        if len(sent) == 1:
+            loop.now += AN_ANSWER_DEADLINE_SECONDS + 1
+
+    scope: Scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "https",
+        "path": ASK,
+        "raw_path": ASK.encode(),
+        "query_string": b"",
+        "headers": [
+            (b"host", b"talk.testserver"),
+            (b"content-type", b"application/json"),
+        ],
+        "client": ("testclient", 50000),
+        "server": ("testserver", 443),
+        "state": {},
+    }
+    await app(scope, receive, send)
+    return b"".join(sent).decode()

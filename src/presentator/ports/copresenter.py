@@ -16,6 +16,7 @@ if TYPE_CHECKING:
         CoPresenterReadiness,
         DeckText,
         HearingTranscript,
+        RetryAfter,
         ShowSlide,
         SpeechTokens,
         SpeechTokenSource,
@@ -123,5 +124,29 @@ class PersonAccess(Protocol):
 
         Raises CoPresenterUnavailableError when the session store or a worker
         thread fails.
+        """
+        ...
+
+
+class AskTicket(Protocol):
+    """The one answer a session is allowed to stream right now."""
+
+    @property
+    def session_id(self) -> str:
+        """The session the answer belongs to."""
+        ...
+
+    def release(self) -> None:
+        """Free the session if this ticket still holds it; later calls do nothing."""
+        ...
+
+
+class AskLimiter(Protocol):
+    """Admits one streaming answer per session at a time, across every process."""
+
+    def admit(self, session_id: str) -> AskTicket | RetryAfter:
+        """Hand out the session's ticket, or say when to retry.
+
+        Raises CoPresenterUnavailableError when the lease cannot be told.
         """
         ...

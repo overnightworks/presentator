@@ -51,6 +51,8 @@ from tests.support.lobby import (
 )
 from tests.support.log_lines import json_lines
 
+pytestmark = pytest.mark.usefixtures("redis_environment")
+
 HAL = "hal-client"
 A_SECOND_CLIENT = "hal-second-client"
 THE_CALLER = "keycloak-subject-of-the-operator"

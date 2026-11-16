@@ -161,6 +161,11 @@ class GatewayAnswerer:
         self._monotonic = monotonic
         self._agent = load_agent(COPRESENTER_AGENT_FILE, [SHOW_SLIDE.declaration])
 
+    @property
+    def deadline_seconds(self) -> int:
+        """How long one turn may take, as the agent's definition states it."""
+        return self._agent.max_duration_seconds
+
     @asynccontextmanager
     async def answer(
         self, *, message: str, person: AskingPerson

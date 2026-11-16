@@ -19,6 +19,8 @@ from tests.support.lobby import (
     AN_API_GROUP,
 )
 
+pytestmark = pytest.mark.usefixtures("redis_environment")
+
 _FIELD_OF = {
     "PRESENTATOR_AGENT__BACKEND": "agent.backend",
     "PRESENTATOR_AGENT__GATEWAY__ORIGIN": "agent.gateway.origin",

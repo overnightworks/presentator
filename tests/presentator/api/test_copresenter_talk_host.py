@@ -12,9 +12,10 @@ from starlette.websockets import WebSocketDisconnect
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.api.copresenter import CoPresenterSurface
-from presentator.application.copresenter import AskLimiter
 from presentator.contracts.models import Role, User
+from tests.presentator.application.support.ask_leases import FakeAskLimiter
 from tests.support.copresenter_support import (
+    AN_ANSWER_DEADLINE_SECONDS,
     HEARING,
     POLICY_VIOLATION,
     QUESTION,
@@ -205,8 +206,9 @@ def _talk_host_with_a_signed_in_admin(
     private = PrivateFakes()
     surface = CoPresenterSurface(
         use=a_use(private, the_admins_decks()),
-        limiter=AskLimiter(),
+        limiter=FakeAskLimiter(),
         browser_origin=TALK_ORIGIN,
+        deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
         delay=asyncio.sleep if deadline is None else deadline.wait,
     )
     hosts = two_hosts(tmp_path, copresenter=lambda _store, _sessions, _auth: surface)

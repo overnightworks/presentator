@@ -7,6 +7,7 @@ from pydantic import SecretStr
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import ProcessWriteLock, SqliteIdentityWrites
+from presentator.adapters.shared_redis import SharedRedis
 from presentator.host import main
 from presentator.host.config import (
     ConfigurationError,
@@ -297,7 +298,12 @@ def test_both_hosts_share_the_one_identity_writes_owner(
         settings.database, ProcessWriteLock(), LoggingAuditSink()
     )
 
-    lobby, talk = main.installed_auths(settings, LOBBY_SHELL, writes)
+    lobby, talk = main.installed_auths(
+        settings,
+        LOBBY_SHELL,
+        writes,
+        SharedRedis(settings.redis_url.get_secret_value()),
+    )
 
     assert talk.transaction is lobby.transaction is writes
     assert talk.config.session_secret != lobby.config.session_secret

@@ -173,11 +173,13 @@ def test_the_overlay_render_is_refused_for_each_difference_beyond_the_image_fiel
     assert named_in_refusal.format(image=manifests_module.PRODUCTION_IMAGE) in problem
 
 
-def test_the_web_documents_are_the_overlays_config_map_and_deployment_as_rendered(
+def test_the_web_documents_are_the_overlays_config_map_and_deployment_with_a_redis_url(
     manifests_module: ModuleType, production_image: str
 ) -> None:
     rendered = workload_documents(production_image)
     documents = manifests_module.web_documents(rendered)
+    web = documents[0]["spec"]["template"]["spec"]["containers"][0]
+    assert web["env"].pop()["name"] == manifests_module.REDIS_URL_VARIABLE
     assert documents == [
         named(rendered, "Deployment"),
         next(

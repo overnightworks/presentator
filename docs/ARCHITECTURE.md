@@ -96,8 +96,9 @@ policy, edge, secrets, the database backup with its restore test and the release
 One process serves the lobby and the talk host and tells them apart by the `Host` header; any other
 host gets a 404, except the lobby's back-channel logout path ([sign-in](sign-in.md)), which ignores
 forwarded headers and trusts only the signed Logout Token. The platform's realm registers no logout
-URL for presentator, so its safety does not depend on the call. `GET /health` answers 200 while the
-Postgres database passes the revision rule (SQLite: always), else a fixed 503; the web starts
+URL for presentator, so its safety does not depend on the call. `GET /health`, the readiness probe,
+answers 200 while the Postgres database passes the revision rule (SQLite: always) and Redis answers
+a ping, else a fixed 503; liveness asks neither, since a restart cures neither. The web starts
 without a worker.
 
 A worker pod keeps a link that reaches only the web: its init container loads nftables rules that
@@ -116,8 +117,9 @@ additive migrations of `adapters/postgres` under a lock. No revision row or one 
 refused at start and unready; an unknown revision is a newer release's and is served.
 
 **Authentication and wire.** Keycloak groups admit people ([sign-in](sign-in.md)). There is no
-session cache: rate limits are per process, and identity writes run in one transaction under a
-lock (advisory on Postgres). JSON lives under `/api/` as typed models. The one signed-out path is `GET
+session cache: rate limits live in the Redis every pod shares (webauth's `RedisRateLimitBackend`,
+one budget per host), and identity writes run in one transaction under a lock (advisory on
+Postgres). JSON lives under `/api/` as typed models. The one signed-out path is `GET
 /api/session`, and a store failure while resolving a reader is a 500, never a signed-out answer.
 Problems follow RFC 9457 with `tag:` URI types, as an https address breaks when its page moves.
 
@@ -160,8 +162,11 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
   pod.
 - The talk has its own origin: one cookie across both hosts would put deck code beside the
   credential it must not reach.
-- Processes share state only through Postgres: every write that needs one winner (sign-in, a draft
-  key, a source run, a deck mark) takes an advisory lock. The SQLite fallback relies on one process.
+- Processes share state only through Postgres and Redis. Every write that needs one winner takes an
+  advisory lock. The ask lease is a Redis key taken with `SET NX PX`, lasting the agent's deadline plus a margin, never renewed:
+  the whole answer runs under that deadline, and only its holder's token frees the lease, so a dead pod's lease expires. Redis keeps nothing durable and its keys start `presentator:v1:`,
+  a version read beside the next for one release. While it cannot answer, every request but `/health`
+  is a 503, since webauth's limiter fails closed. The SQLite fallback relies on one process.
 - The speech origin must be plain `http` and the gateway's `http` or `https`, both at Service
   addresses inside the cluster. presentator sends its workload token and the person's token over
   that hop and relies on the deployment to keep it inside the cluster. The platform decides whom the
@@ -178,7 +183,6 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
 
 ## 7. Not chosen
 
-- Redis: rate limits and the ask lease stay per process. Reopens when a deployment runs several.
 - Cloudflare Access in front, or an own password login: Keycloak is the one door and owns accounts
   and groups. Reopens if Keycloak leaves the fleet.
 - A right in the cluster's API for the web pod: deck code runs only in the sealed worker. Reopens if

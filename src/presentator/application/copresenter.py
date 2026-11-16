@@ -4,9 +4,8 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
-from contextlib import AbstractContextManager, aclosing, asynccontextmanager
-from dataclasses import dataclass, field
-from threading import Lock
+from contextlib import aclosing, asynccontextmanager
+from dataclasses import dataclass
 
 from presentator.application.copresenter_prompt import user_message
 from presentator.application.own_decks import OwnDecks
@@ -32,6 +31,8 @@ from presentator.contracts.models import Role
 from presentator.contracts.voice import SampleLanguage
 from presentator.ports.copresenter import (
     AgentAnswers,
+    AskLimiter,
+    AskTicket,
     DeckTexts,
     HearingSocket,
     PersonAccess,
@@ -40,6 +41,9 @@ from presentator.ports.copresenter import (
     SpeechHearing,
 )
 from presentator.ports.decks import DeckStore, SourceStore
+
+# The routes name the ask lease through this module, never a port.
+__all__ = ["AskLimiter", "AskTicket", "CoPresenterUse", "PreparedAsk"]
 
 _LOGGER = logging.getLogger(__name__)
 _MILLISECONDS = 1000
@@ -185,55 +189,3 @@ class _OpeningTokens:
             return await self.read_fresh()
         tokens, self.first = self.first, None
         return tokens
-
-
-BUSY_RETRY_SECONDS = 1
-
-
-@dataclass(frozen=True, slots=True)
-class RetryAfter:
-    """A refused question and the whole seconds until it may be asked again."""
-
-    seconds: int
-
-
-@dataclass(eq=False, slots=True)
-class AskTicket:
-    """The one answer a session is allowed to stream right now."""
-
-    session_id: str
-    _answering: dict[str, AskTicket]
-    _guard: AbstractContextManager[bool]
-
-    def release(self) -> None:
-        """Free the session if this ticket still holds it; later calls do nothing."""
-        with self._guard:
-            if self._answering.get(self.session_id) is self:
-                del self._answering[self.session_id]
-
-
-@dataclass(slots=True)
-class AskLimiter:
-    """Admit one streaming answer per session at a time.
-
-    A session leaves no record once nothing of it is streaming, so a signed-out
-    session cannot make this grow.
-
-    Safe to call from any thread: every check and update runs under one lock,
-    so concurrent asks cannot interleave between them.
-    """
-
-    _answering: dict[str, AskTicket] = field(default_factory=dict[str, AskTicket])
-    guard: AbstractContextManager[bool] = field(default_factory=Lock)
-
-    def admit(self, session_id: str) -> AskTicket | RetryAfter:
-        """Hand out the session's ticket, or say when to retry."""
-        with self.guard:
-            return self._admit(session_id)
-
-    def _admit(self, session_id: str) -> AskTicket | RetryAfter:
-        if session_id in self._answering:
-            return RetryAfter(BUSY_RETRY_SECONDS)
-        ticket = AskTicket(session_id, self._answering, self.guard)
-        self._answering[session_id] = ticket
-        return ticket

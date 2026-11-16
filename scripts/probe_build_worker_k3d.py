@@ -44,7 +44,8 @@ termination window fails the cell and no later twin starts. Every twin is
 deleted before the cell returns.
 
 Cells 10 to 13 run after cell 9 on the web as platform renders it, at the pin:
-the render's ConfigMap and Deployment, applied unaltered, and Secrets the driver
+the render's ConfigMap and Deployment, whose web container gains the URL of a
+throwaway Redis the probe runs in its namespace, and Secrets the driver
 generates. The Secrets' names and keys come from the Deployment's `secrets`
 volume (the files its environment names under the mount, and the workers' key
 that the volume projects), each value from the effect `secret`, 64 hex
@@ -160,6 +161,7 @@ from probe_build_worker_k3d_manifests import (
     applied_documents,
     namespace_document,
     prove_render,
+    redis_documents,
     throwaway_secrets,
     web_documents,
 )
@@ -348,7 +350,7 @@ def drive_web(run: Run, overlay: list[Document]) -> str:
     deployment = next(d for d in documents if d["kind"] == "Deployment")
     worker_documents = applied_documents(overlay, init_container=True, replicas=2)
     manifest = as_stream(worker_documents)
-    run("kubectl apply --filename -", stdin=as_stream(documents))
+    run("kubectl apply --filename -", stdin=as_stream([*redis_documents(), *documents]))
     statefulset = next(d for d in worker_documents if d["kind"] == "StatefulSet")
     for number, judge in web_cells(run, deployment, statefulset, manifest):
         if problem := judge():
