@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import Connection, Engine, text
 
-from presentator.adapters.postgres.locks import LockClass
+from presentator.adapters.postgres.locks import REFRESH_LOCK, LockClass, parameters
 from presentator.contracts.decks import BuildOutcome
 from tests.presentator.host.support.app_processes import App, Browser, serving_apps
 from tests.presentator.host.support.app_requests import (
@@ -34,6 +34,7 @@ from tests.support.postgres import (
     granted_advisory_locks,
     waiting_advisory_locks,
 )
+from tests.support.sign_in_support import ADMIN
 
 _WAIT_SECONDS = 60
 _POLL_SECONDS = 0.05
@@ -46,6 +47,15 @@ _BUILD_OF_THE_DECK = "SELECT active_build, pdf_export, built_commit FROM decks"
 _BUILD_AND_TOOLCHAIN = (
     "SELECT active_build, pdf_export, built_commit, built_toolchain FROM decks"
 )
+_HAL = "hal-client"
+_TOKEN_CLIENTS = {"PRESENTATOR_TOKEN_CLIENTS": _HAL}
+_PEOPLE = "/api/admin/people"
+_WHAT_ERASURE_REMOVES = (
+    "SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM sources),"
+    " (SELECT count(*) FROM decks)"
+)
+_TAKE_THE_REFRESH_LOCK = "SELECT pg_advisory_lock(:lock_class, :instance)"
+_LET_GO_OF_THE_REFRESH_LOCK = "SELECT pg_advisory_unlock(:lock_class, :instance)"
 _NEWEST_RUN = "SELECT coalesce(max(id), 0) FROM source_runs"
 _ATTEMPT = "SELECT attempt_outcome FROM decks"
 _WAITING_TO_BUMP = (
@@ -241,15 +251,20 @@ def test_a_process_that_lost_its_lock_connection_mid_build_is_replaced_and_refus
         )
         taken_over = fetched(admin, apps[1], "talks").json()
         attempt_taken_over = _rows(engine, _ATTEMPT)
+        runs_after_the_takeover = scalar(engine, _NEWEST_RUN)
         gate.let_through(1)
         late = refreshing.result().json()
         rows = _rows(engine, _BUILD_OF_THE_DECK)
+        attempt_after_the_late_build = _rows(engine, _ATTEMPT)
+        runs_after_the_late_build = scalar(engine, _NEWEST_RUN)
 
     assert taken_over["run"] is not None
     assert attempt_taken_over == [(BuildOutcome.FAILED,)]
     assert late["run"] is None
     assert rows == standing
     assert all(Path(path).exists() for row in rows for path in row[:2] if path)
+    assert attempt_after_the_late_build == attempt_taken_over
+    assert runs_after_the_late_build == runs_after_the_takeover
 
 
 @pytest.mark.parametrize("builder", [0, 1], ids=["first builds", "second builds"])
@@ -395,3 +410,55 @@ def test_a_removal_that_outwaits_its_bound_fails_and_leaves_the_source(
 
     assert timed_out == HTTPStatus.INTERNAL_SERVER_ERROR
     assert retried == HTTPStatus.NO_CONTENT
+
+
+def test_an_account_deletion_that_outwaits_its_bound_fails_and_a_retry_resumes_it(
+    database: Database,
+    tmp_path: Path,
+    *,
+    remote_with_a_deck: GitRemote,
+    gate: BuildGate,
+) -> None:
+    remote = remote_with_a_deck
+    engine = database.engine
+    gate.let_through(1)
+    with (
+        serving_apps(
+            database.url,
+            tmp_path,
+            _shared_builds(tmp_path, {**_NO_TICKS, **_ONE_SECOND, **_TOKEN_CLIENTS}),
+        ) as apps,
+        engine.connect() as another_refresh,
+    ):
+        admin = admin_of(apps[0])
+        added(admin, apps[0], "talks", remote)
+        before = _rows(engine, _WHAT_ERASURE_REMOVES)
+        # Each process has its own issuer keys, so the token is the erasing one's.
+        token = apps[1].ask_access_token("operator", ADMIN, _HAL)
+        erase = _erasure_of("admin", token)
+        another_refresh.execute(text(_TAKE_THE_REFRESH_LOCK), parameters(REFRESH_LOCK))
+
+        timed_out = erase(apps[1])
+        left_after_the_timeout = _rows(engine, _WHAT_ERASURE_REMOVES)
+        another_refresh.execute(
+            text(_LET_GO_OF_THE_REFRESH_LOCK), parameters(REFRESH_LOCK)
+        )
+        retried = erase(apps[1])
+        left_after_the_retry = _rows(engine, _WHAT_ERASURE_REMOVES)
+
+    assert timed_out == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert left_after_the_timeout == before
+    assert all(count != "0" for count in before[0])
+    assert retried == HTTPStatus.OK
+    assert left_after_the_retry == [("0", "0", "0")]
+
+
+def _erasure_of(subject: str, token: str) -> Callable[[App], int]:
+    def erase(app: App) -> int:
+        return app.request(
+            "DELETE",
+            f"{_PEOPLE}/{subject}",
+            {"authorization": f"Bearer {token}", "sec-fetch-site": "same-origin"},
+        ).status_code
+
+    return erase

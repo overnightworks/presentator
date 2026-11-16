@@ -119,18 +119,31 @@ class App:
         with self.asking:
             return self._ask(authorization_url, subject, groups)
 
-    def _ask(self, authorization_url: str, subject: str, groups: list[str]) -> str:
-        assert self.process.stdin is not None
-        self.process.stdin.write(
-            json.dumps(
+    def ask_access_token(
+        self, subject: str, groups: list[str], authorized_party: str
+    ) -> str:
+        """An access token `authorized_party` holds for `subject`, from the issuer."""
+        with self.asking:
+            return self._send(
                 {
-                    "authorization_url": authorization_url,
                     "subject": subject,
                     "groups": groups,
+                    "authorized_party": authorized_party,
                 }
             )
-            + "\n"
+
+    def _ask(self, authorization_url: str, subject: str, groups: list[str]) -> str:
+        return self._send(
+            {
+                "authorization_url": authorization_url,
+                "subject": subject,
+                "groups": groups,
+            }
         )
+
+    def _send(self, question: dict[str, str | list[str]]) -> str:
+        assert self.process.stdin is not None
+        self.process.stdin.write(json.dumps(question) + "\n")
         self.process.stdin.flush()
         answer = self.answers.get(timeout=_REQUEST_SECONDS)
         if answer is None:

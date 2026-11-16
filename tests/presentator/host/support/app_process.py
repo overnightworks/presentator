@@ -4,8 +4,9 @@ Run with `python -m <module> <port> [<migrations directory>]` in the environment
 a deployment gives the app. The parent signs a person in by writing one JSON
 line to its standard input, naming the authorization address the app sent the
 browser to and who signed in; the process answers with one line of the query
-the issuer sends the browser back with. A migrations directory replaces this
-release's history, as a release with a longer one would.
+the issuer sends the browser back with. A line naming an authorized party asks
+for an access token that client holds, answered the same way. A migrations
+directory replaces this release's history, as a release with a longer one would.
 """
 
 import json
@@ -33,14 +34,21 @@ def directory_name_of(port: str | int) -> str:
 
 def _answer_the_parent(issuer: FakeIssuer) -> None:
     for line in sys.stdin:
-        sign_in = json.loads(line)
-        query = issuer.authorize(
-            sign_in["authorization_url"],
-            subject=sign_in["subject"],
-            groups=sign_in["groups"],
-            username=sign_in["subject"],
-        )
-        print(ANSWER_PREFIX + query, flush=True)  # noqa: T201 - the parent reads this line
+        question = json.loads(line)
+        if "authorized_party" in question:
+            answer = issuer.mint_access_token(
+                subject=question["subject"],
+                groups=question["groups"],
+                authorized_party=question["authorized_party"],
+            )
+        else:
+            answer = issuer.authorize(
+                question["authorization_url"],
+                subject=question["subject"],
+                groups=question["groups"],
+                username=question["subject"],
+            )
+        print(ANSWER_PREFIX + answer, flush=True)  # noqa: T201 - the parent reads this line
 
 
 def _migrations_directory() -> Path:
