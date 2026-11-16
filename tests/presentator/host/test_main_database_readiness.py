@@ -1,6 +1,5 @@
 """A database is served only at this release's head or newer, and says so when asked."""
 
-import logging
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -16,6 +15,7 @@ from presentator.adapters.postgres.migrate import (
     serving_refusal,
 )
 from tests.presentator.host.support.revision_history import a_longer_history
+from tests.support.log_lines import json_logged
 from tests.support.postgres import engine_on
 
 _A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS = "9999"
@@ -77,26 +77,50 @@ def test_a_database_at_head_or_newer_is_served_and_ready(
     assert database_is_ready(engine, history)
 
 
-@pytest.mark.parametrize("arrange", [_no_revision_table, _no_revision_row, _behind])
+@pytest.mark.parametrize(
+    ("arrange", "reason"),
+    [
+        (_no_revision_table, "no_revision"),
+        (_no_revision_row, "no_revision"),
+        (_behind, "behind_this_release"),
+    ],
+)
 def test_an_empty_or_older_database_is_refused_and_not_ready(
-    arrange: Arrangement, engine: Engine, tmp_path: Path
+    arrange: Arrangement,
+    reason: str,
+    engine: Engine,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     history = arrange(engine, tmp_path)
 
-    assert serving_refusal(engine, history)
-    assert not database_is_ready(engine, history)
+    refusal = serving_refusal(engine, history)
+    with json_logged(capsys) as logged:
+        ready = database_is_ready(engine, history)
+
+    assert refusal
+    assert refusal.reason == reason
+    assert not ready
+    (line,) = [
+        one for one in logged.lines if one["event"] == "database_readiness.refused"
+    ]
+    assert line["reason"] == reason
 
 
 def test_a_database_that_does_not_answer_is_not_ready_and_the_log_names_no_secret(
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     engine = create_database_engine(_NOTHING_LISTENS_HERE, SecretStr(_A_PASSWORD))
     try:
-        with caplog.at_level(logging.WARNING):
+        with json_logged(capsys) as logged:
             ready = database_is_ready(engine, migration_history())
     finally:
         engine.dispose()
 
     assert not ready
-    assert _A_PASSWORD not in caplog.text
-    assert "nobody" not in caplog.text
+    (line,) = [
+        one for one in logged.lines if one["event"] == "database_readiness.refused"
+    ]
+    assert line["reason"] == "not_answering"
+    assert _A_PASSWORD not in logged.text
+    assert "nobody" not in logged.text

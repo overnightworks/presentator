@@ -1,6 +1,8 @@
 """The migrations of the database, and the rule for serving what they made."""
 
 import logging
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
@@ -26,6 +28,23 @@ BEHIND_THIS_RELEASE: Final = (
 _log = logging.getLogger(__name__)
 
 
+class RefusalReason(StrEnum):
+    """Why a database is not served or migrated: the closed set of `reason` codes."""
+
+    NOT_ANSWERING = "not_answering"
+    NO_REVISION = "no_revision"
+    BEHIND_THIS_RELEASE = "behind_this_release"
+    NEWER_THAN_THIS_RELEASE = "newer_than_this_release"
+
+
+@dataclass(frozen=True, slots=True)
+class ServingRefusal:
+    """A refusal to serve: the code the log carries and the text the operator reads."""
+
+    reason: RefusalReason
+    message: str
+
+
 def migrate(engine: Engine) -> None:
     """Bring the database to head; concurrent runs wait for one another.
 
@@ -39,7 +58,10 @@ def migrate(engine: Engine) -> None:
         _hold(connection, MIGRATION_LOCK)
         try:
             if _is_from_a_newer_release(connection, history):
-                _log.warning("The database is newer than this release; left as it is")
+                _log.info(
+                    "migration.refused",
+                    extra={"reason": RefusalReason.NEWER_THAN_THIS_RELEASE},
+                )
                 return
             config.attributes["connection"] = connection
             command.upgrade(config, "head")
@@ -53,7 +75,7 @@ def migration_history(directory: Path = MIGRATIONS_DIRECTORY) -> ScriptDirectory
     return ScriptDirectory.from_config(_config(directory))
 
 
-def serving_refusal(engine: Engine, history: ScriptDirectory) -> str | None:
+def serving_refusal(engine: Engine, history: ScriptDirectory) -> ServingRefusal | None:
     """Why this release must not serve the database, or None when it may.
 
     A database that does not answer is refused. So is one with no revision row,
@@ -68,19 +90,22 @@ def serving_refusal(engine: Engine, history: ScriptDirectory) -> str | None:
         with engine.connect() as connection:
             held = set(MigrationContext.configure(connection).get_current_heads())
     except SQLAlchemyError as failure:
-        return NOT_ANSWERING.format(failure=type(failure).__name__)
+        return ServingRefusal(
+            RefusalReason.NOT_ANSWERING,
+            NOT_ANSWERING.format(failure=type(failure).__name__),
+        )
     if not held:
-        return NO_REVISION
+        return ServingRefusal(RefusalReason.NO_REVISION, NO_REVISION)
     if history.get_current_head() in held or not held <= _known_revisions(history):
         return None
-    return BEHIND_THIS_RELEASE
+    return ServingRefusal(RefusalReason.BEHIND_THIS_RELEASE, BEHIND_THIS_RELEASE)
 
 
 def database_is_ready(engine: Engine, history: ScriptDirectory) -> bool:
     """Whether the database answers and this release may serve it; a no is logged."""
     refusal = serving_refusal(engine, history)
     if refusal is not None:
-        _log.warning("The database is not ready: %s", refusal)
+        _log.info("database_readiness.refused", extra={"reason": refusal.reason})
     return refusal is None
 
 

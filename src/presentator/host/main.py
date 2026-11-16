@@ -318,7 +318,7 @@ def _postgres_stores(
     refusal = serving_refusal(engine, history)
     if refusal is not None:
         engine.dispose()
-        raise cannot_start(refusal)
+        raise cannot_start(refusal.message)
     toolchain, bound = refresh
     ownership = PostgresRefreshOwnership(
         engine, toolchain=toolchain, lock_timeout=bound
