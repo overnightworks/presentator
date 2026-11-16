@@ -17,7 +17,6 @@ from typing import Final, NoReturn
 from urllib.parse import urlsplit
 
 import logline
-import uvicorn
 from fastapi import FastAPI
 from logline import RequestLineMiddleware
 from pydantic import SecretStr
@@ -136,7 +135,7 @@ from presentator.host.oidc import (
     relying_party,
 )
 from presentator.host.polling import ChoreCode, Schedule
-from presentator.host.stopping_server import StoppingServer
+from presentator.host.stopping_server import StoppingServer, served_config
 from presentator.host.store_connection import (
     StoreFailure,
     StoreKind,
@@ -785,22 +784,10 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
 
 async def _serve(instance: Instance, settings: Settings) -> None:
     """Poll and sweep for as long as the server answers, and stop with it."""
-    server = StoppingServer(
-        uvicorn.Config(
-            served_by_host(instance, settings),
-            host=settings.host,
-            port=settings.port,
-            proxy_headers=False,
-            ws="wsproto",
-            # logline's configure owns uvicorn's loggers, the request line
-            # replaces its access log, and the rejected WebSocket handshake
-            # records that carry a path stay out of the log. uvicorn's own
-            # info lines are free text, so only its warnings reach the log.
-            log_config=None,
-            log_level=logging.WARNING,
-        ),
-        instance.stopping,
+    served = served_config(
+        served_by_host(instance, settings), host=settings.host, port=settings.port
     )
+    server = StoppingServer(served, instance.stopping)
     try:
         async with instance.poller.polling(), instance.session_sweep.polling():
             await server.serve()
