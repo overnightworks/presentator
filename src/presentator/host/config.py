@@ -534,9 +534,7 @@ def read_secret_file(
     return SecretStr(secret)
 
 
-def cannot_start(
-    reason: str, *, variables: tuple[str, ...] = ()
-) -> ConfigurationError:
+def cannot_start(reason: str, *, variables: tuple[str, ...] = ()) -> ConfigurationError:
     """The refusal an environment no instance can run on is answered with."""
     return ConfigurationError(f"{_REFUSED}: {reason}", variables=variables)
 

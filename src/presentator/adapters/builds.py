@@ -456,20 +456,7 @@ class SlidevBuilds:
             )
             try:
                 with step_line:
-                    broke = self.toolchain.ran(
-                        BuildStep(
-                            place=place,
-                            slug=deck.slug,
-                            name=kind,
-                            arguments=slidev_arguments(
-                                kind, place=place, slug=deck.slug
-                            ),
-                            watched=lambda: self._more_than_it_may_leave(
-                                place, step_line
-                            ),
-                            line=step_line,
-                        ),
-                    )
+                    broke = self._ran(kind, deck=deck, place=place, line=step_line)
             except Exception:
                 # The step's line is the exception's one error line.
                 line.handled()
@@ -480,6 +467,26 @@ class SlidevBuilds:
                 step_line.ends(line)
                 return broke
         return self._more_than_it_may_leave(place, line)
+
+    def _ran(
+        self,
+        kind: StepKind,
+        *,
+        deck: Deck,
+        place: BuildPlace,
+        line: StepTimer,
+    ) -> BuildFailure | ToolchainUnavailable | None:
+        """Run one step of the build under its own line."""
+        return self.toolchain.ran(
+            BuildStep(
+                place=place,
+                slug=deck.slug,
+                name=kind,
+                arguments=slidev_arguments(kind, place=place, slug=deck.slug),
+                watched=lambda: self._more_than_it_may_leave(place, line),
+                line=line,
+            ),
+        )
 
     def _more_than_it_may_leave(
         self,
@@ -552,10 +559,8 @@ _REFUSALS: Final = frozenset(
 class _RememberedStepTimer(StepTimer):
     """A step's line that can hand its ending on to the build's own line."""
 
-    def __init__(self, event: str, logger: logging.Logger, /, **fields: str) -> None:
-        super().__init__(event, logger, **fields)
-        self._refusal: str | None = None
-        self._failure: str | None = None
+    _refusal: str | None = None
+    _failure: str | None = None
 
     def refuse(self, reason: str) -> None:
         """End the step as refused, and remember why."""

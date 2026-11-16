@@ -250,6 +250,35 @@ class _Ask:
     step: StepTimer
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _Begun:
+    """A question as it arrives: the time it has to be answered and its answer line."""
+
+    deadline: float
+    step: StepTimer
+
+
+async def _admitted(
+    surface: CoPresenterSurface,
+    admission: Admission,
+    request: Request,
+    question: AskRequest,
+    begun: _Begun,
+) -> _Ask | Response:
+    """Admit the question off the event loop, ending its line if admission breaks."""
+    try:
+        return await run_in_threadpool(
+            _admit, surface, admission, request, question, begun
+        )
+    except Exception:
+        begun.step.fail(AnswerFailure.UNEXPECTED)
+        begun.step.end()
+        raise
+    except BaseException:
+        begun.step.end_cancelled()
+        raise
+
+
 def _ask_route(
     surface: CoPresenterSurface, *, admission: Admission, guard: _SessionGuard
 ) -> Callable[[Request, AskRequest], Awaitable[Response]]:
@@ -257,18 +286,8 @@ def _ask_route(
         if surface.stopping():
             return _unavailable()
         deadline = asyncio.get_running_loop().time() + surface.deadline_seconds
-        step = StepTimer("answer.ended", _log)
-        try:
-            admitted = await run_in_threadpool(
-                _admit, surface, admission, request, question, deadline, step
-            )
-        except Exception:
-            step.fail(AnswerFailure.UNEXPECTED)
-            step.end()
-            raise
-        except BaseException:
-            step.end_cancelled()
-            raise
+        begun = _Begun(deadline=deadline, step=StepTimer("answer.ended", _log))
+        admitted = await _admitted(surface, admission, request, question, begun)
         if isinstance(admitted, Response):
             return admitted
         streaming = False
@@ -322,9 +341,9 @@ def _admit(
     admission: Admission,
     request: Request,
     question: AskRequest,
-    deadline: float,
-    step: StepTimer,
+    begun: _Begun,
 ) -> _Ask | Response:
+    step = begun.step
     connection = admission(request)
     if connection is None:
         return _answer_ended_with(step, _not_authenticated())
@@ -354,7 +373,7 @@ def _admit(
         ticket=ticket,
         subject=connection.user_id,
         role=connection.person.role,
-        deadline=deadline,
+        deadline=begun.deadline,
         step=step,
     )
 

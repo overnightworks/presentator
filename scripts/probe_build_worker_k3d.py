@@ -506,7 +506,7 @@ def hold_signals() -> None:
 def stop_on_signal(
     runner: SubprocessRunner, hold: Callable[[], None]
 ) -> Callable[[int, object], None]:
-    """The handler of SIGTERM and SIGINT: hold further signals, kill the children, exit."""
+    """The handler of SIGTERM and SIGINT: hold signals, kill the children, exit."""
 
     def stop(signal_number: int, _frame: object) -> None:
         hold()

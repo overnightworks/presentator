@@ -570,9 +570,7 @@ def test_an_ask_whose_admission_breaks_still_writes_its_answer_line(
     reason: str | None,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    talk, _private, _clock = a_copresenter_talk_host(
-        limiter=_LimiterThatRaises(raised)
-    )
+    talk, _private, _clock = a_copresenter_talk_host(limiter=_LimiterThatRaises(raised))
     talk.sign_in()
 
     with json_logged(capsys) as logged, pytest.raises(surfaced):

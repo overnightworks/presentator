@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from webauth.oidc_login import AccessTokenRefusal, AccessTokenRefusalReason
 
-from presentator.adapters.identity import SqliteSessionRecordStore
 from presentator.adapters import session_access
+from presentator.adapters.identity import SqliteSessionRecordStore
 from presentator.adapters.session_access import SessionAccess
 from presentator.contracts.copresenter import AccessRefusal, CoPresenterUnavailableError
 from tests.presentator.agent.support.driving import on_an_event_loop
@@ -121,15 +121,17 @@ def _the_token_endpoint_is_down(arranged: Arranged, _: pytest.MonkeyPatch) -> No
     arranged.scene.issuer.token_endpoint_is_down = True
 
 
+def _a_refusal_without_an_issuer_cause(
+    *_args: object, **_kwargs: object
+) -> AccessTokenRefusal:
+    return AccessTokenRefusal(AccessTokenRefusalReason.ISSUER_UNAVAILABLE)
+
+
 def _the_refusal_names_no_issuer_cause(
     _: Arranged, patching: pytest.MonkeyPatch
 ) -> None:
     patching.setattr(
-        session_access,
-        "current_groups",
-        lambda *_args, **_kwargs: AccessTokenRefusal(
-            AccessTokenRefusalReason.ISSUER_UNAVAILABLE
-        ),
+        session_access, "current_groups", _a_refusal_without_an_issuer_cause
     )
 
 
