@@ -32,16 +32,43 @@ _AUTHORSHIP = {
 }
 
 
-def a_path_carrying(*directories: Path) -> str:
-    """A PATH with git on it, because reading a deck is still spawning git."""
+def _the_git_beyond_the_shim() -> str:
     elsewhere = os.pathsep.join(
         entry for entry in os.environ["PATH"].split(os.pathsep) if entry != _SHIM
     )
     git = shutil.which("git", path=elsewhere)
     assert git is not None
+    return git
+
+
+def a_path_carrying(*directories: Path) -> str:
+    """A PATH with git on it, because reading a deck is still spawning git."""
+    git = _the_git_beyond_the_shim()
     return os.pathsep.join(
         (*map(str, directories), _SHIM, str(Path(git).parent)),
     )
+
+
+def recording_every_git_launch(machine: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Log each git launch to the returned file, on a PATH where the shim stays first.
+
+    The recorder sits behind the shim and runs the real git by absolute path,
+    so no program on PATH can lead back to itself.
+    """
+    log = tmp_path / "git-launches.log"
+    recorder = tmp_path / "recording-bin" / "git"
+    recorder.parent.mkdir()
+    recorder.write_text(
+        f'#!/bin/sh\nprintf \'%s\\n\' "$PWD $*" >> "{log}"\n'
+        f'exec "{_the_git_beyond_the_shim()}" "$@"\n',
+        encoding="utf-8",
+    )
+    recorder.chmod(0o755)
+    machine.setenv(
+        "PATH",
+        a_path_carrying().replace(_SHIM, f"{_SHIM}{os.pathsep}{recorder.parent}", 1),
+    )
+    return log
 
 
 def reading_fixture_remotes(machine: pytest.MonkeyPatch) -> None:

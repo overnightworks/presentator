@@ -1,7 +1,6 @@
 """A source whose repository cannot be read ends its run; the others go on."""
 
 import logging
-import os
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
@@ -22,7 +21,7 @@ from presentator.ports.decks import BuildRun
 from tests.presentator.application.support.decks_support import DecksFakes, decks_over
 from tests.presentator.application.support.fakes import FakeSourceStore
 from tests.support.deck_source_support import a_source, folders_under, mirrors_under
-from tests.support.git_remote import GitRemote
+from tests.support.git_remote import GitRemote, recording_every_git_launch
 
 _FIRST_PUSH = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _NEXT_PUSH = _FIRST_PUSH + timedelta(hours=1)
@@ -188,29 +187,13 @@ def test_a_source_that_cannot_be_read_ends_its_run_failed_and_the_next_is_taken_
     assert BuildRun("nobody-names-me") in instance.fakes.builder.removed
 
 
-def _record_every_git_launch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Put a `git` first on PATH that logs each launch, then runs the real one."""
-    real_git = shutil.which("git")
-    assert real_git is not None
-    log = tmp_path / "git-launches.log"
-    wrapper = tmp_path / "recording-bin" / "git"
-    wrapper.parent.mkdir()
-    wrapper.write_text(
-        f'#!/bin/sh\nprintf \'%s\\n\' "$PWD $*" >> "{log}"\nexec "{real_git}" "$@"\n',
-        encoding="utf-8",
-    )
-    wrapper.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{wrapper.parent}:{os.environ['PATH']}")
-    return log
-
-
 def test_a_https_credential_git_cannot_be_sent_starts_no_git_for_its_source(
     instance: _Instance,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _a_https_credential_git_cannot_be_sent(instance)
     spoiled_mirror = str(instance.mirror_directory_of_the_spoiled())
-    launches = _record_every_git_launch(instance.tmp_path, monkeypatch)
+    launches = recording_every_git_launch(monkeypatch, instance.tmp_path)
 
     instance.refresh_after_the_healthy_source_pushed()
 
