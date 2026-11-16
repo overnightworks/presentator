@@ -237,7 +237,7 @@ def _noting_cleanup_failure(
 ) -> None:
     try:
         cleanup()
-    except (Exception, KeyboardInterrupt) as cleanup_failure:  # noqa: BLE001 - logged as a code, noted on the original
+    except (Exception, KeyboardInterrupt) as cleanup_failure:  # noqa: BLE001 - failure logged as a code and noted on the original
         _log_failure("cleanup.failed", cleanup_failure, step=step)
         original.add_note(f"{step} failed: {cleanup_failure!r}")
 
