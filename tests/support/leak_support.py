@@ -12,7 +12,8 @@ def everything_shown(
 ) -> str:
     """The text of every leaf the records and errors hold, in `str` and `repr`.
 
-    A record shows its message, `args`, `exc_info`, `exc_text` and `stack_info`;
+    A record shows its message, `args`, `exc_info`, `exc_text`, `stack_info` and
+    every attribute it holds, such as the fields of a step line;
     an error shows its text, `args`, formatted traceback, `__cause__`,
     `__context__` and group members. Containers are walked iteratively and each
     object once, kept alive so no id is reused, so a cyclic chain ends. A
@@ -53,6 +54,7 @@ def _parts_of(value: object) -> list[object]:
             value.exc_info,
             value.exc_text,
             value.stack_info,
+            *vars(value).values(),
         ]
     if isinstance(value, BaseException):
         return _parts_of_error(value)

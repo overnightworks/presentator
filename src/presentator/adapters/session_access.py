@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import nullcontext
+from enum import StrEnum
 from typing import TYPE_CHECKING, assert_never
 
+from logline import StepTimer
 from webauth.oidc import OidcRefusal
 from webauth.oidc_login import (
     AccessTokenRefusal,
@@ -31,6 +33,20 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
+class TokenPurpose(StrEnum):
+    """What an `access_token.ended` line read the token for."""
+
+    GROUPS = "groups"
+    SPEECH_TOKENS = "speech_tokens"
+
+
+class TokenFailure(StrEnum):
+    """Why an `access_token.ended` line is failed without a refusal's own code."""
+
+    READ_FAILED = "read_failed"
+    ISSUER_UNAVAILABLE = "issuer_unavailable"
+
+
 class SessionAccess:
     """Reads what a session may use now, each read by its own grants at the issuer."""
 
@@ -50,22 +66,26 @@ class SessionAccess:
 
     async def groups_of(self, session_id: str) -> frozenset[str] | AccessRefusal:
         """The session's person's groups, or why it has none."""
-        groups = await _in_a_worker(
-            lambda: self._read_groups(session_id), reading="the groups"
-        )
-        if isinstance(groups, AccessTokenRefusal):
-            return _refusal_of(groups)
+        with StepTimer(
+            "access_token.ended", _LOGGER, purpose=TokenPurpose.GROUPS
+        ) as step:
+            groups = await _in_a_worker(lambda: self._read_groups(session_id), step)
+            if isinstance(groups, AccessTokenRefusal):
+                return _refusal_of(groups, step)
         return frozenset(groups)
 
     async def speech_tokens_of(self, session_id: str) -> SpeechTokens | AccessRefusal:
         """The person's token and this instance's own, or why there are none."""
-        granted = await _in_a_worker(
-            lambda: self._read_speech_tokens(session_id), reading="the speech tokens"
-        )
-        if isinstance(granted, AccessTokenRefusal):
-            return _refusal_of(granted)
-        if isinstance(granted, OidcRefusal):
-            return _issuer_unavailable(granted)
+        with StepTimer(
+            "access_token.ended", _LOGGER, purpose=TokenPurpose.SPEECH_TOKENS
+        ) as step:
+            granted = await _in_a_worker(
+                lambda: self._read_speech_tokens(session_id), step
+            )
+            if isinstance(granted, AccessTokenRefusal):
+                return _refusal_of(granted, step)
+            if isinstance(granted, OidcRefusal):
+                return _issuer_unavailable(granted, step)
         return granted
 
     def _read_groups(self, session_id: str) -> tuple[str, ...] | AccessTokenRefusal:
@@ -98,7 +118,7 @@ class SessionAccess:
 
 
 async def _in_a_worker[Granted](
-    read: Callable[[], Granted], *, reading: str
+    read: Callable[[], Granted], step: StepTimer
 ) -> Granted:
     # A cancelled caller cancels the await, not the worker: it still stores the
     # rotated refresh token, and no later step runs.
@@ -108,26 +128,28 @@ async def _in_a_worker[Granted](
     # Every thread failure is one unavailable error; its text may hold a token.
     except Exception as error:  # noqa: BLE001
         failure = type(error).__name__
-    _LOGGER.warning("reading %s failed: %s", reading, failure)
+    step.fail(TokenFailure.READ_FAILED)
+    step.add(cause=failure)
     # Raised outside the handler, so the error it replaces is not its context.
     raise CoPresenterUnavailableError
 
 
-def _refusal_of(refusal: AccessTokenRefusal) -> AccessRefusal:
+def _refusal_of(refusal: AccessTokenRefusal, step: StepTimer) -> AccessRefusal:
     match refusal.reason:
         case AccessTokenRefusalReason.SIGN_IN_AGAIN:
+            step.refuse(refusal.reason.value)
             return AccessRefusal.SIGN_IN_AGAIN
         case AccessTokenRefusalReason.SESSION_ENDED:
+            step.refuse(refusal.reason.value)
             return AccessRefusal.SESSION_ENDED
         case AccessTokenRefusalReason.ISSUER_UNAVAILABLE:
-            return _issuer_unavailable(refusal.issuer_refusal)
+            return _issuer_unavailable(refusal.issuer_refusal, step)
         case _:
             assert_never(refusal.reason)
 
 
-def _issuer_unavailable(issuer: OidcRefusal | None) -> AccessRefusal:
-    _LOGGER.warning(
-        "the issuer granted nothing: %s",
-        None if issuer is None else issuer.reason.value,
-    )
+def _issuer_unavailable(issuer: OidcRefusal | None, step: StepTimer) -> AccessRefusal:
+    step.fail(TokenFailure.ISSUER_UNAVAILABLE)
+    if issuer is not None:
+        step.add(issuer_reason=issuer.reason.value)
     return AccessRefusal.ISSUER_UNAVAILABLE

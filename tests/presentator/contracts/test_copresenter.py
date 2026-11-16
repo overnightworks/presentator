@@ -44,7 +44,6 @@ def test_a_prepared_ask_hides_the_tokens_it_carries() -> None:
         asked=None,  # type: ignore[arg-type]
         person=None,  # type: ignore[arg-type]
         speech=tokens,
-        started=0.0,
     )
 
     assert "MARKER" not in repr(prepared)

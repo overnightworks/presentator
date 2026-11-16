@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import re
 import sqlite3
 from contextlib import closing
@@ -69,9 +68,7 @@ if TYPE_CHECKING:
 
     from tests.support.git_remote import GitRemote
 from tests.support.leak_support import everything_shown
-
-FIRST_AUDIO: Final = "presentator.application.copresenter"
-
+from tests.support.log_lines import json_logged
 
 A_PUSH: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
 ASKED_MARKER: Final = "asked-deck-MARKER"
@@ -80,9 +77,7 @@ LATER_MARKER: Final = "later-commit-MARKER"
 THE_ASKED: Final = "kern"
 
 
-def the_asked_decks_words_at_its_built_commit(
-    tmp_path: Path, remote: GitRemote, caplog: pytest.LogCaptureFixture
-) -> Run:
+def the_asked_decks_words_at_its_built_commit(tmp_path: Path, remote: GitRemote) -> Run:
     """A repository of two decks, the asked one built before it was edited."""
     remote.commit(
         {
@@ -127,7 +122,6 @@ def the_asked_decks_words_at_its_built_commit(
             ),
         )
 
-    caplog.set_level(logging.INFO, logger=FIRST_AUDIO)
     scenario = Scenario(
         texts=MirroredDeckTexts(mirrors=mirrors_under(tmp_path)),
         sources=[source],
@@ -138,10 +132,11 @@ def the_asked_decks_words_at_its_built_commit(
 
 
 def test_a_signed_in_admins_ask_reaches_the_gateway_with_only_that_decks_words(
-    tmp_path: Path, remote: GitRemote, caplog: pytest.LogCaptureFixture
+    tmp_path: Path, remote: GitRemote, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """CP1: the deck's words at its built commit, the key as bearer, one text."""
-    run = the_asked_decks_words_at_its_built_commit(tmp_path, remote, caplog)
+    with json_logged(capsys) as logged:
+        run = the_asked_decks_words_at_its_built_commit(tmp_path, remote)
 
     (request,) = run.gateway.requests
     sent = json.dumps(json.loads(request.content)["messages"])
@@ -151,8 +146,9 @@ def test_a_signed_in_admins_ask_reaches_the_gateway_with_only_that_decks_words(
     assert LATER_MARKER not in sent
     assert run.response.status_code == HTTPStatus.OK
     assert run.events == ["text", "sentence", "audio", "sentence", "audio", "done"]
-    (line,) = [r.getMessage() for r in caplog.records if r.name == FIRST_AUDIO]
-    assert re.fullmatch(r"co-presenter first audio: ms=\d+", line)
+    (line,) = [one for one in logged.lines if one["event"] == "answer.ended"]
+    assert line["outcome"] == "ok"
+    assert isinstance(line["first_output_ms"], float)
     assert the_ticket_was_released(run)
 
 

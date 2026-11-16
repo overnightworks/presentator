@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from typing import TYPE_CHECKING
 
 import pytest
@@ -18,6 +17,7 @@ from presentator.contracts.copresenter import (
 )
 from presentator.contracts.voice import SampleLanguage
 from tests.support.lobby import the_speech_voices
+from tests.support.log_lines import json_logged
 from tests.support.speech_service import (
     A_WAV,
     MALFORMED_PEERS,
@@ -110,18 +110,19 @@ def test_the_request_carries_both_tokens_in_the_clients_headers() -> None:
 
 @pytest.mark.parametrize("case", SPEAK_FAILURES)
 def test_every_refusal_or_broken_answer_is_unavailable(
-    case: str, caplog: pytest.LogCaptureFixture
+    case: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     fake = FakeSpeechService(speak_answers=[SPEAK_FAILURES[case]])
-    caplog.set_level(logging.DEBUG)
 
-    with pytest.raises(CoPresenterUnavailableError):
+    with json_logged(capsys) as logged, pytest.raises(CoPresenterUnavailableError):
         speak_against(fake)
 
-    assert TOKENS.person not in caplog.text
-    assert TOKENS.workload not in caplog.text
-    assert SENTENCE not in caplog.text
-    assert PLANTED not in caplog.text
+    (line,) = [one for one in logged.lines if one["event"] == "speak.ended"]
+    assert line["outcome"] in {"failed", "refused"}
+    assert TOKENS.person not in logged.text
+    assert TOKENS.workload not in logged.text
+    assert SENTENCE not in logged.text
+    assert PLANTED not in logged.text
 
 
 def test_a_refused_connection_is_unavailable() -> None:
@@ -162,10 +163,9 @@ def test_a_speak_the_client_ended_at_its_own_bound_is_unavailable(
 
 
 def test_a_sentence_the_wire_cannot_carry_is_one_chain_free_unavailable_error(
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     fake = FakeSpeechService()
-    caplog.set_level(logging.DEBUG)
 
     async def scenario() -> None:
         async with a_loopback_server(fake.app()) as origin:
@@ -174,12 +174,17 @@ def test_a_sentence_the_wire_cannot_carry_is_one_chain_free_unavailable_error(
             )
 
     running = scenario()
-    with pytest.raises(CoPresenterUnavailableError) as refused:
+    with (
+        json_logged(capsys) as logged,
+        pytest.raises(CoPresenterUnavailableError) as refused,
+    ):
         asyncio.run(running)
 
     assert (refused.value.__cause__, refused.value.__context__) == (None, None)
     assert not fake.speak_requests
-    assert "…" not in caplog.text
+    (line,) = [one for one in logged.lines if one["event"] == "speak.ended"]
+    assert (line["event"], line["reason"]) == ("speak.ended", "sentence_unsendable")
+    assert "…" not in logged.text
 
 
 def test_a_startup_defect_is_not_mapped() -> None:

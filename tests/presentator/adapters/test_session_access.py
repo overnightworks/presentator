@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
@@ -15,6 +14,7 @@ from presentator.adapters.session_access import SessionAccess
 from presentator.contracts.copresenter import AccessRefusal, CoPresenterUnavailableError
 from tests.presentator.agent.support.driving import on_an_event_loop
 from tests.support.lobby import A_SPEECH_SCOPE
+from tests.support.log_lines import json_logged
 from tests.support.sign_in_support import Scene, a_scene
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ REFRESH = "refresh-MARKER"
 ROTATED = "rotated-MARKER"
 THREAD_ERROR = "thread-error-MARKER"
 GROUPS = ["/apps/presentator", "/other"]
-LOGGER = "presentator.adapters.session_access"
+ACCESS_LINE = "access_token.ended"
 _THREAD_WAIT_SECONDS = 10
 
 
@@ -115,19 +115,21 @@ def test_a_session_row_deleted_between_the_two_transactions_ends_the_session(
     assert arranged.scene.stored_tokens() == []
 
 
-def test_an_issuer_that_is_down_is_one_warning_naming_the_reason(
-    arranged: Arranged, caplog: pytest.LogCaptureFixture
+def test_an_issuer_that_is_down_is_one_failed_line_naming_the_reason(
+    arranged: Arranged, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """An unavailable issuer is one warning, with a closed reason."""
+    """An unavailable issuer is one failed line, with closed reasons."""
     arranged.scene.issuer.token_endpoint_is_down = True
 
-    refusal = asyncio.run(arranged.reader.groups_of(arranged.session_id))
+    with json_logged(capsys) as logged:
+        refusal = asyncio.run(arranged.reader.groups_of(arranged.session_id))
 
     assert refusal is AccessRefusal.ISSUER_UNAVAILABLE
-    (warning,) = [
-        record.getMessage() for record in caplog.records if record.name == LOGGER
-    ]
-    assert "token-endpoint-failed" in warning
+    (line,) = [one for one in logged.lines if one["event"] == ACCESS_LINE]
+    assert line["outcome"] == "failed"
+    assert line["reason"] == "issuer_unavailable"
+    assert line["issuer_reason"] == "token-endpoint-failed"
+    assert line["purpose"] == "groups"
 
 
 class _LoadFails(SqliteSessionRecordStore):
@@ -138,12 +140,12 @@ class _LoadFails(SqliteSessionRecordStore):
 
 
 @pytest.mark.parametrize(
-    ("read", "reading"),
-    [("groups_of", "the groups"), ("speech_tokens_of", "the speech tokens")],
+    ("read", "purpose"),
+    [("groups_of", "groups"), ("speech_tokens_of", "speech_tokens")],
     ids=["groups", "speech-tokens"],
 )
 def test_a_thread_that_raises_is_one_unavailable_error_naming_only_its_type(
-    arranged: Arranged, caplog: pytest.LogCaptureFixture, read: str, reading: str
+    arranged: Arranged, capsys: pytest.CaptureFixture[str], read: str, purpose: str
 ) -> None:
     """The error is foreign and may hold a token, so only its type is shown."""
     scene = arranged.scene
@@ -153,16 +155,24 @@ def test_a_thread_that_raises_is_one_unavailable_error_naming_only_its_type(
         scene.config,
         speech_scope=A_SPEECH_SCOPE,
     )
-    caplog.set_level(logging.DEBUG)
 
     running = getattr(reader, read)(arranged.session_id)
 
-    with pytest.raises(CoPresenterUnavailableError) as failed:
+    with (
+        json_logged(capsys) as logged,
+        pytest.raises(CoPresenterUnavailableError) as failed,
+    ):
         asyncio.run(running)
 
     assert (failed.value.__cause__, failed.value.__context__) == (None, None)
-    assert THREAD_ERROR not in caplog.text
-    assert f"reading {reading} failed: RuntimeError" in caplog.text
+    assert THREAD_ERROR not in logged.text
+    (line,) = [one for one in logged.lines if one["event"] == ACCESS_LINE]
+    assert (line["outcome"], line["reason"], line["cause"]) == (
+        "failed",
+        "read_failed",
+        "RuntimeError",
+    )
+    assert (line["level"], line["purpose"]) == ("error", purpose)
 
 
 class RecordingExecutor(ThreadPoolExecutor):
