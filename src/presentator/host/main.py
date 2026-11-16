@@ -343,13 +343,13 @@ def _postgres_stores(
     with timed_connection(StoreKind.POSTGRES) as step:
         refusal = serving_refusal(engine, history)
         if refusal is not None:
-            if refusal is RefusalReason.NOT_ANSWERING:
+            if refusal.reason is RefusalReason.NOT_ANSWERING:
                 step.fail(StoreFailure.NOT_ANSWERING)
             else:
-                step.refuse(refusal)
+                step.refuse(refusal.reason)
     if refusal is not None:
         engine.dispose()
-        raise DatabaseRefusedError(refusal)
+        raise refusal
     toolchain, bound = refresh
     ownership = PostgresRefreshOwnership(
         engine, toolchain=toolchain, lock_timeout=bound
@@ -735,24 +735,22 @@ def main(
         settings = load_settings()
         instance = build_instance(settings, relying_party_for, migrations_directory)
     except DatabaseRefusedError as refused:
-        _end_failed(refused.reason, refused)
+        driver_error = refused.driver_error
+        codes = {} if driver_error is None else {"error_type": driver_error}
+        _end_failed(refused.reason, **codes)
     except ConfigurationError as refused:
         # The settings by their variables; the message may name a path.
-        setting = ",".join(refused.variables)
-        _end_failed(CONFIGURATION_REFUSED, refused, setting=setting)
+        _end_failed(CONFIGURATION_REFUSED, setting=",".join(refused.variables))
     asyncio.run(_serve(instance, settings))
 
 
-def _end_failed(reason: str, error: Exception, **codes: str) -> NoReturn:
+def _end_failed(reason: str, **codes: str) -> NoReturn:
     """End the process in one line naming the refusal, without its traceback.
 
     The traceback would name the database's host and port or a file's path, so
-    the line carries only codes and the error's class name.
+    the line carries only codes, such as the class name of the driver's error.
     """
-    error_type = type(error).__name__
-    _log.error(
-        "process.failed", extra={"reason": reason, "error_type": error_type, **codes}
-    )
+    _log.error("process.failed", extra={"reason": reason, **codes})
     raise SystemExit(1) from None
 
 

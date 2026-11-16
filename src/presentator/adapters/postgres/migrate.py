@@ -32,14 +32,26 @@ class RefusalReason(StrEnum):
 class DatabaseRefusedError(Exception):
     """The database is not served or migrated, for `reason`.
 
-    It carries the code and never what the driver says, which may quote the
-    address the connection used.
+    It carries the code and the class name of the driver's error, if one refused
+    it, and never what the driver says, which may quote the address the
+    connection used.
     """
 
-    def __init__(self, reason: RefusalReason) -> None:
-        """Refuse the database for `reason`."""
+    def __init__(
+        self, reason: RefusalReason, *, driver_error: str | None = None
+    ) -> None:
+        """Refuse the database for `reason`, after `driver_error` if one ended it."""
         super().__init__(reason)
         self.reason = reason
+        self.driver_error = driver_error
+
+
+def _not_answering(error: SQLAlchemyError) -> DatabaseRefusedError:
+    # SQLAlchemy wraps the driver's own error, whose class names the failure.
+    driver_error = getattr(error, "orig", None) or error
+    return DatabaseRefusedError(
+        RefusalReason.NOT_ANSWERING, driver_error=type(driver_error).__name__
+    )
 
 
 def cap_alembic_logging() -> None:
@@ -59,8 +71,8 @@ def migrate(engine: Engine) -> None:
     history = ScriptDirectory.from_config(config)
     try:
         connection = engine.connect()
-    except SQLAlchemyError:
-        raise DatabaseRefusedError(RefusalReason.NOT_ANSWERING) from None
+    except SQLAlchemyError as error:
+        raise _not_answering(error) from None
     with connection:
         _hold(connection, MIGRATION_LOCK)
         try:
@@ -82,7 +94,9 @@ def migration_history(directory: Path = MIGRATIONS_DIRECTORY) -> ScriptDirectory
     return ScriptDirectory.from_config(_config(directory))
 
 
-def serving_refusal(engine: Engine, history: ScriptDirectory) -> RefusalReason | None:
+def serving_refusal(
+    engine: Engine, history: ScriptDirectory
+) -> DatabaseRefusedError | None:
     """Why this release must not serve the database, or None when it may.
 
     A database that does not answer is refused. So is one with no revision row,
@@ -96,20 +110,20 @@ def serving_refusal(engine: Engine, history: ScriptDirectory) -> RefusalReason |
     try:
         with engine.connect() as connection:
             held = set(MigrationContext.configure(connection).get_current_heads())
-    except SQLAlchemyError:
-        return RefusalReason.NOT_ANSWERING
+    except SQLAlchemyError as error:
+        return _not_answering(error)
     if not held:
-        return RefusalReason.NO_REVISION
+        return DatabaseRefusedError(RefusalReason.NO_REVISION)
     if history.get_current_head() in held or not held <= _known_revisions(history):
         return None
-    return RefusalReason.BEHIND_THIS_RELEASE
+    return DatabaseRefusedError(RefusalReason.BEHIND_THIS_RELEASE)
 
 
 def database_is_ready(engine: Engine, history: ScriptDirectory) -> bool:
     """Whether the database answers and this release may serve it; a no is logged."""
     refusal = serving_refusal(engine, history)
     if refusal is not None:
-        _log.info("database_readiness.refused", extra={"reason": refusal})
+        _log.info("database_readiness.refused", extra={"reason": refusal.reason})
     return refusal is None
 
 
