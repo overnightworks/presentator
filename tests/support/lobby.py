@@ -34,13 +34,11 @@ from webauth.oidc import (
 )
 from webauth.ports import (
     AccountKind,
-    RateLimitBackend,
     SessionRecordStore,
     SignInStores,
     SignInTransaction,
     UserRecord,
 )
-from webauth.rate_limit import SingleProcessRateLimitBackend
 
 from gitmirror.model import CredentialReference
 from presentator.adapters.audit import LoggingAuditSink
@@ -106,7 +104,7 @@ from tests.presentator.application.support.fakes import (
     FrozenClock,
 )
 from tests.support.deck_text_support import FakeDeckTexts
-from tests.support.redis import NOTHING_LISTENS_HERE
+from tests.support.redis import NOTHING_LISTENS_HERE, in_process_rate_limits
 
 
 def _write_throwaway_file(content: str) -> Path:
@@ -248,11 +246,6 @@ def a_web_auth(clock: FrozenClock) -> WebAuthConfig:
         rate_limits=in_process_rate_limits(),
     )
     return replace(host_config, wall_clock=lambda: clock.now().timestamp())
-
-
-def in_process_rate_limits() -> RateLimitBackend:
-    """Budgets that live in this test's memory, a double of the shared Redis."""
-    return SingleProcessRateLimitBackend()
 
 
 def a_talk_web_auth(clock: FrozenClock) -> WebAuthConfig:

@@ -27,8 +27,8 @@ from tests.support.lobby import (
     a_crowd,
     a_lobby_app,
     an_installed_auth,
-    in_process_rate_limits,
 )
+from tests.support.redis import in_process_rate_limits
 from tests.support.talk_support import Hosts, two_hosts
 
 _AN_OTHER_PATH = "/somewhere-else"

@@ -51,6 +51,7 @@ class RateLimitedHost(StrEnum):
     TALK = "talk"
 
 
+@dataclass(frozen=True, slots=True)
 class _LeaseTicket:
     """The lease one answer holds, freed only by the token it was taken with.
 
@@ -58,12 +59,10 @@ class _LeaseTicket:
     life, and a pod that dies mid-answer leaves the lease to expire.
     """
 
-    def __init__(self, session_id: str, redis: Redis, key: str, token: str) -> None:
-        """Hold the lease at `key` taken with `token`."""
-        self.session_id = session_id
-        self._redis = redis
-        self._key = key
-        self._token = token
+    session_id: str
+    _redis: Redis
+    _key: str
+    _token: str
 
     def release(self) -> None:
         """Free the session if this ticket still holds it; later calls do nothing.

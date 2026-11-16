@@ -13,6 +13,8 @@ from urllib.parse import urlsplit
 
 import pytest
 from redis import Redis
+from webauth.ports import RateLimitBackend
+from webauth.rate_limit import SingleProcessRateLimitBackend
 
 SERVER_VARIABLE = "PRESENTATOR_TEST_REDIS_URL"
 # Nothing listens here, so a client built on it fails at once; tests that never
@@ -24,6 +26,11 @@ _NO_SERVER = (
 )
 _UNDISTRIBUTED_WORKER = "master"
 _WORKER_PREFIX = "gw"
+
+
+def in_process_rate_limits() -> RateLimitBackend:
+    """Budgets that live in this test's memory, a double of the shared Redis."""
+    return SingleProcessRateLimitBackend()
 
 
 def _server_url() -> str:

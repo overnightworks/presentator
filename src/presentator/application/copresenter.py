@@ -31,6 +31,8 @@ from presentator.contracts.models import Role
 from presentator.contracts.voice import SampleLanguage
 from presentator.ports.copresenter import (
     AgentAnswers,
+    AskLimiter,
+    AskTicket,
     DeckTexts,
     HearingSocket,
     PersonAccess,
@@ -39,6 +41,9 @@ from presentator.ports.copresenter import (
     SpeechHearing,
 )
 from presentator.ports.decks import DeckStore, SourceStore
+
+# The routes name the ask lease through this module, never a port.
+__all__ = ["AskLimiter", "AskTicket", "CoPresenterUse", "PreparedAsk"]
 
 _LOGGER = logging.getLogger(__name__)
 _MILLISECONDS = 1000

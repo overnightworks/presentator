@@ -26,11 +26,11 @@ from presentator.adapters.identity import (
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host.main import web_auth_config_for
-from tests.support.lobby import in_process_rate_limits
 from tests.support.people import (
     a_session_id,
     seed_user,
 )
+from tests.support.redis import in_process_rate_limits
 
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _ID_MARKER = "id-MARKER-4f7c1e"

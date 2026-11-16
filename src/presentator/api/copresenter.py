@@ -51,10 +51,14 @@ from presentator.contracts.voice import SampleLanguage
 if TYPE_CHECKING:
     from webauth.ports import SessionRecordStore
 
-    from presentator.application.copresenter import CoPresenterUse, PreparedAsk
+    from presentator.application.copresenter import (
+        AskLimiter,
+        AskTicket,
+        CoPresenterUse,
+        PreparedAsk,
+    )
     from presentator.contracts.models import Role, User
     from presentator.contracts.words import Language
-    from presentator.ports.copresenter import AskLimiter, AskTicket
 
 _CHECK_INTERVAL_SECONDS: Final = 0.5
 _POLICY_VIOLATION: Final = 1008
