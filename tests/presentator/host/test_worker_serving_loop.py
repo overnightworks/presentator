@@ -476,15 +476,25 @@ def test_a_phase_writes_one_timed_line_with_its_role_and_how_it_ended(
     assert {key: line[key] for key in fields} == fields
 
 
-def test_a_sweep_that_fails_for_another_reason_surfaces_with_its_error(
-    volume: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    "make_life",
+    [
+        lambda: ScriptedLife(sweep_error=PermissionError("kill refused")),
+        lambda: ScriptedLife(wait_error=PermissionError("wait refused")),
+    ],
+    ids=["a sweep that failed", "a hand-over that failed"],
+)
+def test_a_step_that_fails_for_another_reason_surfaces_with_its_error(
+    volume: Path,
+    capsys: pytest.CaptureFixture[str],
+    make_life: Callable[[], ScriptedLife],
 ) -> None:
-    life = ScriptedLife(sweep_error=PermissionError("kill refused"))
+    life = make_life()
     with listening_with(volume, accepts=1) as listener:
         proven(volume)
         with (
             json_logged(capsys) as logged,
-            pytest.raises(PermissionError, match="kill"),
+            pytest.raises(PermissionError, match="refused"),
         ):
             accept_from(life, listener)
 
@@ -495,7 +505,7 @@ def test_a_sweep_that_fails_for_another_reason_surfaces_with_its_error(
         "failed",
         "PermissionError",
     )
-    assert "kill refused" not in logged.text
+    assert "refused" not in logged.text
     assert "Traceback" not in logged.text
 
 
