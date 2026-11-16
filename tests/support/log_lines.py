@@ -1,10 +1,13 @@
 """The JSON lines a process writes through logline."""
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import cast
 
 import pytest
 from logline import REQUEST_EVENT
+from logline.testing import configured
 from pydantic import JsonValue
 
 type LogLine = dict[str, JsonValue]
@@ -40,3 +43,14 @@ class LoggedText:
     def lines(self) -> list[LogLine]:
         """The output as the lines logline wrote."""
         return json_lines(self.text)
+
+
+@contextmanager
+def json_logged(capsys: pytest.CaptureFixture[str]) -> Iterator[LoggedText]:
+    """Logging as the hosts set it up, on the output `capsys` holds, until the block ends.
+
+    The handler binds the output as it is when `configure` runs, which a fixture
+    cannot do for a test: pytest swaps the captured streams after the fixtures.
+    """
+    with configured("test"):
+        yield LoggedText(capsys)
