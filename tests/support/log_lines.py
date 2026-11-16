@@ -18,6 +18,11 @@ def json_lines(output: str) -> list[LogLine]:
     return [json.loads(line) for line in output.splitlines() if line.strip()]
 
 
+def events_of(logged: LoggedText, event: str) -> list[LogLine]:
+    """The lines written so far under that event name."""
+    return [line for line in logged.lines if line["event"] == event]
+
+
 def request_lines(caplog: pytest.LogCaptureFixture) -> list[LogLine]:
     """The request lines logline has written so far, as the records carry them."""
     carried = [cast("object", record.msg) for record in caplog.records]

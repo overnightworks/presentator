@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import timedelta
 from threading import Thread
 
+import pytest
+
 from presentator.application.decks import Decks
 from presentator.contracts.decks import (
     Source,
@@ -27,6 +29,7 @@ from tests.presentator.application.support.fakes import (
     FrozenClock,
     HeldDeckFolders,
 )
+from tests.support.log_lines import events_of, logged_as_json
 
 
 def _fetched(mirror: FakeDeckFolders, builder: FakeBuildRunner) -> Decks:
@@ -174,3 +177,45 @@ def test_a_slow_pull_marks_a_vanished_deck_removed_at_the_instant_the_pass_began
     decks.refresh()
 
     assert set(fakes.store.removed.values()) == {began}
+
+
+def test_a_refresh_that_built_a_deck_writes_one_line_with_its_counts(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    decks = _fetched(carrying(a_folder("kundenfeedback")), FakeBuildRunner())
+
+    with logged_as_json(capsys) as logged:
+        decks.refresh()
+
+    [refreshed] = events_of(logged, "refresh.ended")
+    assert refreshed["level"] == "info"
+    assert refreshed["sources_fetched"] == 1
+    assert refreshed["decks_built"] == 1
+    assert refreshed["builds_failed"] == 0
+    assert refreshed["decks_removed"] == 0
+    assert "kundenfeedback" not in logged.text
+
+
+def test_a_refresh_that_found_no_work_writes_no_line(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    decks = _fetched(carrying(a_folder("kundenfeedback")), FakeBuildRunner())
+    decks.refresh()
+
+    with logged_as_json(capsys) as logged:
+        decks.refresh()
+        decks.refresh_named(SOURCE.name)
+
+    assert events_of(logged, "refresh.ended") == []
+
+
+def test_fetching_one_source_that_changed_writes_one_line_with_its_counts(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    decks = _fetched(carrying(a_folder("kundenfeedback")), FakeBuildRunner())
+
+    with logged_as_json(capsys) as logged:
+        _fetch(decks)
+
+    [refreshed] = events_of(logged, "refresh.ended")
+    assert (refreshed["sources_fetched"], refreshed["decks_built"]) == (1, 1)

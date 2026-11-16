@@ -1,7 +1,5 @@
 """Which runs of the build a refresh pass leaves on disk: those a deck row names."""
 
-import logging
-import re
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Self
@@ -48,10 +46,20 @@ from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeSourceStore,
 )
+from tests.support.log_lines import LoggedText, LogLine, events_of, logged_as_json
 
 _ANOTHER_SOURCE = a_source("talks", identifier="a-second-source")
 _A_LATER_COMMIT = "b7c1d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80"
 _A_DECK = "kundenfeedback"
+
+
+def refusals_in(logged: LoggedText) -> list[object]:
+    """The reasons of the `build_retention.refused` lines written so far."""
+    return [
+        line["reason"]
+        for line in logged.lines
+        if line["event"] == "build_retention.refused"
+    ]
 
 
 def swept(
@@ -212,10 +220,10 @@ def test_a_run_that_would_not_go_is_tried_again_by_the_next_pass() -> None:
     ],
 )
 def test_a_row_naming_a_path_no_run_owns_stops_the_sweep_without_deleting(
-    stored: Build, caplog: pytest.LogCaptureFixture
+    stored: Build, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Row outside the root, wrongly shaped path inside it."""
-    with caplog.at_level(logging.WARNING):
+    with logged_as_json(capsys) as logged:
         left = swept(
             a_row("odd", build=stored),
             a_row("fine", build=a_build_in("delivered")),
@@ -223,11 +231,34 @@ def test_a_row_naming_a_path_no_run_owns_stops_the_sweep_without_deleting(
         )
 
     assert left == {"delivered", "other"}
-    assert "is not a run under the builds root" in caplog.text
+    assert refusals_in(logged) == ["run_not_under_the_builds_root"]
+
+
+def test_a_sweep_that_took_runs_off_disk_writes_one_line_with_its_counts(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with logged_as_json(capsys) as logged:
+        left = swept(
+            a_row("fine", build=a_build_in("delivered")),
+            on_disk=("delivered", "one", "two"),
+        )
+
+    assert left == {"delivered"}
+    [sweep] = events_of(logged, "build_sweep.ended")
+    assert (sweep["runs_removed"], sweep["runs_stayed"]) == (2, 0)
+
+
+def test_a_sweep_that_found_no_run_to_take_writes_no_line(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with logged_as_json(capsys) as logged:
+        swept(a_row("fine", build=a_build_in("delivered")), on_disk=("delivered",))
+
+    assert events_of(logged, "build_sweep.ended") == []
 
 
 def test_a_listing_that_did_not_finish_deletes_nothing(
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Root unlisted or missing."""
     builder, store, mirror, source_store = over_rows(on_disk=("one",))
@@ -238,11 +269,11 @@ def test_a_listing_that_did_not_finish_deletes_nothing(
         fakes=DecksFakes(builder=builder, store=store),
     )
 
-    with caplog.at_level(logging.WARNING):
+    with logged_as_json(capsys) as logged:
         decks.refresh()
 
     assert runs_left(builder) == {"one"}
-    assert "nothing is swept" in caplog.text
+    assert refusals_in(logged) == ["runs_not_listed"]
 
 
 @dataclass
@@ -620,12 +651,14 @@ def a_name_both_sources_carry(*order: Source) -> _Instance:
 def test_another_source_takes_a_purged_address_and_not_before(
     order: tuple[Source, Source],
     at_expiry: str | None,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    with caplog.at_level(logging.WARNING):
+    with logged_as_json(capsys) as logged:
         instance = a_name_both_sources_carry(*order)
         instance.on_day(_KEPT - 1)
-    assert "already carried by another source" in caplog.text
+    assert {line["reason"] for line in events_of(logged, "take_in.refused")} == {
+        "name_held_by_another_source"
+    }
     assert set(instance.store.removed) == {_A_DECK}
 
     instance.on_day(_KEPT)
@@ -638,17 +671,19 @@ def test_another_source_takes_a_purged_address_and_not_before(
 
 # DK17
 def test_a_re_push_after_another_source_took_the_address_is_skipped(
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     instance = a_name_both_sources_carry(THE_SOURCE, _ANOTHER_SOURCE)
     instance.on_day(_KEPT)
     instance.carries(a_folder(_A_DECK))
-    caplog.clear()
 
-    with caplog.at_level(logging.WARNING):
+    with logged_as_json(capsys) as logged:
         instance.on_day(_KEPT + 1)
 
-    assert "already carried by another source" in caplog.text
+    [refusal] = events_of(logged, "take_in.refused")
+    assert refusal["source_id"] == THE_SOURCE.id
+    assert refusal["reason"] == "name_held_by_another_source"
+    assert refusal["folder_count"] == 1
     assert instance.address_of(_A_DECK) == _ANOTHER_SOURCE.url
 
 
@@ -671,23 +706,18 @@ def test_a_removal_confirmed_before_a_purge_is_stale() -> None:
     assert outcome.current.deck_count == 0
 
 
-def test_a_purge_names_its_source_and_count_in_one_line(
-    caplog: pytest.LogCaptureFixture,
+def test_a_purge_writes_one_line_with_its_source_id_and_deck_count(
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     instance = missed_on_day_zero()
 
-    def said_on(day: int) -> list[str]:
-        caplog.clear()
-        with caplog.at_level(logging.INFO, logger=_RETENTION_LOG):
+    def purges_on(day: int) -> list[LogLine]:
+        with logged_as_json(capsys) as logged:
             instance.on_day(day)
-        return [
-            record.getMessage()
-            for record in caplog.records
-            if record.name == _RETENTION_LOG and record.levelno == logging.INFO
-        ]
+        return events_of(logged, "deck_retention.ended")
 
-    assert said_on(_KEPT - 1) == []
-    (line,) = said_on(_KEPT)
-    assert THE_SOURCE.id in line
-    assert re.search(r"\b1\b", line)
-    assert _A_DECK not in line
+    assert purges_on(_KEPT - 1) == []
+    [purge] = purges_on(_KEPT)
+    assert purge["source_id"] == THE_SOURCE.id
+    assert purge["decks_deleted"] == 1
+    assert purge["level"] == "info"

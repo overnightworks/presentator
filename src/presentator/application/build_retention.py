@@ -22,9 +22,11 @@ from typing import Final
 from presentator.contracts.decks import Build, Deck
 from presentator.ports.decks import BuildRun, BuildRunner, DeckStore, SourceStore
 
-_UNPLACED: Final = "build %s is not a run under the builds root"
-_NOT_LISTED: Final = "the runs on disk could not be listed, nothing is swept"
-_DELETED_ABSENT: Final = "deleted %d decks of source %s missing past their retention"
+_RETENTION_REFUSED: Final = "build_retention.refused"
+_SWEEP_ENDED: Final = "build_sweep.ended"
+_DECK_RETENTION_ENDED: Final = "deck_retention.ended"
+_UNPLACED: Final = "run_not_under_the_builds_root"
+_NOT_LISTED: Final = "runs_not_listed"
 # How long a deck stays after a pass first missed its folder; the privacy
 # section states the same number.
 REMOVED_DECK_KEPT: Final = timedelta(days=30)
@@ -35,6 +37,9 @@ _log = logging.getLogger(__name__)
 def sweep(builder: BuildRunner, sources: SourceStore, store: DeckStore) -> None:
     """Take every run no deck row names off disk; a failed removal is tried next pass.
 
+    A sweep that removed or left a run is one `build_sweep.ended` line with the
+    counts; one that found nothing to take is silent.
+
     Every row of every source counts, because a deck row is only written under a
     source and a source is only removed after its rows.
     """
@@ -44,11 +49,19 @@ def sweep(builder: BuildRunner, sources: SourceStore, store: DeckStore) -> None:
     )
     on_disk = builder.runs()
     if on_disk is None:
-        _log.warning(_NOT_LISTED)
+        _log.info(_RETENTION_REFUSED, extra={"reason": _NOT_LISTED})
     if named is None or on_disk is None:
         return
-    for run in on_disk - named:
-        builder.remove(run)
+    attempts = [builder.remove(run) for run in on_disk - named]
+    if attempts:
+        stayed = sum(1 for left in attempts if left is not None)
+        _log.info(
+            _SWEEP_ENDED,
+            extra={
+                "runs_removed": len(attempts) - stayed,
+                "runs_stayed": stayed,
+            },
+        )
 
 
 def standing_build(builder: BuildRunner, deck: Deck) -> Build | None:
@@ -78,7 +91,10 @@ def delete_absent(
     store.mark_removed_except(present, source_id=source_id, at=at)
     deleted = store.remove_marked_before(source_id, before=at - REMOVED_DECK_KEPT)
     if deleted:
-        _log.info(_DELETED_ABSENT, deleted, source_id)
+        _log.info(
+            _DECK_RETENTION_ENDED,
+            extra={"source_id": source_id, "decks_deleted": deleted},
+        )
 
 
 def builds_removed(
@@ -106,7 +122,7 @@ def _runs_named_by(
         for path in (deck.build.directory, deck.build.pdf):
             run = builder.run_of(path)
             if run is None:
-                _log.warning(_UNPLACED, path)
+                _log.info(_RETENTION_REFUSED, extra={"reason": _UNPLACED})
                 return None
             runs.add(run)
     return frozenset(runs)

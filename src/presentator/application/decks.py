@@ -8,7 +8,7 @@ git, TOML, SQL, and the build toolchain stay outside.
 import hmac
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -71,7 +71,9 @@ from presentator.ports.decks import (
 
 _log = logging.getLogger(__name__)
 
-_REFRESH_TAKEN_OVER: Final = "another process took the refresh over, this one stopped"
+_REFRESH_REFUSED: Final = "refresh.refused"
+_REFRESH_ENDED: Final = "refresh.ended"
+_OWNERSHIP_LOST: Final = "ownership_lost"
 # A source name is one path element of the webhook address, never a path
 # itself: lowercase, digits, hyphens, starting with a letter or digit.
 _SOURCE_NAME: Final = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
@@ -147,6 +149,17 @@ class NewSourceDraft:
 def hash_webhook_secret(secret: str) -> bytes:
     """The only form a webhook secret is stored in: SHA-256, never the value."""
     return sha256(secret.encode()).digest()
+
+
+def _log_refresh(fetches: Sequence[SourceFetch]) -> None:
+    """Write the refresh's one line with its counts, or none where nothing changed."""
+    counts = {
+        "decks_built": sum(fetch.decks_built for fetch in fetches),
+        "builds_failed": sum(fetch.builds_failed for fetch in fetches),
+        "decks_removed": sum(fetch.decks_removed for fetch in fetches),
+    }
+    if any(counts.values()):
+        _log.info(_REFRESH_ENDED, extra={"sources_fetched": len(fetches), **counts})
 
 
 def _credential_of(posted: str, deploy_key: DeployKeyDraft | None) -> str:
@@ -721,7 +734,7 @@ class Decks:
             with self.ownership.fenced():
                 build_retention.sweep(self.builder, self.sources, self.store)
         except RefreshOwnershipLostError:
-            _log.warning(_REFRESH_TAKEN_OVER)
+            _log.info(_REFRESH_REFUSED, extra={"reason": _OWNERSHIP_LOST})
             return busy
         return answer
 
@@ -739,10 +752,14 @@ class Decks:
         """
         self.key_drafts.sweep(older_than=self.clock.now() - DRAFT_MAX_AGE)
         building = True
+        fetches: list[SourceFetch] = []
         for source in self.sources.all():
             if self._polled_recently(source):
                 continue
-            building = self._take_in_and_count(source, building=building).still_building
+            taken_in = self._take_in_and_count(source, building=building)
+            building = taken_in.still_building
+            fetches.append(taken_in.fetch)
+        _log_refresh(fetches)
 
     def _polled_recently(self, source: Source) -> bool:
         """Whether that source's newest run is younger than the poll interval."""
@@ -752,7 +769,11 @@ class Decks:
     def _take_in_and_build_named(self, name: str) -> SourceFetch | None:
         """Take that source in, read again now that nobody can remove it."""
         source = self._named(name)
-        return None if source is None else self._take_in_and_count(source).fetch
+        if source is None:
+            return None
+        fetch = self._take_in_and_count(source).fetch
+        _log_refresh([fetch])
+        return fetch
 
     def _take_in_and_count(self, source: Source, *, building: bool = True) -> TakenIn:
         """Take that source in, build it, count that, say if building goes on."""
