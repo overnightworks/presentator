@@ -75,8 +75,9 @@ _log = logging.getLogger(__name__)
 class AnswerFailure(StrEnum):
     """Why an `answer.ended` line is failed: the closed set of its `reason` codes.
 
-    The hop that failed (the token, the speech call) wrote the error line; this
-    one carries only how the answer ended.
+    The hop that failed (the token, the speech call) wrote its own line, an error
+    line unless it was a busy or cancelled step; this one carries only how the
+    answer ended.
     """
 
     UNAVAILABLE = "unavailable"
