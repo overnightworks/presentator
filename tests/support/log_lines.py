@@ -1,7 +1,7 @@
 """The JSON lines a process writes through logline."""
 
 import json
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from typing import cast
 
@@ -51,7 +51,7 @@ class LoggedText:
 
 
 @contextmanager
-def logged_as_json(capsys: pytest.CaptureFixture[str]) -> Iterator[LoggedText]:
+def logged_as_json(capsys: pytest.CaptureFixture[str]) -> Generator[LoggedText]:
     """Write every log line of the block as logline does, to the test's own output.
 
     A fixture cannot do this: pytest swaps the captured stream between a

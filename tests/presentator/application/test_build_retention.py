@@ -656,9 +656,11 @@ def test_another_source_takes_a_purged_address_and_not_before(
     with logged_as_json(capsys) as logged:
         instance = a_name_both_sources_carry(*order)
         instance.on_day(_KEPT - 1)
-    assert {line["reason"] for line in events_of(logged, "take_in.refused")} == {
-        "name_held_by_another_source"
-    }
+    assert all(
+        line["reason"] == "name_held_by_another_source"
+        for line in events_of(logged, "take_in.refused")
+    )
+    assert events_of(logged, "take_in.refused")
     assert set(instance.store.removed) == {_A_DECK}
 
     instance.on_day(_KEPT)

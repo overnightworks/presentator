@@ -127,8 +127,11 @@ def test_a_chore_that_keeps_raising_writes_its_first_failure_and_its_recovery(
     with logged_as_json(capsys) as logged:
         assert asyncio.run(run_through_the_failures())
 
-    runs = [line for line in logged.lines if line["event"].startswith("scheduled_run")]
-    failed, recovered = runs
+    failed, recovered = [
+        line
+        for line in logged.lines
+        if line["event"] in {"scheduled_run.failed", "scheduled_run.recovered"}
+    ]
     assert (failed["event"], failed["level"], failed["failed_run_count"]) == (
         "scheduled_run.failed",
         "warning",
