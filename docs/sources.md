@@ -43,5 +43,4 @@ about sources stand in [configuration](configuration.md) and the runbook to
   time. A fetch that meets another process's refresh does nothing and answers
   without a run. A removal waits for that refresh as long as a build step may
   take, then fails like any other error, deletes nothing, and a retry removes.
-  A source another process took in within the poll interval waits for the next
-  tick.
+  A source taken in within the poll interval waits for the next tick.

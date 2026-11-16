@@ -74,7 +74,7 @@ some of them.
 | `PRESENTATOR_TRUSTED_PROXIES` | empty | Comma-separated addresses or networks; see below. |
 | `LOG_LEVEL` | `info` | The root log level (`debug`, `info`, `warning`, `error`, `critical`); the request line is written at `info` whatever it says, and anything else refuses the start. |
 | `PRESENTATOR_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/` as the person and `/api/admin/` as an admin; empty serves no route for a token client's token. See [people](people.md). |
-| `PRESENTATOR_SOURCE_POLL_SECONDS` | `300` | Interval of the source poll; a source another process took in within it waits for the next tick. |
+| `PRESENTATOR_SOURCE_POLL_SECONDS` | `300` | Interval of the source poll; a source taken in within it waits for the next tick. |
 | `PRESENTATOR_SOURCE_TIMEOUT_SECONDS` | `180` | Bound of one pull and of one Check connection. |
 | `PRESENTATOR_TOOLCHAIN` | `slidev` | The project carrying Slidev. Read once at start under either runner; a project that cannot be read refuses to start. |
 | `PRESENTATOR_LOBBY_BUILD` | `frontend/build` | The lobby app's `pnpm build` output; an instance without a build it can serve refuses to start. |

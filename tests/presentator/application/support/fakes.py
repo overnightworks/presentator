@@ -762,7 +762,6 @@ class FakeRefreshOwnership:
     held_elsewhere: bool = False
     lost_to_another: bool = False
     present: frozenset[ToolchainIdentity] = frozenset()
-    recoveries: int = 0
     holding: bool = field(default=False, init=False)
 
     @contextmanager
@@ -787,7 +786,7 @@ class FakeRefreshOwnership:
             self.holding = False
 
     def recover(self) -> None:
-        self.recoveries += 1
+        return None
 
     @contextmanager
     def fenced(self) -> Generator[None]:

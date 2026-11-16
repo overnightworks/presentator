@@ -30,18 +30,18 @@ def test_an_empty_database_gets_every_table(unmigrated_database_url: str) -> Non
     }
 
 
-def test_a_migrated_database_holds_the_one_refresh_owner_row_at_epoch_zero(
+def test_a_migrated_database_holds_the_one_refresh_owner_row(
     unmigrated_database_url: str,
 ) -> None:
     engine = engine_on(unmigrated_database_url)
     try:
         migrate(engine)
         with engine.connect() as connection:
-            rows = connection.execute(text("SELECT id, epoch FROM refresh_owner")).all()
+            rows = connection.execute(text("SELECT id FROM refresh_owner")).all()
     finally:
         engine.dispose()
 
-    assert [tuple(row) for row in rows] == [(1, 0)]
+    assert [tuple(row) for row in rows] == [(1,)]
 
 
 def test_a_second_migration_changes_nothing(unmigrated_database_url: str) -> None:

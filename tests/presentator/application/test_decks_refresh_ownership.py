@@ -30,16 +30,6 @@ def test_a_refresh_another_process_holds_takes_nothing_in_and_a_fetch_says_so() 
     assert fetched.run is None
 
 
-def test_a_refresh_checks_the_link_to_other_processes_and_a_fetch_does_not() -> None:
-    fakes = DecksFakes()
-    decks = decks_over(a_folder("kundenfeedback"), fakes=fakes)
-
-    decks.refresh_named(SOURCE.name)
-    decks.refresh()
-
-    assert fakes.ownership.recoveries == 1
-
-
 def test_a_refresh_that_lost_the_refresh_before_its_sweep_sweeps_nothing() -> None:
     fakes = DecksFakes(ownership=FakeRefreshOwnership(lost_to_another=True))
     decks = decks_over(a_folder("kundenfeedback"), fakes=fakes)

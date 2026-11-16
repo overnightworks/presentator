@@ -735,8 +735,7 @@ class Decks:
         A source is taken in and built before the next one is read, so a
         refresh costs its sources' pull bounds one after another instead of
         opening as many pulls at once as the instance has sources. A source
-        whose newest run is younger than the poll interval, taken in by another
-        process, waits for the next one.
+        taken in within the poll interval waits for the next one.
         """
         self.key_drafts.sweep(older_than=self.clock.now() - DRAFT_MAX_AGE)
         building = True
