@@ -137,6 +137,11 @@ from presentator.host.oidc import (
     relying_party,
 )
 from presentator.host.polling import Schedule
+from presentator.host.store_connection import (
+    StoreKind,
+    reach_redis,
+    timed_connection,
+)
 from presentator.host.worker_serving import emergency_end
 from presentator.ports.copresenter import AskLimiter
 from presentator.ports.decks import (
@@ -216,6 +221,7 @@ def build_instance(
     """
     shell = _lobby_shell(settings)
     redis = SharedRedis(settings.redis_url.get_secret_value(), settings.redis_password)
+    reach_redis(redis)
     toolchain = _identity_of_the_toolchain(settings)
     stopping = Stopping()
     stores = _with_redis(_stores(settings, migrations_directory, toolchain), redis)
@@ -328,10 +334,13 @@ def _postgres_stores(
     """
     history = migration_history(migrations_directory)
     engine = create_database_engine(database.url, database.password)
-    refusal = serving_refusal(engine, history)
+    with timed_connection(StoreKind.POSTGRES) as step:
+        refusal = serving_refusal(engine, history)
+        if refusal is not None:
+            step.refuse(refusal.reason)
     if refusal is not None:
         engine.dispose()
-        raise cannot_start(refusal)
+        raise cannot_start(refusal.message)
     toolchain, bound = refresh
     ownership = PostgresRefreshOwnership(
         engine, toolchain=toolchain, lock_timeout=bound
@@ -705,6 +714,7 @@ def main(
     if _command_line().parse_args(arguments).command == MIGRATE_COMMAND:
         _migrate_the_database()
         return
+    _log.info("process.started")
     settings = load_settings()
     asyncio.run(
         _serve(
@@ -750,7 +760,13 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
         # Starlette runs only this router's lifespan, never a `Host` sub-app's, so
         # the lobby's own is entered here.
         async with instance.lobby.router.lifespan_context(instance.lobby):
-            yield
+            _log.info("process.ready")
+            try:
+                yield
+            finally:
+                # uvicorn re-raises the signal that stopped it once serving
+                # returns, so the process ends before any line after `serve`.
+                _log.info("process.stopped")
 
     return RequestLineMiddleware(
         Router(

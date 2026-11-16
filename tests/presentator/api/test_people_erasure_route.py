@@ -1,5 +1,6 @@
 """PE25: `DELETE /api/admin/people/{subject}` takes hal's access token alone."""
 
+import json
 import logging
 from collections.abc import Callable
 from contextlib import nullcontext
@@ -49,9 +50,11 @@ from tests.support.lobby import (
     an_admin_people,
     an_installed_auth,
 )
-from tests.support.log_lines import json_lines
+from tests.support.log_lines import json_lines, json_logged
 
 pytestmark = pytest.mark.usefixtures("redis_environment")
+
+ERASURE_EVENT = "person_erasure.ended"
 
 HAL = "hal-client"
 A_SECOND_CLIENT = "hal-second-client"
@@ -398,25 +401,22 @@ def test_a_leftover_answer_names_no_source_address_deck_or_person(
     assert recognisable not in answer.text
 
 
-def test_a_leftover_writes_one_audit_line_of_kinds_and_counts(
-    caplog: pytest.LogCaptureFixture,
+def test_a_leftover_writes_one_failed_line_of_kinds_and_counts(
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """PE16: the leftover line holds kinds and counts, no path and no name."""
     stuck = FakeDeckFolders(stuck=frozenset({"talks-id"}))
     scene = a_scene(folders=stuck)
-    caplog.set_level(logging.INFO)
 
-    scene.erase()
+    with json_logged(capsys) as logged:
+        scene.erase()
 
-    (line,) = [
-        record.getMessage()
-        for record in caplog.records
-        if record.name == "presentator.api.people"
-    ]
-    assert "left over mirrors=1" in line
-    assert "sessions=1" in line
-    assert "/" not in line
-    assert "talks" not in line
+    (line,) = [one for one in logged.lines if one["event"] == ERASURE_EVENT]
+    assert (line["outcome"], line["reason"]) == ("failed", "disk_leftover")
+    assert line["leftover_mirrors_count"] == 1
+    assert line["sessions_count"] == 1
+    assert "/" not in json.dumps(line)
+    assert "talks" not in json.dumps(line)
 
 
 def test_a_build_no_run_owns_answers_a_plain_500_without_a_leftover() -> None:
@@ -511,28 +511,21 @@ def test_one_call_writes_one_audit_line_naming_nobody(
     subject: str,
     *,
     build_running: bool,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """PE29: one INFO line on the route's logger; neither subject in any record."""
+    """PE29: one line of the erasure event; neither subject in any line."""
     scene = a_scene(lock_wait=timedelta(milliseconds=50))
-    caplog.set_level(logging.DEBUG)
 
-    with scene.instance.decks.one_at_a_time if build_running else nullcontext():
+    building = scene.instance.decks.one_at_a_time if build_running else nullcontext()
+
+    with json_logged(capsys) as logged, building:
         scene.erase(subject, query=query)
 
-    ours = [
-        record for record in caplog.records if record.name == "presentator.api.people"
-    ]
-    assert [record.levelno for record in ours] == [logging.INFO]
-    assert ("would erase" in ours[0].getMessage()) == (query == "?dry_run=true")
-    # The test client logs its own request line; only the server's records count.
-    everything = " ".join(
-        f"{record.getMessage()} {record.args}"
-        for record in caplog.records
-        if not record.name.startswith("httpx2")
-    )
-    assert THE_CALLER not in everything
-    assert subject not in everything
+    (line,) = [one for one in logged.lines if one["event"] == ERASURE_EVENT]
+    assert line["dry_run"] == (query == "?dry_run=true")
+    assert line["outcome"] == ("refused" if build_running else "ok")
+    assert THE_CALLER not in logged.text
+    assert subject not in logged.text
 
 
 @pytest.mark.usefixtures("json_logging")
@@ -549,9 +542,11 @@ def test_the_server_logs_no_request_path(
     )
     server_log.error("the server failed")
 
-    assert [line["event"] for line in json_lines(capsys.readouterr().out)] == [
-        "the server failed"
-    ]
+    assert [
+        line["event"]
+        for line in json_lines(capsys.readouterr().out)
+        if line["logger"] == "uvicorn.error"
+    ] == ["the server failed"]
 
 
 @pytest.mark.parametrize(

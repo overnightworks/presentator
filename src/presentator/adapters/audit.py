@@ -9,19 +9,21 @@ _log = logging.getLogger(__name__)
 
 
 class LoggingAuditSink:
-    """Account events as log lines: the kind, the subject and the roles.
+    """Account events as log lines: the kind, the person (`sub`) and the roles.
 
     The event carries no username and no token, so neither can reach the log.
     """
 
     def account_event(self, event: AccountEvent) -> None:
-        """Write one line per event at INFO."""
+        """Write one `account_event.recorded` line per event at INFO."""
         _log.info(
-            "account event %s: subject %s, role %s, previous role %s",
-            event.kind.value,
-            event.subject_id,
-            event.role,
-            event.previous_role,
+            "account_event.recorded",
+            extra={
+                "kind": event.kind.value,
+                "sub": event.subject_id,
+                "role": event.role,
+                "previous_role": event.previous_role,
+            },
         )
 
 

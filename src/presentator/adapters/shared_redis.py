@@ -125,7 +125,13 @@ class SharedRedis:
         try:
             return bool(self._redis.ping())  # pyright: ignore[reportUnknownMemberType] - redis-py leaves its keyword arguments untyped
         except RedisError as failure:
-            _LOGGER.warning("redis not ready: %s", type(failure).__name__)
+            _LOGGER.warning(
+                "redis_readiness.refused",
+                extra={
+                    "reason": "not_answering",
+                    "error_type": type(failure).__name__,
+                },
+            )
             return False
 
     def close(self) -> None:

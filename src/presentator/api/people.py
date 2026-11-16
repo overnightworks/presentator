@@ -11,14 +11,16 @@ import logging
 import math
 import zipfile
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from http import HTTPStatus
 from typing import Annotated, Final, assert_never
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from logline import StepTimer
 from starlette.responses import Response
 from webauth.middleware.bearer_gate import bearer_caller
 from webauth.ports import BearerCaller
@@ -34,6 +36,7 @@ from presentator.contracts.people import (
     PersonErased,
     PersonErasure,
     PersonExport,
+    Withheld,
 )
 
 ADMIN_PREFIX: Final = "/api/admin/"
@@ -46,7 +49,17 @@ _NOTHING_KEPT: Final = PersonData(
     account=None, sessions=(), preferences=None, key_draft=None, sources=()
 )
 
+_LEFTOVER_PREFIX: Final = "leftover_"
+_WITHHELD_PREFIX: Final = "withheld_"
+
 _log = logging.getLogger(__name__)
+
+
+class ErasureReason(StrEnum):
+    """Why an erasure line is not `ok`: the closed set of its `reason` codes."""
+
+    BUSY = "busy"
+    DISK_LEFTOVER = "disk_leftover"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -114,26 +127,27 @@ def _answer(
             assert_never(outcome)
 
 
-def _tallied(kinds: tuple[KindCount, ...]) -> str:
-    return ", ".join(f"{one.kind.value}={one.count}" for one in kinds) or "nothing"
+def _count_fields(
+    kinds: Iterable[KindCount | Withheld], prefix: str = ""
+) -> dict[str, int]:
+    """One `<kind>_count` field per kind, a name the contract's own enum spells."""
+    return {f"{prefix}{one.kind.name.lower()}_count": one.count for one in kinds}
 
 
-def _audited(outcome: PersonErasure, *, dry_run: bool) -> None:
-    """One line per call: what was asked, how it ended, how many; nobody named."""
-    operation = "dry run" if dry_run else "erase"
+def _audited(step: StepTimer, outcome: PersonErasure) -> None:
+    """What the call's one line carries: how it ended and how many, nobody named."""
     match outcome:
         case PersonErased(kinds=kinds):
-            verb = "would erase" if dry_run else "erased"
-            _log.info("person %s: %s %s", operation, verb, _tallied(kinds))
+            step.add(**_count_fields(kinds))
         case PersonBusy(running=running):
-            _log.info("person %s: busy with %s", operation, _tallied(running))
+            step.add(**_count_fields(running))
+            step.refuse(ErasureReason.BUSY)
         case PersonDiskLeftover(removed=removed, leftovers=leftovers):
-            _log.info(
-                "person %s: left over %s, erased %s",
-                operation,
-                _tallied(_kinds_left(leftovers)),
-                _tallied(removed),
+            step.add(
+                **_count_fields(removed),
+                **_count_fields(_kinds_left(leftovers), _LEFTOVER_PREFIX),
             )
+            step.fail(ErasureReason.DISK_LEFTOVER)
         case _:
             assert_never(outcome)
 
@@ -174,11 +188,6 @@ def _export_archive(
     return archive.getvalue()
 
 
-def _export_audited(export: PersonExport) -> None:
-    held_back = ", ".join(f"{one.kind.value}={one.count}" for one in export.withheld)
-    _log.info("person export: withheld %s", held_back or "nothing")
-
-
 def people_routes(*, admin: AdminPeople, app: str) -> APIRouter:
     """The erase and export routes of the people contract, for the lobby to include."""
     people = admin.people
@@ -196,8 +205,9 @@ def people_routes(*, admin: AdminPeople, app: str) -> APIRouter:
         dry_run: bool = False,
     ) -> Response:
         del caller
-        outcome = people.erase_person(subject, dry_run=dry_run)
-        _audited(outcome, dry_run=dry_run)
+        with StepTimer("person_erasure.ended", _log, dry_run=dry_run) as step:
+            outcome = people.erase_person(subject, dry_run=dry_run)
+            _audited(step, outcome)
         return _answer(
             outcome,
             app=app,
@@ -215,8 +225,9 @@ def people_routes(*, admin: AdminPeople, app: str) -> APIRouter:
         caller: Annotated[BearerCaller, Depends(bearer_caller)],
     ) -> Response:
         del caller
-        export = people.export_person(subject)
-        _export_audited(export)
+        with StepTimer("person_export.ended", _log) as step:
+            export = people.export_person(subject)
+            step.add(**_count_fields(export.withheld, _WITHHELD_PREFIX))
         archive = _export_archive(export, app=app, subject=subject, now=admin.clock())
         return Response(
             archive,

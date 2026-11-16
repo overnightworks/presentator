@@ -6,7 +6,6 @@ the sessions are the real SQLite stores on a temporary file.
 
 import base64
 import json
-import logging
 import sqlite3
 import threading
 from collections.abc import Callable
@@ -37,7 +36,7 @@ from tests.support.lobby import (
     a_settings,
 )
 from tests.support.lobby_reads import signed_in_username
-from tests.support.log_lines import json_lines
+from tests.support.log_lines import json_lines, json_logged
 from tests.support.sign_in_support import (
     ADMIN,
     MEMBER,
@@ -495,12 +494,12 @@ def test_a_username_another_account_holds_writes_nothing_and_closes_the_transact
     assert scene.users.get("subject-2") is not None
 
 
-def test_the_audit_sink_logs_the_event_the_subject_and_the_roles_at_info(
-    caplog: pytest.LogCaptureFixture,
+def test_the_audit_sink_logs_the_event_the_person_and_the_roles_at_info(
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     sink: AuditSink = LoggingAuditSink()
 
-    with caplog.at_level(logging.INFO):
+    with json_logged(capsys) as logged:
         sink.account_event(
             AccountEvent(
                 kind=AccountEventKind.ROLE_CHANGED,
@@ -511,10 +510,13 @@ def test_the_audit_sink_logs_the_event_the_subject_and_the_roles_at_info(
             )
         )
 
-    (record,) = caplog.records
-    assert record.levelno == logging.INFO
-    for fact in ("role_changed", "subject-1", "admin", "user"):
-        assert fact in record.getMessage()
+    (line,) = logged.lines
+    assert line["event"] == "account_event.recorded"
+    assert line["level"] == "info"
+    assert line["kind"] == AccountEventKind.ROLE_CHANGED.value
+    assert line["sub"] == "subject-1"
+    assert "subject_id" not in line
+    assert (line["role"], line["previous_role"]) == ("admin", "user")
 
 
 @pytest.mark.usefixtures("json_logging")
@@ -549,7 +551,7 @@ def test_an_audit_record_reaches_stdout_as_json_after_the_hosts_logging_setup(
     (audit,) = [
         line
         for line in json_lines(capsys.readouterr().out)
-        if "user_created" in str(line["event"])
+        if line["event"] == "account_event.recorded"
     ]
     assert audit["service"] == "presentator"
     assert audit["level"] == "info"
