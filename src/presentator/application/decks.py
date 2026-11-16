@@ -21,6 +21,7 @@ from typing import BinaryIO, Final
 
 from presentator.application import build_retention
 from presentator.application.deck_builds import DeckBuilds, TakenIn
+from presentator.application.deck_take_in import take_in
 from presentator.application.source_state import (
     SHORT_COMMIT,
     deck_state_of,
@@ -28,12 +29,10 @@ from presentator.application.source_state import (
     source_state_of,
 )
 from presentator.contracts.decks import (
-    SLIDES_FILE,
     AccessKind,
     BuildAttempt,
     ConnectionCheckResult,
     Deck,
-    DeckFolder,
     DeckPage,
     DeployKeyDraft,
     ListedDeck,
@@ -72,11 +71,7 @@ from presentator.ports.decks import (
 
 _log = logging.getLogger(__name__)
 
-_NOT_A_FOLDERS_OWN_NAME: Final = "folder %r is not a folder's own name, skipped"
 _REFRESH_TAKEN_OVER: Final = "another process took the refresh over, this one stopped"
-_NAME_BELONGS_TO_ANOTHER_SOURCE: Final = (
-    "folder %r is already carried by another source, skipped for source %s"
-)
 # A source name is one path element of the webhook address, never a path
 # itself: lowercase, digits, hyphens, starting with a letter or digit.
 _SOURCE_NAME: Final = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
@@ -764,7 +759,7 @@ class Decks:
         poll = self.folders.folders(source)
         run = self._record_run(source, poll, at)
         if poll.folders is not None:
-            self._take_in(source, poll.folders, at)
+            take_in(self.store, source, poll.folders, at)
         walk = self.builds.build_what_changed(source, building=building)
         fetch = SourceFetch(
             run=shown_run(run),
@@ -795,42 +790,3 @@ class Decks:
         )
         self.source_runs.record(run)
         return run
-
-    def _take_in(
-        self, source: Source, folders: tuple[DeckFolder, ...], at: datetime
-    ) -> None:
-        """Store every folder that carries both a manifest and slides.
-
-        The folder name becomes the slug, so a changed title reaches no address.
-        A folder whose name is not a folder's own name — such as `..`, planted as a git
-        tree entry — is skipped here rather than stored, so it is never a path
-        component. A folder the source has stopped carrying is marked as removed, and
-        its deck deleted once the folder has been missing for `REMOVED_DECK_KEPT`; a
-        folder that comes back under its old name before then loses that mark, so it is
-        the deck it was. A folder whose name another source already carries is skipped
-        too: the slug is one deck's address here, and the first source keeps it.
-        """
-        for folder in folders:
-            if not is_a_plain_folder_name(folder.name):
-                _log.warning(_NOT_A_FOLDERS_OWN_NAME, folder.name)
-                continue
-            if folder.title is None or SLIDES_FILE not in folder.file_names:
-                continue
-            taken_in = self.store.put(
-                Deck(
-                    slug=folder.name,
-                    title=folder.title,
-                    changed_at=folder.changed_at,
-                    owner_id=source.owner_id,
-                    source_id=source.id,
-                    commit=folder.commit,
-                    build=None,
-                    attempt=None,
-                ),
-            )
-            if not taken_in:
-                _log.warning(_NAME_BELONGS_TO_ANOTHER_SOURCE, folder.name, source.name)
-        present = frozenset(folder.name for folder in folders)
-        build_retention.delete_absent(
-            self.store, present=present, source_id=source.id, at=at
-        )

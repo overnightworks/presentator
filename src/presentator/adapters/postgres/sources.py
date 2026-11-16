@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from gitmirror.model import CredentialReference
 from presentator.adapters.decks import stored_source, written_source
 from presentator.adapters.postgres.key_drafts import locked_owned_draft, remove_in
-from presentator.adapters.postgres.refresh_owner import RefreshFence
+from presentator.adapters.postgres.refresh_owner import RefreshFence, fenced_write
 from presentator.adapters.secrets import DeployKeyPair, SecretBox, generate_deploy_key
 from presentator.contracts.decks import Source, SourceWrite
 from presentator.ports.identity import IdentifierFactory
@@ -159,9 +159,7 @@ class PostgresSourceStore:
 
     def remove(self, source_id: str) -> None:
         """Delete that source's own row."""
-        with self.engine.begin() as connection:
-            self.fence.check(connection)
-            connection.execute(_REMOVE_SOURCE, {"source_id": source_id})
+        fenced_write(self.engine, self.fence, _REMOVE_SOURCE, {"source_id": source_id})
 
     def _parameters(
         self,

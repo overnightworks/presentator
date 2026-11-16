@@ -21,7 +21,7 @@ from presentator.adapters.postgres.locks import (
     hold_until_transaction_ends,
     lock_of,
 )
-from presentator.adapters.postgres.refresh_owner import RefreshFence
+from presentator.adapters.postgres.refresh_owner import RefreshFence, fenced_write
 from presentator.contracts.decks import Build, BuildAttempt, Deck
 
 # A slug already written by another source stays that source's: the conflict
@@ -93,57 +93,57 @@ class PostgresDeckStore:
 
     def put(self, deck: Deck) -> bool:
         """Write the deck under its slug unless another source already carries it."""
-        with self.engine.begin() as connection:
-            self.fence.check(connection)
-            written = connection.execute(
-                _PUT_DECK,
-                {
-                    "slug": deck.slug,
-                    "title": deck.title,
-                    "changed_at": deck.changed_at,
-                    "owner_id": deck.owner_id,
-                    "source_id": deck.source_id,
-                    "commit_sha": deck.commit,
-                },
-            )
-        return written.rowcount == _ONE_ROW
+        written = fenced_write(
+            self.engine,
+            self.fence,
+            _PUT_DECK,
+            {
+                "slug": deck.slug,
+                "title": deck.title,
+                "changed_at": deck.changed_at,
+                "owner_id": deck.owner_id,
+                "source_id": deck.source_id,
+                "commit_sha": deck.commit,
+            },
+        )
+        return written == _ONE_ROW
 
     def put_build(self, slug: str, build: Build) -> None:
         """Switch everything the deck says about its talk over, in one write."""
-        with self.engine.begin() as connection:
-            self.fence.check(connection)
-            connection.execute(
-                _PUT_BUILD,
-                {
-                    "directory": str(build.directory),
-                    "pdf": str(build.pdf),
-                    "commit_sha": build.commit,
-                    "built_at": build.built_at,
-                    "toolchain": toolchain_column(build.commit, build.toolchain),
-                    "slug": slug,
-                },
-            )
+        fenced_write(
+            self.engine,
+            self.fence,
+            _PUT_BUILD,
+            {
+                "directory": str(build.directory),
+                "pdf": str(build.pdf),
+                "commit_sha": build.commit,
+                "built_at": build.built_at,
+                "toolchain": toolchain_column(build.commit, build.toolchain),
+                "slug": slug,
+            },
+        )
 
     def put_attempt(self, slug: str, attempt: BuildAttempt | None) -> None:
         """Write down the build this deck last started, and how far it got."""
         columns = attempt_columns(attempt)
-        with self.engine.begin() as connection:
-            self.fence.check(connection)
-            connection.execute(
-                _PUT_ATTEMPT,
-                {
-                    "commit": columns.commit,
-                    "started_at": columns.started_at,
-                    "outcome": columns.outcome,
-                    "failure_text": columns.failure_text,
-                    "reason": columns.reason,
-                    "written_megabytes": columns.written_megabytes,
-                    "allowed_megabytes": columns.allowed_megabytes,
-                    "allowed_entries": columns.allowed_entries,
-                    "toolchain": columns.toolchain,
-                    "slug": slug,
-                },
-            )
+        fenced_write(
+            self.engine,
+            self.fence,
+            _PUT_ATTEMPT,
+            {
+                "commit": columns.commit,
+                "started_at": columns.started_at,
+                "outcome": columns.outcome,
+                "failure_text": columns.failure_text,
+                "reason": columns.reason,
+                "written_megabytes": columns.written_megabytes,
+                "allowed_megabytes": columns.allowed_megabytes,
+                "allowed_entries": columns.allowed_entries,
+                "toolchain": columns.toolchain,
+                "slug": slug,
+            },
+        )
 
     def get(self, slug: str) -> Deck | None:
         """Read the one deck row that slug names, while its folder is still there."""
@@ -175,12 +175,12 @@ class PostgresDeckStore:
 
     def remove_marked_before(self, source_id: str, *, before: datetime) -> int:
         """Delete that source's decks marked removed at or before `before`."""
-        with self.engine.begin() as connection:
-            self.fence.check(connection)
-            removed = connection.execute(
-                _REMOVE_MARKED_BEFORE, {"source_id": source_id, "before": before}
-            )
-        return removed.rowcount
+        return fenced_write(
+            self.engine,
+            self.fence,
+            _REMOVE_MARKED_BEFORE,
+            {"source_id": source_id, "before": before},
+        )
 
     def all(self) -> tuple[Deck, ...]:
         """Read every deck row whose folder is still at its source."""
@@ -192,9 +192,9 @@ class PostgresDeckStore:
 
     def remove_for_source(self, source_id: str) -> None:
         """Delete every deck row this source has ever carried, marked removed or not."""
-        with self.engine.begin() as connection:
-            self.fence.check(connection)
-            connection.execute(_REMOVE_DECKS_OF_SOURCE, {"source_id": source_id})
+        fenced_write(
+            self.engine, self.fence, _REMOVE_DECKS_OF_SOURCE, {"source_id": source_id}
+        )
 
     def _read(
         self, statement: TextClause, parameters: Mapping[str, str]

@@ -22,7 +22,6 @@ import uvicorn
 from fastapi import FastAPI
 from logline import RequestLineMiddleware
 from pydantic import SecretStr
-from sqlalchemy import Engine
 from starlette.routing import Host, Route, Router
 from webauth.config import SessionLifetime, WebAuthConfig
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
@@ -245,18 +244,15 @@ def build_instance(
 def _with_redis(stores: Stores, redis: SharedRedis) -> Stores:
     """The stores, ready only while Redis answers too and closed with its client."""
     database_ready = stores.readiness
-    database_close = stores.close
 
     def ready() -> bool:
         return database_ready() and redis.is_ready()
 
-    def close() -> None:
-        try:
-            database_close()
-        finally:
-            redis.close()
-
-    return copy.replace(stores, readiness=ready, close=close)
+    return copy.replace(
+        stores,
+        readiness=ready,
+        close=partial(_closed_in_turn, stores.close, redis.close),
+    )
 
 
 def _stores(
@@ -343,16 +339,16 @@ def _postgres_stores(
         instance_settings=PostgresInstanceSettingsStore(engine),
         person_preferences=PostgresPersonPreferencesStore(engine),
         readiness=partial(database_is_ready, engine, history),
-        close=partial(_close_postgres, ownership, engine),
+        close=partial(_closed_in_turn, ownership.close, engine.dispose),
     )
 
 
-def _close_postgres(ownership: PostgresRefreshOwnership, engine: Engine) -> None:
-    """End the pinned connection, then the engine's pool."""
+def _closed_in_turn(first: Callable[[], None], then: Callable[[], None]) -> None:
+    """Close the first, and the then even where the first fails."""
     try:
-        ownership.close()
+        first()
     finally:
-        engine.dispose()
+        then()
 
 
 def _poller(settings: Settings, decks: Decks) -> Schedule:

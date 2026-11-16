@@ -61,6 +61,18 @@ class RefreshFence(Protocol):
         """Refuse with `RefreshOwnershipLostError` unless the holder still holds."""
 
 
+def fenced_write(
+    engine: Engine,
+    fence: RefreshFence,
+    statement: TextClause,
+    arguments: Mapping[str, object],
+) -> int:
+    """Run one write of the holder in a transaction of its own; the rows it touched."""
+    with engine.begin() as connection:
+        fence.check(connection)
+        return connection.execute(statement, arguments).rowcount
+
+
 def _waited_too_long(failure: DBAPIError) -> bool:
     return isinstance(failure.orig, LockNotAvailable)
 

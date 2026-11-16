@@ -13,7 +13,7 @@ from presentator.adapters.postgres.locks import (
     hold_until_transaction_ends,
     lock_of,
 )
-from presentator.adapters.postgres.refresh_owner import RefreshFence
+from presentator.adapters.postgres.refresh_owner import RefreshFence, fenced_write
 from presentator.contracts.decks import RECENT_SOURCE_RUNS, SourceRun
 
 _RECORD_RUN: Final = text(
@@ -82,9 +82,7 @@ class PostgresSourceRunStore:
 
     def remove_for_source(self, source_id: str) -> None:
         """Delete every run this source has ever recorded."""
-        with self.engine.begin() as connection:
-            self.fence.check(connection)
-            connection.execute(_REMOVE_RUNS, {"source_id": source_id})
+        fenced_write(self.engine, self.fence, _REMOVE_RUNS, {"source_id": source_id})
 
     def _newest_first(self, source_id: str, count: int) -> tuple[SourceRun, ...]:
         with self.engine.connect() as connection:
