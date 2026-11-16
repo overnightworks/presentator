@@ -43,6 +43,16 @@ def _an_unknown_agent_backend(environment: pytest.MonkeyPatch, directory: Path) 
     return unknown
 
 
+def _an_issuer_the_sign_in_client_refuses(
+    environment: pytest.MonkeyPatch, directory: Path
+) -> str:
+    del directory
+    # The settings take the host; the client refuses it as no plain host.
+    issuer = "https://sign_in.presentator.test/realms/refused"
+    environment.setenv("PRESENTATOR_OIDC_ISSUER", issuer)
+    return issuer
+
+
 def _no_key_file(environment: pytest.MonkeyPatch, directory: Path) -> str:
     environment.delenv("PRESENTATOR_SECRET_KEY_FILE")
     return str(directory)
@@ -61,6 +71,13 @@ def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
         ([], _unreadable_password_file, "PRESENTATOR_DATABASE_PASSWORD_FILE"),
         ([], _no_key_file, "PRESENTATOR_SECRET_KEY_FILE"),
         ([], _an_unknown_agent_backend, "PRESENTATOR_AGENT__BACKEND"),
+        (
+            [],
+            _an_issuer_the_sign_in_client_refuses,
+            "PRESENTATOR_OIDC_ISSUER,PRESENTATOR_OIDC_CLIENT_ID,"
+            "PRESENTATOR_OIDC_CLIENT_SECRET_FILE,PRESENTATOR_SPEECH_SERVICE_SCOPE,"
+            "PRESENTATOR_PUBLIC_ORIGIN,PRESENTATOR_TALK_ORIGIN",
+        ),
         (
             ["migrate"],
             _no_database,

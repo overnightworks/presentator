@@ -10,7 +10,12 @@ from webauth.oidc import OidcClientConfig, OidcRelyingParty
 from webauth.oidc_transport import post_token_request_over_https
 
 from presentator.api.auth import LOGIN_PATH, SIGN_IN_CALLBACK_PATH
-from presentator.host.config import Settings, cannot_start, read_secret_file
+from presentator.host.config import (
+    Settings,
+    cannot_start,
+    read_secret_file,
+    variable_of,
+)
 
 _PROTOCOL_PATH: Final = "protocol/openid-connect"
 _PERSON_SCOPES: Final = ("openid", "profile", "groups")
@@ -19,6 +24,16 @@ _CLOCK_LEEWAY_SECONDS: Final = 30
 # product's, not a deployment's.
 _LOGIN_GROUP: Final = "/apps/presentator"
 _ADMIN_GROUP: Final = "/apps/presentator/admin"
+# The settings a client configuration is built from; the lobby's and the talk
+# host's clients differ only in their origin.
+_CLIENT_FIELDS: Final = (
+    "oidc_issuer",
+    "oidc_client_id",
+    "oidc_client_secret_file",
+    "speech_service_scope",
+    "public_origin",
+    "talk_origin",
+)
 
 
 def oidc_client_config(
@@ -47,7 +62,8 @@ def oidc_client_config(
     except ValueError as refused:
         # webauth's reasons name a field, never its value.
         message = f"the sign-in client configuration: {refused}"
-        raise cannot_start(message) from None
+        variables = tuple(variable_of(field) for field in _CLIENT_FIELDS)
+        raise cannot_start(message, variables=variables) from None
 
 
 def relying_party(config: OidcClientConfig) -> OidcRelyingParty:
