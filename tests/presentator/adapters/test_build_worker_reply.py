@@ -63,6 +63,7 @@ def exchanged_with(
         ours.close()
         theirs.close()
 
+
 REFUSED = ("refused", None, "info")
 FAILED = ("failed", "toolchain_failed", "warning")
 
