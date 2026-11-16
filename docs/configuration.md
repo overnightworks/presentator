@@ -51,8 +51,9 @@ ends at the newest revision. A database whose revision this release does not
 know was migrated by a newer release: `migrate` leaves it as it is and exits 0,
 and serving works on it. Serving from Postgres refuses a database with no
 revision row and one behind this release's head, and `GET /health` answers 503
-while the database does not answer or fails that rule; from the SQLite file it
-always answers 200. The refusals and the log name the kind of failure and never
+while the database does not answer or fails that rule; from the SQLite file the
+database never makes it unready. With either database it answers 503 while Redis
+does not answer. The refusals and the log name the kind of failure and never
 the URL or the password.
 The tests find their server in `PRESENTATOR_TEST_POSTGRES_URL`, a URL of a
 server whose user may create databases; every test creates one of its own.
