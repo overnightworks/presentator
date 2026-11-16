@@ -784,8 +784,10 @@ async def _serve(instance: Instance, settings: Settings) -> None:
             ws="wsproto",
             # logline's configure owns uvicorn's loggers, the request line
             # replaces its access log, and the rejected WebSocket handshake
-            # records that carry a path stay out of the log.
+            # records that carry a path stay out of the log. uvicorn's own
+            # info lines are free text, so only its warnings reach the log.
             log_config=None,
+            log_level=logging.WARNING,
         ),
         instance.stopping,
     )

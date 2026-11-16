@@ -10,7 +10,12 @@ from pydantic import SecretStr
 from presentator.adapters.shared_redis import SharedRedis
 from presentator.host.store_connection import reach_redis
 from tests.presentator.host.support.app_processes import App, serving_apps
-from tests.support.log_lines import LogLine, json_lines_among, json_logged
+from tests.support.log_lines import (
+    LogLine,
+    json_lines,
+    json_lines_among,
+    json_logged,
+)
 from tests.support.redis import NOTHING_LISTENS_HERE
 
 _LIFECYCLE = {
@@ -53,6 +58,15 @@ def test_a_served_process_writes_start_one_line_per_store_ready_and_stop(
     for line in stores.values():
         assert line["outcome"] == "ok"
         assert isinstance(line["duration_ms"], int | float)
+
+
+def test_a_served_process_writes_only_json_and_no_free_text_line_of_uvicorn(
+    app: App,
+) -> None:
+    app.process.send_signal(signal.SIGTERM)
+    lines = json_lines(app.output_after_exit())
+
+    assert not [one for one in lines if str(one["logger"]).startswith("uvicorn")]
 
 
 def test_no_line_of_a_served_process_carries_a_store_address(app: App) -> None:
