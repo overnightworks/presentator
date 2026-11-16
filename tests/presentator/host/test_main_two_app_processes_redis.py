@@ -2,6 +2,7 @@
 
 from http import HTTPStatus
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -62,3 +63,24 @@ def test_both_processes_refuse_a_sign_in_visibly_while_redis_cannot_be_reached(
     assert [each.status_code for each in refused] == [
         HTTPStatus.SERVICE_UNAVAILABLE
     ] * 2
+
+
+@pytest.mark.usefixtures("environment")
+def test_no_log_line_of_either_process_quotes_the_redis_url_through_an_outage(
+    database_url: str, redis_url: str, tmp_path: Path
+) -> None:
+    with (
+        relay_in_front_of(redis_url) as redis,
+        serving_apps(
+            database_url, tmp_path, {"PRESENTATOR_REDIS_URL": redis.url}
+        ) as apps,
+    ):
+        authority = urlsplit(redis.url).netloc
+        redis.sever()
+        for app in apps:
+            Browser().request(app, "GET", HEALTH_PATH)
+            Browser().request(app, "GET", START_SIGN_IN_PATH)
+    written = [app.output_after_exit() for app in apps]
+
+    assert all('"event"' in output for output in written)
+    assert not [output for output in written if authority in output]

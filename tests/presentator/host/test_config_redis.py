@@ -1,5 +1,8 @@
 """The Redis setting: a URL without credentials, and one the log never quotes."""
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -97,3 +100,28 @@ def test_a_url_that_cannot_name_the_redis_refuses_without_quoting_it(
     environment.setenv(_URL, refused)
 
     assert_refusal_never_quotes(load_settings, _A_PASSWORD, refused)
+
+
+def test_a_refused_start_writes_neither_the_url_nor_its_password_anywhere(
+    environment: pytest.MonkeyPatch,
+) -> None:
+    environment.setenv(_URL, f"redis://user:{_A_PASSWORD}@redis:6379/0")
+    settings = {
+        name: value
+        for name, value in os.environ.items()
+        if name.startswith("PRESENTATOR_") and not name.startswith("PRESENTATOR_TEST_")
+    }
+
+    started = subprocess.run(  # noqa: S603 - the interpreter of this run
+        [str(Path(sys.executable).parent / "presentator")],
+        env={"PATH": os.environ["PATH"], **settings},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    assert started.returncode != 0
+    assert "redis_url" in started.stdout + started.stderr
+    assert _A_PASSWORD not in started.stdout + started.stderr
+    assert "redis:6379" not in started.stdout + started.stderr
