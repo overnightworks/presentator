@@ -10,9 +10,10 @@ from collections.abc import (
     AsyncIterator,
     Awaitable,
     Callable,
+    Generator,
     Iterable,
 )
-from contextlib import AsyncExitStack, suppress
+from contextlib import AsyncExitStack, contextmanager, suppress
 from dataclasses import dataclass
 from enum import StrEnum
 from http import HTTPStatus
@@ -266,16 +267,23 @@ async def _admitted(
     begun: _Begun,
 ) -> _Ask | Response:
     """Admit the question off the event loop, ending its line if admission breaks."""
-    try:
+    with _ended_if_it_breaks(begun.step):
         return await run_in_threadpool(
             _admit, surface, admission, request, question, begun
         )
+
+
+@contextmanager
+def _ended_if_it_breaks(step: StepTimer) -> Generator[None]:
+    """End an answer's line when what runs inside raises or is cancelled."""
+    try:
+        yield
     except Exception:
-        begun.step.fail(AnswerFailure.UNEXPECTED)
-        begun.step.end()
+        step.fail(AnswerFailure.UNEXPECTED)
+        step.end()
         raise
     except BaseException:
-        begun.step.end_cancelled()
+        step.end_cancelled()
         raise
 
 
@@ -292,29 +300,22 @@ def _ask_route(
             return admitted
         streaming = False
         try:
-            prepared = await _prepare(surface.use, admitted)
-            if isinstance(prepared, Response):
-                return _answer_ended_with(admitted.step, prepared)
-            response = StreamingResponse(
-                _answer_events(
-                    request,
-                    ask=admitted,
-                    prepared=prepared,
-                    use=surface.use,
-                    guard=guard,
-                ),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-                background=BackgroundTask(admitted.ticket.release),
-            )
-        except Exception:
-            admitted.step.fail(AnswerFailure.UNEXPECTED)
-            admitted.step.end()
-            raise
-        except BaseException:
-            admitted.step.end_cancelled()
-            raise
-        else:
+            with _ended_if_it_breaks(admitted.step):
+                prepared = await _prepare(surface.use, admitted)
+                if isinstance(prepared, Response):
+                    return _answer_ended_with(admitted.step, prepared)
+                response = StreamingResponse(
+                    _answer_events(
+                        request,
+                        ask=admitted,
+                        prepared=prepared,
+                        use=surface.use,
+                        guard=guard,
+                    ),
+                    media_type="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                    background=BackgroundTask(admitted.ticket.release),
+                )
             streaming = True
             return response
         finally:
