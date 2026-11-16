@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import re
 import sqlite3
+from concurrent.futures import CancelledError
 from contextlib import closing
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -42,8 +42,11 @@ from tests.support.copresenter_support import (
     THE_ASKED_DECK,
     TWO_SENTENCES,
     Gateway,
+    RecordingLimiter,
     Run,
     Scenario,
+    a_copresenter_talk_host,
+    ask,
     ask_as_asked,
     delete_the_sessions,
     drive,
@@ -69,9 +72,7 @@ if TYPE_CHECKING:
 
     from tests.support.git_remote import GitRemote
 from tests.support.leak_support import everything_shown
-
-FIRST_AUDIO: Final = "presentator.application.copresenter"
-
+from tests.support.log_lines import json_logged
 
 A_PUSH: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
 ASKED_MARKER: Final = "asked-deck-MARKER"
@@ -80,9 +81,7 @@ LATER_MARKER: Final = "later-commit-MARKER"
 THE_ASKED: Final = "kern"
 
 
-def the_asked_decks_words_at_its_built_commit(
-    tmp_path: Path, remote: GitRemote, caplog: pytest.LogCaptureFixture
-) -> Run:
+def the_asked_decks_words_at_its_built_commit(tmp_path: Path, remote: GitRemote) -> Run:
     """A repository of two decks, the asked one built before it was edited."""
     remote.commit(
         {
@@ -127,7 +126,6 @@ def the_asked_decks_words_at_its_built_commit(
             ),
         )
 
-    caplog.set_level(logging.INFO, logger=FIRST_AUDIO)
     scenario = Scenario(
         texts=MirroredDeckTexts(mirrors=mirrors_under(tmp_path)),
         sources=[source],
@@ -138,10 +136,11 @@ def the_asked_decks_words_at_its_built_commit(
 
 
 def test_a_signed_in_admins_ask_reaches_the_gateway_with_only_that_decks_words(
-    tmp_path: Path, remote: GitRemote, caplog: pytest.LogCaptureFixture
+    tmp_path: Path, remote: GitRemote, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """CP1: the deck's words at its built commit, the key as bearer, one text."""
-    run = the_asked_decks_words_at_its_built_commit(tmp_path, remote, caplog)
+    with json_logged(capsys) as logged:
+        run = the_asked_decks_words_at_its_built_commit(tmp_path, remote)
 
     (request,) = run.gateway.requests
     sent = json.dumps(json.loads(request.content)["messages"])
@@ -151,8 +150,9 @@ def test_a_signed_in_admins_ask_reaches_the_gateway_with_only_that_decks_words(
     assert LATER_MARKER not in sent
     assert run.response.status_code == HTTPStatus.OK
     assert run.events == ["text", "sentence", "audio", "sentence", "audio", "done"]
-    (line,) = [r.getMessage() for r in caplog.records if r.name == FIRST_AUDIO]
-    assert re.fullmatch(r"co-presenter first audio: ms=\d+", line)
+    (line,) = [one for one in logged.lines if one["event"] == "answer.ended"]
+    assert line["outcome"] == "ok"
+    assert isinstance(line["first_output_ms"], float)
     assert the_ticket_was_released(run)
 
 
@@ -511,3 +511,34 @@ def _payloads_by_event(stream: str) -> dict[str, list[dict[str, object]]]:
     for name, data in re.findall(r"^event: (\w+)\ndata: (.*)$", stream, re.MULTILINE):
         by_event.setdefault(name, []).append(json.loads(data))
     return by_event
+
+
+@pytest.mark.parametrize(
+    ("raised", "surfaced", "outcome", "reason"),
+    [
+        (asyncio.CancelledError(), CancelledError, "cancelled", None),
+        (RuntimeError("broken"), RuntimeError, "failed", "unexpected"),
+    ],
+    ids=["cancelled", "unexpected"],
+)
+def test_an_ask_that_breaks_while_it_is_prepared_still_writes_its_answer_line(
+    raised: BaseException,
+    surfaced: type[BaseException],
+    outcome: str,
+    reason: str | None,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    limiter = RecordingLimiter()
+    talk, private, _clock = a_copresenter_talk_host(limiter=limiter)
+    private.person_access.raises = raised
+    talk.sign_in()
+
+    with json_logged(capsys) as logged, pytest.raises(surfaced):
+        ask(talk.client)
+
+    (line,) = [one for one in logged.lines if one["event"] == "answer.ended"]
+    assert line["outcome"] == outcome
+    assert line.get("reason") == reason
+    (session_id,) = set(limiter.session_ids)
+    ticket = limiter.admit(session_id)
+    assert not isinstance(ticket, RetryAfter)

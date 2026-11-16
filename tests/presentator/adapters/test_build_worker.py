@@ -1,7 +1,6 @@
 """The web's client of the build worker, against a fake worker on a real socket."""
 
 import errno
-import logging
 import os
 import socket
 import time
@@ -40,6 +39,7 @@ from tests.presentator.adapters.support.build_worker_support import (
     Seen,
     a_step,
     answering,
+    ended_line,
     fake_worker,
     proven,
     staging_of,
@@ -47,6 +47,7 @@ from tests.presentator.adapters.support.build_worker_support import (
     tree_of,
 )
 from tests.support import worker_support as support
+from tests.support.log_lines import json_logged
 
 PROMPTLY = 10
 UNAVAILABLE = ToolchainUnavailable()
@@ -149,35 +150,37 @@ def a_peer_without_the_key() -> Script:
 def test_a_step_the_worker_never_answered_is_unavailable_and_names_the_fault(
     volume: Path,
     tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
     script: Script | None,
     fault: Fault,
 ) -> None:
     """Nothing before the STATUS says anything about a deck."""
     step = a_step(tmp_path)
 
-    with caplog.at_level(logging.WARNING):
+    with json_logged(capsys) as logged:
         if script is None:
             result = toolchain(volume).ran(step)
         else:
             with fake_worker(volume, script, accepts=50):
                 result = toolchain(volume).ran(step)
+        line = ended_line(step, logged)
 
     assert result == UNAVAILABLE
-    assert fault.value in caplog.text
+    assert (line["outcome"], line["reason"]) == ("failed", fault.value)
 
 
 def test_a_worker_closing_after_the_status_is_logged_as_the_connection_ending(
-    volume: Path, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    volume: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    step = a_step(tmp_path)
     with (
-        caplog.at_level(logging.WARNING),
+        json_logged(capsys) as logged,
         fake_worker(volume, answering(nothing_to_reply), accepts=1),
     ):
-        toolchain(volume).ran(a_step(tmp_path))
+        toolchain(volume).ran(step)
+        line = ended_line(step, logged)
 
-    assert Fault.CONNECTION.value in caplog.text
-    assert Fault.REPLY_GRAMMAR.value not in caplog.text
+    assert (line["outcome"], line["reason"]) == ("failed", Fault.CONNECTION.value)
 
 
 def test_a_peer_that_cannot_prove_the_key_is_refused_without_a_retry_or_a_byte(
@@ -324,17 +327,28 @@ def a_deck_with_a_deep_path(deck: Path) -> None:
     ],
 )
 def test_a_deck_over_a_limit_or_breaking_a_rule_says_so_and_connects_to_nothing(
-    volume: Path, tmp_path: Path, make: Callable[[Path], None], failure: BuildFailure
+    volume: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    make: Callable[[Path], None],
+    failure: BuildFailure,
 ) -> None:
     """Cell B10: no socket exists, so a connect would have retried until W."""
     step = a_step(tmp_path)
     make(step.place.here / DECK_DIRECTORY)
     started = time.monotonic()
 
-    result = toolchain(volume, connect_window_seconds=30.0).ran(step)
+    with json_logged(capsys) as logged:
+        result = toolchain(volume, connect_window_seconds=30.0).ran(step)
+        line = ended_line(step, logged)
 
     assert result == failure
     assert time.monotonic() - started < PROMPTLY
+    assert (line["outcome"], line["reason"], line["level"]) == (
+        "refused",
+        failure.reason.value,
+        "info",
+    )
 
 
 def test_a_deck_that_cannot_be_walked_fails_without_a_reason(

@@ -1,10 +1,8 @@
 """Lifetime ownership for private co-presenter operations."""
 
 import asyncio
-import logging
-import time
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
-from contextlib import aclosing, asynccontextmanager
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 from presentator.application.copresenter_prompt import user_message
@@ -19,7 +17,6 @@ from presentator.contracts.copresenter import (
     AnswerEvent,
     AskedDeck,
     AskingPerson,
-    Audio,
     CoPresenterReadiness,
     CoPresenterUnavailableError,
     HearingTranscript,
@@ -45,18 +42,14 @@ from presentator.ports.decks import DeckStore, SourceStore
 # The routes name the ask lease through this module, never a port.
 __all__ = ["AskLimiter", "AskTicket", "CoPresenterUse", "PreparedAsk"]
 
-_LOGGER = logging.getLogger(__name__)
-_MILLISECONDS = 1000
-
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PreparedAsk:
-    """An ask whose person's groups and speech tokens are in hand, and when it began."""
+    """An ask whose person's groups and speech tokens are in hand."""
 
     asked: AskedDeck
     person: AskingPerson
     speech: SpeechTokens
-    started: float
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -71,7 +64,6 @@ class CoPresenterUse:
     boundaries: SentenceBoundaries
     speaking: Speaking
     person_access: PersonAccess
-    monotonic: Callable[[], float] = time.monotonic
 
     def asked_deck(self, slug: str, *, viewer: str) -> AskedDeck | None:
         """The viewer's own built deck and its source, or nothing for any other."""
@@ -102,7 +94,6 @@ class CoPresenterUse:
 
         Raises CoPresenterUnavailableError when either cannot be read.
         """
-        started = self.monotonic()
         groups = await self.person_access.groups_of(session_id)
         if isinstance(groups, AccessRefusal):
             return groups
@@ -110,7 +101,7 @@ class CoPresenterUse:
         if isinstance(speech, AccessRefusal):
             return speech
         person = AskingPerson(subject=subject, role=role, groups=groups)
-        return PreparedAsk(asked=asked, person=person, speech=speech, started=started)
+        return PreparedAsk(asked=asked, person=person, speech=speech)
 
     @asynccontextmanager
     async def answer(
@@ -130,19 +121,7 @@ class CoPresenterUse:
             events = spoken_events(
                 texts, self.boundaries, self.speaking, language, prepared.speech
             )
-            async with aclosing(self._timed(events, prepared.started)) as timed:
-                yield timed
-
-    async def _timed(
-        self, events: AsyncIterator[AnswerEvent], started: float
-    ) -> AsyncGenerator[AnswerEvent]:
-        first_audio_pending = True
-        async for event in events:
-            if first_audio_pending and isinstance(event, Audio):
-                first_audio_pending = False
-                elapsed = self.monotonic() - started
-                _LOGGER.info("co-presenter first audio: ms=%d", elapsed * _MILLISECONDS)
-            yield event
+            yield events
 
     async def hearing_tokens(self, session_id: str) -> SpeechTokenSource:
         """The session's speech tokens, read now, for the route to hold while it hears.

@@ -300,10 +300,13 @@ class FakePersonAccess:
 
     refusal: AccessRefusal | None = None
     unavailable: bool = False
+    raises: BaseException | None = None
     sessions: list[str] = field(default_factory=list[str])
 
     async def groups_of(self, session_id: str) -> frozenset[str] | AccessRefusal:
         self.sessions.append(session_id)
+        if self.raises is not None:
+            raise self.raises
         if self.unavailable:
             raise CoPresenterUnavailableError
         return self.refusal or frozenset({AN_API_GROUP})

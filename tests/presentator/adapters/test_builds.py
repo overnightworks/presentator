@@ -8,7 +8,6 @@ interface.
 """
 
 import os
-import shutil
 import stat
 import subprocess
 import time
@@ -21,12 +20,11 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
+from presentator.adapters import build_tree
 from presentator.adapters import builds as builds_module
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
-from presentator.adapters.builds import SlidevBuilds
 from presentator.contracts.decks import (
     FAILURE_TEXT_LIMIT,
-    OUTPUT_DIRECTORY,
     Artefacts,
     BuildFailure,
     BuildFailureReason,
@@ -50,7 +48,9 @@ from tests.presentator.adapters.support.build_support import (
 from tests.presentator.adapters.support.build_support import (
     builds_ready_for,
     builds_under,
+    lines_of,
     on_this_machine,
+    the_error_line,
     what_it_built,
     with_the_toolchain,
 )
@@ -61,15 +61,13 @@ from tests.support.git_remote import (
     a_path_carrying,
     with_the_program,
 )
+from tests.support.log_lines import json_logged
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _ONLY_A_MEGABYTE_MAY_BE_LEFT = 1
 _MEGABYTES_A_GREEDY_BUILD_WRITES = 3
 _WATCHED_OFTEN = timedelta(milliseconds=50)
 _CLOSED_TO_EVERYONE = 0o000
-_TALK = "talk"
-_PDF_FILE = "deck.pdf"
-_A_DATABASE_FILE = "presentator.sqlite3"
 _A_SLUG_OF_SPACES = "a deck of spaces"
 # What a command line may carry beside a space: nothing here reads any of it as
 # grammar, so nothing here may lose it.
@@ -89,7 +87,6 @@ _RECORDED_COMMAND = "command"
 _RECORDED_ENVIRONMENT = "environment"
 _A_BUILT_PAGE = "index.html"
 _WHAT_A_TALK_SAYS = "a talk"
-
 
 # Builds as above, then its export step turns one name of what was written
 # into a link, the way a deck's own `vite.config.ts` could.
@@ -127,6 +124,9 @@ esac
 """
 _A_TOOLCHAIN_THAT_FAILS = """#!/bin/sh
 echo "the deck does not build" >&2
+exit 1
+"""
+_A_TOOLCHAIN_THAT_FAILS_SILENTLY = """#!/bin/sh
 exit 1
 """
 _WHAT_A_FAILING_TOOLCHAIN_SAID = "the deck does not build"
@@ -477,28 +477,57 @@ def test_a_build_carries_nothing_of_the_environment_this_server_runs_in(
 @pytest.mark.parametrize(
     "toolchain",
     [
-        (_A_TOOLCHAIN_THAT_FAILS, _A_GENEROUS_BOUND, _WHAT_A_FAILING_TOOLCHAIN_SAID),
-        (_A_TOOLCHAIN_THAT_NEVER_ENDS, _NO_BUDGET_AT_ALL, None),
+        (
+            _A_TOOLCHAIN_THAT_FAILS,
+            _A_GENEROUS_BOUND,
+            _WHAT_A_FAILING_TOOLCHAIN_SAID,
+            "toolchain_failed",
+        ),
+        (
+            _A_TOOLCHAIN_THAT_FAILS_SILENTLY,
+            _A_GENEROUS_BOUND,
+            None,
+            "toolchain_failed",
+        ),
+        (_A_TOOLCHAIN_THAT_NEVER_ENDS, _NO_BUDGET_AT_ALL, None, "timed_out"),
     ],
-    ids=["a deck that does not build", "a build that runs past its bound"],
+    ids=[
+        "a deck that does not build",
+        "a deck that does not build and says nothing",
+        "a build that runs past its bound",
+    ],
 )
 def test_a_build_that_did_not_finish_says_why_and_leaves_nothing_to_point_at(
     remote: GitRemote,
-    source: Source,
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
-    toolchain: tuple[str, timedelta, str | None],
+    capsys: pytest.CaptureFixture[str],
+    toolchain: tuple[str, timedelta, str | None, str],
 ) -> None:
-    script, bound, said = toolchain
+    script, bound, said, reason = toolchain
+    source = a_source(remote)
     with_the_toolchain(machine, tmp_path, script)
 
     builds = builds_ready_for(
         tmp_path, source, toolchain=on_this_machine(tmp_path, bound=bound)
     )
-    built = builds.build(a_deck(remote), source=source)
+    with json_logged(capsys) as logged:
+        built = builds.build(a_deck(remote), source=source)
 
     assert built == BuildFailure.said(said)
     assert list(builds.builds.iterdir()) == []
+    (step,) = lines_of(logged, "build_step.ended")
+    assert (step["step"], step["outcome"], step["reason"]) == (
+        "build",
+        "failed",
+        reason,
+    )
+    assert step["level"] == "warning"
+    (ended,) = lines_of(logged, "deck_build.ended")
+    assert ended["outcome"] == "failed"
+    assert not [one for one in logged.lines if one["level"] == "error"]
+    assert EXAMPLE_SLUG not in logged.text
+    assert _WHAT_A_FAILING_TOOLCHAIN_SAID not in logged.text
 
 
 def test_a_step_that_stopped_talking_but_not_running_is_given_up_on_too(
@@ -586,19 +615,27 @@ def test_without_a_toolchain_on_the_machine_there_is_no_build(
     source: Source,
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     builds = builds_ready_for(tmp_path, source)
     deck = a_deck(remote)
     machine.setenv("PATH", a_path_carrying())
 
-    built = builds.build(deck, source=source)
+    with json_logged(capsys) as logged:
+        built = builds.build(deck, source=source)
 
-    # What the operating system says names paths of this host, so it stays in
-    # the log; the page is told that this build left no words.
+    # What the operating system says names paths of this host, so no line
+    # carries it; the page is told that this build left no words.
     assert built == BuildFailure.without_words()
-    assert EXAMPLE_SLUG in caplog.text
-    assert _TOOLCHAIN_PROGRAM in caplog.text
+    step = the_error_line(logged)
+    assert (step["event"], step["reason"]) == (
+        "build_step.ended",
+        "toolchain_unavailable",
+    )
+    (build,) = lines_of(logged, "deck_build.ended")
+    assert (build["outcome"], build["level"]) == ("failed", "warning")
+    assert EXAMPLE_SLUG not in logged.text
+    assert _TOOLCHAIN_PROGRAM not in logged.text
 
 
 def test_a_commit_the_mirror_cannot_read_the_deck_at_builds_nothing(
@@ -606,63 +643,22 @@ def test_a_commit_the_mirror_cannot_read_the_deck_at_builds_nothing(
     source: Source,
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_BUILDS)
 
-    built = builds_ready_for(tmp_path, source).build(
-        a_deck(remote, slug="never-pushed"),
-        source=source,
-    )
+    with json_logged(capsys) as logged:
+        built = builds_ready_for(tmp_path, source).build(
+            a_deck(remote, slug="never-pushed"),
+            source=source,
+        )
 
     # A tree this host could not read out of its own mirror is nothing a deck's
-    # author could act on, so the page is told nothing and the log holds it.
+    # author could act on, so the page is told nothing and the line holds why.
     assert built == BuildFailure.without_words()
-    assert "never-pushed" in caplog.text
-
-
-_A_REAL_TALK_UNDER_THE_ROOT = Path("builds/a-run/real-out/talk")
-
-
-@pytest.mark.parametrize(
-    ("talk", "pdf"),
-    [
-        (Path("outside"), Path("outside/deck.pdf")),
-        (Path("builds/through-a-link"), Path("builds/through-a-link/deck.pdf")),
-        (Path("builds/a-run/out/talk"), Path("builds/a-run/out/talk/deck.pdf")),
-        (Path("builds/../outside"), Path("builds/../outside/deck.pdf")),
-        (_A_REAL_TALK_UNDER_THE_ROOT, Path("builds")),
-    ],
-    ids=[
-        "a place outside the root",
-        "a link out of the root",
-        "a run whose out is a link inside the root",
-        "a way up out of the root",
-        "the root itself as the PDF",
-    ],
-)
-def test_artefacts_that_do_not_stand_under_the_root_are_not_held(
-    tmp_path: Path,
-    talk: Path,
-    pdf: Path,
-) -> None:
-    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
-    builds.builds.mkdir(parents=True)
-    outside = a_written_talk(tmp_path / "outside")
-    (builds.builds / "through-a-link").symlink_to(outside)
-    run = builds.builds / "a-run"
-    a_written_talk(tmp_path / _A_REAL_TALK_UNDER_THE_ROOT)
-    (run / OUTPUT_DIRECTORY).symlink_to("real-out")
-
-    assert not builds.holds(Artefacts(directory=tmp_path / talk, pdf=tmp_path / pdf))
-
-
-def a_written_talk(directory: Path) -> Path:
-    """A talk's page and a PDF beside it, as real files in that directory."""
-    directory.mkdir(parents=True)
-    (directory / _A_BUILT_PAGE).write_text(_WHAT_A_TALK_SAYS, encoding="utf-8")
-    (directory / _PDF_FILE).write_bytes(b"%PDF-1.7")
-    return directory
+    line = the_error_line(logged)
+    assert (line["event"], line["reason"]) == ("deck_build.ended", "unreadable_deck")
+    assert "never-pushed" not in logged.text
 
 
 @pytest.mark.parametrize(
@@ -711,102 +707,12 @@ def test_a_build_that_leaves_a_link_on_the_way_to_an_artefact_is_not_held(
     assert not builds.holds(artefacts)
 
 
-def test_a_file_of_a_build_is_read_as_it_was_written(tmp_path: Path) -> None:
-    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
-    run = a_run_with_an_asset(builds)
-
-    file = builds.read(run / _TALK / "assets" / "app.js")
-
-    assert file is not None
-    with file:
-        assert file.read() == b"console.log(1)"
-
-
-@pytest.mark.parametrize(
-    ("replaced", "read"),
-    [
-        (_PDF_FILE, _PDF_FILE),
-        ("talk/assets/app.js", "talk/assets/app.js"),
-        ("talk/assets", "talk/assets/app.js"),
-        ("talk", "talk/index.html"),
-    ],
-    ids=["the PDF", "an asset", "a directory on the way", "the talk itself"],
-)
-def test_a_file_replaced_by_a_link_after_the_build_was_held_is_not_read(
-    tmp_path: Path,
-    replaced: str,
-    read: str,
-) -> None:
-    """The link comes after `holds` said yes, which is the gap `read` closes."""
-    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
-    run = a_run_with_an_asset(builds)
-    assert builds.holds(Artefacts(directory=run / _TALK, pdf=run / _PDF_FILE))
-    secret = a_secret_beside_the_root(tmp_path)
-    target = run / replaced
-    if target.is_dir():
-        shutil.rmtree(target)
-        target.symlink_to(secret.parent)
-    else:
-        target.unlink()
-        target.symlink_to(secret)
-
-    assert builds.read(run / read) is None
-
-
-@pytest.mark.parametrize("nothing_there", ["no-such-file", "talk"])
-def test_a_name_that_is_no_file_of_a_build_is_not_read(
-    tmp_path: Path,
-    nothing_there: str,
-) -> None:
-    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
-    run = a_run_with_an_asset(builds)
-
-    assert builds.read(run / nothing_there) is None
-
-
-def test_a_path_that_leaves_the_root_is_not_read(tmp_path: Path) -> None:
-    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
-    builds.builds.mkdir(parents=True)
-
-    assert builds.read(a_secret_beside_the_root(tmp_path)) is None
-    assert builds.read(builds.builds / ".." / _A_DATABASE_FILE) is None
-
-
-def a_secret_beside_the_root(tmp_path: Path) -> Path:
-    """Something this server keeps to itself, named like every file a build has."""
-    secret = tmp_path / "secret" / _A_DATABASE_FILE
-    secret.parent.mkdir(exist_ok=True)
-    secret.write_bytes(b"what this server keeps to itself")
-    (secret.parent / "app.js").write_bytes(secret.read_bytes())
-    (secret.parent / _A_BUILT_PAGE).write_bytes(secret.read_bytes())
-    return secret
-
-
-def a_run_with_an_asset(builds: SlidevBuilds) -> Path:
-    """A run holding a talk with one asset, and its PDF, as real files."""
-    run = builds.builds / "a-run"
-    talk = a_written_talk(run / _TALK)
-    (run / _PDF_FILE).write_bytes((talk / _PDF_FILE).read_bytes())
-    (talk / _PDF_FILE).unlink()
-    (talk / "assets").mkdir()
-    (talk / "assets" / "app.js").write_text("console.log(1)", encoding="utf-8")
-    return run
-
-
-def test_artefacts_that_were_never_written_are_not_held(tmp_path: Path) -> None:
-    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
-    never_written = builds.builds / "a-run-that-never-was" / _TALK
-
-    assert not builds.holds(
-        Artefacts(directory=never_written, pdf=never_written / "deck.pdf"),
-    )
-
-
 def test_a_talk_larger_than_a_build_may_leave_is_refused_with_that_reason(
     remote: GitRemote,
     source: Source,
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # No watch may see a half-written file: the final check adds up what was left.
     machine.setattr(builds_module, "_ACCOUNTED_EVERY", timedelta(hours=1))
@@ -825,7 +731,8 @@ def test_a_talk_larger_than_a_build_may_leave_is_refused_with_that_reason(
         output_megabytes=_ONLY_A_MEGABYTE_MAY_BE_LEFT,
     )
 
-    built = builds.build(a_deck(remote), source=source)
+    with json_logged(capsys) as logged:
+        built = builds.build(a_deck(remote), source=source)
 
     assert built == BuildFailure(
         reason=BuildFailureReason.OUTPUT_MEGABYTES,
@@ -833,6 +740,41 @@ def test_a_talk_larger_than_a_build_may_leave_is_refused_with_that_reason(
         allowed_megabytes=_ONLY_A_MEGABYTE_MAY_BE_LEFT,
     )
     assert list(builds.builds.iterdir()) == []
+    (ended,) = lines_of(logged, "deck_build.ended")
+    assert (ended["outcome"], ended["reason"], ended["level"]) == (
+        "refused",
+        BuildFailureReason.OUTPUT_MEGABYTES,
+        "info",
+    )
+    assert ended["written_megabytes"] == _MEGABYTES_A_GREEDY_BUILD_WRITES
+
+
+def test_a_build_that_delivers_writes_one_line_per_step_and_one_for_the_build(
+    remote: GitRemote,
+    source: Source,
+    machine: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_BUILDS)
+    builds = builds_ready_for(tmp_path, source)
+
+    with json_logged(capsys) as logged:
+        built = builds.build(a_deck(remote), source=source)
+
+    assert isinstance(built, Artefacts)
+    steps = lines_of(logged, "build_step.ended")
+    assert [(one["step"], one["outcome"]) for one in steps] == [
+        ("build", "ok"),
+        ("export", "ok"),
+    ]
+    (ended,) = lines_of(logged, "deck_build.ended")
+    assert ended["outcome"] == "ok"
+    assert ended["entry_count"] == len(list(built.directory.parent.rglob("*")))
+    assert all(one["deck_id"] == ended["deck_id"] for one in steps)
+    assert isinstance(ended["duration_ms"], float)
+    assert EXAMPLE_SLUG not in logged.text
+    assert str(tmp_path) not in logged.text
 
 
 def test_a_build_that_has_written_too_much_is_stopped_where_it_stands(
@@ -897,17 +839,19 @@ def test_a_talk_that_cannot_be_added_up_in_time_is_refused_without_words(
     source: Source,
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     machine.setattr(builds_module, "_ADDING_UP_WITHIN", _NO_BUDGET_AT_ALL)
     with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_BUILDS)
     builds = builds_ready_for(tmp_path, source)
 
-    built = builds.build(a_deck(remote), source=source)
+    with json_logged(capsys) as logged:
+        built = builds.build(a_deck(remote), source=source)
 
     # What this host could not do is nothing a deck's author could act on.
     assert built == BuildFailure.without_words()
-    assert EXAMPLE_SLUG in caplog.text
+    assert the_error_line(logged)["reason"] == "adding_up_timed_out"
+    assert EXAMPLE_SLUG not in logged.text
     assert list(builds.builds.iterdir()) == []
 
 
@@ -916,16 +860,18 @@ def test_a_talk_holding_something_this_server_cannot_read_is_refused(
     source: Source,
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_CLOSES_WHAT_IT_BUILT)
     builds = builds_ready_for(tmp_path, source)
 
-    built = builds.build(a_deck(remote), source=source)
+    with json_logged(capsys) as logged:
+        built = builds.build(a_deck(remote), source=source)
 
     # An entry nobody can read is a talk nobody added up, never a talk of none.
     assert built == BuildFailure.without_words()
-    assert EXAMPLE_SLUG in caplog.text
+    assert the_error_line(logged)["reason"] == "unaccountable"
+    assert EXAMPLE_SLUG not in logged.text
     assert list(builds.builds.iterdir()) == []
 
 
@@ -1010,19 +956,19 @@ def test_a_run_that_could_not_be_taken_away_is_logged_and_answered_as_its_volume
     source: Source,
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_CLOSES_THE_ROOT)
     builds = builds_ready_for(tmp_path, source)
 
-    with _opened_again_afterwards(builds.builds):
+    with _opened_again_afterwards(builds.builds), json_logged(capsys) as logged:
         built = builds.build(a_deck(remote), source=source)
-        logged = caplog.text
         (left,) = builds.builds.iterdir()
+        stayed = lines_of(logged, "build_run_removal.failed")
         named = builds.remove(BuildRun(left.name))
 
     assert isinstance(built, BuildFailure)
-    assert left.name in logged
+    assert [one["run_id"] for one in stayed] == [left.name]
     assert named == PurePosixPath(builds.builds.name, left.name)
 
 
@@ -1040,7 +986,7 @@ def test_a_talk_that_is_gone_by_the_time_it_is_added_up_is_refused(
     source: Source,
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # The step keeps running after taking its own output away, so only a
     # watch taken while it is still going catches it gone: a machine is
@@ -1049,12 +995,14 @@ def test_a_talk_that_is_gone_by_the_time_it_is_added_up_is_refused(
     with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_TAKES_ITS_OWN_TALK_AWAY)
     builds = builds_ready_for(tmp_path, source)
 
-    built = builds.build(a_deck(remote), source=source)
+    with json_logged(capsys) as logged:
+        built = builds.build(a_deck(remote), source=source)
 
     # A build that took its own talk away left nothing to add up and nothing
     # to deliver; what was written is not guessed at.
     assert built == BuildFailure.without_words()
-    assert EXAMPLE_SLUG in caplog.text
+    assert the_error_line(logged)["reason"] == "unaccountable"
+    assert EXAMPLE_SLUG not in logged.text
 
 
 def test_a_run_that_took_itself_away_leaves_the_next_build_nothing_to_do(
@@ -1077,7 +1025,7 @@ def test_a_name_that_is_no_longer_a_directory_when_it_is_opened_is_refused(
     source: Source,
     machine: pytest.MonkeyPatch,
     tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # A build turning one of its own directories into a link between the
     # moment it is read and the moment it is opened cannot be arranged on
@@ -1086,13 +1034,15 @@ def test_a_name_that_is_no_longer_a_directory_when_it_is_opened_is_refused(
         del name, held_by
         raise OSError(ELOOP, "the name is a link now")
 
-    machine.setattr(builds_module, "_opened_within", a_link_by_now)
+    machine.setattr(build_tree, "opened_within", a_link_by_now)
     with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_BUILDS)
     builds = builds_ready_for(tmp_path, source)
 
-    built = builds.build(a_deck(remote), source=source)
+    with json_logged(capsys) as logged:
+        built = builds.build(a_deck(remote), source=source)
 
     # Refused, and never followed: nothing of this machine was added up.
     assert built == BuildFailure.without_words()
-    assert EXAMPLE_SLUG in caplog.text
+    assert the_error_line(logged)["reason"] == "unaccountable"
+    assert EXAMPLE_SLUG not in logged.text
     assert list(builds.builds.iterdir()) == []

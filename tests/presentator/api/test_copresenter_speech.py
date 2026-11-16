@@ -31,9 +31,11 @@ from tests.support.lobby import (
     A_SPEECH_SCOPE,
     A_TALK_ADDRESS,
 )
+from tests.support.log_lines import LogLine, json_logged
 from tests.support.speech_drive import (
     LEAK_ASKS,
     LEAK_HEALTH,
+    THE_ASKED_DECK,
     WORKLOAD,
     SpeechInstance,
     SpeechScenario,
@@ -164,6 +166,58 @@ def test_an_answer_ending_in_only_punctuation_speaks_the_rest_and_ends_in_a_plai
     assert len(service.speak_requests) == 1
     assert run.error_payload() == _THE_PLAIN_ERROR
     assert "…" not in everything_shown(run.logged, instance.errors)
+
+
+def test_an_ask_writes_its_hops_and_its_answer_under_the_requests_trace(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    scenario = SpeechScenario(gateway=_say("Erster Satz. Zweiter."))
+    with a_speech_instance(tmp_path, scenario) as instance:
+        capsys.readouterr()
+        with json_logged(capsys) as logged:
+            response = instance.talk.post("/copresenter/ask", json=THE_ASKED_DECK)
+
+    assert response.status_code == HTTPStatus.OK
+    by_event: dict[str, list[LogLine]] = {}
+    for line in logged.lines:
+        by_event.setdefault(str(line["event"]), []).append(line)
+    (answer,) = by_event["answer.ended"]
+    assert answer["outcome"] == "ok"
+    assert isinstance(answer["first_output_ms"], float)
+    assert [one["purpose"] for one in by_event["access_token.ended"]] == [
+        "groups",
+        "speech_tokens",
+    ]
+    assert len(by_event["speak.ended"]) == SECOND
+    (request,) = by_event[REQUEST_EVENT]
+    for event in ("access_token.ended", "speak.ended", "answer.ended"):
+        assert all(one["trace_id"] == request["trace_id"] for one in by_event[event])
+    for marker in (ACCESS, WORKLOAD, "Erster Satz"):
+        assert marker not in logged.text
+
+
+def test_a_failed_speech_call_writes_one_error_speak_line_and_one_warning_answer_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    service = FakeSpeechService(speak_answers=[SPEAK_FAILURES["cut-body"]])
+    scenario = SpeechScenario(gateway=_say("Erster Satz."), service=service)
+    with a_speech_instance(tmp_path, scenario) as instance:
+        capsys.readouterr()
+        with json_logged(capsys) as logged:
+            instance.talk.post("/copresenter/ask", json=THE_ASKED_DECK)
+
+    (spoken,) = [one for one in logged.lines if one["event"] == "speak.ended"]
+    (answer,) = [one for one in logged.lines if one["event"] == "answer.ended"]
+    assert (spoken["level"], spoken["outcome"], spoken["reason"]) == (
+        "error",
+        "failed",
+        "cut",
+    )
+    assert (answer["level"], answer["outcome"], answer["reason"]) == (
+        "warning",
+        "failed",
+        "unavailable",
+    )
 
 
 def _who_status(instance: SpeechInstance) -> HTTPStatus:

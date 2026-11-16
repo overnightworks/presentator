@@ -2,7 +2,7 @@
 
 [file_lines]
 "tests/gitmirror/test_mirror.py" = 1042
-"tests/presentator/adapters/test_builds.py" = 1098
+"tests/presentator/adapters/test_builds.py" = 1048
 "tests/presentator/adapters/test_decks.py" = 1217
 "tests/presentator/application/test_decks.py" = 1825
 
