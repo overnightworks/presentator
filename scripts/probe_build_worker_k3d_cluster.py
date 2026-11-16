@@ -46,11 +46,11 @@ class Completed:
 
 
 class SubprocessRunner:
-    """Runs one subprocess at a time and can kill the one that is running."""
+    """Runs subprocesses and streams, and can kill every one still running."""
 
     def __init__(self) -> None:
         """Start with no child running."""
-        self.child: subprocess.Popen[str] | None = None
+        self.children: list[subprocess.Popen[str]] = []
 
     @staticmethod
     def _start(
@@ -80,9 +80,9 @@ class SubprocessRunner:
         """Run the command to its end with exactly this environment."""
         piped = subprocess.PIPE if stdin is not None else subprocess.DEVNULL
         with self._start(command, environment, piped, subprocess.PIPE) as child:
-            self.child = child
+            self.children.append(child)
             stdout, stderr = child.communicate(stdin)
-        self.child = None
+        self.children.remove(child)
         return Completed(child.returncode, stdout, stderr)
 
     def stream(
@@ -102,19 +102,18 @@ class SubprocessRunner:
         self, command: tuple[str, ...], environment: Mapping[str, str]
     ) -> Generator[str]:
         with self._start(command, environment, subprocess.DEVNULL, None) as child:
-            self.child = child
+            self.children.append(child)
             try:
                 yield ""  # the hand-over `stream` waits for: the child runs
                 yield from child.stdout or ()
             finally:
                 self._kill(child)
-                if self.child is child:
-                    self.child = None
+                self.children.remove(child)
 
-    def kill_child(self) -> None:
-        """Kill the running child's process group and reap the child."""
-        if self.child is not None:
-            self._kill(self.child)
+    def kill_children(self) -> None:
+        """Kill every running child's process group and reap the children."""
+        for child in self.children:
+            self._kill(child)
 
     @staticmethod
     def _kill(child: subprocess.Popen[str]) -> None:

@@ -506,18 +506,18 @@ def hold_signals() -> None:
 def stop_on_signal(
     runner: SubprocessRunner, hold: Callable[[], None]
 ) -> Callable[[int, object], None]:
-    """The handler of SIGTERM and SIGINT: hold further signals, kill the child, exit."""
+    """The handler of SIGTERM and SIGINT: hold signals, kill the children, exit."""
 
     def stop(signal_number: int, _frame: object) -> None:
         hold()
-        runner.kill_child()
+        runner.kill_children()
         sys.exit(128 + signal_number)
 
     return stop
 
 
 def drive_for_real(checkout: Path, released: ReleasedImage | None) -> None:
-    """Drive in this process; SIGTERM and SIGINT kill the child, then tear down."""
+    """Drive in this process; SIGTERM and SIGINT kill the children, then tear down."""
     runner = SubprocessRunner()
     stop = stop_on_signal(runner, hold_signals)
     signal.signal(signal.SIGTERM, stop)

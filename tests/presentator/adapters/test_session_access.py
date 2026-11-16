@@ -8,7 +8,9 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from webauth.oidc_login import AccessTokenRefusal, AccessTokenRefusalReason
 
+from presentator.adapters import session_access
 from presentator.adapters.identity import SqliteSessionRecordStore
 from presentator.adapters.session_access import SessionAccess
 from presentator.contracts.copresenter import AccessRefusal, CoPresenterUnavailableError
@@ -115,11 +117,41 @@ def test_a_session_row_deleted_between_the_two_transactions_ends_the_session(
     assert arranged.scene.stored_tokens() == []
 
 
+def _the_token_endpoint_is_down(arranged: Arranged, _: pytest.MonkeyPatch) -> None:
+    arranged.scene.issuer.token_endpoint_is_down = True
+
+
+def _a_refusal_without_an_issuer_cause(
+    *_args: object, **_kwargs: object
+) -> AccessTokenRefusal:
+    return AccessTokenRefusal(AccessTokenRefusalReason.ISSUER_UNAVAILABLE)
+
+
+def _the_refusal_names_no_issuer_cause(
+    _: Arranged, patching: pytest.MonkeyPatch
+) -> None:
+    patching.setattr(
+        session_access, "current_groups", _a_refusal_without_an_issuer_cause
+    )
+
+
+@pytest.mark.parametrize(
+    ("arrange", "issuer_reason"),
+    [
+        (_the_token_endpoint_is_down, "token-endpoint-failed"),
+        (_the_refusal_names_no_issuer_cause, None),
+    ],
+    ids=["issuer down", "no issuer cause"],
+)
 def test_an_issuer_that_is_down_is_one_failed_line_naming_the_reason(
-    arranged: Arranged, capsys: pytest.CaptureFixture[str]
+    arranged: Arranged,
+    arrange: Callable[[Arranged, pytest.MonkeyPatch], None],
+    issuer_reason: str | None,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """An unavailable issuer is one failed line, with closed reasons."""
-    arranged.scene.issuer.token_endpoint_is_down = True
+    arrange(arranged, monkeypatch)
 
     with json_logged(capsys) as logged:
         refusal = asyncio.run(arranged.reader.groups_of(arranged.session_id))
@@ -128,7 +160,7 @@ def test_an_issuer_that_is_down_is_one_failed_line_naming_the_reason(
     (line,) = [one for one in logged.lines if one["event"] == ACCESS_LINE]
     assert line["outcome"] == "failed"
     assert line["reason"] == "issuer_unavailable"
-    assert line["issuer_reason"] == "token-endpoint-failed"
+    assert line["issuer_reason"] == issuer_reason
     assert line["purpose"] == "groups"
 
 
