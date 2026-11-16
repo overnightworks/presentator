@@ -389,6 +389,35 @@ describe('presenter controls', () => {
     }
   })
 
+  it.each([
+    ['a restarting server (1012) reconnects with no fault word', 1012, false],
+    ['a server that closes for another reason (1011) shows the fault', 1011, true],
+  ] as const)('CP14: after %s', async (_situation, code, shownAsFault) => {
+    state.media = createMediaObservation()
+    const { browser, page } = await openPresenter(1024)
+    try {
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      await expect.poll(() => state.hearingOpened).toBeGreaterThan(0)
+      const openedBefore = state.hearingOpened
+      endHearings(code)
+      if (shownAsFault) {
+        await page.getByText(en['controls.noHearing'], { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
+        expect(state.hearingOpened).toBe(openedBefore)
+      } else {
+        await expect.poll(() => state.hearingOpened, { timeout: 5_000 }).toBe(openedBefore + 1)
+        await expect.poll(() => page.evaluate(() => (window as unknown as {
+          __copresenter: { snapshot: () => { capturing: boolean } }
+        }).__copresenter.snapshot().capturing)).toBe(true)
+        expect(await page.getByText(en['controls.noHearing'], { exact: true }).count()).toBe(0)
+        expect(state.media.trackStopped).toBe(false)
+      }
+    } finally {
+      await browser.close()
+    }
+  })
+
   // The deck's language reaches /hear; the heard question's language is the ask's; the controls' words are the account's.
   it.each([
     { deck: 'de', account: 'de', heard: 'de' },
