@@ -355,15 +355,18 @@ class Decks:
         Waits for a refresh under way, in this process or another, so nothing of
         this source is still building when its directories go (R1); a refresh
         that outlasts the build bound raises `RefreshOwnershipTimedOutError` and
-        deletes nothing. Name and counts are read inside the lock: a source
-        removed meanwhile is unknown, and changed counts are handed back rather
-        than deleted under a number nobody confirmed. Disk goes first: if the
+        deletes nothing. The whole removal runs fenced: a process that lost the
+        refresh meanwhile raises `RefreshOwnershipLostError` before it deletes
+        a file, and none takes the refresh over until the removal ended. Name
+        and counts are read inside the lock: a source removed meanwhile is
+        unknown, and changed counts are handed back rather than deleted under a
+        number nobody confirmed. Disk goes first: if the
         mirror or a run survives, or a build lies where no run can be placed, no
         row is deleted and the refusal names what stayed, so the source stays
         taken rather than a leftover becoming an address a later add reopens
         with a new secret (R3); a clean disk frees the URL (R2).
         """
-        with self.one_at_a_time, self.ownership.hold():
+        with self.one_at_a_time, self.ownership.hold(), self.ownership.fenced():
             source = self._named(name)
             if source is None:
                 return None

@@ -23,7 +23,7 @@ from presentator.contracts.decks import (
     Source,
     SourcePoll,
 )
-from presentator.ports.decks import BuildRun
+from presentator.ports.decks import BuildRun, RefreshOwnershipLostError
 from tests.presentator.application.support.decks_support import (
     DecksFakes,
     a_folder,
@@ -37,6 +37,7 @@ from tests.presentator.application.support.fakes import (
     FakeBuildRunner,
     FakeDeckFolders,
     FakeDeckStore,
+    FakeRefreshOwnership,
     FakeSourceStore,
 )
 
@@ -376,6 +377,29 @@ def test_removing_a_source_takes_the_runs_of_its_talk_and_its_pdf() -> None:
 
     assert runs_left(builder) == {"foreign"}
     assert store.kept == {}
+
+
+def test_a_removal_that_lost_the_refresh_leaves_every_build_and_row() -> None:
+    builder, store, mirror, source_store = over_rows(
+        a_row("split", build=a_build_in("talk-run", "pdf-run")),
+        on_disk=("talk-run", "pdf-run"),
+    )
+    decks = decks_over(
+        sources=source_store,
+        mirror=mirror,
+        fakes=DecksFakes(
+            builder=builder,
+            store=store,
+            ownership=FakeRefreshOwnership(lost_to_another=True),
+        ),
+    )
+
+    with pytest.raises(RefreshOwnershipLostError):
+        _confirmed(decks, _SOURCE.name)
+
+    assert runs_left(builder) == {"talk-run", "pdf-run"}
+    assert set(store.kept) == {"split"}
+    assert source_store.sources == [_SOURCE]
 
 
 def test_removing_a_source_over_a_build_no_run_owns_keeps_every_row() -> None:
