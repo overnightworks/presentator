@@ -42,7 +42,7 @@ describe('what the address shows', () => {
 	] as const)('shows for a %s address the token field %s and the key %s', async (which, token, key) => {
 		open();
 
-		type(URL_FIELD, addresses[which].url);
+		type(URL_FIELD, addresses.ssh.url);
 
 		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
 		expect(secretField() !== null).toBe(token);
@@ -86,23 +86,20 @@ describe('the secret on the wire', () => {
 		expect(sentTo(fetched, CHECK)).toEqual([expect.objectContaining({ secret: 'a-typed-token' })]);
 	});
 
-	it.each(['ssh'] as const)(
-		'sends no secret once a typed token meets a %s address',
-		async (which) => {
-			const fetched = open();
-			type(URL_FIELD, addresses.https.url);
-			await vi.waitFor(() => expect(secretField()).not.toBeNull());
-			type('source-secret', 'a-typed-token');
+	it('sends no secret once a typed token meets an ssh address', async () => {
+		const fetched = open();
+		type(URL_FIELD, addresses.https.url);
+		await vi.waitFor(() => expect(secretField()).not.toBeNull());
+		type('source-secret', 'a-typed-token');
 
-			type(URL_FIELD, addresses[which].url);
-			await vi.waitFor(() => expect(secretField()).toBeNull());
-			await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
-			checkButton()?.click();
+		type(URL_FIELD, addresses.ssh.url);
+		await vi.waitFor(() => expect(secretField()).toBeNull());
+		await vi.waitFor(() => expect(checkButton()?.disabled).toBe(false));
+		checkButton()?.click();
 
-			await vi.waitFor(() => expect(sentTo(fetched, CHECK)).toHaveLength(1));
+	await vi.waitFor(() => expect(sentTo(fetched, CHECK)).toHaveLength(1));
 			expect(sentTo(fetched, CHECK)).toEqual([expect.objectContaining({ secret: null })]);
-		}
-	);
+	});
 
 	it('shows an empty token field when https returns after a key address', async () => {
 		open();

@@ -470,7 +470,7 @@ msgid "Eine Quelle mit dieser Git-URL gibt es schon."
 msgstr ""
 
 msgctxt "source.refusedUnknownAccess"
-msgid "Nutze https://host/pfad, user@host:pfad, ssh://user@host/pfad, ohne Benutzername und Passwort darin."
+msgid "Nutze https://host/pfad, user@host:pfad oder ssh://user@host/pfad, ohne Benutzername und Passwort darin."
 msgstr ""
 
 msgctxt "source.refusedNotChecked"

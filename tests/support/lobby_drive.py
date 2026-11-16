@@ -6,8 +6,7 @@ origin on this machine; nobody signs in at an issuer. The outer app's
 drive-only routes sit outside the lobby's gate: one makes a new person (a role,
 a language, deck records and a source of their own) and answers their id and
 session cookies, so each test of the drive signs in as its own person. A second
-drive-only route adds a deck record to a person it made, and a third answers
-the folder local sources are accepted under. `openapi` writes the
+drive-only route adds a deck record to a person it made. `openapi` writes the
 document the lobby's wire types are generated from, so the empty-regeneration
 check holds the committed one to the routes.
 """

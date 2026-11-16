@@ -343,11 +343,11 @@ def test_a_check_of_an_access_kind_it_does_not_probe_is_refused(
     assert checked.commit is None
 
 
-def test_a_credential_free_local_source_fetches_through_the_real_store(
+def test_a_credential_free_source_fetches_through_the_real_store(
     remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    """A source on this box stores an empty secret, never a missing row.
+    """A credential-free https source stores an empty secret, never a missing row.
 
     The real store, the real encryption box, and the real mirror all agree
     an empty, resolved secret fetches exactly like every other source's

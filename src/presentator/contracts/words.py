@@ -309,7 +309,7 @@ WORDS: Mapping[Language, Mapping[Key, str | Mapping[Category, str]]] = {
         'source.refusedFolder': 'Ein Ordner ist ein Pfad im Repository, etwa examples oder talks/2026, ohne führenden Schrägstrich und ohne .. darin.',
         'source.refusedDuplicateName': 'Eine Quelle mit diesem Namen gibt es schon.',
         'source.refusedDuplicateUrl': 'Eine Quelle mit dieser Git-URL gibt es schon.',
-        'source.refusedUnknownAccess': 'Nutze https://host/pfad, user@host:pfad, ssh://user@host/pfad, ohne Benutzername und Passwort darin.',
+        'source.refusedUnknownAccess': 'Nutze https://host/pfad, user@host:pfad oder ssh://user@host/pfad, ohne Benutzername und Passwort darin.',
         'source.refusedNotChecked': 'Prüfe die Verbindung noch einmal – die URL oder das Secret hat sich seit der letzten Prüfung geändert.',
         'source.checkReachable': 'Repository gelesen, Head {commit}.',
         'source.refusedSecretNotAllowed': 'Ein Schlüssel braucht kein Token – lass das Feld leer.',
