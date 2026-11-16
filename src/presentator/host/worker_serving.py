@@ -224,16 +224,21 @@ def _killed(child: WireChild, life_end: LifeEnd | None) -> LifeEnd | None:
     return life_end
 
 
+def _log_failure(event: str, error: BaseException, **fields: object) -> None:
+    """Log the failure as a code and its type, never its traceback.
+
+    The traceback carries paths and failure words.
+    """
+    logger.error(event, extra={**fields, "error_type": type(error).__name__})
+
+
 def _noting_cleanup_failure(
     cleanup: Callable[[], object], original: BaseException, step: CleanupStep
 ) -> None:
     try:
         cleanup()
     except (Exception, KeyboardInterrupt) as cleanup_failure:  # noqa: BLE001 - logged as a code, noted on the original
-        logger.error(  # noqa: TRY400 - the traceback carries paths and failure words
-            "cleanup.failed",
-            extra={"step": step, "error_type": type(cleanup_failure).__name__},
-        )
+        _log_failure("cleanup.failed", cleanup_failure, step=step)
         original.add_note(f"{step} failed: {cleanup_failure!r}")
 
 
@@ -397,9 +402,7 @@ def _side_connection_closed(listener: socket.socket) -> bool:
     except BlockingIOError:
         return True
     except OSError as error:
-        logger.error(  # noqa: TRY400 - the traceback carries paths and failure words
-            "side_connection.failed", extra={"error_type": type(error).__name__}
-        )
+        _log_failure("side_connection.failed", error)
         return False
     else:
         with side_connection:
@@ -688,9 +691,7 @@ def accept_connections(
         try:
             connection, _address = listener.accept()
         except OSError as error:
-            logger.error(  # noqa: TRY400 - the traceback carries paths and failure words
-                "connection.failed", extra={"error_type": type(error).__name__}
-            )
+            _log_failure("connection.failed", error)
             return LifeEnd.ACCEPT
         accepted_at = serving.clock()
         serving.watchdog.arm(accepted_at + WATCHDOG_SECONDS - serving.clock())
