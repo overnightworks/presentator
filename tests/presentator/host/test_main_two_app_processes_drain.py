@@ -2,6 +2,7 @@
 
 import signal
 import threading
+from collections.abc import Iterator
 from http import HTTPStatus
 from pathlib import Path
 
@@ -42,8 +43,12 @@ _BUILT_DECKS = "SELECT count(*) FROM decks WHERE built_commit IS NOT NULL"
 
 
 @pytest.fixture
-def engine(database_url: str) -> Engine:
-    return engine_on(database_url)
+def engine(database_url: str) -> Iterator[Engine]:
+    each = engine_on(database_url)
+    try:
+        yield each
+    finally:
+        each.dispose()
 
 
 def _wait_until_built(engine: Engine) -> None:
