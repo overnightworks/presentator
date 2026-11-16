@@ -1,7 +1,6 @@
 """The background poll: it keeps ticking, and never twice at once."""
 
 import asyncio
-import logging
 import threading
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -10,6 +9,7 @@ import pytest
 
 from presentator.host.polling import Schedule
 from tests.presentator.application.support.fakes import PATIENCE
+from tests.support.log_lines import logged_as_json
 
 _TIGHT = timedelta(0)
 
@@ -94,8 +94,8 @@ class ChoreBrokeError(RuntimeError):
 
 
 @dataclass
-class ChoreThatFailsOnce:
-    """Raises on its first call, so a test sees whether a second one comes."""
+class ChoreThatFailsTwiceThenWorks:
+    """Fails its first calls, and releases a semaphore once per call."""
 
     calls: threading.Semaphore = field(
         default_factory=lambda: threading.Semaphore(0),
@@ -105,31 +105,40 @@ class ChoreThatFailsOnce:
     def __call__(self) -> None:
         self.made += 1
         self.calls.release()
-        if self.made == 1:
+        if self.made <= 2:  # noqa: PLR2004 - two failures, then a recovery
             raise ChoreBrokeError
 
-    def wait_for_second_call(self) -> bool:
+    def wait_for_calls(self, calls: int) -> bool:
         return all(
-            self.calls.acquire(timeout=PATIENCE.total_seconds()) for _ in range(2)
+            self.calls.acquire(timeout=PATIENCE.total_seconds()) for _ in range(calls)
         )
 
 
-def test_a_chore_that_raises_is_logged_with_its_traceback_and_runs_again(
-    caplog: pytest.LogCaptureFixture,
+def test_a_chore_that_keeps_raising_writes_its_first_failure_and_its_recovery(
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    chore = ChoreThatFailsOnce()
+    chore = ChoreThatFailsTwiceThenWorks()
 
-    async def run_through_the_failure() -> bool:
+    async def run_through_the_failures() -> bool:
         async with Schedule(chore=chore, interval=_TIGHT).polling():
-            return await asyncio.to_thread(chore.wait_for_second_call)
+            # The fourth call begins after the third one's recovery line.
+            return await asyncio.to_thread(chore.wait_for_calls, 4)
 
-    with caplog.at_level(logging.ERROR):
-        ran_again = asyncio.run(run_through_the_failure())
+    with logged_as_json(capsys) as logged:
+        assert asyncio.run(run_through_the_failures())
 
-    assert ran_again
-    (failure,) = [record for record in caplog.records if record.exc_info]
-    assert failure.exc_info is not None
-    assert isinstance(failure.exc_info[1], ChoreBrokeError)
+    runs = [line for line in logged.lines if line["event"].startswith("scheduled_run")]
+    failed, recovered = runs
+    assert (failed["event"], failed["level"], failed["failed_run_count"]) == (
+        "scheduled_run.failed",
+        "warning",
+        1,
+    )
+    assert (recovered["event"], recovered["level"], recovered["failed_run_count"]) == (
+        "scheduled_run.recovered",
+        "info",
+        2,
+    )
 
 
 def test_a_schedule_leaves_no_task_running_after_its_block() -> None:
