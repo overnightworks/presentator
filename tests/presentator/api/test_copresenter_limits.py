@@ -310,38 +310,50 @@ class _RecordingTicket:
     def session_id(self) -> str:
         return self._inner.session_id
 
+    def still_holds(self) -> bool:
+        return self._inner.still_holds()
+
     def release(self) -> None:
         self._released_on.append(threading.get_ident())
         self._inner.release()
 
 
-def test_the_release_of_an_answer_a_browser_leaves_runs_off_the_event_loop_thread() -> (
-    None
-):
+@pytest.mark.parametrize(
+    "person_access_unavailable", [False, True], ids=["streams", "never-streams"]
+)
+def test_the_release_of_an_ask_runs_off_the_event_loop_thread(
+    *, person_access_unavailable: bool
+) -> None:
     """The release asks the shared Redis, which holds its thread while it is slow."""
     gateway = HeldTransport()
     limiter = _ThreadRecordingLimiter()
-    app = _a_hanging_app(gateway, limiter, lambda _connection: FixedSession())
-
-    asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
-
-    assert limiter.released_on
-    assert threading.get_ident() not in limiter.released_on
-
-
-def test_the_release_of_an_ask_that_never_streams_runs_off_the_event_loop_thread() -> (
-    None
-):
-    gateway = HeldTransport()
-    limiter = _ThreadRecordingLimiter()
     fakes = PrivateFakes()
-    fakes.person_access.unavailable = True
+    fakes.person_access.unavailable = person_access_unavailable
     app = _a_hanging_app(gateway, limiter, lambda _connection: FixedSession(), fakes)
 
     asyncio.run(_ask_and_leave_while_the_gateway_holds(app, gateway))
 
     assert limiter.released_on
     assert threading.get_ident() not in limiter.released_on
+
+
+def test_an_answer_whose_lease_is_lost_mid_stream_ends_with_a_visible_error() -> None:
+    limiter = FakeAskLimiter()
+    lobby, private, _clock = a_copresenter_talk_host(limiter=limiter)
+    lobby.sign_in()
+
+    def lose_the_lease_after_the_first_event(index: int) -> None:
+        if index == 1:
+            limiter.lose_every_lease()
+
+    private.answers.busy_events = 3
+    private.answers.event_hook = lose_the_lease_after_the_first_event
+
+    response = ask(lobby.client)
+
+    assert response.status_code == HTTPStatus.OK
+    assert "event: error" in response.text
+    assert "Antwort 2" not in response.text
 
 
 async def _ask_and_leave_while_the_gateway_holds(

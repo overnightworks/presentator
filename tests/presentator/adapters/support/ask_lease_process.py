@@ -10,8 +10,7 @@ import os
 import sys
 from typing import Final
 
-from presentator.adapters import shared_redis
-from presentator.adapters.shared_redis import SharedRedis
+from presentator.adapters.shared_redis import LeaseTiming, SharedRedis
 from presentator.contracts.copresenter import RetryAfter
 from presentator.ports.copresenter import AskTicket
 
@@ -25,8 +24,8 @@ LEASE_VARIABLE: Final = "ASK_LEASE_MILLISECONDS"
 
 def run() -> None:
     """Answer commands until the parent closes the input."""
-    shared_redis.LEASE_MILLISECONDS = int(os.environ[LEASE_VARIABLE])
-    limiter = SharedRedis(os.environ[URL_VARIABLE]).ask_limiter()
+    lease = LeaseTiming(milliseconds=int(os.environ[LEASE_VARIABLE]))
+    limiter = SharedRedis(os.environ[URL_VARIABLE], lease=lease).ask_limiter()
     held: AskTicket | None = None
     for command in sys.stdin:
         if command.strip() == "admit":

@@ -350,11 +350,17 @@ async def _answer_events(
                     while True:
                         done, _pending = await asyncio.wait(
                             {next_event, session_watch},
+                            timeout=_CHECK_INTERVAL_SECONDS,
                             return_when=asyncio.FIRST_COMPLETED,
                         )
                         if session_watch in done:
                             _observe_session_end(session_watch)
                             return
+                        if not ask.ticket.still_holds():
+                            yield _error_sse()
+                            return
+                        if next_event not in done:
+                            continue
                         event = next_event.result()
                         yield _sse(event)
                         if isinstance(event, Done):

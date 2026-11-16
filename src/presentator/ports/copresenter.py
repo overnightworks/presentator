@@ -136,6 +136,13 @@ class AskTicket(Protocol):
         """The session the answer belongs to."""
         ...
 
+    def still_holds(self) -> bool:
+        """Whether no other answer can have taken the session since this one began.
+
+        False once the lease may have run out or been taken: the answer stops.
+        """
+        ...
+
     def release(self) -> None:
         """Free the session if this ticket still holds it; later calls do nothing."""
         ...
