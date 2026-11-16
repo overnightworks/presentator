@@ -1,0 +1,8 @@
+claim_id = "f27f3edfe2ba4bbc83dcc22aa2bce5c2"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "172da0ad18e580c2e0741deeb64aa1699d217de2"
+branch = "claude/issue-1226-the-co-presenter-s-hearing-logs-through"
+scope = ["docs/ARCHITECTURE.md", "docs/co-presenter.md", "pyproject.toml", "slidev/components/CoPresenter.vue", "slidev/tests", "src/presentator/adapters/speech.py", "src/presentator/api/copresenter.py", "src/presentator/application/copresenter.py", "src/presentator/contracts/copresenter.py", "src/presentator/ports/copresenter.py", "tests/presentator", "uv.lock"]
+opened_commit = "c06f8e1b2d0a5d2f4ab006c4c1bd4b5f60d4b2c1"
+whole_reason = "one slice crosses the speech pin, the co-presenter's hexagon layers, the overlay and their tests"
