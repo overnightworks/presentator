@@ -1,0 +1,8 @@
+claim_id = "435ad90f2db7497cad74d3422873eae6"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "f816d0774ffb6b06f6e551c099d6e9c9069eff71"
+branch = "claude/issue-1194-a-worker-s-early-close-is-logged-as-a-wi"
+scope = ["src/presentator/adapters/build_wire.py", "src/presentator/adapters/build_worker.py", "src/presentator/host", "tests/presentator"]
+opened_commit = "5cdc087f8d05f63044a452a367e0e4d7484e2ff5"
+whole_reason = "the wire, its web client, the worker host and their tests name one fault together"
