@@ -16,9 +16,11 @@ from presentator.contracts import words
 from presentator.host.config import Settings, WorkerSettings
 from tests.conftest import redis_environment
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
-from tests.presentator.host.conftest import logging_undone_after_main
+from tests.presentator.host.conftest import (
+    clients_closed_with_the_test,
+    logging_undone_after_main,
+)
 from tests.presentator.host.test_main import every_tick_polls_every_source, pytestmark
-from tests.presentator.host.test_worker_serving_loop import clients_closed_with_the_test
 from tests.presentator.host.test_worker_settings import no_worker_variables
 from tests.support.lobby_drive import AdmitEveryRequest, DeckRecord
 

@@ -1,10 +1,12 @@
 """Fixtures the worker's host tests share."""
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
 from tests.presentator.host.support.sealed_snapshot import stage_sealed_root
+from tests.support.worker_support import CLIENTS
 
 
 @pytest.fixture
@@ -16,3 +18,9 @@ def sealed_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def logging_undone_after_main(json_logging: None) -> None:
     """Every `main()` a host test runs configures the process's logging."""
     del json_logging
+
+
+@pytest.fixture(autouse=True)
+def clients_closed_with_the_test() -> Iterator[None]:
+    yield
+    CLIENTS.close()

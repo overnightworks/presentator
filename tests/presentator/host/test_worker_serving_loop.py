@@ -3,8 +3,7 @@
 import errno
 import socket
 import threading
-from collections.abc import Callable, Iterator
-from contextlib import ExitStack, suppress
+from collections.abc import Callable
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
@@ -18,7 +17,6 @@ from presentator.host.worker_serving import (
     HEADER_SECONDS,
     HelloRefusal,
     LifeEnd,
-    Serving,
 )
 from presentator.host.worker_termination import SWEEP_SECONDS, SweepEffects, sweep
 from presentator.host.worker_wire import WireExit
@@ -29,6 +27,7 @@ from tests.support.worker_support import (
     ACCEPT_TIME,
     ANSWERED_HEADER,
     CHILD_LEG,
+    CLIENTS,
     CONNECTIONS,
     CUT_OFF_HEADER,
     IDLE_LEG,
@@ -41,74 +40,22 @@ from tests.support.worker_support import (
     BoundedListener,
     ScriptedLife,
     StopServingError,
-    connect_unproven,
+    a_proven_hello,
+    accept_from,
     connect_when_bound,
+    helloing,
     listening_with,
+    proven,
+    reading_after_a_proven_hello,
     serving,
     wake_until_ended,
 )
-
-_CLIENTS = ExitStack()
-
-
-@pytest.fixture(autouse=True)
-def clients_closed_with_the_test() -> Iterator[None]:
-    yield
-    _CLIENTS.close()
-
-
-def connected(volume: Path) -> socket.socket:
-    return _CLIENTS.enter_context(connect_unproven(volume))
-
-
-def helloing(volume: Path, hello: Callable[[socket.socket], None]) -> socket.socket:
-    """A client whose hello runs in a thread, as the real web's does."""
-    client = connected(volume)
-    thread = threading.Thread(target=hello, args=(client,), daemon=True)
-    thread.start()
-    _CLIENTS.callback(thread.join)
-    return client
-
-
-def a_proven_hello(client: socket.socket) -> None:
-    build_wire.answer_hello(client, KEY)
-
-
-def a_proven_hello_the_worker_may_not_serve(client: socket.socket) -> None:
-    """A hello of a client the worker may close before it answers."""
-    with suppress(build_wire.WireRefusedError, build_wire.HelloRefusedError, OSError):
-        a_proven_hello(client)
-
-
-def proven(volume: Path) -> socket.socket:
-    """A client that proves the hello in a thread and then holds its connection."""
-    return helloing(volume, a_proven_hello_the_worker_may_not_serve)
-
-
-def reading_after_a_proven_hello(volume: Path) -> Callable[[], bytes]:
-    """A client that proves the hello in a thread, then reads; the call is its read."""
-    client = connected(volume)
-    read: list[bytes] = []
-
-    def prove_then_read() -> None:
-        a_proven_hello(client)
-        read.append(client.recv(1))
-
-    thread = threading.Thread(target=prove_then_read, daemon=True)
-    thread.start()
-    _CLIENTS.callback(thread.join)
-
-    def what_the_client_read() -> bytes:
-        thread.join(WAIT_SECONDS)
-        return read[0]
-
-    return what_the_client_read
 
 
 def connected_when_bound(
     volume: Path, still_serving: Callable[[], bool]
 ) -> socket.socket:
-    return _CLIENTS.enter_context(connect_when_bound(volume, still_serving))
+    return CLIENTS.enter_context(connect_when_bound(volume, still_serving))
 
 
 def read_challenge(client: socket.socket) -> bytes:
@@ -256,15 +203,6 @@ def test_the_child_is_told_the_descriptor_of_its_connection_and_inherits_only_it
         "--megabytes",
         "300",
     ]
-
-
-def accept_from(
-    life: ScriptedLife,
-    listener: socket.socket,
-    serving: Serving | None = None,
-) -> LifeEnd:
-    """Run the accept loop in this thread."""
-    return worker_serving.accept_connections(listener, KEY, serving or life.serving())
 
 
 def test_a_sweep_that_is_quiet_only_after_its_deadline_ends_the_life_armed(
@@ -587,6 +525,8 @@ def test_serve_returns_zero_and_writes_one_error_line_for_the_accept_fault(
     assert status == 0
     (fault,) = events_of(logged, "connection.failed")
     assert (fault["level"], fault["error_type"]) == ("error", "OSError")
+    assert "too many open files" not in logged.text
+    assert "Traceback" not in logged.text
     assert events_of(logged, "connection.ended") == []
 
 

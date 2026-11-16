@@ -201,6 +201,8 @@ def test_a_failing_accept_is_logged_once_ends_the_listening_for_that_wait_only(
     assert recording.accept_calls == len(BOTH_PHASES)
     faults = events_of(logged, "side_connection.failed")
     assert [fault["level"] for fault in faults] == ["error"] * len(BOTH_PHASES)
+    assert "too many open files" not in logged.text
+    assert "Traceback" not in logged.text
 
 
 def test_a_side_connection_is_closed_even_when_the_listener_cannot_be_restored(

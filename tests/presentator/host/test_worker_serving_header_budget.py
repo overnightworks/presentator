@@ -5,19 +5,16 @@ from pathlib import Path
 import pytest
 
 from presentator.host.worker_serving import HEADER_SECONDS, LifeEnd
-from tests.presentator.host.test_worker_serving_loop import (
-    accept_from,
-    clients_closed_with_the_test,  # noqa: F401  # pyright: ignore[reportUnusedImport]
-    proven,
-    reading_after_a_proven_hello,
-)
 from tests.support.worker_support import (
     ANSWERED_HEADER,
     EXPIRED_AT_RELEASE,
     EXPIRED_BEFORE_RELEASE,
     ScriptedLife,
     StopServingError,
+    accept_from,
     listening_with,
+    proven,
+    reading_after_a_proven_hello,
 )
 
 
