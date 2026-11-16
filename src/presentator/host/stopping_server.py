@@ -23,7 +23,11 @@ _ASGI_EXCEPTION: Final = "Exception in ASGI application\n"
 
 
 class ServerEvent(StrEnum):
-    """The literal events a uvicorn record is written as."""
+    """The literal events a uvicorn record is written as.
+
+    `process.failed` is also the line a start refused by its configuration or
+    its database ends in.
+    """
 
     PROCESS_FAILED = "process.failed"
     SERVER_REFUSED = "server.refused"
@@ -32,8 +36,12 @@ class ServerEvent(StrEnum):
 
 
 class ServerReason(StrEnum):
-    """Why the server refused a connection or failed to start: the closed set."""
+    """Why the server refused a connection or the process failed to start.
 
+    Together with the database's `RefusalReason`, the closed set of reasons.
+    """
+
+    CONFIGURATION_REFUSED = "configuration_refused"
     PORT_TAKEN = "port_taken"
     BIND_REFUSED = "bind_refused"
     INVALID_REQUEST = "invalid_request"

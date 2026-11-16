@@ -74,9 +74,11 @@ def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
         (
             [],
             _an_issuer_the_sign_in_client_refuses,
-            "PRESENTATOR_OIDC_ISSUER,PRESENTATOR_OIDC_CLIENT_ID,"
-            "PRESENTATOR_OIDC_CLIENT_SECRET_FILE,PRESENTATOR_SPEECH_SERVICE_SCOPE,"
-            "PRESENTATOR_PUBLIC_ORIGIN,PRESENTATOR_TALK_ORIGIN",
+            (
+                "PRESENTATOR_OIDC_ISSUER,PRESENTATOR_OIDC_CLIENT_ID,"
+                "PRESENTATOR_OIDC_CLIENT_SECRET_FILE,PRESENTATOR_SPEECH_SERVICE_SCOPE,"
+                "PRESENTATOR_PUBLIC_ORIGIN,PRESENTATOR_TALK_ORIGIN"
+            ),
         ),
         (
             ["migrate"],

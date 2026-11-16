@@ -137,6 +137,8 @@ from presentator.host.oidc import (
 )
 from presentator.host.polling import ChoreCode, Schedule
 from presentator.host.stopping_server import (
+    ServerEvent,
+    ServerReason,
     StoppingServer,
     name_uvicorn_records,
     served_config,
@@ -165,8 +167,6 @@ from presentator.ports.preferences import (
 _log = logging.getLogger(__name__)
 
 SERVICE_NAME = "presentator"
-# The `reason` of the line a start ends in when the environment is refused.
-CONFIGURATION_REFUSED: Final = "configuration_refused"
 
 RelyingPartyFor = Callable[[OidcClientConfig], OidcRelyingParty]
 
@@ -740,17 +740,19 @@ def main(
         _end_failed(refused.reason, **codes)
     except ConfigurationError as refused:
         # The settings by their variables; the message may name a path.
-        _end_failed(CONFIGURATION_REFUSED, setting=",".join(refused.variables))
+        _end_failed(
+            ServerReason.CONFIGURATION_REFUSED, setting=",".join(refused.variables)
+        )
     asyncio.run(_serve(instance, settings))
 
 
-def _end_failed(reason: str, **codes: str) -> NoReturn:
+def _end_failed(reason: RefusalReason | ServerReason, **codes: str) -> NoReturn:
     """End the process in one line naming the refusal, without its traceback.
 
     The traceback would name the database's host and port or a file's path, so
     the line carries only codes, such as the class name of the driver's error.
     """
-    _log.error("process.failed", extra={"reason": reason, **codes})
+    _log.error(ServerEvent.PROCESS_FAILED, extra={"reason": reason, **codes})
     raise SystemExit(1) from None
 
 
