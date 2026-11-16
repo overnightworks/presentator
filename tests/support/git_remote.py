@@ -64,16 +64,23 @@ def recording_every_git_launch(machine: pytest.MonkeyPatch, tmp_path: Path) -> P
         encoding="utf-8",
     )
     recorder.chmod(0o755)
-    machine.setenv(
-        "PATH",
-        a_path_carrying().replace(_SHIM, f"{_SHIM}{os.pathsep}{recorder.parent}", 1),
-    )
+    _put_ahead_on_path(machine, _SHIM, str(recorder.parent))
     return log
 
 
 def reading_fixture_remotes(machine: pytest.MonkeyPatch) -> None:
     """Put the git that opens a fixture remote's https address ahead on PATH."""
-    machine.setenv("PATH", a_path_carrying())
+    _put_ahead_on_path(machine, _SHIM)
+
+
+def _put_ahead_on_path(machine: pytest.MonkeyPatch, *directories: str) -> None:
+    """Put directories first on the PATH as it stands, keeping the rest of it."""
+    kept = [
+        entry
+        for entry in os.environ["PATH"].split(os.pathsep)
+        if entry not in directories
+    ]
+    machine.setenv("PATH", os.pathsep.join((*directories, *kept)))
 
 
 def with_the_program(
