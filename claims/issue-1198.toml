@@ -1,8 +1,0 @@
-claim_id = "f241ef925857412dbf5d2bd1b2ee4494"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "0a2b866d2d05d82d6220ca94e0e359d7d0fd885e"
-branch = "claude/issue-1198-the-k3d-probe-pulls-its-redis-from-docke"
-scope = ["scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_cluster.py", "scripts/probe_build_worker_k3d_manifests.py", "tests/presentator/adapters/test_postgres_refresh_owner.py", "tests/scripts"]
-opened_commit = "beedf85c038cecc8a78e1b9bed71ba1f73da32a7"
-whole_reason = "the probe, its manifests and its unit tests move together"
