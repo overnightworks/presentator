@@ -278,6 +278,7 @@ def test_a_second_step_admitted_after_the_first_worker_was_ready_again_fails_cel
         (100.0, ["100.0 "], "were not one restarting"),
         (100.0, ["100.0 False True True "], "were not one restarting"),
         (100.0, ["100.0 False False "], "were not one restarting"),
+        (100.0, ["100.0 False "], "were not one restarting"),
         (100.0, ["100.0 True True "], "Ready again"),
     ],
     ids=[
@@ -286,6 +287,7 @@ def test_a_second_step_admitted_after_the_first_worker_was_ready_again_fails_cel
         "an empty reading",
         "a three-pod reading",
         "two workers down",
+        "one listed and down",
         "both Ready",
     ],
 )
@@ -299,6 +301,18 @@ def test_an_odd_or_missing_sample_at_the_admission_fails_the_restart_overlap(
     result = k3d_web.restart_overlap_problem(iter(lines), admitted)
     assert result is not None
     assert problem in result
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["100.0 False True ", "100.0 True "],
+    ids=["the restarting pod not Ready", "the restarting pod not yet recreated"],
+)
+def test_one_worker_restarting_beside_one_ready_at_the_admission_passes_the_overlap(
+    load_script: Callable[..., ModuleType], line: str
+) -> None:
+    k3d_web = load_script("probe_build_worker_k3d_web")
+    assert k3d_web.restart_overlap_problem(iter([line]), 100.0) is None
 
 
 def test_a_build_that_does_not_deliver_in_a_web_pod_fails_cell_11_naming_the_pod(

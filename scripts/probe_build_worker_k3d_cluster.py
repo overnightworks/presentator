@@ -260,6 +260,11 @@ def start_cluster(run: Run, k3s_version: str) -> None:
         f"rancher/k3s:{k3s_version.replace('+', '-')}",
         "--api-port",
         f"127.0.0.1:{run.effects.free_port()}",
+        # The images are imported, never pulled, and the Redis image waits unused
+        # until the web cells; above the kubelet's default 85 % of a runner's disk
+        # its image garbage collection removes it, so collection waits for a full disk.
+        "--k3s-arg",
+        "--kubelet-arg=image-gc-high-threshold=100@server:*",
         "--kubeconfig-update-default=false",
         "--wait",
         "--timeout",
