@@ -9,6 +9,7 @@ splitter and a fake voice.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import re
 import sqlite3
@@ -16,7 +17,8 @@ from contextlib import closing
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Final
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, Final, cast
 
 import pytest
 from agents.backend.fake_gateway import (
@@ -26,11 +28,15 @@ from agents.backend.fake_gateway import (
     tool_call,
     tool_round,
 )
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.adapters.deck_texts import MirroredDeckTexts
+from presentator.api.copresenter import add_copresenter_routes
 from presentator.contracts.copresenter import RetryAfter
 from presentator.contracts.decks import Build, Deck
+from presentator.contracts.models import Role
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
 from tests.support.copresenter_support import (
     A_SOURCE,
@@ -507,3 +513,49 @@ def _payloads_by_event(stream: str) -> dict[str, list[dict[str, object]]]:
     for name, data in re.findall(r"^event: (\w+)\ndata: (.*)$", stream, re.MULTILINE):
         by_event.setdefault(name, []).append(json.loads(data))
     return by_event
+
+
+def test_an_ask_cancelled_while_it_is_prepared_still_writes_its_answer_line(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    released: list[str] = []
+
+    async def cancelled_prepare(*_args: object, **_kwargs: object) -> None:
+        raise asyncio.CancelledError
+
+    def asked_deck(*_args: object, **_kwargs: object) -> object:
+        return object()
+
+    def admit(_session: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            session_id="session", release=lambda: released.append("released")
+        )
+
+    def signed_in(_request: object) -> SimpleNamespace:
+        return SimpleNamespace(
+            user_id="user",
+            session_id="session",
+            person=SimpleNamespace(role=Role.ADMIN),
+        )
+
+    surface = SimpleNamespace(
+        use=SimpleNamespace(asked_deck=asked_deck, prepare=cancelled_prepare),
+        limiter=SimpleNamespace(admit=admit),
+        deadline_seconds=1.0,
+        delay=asyncio.sleep,
+    )
+    app = FastAPI()
+    add_copresenter_routes(
+        app,
+        surface=cast("Any", surface),
+        admission=cast("Any", signed_in),
+        sessions=cast("Any", None),
+    )
+    client = TestClient(app)
+
+    with json_logged(capsys) as logged, contextlib.suppress(BaseException):
+        client.post("/copresenter/ask", json={"said": "Frage", "slide": 1})
+
+    (line,) = [one for one in logged.lines if one["event"] == "answer.ended"]
+    assert line["outcome"] == "cancelled"
+    assert released == ["released"]

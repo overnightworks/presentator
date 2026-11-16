@@ -274,6 +274,9 @@ def _ask_route(
             admitted.step.fail(AnswerFailure.UNEXPECTED)
             admitted.step.end()
             raise
+        except BaseException:
+            admitted.step.end_cancelled()
+            raise
         else:
             streaming = True
             return response
