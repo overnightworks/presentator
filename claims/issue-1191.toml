@@ -1,8 +1,0 @@
-claim_id = "4fc3e9f23ed44fd993dff8b02a9d134f"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "92f60af713f4e41cfd89e76e454a280cd216a3f5"
-branch = "claude/issue-1191-k3d-cell-11-judges-the-restart-overlap-w"
-scope = ["scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_manifests.py", "scripts/probe_build_worker_k3d_web.py", "tests/scripts"]
-opened_commit = "5dd950d0b454a3fbd18e99114eefde314c19c81a"
-whole_reason = "the probe's cell, its manifests and its unit tests move together"
