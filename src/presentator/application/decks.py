@@ -6,7 +6,6 @@ git, TOML, SQL, and the build toolchain stay outside.
 """
 
 import hmac
-import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -19,7 +18,7 @@ from pathlib import Path, PurePosixPath
 from threading import RLock
 from typing import BinaryIO, Final
 
-from presentator.application import build_retention
+from presentator.application import build_retention, deck_builds
 from presentator.application.deck_builds import DeckBuilds, TakenIn
 from presentator.application.deck_take_in import take_in
 from presentator.application.source_state import (
@@ -69,9 +68,6 @@ from presentator.ports.decks import (
     WebhookSecrets,
 )
 
-_log = logging.getLogger(__name__)
-
-_REFRESH_TAKEN_OVER: Final = "another process took the refresh over, this one stopped"
 # A source name is one path element of the webhook address, never a path
 # itself: lowercase, digits, hyphens, starting with a letter or digit.
 _SOURCE_NAME: Final = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
@@ -721,7 +717,7 @@ class Decks:
             with self.ownership.fenced():
                 build_retention.sweep(self.builder, self.sources, self.store)
         except RefreshOwnershipLostError:
-            _log.warning(_REFRESH_TAKEN_OVER)
+            deck_builds.log_refresh_ownership_lost()
             return busy
         return answer
 
@@ -739,10 +735,14 @@ class Decks:
         """
         self.key_drafts.sweep(older_than=self.clock.now() - DRAFT_MAX_AGE)
         building = True
+        fetches: list[SourceFetch] = []
         for source in self.sources.all():
             if self._polled_recently(source):
                 continue
-            building = self._take_in_and_count(source, building=building).still_building
+            taken_in = self._take_in_and_count(source, building=building)
+            building = taken_in.still_building
+            fetches.append(taken_in.fetch)
+        deck_builds.log_refresh(fetches)
 
     def _polled_recently(self, source: Source) -> bool:
         """Whether that source's newest run is younger than the poll interval."""
@@ -752,7 +752,11 @@ class Decks:
     def _take_in_and_build_named(self, name: str) -> SourceFetch | None:
         """Take that source in, read again now that nobody can remove it."""
         source = self._named(name)
-        return None if source is None else self._take_in_and_count(source).fetch
+        if source is None:
+            return None
+        fetch = self._take_in_and_count(source).fetch
+        deck_builds.log_refresh([fetch])
+        return fetch
 
     def _take_in_and_count(self, source: Source, *, building: bool = True) -> TakenIn:
         """Take that source in, build it, count that, say if building goes on."""

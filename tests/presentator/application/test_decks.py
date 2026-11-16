@@ -1,7 +1,6 @@
 """What the lobby calls a deck, which deck it builds, and what it then shows."""
 
 import hashlib
-import logging
 from datetime import timedelta
 from threading import Thread
 
@@ -71,6 +70,7 @@ from tests.presentator.application.support.fakes import (
     FrozenClock,
     HeldDeckFolders,
 )
+from tests.support.log_lines import events_of, json_logged
 
 _ANOTHER_SOURCE = a_source("talks", identifier="a-second-source")
 _HTTPS_SOURCE = Source(
@@ -644,7 +644,7 @@ def test_a_folder_deleted_in_one_source_leaves_the_other_sources_decks_listed() 
 
 
 def test_a_folder_name_another_source_carries_stays_with_the_source_that_had_it(  # DK12
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     store = FakeDeckStore()
     decks = decks_over(
@@ -658,15 +658,15 @@ def test_a_folder_name_another_source_carries_stays_with_the_source_that_had_it(
         fakes=DecksFakes(store=store),
     )
 
-    with caplog.at_level(logging.WARNING):
+    with json_logged(capsys) as logged:
         listed = refreshed(decks)
 
-    assert [(deck.slug, deck.title) for deck in listed] == [
-        ("kundenfeedback", "The first"),
-    ]
+    assert {deck.slug: deck.title for deck in listed} == {"kundenfeedback": "The first"}
     assert [deck.source_id for deck in store.all()] == [SOURCE.id]
-    assert "kundenfeedback" in caplog.text
-    assert _ANOTHER_SOURCE.name in caplog.text
+    [refusal] = events_of(logged, "take_in.refused")
+    assert refusal["source_id"] == _ANOTHER_SOURCE.id
+    assert refusal["reason"] == "name_held_by_another_source"
+    assert "kundenfeedback" not in logged.text
 
 
 def test_a_deck_is_built_out_of_the_source_that_carried_it() -> None:

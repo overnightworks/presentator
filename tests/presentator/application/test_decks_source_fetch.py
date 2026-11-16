@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import timedelta
 from threading import Thread
 
+import pytest
+
 from presentator.application.decks import Decks
 from presentator.contracts.decks import (
     Source,
@@ -24,9 +26,11 @@ from tests.presentator.application.support.fakes import (
     PATIENCE,
     FakeBuildRunner,
     FakeDeckFolders,
+    FakeRefreshOwnership,
     FrozenClock,
     HeldDeckFolders,
 )
+from tests.support.log_lines import events_of, json_logged
 
 
 def _fetched(mirror: FakeDeckFolders, builder: FakeBuildRunner) -> Decks:
@@ -174,3 +178,65 @@ def test_a_slow_pull_marks_a_vanished_deck_removed_at_the_instant_the_pass_began
     decks.refresh()
 
     assert set(fakes.store.removed.values()) == {began}
+
+
+def test_a_refresh_that_built_a_deck_writes_one_line_with_its_counts(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    decks = _fetched(carrying(a_folder("kundenfeedback")), FakeBuildRunner())
+
+    with json_logged(capsys) as logged:
+        decks.refresh()
+
+    [refreshed] = events_of(logged, "refresh.completed")
+    assert refreshed["level"] == "info"
+    assert refreshed["sources_fetched_count"] == 1
+    assert refreshed["decks_built_count"] == 1
+    assert refreshed["builds_failed_count"] == 0
+    assert refreshed["decks_removed_count"] == 0
+    assert "kundenfeedback" not in logged.text
+
+
+def test_a_refresh_that_found_no_work_writes_no_line(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    decks = _fetched(carrying(a_folder("kundenfeedback")), FakeBuildRunner())
+    decks.refresh()
+
+    with json_logged(capsys) as logged:
+        decks.refresh()
+        decks.refresh_named(SOURCE.name)
+
+    assert events_of(logged, "refresh.completed") == []
+
+
+def test_fetching_one_source_that_changed_writes_one_line_with_its_counts(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    decks = _fetched(carrying(a_folder("kundenfeedback")), FakeBuildRunner())
+
+    with json_logged(capsys) as logged:
+        _fetch(decks)
+
+    [refreshed] = events_of(logged, "refresh.completed")
+    assert (
+        refreshed["sources_fetched_count"],
+        refreshed["decks_built_count"],
+    ) == (1, 1)
+
+
+def test_a_fetch_that_lost_the_refresh_writes_one_refusal_and_answers_busy(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    decks = decks_over(
+        mirror=carrying(a_folder("kundenfeedback")),
+        fakes=DecksFakes(ownership=FakeRefreshOwnership(lost_to_another=True)),
+    )
+
+    with json_logged(capsys) as logged:
+        fetched = _fetch(decks)
+
+    assert fetched.run is None
+    [refusal] = events_of(logged, "refresh.refused")
+    assert refusal["level"] == "info"
+    assert refusal["reason"] == "ownership_lost"
