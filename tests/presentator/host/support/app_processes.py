@@ -24,7 +24,7 @@ from presentator.api.auth import (
     START_SIGN_IN_PATH,
 )
 from tests.presentator.host.support.app_process import ANSWER_PREFIX
-from tests.support.lobby import A_BROWSERS_ADDRESS
+from tests.support.lobby import A_BROWSERS_ADDRESS, A_TALK_ADDRESS
 from tests.support.log_lines import LogLine
 from tests.support.postgres import database_environment
 from tests.support.redis import emptied_database_url
@@ -38,6 +38,7 @@ _OUTPUT_END_SECONDS: Final = 30
 _LAST_LINES: Final = 10
 _POLL_SECONDS: Final = 0.1
 _HOST: Final = A_BROWSERS_ADDRESS.removeprefix("https://")
+TALK_HOST: Final = A_TALK_ADDRESS.removeprefix("https://")
 _FROM_THE_SAME_ORIGIN: Final = {"sec-fetch-site": "same-origin"}
 _A_FORM: Final = {"content-type": "application/x-www-form-urlencoded"}
 SESSION: Final = "/api/session"
@@ -120,12 +121,14 @@ class App:
         path: str,
         headers: Mapping[str, str],
         body: JsonValue | None = None,
+        *,
+        host: str = _HOST,
     ) -> httpx2.Response:
-        """One request for the lobby's hostname, redirects left alone."""
+        """One request for `host` (the lobby's unless named), redirects left alone."""
         return httpx2.request(
             method,
             f"http://127.0.0.1:{self.port}{path}",
-            headers={"host": _HOST, **headers},
+            headers={"host": host, **headers},
             json=body,
             timeout=_REQUEST_SECONDS,
             follow_redirects=False,
@@ -176,6 +179,12 @@ class Browser:
     """The cookies of one person, who may go to either process."""
 
     cookies: dict[str, str] = field(default_factory=dict[str, str])
+    host: str = _HOST
+
+    @property
+    def cookie_header(self) -> str:
+        """The cookies held, as a request sends them."""
+        return "; ".join(f"{name}={value}" for name, value in self.cookies.items())
 
     def request(
         self,
@@ -186,7 +195,7 @@ class Browser:
         body: JsonValue | None = None,
     ) -> httpx2.Response:
         """Send the cookies held, keep the ones the answer sets."""
-        cookie = "; ".join(f"{name}={value}" for name, value in self.cookies.items())
+        cookie = self.cookie_header
         answer = app.request(
             method,
             path,
@@ -197,6 +206,7 @@ class Browser:
                 **(headers or {}),
             },
             body,
+            host=self.host,
         )
         for header in answer.headers.get_list("set-cookie"):
             for name, morsel in SimpleCookie(header).items():
@@ -206,11 +216,23 @@ class Browser:
                     self.cookies[name] = morsel.value
         return answer
 
-    def sign_in(self, app: App, subject: str, *, admin: bool = False) -> None:
-        """Sign `subject` in through `app`, as a person does at the issuer."""
+    def sign_in(
+        self,
+        app: App,
+        subject: str,
+        *,
+        admin: bool = False,
+        groups: list[str] | None = None,
+    ) -> None:
+        """Sign `subject` in through `app`, as a person does at the issuer.
+
+        The groups are the issuer's for the person unless named.
+        """
         started = self.request(app, "GET", START_SIGN_IN_PATH)
         query = app.ask_issuer(
-            started.headers["location"], subject, ADMIN if admin else MEMBER
+            started.headers["location"],
+            subject,
+            groups or (ADMIN if admin else MEMBER),
         )
         self.request(app, "GET", f"{SIGN_IN_CALLBACK_PATH}?{query}")
 

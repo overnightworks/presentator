@@ -12,6 +12,7 @@ import uvicorn
 from pydantic import SecretStr
 
 from presentator.adapters.identity import SqliteSessionRecordStore
+from presentator.api.health import Stopping
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host import main
@@ -85,8 +86,8 @@ def test_the_sweep_runs_while_the_server_serves(
     )
 
     class ServerThatWaitsForTheSweep:
-        def __init__(self, config: uvicorn.Config) -> None:
-            self.config = config
+        def __init__(self, config: uvicorn.Config, stopping: Stopping) -> None:
+            del config, stopping
 
         async def serve(self) -> None:
             seed_user(database, _ADMIN)
@@ -102,7 +103,7 @@ def test_the_sweep_runs_while_the_server_serves(
             await asyncio.to_thread(deleted_a_session.wait, PATIENCE.total_seconds())
             swept.append(not stored_session_ids(database))
 
-    monkeypatch.setattr(main.uvicorn, "Server", ServerThatWaitsForTheSweep)
+    monkeypatch.setattr(main, "StoppingServer", ServerThatWaitsForTheSweep)
 
     main.main([])
 

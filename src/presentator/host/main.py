@@ -4,13 +4,12 @@ Imports every other layer, because it is the one place that decides which
 adapter satisfies which port.
 """
 
-import argparse
 import asyncio
 import copy
 import logging
 from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
@@ -60,7 +59,6 @@ from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
 from presentator.adapters.postgres.migrate import (
     MIGRATIONS_DIRECTORY,
     database_is_ready,
-    migrate,
     migration_history,
     serving_refusal,
 )
@@ -110,7 +108,7 @@ from presentator.api.auth import (
     create_lobby,
 )
 from presentator.api.copresenter import CoPresenterSurface
-from presentator.api.health import Readiness, always_ready
+from presentator.api.health import Readiness, Stopping, always_ready
 from presentator.api.lobby_shell import LobbyBuildError, LobbyShell
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_content_security_policy
@@ -121,12 +119,16 @@ from presentator.application.own_decks import OwnDecks
 from presentator.application.people import People
 from presentator.application.preferences import Preferences
 from presentator.contracts.decks import ToolchainIdentity
+from presentator.host.command_line import (
+    MIGRATE_COMMAND,
+    command_line,
+    migrate_the_database,
+)
 from presentator.host.config import (
     PostgresDatabase,
     Settings,
     WhereBuildsRun,
     cannot_start,
-    load_database_settings,
     load_settings,
     variable_of,
 )
@@ -136,6 +138,7 @@ from presentator.host.oidc import (
     relying_party,
 )
 from presentator.host.polling import Schedule
+from presentator.host.stopping_server import StoppingServer
 from presentator.host.store_connection import (
     StoreKind,
     reach_redis,
@@ -159,7 +162,6 @@ from presentator.ports.preferences import (
 _log = logging.getLogger(__name__)
 
 SERVICE_NAME = "presentator"
-MIGRATE_COMMAND = "migrate"
 
 RelyingPartyFor = Callable[[OidcClientConfig], OidcRelyingParty]
 
@@ -182,6 +184,7 @@ class Instance:
     poller: Schedule
     session_sweep: Schedule
     close: Callable[[], None] = _nothing_to_close
+    stopping: Stopping = field(default_factory=Stopping)
 
 
 type SessionStore = SqliteSessionRecordStore | PostgresSessionRecordStore
@@ -221,7 +224,9 @@ def build_instance(
     redis = SharedRedis(settings.redis_url.get_secret_value(), settings.redis_password)
     reach_redis(redis)
     toolchain = _identity_of_the_toolchain(settings)
+    stopping = Stopping()
     stores = _with_redis(_stores(settings, migrations_directory, toolchain), redis)
+    stores = copy.replace(stores, readiness=stopping.unready(stores.readiness))
     mirrors = SourceMirrors(
         directory=settings.mirrors,
         credentials=stores.credentials,
@@ -240,10 +245,19 @@ def build_instance(
             mirrors=mirrors,
             shell=shell,
         ),
-        talk=_talk(settings, stores, decks, talk_auth, mirrors, redis=redis),
+        talk=_talk(
+            settings,
+            stores,
+            decks,
+            talk_auth,
+            mirrors,
+            redis=redis,
+            stopping=stopping,
+        ),
         poller=_poller(settings, decks),
         session_sweep=_session_sweep(stores.sessions, SystemClock()),
         close=stores.close,
+        stopping=stopping,
     )
 
 
@@ -476,6 +490,7 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
     mirrors: SourceMirrors,
     *,
     redis: SharedRedis,
+    stopping: Stopping,
 ) -> FastAPI:
     """The talk host, with the co-presenter it speaks to."""
     return create_talk(
@@ -484,7 +499,7 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
         auth=auth,
         lobby_origin=settings.public_origin,
         copresenter=_copresenter_surface(
-            settings, stores.sessions, decks, auth, mirrors, redis
+            settings, stores.sessions, decks, auth, mirrors, redis, stopping
         ),
         readiness=stores.readiness,
     )
@@ -497,6 +512,7 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
     auth: InstalledAuth,
     mirrors: SourceMirrors,
     redis: SharedRedis,
+    stopping: Stopping,
 ) -> CoPresenterSurface:
     """What only a signed-in admin may reach at the talk host: the gateway's answers."""
     answers = gateway_answerer(settings.agent, auth.relying_party)
@@ -523,6 +539,7 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
         limiter=ask_limiter_of(redis, deadline_seconds=answers.deadline_seconds),
         browser_origin=settings.talk_origin,
         deadline_seconds=answers.deadline_seconds,
+        stopping=stopping,
     )
 
 
@@ -695,8 +712,8 @@ def main(
     Both run on the configuration the environment carries.
     """
     logline.configure(SERVICE_NAME)
-    if _command_line().parse_args(arguments).command == MIGRATE_COMMAND:
-        _migrate_the_database()
+    if command_line().parse_args(arguments).command == MIGRATE_COMMAND:
+        migrate_the_database()
         return
     _log.info("process.started")
     settings = load_settings()
@@ -705,24 +722,6 @@ def main(
             build_instance(settings, relying_party_for, migrations_directory), settings
         )
     )
-
-
-def _migrate_the_database() -> None:
-    database = load_database_settings().postgres
-    engine = create_database_engine(database.url, database.password)
-    try:
-        migrate(engine)
-    finally:
-        engine.dispose()
-
-
-def _command_line() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="presentator")
-    commands = parser.add_subparsers(dest="command")
-    commands.add_parser(
-        MIGRATE_COMMAND, help="bring the database to the newest revision, then exit"
-    )
-    return parser
 
 
 def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddleware:
@@ -767,7 +766,7 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
 
 async def _serve(instance: Instance, settings: Settings) -> None:
     """Poll and sweep for as long as the server answers, and stop with it."""
-    server = uvicorn.Server(
+    server = StoppingServer(
         uvicorn.Config(
             served_by_host(instance, settings),
             host=settings.host,
@@ -779,6 +778,7 @@ async def _serve(instance: Instance, settings: Settings) -> None:
             # records that carry a path stay out of the log.
             log_config=None,
         ),
+        instance.stopping,
     )
     try:
         async with instance.poller.polling(), instance.session_sweep.polling():

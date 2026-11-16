@@ -19,6 +19,7 @@ from presentator.adapters.sentences import split_sentences
 from presentator.adapters.session_access import SessionAccess
 from presentator.agent.backend import gateway_answerer
 from presentator.api.copresenter import CoPresenterSurface
+from presentator.api.health import never_stopping
 from presentator.application.copresenter import CoPresenterUse
 from presentator.contracts.copresenter import (
     AccessRefusal,
@@ -119,6 +120,7 @@ ASKED = AskedDeck(deck=the_admins_decks().kept[A_DECK], source=A_SOURCE)
 
 HEARING = f"{A_TALK_SOCKET_ADDRESS}/copresenter/hear?language=de"
 POLICY_VIOLATION = 1008
+SERVICE_RESTART = 1012
 INTERNAL_ERROR = 1011
 
 
@@ -341,13 +343,14 @@ def a_use(fakes: PrivateFakes, decks: FakeDeckStore) -> CoPresenterUse:
     )
 
 
-def a_copresenter_talk_host(
+def a_copresenter_talk_host(  # noqa: PLR0913 - each is one thing a scenario varies
     *,
     users: FakeUserStore | None = None,
     delay: Callable[[float], Awaitable[None]] = asyncio.sleep,
     limiter: AskLimiter | None = None,
     decks: FakeDeckStore | None = None,
     deadline_seconds: float = AN_ANSWER_DEADLINE_SECONDS,
+    stopping: Callable[[], bool] = never_stopping,
 ) -> tuple[Lobby, PrivateFakes, FrozenClock]:
     private = PrivateFakes()
     people = a_crowd(users)
@@ -359,6 +362,7 @@ def a_copresenter_talk_host(
             browser_origin=TALK_ORIGIN,
             deadline_seconds=deadline_seconds,
             delay=delay,
+            stopping=stopping,
         ),
     )
     browser = a_browser_at(

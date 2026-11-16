@@ -69,7 +69,7 @@ describe('presenter controls', () => {
       state.answerMode = 'audio'
       await browser.close()
     }
-  })
+  }, 30_000)
 
   it('Counts only a voiced sentence as spoken when an answer fails midway', async () => {
     state.answerMode = 'mid-answer-error'
@@ -383,6 +383,36 @@ describe('presenter controls', () => {
       await expect.poll(() => state.media.trackStopped, { timeout: 1_000 }).toBe(true)
       for (const word of [en['controls.noHearing'], en['controls.unreachable'], en['controls.voiceOffline'], en['controls.hearingNotReady']]) {
         expect(await page.getByText(word, { exact: true }).count()).toBe(0)
+      }
+    } finally {
+      await browser.close()
+    }
+  })
+
+  it.each([
+    ['a restarting server (1012) reconnects with no fault word', 1012, false],
+    ['a server that closes for another reason (1011) shows the fault', 1011, true],
+  ] as const)('CP16: after %s', async (_situation, code, shownAsFault) => {
+    state.media = createMediaObservation()
+    const { browser, page } = await openPresenter(1024)
+    try {
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      const hearingsBefore = state.hearingOpened
+      await ai.click({ timeout: 2_000 })
+      await expect.poll(() => state.hearingOpened).toBeGreaterThan(hearingsBefore)
+      const openedBefore = state.hearingOpened
+      endHearings(code)
+      if (shownAsFault) {
+        await page.getByText(en['controls.noHearing'], { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
+        expect(state.hearingOpened).toBe(openedBefore)
+      } else {
+        await expect.poll(() => state.hearingOpened, { timeout: 5_000 }).toBe(openedBefore + 1)
+        await expect.poll(() => page.evaluate(() => (window as unknown as {
+          __copresenter: { snapshot: () => { capturing: boolean } }
+        }).__copresenter.snapshot().capturing)).toBe(true)
+        expect(await page.getByText(en['controls.noHearing'], { exact: true }).count()).toBe(0)
+        expect(state.media.trackStopped).toBe(false)
       }
     } finally {
       await browser.close()

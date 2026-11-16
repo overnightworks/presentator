@@ -2,10 +2,12 @@
 
 The answer is a fixed body for any caller. It is 200 while the instance may
 serve and 503 while what it serves from cannot answer or is not ready, with a
-body that says nothing of why; the reason is in the log.
+body that says nothing of why; the reason is in the log. An instance that has
+begun to stop is unready from that moment on.
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import Final
 
@@ -20,6 +22,30 @@ HEALTH_PATH: Final = "/health"
 HEALTH_IS_PUBLIC: Final = PublicRule(PathRules(exact=frozenset({HEALTH_PATH})))
 _HEALTHY: Final = {"status": "ok"}
 _UNAVAILABLE: Final = {"status": "unavailable"}
+
+
+@dataclass(slots=True)
+class Stopping:
+    """Whether the process has been told to stop; it never turns back."""
+
+    _begun: bool = field(default=False, init=False)
+
+    def begin(self) -> None:
+        """Mark the stop as begun."""
+        self._begun = True
+
+    def __call__(self) -> bool:
+        """True once the stop has begun."""
+        return self._begun
+
+    def unready(self, readiness: Readiness) -> Readiness:
+        """`readiness`, but false from the moment the stop has begun."""
+        return lambda: not self._begun and readiness()
+
+
+def never_stopping() -> bool:
+    """The stop state of a surface no process stop concerns."""
+    return False
 
 
 def always_ready() -> bool:
