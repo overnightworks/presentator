@@ -157,6 +157,8 @@ from probe_build_worker_k3d_lives import (
 )
 from probe_build_worker_k3d_manifests import (
     PRODUCTION_IMAGE,
+    REDIS_IMAGE,
+    REDIS_PINNED,
     WORKER_CONTAINER,
     applied_documents,
     namespace_document,
@@ -424,6 +426,34 @@ def use_released_image(run: Run, released: ReleasedImage) -> None:
     say(f"released image {released.reference} is {run.tag}, repo digest {pinned}")
 
 
+def pull_redis(run: Run) -> None:
+    """Make the probe Redis's local name the pinned image, pulled by the runner.
+
+    The digest in the pulled reference is the proof; the cluster pulls nothing.
+    """
+    pulled = run("docker pull", REDIS_PINNED, check=False)
+    if pulled.returncode:
+        refuse(f"Redis image {REDIS_PINNED} did not pull: {pulled.stderr[-2000:]}")
+    try:
+        run("docker tag", REDIS_PINNED, REDIS_IMAGE)
+    finally:
+        run("docker image rm", REDIS_PINNED, check=False)
+
+
+def import_redis(run: Run) -> None:
+    """Put the probe Redis into the cluster; the local name goes once it is in."""
+    try:
+        imported = run(
+            "k3d image import", REDIS_IMAGE, "--cluster", run.name, check=False
+        )
+        if imported.returncode:
+            refuse(
+                f"Redis image {REDIS_IMAGE} did not import: {imported.stderr[-2000:]}"
+            )
+    finally:
+        run("docker image rm", REDIS_IMAGE, check=False)
+
+
 def drive(run: Run, released: ReleasedImage | None = None) -> None:
     """Drive the cells of the pod shape; always remove what the run made.
 
@@ -439,9 +469,11 @@ def drive(run: Run, released: ReleasedImage | None = None) -> None:
             run("docker build --tag", run.tag, str(run.repository))
         else:
             use_released_image(run, released)
+        pull_redis(run)
         start_cluster(run, k3s_version)
         prove_label_filter(run)
         run("k3d image import", run.tag, "--cluster", run.name)
+        import_redis(run)
         namespace = json.dumps(namespace_document(run.platform))
         run("kubectl apply --filename -", stdin=namespace)
         problems = drive_cells(run, overlay)

@@ -33,11 +33,14 @@ WORKER_CONTAINER = "worker"
 WEB_CONTAINER = "web"
 # The web needs a Redis the platform's render does not yet hold; the probe runs a
 # throwaway one in its namespace, the image CI's Redis service container uses.
+# The runner pulls the pinned digest from a mirror without Docker Hub's anonymous
+# rate limit and imports it under a local name; the cluster never pulls it.
 REDIS = "probe-redis"
-REDIS_IMAGE = (
-    "redis:7.4.12-alpine"
+REDIS_PINNED = (
+    "mirror.gcr.io/library/redis:7.4.12-alpine"
     "@sha256:338fbfc036dc5517ac0b04d6de21521085935336e565f223406180e9d84166e2"
 )
+REDIS_IMAGE = "probe-redis-image:pinned"
 REDIS_PORT = 6379
 REDIS_URL_VARIABLE = "PRESENTATOR_REDIS_URL"
 SECRETS_VOLUME = "secrets"
@@ -220,6 +223,7 @@ def redis_documents() -> list[Document]:
                             {
                                 "name": "redis",
                                 "image": REDIS_IMAGE,
+                                "imagePullPolicy": "Never",
                                 "ports": [{"containerPort": REDIS_PORT}],
                             }
                         ]

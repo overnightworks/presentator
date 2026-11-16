@@ -191,6 +191,15 @@ def test_the_web_documents_are_the_overlays_config_map_and_deployment_with_a_red
     assert documents[0] is not named(rendered, "Deployment")
 
 
+def test_the_probe_redis_never_makes_the_cluster_pull(
+    manifests_module: ModuleType,
+) -> None:
+    deployment = manifests_module.redis_documents()[0]
+    container = deployment["spec"]["template"]["spec"]["containers"][0]
+    assert container["imagePullPolicy"] == "Never"
+    assert container["image"] == manifests_module.REDIS_IMAGE
+
+
 def test_the_throwaway_secrets_read_their_names_and_keys_from_the_deployment(
     manifests_module: ModuleType, production_image: str
 ) -> None:

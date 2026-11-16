@@ -155,6 +155,8 @@ class World:
     repo_digests: list[str] | None = None
     # The error `docker pull` ends with; the pull passes if empty.
     pull_error: str = ""
+    # The error `k3d image import` ends with for the probe Redis; passes if empty.
+    redis_import_error: str = ""
     twin_pod: str = ""
     twin_log: str = "the twin's mount list"
     # What the web and the workers do: whether they become Ready, the web's
@@ -236,6 +238,10 @@ class World:
         match command:
             case ("docker", "pull", *_) if self.pull_error:
                 return 1, "", self.pull_error
+            case ("k3d", "image", "import", image, *_) if (
+                self.redis_import_error and image != self.probe_image
+            ):
+                return 1, "", self.redis_import_error
             case ("timeout", _, "kubectl", "cp", *_):
                 return self.copy_exit, "", self.copy_stderr
             case ("timeout", _, "kubectl", "exec", *_):

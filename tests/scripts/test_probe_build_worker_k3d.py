@@ -776,6 +776,54 @@ def test_a_pull_that_fails_refuses_with_its_error_then_tears_down(
     assert not fixture.run.directory.exists()
 
 
+def test_the_probe_redis_is_pulled_by_the_runner_and_imported_before_the_pod_exists(
+    make_fixture: Callable[..., Fixture], manifests_module: ModuleType
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    pinned, local = manifests_module.REDIS_PINNED, manifests_module.REDIS_IMAGE
+    steps = [
+        ("docker", "pull", pinned),
+        ("docker", "tag", pinned, local),
+        ("k3d", "cluster", "create"),
+        ("k3d", "image", "import", local),
+        ("kubectl", "apply"),
+    ]
+    positions = [command_positions(fixture.world, *step) for step in steps]
+    assert all(found for found in positions)
+    assert [found[0] for found in positions] == sorted(found[0] for found in positions)
+    assert "@sha256:" in pinned
+
+
+def test_a_redis_pull_that_fails_names_the_image_and_creates_no_cluster(
+    make_fixture: Callable[..., Fixture],
+    manifests_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = make_fixture(World(pull_error="429 Too Many Requests"))
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    refusal = capsys.readouterr().err
+    assert manifests_module.REDIS_PINNED in refusal
+    assert "429 Too Many Requests" in refusal
+    assert fixture.world.issued("k3d", "cluster", "create") == []
+
+
+def test_a_redis_import_that_fails_names_the_image_then_tears_down(
+    make_fixture: Callable[..., Fixture],
+    manifests_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = make_fixture(World(redis_import_error="no space left"))
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    refusal = capsys.readouterr().err
+    assert manifests_module.REDIS_IMAGE in refusal
+    assert "no space left" in refusal
+    assert fixture.world.issued("kubectl", "apply") == []
+    assert fixture.world.issued("k3d", "cluster", "delete") != []
+
+
 def test_the_cells_and_the_commands_from_the_cluster_on_are_the_same_for_either_source(
     make_fixture: Callable[..., Fixture], capsys: pytest.CaptureFixture[str]
 ) -> None:
