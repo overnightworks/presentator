@@ -78,7 +78,7 @@ some of them.
 | `PRESENTATOR_DATABASE` | `presentator.sqlite3` | The SQLite file, used while `PRESENTATOR_DATABASE_URL` is unset. |
 | `PRESENTATOR_MIRRORS` | `mirrors` | Where the bare mirrors of the deck sources live. |
 | `PRESENTATOR_HOST` | `127.0.0.1` | Listen address. |
-| `PRESENTATOR_PORT` | `8000` | Listen port; a start that cannot listen on it ends in one `process.failed` line with `reason` `port_taken` (or `bind_refused`) and exit status 3. |
+| `PRESENTATOR_PORT` | `8000` | Listen port, 0 to 65535; another number refuses the start, and a start that cannot listen on it ends in one `process.failed` line with `reason` `port_taken` (or `bind_refused`) and exit status 3. |
 | `PRESENTATOR_TRUSTED_PROXIES` | empty | Comma-separated addresses or networks; see below. |
 | `LOG_LEVEL` | `info` | The root log level (`debug`, `info`, `warning`, `error`, `critical`); the request line is written at `info` whatever it says, and anything else refuses the start. |
 | `PRESENTATOR_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/` as the person and `/api/admin/` as an admin; empty serves no route for a token client's token. See [people](people.md). |

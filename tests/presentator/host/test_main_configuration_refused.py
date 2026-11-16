@@ -58,6 +58,15 @@ def _no_key_file(environment: pytest.MonkeyPatch, directory: Path) -> str:
     return str(directory)
 
 
+def _a_port_no_socket_binds(unbindable: str) -> Arrangement:
+    def arrange(environment: pytest.MonkeyPatch, directory: Path) -> str:
+        del directory
+        environment.setenv("PRESENTATOR_PORT", unbindable)
+        return unbindable
+
+    return arrange
+
+
 def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
     del environment
     return str(directory)
@@ -71,6 +80,8 @@ def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
         ([], _unreadable_password_file, "PRESENTATOR_DATABASE_PASSWORD_FILE"),
         ([], _no_key_file, "PRESENTATOR_SECRET_KEY_FILE"),
         ([], _an_unknown_agent_backend, "PRESENTATOR_AGENT__BACKEND"),
+        ([], _a_port_no_socket_binds("1000000"), "PRESENTATOR_PORT"),
+        ([], _a_port_no_socket_binds("-5"), "PRESENTATOR_PORT"),
         (
             [],
             _an_issuer_the_sign_in_client_refuses,

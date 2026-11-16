@@ -344,7 +344,8 @@ class Settings(
     # the bound leaves room for it.
     source_timeout_seconds: float = 180.0
     host: str = "127.0.0.1"
-    port: int = 8000
+    # The ports a socket can bind; another number would fail only at the bind.
+    port: int = Field(default=8000, ge=0, le=65535)
     public_origin: Annotated[str, AfterValidator(_one_public_origin)]
     # The talk host is an origin of its own, so a deck's code runs on a site the
     # lobby's cookies never reach. It is a deployment fact: no default.
