@@ -58,6 +58,7 @@ from presentator.adapters.postgres.engine import create_database_engine
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
 from presentator.adapters.postgres.migrate import (
     MIGRATIONS_DIRECTORY,
+    DatabaseRefusedError,
     RefusalReason,
     cap_alembic_logging,
     database_is_ready,
@@ -92,15 +93,10 @@ from presentator.adapters.secrets import (
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.session_access import SessionAccess
 from presentator.adapters.shared_redis import RateLimitedHost, SharedRedis
-from presentator.adapters.speech import (
-    SpeechHearing,
-    SpeechSpeaking,
-)
+from presentator.adapters.speech import SpeechHearing, SpeechSpeaking
 from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.agent.backend import gateway_answerer
-from presentator.agent.mcp import (
-    install_mcp_front,
-)
+from presentator.agent.mcp import install_mcp_front
 from presentator.api.auth import (
     BACKCHANNEL_LOGOUT_PATH,
     AgentFront,
@@ -341,13 +337,13 @@ def _postgres_stores(
     with timed_connection(StoreKind.POSTGRES) as step:
         refusal = serving_refusal(engine, history)
         if refusal is not None:
-            if refusal.reason is RefusalReason.NOT_ANSWERING:
+            if refusal is RefusalReason.NOT_ANSWERING:
                 step.fail(StoreFailure.NOT_ANSWERING)
             else:
-                step.refuse(refusal.reason)
+                step.refuse(refusal)
     if refusal is not None:
         engine.dispose()
-        raise cannot_start(refusal.message)
+        raise DatabaseRefusedError(refusal)
     toolchain, bound = refresh
     ownership = PostgresRefreshOwnership(
         engine, toolchain=toolchain, lock_timeout=bound
@@ -717,20 +713,25 @@ def main(
 ) -> None:
     """Migrate the database when asked to, else serve the lobby.
 
-    Both run on the configuration the environment carries.
+    Both run on the configuration the environment carries; a refused database
+    ends either in one line and exit status 1.
     """
     logline.configure(SERVICE_NAME)
     cap_alembic_logging()
-    if command_line().parse_args(arguments).command == MIGRATE_COMMAND:
-        migrate_the_database()
-        return
-    _log.info("process.started")
-    settings = load_settings()
-    asyncio.run(
-        _serve(
-            build_instance(settings, relying_party_for, migrations_directory), settings
+    try:
+        if command_line().parse_args(arguments).command == MIGRATE_COMMAND:
+            migrate_the_database()
+            return
+        _log.info("process.started")
+        settings = load_settings()
+        instance = build_instance(settings, relying_party_for, migrations_directory)
+    except DatabaseRefusedError as refused:
+        error_type = type(refused).__name__
+        _log.error(
+            "process.failed", extra={"reason": refused.reason, "error_type": error_type}
         )
-    )
+        raise SystemExit(1) from None
+    asyncio.run(_serve(instance, settings))
 
 
 def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddleware:

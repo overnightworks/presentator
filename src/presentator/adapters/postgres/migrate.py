@@ -1,7 +1,6 @@
 """The migrations of the database, and the rule for serving what they made."""
 
 import logging
-from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Final
@@ -18,13 +17,6 @@ from presentator.adapters.postgres.locks import MIGRATION_LOCK, AdvisoryLock, pa
 MIGRATIONS_DIRECTORY: Final = Path(__file__).parent / "migrations"
 _TAKE_LOCK: Final = text("SELECT pg_advisory_lock(:lock_class, :instance)")
 _RELEASE_LOCK: Final = text("SELECT pg_advisory_unlock(:lock_class, :instance)")
-NO_REVISION: Final = (
-    "the database holds no revision row; run `presentator migrate` before serving"
-)
-NOT_ANSWERING: Final = "the database did not answer ({failure})"
-BEHIND_THIS_RELEASE: Final = (
-    "the database is behind this release; run `presentator migrate` before serving"
-)
 _log = logging.getLogger(__name__)
 
 
@@ -37,12 +29,17 @@ class RefusalReason(StrEnum):
     NEWER_THAN_THIS_RELEASE = "newer_than_this_release"
 
 
-@dataclass(frozen=True, slots=True)
-class ServingRefusal:
-    """A refusal to serve: the code the log carries and the text the operator reads."""
+class DatabaseRefusedError(Exception):
+    """The database is not served or migrated, for `reason`.
 
-    reason: RefusalReason
-    message: str
+    It carries the code and never what the driver says, which may quote the
+    address the connection used.
+    """
+
+    def __init__(self, reason: RefusalReason) -> None:
+        """Refuse the database for `reason`."""
+        super().__init__(reason)
+        self.reason = reason
 
 
 def cap_alembic_logging() -> None:
@@ -55,11 +52,16 @@ def migrate(engine: Engine) -> None:
 
     Migrations only add, so a database whose revision this release does not know
     was migrated by a newer release: it stays as it is, which lets a rollback of
-    the release run its migration step without harm.
+    the release run its migration step without harm. A database that does not
+    answer is refused.
     """
     config = _config(MIGRATIONS_DIRECTORY)
     history = ScriptDirectory.from_config(config)
-    with engine.connect() as connection:
+    try:
+        connection = engine.connect()
+    except SQLAlchemyError:
+        raise DatabaseRefusedError(RefusalReason.NOT_ANSWERING) from None
+    with connection:
         _hold(connection, MIGRATION_LOCK)
         try:
             if _is_from_a_newer_release(connection, history):
@@ -80,7 +82,7 @@ def migration_history(directory: Path = MIGRATIONS_DIRECTORY) -> ScriptDirectory
     return ScriptDirectory.from_config(_config(directory))
 
 
-def serving_refusal(engine: Engine, history: ScriptDirectory) -> ServingRefusal | None:
+def serving_refusal(engine: Engine, history: ScriptDirectory) -> RefusalReason | None:
     """Why this release must not serve the database, or None when it may.
 
     A database that does not answer is refused. So is one with no revision row,
@@ -94,23 +96,20 @@ def serving_refusal(engine: Engine, history: ScriptDirectory) -> ServingRefusal 
     try:
         with engine.connect() as connection:
             held = set(MigrationContext.configure(connection).get_current_heads())
-    except SQLAlchemyError as failure:
-        return ServingRefusal(
-            RefusalReason.NOT_ANSWERING,
-            NOT_ANSWERING.format(failure=type(failure).__name__),
-        )
+    except SQLAlchemyError:
+        return RefusalReason.NOT_ANSWERING
     if not held:
-        return ServingRefusal(RefusalReason.NO_REVISION, NO_REVISION)
+        return RefusalReason.NO_REVISION
     if history.get_current_head() in held or not held <= _known_revisions(history):
         return None
-    return ServingRefusal(RefusalReason.BEHIND_THIS_RELEASE, BEHIND_THIS_RELEASE)
+    return RefusalReason.BEHIND_THIS_RELEASE
 
 
 def database_is_ready(engine: Engine, history: ScriptDirectory) -> bool:
     """Whether the database answers and this release may serve it; a no is logged."""
     refusal = serving_refusal(engine, history)
     if refusal is not None:
-        _log.info("database_readiness.refused", extra={"reason": refusal.reason})
+        _log.info("database_readiness.refused", extra={"reason": refusal})
     return refusal is None
 
 

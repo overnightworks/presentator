@@ -8,6 +8,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 from presentator.adapters.postgres.locks import MIGRATION_LOCK
+from presentator.adapters.postgres.migrate import DatabaseRefusedError
 from presentator.host import main
 from tests.support.log_lines import json_logged
 from tests.support.postgres import database_environment, engine_on
@@ -61,6 +62,29 @@ def test_migrate_writes_no_free_text_line_of_alembic(
     assert not [
         line for line in logged.lines if str(line["logger"]).startswith("alembic")
     ]
+
+
+def test_a_migrate_against_a_database_that_does_not_answer_ends_in_one_failed_line(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    nothing_listens_here = "postgresql://nobody@127.0.0.1:1/nothing"
+    for name, value in database_environment(nothing_listens_here, tmp_path).items():
+        monkeypatch.setenv(name, value)
+
+    with json_logged(capsys) as logged, pytest.raises(SystemExit) as ended:
+        main.main(["migrate"])
+
+    assert ended.value.code == 1
+    (failed,) = logged.lines
+    assert (failed["event"], failed["level"]) == ("process.failed", "error")
+    assert (failed["reason"], failed["error_type"]) == (
+        "not_answering",
+        DatabaseRefusedError.__name__,
+    )
+    assert "127.0.0.1" not in logged.text
+    assert capsys.readouterr().err == ""
 
 
 def test_two_concurrent_migrations_wait_for_one_another_and_both_end_at_head(

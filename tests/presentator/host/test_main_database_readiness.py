@@ -98,8 +98,7 @@ def test_an_empty_or_older_database_is_refused_and_not_ready(
     with json_logged(capsys) as logged:
         ready = database_is_ready(engine, history)
 
-    assert refusal
-    assert refusal.reason == reason
+    assert refusal == reason
     assert not ready
     (line,) = [
         one for one in logged.lines if one["event"] == "database_readiness.refused"
