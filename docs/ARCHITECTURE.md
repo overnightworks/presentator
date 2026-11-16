@@ -126,14 +126,14 @@ Postgres). JSON lives under `/api/` as typed models. The one signed-out path is 
 /api/session`, and a store failure while resolving a reader is a 500, never a signed-out answer.
 Problems follow RFC 9457 with `tag:` URI types, as an https address breaks when its page moves.
 
-**Logging.** logline owns it: each process calls `configure` first (`presentator`, `presentator-worker`),
-so every line is one JSON object. One request line per HTTP request names the route template, never
-the path, with `sub` and the client address from webauth's decisions (`api/request_line.py`). The audit, person
-erasure and export, migrate, refresh-lock and process lines are literal `<noun>.<verb_past>` events with id, count
-and code fields; the web writes `process.started`, `process.ready`, `process.stopped` and one
-`store_connection.ended` per store, and the worker the same process lines with one `connection.ended` per
-connection and one `wire_phase.ended` per phase. A co-presenter ask writes `access_token.ended`, `speak.ended` and
-`answer.ended` (with `first_output_ms`) under the request's trace. Other lines are still free text.
+**Logging.** logline owns it, configured first in each process: every line is one JSON object. One line per HTTP
+request names the route template, never the path, with `sub` and the client address from webauth's decisions
+(`api/request_line.py`). Every other line is a literal `<noun>.<verb_past>` event of ids, counts and codes: the web
+writes `process.started`, `process.ready`, `process.stopped` and one `store_connection.ended` per store, the worker
+the same process lines with one `connection.ended` per connection and one `wire_phase.ended` per phase, and a
+co-presenter ask `access_token.ended`, `speak.ended` and `answer.ended` (with `first_output_ms`) under the request's
+trace. A start refused by its settings, its port or its database ends in one `process.failed` with a `reason` code; a
+filter on `uvicorn.error` makes uvicorn's records `server.refused`, `request.failed` or `server.reported`, codes only.
 
 **Words and look.** Every lobby word comes from one gettext catalog per language
 (`frontend/src/lib/catalogs`), generated into typed modules for page and server; the session answer
