@@ -585,15 +585,13 @@ class _RememberedStepTimer(StepTimer):
             build.refuse(self._refusal)
 
 
-def stopped_by(line: StepTimer, broke: BuildFailure | ToolchainUnavailable) -> None:
+def stopped_by(line: StepTimer, broke: BuildFailure) -> None:
     """End a line as what a step handed back says: a refusal or a fault.
 
     A deck whose own build fails is no fault of this host, so its line is a
     handled warning, not an error.
     """
-    if isinstance(broke, ToolchainUnavailable):
-        line.fail(BuildFault.TOOLCHAIN_UNAVAILABLE)
-    elif broke.reason in _REFUSALS:
+    if broke.reason in _REFUSALS:
         line.refuse(broke.reason)
     else:
         # What is no refusal is the deck's own failure, with words or none: a
