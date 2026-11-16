@@ -43,7 +43,6 @@ from presentator.contracts.decks import (
 from presentator.contracts.models import Role, User
 from presentator.host.main import web_auth_config_for
 from tests.presentator.application.support.fakes import (
-    LOCAL_MOUNT_EXAMPLE,
     FakeDeckStore,
     FakePeople,
     FakeSourceStore,
@@ -72,7 +71,6 @@ _SCHEMA_REFERENCE: Final = "#/components/schemas/"
 _SECRET: Final = SecretStr("a drive's own key of at least 32 bytes")
 _PERSON_ROUTE: Final = "/drive/person"
 _DECK_ROUTE: Final = f"{_PERSON_ROUTE}/{{person_id}}/deck"
-_LOCAL_MOUNT_ROUTE: Final = "/drive/local-mount"
 _SOME_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _ATTEMPT_COMMIT: Final = "e91c5ad4f3b2a1908877665544332211aabbccdd"
 _A_PDF_NOBODY_WROTE: Final = EXPORTED_PDF.with_name("nobody-wrote-this.pdf")
@@ -298,14 +296,8 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
 
     outer.add_api_route(_PERSON_ROUTE, newcomers.enter, methods=["POST"])
     outer.add_api_route(_DECK_ROUTE, newcomers.add_deck_of, methods=["POST"])
-    outer.add_api_route(_LOCAL_MOUNT_ROUTE, _local_mount, methods=["GET"])
     outer.mount("/", lobby)
     return outer
-
-
-def _local_mount() -> dict[str, str]:
-    """The folder the driven lobby accepts local sources under."""
-    return {"path": str(LOCAL_MOUNT_EXAMPLE)}
 
 
 def _session_cookies(issued: Response) -> dict[str, JsonNode]:

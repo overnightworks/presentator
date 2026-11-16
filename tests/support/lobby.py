@@ -92,7 +92,6 @@ from tests.presentator.application.support.fakes import (
     FakeDeckStore,
     FakeDeployKeyDrafts,
     FakeInstanceSettingsStore,
-    FakeLocalMount,
     FakePeople,
     FakePersonPreferencesStore,
     FakeSessionRecordStore,
@@ -546,7 +545,6 @@ def a_decks(given: GivenDecks, clock: FrozenClock) -> Decks:
         build_bound=BUILD_BOUND,
         fingerprint_key=_FINGERPRINT_KEY,
         clock=clock,
-        local_mount=FakeLocalMount(),
         webhook_secrets=FakeWebhookSecrets(),
     )
     # The list and the deck page read the store only; a test arranges what a
@@ -715,7 +713,6 @@ def real_builds_under(root: Path) -> SlidevBuilds:
             directory=root / "mirrors",
             credentials=_NoCredentials(),
             pull_timeout=timedelta(minutes=1),
-            local_mount=FakeLocalMount(),
         ),
         output_megabytes=1,
     )

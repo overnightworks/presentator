@@ -47,9 +47,7 @@ from presentator.contracts.decks import (
     SourceRunOutcome,
     SourceWrite,
     access_kind_of,
-    local_mount_path_of,
 )
-from presentator.ports.decks import LocalMount
 from presentator.ports.identity import IdentifierFactory
 
 FOLDER_COLUMN: Final = "folder TEXT NOT NULL DEFAULT ''"
@@ -140,7 +138,7 @@ _ONE_ROW: Final = 1
 _SOURCE_ANCHOR: Final = "SELECT encrypted_secret FROM sources WHERE id = ?"
 _UNREADABLE_SOURCE: Final = "source %s cannot be read: %s"
 _UNREADABLE_MANIFEST: Final = "folder %s has no readable title, keeps its listing: %s"
-_OUTSIDE_MOUNT: Final = (
+_UNRESOLVABLE_SOURCE: Final = (
     "source %s no longer resolves to a readable repository, treated as unreadable"
 )
 _MIRROR_STAYED: Final = "the mirror of source %s could not be taken away"
@@ -339,37 +337,6 @@ class SourceCredentials:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class FilesystemLocalMount:
-    """Resolves a file-kind address against the real, mounted directory.
-
-    `local_mount_path_of` already rejects an address that cannot even name a
-    path; this is the one place that asks the real filesystem, because a
-    symlink or a mount whose target has since changed is invisible to a
-    lexical check. Both the address and the mount are resolved the way git
-    itself would open them — following every symlink, refusing what does not
-    exist — before either is trusted, so the answer is the real path, not the
-    operator's spelling of it, and a repository that no longer stands under
-    the mount is refused exactly as one that was never under it.
-    """
-
-    mount: Path
-
-    def canonical_repository(self, address: str) -> Path | None:
-        """The address's real path, resolved and confirmed under the mount."""
-        path = local_mount_path_of(address)
-        if path is None:
-            return None
-        try:
-            mount = self.mount.resolve(strict=True)
-            repository = Path(path).resolve(strict=True)
-        except OSError:
-            return None
-        if repository != mount and mount not in repository.parents:
-            return None
-        return repository
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class SourceMirrors:
     """The bare mirrors this instance keeps, and how one of them is opened.
 
@@ -380,30 +347,18 @@ class SourceMirrors:
     directory: Path
     credentials: CredentialResolver
     pull_timeout: timedelta
-    local_mount: LocalMount
 
     def of(self, source: Source) -> GitMirror | None:
         """The mirror of that source, or nothing when it no longer resolves.
 
         An address that names no access is unresolvable before any credential
         is looked up.
-
-        A file-kind address that no longer resolves under the mount —
-        whatever moved it — is unreadable rather than a fetch of wherever it
-        now points.
         """
-        url = source.url
-        kind = access_kind_of(url)
-        if kind is None:
+        if access_kind_of(source.url) is None:
             return None
-        if kind is AccessKind.FILE:
-            canonical = self.local_mount.canonical_repository(url)
-            if canonical is None:
-                return None
-            url = str(canonical)
         return GitMirror(
             source=GitSource(
-                url=url,
+                url=source.url,
                 ref=source.ref,
                 # The source's own id is the anchor, because the row is what
                 # holds the secret; the resolver reads it there.
@@ -444,7 +399,7 @@ class SourceMirrors:
 # a single argument reaches git, never handed to it on the chance a probe
 # might make sense of it.
 _PROBED_ACCESS_KINDS: Final = frozenset(
-    {AccessKind.HTTPS, AccessKind.SSH, AccessKind.FILE},
+    {AccessKind.HTTPS, AccessKind.SSH},
 )
 
 
@@ -453,35 +408,21 @@ class MirroredConnectionChecker:
     """Probes a form's own URL and secret through `ls-remote`, storing nothing."""
 
     check_timeout: timedelta
-    local_mount: LocalMount
     known_hosts: Path
 
     def check(self, *, url: str, ref: str, secret: str) -> ConnectionCheckResult:
         """No failure and the head commit when reachable, or which failure and why.
 
-        A file-kind address is resolved against the real mount first, the
-        same way a stored source's own mirror is: one outside it is refused
-        without ever reaching `ls-remote`, because no host answered no and no
-        host failed to answer — the mount itself declined to open it. An
-        access kind the checker does not probe is refused the same way.
+        An access kind the checker does not probe is refused without ever
+        reaching `ls-remote`.
         """
         kind = access_kind_of(url)
         if kind not in _PROBED_ACCESS_KINDS:
             return ConnectionCheckResult(
                 failure=SourceRunFailure.REFUSED, commit=None, detail=None
             )
-        resolved = url
-        if kind is AccessKind.FILE:
-            canonical = self.local_mount.canonical_repository(url)
-            if canonical is None:
-                return ConnectionCheckResult(
-                    failure=SourceRunFailure.REFUSED,
-                    commit=None,
-                    detail=None,
-                )
-            resolved = str(canonical)
         probed = check_connection(
-            url=resolved,
+            url=url,
             ref=ref,
             secret=secret or None,
             timeout=self.check_timeout,
@@ -514,7 +455,7 @@ class MirroredDeckFolders:
         """Poll for every top-level folder at the newest commit, or why not."""
         mirror = self.mirrors.of(source)
         if mirror is None:
-            _log.warning(_OUTSIDE_MOUNT, source.name)
+            _log.warning(_UNRESOLVABLE_SOURCE, source.name)
             return SourcePoll(
                 folders=None,
                 commit=None,

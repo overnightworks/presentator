@@ -2,11 +2,10 @@
   "components": {
     "schemas": {
       "AccessKind": {
-        "description": "How a source is read, derived from its URL's scheme and nothing else.\n\nHTTPS may carry a token; SSH and the scp form are a deploy key; a `file://`\naddress or a bare absolute path is this box's own mount, and carries no\nsecret at all. An address naming none of them is refused rather than stored\nas a fourth kind.",
+        "description": "How a source is read, derived from its URL's scheme and nothing else.\n\nHTTPS may carry a token; SSH and the scp form are a deploy key. An address\nnaming neither is refused rather than stored as a third kind.",
         "enum": [
           "https-token",
-          "ssh-deploy-key",
-          "local-folder"
+          "ssh-deploy-key"
         ],
         "title": "AccessKind",
         "type": "string"
@@ -1768,7 +1767,6 @@
                         "unknown-access",
                         "not-checked",
                         "credential-not-allowed",
-                        "outside-local-mount",
                         "deploy-key-unavailable"
                       ],
                       "type": "string"
@@ -1906,7 +1904,6 @@
                         "unknown-access",
                         "not-checked",
                         "credential-not-allowed",
-                        "outside-local-mount",
                         "deploy-key-unavailable"
                       ],
                       "type": "string"

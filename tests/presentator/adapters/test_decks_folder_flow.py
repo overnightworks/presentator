@@ -1,6 +1,6 @@
 """Decks of a source that names a folder, from a real repository to the deck rows."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -8,7 +8,6 @@ import pytest
 
 from presentator.adapters.deck_store import SqliteDeckStore
 from presentator.adapters.decks import (
-    FilesystemLocalMount,
     SqliteSourceRunStore,
     SqliteSourceStore,
 )
@@ -18,6 +17,7 @@ from presentator.application.decks import (
     Decks,
     NewSourceDraft,
     SourceRefusal,
+    hash_webhook_secret,
 )
 from presentator.contracts.decks import (
     MANIFEST_FILE,
@@ -45,7 +45,6 @@ from tests.presentator.application.support.fakes import (
     FrozenClock,
 )
 from tests.support.deck_source_support import (
-    OWNER,
     a_source_database,
     a_source_store,
     a_source_write,
@@ -97,7 +96,6 @@ def wired(tmp_path: Path) -> Wired:
         checker=FakeConnectionChecker(),
         toolchain_themes=FakeToolchainThemes(),
         clock=clock,
-        local_mount=FilesystemLocalMount(mount=tmp_path),
         webhook_secrets=FakeWebhookSecrets(),
         build_bound=BUILD_BOUND,
         fingerprint_key=FINGERPRINT_KEY,
@@ -260,12 +258,18 @@ def test_a_webhook_refresh_takes_in_the_decks_of_a_source_with_a_folder(
     remote: GitRemote, tmp_path: Path
 ) -> None:
     world = wired(tmp_path)
+    offered = "what-the-hook-offers"
     remote.commit(a_deck_tree("examples", "a"), at=_PUSHED_AT)
-    added = added_with_folder(world.decks, remote.url, "examples", owner_id=OWNER.id)
-    assert isinstance(added, AddedSource)
+    written = replace(
+        a_source_write(remote.url, folder="examples"),
+        hook_secret_hash=hash_webhook_secret(offered),
+    )
+    stored = world.sources.add(written)
+    assert stored is not None
+    world.decks.refresh()
     remote.commit(a_deck_tree("examples", "b"), at=_LATER)
 
-    accepted = world.decks.accept_hook(added.source.name, added.webhook_secret)
+    accepted = world.decks.accept_hook(stored.name, offered)
 
     assert accepted
     assert slugs(world) == ["a", "b"]

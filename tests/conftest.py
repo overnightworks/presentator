@@ -12,7 +12,11 @@ import uvicorn
 from logline.testing import configured
 
 from presentator.host import main
-from tests.support.git_remote import GitRemote, a_remote
+from tests.support.git_remote import (
+    GitRemote,
+    a_remote,
+    read_local_remotes_as_https,
+)
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_GATEWAY_KEY_FILE,
@@ -66,14 +70,16 @@ def main_without_serving(environment: pytest.MonkeyPatch) -> Callable[[], None]:
 
 
 @pytest.fixture
-def remote(tmp_path: Path) -> GitRemote:
+def remote(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> GitRemote:
     """An empty bare repository with a working tree that pushes into it."""
+    read_local_remotes_as_https(monkeypatch)
     return a_remote(tmp_path, "remote")
 
 
 @pytest.fixture
-def another_remote(tmp_path: Path) -> GitRemote:
+def another_remote(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> GitRemote:
     """A second one, for what two sources of one instance do to one another."""
+    read_local_remotes_as_https(monkeypatch)
     return a_remote(tmp_path, "another-remote")
 
 
@@ -141,12 +147,6 @@ def bare_environment(
     toolchain.mkdir()
     (toolchain / "package.json").write_text("{}")
     monkeypatch.setenv("PRESENTATOR_TOOLCHAIN", str(toolchain))
-    # `remote`/`another_remote` write their bare
-    # repositories straight into `tmp_path`, the one directory every real
-    # git address these tests build stands under; naming it as the mount
-    # lets a `file://` fixture keep standing in for "any git remote" without
-    # every such test naming the mount for itself.
-    monkeypatch.setenv("PRESENTATOR_LOCAL_SOURCES_MOUNT", str(tmp_path))
     monkeypatch.setenv("PRESENTATOR_PUBLIC_ORIGIN", A_BROWSERS_ADDRESS)
     monkeypatch.setenv("PRESENTATOR_REDIS_URL", NOTHING_LISTENS_HERE)
     configure_oidc(monkeypatch, tmp_path)

@@ -2,7 +2,6 @@ import { expect, test } from './person.ts';
 import { expectsNoHorizontalScroll, wordsOf } from './scenario.ts';
 import {
 	ACCESS_TOKEN,
-	aLocalAddress,
 	aName,
 	anHttpsAddress,
 	anSshAddress,
@@ -21,8 +20,7 @@ test.describe('the address decides what the Add source form shows', () => {
 
 	for (const [shape, token, key] of [
 		['https', true, false],
-		['ssh', false, true],
-		['folder', false, false]
+		['ssh', false, true]
 	] as const) {
 		test(`a ${shape} address shows the token field ${token}, the key ${key} and the folder ${token || key}`, async ({
 			page
@@ -31,8 +29,7 @@ test.describe('the address decides what the Add source form shows', () => {
 			const name = aName(testInfo);
 			const url = {
 				https: () => anHttpsAddress(name),
-				ssh: () => anSshAddress(name),
-				folder: () => aLocalAddress(page, name)
+				ssh: () => anSshAddress(name)
 			}[shape]();
 			await opensTheForm(page);
 
@@ -89,27 +86,6 @@ test.describe('the address decides what the Add source form shows', () => {
 		await opensTheForm(page);
 
 		await expect(folderField(page, words)).toHaveCount(0);
-	});
-
-	test('a folder typed for https is gone when a server folder follows, and Create sends none', async ({
-		page
-	}, testInfo) => {
-		const words = await wordsOf(page);
-		const name = aName(testInfo);
-		await opensTheForm(page);
-		await page.getByLabel(words['sourceNew.name'], { exact: true }).fill(name);
-		await typesTheAddress(page, words, anHttpsAddress(name));
-		await folderField(page, words).fill('examples');
-
-		await typesTheAddress(page, words, await aLocalAddress(page, name));
-		await expect(folderField(page, words)).toHaveCount(0);
-		await checks(page, words);
-		const sent = page.waitForRequest(
-			(request) => new URL(request.url()).pathname === SOURCES_API && request.method() === 'POST'
-		);
-		await page.getByRole('button', { name: words['sourceNew.create'] }).click();
-
-		expect((await sent).postDataJSON()).toMatchObject({ folder: '' });
 	});
 
 	test('Create sends the folder typed for a key address and Check does not', async ({

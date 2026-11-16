@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from presentator.adapters.builds import DeckToolchain, HostToolchain, SlidevBuilds
-from presentator.adapters.decks import FilesystemLocalMount, SourceMirrors
+from presentator.adapters.decks import SourceMirrors
 from presentator.contracts.decks import (
     Artefacts,
     BuildFailure,
@@ -66,7 +66,6 @@ def builds_under(
     toolchain: DeckToolchain,
     identity: ToolchainIdentity = THE_TOOLCHAIN,
     output_megabytes: int = A_TALK_THIS_BIG_IS_FINE,
-    local_mount: FilesystemLocalMount | None = None,
 ) -> SlidevBuilds:
     return SlidevBuilds(
         builds=tmp_path / "builds",
@@ -76,11 +75,6 @@ def builds_under(
             directory=tmp_path / "mirrors",
             credentials=OpenCredentials(),
             pull_timeout=A_GENEROUS_BOUND,
-            local_mount=(
-                FilesystemLocalMount(mount=tmp_path)
-                if local_mount is None
-                else local_mount
-            ),
         ),
         output_megabytes=output_megabytes,
     )

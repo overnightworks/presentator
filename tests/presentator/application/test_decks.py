@@ -59,7 +59,6 @@ from tests.presentator.application.support.decks_support import (
 )
 from tests.presentator.application.support.fakes import (
     BUILDS_ROOT,
-    LOCAL_MOUNT_EXAMPLE,
     PATIENCE,
     ConnectionCheckerThatMustNotRun,
     DeckFoldersThatMustNotRun,
@@ -1323,26 +1322,6 @@ def test_a_fingerprint_from_a_different_secret_is_refused() -> None:
     assert store.all() == ()
 
 
-def test_a_different_spelling_of_an_existing_local_source_is_a_duplicate_url() -> None:
-    existing = Source(
-        id="the-existing-file-source",
-        name="talks",
-        url=f"{LOCAL_MOUNT_EXAMPLE}/talks.git",
-        ref="main",
-        owner_id=OWNER,
-    )
-    decks = decks_over(sources=having(existing))
-
-    refused = _add(
-        decks,
-        name="other",
-        url=f"file://{LOCAL_MOUNT_EXAMPLE}/talks.git",
-        secret="",
-    )
-
-    assert refused is SourceRefusal.DUPLICATE_URL
-
-
 def test_a_hook_call_with_the_stored_secret_refreshes_that_source() -> None:
     store = having()
     run_store = FakeSourceRunStore()
@@ -1722,8 +1701,8 @@ def test_removing_a_source_waits_for_a_refresh_then_checks_the_fresh_count() -> 
         ("https://[2001:db8::1]:8443/r.git", AccessKind.HTTPS),
         ("ssh://git@[2001:db8::1]/r.git", AccessKind.SSH),
         ("git@[2001:db8::1]:r.git", AccessKind.SSH),
-        ("file:///srv/r.git", AccessKind.FILE),
-        ("/srv/r.git", AccessKind.FILE),
+        ("file:///srv/r.git", None),
+        ("/srv/r.git", None),
         ("http://git.example.invalid/talks.git", None),
         ("https://git.example.invalid/talks.git\x00evil", None),
     ],

@@ -38,7 +38,6 @@ describe('what the address shows', () => {
 	it.each([
 		['https', true, false],
 		['ssh', false, true],
-		['folder', false, false],
 		['none', false, false]
 	] as const)('shows for a %s address the token field %s and the key %s', async (which, token, key) => {
 		open();
@@ -87,7 +86,7 @@ describe('the secret on the wire', () => {
 		expect(sentTo(fetched, CHECK)).toEqual([expect.objectContaining({ secret: 'a-typed-token' })]);
 	});
 
-	it.each(['ssh', 'folder'] as const)(
+	it.each(['ssh'] as const)(
 		'sends no secret once a typed token meets a %s address',
 		async (which) => {
 			const fetched = open();

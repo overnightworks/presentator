@@ -453,10 +453,6 @@ msgctxt "source.accessDeployKey"
 msgid "Deploy-Key"
 msgstr "Deploy-Key"
 
-msgctxt "source.accessLocal"
-msgid "Auf diesem Rechner"
-msgstr "On this box"
-
 msgctxt "source.refusedName"
 msgid "Ein Name besteht aus Kleinbuchstaben, Ziffern und Bindestrichen, beginnt mit einem Buchstaben oder einer Ziffer und ist höchstens 64 Zeichen lang."
 msgstr "A name is lowercase letters, digits and hyphens, starts with a letter or digit, and is at most 64 characters."
@@ -474,8 +470,8 @@ msgid "Eine Quelle mit dieser Git-URL gibt es schon."
 msgstr "A source with this Git URL is already here."
 
 msgctxt "source.refusedUnknownAccess"
-msgid "Nutze https://host/pfad, user@host:pfad, ssh://user@host/pfad oder einen Ordner auf diesem Rechner, ohne Benutzername und Passwort darin."
-msgstr "Use https://host/path, user@host:path or ssh://user@host/path, or a folder on this box, with no user name or password in it."
+msgid "Nutze https://host/pfad, user@host:pfad, ssh://user@host/pfad, ohne Benutzername und Passwort darin."
+msgstr "Use https://host/path, user@host:path or ssh://user@host/path, with no user name or password in it."
 
 msgctxt "source.refusedNotChecked"
 msgid "Prüfe die Verbindung noch einmal – die URL oder das Secret hat sich seit der letzten Prüfung geändert."
@@ -486,12 +482,8 @@ msgid "Repository gelesen, Head {commit}."
 msgstr "Repository read, head {commit}."
 
 msgctxt "source.refusedSecretNotAllowed"
-msgid "Ein Schlüssel oder ein Ordner auf diesem Rechner braucht kein Token – lass das Feld leer."
-msgstr "A key or a folder on this box needs no token — leave it blank."
-
-msgctxt "source.refusedOutsideMount"
-msgid "Die Adresse muss einen Pfad unter /data/local-sources nennen, wo das Host-Verzeichnis eingebunden ist."
-msgstr "The address has to name a path under /data/local-sources, where the host directory is mounted."
+msgid "Ein Schlüssel braucht kein Token – lass das Feld leer."
+msgstr "A key needs no token — leave it blank."
 
 msgctxt "source.refusedDeployKey"
 msgid "Dieser Deploy-Key gehört dir nicht mehr – hier ist ein neuer zum Eintragen."

@@ -291,13 +291,11 @@ export interface components {
          * AccessKind
          * @description How a source is read, derived from its URL's scheme and nothing else.
          *
-         *     HTTPS may carry a token; SSH and the scp form are a deploy key; a `file://`
-         *     address or a bare absolute path is this box's own mount, and carries no
-         *     secret at all. An address naming none of them is refused rather than stored
-         *     as a fourth kind.
+         *     HTTPS may carry a token; SSH and the scp form are a deploy key. An address
+         *     naming neither is refused rather than stored as a third kind.
          * @enum {string}
          */
-        AccessKind: "https-token" | "ssh-deploy-key" | "local-folder";
+        AccessKind: "https-token" | "ssh-deploy-key";
         /**
          * AccessRenewal
          * @description The new HTTPS token, or null for an SSH source, which renews its own pair.
@@ -1161,7 +1159,7 @@ export interface operations {
                         /** Detail */
                         detail?: string | null;
                         /** @enum {string} */
-                        reason: "malformed-name" | "malformed-folder" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
+                        reason: "malformed-name" | "malformed-folder" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "deploy-key-unavailable";
                         /** Status */
                         status: number;
                         /** Title */
@@ -1231,7 +1229,7 @@ export interface operations {
                         /** Detail */
                         detail?: string | null;
                         /** @enum {string} */
-                        reason: "malformed-name" | "malformed-folder" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "outside-local-mount" | "deploy-key-unavailable";
+                        reason: "malformed-name" | "malformed-folder" | "duplicate-name" | "duplicate-url" | "unknown-access" | "not-checked" | "credential-not-allowed" | "deploy-key-unavailable";
                         /** Status */
                         status: number;
                         /** Title */

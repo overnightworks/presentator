@@ -19,7 +19,6 @@ export function refusalWords(reason: SourceRefusalReason, words: Words): string 
 		'unknown-access': words['source.refusedUnknownAccess'],
 		'not-checked': words['source.refusedNotChecked'],
 		'credential-not-allowed': words['source.refusedSecretNotAllowed'],
-		'outside-local-mount': words['source.refusedOutsideMount'],
 		'deploy-key-unavailable': words['source.refusedDeployKey']
 	};
 	return sentences[reason];
@@ -134,8 +133,8 @@ export function runRow(run: SourceRunView, words: Words): RunRow {
 }
 
 interface AccessView {
-	// What the access section draws: the key and its renewal, the token form, or the tag alone.
-	control: 'deploy-key' | 'token' | 'none';
+	// What the access section draws: the key and its renewal, or the token form.
+	control: 'deploy-key' | 'token';
 	tag: string | null;
 }
 
@@ -143,9 +142,6 @@ interface AccessView {
 export function accessView(access: AccessKind | null, words: Words): AccessView {
 	if (access === 'ssh-deploy-key') {
 		return { control: 'deploy-key', tag: words['source.accessDeployKey'] };
-	}
-	if (access === 'local-folder') {
-		return { control: 'none', tag: words['source.accessLocal'] };
 	}
 	return { control: 'token', tag: access === null ? null : words['source.accessToken'] };
 }

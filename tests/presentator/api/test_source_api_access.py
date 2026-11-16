@@ -42,7 +42,6 @@ from tests.presentator.api.support.source_api_support import (
     without_raising,
 )
 from tests.presentator.application.support.fakes import (
-    LOCAL_MOUNT_EXAMPLE,
     FakeSourceStore,
 )
 from tests.support.lobby import ADMIN
@@ -53,7 +52,6 @@ _OLD = "the-token-this-scenario-replaces"
 _NEW = "the-token-this-scenario-sends"
 _HTTPS = "https://git.example.invalid/talks.git"
 _SSH = "git@git.example.invalid:talks.git"
-_LOCAL = f"{LOCAL_MOUNT_EXAMPLE}/talks.git"
 _NAME = "decks"
 _SEEN_BY_NOBODY = pytest.mark.parametrize(
     "body", [{"secret": _NEW}, {"secret": 12345}, {"secret": None}]
@@ -247,21 +245,6 @@ def test_an_ssh_renewal_that_carries_a_token_renews_the_pair_and_stores_no_token
     assert instance.store.sources[0].public_key is not None
     assert instance.store.secrets == {}
     assert _NEW not in whole_answers_of(instance, _NAME)
-
-
-# 14
-@pytest.mark.parametrize("secret", [_NEW, None])
-def test_a_local_folder_cannot_be_renewed(
-    an_admin: Callable[[FakeSourceStore], Instance], secret: str | None
-) -> None:
-    store = a_source_store(a_source(_LOCAL), secret=_OLD)
-    instance = an_admin(store)
-
-    answer = instance.renew(_NAME, {"secret": secret})
-
-    assert_problem(answer, HTTPStatus.UNPROCESSABLE_ENTITY, _OLD, _NEW)
-    assert store.secrets == {"the-source": _OLD}
-    assert store.sources[0].public_key is None
 
 
 # 15
@@ -458,10 +441,6 @@ def _ssh_store() -> FakeSourceStore:
     return a_source_store(a_source(_SSH))
 
 
-def _local_store() -> FakeSourceStore:
-    return a_source_store(a_source(_LOCAL), secret=_OLD)
-
-
 def _removed_store() -> FakeSourceStore:
     return _SourceRemovedWhileRenewing(sources=[a_source(_SSH)])
 
@@ -490,10 +469,6 @@ _LOGGED = {
     ),
     "12 ssh null": _Logged(_ssh_store, _renewal(_NAME, {"secret": None}), _OK),
     "13 ssh token": _Logged(_ssh_store, _renewal(_NAME, {"secret": _NEW}), _OK),
-    "14 local token": _Logged(
-        _local_store, _renewal(_NAME, {"secret": _NEW}), _REFUSED
-    ),
-    "14 local null": _Logged(_local_store, _renewal(_NAME, {"secret": None}), _REFUSED),
     "15 unknown": _Logged(
         an_https_store, _renewal("no-such-source", {"secret": _NEW}), _GONE
     ),

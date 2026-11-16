@@ -16,7 +16,6 @@ from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.builds import HostToolchain, SlidevBuilds
 from presentator.adapters.deck_store import SqliteDeckStore
 from presentator.adapters.decks import (
-    FilesystemLocalMount,
     MirroredDeckFolders,
     SourceMirrors,
     SqliteSourceRunStore,
@@ -227,7 +226,6 @@ def _decks_application(
         checker=FakeConnectionChecker(),
         toolchain_themes=FakeToolchainThemes(),
         clock=FrozenClock(instant=_NOW),
-        local_mount=FilesystemLocalMount(mount=tmp_path),
         build_bound=_A_BOUND,
         fingerprint_key=b"a fingerprint key of some length",
         webhook_secrets=TokenWebhookSecrets(),
@@ -244,7 +242,6 @@ def directories_with_both_people(stores: Stores, tmp_path: Path) -> Directories:
         directory=tmp_path / "mirrors",
         credentials=OpenCredentials(),
         pull_timeout=_A_BOUND,
-        local_mount=FilesystemLocalMount(mount=tmp_path),
     )
     builds = tmp_path / "builds"
     kept_by = {

@@ -453,10 +453,6 @@ msgctxt "source.accessDeployKey"
 msgid "Deploy-Key"
 msgstr ""
 
-msgctxt "source.accessLocal"
-msgid "Auf diesem Rechner"
-msgstr ""
-
 msgctxt "source.refusedName"
 msgid "Ein Name besteht aus Kleinbuchstaben, Ziffern und Bindestrichen, beginnt mit einem Buchstaben oder einer Ziffer und ist höchstens 64 Zeichen lang."
 msgstr ""
@@ -474,7 +470,7 @@ msgid "Eine Quelle mit dieser Git-URL gibt es schon."
 msgstr ""
 
 msgctxt "source.refusedUnknownAccess"
-msgid "Nutze https://host/pfad, user@host:pfad, ssh://user@host/pfad oder einen Ordner auf diesem Rechner, ohne Benutzername und Passwort darin."
+msgid "Nutze https://host/pfad, user@host:pfad, ssh://user@host/pfad, ohne Benutzername und Passwort darin."
 msgstr ""
 
 msgctxt "source.refusedNotChecked"
@@ -486,11 +482,7 @@ msgid "Repository gelesen, Head {commit}."
 msgstr ""
 
 msgctxt "source.refusedSecretNotAllowed"
-msgid "Ein Schlüssel oder ein Ordner auf diesem Rechner braucht kein Token – lass das Feld leer."
-msgstr ""
-
-msgctxt "source.refusedOutsideMount"
-msgid "Die Adresse muss einen Pfad unter /data/local-sources nennen, wo das Host-Verzeichnis eingebunden ist."
+msgid "Ein Schlüssel braucht kein Token – lass das Feld leer."
 msgstr ""
 
 msgctxt "source.refusedDeployKey"

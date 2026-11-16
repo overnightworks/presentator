@@ -19,7 +19,6 @@ from tests.presentator.application.support.fakes import (
     FakeBuildRunner,
     FakeConnectionChecker,
     FakeDeckFolders,
-    FakeLocalMount,
     FakeToolchainThemes,
     FakeWebhookSecrets,
     FrozenClock,
@@ -176,7 +175,6 @@ def test_a_refresh_over_the_tables_deletes_a_deck_missed_for_the_kept_period(
         build_bound=timedelta(minutes=5),
         fingerprint_key=b"what only this test's instance signs a fingerprint with",
         clock=clock,
-        local_mount=FakeLocalMount(),
         webhook_secrets=FakeWebhookSecrets(),
     )
     decks.refresh()

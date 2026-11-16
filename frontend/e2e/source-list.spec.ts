@@ -138,7 +138,7 @@ test.describe('as an admin', () => {
 		await listAnswers(page, [
 			aSummary('Reach-Able'),
 			aSummary('refused-one', { state: 'refused', reason: 'refused', access: 'ssh-deploy-key' }),
-			aSummary('failed-one', { state: 'failed', reason: 'failed', access: 'local-folder' }),
+			aSummary('failed-one', { state: 'failed', reason: 'failed', access: 'https-token' }),
 			aSummary('dead-host', { state: 'error', reason: 'unreachable' }),
 			aSummary('lost-secret', { state: 'error', reason: 'credential-unresolvable' }),
 			aSummary('no-reason', { state: 'failed', reason: null }),

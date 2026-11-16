@@ -39,7 +39,6 @@ from presentator.adapters.builds import (
 from presentator.adapters.deck_store import SqliteDeckStore
 from presentator.adapters.deck_texts import MirroredDeckTexts
 from presentator.adapters.decks import (
-    FilesystemLocalMount,
     MirroredConnectionChecker,
     MirroredDeckFolders,
     SourceCredentials,
@@ -207,17 +206,12 @@ def build_instance(
     shell = _lobby_shell(settings)
     redis = SharedRedis(settings.redis_url.get_secret_value(), settings.redis_password)
     stores = _with_redis(_stores(settings, migrations_directory), redis)
-    local_mount = FilesystemLocalMount(mount=settings.local_sources_mount)
-    # The one mounted directory a file-kind source's address may resolve
-    # under, real filesystem and all: shared by every use, since a symlink or
-    # a remount between them must be caught the same way each time.
     mirrors = SourceMirrors(
         directory=settings.mirrors,
         credentials=stores.credentials,
         pull_timeout=_source_timeout(settings),
-        local_mount=local_mount,
     )
-    decks = _decks(settings, stores, mirrors=mirrors, local_mount=local_mount)
+    decks = _decks(settings, stores, mirrors=mirrors)
     lobby_auth, talk_auth = installed_auths(
         settings, shell, stores.identity_writes, redis, relying_party_for
     )
@@ -394,7 +388,6 @@ def _decks(
     stores: Stores,
     *,
     mirrors: SourceMirrors,
-    local_mount: FilesystemLocalMount,
 ) -> Decks:
     """The deck use cases over the adapters the instance chose."""
     build_bound = build_bound_of(settings)
@@ -415,7 +408,6 @@ def _decks(
         # same remote for the same one thing, just without writing it down.
         checker=MirroredConnectionChecker(
             check_timeout=_source_timeout(settings),
-            local_mount=local_mount,
             known_hosts=settings.mirrors / "known_hosts",
         ),
         toolchain_themes=PackageJsonThemes(project=settings.toolchain),
@@ -426,7 +418,6 @@ def _decks(
             settings.secret_key.get_secret_value(),
         ),
         clock=SystemClock(),
-        local_mount=local_mount,
         webhook_secrets=TokenWebhookSecrets(),
     )
 
