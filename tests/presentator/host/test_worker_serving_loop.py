@@ -475,15 +475,26 @@ def test_a_phase_writes_one_timed_line_with_its_role_and_how_it_ended(
 
 
 def test_a_sweep_that_fails_for_another_reason_surfaces_with_its_error(
-    volume: Path,
+    volume: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     life = ScriptedLife(sweep_error=PermissionError("kill refused"))
     with listening_with(volume, accepts=1) as listener:
         proven(volume)
-        with pytest.raises(PermissionError, match="kill refused"):
+        with (
+            json_logged(capsys) as logged,
+            pytest.raises(PermissionError, match="kill"),
+        ):
             accept_from(life, listener)
 
     assert "cancel" not in life.events
+    (line,) = events_of(logged, "connection.ended")
+    assert (line["level"], line["outcome"], line["error_type"]) == (
+        "error",
+        "failed",
+        "PermissionError",
+    )
+    assert "kill refused" not in logged.text
+    assert "Traceback" not in logged.text
 
 
 class FailingAcceptListener(BoundedListener):
