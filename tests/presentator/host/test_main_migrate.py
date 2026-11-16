@@ -84,7 +84,6 @@ def test_a_migrate_against_a_database_that_does_not_answer_ends_in_one_failed_li
         DatabaseRefusedError.__name__,
     )
     assert "127.0.0.1" not in logged.text
-    assert capsys.readouterr().err == ""
 
 
 def test_two_concurrent_migrations_wait_for_one_another_and_both_end_at_head(

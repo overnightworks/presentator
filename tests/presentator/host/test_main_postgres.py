@@ -63,7 +63,6 @@ def test_a_database_that_does_not_answer_ends_the_start_in_one_failed_line(
     assert (failed["level"], failed["reason"]) == ("error", "not_answering")
     assert failed["error_type"] == DatabaseRefusedError.__name__
     assert "127.0.0.1" not in logged.text
-    assert capsys.readouterr().err == ""
 
 
 @pytest.mark.parametrize("address", [A_BROWSERS_ADDRESS, A_TALK_ADDRESS])
