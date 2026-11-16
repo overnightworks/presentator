@@ -132,6 +132,9 @@ _A_TOOLCHAIN_THAT_FAILS = """#!/bin/sh
 echo "the deck does not build" >&2
 exit 1
 """
+_A_TOOLCHAIN_THAT_FAILS_SILENTLY = """#!/bin/sh
+exit 1
+"""
 _WHAT_A_FAILING_TOOLCHAIN_SAID = "the deck does not build"
 # A deck's own toolchain can print megabytes; what a page shows is the end of
 # it, where the reason stands, and that end is all this server ever holds.
@@ -486,9 +489,19 @@ def test_a_build_carries_nothing_of_the_environment_this_server_runs_in(
             _WHAT_A_FAILING_TOOLCHAIN_SAID,
             "toolchain_failed",
         ),
+        (
+            _A_TOOLCHAIN_THAT_FAILS_SILENTLY,
+            _A_GENEROUS_BOUND,
+            None,
+            "toolchain_failed",
+        ),
         (_A_TOOLCHAIN_THAT_NEVER_ENDS, _NO_BUDGET_AT_ALL, None, "timed_out"),
     ],
-    ids=["a deck that does not build", "a build that runs past its bound"],
+    ids=[
+        "a deck that does not build",
+        "a deck that does not build and says nothing",
+        "a build that runs past its bound",
+    ],
 )
 def test_a_build_that_did_not_finish_says_why_and_leaves_nothing_to_point_at(
     remote: GitRemote,

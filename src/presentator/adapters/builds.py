@@ -567,7 +567,9 @@ def stopped_by(line: StepTimer, broke: BuildFailure | ToolchainUnavailable) -> N
         line.fail(BuildFault.TOOLCHAIN_UNAVAILABLE)
     elif broke.reason in _REFUSALS:
         line.refuse(broke.reason)
-    elif broke.reason is BuildFailureReason.TOOLCHAIN:
+    elif broke.reason in {BuildFailureReason.TOOLCHAIN, BuildFailureReason.NO_WORDS}:
+        # A failure with no words is a deck's own silent failure here: a host
+        # fault wrote its own line before it handed the failure back.
         line.handled()
         line.fail(BuildFault.TOOLCHAIN_FAILED)
     else:
