@@ -359,13 +359,9 @@ REAL_BOUNDARY = Boundary(
 )
 
 
-def _refuse(refused: Predicate | StartRefusal) -> int:
-    logger.error(START_REFUSED_EVENT, extra={"reason": refused})
+def _refuse(refused: Predicate | StartRefusal, **fields: str) -> int:
+    logger.error(START_REFUSED_EVENT, extra={"reason": refused, **fields})
     return REFUSAL_EXIT_STATUS
-
-
-def _refuse_settings() -> int:
-    return _refuse(StartRefusal.SETTINGS)
 
 
 def _process_limit_lowered(boundary: Boundary) -> bool:
@@ -437,8 +433,8 @@ def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) 
         return 0
     try:
         settings = boundary.load_settings()
-    except ConfigurationError:
-        return _refuse_settings()
+    except ConfigurationError as refused:
+        return _refuse(StartRefusal.SETTINGS, setting=",".join(refused.variables))
     return boundary.serve(
         port=arguments.port, key_file=arguments.key_file, settings=settings
     )
