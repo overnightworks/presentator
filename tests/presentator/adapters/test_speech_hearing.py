@@ -258,9 +258,10 @@ def test_a_fault_of_the_token_source_fails_the_pending_opening_and_passes_throug
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     tokens = MintedTokens(failing_call=1, fails_with=_CallerFaultError)
+    hearing = _heard_through(sending(a_completed("Nie gehört.")), tokens=tokens)
 
     with json_logged(capsys) as logged, pytest.raises(_CallerFaultError):
-        asyncio.run(_heard_through(sending(a_completed("Nie gehört.")), tokens=tokens))
+        asyncio.run(hearing)
 
     (opening,) = events_of(logged, "hearing_opening.ended")
     assert (opening["outcome"], opening["error_type"]) == (
