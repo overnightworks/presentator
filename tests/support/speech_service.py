@@ -67,6 +67,7 @@ def _a_voice_entry(*, ready: bool, sample_rate: object = 1) -> dict[str, object]
         "name": "a-name",
         "languages": [wire.Language.DE],
         "takes_instructions": False,
+        "gives_marks": {"words": False, "sounds": False},
         "ready": ready,
         "sample_rate": sample_rate,
     }
