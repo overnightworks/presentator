@@ -243,6 +243,9 @@ class SpeechHearing:
                 _tokens_unavailable(session)
                 await self.refuse(browser)
                 return
+            except Exception as error:
+                openings.end_raised(error)
+                raise
             else:
                 openings.end(lambda opening: _mark_ending(outcome, opening))
                 _mark_ending(outcome, session)
@@ -404,6 +407,12 @@ class _Openings:
             mark(pending)
             pending.handled()
             pending.end()
+
+    def end_raised(self, error: Exception) -> None:
+        pending, self._pending = self._pending, None
+        if pending is not None:
+            pending.handled()
+            pending.__exit__(type(error), error, error.__traceback__)
 
     def end_cancelled(self) -> None:
         pending, self._pending = self._pending, None
