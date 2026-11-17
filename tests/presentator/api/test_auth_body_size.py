@@ -194,7 +194,7 @@ def test_the_longest_ask_in_the_widest_json_spelling_still_fits_the_cap() -> Non
     assert len(body) > _CAP // 2
     assert answer.status_code == HTTPStatus.OK
     (message,) = private.answers.messages
-    assert message.endswith("The person said: " + "\N{GRINNING FACE}" * MAX_SAID_LENGTH)
+    assert "The person said: " + "\N{GRINNING FACE}" * MAX_SAID_LENGTH + "\n" in message
 
 
 def test_a_33_kib_settings_write_gets_413_with_the_security_headers() -> None:

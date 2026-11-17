@@ -6,6 +6,7 @@ from collections.abc import Iterator, Sequence
 import pytest
 from agents.tools import (
     AGENT_TOOL_EXTENSION,
+    JsonObject,
     ToolEffect,
     ToolMark,
     read_decision,
@@ -31,7 +32,7 @@ def registered_routes(routes: Sequence[BaseRoute]) -> Iterator[Route]:
             yield route
 
 
-def operations_of(app: FastAPI) -> list[tuple[str, str, dict[str, dict[str, str]]]]:
+def operations_of(app: FastAPI) -> list[tuple[str, str, JsonObject]]:
     return [
         (method.upper(), template, node)
         for template, operations in app.openapi()["paths"].items()

@@ -31,6 +31,7 @@ from starlette.responses import Response
 
 from presentator.api.health import never_stopping
 from presentator.api.session_api import language_of
+from presentator.application.spoken_answer import spoken_language
 from presentator.contracts.copresenter import (
     AccessRefusal,
     AnswerEvent,
@@ -166,9 +167,34 @@ def add_copresenter_routes(
 ) -> None:
     """Add the exact signed-in co-presenter allowlist to the talk host."""
     router = APIRouter(prefix="/copresenter")
-    use = surface.use
     guard = _SessionGuard(admission=admission, delay=surface.delay)
 
+    router.add_api_route(
+        "/who",
+        _who_route(
+            surface.use,
+            admission=admission,
+            interface_language=lambda request: language_of(request, sessions),
+        ),
+        methods=["GET"],
+    )
+    router.add_api_route(
+        "/ask",
+        _ask_route(
+            surface,
+            admission=admission,
+            guard=guard,
+            interface_language=lambda request: language_of(request, sessions),
+        ),
+        methods=["POST"],
+    )
+    router.add_api_websocket_route("/hear", _hear_route(surface, admission, guard))
+    app.include_router(router)
+
+
+def _hear_route(
+    surface: CoPresenterSurface, admission: Admission, guard: _SessionGuard
+) -> Callable[[WebSocket, str], Awaitable[None]]:
     async def _hear(socket: WebSocket, language: str = "de") -> None:
         if (
             socket.headers.get("origin") != surface.browser_origin
@@ -192,24 +218,11 @@ def add_copresenter_routes(
                 socket,
                 language=language,
                 session_id=connection.session_id,
-                use=use,
+                use=surface.use,
                 guard=guard,
             )
 
-    router.add_api_route(
-        "/who",
-        _who_route(
-            use,
-            admission=admission,
-            interface_language=lambda request: language_of(request, sessions),
-        ),
-        methods=["GET"],
-    )
-    router.add_api_route(
-        "/ask", _ask_route(surface, admission=admission, guard=guard), methods=["POST"]
-    )
-    router.add_api_websocket_route("/hear", _hear)
-    app.include_router(router)
+    return _hear
 
 
 def _who_route(
@@ -255,6 +268,14 @@ class _Ask:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class _AskAdmission:
+    """Who may ask, and the language the person reads in when nothing was heard."""
+
+    admission: Admission
+    interface_language: Callable[[Request], Language]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class _Begun:
     """A question as it arrives: the time it has to be answered and its answer line."""
 
@@ -264,7 +285,7 @@ class _Begun:
 
 async def _admitted(
     surface: CoPresenterSurface,
-    admission: Admission,
+    admission: _AskAdmission,
     request: Request,
     question: AskRequest,
     begun: _Begun,
@@ -291,14 +312,22 @@ def _ended_if_it_breaks(step: StepTimer) -> Generator[None]:
 
 
 def _ask_route(
-    surface: CoPresenterSurface, *, admission: Admission, guard: _SessionGuard
+    surface: CoPresenterSurface,
+    *,
+    admission: Admission,
+    guard: _SessionGuard,
+    interface_language: Callable[[Request], Language],
 ) -> Callable[[Request, AskRequest], Awaitable[Response]]:
+    ask_admission = _AskAdmission(
+        admission=admission, interface_language=interface_language
+    )
+
     async def _ask(request: Request, question: AskRequest) -> Response:
         if surface.stopping():
             return _unavailable()
         deadline = asyncio.get_running_loop().time() + surface.deadline_seconds
         begun = _Begun(deadline=deadline, step=StepTimer("answer.ended", _log))
-        admitted = await _admitted(surface, admission, request, question, begun)
+        admitted = await _admitted(surface, ask_admission, request, question, begun)
         if isinstance(admitted, Response):
             return admitted
         streaming = False
@@ -342,13 +371,13 @@ def _answer_ended_with(step: StepTimer, response: Response) -> Response:
 
 def _admit(
     surface: CoPresenterSurface,
-    admission: Admission,
+    admission: _AskAdmission,
     request: Request,
     question: AskRequest,
     begun: _Begun,
 ) -> _Ask | Response:
     step = begun.step
-    connection = admission(request)
+    connection = admission.admission(request)
     if connection is None:
         return _answer_ended_with(step, _not_authenticated())
     asked = surface.use.asked_deck(question.deck, viewer=connection.user_id)
@@ -372,7 +401,9 @@ def _admit(
         question=Question(
             said=question.said,
             slide=question.slide,
-            language=question.language and question.language.value,
+            language=spoken_language(
+                question.language, lambda: admission.interface_language(request)
+            ),
         ),
         ticket=ticket,
         subject=connection.user_id,

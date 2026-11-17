@@ -15,7 +15,7 @@ from presentator.contracts.copresenter import (
 from presentator.contracts.voice import SampleLanguage
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Callable
 
     from presentator.contracts.copresenter import AnswerEvent, SpeechTokens
     from presentator.ports.copresenter import SentenceBoundaries, Speaking
@@ -72,13 +72,19 @@ class SpokenAnswer:
         return ()
 
 
-def spoken_language(asked: str | None, deck: str | None) -> str:
-    """The browser's language, else the deck's as `deck_language_of` reads it."""
-    return asked or deck_language_of(deck).value
+def spoken_language(
+    heard: SampleLanguage | None, interface: Callable[[], str]
+) -> SampleLanguage:
+    """The language a question is answered in, written and spoken.
+
+    The language it was heard in, else the asking person's interface language as
+    `voice_language_of` reads it; that is read only when nothing was heard.
+    """
+    return heard or voice_language_of(interface())
 
 
-def deck_language_of(written: str | None) -> SampleLanguage:
-    """The language a deck's manifest names when the voice has it, else German."""
+def voice_language_of(written: str | None) -> SampleLanguage:
+    """The language a tag names when the voice has it, else German."""
     try:
         return SampleLanguage(written)
     except ValueError:

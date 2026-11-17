@@ -81,8 +81,10 @@ the cluster, and that hop's trust sentence is in
   notice) says which one."
 - **CP12** Every answer event of text, sentence, audio and done carries
   `"ai_generated": true`; `error` and `slide`, the control events, do not; and
-  nothing switches it off. The answer is spoken by the voice of the heard
-  question's language, which the hearing reports for each finished utterance.
+  nothing switches it off. The answer is written and spoken in the heard
+  question's language, which the hearing reports for each finished utterance;
+  a question heard in none is answered in the asking person's language of the
+  controls (CP10), never the deck's.
 
 ## Where it runs and when it stops
 
