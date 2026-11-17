@@ -46,12 +46,13 @@ class MintedTokens:
     """A token source that mints a new pair per call, or fails on one call."""
 
     failing_call: int | None = None
+    fails_with: type[Exception] = CoPresenterUnavailableError
     calls: int = 0
 
     async def __call__(self) -> SpeechTokens:
         self.calls += 1
         if self.calls == self.failing_call:
-            raise CoPresenterUnavailableError
+            raise self.fails_with
         return self.pair(self.calls)
 
     @staticmethod
@@ -251,6 +252,23 @@ def test_a_fault_of_the_caller_passes_through_and_closes_the_service_side() -> N
             return fake.closes
 
     assert asyncio.run(scenario()) == ["closed"]
+
+
+def test_a_fault_of_the_token_source_fails_the_pending_opening_and_passes_through(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    tokens = MintedTokens(failing_call=1, fails_with=_CallerFaultError)
+
+    with json_logged(capsys) as logged, pytest.raises(_CallerFaultError):
+        asyncio.run(_heard_through(sending(a_completed("Nie gehört.")), tokens=tokens))
+
+    (opening,) = events_of(logged, "hearing_opening.ended")
+    assert (opening["outcome"], opening["error_type"]) == (
+        "failed",
+        _CallerFaultError.__name__,
+    )
+    (session,) = events_of(logged, "hearing_session.ended")
+    assert session["outcome"] == "failed"
 
 
 def _presented(upgrade: RecordedRequest) -> tuple[str, str]:
