@@ -141,7 +141,7 @@ def workload_documents(image: str) -> list[Document]:
         document("NetworkPolicy", "build-worker"),
         document("NetworkPolicy", "http-from-traefik-only"),
         document("ConfigMap", "build-worker-rules-0a1b2c"),
-        document("ConfigMap", "sqlite"),
+        document("ConfigMap", "web-settings"),
         document("Schedule", "backup"),
         document(
             "PodConfig",

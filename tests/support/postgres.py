@@ -141,6 +141,14 @@ def database_environment(database_url: str, directory: Path) -> Mapping[str, str
     }
 
 
+def point_at(
+    environment: pytest.MonkeyPatch, database_url: str, directory: Path
+) -> None:
+    """Set the variables that make an instance in this process reach the database."""
+    for name, value in database_environment(database_url, directory).items():
+        environment.setenv(name, value)
+
+
 def engine_from_environment() -> Engine:
     """In a child: the engine on the database `database_environment` pointed it at."""
     password = Path(os.environ["PRESENTATOR_DATABASE_PASSWORD_FILE"]).read_text(

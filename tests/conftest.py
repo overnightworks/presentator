@@ -36,9 +36,9 @@ from tests.support.log_lines import LoggedText
 from tests.support.postgres import (
     NO_DATABASE_HERE,
     created_database,
-    database_environment,
     engine_on,
     migrated_template,
+    point_at,
 )
 from tests.support.redis import NOTHING_LISTENS_HERE, emptied_database_url
 from tests.support.worker_support import (
@@ -78,8 +78,11 @@ class _ServerThatOnlyReturns:
 
 
 @pytest.fixture
-def main_without_serving(environment: pytest.MonkeyPatch) -> Callable[[], None]:
-    """`main()` as far as serving, with a server that returns at once."""
+def main_without_serving(
+    environment: pytest.MonkeyPatch, served_database: str
+) -> Callable[[], None]:
+    """`main()` over a database of its own, with a server that returns at once."""
+    del served_database
     environment.setattr(main, "StoppingServer", _ServerThatOnlyReturns)
     return partial(main.main, [])
 
@@ -157,8 +160,7 @@ def bare_environment(
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("PRESENTATOR_SECRET_KEY_FILE", raising=False)
     # Nothing listens at this database; the tests that serve name their own.
-    for name, value in database_environment(NO_DATABASE_HERE, tmp_path).items():
-        monkeypatch.setenv(name, value)
+    point_at(monkeypatch, NO_DATABASE_HERE, tmp_path)
     monkeypatch.setenv("PRESENTATOR_LOBBY_BUILD", str(LOBBY_BUILD))
     toolchain = tmp_path / "toolchain"
     toolchain.mkdir()
@@ -217,8 +219,7 @@ def served_database(
     bare_environment: pytest.MonkeyPatch, database_url: str, tmp_path: Path
 ) -> str:
     """An instance that serves from a migrated database of this test's own."""
-    for name, value in database_environment(database_url, tmp_path).items():
-        bare_environment.setenv(name, value)
+    point_at(bare_environment, database_url, tmp_path)
     return database_url
 
 

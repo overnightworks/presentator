@@ -69,9 +69,6 @@ class NumberedKeyPairs:
         """Count from one."""
         self._numbers = itertools.count(1)
 
-    def restart(self) -> None:
-        self._numbers = itertools.count(1)
-
     def __call__(self) -> DeployKeyPair:
         number = next(self._numbers)
         return DeployKeyPair(

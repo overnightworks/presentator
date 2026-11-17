@@ -13,21 +13,14 @@ from presentator.host import main
 from presentator.host.config import load_settings
 from tests.support.lobby import A_BROWSERS_ADDRESS, A_BROWSERS_HEADERS, A_TALK_ADDRESS
 from tests.support.log_lines import json_logged
-from tests.support.postgres import NO_DATABASE_HERE, database_environment, engine_on
+from tests.support.postgres import NO_DATABASE_HERE, engine_on, point_at
 from tests.support.redis import relay_in_front_of
-
-
-def _point_at(
-    environment: pytest.MonkeyPatch, database_url: str, directory: Path
-) -> None:
-    for name, value in database_environment(database_url, directory).items():
-        environment.setenv(name, value)
 
 
 def test_an_empty_database_is_refused_at_start_and_left_without_a_table(
     environment: pytest.MonkeyPatch, unmigrated_database_url: str, tmp_path: Path
 ) -> None:
-    _point_at(environment, unmigrated_database_url, tmp_path)
+    point_at(environment, unmigrated_database_url, tmp_path)
 
     with pytest.raises(DatabaseRefusedError) as refused:
         main.build_instance(load_settings())
@@ -46,7 +39,7 @@ def test_a_database_that_does_not_answer_ends_the_start_in_one_failed_line(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    _point_at(environment, NO_DATABASE_HERE, tmp_path)
+    point_at(environment, NO_DATABASE_HERE, tmp_path)
     environment.setenv("PRESENTATOR_REDIS_URL", redis_url)
 
     with json_logged(capsys) as logged, pytest.raises(SystemExit) as ended:
@@ -73,7 +66,7 @@ def test_health_is_ok_while_the_database_may_be_served_and_unavailable_when_not(
     tmp_path: Path,
     address: str,
 ) -> None:
-    _point_at(environment, database_url, tmp_path)
+    point_at(environment, database_url, tmp_path)
     environment.setenv("PRESENTATOR_REDIS_URL", redis_url)
     instance = main.build_instance(load_settings())
     app = instance.lobby if address == A_BROWSERS_ADDRESS else instance.talk
@@ -101,7 +94,7 @@ def test_health_is_unavailable_while_redis_cannot_be_reached(
     tmp_path: Path,
     address: str,
 ) -> None:
-    _point_at(environment, database_url, tmp_path)
+    point_at(environment, database_url, tmp_path)
     with relay_in_front_of(redis_url) as redis:
         environment.setenv("PRESENTATOR_REDIS_URL", redis.url)
         instance = main.build_instance(load_settings())

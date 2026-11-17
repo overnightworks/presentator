@@ -161,6 +161,7 @@ def test_a_secret_file_nobody_can_use_refuses_naming_only_the_setting(
     assert "fake-secret-bytes" not in str(refused.value)
 
 
+@pytest.mark.usefixtures("served_database")
 def test_an_instance_whose_secret_file_is_gone_refuses_to_start(
     environment: pytest.MonkeyPatch,
     tmp_path: Path,

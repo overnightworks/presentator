@@ -11,7 +11,12 @@ from sqlalchemy.engine import Engine
 from presentator.adapters.postgres.locks import MIGRATION_LOCK
 from presentator.host import main
 from tests.support.log_lines import json_logged
-from tests.support.postgres import NO_DATABASE_HERE, database_environment, engine_on
+from tests.support.postgres import (
+    NO_DATABASE_HERE,
+    database_environment,
+    engine_on,
+    point_at,
+)
 from tests.support.two_processes import two_presentators
 
 _A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS = "9999"
@@ -34,8 +39,7 @@ def _revisions(engine: Engine) -> list[str]:
 def test_migrate_brings_an_empty_database_to_head(
     unmigrated_database_url: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    for name, value in database_environment(unmigrated_database_url, tmp_path).items():
-        monkeypatch.setenv(name, value)
+    point_at(monkeypatch, unmigrated_database_url, tmp_path)
 
     main.main(["migrate"])
 
@@ -53,8 +57,7 @@ def test_migrate_writes_no_free_text_line_of_alembic(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    for name, value in database_environment(unmigrated_database_url, tmp_path).items():
-        monkeypatch.setenv(name, value)
+    point_at(monkeypatch, unmigrated_database_url, tmp_path)
 
     with json_logged(capsys) as logged:
         main.main(["migrate"])
@@ -69,8 +72,7 @@ def test_a_migrate_against_a_database_that_does_not_answer_ends_in_one_failed_li
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    for name, value in database_environment(NO_DATABASE_HERE, tmp_path).items():
-        monkeypatch.setenv(name, value)
+    point_at(monkeypatch, NO_DATABASE_HERE, tmp_path)
 
     with json_logged(capsys) as logged, pytest.raises(SystemExit) as ended:
         main.main(["migrate"])

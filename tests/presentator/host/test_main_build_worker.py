@@ -41,6 +41,7 @@ def key_file(tmp_path: Path) -> Path:
     return path
 
 
+@pytest.mark.usefixtures("served_database")
 def test_an_instance_starts_with_no_worker_answering_and_holds_the_workers_bounds(
     environment: pytest.MonkeyPatch, key_file: Path
 ) -> None:
@@ -100,6 +101,7 @@ def test_a_host_run_that_names_no_worker_has_no_worker_link() -> None:
         main.the_build_worker(settings, bound=bound)
 
 
+@pytest.mark.usefixtures("served_database")
 def test_a_key_file_that_is_too_short_refuses_to_start(
     environment: pytest.MonkeyPatch, key_file: Path
 ) -> None:

@@ -123,7 +123,7 @@ def test_an_unknown_presentator_key_in_a_dot_env_refuses_the_start(
         load_settings()
 
 
-@pytest.mark.usefixtures("environment")
+@pytest.mark.usefixtures("environment", "served_database")
 def test_the_lobby_starts_with_no_mcp_setting_and_serves_the_front() -> None:
     instance = build_instance(load_settings())
 

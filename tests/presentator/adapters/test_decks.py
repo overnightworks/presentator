@@ -1,14 +1,12 @@
 """Deck folders read out of a real repository, and deck rows in a real database."""
 
 import subprocess
-from collections.abc import Generator
-from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Connection, Engine
+from sqlalchemy import Engine
 from sqlalchemy.exc import DBAPIError
 
 from gitmirror.mirror import credential_arguments, unattended_environment
@@ -79,22 +77,12 @@ def a_box(*, instance_key: str = _INSTANCE_KEY) -> SecretBox:
 
 
 def a_resolver(
-    database: Engine,
-    *,
-    instance_key: str = _INSTANCE_KEY,
+    database: Engine, *, instance_key: str = _INSTANCE_KEY
 ) -> PostgresSourceCredentials:
     """The resolver the composition root builds, over that real database."""
     return PostgresSourceCredentials(
-        engine=database,
-        box=a_box(instance_key=instance_key),
+        engine=database, box=a_box(instance_key=instance_key)
     )
-
-
-@contextmanager
-def rows(database: Engine) -> Generator[Connection]:
-    """One transaction on the database, committed as it ends."""
-    with database.begin() as connection:
-        yield connection
 
 
 def folders_read(tmp_path: Path, source: Source) -> tuple[DeckFolder, ...]:
@@ -178,11 +166,6 @@ def add_a_source(
 
 
 _THE_ENCRYPTED_OF = "SELECT encrypted_secret FROM sources WHERE id = %s"
-
-
-def an_instance_that_was_set_up(engine: Engine) -> Engine:
-    """A migrated database holding the admin first start created."""
-    return a_source_database(engine)
 
 
 def test_a_pushed_deck_folder_is_read_with_its_title_and_its_change_time(
@@ -354,7 +337,7 @@ def test_a_credential_free_source_fetches_through_the_real_store(
     does, asking git for no credential at all.
     """
     remote.commit_example_deck(at=PUSHED_AT)
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     stored = add_a_source(
         database,
         write=SourceWrite(
@@ -457,7 +440,7 @@ def test_a_real_git_source_can_be_added_removed_and_added_again(
     engine: Engine,
 ) -> None:
     remote.commit_example_deck(at=PUSHED_AT)
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     sources = a_source_store(database)
     folders = MirroredDeckFolders(mirrors=mirrors_under(tmp_path))
 
@@ -481,10 +464,10 @@ def test_a_real_git_source_can_be_added_removed_and_added_again(
 def test_a_stored_secret_stands_in_its_row_as_ciphertext_and_comes_back(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     stored = add_a_source(database)
 
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         written = cursor.exec_driver_sql(_THE_ENCRYPTED_OF, (stored.id,)).scalar_one()
     assert _WHAT_THE_GIT_HOST_EXPECTS.encode() not in written
     assert (
@@ -496,7 +479,7 @@ def test_a_stored_secret_stands_in_its_row_as_ciphertext_and_comes_back(
 def test_a_source_this_instance_no_longer_carries_resolves_to_nothing(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
 
     resolved = a_resolver(database).resolve(
         CredentialReference(name="no source of this name"),
@@ -508,7 +491,7 @@ def test_a_source_this_instance_no_longer_carries_resolves_to_nothing(
 def test_a_secret_another_instance_key_wrote_is_refused_rather_than_answered(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     stored = add_a_source(database)
 
     resolved = a_resolver(database, instance_key=_ANOTHER_INSTANCE_KEY).resolve(
@@ -521,7 +504,7 @@ def test_a_secret_another_instance_key_wrote_is_refused_rather_than_answered(
 def test_a_stored_secret_reaches_git_without_riding_on_its_command_line(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     stored = add_a_source(database)
 
     resolved = a_resolver(database).resolve(CredentialReference(name=stored.id))
@@ -564,14 +547,14 @@ def a_write(
 def test_adding_a_source_stores_the_secret_encrypted_and_the_webhook_hash(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     sources = a_source_store(database)
 
     added = sources.add(a_write())
 
     assert added is not None
     assert sources.hook_secret_hash("talks") == _A_WEBHOOK_HASH
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         written = cursor.exec_driver_sql(_THE_ENCRYPTED_OF, (added.id,)).scalar_one()
     assert _WHAT_THE_GIT_HOST_EXPECTS.encode() not in written
     assert (
@@ -584,7 +567,7 @@ _A_PUBLIC_KEY = "ssh-ed25519 AAAAtestkeymaterial presentator"
 
 
 def test_adding_an_ssh_source_stores_its_public_key_in_clear(engine: Engine) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     sources = a_source_store(database)
 
     added = sources.add(a_write(public_key=_A_PUBLIC_KEY))
@@ -597,7 +580,7 @@ def test_adding_an_ssh_source_stores_its_public_key_in_clear(engine: Engine) -> 
 def test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     sources = a_source_store(database)
     target = sources.add(
         a_write(name="target", url=_ADDRESS, public_key=_A_PUBLIC_KEY),
@@ -617,7 +600,7 @@ def test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair(
         public_key="ssh-ed25519 AAAAreplacement presentator",
     )
     sources = replace(sources, new_key_pair=lambda: pair)
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         target_before = cursor.exec_driver_sql(
             "SELECT encrypted_secret, ssh_public_key FROM sources WHERE id = %s",
             (target.id,),
@@ -634,7 +617,7 @@ def test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair(
 
     assert sources.renew_deploy_key(target.id)
 
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         target_after = cursor.exec_driver_sql(
             "SELECT encrypted_secret, ssh_public_key FROM sources WHERE id = %s",
             (target.id,),
@@ -665,7 +648,7 @@ def test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair(
 def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     sources = a_source_store(database)
     target = sources.add(
         a_write(name="target", url=_ADDRESS, public_key=_A_PUBLIC_KEY),
@@ -680,7 +663,7 @@ def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
     assert target is not None
     assert neighbour is not None
     a_key_drafts_store(database).mint(OWNER.id, at=PUSHED_AT)
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         before = (
             cursor.exec_driver_sql(
                 "SELECT id, encrypted_secret, ssh_public_key FROM sources ORDER BY id",
@@ -699,7 +682,7 @@ def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
     with pytest.raises(RuntimeError, match="key generation failed"):
         sources.renew_deploy_key(target.id)
 
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         after = (
             cursor.exec_driver_sql(
                 "SELECT id, encrypted_secret, ssh_public_key FROM sources ORDER BY id",
@@ -714,7 +697,7 @@ def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
 def test_a_deploy_key_update_failure_keeps_every_source_and_draft(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     sources = a_source_store(database)
     target = sources.add(
         a_write(name="target", url=_ADDRESS, public_key=_A_PUBLIC_KEY),
@@ -729,7 +712,7 @@ def test_a_deploy_key_update_failure_keeps_every_source_and_draft(
     assert target is not None
     assert neighbour is not None
     draft = a_key_drafts_store(database).mint(OWNER.id, at=PUSHED_AT)
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         before = (
             cursor.exec_driver_sql(
                 "SELECT id, encrypted_secret, ssh_public_key FROM sources ORDER BY id",
@@ -738,7 +721,7 @@ def test_a_deploy_key_update_failure_keeps_every_source_and_draft(
                 "SELECT id, public_key, encrypted_private_key FROM source_key_drafts",
             ).fetchall(),
         )
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         cursor.exec_driver_sql(
             "CREATE FUNCTION reject_deploy_key_replacement() RETURNS trigger"
             " LANGUAGE plpgsql AS"
@@ -753,7 +736,7 @@ def test_a_deploy_key_update_failure_keeps_every_source_and_draft(
     with pytest.raises(DBAPIError, match="deploy key write refused"):
         sources.renew_deploy_key(target.id)
 
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         after = (
             cursor.exec_driver_sql(
                 "SELECT id, encrypted_secret, ssh_public_key FROM sources ORDER BY id",
@@ -769,7 +752,7 @@ def test_a_deploy_key_update_failure_keeps_every_source_and_draft(
 def test_promoting_a_draft_encrypts_its_private_half_and_consumes_it(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     drafts = a_key_drafts_store(database)
     minted = drafts.mint(OWNER.id, at=PUSHED_AT)
 
@@ -784,7 +767,7 @@ def test_promoting_a_draft_encrypts_its_private_half_and_consumes_it(
     assert a_resolver(database).resolve(CredentialReference(name=promoted.id)) == (
         minted.private_key
     )
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         encrypted = cursor.exec_driver_sql(
             _THE_ENCRYPTED_OF, (promoted.id,)
         ).scalar_one()
@@ -800,7 +783,7 @@ def test_promoting_a_missing_or_foreign_draft_creates_no_source(
     engine: Engine,
     draft_owner: str | None,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     sources = a_source_store(database)
     drafts = a_key_drafts_store(database)
     if draft_owner is not None:
@@ -822,11 +805,11 @@ def test_promoting_a_missing_or_foreign_draft_creates_no_source(
 def test_promoting_an_undecryptable_draft_keeps_it_and_creates_no_source(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     sources = a_source_store(database)
     minted = a_key_drafts_store(database).mint(OWNER.id, at=PUSHED_AT)
     corrupted = b"not fernet ciphertext"
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         cursor.exec_driver_sql(
             "UPDATE source_key_drafts SET encrypted_private_key = %s WHERE id = %s",
             (corrupted, minted.id),
@@ -836,7 +819,7 @@ def test_promoting_an_undecryptable_draft_keeps_it_and_creates_no_source(
 
     assert promoted is None
     assert sources.all() == ()
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         stored = cursor.exec_driver_sql(
             "SELECT encrypted_private_key FROM source_key_drafts WHERE id = %s",
             (minted.id,),
@@ -847,7 +830,7 @@ def test_promoting_an_undecryptable_draft_keeps_it_and_creates_no_source(
 def test_a_failed_draft_promotion_keeps_the_draft_and_creates_no_source(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     sources = a_source_store(database)
     assert sources.add(a_write()) is not None
     drafts = a_key_drafts_store(database)
@@ -863,7 +846,7 @@ def test_a_failed_draft_promotion_keeps_the_draft_and_creates_no_source(
 def test_adding_a_source_with_a_name_or_url_already_stored_writes_nothing(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     sources = a_source_store(database)
     stored = add_a_source(database)
 
@@ -878,7 +861,7 @@ def test_adding_a_source_with_a_name_or_url_already_stored_writes_nothing(
 def test_removing_a_source_deletes_its_row_and_frees_its_name_and_url(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     sources = a_source_store(database)
     stored = add_a_source(database)
 
@@ -1023,7 +1006,7 @@ def test_taking_a_deck_in_again_leaves_what_it_delivers_standing(
 
 
 def test_an_instance_with_no_source_row_stores_none(engine: Engine) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
 
     assert a_source_store(database).all() == ()
 
@@ -1102,7 +1085,7 @@ def test_removing_a_sources_decks_takes_every_row_marked_removed_or_not(
 
     assert {deck.slug for deck in carried} == {"kundenfeedback", "knowledge-fabric"}
     assert store.all() == (a_deck("agenten-fabrik", source_id=_ANOTHER_SOURCE_ID),)
-    with rows(engine) as cursor:
+    with engine.begin() as cursor:
         left = cursor.exec_driver_sql(
             "SELECT COUNT(*) FROM decks WHERE source_id = %s",
             (SOURCE_ID,),
@@ -1164,7 +1147,7 @@ def test_recording_a_run_keeps_only_the_newest_bound(engine: Engine) -> None:
         )
 
     recent = store.recent(SOURCE_ID)
-    with rows(engine) as cursor:
+    with engine.begin() as cursor:
         kept = cursor.exec_driver_sql(
             "SELECT COUNT(*) FROM source_runs WHERE source_id = %s",
             (SOURCE_ID,),
@@ -1191,12 +1174,12 @@ def test_removing_a_sources_runs_deletes_every_one_it_recorded(
 def test_renewing_the_access_secret_replaces_the_stored_ciphertext(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     secretless = add_a_source(database)
     sources = a_source_store(database)
 
     sources.put_credential(secretless.id, _WHAT_THE_GIT_HOST_EXPECTS)
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         old_ciphertext = cursor.exec_driver_sql(
             _THE_ENCRYPTED_OF,
             (secretless.id,),
@@ -1205,7 +1188,7 @@ def test_renewing_the_access_secret_replaces_the_stored_ciphertext(
     replacement = "another read-only secret"
     sources.put_credential(secretless.id, replacement)
 
-    with rows(database) as cursor:
+    with database.begin() as cursor:
         new_ciphertext = cursor.exec_driver_sql(
             _THE_ENCRYPTED_OF,
             (secretless.id,),
@@ -1222,7 +1205,7 @@ def test_renewing_the_access_secret_replaces_the_stored_ciphertext(
 def test_replacing_the_webhook_hash_leaves_the_previous_digest_behind(
     engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(engine)
+    database = a_source_database(engine)
     stored = add_a_source(database, a_write(name=SOURCE_NAME, url=_ADDRESS))
     sources = a_source_store(database)
     replacement = b"\x22" * 32
