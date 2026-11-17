@@ -7,11 +7,7 @@ from dataclasses import dataclass
 
 from presentator.application.copresenter_prompt import user_message
 from presentator.application.own_decks import OwnDecks
-from presentator.application.spoken_answer import (
-    deck_language_of,
-    spoken_events,
-    spoken_language,
-)
+from presentator.application.spoken_answer import spoken_events, voice_language_of
 from presentator.contracts.copresenter import (
     AccessRefusal,
     AnswerEvent,
@@ -81,7 +77,7 @@ class CoPresenterUse:
         )
         if deck_text is None:
             raise CoPresenterUnavailableError
-        return deck_language_of(deck_text.language)
+        return voice_language_of(deck_text.language)
 
     async def readiness(self) -> CoPresenterReadiness:
         """Return speech's narrow readiness report."""
@@ -113,13 +109,15 @@ class CoPresenterUse:
         )
         if deck_text is None:
             raise CoPresenterUnavailableError
-        language = spoken_language(question.language, deck_text.language)
-
         async with self.answers.answer(
             message=user_message(question, deck_text), person=prepared.person
         ) as texts:
             events = spoken_events(
-                texts, self.boundaries, self.speaking, language, prepared.speech
+                texts,
+                self.boundaries,
+                self.speaking,
+                question.language,
+                prepared.speech,
             )
             yield events
 

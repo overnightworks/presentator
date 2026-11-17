@@ -114,20 +114,40 @@ def test_ask_accepts_the_limit_and_the_offered_languages(
 
 
 @pytest.mark.parametrize(
-    ("deck_language", "heard_language"),
-    [("de", "de"), ("de", "en"), ("en", "de"), ("en", "en")],
+    ("deck_language", "heard_language", "reads_in", "answer_language", "named"),
+    [
+        ("de", "de", "en", "de", "German"),
+        ("de", "en", "de", "en", "English"),
+        ("en", "de", "en", "de", "German"),
+        ("en", "en", "de", "en", "English"),
+        ("de", None, "en", "en", "English"),
+        ("en", None, "de", "de", "German"),
+    ],
 )
-def test_the_answer_is_spoken_in_the_language_the_question_was_heard_in(
-    deck_language: str, heard_language: str
+def test_the_answer_is_written_and_spoken_in_the_language_the_question_was_heard_in(
+    deck_language: str,
+    heard_language: str | None,
+    reads_in: str,
+    answer_language: str,
+    named: str,
 ) -> None:
+    """CP12: heard, else the person's language of the controls, never the deck's."""
     lobby, private, _clock = a_copresenter_talk_host()
     private.texts.text = DeckText(title="t", language=deck_language, slides=())
     lobby.sign_in()
 
-    response = ask(lobby.client, {**QUESTION, "language": heard_language})
+    response = lobby.client.post(
+        "/copresenter/ask",
+        json={**QUESTION, "language": heard_language},
+        headers={"accept-language": reads_in},
+    )
 
     assert response.status_code == HTTPStatus.OK
-    assert [language for _text, language in private.speaking.spoken] == [heard_language]
+    (message,) = private.answers.messages
+    assert named in message
+    assert [language for _text, language in private.speaking.spoken] == [
+        answer_language
+    ]
 
 
 def test_a_question_whose_lease_cannot_be_told_gets_503_and_no_turn() -> None:

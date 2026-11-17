@@ -1,6 +1,9 @@
 """The turn the answering model is given: the question and the deck around it."""
 
+from typing import assert_never
+
 from presentator.contracts.copresenter import DeckText, Question, SlideText
+from presentator.contracts.voice import SampleLanguage
 
 
 def user_message(question: Question, deck_text: DeckText) -> str:
@@ -17,8 +20,19 @@ def user_message(question: Question, deck_text: DeckText) -> str:
         f"You are on slide {question.slide}.\n\n"
         f"--- CURRENT SLIDE ---\n{here}\n--- END CURRENT SLIDE ---\n\n"
         f"--- DECK ---\n{pages}\n--- END DECK ---\n\n"
-        f"The person said: {question.said}"
+        f"The person said: {question.said}\n"
+        f"Answer in {_name_of(question.language)}."
     )
+
+
+def _name_of(language: SampleLanguage) -> str:
+    match language:
+        case SampleLanguage.GERMAN:
+            return "German"
+        case SampleLanguage.ENGLISH:
+            return "English"
+        case _:
+            assert_never(language)
 
 
 def _page(slide: SlideText, *, current_mark: bool = False) -> str:
