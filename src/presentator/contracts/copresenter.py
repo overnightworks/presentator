@@ -152,12 +152,15 @@ type AnswerEvent = AnswerText | Sentence | Audio | Done | ShowSlide
 class HearingTranscript:
     """One interim or final transcript from private hearing.
 
-    A final one carries the language its utterance was heard in.
+    A final one carries the language its utterance was heard in, and the W3C
+    `traceparent` of its turn when the service sent one: the browser asks under
+    that trace, so the hearing's and the answer's lines share one `trace_id`.
     """
 
     text: str
     final: bool
     language: SampleLanguage | None = None
+    traceparent: str | None = None
 
     def __post_init__(self) -> None:
         """Refuse a final transcript that names no language."""

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final
 
-from speech_client import wire
+from speech_client import realtime_wire
 from speech_client.relay import HopClose
 
 from tests.support.speech_service import (
@@ -96,11 +96,11 @@ HEARING_ENDS: Final[dict[str, Ending]] = {
 
 
 def _interim(text: str) -> dict[str, object]:
-    return {"text": text, "final": False, "language": None}
+    return {"text": text, "final": False, "language": None, "traceparent": None}
 
 
 def _final(text: str, language: str = "de") -> dict[str, object]:
-    return {"text": text, "final": True, "language": language}
+    return {"text": text, "final": True, "language": language, "traceparent": None}
 
 
 BROWSER_ENDINGS: dict[str, Ending] = {
@@ -113,18 +113,18 @@ BROWSER_ENDINGS: dict[str, Ending] = {
     ),
     "session-and-turn-events-skipped": Ending(
         lambda: after_the_first_audio(
-            wire.SessionCreated(
-                session=wire.TranscriptionSession(type="transcription")
+            realtime_wire.SessionCreated(
+                session=realtime_wire.TranscriptionSession(type="transcription")
             ),
-            wire.SessionUpdated(
-                session=wire.TranscriptionSession(type="transcription")
+            realtime_wire.SessionUpdated(
+                session=realtime_wire.TranscriptionSession(type="transcription")
             ),
-            wire.SpeechStarted(audio_start_ms=0, item_id=AN_ITEM),
-            wire.SpeechStopped(audio_end_ms=1, item_id=AN_ITEM),
-            wire.AudioCommitted(item_id=AN_ITEM, previous_item_id=None),
-            wire.ItemCreated(
+            realtime_wire.SpeechStarted(audio_start_ms=0, item_id=AN_ITEM),
+            realtime_wire.SpeechStopped(audio_end_ms=1, item_id=AN_ITEM),
+            realtime_wire.AudioCommitted(item_id=AN_ITEM, previous_item_id=None),
+            realtime_wire.ItemCreated(
                 previous_item_id=None,
-                item=wire.UserMessageItem(id=AN_ITEM),
+                item=realtime_wire.UserMessageItem(id=AN_ITEM),
             ),
             a_completed("Ein Wort."),
         ),

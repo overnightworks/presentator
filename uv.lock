@@ -627,7 +627,7 @@ requires-dist = [
     { name = "httpx2", specifier = "==2.16.0" },
     { name = "overnightworks-agents", extras = ["backend", "mcp-server"], git = "https://github.com/overnightworks/agents?rev=v0.33.0" },
     { name = "overnightworks-logline", git = "https://github.com/overnightworks/logline?rev=v0.4.0" },
-    { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.17.0" },
+    { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.21.0" },
     { name = "overnightworks-webauth", extras = ["redis"], git = "https://github.com/overnightworks/webauth?rev=v0.40.1" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.9" },
     { name = "pydantic-settings", specifier = "==2.16.2" },
@@ -652,9 +652,10 @@ dev = [
 
 [[package]]
 name = "overnightworks-speech-client"
-version = "0.17.0"
-source = { git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.17.0#8b4ba03d1b7a4b7538f48869d6cae24419c896b6" }
+version = "0.21.0"
+source = { git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.21.0#75baa0b986c6f71e2a1b7a53a96f4d7bbfb4eacf" }
 dependencies = [
+    { name = "overnightworks-logline" },
     { name = "pydantic" },
     { name = "websockets" },
 ]

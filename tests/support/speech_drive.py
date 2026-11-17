@@ -525,9 +525,13 @@ def assert_nothing_shows(
     *,
     response: Response | None = None,
     frames: Sequence[Mapping[str, object]] = (),
-    close_reasons: Sequence[str] = (),
+    texts: Sequence[str] = (),
 ) -> None:
-    """No marker in a log, a caught error, the browser or a stored row."""
+    """No marker in a log, a caught error, the browser or a stored row.
+
+    `texts` are more places the browser or a reader sees whole: close reasons
+    and the lines the hearing wrote.
+    """
     markers = _every_marker(instance)
     words = (*ANSWER_SENTENCES, *HEARD_WORDS)
     _absent(
@@ -541,8 +545,8 @@ def assert_nothing_shows(
     for frame in frames:
         text = json.dumps(frame, ensure_ascii=False)
         _absent(text, (*markers, *(w for w in words if w not in HEARD_WORDS)))
-    for reason in close_reasons:
-        _absent(reason, (*markers, *words))
+    for text in texts:
+        _absent(text, (*markers, *words))
 
 
 def the_marked_answer() -> Gateway:

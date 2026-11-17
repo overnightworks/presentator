@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import sqlite3
 import threading
@@ -11,7 +12,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 from fastapi import Response, WebSocket
-from speech_client import wire
+from speech_client import realtime_wire, wire
 from speech_client.relay import HOP_FRAME_BYTES, HopClose
 from starlette.websockets import WebSocketDisconnect
 from webauth.oidc import OidcRefusalReason
@@ -29,6 +30,7 @@ from tests.support.copresenter_support import (
 from tests.support.hearing_endings import BROWSER_ENDINGS
 from tests.support.leak_support import everything_shown
 from tests.support.lobby import A_SPEECH_SCOPE, A_TALK_ADDRESS
+from tests.support.log_lines import LoggedText, LogLine, json_lines_among
 from tests.support.speech_drive import (
     LEAK_HEARINGS,
     ORIGIN,
@@ -48,6 +50,7 @@ from tests.support.speech_service import (
     RawPeer,
     Served,
     a_completed,
+    a_delta,
     a_failed_item,
     a_loopback_server,
     a_served_origin,
@@ -82,6 +85,26 @@ def _warnings(logged: list[logging.LogRecord]) -> list[str]:
         for record in logged
         if record.levelno >= logging.WARNING and record.name.startswith("presentator")
     ]
+
+
+def _the_session_line(capsys: pytest.CaptureFixture[str]) -> LogLine:
+    (line,) = [
+        one
+        for one in json_lines_among(LoggedText(capsys).text)
+        if one["event"] == "hearing_session.ended"
+    ]
+    return line
+
+
+def _hearing_lines(capsys: pytest.CaptureFixture[str]) -> str:
+    """The hearing's own lines as written, without the request lines."""
+    return json.dumps(
+        [
+            line
+            for line in json_lines_among(LoggedText(capsys).text)
+            if str(line["event"]).startswith("hearing_")
+        ]
+    )
 
 
 def _appended(service: FakeSpeechService) -> list[bytes]:
@@ -139,56 +162,67 @@ def test_the_browser_gets_each_transcript_then_the_close_the_service_ended_with(
         assert _warnings(heard.logged) == []
 
 
+def test_a_final_transcript_carries_the_trace_of_the_turn_the_service_heard(
+    tmp_path: Path,
+) -> None:
+    turn = f"00-{'1' * 32}-{'2' * 16}-01"
+    service = FakeSpeechService(
+        realtime=sending(a_delta("Ha"), a_completed("Hallo.", traceparent=turn))
+    )
+    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+        heard = hear_and_record(instance)
+
+    assert [frame["traceparent"] for frame in heard.frames] == [None, turn]
+
+
 @pytest.mark.parametrize(
-    ("peer", "named"),
+    ("peer", "reason"),
     [
         pytest.param(
             RawPeer(MALFORMED_PEERS["status-line-not-http"]).serving,
-            "Malformed",
+            "malformed",
             id="status-line-not-http",
         ),
         pytest.param(
             RawPeer(MALFORMED_PEERS["cut-header-block"]).serving,
-            "Cut",
+            "cut",
             id="cut-header-block",
         ),
         pytest.param(
             RawPeer(MALFORMED_PEERS["marked-status-reason"]).serving,
-            "Refused status=500",
+            "refused",
             id="marked-status-reason",
         ),
         pytest.param(
             RawPeer(b"HTTP/1.1 204 No Content\r\n\r\n").serving,
-            "Malformed",
+            "malformed",
             id="no-upgrade-204",
         ),
-        pytest.param(nobody_listens, "Unreachable", id="nobody-listens"),
+        pytest.param(nobody_listens, "unreachable", id="nobody-listens"),
     ],
 )
 def test_a_service_that_answers_the_upgrade_off_the_wire_closes_the_browser_4502(
-    tmp_path: Path, peer: Served, named: str
+    tmp_path: Path, peer: Served, reason: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     with a_speech_instance(tmp_path, SpeechScenario(peer=peer)) as instance:
         heard = hear_and_record(instance)
 
     assert heard.frames == []
     assert heard.closed_with == HopClose.SERVICE_FAILED
-    assert _warnings(heard.logged) == [f"hearing failed: {named}"]
+    session = _the_session_line(capsys)
+    assert (session["outcome"], session["reason"]) == ("failed", reason)
 
 
-@pytest.mark.parametrize(
-    ("status", "named"),
-    [(403, "Refused status=403"), (503, "Refused status=503")],
-)
-def test_a_refused_upgrade_logs_one_warning_naming_its_type_and_status(
-    tmp_path: Path, status: int, named: str
+@pytest.mark.parametrize("status", [403, 503])
+def test_a_refused_upgrade_logs_one_session_line_naming_its_refusal_and_status(
+    tmp_path: Path, status: int, capsys: pytest.CaptureFixture[str]
 ) -> None:
     service = FakeSpeechService(realtime=denying(status))
     with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
         heard = hear_and_record(instance)
 
-    (warning,) = _warnings(heard.logged)
-    assert named in warning
+    session = _the_session_line(capsys)
+    assert (session["reason"], session["status"]) == ("refused", status)
     assert heard.closed_with == HopClose.SERVICE_FAILED
 
 
@@ -208,7 +242,7 @@ def test_a_redirect_from_the_service_is_not_followed(tmp_path: Path) -> None:
     "event", [a_failed_item(), an_error_event()], ids=lambda e: type(e).__name__
 )
 def test_a_failed_item_or_error_event_closes_the_browser_4502_and_the_service_socket(
-    tmp_path: Path, event: wire.ServerEvent
+    tmp_path: Path, event: realtime_wire.ServerEvent, capsys: pytest.CaptureFixture[str]
 ) -> None:
     service = FakeSpeechService()
     service.realtime = sending_then_reading(service, event)
@@ -216,8 +250,11 @@ def test_a_failed_item_or_error_event_closes_the_browser_4502_and_the_service_so
         heard = hear_and_record(instance)
         assert service.closed.wait(THREAD_WAIT_SECONDS)
 
-    (warning,) = _warnings(heard.logged)
-    assert wire.RefusalCode.UNAVAILABLE.value in warning
+    session = _the_session_line(capsys)
+    assert (session["reason"], session["code"]) == (
+        "service_failed",
+        wire.RefusalCode.UNAVAILABLE.value,
+    )
     assert heard.closed_with == HopClose.SERVICE_FAILED
 
 
@@ -255,15 +292,17 @@ def test_the_upgrade_carries_the_issued_tokens_and_names_the_language_before_aud
     assert append["type"] == "input_audio_buffer.append"
 
 
-def test_a_language_the_wire_does_not_name_closes_4502_with_no_upgrade_and_one_warning(
-    tmp_path: Path,
+def test_a_language_the_wire_does_not_name_closes_4502_with_no_upgrade_and_a_refusal(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     service = FakeSpeechService()
     with a_speech_instance(tmp_path, _reading_scenario(service)) as instance:
         heard = hear_and_record(instance, url=HEARING.replace("=de", "=fr"))
 
     assert heard.closed_with == HopClose.SERVICE_FAILED
-    assert len(_warnings(heard.logged)) == 1
+    session = _the_session_line(capsys)
+    assert (session["outcome"], session["reason"]) == ("refused", "unknown_language")
+    assert "language" not in session
     assert not service.upgrades
 
 
@@ -327,11 +366,12 @@ def test_a_sign_out_during_a_hearing_closes_the_browser_1000_and_the_service_soc
 
 @pytest.mark.parametrize("error", ["invalid_scope", "invalid_client"])
 def test_a_refused_workload_grant_closes_4502_with_no_upgrade_and_logs_its_reason(
-    tmp_path: Path, error: str
+    tmp_path: Path, error: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     scenario = SpeechScenario(arrange=refusing_every_workload_grant(error))
     with a_speech_instance(tmp_path, scenario) as instance:
         heard = hear_and_record(instance)
+    written = LoggedText(capsys).text
 
     assert heard.frames == []
     assert heard.closed_with == HopClose.SERVICE_FAILED
@@ -339,6 +379,8 @@ def test_a_refused_workload_grant_closes_4502_with_no_upgrade_and_logs_its_reaso
     shown = everything_shown(heard.logged)
     assert OidcRefusalReason.TOKEN_REQUEST_REFUSED.value in shown
     assert error not in shown
+    assert error not in written
+    assert OidcRefusalReason.TOKEN_REQUEST_REFUSED.value in written
 
 
 @pytest.mark.parametrize(
@@ -499,7 +541,7 @@ def test_a_hearing_reaching_its_deadline_closes_4504(tmp_path: Path) -> None:
     ],
 )
 def test_a_service_that_does_not_open_within_the_opening_bound_closes_4502(
-    tmp_path: Path, silence: Served | None
+    tmp_path: Path, silence: Served | None, capsys: pytest.CaptureFixture[str]
 ) -> None:
     service = FakeSpeechService(realtime=accept_and_stay_silent)
     scenario = SpeechScenario(
@@ -511,8 +553,7 @@ def test_a_service_that_does_not_open_within_the_opening_bound_closes_4502(
         heard = hear_and_record(instance)
 
     assert heard.closed_with == HopClose.SERVICE_FAILED
-    (warning,) = _warnings(heard.logged)
-    assert "Unreachable" in warning
+    assert _the_session_line(capsys)["reason"] == "unreachable"
 
 
 def test_a_browser_that_sends_nothing_opens_one_upgrade_and_one_session_update(
@@ -573,16 +614,21 @@ def test_a_browser_that_leaves_during_the_token_read_sends_no_audio_and_logs_no_
 
 @pytest.mark.parametrize("case", LEAK_HEARINGS)
 def test_a_hearing_shows_no_marker_in_any_log_frame_close_or_stored_row(
-    tmp_path: Path, case: str
+    tmp_path: Path, case: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     with a_speech_instance(tmp_path, LEAK_HEARINGS[case]()) as instance:
         heard = hear_and_record(instance)
         assert_nothing_shows(
-            instance, heard.logged, frames=heard.frames, close_reasons=[heard.reason]
+            instance,
+            heard.logged,
+            frames=heard.frames,
+            texts=[heard.reason, _hearing_lines(capsys)],
         )
 
 
-def test_a_stalled_token_read_ended_by_logout_shows_no_marker(tmp_path: Path) -> None:
+def test_a_stalled_token_read_ended_by_logout_shows_no_marker(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     scenario = SpeechScenario(arrange=refusing_every_workload_grant(PLANTED))
     with a_speech_instance(tmp_path, scenario) as instance:
         entered, release = _held_at_the_workload_grant(instance.hosts)
@@ -595,4 +641,8 @@ def test_a_stalled_token_read_ended_by_logout_shows_no_marker(tmp_path: Path) ->
             _release_the_recheck(instance)
             closed = _closed_with(socket)
             release.set()
-        assert_nothing_shows(instance, list(logged), close_reasons=[closed.reason])
+        assert_nothing_shows(
+            instance,
+            list(logged),
+            texts=[closed.reason, _hearing_lines(capsys)],
+        )
