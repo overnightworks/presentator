@@ -2,7 +2,6 @@
 
 import re
 from collections.abc import Iterator, Sequence
-from pathlib import Path
 
 import pytest
 from agents.tools import (
@@ -12,6 +11,7 @@ from agents.tools import (
     read_decision,
 )
 from fastapi import APIRouter, FastAPI
+from sqlalchemy import Engine
 from starlette.routing import BaseRoute, Match, Route
 
 from presentator.agent.mcp import marked_tools
@@ -49,9 +49,9 @@ def marks_of(app: FastAPI) -> list[tuple[str, str, ToolMark]]:
     ]
 
 
-def test_the_lobby_offers_exactly_the_pinned_tools(tmp_path: Path) -> None:
+def test_the_lobby_offers_exactly_the_pinned_tools(engine: Engine) -> None:
     """D7: a route marked as a tool that is not listed here fails the build."""
-    app = a_scene(tmp_path).lobby.app
+    app = a_scene(engine).lobby.app
 
     marked = {
         (method, template, mark.name, mark.effect)
@@ -77,10 +77,10 @@ def test_the_lobby_offers_exactly_the_pinned_tools(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("token_clients", [frozenset[str](), frozenset({World.HAL})])
 def test_the_lobby_starts_with_every_operation_decided_with_and_without_token_clients(
-    tmp_path: Path, token_clients: frozenset[str]
+    engine: Engine, token_clients: frozenset[str]
 ) -> None:
     """A forgotten decision stops the start, so a built lobby holds none."""
-    app = a_scene(tmp_path, token_clients=token_clients).lobby.app
+    app = a_scene(engine, token_clients=token_clients).lobby.app
 
     operations = operations_of(app)
 
@@ -91,10 +91,10 @@ def test_the_lobby_starts_with_every_operation_decided_with_and_without_token_cl
 
 
 def test_no_marked_template_is_met_by_another_route_of_its_method(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """A marked path is answered by its own route and no other of its method."""
-    app = a_scene(tmp_path).lobby.app
+    app = a_scene(engine).lobby.app
     marked = [(method, template) for method, template, _ in marks_of(app)]
 
     for method, template in marked:

@@ -1,7 +1,7 @@
 """Deck folders read out of a real repository, and deck rows in a real database."""
 
 import subprocess
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -91,7 +91,7 @@ def a_resolver(
 
 
 @contextmanager
-def rows(database: Engine) -> Iterator[Connection]:
+def rows(database: Engine) -> Generator[Connection]:
     """One transaction on the database, committed as it ends."""
     with database.begin() as connection:
         yield connection
@@ -485,7 +485,7 @@ def test_a_stored_secret_stands_in_its_row_as_ciphertext_and_comes_back(
     stored = add_a_source(database)
 
     with rows(database) as cursor:
-        written = cursor.exec_driver_sql(_THE_ENCRYPTED_OF, (stored.id,)).fetchone()[0]
+        written = cursor.exec_driver_sql(_THE_ENCRYPTED_OF, (stored.id,)).scalar_one()
     assert _WHAT_THE_GIT_HOST_EXPECTS.encode() not in written
     assert (
         a_resolver(database).resolve(CredentialReference(name=stored.id))
@@ -572,7 +572,7 @@ def test_adding_a_source_stores_the_secret_encrypted_and_the_webhook_hash(
     assert added is not None
     assert sources.hook_secret_hash("talks") == _A_WEBHOOK_HASH
     with rows(database) as cursor:
-        written = cursor.exec_driver_sql(_THE_ENCRYPTED_OF, (added.id,)).fetchone()[0]
+        written = cursor.exec_driver_sql(_THE_ENCRYPTED_OF, (added.id,)).scalar_one()
     assert _WHAT_THE_GIT_HOST_EXPECTS.encode() not in written
     assert (
         a_resolver(database).resolve(CredentialReference(name=added.id))
@@ -787,7 +787,7 @@ def test_promoting_a_draft_encrypts_its_private_half_and_consumes_it(
     with rows(database) as cursor:
         encrypted = cursor.exec_driver_sql(
             _THE_ENCRYPTED_OF, (promoted.id,)
-        ).fetchone()[0]
+        ).scalar_one()
     assert minted.private_key.encode() not in encrypted
 
 
@@ -1200,7 +1200,7 @@ def test_renewing_the_access_secret_replaces_the_stored_ciphertext(
         old_ciphertext = cursor.exec_driver_sql(
             _THE_ENCRYPTED_OF,
             (secretless.id,),
-        ).fetchone()[0]
+        ).scalar_one()
 
     replacement = "another read-only secret"
     sources.put_credential(secretless.id, replacement)
@@ -1209,7 +1209,7 @@ def test_renewing_the_access_secret_replaces_the_stored_ciphertext(
         new_ciphertext = cursor.exec_driver_sql(
             _THE_ENCRYPTED_OF,
             (secretless.id,),
-        ).fetchone()[0]
+        ).scalar_one()
     assert new_ciphertext != old_ciphertext
     assert _WHAT_THE_GIT_HOST_EXPECTS.encode() not in new_ciphertext
     assert replacement.encode() not in new_ciphertext

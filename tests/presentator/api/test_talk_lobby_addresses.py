@@ -1,12 +1,12 @@
 """The lobby serves no talk: every old talk address answers as if none stood there."""
 
 from http import HTTPStatus
-from pathlib import Path
 from typing import Final
 
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from sqlalchemy import Engine
 from starlette.testclient import WebSocketDenialResponse
 from starlette.websockets import WebSocketDisconnect
 
@@ -46,8 +46,8 @@ _SHAPES_AROUND_A_TALK: Final = [
 
 
 @pytest.fixture
-def lobby(tmp_path: Path) -> TestClient:
-    return two_hosts(tmp_path).signed_in_at(A_BROWSERS_ADDRESS)
+def lobby(engine: Engine) -> TestClient:
+    return two_hosts(engine).signed_in_at(A_BROWSERS_ADDRESS)
 
 
 def _unvarying(response: Response, *, besides: frozenset[str] = frozenset()) -> str:
@@ -90,9 +90,9 @@ def test_the_slash_address_of_a_deck_loads_the_lobby_app_alike_for_every_slug(
 @pytest.mark.parametrize("address", ["/", "/presenter/"])
 @pytest.mark.parametrize("signed_in", [True, False])
 def test_a_websocket_into_a_deck_address_on_the_lobby_is_never_accepted(
-    tmp_path: Path, slug: str, address: str, *, signed_in: bool
+    engine: Engine, slug: str, address: str, *, signed_in: bool
 ) -> None:
-    hosts = two_hosts(tmp_path)
+    hosts = two_hosts(engine)
     browser = (
         hosts.signed_in_at(A_BROWSERS_ADDRESS)
         if signed_in

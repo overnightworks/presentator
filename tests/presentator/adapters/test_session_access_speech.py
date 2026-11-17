@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 
 import pytest
+from sqlalchemy import Engine
 
 from presentator.adapters.session_access import SessionAccess
 from presentator.contracts.copresenter import AccessRefusal, SpeechTokens
 from tests.support.lobby import A_SPEECH_SCOPE
 from tests.support.log_lines import json_logged
 from tests.support.sign_in_support import Scene, a_scene
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 REFRESH = "refresh-MARKER"
 ROTATED = "rotated-MARKER"
@@ -44,8 +41,8 @@ class Arranged:
 
 
 @pytest.fixture
-def arranged(tmp_path: Path) -> Arranged:
-    return Arranged(a_scene(tmp_path))
+def arranged(engine: Engine) -> Arranged:
+    return Arranged(a_scene(engine))
 
 
 def test_a_session_yields_the_persons_token_and_the_workload_token(

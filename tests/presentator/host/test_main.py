@@ -12,18 +12,13 @@ import uvicorn
 from fastapi.testclient import TestClient
 from httpx2 import Response
 from pydantic import SecretStr
+from sqlalchemy import Engine, text
 from starlette.types import ASGIApp
 from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
-from webauth.ports import AccountKind
 
-from presentator.adapters.deck_store import SqliteDeckStore
-from presentator.adapters.identity import (
-    SqliteSessionRecordStore,
-    StoredAccount,
-    create_identity_tables,
-)
-from presentator.adapters.sqlite import rows
+from presentator.adapters.postgres.deck_store import PostgresDeckStore
+from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
 from presentator.api.hooks import hook_address
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
@@ -50,12 +45,9 @@ from tests.support.lobby import (
     hand_over_session_cookies,
 )
 from tests.support.lobby_reads import deck_list, listed_titles, signed_in_username
-from tests.support.people import (
-    a_session_id,
-    copy_of_a_crashed_database,
-    seed_user,
-)
+from tests.support.people import a_session_id, seed_user
 from tests.support.polled_source_support import add_a_polled_source, sources_over
+from tests.support.postgres import NO_FENCE
 
 _PERSON = "felix"
 _ADMIN = User(id="id-of-felix", username=_PERSON, role=Role.ADMIN)
@@ -70,7 +62,7 @@ _WHAT_THE_GIT_HOST_EXPECTS = "the read-only words only this test made up"
 _CREDENTIAL_VARIABLE = "A_READ_ONLY_TOKEN"
 _ANOTHER_INSTANCE_KEY = "the key another instance carries"
 
-pytestmark = pytest.mark.usefixtures("redis_environment")
+pytestmark = pytest.mark.usefixtures("redis_environment", "served_database")
 
 
 def a_real_instance() -> Instance:
@@ -79,6 +71,7 @@ def a_real_instance() -> Instance:
 
 
 def signed_in(
+    engine: Engine,
     instance: Instance,
     *,
     base_url: str = A_BROWSERS_ADDRESS,
@@ -86,10 +79,9 @@ def signed_in(
     app: ASGIApp | None = None,
 ) -> TestClient:
     """A browser at that stack, or at `app` over it, signed in as the admin."""
-    database = load_settings().database
-    seed_user(database, _ADMIN)
+    seed_user(engine, _ADMIN)
     now = datetime.now(UTC)
-    session = SqliteSessionRecordStore(database).create(
+    session = PostgresSessionRecordStore(engine).create(
         _ADMIN.id,
         session_id=a_session_id(),
         now=now,
@@ -120,6 +112,7 @@ def every_tick_polls_every_source(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_a_sigterm_turns_the_built_instance_unready_and_refuses_asks(
+    engine: Engine,
     environment: pytest.MonkeyPatch,
 ) -> None:
     del environment
@@ -129,6 +122,7 @@ def test_a_sigterm_turns_the_built_instance_unready_and_refuses_asks(
         uvicorn.Config(main.served_by_host(instance, settings)), instance.stopping
     )
     talk = signed_in(
+        engine,
         instance,
         base_url=A_TALK_ADDRESS,
         app=main.served_by_host(instance, settings),
@@ -247,8 +241,10 @@ def test_a_removed_build_key_in_the_env_file_of_a_direct_run_refuses_to_start(
 
 
 @pytest.mark.usefixtures("environment")
-def test_the_real_stack_keeps_a_seeded_person_in_until_they_sign_out() -> None:
-    real_lobby = signed_in(a_real_instance())
+def test_the_real_stack_keeps_a_seeded_person_in_until_they_sign_out(
+    engine: Engine,
+) -> None:
+    real_lobby = signed_in(engine, a_real_instance())
     assert signed_in_username(real_lobby) == _PERSON
 
     signed_in_cookie = real_lobby.cookies[DEFAULT_SESSION_COOKIE_NAME]
@@ -259,8 +255,10 @@ def test_the_real_stack_keeps_a_seeded_person_in_until_they_sign_out() -> None:
 
 
 @pytest.mark.usefixtures("environment")
-def test_the_real_stack_issues_no_cookie_with_an_ordinary_answer() -> None:
-    answered = signed_in(a_real_instance()).get("/")
+def test_the_real_stack_issues_no_cookie_with_an_ordinary_answer(
+    engine: Engine,
+) -> None:
+    answered = signed_in(engine, a_real_instance()).get("/")
 
     assert answered.is_success
     assert answered.headers.get_list("set-cookie") == []
@@ -274,14 +272,14 @@ def test_the_real_stack_issues_no_cookie_with_an_ordinary_answer() -> None:
 def test_the_hook_address_names_https_only_behind_a_trusted_proxy(
     environment: pytest.MonkeyPatch,
     remote: GitRemote,
-    tmp_path: Path,
+    engine: Engine,
     *,
     trusted_proxies: str,
     hook_scheme: str,
 ) -> None:
     environment.setenv("PRESENTATOR_TRUSTED_PROXIES", trusted_proxies)
-    instance = a_polled_source(remote, tmp_path)
-    browser = signed_in(instance, peer="127.0.0.1")
+    instance = a_polled_source(engine, remote)
+    browser = signed_in(engine, instance, peer="127.0.0.1")
     # A browser sends a Secure cookie over https only, so the cookie rides as a
     # header to reach the lobby the way a proxy that terminated TLS would.
     cookie = "; ".join(f"{name}={value}" for name, value in browser.cookies.items())
@@ -302,8 +300,10 @@ def test_the_hook_address_names_https_only_behind_a_trusted_proxy(
 
 
 @pytest.mark.usefixtures("environment")
-def test_the_real_stack_offers_no_password_login_and_no_first_start() -> None:
-    real_lobby = signed_in(a_real_instance())
+def test_the_real_stack_offers_no_password_login_and_no_first_start(
+    engine: Engine,
+) -> None:
+    real_lobby = signed_in(engine, a_real_instance())
 
     password_posted = real_lobby.post(
         "/login",
@@ -415,24 +415,23 @@ def test_the_key_file_is_read_once_at_start(
     assert settings.secret_key.get_secret_value() == INSTANCE_KEY
 
 
-def a_signed_in_instance() -> TestClient:
+def a_signed_in_instance(engine: Engine) -> TestClient:
     """The real stack with its admin created and its session open."""
-    return signed_in(a_real_instance())
+    return signed_in(engine, a_real_instance())
 
 
 def a_polled_source(
+    engine: Engine,
     remote: GitRemote,
-    tmp_path: Path,
     *,
     armed: bool = True,
     name: str = _SOURCE_NAME,
 ) -> Instance:
     """A real stack with that remote stored as a source after first start."""
     instance = a_real_instance()
-    signed_in(instance)
-    database = tmp_path / "presentator.sqlite3"
+    signed_in(engine, instance)
     add_a_polled_source(
-        database,
+        engine,
         remote,
         name=name,
         owner_id=_ADMIN.id,
@@ -440,10 +439,10 @@ def a_polled_source(
         hook_secret=_WHAT_THE_HOST_CARRIES,
     )
     if not armed:
-        with rows(database) as cursor:
-            cursor.execute(
-                "UPDATE sources SET hook_secret_hash = NULL WHERE name = ?",
-                (name,),
+        with engine.begin() as connection:
+            connection.execute(
+                text("UPDATE sources SET hook_secret_hash = NULL WHERE name = :name"),
+                {"name": name},
             )
     return instance
 
@@ -453,10 +452,14 @@ def listed_slugs(lobby: TestClient) -> list[str]:
     return [deck.slug for deck in deck_list(lobby).decks]
 
 
-def owner_of(database: Path, slug: str) -> str:
+def owner_of(engine: Engine, slug: str) -> str:
     """Who the stored deck belongs to, read straight from the real table."""
-    kept = SqliteDeckStore(database=database).all()
+    kept = _deck_store(engine).all()
     return next(deck.owner_id for deck in kept if deck.slug == slug)
+
+
+def _deck_store(engine: Engine) -> PostgresDeckStore:
+    return PostgresDeckStore(engine=engine, fence=NO_FENCE)
 
 
 def call_the_hook(lobby: TestClient, *, carrying: str) -> Response:
@@ -469,23 +472,22 @@ def call_the_hook(lobby: TestClient, *, carrying: str) -> Response:
 @pytest.mark.usefixtures("environment")
 def test_the_real_stack_pulls_with_the_secret_its_own_key_can_open(
     remote: GitRemote,
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    instance = a_polled_source(remote, tmp_path)
-    lobby = signed_in(instance)
+    instance = a_polled_source(engine, remote)
+    lobby = signed_in(engine, instance)
     asyncio.run(instance.poller.tick())
-    database = tmp_path / "presentator.sqlite3"
-    stored = sources_over(database).all()[0]
+    stored = sources_over(engine).all()[0]
     remote.commit_example_deck(at=_PUSHED_AT)
 
-    sources_over(database, instance_key=_ANOTHER_INSTANCE_KEY).put_credential(
+    sources_over(engine, instance_key=_ANOTHER_INSTANCE_KEY).put_credential(
         stored.id,
         _WHAT_THE_GIT_HOST_EXPECTS,
     )
     asyncio.run(instance.poller.tick())
     while_the_row_held_what_this_key_cannot_open = listed_titles(lobby)
 
-    sources_over(database).put_credential(stored.id, _WHAT_THE_GIT_HOST_EXPECTS)
+    sources_over(engine).put_credential(stored.id, _WHAT_THE_GIT_HOST_EXPECTS)
     asyncio.run(instance.poller.tick())
     after_this_instance_wrote_it = listed_titles(lobby)
 
@@ -496,10 +498,10 @@ def test_the_real_stack_pulls_with_the_secret_its_own_key_can_open(
 @pytest.mark.usefixtures("environment")
 def test_a_deck_pushed_after_the_start_is_listed_after_one_tick_and_no_request(
     remote: GitRemote,
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    instance = a_polled_source(remote, tmp_path)
-    lobby = signed_in(instance)
+    instance = a_polled_source(engine, remote)
+    lobby = signed_in(engine, instance)
     remote.commit_example_deck(at=_PUSHED_AT)
 
     before_the_tick = listed_titles(lobby)
@@ -513,10 +515,10 @@ def test_a_deck_pushed_after_the_start_is_listed_after_one_tick_and_no_request(
 @pytest.mark.usefixtures("environment")
 def test_the_hook_with_the_sources_secret_lists_a_push_at_once(
     remote: GitRemote,
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    instance = a_polled_source(remote, tmp_path)
-    lobby = signed_in(instance)
+    instance = a_polled_source(engine, remote)
+    lobby = signed_in(engine, instance)
     asyncio.run(instance.poller.tick())
     remote.commit_example_deck(at=_PUSHED_AT)
 
@@ -529,10 +531,10 @@ def test_the_hook_with_the_sources_secret_lists_a_push_at_once(
 @pytest.mark.usefixtures("environment")
 def test_a_hook_call_with_a_wrong_secret_leaves_the_list_as_it_was(
     remote: GitRemote,
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    instance = a_polled_source(remote, tmp_path)
-    lobby = signed_in(instance)
+    instance = a_polled_source(engine, remote)
+    lobby = signed_in(engine, instance)
     asyncio.run(instance.poller.tick())
     remote.commit_example_deck(at=_PUSHED_AT)
 
@@ -545,9 +547,9 @@ def test_a_hook_call_with_a_wrong_secret_leaves_the_list_as_it_was(
 @pytest.mark.usefixtures("environment")
 def test_a_source_without_a_webhook_hash_is_refused_alike_not_sent_to_login(
     remote: GitRemote,
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    lobby = signed_in(a_polled_source(remote, tmp_path, armed=False))
+    lobby = signed_in(engine, a_polled_source(engine, remote, armed=False))
     remote.commit_example_deck(at=_PUSHED_AT)
     lobby.cookies.clear()
 
@@ -555,25 +557,25 @@ def test_a_source_without_a_webhook_hash_is_refused_alike_not_sent_to_login(
 
     assert (called.status_code, called.content) == (HTTPStatus.NOT_FOUND, b"")
     assert called.headers.get("location") is None
-    assert EXAMPLE_TITLE not in listed_titles(signed_in(a_real_instance()))
+    assert EXAMPLE_TITLE not in listed_titles(signed_in(engine, a_real_instance()))
 
 
 @pytest.mark.usefixtures("environment")
 def test_a_deck_the_real_stack_took_in_belongs_to_the_instance_admin(
     remote: GitRemote,
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    instance = a_polled_source(remote, tmp_path)
+    instance = a_polled_source(engine, remote)
     remote.commit_example_deck(at=_PUSHED_AT)
-    database = tmp_path / "presentator.sqlite3"
 
     asyncio.run(instance.poller.tick())
 
-    kept = SqliteDeckStore(database=database).all()
+    kept = _deck_store(engine).all()
     assert [(deck.slug, deck.owner_id) for deck in kept] == [(EXAMPLE_SLUG, _ADMIN.id)]
 
 
 def test_a_deck_the_real_stack_cannot_build_keeps_its_page_and_offers_no_view(
+    engine: Engine,
     environment: pytest.MonkeyPatch,
     remote: GitRemote,
     tmp_path: Path,
@@ -581,8 +583,8 @@ def test_a_deck_the_real_stack_cannot_build_keeps_its_page_and_offers_no_view(
     empty_project = tmp_path / "an-empty-toolchain-project"
     empty_project.mkdir()
     environment.setenv("PRESENTATOR_TOOLCHAIN", str(empty_project))
-    instance = a_polled_source(remote, tmp_path)
-    lobby = signed_in(instance)
+    instance = a_polled_source(engine, remote)
+    lobby = signed_in(engine, instance)
     remote.commit_example_deck(at=_PUSHED_AT)
 
     asyncio.run(instance.poller.tick())
@@ -596,11 +598,11 @@ def test_a_deck_the_real_stack_cannot_build_keeps_its_page_and_offers_no_view(
 def test_a_tick_whose_fetch_exceeds_its_bound_leaves_the_list_answering(
     environment: pytest.MonkeyPatch,
     remote: GitRemote,
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     environment.setenv("PRESENTATOR_SOURCE_TIMEOUT_SECONDS", "0")
-    instance = a_polled_source(remote, tmp_path)
-    lobby = signed_in(instance)
+    instance = a_polled_source(engine, remote)
+    lobby = signed_in(engine, instance)
     remote.commit_example_deck(at=_PUSHED_AT)
 
     asyncio.run(instance.poller.tick())
@@ -610,10 +612,10 @@ def test_a_tick_whose_fetch_exceeds_its_bound_leaves_the_list_answering(
 @pytest.mark.usefixtures("environment")
 def test_a_source_that_has_gone_away_still_leaves_its_decks_listed(
     remote: GitRemote,
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    instance = a_polled_source(remote, tmp_path)
-    lobby = signed_in(instance)
+    instance = a_polled_source(engine, remote)
+    lobby = signed_in(engine, instance)
     remote.commit_example_deck(at=_PUSHED_AT)
     asyncio.run(instance.poller.tick())
 
@@ -622,11 +624,14 @@ def test_a_source_that_has_gone_away_still_leaves_its_decks_listed(
 
 
 @pytest.mark.usefixtures("environment")
-def test_an_instance_without_a_source_shows_the_empty_list() -> None:
-    assert deck_list(a_signed_in_instance()).decks == []
+def test_an_instance_without_a_source_shows_the_empty_list(
+    engine: Engine,
+) -> None:
+    assert deck_list(a_signed_in_instance(engine)).decks == []
 
 
 def test_a_configured_source_url_in_the_environment_changes_nothing(
+    engine: Engine,
     environment: pytest.MonkeyPatch,
     remote: GitRemote,
 ) -> None:
@@ -634,7 +639,7 @@ def test_a_configured_source_url_in_the_environment_changes_nothing(
     environment.setenv("PRESENTATOR_SOURCE_NAME", _SOURCE_NAME)
     environment.setenv("PRESENTATOR_SOURCE_CREDENTIAL", _CREDENTIAL_VARIABLE)
     environment.setenv(_CREDENTIAL_VARIABLE, _WHAT_THE_GIT_HOST_EXPECTS)
-    lobby = a_signed_in_instance()
+    lobby = a_signed_in_instance(engine)
 
     sources = lobby.get("/api/sources", headers={"accept": "application/json"})
 
@@ -645,16 +650,15 @@ def test_a_configured_source_url_in_the_environment_changes_nothing(
 @pytest.mark.usefixtures("environment")
 def test_a_deck_deleted_in_git_leaves_the_lobby_and_returns_as_the_same_deck(
     remote: GitRemote,
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    instance = a_polled_source(remote, tmp_path)
-    lobby = signed_in(instance)
-    database = tmp_path / "presentator.sqlite3"
+    instance = a_polled_source(engine, remote)
+    lobby = signed_in(engine, instance)
     remote.commit_example_deck(at=_PUSHED_AT)
     remote.commit_example_deck(at=_PUSHED_AT, into=_ANOTHER_SLUG)
     asyncio.run(instance.poller.tick())
     both_pushed = listed_slugs(lobby)
-    owner_before_the_delete = owner_of(database, EXAMPLE_SLUG)
+    owner_before_the_delete = owner_of(engine, EXAMPLE_SLUG)
 
     remote.remove(EXAMPLE_SLUG, at=_DELETED_AT)
     asyncio.run(instance.poller.tick())
@@ -667,23 +671,22 @@ def test_a_deck_deleted_in_git_leaves_the_lobby_and_returns_as_the_same_deck(
     assert sorted(both_pushed) == sorted([EXAMPLE_SLUG, _ANOTHER_SLUG])
     assert after_the_delete == [_ANOTHER_SLUG]
     assert after_it_came_back == [EXAMPLE_SLUG, _ANOTHER_SLUG]
-    assert owner_of(database, EXAMPLE_SLUG) == owner_before_the_delete
+    assert owner_of(engine, EXAMPLE_SLUG) == owner_before_the_delete
 
 
 @pytest.mark.usefixtures("environment")
 def test_two_sources_each_list_their_own_decks_and_reconcile_alone(
     remote: GitRemote,
     another_remote: GitRemote,
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    first = a_polled_source(remote, tmp_path)
-    lobby = signed_in(first)
+    first = a_polled_source(engine, remote)
+    lobby = signed_in(engine, first)
     remote.commit_example_deck(at=_PUSHED_AT)
     asyncio.run(first.poller.tick())
     another_remote.commit_example_deck(at=_PUSHED_AT, into=_ANOTHER_SLUG)
-    database = tmp_path / "presentator.sqlite3"
     add_a_polled_source(
-        database,
+        engine,
         another_remote,
         name=_ANOTHER_SOURCE_NAME,
         owner_id=_ADMIN.id,
@@ -701,64 +704,3 @@ def test_two_sources_each_list_their_own_decks_and_reconcile_alone(
 
     assert sorted(listed_together) == sorted([EXAMPLE_SLUG, _ANOTHER_SLUG])
     assert after_the_delete == [_ANOTHER_SLUG]
-
-
-def test_an_instance_on_a_relative_database_path_starts_again_after_its_first_start(
-    environment: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    environment.chdir(tmp_path)
-    environment.setenv("PRESENTATOR_DATABASE", "presentator.sqlite3")
-    a_real_instance()
-
-    a_real_instance()
-
-    assert (tmp_path / "presentator.sqlite3").is_file()
-
-
-def test_an_instance_restarts_on_a_crash_that_left_only_current_frames_in_the_log(
-    environment: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    session_ids: list[str] = []
-
-    def commit_a_person_and_a_session(database: Path) -> None:
-        create_identity_tables(database)
-        seed_user(database, _ADMIN)
-        now = datetime.now(UTC)
-        opened = SqliteSessionRecordStore(database).create(
-            _ADMIN.id,
-            session_id=a_session_id(),
-            now=now,
-            expires_at=now + SESSION_LIFETIME,
-            refresh_token=None,
-            id_token=SecretStr("an-id-token"),
-            account_language=None,
-        )
-        session_ids.append(opened.id)
-
-    database = copy_of_a_crashed_database(
-        tmp_path / "crashed" / "presentator.sqlite3", commit_a_person_and_a_session
-    )
-    environment.setenv("PRESENTATOR_DATABASE", str(database))
-
-    instance = a_real_instance()
-
-    survivor = SqliteSessionRecordStore(database).load(session_ids[0])
-    assert survivor is not None
-    assert survivor.user == StoredAccount(
-        id=_ADMIN.id,
-        username=_ADMIN.username,
-        role=_ADMIN.role,
-        kind=AccountKind.PERSON,
-    )
-    lobby = TestClient(
-        instance.lobby,
-        base_url=A_BROWSERS_ADDRESS,
-        follow_redirects=False,
-        headers=A_BROWSERS_HEADERS,
-    )
-    hand_over_session_cookies(
-        lobby, session_ids[0], installed_web_auth_config(instance.lobby)
-    )
-    assert lobby.get("/").status_code == HTTPStatus.OK

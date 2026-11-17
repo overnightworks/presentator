@@ -1,23 +1,21 @@
 """The Host header alone chooses which app of the instance answers."""
 
-import sqlite3
 from collections.abc import Callable
-from contextlib import closing
 from datetime import UTC, datetime
 from http import HTTPStatus
-from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 import pytest
 from httpx2 import Response
 from pydantic import SecretStr
+from sqlalchemy import Engine, text
 from starlette.testclient import TestClient, WebSocketDenialResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocketDisconnect
 from webauth.config import installed_web_auth_config
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
 
-from presentator.adapters.identity import SqliteSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
 from presentator.api.auth import BACKCHANNEL_LOGOUT_PATH, DEFAULT_BODY_BYTES
 from presentator.api.talk import TALK_PERMISSIONS_POLICY, talk_content_security_policy
 from presentator.application.identity import SESSION_LIFETIME
@@ -53,8 +51,8 @@ _ADMIN = User(id="id-of-felix", username="felix", role=Role.ADMIN)
 
 
 @pytest.fixture
-def hosts(tmp_path: Path) -> Hosts:
-    return two_hosts(tmp_path)
+def hosts(engine: Engine) -> Hosts:
+    return two_hosts(engine)
 
 
 def _is_the_talk_host(permissions_policy: str | None) -> bool:
@@ -192,14 +190,16 @@ def test_the_composition_root_wires_the_talk_host_to_its_own_policy() -> None:
 
 
 # CP13
-@pytest.mark.usefixtures("environment")
-def test_the_composition_root_serves_the_copresenter_at_the_talk_host_only() -> None:
+@pytest.mark.usefixtures("environment", "served_database")
+def test_the_composition_root_serves_the_copresenter_at_the_talk_host_only(
+    engine: Engine,
+) -> None:
     settings = load_settings()
     instance = main.build_instance(settings)
     router = main.served_by_host(instance, settings)
-    seed_user(settings.database, _ADMIN)
+    seed_user(engine, _ADMIN)
     now = datetime.now(UTC)
-    session = SqliteSessionRecordStore(settings.database).create(
+    session = PostgresSessionRecordStore(engine).create(
         _ADMIN.id,
         session_id=a_session_id(),
         now=now,
@@ -232,8 +232,10 @@ def test_the_composition_root_serves_the_copresenter_at_the_talk_host_only() -> 
     assert at_the_talk_host.json() != at_the_lobby.json()
 
 
-@pytest.mark.usefixtures("environment")
-def test_the_talk_hosts_sign_in_stores_no_id_token_while_the_lobbys_does() -> None:
+@pytest.mark.usefixtures("environment", "served_database")
+def test_the_talk_hosts_sign_in_stores_no_id_token_while_the_lobbys_does(
+    engine: Engine,
+) -> None:
     """The lobby row keeps the ID token, talk row none."""
     settings = load_settings()
     now = datetime.now(UTC)
@@ -257,10 +259,10 @@ def test_the_talk_hosts_sign_in_stores_no_id_token_while_the_lobbys_does() -> No
     )
 
     def stored_id_tokens() -> list[str | None]:
-        with closing(sqlite3.connect(settings.database)) as connection:
-            return [
-                row[0] for row in connection.execute("SELECT id_token FROM sessions")
-            ]
+        with engine.connect() as connection:
+            return list(
+                connection.execute(text("SELECT id_token FROM sessions")).scalars()
+            )
 
     def sign_in_at(origin: str) -> None:
         browser = TestClient(

@@ -9,6 +9,7 @@ from typing import Final
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from sqlalchemy import Engine
 
 from presentator.contracts.decks import Build, Deck, Source
 from presentator.contracts.models import Role, User
@@ -94,13 +95,15 @@ class _TwoAdmins:
 _ADMIN_B: Final = User(id=_B, username=NEIGHBOUR, role=Role.ADMIN)
 
 
-def _two_admins(tmp_path: Path, *, stuck_mirror: bool = False) -> _TwoAdmins:
+def _two_admins(
+    engine: Engine, tmp_path: Path, *, stuck_mirror: bool = False
+) -> _TwoAdmins:
     foreign = _b_source()
     run = tmp_path / "builds" / "run" / "out"
     shutil.copytree(BUILT_TALK, run / "talk")
     shutil.copyfile(EXPORTED_PDF, run / "deck.pdf")
     hosts = two_hosts(
-        tmp_path,
+        engine,
         given=GivenDecks(
             builder=FakeBuildRunner(root=tmp_path / "builds"),
             store=_store_of_built_decks(run / "talk", run / "deck.pdf"),
@@ -155,14 +158,15 @@ _REQUESTS: Final = [
 
 # DK7
 @pytest.mark.parametrize(("origin", "method", "tail", "headers"), _REQUESTS)
-def test_a_deck_of_another_account_answers_like_an_unknown_slug(
+def test_a_deck_of_another_account_answers_like_an_unknown_slug(  # noqa: PLR0913, PLR0917 - four parametrized values beside two fixtures
+    engine: Engine,
     tmp_path: Path,
     origin: str,
     method: str,
     tail: str,
     headers: dict[str, str],
 ) -> None:
-    admins = _two_admins(tmp_path)
+    admins = _two_admins(engine, tmp_path)
     send = getattr(admins.as_a_at(origin), method)
 
     foreign = send(f"/deck/b-deck{tail}", headers=headers)
@@ -174,10 +178,11 @@ def test_a_deck_of_another_account_answers_like_an_unknown_slug(
 
 @pytest.mark.parametrize("header", ["if-none-match", "if-modified-since"])
 def test_a_conditional_request_for_a_foreign_asset_gets_no_not_modified(
+    engine: Engine,
     tmp_path: Path,
     header: str,
 ) -> None:
-    admins = _two_admins(tmp_path)
+    admins = _two_admins(engine, tmp_path)
     own = admins.talk_as_b.get(f"/deck/b-deck/{AN_ASSET}")
     validators = {
         "if-none-match": own.headers["etag"],
@@ -198,9 +203,10 @@ def test_a_conditional_request_for_a_foreign_asset_gets_no_not_modified(
 
 
 def test_the_owner_receives_every_shape_of_request_for_the_own_deck(
+    engine: Engine,
     tmp_path: Path,
 ) -> None:
-    admins = _two_admins(tmp_path)
+    admins = _two_admins(engine, tmp_path)
     client = admins.talk_as_a
     asset = client.get(f"/deck/a-deck/{AN_ASSET}")
 
@@ -224,8 +230,8 @@ def test_the_owner_receives_every_shape_of_request_for_the_own_deck(
 
 
 # DK6
-def test_each_admin_lists_exactly_the_own_deck(tmp_path: Path) -> None:
-    admins = _two_admins(tmp_path)
+def test_each_admin_lists_exactly_the_own_deck(engine: Engine, tmp_path: Path) -> None:
+    admins = _two_admins(engine, tmp_path)
 
     assert listed_titles(admins.as_a) == ["Title of a-deck"]
     assert listed_titles(admins.as_b) == ["Title of b-deck"]
@@ -254,9 +260,9 @@ _AT_THE_LOBBY_OR_THE_TALK_HOST: Final = [
 
 # DK9
 def test_a_member_without_the_admin_role_has_no_deck_of_another_account(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    hosts = two_hosts(tmp_path, given=GivenDecks(store=_store_of_built_decks()))
+    hosts = two_hosts(engine, given=GivenDecks(store=_store_of_built_decks()))
 
     assert listed_titles(hosts.signed_in_at(A_BROWSERS_ADDRESS, _WALTER)) == []
     for origin, tail in _AT_THE_LOBBY_OR_THE_TALK_HOST:
@@ -271,11 +277,11 @@ def test_a_member_without_the_admin_role_has_no_deck_of_another_account(
 
 # DK11
 def test_the_owner_without_the_admin_role_has_the_own_deck_but_no_sources(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     store = _store_of_built_decks()
     store.put(replace(store.kept["a-deck"], owner_id=_WALTER.id))
-    hosts = two_hosts(tmp_path, given=GivenDecks(store=store))
+    hosts = two_hosts(engine, given=GivenDecks(store=store))
     client = hosts.signed_in_at(A_BROWSERS_ADDRESS, _WALTER)
 
     assert listed_titles(client) == ["Title of a-deck"]
@@ -293,9 +299,10 @@ def test_the_owner_without_the_admin_role_has_the_own_deck_but_no_sources(
 
 # DK10
 def test_a_deck_of_a_removed_source_answers_like_an_unknown_slug_for_its_owner(
+    engine: Engine,
     tmp_path: Path,
 ) -> None:
-    admins = _two_admins(tmp_path)
+    admins = _two_admins(engine, tmp_path)
     own_source = a_configured_source(_A_SOURCE_URL)
 
     counts = source_api_support.preview_removal(admins.as_a, own_source.name).json()
@@ -321,9 +328,10 @@ def test_a_deck_of_a_removed_source_answers_like_an_unknown_slug_for_its_owner(
 
 
 def test_a_refused_removal_of_anothers_source_shows_no_deck_titles(
+    engine: Engine,
     tmp_path: Path,
 ) -> None:
-    admins = _two_admins(tmp_path, stuck_mirror=True)
+    admins = _two_admins(engine, tmp_path, stuck_mirror=True)
     counts = source_api_support.preview_removal(admins.as_a, "b-talks").json()
 
     refused = source_api_support.remove(

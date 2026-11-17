@@ -4,9 +4,10 @@ from pathlib import Path
 
 import pytest
 from pydantic import SecretStr
+from sqlalchemy import Engine
 
 from presentator.adapters.audit import LoggingAuditSink
-from presentator.adapters.identity import ProcessWriteLock, SqliteIdentityWrites
+from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.adapters.shared_redis import SharedRedis
 from presentator.host import main
 from presentator.host.config import (
@@ -289,14 +290,12 @@ def test_the_talk_origin_must_be_another_canonical_https_hostname(
 
 # T15.
 def test_both_hosts_share_the_one_identity_writes_owner(
-    environment: pytest.MonkeyPatch,
+    environment: pytest.MonkeyPatch, engine: Engine
 ) -> None:
     del environment
 
     settings = load_settings()
-    writes = SqliteIdentityWrites(
-        settings.database, ProcessWriteLock(), LoggingAuditSink()
-    )
+    writes = PostgresIdentityWrites(engine, LoggingAuditSink())
 
     lobby, talk = main.installed_auths(
         settings,

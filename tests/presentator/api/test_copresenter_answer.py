@@ -11,9 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import sqlite3
 from concurrent.futures import CancelledError
-from contextlib import closing
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from http import HTTPStatus
@@ -27,6 +25,7 @@ from agents.backend.fake_gateway import (
     tool_call,
     tool_round,
 )
+from sqlalchemy import Engine, text
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.adapters.deck_texts import MirroredDeckTexts
@@ -81,7 +80,9 @@ LATER_MARKER: Final = "later-commit-MARKER"
 THE_ASKED: Final = "kern"
 
 
-def the_asked_decks_words_at_its_built_commit(tmp_path: Path, remote: GitRemote) -> Run:
+def the_asked_decks_words_at_its_built_commit(
+    engine: Engine, tmp_path: Path, remote: GitRemote
+) -> Run:
     """A repository of two decks, the asked one built before it was edited."""
     remote.commit(
         {
@@ -132,15 +133,18 @@ def the_asked_decks_words_at_its_built_commit(tmp_path: Path, remote: GitRemote)
         arrange=own_the_built_deck,
         body={**SPOKEN_QUESTION, "deck": THE_ASKED},
     )
-    return drive(tmp_path, scenario)
+    return drive(engine, scenario)
 
 
 def test_a_signed_in_admins_ask_reaches_the_gateway_with_only_that_decks_words(
-    tmp_path: Path, remote: GitRemote, capsys: pytest.CaptureFixture[str]
+    engine: Engine,
+    tmp_path: Path,
+    remote: GitRemote,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """CP1: the deck's words at its built commit, the key as bearer, one text."""
     with json_logged(capsys) as logged:
-        run = the_asked_decks_words_at_its_built_commit(tmp_path, remote)
+        run = the_asked_decks_words_at_its_built_commit(engine, tmp_path, remote)
 
     (request,) = run.gateway.requests
     sent = json.dumps(json.loads(request.content)["messages"])
@@ -203,10 +207,10 @@ def the_ticket_was_released(run: Run) -> bool:
     ],
 )
 def test_an_access_refusal_is_answered_before_the_gateway_is_called(
-    tmp_path: Path, setup: Scenario, status: HTTPStatus, detail: str
+    engine: Engine, setup: Scenario, status: HTTPStatus, detail: str
 ) -> None:
     """CP6: the ruled 401 and 503 come before the stream, and the ticket is freed."""
-    run = drive(tmp_path, setup)
+    run = drive(engine, setup)
 
     assert run.response.status_code == status
     assert run.response.json() == {"detail": detail}
@@ -216,15 +220,15 @@ def test_an_access_refusal_is_answered_before_the_gateway_is_called(
 
 
 def test_a_session_that_ended_during_the_grant_asked_the_issuer_exactly_once(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """The grant ran, and nothing was spent after it."""
-    run = drive(tmp_path, Scenario(before_ask=the_session_ends_during_the_grant))
+    run = drive(engine, Scenario(before_ask=the_session_ends_during_the_grant))
 
     assert run.grants_since_sign_in == ["refresh_token"]
 
 
-def test_a_doubled_session_cookie_is_refused_before_any_grant(tmp_path: Path) -> None:
+def test_a_doubled_session_cookie_is_refused_before_any_grant(engine: Engine) -> None:
     """Webauth reads a doubled cookie as no session, so its gate refuses.
 
     The refusal is the library's 401 before the route runs, as it answers the
@@ -232,7 +236,7 @@ def test_a_doubled_session_cookie_is_refused_before_any_grant(tmp_path: Path) ->
     sign in); the route's own 401 "Not authenticated" for a missing admission
     is pinned in test_copresenter.py.
     """
-    run = drive(tmp_path)
+    run = drive(engine)
     grants = len(run.hosts.issuer.grant_types)
     session = run.talk.cookies[DEFAULT_SESSION_COOKIE_NAME]
     named = f"{DEFAULT_SESSION_COOKIE_NAME}={session}"
@@ -250,10 +254,10 @@ def test_a_doubled_session_cookie_is_refused_before_any_grant(tmp_path: Path) ->
 
 
 def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """CP3, CP6: the overlay reads the literal `not-enabled`, so it is spelled out."""
-    run = drive(tmp_path, Scenario(groups=ADMIN_GROUPS))
+    run = drive(engine, Scenario(groups=ADMIN_GROUPS))
 
     assert run.events == ["error"]
     assert run.error_payload() == {
@@ -265,10 +269,10 @@ def test_a_person_outside_the_api_group_is_not_enabled_and_no_call_is_made(
 
 
 def test_a_group_removed_at_the_issuer_between_two_questions_refuses_the_second(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """CP3: the groups are read anew for every question."""
-    run = drive(tmp_path)
+    run = drive(engine)
     run.hosts.issuer.hold_groups(ADMIN_GROUPS)
 
     second = ask_as_asked(run.talk)
@@ -279,13 +283,15 @@ def test_a_group_removed_at_the_issuer_between_two_questions_refuses_the_second(
 
 
 def test_a_talk_session_that_keeps_no_id_token_asks_and_is_answered(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """The talk host stores no ID token, and the answer comes anyway."""
-    run = drive(tmp_path)
+    run = drive(engine)
 
-    with closing(sqlite3.connect(run.hosts.database)) as connection:
-        stored = [row[0] for row in connection.execute("SELECT id_token FROM sessions")]
+    with run.hosts.database.connect() as connection:
+        stored = list(
+            connection.execute(text("SELECT id_token FROM sessions")).scalars()
+        )
     assert stored == [None]
     assert run.events[-1] == "done"
 
@@ -302,10 +308,10 @@ def test_a_talk_session_that_keeps_no_id_token_asks_and_is_answered(
     ],
 )
 def test_a_gateway_that_does_not_answer_ends_in_a_plain_error_and_never_in_done(
-    tmp_path: Path, reply: Reply
+    engine: Engine, reply: Reply
 ) -> None:
     """No reason reaches the overlay, and no word was spoken."""
-    run = drive(tmp_path, Scenario(gateway=lambda: FakeGateway(reply)))
+    run = drive(engine, Scenario(gateway=lambda: FakeGateway(reply)))
 
     assert run.events == ["error"]
     assert "reason" not in run.error_payload()
@@ -335,10 +341,10 @@ def a_gateway_error(error_type: str) -> bytes:
     ],
 )
 def test_a_busy_gateway_or_a_spent_budget_ends_in_its_own_error_reason(
-    tmp_path: Path, reply: Reply, stop: dict[str, object]
+    engine: Engine, reply: Reply, stop: dict[str, object]
 ) -> None:
     """CP6: the overlay reads these literals, so they are spelled out."""
-    run = drive(tmp_path, Scenario(gateway=lambda: FakeGateway(reply)))
+    run = drive(engine, Scenario(gateway=lambda: FakeGateway(reply)))
 
     assert run.events == ["error"]
     assert run.error_payload() == {"message": "the answer could not be spoken", **stop}
@@ -346,9 +352,9 @@ def test_a_busy_gateway_or_a_spent_budget_ends_in_its_own_error_reason(
     assert the_ticket_was_released(run)
 
 
-def test_a_refused_connection_ends_in_a_plain_error(tmp_path: Path) -> None:
+def test_a_refused_connection_ends_in_a_plain_error(engine: Engine) -> None:
     """The refusing transport."""
-    run = drive(tmp_path, Scenario(gateway=RefusingTransport))
+    run = drive(engine, Scenario(gateway=RefusingTransport))
 
     assert run.events == ["error"]
     assert "reason" not in run.error_payload()
@@ -356,7 +362,7 @@ def test_a_refused_connection_ends_in_a_plain_error(tmp_path: Path) -> None:
 
 
 def test_speech_failing_on_the_second_sentence_ends_after_the_first_in_error(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """The first sentence was spoken before the failure."""
     scenario = Scenario(
@@ -364,7 +370,7 @@ def test_speech_failing_on_the_second_sentence_ends_after_the_first_in_error(
         speaking_fails_at=1,
     )
 
-    run = drive(tmp_path, scenario)
+    run = drive(engine, scenario)
 
     assert run.events == ["text", "sentence", "audio", "sentence", "error"]
     assert "reason" not in run.error_payload()
@@ -372,14 +378,14 @@ def test_speech_failing_on_the_second_sentence_ends_after_the_first_in_error(
 
 
 def test_the_first_sentence_is_spoken_before_the_last_piece_is_read(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """An answer streamed in pieces has its first sentence out before its last piece."""
     scenario = Scenario(
         gateway=lambda: FakeGateway(completion("Erster Satz. ", "Zweiter ", "Satz."))
     )
 
-    events = drive(tmp_path, scenario).events
+    events = drive(engine, scenario).events
 
     last_piece = max(at for at, name in enumerate(events) if name == "text")
     assert events.index("sentence") < last_piece
@@ -400,13 +406,13 @@ class ChangeOnceTheAnswerHangs:
 
 
 def test_an_answer_ends_within_one_recheck_when_the_session_goes(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """CP14: no text was sent before the end, and the held call is cancelled."""
     recheck = ChangeOnceTheAnswerHangs(delete_the_sessions)
     scenario = Scenario(gateway=HeldTransport, delay=recheck)
 
-    run = drive(tmp_path, scenario)
+    run = drive(engine, scenario)
 
     assert isinstance(run.gateway, HeldTransport)
     assert run.response.status_code == HTTPStatus.OK
@@ -424,10 +430,10 @@ def test_an_answer_ends_within_one_recheck_when_the_session_goes(
     ],
 )
 def test_a_deck_without_readable_words_ends_in_error_and_never_calls_the_gateway(
-    tmp_path: Path, texts: FakeDeckTexts
+    engine: Engine, texts: FakeDeckTexts
 ) -> None:
     """CP1: a deck with no words has nothing to ask about."""
-    run = drive(tmp_path, Scenario(texts=texts))
+    run = drive(engine, Scenario(texts=texts))
 
     assert run.events == ["error"]
     assert run.gateway.requests == []
@@ -435,17 +441,11 @@ def test_a_deck_without_readable_words_ends_in_error_and_never_calls_the_gateway
 
 
 def test_another_admins_deck_gets_the_ghosts_refusal_and_spends_no_grant(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """CP2: the ownership refusal comes before any grant is made."""
-    (tmp_path / "ghost").mkdir()
-    (tmp_path / "foreign").mkdir()
-    ghost = drive(
-        tmp_path / "ghost", Scenario(body={**SPOKEN_QUESTION, "deck": "ghost"})
-    )
-    foreign = drive(
-        tmp_path / "foreign", Scenario(body={**SPOKEN_QUESTION, "deck": B_DECK})
-    )
+    ghost = drive(engine, Scenario(body={**SPOKEN_QUESTION, "deck": "ghost"}))
+    foreign = drive(engine, Scenario(body={**SPOKEN_QUESTION, "deck": B_DECK}))
 
     assert foreign.response.status_code == HTTPStatus.NOT_FOUND
     assert foreign.response.content == ghost.response.content
@@ -455,10 +455,10 @@ def test_another_admins_deck_gets_the_ghosts_refusal_and_spends_no_grant(
 
 @pytest.mark.parametrize("scenario", LEAK_SCENARIOS.values(), ids=LEAK_SCENARIOS)
 def test_no_secret_or_word_of_the_person_reaches_a_log_record_or_the_browser(
-    tmp_path: Path, scenario: Scenario
+    engine: Engine, scenario: Scenario
 ) -> None:
     """Every log record and error of the ask, and all the browser got."""
-    run = drive(tmp_path, scenario)
+    run = drive(engine, scenario)
 
     logged = everything_shown(run.logged, run.errors)
     browser = f"{run.response.headers}\n{run.response.text}"
@@ -469,14 +469,12 @@ def test_no_secret_or_word_of_the_person_reaches_a_log_record_or_the_browser(
 
 
 def test_every_generated_answer_event_says_ai_generated_and_error_does_not(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """CP12: text, sentence, audio and done say ai_generated; error does not."""
-    (tmp_path / "answered").mkdir()
-    (tmp_path / "refused").mkdir()
-    answered = _payloads_by_event(drive(tmp_path / "answered").response.text)
+    answered = _payloads_by_event(drive(engine).response.text)
     refused = _payloads_by_event(
-        drive(tmp_path / "refused", Scenario(groups=ADMIN_GROUPS)).response.text
+        drive(engine, Scenario(groups=ADMIN_GROUPS)).response.text
     )
 
     assert {"text", "sentence", "audio", "done"} <= answered.keys()
@@ -490,7 +488,7 @@ def test_every_generated_answer_event_says_ai_generated_and_error_does_not(
 
 
 def test_a_slide_event_carries_the_number_without_the_ai_mark(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """CP12: the slide event is a control event like error, so it is not marked."""
     scenario = Scenario(
@@ -500,7 +498,7 @@ def test_a_slide_event_carries_the_number_without_the_ai_mark(
         )
     )
 
-    answered = _payloads_by_event(drive(tmp_path, scenario).response.text)
+    answered = _payloads_by_event(drive(engine, scenario).response.text)
 
     assert answered["slide"] == [{"number": 3}]
     assert answered["done"][0]["ai_generated"] is True

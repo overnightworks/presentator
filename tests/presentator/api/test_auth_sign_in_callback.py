@@ -1,33 +1,28 @@
 """A member signs in through the issuer's return; every refusal shows its page.
 
 The issuer is a fake that signs with a key the test generated; the accounts and
-the sessions are the real SQLite stores on a temporary file.
+the sessions are the real Postgres stores on a database of its own.
 """
 
 import base64
 import json
-import sqlite3
-import threading
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from http import HTTPStatus
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
 from httpx2 import Response as BrowserAnswer
 from pydantic import SecretStr
+from sqlalchemy import Engine
+from sqlalchemy.exc import OperationalError
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.ports import AccountEvent, AccountEventKind, AccountKind, AuditSink
 
 from presentator.adapters.audit import LoggingAuditSink
-from presentator.adapters.identity import (
-    ProcessWriteLock,
-    SqliteSessionRecordStore,
-    StoredSession,
-)
+from presentator.adapters.identity import StoredSession
+from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
 from presentator.api.auth import LOGOUT_PATH
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.host import main
@@ -40,21 +35,19 @@ from tests.support.log_lines import json_lines, json_logged
 from tests.support.sign_in_support import (
     ADMIN,
     MEMBER,
-    ContentionSignalingLock,
     Scene,
     TransactionDouble,
     a_scene,
     cookie_names,
 )
 
-_BOUND = 30.0
 _TOO_LONG_FOR_A_COOKIE = 4000
 _COOKIES_OF_A_SIGN_IN = 2
 
 
 @pytest.fixture
-def scene(tmp_path: Path) -> Scene:
-    return a_scene(tmp_path)
+def scene(engine: Engine) -> Scene:
+    return a_scene(engine)
 
 
 def _cookie(answer: BrowserAnswer, name_part: str) -> str:
@@ -364,9 +357,9 @@ def test_a_refusal_writes_no_session_and_no_account(
 
 
 def test_an_issuer_that_differs_in_case_from_the_bound_one_is_a_foreign_issuer(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    scene = a_scene(tmp_path, realm=AN_ISSUER.replace("auth.", "AUTH."))
+    scene = a_scene(engine, realm=AN_ISSUER.replace("auth.", "AUTH."))
 
     page = scene.sign_in()
 
@@ -384,47 +377,11 @@ def test_a_signed_in_person_stays_signed_in_while_the_issuer_is_down(
     assert scene.lobby.client.get("/").status_code == HTTPStatus.OK
 
 
-def test_two_first_sign_ins_of_one_subject_make_one_account_and_two_sessions(
-    tmp_path: Path,
-) -> None:
-    contention = ContentionSignalingLock()
-    first_inside = threading.Event()
-    release_first = threading.Event()
-    entries: list[object] = []
-
-    def hold_the_first_entry() -> None:
-        entries.append(None)
-        if len(entries) == 1:
-            first_inside.set()
-            assert release_first.wait(_BOUND)
-
-    double = TransactionDouble(inside=hold_the_first_entry)
-    scene = a_scene(
-        tmp_path,
-        transaction=double.around,
-        lock=ProcessWriteLock(primitive=contention),
-    )
-
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        first = pool.submit(scene.sign_in, scene.browser())
-        assert first_inside.wait(_BOUND)
-        second = pool.submit(scene.sign_in, scene.browser())
-        assert contention.contended.wait(_BOUND)
-        release_first.set()
-        answers = [first.result(timeout=_BOUND), second.result(timeout=_BOUND)]
-
-    assert [answer.status_code for answer in answers] == [HTTPStatus.SEE_OTHER] * 2
-    assert (scene.count("users"), scene.count("sessions")) == (1, 2)
-    assert [event.kind for event in scene.audit.events] == [
-        AccountEventKind.USER_CREATED
-    ]
-
-
 def test_one_callback_enters_the_transaction_once_on_a_worker_thread(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     double = TransactionDouble()
-    scene = a_scene(tmp_path, transaction=double.around)
+    scene = a_scene(engine, transaction=double.around)
 
     scene.sign_in()
 
@@ -433,14 +390,14 @@ def test_one_callback_enters_the_transaction_once_on_a_worker_thread(
 
 
 def test_a_store_failure_inside_the_callback_leaves_no_account_no_session_and_no_audit(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    scene = a_scene(tmp_path)
-    create = SqliteSessionRecordStore.create
-    failures = [sqlite3.OperationalError("disk I/O error")]
+    scene = a_scene(engine)
+    create = PostgresSessionRecordStore.create
+    failures = [OperationalError(None, None, Exception("disk I/O error"))]
 
     def create_unless_the_disk_fails(  # noqa: PLR0913
-        store: SqliteSessionRecordStore,
+        store: PostgresSessionRecordStore,
         user_id: str,
         *,
         session_id: str,
@@ -464,7 +421,7 @@ def test_a_store_failure_inside_the_callback_leaves_no_account_no_session_and_no
         )
 
     monkeypatch.setattr(
-        SqliteSessionRecordStore, "create", create_unless_the_disk_fails
+        PostgresSessionRecordStore, "create", create_unless_the_disk_fails
     )
     browser = scene.browser(raise_server_exceptions=False)
 

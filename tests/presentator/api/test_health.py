@@ -1,11 +1,11 @@
 """Both hosts answer `GET /health` to anyone, touching no session."""
 
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine
 
 from presentator.api.health import Stopping, add_health_route, always_ready
 from tests.support.lobby import (
@@ -23,10 +23,10 @@ _HOSTS = [A_BROWSERS_ADDRESS, A_TALK_ADDRESS]
 
 @pytest.mark.parametrize("address", _HOSTS)
 def test_a_signed_out_reader_gets_the_fixed_ok_body_at_each_host(
-    tmp_path: Path, address: str
+    engine: Engine, address: str
 ) -> None:
     """A signed-out reader gets 200 and the fixed body at each host."""
-    answer = two_hosts(tmp_path).browser(address).get("/health")
+    answer = two_hosts(engine).browser(address).get("/health")
 
     assert answer.status_code == HTTPStatus.OK
     assert answer.headers["content-type"] == "application/json"
@@ -34,18 +34,18 @@ def test_a_signed_out_reader_gets_the_fixed_ok_body_at_each_host(
 
 
 @pytest.mark.parametrize("address", _HOSTS)
-def test_the_answer_sets_no_cookie(tmp_path: Path, address: str) -> None:
+def test_the_answer_sets_no_cookie(engine: Engine, address: str) -> None:
     """The answer sets no cookie."""
-    answer = two_hosts(tmp_path).browser(address).get("/health")
+    answer = two_hosts(engine).browser(address).get("/health")
 
     assert "set-cookie" not in answer.headers
 
 
 @pytest.mark.parametrize("address", _HOSTS)
 @pytest.mark.parametrize("method", ["HEAD", "POST"])
-def test_only_a_get_is_answered(tmp_path: Path, address: str, method: str) -> None:
+def test_only_a_get_is_answered(engine: Engine, address: str, method: str) -> None:
     """Only GET is answered."""
-    client = two_hosts(tmp_path).browser(address)
+    client = two_hosts(engine).browser(address)
 
     answer = client.request(
         method, "/health", headers={"sec-fetch-site": "same-origin"}
@@ -55,17 +55,17 @@ def test_only_a_get_is_answered(tmp_path: Path, address: str, method: str) -> No
 
 
 @pytest.mark.parametrize("address", _HOSTS)
-def test_an_address_below_health_is_still_gated(tmp_path: Path, address: str) -> None:
+def test_an_address_below_health_is_still_gated(engine: Engine, address: str) -> None:
     """No web route other than `/health` is public."""
-    answer = two_hosts(tmp_path).browser(address).get("/health/more")
+    answer = two_hosts(engine).browser(address).get("/health/more")
 
     assert answer.status_code == HTTPStatus.FOUND
     assert answer.headers["location"].startswith("/login/oidc?next=")
 
 
-def test_an_unknown_host_gets_not_found(tmp_path: Path) -> None:
+def test_an_unknown_host_gets_not_found(engine: Engine) -> None:
     """An unknown host gets 404."""
-    answer = two_hosts(tmp_path).browser("https://other.example").get("/health")
+    answer = two_hosts(engine).browser("https://other.example").get("/health")
 
     assert answer.status_code == HTTPStatus.NOT_FOUND
 

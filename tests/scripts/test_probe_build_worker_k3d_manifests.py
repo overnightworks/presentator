@@ -185,7 +185,8 @@ def test_the_web_documents_are_the_overlays_config_map_and_deployment_with_a_red
         next(
             d
             for d in rendered
-            if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "sqlite"
+            if d["kind"] == "ConfigMap"
+            and not d["metadata"]["name"].startswith("build-worker")
         ),
     ]
     assert documents[0] is not named(rendered, "Deployment")

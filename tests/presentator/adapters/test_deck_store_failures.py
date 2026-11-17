@@ -268,7 +268,7 @@ def test_a_toolchain_the_row_cannot_vouch_for_reads_as_unknown(
 ) -> None:
     store = a_store_after_a_build_and_a_failed_attempt(tmp_path, engine)
     with store.engine.begin() as connection:
-        (stored,) = connection.exec_driver_sql(_READ_WHAT_IS_STORED[which]).fetchone()
+        stored = connection.exec_driver_sql(_READ_WHAT_IS_STORED[which]).scalar_one()
         flawed = _STORED_WITH_A_FLAW[flaw](stored)
         connection.exec_driver_sql(_WRITE_WHAT_IS_STORED[which], (flawed,))
 

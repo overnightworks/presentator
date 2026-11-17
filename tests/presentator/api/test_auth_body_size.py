@@ -4,11 +4,11 @@ import asyncio
 import json
 from dataclasses import dataclass, field
 from http import HTTPStatus
-from pathlib import Path
 from urllib.parse import urlencode
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine
 from starlette.types import ASGIApp, Message
 
 from presentator.api.auth import (
@@ -126,9 +126,9 @@ def padded_to_the_stream_size(body: str) -> bytes:
 
 
 def test_a_streamed_body_over_the_cap_on_the_back_channel_gets_413(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    scene: Scene = a_scene(tmp_path)
+    scene: Scene = a_scene(engine)
     scene.sign_in()
     token = scene.issuer.mint_logout_token(subject="subject-1")
     body = padded_to_the_stream_size(urlencode({"logout_token": token}))

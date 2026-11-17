@@ -688,7 +688,7 @@ def test_a_build_that_leaves_a_link_on_the_way_to_an_artefact_is_not_held(
     The link is planted by the build's last step, after everything it was
     asked for was written, so all that refuses the build is the link itself.
     """
-    elsewhere = tmp_path / "presentator.sqlite3"
+    elsewhere = tmp_path / "kept-by-the-server"
     elsewhere.write_bytes(b"what this server keeps to itself")
     with_the_toolchain(
         machine,

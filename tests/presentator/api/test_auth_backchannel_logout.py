@@ -1,20 +1,19 @@
 """Keycloak's back-channel logout ends every session of the person it names.
 
 The issuer is the fake one, so every Logout Token is signed by a key the test
-generated; the accounts and the sessions are the real SQLite stores.
+generated; the accounts and the sessions are the real Postgres stores.
 """
 
-import sqlite3
 from collections.abc import Callable
-from contextlib import closing
 from dataclasses import dataclass, replace
 from http import HTTPMethod, HTTPStatus
-from pathlib import Path
 from urllib.parse import urlencode
 
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response as Answer
+from sqlalchemy import Engine, text
+from sqlalchemy.exc import OperationalError
 from starlette.types import Message, Receive, Scope, Send
 from webauth.ports import (
     AccountEvent,
@@ -64,7 +63,7 @@ class AccountsThatBreak:
 
     def get(self, user_id: str) -> UserRecord | None:
         if self.breakdown.now:
-            raise sqlite3.OperationalError(user_id)
+            raise OperationalError(None, None, Exception(user_id))
         return self.real.get(user_id)
 
     def create_for_subject(
@@ -116,10 +115,11 @@ class World:
         )
 
     def sessions_of(self, subject: str) -> int:
-        with closing(sqlite3.connect(self.scene.database)) as connection:
-            (count,) = connection.execute(
-                "SELECT count(*) FROM sessions WHERE user_id = ?", (subject,)
-            ).fetchone()
+        with self.scene.engine.connect() as connection:
+            count = connection.execute(
+                text("SELECT count(*) FROM sessions WHERE user_id = :subject"),
+                {"subject": subject},
+            ).scalar_one()
         return int(count)
 
     def token(self, subject: str = "subject-1", *, seconds_ago: int = 0) -> str:
@@ -138,13 +138,13 @@ class World:
 
 
 def _arranged(
-    tmp_path: Path,
+    engine: Engine,
     *,
     through: Callable[[SignInStores], SignInStores] = lambda stores: stores,
     audit: Callable[[RecordingAudit], AuditSink] = lambda recording: recording,
 ) -> World:
     transaction = TransactionDouble(through=through)
-    scene = a_scene(tmp_path, transaction=transaction.around, audit=audit)
+    scene = a_scene(engine, transaction=transaction.around, audit=audit)
     transaction.sessions_seen = lambda: scene.count("sessions")
     first, second, other = (scene.browser() for _ in range(3))
     scene.sign_in(first)
@@ -158,8 +158,8 @@ def _arranged(
 
 
 @pytest.fixture
-def world(tmp_path: Path) -> World:
-    return _arranged(tmp_path)
+def world(engine: Engine) -> World:
+    return _arranged(engine)
 
 
 def _untouched(world: World) -> None:
@@ -315,11 +315,11 @@ def test_a_body_that_is_not_one_logout_token_form_ends_nothing(
 
 
 def test_a_failing_account_store_answers_400_and_leaves_the_sessions_as_they_were(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     breakdown = Breakdown()
     world = _arranged(
-        tmp_path,
+        engine,
         through=lambda stores: replace(
             stores, accounts=AccountsThatBreak(stores.accounts, breakdown)
         ),
@@ -336,11 +336,11 @@ def test_a_failing_account_store_answers_400_and_leaves_the_sessions_as_they_wer
 
 
 def test_a_failing_audit_call_inside_the_block_answers_400_and_ends_no_session(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     breakdown = Breakdown()
     world = _arranged(
-        tmp_path,
+        engine,
         through=lambda stores: replace(
             stores, audit=AuditThatBreaks(stores.audit, breakdown)
         ),
@@ -357,11 +357,11 @@ def test_a_failing_audit_call_inside_the_block_answers_400_and_ends_no_session(
 
 
 def test_a_logging_failure_after_the_commit_answers_400_and_keeps_the_deletion(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     breakdown = Breakdown()
     world = _arranged(
-        tmp_path, audit=lambda recording: AuditThatBreaks(recording, breakdown)
+        engine, audit=lambda recording: AuditThatBreaks(recording, breakdown)
     )
     breakdown.now = True
 
@@ -374,11 +374,11 @@ def test_a_logging_failure_after_the_commit_answers_400_and_keeps_the_deletion(
 
 
 def test_a_logging_failure_after_the_commit_is_raised_to_the_server(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     breakdown = Breakdown()
     world = _arranged(
-        tmp_path, audit=lambda recording: AuditThatBreaks(recording, breakdown)
+        engine, audit=lambda recording: AuditThatBreaks(recording, breakdown)
     )
     breakdown.now = True
     client, token = world.keycloak(), world.token()
@@ -388,9 +388,9 @@ def test_a_logging_failure_after_the_commit_is_raised_to_the_server(
 
 
 def test_the_sessions_end_in_one_transaction_off_the_event_loop_before_the_answer(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    world = _arranged(tmp_path)
+    world = _arranged(engine)
     log = world.transaction.log
 
     async def lobby_that_logs_the_answer(

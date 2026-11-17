@@ -38,7 +38,6 @@ def test_an_empty_database_is_refused_at_start_and_left_without_a_table(
         assert inspect(engine).get_table_names() == []
     finally:
         engine.dispose()
-    assert not (tmp_path / "presentator.sqlite3").exists()
 
 
 def test_a_database_that_does_not_answer_ends_the_start_in_one_failed_line(
