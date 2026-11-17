@@ -26,6 +26,7 @@ from tests.scripts.support.k3d_world import (
     expected_ends,
     fixture_maker,
     issued_commands,
+    kubelet_config,
     named,
     workload_documents,
 )
@@ -86,22 +87,54 @@ def test_drive_refuses_a_missing_tool_by_name_before_any_command(
 
 
 @pytest.mark.parametrize(
-    ("nodes", "named_in_refusal"),
+    ("world", "named_in_refusal"),
     [
-        ([node(), node("k3d-other-agent-0")], "2 nodes"),
-        ([node("k3d-someone-else-server-0")], "k3d-someone-else-server-0"),
-        ([node(ready=False)], "not Ready"),
-        ([node(version="v1.0.0+k3s1")], "v1.0.0+k3s1"),
+        (World(nodes=[node(), node("k3d-other-agent-0")]), "2 nodes"),
+        (
+            World(nodes=[node("k3d-someone-else-server-0")]),
+            "k3d-someone-else-server-0",
+        ),
+        (World(nodes=[node(ready=False)]), "not Ready"),
+        (World(nodes=[node(version="v1.0.0+k3s1")]), "v1.0.0+k3s1"),
+        (World(kubelet=kubelet_config(imageGCHighThresholdPercent=85)), "85"),
+        (World(kubelet=kubelet_config(imageMaximumGCAge="2h0m0s")), "2h0m0s"),
+        (
+            World(kubelet=kubelet_config(evictionHard={"imagefs.available": "15%"})),
+            "imagefs.available<15%",
+        ),
+        (
+            World(kubelet=kubelet_config(evictionHard={"nodefs.inodesFree": "5%"})),
+            "nodefs.inodesFree<5%",
+        ),
+        (
+            World(kubelet=kubelet_config(evictionSoft={"nodefs.available": "20%"})),
+            "nodefs.available<20%",
+        ),
+        (
+            World(kubelet=kubelet_config(mergeDefaultEvictionSettings=True)),
+            "default eviction",
+        ),
     ],
-    ids=["a second node", "another name", "a node not Ready", "another k3s version"],
+    ids=[
+        "a second node",
+        "another name",
+        "a node not Ready",
+        "another k3s version",
+        "image garbage collection below a full disk",
+        "image garbage collection by age",
+        "imagefs eviction",
+        "nodefs inode eviction",
+        "soft nodefs eviction",
+        "merged default eviction",
+    ],
 )
-def test_drive_refuses_a_cluster_that_is_not_the_runs_own_before_any_write(
+def test_drive_refuses_a_foreign_or_image_dropping_cluster_before_any_write(
     make_fixture: Callable[..., Fixture],
     capsys: pytest.CaptureFixture[str],
-    nodes: list[Document],
+    world: World,
     named_in_refusal: str,
 ) -> None:
-    fixture = make_fixture(World(nodes=nodes))
+    fixture = make_fixture(world)
     with pytest.raises(SystemExit):
         fixture.drive()
     assert named_in_refusal in capsys.readouterr().err
@@ -588,6 +621,26 @@ def test_cell_9_runs_and_prints_the_facts_when_cell_8_fails(
     assert "cell 9: nothing: exit 0, self-check passed" in output.out
     assert "cell 9: the worker pod's facts:" in output.out
     assert set(world.residue_pods) <= set(applied_twins(world))
+
+
+def test_a_failed_cell_prints_the_node_events_and_images_and_the_runner_disk_use(
+    make_fixture: Callable[..., Fixture],
+    lives_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    world = World(
+        streams=[
+            lives_stream(1, Predicate.EGRESS, version=Version(init=False)),
+            lives_stream(lives_module.LIVES, Predicate.MOUNTS),
+        ]
+    )
+    fixture = make_fixture(world)
+    with pytest.raises(SystemExit):
+        fixture.drive()
+    output = capsys.readouterr().out
+    assert f"node events:\n{world.node_events}" in output
+    assert f"node images:\n{world.node_images}" in output
+    assert f"runner disk use:\n{world.disk_use}" in output
 
 
 def a_failed_end(refusal: Predicate | None) -> Document:

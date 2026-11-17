@@ -34,6 +34,13 @@ K3D_LABEL = "app=k3d"
 PRODUCTION_REPOSITORY = "presentator"
 
 Document = dict[str, Any]
+# Pressure on these filesystems makes the kubelet's eviction manager delete
+# unused images.
+DISK_SIGNALS = ("nodefs.", "imagefs.", "containerfs.")
+# The eviction threshold, image collection start and image age the kubelet ignores.
+NO_THRESHOLD = "0%"
+FULL_DISK_PERCENT = 100
+NO_AGE = "0s"
 
 
 @dataclass(frozen=True)
@@ -260,11 +267,14 @@ def start_cluster(run: Run, k3s_version: str) -> None:
         f"rancher/k3s:{k3s_version.replace('+', '-')}",
         "--api-port",
         f"127.0.0.1:{run.effects.free_port()}",
-        # The images are imported, never pulled, and the Redis image waits unused
-        # until the web cells; above the kubelet's default 85 % of a runner's disk
-        # its image garbage collection removes it, so collection waits for a full disk.
+        # The images are imported, never pulled, and wait unused between cells.
+        # The kubelet deletes unused images above 85 % of a runner's disk, and its
+        # eviction manager does under k3s's 5 % free disk thresholds; 100 % holds
+        # off collection, and a 0 % threshold is one the kubelet ignores.
         "--k3s-arg",
         "--kubelet-arg=image-gc-high-threshold=100@server:*",
+        "--k3s-arg",
+        "--kubelet-arg=eviction-hard=imagefs.available<0%,nodefs.available<0%@server:*",
         "--kubeconfig-update-default=false",
         "--wait",
         "--timeout",
@@ -277,6 +287,31 @@ def start_cluster(run: Run, k3s_version: str) -> None:
     if problem := node_problem(nodes, run.node, k3s_version):
         refuse(f"cluster identity: {problem}")
     say(f"identity holds: node {run.node} is Ready at {k3s_version}")
+    configz = run("kubectl get --raw", f"/api/v1/nodes/{run.node}/proxy/configz")
+    if problem := image_removal_problem(json.loads(configz.stdout)):
+        refuse(f"kubelet of {run.node} can remove the imported images: {problem}")
+    say(f"images kept: the kubelet of {run.node} neither collects nor evicts them")
+
+
+def image_removal_problem(configz: Document) -> str | None:
+    """How the node's kubelet, by its configz, could remove an unused image."""
+    kubelet: Document = configz["kubeletconfig"]
+    evictions: dict[str, dict[str, str]] = {
+        kind: kubelet.get(kind) or {} for kind in ("evictionHard", "evictionSoft")
+    }
+    problems = [
+        f"{kind} {signal}<{threshold}"
+        for kind, thresholds in evictions.items()
+        for signal, threshold in thresholds.items()
+        if signal.startswith(DISK_SIGNALS) and threshold != NO_THRESHOLD
+    ]
+    if kubelet.get("mergeDefaultEvictionSettings"):
+        problems.append("it merges the default eviction thresholds")
+    if (high := kubelet["imageGCHighThresholdPercent"]) != FULL_DISK_PERCENT:
+        problems.append(f"image garbage collection starts at {high} % disk use")
+    if (age := kubelet.get("imageMaximumGCAge", NO_AGE)) != NO_AGE:
+        problems.append(f"it collects images unused for {age}")
+    return "; ".join(problems) or None
 
 
 @dataclass(frozen=True)

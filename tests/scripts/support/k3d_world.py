@@ -58,6 +58,20 @@ READY_AFTER_SECONDS = 5
 Issued = tuple[tuple[str, ...], Mapping[str, str], str | None]
 
 
+def kubelet_config(**changes: object) -> Document:
+    """The node's configz, which keeps every image, with the changes to its fields."""
+    kubelet: Document = {
+        "imageGCHighThresholdPercent": 100,
+        "imageMaximumGCAge": "0s",
+        "evictionHard": {
+            "imagefs.available": "0%",
+            "nodefs.available": "0%",
+            "memory.available": "100Mi",
+        },
+    }
+    return {"kubeletconfig": kubelet | changes}
+
+
 def add_web_secrets(spec: Document) -> None:
     """Give the web container's pod spec a projected Secret and the files naming it."""
     (main,) = spec["containers"]
@@ -151,6 +165,12 @@ class World:
 
     nodes: list[Document] = field(default_factory=lambda: [node()])
     node_name: str = ""
+    kubelet: Document = field(default_factory=kubelet_config)
+    # What the dump of a failed cell reads: the node's events and images, the
+    # runner's disk use.
+    node_events: str = "a node event"
+    node_images: str = "a node image"
+    disk_use: str = "a disk use"
     probe_image: str = ""
     redis_image: str = ""
     production_image: str = ""
@@ -300,6 +320,12 @@ class World:
                 return self.render(command)
             case ("kubectl", "get", "nodes", *_):
                 return self.nodes_json()
+            case (
+                ("kubectl", "get", "--raw" | "events", *_)
+                | ("docker", "exec", _, "crictl", "images")
+                | ("df", *_)
+            ):
+                return self.node_answer(command)
             case ("kubectl", "get", "pod" | "pods", *_) | ("kubectl", "logs", *_):
                 return self.pod_answer(command)
             case ("kubectl", "delete", "statefulset", *_):
@@ -309,6 +335,21 @@ class World:
             case _:
                 pass
         return ""
+
+    def node_answer(self, command: tuple[str, ...]) -> str | None:
+        """What the node shows: its kubelet config, its events and images, the disk."""
+        configz = f"/api/v1/nodes/{self.node_name}/proxy/configz"
+        match command:
+            case ("kubectl", "get", "--raw", path):
+                return json.dumps(self.kubelet) if path == configz else None
+            case ("kubectl", "get", "events", "--all-namespaces", *_):
+                return self.node_events
+            case ("docker", "exec", name, "crictl", "images"):
+                return self.node_images if name == self.node_name else None
+            case ("df", "-h"):
+                return self.disk_use
+            case _:
+                return ""
 
     def container_effect(self, command: tuple[str, ...]) -> None:
         """What a k3d or docker command changes: the cluster, its volume, its tools."""
