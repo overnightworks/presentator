@@ -1,0 +1,7 @@
+claim_id = "0df00c30199841d1a459bb14a4f5833e"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "f92d34397b72ae86dd0f84e9721e8d74a9a733b5"
+branch = "claude/issue-1237-the-picomatch-advisory-ghsa-fc5q-39xc-vj"
+scope = ["quality/config.toml"]
+opened_commit = "442275724855e88738724e3d3e44710ddf427de1"
