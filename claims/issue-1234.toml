@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "f92d34397b72ae86dd0f84e9721e8d74a9a733b5"
 branch = "claude/issue-1234-presentator-pins-agents-v0-52-0"
-scope = ["pyproject.toml", "tests", "uv.lock"]
+scope = ["pyproject.toml", "src/presentator/agent/backend.py", "tests", "uv.lock"]
 opened_commit = "f7d8253087d77b3f70d879b52a74deca42129bc7"
 whole_reason = "a pin take-up whose tests may need fixes across the test tree"
