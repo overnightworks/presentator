@@ -1,0 +1,8 @@
+claim_id = "7e22a6a43da34588961967a063d5dc74"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "172da0ad18e580c2e0741deeb64aa1699d217de2"
+branch = "claude/issue-1228-the-k3d-probe-keeps-its-imported-images"
+scope = ["scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_cluster.py", "tests/scripts/support/k3d_world.py", "tests/scripts/test_probe_build_worker_k3d.py"]
+opened_commit = "aa7d42f776eb87d823cf5c3f343f8689f409895f"
+whole_reason = "the probe's cluster setup, its drive and their tests change together"
