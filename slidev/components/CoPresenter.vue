@@ -269,7 +269,7 @@ function onHeard(data, generation) {
   }
   if (!payload.text) return
   heard.value = payload.text
-  if (payload.final) onFinal(payload.text, payload.language)
+  if (payload.final) onFinal(payload.text, payload.language, payload.traceparent)
 }
 
 function stopStream(stream) {
@@ -286,10 +286,10 @@ function releaseCapture() {
   if (mediaStream) stopStream(mediaStream)
 }
 
-function onFinal(text, utteranceLanguage) {
+function onFinal(text, utteranceLanguage, heardTraceparent) {
   if (!on.value || speaking.value) return
   if (isEcho(text, spokenText)) return
-  void ask(text, utteranceLanguage)
+  void ask(text, utteranceLanguage, heardTraceparent)
 }
 
 function isEcho(text, spoken) {
@@ -303,7 +303,25 @@ function isEcho(text, spoken) {
   return overlap / a.size >= 0.5
 }
 
-async function ask(text, utteranceLanguage) {
+const TRACEPARENT = /^00-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}$/
+const INVALID_TRACE_ID = '0'.repeat(32)
+
+// One W3C trace per turn, so the turn's hearing, ask and answer lines share a
+// trace_id: the heard turn's trace when the hearing sent a valid one, else a new
+// one. The value lives only in its ask, so a failed turn leaves none behind.
+function turnTraceparent(heardTraceparent) {
+  const heardTraceId = TRACEPARENT.exec(heardTraceparent ?? '')?.[1]
+  const traceId =
+    heardTraceId && heardTraceId !== INVALID_TRACE_ID ? heardTraceId : randomHex(16)
+  return `00-${traceId}-${randomHex(8)}-01`
+}
+
+function randomHex(byteCount) {
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(byteCount))
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+async function ask(text, utteranceLanguage, heardTraceparent) {
   if (!capture) return
   invalidatePlayback()
   if (askAbort) askAbort.abort()
@@ -318,6 +336,7 @@ async function ask(text, utteranceLanguage) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        traceparent: turnTraceparent(heardTraceparent),
       },
       body: JSON.stringify({
         said: text,

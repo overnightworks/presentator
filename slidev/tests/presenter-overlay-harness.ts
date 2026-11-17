@@ -68,6 +68,10 @@ export const state = {
   hearingClosed: 0,
   pendingAnswerClosed: 0,
   askHeaderNames: [] as string[],
+  // The `traceparent` header of each ask, in order.
+  askTraceparents: [] as (string | undefined)[],
+  // The turn trace the fake hearing hands over with each final transcript.
+  heardTraceparent: null as string | null,
   answerMode: 'audio' as AnswerMode,
   // The payload the fake answer stream sends as its `error` event in 'error-event' mode.
   errorEvent: {} as Record<string, unknown>,
@@ -111,9 +115,14 @@ function hasCloseFrame(data: Buffer) {
   return false
 }
 
+// One unmasked text frame; RFC 6455 marks a payload of 126 bytes or more with 126
+// and a 16-bit length.
 function frame(message: string) {
   const data = Buffer.from(message)
-  return Buffer.concat([Buffer.from([0x81, data.length]), data])
+  const header = data.length < 126
+    ? Buffer.from([0x81, data.length])
+    : Buffer.from([0x81, 126, data.length >> 8, data.length & 0xff])
+  return Buffer.concat([header, data])
 }
 
 function mimeType(pathname: string) {
@@ -422,6 +431,7 @@ async function startServer() {
     }
     if (url.pathname === '/copresenter/ask') {
       state.askHeaderNames = Object.keys(request.headers)
+      state.askTraceparents.push(request.headers.traceparent as string | undefined)
       state.askBodies.push(await readAskBody(request))
       const refusal = REFUSED_REQUESTS[state.answerMode as keyof typeof REFUSED_REQUESTS]
       if (refusal) {
@@ -505,7 +515,12 @@ async function startServer() {
       + `Sec-WebSocket-Accept: ${websocketAcceptKey(key)}\r\n\r\n`,
     )
     if (state.hearingMode === 'ready' && state.heardOnConnect) {
-      socket.write(frame(JSON.stringify({ text: 'Where does the handoff slow down?', final: true, language: state.heardLanguage })))
+      socket.write(frame(JSON.stringify({
+        text: 'Where does the handoff slow down?',
+        final: true,
+        language: state.heardLanguage,
+        traceparent: state.heardTraceparent,
+      })))
     }
     if (state.hearingMode === 'refused-on-open') socket.write(closeFrame(HopClose.BUSY))
     recordUnexpectedSocketErrors(socket)
@@ -544,7 +559,7 @@ async function readAskBody(request: import('node:http').IncomingMessage) {
 }
 
 export function sendHeard(text: string) {
-  for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final: true, language: state.heardLanguage })))
+  for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final: true, language: state.heardLanguage, traceparent: state.heardTraceparent })))
 }
 
 // The server ends every open hearing with a close code, as it does when a
@@ -784,6 +799,8 @@ export function registerOverlayHarness() {
     cspViolations = []
     socketErrors.length = 0
     state.askBodies = []
+    state.askTraceparents = []
+    state.heardTraceparent = null
     state.hearLanguages = []
     state.heardLanguage = 'de'
     state.interfaceLanguage = 'en'

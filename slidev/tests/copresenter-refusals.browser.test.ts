@@ -11,6 +11,7 @@ import {
   readPaintedColours,
   registerOverlayHarness,
   saveEvidence,
+  sendHeard,
   state,
   wordsOf,
 } from './presenter-overlay-harness'
@@ -96,6 +97,31 @@ describe('co-presenter refusals', () => {
       }
     }
   })
+
+  it('asks each turn under its own trace: the heard turn\'s, then a new one after the turn failed', async () => {
+    const heardTraceId = '4bf92f3577b34da6a3ce929d0e0e4736'
+    state.answerMode = 'refused-then-answered'
+    state.heardTraceparent = `00-${heardTraceId}-00f067aa0ba902b7-01`
+    const { browser, page } = await openPresenter(1024)
+    try {
+      const ai = page.getByRole('switch', { name: en['controls.switch'] })
+      await ai.waitFor({ state: 'visible', timeout: 2_000 })
+      await ai.click({ timeout: 2_000 })
+      await page.getByText(en['controls.noAnswer'], { exact: true }).waitFor({ state: 'visible', timeout: 5_000 })
+      state.heardTraceparent = null
+      sendHeard('And again?')
+      await page.getByText('The second ask is answered.').waitFor({ state: 'visible', timeout: 5_000 })
+      const traces = state.askTraceparents.map((value) => /^00-([0-9a-f]{32})-([0-9a-f]{16})-01$/.exec(value ?? ''))
+      expect(traces).toHaveLength(2)
+      expect(traces[0]?.[1]).toBe(heardTraceId)
+      expect(traces[0]?.[2]).not.toBe('00f067aa0ba902b7')
+      expect(traces[1]?.[1]).toMatch(/^[0-9a-f]{32}$/)
+      expect(traces[1]?.[1]).not.toBe(heardTraceId)
+    } finally {
+      state.answerMode = 'audio'
+      await browser.close()
+    }
+  }, 30_000)
 
   it('CP6: clears the refusal line when the next ask is answered', async () => {
     state.answerMode = 'refused-then-answered'
