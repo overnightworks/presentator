@@ -167,7 +167,7 @@ def test_a_socket_to_a_talk_is_closed_before_it_is_accepted(
         pytest.fail("a socket was accepted")
 
 
-@pytest.mark.usefixtures("environment")
+@pytest.mark.usefixtures("environment", "served_database")
 def test_the_composition_root_wires_the_talk_host_to_its_own_policy() -> None:
     settings = load_settings()
     router = main.served_by_host(main.build_instance(settings), settings)

@@ -356,7 +356,7 @@ def test_a_failing_audit_call_inside_the_block_answers_400_and_ends_no_session(
     assert world.scene.audit.events == []
 
 
-def test_a_logging_failure_after_the_commit_answers_400_and_keeps_the_deletion(
+def test_a_failing_audit_sink_answers_400_and_ends_no_session(
     engine: Engine,
 ) -> None:
     breakdown = Breakdown()
@@ -370,10 +370,10 @@ def test_a_logging_failure_after_the_commit_answers_400_and_keeps_the_deletion(
     )
 
     assert answer.status_code == HTTPStatus.BAD_REQUEST
-    assert world.sessions_of("subject-1") == 0
+    assert world.sessions_of("subject-1") == _ROWS_OF_SUBJECT_1
 
 
-def test_a_logging_failure_after_the_commit_is_raised_to_the_server(
+def test_a_failing_audit_sink_is_raised_to_the_server(
     engine: Engine,
 ) -> None:
     breakdown = Breakdown()

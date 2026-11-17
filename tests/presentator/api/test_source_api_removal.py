@@ -192,7 +192,7 @@ def assert_removed_exactly(shelf: Stocked, runs_before: frozenset[str]) -> None:
     assert {run.name for run in shelf.builder.on_disk} == shelf.runs_of(shelf.staying)
 
 
-def _by_cookie(shelf: Stocked, _tmp_path: Path) -> Instance:
+def _by_cookie(shelf: Stocked, _engine: Engine) -> Instance:
     return an_admin_cookie_instance(shelf.decks, shelf.sources)
 
 
@@ -330,10 +330,10 @@ def test_the_preview_counts_every_deck_of_every_owner_and_changes_nothing() -> N
 # 9, 10
 @AN_ADMIN_BY_COOKIE_OR_BEARER
 def test_a_removal_with_the_previews_counts_removes_exactly_the_source(
-    reach: Callable[[Stocked, Path], Instance], tmp_path: Path
+    reach: Callable[[Stocked, Engine], Instance], engine: Engine
 ) -> None:
     shelf = stocked()
-    instance = reach(shelf, tmp_path)
+    instance = reach(shelf, engine)
     runs_before = shelf.runs_of(shelf.going)
     previewed = preview_removal(instance.client, shelf.name, instance.headers).json()
 

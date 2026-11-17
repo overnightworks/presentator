@@ -23,6 +23,9 @@ def create_database_engine(database_url: str, password: SecretStr) -> Engine:
         url,
         pool_pre_ping=True,
         connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
+        # A failed statement's error would otherwise quote its parameters, among
+        # them refresh tokens, sealed secrets and personal data, to every log.
+        hide_parameters=True,
     )
 
 
