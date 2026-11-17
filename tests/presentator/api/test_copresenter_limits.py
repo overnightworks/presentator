@@ -124,7 +124,7 @@ def test_ask_accepts_the_limit_and_the_offered_languages(
         ("en", None, "de", "de", "German"),
     ],
 )
-def test_the_answer_is_written_and_spoken_in_the_language_the_question_was_heard_in(
+def test_answer_text_and_voice_follow_the_heard_language_else_the_persons_not_the_decks(
     deck_language: str,
     heard_language: str | None,
     reads_in: str,
