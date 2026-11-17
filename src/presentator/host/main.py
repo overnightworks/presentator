@@ -209,33 +209,6 @@ def build_instance(
     stopping = Stopping()
     stores = _with_redis(_stores(settings, migrations_directory, toolchain), redis)
     stores = copy.replace(stores, readiness=stopping.unready(stores.readiness))
-    try:
-        return _instance_over(
-            settings,
-            stores,
-            shell=shell,
-            redis=redis,
-            toolchain=toolchain,
-            stopping=stopping,
-            relying_party_for=relying_party_for,
-        )
-    except BaseException:
-        # A start refused after the stores opened leaves no connection behind.
-        stores.close()
-        raise
-
-
-def _instance_over(  # noqa: PLR0913 - the composition root hands each owner on
-    settings: Settings,
-    stores: Stores,
-    *,
-    shell: LobbyShell,
-    redis: SharedRedis,
-    toolchain: ToolchainIdentity,
-    stopping: Stopping,
-    relying_party_for: RelyingPartyFor,
-) -> Instance:
-    """The instance over stores that are open already."""
     mirrors = SourceMirrors(
         directory=settings.mirrors,
         credentials=stores.credentials,
