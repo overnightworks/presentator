@@ -167,9 +167,34 @@ def add_copresenter_routes(
 ) -> None:
     """Add the exact signed-in co-presenter allowlist to the talk host."""
     router = APIRouter(prefix="/copresenter")
-    use = surface.use
     guard = _SessionGuard(admission=admission, delay=surface.delay)
 
+    router.add_api_route(
+        "/who",
+        _who_route(
+            surface.use,
+            admission=admission,
+            interface_language=lambda request: language_of(request, sessions),
+        ),
+        methods=["GET"],
+    )
+    router.add_api_route(
+        "/ask",
+        _ask_route(
+            surface,
+            admission=admission,
+            guard=guard,
+            interface_language=lambda request: language_of(request, sessions),
+        ),
+        methods=["POST"],
+    )
+    router.add_api_websocket_route("/hear", _hear_route(surface, admission, guard))
+    app.include_router(router)
+
+
+def _hear_route(
+    surface: CoPresenterSurface, admission: Admission, guard: _SessionGuard
+) -> Callable[[WebSocket, str], Awaitable[None]]:
     async def _hear(socket: WebSocket, language: str = "de") -> None:
         if (
             socket.headers.get("origin") != surface.browser_origin
@@ -193,31 +218,11 @@ def add_copresenter_routes(
                 socket,
                 language=language,
                 session_id=connection.session_id,
-                use=use,
+                use=surface.use,
                 guard=guard,
             )
 
-    router.add_api_route(
-        "/who",
-        _who_route(
-            use,
-            admission=admission,
-            interface_language=lambda request: language_of(request, sessions),
-        ),
-        methods=["GET"],
-    )
-    router.add_api_route(
-        "/ask",
-        _ask_route(
-            surface,
-            admission=admission,
-            guard=guard,
-            interface_language=lambda request: language_of(request, sessions),
-        ),
-        methods=["POST"],
-    )
-    router.add_api_websocket_route("/hear", _hear)
-    app.include_router(router)
+    return _hear
 
 
 def _who_route(
