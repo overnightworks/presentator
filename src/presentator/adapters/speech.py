@@ -32,8 +32,6 @@ from speech_client.utterances import (
     HearingCallbacks,
     Partial,
     ServiceFailed,
-    SpeechStart,
-    TurnEnd,
     Utterance,
     UtteranceOutcome,
     hear_utterances,
@@ -263,36 +261,6 @@ class SpeechHearing:
         heard: Callable[[HearingTranscript], Awaitable[None]],
         openings: _Openings,
     ) -> UtteranceOutcome:
-        async def heard_utterance(utterance: Utterance) -> None:
-            openings.opened()
-            openings.utterances += 1
-            await heard(
-                HearingTranscript(
-                    text=utterance.text,
-                    final=True,
-                    language=_sample_language(utterance.language),
-                    traceparent=utterance.traceparent,
-                )
-            )
-
-        async def heard_partial(partial: Partial) -> None:
-            openings.opened()
-            await heard(HearingTranscript(text=partial.text, final=False))
-
-        async def speech_started(start: SpeechStart) -> None:
-            del start
-            openings.opened()
-
-        async def turn_ended(turn: TurnEnd) -> None:
-            del turn
-            openings.opened()
-
-        async def reconnected(reopened: Reconnected) -> None:
-            openings.opened(
-                cause=reopened.cause.value,
-                unheard_ms=reopened.unheard_end_ms - reopened.unheard_start_ms,
-            )
-
         async def opening_tokens() -> SessionTokens:
             openings.begin()
             read = await tokens()
@@ -306,13 +274,7 @@ class SpeechHearing:
             deadline_seconds=self._hearing_deadline_seconds,
             held_limit_bytes=_HELD_LIMIT_BYTES,
             ended=ended,
-            callbacks=HearingCallbacks(
-                on_utterance=heard_utterance,
-                on_partial=heard_partial,
-                on_speech_started=speech_started,
-                on_turn_ended=turn_ended,
-                on_reconnected=reconnected,
-            ),
+            callbacks=_hearing_callbacks(openings, heard),
             opening_seconds=self._opening_seconds,
         )
 
@@ -418,6 +380,45 @@ class _Openings:
         pending, self._pending = self._pending, None
         if pending is not None:
             pending.end_cancelled()
+
+
+def _hearing_callbacks(
+    openings: _Openings, heard: Callable[[HearingTranscript], Awaitable[None]]
+) -> HearingCallbacks:
+    async def heard_utterance(utterance: Utterance) -> None:
+        openings.opened()
+        openings.utterances += 1
+        await heard(
+            HearingTranscript(
+                text=utterance.text,
+                final=True,
+                language=_sample_language(utterance.language),
+                traceparent=utterance.traceparent,
+            )
+        )
+
+    async def heard_partial(partial: Partial) -> None:
+        openings.opened()
+        await heard(HearingTranscript(text=partial.text, final=False))
+
+    # The client awaits each callback; these two only note the opening as open.
+    async def opened(event: object) -> None:  # NOSONAR(S7503)
+        del event
+        openings.opened()
+
+    async def reconnected(reopened: Reconnected) -> None:  # NOSONAR(S7503)
+        openings.opened(
+            cause=reopened.cause.value,
+            unheard_ms=reopened.unheard_end_ms - reopened.unheard_start_ms,
+        )
+
+    return HearingCallbacks(
+        on_utterance=heard_utterance,
+        on_partial=heard_partial,
+        on_speech_started=opened,
+        on_turn_ended=opened,
+        on_reconnected=reconnected,
+    )
 
 
 def _tokens_unavailable(step: StepTimer) -> None:
