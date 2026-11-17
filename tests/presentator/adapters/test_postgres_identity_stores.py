@@ -1,5 +1,7 @@
 """The Postgres identity stores: taken names, deleted accounts, and the sign-in lock."""
 
+import threading
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -27,6 +29,10 @@ _AN_EVENT = AccountEvent(
     kind=AccountEventKind.BACKCHANNEL_LOGOUT, actor_id=None, subject_id="subject-1"
 )
 _TRY_SIGN_IN_LOCK = text("SELECT pg_try_advisory_xact_lock(:lock_class, :instance)")
+_AWAITED_ADVISORY_LOCKS = text(
+    "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
+)
+_PATIENCE_SECONDS = 10
 
 
 class _RefusedError(Exception):
@@ -151,6 +157,45 @@ def test_deleting_an_account_ends_its_sessions_and_leaves_the_others(
     assert stores.sessions.load("leaver-session") is None
     assert stores.writes.get("stayer") is not None
     assert stores.sessions.load("stayer-session") is not None
+
+
+def _until_a_lock_is_awaited(other_engine: Engine) -> None:
+    deadline = time.monotonic() + _PATIENCE_SECONDS
+    with other_engine.connect() as connection:
+        while not connection.execute(_AWAITED_ADVISORY_LOCKS).scalar_one():
+            assert time.monotonic() < deadline, "nobody waits for the sign-in lock"
+            connection.rollback()
+
+
+def test_deleting_an_account_cannot_split_a_sign_in_that_has_read_the_account(
+    stores: _Stores, database_url: str
+) -> None:
+    """PE1: an in-flight code exchange leaves no session of a gone account."""
+    stores.accounts.create_for_subject(
+        "leaver", "leaver", Role.USER.value, AccountKind.PERSON
+    )
+    deletion = threading.Thread(target=stores.writes.delete_account, args=("leaver",))
+    other_engine = engine_on(database_url)
+    try:
+        with stores.writes() as entry:
+            assert entry.accounts.get("leaver") is not None
+            deletion.start()
+            _until_a_lock_is_awaited(other_engine)
+            entry.sessions.create(
+                "leaver",
+                session_id="leaver-session",
+                now=_NOON,
+                expires_at=_NOON + timedelta(hours=1),
+                refresh_token=None,
+                id_token=None,
+                account_language=None,
+            )
+    finally:
+        deletion.join(timeout=_PATIENCE_SECONDS)
+        other_engine.dispose()
+
+    assert stores.writes.get("leaver") is None
+    assert stores.sessions.load("leaver-session") is None
 
 
 def test_an_entry_still_holds_the_sign_in_lock_while_its_events_reach_the_sink(
