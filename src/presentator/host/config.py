@@ -38,9 +38,6 @@ _WORKER_REACHED: Final = (
     "is set together with build_worker_key_file, and both are set when builds"
     " run in the worker"
 )
-_DATABASE_NAMED_WHOLE: Final = (
-    "is set together with database_password_file, or neither is"
-)
 
 ENVIRONMENT_PREFIX: Final = "PRESENTATOR_"
 _NESTED: Final = "__"
@@ -301,12 +298,11 @@ class Settings(
     # Where the master key is read from once at start, so it never rides the
     # environment.
     secret_key_file: Annotated[Path, AfterValidator(_an_absolute_path)]
-    database: Path = Path("presentator.sqlite3")
-    # Setting the URL is what makes Postgres the database: every store is then
-    # served from it and the SQLite file above is not opened. The password
-    # lives in a file, read once at start, so it never rides the environment.
-    database_url: PostgresUrl | None = None
-    database_password_file: AbsolutePath | None = None
+    # The Postgres every store is served from. The URL names no password: the
+    # file is its one owner, read once at start, so it never rides the
+    # environment. A deployment fact: no default.
+    database_url: PostgresUrl
+    database_password_file: AbsolutePath
     # The Redis every pod shares for its limits and its ask lease; it keeps
     # nothing durable. A password may ride the URL, which is why it is a secret,
     # or live in a file, read once at start, like the database's. A
@@ -405,10 +401,8 @@ class Settings(
         )
 
     @cached_property
-    def postgres(self) -> PostgresDatabase | None:
-        """The Postgres this instance serves from; nothing means the SQLite file."""
-        if self.database_url is None or self.database_password_file is None:
-            return None
+    def postgres(self) -> PostgresDatabase:
+        """The Postgres this instance serves from, its password read from its file."""
         return _postgres_database(self.database_url, self.database_password_file)
 
     @cached_property
@@ -437,12 +431,6 @@ class Settings(
             if not voice_speaks(voice, language):
                 field = f"speech_voice_{language.value}"
                 raise _FieldRefusedError(_VOICE_SPEAKS_OTHER, field=field)
-        return self
-
-    @model_validator(mode="after")
-    def _database_is_named_whole(self) -> Self:
-        if (self.database_url is None) != (self.database_password_file is None):
-            raise _FieldRefusedError(_DATABASE_NAMED_WHOLE, field="database_url")
         return self
 
     @model_validator(mode="after")

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from sqlalchemy import Engine
 
 from presentator.adapters.deck_texts import MirroredDeckTexts
 from presentator.contracts.copresenter import CoPresenterUnavailableError, DeckText
@@ -305,6 +306,7 @@ def test_a_lone_hash_does_not_borrow_a_heading_from_a_later_line(
 def test_a_deck_under_its_sources_folder_is_read_from_there(
     remote: GitRemote,
     tmp_path: Path,
+    engine: Engine,
 ) -> None:
     remote.commit(
         {
@@ -314,7 +316,7 @@ def test_a_deck_under_its_sources_folder_is_read_from_there(
         },
         at=_PUSHED_AT,
     )
-    store = a_source_store(a_source_database(tmp_path))
+    store = a_source_store(a_source_database(engine))
     store.add(a_source_write(remote.url, folder="examples"))
     (stored,) = store.all()
 

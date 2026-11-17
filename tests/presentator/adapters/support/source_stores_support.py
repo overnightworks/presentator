@@ -1,24 +1,15 @@
-"""The stores over SQLite or Postgres, for tests that compare the two."""
+"""The Postgres stores over a database of the test's own, with numbered ids and keys."""
 
 import itertools
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Final
 
 from sqlalchemy import Engine, text
 from sqlalchemy.engine import make_url
 from webauth.ports import AccountKind
 
-from presentator.adapters.deck_store import SqliteDeckStore
-from presentator.adapters.decks import (
-    SqliteSourceRunStore,
-    SqliteSourceStore,
-    create_deck_tables,
-)
-from presentator.adapters.identity import create_identity_tables
-from presentator.adapters.key_drafts import SqliteSourceKeyDrafts
 from presentator.adapters.postgres.deck_store import PostgresDeckStore
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
 from presentator.adapters.postgres.preferences import (
@@ -27,13 +18,7 @@ from presentator.adapters.postgres.preferences import (
 )
 from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
 from presentator.adapters.postgres.sources import PostgresSourceStore
-from presentator.adapters.preferences import (
-    SqliteInstanceSettingsStore,
-    SqlitePersonPreferencesStore,
-    create_preference_tables,
-)
 from presentator.adapters.secrets import DeployKeyPair, secret_box
-from presentator.adapters.sqlite import rows
 from presentator.contracts.models import Role
 from presentator.ports.decks import DeckStore, DeployKeyDrafts, SourceRuns, SourceStore
 from presentator.ports.preferences import (
@@ -50,7 +35,7 @@ _SESSION_TIME_ZONE: Final = "Pacific/Auckland"
 
 
 class NumberedIdentifiers:
-    """Identifiers that count up, so two adapters given the same writes agree."""
+    """Identifiers that count up, so a test can name what a write is given."""
 
     def __init__(self) -> None:
         """Count from one."""
@@ -62,7 +47,7 @@ class NumberedIdentifiers:
 
 @dataclass(frozen=True, slots=True)
 class Adapters:
-    """One adapter's stores over a database of its own."""
+    """The stores over a database of their own."""
 
     drafts: DeployKeyDrafts
     sources: SourceStore
@@ -92,58 +77,6 @@ class NumberedKeyPairs:
         return DeployKeyPair(
             private_key=f"private key {number}", public_key=f"public key {number}"
         )
-
-
-def sqlite_adapters(directory: Path, key_pairs: NumberedKeyPairs) -> Adapters:
-    database = directory / "presentator.sqlite3"
-    create_identity_tables(database)
-    create_deck_tables(database)
-    create_preference_tables(database)
-
-    def seed_owner(owner_id: str) -> None:
-        with rows(database) as cursor:
-            cursor.execute(
-                "INSERT INTO users (id, username, role, kind) VALUES (?, ?, ?, ?)",
-                (owner_id, owner_id, Role.ADMIN.value, AccountKind.PERSON.value),
-            )
-
-    identifiers = NumberedIdentifiers()
-
-    def drafts_opened_with(instance_key: str) -> DeployKeyDrafts:
-        return SqliteSourceKeyDrafts(
-            database=database,
-            identifiers=identifiers,
-            box=secret_box(instance_key),
-            new_key_pair=key_pairs,
-        )
-
-    def sources_opened_with(instance_key: str) -> SourceStore:
-        return SqliteSourceStore(
-            database=database,
-            identifiers=identifiers,
-            box=secret_box(instance_key),
-            new_key_pair=key_pairs,
-        )
-
-    def secret_of(source_id: str) -> str | None:
-        with rows(database) as cursor:
-            found = cursor.execute(
-                "SELECT encrypted_secret FROM sources WHERE id = ?", (source_id,)
-            ).fetchone()
-        return None if found is None else secret_box(INSTANCE_KEY).decrypt(found[0])
-
-    return Adapters(
-        drafts=drafts_opened_with(INSTANCE_KEY),
-        sources=sources_opened_with(INSTANCE_KEY),
-        runs=SqliteSourceRunStore(database=database),
-        decks=SqliteDeckStore(database=database),
-        settings=SqliteInstanceSettingsStore(database),
-        preferences=SqlitePersonPreferencesStore(database),
-        seed_owner=seed_owner,
-        drafts_opened_with=drafts_opened_with,
-        sources_opened_with=sources_opened_with,
-        secret_of=secret_of,
-    )
 
 
 @contextmanager

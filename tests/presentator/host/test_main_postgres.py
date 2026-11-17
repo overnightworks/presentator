@@ -13,7 +13,7 @@ from presentator.host import main
 from presentator.host.config import load_settings
 from tests.support.lobby import A_BROWSERS_ADDRESS, A_BROWSERS_HEADERS, A_TALK_ADDRESS
 from tests.support.log_lines import json_logged
-from tests.support.postgres import database_environment, engine_on
+from tests.support.postgres import NO_DATABASE_HERE, database_environment, engine_on
 from tests.support.redis import relay_in_front_of
 
 
@@ -47,7 +47,7 @@ def test_a_database_that_does_not_answer_ends_the_start_in_one_failed_line(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    _point_at(environment, "postgresql://nobody@127.0.0.1:1/nothing", tmp_path)
+    _point_at(environment, NO_DATABASE_HERE, tmp_path)
     environment.setenv("PRESENTATOR_REDIS_URL", redis_url)
 
     with json_logged(capsys) as logged, pytest.raises(SystemExit) as ended:

@@ -33,24 +33,13 @@ from presentator.adapters.builds import (
     PackageJsonThemes,
     SlidevBuilds,
 )
-from presentator.adapters.deck_store import SqliteDeckStore
 from presentator.adapters.deck_texts import MirroredDeckTexts
 from presentator.adapters.decks import (
     MirroredConnectionChecker,
     MirroredDeckFolders,
-    SourceCredentials,
     SourceMirrors,
-    SqliteSourceRunStore,
-    SqliteSourceStore,
 )
-from presentator.adapters.identity import (
-    ProcessWriteLock,
-    SqliteIdentityWrites,
-    SqliteSessionRecordStore,
-    SystemClock,
-    TokenIdentifierFactory,
-)
-from presentator.adapters.key_drafts import SqliteSourceKeyDrafts
+from presentator.adapters.identity import SystemClock, TokenIdentifierFactory
 from presentator.adapters.postgres.deck_store import PostgresDeckStore
 from presentator.adapters.postgres.engine import create_database_engine
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
@@ -75,12 +64,6 @@ from presentator.adapters.postgres.sources import (
     PostgresSourceCredentials,
     PostgresSourceStore,
 )
-from presentator.adapters.preferences import (
-    SqliteInstanceSettingsStore,
-    SqlitePersonPreferencesStore,
-)
-from presentator.adapters.refresh_ownership import SingleProcessRefreshOwnership
-from presentator.adapters.schema import create_tables
 from presentator.adapters.secrets import (
     SecretBox,
     TokenWebhookSecrets,
@@ -104,7 +87,7 @@ from presentator.api.auth import (
     create_lobby,
 )
 from presentator.api.copresenter import CoPresenterSurface
-from presentator.api.health import Readiness, Stopping, always_ready
+from presentator.api.health import Readiness, Stopping
 from presentator.api.lobby_shell import LobbyBuildError, LobbyShell
 from presentator.api.people import AdminPeople
 from presentator.api.talk import create_talk, talk_content_security_policy
@@ -171,7 +154,7 @@ RelyingPartyFor = Callable[[OidcClientConfig], OidcRelyingParty]
 
 
 def _nothing_to_close() -> None:
-    """What an instance holds open when its state lives in one file."""
+    """What an instance built without stores holds open: nothing."""
 
 
 # The wait between taking the lease and the answer's clock starting, so the lease
@@ -191,11 +174,6 @@ class Instance:
     stopping: Stopping = field(default_factory=Stopping)
 
 
-type SessionStore = SqliteSessionRecordStore | PostgresSessionRecordStore
-type IdentityWrites = SqliteIdentityWrites | PostgresIdentityWrites
-type Credentials = SourceCredentials | PostgresSourceCredentials
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Stores:
     """The adapter behind every store port, all of one database."""
@@ -205,9 +183,9 @@ class Stores:
     deck_store: DeckStore
     source_runs: SourceRuns
     refresh_ownership: RefreshOwnership
-    credentials: Credentials
-    sessions: SessionStore
-    identity_writes: IdentityWrites
+    credentials: PostgresSourceCredentials
+    sessions: PostgresSessionRecordStore
+    identity_writes: PostgresIdentityWrites
     instance_settings: InstanceSettingsStore
     person_preferences: PersonPreferencesStore
     readiness: Readiness
@@ -231,6 +209,33 @@ def build_instance(
     stopping = Stopping()
     stores = _with_redis(_stores(settings, migrations_directory, toolchain), redis)
     stores = copy.replace(stores, readiness=stopping.unready(stores.readiness))
+    try:
+        return _instance_over(
+            settings,
+            stores,
+            shell=shell,
+            redis=redis,
+            toolchain=toolchain,
+            stopping=stopping,
+            relying_party_for=relying_party_for,
+        )
+    except BaseException:
+        # A start refused after the stores opened leaves no connection behind.
+        stores.close()
+        raise
+
+
+def _instance_over(  # noqa: PLR0913 - the composition root hands each owner on
+    settings: Settings,
+    stores: Stores,
+    *,
+    shell: LobbyShell,
+    redis: SharedRedis,
+    toolchain: ToolchainIdentity,
+    stopping: Stopping,
+    relying_party_for: RelyingPartyFor,
+) -> Instance:
+    """The instance over stores that are open already."""
     mirrors = SourceMirrors(
         directory=settings.mirrors,
         credentials=stores.credentials,
@@ -282,45 +287,17 @@ def _with_redis(stores: Stores, redis: SharedRedis) -> Stores:
 def _stores(
     settings: Settings, migrations_directory: Path, toolchain: ToolchainIdentity
 ) -> Stores:
-    """The stores of the database the settings name: Postgres, else the SQLite file."""
+    """The stores of the Postgres the settings name."""
     # One box for both directions: what the store writes down is what the
     # resolver opens at the pull, and neither picks its own key.
     box = secret_box(settings.secret_key.get_secret_value())
     identifiers = TokenIdentifierFactory()
-    if settings.postgres is None:
-        return _sqlite_stores(settings.database, box, identifiers)
     return _postgres_stores(
         settings.postgres,
         box,
         identifiers,
         migrations_directory,
         refresh=(toolchain, build_bound_of(settings)),
-    )
-
-
-def _sqlite_stores(
-    database: Path, box: SecretBox, identifiers: IdentifierFactory
-) -> Stores:
-    create_tables(database)
-    return Stores(
-        sources=SqliteSourceStore(database=database, identifiers=identifiers, box=box),
-        key_drafts=SqliteSourceKeyDrafts(
-            database=database, identifiers=identifiers, box=box
-        ),
-        deck_store=SqliteDeckStore(database=database),
-        source_runs=SqliteSourceRunStore(database=database),
-        refresh_ownership=SingleProcessRefreshOwnership(),
-        credentials=SourceCredentials(database=database, box=box),
-        sessions=SqliteSessionRecordStore(database),
-        # One use case object serves both callers, so the hook and the poll share
-        # the one refresh that runs at a time.
-        identity_writes=SqliteIdentityWrites(
-            database, ProcessWriteLock(), LoggingAuditSink()
-        ),
-        instance_settings=SqliteInstanceSettingsStore(database),
-        person_preferences=SqlitePersonPreferencesStore(database),
-        readiness=always_ready,
-        close=_nothing_to_close,
     )
 
 
@@ -517,7 +494,7 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
 
 def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands the surface each owner
     settings: Settings,
-    sessions: SessionStore,
+    sessions: PostgresSessionRecordStore,
     decks: Decks,
     auth: InstalledAuth,
     mirrors: SourceMirrors,
@@ -585,7 +562,7 @@ def _lobby_private(settings: Settings, stores: Stores, decks: Decks) -> LobbyPri
 def installed_auths(
     settings: Settings,
     shell: LobbyShell,
-    identity_writes: IdentityWrites,
+    identity_writes: PostgresIdentityWrites,
     redis: SharedRedis,
     relying_party_for: RelyingPartyFor = relying_party,
 ) -> tuple[InstalledAuth, InstalledAuth]:
@@ -633,7 +610,9 @@ def _preferences(stores: Stores) -> Preferences:
     )
 
 
-def _session_sweep(sessions: SessionStore, clock: SystemClock) -> Schedule:
+def _session_sweep(
+    sessions: PostgresSessionRecordStore, clock: SystemClock
+) -> Schedule:
     """Delete expired sessions on a schedule, reading the clock on every run."""
     return Schedule(
         chore=lambda: sessions.delete_expired(clock.now()),

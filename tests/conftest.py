@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 import uvicorn
 from logline.testing import configured
+from sqlalchemy import Engine
 
 from presentator.api.health import Stopping
 from presentator.host import main
@@ -32,7 +33,13 @@ from tests.support.lobby import (
     configure_secret_key,
 )
 from tests.support.log_lines import LoggedText
-from tests.support.postgres import created_database, migrated_template
+from tests.support.postgres import (
+    NO_DATABASE_HERE,
+    created_database,
+    database_environment,
+    engine_on,
+    migrated_template,
+)
 from tests.support.redis import NOTHING_LISTENS_HERE, emptied_database_url
 from tests.support.worker_support import (
     KEY,
@@ -149,7 +156,9 @@ def bare_environment(
 ) -> pytest.MonkeyPatch:
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("PRESENTATOR_SECRET_KEY_FILE", raising=False)
-    monkeypatch.setenv("PRESENTATOR_DATABASE", str(tmp_path / "presentator.sqlite3"))
+    # Nothing listens at this database; the tests that serve name their own.
+    for name, value in database_environment(NO_DATABASE_HERE, tmp_path).items():
+        monkeypatch.setenv(name, value)
     monkeypatch.setenv("PRESENTATOR_LOBBY_BUILD", str(LOBBY_BUILD))
     toolchain = tmp_path / "toolchain"
     toolchain.mkdir()
@@ -191,6 +200,26 @@ def database_url(postgres_template: str) -> Iterator[str]:
     """A migrated database of this test's own."""
     with created_database(postgres_template) as url:
         yield url
+
+
+@pytest.fixture
+def engine(database_url: str) -> Iterator[Engine]:
+    """An engine on this test's own database, disposed at teardown."""
+    each = engine_on(database_url)
+    try:
+        yield each
+    finally:
+        each.dispose()
+
+
+@pytest.fixture
+def served_database(
+    bare_environment: pytest.MonkeyPatch, database_url: str, tmp_path: Path
+) -> str:
+    """An instance that serves from a migrated database of this test's own."""
+    for name, value in database_environment(database_url, tmp_path).items():
+        bare_environment.setenv(name, value)
+    return database_url
 
 
 @pytest.fixture

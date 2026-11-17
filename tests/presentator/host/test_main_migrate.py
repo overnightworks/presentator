@@ -11,7 +11,7 @@ from sqlalchemy.engine import Engine
 from presentator.adapters.postgres.locks import MIGRATION_LOCK
 from presentator.host import main
 from tests.support.log_lines import json_logged
-from tests.support.postgres import database_environment, engine_on
+from tests.support.postgres import NO_DATABASE_HERE, database_environment, engine_on
 from tests.support.two_processes import two_presentators
 
 _A_REVISION_ONLY_A_NEWER_RELEASE_KNOWS = "9999"
@@ -69,8 +69,7 @@ def test_a_migrate_against_a_database_that_does_not_answer_ends_in_one_failed_li
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    nothing_listens_here = "postgresql://nobody@127.0.0.1:1/nothing"
-    for name, value in database_environment(nothing_listens_here, tmp_path).items():
+    for name, value in database_environment(NO_DATABASE_HERE, tmp_path).items():
         monkeypatch.setenv(name, value)
 
     with json_logged(capsys) as logged, pytest.raises(SystemExit) as ended:

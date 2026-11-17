@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine
 
 from presentator.contracts.decks import DeckFolder, Source
 from tests.presentator.adapters.support.key_draft_support import a_key_drafts_store
@@ -136,8 +137,8 @@ def test_an_older_release_reading_a_source_with_a_folder_loses_its_nested_decks(
     assert older["a"].commit != nested["a"].commit
 
 
-def test_the_plain_insert_stores_and_returns_the_folder(tmp_path: Path) -> None:
-    store = a_source_store(a_source_database(tmp_path))
+def test_the_plain_insert_stores_and_returns_the_folder(engine: Engine) -> None:
+    store = a_source_store(a_source_database(engine))
 
     added = store.add(
         a_source_write("https://example.invalid/a.git", folder="examples")
@@ -148,9 +149,9 @@ def test_the_plain_insert_stores_and_returns_the_folder(tmp_path: Path) -> None:
 
 
 def test_the_insert_that_promotes_a_key_draft_stores_and_returns_the_folder(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = a_source_database(tmp_path)
+    database = a_source_database(engine)
     drafted = a_key_drafts_store(database).get_or_mint(
         OWNER.id, newer_than=_PUSHED_AT, at=_LATER
     )

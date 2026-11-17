@@ -104,6 +104,7 @@ from tests.presentator.application.support.fakes import (
     FrozenClock,
 )
 from tests.support.deck_text_support import FakeDeckTexts
+from tests.support.postgres import NO_DATABASE_HERE
 from tests.support.redis import NOTHING_LISTENS_HERE, in_process_rate_limits
 
 
@@ -303,6 +304,8 @@ def a_settings() -> Settings:
     """The settings of an instance at the test origin, signing in at a fake issuer."""
     return Settings(
         secret_key_file=_KEY_FILE,
+        database_url=NO_DATABASE_HERE,
+        database_password_file=Path("/run/database-password"),
         redis_url=SecretStr(NOTHING_LISTENS_HERE),
         public_origin=A_BROWSERS_ADDRESS,
         talk_origin=A_TALK_ADDRESS,

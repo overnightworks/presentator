@@ -27,6 +27,9 @@ _NO_SERVER = (
     f"{SERVER_VARIABLE} names no Postgres server: set it to a postgresql URL of a"
     " server whose user may create databases"
 )
+# Nothing listens here, so a start that reaches it fails at once; tests that
+# never reach the database name it.
+NO_DATABASE_HERE = "postgresql://nobody@127.0.0.1:1/nothing"
 # A trust-authenticated test server asks for no password, so any text will do.
 _ANY_PASSWORD = SecretStr("not-checked-by-the-test-server")
 

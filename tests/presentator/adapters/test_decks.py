@@ -1,30 +1,27 @@
-"""Deck folders read out of a real repository, and deck rows in a real file."""
+"""Deck folders read out of a real repository, and deck rows in a real database."""
 
-import sqlite3
 import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from sqlalchemy import Connection, Engine
+from sqlalchemy.exc import DBAPIError
 
 from gitmirror.mirror import credential_arguments, unattended_environment
 from gitmirror.model import CredentialReference
-from presentator.adapters.deck_store import SqliteDeckStore
-from presentator.adapters.decks import (
-    MirroredConnectionChecker,
-    MirroredDeckFolders,
-    SourceCredentials,
-    SqliteSourceRunStore,
-    SqliteSourceStore,
-    create_deck_tables,
-)
-from presentator.adapters.identity import (
-    TokenIdentifierFactory,
-    create_identity_tables,
+from presentator.adapters.decks import MirroredConnectionChecker, MirroredDeckFolders
+from presentator.adapters.identity import TokenIdentifierFactory
+from presentator.adapters.postgres.deck_store import PostgresDeckStore
+from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
+from presentator.adapters.postgres.sources import (
+    PostgresSourceCredentials,
+    PostgresSourceStore,
 )
 from presentator.adapters.secrets import DeployKeyPair, SecretBox, secret_box
-from presentator.adapters.sqlite import rows
 from presentator.contracts.decks import (
     MANIFEST_FILE,
     RECENT_SOURCE_RUNS,
@@ -39,6 +36,7 @@ from presentator.contracts.decks import (
     SourceRunOutcome,
     SourceWrite,
 )
+from presentator.contracts.models import Role, User
 from tests.presentator.adapters.support.key_draft_support import (
     INSTANCE_KEY as _INSTANCE_KEY,
 )
@@ -53,12 +51,15 @@ from tests.support.deck_source_support import (
     a_build,
     a_deck,
     a_source,
+    a_source_database,
     folders_under,
     mirrors_under,
+    seed_source_rows,
 )
 from tests.support.git_remote import EXAMPLE_SLUG, EXAMPLE_TITLE, MAIN_BRANCH, GitRemote
 from tests.support.log_lines import json_logged
 from tests.support.people import seed_user
+from tests.support.postgres import NO_FENCE
 
 _NOTICED_GONE_AT = datetime(2026, 1, 20, 9, tzinfo=UTC)
 _ANOTHER_SOURCE_ID = "a-second-source"
@@ -78,15 +79,22 @@ def a_box(*, instance_key: str = _INSTANCE_KEY) -> SecretBox:
 
 
 def a_resolver(
-    database: Path,
+    database: Engine,
     *,
     instance_key: str = _INSTANCE_KEY,
-) -> SourceCredentials:
-    """The resolver the composition root builds, over that real file."""
-    return SourceCredentials(
-        database=database,
+) -> PostgresSourceCredentials:
+    """The resolver the composition root builds, over that real database."""
+    return PostgresSourceCredentials(
+        engine=database,
         box=a_box(instance_key=instance_key),
     )
+
+
+@contextmanager
+def rows(database: Engine) -> Iterator[Connection]:
+    """One transaction on the database, committed as it ends."""
+    with database.begin() as connection:
+        yield connection
 
 
 def folders_read(tmp_path: Path, source: Source) -> tuple[DeckFolder, ...]:
@@ -111,18 +119,14 @@ def an_attempt(
     )
 
 
-def a_deck_store(tmp_path: Path) -> SqliteDeckStore:
-    database = tmp_path / "presentator.sqlite3"
-    create_identity_tables(database)
-    create_deck_tables(database)
-    return SqliteDeckStore(database=database)
+def a_deck_store(engine: Engine) -> PostgresDeckStore:
+    seed_source_rows(engine, SOURCE_ID, _ANOTHER_SOURCE_ID)
+    return PostgresDeckStore(engine=engine, fence=NO_FENCE)
 
 
-def a_source_run_store(tmp_path: Path) -> SqliteSourceRunStore:
-    database = tmp_path / "presentator.sqlite3"
-    create_identity_tables(database)
-    create_deck_tables(database)
-    return SqliteSourceRunStore(database=database)
+def a_source_run_store(engine: Engine) -> PostgresSourceRunStore:
+    seed_source_rows(engine, SOURCE_ID, _ANOTHER_SOURCE_ID)
+    return PostgresSourceRunStore(engine=engine, fence=NO_FENCE)
 
 
 def a_successful_run(*, source_id: str = SOURCE_ID, at: datetime) -> SourceRun:
@@ -146,20 +150,21 @@ def a_failed_run(*, source_id: str = SOURCE_ID, at: datetime) -> SourceRun:
 
 
 def a_source_store(
-    database: Path,
+    database: Engine,
     *,
     instance_key: str = _INSTANCE_KEY,
-) -> SqliteSourceStore:
-    """The sources table over that file."""
-    return SqliteSourceStore(
-        database=database,
+) -> PostgresSourceStore:
+    """The sources table over that database."""
+    return PostgresSourceStore(
+        engine=database,
         identifiers=TokenIdentifierFactory(),
         box=a_box(instance_key=instance_key),
+        fence=NO_FENCE,
     )
 
 
 def add_a_source(
-    database: Path,
+    database: Engine,
     write: SourceWrite | None = None,
     *,
     instance_key: str = _INSTANCE_KEY,
@@ -172,16 +177,12 @@ def add_a_source(
     return added
 
 
-_THE_ENCRYPTED_OF = "SELECT encrypted_secret FROM sources WHERE id = ?"
+_THE_ENCRYPTED_OF = "SELECT encrypted_secret FROM sources WHERE id = %s"
 
 
-def an_instance_that_was_set_up(tmp_path: Path) -> Path:
-    """A database with every table and the admin first start created."""
-    database = tmp_path / "presentator.sqlite3"
-    create_identity_tables(database)
-    create_deck_tables(database)
-    seed_user(database, OWNER)
-    return database
+def an_instance_that_was_set_up(engine: Engine) -> Engine:
+    """A migrated database holding the admin first start created."""
+    return a_source_database(engine)
 
 
 def test_a_pushed_deck_folder_is_read_with_its_title_and_its_change_time(
@@ -344,6 +345,7 @@ def test_a_check_of_an_access_kind_it_does_not_probe_is_refused(
 def test_a_credential_free_source_fetches_through_the_real_store(
     remote: GitRemote,
     tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """A credential-free https source stores an empty secret, never a missing row.
 
@@ -352,7 +354,7 @@ def test_a_credential_free_source_fetches_through_the_real_store(
     does, asking git for no credential at all.
     """
     remote.commit_example_deck(at=PUSHED_AT)
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     stored = add_a_source(
         database,
         write=SourceWrite(
@@ -452,9 +454,10 @@ def test_a_mirror_whose_parent_refuses_the_delete_is_reported_not_gone(
 def test_a_real_git_source_can_be_added_removed_and_added_again(
     remote: GitRemote,
     tmp_path: Path,
+    engine: Engine,
 ) -> None:
     remote.commit_example_deck(at=PUSHED_AT)
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     sources = a_source_store(database)
     folders = MirroredDeckFolders(mirrors=mirrors_under(tmp_path))
 
@@ -476,13 +479,13 @@ def test_a_real_git_source_can_be_added_removed_and_added_again(
 
 
 def test_a_stored_secret_stands_in_its_row_as_ciphertext_and_comes_back(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     stored = add_a_source(database)
 
     with rows(database) as cursor:
-        written = cursor.execute(_THE_ENCRYPTED_OF, (stored.id,)).fetchone()[0]
+        written = cursor.exec_driver_sql(_THE_ENCRYPTED_OF, (stored.id,)).fetchone()[0]
     assert _WHAT_THE_GIT_HOST_EXPECTS.encode() not in written
     assert (
         a_resolver(database).resolve(CredentialReference(name=stored.id))
@@ -491,9 +494,9 @@ def test_a_stored_secret_stands_in_its_row_as_ciphertext_and_comes_back(
 
 
 def test_a_source_this_instance_no_longer_carries_resolves_to_nothing(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
 
     resolved = a_resolver(database).resolve(
         CredentialReference(name="no source of this name"),
@@ -503,9 +506,9 @@ def test_a_source_this_instance_no_longer_carries_resolves_to_nothing(
 
 
 def test_a_secret_another_instance_key_wrote_is_refused_rather_than_answered(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     stored = add_a_source(database)
 
     resolved = a_resolver(database, instance_key=_ANOTHER_INSTANCE_KEY).resolve(
@@ -516,9 +519,9 @@ def test_a_secret_another_instance_key_wrote_is_refused_rather_than_answered(
 
 
 def test_a_stored_secret_reaches_git_without_riding_on_its_command_line(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     stored = add_a_source(database)
 
     resolved = a_resolver(database).resolve(CredentialReference(name=stored.id))
@@ -559,9 +562,9 @@ def a_write(
 
 
 def test_adding_a_source_stores_the_secret_encrypted_and_the_webhook_hash(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     sources = a_source_store(database)
 
     added = sources.add(a_write())
@@ -569,7 +572,7 @@ def test_adding_a_source_stores_the_secret_encrypted_and_the_webhook_hash(
     assert added is not None
     assert sources.hook_secret_hash("talks") == _A_WEBHOOK_HASH
     with rows(database) as cursor:
-        written = cursor.execute(_THE_ENCRYPTED_OF, (added.id,)).fetchone()[0]
+        written = cursor.exec_driver_sql(_THE_ENCRYPTED_OF, (added.id,)).fetchone()[0]
     assert _WHAT_THE_GIT_HOST_EXPECTS.encode() not in written
     assert (
         a_resolver(database).resolve(CredentialReference(name=added.id))
@@ -580,8 +583,8 @@ def test_adding_a_source_stores_the_secret_encrypted_and_the_webhook_hash(
 _A_PUBLIC_KEY = "ssh-ed25519 AAAAtestkeymaterial presentator"
 
 
-def test_adding_an_ssh_source_stores_its_public_key_in_clear(tmp_path: Path) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+def test_adding_an_ssh_source_stores_its_public_key_in_clear(engine: Engine) -> None:
+    database = an_instance_that_was_set_up(engine)
     sources = a_source_store(database)
 
     added = sources.add(a_write(public_key=_A_PUBLIC_KEY))
@@ -592,9 +595,9 @@ def test_adding_an_ssh_source_stores_its_public_key_in_clear(tmp_path: Path) -> 
 
 
 def test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     sources = a_source_store(database)
     target = sources.add(
         a_write(name="target", url=_ADDRESS, public_key=_A_PUBLIC_KEY),
@@ -615,34 +618,34 @@ def test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair(
     )
     sources = replace(sources, new_key_pair=lambda: pair)
     with rows(database) as cursor:
-        target_before = cursor.execute(
-            "SELECT encrypted_secret, ssh_public_key FROM sources WHERE id = ?",
+        target_before = cursor.exec_driver_sql(
+            "SELECT encrypted_secret, ssh_public_key FROM sources WHERE id = %s",
             (target.id,),
         ).fetchone()
-        neighbour_before = cursor.execute(
-            "SELECT encrypted_secret, ssh_public_key FROM sources WHERE id = ?",
+        neighbour_before = cursor.exec_driver_sql(
+            "SELECT encrypted_secret, ssh_public_key FROM sources WHERE id = %s",
             (neighbour.id,),
         ).fetchone()
-        draft_before = cursor.execute(
+        draft_before = cursor.exec_driver_sql(
             "SELECT public_key, encrypted_private_key FROM source_key_drafts "
-            "WHERE id = ?",
+            "WHERE id = %s",
             (draft.id,),
         ).fetchone()
 
     assert sources.renew_deploy_key(target.id)
 
     with rows(database) as cursor:
-        target_after = cursor.execute(
-            "SELECT encrypted_secret, ssh_public_key FROM sources WHERE id = ?",
+        target_after = cursor.exec_driver_sql(
+            "SELECT encrypted_secret, ssh_public_key FROM sources WHERE id = %s",
             (target.id,),
         ).fetchone()
-        neighbour_after = cursor.execute(
-            "SELECT encrypted_secret, ssh_public_key FROM sources WHERE id = ?",
+        neighbour_after = cursor.exec_driver_sql(
+            "SELECT encrypted_secret, ssh_public_key FROM sources WHERE id = %s",
             (neighbour.id,),
         ).fetchone()
-        draft_after = cursor.execute(
+        draft_after = cursor.exec_driver_sql(
             "SELECT public_key, encrypted_private_key FROM source_key_drafts "
-            "WHERE id = ?",
+            "WHERE id = %s",
             (draft.id,),
         ).fetchone()
 
@@ -660,9 +663,9 @@ def test_renewing_an_ssh_deploy_key_replaces_only_that_sources_encrypted_pair(
 
 
 def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     sources = a_source_store(database)
     target = sources.add(
         a_write(name="target", url=_ADDRESS, public_key=_A_PUBLIC_KEY),
@@ -679,10 +682,10 @@ def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
     a_key_drafts_store(database).mint(OWNER.id, at=PUSHED_AT)
     with rows(database) as cursor:
         before = (
-            cursor.execute(
+            cursor.exec_driver_sql(
                 "SELECT id, encrypted_secret, ssh_public_key FROM sources ORDER BY id",
             ).fetchall(),
-            cursor.execute(
+            cursor.exec_driver_sql(
                 "SELECT id, public_key, encrypted_private_key FROM source_key_drafts",
             ).fetchall(),
         )
@@ -698,10 +701,10 @@ def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
 
     with rows(database) as cursor:
         after = (
-            cursor.execute(
+            cursor.exec_driver_sql(
                 "SELECT id, encrypted_secret, ssh_public_key FROM sources ORDER BY id",
             ).fetchall(),
-            cursor.execute(
+            cursor.exec_driver_sql(
                 "SELECT id, public_key, encrypted_private_key FROM source_key_drafts",
             ).fetchall(),
         )
@@ -709,9 +712,9 @@ def test_a_deploy_key_preparation_failure_keeps_every_source_and_draft(
 
 
 def test_a_deploy_key_update_failure_keeps_every_source_and_draft(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     sources = a_source_store(database)
     target = sources.add(
         a_write(name="target", url=_ADDRESS, public_key=_A_PUBLIC_KEY),
@@ -728,29 +731,34 @@ def test_a_deploy_key_update_failure_keeps_every_source_and_draft(
     draft = a_key_drafts_store(database).mint(OWNER.id, at=PUSHED_AT)
     with rows(database) as cursor:
         before = (
-            cursor.execute(
+            cursor.exec_driver_sql(
                 "SELECT id, encrypted_secret, ssh_public_key FROM sources ORDER BY id",
             ).fetchall(),
-            cursor.execute(
+            cursor.exec_driver_sql(
                 "SELECT id, public_key, encrypted_private_key FROM source_key_drafts",
             ).fetchall(),
         )
     with rows(database) as cursor:
-        cursor.execute(
-            "CREATE TRIGGER reject_deploy_key_replacement "
-            "BEFORE UPDATE OF encrypted_secret, ssh_public_key ON sources "
-            "BEGIN SELECT RAISE(ABORT, 'deploy key write refused'); END",
+        cursor.exec_driver_sql(
+            "CREATE FUNCTION reject_deploy_key_replacement() RETURNS trigger"
+            " LANGUAGE plpgsql AS"
+            " $$ BEGIN RAISE EXCEPTION 'deploy key write refused'; END $$",
+        )
+        cursor.exec_driver_sql(
+            "CREATE TRIGGER reject_deploy_key_replacement"
+            " BEFORE UPDATE OF encrypted_secret, ssh_public_key ON sources"
+            " FOR EACH ROW EXECUTE FUNCTION reject_deploy_key_replacement()",
         )
 
-    with pytest.raises(sqlite3.IntegrityError, match="deploy key write refused"):
+    with pytest.raises(DBAPIError, match="deploy key write refused"):
         sources.renew_deploy_key(target.id)
 
     with rows(database) as cursor:
         after = (
-            cursor.execute(
+            cursor.exec_driver_sql(
                 "SELECT id, encrypted_secret, ssh_public_key FROM sources ORDER BY id",
             ).fetchall(),
-            cursor.execute(
+            cursor.exec_driver_sql(
                 "SELECT id, public_key, encrypted_private_key FROM source_key_drafts",
             ).fetchall(),
         )
@@ -759,9 +767,9 @@ def test_a_deploy_key_update_failure_keeps_every_source_and_draft(
 
 
 def test_promoting_a_draft_encrypts_its_private_half_and_consumes_it(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     drafts = a_key_drafts_store(database)
     minted = drafts.mint(OWNER.id, at=PUSHED_AT)
 
@@ -777,7 +785,9 @@ def test_promoting_a_draft_encrypts_its_private_half_and_consumes_it(
         minted.private_key
     )
     with rows(database) as cursor:
-        encrypted = cursor.execute(_THE_ENCRYPTED_OF, (promoted.id,)).fetchone()[0]
+        encrypted = cursor.exec_driver_sql(
+            _THE_ENCRYPTED_OF, (promoted.id,)
+        ).fetchone()[0]
     assert minted.private_key.encode() not in encrypted
 
 
@@ -787,12 +797,14 @@ def test_promoting_a_draft_encrypts_its_private_half_and_consumes_it(
     ids=["missing draft", "another account's draft"],
 )
 def test_promoting_a_missing_or_foreign_draft_creates_no_source(
-    tmp_path: Path,
+    engine: Engine,
     draft_owner: str | None,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     sources = a_source_store(database)
     drafts = a_key_drafts_store(database)
+    if draft_owner is not None:
+        seed_user(database, User(id=draft_owner, username=draft_owner, role=Role.ADMIN))
     minted = None if draft_owner is None else drafts.mint(draft_owner, at=PUSHED_AT)
 
     promoted = sources.add_from_draft(
@@ -808,15 +820,15 @@ def test_promoting_a_missing_or_foreign_draft_creates_no_source(
 
 
 def test_promoting_an_undecryptable_draft_keeps_it_and_creates_no_source(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     sources = a_source_store(database)
     minted = a_key_drafts_store(database).mint(OWNER.id, at=PUSHED_AT)
     corrupted = b"not fernet ciphertext"
     with rows(database) as cursor:
-        cursor.execute(
-            "UPDATE source_key_drafts SET encrypted_private_key = ? WHERE id = ?",
+        cursor.exec_driver_sql(
+            "UPDATE source_key_drafts SET encrypted_private_key = %s WHERE id = %s",
             (corrupted, minted.id),
         )
 
@@ -825,17 +837,17 @@ def test_promoting_an_undecryptable_draft_keeps_it_and_creates_no_source(
     assert promoted is None
     assert sources.all() == ()
     with rows(database) as cursor:
-        stored = cursor.execute(
-            "SELECT encrypted_private_key FROM source_key_drafts WHERE id = ?",
+        stored = cursor.exec_driver_sql(
+            "SELECT encrypted_private_key FROM source_key_drafts WHERE id = %s",
             (minted.id,),
         ).fetchone()
     assert stored == (corrupted,)
 
 
 def test_a_failed_draft_promotion_keeps_the_draft_and_creates_no_source(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     sources = a_source_store(database)
     assert sources.add(a_write()) is not None
     drafts = a_key_drafts_store(database)
@@ -849,9 +861,9 @@ def test_a_failed_draft_promotion_keeps_the_draft_and_creates_no_source(
 
 
 def test_adding_a_source_with_a_name_or_url_already_stored_writes_nothing(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     sources = a_source_store(database)
     stored = add_a_source(database)
 
@@ -864,9 +876,9 @@ def test_adding_a_source_with_a_name_or_url_already_stored_writes_nothing(
 
 
 def test_removing_a_source_deletes_its_row_and_frees_its_name_and_url(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     sources = a_source_store(database)
     stored = add_a_source(database)
 
@@ -879,9 +891,9 @@ def test_removing_a_source_deletes_its_row_and_frees_its_name_and_url(
 
 
 def test_pushing_the_same_folder_again_leaves_one_deck_under_its_slug(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     store.put(a_deck(title="Kundenfeedback"))
 
     store.put(a_deck(title="Kundenfeedback Q3", commit=_A_LATER_COMMIT))
@@ -893,9 +905,9 @@ def test_pushing_the_same_folder_again_leaves_one_deck_under_its_slug(
 
 
 def test_a_deck_whose_folder_vanished_is_gone_from_the_list_until_it_returns(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     store.put(a_deck("kundenfeedback"))
     store.put(a_deck("knowledge-fabric"))
 
@@ -919,8 +931,8 @@ def test_a_deck_whose_folder_vanished_is_gone_from_the_list_until_it_returns(
     ]
 
 
-def test_a_removed_decks_own_page_is_unreachable_by_slug(tmp_path: Path) -> None:
-    store = a_deck_store(tmp_path)
+def test_a_removed_decks_own_page_is_unreachable_by_slug(engine: Engine) -> None:
+    store = a_deck_store(engine)
     store.put(a_deck("kundenfeedback"))
 
     store.mark_removed_except(
@@ -933,9 +945,9 @@ def test_a_removed_decks_own_page_is_unreachable_by_slug(tmp_path: Path) -> None
 
 
 def test_a_slug_carrying_an_apostrophe_and_a_non_ascii_letter_survives_reconciliation(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     kept_slug = "l'équipe"
     store.put(a_deck(kept_slug))
     store.put(a_deck("gone"))
@@ -950,8 +962,10 @@ def test_a_slug_carrying_an_apostrophe_and_a_non_ascii_letter_survives_reconcili
     assert store.get("gone") is None
 
 
-def test_everything_a_build_wrote_switches_over_together(tmp_path: Path) -> None:
-    store = a_deck_store(tmp_path)
+def test_everything_a_build_wrote_switches_over_together(
+    tmp_path: Path, engine: Engine
+) -> None:
+    store = a_deck_store(engine)
     store.put(a_deck(title="Kundenfeedback"))
     first = a_build(tmp_path)
 
@@ -973,9 +987,10 @@ def test_everything_a_build_wrote_switches_over_together(tmp_path: Path) -> None
 )
 def test_the_build_a_deck_last_started_is_kept_beside_the_talk_that_stands(
     tmp_path: Path,
+    engine: Engine,
     attempt: BuildAttempt,
 ) -> None:
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     store.put(a_deck())
     built = a_build(tmp_path)
     store.put_build("kundenfeedback", built)
@@ -990,8 +1005,9 @@ def test_the_build_a_deck_last_started_is_kept_beside_the_talk_that_stands(
 
 def test_taking_a_deck_in_again_leaves_what_it_delivers_standing(
     tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     store.put(a_deck(title="Kundenfeedback"))
     built = a_build(tmp_path)
     store.put_build("kundenfeedback", built)
@@ -1006,16 +1022,16 @@ def test_taking_a_deck_in_again_leaves_what_it_delivers_standing(
     assert kept.attempt == standing_attempt
 
 
-def test_an_instance_with_no_source_row_stores_none(tmp_path: Path) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+def test_an_instance_with_no_source_row_stores_none(engine: Engine) -> None:
+    database = an_instance_that_was_set_up(engine)
 
     assert a_source_store(database).all() == ()
 
 
 def test_a_folder_name_another_source_carries_is_not_taken_over(  # DK12
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     store.put(a_deck(title="The first"))
 
     taken_over = store.put(
@@ -1027,9 +1043,9 @@ def test_a_folder_name_another_source_carries_is_not_taken_over(  # DK12
 
 
 def test_a_removed_slug_stays_with_its_source_and_is_the_deck_it_was(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     store.put(a_deck(title="The first"))
     store.mark_removed_except(
         present=frozenset(),
@@ -1053,9 +1069,9 @@ def test_a_removed_slug_stays_with_its_source_and_is_the_deck_it_was(
 
 
 def test_one_sources_reconciliation_leaves_another_sources_decks_alone(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     store.put(a_deck("kundenfeedback"))
     store.put(a_deck("knowledge-fabric", source_id=_ANOTHER_SOURCE_ID))
 
@@ -1069,9 +1085,9 @@ def test_one_sources_reconciliation_leaves_another_sources_decks_alone(
 
 
 def test_removing_a_sources_decks_takes_every_row_marked_removed_or_not(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     store.put(a_deck("kundenfeedback"))
     store.put(a_deck("knowledge-fabric"))
     store.put(a_deck("agenten-fabrik", source_id=_ANOTHER_SOURCE_ID))
@@ -1086,22 +1102,22 @@ def test_removing_a_sources_decks_takes_every_row_marked_removed_or_not(
 
     assert {deck.slug for deck in carried} == {"kundenfeedback", "knowledge-fabric"}
     assert store.all() == (a_deck("agenten-fabrik", source_id=_ANOTHER_SOURCE_ID),)
-    with rows(tmp_path / "presentator.sqlite3") as cursor:
-        left = cursor.execute(
-            "SELECT COUNT(*) FROM decks WHERE source_id = ?",
+    with rows(engine) as cursor:
+        left = cursor.exec_driver_sql(
+            "SELECT COUNT(*) FROM decks WHERE source_id = %s",
             (SOURCE_ID,),
         ).fetchone()
     assert left == (0,)
 
 
-def test_a_source_with_no_run_yet_reads_as_nothing(tmp_path: Path) -> None:
-    store = a_source_run_store(tmp_path)
+def test_a_source_with_no_run_yet_reads_as_nothing(engine: Engine) -> None:
+    store = a_source_run_store(engine)
 
     assert store.newest(SOURCE_ID) is None
 
 
-def test_a_recorded_run_is_read_back_carrying_its_commit(tmp_path: Path) -> None:
-    store = a_source_run_store(tmp_path)
+def test_a_recorded_run_is_read_back_carrying_its_commit(engine: Engine) -> None:
+    store = a_source_run_store(engine)
     run = a_successful_run(at=PUSHED_AT)
 
     store.record(run)
@@ -1109,8 +1125,8 @@ def test_a_recorded_run_is_read_back_carrying_its_commit(tmp_path: Path) -> None
     assert store.newest(SOURCE_ID) == run
 
 
-def test_a_recorded_failure_is_read_back_naming_why(tmp_path: Path) -> None:
-    store = a_source_run_store(tmp_path)
+def test_a_recorded_failure_is_read_back_naming_why(engine: Engine) -> None:
+    store = a_source_run_store(engine)
     run = a_failed_run(at=PUSHED_AT)
 
     store.record(run)
@@ -1123,9 +1139,9 @@ def test_a_recorded_failure_is_read_back_naming_why(tmp_path: Path) -> None:
 
 
 def test_the_newest_run_of_a_source_belongs_to_that_source_alone(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    store = a_source_run_store(tmp_path)
+    store = a_source_run_store(engine)
     store.record(a_successful_run(at=PUSHED_AT))
     store.record(a_failed_run(at=_NOTICED_GONE_AT))
     store.record(a_successful_run(source_id=_ANOTHER_SOURCE_ID, at=PUSHED_AT))
@@ -1140,17 +1156,17 @@ def test_the_newest_run_of_a_source_belongs_to_that_source_alone(
     )
 
 
-def test_recording_a_run_keeps_only_the_newest_bound(tmp_path: Path) -> None:
-    store = a_source_run_store(tmp_path)
+def test_recording_a_run_keeps_only_the_newest_bound(engine: Engine) -> None:
+    store = a_source_run_store(engine)
     for index in range(RECENT_SOURCE_RUNS + 2):
         store.record(
             a_successful_run(at=PUSHED_AT + timedelta(minutes=index)),
         )
 
     recent = store.recent(SOURCE_ID)
-    with rows(tmp_path / "presentator.sqlite3") as cursor:
-        kept = cursor.execute(
-            "SELECT COUNT(*) FROM source_runs WHERE source_id = ?",
+    with rows(engine) as cursor:
+        kept = cursor.exec_driver_sql(
+            "SELECT COUNT(*) FROM source_runs WHERE source_id = %s",
             (SOURCE_ID,),
         ).fetchone()
 
@@ -1160,9 +1176,9 @@ def test_recording_a_run_keeps_only_the_newest_bound(tmp_path: Path) -> None:
 
 
 def test_removing_a_sources_runs_deletes_every_one_it_recorded(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    store = a_source_run_store(tmp_path)
+    store = a_source_run_store(engine)
     store.record(a_successful_run(at=PUSHED_AT))
     store.record(a_successful_run(source_id=_ANOTHER_SOURCE_ID, at=PUSHED_AT))
 
@@ -1173,15 +1189,15 @@ def test_removing_a_sources_runs_deletes_every_one_it_recorded(
 
 
 def test_renewing_the_access_secret_replaces_the_stored_ciphertext(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     secretless = add_a_source(database)
     sources = a_source_store(database)
 
     sources.put_credential(secretless.id, _WHAT_THE_GIT_HOST_EXPECTS)
     with rows(database) as cursor:
-        old_ciphertext = cursor.execute(
+        old_ciphertext = cursor.exec_driver_sql(
             _THE_ENCRYPTED_OF,
             (secretless.id,),
         ).fetchone()[0]
@@ -1190,7 +1206,7 @@ def test_renewing_the_access_secret_replaces_the_stored_ciphertext(
     sources.put_credential(secretless.id, replacement)
 
     with rows(database) as cursor:
-        new_ciphertext = cursor.execute(
+        new_ciphertext = cursor.exec_driver_sql(
             _THE_ENCRYPTED_OF,
             (secretless.id,),
         ).fetchone()[0]
@@ -1204,9 +1220,9 @@ def test_renewing_the_access_secret_replaces_the_stored_ciphertext(
 
 
 def test_replacing_the_webhook_hash_leaves_the_previous_digest_behind(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     stored = add_a_source(database, a_write(name=SOURCE_NAME, url=_ADDRESS))
     sources = a_source_store(database)
     replacement = b"\x22" * 32
