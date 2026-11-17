@@ -7,7 +7,7 @@ import logging
 import time
 from contextlib import aclosing, asynccontextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, NoReturn, assert_never, cast
+from typing import TYPE_CHECKING, Final, NoReturn, assert_never
 
 from agents.agent_file import load_agent
 from agents.backend import (
@@ -215,10 +215,7 @@ async def _answered(
                     yield text
                 case ToolCallEvent(
                     tool_use_id=call_id, name=SHOW_SLIDE.declaration.name
-                ) if (
-                    # the client types the call's input as a bare dict
-                    number := _slide_number(cast("JsonObject", event.input))  # pyright: ignore[reportUnknownMemberType]
-                ) is not None:
+                ) if (number := _slide_number(event.input)) is not None:
                     asked_slides[call_id] = number
                 case ToolCallEvent():
                     continue
