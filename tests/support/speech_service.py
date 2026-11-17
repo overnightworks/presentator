@@ -420,6 +420,16 @@ def denying(
     return realtime
 
 
+def refusing(code: wire.RefusalCode) -> Hear:
+    """Refuse the upgrade with the wire's own refusal for `code`."""
+    answer = a_refusal(code)
+
+    async def realtime(socket_to_browser: WebSocket) -> None:
+        await socket_to_browser.send_denial_response(answer())
+
+    return realtime
+
+
 def busy_at_the_upgrade(*, marked: bool = False) -> Hear:
     return denying(
         429, headers={wire.RETRY_AFTER_HEADER: _SECONDS_TO_RETRY}, marked=marked

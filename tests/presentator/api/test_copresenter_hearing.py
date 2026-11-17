@@ -62,6 +62,7 @@ from tests.support.speech_service import (
     nobody_listens,
     one_after_another,
     reading,
+    refusing,
     sending,
     sending_then_reading,
 )
@@ -72,6 +73,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from starlette.testclient import WebSocketTestSession
+
+    from tests.support.speech_service import Hear
 
 _POLICY_VIOLATION = 1008
 _SHORT_SECONDS = 0.5
@@ -213,16 +216,36 @@ def test_a_service_that_answers_the_upgrade_off_the_wire_closes_the_browser_4502
     assert (session["outcome"], session["reason"]) == ("failed", reason)
 
 
-@pytest.mark.parametrize("status", [403, 503])
-def test_a_refused_upgrade_logs_one_session_line_naming_its_refusal_and_status(
-    tmp_path: Path, status: int, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    ("refusal", "status", "code"),
+    [
+        (denying(403), 403, None),
+        (denying(503), 503, None),
+        (
+            refusing(wire.RefusalCode.FORBIDDEN),
+            wire.REFUSAL_STATUS[wire.RefusalCode.FORBIDDEN],
+            wire.RefusalCode.FORBIDDEN.value,
+        ),
+    ],
+    ids=["unmarked-403", "unmarked-503", "coded"],
+)
+def test_a_refused_upgrade_logs_one_session_line_naming_its_refusal_status_and_code(
+    tmp_path: Path,
+    refusal: Hear,
+    status: int,
+    code: str | None,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    service = FakeSpeechService(realtime=denying(status))
+    service = FakeSpeechService(realtime=refusal)
     with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
         heard = hear_and_record(instance)
 
     session = _the_session_line(capsys)
-    assert (session["reason"], session["status"]) == ("refused", status)
+    assert (session["reason"], session["status"], session.get("code")) == (
+        "refused",
+        status,
+        code,
+    )
     assert heard.closed_with == HopClose.SERVICE_FAILED
 
 
