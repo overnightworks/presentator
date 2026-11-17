@@ -85,11 +85,11 @@ class AskedDeck:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Question:
-    """What a person asked while showing one slide."""
+    """What a person asked while showing one slide, and the language to answer in."""
 
     said: str
     slide: int
-    language: str | None
+    language: SampleLanguage
 
 
 BUSY_RETRY_SECONDS: Final = 1
