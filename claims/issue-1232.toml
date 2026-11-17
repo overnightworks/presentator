@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "f92d34397b72ae86dd0f84e9721e8d74a9a733b5"
 branch = "claude/issue-1232-the-co-presenter-writes-its-answer-in-th"
-scope = ["docs/co-presenter.md", "src/presentator/agents/copresenter.md", "src/presentator/api/copresenter.py", "src/presentator/application/copresenter.py", "src/presentator/application/copresenter_prompt.py", "src/presentator/application/spoken_answer.py", "src/presentator/contracts/copresenter.py", "tests/presentator/api/test_copresenter.py", "tests/presentator/api/test_copresenter_limits.py", "tests/presentator/api/test_copresenter_use.py", "tests/presentator/application", "tests/presentator/contracts/test_copresenter.py"]
+scope = ["docs/co-presenter.md", "src/presentator/agents/copresenter.md", "src/presentator/api/copresenter.py", "src/presentator/application/copresenter.py", "src/presentator/application/copresenter_prompt.py", "src/presentator/application/spoken_answer.py", "src/presentator/contracts/copresenter.py", "tests/presentator/api/test_auth_body_size.py", "tests/presentator/api/test_copresenter.py", "tests/presentator/api/test_copresenter_limits.py", "tests/presentator/api/test_copresenter_use.py", "tests/presentator/application", "tests/presentator/contracts/test_copresenter.py"]
 opened_commit = "366c8a5bce00588c77cdcf7a4084114c62e02929"
 whole_reason = "the answer language spans prompt, application, agent file, doc and their tests"
