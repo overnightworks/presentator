@@ -331,7 +331,8 @@ name = "Only adapters import the database library"
 type = "forbidden"
 # A third-party library lives in the adapter that owns it, and its
 # contract is written with its first import. `sqlalchemy`, `psycopg` and
-# `alembic` are the Postgres store, so a layer above must ask a port instead.
+# `alembic` are the Postgres store, so a layer above must ask a port instead;
+# `sqlite3` is no store of this product, so no layer above names it either.
 source_modules = [
     "presentator.host",
     "presentator.api",
@@ -339,7 +340,7 @@ source_modules = [
     "presentator.ports",
     "presentator.contracts",
 ]
-forbidden_modules = ["sqlalchemy", "psycopg", "alembic"]
+forbidden_modules = ["sqlite3", "sqlalchemy", "psycopg", "alembic"]
 as_packages = true
 # The host composes the adapter that owns it, so the legal chain runs through
 # it; only naming the library in a layer above is the violation.
