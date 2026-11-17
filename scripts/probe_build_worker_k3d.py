@@ -255,10 +255,29 @@ def print_twin(run: Run, manifest: str, title: str) -> None:
 
 
 def diagnose(run: Run, manifest: str) -> None:
-    """Print the Namespace's events and what the manifest's twin Pod prints."""
+    """Print the Namespace's events, the node's evidence and the twin Pod's words."""
     sort = "--sort-by=.metadata.creationTimestamp"
     say(f"events:\n{run('kubectl get events', sort, *IN_NAMESPACE).stdout}")
+    print_node_evidence(run, sort)
     print_twin(run, manifest, "twin Pod")
+
+
+def print_node_evidence(run: Run, sort: str) -> None:
+    """Print why an image may have left the node: its events, its images, the disk."""
+    events = run(
+        "kubectl get events --all-namespaces --field-selector",
+        "involvedObject.kind=Node",
+        sort,
+        check=False,
+    )
+    images = run("docker exec", run.node, "crictl", "images", check=False)
+    disk = run("df -h", check=False)
+    for title, done in (
+        ("node events", events),
+        ("node images", images),
+        ("runner disk use", disk),
+    ):
+        say(f"{title}:\n{done.stdout}{done.stderr}")
 
 
 def drive_cell(
@@ -449,8 +468,8 @@ def require_redis_in_node(run: Run) -> None:
     The Redis pod never pulls, so a missing image would only show as a web that
     never turns Ready; the runtime resolves the name the way the kubelet does.
     The node is asked right after the import, and again before the web cells
-    apply the pod: the cluster starts with image garbage collection held off,
-    and this look proves it held.
+    apply the pod: the cluster starts with image garbage collection and
+    eviction held off, and this look proves it held.
     """
     found = run(
         "docker exec", run.node, "crictl", "inspecti", run.redis_image, check=False
