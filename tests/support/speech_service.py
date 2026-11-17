@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Final
 
 from fastapi import FastAPI, Request, Response, WebSocket
 from fastapi.responses import JSONResponse, StreamingResponse
-from speech_client import wire
+from speech_client import realtime_wire, wire
 
 from tests.presentator.adapters.support.serving import (
     Serving,
@@ -67,6 +67,7 @@ def _a_voice_entry(*, ready: bool, sample_rate: object = 1) -> dict[str, object]
         "name": "a-name",
         "languages": [wire.Language.DE],
         "takes_instructions": False,
+        "gives_marks": {"words": False, "sounds": False},
         "ready": ready,
         "sample_rate": sample_rate,
     }
@@ -247,8 +248,8 @@ async def _opened(socket_to_browser: WebSocket) -> None:
     """Accept the upgrade and send the first event, as the real service does."""
     await socket_to_browser.accept()
     await socket_to_browser.send_text(
-        wire.SessionCreated(
-            session=wire.TranscriptionSession(type="transcription")
+        realtime_wire.SessionCreated(
+            session=realtime_wire.TranscriptionSession(type="transcription")
         ).model_dump_json()
     )
 
@@ -267,34 +268,38 @@ async def accept_and_stay_silent(socket_to_browser: WebSocket) -> None:
         pass
 
 
-def a_delta(text: str, item: str = AN_ITEM) -> wire.TranscriptDelta:
-    return wire.TranscriptDelta(item_id=item, delta=text)
+def a_delta(text: str, item: str = AN_ITEM) -> realtime_wire.TranscriptDelta:
+    return realtime_wire.TranscriptDelta(item_id=item, delta=text)
 
 
 def a_completed(
-    text: str, item: str = AN_ITEM, language: wire.Language = wire.Language.DE
-) -> wire.TranscriptCompleted:
-    return wire.TranscriptCompleted(
+    text: str,
+    item: str = AN_ITEM,
+    language: wire.Language = wire.Language.DE,
+    traceparent: str | None = None,
+) -> realtime_wire.TranscriptCompleted:
+    return realtime_wire.TranscriptCompleted(
         item_id=item,
         transcript=text,
-        usage=wire.DurationUsage(seconds=1.0),
-        languages=(wire.TranscriptLanguage(code=language),),
+        usage=realtime_wire.DurationUsage(seconds=1.0),
+        languages=(realtime_wire.TranscriptLanguage(code=language),),
+        traceparent=traceparent,
     )
 
 
-def an_error_event() -> wire.ErrorEvent:
-    return wire.error_event(wire.RefusalCode.UNAVAILABLE)
+def an_error_event() -> realtime_wire.ErrorEvent:
+    return realtime_wire.error_event(wire.RefusalCode.UNAVAILABLE)
 
 
-def a_failed_item() -> wire.TranscriptFailed:
-    return wire.TranscriptFailed(
-        item_id=AN_ITEM, error=wire.item_failure(wire.RefusalCode.UNAVAILABLE)
+def a_failed_item() -> realtime_wire.TranscriptFailed:
+    return realtime_wire.TranscriptFailed(
+        item_id=AN_ITEM, error=realtime_wire.item_failure(wire.RefusalCode.UNAVAILABLE)
     )
 
 
-def a_marked_error_event() -> wire.ErrorEvent:
-    return wire.ErrorEvent(
-        error=wire.RealtimeError(
+def a_marked_error_event() -> realtime_wire.ErrorEvent:
+    return realtime_wire.ErrorEvent(
+        error=realtime_wire.RealtimeError(
             message=PLANTED,
             type="server_error",
             code=wire.RefusalCode.UNAVAILABLE,
@@ -304,20 +309,20 @@ def a_marked_error_event() -> wire.ErrorEvent:
     )
 
 
-def a_marked_failed_item() -> wire.TranscriptFailed:
-    return wire.TranscriptFailed(
+def a_marked_failed_item() -> realtime_wire.TranscriptFailed:
+    return realtime_wire.TranscriptFailed(
         item_id=AN_ITEM,
-        error=wire.ItemFailure(
+        error=realtime_wire.ItemFailure(
             message=PLANTED, type="server_error", code=wire.RefusalCode.UNAVAILABLE
         ),
     )
 
 
-def _encoded(event: wire.ServerEvent | str) -> str:
+def _encoded(event: realtime_wire.ServerEvent | str) -> str:
     return event if isinstance(event, str) else event.model_dump_json()
 
 
-def sending(*events: wire.ServerEvent) -> Hear:
+def sending(*events: realtime_wire.ServerEvent) -> Hear:
     """Accept, take the `session.update`, send the events, then close."""
 
     async def realtime(socket_to_browser: WebSocket) -> None:
@@ -353,7 +358,9 @@ def one_after_another(*openings: Hear) -> Hear:
 
 
 def after_the_first_audio(
-    *events: wire.ServerEvent | str, close_code: int = 1000, close_reason: str = ""
+    *events: realtime_wire.ServerEvent | str,
+    close_code: int = 1000,
+    close_reason: str = "",
 ) -> Hear:
     """Accept, take the `session.update` and one append, send the events, close."""
 
@@ -368,7 +375,9 @@ def after_the_first_audio(
     return realtime
 
 
-def sending_then_reading(service: FakeSpeechService, *events: wire.ServerEvent) -> Hear:
+def sending_then_reading(
+    service: FakeSpeechService, *events: realtime_wire.ServerEvent
+) -> Hear:
     """Accept, send the events, then keep every client event until the peer leaves."""
 
     async def realtime(socket_to_browser: WebSocket) -> None:
@@ -407,6 +416,16 @@ def denying(
                 headers={**(_MARKED_HEADERS if marked else {}), **(headers or {})},
             )
         )
+
+    return realtime
+
+
+def refusing(code: wire.RefusalCode) -> Hear:
+    """Refuse the upgrade with the wire's own refusal for `code`."""
+    answer = a_refusal(code)
+
+    async def realtime(socket_to_browser: WebSocket) -> None:
+        await socket_to_browser.send_denial_response(answer())
 
     return realtime
 

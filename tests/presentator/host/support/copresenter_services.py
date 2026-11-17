@@ -11,7 +11,7 @@ from typing import Final
 from agents.backend.fake_gateway import completion
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import StreamingResponse
-from speech_client import wire
+from speech_client import realtime_wire
 from starlette.responses import Response
 from wsproto import ConnectionType, WSConnection
 from wsproto.events import (
@@ -69,8 +69,8 @@ async def _hears_what_is_said(socket_to_browser: WebSocket) -> None:
     """Take the first audio of each hearing, answer it with a finished utterance."""
     await socket_to_browser.accept()
     await socket_to_browser.send_text(
-        wire.SessionCreated(
-            session=wire.TranscriptionSession(type="transcription")
+        realtime_wire.SessionCreated(
+            session=realtime_wire.TranscriptionSession(type="transcription")
         ).model_dump_json()
     )
     await socket_to_browser.receive()

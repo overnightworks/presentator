@@ -29,6 +29,7 @@ from speech_client.outcomes import (
 from speech_client.relay import AppEnded, BrowserLeft, HopClose, RuleBroken
 from speech_client.speak import Busy, Refused, SpeakOutcome, Spoken, speak
 from speech_client.utterances import (
+    HearingCallbacks,
     Partial,
     ServiceFailed,
     Utterance,
@@ -50,11 +51,13 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Mapping
 
     from speech_client.health import HealthOutcome
+    from speech_client.hearing import Reconnected
 
     from presentator.ports.copresenter import HearingSocket
 
 _LOGGER = logging.getLogger(__name__)
-_HEARING_FAILED_LOG: Final = "hearing failed: %s"
+_HEARING_SESSION_EVENT: Final = "hearing_session.ended"
+_HEARING_OPENING_EVENT: Final = "hearing_opening.ended"
 
 # These bound presentator's own resources and its patience in a live talk: a
 # worker thread's life, one sentence's memory. They vary by no deployment.
@@ -216,48 +219,64 @@ class SpeechHearing:
         heard: Callable[[HearingTranscript], Awaitable[None]],
     ) -> None:
         """Relay the browser's audio to the service and its transcripts back."""
-        try:
-            hears = wire.Language(language)
-        except ValueError:
-            _LOGGER.warning("hearing refused a language the wire does not name")
-            await self.refuse(browser)
-            return
-
-        async def heard_utterance(utterance: Utterance) -> None:
-            await heard(
-                HearingTranscript(
-                    text=utterance.text,
-                    final=True,
-                    language=_sample_language(utterance.language),
+        with StepTimer(_HEARING_SESSION_EVENT, _LOGGER) as session:
+            try:
+                hears = wire.Language(language)
+            except ValueError:
+                session.refuse(HearingFailure.UNKNOWN_LANGUAGE)
+                await self.refuse(browser)
+                return
+            session.add(language=hears.value)
+            openings = _Openings()
+            try:
+                outcome = await self._hear(
+                    browser, hears, tokens, ended=ended, heard=heard, openings=openings
                 )
-            )
+            # The client leaves the browser socket to the app when the token source
+            # raises, so the hearing ends here as a service failure. The token read
+            # wrote the error line.
+            except CoPresenterUnavailableError:
+                openings.end(_tokens_unavailable)
+                session.handled()
+                _tokens_unavailable(session)
+                await self.refuse(browser)
+                return
+            except Exception as error:
+                openings.end_raised(error)
+                raise
+            else:
+                openings.end(lambda opening: _mark_ending(outcome, opening))
+                _mark_ending(outcome, session)
+            finally:
+                openings.end_cancelled()
+                session.add(openings=openings.count, utterances=openings.utterances)
 
-        async def heard_partial(partial: Partial) -> None:
-            await heard(HearingTranscript(text=partial.text, final=False))
-
+    async def _hear(  # noqa: PLR0913 - one parameter per input of the hearing
+        self,
+        browser: HearingSocket,
+        hears: wire.Language,
+        tokens: SpeechTokenSource,
+        *,
+        ended: asyncio.Event,
+        heard: Callable[[HearingTranscript], Awaitable[None]],
+        openings: _Openings,
+    ) -> UtteranceOutcome:
         async def opening_tokens() -> SessionTokens:
+            openings.begin()
             read = await tokens()
             return SessionTokens(workload_token=read.workload, person_token=read.person)
 
-        try:
-            outcome = await hear_utterances(
-                browser,
-                self._origin,
-                token_source=opening_tokens,
-                languages=_hearing_languages(hears),
-                deadline_seconds=self._hearing_deadline_seconds,
-                held_limit_bytes=_HELD_LIMIT_BYTES,
-                ended=ended,
-                on_utterance=heard_utterance,
-                on_partial=heard_partial,
-                opening_seconds=self._opening_seconds,
-            )
-        # The client leaves the browser socket to the app when the token source
-        # raises, so the hearing ends here as a service failure.
-        except CoPresenterUnavailableError:
-            await self.refuse(browser)
-            return
-        _log_ending(outcome)
+        return await hear_utterances(
+            browser,
+            self._origin,
+            token_source=opening_tokens,
+            languages=_hearing_languages(hears),
+            deadline_seconds=self._hearing_deadline_seconds,
+            held_limit_bytes=_HELD_LIMIT_BYTES,
+            ended=ended,
+            callbacks=_hearing_callbacks(openings, heard),
+            opening_seconds=self._opening_seconds,
+        )
 
     async def refuse(self, browser: HearingSocket) -> None:
         """Close the browser as a hearing the service cannot give."""
@@ -287,19 +306,162 @@ def _hearing_languages(main: wire.Language) -> tuple[wire.Language, ...]:
     return (main, *(code for code in wire.Language if code is not main))
 
 
-def _log_ending(outcome: UtteranceOutcome) -> None:
+class HearingFailure(StrEnum):
+    """Why a hearing line is not `ok`: the closed set of its `reason` codes."""
+
+    UNKNOWN_LANGUAGE = "unknown_language"
+    TOKENS_UNAVAILABLE = "tokens_unavailable"
+    ATTEMPT_FAILED = "attempt_failed"
+    REFUSED = "refused"
+    SERVICE_FAILED = "service_failed"
+    RULE_BROKEN = "rule_broken"
+    BUSY = "busy"
+    OVER_CAP = "over_cap"
+    MALFORMED = "malformed"
+    PAST_DEADLINE = "past_deadline"
+    CUT = "cut"
+    UNREACHABLE = "unreachable"
+    SOURCE_EMPTY = "source_empty"
+    RECONNECT_FAILED = "reconnect_failed"
+
+
+class HearingEnding(StrEnum):
+    """How a hearing ended in order: the `ending` code of an `ok` line."""
+
+    CLOSED = "closed"
+    BROWSER_LEFT = "browser_left"
+    APP_ENDED = "app_ended"
+
+
+class _Openings:
+    """The `hearing_opening.ended` line of each opening the hearing tries.
+
+    An opening begins when the client asks for its tokens. The client reports no
+    `session.created`, so an opening counts as open at the first thing the hearing
+    hands over: a reopening's `Reconnected`, a first opening's first event. The
+    client reopens only a session that opened, and announces each reopening that
+    opens, so a next token request means the first opening was open and any later
+    pending one failed. One still pending when the hearing ends ends as the
+    hearing did. The session's line carries the hearing's failure, so an
+    opening's is a warning.
+    """
+
+    def __init__(self) -> None:
+        self.count = 0
+        self.utterances = 0
+        self._pending: StepTimer | None = None
+
+    def begin(self) -> None:
+        if self.count > 1:
+            self.end(lambda opening: opening.fail(HearingFailure.ATTEMPT_FAILED))
+        self.end(lambda _opening: None)
+        self.count += 1
+        self._pending = StepTimer(_HEARING_OPENING_EVENT, _LOGGER, attempt=self.count)
+
+    def opened(self, **fields: str | int) -> None:
+        if self._pending is not None:
+            self._pending.add(**fields)
+        self.end(lambda _opening: None)
+
+    def end(self, mark: Callable[[StepTimer], None]) -> None:
+        pending, self._pending = self._pending, None
+        if pending is not None:
+            mark(pending)
+            pending.handled()
+            pending.end()
+
+    def end_raised(self, error: Exception) -> None:
+        pending, self._pending = self._pending, None
+        if pending is not None:
+            pending.handled()
+            pending.__exit__(type(error), error, error.__traceback__)
+
+    def end_cancelled(self) -> None:
+        pending, self._pending = self._pending, None
+        if pending is not None:
+            pending.end_cancelled()
+
+
+def _hearing_callbacks(
+    openings: _Openings, heard: Callable[[HearingTranscript], Awaitable[None]]
+) -> HearingCallbacks:
+    async def heard_utterance(utterance: Utterance) -> None:
+        openings.opened()
+        openings.utterances += 1
+        await heard(
+            HearingTranscript(
+                text=utterance.text,
+                final=True,
+                language=_sample_language(utterance.language),
+                traceparent=utterance.traceparent,
+            )
+        )
+
+    async def heard_partial(partial: Partial) -> None:
+        openings.opened()
+        await heard(HearingTranscript(text=partial.text, final=False))
+
+    # The client awaits each callback; these two only note the opening as open.
+    async def opened(event: object) -> None:  # NOSONAR(S7503)
+        del event
+        openings.opened()
+
+    async def reconnected(reopened: Reconnected) -> None:  # NOSONAR(S7503)
+        openings.opened(
+            cause=reopened.cause.value,
+            unheard_ms=reopened.unheard_end_ms - reopened.unheard_start_ms,
+        )
+
+    return HearingCallbacks(
+        on_utterance=heard_utterance,
+        on_partial=heard_partial,
+        on_speech_started=opened,
+        on_turn_ended=opened,
+        on_reconnected=reconnected,
+    )
+
+
+def _tokens_unavailable(step: StepTimer) -> None:
+    step.fail(HearingFailure.TOKENS_UNAVAILABLE)
+
+
+_IN_ORDER: Final = {
+    Closed: HearingEnding.CLOSED,
+    BrowserLeft: HearingEnding.BROWSER_LEFT,
+    AppEnded: HearingEnding.APP_ENDED,
+}
+_PLAIN_FAILURES: Final = {
+    OverCap: HearingFailure.OVER_CAP,
+    Malformed: HearingFailure.MALFORMED,
+    PastDeadline: HearingFailure.PAST_DEADLINE,
+    Cut: HearingFailure.CUT,
+    Unreachable: HearingFailure.UNREACHABLE,
+    NoToken: HearingFailure.SOURCE_EMPTY,
+    ReconnectFailed: HearingFailure.RECONNECT_FAILED,
+}
+
+
+def _mark_ending(outcome: UtteranceOutcome, step: StepTimer) -> None:
+    """Record on `step` how the hearing ended: its ending, refusal or failure."""
     match outcome:
         case Closed() | BrowserLeft() | AppEnded():
-            return
+            step.add(ending=_IN_ORDER[type(outcome)])
         case HearingRefused():
-            _LOGGER.warning("hearing failed: Refused status=%d", outcome.status)
+            step.add(status=outcome.status)
+            if outcome.code is not None:
+                step.add(code=outcome.code.value)
+            step.fail(HearingFailure.REFUSED)
         case ServiceFailed():
-            _LOGGER.warning("hearing failed: ServiceFailed code=%s", outcome.code.value)
+            step.add(code=outcome.code.value)
+            step.fail(HearingFailure.SERVICE_FAILED)
         case RuleBroken():
-            _LOGGER.warning("hearing failed: RuleBroken close=%d", outcome.close.value)
+            step.add(close=outcome.close.value)
+            step.refuse(HearingFailure.RULE_BROKEN)
+        case Busy():
+            step.add(retry_after_s=outcome.wait.retry_after_seconds)
+            step.refuse(HearingFailure.BUSY)
         case (
-            Busy()
-            | OverCap()
+            OverCap()
             | Malformed()
             | PastDeadline()
             | Cut()
@@ -307,6 +469,6 @@ def _log_ending(outcome: UtteranceOutcome) -> None:
             | NoToken()
             | ReconnectFailed()
         ):
-            _LOGGER.warning(_HEARING_FAILED_LOG, type(outcome).__name__)
+            step.fail(_PLAIN_FAILURES[type(outcome)])
         case _:
             assert_never(outcome)

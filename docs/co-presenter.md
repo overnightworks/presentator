@@ -95,3 +95,18 @@ the cluster, and that hop's trust sentence is in
   restart); the half-heard sentence is lost and the speaker repeats it. The
   overlay opens the hearing again at the same address, which any ready pod
   answers, with no fault word; any other close shows "No hearing".
+
+**What the log keeps of a hearing.** Each hearing is a trace of its own and
+writes one `hearing_session.ended`, with its language, how many openings and
+utterances it had, how it ended (`ending`) or why it failed (`reason`, with the
+service's `status`, `code` or `close` where one exists). Each opening of the
+service's socket writes one `hearing_opening.ended` with its `attempt`; a
+reopening names its `cause` and how long the hearing went unheard
+(`unheard_ms`), and a reopening attempt that did not open ends as `attempt_failed`.
+The speech client reports no opened session, so a first opening counts as open
+at its first event and its duration is an upper bound. No line holds a
+transcript, token, address or path. Each final transcript hands the overlay
+the service's trace of its turn; the overlay asks under that trace with a span
+of its own, or under a new trace when none came, so the turn's hearing, ask and
+answer lines share one `trace_id`, and the next turn never reuses a failed
+one's.

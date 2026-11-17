@@ -253,6 +253,7 @@ def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_running_hearing(
             "text": "gehört",
             "final": True,
             "language": "de",
+            "traceparent": None,
         }
 
     assert private.speech.hearing.frames == [b"after demotion"]

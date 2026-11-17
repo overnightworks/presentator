@@ -144,6 +144,7 @@ def test_a_signed_in_user_is_answered_on_every_copresenter_route() -> None:
             "text": "gehört",
             "final": True,
             "language": "de",
+            "traceparent": None,
         }
 
     assert whose.status_code == HTTPStatus.OK
@@ -172,6 +173,7 @@ def test_a_running_hearing_keeps_going_when_its_person_changes_role() -> None:
             "text": "gehört",
             "final": True,
             "language": "de",
+            "traceparent": None,
         }
 
     assert private.speech.hearing.frames == [b"after the role change"]
@@ -323,6 +325,7 @@ def test_an_active_session_keeps_hearing_after_an_authoritative_recheck() -> Non
             "text": "gehört",
             "final": True,
             "language": "de",
+            "traceparent": None,
         }
 
     assert private.speech.hearing.frames == [b"pcm after the session check"]
@@ -353,24 +356,28 @@ def test_binary_hearing_forwards_pcm_and_returns_only_typed_transcripts() -> Non
             "text": "erste Antwort",
             "final": False,
             "language": None,
+            "traceparent": None,
         }
         socket.send_bytes(b"zweites pcm")
         assert socket.receive_json() == {
             "text": "second answer",
             "final": True,
             "language": "en",
+            "traceparent": None,
         }
         socket.send_bytes(b"drittes pcm")
         assert socket.receive_json() == {
             "text": "zweite Antwort",
             "final": True,
             "language": "de",
+            "traceparent": None,
         }
         socket.send_bytes(b"")
         assert socket.receive_json() == {
             "text": "leere Antwort",
             "final": False,
             "language": None,
+            "traceparent": None,
         }
 
     assert private.speech.hearing.frames == [
@@ -572,6 +579,7 @@ def test_a_running_hearing_ends_at_the_cap_on_its_recheck(
                 "text": "gehört",
                 "final": True,
                 "language": "de",
+                "traceparent": None,
             }
 
     if closed:

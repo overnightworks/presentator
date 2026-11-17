@@ -13,6 +13,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest'
 
 import { words as germanWords } from '../words/de'
 import { words as englishWords } from '../words/en'
+import { closeFrame, frame, hasCloseFrame } from './websocket-frames'
 
 const run = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
@@ -68,6 +69,10 @@ export const state = {
   hearingClosed: 0,
   pendingAnswerClosed: 0,
   askHeaderNames: [] as string[],
+  // The `traceparent` header of each ask, in order.
+  askTraceparents: [] as (string | undefined)[],
+  // The turn trace the fake hearing hands over with each final transcript.
+  heardTraceparent: null as string | null,
   answerMode: 'audio' as AnswerMode,
   // The payload the fake answer stream sends as its `error` event in 'error-event' mode.
   errorEvent: {} as Record<string, unknown>,
@@ -90,31 +95,7 @@ export const state = {
   media: createMediaObservation(),
 }
 
-function closeFrame(code: number) {
-  return Buffer.from([0x88, 0x02, code >> 8, code & 0xff])
-}
-
 const endedByServer = new WeakSet<import('node:stream').Duplex>()
-
-// Whether a client's masked frames, which may arrive together, include a close frame.
-function hasCloseFrame(data: Buffer) {
-  const CLOSE = 0x08
-  const MASKED_HEADER = 6
-  let offset = 0
-  while (offset + 2 <= data.length) {
-    if ((data.readUInt8(offset) & 0x0f) === CLOSE) return true
-    const short = data.readUInt8(offset + 1) & 0x7f
-    if (short === 126) offset += MASKED_HEADER + 2 + data.readUInt16BE(offset + 2)
-    else if (short === 127) offset += MASKED_HEADER + 8 + Number(data.readBigUInt64BE(offset + 2))
-    else offset += MASKED_HEADER + short
-  }
-  return false
-}
-
-function frame(message: string) {
-  const data = Buffer.from(message)
-  return Buffer.concat([Buffer.from([0x81, data.length]), data])
-}
 
 function mimeType(pathname: string) {
   return {
@@ -422,6 +403,7 @@ async function startServer() {
     }
     if (url.pathname === '/copresenter/ask') {
       state.askHeaderNames = Object.keys(request.headers)
+      state.askTraceparents.push(request.headers.traceparent as string | undefined)
       state.askBodies.push(await readAskBody(request))
       const refusal = REFUSED_REQUESTS[state.answerMode as keyof typeof REFUSED_REQUESTS]
       if (refusal) {
@@ -505,7 +487,12 @@ async function startServer() {
       + `Sec-WebSocket-Accept: ${websocketAcceptKey(key)}\r\n\r\n`,
     )
     if (state.hearingMode === 'ready' && state.heardOnConnect) {
-      socket.write(frame(JSON.stringify({ text: 'Where does the handoff slow down?', final: true, language: state.heardLanguage })))
+      socket.write(frame(JSON.stringify({
+        text: 'Where does the handoff slow down?',
+        final: true,
+        language: state.heardLanguage,
+        traceparent: state.heardTraceparent,
+      })))
     }
     if (state.hearingMode === 'refused-on-open') socket.write(closeFrame(HopClose.BUSY))
     recordUnexpectedSocketErrors(socket)
@@ -544,7 +531,7 @@ async function readAskBody(request: import('node:http').IncomingMessage) {
 }
 
 export function sendHeard(text: string) {
-  for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final: true, language: state.heardLanguage })))
+  for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final: true, language: state.heardLanguage, traceparent: state.heardTraceparent })))
 }
 
 // The server ends every open hearing with a close code, as it does when a
@@ -784,6 +771,8 @@ export function registerOverlayHarness() {
     cspViolations = []
     socketErrors.length = 0
     state.askBodies = []
+    state.askTraceparents = []
+    state.heardTraceparent = null
     state.hearLanguages = []
     state.heardLanguage = 'de'
     state.interfaceLanguage = 'en'

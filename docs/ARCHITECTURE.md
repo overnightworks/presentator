@@ -132,7 +132,9 @@ request names the route template, never the path, with `sub` and the client addr
 writes `process.started`, `process.ready`, `process.stopped` and one `store_connection.ended` per store, the worker
 the same process lines with one `connection.ended` per connection and one `wire_phase.ended` per phase, and a
 co-presenter ask `access_token.ended`, `speak.ended` and `answer.ended` (with `first_output_ms`) under the request's
-trace. A start refused by its settings, its port or its database ends in one `process.failed` with a `reason` code; a
+trace, which the overlay takes from the heard turn; a hearing writes `hearing_session.ended` and one
+`hearing_opening.ended` per opening (`docs/co-presenter.md`).
+A start refused by its settings, its port or its database ends in one `process.failed` with a `reason` code; a
 filter on `uvicorn.error` makes uvicorn's warnings and errors `server.refused`, `request.failed` or `server.reported`,
 codes only; its info records stay below the warning level and never reach the log.
 
