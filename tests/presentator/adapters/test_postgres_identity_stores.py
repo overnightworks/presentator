@@ -29,8 +29,14 @@ _AN_EVENT = AccountEvent(
     kind=AccountEventKind.BACKCHANNEL_LOGOUT, actor_id=None, subject_id="subject-1"
 )
 _TRY_SIGN_IN_LOCK = text("SELECT pg_try_advisory_xact_lock(:lock_class, :instance)")
-_AWAITED_ADVISORY_LOCKS = text(
+# pg_locks spans the server, where other tests wait on locks in databases of
+# their own; a two-key lock shows its keys as classid and objid, objsubid 2.
+_AWAITED_SIGN_IN_LOCKS = text(
     "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
+    " AND database = (SELECT oid FROM pg_database"
+    " WHERE datname = current_database())"
+    " AND objsubid = 2 AND classid::bigint = :lock_class"
+    " AND objid::bigint = (:instance)::bigint & 4294967295"
 )
 _PATIENCE_SECONDS = 10
 
@@ -159,10 +165,12 @@ def test_deleting_an_account_ends_its_sessions_and_leaves_the_others(
     assert stores.sessions.load("stayer-session") is not None
 
 
-def _until_a_lock_is_awaited(other_engine: Engine) -> None:
+def _until_the_sign_in_lock_is_awaited(other_engine: Engine) -> None:
     deadline = time.monotonic() + _PATIENCE_SECONDS
     with other_engine.connect() as connection:
-        while not connection.execute(_AWAITED_ADVISORY_LOCKS).scalar_one():
+        while not connection.execute(
+            _AWAITED_SIGN_IN_LOCKS, parameters(SIGN_IN_LOCK)
+        ).scalar_one():
             assert time.monotonic() < deadline, "nobody waits for the sign-in lock"
             connection.rollback()
 
@@ -180,7 +188,7 @@ def test_deleting_an_account_cannot_split_a_sign_in_that_has_read_the_account(
         with stores.writes() as entry:
             assert entry.accounts.get("leaver") is not None
             deletion.start()
-            _until_a_lock_is_awaited(other_engine)
+            _until_the_sign_in_lock_is_awaited(other_engine)
             entry.sessions.create(
                 "leaver",
                 session_id="leaver-session",
