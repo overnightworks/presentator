@@ -9,8 +9,8 @@ import pytest
 from agents.mcp_wire import MCP_ENDPOINT_PATH
 from fastapi.testclient import TestClient
 
+from presentator.host import main
 from presentator.host.config import ConfigurationError, load_settings
-from presentator.host.main import build_instance
 from tests.presentator.host.support.config_refusals import assert_refusal_names
 from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
@@ -125,7 +125,7 @@ def test_an_unknown_presentator_key_in_a_dot_env_refuses_the_start(
 
 @pytest.mark.usefixtures("environment", "served_database")
 def test_the_lobby_starts_with_no_mcp_setting_and_serves_the_front() -> None:
-    instance = build_instance(load_settings())
+    instance = main.build_instance(load_settings())
 
     metadata = TestClient(
         instance.lobby, base_url=A_BROWSERS_ADDRESS, headers=A_BROWSERS_HEADERS

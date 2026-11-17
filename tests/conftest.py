@@ -217,10 +217,31 @@ def engine(database_url: str) -> Iterator[Engine]:
 @pytest.fixture
 def served_database(
     bare_environment: pytest.MonkeyPatch, database_url: str, tmp_path: Path
-) -> str:
-    """An instance that serves from a migrated database of this test's own."""
+) -> Iterator[str]:
+    """An instance that serves from a migrated database of this test's own.
+
+    Every instance the composition root builds in the test is closed before the
+    database is dropped; one left to the garbage collector warns in a later test.
+    """
     point_at(bare_environment, database_url, tmp_path)
-    return database_url
+    built: list[main.Instance] = []
+    bare_environment.setattr(
+        main, "build_instance", _keeping(main.build_instance, built)
+    )
+    yield database_url
+    for instance in reversed(built):
+        instance.close()
+
+
+def _keeping[**Arguments](
+    build: Callable[Arguments, main.Instance], built: list[main.Instance]
+) -> Callable[Arguments, main.Instance]:
+    def keeping(*args: Arguments.args, **kwargs: Arguments.kwargs) -> main.Instance:
+        instance = build(*args, **kwargs)
+        built.append(instance)
+        return instance
+
+    return keeping
 
 
 @pytest.fixture

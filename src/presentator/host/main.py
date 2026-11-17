@@ -209,38 +209,44 @@ def build_instance(
     stopping = Stopping()
     stores = _with_redis(_stores(settings, migrations_directory, toolchain), redis)
     stores = copy.replace(stores, readiness=stopping.unready(stores.readiness))
-    mirrors = SourceMirrors(
-        directory=settings.mirrors,
-        credentials=stores.credentials,
-        pull_timeout=_source_timeout(settings),
-    )
-    decks = _decks(settings, stores, mirrors=mirrors, toolchain=toolchain)
-    lobby_auth, talk_auth = installed_auths(
-        settings, shell, stores.identity_writes, redis, relying_party_for
-    )
-    return Instance(
-        lobby=_lobby(
-            settings,
-            stores,
-            decks=decks,
-            auth=lobby_auth,
-            mirrors=mirrors,
-            shell=shell,
-        ),
-        talk=_talk(
-            settings,
-            stores,
-            decks,
-            talk_auth,
-            mirrors,
-            redis=redis,
+    # A refusal after the stores opened releases their connections, which
+    # nothing else holds.
+    try:
+        mirrors = SourceMirrors(
+            directory=settings.mirrors,
+            credentials=stores.credentials,
+            pull_timeout=_source_timeout(settings),
+        )
+        decks = _decks(settings, stores, mirrors=mirrors, toolchain=toolchain)
+        lobby_auth, talk_auth = installed_auths(
+            settings, shell, stores.identity_writes, redis, relying_party_for
+        )
+        return Instance(
+            lobby=_lobby(
+                settings,
+                stores,
+                decks=decks,
+                auth=lobby_auth,
+                mirrors=mirrors,
+                shell=shell,
+            ),
+            talk=_talk(
+                settings,
+                stores,
+                decks,
+                talk_auth,
+                mirrors,
+                redis=redis,
+                stopping=stopping,
+            ),
+            poller=_poller(settings, decks),
+            session_sweep=_session_sweep(stores.sessions, SystemClock()),
+            close=stores.close,
             stopping=stopping,
-        ),
-        poller=_poller(settings, decks),
-        session_sweep=_session_sweep(stores.sessions, SystemClock()),
-        close=stores.close,
-        stopping=stopping,
-    )
+        )
+    except BaseException:
+        stores.close()
+        raise
 
 
 def _with_redis(stores: Stores, redis: SharedRedis) -> Stores:

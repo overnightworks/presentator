@@ -107,6 +107,10 @@ _COUNT_WAITING: Final = text(
     "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
     " AND database = (SELECT oid FROM pg_database WHERE datname = current_database())"
 )
+_COUNT_OTHER_CONNECTIONS: Final = text(
+    "SELECT count(*) FROM pg_stat_activity"
+    " WHERE datname = current_database() AND pid <> pg_backend_pid()"
+)
 
 
 def granted_advisory_locks(engine: Engine, *classes: IntEnum) -> int:
@@ -123,6 +127,12 @@ def waiting_advisory_locks(engine: Engine) -> int:
     """How many advisory lock requests of the database wait now."""
     with engine.connect() as connection:
         return int(connection.execute(_COUNT_WAITING).scalar_one())
+
+
+def other_connections(engine: Engine) -> int:
+    """How many connections besides the asking one the database holds now."""
+    with engine.connect() as connection:
+        return int(connection.execute(_COUNT_OTHER_CONNECTIONS).scalar_one())
 
 
 def end_connections_holding(engine: Engine, *classes: IntEnum) -> None:

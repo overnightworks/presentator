@@ -16,7 +16,7 @@ from presentator.host.worker_serving import emergency_end
 from tests.support.git_remote import GitRemote
 from tests.support.people import seed_user
 from tests.support.polled_source_support import add_a_polled_source
-from tests.support.postgres import NO_FENCE
+from tests.support.postgres import NO_FENCE, other_connections
 from tests.support.worker_support import KEY
 
 BUILD_TIMEOUT_SECONDS = 123.0
@@ -102,14 +102,16 @@ def test_a_host_run_that_names_no_worker_has_no_worker_link() -> None:
 
 
 @pytest.mark.usefixtures("served_database")
-def test_a_key_file_that_is_too_short_refuses_to_start(
-    environment: pytest.MonkeyPatch, key_file: Path
+def test_a_key_file_that_is_too_short_refuses_to_start_and_holds_no_connection(
+    environment: pytest.MonkeyPatch, key_file: Path, engine: Engine
 ) -> None:
     key_file.write_text("short")
     a_worker_run(environment, key_file)
 
     with pytest.raises(ConfigurationError, match="build_worker_key_file"):
         main.build_instance(load_settings())
+
+    assert other_connections(engine) == 0
 
 
 @pytest.mark.usefixtures("environment", "served_database")
