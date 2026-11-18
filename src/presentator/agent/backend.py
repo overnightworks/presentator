@@ -14,6 +14,7 @@ from agents.backend import (
     AgentBackend,
     TurnEvent,
     TurnPerson,
+    TurnStopKind,
     TurnStopped,
 )
 from agents.backend.gateway import GatewayBackend
@@ -176,7 +177,10 @@ class GatewayAnswerer:
                 [TurnMessage(role=TurnRole.USER, text=message)]
             )
         except ValueError:
-            _log_closed(failure="request_invalid")
+            _LOGGER.warning(
+                "gateway_turn.stopped",
+                extra={"outcome": TurnStopKind.FAILED, "reason": "request_invalid"},
+            )
             _unavailable()
         summary = _RunSummary(self._monotonic)
         async with aclosing(
@@ -235,14 +239,16 @@ async def _answered(
 
 
 def _refuse(stopped: TurnStopped) -> NoReturn:
-    _log_closed(
-        kind=stopped.kind.value,
-        code=stopped.code.value,
-        outcome=stopped.outcome.value,
-        detail=stopped.detail,
-        retry_after_s=None
-        if stopped.retry_after_s is None
-        else str(stopped.retry_after_s),
+    # Only closed values: a body, a message or an exception may carry the question.
+    _LOGGER.warning(
+        "gateway_turn.stopped",
+        extra={
+            "outcome": stopped.kind,
+            "reason": stopped.code,
+            "stop_outcome": stopped.outcome,
+            "detail": stopped.detail,
+            "retry_after_s": stopped.retry_after_s,
+        },
     )
     match stopped.outcome:
         case StopOutcome.NOT_ENABLED:
@@ -255,14 +261,6 @@ def _refuse(stopped: TurnStopped) -> NoReturn:
             _unavailable()
         case _:
             assert_never(stopped.outcome)
-
-
-def _log_closed(**values: str | None) -> None:
-    # Only closed values: a body, a message or an exception may carry the question.
-    shown = " ".join(
-        f"{name}={value}" for name, value in values.items() if value is not None
-    )
-    _LOGGER.warning("gateway turn refused: %s", shown)
 
 
 def gateway_answerer(

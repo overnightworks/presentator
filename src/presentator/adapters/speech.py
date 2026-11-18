@@ -58,6 +58,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 _HEARING_SESSION_EVENT: Final = "hearing_session.ended"
 _HEARING_OPENING_EVENT: Final = "hearing_opening.ended"
+_READINESS_FAILED_EVENT: Final = "speech_readiness.failed"
 
 # These bound presentator's own resources and its patience in a live talk: a
 # worker thread's life, one sentence's memory. They vary by no deployment.
@@ -203,7 +204,10 @@ class SpeechHearing:
         if health.hearing.ready and not all(
             _speaks(health, voice) for voice in self._voices.values()
         ):
-            _LOGGER.warning("a configured voice cannot speak")
+            _LOGGER.warning(
+                _READINESS_FAILED_EVENT,
+                extra={"reason": ReadinessFailure.VOICE_UNREADY},
+            )
             raise CoPresenterUnavailableError
         return CoPresenterReadiness(
             local_hearing_ready=health.hearing.ready,
@@ -283,14 +287,44 @@ class SpeechHearing:
         await browser.close(HopClose.SERVICE_FAILED)
 
 
+class ReadinessFailure(StrEnum):
+    """Why a `speech_readiness.failed` line was written: its `reason` codes."""
+
+    VOICE_UNREADY = "voice_unready"
+    UNEXPECTED_STATUS = "unexpected_status"
+    MALFORMED = "malformed"
+    OVER_CAP = "over_cap"
+    PAST_DEADLINE = "past_deadline"
+    CUT = "cut"
+    UNREACHABLE = "unreachable"
+
+
+_PLAIN_READINESS_FAILURES: Final = {
+    Malformed: ReadinessFailure.MALFORMED,
+    OverCap: ReadinessFailure.OVER_CAP,
+    PastDeadline: ReadinessFailure.PAST_DEADLINE,
+    Cut: ReadinessFailure.CUT,
+    Unreachable: ReadinessFailure.UNREACHABLE,
+}
+
+
 def _health_of(outcome: HealthOutcome) -> wire.Health:
     match outcome:
         case wire.Health():
             return outcome
         case UnexpectedStatus():
-            _LOGGER.warning("readiness failed: status=%d", outcome.status)
+            _LOGGER.warning(
+                _READINESS_FAILED_EVENT,
+                extra={
+                    "reason": ReadinessFailure.UNEXPECTED_STATUS,
+                    "status": outcome.status,
+                },
+            )
         case Malformed() | OverCap() | PastDeadline() | Cut() | Unreachable():
-            _LOGGER.warning("readiness failed: %s", type(outcome).__name__)
+            _LOGGER.warning(
+                _READINESS_FAILED_EVENT,
+                extra={"reason": _PLAIN_READINESS_FAILURES[type(outcome)]},
+            )
         case _:
             assert_never(outcome)
     raise CoPresenterUnavailableError

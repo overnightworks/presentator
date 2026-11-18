@@ -17,6 +17,7 @@ from tests.presentator.adapters.support.ask_lease_process import (
 )
 from tests.presentator.host.support.app_processes import two_free_ports
 from tests.support.copresenter_support import ASK, QUESTION
+from tests.support.log_lines import json_lines_among
 from tests.support.redis import relay_in_front_of
 from tests.support.two_processes import TwoProcesses, two_modules
 
@@ -90,6 +91,12 @@ def _output_of(processes: TwoProcesses) -> str:
     return "".join(written)
 
 
+def _failures_of(written: str, event: str) -> list[str]:
+    """The `error_type` of each line of that event, which names a class alone."""
+    lines = [line for line in json_lines_among(written) if line["event"] == event]
+    return [str(line["error_type"]) for line in lines]
+
+
 def test_the_other_process_answers_once_the_streaming_one_ends(
     redis_url: str,
 ) -> None:
@@ -149,7 +156,7 @@ def test_an_ask_while_redis_cannot_be_reached_is_refused_visibly_and_leaks_nothi
         HTTPStatus.SERVICE_UNAVAILABLE
     ] * 2
     assert not [each for each in refused if authority in each.text]
-    assert "ask lease failed" in written
+    assert _failures_of(written, "ask_lease.failed")[0].isidentifier()
     assert authority not in written
 
 
@@ -178,5 +185,5 @@ def test_an_answer_finishing_while_redis_is_out_ends_whole_and_leaks_nothing(
 
     assert "event: done" in body
     assert authority not in body
-    assert "ask lease release failed" in written
+    assert _failures_of(written, "ask_lease_release.failed")[0].isidentifier()
     assert authority not in written
