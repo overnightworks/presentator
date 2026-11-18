@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "d3760ff658f87b2f60b9310da055d4ddaa0a0d68"
 branch = "claude/issue-1231-sqlite-leaves-presentator-postgres-is-it"
-scope = ["Dockerfile", "docs/ARCHITECTURE.md", "docs/configuration.md", "pyproject.toml", "quality/baseline.toml", "quality/config.toml", "src", "tests", "uv.lock"]
+scope = ["Dockerfile", "docs/ARCHITECTURE.md", "docs/configuration.md", "docs/sources.md", "pyproject.toml", "quality/baseline.toml", "quality/config.toml", "scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_cluster.py", "scripts/probe_build_worker_k3d_manifests.py", "src", "tests", "uv.lock"]
 opened_commit = "ebb5bf0648db5d099fa712a45f1eba6535da50e8"
 whole_reason = "pure deletion of the SQLite predecessor across adapters, host, tests, docs and gate entries"
