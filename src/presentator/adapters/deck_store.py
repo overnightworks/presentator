@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Final
 
 from presentator.contracts.decks import (
@@ -16,17 +15,16 @@ from presentator.contracts.decks import (
     Deck,
     ToolchainIdentity,
     UnplacedBuildError,
-    run_name_holding,
 )
 
 # The select every adapter reads a deck row by, in the order `DeckRow` holds.
 DECK_SELECT: Final = """
 SELECT slug, title, changed_at, owner_id, source_id, commit_sha,
-       active_build, pdf_export, built_commit, built_at,
+       built_run, built_commit, built_at, built_toolchain,
        attempt_commit, attempt_started_at, attempt_outcome, attempt_failure,
        attempt_reason,
        attempt_written_megabytes, attempt_allowed_megabytes,
-       attempt_allowed_entries, built_toolchain, attempt_toolchain, built_run
+       attempt_allowed_entries, attempt_toolchain
 FROM decks
 """
 # The deck row as an adapter hands it back: what the source carries, then what
@@ -41,18 +39,16 @@ type DeckRow[Instant] = tuple[
     str,
     str | None,
     str | None,
-    str | None,
-    Instant | None,
-    str | None,
     Instant | None,
     str | None,
     str | None,
+    Instant | None,
+    str | None,
+    str | None,
     str | None,
     int | None,
     int | None,
     int | None,
-    str | None,
-    str | None,
     str | None,
 ]
 # What a toolchain is stored as: the commit it was written for, then its digest.
@@ -73,55 +69,34 @@ def stored_deck[Instant](
         owner_id=owner_id,
         source_id=source_id,
         commit=commit,
-        build=_build(
-            row[6:10],
-            run=row[20],
-            source_id=source_id,
-            stored_toolchain=row[18],
-            read_instant=read_instant,
-        ),
+        build=_build(row[6:10], source_id=source_id, read_instant=read_instant),
         attempt=_attempt(
-            row[10:18], stored_toolchain=row[19], read_instant=read_instant
+            row[10:18], stored_toolchain=row[18], read_instant=read_instant
         ),
     )
 
 
 def _build[Instant](
-    columns: tuple[str | None, str | None, str | None, Instant | None],
+    columns: tuple[str | None, str | None, Instant | None, str | None],
     *,
-    run: str | None,
     source_id: str,
-    stored_toolchain: str | None,
     read_instant: Callable[[Instant], datetime],
 ) -> Build | None:
     """What the row says its talk is, or nothing while no build has switched.
 
     A build written before builds were kept in the store names no run, so it
     is no talk any process can serve, and the next refresh builds it again.
-    So is one whose talk lies in another run than the row names: a release
-    that writes no run moved the talk and the commit and left the run of an
-    older build standing, which would serve that older talk as this commit.
     A run that is no single name is a corrupted row and fails loud.
     """
-    directory, pdf, commit, built_at = columns
-    if (
-        run is None
-        or directory is None
-        or pdf is None
-        or commit is None
-        or built_at is None
-    ):
+    run, commit, built_at, stored_toolchain = columns
+    if run is None or commit is None or built_at is None:
         return None
     try:
         stored_run = BuildRun(run)
     except ValueError as refused:
         raise UnplacedBuildError(source_id) from refused
-    if run_name_holding(Path(directory)) != stored_run.name:
-        return None
     return Build(
         run=stored_run,
-        directory=Path(directory),
-        pdf=Path(pdf),
         commit=commit,
         built_at=read_instant(built_at),
         toolchain=_read_toolchain(stored_toolchain, commit),

@@ -60,6 +60,7 @@ from presentator.application.own_decks import OwnDecks
 from presentator.application.people import People
 from presentator.application.preferences import Preferences
 from presentator.contracts.decks import (
+    Artefacts,
     Build,
     BuildRun,
     ConnectionCheckResult,
@@ -120,6 +121,9 @@ _FIXTURES: Final = Path(__file__).parents[1] / "presentator" / "api" / "fixtures
 BUILT_TALK: Final = _FIXTURES / "built_talk"
 AN_ASSET: Final = "assets/index-mRcVgIkQ.js"
 EXPORTED_PDF: Final = _FIXTURES / "exported_deck.pdf"
+# The run every built deck of a lobby names unless a test lays down its own.
+THE_EXAMPLE_RUN: Final = BuildRun("the-example-talk")
+THE_EXAMPLE_ARTEFACTS: Final = Artefacts(directory=BUILT_TALK, pdf=EXPORTED_PDF)
 # A lobby build in the shape `pnpm build` leaves: one shell, one bootstrap,
 # one asset under `_app/`.
 LOBBY_BUILD: Final = _FIXTURES / "lobby_build"
@@ -531,7 +535,11 @@ def a_decks(given: GivenDecks, clock: FrozenClock) -> Decks:
             ),
         ),
         store=FakeDeckStore() if given.store is None else given.store,
-        builder=FakeBuildRunner() if given.builder is None else given.builder,
+        builder=(
+            FakeBuildRunner(served={THE_EXAMPLE_RUN: THE_EXAMPLE_ARTEFACTS})
+            if given.builder is None
+            else given.builder
+        ),
         source_runs=_run_store_of(given),
         checker=FakeConnectionChecker(answer=given.checked),
         toolchain_themes=(
@@ -727,9 +735,7 @@ def put_a_built_deck(
     store.put_build(
         slug,
         Build(
-            run=BuildRun("the-example-talk"),
-            directory=BUILT_TALK,
-            pdf=EXPORTED_PDF,
+            run=THE_EXAMPLE_RUN,
             commit=_BUILT_DECK_COMMIT,
             built_at=NOW,
             toolchain=None,

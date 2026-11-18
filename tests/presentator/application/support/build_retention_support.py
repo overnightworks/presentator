@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from presentator.contracts.decks import Build, BuildRun, Deck, Source
 from tests.presentator.application.support.decks_support import a_source, having
 from tests.presentator.application.support.fakes import (
-    BUILDS_ROOT,
     THE_TOOLCHAIN,
     FakeBuildRunner,
     FakeDeckFolders,
@@ -37,8 +36,6 @@ def a_row(
 def a_build_in(run: str) -> Build:
     return Build(
         run=BuildRun(run),
-        directory=BUILDS_ROOT / run / "out" / "talk",
-        pdf=BUILDS_ROOT / run / "out" / "deck.pdf",
         commit=THE_COMMIT,
         built_at=THE_MOMENT,
         toolchain=THE_TOOLCHAIN,

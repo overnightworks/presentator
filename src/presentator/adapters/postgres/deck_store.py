@@ -39,9 +39,8 @@ _PUT_DECK: Final = text(
 # One statement, so everything a build wrote moves at once and no reader sees
 # the talk of one commit beside the PDF or build time of another.
 _PUT_BUILD: Final = text(
-    "UPDATE decks SET built_run = :run, active_build = :directory, pdf_export = :pdf,"
-    " built_commit = :commit_sha, built_at = :built_at,"
-    " built_toolchain = :toolchain, attempt_toolchain = NULL,"
+    "UPDATE decks SET built_run = :run, built_commit = :commit_sha,"
+    " built_at = :built_at, built_toolchain = :toolchain, attempt_toolchain = NULL,"
     " attempt_commit = NULL, attempt_started_at = NULL,"
     " attempt_outcome = NULL, attempt_failure = NULL, attempt_reason = NULL,"
     " attempt_written_megabytes = NULL, attempt_allowed_megabytes = NULL,"
@@ -116,8 +115,6 @@ class PostgresDeckStore:
             _PUT_BUILD,
             {
                 "run": build.run.name,
-                "directory": str(build.directory),
-                "pdf": str(build.pdf),
                 "commit_sha": build.commit,
                 "built_at": build.built_at,
                 "toolchain": toolchain_column(build.commit, build.toolchain),
