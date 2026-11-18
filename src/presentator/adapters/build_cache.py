@@ -140,7 +140,7 @@ class BuildCache:
             arriving.chmod(RUN_DIRECTORY_MODE)
             arriving.rename(self.root / name)
         except OSError, tarfile.TarError:
-            return (self.root / name).is_dir()
+            return self.root.joinpath(name).is_dir()
         finally:
             if arriving.exists():
                 taken_away(arriving)
