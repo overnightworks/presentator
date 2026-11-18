@@ -1,0 +1,8 @@
+claim_id = "d7093958060d4053af2ae48dfc13c351"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "60c635c2993d9f3086c3a12c93287f909e1d8062"
+branch = "claude/issue-1267-s9-follow-ups-say-a-host-key-refusal-in"
+scope = ["docs/runbooks", "docs/sources.md", "src/gitmirror/mirror.py"]
+opened_commit = "1da8e23d917bc6008d9d4109a7ce1905d35f2e6e"
+whole_reason = "gitmirror, runbook and sources doc"
