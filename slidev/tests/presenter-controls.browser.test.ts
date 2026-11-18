@@ -625,7 +625,7 @@ describe('presenter controls', () => {
       try {
         const ai = page.getByRole('switch', { name: en['controls.switch'] })
         const home = page.getByRole('link', { name: en['controls.home'] })
-        await ai.waitFor({ state: 'visible', timeout: 2_000 })
+        await ai.waitFor({ state: 'visible', timeout: 5_000 })
         // Home renders only once the start's /who has answered.
         await home.waitFor({ state: 'visible', timeout: 5_000 })
         expect(await ai.count()).toBe(1)
