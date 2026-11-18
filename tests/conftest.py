@@ -180,7 +180,6 @@ def bare_environment(
         monkeypatch.setenv(name, value)
     monkeypatch.delenv("AWS_ENDPOINT_URL_S3", raising=False)
     configure_oidc(monkeypatch, tmp_path)
-    monkeypatch.setenv("PRESENTATOR_AGENT__BACKEND", "litellm")
     monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__ORIGIN", A_GATEWAY_ORIGIN)
     monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__KEY_FILE", str(A_GATEWAY_KEY_FILE))
     monkeypatch.setenv("PRESENTATOR_AGENT__API_GROUP", AN_API_GROUP)

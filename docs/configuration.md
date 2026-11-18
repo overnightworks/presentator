@@ -17,7 +17,7 @@ or a path, so a mistyped secret does not land in the startup output.
 | `PRESENTATOR_REDIS_URL` | The `redis://` or `rediss://` URL of the Redis every pod shares, with a host, at most a database number and no query or fragment; the URL may carry the password, so it is a secret and no log or refusal quotes it. It holds the request budgets and the ask lease, nothing durable, and every key starts `presentator:v1:`. The start does not need it to answer, but `GET /health` answers 503 and every request but that one is refused while it does not. No default. |
 | `PRESENTATOR_REDIS_PASSWORD_FILE` | Optional absolute path of a file holding the Redis password, read once at start, minus one trailing newline; unset for a Redis that asks for none. The password may ride the URL instead. |
 | `PRESENTATOR_TALK_ORIGIN` | The talk host's canonical https origin, on another hostname than `PRESENTATOR_PUBLIC_ORIGIN`; talks are served and signed in there. |
-| `PRESENTATOR_AGENT__BACKEND` | Which backend answers the co-presenter: `litellm`, the one value; any other, `service` included, refuses the start. No default. |
+| `PRESENTATOR_AGENT__BACKEND` | Ignored: it no longer chooses anything, and any value starts. |
 | `PRESENTATOR_AGENT__GATEWAY__ORIGIN` | Where the LiteLLM gateway answers: one `http` or `https` origin, scheme, host and optional port, without a path, credentials, query or fragment. No default. |
 | `PRESENTATOR_AGENT__GATEWAY__KEY_FILE` | Absolute path of the file holding this app's gateway key. It is read for every question, not at start, so a missing file refuses the question and not the start. The file holds the key alone on one line of printable ASCII without a space, 1024 bytes at most; the client strips one trailing `\n`, so any other control character, a `\r` from a Windows editor included, refuses every question with only `key_unusable` logged. No default. |
 | `PRESENTATOR_AGENT__API_GROUP` | The Keycloak group path whose members the co-presenter answers; any other person is answered "not enabled". No default. |
@@ -89,7 +89,7 @@ some of them.
 | --- | --- | --- |
 | `PRESENTATOR_MIRRORS` | `mirrors` | Where this process keeps its bare mirrors of the deck sources, a cache each pull rebuilds. |
 | `PRESENTATOR_HOST` | `127.0.0.1` | Listen address. |
-| `PRESENTATOR_PORT` | `8000` | Listen port, 0 to 65535; another number refuses the start, and a start that cannot listen on it ends in one `process.failed` line with `reason` `port_taken` (or `bind_refused`) and exit status 3. |
+| `PRESENTATOR_PORT` | `8000` | Listen port, 0 to 65535; another number refuses the start, and a start that cannot listen on it ends in logline's one `server_bind.failed` line with `reason` `port_taken` (or `os_error`) and exit status 3. |
 | `PRESENTATOR_TRUSTED_PROXIES` | empty | Comma-separated addresses or networks; see below. |
 | `LOG_LEVEL` | `info` | The root log level (`debug`, `info`, `warning`, `error`, `critical`); the request line is written at `info` whatever it says, and anything else refuses the start. |
 | `PRESENTATOR_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/` as the person and `/api/admin/` as an admin; empty serves no route for a token client's token. See [people](people.md). |
