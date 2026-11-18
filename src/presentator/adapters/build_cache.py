@@ -73,7 +73,8 @@ class BuildCache:
 
         Only the talk, the PDF and the deck's text travel, and of the talk only
         directories and regular files: a link a deck's code left is no file of
-        its talk, and serving refuses it anyway.
+        its talk, and serving refuses it anyway. A run the store took counts
+        against the bound like one fetched.
         """
         run = self.root / name
         archive = run / _ARCHIVE
@@ -81,13 +82,16 @@ class BuildCache:
             with tarfile.open(archive, "w") as packed:
                 for member in _members_of(run):
                     packed.add(run / member, arcname=str(member), recursive=False)
-            return self.store.put(
+            kept = self.store.put(
                 name, archive=archive, pdf=run / OUTPUT_DIRECTORY / PDF_FILE
             )
         except OSError:
             return False
         finally:
             archive.unlink(missing_ok=True)
+        if kept:
+            self._bounded(keeping=name)
+        return kept
 
     def local(self, name: str) -> Path | None:
         """That run's directory on this disk, fetched first where it is not here.
