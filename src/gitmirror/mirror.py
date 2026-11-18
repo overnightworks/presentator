@@ -6,6 +6,7 @@ than binding a second git implementation.
 """
 
 import base64
+import fcntl
 import hashlib
 import hmac
 import os
@@ -485,12 +486,31 @@ def _pinned_hosts(
         prefix=_KNOWN_HOSTS_PREFIX, dir=known_hosts.directory
     )
     path = Path(name)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as hosts_file:
+    with os.fdopen(descriptor, "w", encoding="utf-8") as hosts_file:
+        # The lock tells `remove_leftover_known_hosts` this run still needs the
+        # file, and goes with the process when it is killed mid-run.
+        fcntl.flock(hosts_file, fcntl.LOCK_EX)
+        try:
             hosts_file.writelines(f"{each.host} {each.key}\n" for each in pinned)
-        yield _PinnedHostsFile(path=path, known_hosts=known_hosts, pinned=pinned)
-    finally:
-        path.unlink(missing_ok=True)
+            hosts_file.flush()
+            yield _PinnedHostsFile(path=path, known_hosts=known_hosts, pinned=pinned)
+        finally:
+            path.unlink(missing_ok=True)
+
+
+def remove_leftover_known_hosts(directory: Path) -> None:
+    """Delete each ssh run's known_hosts file in that directory no run still holds.
+
+    A process killed during an ssh run leaves its file behind; a run that
+    still runs, in any process, holds the lock on its own.
+    """
+    for path in directory.glob(f"{_KNOWN_HOSTS_PREFIX}*"):
+        try:
+            with path.open("rb") as leftover:
+                fcntl.flock(leftover, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                path.unlink()
+        except BlockingIOError, FileNotFoundError:
+            continue
 
 
 def _host_keys_in(path: Path) -> frozenset[HostKey]:
