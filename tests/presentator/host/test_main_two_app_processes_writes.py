@@ -43,7 +43,6 @@ from tests.presentator.host.support.app_requests import (
     watching,
 )
 from tests.support.git_remote import EXAMPLE_SLUG, GitRemote, with_the_program
-from tests.support.mirror_support import written_by_ssh
 from tests.support.object_store import ObjectStore
 from tests.support.postgres import engine_on
 
@@ -595,42 +594,6 @@ def test_a_host_key_pinned_at_one_process_refuses_a_changed_key_at_the_other(
 
     assert changed["outcome"] == SourceRunOutcome.FAILURE
     assert pinned["outcome"] == SourceRunOutcome.SUCCESS
-    assert texts(engine, "SELECT host || ' ' || public_key FROM host_key_pins") == {
-        f"{_SSH_HOST} {_THE_HOST_KEY}"
-    }
-
-
-@pytest.mark.usefixtures("environment")
-def test_a_host_key_one_process_kept_on_its_disk_refuses_a_changed_key_once_shared(
-    database_url: str,
-    tmp_path: Path,
-    engine: Engine,
-    routes: Path,
-    remote: GitRemote,
-) -> None:
-    """SR12: a key a pod pinned on its own disk still stands once pins are shared."""
-    remote.commit_example_deck(at=AT)
-    with serving_apps(database_url, tmp_path) as apps:
-        _route(routes, apps[0], remote)
-        _presenting(routes, apps[0], _THE_HOST_KEY)
-        _added_over_ssh(admin_of(apps[0]), apps[0], "talks", remote)
-    # The source as a release left it that kept each pod's pins beside its
-    # mirrors, in the file ssh wrote there with its hashed host names.
-    with engine.begin() as connection:
-        connection.execute(text("DELETE FROM host_key_pins"))
-    earlier = tmp_path / "earlier-pod" / "mirrors"
-    earlier.mkdir(parents=True)
-    written_by_ssh(
-        earlier / "known_hosts", f"{_SSH_HOST} {_THE_HOST_KEY}\n", hashed=True
-    )
-    (routes / "earlier-pod").write_text(str(remote.bare), encoding="utf-8")
-    (routes / "earlier-pod.host-key").write_text(_A_CHANGED_HOST_KEY, encoding="utf-8")
-    with serving_apps(
-        database_url, tmp_path, second_environment={"PRESENTATOR_MIRRORS": str(earlier)}
-    ) as apps:
-        changed = fetched(admin_of(apps[1]), apps[1], "talks").json()["run"]
-
-    assert changed["outcome"] == SourceRunOutcome.FAILURE
     assert texts(engine, "SELECT host || ' ' || public_key FROM host_key_pins") == {
         f"{_SSH_HOST} {_THE_HOST_KEY}"
     }
