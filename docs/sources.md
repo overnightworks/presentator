@@ -35,3 +35,11 @@ about sources stand in [configuration](configuration.md) and the runbook to
   without a run. A removal waits for that refresh as long as a build step may
   take, then fails like any other error, deletes nothing, and a retry removes.
   A source taken in within the poll interval waits for the next tick.
+- **SR12** A key address trusts the host key the instance first met for its
+  host, at Check connection or a pull in any process, and every process
+  refuses a host that answers with another key: the check and every pull fail
+  until the host's row in `host_key_pins` is removed.
+- **SR13** A source's mirror is a cache on each process's own disk, rebuilt
+  from the source by its next pull there. A removal deletes the mirror on the
+  process that runs it; a mirror of the removed source on another process's
+  disk goes at that process's next source poll tick.

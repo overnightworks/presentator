@@ -562,6 +562,7 @@ def test_a_host_key_pinned_at_one_process_refuses_a_changed_key_at_the_other(
     routes: Path,
     remote: GitRemote,
 ) -> None:
+    """SR12: the key first met at one process is the key every process trusts."""
     remote.commit_example_deck(at=AT)
     with serving_apps(database_url, tmp_path) as apps:
         admin = admin_of(apps[0])
@@ -605,6 +606,7 @@ def test_a_mirror_of_a_source_removed_at_one_process_goes_at_the_others_next_tur
     tmp_path: Path,
     committed_remotes: tuple[GitRemote, GitRemote],
 ) -> None:
+    """SR13: another process's mirror of a removed source goes at its next turn."""
     talks, other_talks = committed_remotes
     with serving_apps(database_url, tmp_path) as apps:
         admin = admin_of(apps[0])

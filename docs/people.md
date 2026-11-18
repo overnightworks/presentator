@@ -114,10 +114,14 @@ part; a secret typed into a path or query is exported as typed.
 - **PE30** No log line holds a request path: the request line names the route
   template.
 
-## Known gap: builds that outlive an erasure
+## Known gap: builds and mirrors that outlive an erasure
 
 By the time the erasure answers, the rows and the store objects of every run
-its decks deliver from are gone. A copy of such a run on another process's disk
+its decks deliver from are gone. PE8 and PE11 to PE14 speak of the disk of the
+process that runs the erasure: a mirror of an erased source on another
+process's disk is no leftover, holds no row or account back, and goes at that
+process's next source poll tick ([sources](sources.md), SR13), so it outlives
+the erasure by up to `PRESENTATOR_SOURCE_POLL_SECONDS` too. A copy of such a run on another process's disk
 goes at that process's next source poll tick ([decks](decks.md), DK20), so it
 outlives the erasure by up to `PRESENTATOR_SOURCE_POLL_SECONDS`, 300 s by
 default ([configuration](configuration.md)). Superseded builds and leftovers in
