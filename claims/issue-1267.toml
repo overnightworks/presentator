@@ -1,8 +1,0 @@
-claim_id = "d7093958060d4053af2ae48dfc13c351"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "60c635c2993d9f3086c3a12c93287f909e1d8062"
-branch = "claude/issue-1267-s9-follow-ups-say-a-host-key-refusal-in"
-scope = ["README.md", "docs/runbooks", "docs/sources.md", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "frontend/src/lib/catalogs/de.po", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/source.test.ts", "frontend/src/lib/source.ts", "frontend/src/lib/words/de.ts", "frontend/src/lib/words/en.ts", "src/gitmirror/mirror.py", "src/gitmirror/model.py", "src/presentator/adapters/decks.py", "src/presentator/adapters/postgres/host_keys.py", "src/presentator/application/source_state.py", "src/presentator/contracts/decks.py", "src/presentator/contracts/words.py", "src/presentator/host/command_line.py", "src/presentator/host/main.py", "tests/gitmirror/test_mirror.py", "tests/gitmirror/test_mirror_connection_states.py", "tests/gitmirror/test_mirror_ssh.py", "tests/presentator/adapters/test_decks_mirror_sweep.py", "tests/presentator/adapters/test_decks_source_fetch_lines.py", "tests/presentator/api/test_source_api.py", "tests/presentator/host/test_main_unpin_host.py"]
-opened_commit = "1da8e23d917bc6008d9d4109a7ce1905d35f2e6e"
-whole_reason = "gitmirror, runbook and sources doc"
