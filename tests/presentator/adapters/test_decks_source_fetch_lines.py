@@ -142,9 +142,9 @@ def test_a_fetch_line_and_the_listed_state_agree_on_whether_a_failure_is_a_refus
     assert fetch["event"] == "source_fetch.ended"
     assert fetch["source_id"] == source.id
     assert fetch["reason"] == unread.failure.value
-    assert (fetch["outcome"], fetch["level"]) == (
-        ("refused", "info") if unread.refused else ("failed", "warning")
-    )
+    outcome, level = ("refused", "info") if unread.refused else ("failed", "warning")
+    assert fetch["outcome"] == outcome
+    assert fetch["level"] == level
     assert source.url not in logged.text
     run = SourceRun(
         source_id=source.id,
