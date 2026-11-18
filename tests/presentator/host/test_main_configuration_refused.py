@@ -36,11 +36,11 @@ def _unreadable_password_file(environment: pytest.MonkeyPatch, directory: Path) 
     return password_file
 
 
-def _a_leftover_agent_backend(environment: pytest.MonkeyPatch, directory: Path) -> str:
+def _an_unknown_agent_setting(environment: pytest.MonkeyPatch, directory: Path) -> str:
     del directory
-    leftover = "litellm"
-    environment.setenv("PRESENTATOR_AGENT__BACKEND", leftover)
-    return leftover
+    unknown = "a-value-no-setting-owns"
+    environment.setenv("PRESENTATOR_AGENT__BACKENDS", unknown)
+    return unknown
 
 
 def _an_issuer_the_sign_in_client_refuses(
@@ -112,7 +112,7 @@ def _unparsable_object_store_key(
         ([], _talk_on_the_lobby_hostname, "PRESENTATOR_TALK_ORIGIN"),
         ([], _unreadable_password_file, "PRESENTATOR_DATABASE_PASSWORD_FILE"),
         ([], _no_key_file, "PRESENTATOR_SECRET_KEY_FILE"),
-        ([], _a_leftover_agent_backend, "PRESENTATOR_AGENT__BACKEND"),
+        ([], _an_unknown_agent_setting, "PRESENTATOR_AGENT__BACKENDS"),
         ([], _a_port_no_socket_binds("1000000"), "PRESENTATOR_PORT"),
         ([], _a_port_no_socket_binds("-5"), "PRESENTATOR_PORT"),
         ([], _a_log_level_logline_does_not_name, "LOG_LEVEL"),

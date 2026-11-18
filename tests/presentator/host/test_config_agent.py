@@ -124,11 +124,20 @@ def test_the_lobby_starts_with_no_mcp_setting_and_serves_the_front() -> None:
     assert metadata.status_code == HTTPStatus.OK
 
 
+def test_the_retired_backend_variable_starts_the_instance(
+    environment: pytest.MonkeyPatch,
+) -> None:
+    """The previous release's deployment still sets it; its value is unread."""
+    environment.setenv("PRESENTATOR_AGENT__BACKEND", "any-value-at-all")
+
+    assert load_settings().agent.api_group == AN_API_GROUP
+
+
 @pytest.mark.parametrize(
     ("variable", "field"),
     [
         pytest.param("PRESENTATOR_AGENT__MCP__GROUP", "agent.mcp", id="mcp"),
-        pytest.param("PRESENTATOR_AGENT__BACKEND", "agent.backend", id="backend"),
+        pytest.param("PRESENTATOR_AGENT__BACKENDS", "agent.backends", id="other"),
     ],
 )
 def test_a_stale_agent_variable_refuses_the_start_naming_the_key_not_the_value(
