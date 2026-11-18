@@ -110,7 +110,9 @@ def test_an_empty_or_older_database_is_refused_and_not_ready(
 def test_a_database_that_does_not_answer_is_not_ready_and_the_log_names_no_secret(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    engine = create_database_engine(_NOTHING_LISTENS_HERE, SecretStr(_A_PASSWORD))
+    engine = create_database_engine(
+        _NOTHING_LISTENS_HERE, SecretStr(_A_PASSWORD), statement_timeout=None
+    )
     try:
         with json_logged(capsys) as logged:
             ready = database_is_ready(engine, migration_history())

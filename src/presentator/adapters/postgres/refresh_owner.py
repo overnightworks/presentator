@@ -15,13 +15,13 @@ from collections.abc import Callable, Generator, Mapping
 from contextlib import AbstractContextManager, contextmanager, suppress
 from datetime import timedelta
 from enum import StrEnum
-from math import ceil
 from typing import Any, Final, Protocol
 
 from psycopg.errors import LockNotAvailable
 from sqlalchemy import Connection, CursorResult, Engine, TextClause, text
 from sqlalchemy.exc import DBAPIError
 
+from presentator.adapters.postgres.engine import milliseconds_of
 from presentator.adapters.postgres.locks import (
     REFRESH_LOCK,
     LockClass,
@@ -40,13 +40,17 @@ _UNLOCK: Final = text("SELECT pg_advisory_unlock(:lock_class, :instance)")
 _SHARE_LOCK: Final = text("SELECT pg_advisory_lock_shared(:lock_class, :instance)")
 # Every wait on the pinned connection ends within the bound: the lock a removal
 # waits for, the bump that waits for a holder's open transaction, the presence key.
-_BOUND_WAITS: Final = text("SELECT set_config('lock_timeout', :milliseconds, false)")
+# Its statement timeout leaves room for that wait on top of the statement's own
+# run, so a wait ends as the lock timeout it is and not as a cancelled statement.
+_BOUND_WAITS: Final = text(
+    "SELECT set_config('lock_timeout', :lock_milliseconds, false),"
+    " set_config('statement_timeout', :statement_milliseconds, false)"
+)
 _BUMP: Final = text(
     "UPDATE refresh_owner SET epoch = epoch + 1 WHERE id = 1 RETURNING epoch"
 )
 _READ_EPOCH: Final = text("SELECT epoch FROM refresh_owner WHERE id = 1 FOR SHARE")
 _PING: Final = text("SELECT 1")
-_MILLISECONDS: Final = 1000
 _LET_GO: Final = "refresh_lock.let_go"
 
 _log = logging.getLogger(__name__)
@@ -91,13 +95,20 @@ class PostgresRefreshOwnership:
         *,
         toolchain: ToolchainIdentity,
         lock_timeout: timedelta,
+        statement_timeout: timedelta,
     ) -> None:
-        """Pin a connection and announce the toolchain on it."""
+        """Pin a connection and announce the toolchain on it.
+
+        A statement there may wait `lock_timeout`, then run `statement_timeout`.
+        """
         self._engine = engine
         self._presence = lock_of(LockClass.TOOLCHAIN_PRESENCE, toolchain.digest)
-        self._milliseconds = str(
-            max(1, ceil(lock_timeout.total_seconds() * _MILLISECONDS))
-        )
+        self._bounds = {
+            "lock_milliseconds": str(milliseconds_of(lock_timeout)),
+            "statement_milliseconds": str(
+                milliseconds_of(lock_timeout + statement_timeout)
+            ),
+        }
         self._pinned: Connection | None = None
         self._epoch: int | None = None
         self._pinned_connection()
@@ -209,7 +220,7 @@ class PostgresRefreshOwnership:
                 isolation_level="AUTOCOMMIT"
             )
             try:
-                connection.execute(_BOUND_WAITS, {"milliseconds": self._milliseconds})
+                connection.execute(_BOUND_WAITS, self._bounds)
                 connection.execute(_SHARE_LOCK, parameters(self._presence))
             except BaseException:
                 connection.invalidate()

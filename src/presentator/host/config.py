@@ -20,6 +20,7 @@ from pydantic import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from webauth.proxies import TrustedProxies
 
+from presentator.adapters.postgres.engine import LONGEST_TIMEOUT
 from presentator.adapters.speech import VoiceId, voice_speaks
 from presentator.agent.settings import AgentSettings
 from presentator.contracts.voice import SampleLanguage
@@ -34,6 +35,9 @@ _REFUSED: Final = "this environment cannot start an instance"
 _EMPTY_CLIENT_ID: Final = "token_clients: names an empty client id"
 _VOICE_SPEAKS_OTHER: Final = "names a voice that does not speak it"
 _ONE_HOSTNAME: Final = "is another hostname than public_origin"
+_POSTGRES_HOLDS: Final = (
+    "together with build_timeout_seconds is a timeout Postgres holds"
+)
 _WORKER_REACHED: Final = (
     "is set together with build_worker_key_file, and both are set when builds"
     " run in the worker"
@@ -305,6 +309,12 @@ class Settings(
     # environment. A deployment fact: no default.
     database_url: PostgresUrl
     database_password_file: AbsolutePath
+    # Shutdown waits for a chore in flight, so a statement held by a lock would
+    # hold it too; every statement served is cancelled past this bound. The
+    # migrations run without it.
+    database_statement_timeout_seconds: float = Field(
+        default=10.0, gt=0, allow_inf_nan=False
+    )
     # The Redis every pod shares for its limits and its ask lease; it keeps
     # nothing durable. A password may ride the URL, which is why it is a secret,
     # or live in a file, read once at start, like the database's. A
@@ -450,6 +460,18 @@ class Settings(
             and self.build_worker_address is None
         ):
             raise _FieldRefusedError(_WORKER_REACHED, field="build_worker_address")
+        return self
+
+    @model_validator(mode="after")
+    def _statement_bound_fits_postgres(self) -> Self:
+        # A wait for the refresh runs under both bounds added up.
+        longest = LONGEST_TIMEOUT.total_seconds()
+        if (
+            self.database_statement_timeout_seconds + self.build_timeout_seconds
+            > longest
+        ):
+            field = "database_statement_timeout_seconds"
+            raise _FieldRefusedError(_POSTGRES_HOLDS, field=field)
         return self
 
     @model_validator(mode="after")
