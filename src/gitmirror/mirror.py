@@ -6,17 +6,18 @@ than binding a second git implementation.
 """
 
 import base64
+import hashlib
 import hmac
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+from _hashlib import HASH
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from hashlib import sha1
 from pathlib import Path
 from typing import Final
 from urllib.parse import urlsplit
@@ -553,8 +554,17 @@ def _names(names: str, host: str) -> bool:
         salt, digest = (base64.b64decode(part, validate=True) for part in parts)
     except ValueError:
         return False
-    hashed = hmac.new(salt, host.encode(), sha1).digest()
+    hashed = hmac.new(salt, host.encode(), _known_hosts_sha1).digest()
     return hmac.compare_digest(hashed, digest)
+
+
+def _known_hosts_sha1(data: bytes = b"") -> HASH:
+    """SHA-1 as OpenSSH's hashed known_hosts format fixes it.
+
+    The hash only finds the line that names a host; the pinned key, not the
+    hash, decides trust, so no security property rests on SHA-1 here.
+    """
+    return hashlib.sha1(data, usedforsecurity=False)
 
 
 @contextmanager
