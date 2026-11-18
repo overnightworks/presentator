@@ -1,4 +1,4 @@
-"""The `agent` section: own settings, a stale MCP variable refused, no MCP setting."""
+"""The `agent` section: own settings, a stale variable refused, no MCP setting."""
 
 import os
 import re
@@ -22,15 +22,14 @@ from tests.support.lobby import (
 pytestmark = pytest.mark.usefixtures("redis_environment")
 
 _FIELD_OF = {
-    "PRESENTATOR_AGENT__BACKEND": "agent.backend",
     "PRESENTATOR_AGENT__GATEWAY__ORIGIN": "agent.gateway.origin",
     "PRESENTATOR_AGENT__GATEWAY__KEY_FILE": "agent.gateway.key_file",
     "PRESENTATOR_AGENT__API_GROUP": "agent.api_group",
 }
-_FOUR_SETTINGS = tuple(_FIELD_OF)
+_THREE_SETTINGS = tuple(_FIELD_OF)
 
 
-def test_the_four_agent_values_start_the_instance_and_read_no_key(
+def test_the_three_agent_values_start_the_instance_and_read_no_key(
     environment: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """The key file is read per question, so an absent one starts."""
@@ -48,7 +47,7 @@ def test_the_four_agent_values_start_the_instance_and_read_no_key(
 def test_a_missing_agent_value_refuses_the_start_naming_the_field(
     environment: pytest.MonkeyPatch, variable: str, field: str
 ) -> None:
-    """CF5: none of the four has a default."""
+    """CF5: none of the three has a default."""
     environment.delenv(variable)
 
     assert_refusal_names(load_settings, field)
@@ -57,15 +56,6 @@ def test_a_missing_agent_value_refuses_the_start_naming_the_field(
 @pytest.mark.parametrize(
     ("variable", "value", "field"),
     [
-        pytest.param(
-            "PRESENTATOR_AGENT__BACKEND", "service", "agent.backend", id="service"
-        ),
-        pytest.param(
-            "PRESENTATOR_AGENT__BACKEND",
-            "other-MARKER",
-            "agent.backend",
-            id="other-backend",
-        ),
         pytest.param(
             "PRESENTATOR_AGENT__GATEWAY__ORIGIN",
             "http://gateway.test:4000/v1?token=secret-MARKER",
@@ -84,12 +74,18 @@ def test_a_missing_agent_value_refuses_the_start_naming_the_field(
             "agent.gateway.key_file",
             id="relative-key-file",
         ),
+        pytest.param(
+            "PRESENTATOR_AGENT",
+            '["a-list-MARKER"]',
+            "agent",
+            id="section-not-an-object",
+        ),
     ],
 )
 def test_a_bad_agent_value_refuses_the_start_without_echoing_it(
     environment: pytest.MonkeyPatch, variable: str, value: str, field: str
 ) -> None:
-    """CF5 for the backend cases: a bad agent value names the field, not the value."""
+    """CF5: a bad agent value names the field, not the value."""
     environment.setenv(variable, value)
 
     with pytest.raises(ConfigurationError, match=re.escape(field)) as refused:
@@ -98,12 +94,12 @@ def test_a_bad_agent_value_refuses_the_start_without_echoing_it(
     assert "MARKER" not in str(refused.value)
 
 
-def test_a_dot_env_with_the_four_keys_starts_the_instance(
+def test_a_dot_env_with_the_three_keys_starts_the_instance(
     environment: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The four keys come from the file, not from the environment."""
-    lines = [f"{variable}={os.environ[variable]}" for variable in _FOUR_SETTINGS]
-    for variable in _FOUR_SETTINGS:
+    """The three keys come from the file, not from the environment."""
+    lines = [f"{variable}={os.environ[variable]}" for variable in _THREE_SETTINGS]
+    for variable in _THREE_SETTINGS:
         environment.delenv(variable)
     (tmp_path / ".env").write_text("\n".join(lines), encoding="utf-8")
 
@@ -134,12 +130,28 @@ def test_the_lobby_starts_with_no_mcp_setting_and_serves_the_front() -> None:
     assert metadata.status_code == HTTPStatus.OK
 
 
-def test_a_stale_mcp_variable_refuses_the_start_naming_the_key_not_the_value(
+def test_the_retired_backend_variable_starts_the_instance(
     environment: pytest.MonkeyPatch,
 ) -> None:
-    environment.setenv("PRESENTATOR_AGENT__MCP__GROUP", "a-stale-MARKER")
+    """The previous release's deployment still sets it; its value is unread."""
+    environment.setenv("PRESENTATOR_AGENT__BACKEND", "any-value-at-all")
 
-    with pytest.raises(ConfigurationError, match=re.escape("agent.mcp")) as refused:
+    assert load_settings().agent.api_group == AN_API_GROUP
+
+
+@pytest.mark.parametrize(
+    ("variable", "field"),
+    [
+        pytest.param("PRESENTATOR_AGENT__MCP__GROUP", "agent.mcp", id="mcp"),
+        pytest.param("PRESENTATOR_AGENT__BACKENDS", "agent.backends", id="other"),
+    ],
+)
+def test_a_stale_agent_variable_refuses_the_start_naming_the_key_not_the_value(
+    environment: pytest.MonkeyPatch, variable: str, field: str
+) -> None:
+    environment.setenv(variable, "a-stale-MARKER")
+
+    with pytest.raises(ConfigurationError, match=re.escape(field)) as refused:
         load_settings()
 
     assert "MARKER" not in str(refused.value)

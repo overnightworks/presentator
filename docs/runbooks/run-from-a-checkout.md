@@ -40,7 +40,6 @@ export PRESENTATOR_REDIS_URL=redis://localhost:6379/0
 export PRESENTATOR_OIDC_ISSUER=https://auth.example.test/realms/example
 export PRESENTATOR_OIDC_CLIENT_ID=presentator
 export PRESENTATOR_OIDC_CLIENT_SECRET_FILE=/run/user/"$(id -u)"/presentator/oidc-client-secret
-export PRESENTATOR_AGENT__BACKEND=litellm
 export PRESENTATOR_AGENT__GATEWAY__ORIGIN=http://litellm-front:4000
 export PRESENTATOR_AGENT__GATEWAY__KEY_FILE=/run/user/"$(id -u)"/presentator/litellm-key
 export PRESENTATOR_AGENT__API_GROUP=/services/agent-service/api

@@ -16,7 +16,6 @@ from httpx2 import Response
 from presentator.application.people import People
 from presentator.host import main
 from presentator.host.config import ConfigurationError, load_settings
-from presentator.host.stopping_server import ServerEvent
 from tests.presentator.application.support.decks_support import (
     a_folder,
     a_source,
@@ -542,13 +541,15 @@ def test_the_server_logs_no_request_path(
     server_log.info(
         '%s - "WebSocket %s" 403', "127.0.0.1", "/api/admin/people/subject-id"
     )
-    server_log.error("the server failed")
+    # A line that must still reach the log, so an empty log proves nothing;
+    # logline names a record it does not know without keeping its text.
+    server_log.error("server_part.failed")
 
     assert [
         line["event"]
         for line in json_lines(capsys.readouterr().out)
         if line["logger"] == "uvicorn.error"
-    ] == [ServerEvent.SERVER_REPORTED]
+    ] == ["uvicorn.unknown_record"]
 
 
 @pytest.mark.parametrize(
