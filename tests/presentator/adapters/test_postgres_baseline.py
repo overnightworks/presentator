@@ -40,7 +40,8 @@ def connection(database_url: str) -> Iterator[Connection]:
         ),
         pytest.param(
             "INSERT INTO host_key_pins (host, public_key)"
-            " VALUES ('git.example', 'ssh-ed25519 A'), ('git.example', 'ssh-ed25519 B')",
+            " VALUES ('git.example', 'ssh-ed25519 A'),"
+            " ('git.example', 'ssh-ed25519 B')",
             id="a second key pinned for one host",
         ),
     ],

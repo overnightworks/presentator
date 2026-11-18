@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from pathlib import Path
 from types import MappingProxyType
 from typing import Final, Protocol
 
@@ -130,6 +131,41 @@ class CredentialResolver(Protocol):
     @abstractmethod
     def resolve(self, reference: CredentialReference) -> str | None:
         """Return the secret, or nothing when the reference leads nowhere."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class HostKey:
+    """The public key one ssh host answered with, as a known_hosts line holds it.
+
+    `key` is the key type and its base64 body, so one line is `host key`.
+    """
+
+    host: str
+    key: str
+
+
+class HostKeyPins(Protocol):
+    """The ssh host keys every pull trusts, kept where every process reads them."""
+
+    @abstractmethod
+    def pinned(self) -> tuple[HostKey, ...]:
+        """Every key pinned so far, one per host."""
+
+    @abstractmethod
+    def pin(self, key: HostKey) -> HostKey:
+        """Keep that key unless its host has one already; answer the key that stands."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class KnownHosts:
+    """Where ssh is handed the pinned keys for one run, and where they are kept.
+
+    The file ssh reads is written from the pins into `directory` before each
+    run and removed after it, so no key outlives the run on this disk.
+    """
+
+    directory: Path
+    pins: HostKeyPins
 
 
 class GitUnavailableError(RuntimeError):

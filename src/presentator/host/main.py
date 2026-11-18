@@ -44,6 +44,7 @@ from presentator.adapters.decks import (
 from presentator.adapters.identity import SystemClock, TokenIdentifierFactory
 from presentator.adapters.postgres.deck_store import PostgresDeckStore
 from presentator.adapters.postgres.engine import create_database_engine
+from presentator.adapters.postgres.host_keys import PostgresHostKeyPins
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
 from presentator.adapters.postgres.migrate import (
     MIGRATIONS_DIRECTORY,
@@ -189,6 +190,7 @@ class Stores:
     source_runs: SourceRuns
     refresh_ownership: RefreshOwnership
     credentials: PostgresSourceCredentials
+    host_keys: PostgresHostKeyPins
     sessions: PostgresSessionRecordStore
     identity_writes: PostgresIdentityWrites
     instance_settings: InstanceSettingsStore
@@ -221,6 +223,7 @@ def build_instance(
             directory=settings.mirrors,
             credentials=stores.credentials,
             pull_timeout=_source_timeout(settings),
+            host_keys=stores.host_keys,
         )
         cache = _build_cache(settings)
         decks = _decks(
@@ -329,6 +332,7 @@ def _postgres_stores(
         source_runs=PostgresSourceRunStore(engine=engine, fence=ownership),
         refresh_ownership=ownership,
         credentials=PostgresSourceCredentials(engine=engine, box=box),
+        host_keys=PostgresHostKeyPins(engine=engine),
         sessions=PostgresSessionRecordStore(engine),
         identity_writes=PostgresIdentityWrites(engine, LoggingAuditSink()),
         instance_settings=PostgresInstanceSettingsStore(engine),
@@ -466,7 +470,7 @@ def _decks(
         # same remote for the same one thing, just without writing it down.
         checker=MirroredConnectionChecker(
             check_timeout=_source_timeout(settings),
-            known_hosts=settings.mirrors / "known_hosts",
+            known_hosts=mirrors.known_hosts,
         ),
         toolchain_themes=PackageJsonThemes(project=settings.toolchain),
         ownership=stores.refresh_ownership,

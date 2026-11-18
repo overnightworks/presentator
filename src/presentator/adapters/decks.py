@@ -23,7 +23,9 @@ from gitmirror.model import (
     CredentialReference,
     CredentialResolver,
     GitSource,
+    HostKeyPins,
     InvalidCredentialError,
+    KnownHosts,
     MirrorError,
     Revision,
 )
@@ -80,11 +82,19 @@ class SourceMirrors:
 
     Reading a source's folders and building a deck out of one both need the
     same mirror, so where it lives and how it is named is decided once.
+    The directory is this process's cache: a mirror is rebuilt from its
+    source by the next pull, and the host keys it trusts live in `host_keys`.
     """
 
     directory: Path
     credentials: CredentialResolver
     pull_timeout: timedelta
+    host_keys: HostKeyPins
+
+    @property
+    def known_hosts(self) -> KnownHosts:
+        """Where every ssh run of this process is handed the pinned host keys."""
+        return KnownHosts(directory=self.directory, pins=self.host_keys)
 
     def of(self, source: Source) -> GitMirror | None:
         """The mirror of that source, or nothing when it no longer resolves.
@@ -105,6 +115,7 @@ class SourceMirrors:
             directory=self._directory_of(source),
             credentials=self.credentials,
             pull_timeout=self.pull_timeout,
+            known_hosts=self.known_hosts,
         )
 
     def remove(self, source: Source) -> PurePosixPath | None:
@@ -149,7 +160,7 @@ class MirroredConnectionChecker:
     """Probes a form's own URL and secret through `ls-remote`, storing nothing."""
 
     check_timeout: timedelta
-    known_hosts: Path
+    known_hosts: KnownHosts
 
     def check(self, *, url: str, ref: str, secret: str) -> ConnectionCheckResult:
         """No failure and the head commit when reachable, or which failure and why.

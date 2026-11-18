@@ -68,15 +68,28 @@ exec sh -c "git ${command#git-}"
 """
 # Stands in for the ssh git starts, too, but reaches the repository its caller's
 # route names: git tells ssh the known_hosts file of the app it runs for, and
-# that file lies in the directory of that app alone.
+# that file lies in the directory of that app alone. Where the route names a
+# host key too, the host answers with it and is checked as `accept-new` does.
 _SSH_TO_THE_ROUTE_OF_THE_CALLER = """#!/bin/sh
 for argument; do
     case "$argument" in UserKnownHostsFile=*) hosts=${{argument#*=}};; esac
 done
 caller=$(basename "$(dirname "$(dirname "$hosts")")")
+if [ -f "{routes}/$caller.host-key" ]; then
+    presented=$(cat "{routes}/$caller.host-key")
+    pinned=$(sed -n "s/^{host} //p" "$hosts")
+    if [ -n "$pinned" ] && [ "$pinned" != "$presented" ]; then
+        echo "Host key verification failed." >&2
+        exit 255
+    fi
+    [ -n "$pinned" ] || printf '%s %s\\n' "{host}" "$presented" >> "$hosts"
+fi
 exec git upload-pack "$(cat "{routes}/$caller")"
 """
-_SSH_ADDRESS = "git@localhost:{repository}"
+_SSH_HOST = "localhost"
+_SSH_ADDRESS = f"git@{_SSH_HOST}:{{repository}}"
+_THE_HOST_KEY = "ssh-ed25519 AAAAthe-host"
+_A_CHANGED_HOST_KEY = "ssh-ed25519 AAAAa-changed-host"
 
 
 @pytest.fixture
@@ -118,7 +131,7 @@ def routes(environment: pytest.MonkeyPatch, tmp_path: Path) -> Path:
         environment,
         tmp_path,
         "ssh",
-        _SSH_TO_THE_ROUTE_OF_THE_CALLER.format(routes=directory),
+        _SSH_TO_THE_ROUTE_OF_THE_CALLER.format(routes=directory, host=_SSH_HOST),
     )
     with_the_toolchain(environment, tmp_path, A_TOOLCHAIN_THAT_BUILDS)
     return directory
@@ -128,6 +141,13 @@ def _route(routes: Path, app: App, remote: GitRemote) -> None:
     """Let the ssh that `app` runs reach `remote`, whatever address it is given."""
     (routes / directory_name_of(app.port)).write_text(
         str(remote.bare), encoding="utf-8"
+    )
+
+
+def _presenting(routes: Path, app: App, host_key: str) -> None:
+    """Let the host the ssh of `app` reaches answer with that key."""
+    (routes / f"{directory_name_of(app.port)}.host-key").write_text(
+        host_key, encoding="utf-8"
     )
 
 
@@ -531,3 +551,42 @@ def test_settings_and_a_theme_saved_at_both_processes_at_once_leave_one_row_each
     assert read_names[0] in names
     assert read_themes[0] == read_themes[1]
     assert read_themes[0] in themes
+
+
+@pytest.mark.usefixtures("environment")
+def test_a_host_key_pinned_at_one_process_refuses_a_changed_key_at_the_other(
+    database_url: str,
+    tmp_path: Path,
+    engine: Engine,
+    routes: Path,
+    remote: GitRemote,
+) -> None:
+    remote.commit_example_deck(at=AT)
+    with serving_apps(database_url, tmp_path) as apps:
+        admin = admin_of(apps[0])
+        for app in apps:
+            _route(routes, app, remote)
+        _presenting(routes, apps[0], _THE_HOST_KEY)
+        draft = _opened_draft(admin, apps[0])
+        created = create_source(
+            admin,
+            apps[0],
+            checked(
+                admin,
+                apps[0],
+                name="talks",
+                url=_SSH_ADDRESS.format(repository=remote.bare),
+                key_draft_id=draft["id"],
+            ),
+        )
+        assert created.status_code == HTTPStatus.CREATED, created.text
+        _presenting(routes, apps[1], _A_CHANGED_HOST_KEY)
+        changed = fetched(admin, apps[1], "talks").json()["run"]
+        _presenting(routes, apps[1], _THE_HOST_KEY)
+        pinned = fetched(admin, apps[1], "talks").json()["run"]
+
+    assert changed["outcome"] == SourceRunOutcome.FAILURE
+    assert pinned["outcome"] == SourceRunOutcome.SUCCESS
+    assert texts(engine, "SELECT host || ' ' || public_key FROM host_key_pins") == {
+        f"{_SSH_HOST} {_THE_HOST_KEY}"
+    }

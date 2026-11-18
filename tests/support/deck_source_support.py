@@ -15,6 +15,7 @@ from presentator.contracts.models import Role, User
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
 from tests.presentator.adapters.support.key_draft_support import INSTANCE_KEY
 from tests.support.git_remote import MAIN_BRANCH
+from tests.support.mirror_support import PinsInMemory
 from tests.support.people import seed_user
 from tests.support.postgres import NO_FENCE
 
@@ -115,6 +116,7 @@ def mirrors_under(
         directory=tmp_path / "mirrors",
         credentials=OpenCredentials() if credentials is None else credentials,
         pull_timeout=timeout,
+        host_keys=PinsInMemory(),
     )
 
 
