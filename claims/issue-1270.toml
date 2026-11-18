@@ -1,0 +1,7 @@
+claim_id = "3f2086a027d84ecf8e0ec21321c9f7b1"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "60c635c2993d9f3086c3a12c93287f909e1d8062"
+branch = "claude/issue-1270-remove-the-withdrawn-picomatch-advisory"
+scope = ["quality/config.toml"]
+opened_commit = "006052439a5cf59a57ac6972e191993c06d7e2d0"
