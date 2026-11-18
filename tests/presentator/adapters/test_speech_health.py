@@ -117,36 +117,35 @@ def the_readiness_failure(logged: LoggedText) -> tuple[object, object]:
     return line["reason"], line.get("status")
 
 
-# The `(reason, status)` of the `speech_readiness.failed` line of every failure.
-_READINESS_FAILURE_LINES: Final[dict[str, tuple[str, int | None]]] = {
-    "non-200-marked": ("unexpected_status", 503),
-    "garbage-marked": ("malformed", None),
-    "missing-section": ("malformed", None),
-    "ready-as-text": ("malformed", None),
-    "ready-as-number": ("malformed", None),
-    "sample-rate-as-text": ("malformed", None),
-    "past-the-cap": ("over_cap", None),
-    "cut-body": ("cut", None),
-    "v0.1-shape": ("malformed", None),
-    "voice-absent": ("voice_unready", None),
-    "service-in-its-start-load": ("voice_unready", None),
+# The `reason` of the `speech_readiness.failed` line of every failure.
+_READINESS_FAILURE_REASONS: Final[dict[str, str]] = {
+    "non-200-marked": "unexpected_status",
+    "garbage-marked": "malformed",
+    "missing-section": "malformed",
+    "ready-as-text": "malformed",
+    "ready-as-number": "malformed",
+    "sample-rate-as-text": "malformed",
+    "past-the-cap": "over_cap",
+    "cut-body": "cut",
+    "v0.1-shape": "malformed",
+    "voice-absent": "voice_unready",
+    "service-in-its-start-load": "voice_unready",
 }
 
 
-def test_the_table_of_readiness_failure_lines_names_every_failure() -> None:
-    assert _READINESS_FAILURE_LINES.keys() == HEALTH_FAILURES.keys()
-
-
-@pytest.mark.parametrize(("case", "expected"), _READINESS_FAILURE_LINES.items())
+@pytest.mark.parametrize("case", HEALTH_FAILURES)
 def test_every_answer_but_a_ready_health_is_unavailable(
-    case: str, expected: tuple[str, int | None], capsys: pytest.CaptureFixture[str]
+    case: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    fake = FakeSpeechService(health_answer=HEALTH_FAILURES[case])
+    answer = HEALTH_FAILURES[case]
+    reason = _READINESS_FAILURE_REASONS[case]
+    status = answer().status_code if reason == "unexpected_status" else None
+    fake = FakeSpeechService(health_answer=answer)
 
     with json_logged(capsys) as logged, pytest.raises(CoPresenterUnavailableError):
         readiness_of(fake)
 
-    assert the_readiness_failure(logged) == expected
+    assert the_readiness_failure(logged) == (reason, status)
 
 
 def test_a_health_read_past_its_deadline_is_unavailable(
