@@ -37,25 +37,28 @@ class Schedule:
 
     @asynccontextmanager
     async def polling(self) -> AsyncGenerator[None]:
-        """Run the chore for exactly as long as the block it wraps runs."""
-        ticking = asyncio.create_task(self._every_interval())
+        """Run the chore for as long as the block it wraps runs.
+
+        Leaving the block ends the wait for the next run at once, but waits for
+        a run in flight: whatever the chore uses may be closed after the block.
+        """
+        stopped = asyncio.Event()
+        ticking = asyncio.create_task(self._every_interval(stopped))
         try:
             yield
         finally:
-            ticking.cancel()
-            # A cancelled tick leaves its fetch running in its own thread, so
-            # the fetch's own bound is what keeps a shutdown finite.
-            with suppress(asyncio.CancelledError):
-                await ticking
+            stopped.set()
+            # A cancelled run would go on in its thread and use what the caller
+            # closes next; the chore's own bound keeps this wait finite.
+            await ticking
 
     async def tick(self) -> None:
         """One run of the chore, in a thread, so a slow one holds up no answer."""
         await asyncio.to_thread(self.chore)
 
-    async def _every_interval(self) -> None:
+    async def _every_interval(self, stopped: asyncio.Event) -> None:
         failed_run_count = 0
-        while True:
-            await asyncio.sleep(self.interval.total_seconds())
+        while await self._interval_passed(stopped):
             # Awaiting the whole tick is what keeps two of them from running at
             # once, and the fetch's own bound is what ends the one that hangs.
             try:
@@ -85,3 +88,10 @@ class Schedule:
                         },
                     )
                 failed_run_count = 0
+
+    async def _interval_passed(self, stopped: asyncio.Event) -> bool:
+        """Whether a whole interval passed without the schedule being stopped."""
+        with suppress(TimeoutError):
+            async with asyncio.timeout(self.interval.total_seconds()):
+                await stopped.wait()
+        return not stopped.is_set()
