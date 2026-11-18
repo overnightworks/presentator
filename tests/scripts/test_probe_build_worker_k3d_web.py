@@ -560,7 +560,7 @@ def test_a_generated_secret_value_reaches_only_the_secrets_apply_and_no_output(
     documents = [json.loads(part) for part in secret_stdin.split("\n---\n")]
     values = [v for document in documents for v in document["stringData"].values()]
     assert values
-    assert all(value.startswith(GENERATED_VALUE) for value in values)
+    assert all(GENERATED_VALUE in value for value in values)
     for command, _, stdin in world.commands:
         assert GENERATED_VALUE not in " ".join(command)
         assert (GENERATED_VALUE in (stdin or "")) == (stdin == secret_stdin)

@@ -643,7 +643,7 @@ def fixture_maker(
             effects=effects,
         )
         world.node_name, world.probe_image = run.node, run.tag
-        world.store_images = (run.redis_image, run.postgres_image)
+        world.store_images = (run.redis_image, run.postgres_image, run.garage_image)
         world.cluster_name = run.name
         world.production_image, world.twin_pod = production_image, driver.TWIN_POD
         world.residue_pods = residue_pods(load_script, driver, world.outcomes)

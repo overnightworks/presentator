@@ -213,7 +213,7 @@ def test_a_failure_still_removes_what_the_run_made_then_the_directory(
     with pytest.raises(RuntimeError):
         fixture.drive(released=released)
     run = fixture.run
-    steps = fixture.world.commands[-6:]
+    steps = fixture.world.commands[-7:]
     assert [command for command, _, _ in steps] == [
         ("k3d", "cluster", "delete", run.name),
         ("docker", "rm", "--force", run.tools),
@@ -221,6 +221,7 @@ def test_a_failure_still_removes_what_the_run_made_then_the_directory(
         ("docker", "image", "rm", "--force", run.tag),
         ("docker", "image", "rm", "--force", run.redis_image),
         ("docker", "image", "rm", "--force", run.postgres_image),
+        ("docker", "image", "rm", "--force", run.garage_image),
     ]
     for _, environment, _ in steps:
         assert environment["KUBECONFIG"] == str(fixture.run.kubeconfig)

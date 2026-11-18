@@ -47,16 +47,19 @@ Cells 10 to 13 run after cell 9 on the web as platform renders it, at the pin:
 the render's ConfigMaps and Deployment, whose web container's Redis URL names a
 throwaway Redis the probe runs in its namespace, a throwaway Postgres there in
 place of the render's, named, reached and logged into as the web's database URL
-says, which the Deployment's init container migrates before the web starts, and
-Secrets the driver generates. The Secrets' names and keys come from the Secret
-volumes the web container mounts (the files its environment names under each
-mount, the database password among them, and the workers' key that the
-`secrets` volume projects), each value from the effect `secret`, 64 hex
-characters from `secrets` in a real run; the probe's Postgres reads the
-password from the same Secret. The values go to `kubectl apply` on
-stdin only and never to a printed line, an error, an argument or a file; they
-live in the run's cluster. The Secrets go in before cell 7, as the worker pods
-mount the workers' key.
+says, which the Deployment's init container migrates before the web starts, a
+throwaway Garage there, named under the host of the web's object store endpoint
+by an ExternalName Service in that host's namespace, which makes the web's
+bucket and key itself, and Secrets the driver generates. The Secrets' names and
+keys come from the Secret volumes the web container mounts (the files its
+environment names under each mount, the database password among them, and the
+workers' key and the object store's credentials file that the `secrets` volume
+projects), each value from the effect `secret`, 64 hex characters from
+`secrets` in a real run; the probe's Postgres reads the password from the same
+Secret, and the probe's Garage the key the credentials file holds. The values
+go to `kubectl apply` on stdin only and never to a printed line, an error, an
+argument or a file; they live in the run's cluster. The Secrets go in before
+cell 7, as the worker pods mount the workers' key.
 
 Cell 10 awaits the web Ready with no worker pod and no Service, restartCount 0,
 copies `examples/hello-deck` into the web pod's `emptyDir` with `kubectl cp` and
@@ -160,11 +163,13 @@ from probe_build_worker_k3d_lives import (
     watch_lives,
 )
 from probe_build_worker_k3d_manifests import (
+    GARAGE_PINNED,
     POSTGRES_PINNED,
     PRODUCTION_IMAGE,
     REDIS_PINNED,
     WORKER_CONTAINER,
     applied_documents,
+    garage_documents,
     namespace_document,
     postgres_documents,
     prove_render,
@@ -381,6 +386,7 @@ def drive_web(run: Run, overlay: list[Document]) -> str:
     stores = [
         *redis_documents(run.redis_image),
         *postgres_documents(deployment, run.postgres_image),
+        *garage_documents(deployment, run.garage_image),
     ]
     run("kubectl apply --filename -", stdin=as_stream([*stores, *documents]))
     statefulset = next(d for d in worker_documents if d["kind"] == "StatefulSet")
@@ -466,10 +472,11 @@ class ThrowawayStore:
 
 
 def throwaway_stores(run: Run) -> tuple[ThrowawayStore, ...]:
-    """The probe's Redis and Postgres."""
+    """The probe's Redis, Postgres and Garage."""
     return (
         ThrowawayStore("Redis", REDIS_PINNED, run.redis_image),
         ThrowawayStore("Postgres", POSTGRES_PINNED, run.postgres_image),
+        ThrowawayStore("Garage", GARAGE_PINNED, run.garage_image),
     )
 
 
