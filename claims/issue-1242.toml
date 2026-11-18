@@ -1,0 +1,8 @@
+claim_id = "8d9c86bac2e44526b0c94f834688ebe9"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "7039fcb04fc1432c93d7a4d8bdd339bee5848f06"
+branch = "claude/issue-1242-the-last-free-text-log-lines-in-the-redi"
+scope = ["docs/ARCHITECTURE.md", "src/presentator/adapters/shared_redis.py", "src/presentator/adapters/speech.py", "src/presentator/agent/backend.py", "tests/presentator"]
+opened_commit = "2e2e48c8ac3bcc8e6930ebaf967f808e183bdf0c"
+whole_reason = "Six lines of one rule in three adapters, their tests and the one ARCHITECTURE sentence about them."
