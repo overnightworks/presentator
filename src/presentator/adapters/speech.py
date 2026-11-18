@@ -58,6 +58,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 _HEARING_SESSION_EVENT: Final = "hearing_session.ended"
 _HEARING_OPENING_EVENT: Final = "hearing_opening.ended"
+_READINESS_FAILED_EVENT: Final = "speech_readiness.failed"
 
 # These bound presentator's own resources and its patience in a live talk: a
 # worker thread's life, one sentence's memory. They vary by no deployment.
@@ -204,7 +205,7 @@ class SpeechHearing:
             _speaks(health, voice) for voice in self._voices.values()
         ):
             _LOGGER.warning(
-                "speech_readiness.failed",
+                _READINESS_FAILED_EVENT,
                 extra={"reason": ReadinessFailure.VOICE_UNREADY},
             )
             raise CoPresenterUnavailableError
@@ -313,7 +314,7 @@ def _health_of(outcome: HealthOutcome) -> wire.Health:
             return outcome
         case UnexpectedStatus():
             _LOGGER.warning(
-                "speech_readiness.failed",
+                _READINESS_FAILED_EVENT,
                 extra={
                     "reason": ReadinessFailure.UNEXPECTED_STATUS,
                     "status": outcome.status,
@@ -321,7 +322,7 @@ def _health_of(outcome: HealthOutcome) -> wire.Health:
             )
         case Malformed() | OverCap() | PastDeadline() | Cut() | Unreachable():
             _LOGGER.warning(
-                "speech_readiness.failed",
+                _READINESS_FAILED_EVENT,
                 extra={"reason": _PLAIN_READINESS_FAILURES[type(outcome)]},
             )
         case _:
