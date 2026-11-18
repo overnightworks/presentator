@@ -1,8 +1,0 @@
-claim_id = "29aacb1bbd054dbf9beea328a105fa2f"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "eba96118613fe798ac17a0aa2507faa948172e50"
-branch = "claude/issue-1264-s9-mirrors-are-a-pod-cache-and-host-key"
-scope = ["docs", "src/gitmirror/__init__.py", "src/gitmirror/mirror.py", "src/gitmirror/model.py", "src/presentator", "tests/gitmirror/test_mirror.py", "tests/gitmirror/test_mirror_ssh.py", "tests/presentator", "tests/support/deck_source_support.py", "tests/support/mirror_support.py", "tests/support/swapped_build.py"]
-opened_commit = "b371b835375374336872d43f7dd7dca6621db69b"
-whole_reason = "the mirror and pin move spans adapters, application, host, migrations, tests and docs"
