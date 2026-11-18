@@ -109,6 +109,17 @@ def fetched(admin: Browser, app: App, name: str) -> httpx2.Response:
     return answer
 
 
+def removal_of(admin: Browser, app: App, name: str) -> int:
+    """Confirm and request the removal of that source, answering its status code."""
+    preview = admin.request(app, "GET", f"{SOURCES}/{name}/removal").json()
+    return admin.request(
+        app,
+        "DELETE",
+        f"{SOURCES}/{name}?deck_count={preview['deck_count']}"
+        f"&run_count={preview['run_count']}",
+    ).status_code
+
+
 def listed_slugs(admin: Browser, app: App) -> list[str]:
     answer = admin.request(app, "GET", DECKS)
     assert answer.status_code == HTTPStatus.OK

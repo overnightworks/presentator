@@ -5,17 +5,24 @@ prompt suppression an unattended server needs, so this package spawns it rather
 than binding a second git implementation.
 """
 
+import base64
+import hashlib
+import hmac
 import os
 import re
 import shutil
 import subprocess
 import tempfile
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
+from urllib.parse import urlsplit
+
+if TYPE_CHECKING:
+    from _hashlib import HASH
 
 from gitmirror.model import (
     Change,
@@ -25,7 +32,10 @@ from gitmirror.model import (
     CredentialResolver,
     GitSource,
     GitUnavailableError,
+    HostKey,
+    HostKeyPins,
     InvalidCredentialError,
+    KnownHosts,
     MirrorError,
     Revision,
     TreeEntry,
@@ -77,7 +87,15 @@ _UNATTENDED: Final = {
 _SSH_KEY_DIRECTORY_MODE: Final = 0o700
 _SSH_KEY_FILE_MODE: Final = 0o600
 _SSH_KEY_FILE_NAME: Final = "id_ed25519"
-_KNOWN_HOSTS_FILE_NAME: Final = "known_hosts"
+_KNOWN_HOSTS_PREFIX: Final = "known_hosts."
+# ssh names a host it reaches on another port than this one `[host]:port`, and
+# hashes that name, with a salt of its own, on a line that starts so.
+_SSH_PORT: Final = 22
+_HASHED_HOST: Final = "|1|"
+_LINE_FIELDS: Final = 3
+# ssh's own words when a host answers with another key than the pinned one;
+# a run whose newly accepted key lost the pin to another process says the same.
+_HOST_KEY_REFUSED: Final = "Host key verification failed."
 # git prints exactly what the format asks for, so the commit and the time of
 # one change arrive on a single line with this between them.
 _LAST_CHANGE: Final = "--format=%H %cI"
@@ -97,6 +115,11 @@ _UNREACHABLE_CHECK: Final = ConnectionCheck(
     state=ConnectionState.UNREACHABLE,
     commit=None,
     detail=None,
+)
+_HOST_KEY_REFUSED_CHECK: Final = ConnectionCheck(
+    state=ConnectionState.FAILED,
+    commit=None,
+    detail=_HOST_KEY_REFUSED,
 )
 # git's own words for a login the far end asked for or turned down, lowercased
 # so a case git happens to pick never hides the match. A bare 403 is
@@ -133,6 +156,7 @@ class GitMirror:
     directory: Path
     credentials: CredentialResolver
     pull_timeout: timedelta
+    known_hosts: KnownHosts
 
     def connect(self) -> Connection:
         """Pull the source's ref, and say what stopped that when it failed."""
@@ -228,7 +252,10 @@ class GitMirror:
         # The URL may carry a user name, so this is the only call that never
         # turns its command line into an error message.
         try:
-            with _credentials(url, secret) as (credential, ssh_key):
+            with (
+                _credentials(url, secret) as (credential, ssh_key),
+                _pinned_hosts(ssh_key, self.known_hosts) as hosts,
+            ):
                 pulled = subprocess.run(  # noqa: S603 - argv is a list led by the resolved git executable with no shell
                     [
                         _git_executable(),
@@ -246,13 +273,16 @@ class GitMirror:
                     env=unattended_environment(
                         credential,
                         ssh_key=ssh_key,
-                        known_hosts=self.directory.parent / _KNOWN_HOSTS_FILE_NAME,
+                        known_hosts=None if hosts is None else hosts.path,
                     ),
                     timeout=self.pull_timeout.total_seconds(),
                 )
+                trusted = hosts is None or hosts.accepted_keys_stand()
         except subprocess.TimeoutExpired:
             # A remote nobody can reach must not hold the page that asked for it.
             return _UNREACHABLE
+        if not trusted:
+            return Connection(state=ConnectionState.FAILED, revision=None)
         if pulled.returncode != 0:
             stderr = pulled.stderr.decode(errors="replace").strip()
             return Connection(
@@ -298,7 +328,7 @@ def check_connection(
     ref: str,
     secret: str | None,
     timeout: timedelta,
-    known_hosts: Path | None = None,
+    known_hosts: KnownHosts | None = None,
 ) -> ConnectionCheck:
     """Ask the remote for one ref's head, without ever writing a mirror to disk.
 
@@ -312,7 +342,10 @@ def check_connection(
     except InvalidCredentialError:
         return _REFUSED_CHECK
     try:
-        with _credentials(url, secret) as (credential, ssh_key):
+        with (
+            _credentials(url, secret) as (credential, ssh_key),
+            _pinned_hosts(ssh_key, known_hosts) as hosts,
+        ):
             probed = subprocess.run(  # noqa: S603 - argv is a list led by the resolved git executable with no shell
                 [
                     _git_executable(),
@@ -328,12 +361,22 @@ def check_connection(
                 env=unattended_environment(
                     credential,
                     ssh_key=ssh_key,
-                    known_hosts=known_hosts,
+                    known_hosts=None if hosts is None else hosts.path,
                 ),
                 timeout=timeout.total_seconds(),
             )
+            trusted = hosts is None or hosts.accepted_keys_stand()
     except subprocess.TimeoutExpired:
         return _UNREACHABLE_CHECK
+    if not trusted:
+        return _HOST_KEY_REFUSED_CHECK
+    return _check_answered_by(probed, secret=secret)
+
+
+def _check_answered_by(
+    probed: subprocess.CompletedProcess[bytes], *, secret: str | None
+) -> ConnectionCheck:
+    """What a finished `ls-remote` says: the head commit, or which failure and why."""
     if probed.returncode != 0:
         stderr = probed.stderr.decode(errors="replace").strip()
         sanitized = _sanitized(stderr, secret=secret)
@@ -395,12 +438,135 @@ def is_ssh_remote(url: str) -> bool:
 
 
 def _ssh_command(key: Path, known_hosts: Path) -> str:
-    """The `ssh` git is told to run: this key alone, host key pinned on first use."""
+    """The `ssh` git is told to run: this key alone, host key pinned on first use.
+
+    The host stays readable and ssh adds no further key on its own, so each
+    line it writes names one host the pins can be keyed by.
+    """
     return (
         f"ssh -i {key} -o IdentitiesOnly=yes -o BatchMode=yes "
         f"-o ConnectTimeout={_SSH_CONNECT_SECONDS} -o StrictHostKeyChecking=accept-new "
-        f"-o UserKnownHostsFile={known_hosts}"
+        f"-o UserKnownHostsFile={known_hosts} -o HashKnownHosts=no -o UpdateHostKeys=no"
     )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _PinnedHostsFile:
+    """The known_hosts file of one ssh run, written from the pins it started with."""
+
+    path: Path
+    known_hosts: KnownHosts
+    pinned: frozenset[HostKey]
+
+    def accepted_keys_stand(self) -> bool:
+        """Pin each key ssh accepted during the run; false if another pin stood first.
+
+        Two processes can each accept a new host's key before either pinned
+        it, and only the first pin stands, so the other's run is not trusted.
+        """
+        accepted = _host_keys_in(self.path) - self.pinned
+        return all(self.known_hosts.pins.pin(key) == key for key in accepted)
+
+
+@contextmanager
+def _pinned_hosts(
+    ssh_key: Path | None, known_hosts: KnownHosts | None
+) -> Generator[_PinnedHostsFile | None]:
+    """Every pinned host key in a file for the length of one ssh run, else nothing."""
+    if ssh_key is None or known_hosts is None:
+        yield None
+        return
+    pinned = frozenset(known_hosts.pins.pinned())
+    known_hosts.directory.mkdir(parents=True, exist_ok=True)
+    descriptor, name = tempfile.mkstemp(
+        prefix=_KNOWN_HOSTS_PREFIX, dir=known_hosts.directory
+    )
+    path = Path(name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as hosts_file:
+            hosts_file.writelines(f"{each.host} {each.key}\n" for each in pinned)
+        yield _PinnedHostsFile(path=path, known_hosts=known_hosts, pinned=pinned)
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def _host_keys_in(path: Path) -> frozenset[HostKey]:
+    """The keys a known_hosts file holds, one per line as `host key`."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return frozenset(
+        HostKey(host=host, key=key.strip())
+        for host, _, key in (line.strip().partition(" ") for line in lines)
+        if host and not host.startswith("#")
+    )
+
+
+def adopt_known_hosts(file: Path, *, urls: Iterable[str], pins: HostKeyPins) -> None:
+    """Pin the key a known_hosts file ssh wrote holds for each ssh host of the urls.
+
+    ssh may have hashed the host names, so a line is matched by each host the
+    urls name. A host pinned already keeps its pin.
+    """
+    if not file.is_file():
+        return
+    entries = tuple(_known_host_entries(file))
+    for host in sorted({host for url in urls if (host := _known_host_of(url))}):
+        key = next((key for names, key in entries if _names(names, host)), None)
+        if key is not None:
+            pins.pin(HostKey(host=host, key=key))
+
+
+def _known_host_of(url: str) -> str | None:
+    """The name ssh gives the host of an ssh url in a known_hosts file."""
+    if url.startswith("ssh://"):
+        parsed = urlsplit(url)
+        try:
+            host, port = parsed.hostname, parsed.port
+        except ValueError:
+            return None
+    elif is_ssh_remote(url):
+        authority = url.partition("@")[2]
+        bracketed = authority.startswith("[")
+        host = (
+            authority[1 : authority.find("]")]
+            if bracketed
+            else authority.partition(":")[0]
+        ).lower()
+        port = None
+    else:
+        return None
+    return host if port in {None, _SSH_PORT} else f"[{host}]:{port}"
+
+
+def _known_host_entries(file: Path) -> Generator[tuple[str, str]]:
+    """Each line's host names and its key, skipping comments and markers."""
+    for line in file.read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        if len(fields) >= _LINE_FIELDS and not fields[0].startswith(("#", "@")):
+            yield fields[0], f"{fields[1]} {fields[2]}"
+
+
+def _names(names: str, host: str) -> bool:
+    """Whether a line's host names, plain or hashed, name that host."""
+    if not names.startswith(_HASHED_HOST):
+        return host in names.split(",")
+    parts = names.removeprefix(_HASHED_HOST).split("|")
+    try:
+        # A line ssh did not write fails either way: as too many parts or as
+        # no base64, whose error is a `ValueError` too.
+        salt, digest = (base64.b64decode(part, validate=True) for part in parts)
+    except ValueError:
+        return False
+    hashed = hmac.new(salt, host.encode(), _known_hosts_sha1).digest()
+    return hmac.compare_digest(hashed, digest)
+
+
+def _known_hosts_sha1(data: bytes = b"") -> HASH:
+    """SHA-1 as OpenSSH's hashed known_hosts format fixes it.
+
+    The hash only finds the line that names a host; the pinned key, not the
+    hash, decides trust, so no security property rests on SHA-1 here.
+    """
+    return hashlib.sha1(data, usedforsecurity=False)
 
 
 @contextmanager

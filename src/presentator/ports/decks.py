@@ -5,6 +5,7 @@ is a different thing entirely.
 """
 
 from abc import abstractmethod
+from collections.abc import Iterable
 from contextlib import AbstractContextManager
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -153,6 +154,13 @@ class DeckFolders(Protocol):
         answered by its path relative to the data volume, so a caller that
         must not go on believing a mirror was cleared can stop and say what
         stayed rather than take that on faith.
+        """
+
+    @abstractmethod
+    def forget_all_but(self, sources: Iterable[Source]) -> None:
+        """Delete every mirror on this disk that none of these sources has.
+
+        A mirror that stays is tried again on the next call.
         """
 
 

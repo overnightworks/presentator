@@ -688,12 +688,14 @@ class Decks:
         """Run that work, or answer `busy` while another refresh holds the lock.
 
         The lock of this process is taken first, so the one connection to the
-        other processes is never used by two refreshes at once. A process
-        turned away by another drops the copies on its disk that no row names.
+        other processes is never used by two refreshes at once. Every turn
+        drops the mirrors on this disk that no source row names, and a process
+        turned away by another drops the copies of builds no row names.
         """
         if not self.one_at_a_time.acquire(blocking=False):
             return busy
         try:
+            self.folders.forget_all_but(self.sources.all())
             if recovering:
                 self.ownership.recover()
             with self.ownership.try_hold() as held:

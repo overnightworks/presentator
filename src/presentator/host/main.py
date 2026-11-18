@@ -44,6 +44,7 @@ from presentator.adapters.decks import (
 from presentator.adapters.identity import SystemClock, TokenIdentifierFactory
 from presentator.adapters.postgres.deck_store import PostgresDeckStore
 from presentator.adapters.postgres.engine import create_database_engine
+from presentator.adapters.postgres.host_keys import PostgresHostKeyPins
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
 from presentator.adapters.postgres.migrate import (
     MIGRATIONS_DIRECTORY,
@@ -189,6 +190,7 @@ class Stores:
     source_runs: SourceRuns
     refresh_ownership: RefreshOwnership
     credentials: PostgresSourceCredentials
+    host_keys: PostgresHostKeyPins
     sessions: PostgresSessionRecordStore
     identity_writes: PostgresIdentityWrites
     instance_settings: InstanceSettingsStore
@@ -217,11 +219,8 @@ def build_instance(
     # A refusal after the stores opened releases their connections, which
     # nothing else holds.
     try:
-        mirrors = SourceMirrors(
-            directory=settings.mirrors,
-            credentials=stores.credentials,
-            pull_timeout=_source_timeout(settings),
-        )
+        mirrors = _source_mirrors(settings, stores)
+        mirrors.adopt_earlier_pins(stores.sources.all())
         cache = _build_cache(settings)
         decks = _decks(
             settings, stores, mirrors=mirrors, cache=cache, toolchain=toolchain
@@ -269,6 +268,16 @@ def _with_redis(stores: Stores, redis: SharedRedis) -> Stores:
         stores,
         readiness=ready,
         close=partial(_closed_in_turn, stores.close, redis.close),
+    )
+
+
+def _source_mirrors(settings: Settings, stores: Stores) -> SourceMirrors:
+    """This process's mirrors, trusting the host keys the database pins."""
+    return SourceMirrors(
+        directory=settings.mirrors,
+        credentials=stores.credentials,
+        pull_timeout=_source_timeout(settings),
+        host_keys=stores.host_keys,
     )
 
 
@@ -329,6 +338,7 @@ def _postgres_stores(
         source_runs=PostgresSourceRunStore(engine=engine, fence=ownership),
         refresh_ownership=ownership,
         credentials=PostgresSourceCredentials(engine=engine, box=box),
+        host_keys=PostgresHostKeyPins(engine=engine),
         sessions=PostgresSessionRecordStore(engine),
         identity_writes=PostgresIdentityWrites(engine, LoggingAuditSink()),
         instance_settings=PostgresInstanceSettingsStore(engine),
@@ -466,7 +476,7 @@ def _decks(
         # same remote for the same one thing, just without writing it down.
         checker=MirroredConnectionChecker(
             check_timeout=_source_timeout(settings),
-            known_hosts=settings.mirrors / "known_hosts",
+            known_hosts=mirrors.known_hosts,
         ),
         toolchain_themes=PackageJsonThemes(project=settings.toolchain),
         ownership=stores.refresh_ownership,

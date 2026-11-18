@@ -279,7 +279,7 @@ def test_a_pull_that_runs_past_its_bound_says_nothing_rather_than_waiting(
 def a_checker() -> MirroredConnectionChecker:
     return MirroredConnectionChecker(
         check_timeout=A_GENEROUS_BOUND,
-        known_hosts=Path("/nowhere-a-test-names-known-hosts"),
+        known_hosts=mirrors_under(Path("/nowhere-a-test-names-mirrors")).known_hosts,
     )
 
 

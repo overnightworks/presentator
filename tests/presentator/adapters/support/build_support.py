@@ -19,6 +19,7 @@ from tests.presentator.adapters.support.credentials_support import OpenCredentia
 from tests.presentator.application.support.fakes import THE_TOOLCHAIN
 from tests.support.git_remote import with_the_program
 from tests.support.log_lines import LoggedText, LogLine
+from tests.support.mirror_support import PinsInMemory
 from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects
 
 A_GENEROUS_BOUND = timedelta(seconds=30)
@@ -82,6 +83,7 @@ def builds_under(
             directory=tmp_path / "mirrors",
             credentials=OpenCredentials(),
             pull_timeout=A_GENEROUS_BOUND,
+            host_keys=PinsInMemory(),
         ),
         output_megabytes=output_megabytes,
     )
