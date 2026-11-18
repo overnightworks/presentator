@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from logline.standard import EVENT_NAME_PATTERN
 from pydantic import SecretStr
 
 from presentator.adapters.shared_redis import SharedRedis
@@ -66,7 +67,12 @@ def test_a_served_process_writes_only_json_and_no_free_text_line_of_uvicorn(
     app.process.send_signal(signal.SIGTERM)
     lines = json_lines(app.output_after_exit())
 
-    assert not [one for one in lines if str(one["logger"]).startswith("uvicorn")]
+    uvicorn_events = [
+        str(one["event"]) for one in lines if str(one["logger"]).startswith("uvicorn")
+    ]
+    assert uvicorn_events
+    assert "uvicorn.unknown_record" not in uvicorn_events
+    assert all(EVENT_NAME_PATTERN.fullmatch(event) for event in uvicorn_events)
 
 
 def test_no_line_of_a_served_process_carries_a_store_address(app: App) -> None:
