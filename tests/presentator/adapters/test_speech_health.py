@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Final
 
 import pytest
 from fastapi.responses import JSONResponse
@@ -16,9 +17,11 @@ from presentator.contracts.copresenter import (
 )
 from presentator.contracts.voice import SampleLanguage
 from tests.support.lobby import the_speech_voices
+from tests.support.log_lines import LoggedText, json_logged
 from tests.support.speech_service import (
     HEALTH_FAILURES,
     MALFORMED_PEERS,
+    PLANTED,
     FakeSpeechService,
     RawPeer,
     a_closed_port_origin,
@@ -107,15 +110,48 @@ def test_the_health_request_carries_no_credential() -> None:
     )
 
 
-@pytest.mark.parametrize("case", HEALTH_FAILURES)
-def test_every_answer_but_a_ready_health_is_unavailable(case: str) -> None:
+def the_readiness_failure(logged: LoggedText) -> tuple[object, object]:
+    """The `(reason, status)` of the one readiness failure line; no planted text."""
+    (line,) = [one for one in logged.lines if one["event"] == "speech_readiness.failed"]
+    assert PLANTED not in logged.text
+    return line["reason"], line.get("status")
+
+
+# The `(reason, status)` of the `speech_readiness.failed` line of every failure.
+_READINESS_FAILURE_LINES: Final[dict[str, tuple[str, int | None]]] = {
+    "non-200-marked": ("unexpected_status", 503),
+    "garbage-marked": ("malformed", None),
+    "missing-section": ("malformed", None),
+    "ready-as-text": ("malformed", None),
+    "ready-as-number": ("malformed", None),
+    "sample-rate-as-text": ("malformed", None),
+    "past-the-cap": ("over_cap", None),
+    "cut-body": ("cut", None),
+    "v0.1-shape": ("malformed", None),
+    "voice-absent": ("voice_unready", None),
+    "service-in-its-start-load": ("voice_unready", None),
+}
+
+
+def test_the_table_of_readiness_failure_lines_names_every_failure() -> None:
+    assert _READINESS_FAILURE_LINES.keys() == HEALTH_FAILURES.keys()
+
+
+@pytest.mark.parametrize(("case", "expected"), _READINESS_FAILURE_LINES.items())
+def test_every_answer_but_a_ready_health_is_unavailable(
+    case: str, expected: tuple[str, int | None], capsys: pytest.CaptureFixture[str]
+) -> None:
     fake = FakeSpeechService(health_answer=HEALTH_FAILURES[case])
 
-    with pytest.raises(CoPresenterUnavailableError):
+    with json_logged(capsys) as logged, pytest.raises(CoPresenterUnavailableError):
         readiness_of(fake)
 
+    assert the_readiness_failure(logged) == expected
 
-def test_a_health_read_past_its_deadline_is_unavailable() -> None:
+
+def test_a_health_read_past_its_deadline_is_unavailable(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     def bounded_health_fetch(*_args: object, **_kwargs: object) -> PastDeadline:
         return PastDeadline()
 
@@ -126,16 +162,22 @@ def test_a_health_read_past_its_deadline_is_unavailable() -> None:
     )
 
     running = hearing.readiness()
-    with pytest.raises(CoPresenterUnavailableError):
+    with json_logged(capsys) as logged, pytest.raises(CoPresenterUnavailableError):
         asyncio.run(running)
 
+    assert the_readiness_failure(logged) == ("past_deadline", None)
 
-def test_a_refused_connection_is_unavailable() -> None:
+
+def test_a_refused_connection_is_unavailable(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     hearing = SpeechHearing(a_closed_port_origin(), voices=the_speech_voices())
 
     running = hearing.readiness()
-    with pytest.raises(CoPresenterUnavailableError):
+    with json_logged(capsys) as logged, pytest.raises(CoPresenterUnavailableError):
         asyncio.run(running)
+
+    assert the_readiness_failure(logged) == ("unreachable", None)
 
 
 @pytest.mark.parametrize(
