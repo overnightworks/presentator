@@ -417,18 +417,21 @@ def _build_cache(settings: Settings) -> BuildCache:
     """The runs on this disk, kept in the store through this process's one client.
 
     The client reads the platform's key and configuration files as it is made,
-    so one that does not parse refuses the start.
+    so one that does not parse refuses the start. A copy a fetch left half
+    written when an earlier process died goes before any request is served.
     """
     try:
         client = object_store_client()
     except ConfigParseError:
         unparsable = "the object store's key or configuration file does not parse"
         raise cannot_start(unparsable, variables=_OBJECT_STORE_FILES) from None
-    return BuildCache(
+    cache = BuildCache(
         root=settings.builds,
         store=StoredRuns(client=client, bucket=settings.s3_bucket),
         bound_bytes=settings.build_cache_bytes,
     )
+    cache.drop_unfinished_fetches()
+    return cache
 
 
 def _source_timeout(settings: Settings) -> timedelta:

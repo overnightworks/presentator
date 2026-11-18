@@ -127,6 +127,17 @@ class BuildCache:
         """Take that run out of the store and off this disk, and say whether it went."""
         return self.store.delete(name) and removed_run(self.root.absolute(), name)
 
+    def drop_unfinished_fetches(self) -> None:
+        """Take away every copy a fetch left half written when its process died.
+
+        Called once at start, before any request: this disk is the process's
+        own, so nothing else is fetching into it, and no listing of runs counts
+        such a copy, so nothing else would ever take it. A root never made
+        holds none.
+        """
+        for arriving in self.root.glob(f"{ARRIVING_PREFIX}*"):
+            taken_away(arriving)
+
     def _fetched(self, name: str) -> bool:
         """Fetch that run into a directory of its own, then move it into place at once.
 

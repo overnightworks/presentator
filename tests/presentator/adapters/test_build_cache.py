@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from presentator.adapters.build_cache import BuildCache, RunObjects
+from presentator.adapters.build_runs import ARRIVING_PREFIX
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
     MANIFEST_FILE,
@@ -181,6 +182,20 @@ def test_a_fetch_under_way_is_no_copy_a_drop_beside_it_takes(tmp_path: Path) -> 
     assert served is not None
     talk = served / OUTPUT_DIRECTORY / TALK_DIRECTORY / _PAGE
     assert talk.read_text(encoding="utf-8") == "the talk of run-1"
+
+
+def test_a_copy_a_dead_process_left_half_fetched_is_gone_after_the_start(
+    tmp_path: Path, store: DirectoryRunObjects
+) -> None:
+    cache = a_cache(tmp_path / "builds", store)
+    built_run(cache, "run-1")
+    left_behind = cache.root / f"{ARRIVING_PREFIX}x" / OUTPUT_DIRECTORY
+    left_behind.mkdir(parents=True)
+    (left_behind / PDF_FILE).write_bytes(b"x" * _A_RUNS_BYTES)
+
+    cache.drop_unfinished_fetches()
+
+    assert on_disk(cache) == {"run-1"}
 
 
 def test_a_run_under_way_counts_but_is_never_taken_by_the_bound(
