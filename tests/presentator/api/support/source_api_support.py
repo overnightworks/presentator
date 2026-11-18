@@ -3,12 +3,12 @@
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from http import HTTPStatus
-from pathlib import Path
 from typing import Final, cast
 
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from sqlalchemy import Engine
 
 from presentator.api.hooks import hook_address
 from presentator.application.decks import RESERVED_SOURCE_NAME, Decks
@@ -142,10 +142,10 @@ def an_admin_cookie_instance(decks: Decks, store: FakeSourceStore) -> Instance:
 
 
 def an_admin_bearer_instance(
-    decks: Decks, store: FakeSourceStore, tmp_path: Path
+    decks: Decks, store: FakeSourceStore, engine: Engine
 ) -> Instance:
     """An admin reaching the lobby by a bearer alone, with no cookie."""
-    scene = a_scene(tmp_path, token_clients=frozenset({HAL}), decks=decks)
+    scene = a_scene(engine, token_clients=frozenset({HAL}), decks=decks)
     return Instance(
         a_client_with_no_header_of_its_own(scene),
         store,
@@ -154,10 +154,10 @@ def an_admin_bearer_instance(
     )
 
 
-def a_scene_that_must_not_run(tmp_path: Path) -> Scene:
+def a_scene_that_must_not_run(engine: Engine) -> Scene:
     """A lobby with a bearer client whose every deck port fails the test."""
     return a_scene(
-        tmp_path, token_clients=frozenset({HAL}), decks=decks_that_must_not_run()
+        engine, token_clients=frozenset({HAL}), decks=decks_that_must_not_run()
     )
 
 
@@ -341,15 +341,15 @@ def a_world(checker: RecordingChecker | None = None) -> World:
     return World(decks, clock, recording, store, drafts, webhook_secrets)
 
 
-def _cookie(world: World, _tmp_path: Path) -> Instance:
+def _cookie(world: World, _engine: Engine) -> Instance:
     return an_admin_cookie_instance(world.decks, world.store)
 
 
-def _bearer(world: World, tmp_path: Path) -> Instance:
-    return an_admin_bearer_instance(world.decks, world.store, tmp_path)
+def _bearer(world: World, engine: Engine) -> Instance:
+    return an_admin_bearer_instance(world.decks, world.store, engine)
 
 
-type AdminReach = Callable[[World, Path], Instance]
+type AdminReach = Callable[[World, Engine], Instance]
 
 AN_ADMIN_BY_COOKIE_AND_BEARER: Final = pytest.mark.parametrize(
     "reach", [_cookie, _bearer], ids=["cookie", "bearer"]

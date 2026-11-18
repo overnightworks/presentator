@@ -44,12 +44,16 @@ termination window fails the cell and no later twin starts. Every twin is
 deleted before the cell returns.
 
 Cells 10 to 13 run after cell 9 on the web as platform renders it, at the pin:
-the render's ConfigMap and Deployment, whose web container gains the URL of a
-throwaway Redis the probe runs in its namespace, and Secrets the driver
-generates. The Secrets' names and keys come from the Deployment's `secrets`
-volume (the files its environment names under the mount, and the workers' key
-that the volume projects), each value from the effect `secret`, 64 hex
-characters from `secrets` in a real run. The values go to `kubectl apply` on
+the render's ConfigMaps and Deployment, whose web container's Redis URL names a
+throwaway Redis the probe runs in its namespace, a throwaway Postgres there in
+place of the render's, named, reached and logged into as the web's database URL
+says, which the Deployment's init container migrates before the web starts, and
+Secrets the driver generates. The Secrets' names and keys come from the Secret
+volumes the web container mounts (the files its environment names under each
+mount, the database password among them, and the workers' key that the
+`secrets` volume projects), each value from the effect `secret`, 64 hex
+characters from `secrets` in a real run; the probe's Postgres reads the
+password from the same Secret. The values go to `kubectl apply` on
 stdin only and never to a printed line, an error, an argument or a file; they
 live in the run's cluster. The Secrets go in before cell 7, as the worker pods
 mount the workers' key.
@@ -156,11 +160,13 @@ from probe_build_worker_k3d_lives import (
     watch_lives,
 )
 from probe_build_worker_k3d_manifests import (
+    POSTGRES_PINNED,
     PRODUCTION_IMAGE,
     REDIS_PINNED,
     WORKER_CONTAINER,
     applied_documents,
     namespace_document,
+    postgres_documents,
     prove_render,
     redis_documents,
     throwaway_secrets,
@@ -370,11 +376,13 @@ def drive_web(run: Run, overlay: list[Document]) -> str:
     deployment = next(d for d in documents if d["kind"] == "Deployment")
     worker_documents = applied_documents(overlay, init_container=True, replicas=2)
     manifest = as_stream(worker_documents)
-    require_redis_in_node(run)
-    run(
-        "kubectl apply --filename -",
-        stdin=as_stream([*redis_documents(run.redis_image), *documents]),
-    )
+    for store in throwaway_stores(run):
+        require_store_in_node(run, store)
+    stores = [
+        *redis_documents(run.redis_image),
+        *postgres_documents(deployment, run.postgres_image),
+    ]
+    run("kubectl apply --filename -", stdin=as_stream([*stores, *documents]))
     statefulset = next(d for d in worker_documents if d["kind"] == "StatefulSet")
     for number, judge in web_cells(run, deployment, statefulset, manifest):
         if problem := judge():
@@ -448,49 +456,65 @@ def use_released_image(run: Run, released: ReleasedImage) -> None:
     say(f"released image {released.reference} is {run.tag}, repo digest {pinned}")
 
 
-def pull_redis(run: Run) -> None:
-    """Make the probe Redis's local name the pinned image, pulled by the runner.
+@dataclass(frozen=True)
+class ThrowawayStore:
+    """A store the web reaches that the probe runs: its pinned image, its local name."""
+
+    name: str
+    pinned: str
+    local: str
+
+
+def throwaway_stores(run: Run) -> tuple[ThrowawayStore, ...]:
+    """The probe's Redis and Postgres."""
+    return (
+        ThrowawayStore("Redis", REDIS_PINNED, run.redis_image),
+        ThrowawayStore("Postgres", POSTGRES_PINNED, run.postgres_image),
+    )
+
+
+def pull_store(run: Run, store: ThrowawayStore) -> None:
+    """Make the store's local name its pinned image, pulled by the runner.
 
     The digest in the pulled reference is the proof; the cluster pulls nothing.
     """
-    pulled = run("docker pull", REDIS_PINNED, check=False)
+    pulled = run("docker pull", store.pinned, check=False)
     if pulled.returncode:
-        refuse(f"Redis image {REDIS_PINNED} did not pull: {pulled.stderr[-2000:]}")
+        refuse(
+            f"{store.name} image {store.pinned} did not pull: {pulled.stderr[-2000:]}"
+        )
     try:
-        run("docker tag", REDIS_PINNED, run.redis_image)
+        run("docker tag", store.pinned, store.local)
     finally:
-        run("docker image rm", REDIS_PINNED, check=False)
+        run("docker image rm", store.pinned, check=False)
 
 
-def require_redis_in_node(run: Run) -> None:
-    """Refuse unless the node's runtime holds the probe Redis under its local name.
+def require_store_in_node(run: Run, store: ThrowawayStore) -> None:
+    """Refuse unless the node's runtime holds the store's image under its local name.
 
-    The Redis pod never pulls, so a missing image would only show as a web that
-    never turns Ready; the runtime resolves the name the way the kubelet does.
-    The node is asked right after the import, and again before the web cells
-    apply the pod: the cluster starts with image garbage collection and
+    The store's pod never pulls, so a missing image would only show as a web
+    that never turns Ready; the runtime resolves the name the way the kubelet
+    does. The node is asked right after the import, and again before the web
+    cells apply the pod: the cluster starts with image garbage collection and
     eviction held off, and this look proves it held.
     """
-    found = run(
-        "docker exec", run.node, "crictl", "inspecti", run.redis_image, check=False
-    )
+    found = run("docker exec", run.node, "crictl", "inspecti", store.local, check=False)
     if found.returncode:
         refuse(
-            f"Redis image {run.redis_image} is not in the cluster's node {run.node}: "
-            f"{found.stderr[-2000:]}"
+            f"{store.name} image {store.local} is not in the cluster's node "
+            f"{run.node}: {found.stderr[-2000:]}"
         )
 
 
-def import_redis(run: Run) -> None:
-    """Put the probe Redis into the cluster; teardown removes the local name."""
-    imported = run(
-        "k3d image import", run.redis_image, "--cluster", run.name, check=False
-    )
+def import_store(run: Run, store: ThrowawayStore) -> None:
+    """Put the store's image into the cluster; teardown removes the local name."""
+    imported = run("k3d image import", store.local, "--cluster", run.name, check=False)
     if imported.returncode:
         refuse(
-            f"Redis image {run.redis_image} did not import: {imported.stderr[-2000:]}"
+            f"{store.name} image {store.local} did not import: "
+            f"{imported.stderr[-2000:]}"
         )
-    require_redis_in_node(run)
+    require_store_in_node(run, store)
 
 
 def drive(run: Run, released: ReleasedImage | None = None) -> None:
@@ -508,11 +532,13 @@ def drive(run: Run, released: ReleasedImage | None = None) -> None:
             run("docker build --tag", run.tag, str(run.repository))
         else:
             use_released_image(run, released)
-        pull_redis(run)
+        for store in throwaway_stores(run):
+            pull_store(run, store)
         start_cluster(run, k3s_version)
         prove_label_filter(run)
         run("k3d image import", run.tag, "--cluster", run.name)
-        import_redis(run)
+        for store in throwaway_stores(run):
+            import_store(run, store)
         namespace = json.dumps(namespace_document(run.platform))
         run("kubectl apply --filename -", stdin=namespace)
         problems = drive_cells(run, overlay)

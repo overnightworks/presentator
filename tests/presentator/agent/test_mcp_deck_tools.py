@@ -11,10 +11,10 @@ from collections.abc import Iterator
 from dataclasses import replace
 from datetime import timedelta
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from httpx2 import Response
+from sqlalchemy import Engine
 
 from presentator.agent.mcp import AGENT_GROUP, MCP_GROUP
 from presentator.api.deck_api import DECK_VIEW_PATH
@@ -48,8 +48,8 @@ _DECK_AND_TEXT = pytest.mark.parametrize(
 
 
 @pytest.fixture
-def world(tmp_path: Path) -> Iterator[World]:
-    with a_world(tmp_path) as running:
+def world(engine: Engine) -> Iterator[World]:
+    with a_world(engine) as running:
         yield running
 
 
@@ -153,13 +153,13 @@ def test_a_deck_with_no_build_shows_its_state_and_has_no_text(
 
 
 def test_after_a_failed_rebuild_the_view_shows_the_failure_and_the_text_the_last_build(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     failed = an_attempt(BuildOutcome.FAILED, failure=BuildFailure.said("it broke"))
     texts = FakeDeckTexts(
         by_commit={failed.commit: replace(A_DECK_TEXT, title="Failed commit")}
     )
-    with a_world(tmp_path, texts=texts) as world:
+    with a_world(engine, texts=texts) as world:
         the_deck_has(world, attempt=failed, built=True)
 
         view = called_through_mcp(
@@ -188,9 +188,9 @@ def test_after_a_failed_rebuild_the_view_shows_the_failure_and_the_text_the_last
     ],
 )
 def test_a_deck_without_slides_is_not_found_and_one_with_none_is_an_empty_list(
-    tmp_path: Path, text: DeckText | None, answers: HTTPStatus
+    engine: Engine, text: DeckText | None, answers: HTTPStatus
 ) -> None:
-    with a_world(tmp_path, texts=FakeDeckTexts(text=text)) as world:
+    with a_world(engine, texts=FakeDeckTexts(text=text)) as world:
         address = DECK_TEXT_PATH.format(slug=World.FELIX_DECK)
 
         by_cookie = felix_by_cookie(world, address)
@@ -230,9 +230,9 @@ def test_another_persons_deck_and_an_unknown_one_give_the_same_not_found_bytes(
 
 
 def test_an_unreadable_mirror_is_a_503_problem_and_no_usable_answer_to_the_agent(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    engine: Engine, caplog: pytest.LogCaptureFixture
 ) -> None:
-    with a_world(tmp_path, texts=FakeDeckTexts(unreadable=True)) as world:
+    with a_world(engine, texts=FakeDeckTexts(unreadable=True)) as world:
         address = DECK_TEXT_PATH.format(slug=World.FELIX_DECK)
         bearer = world.bearer()
         token = bearer["authorization"].removeprefix("Bearer ")
@@ -348,11 +348,11 @@ def test_an_own_account_agent_finds_no_deck_of_a_person(
 
 @_DECK_AND_TEXT
 def test_the_cookie_and_a_configured_person_bearer_read_beside_the_resource(
-    tmp_path: Path, path: str, tool: str
+    engine: Engine, path: str, tool: str
 ) -> None:
     del tool
     with a_world(
-        tmp_path,
+        engine,
         token_clients=frozenset({World.HAL}),
     ) as world:
         address = path.format(slug=World.FELIX_DECK)

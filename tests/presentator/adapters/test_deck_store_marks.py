@@ -1,14 +1,14 @@
 """The mark a deck row carries while its folder is missing, and the purge by it."""
 
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine
 
-from presentator.adapters.deck_store import SqliteDeckStore
-from presentator.adapters.decks import SqliteSourceRunStore, SqliteSourceStore
 from presentator.adapters.identity import TokenIdentifierFactory
-from presentator.adapters.schema import create_tables
+from presentator.adapters.postgres.deck_store import PostgresDeckStore
+from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
+from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
 from presentator.application.build_retention import REMOVED_DECK_KEPT
 from presentator.application.decks import Decks
@@ -24,7 +24,14 @@ from tests.presentator.application.support.fakes import (
     FakeWebhookSecrets,
     FrozenClock,
 )
-from tests.support.deck_source_support import OWNER, SOURCE_ID, a_deck
+from tests.support.deck_source_support import (
+    OWNER,
+    SOURCE_ID,
+    a_deck,
+    a_source_database,
+    seed_source_rows,
+)
+from tests.support.postgres import NO_FENCE
 
 _MICROSECOND = timedelta(microseconds=1)
 _DAY = timedelta(days=1)
@@ -36,31 +43,35 @@ def missed_at() -> datetime:
     return datetime(2026, 1, 20, 9, tzinfo=UTC)
 
 
+_ANOTHER_SOURCE_ID = "a-second-source"
+
+
 @pytest.fixture
 def another_source_id() -> str:
-    return "a-second-source"
+    return _ANOTHER_SOURCE_ID
 
 
-def a_deck_store(tmp_path: Path) -> SqliteDeckStore:
-    database = tmp_path / "presentator.sqlite3"
-    create_tables(database)
-    return SqliteDeckStore(database=database)
+def a_deck_store(engine: Engine) -> PostgresDeckStore:
+    seed_source_rows(engine, SOURCE_ID, _ANOTHER_SOURCE_ID)
+    return PostgresDeckStore(engine=engine, fence=NO_FENCE)
 
 
-def slugs_of(store: SqliteDeckStore, source_id: str = SOURCE_ID) -> set[str]:
+def slugs_of(store: PostgresDeckStore, source_id: str = SOURCE_ID) -> set[str]:
     return {deck.slug for deck in store.for_source(source_id)}
 
 
-def missed(store: SqliteDeckStore, *, at: datetime, source_id: str = SOURCE_ID) -> None:
+def missed(
+    store: PostgresDeckStore, *, at: datetime, source_id: str = SOURCE_ID
+) -> None:
     """A pass that read the source and found none of its folders."""
     store.mark_removed_except(frozenset(), source_id=source_id, at=at)
 
 
 def test_only_that_sources_rows_marked_by_the_cutoff_go(
-    tmp_path: Path, missed_at: datetime, another_source_id: str
+    engine: Engine, missed_at: datetime, another_source_id: str
 ) -> None:
     """#511 matrix 18."""
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     for slug in ("long-gone", "just-gone", "listed"):
         store.put(a_deck(slug))
     store.put(a_deck("theirs", source_id=another_source_id))
@@ -91,14 +102,14 @@ def test_only_that_sources_rows_marked_by_the_cutoff_go(
     ],
 )
 def test_the_cutoff_holds_to_the_microsecond(
-    tmp_path: Path,
+    engine: Engine,
     missed_at: datetime,
     marked_after: timedelta,
     before_after: timedelta,
     removed: int,
 ) -> None:
     """#511 matrix 19."""
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     store.put(a_deck())
     missed(store, at=missed_at + marked_after)
 
@@ -109,10 +120,10 @@ def test_the_cutoff_holds_to_the_microsecond(
 
 
 def test_a_second_miss_keeps_the_first_instant(
-    tmp_path: Path, missed_at: datetime
+    engine: Engine, missed_at: datetime
 ) -> None:
     """#511 matrix 20."""
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     store.put(a_deck())
     missed(store, at=missed_at)
     missed(store, at=missed_at + 10 * _DAY)
@@ -121,10 +132,10 @@ def test_a_second_miss_keeps_the_first_instant(
 
 
 def test_a_folder_seen_again_starts_a_new_count_at_its_next_miss(
-    tmp_path: Path, missed_at: datetime
+    engine: Engine, missed_at: datetime
 ) -> None:
     """#511 matrix 20."""
-    store = a_deck_store(tmp_path)
+    store = a_deck_store(engine)
     store.put(a_deck())
     missed(store, at=missed_at)
     store.mark_removed_except(
@@ -138,16 +149,16 @@ def test_a_folder_seen_again_starts_a_new_count_at_its_next_miss(
 
 
 def test_a_refresh_over_the_tables_deletes_a_deck_missed_for_the_kept_period(
-    tmp_path: Path, missed_at: datetime
+    engine: Engine, missed_at: datetime
 ) -> None:
     """#511 matrix 21."""
     a_git_host_credential = "the read-only words only this test made up"
-    database = tmp_path / "presentator.sqlite3"
-    create_tables(database)
-    sources = SqliteSourceStore(
-        database=database,
+    database = a_source_database(engine)
+    sources = PostgresSourceStore(
+        engine=database,
         identifiers=TokenIdentifierFactory(),
         box=secret_box("the key only this test's instance carries"),
+        fence=NO_FENCE,
     )
     source = sources.add(
         SourceWrite(
@@ -160,7 +171,7 @@ def test_a_refresh_over_the_tables_deletes_a_deck_missed_for_the_kept_period(
         ),
     )
     assert source is not None
-    store = SqliteDeckStore(database=database)
+    store = PostgresDeckStore(engine=database, fence=NO_FENCE)
     folders = FakeDeckFolders(carried={source.id: (a_folder("kundenfeedback"),)})
     builder = FakeBuildRunner()
     clock = FrozenClock(instant=missed_at)
@@ -170,7 +181,7 @@ def test_a_refresh_over_the_tables_deletes_a_deck_missed_for_the_kept_period(
         folders=folders,
         store=store,
         builder=builder,
-        source_runs=SqliteSourceRunStore(database=database),
+        source_runs=PostgresSourceRunStore(engine=database, fence=NO_FENCE),
         checker=FakeConnectionChecker(),
         toolchain_themes=FakeToolchainThemes(),
         ownership=FakeRefreshOwnership(),

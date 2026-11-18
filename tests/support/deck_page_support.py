@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Final
 
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine
 
 from presentator.contracts.decks import Build, BuildAttempt, Deck
 from tests.presentator.application.support.fakes import FakeDeckStore
@@ -59,6 +60,6 @@ def a_deck_store(
     return store
 
 
-def a_talk_host(tmp_path: Path, given: GivenDecks) -> TestClient:
+def a_talk_host(engine: Engine, given: GivenDecks) -> TestClient:
     """A browser signed in at the talk host of an instance with these decks."""
-    return two_hosts(tmp_path, given=given).signed_in_at(A_TALK_ADDRESS)
+    return two_hosts(engine, given=given).signed_in_at(A_TALK_ADDRESS)

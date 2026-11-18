@@ -1,18 +1,17 @@
 """Logging out ends the session and answers the page that ends Keycloak's too."""
 
 import re
-import sqlite3
-from contextlib import closing
 from dataclasses import dataclass, replace
 from datetime import datetime
 from html import unescape
 from http import HTTPStatus
 from http.cookies import SimpleCookie
-from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
 from pydantic import SecretStr
+from sqlalchemy import Engine
+from sqlalchemy.exc import OperationalError
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.ports import SessionRecord, SessionRecordStore
 
@@ -86,7 +85,7 @@ class SessionsThatBreakOnDelete:
     def delete(self, session_id: str) -> None:
         if self.breakdown.now:
             message = "disk I/O error"
-            raise sqlite3.OperationalError(message)
+            raise OperationalError(None, None, Exception(message))
         self.real.delete(session_id)
 
     def delete_for_user(self, user_id: str) -> int:
@@ -97,8 +96,8 @@ class SessionsThatBreakOnDelete:
 
 
 @pytest.fixture
-def scene(tmp_path: Path) -> Scene:
-    return a_scene(tmp_path)
+def scene(engine: Engine) -> Scene:
+    return a_scene(engine)
 
 
 def _posted_fields(page: str) -> dict[str, str]:
@@ -151,14 +150,14 @@ def _arrange_no_hint(scene: Scene, arrangement: str) -> None:
         case "no-session-cookie":
             del scene.lobby.client.cookies[DEFAULT_SESSION_COOKIE_NAME]
         case "row-gone":
-            _in_the_file(scene, "DELETE FROM sessions")
+            _in_the_database(scene, "DELETE FROM sessions")
         case _:
-            _in_the_file(scene, "UPDATE sessions SET id_token = NULL")
+            _in_the_database(scene, "UPDATE sessions SET id_token = NULL")
 
 
-def _in_the_file(scene: Scene, statement: str) -> None:
-    with closing(sqlite3.connect(scene.database)) as connection, connection:
-        connection.execute(statement)
+def _in_the_database(scene: Scene, statement: str) -> None:
+    with scene.engine.begin() as connection:
+        connection.exec_driver_sql(statement)
 
 
 @pytest.mark.parametrize("arrangement", ["no-session-cookie", "row-gone", "no-token"])
@@ -209,9 +208,9 @@ def test_the_fallback_button_is_worded_in_the_catalog_source_without_other_hints
 
 
 def test_the_logout_page_carries_the_browsers_language_as_its_lang_and_its_button(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    scene = a_scene(tmp_path, preferences=a_preferences())
+    scene = a_scene(engine, preferences=a_preferences())
     scene.sign_in()
 
     answer = scene.lobby.client.post(
@@ -228,9 +227,9 @@ def test_the_logout_page_carries_the_browsers_language_as_its_lang_and_its_butto
     ("account", "spoken"), [("en", "en"), ("en-GB", "en"), ("fr", SOURCE_LANGUAGE)]
 )
 def test_the_logout_page_follows_the_account_language_where_a_catalog_has_it(
-    tmp_path: Path, account: str, spoken: Language
+    engine: Engine, account: str, spoken: Language
 ) -> None:
-    scene = a_scene(tmp_path, preferences=a_preferences())
+    scene = a_scene(engine, preferences=a_preferences())
     scene.sign_in()
     scene.sessions.delete_for_user("subject-1")
     session = scene.sessions.create(
@@ -345,10 +344,10 @@ def test_a_logout_form_with_no_origin_signal_deletes_nothing_and_goes_nowhere(
 
 
 def test_a_logout_enters_the_transaction_once_on_a_worker_thread(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     double = TransactionDouble()
-    scene = a_scene(tmp_path, transaction=double.around)
+    scene = a_scene(engine, transaction=double.around)
     scene.sign_in()
     double.log.clear()
 
@@ -359,7 +358,7 @@ def test_a_logout_enters_the_transaction_once_on_a_worker_thread(
 
 
 def test_a_store_failure_in_the_logout_answers_500_clears_no_cookie_and_keeps_the_row(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     breakdown = Breakdown()
     double = TransactionDouble(
@@ -367,7 +366,7 @@ def test_a_store_failure_in_the_logout_answers_500_clears_no_cookie_and_keeps_th
             stores, sessions=SessionsThatBreakOnDelete(stores.sessions, breakdown)
         )
     )
-    scene = a_scene(tmp_path, transaction=double.around)
+    scene = a_scene(engine, transaction=double.around)
     browser = scene.browser(raise_server_exceptions=False)
     scene.sign_in(browser)
     breakdown.now = True

@@ -1,28 +1,20 @@
-"""The identity bridge against a temporary SQLite file."""
+"""The identity bridge against a migrated database of the test's own."""
 
-import sqlite3
 from collections.abc import Callable
-from contextlib import closing
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
 from pydantic import SecretStr
+from sqlalchemy import Connection, Engine, text
 from webauth.config import WebAuthConfig
 from webauth.dependencies import ConnectionRefusal, admit_session
 from webauth.ports import AccountKind
 
 from presentator.adapters.audit import LoggingAuditSink
-from presentator.adapters.identity import (
-    ProcessWriteLock,
-    SqliteIdentityWrites,
-    SqliteSessionRecordStore,
-    StoredAccount,
-    StoredSession,
-    SystemClock,
-    create_identity_tables,
-)
+from presentator.adapters.identity import StoredAccount, StoredSession, SystemClock
+from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host.main import web_auth_config_for
@@ -37,17 +29,46 @@ _ID_MARKER = "id-MARKER-4f7c1e"
 
 
 @pytest.fixture
-def database(tmp_path: Path) -> Path:
-    database = tmp_path / "identity.sqlite3"
-    create_identity_tables(database)
-    seed_user(database, an_admin())
-    seed_user(database, an_admin("user-2", "anna"))
-    return database
+def database(engine: Engine) -> Engine:
+    """This test's database, holding two admins."""
+    seed_user(engine, an_admin())
+    seed_user(engine, an_admin("user-2", "anna"))
+    return engine
 
 
 @pytest.fixture
-def sessions(database: Path) -> SqliteSessionRecordStore:
-    return SqliteSessionRecordStore(database)
+def sessions(database: Engine) -> PostgresSessionRecordStore:
+    return PostgresSessionRecordStore(database)
+
+
+_TABLES = text(
+    "SELECT table_name FROM information_schema.tables"
+    " WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'"
+    " ORDER BY table_name"
+)
+_COLUMNS = text(
+    "SELECT column_name FROM information_schema.columns"
+    " WHERE table_schema = current_schema() AND table_name = :table"
+    " ORDER BY ordinal_position"
+)
+
+
+def _tables_of(connection: Connection) -> list[str]:
+    return [name for (name,) in connection.execute(_TABLES)]
+
+
+def _columns_of(connection: Connection, table: str) -> list[str]:
+    return [name for (name,) in connection.execute(_COLUMNS, {"table": table})]
+
+
+def _rows_of(connection: Connection, table: str) -> list[str]:
+    """Every row of the table, each as Postgres writes it out."""
+    return sorted(
+        row
+        for (row,) in connection.exec_driver_sql(
+            f'SELECT CAST(t AS text) FROM "{table}" AS t'  # noqa: S608 - names from the catalogue
+        )
+    )
 
 
 def an_id_token(word: str = _ID_MARKER) -> SecretStr:
@@ -55,7 +76,7 @@ def an_id_token(word: str = _ID_MARKER) -> SecretStr:
 
 
 def open_session(  # noqa: PLR0913 - one keyword per stored column
-    store: SqliteSessionRecordStore,
+    store: PostgresSessionRecordStore,
     user_id: str = "user-1",
     *,
     now: datetime = _NOW,
@@ -87,23 +108,20 @@ def the_account_of(person: User) -> StoredAccount:
     )
 
 
-def stored_expiry(database: Path, session_id: str) -> str:
-    with closing(sqlite3.connect(database)) as connection:
-        (expires_at,) = connection.execute(
-            "SELECT expires_at FROM sessions WHERE id = ?", (session_id,)
-        ).fetchone()
-    return str(expires_at)
+def stored_expiry(database: Engine, session_id: str) -> datetime:
+    with database.connect() as connection:
+        return connection.execute(
+            text("SELECT expires_at FROM sessions WHERE id = :id"), {"id": session_id}
+        ).scalar_one()
 
 
-def test_the_database_keeps_its_write_ahead_log(database: Path) -> None:
-    with closing(sqlite3.connect(database)) as connection, connection:
-        mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
-
-    assert mode == "wal"
+def session_count(database: Engine) -> int:
+    with database.connect() as connection:
+        return connection.exec_driver_sql("SELECT COUNT(*) FROM sessions").scalar_one()
 
 
 def test_a_session_is_read_back_with_the_account_joined_from_the_users(
-    sessions: SqliteSessionRecordStore,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     expires_at = _NOW + timedelta(hours=1)
 
@@ -116,29 +134,17 @@ def test_a_session_is_read_back_with_the_account_joined_from_the_users(
 
 
 def test_a_session_for_an_account_that_does_not_exist_is_refused_loudly(
-    database: Path,
-    sessions: SqliteSessionRecordStore,
+    database: Engine,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     with pytest.raises(LookupError, match="nobody"):
         open_session(sessions, "nobody")
 
-    with closing(sqlite3.connect(database)) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM sessions").fetchone() == (0,)
-
-
-def test_a_session_whose_account_row_is_gone_reads_as_nothing(
-    database: Path,
-    sessions: SqliteSessionRecordStore,
-) -> None:
-    session = open_session(sessions, "user-1")
-    with closing(sqlite3.connect(database)) as connection, connection:
-        connection.execute("DELETE FROM users WHERE id = 'user-1'")
-
-    assert sessions.load(session.id) is None
+    assert session_count(database) == 0
 
 
 def test_a_touched_session_keeps_its_creation_and_takes_the_given_expiry(
-    sessions: SqliteSessionRecordStore,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     session = open_session(sessions, "user-1")
     later = _NOW + timedelta(minutes=15)
@@ -152,10 +158,10 @@ def test_a_touched_session_keeps_its_creation_and_takes_the_given_expiry(
 
 
 def test_a_session_deleted_after_its_load_is_not_brought_back_by_touch(
-    sessions: SqliteSessionRecordStore,
-    database: Path,
+    sessions: PostgresSessionRecordStore,
+    database: Engine,
 ) -> None:
-    logout = SqliteSessionRecordStore(database)
+    logout = PostgresSessionRecordStore(database)
     session = open_session(sessions, "user-1")
 
     assert sessions.load(session.id) is not None
@@ -167,7 +173,7 @@ def test_a_session_deleted_after_its_load_is_not_brought_back_by_touch(
 
 
 def test_deleting_one_persons_sessions_counts_them_and_leaves_another_standing(
-    sessions: SqliteSessionRecordStore,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     kept = open_session(sessions, "user-2")
     open_session(sessions, "user-1")
@@ -179,13 +185,13 @@ def test_deleting_one_persons_sessions_counts_them_and_leaves_another_standing(
 
 
 def test_deleting_sessions_for_nobody_drops_nothing(
-    sessions: SqliteSessionRecordStore,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     assert sessions.delete_for_user("nobody") == 0
 
 
 def test_a_session_count_below_the_cap_drops_nothing(
-    sessions: SqliteSessionRecordStore,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     created = [
         open_session(sessions, "user-1", now=_NOW + timedelta(minutes=minute))
@@ -198,8 +204,8 @@ def test_a_session_count_below_the_cap_drops_nothing(
 
 
 def test_a_timestamp_given_with_an_offset_is_stored_as_the_same_instant_in_utc(
-    database: Path,
-    sessions: SqliteSessionRecordStore,
+    database: Engine,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     in_berlin = timezone(timedelta(hours=1))
 
@@ -213,7 +219,7 @@ def test_a_timestamp_given_with_an_offset_is_stored_as_the_same_instant_in_utc(
         account_language=None,
     )
 
-    assert stored_expiry(database, session.id) == "2026-01-15T10:00:00+00:00"
+    assert stored_expiry(database, session.id) == _NOW + timedelta(hours=1)
     loaded = sessions.load(session.id)
     assert loaded is not None
     assert loaded.created_at == _NOW
@@ -224,8 +230,8 @@ def test_the_system_clock_reads_an_aware_utc_time() -> None:
 
 
 def test_an_admitted_session_is_renewed_to_the_cap_when_the_window_reaches_it(
-    database: Path,
-    sessions: SqliteSessionRecordStore,
+    database: Engine,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     session = open_session(sessions, "user-1", expires_at=_NOW + timedelta(hours=1))
     at = _NOW + timedelta(minutes=30)
@@ -234,7 +240,7 @@ def test_an_admitted_session_is_renewed_to_the_cap_when_the_window_reaches_it(
 
     assert not isinstance(admitted, ConnectionRefusal)
     assert admitted.username == "felix"
-    assert stored_expiry(database, session.id) == (_NOW + SESSION_LIFETIME).isoformat()
+    assert stored_expiry(database, session.id) == _NOW + SESSION_LIFETIME
 
 
 @pytest.mark.parametrize(
@@ -251,8 +257,8 @@ def test_an_admitted_session_is_renewed_to_the_cap_when_the_window_reaches_it(
     ],
 )
 def test_a_refused_session_is_not_renewed(
-    database: Path,
-    sessions: SqliteSessionRecordStore,
+    database: Engine,
+    sessions: PostgresSessionRecordStore,
     idle_expiry: timedelta,
     refused_at: timedelta,
 ) -> None:
@@ -279,43 +285,14 @@ def a_config_reading(now: datetime) -> WebAuthConfig:
     )
 
 
-def test_creating_the_tables_twice_leaves_the_people_as_they_were(
-    database: Path,
-) -> None:
-    session = SqliteSessionRecordStore(database).create(
-        "user-1",
-        session_id=a_session_id(),
-        now=_NOW,
-        expires_at=_NOW,
-        refresh_token=None,
-        id_token=an_id_token(),
-        account_language=None,
-    )
-
-    create_identity_tables(database)
-
-    loaded = SqliteSessionRecordStore(database).load(session.id)
-    assert loaded is not None
-    assert loaded.user == the_account_of(an_admin())
-
-
 def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_address(
-    database: Path,
+    engine: Engine,
 ) -> None:
     """SI2, SI5: a fresh database stores no password, attempt or client address."""
-    with closing(sqlite3.connect(database)) as connection, connection:
-        user_columns = [
-            column[1] for column in connection.execute("PRAGMA table_info(users)")
-        ]
-        session_columns = [
-            column[1] for column in connection.execute("PRAGMA table_info(sessions)")
-        ]
-        tables = {
-            table[0]
-            for table in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'",
-            )
-        }
+    with engine.connect() as connection:
+        user_columns = _columns_of(connection, "users")
+        session_columns = _columns_of(connection, "sessions")
+        tables = set(_tables_of(connection))
 
     assert user_columns == ["id", "username", "role", "kind"]
     assert session_columns == [
@@ -331,40 +308,6 @@ def test_a_fresh_database_stores_no_password_no_login_attempts_and_no_client_add
 
 
 @pytest.mark.parametrize(
-    "started",
-    [
-        pytest.param("", id="file-with-no-tables"),
-        pytest.param(
-            "CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL"
-            " UNIQUE, role TEXT NOT NULL);",
-            id="users-only-after-a-first-start-stopped-early",
-        ),
-    ],
-)
-def test_a_file_this_version_started_is_completed_to_sessions_without_a_client_address(
-    tmp_path: Path,
-    started: str,
-) -> None:
-    database = tmp_path / "identity.sqlite3"
-    with closing(sqlite3.connect(database)) as connection:
-        connection.executescript("PRAGMA journal_mode=WAL;" + started)
-
-    create_identity_tables(database)
-
-    with closing(sqlite3.connect(database)) as connection:
-        columns = [row[1] for row in connection.execute("PRAGMA table_info(sessions)")]
-    assert columns == [
-        "id",
-        "user_id",
-        "created_at",
-        "expires_at",
-        "refresh_token",
-        "id_token",
-        "account_language",
-    ]
-
-
-@pytest.mark.parametrize(
     ("expires_at", "stays"),
     [
         (_NOW - timedelta(seconds=1), False),
@@ -374,7 +317,7 @@ def test_a_file_this_version_started_is_completed_to_sessions_without_a_client_a
     ids=["before the sweep", "at the sweep", "after the sweep"],
 )
 def test_a_sweep_deletes_a_session_only_when_it_ended_before_the_sweep(
-    sessions: SqliteSessionRecordStore,
+    sessions: PostgresSessionRecordStore,
     expires_at: datetime,
     *,
     stays: bool,
@@ -396,7 +339,7 @@ def test_a_sweep_deletes_a_session_only_when_it_ended_before_the_sweep(
     ids=["at the expiry", "within the second after", "a second after"],
 )
 def test_the_sweep_keeps_exactly_the_sessions_the_admission_admits(
-    sessions: SqliteSessionRecordStore,
+    sessions: PostgresSessionRecordStore,
     after_expiry: timedelta,
 ) -> None:
     expires_at = _NOW + timedelta(hours=1)
@@ -414,18 +357,19 @@ def test_the_sweep_keeps_exactly_the_sessions_the_admission_admits(
     )
 
 
-def dump_without_sessions(database: Path) -> list[str]:
-    with closing(sqlite3.connect(database)) as connection:
+def dump_without_sessions(database: Engine) -> list[str]:
+    with database.connect() as connection:
         return [
-            statement
-            for statement in connection.iterdump()
-            if not statement.startswith('INSERT INTO "sessions"')
+            f"{table}: {row}"
+            for table in _tables_of(connection)
+            if table != "sessions"
+            for row in _rows_of(connection, table)
         ]
 
 
 def test_a_sweep_leaves_the_accounts_and_every_other_table_as_they_were(
-    database: Path,
-    sessions: SqliteSessionRecordStore,
+    database: Engine,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     ended = _NOW - SESSION_LIFETIME
     open_session(sessions, "user-1", now=ended, expires_at=ended)
@@ -442,14 +386,18 @@ def a_token(text: str = "rt-MARKER") -> SecretStr:
     return SecretStr(text)
 
 
-def occurrences_in_the_file(database: Path, text: str) -> int:
-    """How often `text` appears in the dump of every table of the file."""
-    with closing(sqlite3.connect(database)) as connection:
-        return "\n".join(connection.iterdump()).count(text)
+def occurrences_in_the_database(database: Engine, word: str) -> int:
+    """How often `word` appears in the rows of every table of the database."""
+    with database.connect() as connection:
+        return "\n".join(
+            row
+            for table in _tables_of(connection)
+            for row in _rows_of(connection, table)
+        ).count(word)
 
 
 def test_a_refresh_token_is_stored_in_the_row_and_read_back_as_a_secret(
-    database: Path, sessions: SqliteSessionRecordStore
+    database: Engine, sessions: PostgresSessionRecordStore
 ) -> None:
     """SI6: a refresh token is stored in the row and read back as a secret."""
     created = open_session(sessions, "user-1", refresh_token=a_token())
@@ -459,12 +407,12 @@ def test_a_refresh_token_is_stored_in_the_row_and_read_back_as_a_secret(
     assert loaded is not None
     assert loaded.refresh_token is not None
     assert loaded.refresh_token.get_secret_value() == "rt-MARKER"
-    assert occurrences_in_the_file(database, "rt-MARKER") == 1
+    assert occurrences_in_the_database(database, "rt-MARKER") == 1
 
 
 @pytest.mark.parametrize("language", ["de", "pt-BR", None])
 def test_a_session_reads_back_the_account_language_it_was_created_with(
-    sessions: SqliteSessionRecordStore, language: str | None
+    sessions: PostgresSessionRecordStore, language: str | None
 ) -> None:
     created = open_session(sessions, "user-1", account_language=language)
 
@@ -477,7 +425,7 @@ def test_a_session_reads_back_the_account_language_it_was_created_with(
 
 
 def test_a_session_without_a_refresh_token_reads_back_none(
-    sessions: SqliteSessionRecordStore,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     created = open_session(sessions, "user-1")
 
@@ -488,7 +436,7 @@ def test_a_session_without_a_refresh_token_reads_back_none(
 
 
 def test_a_replaced_refresh_token_is_read_back_and_the_answer_is_true(
-    sessions: SqliteSessionRecordStore,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     created = open_session(sessions, "user-1", refresh_token=a_token())
 
@@ -506,52 +454,49 @@ def test_a_replaced_refresh_token_is_read_back_and_the_answer_is_true(
 
 
 def test_a_logout_on_another_store_before_a_replacement_leaves_the_row_gone(
-    database: Path, sessions: SqliteSessionRecordStore
+    database: Engine, sessions: PostgresSessionRecordStore
 ) -> None:
     created = open_session(sessions, "user-1", refresh_token=a_token())
-    SqliteSessionRecordStore(database).delete(created.id)
+    PostgresSessionRecordStore(database).delete(created.id)
 
     answer = sessions.replace_refresh_token(created.id, refresh_token=a_token("rt-2"))
 
     assert answer is False
     assert sessions.load(created.id) is None
-    assert occurrences_in_the_file(database, "rt-2") == 0
+    assert occurrences_in_the_database(database, "rt-2") == 0
 
 
 def test_replacing_the_token_of_a_never_created_session_creates_no_row(
-    database: Path, sessions: SqliteSessionRecordStore
+    database: Engine, sessions: PostgresSessionRecordStore
 ) -> None:
     answer = sessions.replace_refresh_token("never-existed", refresh_token=a_token())
 
     assert answer is False
-    with closing(sqlite3.connect(database)) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM sessions").fetchone() == (0,)
+    assert session_count(database) == 0
 
 
-def end_by_delete(store: SqliteSessionRecordStore, session_id: str) -> None:
+def end_by_delete(store: PostgresSessionRecordStore, session_id: str) -> None:
     store.delete(session_id)
 
 
-def end_by_delete_for_user(store: SqliteSessionRecordStore, session_id: str) -> None:
+def end_by_delete_for_user(store: PostgresSessionRecordStore, session_id: str) -> None:
     del session_id
     store.delete_for_user("user-1")
 
 
-def end_by_delete_expired(store: SqliteSessionRecordStore, session_id: str) -> None:
+def end_by_delete_expired(store: PostgresSessionRecordStore, session_id: str) -> None:
     del session_id
     store.delete_expired(_NOW + timedelta(days=1))
 
 
-def end_by_prune_overflow(store: SqliteSessionRecordStore, session_id: str) -> None:
+def end_by_prune_overflow(store: PostgresSessionRecordStore, session_id: str) -> None:
     del session_id
     store.prune_overflow("user-1", 0)
 
 
-def end_by_delete_account(store: SqliteSessionRecordStore, session_id: str) -> None:
+def end_by_delete_account(store: PostgresSessionRecordStore, session_id: str) -> None:
     del session_id
-    SqliteIdentityWrites(
-        store.database, ProcessWriteLock(), LoggingAuditSink()
-    ).delete_account("user-1")
+    PostgresIdentityWrites(store.engine, LoggingAuditSink()).delete_account("user-1")
 
 
 @pytest.mark.parametrize(
@@ -565,32 +510,29 @@ def end_by_delete_account(store: SqliteSessionRecordStore, session_id: str) -> N
     ],
 )
 def test_every_way_of_ending_a_session_removes_its_token_with_the_row(
-    database: Path,
-    sessions: SqliteSessionRecordStore,
-    remove: Callable[[SqliteSessionRecordStore, str], None],
+    database: Engine,
+    sessions: PostgresSessionRecordStore,
+    remove: Callable[[PostgresSessionRecordStore, str], None],
 ) -> None:
     created = open_session(sessions, "user-1", refresh_token=a_token())
-    assert occurrences_in_the_file(database, "rt-MARKER") == 1
-    assert occurrences_in_the_file(database, _ID_MARKER) == 1
+    assert occurrences_in_the_database(database, "rt-MARKER") == 1
+    assert occurrences_in_the_database(database, _ID_MARKER) == 1
 
     remove(sessions, created.id)
 
-    assert occurrences_in_the_file(database, "rt-MARKER") == 0
-    assert occurrences_in_the_file(database, _ID_MARKER) == 0
-    with closing(sqlite3.connect(database)) as connection:
+    assert occurrences_in_the_database(database, "rt-MARKER") == 0
+    assert occurrences_in_the_database(database, _ID_MARKER) == 0
+    with database.connect() as connection:
         owners = [
             table
-            for (table,) in connection.execute(
-                "SELECT m.name FROM sqlite_master m,"
-                " pragma_table_info(m.name) c WHERE m.type = 'table'"
-                " AND c.name = 'refresh_token'"
-            )
+            for table in _tables_of(connection)
+            if "refresh_token" in _columns_of(connection, table)
         ]
     assert owners == ["sessions"]
 
 
 def test_a_session_never_shows_its_tokens_in_repr_or_str(
-    sessions: SqliteSessionRecordStore,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     """Neither `repr` nor `str` shows a token."""
     created = sessions.create(
@@ -609,7 +551,7 @@ def test_a_session_never_shows_its_tokens_in_repr_or_str(
 
 
 def test_the_id_token_is_read_back_and_survives_a_touch_and_a_refresh_token_swap(
-    sessions: SqliteSessionRecordStore,
+    sessions: PostgresSessionRecordStore,
 ) -> None:
     """The ID token reads back and outlives a touch and a swap."""
     created = sessions.create(
@@ -632,10 +574,10 @@ def test_the_id_token_is_read_back_and_survives_a_touch_and_a_refresh_token_swap
 
 
 def test_a_session_created_without_an_id_token_stores_none(
-    database: Path,
+    database: Engine,
 ) -> None:
     """SI7: the caller states the ID token; NULL is stored for none."""
-    store = SqliteSessionRecordStore(database)
+    store = PostgresSessionRecordStore(database)
     created = store.create(
         "user-1",
         session_id=a_session_id(),

@@ -1,6 +1,6 @@
 """The agents client reaches `/mcp` and the marked deck list as one person.
 
-The lobby runs over the real SQLite identity stores and the fake issuer; two
+The lobby runs over the real Postgres identity stores and the fake issuer; two
 people sign in through the real callback, then a program that is no browser
 calls with a bearer alone.
 """
@@ -11,13 +11,13 @@ from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from datetime import timedelta
 from http import HTTPStatus
-from pathlib import Path
 from typing import Any
 
 import pytest
 from agents.mcp_wire import MCP_ENDPOINT_PATH, PROTOCOL_VERSION
 from fastapi.testclient import TestClient
 from mcp_types import UNSUPPORTED_PROTOCOL_VERSION
+from sqlalchemy import Engine
 from webauth.ports import AccountKind
 
 from presentator.agent.mcp import AGENT_GROUP, MCP_GROUP, MCP_SCOPE
@@ -52,8 +52,8 @@ from tests.support.sign_in_support import ADMIN, MEMBER, a_scene
 
 
 @pytest.fixture
-def world(tmp_path: Path) -> Iterator[World]:
-    with a_world(tmp_path) as running:
+def world(engine: Engine) -> Iterator[World]:
+    with a_world(engine) as running:
         yield running
 
 
@@ -99,10 +99,10 @@ def test_one_world_answers_several_requests_through_its_one_running_front(
     ids=["no token client", "hal"],
 )
 def test_an_agent_discovers_lists_and_calls_as_the_person_whose_token_it_holds(
-    tmp_path: Path, token_clients: frozenset[str]
+    engine: Engine, token_clients: frozenset[str]
 ) -> None:
     """With or without token clients, the front returns only that person's decks."""
-    with a_world(tmp_path, token_clients=token_clients) as world:
+    with a_world(engine, token_clients=token_clients) as world:
         program = world.program()
         headers = world.bearer()
 
@@ -174,10 +174,10 @@ def test_a_marked_get_with_the_resource_bearer_is_the_real_route_for_that_person
 
 
 def test_an_ordinary_app_clients_bearer_on_the_marked_get_stays_a_person_token(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """Today's person-token behaviour holds beside the resource."""
-    with a_world(tmp_path, token_clients=frozenset({World.HAL})) as world:
+    with a_world(engine, token_clients=frozenset({World.HAL})) as world:
         token = world.bearer(authorized_party=World.HAL, audience=None, groups=MEMBER)
 
         answer = world.program().get(DECK_LIST_PATH, headers={**token, **World.JSON})
@@ -187,10 +187,10 @@ def test_an_ordinary_app_clients_bearer_on_the_marked_get_stays_a_person_token(
 
 
 def test_the_resource_bearer_opens_no_admin_delete_or_excluded_route(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """Only `/mcp` and the marked routes take it."""
-    with a_world(tmp_path, token_clients=frozenset({World.HAL})) as world:
+    with a_world(engine, token_clients=frozenset({World.HAL})) as world:
         bearer = {**world.bearer(), **World.JSON}
         program = world.program()
 
@@ -212,10 +212,10 @@ def test_the_resource_bearer_opens_no_admin_delete_or_excluded_route(
 @pytest.mark.parametrize("subject", [World.FELIX, World.ANNA])
 @pytest.mark.parametrize("token_clients", [frozenset[str](), frozenset({World.HAL})])
 def test_the_resource_bearer_never_authorizes_an_excluded_route(
-    tmp_path: Path, token_clients: frozenset[str], subject: str
+    engine: Engine, token_clients: frozenset[str], subject: str
 ) -> None:
     """Alone it is refused; beside a cookie it is ignored, never used."""
-    with a_world(tmp_path, token_clients=token_clients) as world:
+    with a_world(engine, token_clients=token_clients) as world:
         bearer = world.bearer(subject=subject)
 
         alone = world.program().get(
@@ -399,10 +399,10 @@ def test_an_own_account_agent_sets_only_its_own_theme(world: World) -> None:
     ],
 )
 def test_an_admin_persons_agents_client_bearer_opens_no_admin_route(
-    tmp_path: Path, method: str, path: str
+    engine: Engine, method: str, path: str
 ) -> None:
     """An agent's token never carries admin rights."""
-    with a_world(tmp_path, token_clients=frozenset({World.HAL})) as world:
+    with a_world(engine, token_clients=frozenset({World.HAL})) as world:
         headers = world.bearer(groups=[*ADMIN, MCP_GROUP])
 
         answer = world.program().request(
@@ -414,10 +414,10 @@ def test_an_admin_persons_agents_client_bearer_opens_no_admin_route(
 
 @pytest.mark.parametrize("token_clients", [frozenset[str](), frozenset({World.HAL})])
 def test_an_admin_persons_bearer_beside_a_members_cookie_never_opens_an_admin_route(
-    tmp_path: Path, token_clients: frozenset[str]
+    engine: Engine, token_clients: frozenset[str]
 ) -> None:
     """The settings are admin-only: the member is refused, the bearer ignored."""
-    with a_world(tmp_path, token_clients=token_clients) as world:
+    with a_world(engine, token_clients=token_clients) as world:
         admin_browser = world.scene.browser()
         assert world.scene.sign_in(
             admin_browser, subject=World.ADMIN, username="root", groups=ADMIN
@@ -472,10 +472,10 @@ def test_unauthenticated_discovery_is_public_and_the_front_challenges_for_a_bear
 
 
 def test_a_lobby_with_no_mcp_setting_serves_the_front_and_a_cookie_does_not_open_it(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """A signed-in browser reads the public discovery; the front wants a bearer."""
-    scene = a_scene(tmp_path)
+    scene = a_scene(engine)
     browser = scene.browser()
     scene.sign_in(browser, subject=World.FELIX, username="felix")
 
@@ -507,9 +507,9 @@ def test_the_production_hostname_routing_keeps_the_front_at_the_lobby_alone(
 
 
 def test_a_request_the_gate_admits_outside_a_running_front_fails_loud(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    with a_world(tmp_path, entering_the_lifespan=False) as world:
+    with a_world(engine, entering_the_lifespan=False) as world:
         program = world.program()
         headers = world.bearer()
 
@@ -521,9 +521,9 @@ def test_a_request_the_gate_admits_outside_a_running_front_fails_loud(
 
 
 def test_the_served_router_runs_the_front_for_the_lobby_it_serves(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    with a_world(tmp_path, entering_the_lifespan=False) as world:
+    with a_world(engine, entering_the_lifespan=False) as world:
         with the_served_lobby(world) as lobby:
             answer = post_mcp(lobby, world.bearer(), "tools/list")
 
@@ -531,11 +531,11 @@ def test_the_served_router_runs_the_front_for_the_lobby_it_serves(
 
 
 def test_the_served_request_line_names_the_bearers_person_and_the_route_of_the_front(
-    tmp_path: Path, json_logging: None, caplog: pytest.LogCaptureFixture
+    engine: Engine, json_logging: None, caplog: pytest.LogCaptureFixture
 ) -> None:
     del json_logging
     caplog.set_level(logging.INFO)
-    with a_world(tmp_path, entering_the_lifespan=False) as world:
+    with a_world(engine, entering_the_lifespan=False) as world:
         with the_served_lobby(world) as lobby:
             post_mcp(lobby, world.bearer(), "tools/list")
             lobby.get(DECK_LIST_PATH, headers={**world.bearer(), **World.JSON})

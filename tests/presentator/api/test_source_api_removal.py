@@ -11,6 +11,7 @@ from typing import cast
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from sqlalchemy import Engine
 
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
 from presentator.api.source_api import (
@@ -191,12 +192,12 @@ def assert_removed_exactly(shelf: Stocked, runs_before: frozenset[str]) -> None:
     assert {run.name for run in shelf.builder.on_disk} == shelf.runs_of(shelf.staying)
 
 
-def _by_cookie(shelf: Stocked, _tmp_path: Path) -> Instance:
+def _by_cookie(shelf: Stocked, _engine: Engine) -> Instance:
     return an_admin_cookie_instance(shelf.decks, shelf.sources)
 
 
-def _by_bearer(shelf: Stocked, tmp_path: Path) -> Instance:
-    return an_admin_bearer_instance(shelf.decks, shelf.sources, tmp_path)
+def _by_bearer(shelf: Stocked, engine: Engine) -> Instance:
+    return an_admin_bearer_instance(shelf.decks, shelf.sources, engine)
 
 
 AN_ADMIN_BY_COOKIE_OR_BEARER = pytest.mark.parametrize(
@@ -249,8 +250,8 @@ def test_a_member_is_refused_with_a_problem(act: Gated) -> None:
 
 # 3
 @_BOTH_ROUTES
-def test_a_members_bearer_is_refused_with_a_problem(act: Gated, tmp_path: Path) -> None:
-    scene = a_scene_that_must_not_run(tmp_path)
+def test_a_members_bearer_is_refused_with_a_problem(act: Gated, engine: Engine) -> None:
+    scene = a_scene_that_must_not_run(engine)
 
     answer = act(a_client_with_no_header_of_its_own(scene), a_bearer(scene, MEMBER))
 
@@ -259,9 +260,9 @@ def test_a_members_bearer_is_refused_with_a_problem(act: Gated, tmp_path: Path) 
 
 # 4
 def test_a_members_bearer_beside_an_admin_cookie_carries_the_members_rights(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    scene = a_scene_that_must_not_run(tmp_path)
+    scene = a_scene_that_must_not_run(engine)
     browser = scene.browser()
     scene.sign_in(browser, groups=ADMIN_GROUPS)
 
@@ -271,8 +272,8 @@ def test_a_members_bearer_beside_an_admin_cookie_carries_the_members_rights(
 
 
 # 5
-def test_an_invalid_bearer_beside_an_admin_cookie_is_refused(tmp_path: Path) -> None:
-    scene = a_scene_that_must_not_run(tmp_path)
+def test_an_invalid_bearer_beside_an_admin_cookie_is_refused(engine: Engine) -> None:
+    scene = a_scene_that_must_not_run(engine)
     browser = scene.browser()
     scene.sign_in(browser, groups=ADMIN_GROUPS)
 
@@ -329,10 +330,10 @@ def test_the_preview_counts_every_deck_of_every_owner_and_changes_nothing() -> N
 # 9, 10
 @AN_ADMIN_BY_COOKIE_OR_BEARER
 def test_a_removal_with_the_previews_counts_removes_exactly_the_source(
-    reach: Callable[[Stocked, Path], Instance], tmp_path: Path
+    reach: Callable[[Stocked, Engine], Instance], engine: Engine
 ) -> None:
     shelf = stocked()
-    instance = reach(shelf, tmp_path)
+    instance = reach(shelf, engine)
     runs_before = shelf.runs_of(shelf.going)
     previewed = preview_removal(instance.client, shelf.name, instance.headers).json()
 

@@ -97,7 +97,7 @@ One process serves the lobby and the talk host and tells them apart by the `Host
 host gets a 404, except the lobby's back-channel logout path ([sign-in](sign-in.md)), which ignores
 forwarded headers and trusts only the signed Logout Token. The platform's realm registers no logout
 URL for presentator, so its safety does not depend on the call. `GET /health`, the readiness probe,
-answers 200 while the Postgres database passes the revision rule (SQLite: always) and Redis answers
+answers 200 while the Postgres database passes the revision rule and Redis answers
 a ping, else a fixed 503; liveness asks neither, since a restart cures neither. The web starts
 without a worker. On SIGTERM it turns unready first, takes no new ask or hearing, lets a running
 answer finish and closes each hearing with 1012; the half-heard sentence is lost and the overlay
@@ -113,11 +113,11 @@ Each life ends the pod and the StatefulSet makes a fresh one.
 
 ## 5. Crosscutting Concepts
 
-**Persistence.** With `PRESENTATOR_DATABASE_URL` set, Postgres holds the state over one engine per process;
-unset, the SQLite file serves, creates its tables at start and is always ready. Files hold mirrors and
-builds, caches the rows rebuild. On Postgres `serve` creates no table; `presentator migrate` runs the
-additive migrations of `adapters/postgres` under a lock. No revision row or one behind this release is
-refused at start and unready; an unknown revision is a newer release's and is served.
+**Persistence.** Postgres, named by the required `PRESENTATOR_DATABASE_URL`, holds the state over one
+engine per process. Files hold mirrors and builds, caches the rows rebuild. `serve` creates no table;
+`presentator migrate` runs the additive migrations of `adapters/postgres` under a lock. No revision
+row or one behind this release is refused at start and unready; an unknown revision is a newer
+release's and is served.
 
 **Authentication and wire.** Keycloak groups admit people ([sign-in](sign-in.md)). There is no
 session cache: rate limits live in the Redis every pod shares (webauth's `RedisRateLimitBackend`,
@@ -180,7 +180,7 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
   rebuilding what a running pod of another toolchain built. The ask lease is a Redis key taken with `SET NX PX`, lasting the agent's deadline plus a margin, never renewed:
   the whole answer runs under that deadline, and only its holder's token frees the lease, so a dead pod's lease expires. Redis keeps nothing durable and its keys start `presentator:v1:`,
   a version read beside the next for one release. While it cannot answer, every request but `/health`
-  is a 503, since webauth's limiter fails closed. The SQLite fallback relies on one process.
+  is a 503, since webauth's limiter fails closed.
 - The speech origin must be plain `http` and the gateway's `http` or `https`, both at Service
   addresses inside the cluster. presentator sends its workload token and the person's token over
   that hop and relies on the deployment to keep it inside the cluster. The platform decides whom the
@@ -221,5 +221,3 @@ A delegated agent proves a person's flow at a surface; a leak fails the run.
   failing presenter-controls test shows a move.
 - A toolchain rollout can let one deck's build reach the old worker pod, its result recorded under
   the new identity until its next push; the update strategy must not be `OnDelete`.
-- SQLite does not guard against an empty or older file: its retention pass deletes the runs only
-  the right database names.

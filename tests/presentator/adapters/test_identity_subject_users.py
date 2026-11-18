@@ -1,11 +1,11 @@
 """The accounts an identity provider vouches for, in the users table."""
 
-import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine
+from sqlalchemy.exc import IntegrityError
 from webauth.ports import (
     AccountEvent,
     AccountEventKind,
@@ -15,29 +15,23 @@ from webauth.ports import (
 )
 
 from presentator.adapters.audit import LoggingAuditSink
-from presentator.adapters.identity import (
-    ProcessWriteLock,
-    SqliteIdentityWrites,
-    SqliteSubjectUserStore,
-    create_identity_tables,
-)
+from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
+from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.contracts.models import Role
 
 
 @pytest.fixture
-def database(tmp_path: Path) -> Path:
-    database = tmp_path / "identity.sqlite3"
-    create_identity_tables(database)
-    return database
+def database(engine: Engine) -> Engine:
+    return engine
 
 
 @pytest.fixture
-def accounts(database: Path) -> SqliteSubjectUserStore:
-    return SqliteSubjectUserStore(database)
+def accounts(database: Engine) -> PostgresSubjectUserStore:
+    return PostgresSubjectUserStore(database)
 
 
 def test_an_account_created_for_a_subject_is_found_by_that_subject(
-    accounts: SqliteSubjectUserStore,
+    accounts: PostgresSubjectUserStore,
 ) -> None:
     created = accounts.create_for_subject(
         "subject-1", "felix", "admin", AccountKind.PERSON
@@ -51,7 +45,7 @@ def test_an_account_created_for_a_subject_is_found_by_that_subject(
 
 
 def test_a_username_another_account_holds_is_refused_as_taken(
-    accounts: SqliteSubjectUserStore,
+    accounts: PostgresSubjectUserStore,
 ) -> None:
     accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
 
@@ -63,12 +57,12 @@ def test_a_username_another_account_holds_is_refused_as_taken(
 
 @pytest.mark.parametrize("second_username", ["anna", "felix"])
 def test_a_subject_that_already_has_an_account_is_not_a_taken_username(
-    accounts: SqliteSubjectUserStore,
+    accounts: PostgresSubjectUserStore,
     second_username: str,
 ) -> None:
     accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
 
-    with pytest.raises(sqlite3.IntegrityError) as refused:
+    with pytest.raises(IntegrityError) as refused:
         accounts.create_for_subject(
             "subject-1", second_username, "user", AccountKind.PERSON
         )
@@ -77,7 +71,7 @@ def test_a_subject_that_already_has_an_account_is_not_a_taken_username(
 
 
 def test_a_changed_role_is_stored_and_returned(
-    accounts: SqliteSubjectUserStore,
+    accounts: PostgresSubjectUserStore,
 ) -> None:
     accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
 
@@ -90,7 +84,7 @@ def test_a_changed_role_is_stored_and_returned(
 
 
 def test_a_changed_kind_is_stored_and_returned(
-    accounts: SqliteSubjectUserStore,
+    accounts: PostgresSubjectUserStore,
 ) -> None:
     accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
 
@@ -103,7 +97,7 @@ def test_a_changed_kind_is_stored_and_returned(
 
 
 def test_an_account_is_created_with_the_kind_it_is_given(
-    accounts: SqliteSubjectUserStore,
+    accounts: PostgresSubjectUserStore,
 ) -> None:
     created = accounts.create_for_subject("subject-1", "bot", "user", AccountKind.AGENT)
 
@@ -114,10 +108,10 @@ def test_an_account_is_created_with_the_kind_it_is_given(
 
 
 def test_a_kind_changed_in_an_entry_that_raises_is_rolled_back(
-    accounts: SqliteSubjectUserStore, database: Path
+    accounts: PostgresSubjectUserStore, database: Engine
 ) -> None:
     accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
-    writes = SqliteIdentityWrites(database, ProcessWriteLock(), LoggingAuditSink())
+    writes = PostgresIdentityWrites(database, LoggingAuditSink())
 
     with pytest.raises(RuntimeError):
         _fail_after(
@@ -131,7 +125,7 @@ def test_a_kind_changed_in_an_entry_that_raises_is_rolled_back(
 
 
 def _fail_after(
-    writes: SqliteIdentityWrites, write: Callable[[SignInStores], object]
+    writes: PostgresIdentityWrites, write: Callable[[SignInStores], object]
 ) -> None:
     """Enter the transaction, write, and let the block raise."""
     with writes() as stores:
@@ -141,10 +135,10 @@ def _fail_after(
 
 
 def test_a_role_changed_in_an_entry_that_raises_is_rolled_back(
-    accounts: SqliteSubjectUserStore, database: Path
+    accounts: PostgresSubjectUserStore, database: Engine
 ) -> None:
     accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
-    writes = SqliteIdentityWrites(database, ProcessWriteLock(), LoggingAuditSink())
+    writes = PostgresIdentityWrites(database, LoggingAuditSink())
 
     with pytest.raises(RuntimeError):
         _fail_after(
@@ -157,10 +151,10 @@ def test_a_role_changed_in_an_entry_that_raises_is_rolled_back(
 
 
 def test_a_role_changed_in_an_entry_reads_back_only_after_the_entry_commits(
-    accounts: SqliteSubjectUserStore, database: Path
+    accounts: PostgresSubjectUserStore, database: Engine
 ) -> None:
     accounts.create_for_subject("subject-1", "felix", "user", AccountKind.PERSON)
-    writes = SqliteIdentityWrites(database, ProcessWriteLock(), LoggingAuditSink())
+    writes = PostgresIdentityWrites(database, LoggingAuditSink())
 
     with writes() as stores:
         stores.accounts.set_role("subject-1", Role.ADMIN.value)
@@ -187,10 +181,10 @@ _AN_EVENT = AccountEvent(
 
 
 def test_the_audit_events_of_an_entry_reach_the_sink_only_after_it_commits(
-    database: Path,
+    database: Engine,
 ) -> None:
     sink = _Sink()
-    writes = SqliteIdentityWrites(database, ProcessWriteLock(), sink)
+    writes = PostgresIdentityWrites(database, sink)
 
     with writes() as stores:
         stores.audit.account_event(_AN_EVENT)
@@ -200,9 +194,9 @@ def test_the_audit_events_of_an_entry_reach_the_sink_only_after_it_commits(
     assert sink.events == [_AN_EVENT]
 
 
-def test_the_audit_events_of_an_entry_that_raises_are_dropped(database: Path) -> None:
+def test_the_audit_events_of_an_entry_that_raises_are_dropped(database: Engine) -> None:
     sink = _Sink()
-    writes = SqliteIdentityWrites(database, ProcessWriteLock(), sink)
+    writes = PostgresIdentityWrites(database, sink)
 
     with pytest.raises(RuntimeError):
         _fail_after(writes, lambda stores: stores.audit.account_event(_AN_EVENT))

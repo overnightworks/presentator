@@ -129,6 +129,7 @@ def test_a_uvicorn_record_is_one_literal_event_with_codes_and_no_text(
     assert "never" not in logged.text
 
 
+@pytest.mark.usefixtures("served_database")
 @pytest.mark.parametrize(
     ("host", "reason"),
     [(_LOOPBACK, "port_taken"), (_AN_ADDRESS_NOT_HERE, "bind_refused")],

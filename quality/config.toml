@@ -138,19 +138,9 @@ rule = "test-import"
 reason = "vulture's whitelist must import every name it vouches for, test helpers included"
 
 [[layout.allow]]
-path = "tests/presentator/adapters/test_person_erasure_sqlite.py"
-rule = "test-layout"
-reason = "it checks every SQLite store of a person at once, so no single adapter module is its subject"
-
-[[layout.allow]]
-path = "tests/presentator/adapters/test_person_export_sqlite.py"
-rule = "test-layout"
-reason = "it checks every SQLite store of a person at once, so no single adapter module is its subject"
-
-[[layout.allow]]
 path = "tests/presentator/adapters/test_person_records.py"
 rule = "test-layout"
-reason = "it checks every SQLite store of a person at once, so no single adapter module is its subject"
+reason = "it checks every store of a person at once, so no single adapter module is its subject"
 
 [[advisories.allow]]
 id = "GHSA-fc5q-39xc-vjpf"

@@ -61,7 +61,6 @@ def test_a_sign_in_at_one_process_is_valid_at_the_other_until_a_sign_out_ends_it
 
     assert at_the_other_process == "alice"
     assert replayed_at_the_first is None
-    assert not (tmp_path / "presentator.sqlite3").exists()
 
 
 @pytest.mark.usefixtures("environment")

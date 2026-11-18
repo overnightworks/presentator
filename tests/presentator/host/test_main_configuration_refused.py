@@ -77,7 +77,8 @@ def _a_log_level_logline_does_not_name(
 
 
 def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
-    del environment
+    environment.delenv("PRESENTATOR_DATABASE_URL")
+    environment.delenv("PRESENTATOR_DATABASE_PASSWORD_FILE")
     return str(directory)
 
 
@@ -103,12 +104,18 @@ def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
             ),
         ),
         (
+            [],
+            _no_database,
+            "PRESENTATOR_DATABASE_URL,PRESENTATOR_DATABASE_PASSWORD_FILE",
+        ),
+        (
             ["migrate"],
             _no_database,
             "PRESENTATOR_DATABASE_URL,PRESENTATOR_DATABASE_PASSWORD_FILE",
         ),
     ],
 )
+@pytest.mark.usefixtures("served_database")
 def test_a_refused_configuration_ends_in_one_failed_line_naming_the_setting(  # noqa: PLR0913, PLR0917 - the fixtures and the case
     environment: pytest.MonkeyPatch,
     tmp_path: Path,

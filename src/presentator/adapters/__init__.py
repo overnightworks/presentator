@@ -1,6 +1,6 @@
 """Owns every implementation of a port.
 
-Holds the webauth stores, the speech adapters, SQLite, the secrets, the
+Holds the webauth stores, the speech adapters, Postgres, the secrets, the
 filesystem, the deck sources read through the git mirror, the audit log, the
 sentence splitter, the sealed build worker and the Slidev
 build, and imports `presentator.ports` and `presentator.contracts` only --

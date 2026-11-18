@@ -5,10 +5,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from httpx2 import Response
+from sqlalchemy import Engine
 
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
 from presentator.application.decks import DRAFT_MAX_AGE, SourceRefusal
@@ -69,8 +69,8 @@ class _CheckerThatBreaks(RecordingChecker):
 
 
 @pytest.fixture
-def scene(tmp_path: Path) -> Scene:
-    return a_scene_that_must_not_run(tmp_path)
+def scene(engine: Engine) -> Scene:
+    return a_scene_that_must_not_run(engine)
 
 
 _ROUTES = pytest.mark.parametrize(
@@ -191,10 +191,10 @@ def test_a_same_site_write_with_the_own_origin_is_taken(
 # 9, 10
 @AN_ADMIN_BY_COOKIE_AND_BEARER
 def test_an_admin_drafts_a_key_and_the_private_half_is_in_no_answer(
-    reach: AdminReach, tmp_path: Path
+    reach: AdminReach, engine: Engine
 ) -> None:
     world = a_world()
-    instance = reach(world, tmp_path)
+    instance = reach(world, engine)
 
     answer = draft(instance.client, instance.headers)
 
@@ -241,10 +241,10 @@ def test_two_admins_each_get_their_own_draft() -> None:
 # 13
 @AN_ADMIN_BY_COOKIE_AND_BEARER
 def test_a_reachable_https_check_hands_the_token_to_the_checker_and_back_to_nobody(
-    reach: AdminReach, tmp_path: Path
+    reach: AdminReach, engine: Engine
 ) -> None:
     world = a_world()
-    instance = reach(world, tmp_path)
+    instance = reach(world, engine)
 
     answer = check(instance.client, instance.headers)
 

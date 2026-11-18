@@ -152,14 +152,13 @@ COPY --from=lobby /lobby/build /app/lobby
 
 # The directories the instance keeps its state in are made here so that an empty
 # volume mounted over one belongs to the user that writes it.
-RUN mkdir -p /data/database /data/mirrors /data/builds \
-    && chown presentator /data/database /data/mirrors /data/builds
+RUN mkdir -p /data/mirrors /data/builds \
+    && chown presentator /data/mirrors /data/builds
 
 # Where this filesystem keeps what has to survive the container, and the address
 # it answers at inside it; the deployment mounts a volume over each directory and
 # routes to the port.
-ENV PRESENTATOR_DATABASE=/data/database/presentator.sqlite3 \
-    PRESENTATOR_MIRRORS=/data/mirrors \
+ENV PRESENTATOR_MIRRORS=/data/mirrors \
     PRESENTATOR_BUILDS=/data/builds \
     PRESENTATOR_TOOLCHAIN=/app/slidev \
     PRESENTATOR_LOBBY_BUILD=/app/lobby \

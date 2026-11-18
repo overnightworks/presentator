@@ -2,10 +2,10 @@
 
 from datetime import datetime, timedelta
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine
 from webauth.ports import AccountKind
 
 from presentator.api.deck_api import DeckView
@@ -322,8 +322,8 @@ def test_a_store_that_fails_is_the_plain_server_error_never_a_problem() -> None:
 
 
 @pytest.fixture
-def scene(tmp_path: Path) -> Scene:
-    return a_scene(tmp_path, token_clients=frozenset({_HAL}))
+def scene(engine: Engine) -> Scene:
+    return a_scene(engine, token_clients=frozenset({_HAL}))
 
 
 def test_a_persons_bearer_reaches_the_route_and_gets_the_problem(scene: Scene) -> None:
@@ -339,10 +339,10 @@ def test_a_persons_bearer_reaches_the_route_and_gets_the_problem(scene: Scene) -
     assert answer.content == _NOT_FOUND
 
 
-def test_a_persons_bearer_reads_that_persons_own_deck(tmp_path: Path) -> None:
+def test_a_persons_bearer_reads_that_persons_own_deck(engine: Engine) -> None:
     subject = "a-member"
     scene = a_scene(
-        tmp_path,
+        engine,
         token_clients=frozenset({_HAL}),
         decks=a_decks(
             GivenDecks(

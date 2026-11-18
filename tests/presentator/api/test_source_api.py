@@ -3,11 +3,11 @@
 from dataclasses import replace
 from datetime import timedelta
 from http import HTTPStatus
-from pathlib import Path
 from threading import Event, Thread
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine
 
 from presentator.api.hooks import hook_address
 from presentator.api.source_api import SourceFetchView, SourceListView, SourceView
@@ -390,8 +390,8 @@ def test_a_signed_out_caller_meets_webauth_not_a_problem() -> None:
 
 
 @pytest.fixture
-def scene(tmp_path: Path) -> Scene:
-    return a_scene(tmp_path, token_clients=frozenset({_HAL}))
+def scene(engine: Engine) -> Scene:
+    return a_scene(engine, token_clients=frozenset({_HAL}))
 
 
 def a_bearer(scene: Scene, groups: list[str]) -> dict[str, str]:

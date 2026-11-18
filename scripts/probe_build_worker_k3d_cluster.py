@@ -23,7 +23,7 @@ from typing import Any
 from probe_build_worker_harness import refuse, say
 from ruamel.yaml import YAML
 
-PLATFORM_COMMIT = "3d8bc6ad5455b109685d62fa55d5d49b5946002c"
+PLATFORM_COMMIT = "b60a5401880da3e905c676ed4942abbc78fa032b"
 TOOLS = ("k3d", "kubectl", "docker")
 NAMESPACE = "presentator"
 IN_NAMESPACE = ("--namespace", NAMESPACE)
@@ -169,6 +169,11 @@ class Run:
     def redis_image(self) -> str:
         """The local name of the probe's Redis image, in the probe's repository."""
         return f"{PROBE_REPOSITORY}:redis-{self.identifier}"
+
+    @property
+    def postgres_image(self) -> str:
+        """The local name of the probe's Postgres image, in the probe's repository."""
+        return f"{PROBE_REPOSITORY}:postgres-{self.identifier}"
 
     @property
     def node(self) -> str:
@@ -399,6 +404,7 @@ def teardown(run: Run) -> None:
         ("docker volume rm --force", run.images_volume),
         ("docker image rm --force", run.tag),
         ("docker image rm --force", run.redis_image),
+        ("docker image rm --force", run.postgres_image),
     )
     with contextlib.ExitStack() as cleanup:
         cleanup.callback(shutil.rmtree, run.directory, ignore_errors=True)
