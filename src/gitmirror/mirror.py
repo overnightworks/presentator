@@ -13,14 +13,16 @@ import re
 import shutil
 import subprocess
 import tempfile
-from _hashlib import HASH
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 from urllib.parse import urlsplit
+
+if TYPE_CHECKING:
+    from _hashlib import HASH
 
 from gitmirror.model import (
     Change,
