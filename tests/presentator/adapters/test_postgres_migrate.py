@@ -37,6 +37,7 @@ def test_an_empty_database_gets_every_table(unmigrated_database_url: str) -> Non
         "decks",
         "source_runs",
         "refresh_owner",
+        "host_key_pins",
     }
 
 

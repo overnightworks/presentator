@@ -38,6 +38,11 @@ def connection(database_url: str) -> Iterator[Connection]:
             " VALUES ('s1', 'nobody', now(), now())",
             id="a session of a user that does not exist",
         ),
+        pytest.param(
+            "INSERT INTO host_key_pins (host, public_key)"
+            " VALUES ('git.example', 'ssh-ed25519 A'), ('git.example', 'ssh-ed25519 B')",
+            id="a second key pinned for one host",
+        ),
     ],
 )
 def test_a_migrated_database_refuses(connection: Connection, refused: str) -> None:
