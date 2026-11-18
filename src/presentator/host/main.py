@@ -422,10 +422,8 @@ def _build_cache(settings: Settings) -> BuildCache:
     try:
         client = object_store_client()
     except ConfigParseError:
-        raise cannot_start(
-            "the object store's key or configuration file does not parse",
-            variables=_OBJECT_STORE_FILES,
-        ) from None
+        unparsable = "the object store's key or configuration file does not parse"
+        raise cannot_start(unparsable, variables=_OBJECT_STORE_FILES) from None
     return BuildCache(
         root=settings.builds,
         store=StoredRuns(client=client, bucket=settings.s3_bucket),
