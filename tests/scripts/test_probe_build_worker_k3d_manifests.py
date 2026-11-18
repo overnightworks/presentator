@@ -4,23 +4,29 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+from urllib.parse import urlsplit
 
 import pytest
 
 from tests.scripts.support.k3d_pods import (
     Document,
 )
-from tests.scripts.support.k3d_world import (
-    DIGEST,
+from tests.scripts.support.k3d_render import (
+    DATABASE_CREDENTIALS,
+    DATABASE_KEY_FILE,
+    DATABASE_URL,
     PROJECTED_KEYS,
     PROJECTED_NAME,
-    RUN_IDENTIFIER,
     WORKER_KEY_NAME,
+    named,
+    workload_documents,
+)
+from tests.scripts.support.k3d_world import (
+    DIGEST,
+    RUN_IDENTIFIER,
     WORKER_POD_NAMES,
     Fixture,
     fixture_maker,
-    named,
-    workload_documents,
 )
 
 
@@ -127,6 +133,16 @@ CHANGES: list[tuple[Change, str]] = [
         "Deployment web",
     ),
     (
+        lambda b, o: named(o, "Deployment")["spec"]["template"]["spec"][
+            "initContainers"
+        ][0].update(
+            image=named(b, "Deployment")["spec"]["template"]["spec"]["initContainers"][
+                0
+            ]["image"]
+        ),
+        "Deployment web container migrate",
+    ),
+    (
         lambda b, o: container_of(o, "CronJob").update(
             image=container_of(b, "CronJob")["image"]
         ),
@@ -152,6 +168,7 @@ CHANGES: list[tuple[Change, str]] = [
         "another field changed",
         "nft-rules's digest changed",
         "the web left at the production image",
+        "the web's init container left at the production image",
         "the CronJob's container left at the production image",
         "a digest on the probe image",
         "the worker container not swapped",
@@ -179,7 +196,12 @@ def test_the_web_documents_are_the_overlays_config_map_and_deployment_with_a_red
     rendered = workload_documents(production_image)
     documents = manifests_module.web_documents(rendered)
     web = documents[0]["spec"]["template"]["spec"]["containers"][0]
-    assert web["env"].pop()["name"] == manifests_module.REDIS_URL_VARIABLE
+    variable = manifests_module.REDIS_URL_VARIABLE
+    named_redis = [e for e in web["env"] if e["name"] == variable]
+    assert named_redis == [web["env"].pop()]
+    assert manifests_module.REDIS in named_redis[0]["value"]
+    rendered_web = container_of(rendered, "Deployment")
+    rendered_web["env"] = [e for e in rendered_web["env"] if e["name"] != variable]
     assert documents == [
         named(rendered, "Deployment"),
         next(
@@ -209,11 +231,36 @@ def test_the_throwaway_secrets_read_their_names_and_keys_from_the_deployment(
     secrets = manifests_module.throwaway_secrets(deployment, lambda: next(values))
     assert {secret["kind"] for secret in secrets} == {"Secret"}
     by_name = {secret["metadata"]["name"]: secret["stringData"] for secret in secrets}
-    assert set(by_name) == {PROJECTED_NAME, WORKER_KEY_NAME}
+    assert set(by_name) == {PROJECTED_NAME, WORKER_KEY_NAME, DATABASE_CREDENTIALS}
     assert set(by_name[PROJECTED_NAME]) == set(PROJECTED_KEYS)
     assert set(by_name[WORKER_KEY_NAME]) == {"key"}
+    assert set(by_name[DATABASE_CREDENTIALS]) == {DATABASE_KEY_FILE}
     shown = [value for held in by_name.values() for value in held.values()]
-    assert sorted(shown) == ["effect-0", "effect-1", "effect-2"]
+    assert sorted(shown) == [f"effect-{number}" for number in range(4)]
+
+
+def test_the_probe_postgres_is_the_one_the_web_database_url_names_and_never_pulls(
+    manifests_module: ModuleType, production_image: str
+) -> None:
+    deployment = named(workload_documents(production_image), "Deployment")
+    postgres, service = manifests_module.postgres_documents(deployment, "local-pg")
+    pod = postgres["spec"]["template"]["spec"]
+    (container,) = pod["containers"]
+    environment = {e["name"]: e["value"] for e in container["env"]}
+    (volume,) = pod["volumes"]
+    (mount,) = container["volumeMounts"]
+    password_file = Path(environment["POSTGRES_PASSWORD_FILE"])
+    url = f"postgresql://{environment['POSTGRES_USER']}@{service['metadata']['name']}"
+    url += f":{service['spec']['ports'][0]['port']}/{environment['POSTGRES_DB']}"
+    assert url == DATABASE_URL
+    assert service["spec"]["selector"] == postgres["spec"]["selector"]["matchLabels"]
+    assert (container["image"], container["imagePullPolicy"]) == ("local-pg", "Never")
+    assert volume["secret"] == {"secretName": DATABASE_CREDENTIALS}
+    assert (mount["name"], Path(mount["mountPath"])) == (
+        volume["name"],
+        password_file.parent,
+    )
+    assert password_file.name == DATABASE_KEY_FILE
 
 
 def test_the_workers_apply_at_the_replicas_asked_for(
@@ -224,3 +271,22 @@ def test_the_workers_apply_at_the_replicas_asked_for(
         rendered, init_container=True, replicas=len(WORKER_POD_NAMES)
     )
     assert named(documents, "StatefulSet")["spec"]["replicas"] == len(WORKER_POD_NAMES)
+
+
+def test_the_web_cells_apply_the_probe_redis_and_postgres_with_the_web(
+    make_fixture: Callable[..., Fixture], manifests_module: ModuleType
+) -> None:
+    fixture = make_fixture()
+    fixture.drive()
+    (with_the_web,) = [
+        documents
+        for documents in fixture.world.applies()
+        if ("Deployment", "web")
+        in {(d["kind"], d["metadata"]["name"]) for d in documents}
+    ]
+    database = urlsplit(DATABASE_URL).hostname
+    assert {(d["kind"], d["metadata"]["name"]) for d in with_the_web} >= {
+        ("Deployment", manifests_module.REDIS),
+        ("Deployment", database),
+        ("Service", database),
+    }

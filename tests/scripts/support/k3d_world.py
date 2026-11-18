@@ -27,6 +27,7 @@ from tests.scripts.support.k3d_pods import (
     stamp,
     twin_answer,
 )
+from tests.scripts.support.k3d_render import as_yaml_stream, workload_documents
 from tests.scripts.support.web_client_output import (
     client_output,
     delivered_outcome,
@@ -36,19 +37,8 @@ from tests.scripts.support.web_client_output import (
 DIGEST = "@sha256:" + "a" * 64
 OTHER_DIGEST = "@sha256:" + "c" * 64
 RELEASED_VERSION = "2026.11.11.1"
-NFT_IMAGE = "docker.io/library/busybox:1.38.0@sha256:" + "b" * 64
 RUN_IDENTIFIER = "0a1b2c3d"
-SECRETS_VOLUME = "secrets"
-PROJECTED_NAME = "web-secrets"
-PROJECTED_MOUNT = "/run/fake-secrets"
-PROJECTED_KEYS = ("first_key", "second_key")
-WEB_LABELS = {"app": "fake-web", "tier": "front"}
-WORKER_KEY_NAME = "fake-worker-key"
-WORKER_KEY_FILE = f"{PROJECTED_MOUNT}/fake-key-directory/key"
 GENERATED_VALUE = "generated-value-"
-SCRATCH_MOUNT = "/data/elsewhere"
-WEB_PORT = 8000
-WORKER_PORT = 7100
 WEB_POD_NAMES = ("web-pod-a", "web-pod-b")
 WORKER_POD_NAMES = ("build-worker-0", "build-worker-1")
 INBOUND_PORT = 40123
@@ -72,93 +62,6 @@ def kubelet_config(**changes: object) -> Document:
     return {"kubeletconfig": kubelet | changes}
 
 
-def add_web_secrets(spec: Document) -> None:
-    """Give the web container's pod spec a projected Secret and the files naming it."""
-    (main,) = spec["containers"]
-    main["env"] = [
-        {"name": "AN_ORIGIN", "value": "https://example.org"},
-        {"name": "A_SECRET_FILE", "value": f"{PROJECTED_MOUNT}/{PROJECTED_KEYS[0]}"},
-        {"name": "AN_OTHER_PATH", "value": SCRATCH_MOUNT},
-        {"name": "A_REFERENCE", "valueFrom": {"fieldRef": {}}},
-        {"name": "ANOTHER_FILE", "value": f"{PROJECTED_MOUNT}/{PROJECTED_KEYS[1]}"},
-        {"name": "A_WORKER_KEY_FILE", "value": WORKER_KEY_FILE},
-    ]
-    main["volumeMounts"] = [
-        {"name": "elsewhere", "mountPath": SCRATCH_MOUNT},
-        {"name": SECRETS_VOLUME, "mountPath": PROJECTED_MOUNT},
-    ]
-    keyed = {
-        "name": WORKER_KEY_NAME,
-        "items": [{"key": "key", "path": "fake-key-directory/key"}],
-    }
-    projected = {"sources": [{"secret": {"name": PROJECTED_NAME}}, {"secret": keyed}]}
-    spec["volumes"] = [
-        {"name": "elsewhere", "emptyDir": {}},
-        {"name": SECRETS_VOLUME, "projected": projected},
-    ]
-
-
-def workload_documents(image: str) -> list[Document]:
-    """What the overlay and the base render, every production container at `image`."""
-
-    def template(container: str, *, init: bool = False) -> Document:
-        main: Document = {"name": container, "image": image}
-        if container == "worker":
-            main["command"] = ["serve-the-build-worker", "--flag"]
-            main["ports"] = [{"name": "build", "containerPort": WORKER_PORT}]
-        if container == "web":
-            main["ports"] = [{"name": "http", "containerPort": WEB_PORT}]
-        spec: Document = {"containers": [main]}
-        if container == "web":
-            add_web_secrets(spec)
-        if init:
-            spec["initContainers"] = [{"name": "nft-rules", "image": NFT_IMAGE}]
-        return {"spec": spec}
-
-    def document(kind: str, name: str, **spec: Any) -> Document:  # noqa: ANN401
-        return {"kind": kind, "metadata": {"name": name}, "spec": spec}
-
-    job = {"spec": {"template": template("restore-test")}}
-    return [
-        document(
-            "Deployment",
-            "web",
-            replicas=1,
-            selector={"matchLabels": WEB_LABELS},
-            template=template("web"),
-        ),
-        document(
-            "StatefulSet",
-            "build-worker",
-            replicas=2,
-            template=template("worker", init=True),
-        ),
-        document("StatefulSet", "postgres", replicas=1, template=template("postgres")),
-        document("CronJob", "restore-test", jobTemplate=job),
-        document("PersistentVolumeClaim", "builds"),
-        document("ServiceAccount", "build-worker"),
-        document("Service", "build-worker"),
-        document("NetworkPolicy", "build-worker"),
-        document("NetworkPolicy", "http-from-traefik-only"),
-        document("ConfigMap", "build-worker-rules-0a1b2c"),
-        document("ConfigMap", "web-settings"),
-        document("Schedule", "backup"),
-        document(
-            "PodConfig",
-            "backup",
-            template={"spec": {"containers": [{"name": "backup"}]}},
-        ),
-    ]
-
-
-def named(documents: list[Document], kind: str) -> Document:
-    return next(document for document in documents if document["kind"] == kind)
-
-
-def as_yaml_stream(documents: list[Document]) -> str:
-    return "\n---\n".join(json.dumps(document) for document in documents)
-
-
 @dataclass
 class World:
     """Answers every command of a run and remembers it, with its environment."""
@@ -172,17 +75,20 @@ class World:
     node_images: str = "a node image"
     disk_use: str = "a disk use"
     probe_image: str = ""
-    redis_image: str = ""
+    # The local names of the probe's throwaway stores, Redis first.
+    store_images: tuple[str, ...] = ()
     production_image: str = ""
     # The repo digests the probe tag shows once the published image is tagged;
     # the published image's own if unset.
     repo_digests: list[str] | None = None
     # The error `docker pull` ends with; the pull passes if empty.
     pull_error: str = ""
-    # The error `k3d image import` ends with for the probe Redis; passes if empty.
-    redis_import_error: str = ""
-    # How many looks into the node find the probe Redis; every look if None.
-    redis_found_in_node: int | None = None
+    # The store whose image `k3d image import` and the node's runtime fail on, by
+    # its place in store_images: the import's error (passes if empty), and how
+    # many looks into the node find it (every look if None).
+    failing_store: int = 0
+    store_import_error: str = ""
+    store_found_in_node: int | None = None
     twin_pod: str = ""
     twin_log: str = "the twin's mount list"
     # What the web and the workers do: whether they become Ready, the web's
@@ -235,7 +141,8 @@ class World:
     cluster_name: str = ""
     cluster_up: bool = False
     image_built: bool = False
-    redis_image_present: bool = False
+    # The local names of the stores tagged and not yet removed.
+    stores_present: set[str] = field(default_factory=set[str])
     # The images volume lives from the cluster's creation until it is removed;
     # `k3d cluster delete` cannot remove it while the import's tools container uses it.
     volume_up: bool = False
@@ -268,9 +175,9 @@ class World:
             case ("docker", "pull", *_) if self.pull_error:
                 return 1, "", self.pull_error
             case ("k3d", "image", "import", image, *_) if (
-                self.redis_import_error and image == self.redis_image
+                self.store_import_error and image == self.failing_store_image
             ):
-                return 1, "", self.redis_import_error
+                return 1, "", self.store_import_error
             case ("docker", "exec", _, "crictl", "inspecti", image):
                 return self.node_image_answer(image)
             case ("timeout", _, "kubectl", "cp", *_):
@@ -282,12 +189,18 @@ class World:
                 return (1, "", "") if answer is None else (0, answer, "")
 
     def node_image_answer(self, image: str) -> tuple[int, str, str]:
-        """How the node's runtime answers a look for the image, by the looks so far."""
-        looks = len(self.issued("docker", "exec", self.node_name, "crictl"))
-        found = self.redis_found_in_node
-        if image == self.redis_image and found is not None and looks > found:
+        """How the node's runtime answers a look for the image, by its looks so far."""
+        looks = len(
+            self.issued("docker", "exec", self.node_name, "crictl", "inspecti", image)
+        )
+        found = self.store_found_in_node
+        if image == self.failing_store_image and found is not None and looks > found:
             return 1, "", f'no such image "{image}" present'
         return 0, "{}", ""
+
+    @property
+    def failing_store_image(self) -> str:
+        return self.store_images[self.failing_store]
 
     def exec_answer(self, command: tuple[str, ...]) -> tuple[int, str, str]:
         """What a program sent into a pod prints, by its container and arguments."""
@@ -370,7 +283,7 @@ class World:
                 pass
 
     def image_effect(self, command: tuple[str, ...]) -> None:
-        """What a docker image command changes: the probe image and the Redis image."""
+        """What a docker image command changes: the probe image and the store images."""
         match command:
             case ("docker", "build", *_):
                 self.image_built = True
@@ -378,10 +291,10 @@ class World:
                 self.image_built = True
             case ("docker", "image", "rm", *_, name) if name == self.probe_image:
                 self.image_built = False
-            case ("docker", "tag", _, name) if name == self.redis_image:
-                self.redis_image_present = True
-            case ("docker", "image", "rm", *_, name) if name == self.redis_image:
-                self.redis_image_present = False
+            case ("docker", "tag", _, name) if name in self.store_images:
+                self.stores_present.add(name)
+            case ("docker", "image", "rm", *_, name) if name in self.store_images:
+                self.stores_present.discard(name)
             case _:
                 pass
 
@@ -411,10 +324,11 @@ class World:
             case ("docker", "image", "ls", *_, repository):
                 probe = repository == self.probe_image.split(":")[0]
                 own = self.listing("tag", self.probe_image, exists=self.image_built)
-                redis = self.listing(
-                    "tag", self.redis_image, exists=self.redis_image_present
+                stores = "".join(
+                    self.listing("tag", name, exists=name in self.stores_present)
+                    for name in self.store_images
                 )
-                return (own + redis) if probe else ""
+                return (own + stores) if probe else ""
             case _:
                 pass
         return ""
@@ -729,7 +643,7 @@ def fixture_maker(
             effects=effects,
         )
         world.node_name, world.probe_image = run.node, run.tag
-        world.redis_image = run.redis_image
+        world.store_images = (run.redis_image, run.postgres_image)
         world.cluster_name = run.name
         world.production_image, world.twin_pod = production_image, driver.TWIN_POD
         world.residue_pods = residue_pods(load_script, driver, world.outcomes)

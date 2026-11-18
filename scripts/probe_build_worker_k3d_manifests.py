@@ -3,9 +3,11 @@
 `prove_render` renders the image-only overlay and proves it differs from
 platform's own render only in the production image fields of every pod
 template. `applied_documents` takes the overlay's documents the worker pods
-need, `web_documents` those the web needs and `throwaway_secrets` the Secrets
-the web's Deployment projects, with a value from an effect for each file they
-hold. `namespace_document` takes production's Namespace for presentator.
+need, `web_documents` those the web needs, `redis_documents` and
+`postgres_documents` the throwaway stores it reaches, and `throwaway_secrets`
+the Secrets the web's Deployment mounts, with a value from an effect for each
+file they hold. `namespace_document` takes production's Namespace for
+presentator.
 """
 
 import copy
@@ -14,6 +16,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
+from urllib.parse import urlsplit
 
 from probe_build_worker_harness import refuse, say
 from probe_build_worker_k3d_cluster import NAMESPACE, Document, Run, documents_of
@@ -23,7 +26,8 @@ PRODUCTION_IMAGE = "ghcr.io/overnightworks/presentator"
 APPLIED_KINDS = ("PersistentVolumeClaim", "ServiceAccount")
 # What the workers are: their StatefulSet, their Service, their NetworkPolicy and
 # the ConfigMap holding the packet filter, each named for the workers; the base
-# renders other StatefulSets, Postgres among them, that the probe leaves out.
+# renders other StatefulSets, its Postgres and Redis among them, that the probe
+# leaves out for throwaway ones the cluster never pulls.
 WORKER_KINDS = ("ConfigMap", "NetworkPolicy", "Service", "StatefulSet")
 WORKERS = "build-worker"
 WORKER_LABEL = "app.kubernetes.io/name"
@@ -31,10 +35,11 @@ INBOUND_PROBE_POLICY = "probe-inbound-any-port"
 WEB_KINDS = ("ConfigMap", "Deployment")
 WORKER_CONTAINER = "worker"
 WEB_CONTAINER = "web"
-# The web needs a Redis the platform's render does not yet hold; the probe runs a
-# throwaway one in its namespace, the image CI's Redis service container uses.
-# The runner pulls the pinned digest from a mirror without Docker Hub's anonymous
-# rate limit and imports it under a local name; the cluster never pulls it.
+# The web needs a Redis and a Postgres; the probe runs a throwaway one of each in
+# its namespace, from the image that CI's service container of that store uses.
+# The runner pulls each pinned digest from a mirror without Docker Hub's
+# anonymous rate limit and imports it under a local name; the cluster never
+# pulls it.
 REDIS = "probe-redis"
 REDIS_PINNED = (
     "mirror.gcr.io/library/redis:7.4.12-alpine"
@@ -42,7 +47,14 @@ REDIS_PINNED = (
 )
 REDIS_PORT = 6379
 REDIS_URL_VARIABLE = "PRESENTATOR_REDIS_URL"
-SECRETS_VOLUME = "secrets"
+POSTGRES_PINNED = (
+    "mirror.gcr.io/library/postgres:18.6-alpine3.24"
+    "@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395"
+)
+DATABASE_URL_VARIABLE = "PRESENTATOR_DATABASE_URL"
+DATABASE_PASSWORD_FILE_VARIABLE = "PRESENTATOR_DATABASE_PASSWORD_FILE"  # noqa: S105 - the value names an environment variable and is not a password
+# Where the probe's Postgres reads the password the web reads from its own mount.
+POSTGRES_PASSWORD_MOUNT = PurePosixPath("/run/secrets/postgres")
 INIT_CONTAINER = "nft-rules"
 TERMINATION_MESSAGE_POLICY = "FallbackToLogsOnError"
 
@@ -84,6 +96,17 @@ def _wrong_image(image: str) -> str:
     return "carries a digest" if "@" in image else f"names {image}"
 
 
+def _container_pairs(
+    before: Document, after: Document
+) -> list[tuple[Document, Document]]:
+    """The init containers and containers of two pod specs, side by side."""
+    return [
+        pair
+        for field in ("initContainers", "containers")
+        for pair in zip(before.get(field, []), after.get(field, []), strict=False)
+    ]
+
+
 def _swap_images(base: list[Document], overlay: list[Document], image: str) -> str:
     """Drop the presentator image fields of both renders; say why one is wrong."""
     worker_swapped = False
@@ -92,10 +115,7 @@ def _swap_images(base: list[Document], overlay: list[Document], image: str) -> s
         for original_spec, replaced_spec in zip(
             _pod_specs(before), _pod_specs(after), strict=False
         ):
-            pairs = zip(
-                original_spec["containers"], replaced_spec["containers"], strict=False
-            )
-            for original, replaced in pairs:
+            for original, replaced in _container_pairs(original_spec, replaced_spec):
                 if not original.get("image", "").startswith(PRODUCTION_IMAGE):
                     continue
                 if replaced["image"] != image:
@@ -185,8 +205,8 @@ def applied_documents(
 def web_documents(overlay: list[Document]) -> list[Document]:
     """The overlay's ConfigMaps and Deployment the web needs, as rendered.
 
-    The web container's environment gains the URL of the probe's Redis; no worker
-    pod gets it.
+    The web container's Redis URL names the probe's Redis instead of the
+    render's; no worker pod gets it.
     """
     documents = [
         copy.deepcopy(document)
@@ -199,7 +219,10 @@ def web_documents(overlay: list[Document]) -> list[Document]:
         for container in document["spec"]["template"]["spec"]["containers"]:
             if container["name"] == WEB_CONTAINER:
                 url = f"redis://{REDIS}.{NAMESPACE}.svc.cluster.local:{REDIS_PORT}/0"
-                container["env"].append({"name": REDIS_URL_VARIABLE, "value": url})
+                container["env"] = [
+                    *(e for e in container["env"] if e["name"] != REDIS_URL_VARIABLE),
+                    {"name": REDIS_URL_VARIABLE, "value": url},
+                ]
     return documents
 
 
@@ -242,26 +265,101 @@ def redis_documents(image: str) -> list[Document]:
     ]
 
 
+def _environment_value(container: Document, name: str) -> str:
+    return next(e["value"] for e in container["env"] if e["name"] == name)
+
+
+def _web_pod(deployment: Document) -> tuple[Document, Document]:
+    """The Deployment's pod spec and its web container."""
+    pod = deployment["spec"]["template"]["spec"]
+    return pod, next(c for c in pod["containers"] if c["name"] == WEB_CONTAINER)
+
+
+def postgres_documents(deployment: Document, image: str) -> list[Document]:
+    """The Deployment and Service of the probe's throwaway Postgres, from `image`.
+
+    The web's database URL names the Service, its port, the user and the
+    database; the Postgres reads its password from the Secret key the web reads
+    as its password file, so both hold the one throwaway value.
+    """
+    pod, container = _web_pod(deployment)
+    url = urlsplit(_environment_value(container, DATABASE_URL_VARIABLE))
+    password = PurePosixPath(
+        _environment_value(container, DATABASE_PASSWORD_FILE_VARIABLE)
+    )
+    mount = next(
+        m for m in container["volumeMounts"] if m["mountPath"] == str(password.parent)
+    )
+    volume = next(v for v in pod["volumes"] if v["name"] == mount["name"])
+    name, port = url.hostname, url.port
+    labels = {"app.kubernetes.io/name": name}
+    metadata = {"name": name, "namespace": NAMESPACE, "labels": labels}
+    environment = {
+        "POSTGRES_USER": url.username,
+        "POSTGRES_DB": url.path.removeprefix("/"),
+        "POSTGRES_PASSWORD_FILE": str(POSTGRES_PASSWORD_MOUNT / password.name),
+    }
+    secret = {"name": "password", "secret": volume["secret"]}
+    postgres = {
+        "name": "postgres",
+        "image": image,
+        "imagePullPolicy": "Never",
+        "env": [{"name": key, "value": value} for key, value in environment.items()],
+        "ports": [{"containerPort": port}],
+        "readinessProbe": {"exec": {"command": ["pg_isready", "-U", url.username]}},
+        "volumeMounts": [
+            {"name": "password", "mountPath": str(POSTGRES_PASSWORD_MOUNT)}
+        ],
+    }
+    return [
+        {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": metadata,
+            "spec": {
+                "replicas": 1,
+                "selector": {"matchLabels": labels},
+                "template": {
+                    "metadata": {"labels": labels},
+                    "spec": {"containers": [postgres], "volumes": [secret]},
+                },
+            },
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Service",
+            "metadata": metadata,
+            "spec": {"selector": labels, "ports": [{"port": port, "targetPort": port}]},
+        },
+    ]
+
+
 def _files_under(container: Document, mount: PurePosixPath) -> list[str]:
     """The last parts of the container's environment values directly under the mount."""
     files = (PurePosixPath(e["value"]) for e in container["env"] if "value" in e)
     return [file.name for file in files if file.parent == mount]
 
 
-def throwaway_secrets(deployment: Document, value: Callable[[], str]) -> list[Document]:
-    """The Secrets the Deployment's `secrets` volume projects, a `value()` per file.
+def _secret_sources(volume: Document) -> list[Document]:
+    """The Secrets a volume holds, each by its name and the keys it names, if any."""
+    if "secret" in volume:
+        secret = volume["secret"]
+        return [{"name": secret["secretName"], "items": secret.get("items", [])}]
+    sources = volume.get("projected", {}).get("sources", [])
+    return [source["secret"] for source in sources if "secret" in source]
 
-    A source that names its keys holds those; the one that names none holds the
-    last parts of the web container's environment values that lie directly under
-    the volume's mount path. The workers' Secret is the one source that names its
-    keys, so the web and the workers hold the one key.
+
+def throwaway_secrets(deployment: Document, value: Callable[[], str]) -> list[Document]:
+    """The Secrets the web container mounts, a `value()` per file.
+
+    A Secret that names its keys holds those; one that names none holds the last
+    parts of the web container's environment values that lie directly under the
+    mount path of its volume. The workers' Secret names its keys, so the web and
+    the workers hold the one key, and the database password's Secret names none,
+    so the web and the probe's Postgres hold the one password.
     """
-    pod = deployment["spec"]["template"]["spec"]
-    volume = next(v for v in pod["volumes"] if v["name"] == SECRETS_VOLUME)
-    container = next(c for c in pod["containers"] if c["name"] == WEB_CONTAINER)
-    mounted = next(m for m in container["volumeMounts"] if m["name"] == SECRETS_VOLUME)
-    under_mount = _files_under(container, PurePosixPath(mounted["mountPath"]))
-    sources = [s["secret"] for s in volume["projected"]["sources"] if "secret" in s]
+    pod, container = _web_pod(deployment)
+    volumes = {volume["name"]: volume for volume in pod["volumes"]}
     return [
         {
             "apiVersion": "v1",
@@ -270,10 +368,11 @@ def throwaway_secrets(deployment: Document, value: Callable[[], str]) -> list[Do
             "stringData": {
                 key: value()
                 for key in [item["key"] for item in source.get("items", [])]
-                or under_mount
+                or _files_under(container, PurePosixPath(mount["mountPath"]))
             },
         }
-        for source in sources
+        for mount in container["volumeMounts"]
+        for source in _secret_sources(volumes[mount["name"]])
     ]
 
 

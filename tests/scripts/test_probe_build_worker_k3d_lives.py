@@ -20,11 +20,13 @@ from tests.scripts.support.k3d_pods import (
     terminated_state,
     watch_event,
 )
+from tests.scripts.support.k3d_render import (
+    workload_documents,
+)
 from tests.scripts.support.k3d_world import (
     Fixture,
     World,
     fixture_maker,
-    workload_documents,
 )
 
 
