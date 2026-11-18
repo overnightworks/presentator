@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Final, Self
 
 import pytest
-from agents.config import BackendKind, ChatGateway
+from agents.config import ChatGateway
 from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
 from httpx2 import Request as BrowserRequest
@@ -289,7 +289,6 @@ def _no_key_set(url: str) -> bytes:
 def an_agent_config() -> AgentSettings:
     """The `agent` section of an instance whose gateway key is a throwaway file."""
     return AgentSettings(
-        backend=BackendKind.LITELLM,
         gateway=ChatGateway(origin=A_GATEWAY_ORIGIN, key_file=A_GATEWAY_KEY_FILE),
         api_group=AN_API_GROUP,
     )

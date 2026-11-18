@@ -589,8 +589,8 @@ wheels = [
 
 [[package]]
 name = "overnightworks-agents"
-version = "0.52.0"
-source = { git = "https://github.com/overnightworks/agents?rev=v0.52.0#ba4e84e9b36f078e375224ede3b9be5bbd257da0" }
+version = "0.59.0"
+source = { git = "https://github.com/overnightworks/agents?rev=v0.59.0#69adc89643d4f68e0c9b8fd41e1fd446dc9acec9" }
 dependencies = [
     { name = "pydantic" },
     { name = "ruamel-yaml" },
@@ -629,11 +629,20 @@ provides-extras = ["catalogs", "po"]
 
 [[package]]
 name = "overnightworks-logline"
-version = "0.4.0"
-source = { git = "https://github.com/overnightworks/logline?rev=v0.4.0#24a7a6077f3bd0c382fde62e149946c70a9ced31" }
+version = "1.2.0"
+source = { url = "https://github.com/overnightworks/logline/releases/download/v1.2.0/overnightworks_logline-1.2.0-py3-none-any.whl" }
 dependencies = [
     { name = "opentelemetry-api" },
     { name = "structlog" },
+]
+wheels = [
+    { url = "https://github.com/overnightworks/logline/releases/download/v1.2.0/overnightworks_logline-1.2.0-py3-none-any.whl", hash = "sha256:f1f9b46acefb7166bf96c1a25000d77c109e2bf6e96f76cf45f4074c3947bb3b" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "opentelemetry-api", specifier = ">=1.30" },
+    { name = "structlog", specifier = ">=25.1" },
 ]
 
 [[package]]
@@ -679,9 +688,9 @@ requires-dist = [
     { name = "cryptography", specifier = "==50.0.2" },
     { name = "fastapi", specifier = "==0.162.0" },
     { name = "httpx2", specifier = "==2.16.0" },
-    { name = "overnightworks-agents", extras = ["backend", "mcp-server"], git = "https://github.com/overnightworks/agents?rev=v0.52.0" },
-    { name = "overnightworks-logline", git = "https://github.com/overnightworks/logline?rev=v0.4.0" },
-    { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.21.0" },
+    { name = "overnightworks-agents", extras = ["backend", "mcp-server"], git = "https://github.com/overnightworks/agents?rev=v0.59.0" },
+    { name = "overnightworks-logline", url = "https://github.com/overnightworks/logline/releases/download/v1.2.0/overnightworks_logline-1.2.0-py3-none-any.whl" },
+    { name = "overnightworks-speech-client", git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.22.0" },
     { name = "overnightworks-webauth", extras = ["redis"], git = "https://github.com/overnightworks/webauth?rev=v0.40.1" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.9" },
     { name = "pydantic-settings", specifier = "==2.16.2" },
@@ -707,8 +716,8 @@ dev = [
 
 [[package]]
 name = "overnightworks-speech-client"
-version = "0.21.0"
-source = { git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.21.0#75baa0b986c6f71e2a1b7a53a96f4d7bbfb4eacf" }
+version = "0.22.0"
+source = { git = "https://github.com/overnightworks/speech?subdirectory=packages%2Fclient&rev=v0.22.0#8d56f8c5f702e2e7bc2b628cb77a1688329952f5" }
 dependencies = [
     { name = "overnightworks-logline" },
     { name = "pydantic" },
