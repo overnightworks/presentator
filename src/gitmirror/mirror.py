@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, TextIO
 from urllib.parse import urlsplit
 
 if TYPE_CHECKING:
@@ -481,21 +481,32 @@ def _pinned_hosts(
         yield None
         return
     pinned = frozenset(known_hosts.pins.pinned())
-    known_hosts.directory.mkdir(parents=True, exist_ok=True)
-    descriptor, name = tempfile.mkstemp(
-        prefix=_KNOWN_HOSTS_PREFIX, dir=known_hosts.directory
-    )
-    path = Path(name)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as hosts_file:
-        # The lock tells `remove_leftover_known_hosts` this run still needs the
-        # file, and goes with the process when it is killed mid-run.
-        fcntl.flock(hosts_file, fcntl.LOCK_EX)
+    hosts_file, path = _locked_hosts_file(known_hosts.directory)
+    with hosts_file:
         try:
             hosts_file.writelines(f"{each.host} {each.key}\n" for each in pinned)
             hosts_file.flush()
             yield _PinnedHostsFile(path=path, known_hosts=known_hosts, pinned=pinned)
         finally:
             path.unlink(missing_ok=True)
+
+
+def _locked_hosts_file(directory: Path) -> tuple[TextIO, Path]:
+    """A new known_hosts file in that directory, held under this run's lock.
+
+    The lock tells `remove_leftover_known_hosts` this run still needs the
+    file, and goes with the process when it is killed mid-run. A sweep can
+    take the file between its creation and the lock; ssh would then make a
+    fresh one and accept any key, so a taken file is replaced.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    while True:
+        descriptor, name = tempfile.mkstemp(prefix=_KNOWN_HOSTS_PREFIX, dir=directory)
+        hosts_file = os.fdopen(descriptor, "w", encoding="utf-8")
+        fcntl.flock(hosts_file, fcntl.LOCK_EX)
+        if os.fstat(hosts_file.fileno()).st_nlink:
+            return hosts_file, Path(name)
+        hosts_file.close()
 
 
 def remove_leftover_known_hosts(directory: Path) -> None:

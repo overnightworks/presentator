@@ -12,7 +12,11 @@ from typing import cast
 import pytest
 
 from gitmirror import mirror as mirror_module
-from gitmirror.mirror import adopt_known_hosts, check_connection
+from gitmirror.mirror import (
+    adopt_known_hosts,
+    check_connection,
+    remove_leftover_known_hosts,
+)
 from gitmirror.model import (
     ConnectionState,
     CredentialReference,
@@ -40,7 +44,8 @@ _A_DECK = {"hello-deck/slides.md": "# Hello\n"}
 
 # The stub answers with the host key in `host-key` and checks it as
 # `accept-new` does: a host the known_hosts file names with another key is
-# refused under ssh's banner, an unnamed one is added. It then consumes every `-i key` /
+# refused under ssh's banner, an unnamed one is added. It records that it got
+# past that check. It then consumes every `-i key` /
 # `-o value` pair `_ssh_command` builds, records the key path and its mode for
 # the test to read back, and runs the real `git-upload-pack` locally — exactly
 # what git would have asked the real `ssh` to run on the far end, against a
@@ -60,6 +65,7 @@ if [ -n "$pinned" ] && [ "$pinned" != "$presented" ]; then
   exit 255
 fi
 [ -n "$pinned" ] || printf '%s %s\\n' "{host}" "$presented" >> "$hosts"
+: > "{recorded}/past-host-check"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -i) key="$2"; shift 2 ;;
@@ -254,6 +260,35 @@ def test_a_check_against_another_key_than_the_pin_names_the_host_key_refusal(
     )
 
     assert checked.detail == "Host key verification failed."
+
+
+def _swept_once_before_the_lock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let the turn's sweep run once between a known_hosts file's creation and lock."""
+    create = mirror_module.tempfile.mkstemp
+    swept: list[Path] = []
+
+    def created_then_swept(*, prefix: str, dir: Path) -> tuple[int, str]:  # noqa: A002 - mkstemp's own keyword
+        descriptor, name = create(prefix=prefix, dir=dir)
+        if not swept:
+            swept.append(Path(name))
+            remove_leftover_known_hosts(Path(name).parent)
+        return descriptor, name
+
+    monkeypatch.setattr(mirror_module.tempfile, "mkstemp", created_then_swept)
+
+
+@_OVER_SSH
+def test_a_swept_hosts_file_still_refuses_another_key_before_authentication(
+    monkeypatch: pytest.MonkeyPatch, remote: GitRemote, tmp_path: Path, reach: Reach
+) -> None:
+    url, recorded = ssh_stub_transport(monkeypatch, remote, tmp_path)
+    _swept_once_before_the_lock(monkeypatch)
+    pins = PinsInMemory({_ANOTHER_HOST_KEY.host: _ANOTHER_HOST_KEY.key})
+
+    state = reach(remote, tmp_path, url, pins)
+
+    assert state is ConnectionState.HOST_KEY_REFUSED
+    assert not (recorded / "past-host-check").exists()
 
 
 @_OVER_SSH
