@@ -119,7 +119,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				let wire = await wireOf(page, ready ?? '');
 				await page.goto(`/deck/${ready}`);
 				await expect(page.locator('h1')).toHaveText('Agenten-Fabrik');
-				await expect(page.locator('h1')).toHaveCSS('text-transform', 'none');
+				await expect(page.locator('h1 .as-typed')).toHaveCSS('text-transform', 'none');
 				await expect(page.locator('.status .state')).toHaveText(words['deck.stateReady']);
 				await expect(page.locator('.status .state')).toHaveAttribute('data-state', 'ready');
 				await expect(page.getByText(ready ?? '', { exact: true })).toBeVisible();

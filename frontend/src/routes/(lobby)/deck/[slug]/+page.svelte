@@ -29,7 +29,7 @@
 	{@const deck = data.deck}
 	{@const attempt = deck.attempt}
 	<a class="back" href={home}>{words['deck.back']}</a>
-	<h1 class="as-typed">{deck.title}</h1>
+	<h1><span class="as-typed">{deck.title}</span></h1>
 	<code>{deck.slug}</code>
 	<section class="status">
 		<h2>{words['deck.status']}</h2>
