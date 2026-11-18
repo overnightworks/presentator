@@ -94,6 +94,7 @@ test.describe('as an admin', () => {
 						expect(shell?.status()).toBe(200);
 						await expect(page).toHaveTitle(name);
 						await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+						await expect(page.locator('h1 .as-typed')).toHaveCSS('text-transform', 'none');
 						const access = section(page, words['source.accessHeading']);
 						const webhook = section(page, words['source.webhookHeading']);
 						const dots = page.getByText(words['source.secretMask'], { exact: true });
