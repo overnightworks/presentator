@@ -179,3 +179,28 @@ def test_a_schedule_leaves_no_task_running_after_its_block() -> None:
         return len(asyncio.all_tasks())
 
     assert asyncio.run(run_and_leave()) == 1
+
+
+def test_leaving_the_block_waits_for_the_run_in_flight() -> None:
+    refresh = HeldRefresh()
+    # More turns of the loop than a block that does not wait needs to be left.
+    loop_turns = 10
+
+    async def leave_while_a_run_is_in_flight() -> tuple[bool, int]:
+        leave = asyncio.Event()
+
+        async def poll_until_left() -> None:
+            async with a_schedule(refresh).polling():
+                await leave.wait()
+
+        block = asyncio.create_task(poll_until_left())
+        await asyncio.to_thread(refresh.started.wait, PATIENCE.total_seconds())
+        leave.set()
+        for _ in range(loop_turns):
+            await asyncio.sleep(0)
+        left_before_the_run_returned = block.done()
+        refresh.release.set()
+        await block
+        return left_before_the_run_returned, refresh.inside
+
+    assert asyncio.run(leave_while_a_run_is_in_flight()) == (False, 0)
