@@ -425,6 +425,10 @@ class SlidevBuilds:
         names = self.cache.names()
         return None if names is None else frozenset(map(BuildRun, names))
 
+    def drop_copies_except(self, runs: frozenset[BuildRun]) -> None:
+        """Take every run but these off this disk, leaving the store as it is."""
+        self.cache.drop_copies_except(frozenset(run.name for run in runs))
+
     def remove(self, run: BuildRun) -> PurePosixPath | None:
         """Take that run out of the store and off disk, or name it if it stayed."""
         if self.cache.remove(run.name):

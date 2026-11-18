@@ -115,6 +115,13 @@ class BuildCache:
             return None
         return stored | here
 
+    def drop_copies_except(self, names: frozenset[str]) -> None:
+        """Take every run but these off this disk; a root never made holds none."""
+        root = self.root.absolute()
+        here = listed_runs(root) if root.is_dir() else None
+        for name in (here or frozenset()) - names:
+            removed_run(root, name)
+
     def remove(self, name: str) -> bool:
         """Take that run out of the store and off this disk, and say whether it went."""
         return self.store.delete(name) and removed_run(self.root.absolute(), name)

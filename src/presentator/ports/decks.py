@@ -346,6 +346,14 @@ class BuildRunner(Protocol):
         """
 
     @abstractmethod
+    def drop_copies_except(self, runs: frozenset[BuildRun]) -> None:
+        """Take every run but these off this process's disk, the store untouched.
+
+        Only a process that builds nothing meanwhile may ask, as a run it is
+        building stands on its disk under no row yet.
+        """
+
+    @abstractmethod
     def remove(self, run: BuildRun) -> PurePosixPath | None:
         """Take that run out of the store and its whole directory off disk.
 

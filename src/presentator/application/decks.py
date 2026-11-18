@@ -697,7 +697,8 @@ class Decks:
         """Run that work, or answer `busy` while another refresh holds the lock.
 
         The lock of this process is taken first, so the one connection to the
-        other processes is never used by two refreshes at once.
+        other processes is never used by two refreshes at once. A process
+        turned away by another drops the copies on its disk that no row names.
         """
         if not self.one_at_a_time.acquire(blocking=False):
             return busy
@@ -705,7 +706,13 @@ class Decks:
             if recovering:
                 self.ownership.recover()
             with self.ownership.try_hold() as held:
-                return self._work_as_holder(work, busy=busy) if held else busy
+                if held:
+                    return self._work_as_holder(work, busy=busy)
+                # Nothing builds in this process while it holds its own lock.
+                build_retention.drop_unnamed_copies(
+                    self.builder, self.sources, self.store
+                )
+                return busy
         finally:
             self.one_at_a_time.release()
 

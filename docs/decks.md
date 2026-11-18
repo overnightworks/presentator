@@ -82,6 +82,8 @@ Authors outside this repository rely on these rules. Local assets,
 - **DK20** Every process serves every build, its talk, its PDF and the deck's
   text the co-presenter reads, from the store the build was kept in, through a
   copy on its own disk. A process keeps serving a copy it holds while the store
-  does not answer. A deck whose build was written before builds were kept in
-  the store, or by a release that keeps none there, has no talk until the next
-  refresh builds it again.
+  does not answer. A copy of a build no deck names any more, after a new
+  delivery, a removal or an erasure through another process, goes at that
+  process's next source poll tick. A deck whose build was written before builds
+  were kept in the store, or by a release that keeps none there, has no talk
+  until the next refresh builds it again.

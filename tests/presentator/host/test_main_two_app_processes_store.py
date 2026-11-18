@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import Engine, text
 
+from presentator.adapters.postgres.locks import REFRESH_LOCK, parameters
 from tests.presentator.adapters.support.build_support import (
     A_TOOLCHAIN_THAT_BUILDS,
     with_the_toolchain,
@@ -39,6 +40,7 @@ _PDF = f"/deck/{EXAMPLE_SLUG}/pdf"
 _TEXT = f"/api/decks/{EXAMPLE_SLUG}/text"
 # A row as a release before the store wrote it: its paths, but no run.
 _FORGET_THE_RUN = text("UPDATE decks SET built_run = NULL")
+_TAKE_THE_REFRESH_LOCK = text("SELECT pg_advisory_lock(:lock_class, :instance)")
 
 
 def _runs_on_the_disk_of(app: App, tmp_path: Path) -> set[str]:
@@ -122,3 +124,32 @@ def test_a_deck_built_before_the_store_is_rebuilt_by_the_first_refresh_after_it(
     assert before_the_refresh.status_code == HTTPStatus.NOT_FOUND
     assert object_store.runs.names() == frozenset({rebuilt})
     assert after_the_refresh.status_code == HTTPStatus.OK
+
+
+@pytest.mark.usefixtures("built")
+def test_a_process_another_holds_the_refresh_from_drops_its_copy_no_row_names(
+    database_url: str,
+    tmp_path: Path,
+    engine: Engine,
+    remote: GitRemote,
+    object_store: ObjectStore,
+) -> None:
+    with (
+        serving_apps(database_url, tmp_path, object_store.environment) as (a, b),
+        engine.connect() as another_refresh,
+    ):
+        admin = admin_of(a)
+        added(admin, a, "talks", remote)
+        fetched(admin, a, "talks")
+        superseded = scalar_text(engine, _THE_RUN)
+        remote.commit({f"{EXAMPLE_SLUG}/notes.md": "a second push"}, at=AT)
+        fetched(admin, b, "talks")
+        held_at_a = _runs_on_the_disk_of(a, tmp_path)
+        another_refresh.execute(_TAKE_THE_REFRESH_LOCK, parameters(REFRESH_LOCK))
+
+        turned_away = fetched(admin, a, "talks").json()
+        left_at_a = _runs_on_the_disk_of(a, tmp_path)
+
+    assert superseded in held_at_a
+    assert turned_away["run"] is None
+    assert left_at_a == set()

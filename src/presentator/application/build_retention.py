@@ -44,9 +44,7 @@ def sweep(builder: BuildRunner, sources: SourceStore, store: DeckStore) -> None:
     Every row of every source counts, because a deck row is only written under a
     source and a source is only removed after its rows.
     """
-    named = _runs_named_by(
-        [deck for source in sources.all() for deck in store.for_source(source.id)],
-    )
+    named = _runs_named_by_every_row(sources, store)
     kept = builder.runs()
     if kept is None:
         _log.info(_RETENTION_REFUSED, extra={"reason": _NOT_LISTED})
@@ -61,6 +59,18 @@ def sweep(builder: BuildRunner, sources: SourceStore, store: DeckStore) -> None:
                 "runs_stayed_count": stayed,
             },
         )
+
+
+def drop_unnamed_copies(
+    builder: BuildRunner, sources: SourceStore, store: DeckStore
+) -> None:
+    """Take this process's copies of runs no deck row names off its disk.
+
+    The process that holds the refresh sweeps the store; every other one asks
+    this on its turn, so a run the holder swept, or a removal or an erasure
+    through another process took, leaves no copy behind on this disk.
+    """
+    builder.drop_copies_except(_runs_named_by_every_row(sources, store))
 
 
 def standing_build(builder: BuildRunner, deck: Deck) -> Build | None:
@@ -101,6 +111,15 @@ def builds_removed(
     runs = sorted(_runs_named_by(decks), key=attrgetter("name"))
     attempts = (builder.remove(run) for run in runs)
     return tuple(stayed for stayed in attempts if stayed is not None)
+
+
+def _runs_named_by_every_row(
+    sources: SourceStore, store: DeckStore
+) -> frozenset[BuildRun]:
+    """The runs any deck row of any source delivers from, marked removed or not."""
+    return _runs_named_by(
+        [deck for source in sources.all() for deck in store.for_source(source.id)],
+    )
 
 
 def _runs_named_by(decks: Iterable[Deck]) -> frozenset[BuildRun]:
