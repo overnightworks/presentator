@@ -745,16 +745,27 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
     reaches it under the name of the network it shares with the instance, and
     the signed Logout Token is its only control. Other methods on that path
     answer 405. The talk hostname stays the talk app's alone, so the path is a
-    404 there. Nothing the
-    caller sent builds a redirect.
+    404 there. Nothing the caller sent builds a redirect.
+
+    While the app runs, it polls the sources and sweeps the sessions; its end
+    waits for a chore in flight, then closes the instance.
     """
 
     @asynccontextmanager
     async def lifespan(_: Router) -> AsyncGenerator[None]:
-        # Starlette runs only this router's lifespan, never a `Host` sub-app's, so
-        # the lobby's own is entered here.
-        async with instance.lobby.router.lifespan_context(instance.lobby):
-            yield
+        # uvicorn awaits the lifespan's end on every stop, a signal's included,
+        # so the chores stop and the instance closes here, before the server
+        # writes its stop line. Starlette runs only this router's lifespan, never
+        # a `Host` sub-app's, so the lobby's own is entered here.
+        try:
+            async with (
+                instance.lobby.router.lifespan_context(instance.lobby),
+                instance.poller.polling(),
+                instance.session_sweep.polling(),
+            ):
+                yield
+        finally:
+            instance.close()
 
     return RequestLineMiddleware(
         Router(
@@ -770,13 +781,8 @@ def served_by_host(instance: Instance, settings: Settings) -> RequestLineMiddlew
 
 
 async def _serve(instance: Instance, settings: Settings) -> None:
-    """Poll and sweep for as long as the server answers, and stop with it."""
+    """Serve the instance until a signal stops it."""
     served = served_config(
         served_by_host(instance, settings), host=settings.host, port=settings.port
     )
-    server = StoppingServer(served, instance.stopping)
-    try:
-        async with instance.poller.polling(), instance.session_sweep.polling():
-            await server.serve()
-    finally:
-        instance.close()
+    await StoppingServer(served, instance.stopping).serve()
