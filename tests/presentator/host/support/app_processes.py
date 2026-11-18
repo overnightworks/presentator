@@ -5,6 +5,7 @@ import os
 import queue
 import socket
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Callable, Generator, Mapping
@@ -33,6 +34,7 @@ from tests.support.sign_in_support import ADMIN, MEMBER
 from tests.support.two_processes import TwoProcesses, two_modules
 
 _CHILD: Final = "tests.presentator.host.support.app_process"
+_CONSOLE_ENTRY_POINT: Final = Path(sys.executable).parent / "presentator"
 _START_SECONDS: Final = 60
 _REQUEST_SECONDS: Final = 30
 _OUTPUT_END_SECONDS: Final = 30
@@ -341,3 +343,35 @@ def serving_apps(
                 first.stop()
             finally:
                 second.stop()
+
+
+@contextmanager
+def serving_presentator(
+    database_url: str, directory: Path, environment: Mapping[str, str]
+) -> Generator[App]:
+    """The installed `presentator` command serving on `database_url`, ready.
+
+    It runs with `environment` added and no fake issuer, so it stops as a
+    deployment's process does; none outlives the block.
+    """
+    port, _ = two_free_ports()
+    served = {
+        **_environment(database_url, directory, environment),
+        "PRESENTATOR_PORT": str(port),
+        "PRESENTATOR_MIRRORS": str(directory / "mirrors"),
+        "PRESENTATOR_BUILDS": str(directory / "builds"),
+    }
+    with subprocess.Popen(  # noqa: S603 - the command is this repository's own
+        [str(_CONSOLE_ENTRY_POINT)],
+        env={"PATH": os.environ["PATH"], **served},
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    ) as process:
+        app = App(process, port)
+        try:
+            _wait_until_ready(app)
+            yield app
+        finally:
+            app.stop()

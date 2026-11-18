@@ -194,8 +194,10 @@ class StoppingServer(uvicorn.Server):
     async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
         """Stop serving, then say the process stopped.
 
-        uvicorn re-raises the signal that stopped it once serving returns, so the
-        process ends before any line after `serve`.
+        uvicorn ends the app's lifespan inside this stop, so the line follows
+        the chores' end and the instance's close. uvicorn re-raises the signal
+        that stopped it once serving returns, so the process ends before any
+        line after `serve`.
         """
         await super().shutdown(sockets)
         _log.info("process.stopped")

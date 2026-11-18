@@ -49,9 +49,9 @@ class Schedule:
         finally:
             stopped.set()
             # A cancelled run would go on in its thread and use what the caller
-            # closes next. The chore's own bounds keep this wait finite: the
-            # fetch's timeout, and the statement timeout of every Postgres
-            # session served.
+            # closes next. A signal's stop waits here too, so the chore's own
+            # bounds are what keep it finite: the fetch's timeout, and the
+            # statement timeout of every Postgres session served.
             await ticking
 
     async def tick(self) -> None:
