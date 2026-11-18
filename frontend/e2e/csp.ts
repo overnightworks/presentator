@@ -26,19 +26,23 @@ declare global {
 // page's content, so it is no violation of the page, however often and late it
 // comes. Any other refusal, a favicon the page itself asks for included, stays
 // one.
+function firefoxFaviconUrl(pageOrigin: string): string {
+	return `${pageOrigin}/favicon.ico`;
+}
+
 function isFirefoxFaviconEvent(violation: PolicyViolation): boolean {
 	return (
 		violation.directive === 'img-src' &&
-		violation.blockedURI === `${violation.pageOrigin}/favicon.ico` &&
+		violation.blockedURI === firefoxFaviconUrl(violation.pageOrigin) &&
 		violation.sourceFile === 'resource'
 	);
 }
 
-function isFirefoxFaviconLine(message: ConsoleMessage): boolean {
+function isFirefoxFaviconLine(message: ConsoleMessage, pageOrigin: string): boolean {
 	return (
 		message.location().url.endsWith('/FaviconLoader.sys.mjs') &&
 		/\bimg-src\b/.test(message.text()) &&
-		message.text().includes('/favicon.ico')
+		message.text().includes(` ${firefoxFaviconUrl(pageOrigin)} `)
 	);
 }
 
@@ -72,7 +76,7 @@ export const test = base.extend<{ violations: string[] }>({
 			page.on('console', (message) => {
 				if (
 					/content.security.policy/i.test(message.text()) &&
-					!(firefox && isFirefoxFaviconLine(message))
+					!(firefox && isFirefoxFaviconLine(message, new URL(page.url()).origin))
 				) {
 					violations.push(message.text());
 				}
