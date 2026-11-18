@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine, text
 from sqlalchemy.exc import IntegrityError
 
 from presentator.contracts.decks import (
@@ -192,6 +193,21 @@ def test_a_deck_written_at_another_offset_reads_back_as_the_same_instant_in_utc(
     read_back = (deck.changed_at, deck.build.built_at, deck.attempt.started_at)
 
     assert repr(read_back) == repr((_NOON, _NOON, _NOON))
+
+
+@pytest.mark.parametrize("stored", ["../elsewhere", "a/b", ""])
+def test_a_stored_run_that_is_no_single_name_under_the_root_fails_loud_on_read(
+    postgres_stores: Adapters, engine: Engine, stored: str
+) -> None:
+    """A run is never read as a path a retention pass could delete elsewhere."""
+    source = _a_source(postgres_stores, "mine", _ADMIN)
+    postgres_stores.decks.put(_a_deck("talk", source))
+    postgres_stores.decks.put_build("talk", _a_build("c"))
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE decks SET built_run = :run"), {"run": stored})
+
+    with pytest.raises(ValueError, match="builds root"):
+        postgres_stores.decks.get("talk")
 
 
 def test_a_postgres_deck_of_a_source_that_does_not_exist_is_an_error_not_a_refusal(

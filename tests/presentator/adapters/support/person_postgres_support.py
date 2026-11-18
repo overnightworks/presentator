@@ -73,6 +73,7 @@ def an_instance_with_both_people_on_postgres(
             decks=around.decks,
             people=around.people,
             kept_by=around.kept_by,
+            store=around.store,
         )
     finally:
         engine.dispose()

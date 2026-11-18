@@ -57,12 +57,23 @@ class Directories:
     decks: Decks
     people: People
     kept_by: dict[str, tuple[Source, Path, Path]]
+    store: DirectoryRunObjects
 
     def mirror_of(self, owner: User) -> Path:
         return self.kept_by[owner.id][1]
 
     def build_of(self, owner: User) -> Path:
         return self.kept_by[owner.id][2]
+
+    def stored(self, owner: User) -> bool:
+        """Whether the store still holds the run of that person's build."""
+        names = self.store.names()
+        assert names is not None
+        return _run_of(self.build_of(owner)) in names
+
+
+def _run_of(talk: Path) -> str:
+    return talk.parent.parent.name
 
 
 class SessionStore(SessionRecordStore, PersonSessions, Protocol):
@@ -121,6 +132,7 @@ def _seed_person(
     build = builds / f"{person.username}-run" / "out" / "talk"
     build.mkdir(parents=True)
     (build / "index.html").write_text("a talk")
+    (build.parent / "deck.pdf").write_bytes(b"%PDF-1.7")
     _seed_deck(stores, person, source, build)
     return source, mirror, build
 
@@ -142,7 +154,7 @@ def _seed_deck(stores: Stores, person: User, source: Source, build: Path) -> Non
     stores.decks.put_build(
         slug,
         Build(
-            run=BuildRun(build.parent.parent.name),
+            run=BuildRun(_run_of(build)),
             directory=build,
             pdf=build.parent / "deck.pdf",
             commit=_COMMIT,
@@ -164,7 +176,7 @@ def _seed_deck(stores: Stores, person: User, source: Source, build: Path) -> Non
 def _decks_application(
     stores: Stores,
     mirrors: SourceMirrors,
-    builds: Path,
+    cache: BuildCache,
     tmp_path: Path,
 ) -> Decks:
     return Decks(
@@ -173,11 +185,7 @@ def _decks_application(
         folders=MirroredDeckFolders(mirrors=mirrors),
         store=stores.decks,
         builder=SlidevBuilds(
-            cache=BuildCache(
-                root=builds,
-                store=DirectoryRunObjects(tmp_path / "store"),
-                bound_bytes=A_CACHE_BOUND,
-            ),
+            cache=cache,
             identity=THE_TOOLCHAIN,
             toolchain=HostToolchain(project=tmp_path, bound=_A_BOUND),
             mirrors=mirrors,
@@ -198,7 +206,7 @@ def directories_with_both_people(stores: Stores, tmp_path: Path) -> Directories:
     """Each person has an account, a session, preferences, a draft and a source.
 
     The source carries a deck with a build, a run, a mirror and a build
-    directory on disk.
+    directory on disk, kept in the store.
     """
     mirrors = SourceMirrors(
         directory=tmp_path / "mirrors",
@@ -210,7 +218,11 @@ def directories_with_both_people(stores: Stores, tmp_path: Path) -> Directories:
         person.id: _seed_person(person, stores, mirrors, builds)
         for person in (THE_PERSON, ANOTHER)
     }
-    decks = _decks_application(stores, mirrors, builds, tmp_path)
+    store = DirectoryRunObjects(tmp_path / "store")
+    cache = BuildCache(root=builds, store=store, bound_bytes=A_CACHE_BOUND)
+    for _, _, build in kept_by.values():
+        assert cache.keep(_run_of(build))
+    decks = _decks_application(stores, mirrors, cache, tmp_path)
     return Directories(
         mirrors=mirrors,
         builds=builds,
@@ -223,4 +235,5 @@ def directories_with_both_people(stores: Stores, tmp_path: Path) -> Directories:
             key_drafts=stores.key_drafts,
         ),
         kept_by=kept_by,
+        store=store,
     )

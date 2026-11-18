@@ -35,6 +35,7 @@ def test_a_person_with_every_kind_of_row_leaves_none_and_no_mirror_or_build(
 ) -> None:
     owned = _owned_by(instance, THE_PERSON.id)
     assert all(owned.values())
+    assert instance.stored(THE_PERSON)
 
     outcome = instance.people.erase_person(THE_PERSON.id, dry_run=False)
 
@@ -44,6 +45,7 @@ def test_a_person_with_every_kind_of_row_leaves_none_and_no_mirror_or_build(
     assert not any(_owned_by(instance, THE_PERSON.id).values())
     assert not instance.mirror_of(THE_PERSON).exists()
     assert not instance.build_of(THE_PERSON).exists()
+    assert not instance.stored(THE_PERSON)
 
 
 def test_a_second_person_keeps_every_row_mirror_and_build(
@@ -56,6 +58,7 @@ def test_a_second_person_keeps_every_row_mirror_and_build(
     assert _owned_by(instance, ANOTHER.id) == before
     assert instance.mirror_of(ANOTHER).exists()
     assert instance.build_of(ANOTHER).exists()
+    assert instance.stored(ANOTHER)
 
 
 def test_a_dry_run_changes_no_row_and_no_directory(
@@ -68,6 +71,7 @@ def test_a_dry_run_changes_no_row_and_no_directory(
     assert _owned_by(instance, THE_PERSON.id) == before
     assert instance.mirror_of(THE_PERSON).exists()
     assert instance.build_of(THE_PERSON).exists()
+    assert instance.stored(THE_PERSON)
 
 
 def test_an_unknown_subject_creates_no_account(instance: PostgresInstance) -> None:
