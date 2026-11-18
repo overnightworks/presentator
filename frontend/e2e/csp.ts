@@ -1,8 +1,16 @@
-import { test as base, expect } from '@playwright/test';
+import { test as base, expect, type ConsoleMessage } from '@playwright/test';
+
+interface PolicyViolation {
+	directive: string;
+	blockedURI: string;
+	sourceFile: string;
+	lineNumber: number;
+	pageOrigin: string;
+}
 
 declare global {
 	interface Window {
-		reportViolation?: (violation: string) => Promise<void>;
+		reportViolation?: (violation: PolicyViolation) => Promise<void>;
 	}
 }
 
@@ -12,38 +20,61 @@ declare global {
 // build's plugin misreads it.
 //
 // Firefox fetches /favicon.ico on its own for a page that declares no icon and
-// reports a refusal under that page's policy both as the event and as a console
-// line, each in its own time. That fetch is the browser's, not the page's
-// content, so it is no violation of the page, however often and late it comes.
-const browserFaviconFetch = /\bimg-src\b.*\/favicon\.ico\b/;
+// reports a refusal under that page's policy both as the event, whose source
+// file is its internal "resource", and as a console line from its
+// FaviconLoader, each in its own time. That fetch is the browser's, not the
+// page's content, so it is no violation of the page, however often and late it
+// comes. Any other refusal, a favicon the page itself asks for included, stays
+// one.
+function isFirefoxFaviconEvent(violation: PolicyViolation): boolean {
+	return (
+		violation.directive === 'img-src' &&
+		violation.blockedURI === `${violation.pageOrigin}/favicon.ico` &&
+		violation.sourceFile === 'resource'
+	);
+}
 
-function record(violations: string[], violation: string): void {
-	if (!browserFaviconFetch.test(violation)) {
-		violations.push(violation);
-	}
+function isFirefoxFaviconLine(message: ConsoleMessage): boolean {
+	return (
+		message.location().url.endsWith('/FaviconLoader.sys.mjs') &&
+		/\bimg-src\b/.test(message.text()) &&
+		message.text().includes('/favicon.ico')
+	);
 }
 
 export const test = base.extend<{ violations: string[] }>({
 	violations: [
-		async ({ context, page }, use) => {
+		async ({ browserName, context, page }, use) => {
+			const firefox = browserName === 'firefox';
 			const violations: string[] = [];
-			await context.exposeBinding('reportViolation', (_source, violation: string) => {
-				record(violations, violation);
+			await context.exposeBinding('reportViolation', (_source, violation: PolicyViolation) => {
+				if (!(firefox && isFirefoxFaviconEvent(violation))) {
+					violations.push(
+						`${violation.directive} ${violation.blockedURI} ${violation.sourceFile}:${violation.lineNumber}`
+					);
+				}
 			});
 			await context.addInitScript(() => {
 				document.addEventListener(
 					'securitypolicyviolation',
 					(event) => {
-						void window.reportViolation?.(
-							`${event.effectiveDirective} ${event.blockedURI} ${event.sourceFile}:${event.lineNumber}`
-						);
+						void window.reportViolation?.({
+							directive: event.effectiveDirective,
+							blockedURI: event.blockedURI,
+							sourceFile: event.sourceFile,
+							lineNumber: event.lineNumber,
+							pageOrigin: location.origin
+						});
 					},
 					true
 				);
 			});
 			page.on('console', (message) => {
-				if (/content.security.policy/i.test(message.text())) {
-					record(violations, message.text());
+				if (
+					/content.security.policy/i.test(message.text()) &&
+					!(firefox && isFirefoxFaviconLine(message))
+				) {
+					violations.push(message.text());
 				}
 			});
 			await use(violations);
