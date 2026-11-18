@@ -446,11 +446,7 @@ test.describe('log out', () => {
 	test.use({ person: { role: 'user' } });
 
 	// SI3.
-	test('posts to /logout and the next / is sent to the sign-in', async ({
-		page,
-		violations,
-		browserName
-	}) => {
+	test('posts to /logout and the next / is sent to the sign-in', async ({ page }) => {
 		const kitWords = await kitWordsOf(page);
 		await page.goto('/');
 		await opensTheMenu(page);
@@ -462,17 +458,6 @@ test.describe('log out', () => {
 		await posted.response();
 
 		expect(posted.method()).toBe('POST');
-		// The library's logout page carries a policy of its own, under which
-		// Firefox's request for a favicon is refused; that one violation is this
-		// page's alone to excuse, and no other is.
-		if (browserName === 'firefox') {
-			await expect.poll(() => violations.some((one) => one.includes('favicon.ico'))).toBe(true);
-		}
-		violations.splice(
-			0,
-			violations.length,
-			...violations.filter((one) => !one.includes('favicon.ico'))
-		);
 		const next = await page.request.get('/', {
 			headers: { Accept: 'text/html' },
 			maxRedirects: 0
