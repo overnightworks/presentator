@@ -19,6 +19,7 @@ from tempfile import mkdtemp
 from typing import Final, Protocol
 
 from presentator.adapters.build_runs import (
+    ARRIVING_PREFIX,
     RUN_DIRECTORY_MODE,
     listed_runs,
     removed_run,
@@ -130,10 +131,11 @@ class BuildCache:
         """Fetch that run into a directory of its own, then move it into place at once.
 
         Two requests that fetch one run at the same moment each write their own
-        copy; the first to arrive stands, and the other is taken away.
+        copy; the first to arrive stands, and the other is taken away. A copy
+        under way is no run a listing names, so no drop or sweep takes it.
         """
         self.root.mkdir(parents=True, exist_ok=True)
-        arriving = Path(mkdtemp(dir=self.root))
+        arriving = Path(mkdtemp(prefix=ARRIVING_PREFIX, dir=self.root))
         try:
             (arriving / OUTPUT_DIRECTORY).mkdir()
             archive = arriving / _ARCHIVE

@@ -2,6 +2,8 @@
 
 import os
 import shutil
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -153,6 +155,32 @@ def test_a_process_that_never_made_its_root_drops_nothing_and_warns_of_nothing(
 
     assert not builds.cache.root.exists()
     assert [one["level"] for one in logged.lines] == []
+
+
+@dataclass
+class _DroppedWhileFetching(DirectoryRunObjects):
+    """A store whose every fetch meets another thread's drop of unnamed copies."""
+
+    meanwhile: Callable[[], None] = field(default=lambda: None)
+
+    def fetch(self, run: str, *, archive: Path, pdf: Path) -> bool:
+        self.meanwhile()
+        return super().fetch(run, archive=archive, pdf=pdf)
+
+
+def test_a_fetch_under_way_is_no_copy_a_drop_beside_it_takes(tmp_path: Path) -> None:
+    store = _DroppedWhileFetching(tmp_path / "store")
+    building = a_cache(tmp_path / "a", store)
+    built_run(building, "run-1")
+    assert building.keep("run-1")
+    serving = a_cache(tmp_path / "b", store)
+    store.meanwhile = lambda: serving.drop_copies_except(frozenset({"run-1"}))
+
+    served = serving.local("run-1")
+
+    assert served is not None
+    talk = served / OUTPUT_DIRECTORY / TALK_DIRECTORY / _PAGE
+    assert talk.read_text(encoding="utf-8") == "the talk of run-1"
 
 
 def test_a_run_under_way_counts_but_is_never_taken_by_the_bound(

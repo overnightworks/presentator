@@ -3,8 +3,10 @@
 A run is a directory directly under the builds root that holds an `out`
 directory, or that is empty: a removal that could empty a run but not take its
 own directory away leaves exactly that, and an empty directory holds nothing to
-lose. Everything here is anchored to the configured root, because automatic
-retention deletes what these functions answer for.
+lose. A copy still arriving from the store is staged under the root, beside the
+runs so it moves into place at once, under a name no listing counts. Everything
+here is anchored to the configured root, because automatic retention deletes
+what these functions answer for.
 
 Ancestors of the root are the operator's and outside the threat model; below it,
 a deck's own code wrote the tree, so no link is followed.
@@ -24,6 +26,9 @@ from presentator.contracts.decks import OUTPUT_DIRECTORY
 # Owner rwx, others read and enter: a run is never left closed to the backup
 # that reads the builds volume as another uid, even one that stays half removed.
 RUN_DIRECTORY_MODE: Final = 0o755
+# A run's name never starts with a dot, so a fetch under way is never listed,
+# swept or dropped while it writes.
+ARRIVING_PREFIX: Final = ".arriving-"
 # A descriptor pinned to a directory nobody may read is still that directory;
 # this is the name the running kernel gives it, and the one way its mode can be
 # changed without naming a path a build could have exchanged underneath.
@@ -48,7 +53,11 @@ def listed_runs(root: Path) -> frozenset[str] | None:
     """Every run directly under that root, or nothing where the listing broke off."""
     try:
         with os.scandir(root) as entries:
-            names = [entry.name for entry in entries]
+            names = [
+                entry.name
+                for entry in entries
+                if not entry.name.startswith(ARRIVING_PREFIX)
+            ]
     except OSError as problem:
         _log.warning(
             _ROOT_UNLISTED_EVENT,
