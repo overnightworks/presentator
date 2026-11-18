@@ -1,0 +1,7 @@
+claim_id = "db911011a2324debbc1aaffe24e66664"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "cfc1e44ab0c60c776dfdb9c4e3f9a7b27a75ceb7"
+branch = "claude/issue-1250-presentator-s-gate-pins-quality-v0-22-0"
+scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml"]
+opened_commit = "88649f06b6dc86ff93c36e44e0a966295fdd7b6a"
