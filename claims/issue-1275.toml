@@ -1,0 +1,8 @@
+claim_id = "372c0e75d06442028a10d503a841dfbd"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "159595466289067ca2109c2176bd7b61d2ebd263"
+branch = "claude/issue-1275-the-overlay-s-worklet-load-browser-test"
+scope = ["slidev/tests"]
+opened_commit = "27df9a62856c666f496772f6a08155c264037eb1"
+whole_reason = "the overlay browser tests under slidev/tests"
