@@ -127,6 +127,33 @@ def test_a_deck_built_before_the_store_is_rebuilt_by_the_first_refresh_after_it(
 
 
 @pytest.mark.usefixtures("built")
+def test_a_put_the_store_refuses_ends_the_attempt_failed_and_the_next_refresh_builds(
+    database_url: str,
+    tmp_path: Path,
+    engine: Engine,
+    remote: GitRemote,
+    object_store: ObjectStore,
+) -> None:
+    # The first process names a bucket the store does not hold, so it refuses
+    # the put; the second names the test's own, the bucket as it exists later.
+    missing = {**object_store.environment, "PRESENTATOR_S3_BUCKET": "no-such-bucket"}
+    with serving_apps(
+        database_url, tmp_path, missing, second_environment=object_store.environment
+    ) as (a, b):
+        admin = admin_of(a)
+        added(admin, a, "talks", remote)
+        fetched(admin, a, "talks")
+        refused = admin.request(a, "GET", f"/api/decks/{EXAMPLE_SLUG}").json()
+        fetched(admin, b, "talks")
+        built_run = scalar_text(engine, _THE_RUN)
+
+    assert refused["state"] == "failed"
+    assert refused["attempt"]["outcome"] == "failed"
+    assert refused["attempt"]["failure"]["reason"] == "store"
+    assert object_store.runs.names() == frozenset({built_run})
+
+
+@pytest.mark.usefixtures("built")
 def test_a_process_another_holds_the_refresh_from_drops_its_copy_no_row_names(
     database_url: str,
     tmp_path: Path,

@@ -37,6 +37,8 @@ export function failureWords(failure: FailureView | null, words: Words): string 
 			});
 		case 'deck-paths':
 			return words['deck.failedDeckPaths'];
+		case 'store':
+			return words['deck.failedStore'];
 	}
 }
 

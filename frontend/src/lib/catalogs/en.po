@@ -145,6 +145,10 @@ msgctxt "deck.failedDeckPaths"
 msgid "Dieses Deck kann nicht gebaut werden: Es enthält einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes oder einen Link, eine Spezialdatei oder eine nicht lesbare Datei."
 msgstr "This deck cannot be built: it holds a path of more than 32 parts (folders and the file) or 1024 bytes, or a link, a special or an unreadable file."
 
+msgctxt "deck.failedStore"
+msgid "Dieser Build konnte nicht abgelegt werden, weil der Speicher der Builds ihn nicht angenommen hat. Die nächste Aktualisierung versucht es erneut."
+msgstr "This build could not be kept: the store of builds did not take it. The next refresh tries again."
+
 msgctxt "deck.failedLastTalkStands"
 msgid "Der zuletzt gebaute Vortrag lässt sich weiterhin in beiden Ansichten öffnen."
 msgstr "The last talk that was built still opens in both views."

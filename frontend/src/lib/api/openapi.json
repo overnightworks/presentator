@@ -110,7 +110,8 @@
           "output-entries",
           "output-shape",
           "deck-megabytes",
-          "deck-paths"
+          "deck-paths",
+          "store"
         ],
         "title": "BuildFailureReason",
         "type": "string"

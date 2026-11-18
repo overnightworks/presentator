@@ -8,6 +8,7 @@ from presentator.application.decks import Decks
 from presentator.contracts.decks import (
     Build,
     BuildFailure,
+    BuildFailureReason,
     DeckPage,
     DeckState,
     ToolchainIdentity,
@@ -312,16 +313,22 @@ def test_a_commit_another_toolchain_made_is_rebuilt_only_once_none_runs_it(
     assert len(builder.built) == (1 if present else 2)
 
 
-def test_a_build_whose_run_the_store_did_not_take_leaves_the_deck_as_it_was() -> None:
+def test_a_build_the_store_did_not_take_fails_naming_the_store_and_is_tried_again() -> (
+    None
+):
     builder = FakeBuildRunner(store_answers=False)
-    store = FakeDeckStore()
-    decks = decks_over(
-        a_folder("kundenfeedback"), fakes=DecksFakes(store=store, builder=builder)
-    )
+    decks = decks_over(a_folder(_SLUG), fakes=DecksFakes(builder=builder))
 
     decks.refresh()
-
-    assert [(deck.build, deck.attempt) for deck in store.all()] == [(None, None)]
+    refused = page_of(decks, _SLUG)
+    built_so_far = len(builder.built)
+    decks.refresh()
+    tried_again = len(builder.built) - built_so_far
     builder.store_answers = True
     decks.refresh()
+
+    assert refused.state is DeckState.FAILED
+    assert refused.attempt is not None
+    assert refused.attempt.failure == BuildFailure(reason=BuildFailureReason.STORE)
+    assert tried_again == 1
     assert listed_states(decks) == [DeckState.READY]

@@ -72,8 +72,9 @@ the database. The S3 client reads the endpoint, the region and the key from
 `AWS_ENDPOINT_URL_S3`, `AWS_DEFAULT_REGION` and `AWS_SHARED_CREDENTIALS_FILE`,
 which the platform gives the web, and addresses the bucket by path. A store that
 does not answer fails each call with one `object_store.failed` warning naming
-the operation and the error class: a build it does not take is tried again by
-the next refresh, and a talk this process already holds is still served.
+the operation and the error class: a build it does not take ends the deck's
+attempt failed, naming the store, and is tried again by the next refresh; a
+talk this process already holds is still served.
 The tests that reach the store find a Garage through the same three variables
 and the bucket in `PRESENTATOR_TEST_S3_BUCKET`; they hold it one at a time and
 empty it first.

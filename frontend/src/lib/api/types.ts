@@ -342,7 +342,7 @@ export interface components {
          *     The server refusals are named as the build-worker probe names its cases.
          * @enum {string}
          */
-        BuildFailureReason: "toolchain" | "no-words" | "output-megabytes" | "output-entries" | "output-shape" | "deck-megabytes" | "deck-paths";
+        BuildFailureReason: "toolchain" | "no-words" | "output-megabytes" | "output-entries" | "output-shape" | "deck-megabytes" | "deck-paths" | "store";
         /**
          * BuildOutcome
          * @description How the build a deck last started ended, while it is not its talk yet.

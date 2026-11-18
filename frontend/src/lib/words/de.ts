@@ -40,6 +40,7 @@ export type Words = {
     readonly "deck.failedOutputShape": string;
     readonly "deck.failedDeckMegabytes": (gaps: { readonly entries: string; readonly megabytes: string }) => string;
     readonly "deck.failedDeckPaths": string;
+    readonly "deck.failedStore": string;
     readonly "deck.failedLastTalkStands": string;
     readonly "deck.presenterView": string;
     readonly "deck.projectorView": string;
@@ -208,6 +209,7 @@ export const words: Words = {
     "deck.failedOutputShape": "Der Vortrag, den dieser Build geschrieben hat, kann nicht übernommen werden: Er enthält einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes, eine Datei, die dieser Schritt nicht schreiben darf, einen Link, eine Spezialdatei oder eine nicht lesbare Datei.",
     "deck.failedDeckMegabytes": (gaps: { readonly entries: string; readonly megabytes: string }) => "Dieses Deck ist zu groß zum Bauen: Ein Deck darf höchstens " + gaps.megabytes + " MB und höchstens " + gaps.entries + " Dateien und Ordner zusammen enthalten, den obersten Ordner node_modules nicht mitgezählt.",
     "deck.failedDeckPaths": "Dieses Deck kann nicht gebaut werden: Es enthält einen Pfad mit mehr als 32 Teilen (Ordner und Datei) oder 1024 Bytes oder einen Link, eine Spezialdatei oder eine nicht lesbare Datei.",
+    "deck.failedStore": "Dieser Build konnte nicht abgelegt werden, weil der Speicher der Builds ihn nicht angenommen hat. Die nächste Aktualisierung versucht es erneut.",
     "deck.failedLastTalkStands": "Der zuletzt gebaute Vortrag lässt sich weiterhin in beiden Ansichten öffnen.",
     "deck.presenterView": "Presenter-Ansicht",
     "deck.projectorView": "Projektor-Ansicht",
