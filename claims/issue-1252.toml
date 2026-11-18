@@ -1,8 +1,0 @@
-claim_id = "4f508f2a89284ffe983b7c23b8ae5073"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "7039fcb04fc1432c93d7a4d8bdd339bee5848f06"
-branch = "claude/issue-1252-the-build-worker-stops-tolerating-presen"
-scope = ["docs/configuration.md", "scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_cluster.py", "src/presentator/host/worker_self_check.py", "tests/presentator/host"]
-opened_commit = "025e0b95793d8acd4b9f978883b8295887cb8b11"
-whole_reason = "a tolerance removal touches the self-check, its tests and the configuration doc"
