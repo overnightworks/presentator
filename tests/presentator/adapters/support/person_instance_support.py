@@ -40,6 +40,7 @@ from tests.presentator.application.support.fakes import (
 from tests.presentator.application.support.refresh_ownership_fake import (
     FakeRefreshOwnership,
 )
+from tests.support.mirror_support import PinsInMemory
 from tests.support.people import a_session_id
 from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects
 
@@ -211,6 +212,7 @@ def directories_with_both_people(stores: Stores, tmp_path: Path) -> Directories:
         directory=tmp_path / "mirrors",
         credentials=OpenCredentials(),
         pull_timeout=_A_BOUND,
+        host_keys=PinsInMemory(),
     )
     builds = tmp_path / "builds"
     kept_by = {

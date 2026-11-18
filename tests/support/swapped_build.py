@@ -17,6 +17,7 @@ from tests.support.lobby import (
     GivenDecks,
     a_configured_source,
 )
+from tests.support.mirror_support import PinsInMemory
 from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects
 
 _A_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
@@ -41,6 +42,7 @@ def real_builds_under(root: Path) -> SlidevBuilds:
             directory=root / "mirrors",
             credentials=_NoCredentials(),
             pull_timeout=timedelta(minutes=1),
+            host_keys=PinsInMemory(),
         ),
         output_megabytes=1,
     )

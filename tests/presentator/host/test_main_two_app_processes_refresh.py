@@ -19,10 +19,10 @@ from presentator.contracts.decks import BuildOutcome
 from tests.presentator.host.support.app_processes import App, Browser, serving_apps
 from tests.presentator.host.support.app_requests import (
     AT,
-    SOURCES,
     added,
     admin_of,
     fetched,
+    removal_of,
     scalar,
     watching,
 )
@@ -148,17 +148,6 @@ def _a_source_pushed_once_more(
     _push(remote, 1)
 
 
-def _removal(admin: Browser, app: App) -> int:
-    """Confirm and request the removal of `talks`, answering its status code."""
-    preview = admin.request(app, "GET", f"{SOURCES}/talks/removal").json()
-    return admin.request(
-        app,
-        "DELETE",
-        f"{SOURCES}/talks?deck_count={preview['deck_count']}"
-        f"&run_count={preview['run_count']}",
-    ).status_code
-
-
 @pytest.mark.parametrize(
     "removing_at",
     [0, 1],
@@ -186,7 +175,7 @@ def test_a_removal_waits_for_the_refresh_of_either_process(
         refreshing = pool.submit(fetched, admin, apps[0], "talks")
         _wait_until_building(engine)
 
-        removing = pool.submit(_removal, admin, apps[removing_at])
+        removing = pool.submit(removal_of, admin, apps[removing_at], "talks")
         if removing_at != 0:
             # Another process waits on the database for the lock.
             _eventually(lambda: waiting_advisory_locks(engine), lambda each: each >= 1)
@@ -409,10 +398,10 @@ def test_a_removal_that_outwaits_its_bound_fails_and_leaves_the_source(
         refreshing = pool.submit(fetched, admin, apps[0], "talks")
         _wait_until_building(engine)
 
-        timed_out = _removal(admin, apps[1])
+        timed_out = removal_of(admin, apps[1], "talks")
         gate.let_through(1)
         refreshing.result()
-        retried = _removal(admin, apps[1])
+        retried = removal_of(admin, apps[1], "talks")
 
     assert timed_out == HTTPStatus.INTERNAL_SERVER_ERROR
     assert retried == HTTPStatus.NO_CONTENT

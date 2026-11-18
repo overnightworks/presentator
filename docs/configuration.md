@@ -86,7 +86,7 @@ some of them.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `PRESENTATOR_MIRRORS` | `mirrors` | Where the bare mirrors of the deck sources live. |
+| `PRESENTATOR_MIRRORS` | `mirrors` | Where this process keeps its bare mirrors of the deck sources, a cache each pull rebuilds. |
 | `PRESENTATOR_HOST` | `127.0.0.1` | Listen address. |
 | `PRESENTATOR_PORT` | `8000` | Listen port, 0 to 65535; another number refuses the start, and a start that cannot listen on it ends in one `process.failed` line with `reason` `port_taken` (or `bind_refused`) and exit status 3. |
 | `PRESENTATOR_TRUSTED_PROXIES` | empty | Comma-separated addresses or networks; see below. |

@@ -36,12 +36,14 @@ from tests.presentator.host.support.app_requests import (
     create_source,
     fetched,
     listed_slugs,
+    removal_of,
     scalar,
     scalar_text,
     texts,
     watching,
 )
 from tests.support.git_remote import EXAMPLE_SLUG, GitRemote, with_the_program
+from tests.support.mirror_support import written_by_ssh
 from tests.support.object_store import ObjectStore
 from tests.support.postgres import engine_on
 
@@ -68,15 +70,28 @@ exec sh -c "git ${command#git-}"
 """
 # Stands in for the ssh git starts, too, but reaches the repository its caller's
 # route names: git tells ssh the known_hosts file of the app it runs for, and
-# that file lies in the directory of that app alone.
+# that file lies in the directory of that app alone. Where the route names a
+# host key too, the host answers with it and is checked as `accept-new` does.
 _SSH_TO_THE_ROUTE_OF_THE_CALLER = """#!/bin/sh
 for argument; do
     case "$argument" in UserKnownHostsFile=*) hosts=${{argument#*=}};; esac
 done
 caller=$(basename "$(dirname "$(dirname "$hosts")")")
+if [ -f "{routes}/$caller.host-key" ]; then
+    presented=$(cat "{routes}/$caller.host-key")
+    pinned=$(sed -n "s/^{host} //p" "$hosts")
+    if [ -n "$pinned" ] && [ "$pinned" != "$presented" ]; then
+        echo "Host key verification failed." >&2
+        exit 255
+    fi
+    [ -n "$pinned" ] || printf '%s %s\\n' "{host}" "$presented" >> "$hosts"
+fi
 exec git upload-pack "$(cat "{routes}/$caller")"
 """
-_SSH_ADDRESS = "git@localhost:{repository}"
+_SSH_HOST = "localhost"
+_SSH_ADDRESS = f"git@{_SSH_HOST}:{{repository}}"
+_THE_HOST_KEY = "ssh-ed25519 AAAAthe-host"
+_A_CHANGED_HOST_KEY = "ssh-ed25519 AAAAa-changed-host"
 
 
 @pytest.fixture
@@ -118,7 +133,7 @@ def routes(environment: pytest.MonkeyPatch, tmp_path: Path) -> Path:
         environment,
         tmp_path,
         "ssh",
-        _SSH_TO_THE_ROUTE_OF_THE_CALLER.format(routes=directory),
+        _SSH_TO_THE_ROUTE_OF_THE_CALLER.format(routes=directory, host=_SSH_HOST),
     )
     with_the_toolchain(environment, tmp_path, A_TOOLCHAIN_THAT_BUILDS)
     return directory
@@ -128,6 +143,13 @@ def _route(routes: Path, app: App, remote: GitRemote) -> None:
     """Let the ssh that `app` runs reach `remote`, whatever address it is given."""
     (routes / directory_name_of(app.port)).write_text(
         str(remote.bare), encoding="utf-8"
+    )
+
+
+def _presenting(routes: Path, app: App, host_key: str) -> None:
+    """Let the host the ssh of `app` reaches answer with that key."""
+    (routes / f"{directory_name_of(app.port)}.host-key").write_text(
+        host_key, encoding="utf-8"
     )
 
 
@@ -531,3 +553,114 @@ def test_settings_and_a_theme_saved_at_both_processes_at_once_leave_one_row_each
     assert read_names[0] in names
     assert read_themes[0] == read_themes[1]
     assert read_themes[0] in themes
+
+
+def _added_over_ssh(admin: Browser, app: App, name: str, remote: GitRemote) -> None:
+    """Check and store a source with a deploy key, reached over ssh at that app."""
+    draft = _opened_draft(admin, app)
+    created = create_source(
+        admin,
+        app,
+        checked(
+            admin,
+            app,
+            name=name,
+            url=_SSH_ADDRESS.format(repository=remote.bare),
+            key_draft_id=draft["id"],
+        ),
+    )
+    assert created.status_code == HTTPStatus.CREATED, created.text
+
+
+@pytest.mark.usefixtures("environment")
+def test_a_host_key_pinned_at_one_process_refuses_a_changed_key_at_the_other(
+    database_url: str,
+    tmp_path: Path,
+    engine: Engine,
+    routes: Path,
+    remote: GitRemote,
+) -> None:
+    """SR12: the key first met at one process is the key every process trusts."""
+    remote.commit_example_deck(at=AT)
+    with serving_apps(database_url, tmp_path) as apps:
+        admin = admin_of(apps[0])
+        for app in apps:
+            _route(routes, app, remote)
+        _presenting(routes, apps[0], _THE_HOST_KEY)
+        _added_over_ssh(admin, apps[0], "talks", remote)
+        _presenting(routes, apps[1], _A_CHANGED_HOST_KEY)
+        changed = fetched(admin, apps[1], "talks").json()["run"]
+        _presenting(routes, apps[1], _THE_HOST_KEY)
+        pinned = fetched(admin, apps[1], "talks").json()["run"]
+
+    assert changed["outcome"] == SourceRunOutcome.FAILURE
+    assert pinned["outcome"] == SourceRunOutcome.SUCCESS
+    assert texts(engine, "SELECT host || ' ' || public_key FROM host_key_pins") == {
+        f"{_SSH_HOST} {_THE_HOST_KEY}"
+    }
+
+
+@pytest.mark.usefixtures("environment")
+def test_a_host_key_one_process_kept_on_its_disk_refuses_a_changed_key_once_shared(
+    database_url: str,
+    tmp_path: Path,
+    engine: Engine,
+    routes: Path,
+    remote: GitRemote,
+) -> None:
+    """SR12: a key a pod pinned on its own disk still stands once pins are shared."""
+    remote.commit_example_deck(at=AT)
+    with serving_apps(database_url, tmp_path) as apps:
+        _route(routes, apps[0], remote)
+        _presenting(routes, apps[0], _THE_HOST_KEY)
+        _added_over_ssh(admin_of(apps[0]), apps[0], "talks", remote)
+    # The source as a release left it that kept each pod's pins beside its
+    # mirrors, in the file ssh wrote there with its hashed host names.
+    with engine.begin() as connection:
+        connection.execute(text("DELETE FROM host_key_pins"))
+    earlier = tmp_path / "earlier-pod" / "mirrors"
+    earlier.mkdir(parents=True)
+    written_by_ssh(
+        earlier / "known_hosts", f"{_SSH_HOST} {_THE_HOST_KEY}\n", hashed=True
+    )
+    (routes / "earlier-pod").write_text(str(remote.bare), encoding="utf-8")
+    (routes / "earlier-pod.host-key").write_text(_A_CHANGED_HOST_KEY, encoding="utf-8")
+    with serving_apps(
+        database_url, tmp_path, second_environment={"PRESENTATOR_MIRRORS": str(earlier)}
+    ) as apps:
+        changed = fetched(admin_of(apps[1]), apps[1], "talks").json()["run"]
+
+    assert changed["outcome"] == SourceRunOutcome.FAILURE
+    assert texts(engine, "SELECT host || ' ' || public_key FROM host_key_pins") == {
+        f"{_SSH_HOST} {_THE_HOST_KEY}"
+    }
+
+
+def _mirrors_of(tmp_path: Path, app: App) -> set[str]:
+    """The names in the mirrors directory of that app's own disk."""
+    directory = tmp_path / directory_name_of(app.port) / "mirrors"
+    return {each.name for each in directory.iterdir() if each.is_dir()}
+
+
+@pytest.mark.usefixtures("environment")
+def test_a_mirror_of_a_source_removed_at_one_process_goes_at_the_others_next_turn(
+    database_url: str,
+    tmp_path: Path,
+    committed_remotes: tuple[GitRemote, GitRemote],
+) -> None:
+    """SR13: another process's mirror of a removed source goes at its next turn."""
+    talks, other_talks = committed_remotes
+    with serving_apps(database_url, tmp_path) as apps:
+        admin = admin_of(apps[0])
+        added(admin, apps[0], "talks", talks)
+        added(admin, apps[0], "other-talks", other_talks)
+        fetched(admin, apps[1], "talks")
+        before = _mirrors_of(tmp_path, apps[1])
+        removed = removal_of(admin, apps[0], "talks")
+        fetched(admin, apps[1], "other-talks")
+        after = _mirrors_of(tmp_path, apps[1])
+
+    assert removed == HTTPStatus.NO_CONTENT
+    assert len(before) == 1
+    assert len(after) == 1
+    assert not before & after

@@ -1,11 +1,12 @@
 """A mirror over a real source and the resolvers that stand in for the secrets."""
 
-from dataclasses import dataclass
+import subprocess
+from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 
 from gitmirror.mirror import GitMirror
-from gitmirror.model import CredentialReference, GitSource
+from gitmirror.model import CredentialReference, GitSource, HostKey, KnownHosts
 from tests.support.git_remote import MAIN_BRANCH
 
 A_GENEROUS_BOUND = timedelta(seconds=30)
@@ -36,6 +37,24 @@ class FixedSecret:
         return self.value
 
 
+@dataclass(slots=True)
+class PinsInMemory:
+    """Host-key pins one test keeps, the first pin of a host standing."""
+
+    keys: dict[str, str] = field(default_factory=dict[str, str])
+
+    def pinned(self) -> tuple[HostKey, ...]:
+        return tuple(HostKey(host=host, key=key) for host, key in self.keys.items())
+
+    def pin(self, key: HostKey) -> HostKey:
+        return HostKey(host=key.host, key=self.keys.setdefault(key.host, key.key))
+
+
+def known_hosts_under(directory: Path) -> KnownHosts:
+    """Pins of this test alone, handed to ssh from that directory."""
+    return KnownHosts(directory=directory, pins=PinsInMemory())
+
+
 def a_mirror(
     url: str,
     *,
@@ -49,4 +68,17 @@ def a_mirror(
         directory=directory / "mirror.git",
         credentials=NoSecretAnywhere() if resolver is None else resolver,
         pull_timeout=pull_timeout,
+        known_hosts=known_hosts_under(directory),
     )
+
+
+def written_by_ssh(file: Path, lines: str, *, hashed: bool) -> Path:
+    """A known_hosts file holding those lines, its host names hashed by ssh itself."""
+    file.write_text(lines, encoding="utf-8")
+    if hashed:
+        subprocess.run(  # noqa: S603 - argv is a fixed list naming a file of this test
+            ["ssh-keygen", "-H", "-f", str(file)],  # noqa: S607 - ssh's own tool, from PATH
+            check=True,
+            capture_output=True,
+        )
+    return file
