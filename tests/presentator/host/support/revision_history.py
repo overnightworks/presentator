@@ -4,12 +4,19 @@ import shutil
 from pathlib import Path
 from typing import Final
 
-from presentator.adapters.postgres.migrate import MIGRATIONS_DIRECTORY
+from presentator.adapters.postgres.migrate import (
+    MIGRATIONS_DIRECTORY,
+    migration_history,
+)
 
-_NEXT_REVISION: Final = '''"""A revision a database made by an older release lacks."""
+_NEXT_REVISION: Final = "next"
 
-revision = "0003"
-down_revision = "0002"
+
+def _next_revision(head: str) -> str:
+    return f'''"""A revision a database made by an older release lacks."""
+
+revision = "{_NEXT_REVISION}"
+down_revision = "{head}"
 
 
 def upgrade() -> None:
@@ -23,5 +30,9 @@ def a_longer_history(directory: Path) -> Path:
     shutil.copytree(
         MIGRATIONS_DIRECTORY, history, ignore=shutil.ignore_patterns("__pycache__")
     )
-    (history / "versions" / "0003_next.py").write_text(_NEXT_REVISION, encoding="utf-8")
+    head = migration_history().get_current_head()
+    assert head is not None
+    (history / "versions" / f"{_NEXT_REVISION}.py").write_text(
+        _next_revision(head), encoding="utf-8"
+    )
     return history

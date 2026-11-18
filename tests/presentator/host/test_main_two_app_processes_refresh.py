@@ -28,6 +28,7 @@ from tests.presentator.host.support.app_requests import (
 )
 from tests.presentator.host.support.build_gate import BuildGate, gated_toolchain
 from tests.support.git_remote import EXAMPLE_SLUG, GitRemote
+from tests.support.object_store import ObjectStore
 from tests.support.postgres import (
     end_connections_holding,
     engine_on,
@@ -64,24 +65,28 @@ _WAITING_TO_BUMP = (
 )
 
 
-def _shared_builds(tmp_path: Path, settings: dict[str, str]) -> dict[str, str]:
-    """The settings, with one builds directory for both processes, as one disk."""
-    return {**settings, "PRESENTATOR_BUILDS": str(tmp_path / "builds")}
+def _stored(store: ObjectStore, settings: dict[str, str]) -> dict[str, str]:
+    """The settings, with the one store both processes keep their builds in."""
+    return {**settings, **store.environment}
 
 
 @dataclass(frozen=True, slots=True)
 class Database:
-    """The test's own database, as the processes reach it and as the test reads it."""
+    """The test's own database, as the processes reach it and as the test reads it.
+
+    `store` is where both processes keep the builds those rows name.
+    """
 
     url: str
     engine: Engine
+    store: ObjectStore
 
 
 @pytest.fixture
-def database(database_url: str) -> Iterator[Database]:
+def database(database_url: str, object_store: ObjectStore) -> Iterator[Database]:
     each = engine_on(database_url)
     try:
-        yield Database(database_url, each)
+        yield Database(database_url, each, object_store)
     finally:
         each.dispose()
 
@@ -171,7 +176,7 @@ def test_a_removal_waits_for_the_refresh_of_either_process(
     engine = database.engine
     with (
         serving_apps(
-            database.url, tmp_path, _shared_builds(tmp_path, _NO_TICKS)
+            database.url, tmp_path, _stored(database.store, _NO_TICKS)
         ) as apps,
         ThreadPoolExecutor(max_workers=2) as pool,
         watching(engine, _DECK_ROW) as seen,
@@ -206,7 +211,7 @@ def test_a_fetch_while_another_process_refreshes_does_nothing(
     engine = database.engine
     with (
         serving_apps(
-            database.url, tmp_path, _shared_builds(tmp_path, _NO_TICKS)
+            database.url, tmp_path, _stored(database.store, _NO_TICKS)
         ) as apps,
         ThreadPoolExecutor(max_workers=1) as pool,
     ):
@@ -234,7 +239,7 @@ def test_a_process_that_lost_its_lock_connection_mid_build_is_replaced_and_refus
     engine = database.engine
     with (
         serving_apps(
-            database.url, tmp_path, _shared_builds(tmp_path, _NO_TICKS)
+            database.url, tmp_path, _stored(database.store, _NO_TICKS)
         ) as apps,
         ThreadPoolExecutor(max_workers=1) as pool,
     ):
@@ -285,7 +290,7 @@ def test_a_process_does_not_rebuild_what_a_present_toolchain_built_until_it_is_g
     with serving_apps(
         database.url,
         tmp_path,
-        _shared_builds(tmp_path, _NO_TICKS),
+        _stored(database.store, _NO_TICKS),
         {"PRESENTATOR_TOOLCHAIN": str(another_toolchain)},
     ) as apps:
         other = 1 - builder
@@ -299,7 +304,7 @@ def test_a_process_does_not_rebuild_what_a_present_toolchain_built_until_it_is_g
 
         fetched(admin, apps[other], "talks")
         not_rebuilt = _rows(engine, _BUILD_AND_TOOLCHAIN)
-        runs_not_rebuilt = list((tmp_path / "builds").glob("*"))
+        runs_not_rebuilt = database.store.runs.names()
 
         apps[builder].process.kill()
         apps[builder].process.wait()
@@ -312,6 +317,7 @@ def test_a_process_does_not_rebuild_what_a_present_toolchain_built_until_it_is_g
 
     assert built[0][2] == remote.head
     assert not_rebuilt == built
+    assert runs_not_rebuilt is not None
     assert len(runs_not_rebuilt) == 1
     assert rebuilt[0][2] == remote.head
     assert rebuilt[0][3] != built[0][3]
@@ -334,7 +340,7 @@ def test_after_every_lock_connection_ends_a_process_refreshes_again(
     engine = database.engine
     gate.let_through(1)
     with serving_apps(
-        database.url, tmp_path, _shared_builds(tmp_path, _TICKING), second_environment
+        database.url, tmp_path, _stored(database.store, _TICKING), second_environment
     ) as apps:
         added(admin_of(apps[0]), apps[0], "talks", remote)
         ticked = scalar(engine, _NEWEST_RUN)
@@ -359,7 +365,7 @@ def test_a_bump_blocked_by_a_stale_fenced_transaction_gives_up_and_succeeds_late
     with serving_apps(
         database.url,
         tmp_path,
-        _shared_builds(tmp_path, {**_TICKING, **_ONE_SECOND}),
+        _stored(database.store, {**_TICKING, **_ONE_SECOND}),
         _NO_TICKS,
     ) as apps:
         added(admin_of(apps[0]), apps[0], "talks", remote)
@@ -394,7 +400,7 @@ def test_a_removal_that_outwaits_its_bound_fails_and_leaves_the_source(
     engine = database.engine
     with (
         serving_apps(
-            database.url, tmp_path, _shared_builds(tmp_path, _NO_TICKS), _ONE_SECOND
+            database.url, tmp_path, _stored(database.store, _NO_TICKS), _ONE_SECOND
         ) as apps,
         ThreadPoolExecutor(max_workers=1) as pool,
     ):
@@ -426,7 +432,7 @@ def test_an_account_deletion_that_outwaits_its_bound_fails_and_a_retry_resumes_i
         serving_apps(
             database.url,
             tmp_path,
-            _shared_builds(tmp_path, {**_NO_TICKS, **_ONE_SECOND, **_TOKEN_CLIENTS}),
+            _stored(database.store, {**_NO_TICKS, **_ONE_SECOND, **_TOKEN_CLIENTS}),
         ) as apps,
         engine.connect() as another_refresh,
     ):

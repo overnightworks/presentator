@@ -265,6 +265,7 @@ def _environment(
     return {
         **app_settings,
         **database_environment(database_url, directory),
+        # No store, unless the test hands its `object_store` environment in.
         **no_object_store_environment(directory),
         # Both processes count their budgets in the one Redis database of this worker.
         "PRESENTATOR_REDIS_URL": emptied_database_url(),

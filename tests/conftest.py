@@ -33,7 +33,12 @@ from tests.support.lobby import (
     configure_secret_key,
 )
 from tests.support.log_lines import LoggedText
-from tests.support.object_store import no_object_store_environment
+from tests.support.object_store import (
+    ObjectStore,
+    emptied_store,
+    no_object_store_environment,
+    the_bucket_alone,
+)
 from tests.support.postgres import (
     NO_DATABASE_HERE,
     created_database,
@@ -194,6 +199,19 @@ def environment(
 ) -> pytest.MonkeyPatch:
     configure_secret_key(bare_environment, tmp_path, INSTANCE_KEY)
     return bare_environment
+
+
+@pytest.fixture
+def object_store(
+    bare_environment: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> Iterator[ObjectStore]:
+    """The test run's Garage for every instance this test starts, its bucket emptied.
+
+    Every xdist worker's directory lies in one directory of the run, which
+    holds the lock.
+    """
+    with the_bucket_alone(tmp_path_factory.getbasetemp().parent):
+        yield emptied_store(bare_environment)
 
 
 @pytest.fixture(scope="session")
