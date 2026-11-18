@@ -17,10 +17,12 @@ from starlette.types import ASGIApp
 from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
+from presentator.adapters.build_runs import ARRIVING_PREFIX
 from presentator.adapters.postgres.deck_store import PostgresDeckStore
 from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
 from presentator.api.hooks import hook_address
 from presentator.application.identity import SESSION_LIFETIME
+from presentator.contracts.decks import OUTPUT_DIRECTORY, PDF_FILE
 from presentator.contracts.models import Role, User
 from presentator.host import main
 from presentator.host.config import (
@@ -313,6 +315,17 @@ def test_the_real_stack_offers_no_password_login_and_no_first_start(
     assert password_posted.status_code == HTTPStatus.NOT_FOUND
     assert real_lobby.get("/setup").status_code == HTTPStatus.NOT_FOUND
     assert 'type="password"' not in real_lobby.get("/login").text
+
+
+@pytest.mark.usefixtures("environment")
+def test_a_copy_a_dead_process_left_half_fetched_is_gone_after_the_start() -> None:
+    left_behind = load_settings().builds / f"{ARRIVING_PREFIX}x" / OUTPUT_DIRECTORY
+    left_behind.mkdir(parents=True)
+    (left_behind / PDF_FILE).write_bytes(b"half a talk")
+
+    a_real_instance()
+
+    assert not left_behind.parent.exists()
 
 
 def test_an_instance_without_a_lobby_build_refuses_to_start(

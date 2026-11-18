@@ -184,7 +184,7 @@ def test_a_fetch_under_way_is_no_copy_a_drop_beside_it_takes(tmp_path: Path) -> 
     assert talk.read_text(encoding="utf-8") == "the talk of run-1"
 
 
-def test_a_copy_a_dead_process_left_half_fetched_is_gone_after_the_start(
+def test_dropping_unfinished_fetches_takes_every_staged_copy_and_keeps_the_runs(
     tmp_path: Path, store: DirectoryRunObjects
 ) -> None:
     cache = a_cache(tmp_path / "builds", store)
