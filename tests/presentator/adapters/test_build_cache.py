@@ -14,7 +14,13 @@ from presentator.contracts.decks import (
     PDF_FILE,
     SLIDES_FILE,
     TALK_DIRECTORY,
+    BuildRun,
 )
+from tests.presentator.adapters.support.build_support import (
+    builds_under,
+    on_this_machine,
+)
+from tests.support.log_lines import json_logged
 from tests.support.object_store import ObjectStore
 from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects
 
@@ -121,6 +127,32 @@ def test_removing_a_run_takes_it_out_of_the_store_and_off_this_disk(
     assert on_disk(building) == set()
     assert store.names() == frozenset()
     assert a_cache(tmp_path / "b", store).local("run-1") is None
+
+
+def test_a_process_turned_away_drops_the_copies_no_row_names_and_keeps_the_store(
+    tmp_path: Path,
+) -> None:
+    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
+    for name in ("named", "unnamed"):
+        built_run(builds.cache, name)
+        assert builds.cache.keep(name)
+
+    builds.drop_copies_except(frozenset({BuildRun("named")}))
+
+    assert on_disk(builds.cache) == {"named"}
+    assert builds.cache.store.names() == frozenset({"named", "unnamed"})
+
+
+def test_a_process_that_never_made_its_root_drops_nothing_and_warns_of_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
+
+    with json_logged(capsys) as logged:
+        builds.drop_copies_except(frozenset())
+
+    assert not builds.cache.root.exists()
+    assert [one["level"] for one in logged.lines] == []
 
 
 def test_a_run_under_way_counts_but_is_never_taken_by_the_bound(
