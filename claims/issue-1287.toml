@@ -1,7 +1,0 @@
-claim_id = "58cab89f3c3f48ffa488cc9e20ce8d81"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "d02bc295486905e2cf7cb3ea6f4aa6fc8094720a"
-branch = "claude/issue-1287-the-overlay-test-pins-the-worklet-s-url"
-scope = ["slidev/tests/presenter-controls.browser.test.ts"]
-opened_commit = "d33714fbb6cc3597fcac3bb5b79eef7b1b8c8862"
