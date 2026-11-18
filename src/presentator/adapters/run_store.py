@@ -32,8 +32,12 @@ _log = logging.getLogger(__name__)
 
 
 def object_store_client() -> S3Client:
-    """The one client of this process, configured by the environment alone."""
-    client: S3Client = boto3.client(
+    """A client configured by the environment as it stands at this call.
+
+    A session of its own, not boto3's default one, which keeps the key and the
+    configuration files it read first for the rest of the process.
+    """
+    client: S3Client = boto3.session.Session().client(
         "s3", config=Config(s3={"addressing_style": "path"})
     )
     return client

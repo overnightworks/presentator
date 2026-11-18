@@ -71,3 +71,13 @@ def test_a_store_that_refuses_the_key_fails_every_call_with_one_line_each(
     assert answers == (False, False, None, False)
     failed = events_of(logged, _FAILED)
     assert [line["operation"] for line in failed] == ["put", "fetch", "list", "delete"]
+
+
+def test_a_client_reaches_the_store_its_environment_names_when_it_is_made(
+    tmp_path: Path, object_store: ObjectStore, bare_environment: pytest.MonkeyPatch
+) -> None:
+    for name, value in no_object_store_environment(tmp_path).items():
+        bare_environment.setenv(name, value)
+    refused = StoredRuns(client=object_store_client(), bucket=object_store.runs.bucket)
+
+    assert refused.names() is None
