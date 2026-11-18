@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "89d8ca9c1e316a8d4654823cdfe87557d69e11a9"
 branch = "claude/issue-1280-a-one-word-deck-title-wraps-inside-its-c"
-scope = ["frontend/src", "frontend/tests"]
+scope = ["frontend/e2e/home.spec.ts", "frontend/e2e/source.spec.ts", "frontend/src", "frontend/tests"]
 opened_commit = "8e984bde569719c444fe2ae726c9be887bb3e1ac"
 whole_reason = "the deck list stylesheet and one drive spec under frontend"
