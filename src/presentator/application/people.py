@@ -9,7 +9,13 @@ from presentator.application.decks import (
     SourceRemovalRefused,
     SourceRemovalStale,
 )
-from presentator.contracts.decks import Deck, Source, SourceRemoval, SourceRun
+from presentator.contracts.decks import (
+    Deck,
+    Source,
+    SourceRemoval,
+    SourceRun,
+    UnplacedBuildError,
+)
 from presentator.contracts.people import (
     DeckExport,
     KeyDraftExport,
@@ -151,17 +157,41 @@ class People:
     def _erased_owned(
         self, subject: str, owned: tuple[Source, ...]
     ) -> PersonErased | PersonDiskLeftover:
-        census = self._census(subject, owned)
+        placed, unplaced = self._placed(owned)
+        census = self._census(subject, placed)
         self.sessions.delete_for_user(subject)
         self.preferences.delete(subject)
         self.key_drafts.remove_for_owner(subject)
-        leftovers = self._every_source_removed(owned)
+        leftovers = self._every_source_removed(placed)
+        if unplaced:
+            named = ", ".join(unplaced)
+            message = f"source {named} has a build no run can be placed for"
+            raise RuntimeError(message)
         if not leftovers:
             return PersonErased(kinds=census)
         remaining = self._census(subject, self._sources_of(subject))
         return PersonDiskLeftover(
             removed=_removed_between(census, remaining), leftovers=leftovers
         )
+
+    def _placed(
+        self, owned: tuple[Source, ...]
+    ) -> tuple[tuple[Source, ...], tuple[str, ...]]:
+        """The sources whose rows read, and the ids of those that do not.
+
+        A stored build no run can be placed for has no directory to name, so
+        its source stays and the erasure fails loud once every other was tried.
+        """
+        placed: list[Source] = []
+        unplaced: list[str] = []
+        for source in owned:
+            try:
+                self.decks.store.for_source(source.id)
+            except UnplacedBuildError:
+                unplaced.append(source.id)
+            else:
+                placed.append(source)
+        return tuple(placed), tuple(unplaced)
 
     def _every_source_removed(
         self, owned: tuple[Source, ...]

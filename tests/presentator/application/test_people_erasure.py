@@ -316,6 +316,28 @@ def test_a_leftover_counts_only_what_this_attempt_removed() -> None:
     }
 
 
+def test_a_build_no_run_owns_fails_loud_after_the_other_sources_went() -> None:
+    """PE15: the erasure goes on, keeps the account, then names the id."""
+    instance = an_instance()
+    store = instance.fakes.store
+    (deck,) = store.for_source("decks-id")
+    decks_runs = _runs_of(instance, "decks-id")
+    talks_runs = _runs_of(instance, "talks-id")
+    store.lose_run(deck.slug)
+
+    with pytest.raises(RuntimeError, match="decks-id") as raised:
+        instance.people.erase_person(THE_PERSON.id, dry_run=False)
+
+    assert "decks" not in str(raised.value).replace("decks-id", "")
+    assert _owned_source_ids(instance) == {"decks-id"}
+    assert store.kept[deck.slug]
+    assert store.for_source("talks-id") == ()
+    assert decks_runs <= instance.fakes.builder.on_disk
+    assert talks_runs
+    assert not talks_runs & instance.fakes.builder.on_disk
+    assert THE_PERSON.id in instance.users.users
+
+
 @dataclass
 class _FoldersThatWatchTheRows(FakeDeckFolders):
     """Records what still stood in the database when a mirror was removed."""

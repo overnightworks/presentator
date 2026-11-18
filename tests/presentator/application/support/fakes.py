@@ -35,6 +35,7 @@ from presentator.contracts.decks import (
     SourceWrite,
     ToolchainIdentity,
     ToolchainUnavailable,
+    UnplacedBuildError,
 )
 from presentator.contracts.models import User
 from presentator.contracts.people import SessionExport, SessionSecretsHeld
@@ -546,6 +547,8 @@ class FakeDeckStore:
     kept: dict[str, Deck] = field(default_factory=dict[str, Deck])
     # Each marked slug and the instant a pass first missed its folder.
     removed: dict[str, datetime] = field(default_factory=dict[str, datetime])
+    # The slugs whose stored run reads as no single name.
+    unplaced: set[str] = field(default_factory=set[str])
 
     def put(self, deck: Deck) -> bool:
         standing = self.kept.get(deck.slug)
@@ -563,16 +566,27 @@ class FakeDeckStore:
     def put_build(self, slug: str, build: Build) -> None:
         self.kept[slug] = replace(self.kept[slug], build=build, attempt=None)
 
+    def lose_run(self, slug: str) -> None:
+        """Make that deck's stored run no single name, the way a corrupted row is."""
+        self.unplaced.add(slug)
+
     def put_attempt(self, slug: str, attempt: BuildAttempt | None) -> None:
         self.kept[slug] = replace(self.kept[slug], attempt=attempt)
 
     def get(self, slug: str) -> Deck | None:
-        return None if slug in self.removed else self.kept.get(slug)
+        return None if slug in self.removed else self._read(self.kept.get(slug))
 
     def all(self) -> tuple[Deck, ...]:
         return tuple(
-            deck for slug, deck in self.kept.items() if slug not in self.removed
+            self._read(deck)
+            for slug, deck in self.kept.items()
+            if slug not in self.removed
         )
+
+    def _read[Read: Deck | None](self, deck: Read) -> Read:
+        if deck is not None and deck.slug in self.unplaced:
+            raise UnplacedBuildError(deck.source_id)
+        return deck
 
     def mark_removed_except(
         self,
@@ -601,7 +615,11 @@ class FakeDeckStore:
         return len(gone)
 
     def for_source(self, source_id: str) -> tuple[Deck, ...]:
-        return tuple(deck for deck in self.kept.values() if deck.source_id == source_id)
+        return tuple(
+            self._read(deck)
+            for deck in self.kept.values()
+            if deck.source_id == source_id
+        )
 
     def remove_for_source(self, source_id: str) -> None:
         for deck in self.for_source(source_id):

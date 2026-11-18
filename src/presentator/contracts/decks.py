@@ -436,6 +436,18 @@ class BuildRun:
             raise ValueError(message)
 
 
+class UnplacedBuildError(ValueError):
+    """A stored build whose run is no single name under the builds root."""
+
+    def __init__(self, source_id: str) -> None:
+        """Name the source whose row carries it, never the value it carries."""
+        self.source_id = source_id
+        super().__init__(
+            f"source {source_id} has a build whose run is no single name"
+            " under the builds root"
+        )
+
+
 def run_name_holding(talk: Path) -> str:
     """The name of the run whose output holds this talk, as `<run>/out/talk`."""
     return talk.parent.parent.name

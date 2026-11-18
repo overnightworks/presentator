@@ -21,6 +21,7 @@ from presentator.contracts.decks import (
     SourceRunOutcome,
     SourceWrite,
     ToolchainIdentity,
+    UnplacedBuildError,
 )
 from presentator.contracts.preferences import (
     PersonPreferences,
@@ -206,7 +207,7 @@ def test_a_stored_run_that_is_no_single_name_under_the_root_fails_loud_on_read(
     with engine.begin() as connection:
         connection.execute(text("UPDATE decks SET built_run = :run"), {"run": stored})
 
-    with pytest.raises(ValueError, match="builds root"):
+    with pytest.raises(UnplacedBuildError, match=source.id):
         postgres_stores.decks.get("talk")
 
 

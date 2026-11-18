@@ -15,6 +15,7 @@ from presentator.contracts.decks import (
     BuildRun,
     Deck,
     ToolchainIdentity,
+    UnplacedBuildError,
     run_name_holding,
 )
 
@@ -75,6 +76,7 @@ def stored_deck[Instant](
         build=_build(
             row[6:10],
             run=row[20],
+            source_id=source_id,
             stored_toolchain=row[18],
             read_instant=read_instant,
         ),
@@ -88,6 +90,7 @@ def _build[Instant](
     columns: tuple[str | None, str | None, str | None, Instant | None],
     *,
     run: str | None,
+    source_id: str,
     stored_toolchain: str | None,
     read_instant: Callable[[Instant], datetime],
 ) -> Build | None:
@@ -98,6 +101,7 @@ def _build[Instant](
     So is one whose talk lies in another run than the row names: a release
     that writes no run moved the talk and the commit and left the run of an
     older build standing, which would serve that older talk as this commit.
+    A run that is no single name is a corrupted row and fails loud.
     """
     directory, pdf, commit, built_at = columns
     if (
@@ -108,7 +112,10 @@ def _build[Instant](
         or built_at is None
     ):
         return None
-    stored_run = BuildRun(run)
+    try:
+        stored_run = BuildRun(run)
+    except ValueError as refused:
+        raise UnplacedBuildError(source_id) from refused
     if run_name_holding(Path(directory)) != stored_run.name:
         return None
     return Build(

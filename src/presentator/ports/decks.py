@@ -190,7 +190,11 @@ class SourceRuns(Protocol):
 
 
 class DeckStore(Protocol):
-    """The decks this instance knows about, keyed by their folder name."""
+    """The decks this instance knows about, keyed by their folder name.
+
+    Reading a row whose stored build names a run that is no single name raises
+    `UnplacedBuildError` naming that row's source.
+    """
 
     @abstractmethod
     def put(self, deck: Deck) -> bool:
