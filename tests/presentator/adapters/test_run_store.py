@@ -81,3 +81,27 @@ def test_a_client_reaches_the_store_its_environment_names_when_it_is_made(
     refused = StoredRuns(client=object_store_client(), bucket=object_store.runs.bucket)
 
     assert refused.names() is None
+
+
+def test_a_key_the_store_does_not_know_fails_a_fetch_with_one_line(
+    tmp_path: Path,
+    object_store: ObjectStore,
+    bare_environment: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    unknown = tmp_path / "an-unknown-key"
+    unknown.write_text(
+        f"[default]\naws_access_key_id = GK{'0' * 24}\n"
+        f"aws_secret_access_key = {'0' * 64}\n",
+        encoding="utf-8",
+    )
+    bare_environment.setenv("AWS_SHARED_CREDENTIALS_FILE", str(unknown))
+    refused = StoredRuns(client=object_store_client(), bucket=object_store.runs.bucket)
+
+    with json_logged(capsys) as logged:
+        fetched = refused.fetch(
+            "run-1", archive=tmp_path / "talk.tar", pdf=tmp_path / "deck.pdf"
+        )
+
+    assert not fetched
+    assert [line["operation"] for line in events_of(logged, _FAILED)] == ["fetch"]

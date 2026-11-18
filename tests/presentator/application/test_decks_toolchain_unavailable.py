@@ -310,3 +310,18 @@ def test_a_commit_another_toolchain_made_is_rebuilt_only_once_none_runs_it(
     decks.refresh()
 
     assert len(builder.built) == (1 if present else 2)
+
+
+def test_a_build_whose_run_the_store_did_not_take_leaves_the_deck_as_it_was() -> None:
+    builder = FakeBuildRunner(store_answers=False)
+    store = FakeDeckStore()
+    decks = decks_over(
+        a_folder("kundenfeedback"), fakes=DecksFakes(store=store, builder=builder)
+    )
+
+    decks.refresh()
+
+    assert [(deck.build, deck.attempt) for deck in store.all()] == [(None, None)]
+    builder.store_answers = True
+    decks.refresh()
+    assert listed_states(decks) == [DeckState.READY]

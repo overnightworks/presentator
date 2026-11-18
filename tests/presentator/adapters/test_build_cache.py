@@ -1,5 +1,7 @@
 """The runs on a process's disk: kept in the store, fetched from it, bounded."""
 
+import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -167,3 +169,87 @@ def test_past_its_bound_the_least_recently_served_run_goes_and_is_fetched_again(
     talk = again / OUTPUT_DIRECTORY / TALK_DIRECTORY / _PAGE
     assert talk.read_text(encoding="utf-8") == "the talk of run-1"
     assert on_disk(serving) == {"run-1"}
+
+
+def test_a_run_that_cannot_be_packed_is_not_kept(
+    tmp_path: Path, store: DirectoryRunObjects
+) -> None:
+    building = a_cache(tmp_path / "a", store)
+    run = built_run(building, "run-1")
+    run.chmod(0o500)
+    try:
+        assert not building.keep("run-1")
+    finally:
+        run.chmod(0o700)
+
+    assert store.names() == frozenset()
+
+
+def test_a_run_whose_archive_does_not_unpack_is_not_served_and_leaves_nothing(
+    tmp_path: Path, store: DirectoryRunObjects
+) -> None:
+    broken = tmp_path / "broken"
+    broken.mkdir()
+    (broken / "talk.tar").write_bytes(b"no archive at all")
+    (broken / PDF_FILE).write_bytes(b"%PDF")
+    assert store.put("run-1", archive=broken / "talk.tar", pdf=broken / PDF_FILE)
+    serving = a_cache(tmp_path / "b", store)
+
+    assert serving.local("run-1") is None
+    assert on_disk(serving) == set()
+
+
+def test_a_kept_run_stays_kept_where_this_disk_cannot_be_listed(
+    tmp_path: Path, store: DirectoryRunObjects
+) -> None:
+    cache = a_cache(tmp_path / "a", store, bound=_A_RUNS_BYTES)
+    built_run(cache, "run-1")
+    assert cache.keep("run-1")
+    built_run(cache, "run-2")
+    cache.root.chmod(0o300)
+    try:
+        assert cache.keep("run-2")
+    finally:
+        cache.root.chmod(0o700)
+
+    assert on_disk(cache) == {"run-1", "run-2"}
+    assert store.names() == frozenset({"run-1", "run-2"})
+
+
+def test_a_run_the_bound_could_not_take_off_disk_frees_nothing_and_the_next_one_goes(
+    tmp_path: Path, store: DirectoryRunObjects, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = a_cache(tmp_path / "a", store, bound=3 * _A_RUNS_BYTES)
+    for served_at, name in enumerate(("run-1", "run-2"), start=1):
+        run = built_run(cache, name)
+        assert cache.keep(name)
+        os.utime(run / OUTPUT_DIRECTORY, (served_at, served_at))
+    built_run(cache, "run-3")
+    removing = shutil.rmtree
+
+    def stuck_on_the_oldest(path: Path, *, ignore_errors: bool = False) -> None:
+        if path.name != "run-1":
+            removing(path, ignore_errors=ignore_errors)
+
+    monkeypatch.setattr(shutil, "rmtree", stuck_on_the_oldest)
+
+    assert cache.keep("run-3")
+
+    assert on_disk(cache) == {"run-1", "run-3"}
+
+
+def test_a_run_a_removal_left_empty_is_taken_by_the_bound_with_the_rest(
+    tmp_path: Path, store: DirectoryRunObjects
+) -> None:
+    building = a_cache(tmp_path / "a", store)
+    for name in ("run-1", "run-2"):
+        built_run(building, name)
+        assert building.keep(name)
+    serving = a_cache(tmp_path / "b", store, bound=2 * _A_RUNS_BYTES)
+    assert serving.local("run-2") is not None
+    # What a removal leaves that took the run's contents but not its directory.
+    (serving.root / "run-1").mkdir()
+    built_run(serving, "run-3")
+    assert serving.keep("run-3")
+
+    assert on_disk(serving) == {"run-3"}
