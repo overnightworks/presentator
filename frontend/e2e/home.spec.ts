@@ -153,6 +153,28 @@ for (const { role, source } of emptyCards) {
 	});
 }
 
+test.describe('a one-word long deck title on a narrow screen', () => {
+	test.use({
+		person: {
+			role: 'admin',
+			decks: [aDeck({ title: 'Donaudampfschifffahrtsgesellschaftskapitänsmützenabzeichen' })]
+		}
+	});
+
+	test('wraps inside its card and leaves no horizontal scroll at 390 px', async ({
+		page
+	}, testInfo) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+
+		await page.goto('/');
+
+		await expect(page.locator('table.decks tbody tr')).toHaveCount(1);
+		await expectsNoHorizontalScroll(page);
+		await page.evaluate(() => document.fonts.ready);
+		await page.screenshot({ path: testInfo.outputPath('home-390-long-title.png'), fullPage: true });
+	});
+});
+
 test.describe('the header on a narrow screen and its focus', () => {
 	test.use({ person: { role: 'admin', decks: [aDeck()] } });
 
