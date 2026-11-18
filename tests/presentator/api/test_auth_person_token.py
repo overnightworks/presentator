@@ -1,17 +1,15 @@
 """A person's hal access token on `/api/` is that person, and makes no session.
 
-The lobby runs over the real SQLite identity stores and the fake issuer; `/api/nothing`
-has no route, so a 404 shows the gate admitted the request.
+The lobby runs over the real Postgres identity stores and the fake issuer;
+`/api/nothing` has no route, so a 404 shows the gate admitted the request.
 """
 
-import sqlite3
-from contextlib import closing
-from datetime import timedelta
+from datetime import datetime, timedelta
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine, text
 from webauth.ports import AccountEvent, AccountEventKind
 
 from tests.support.lobby import A_BROWSERS_ADDRESS
@@ -24,8 +22,8 @@ _OTHER_CLIENT = "another-client"
 
 
 @pytest.fixture
-def scene(tmp_path: Path) -> Scene:
-    return a_scene(tmp_path, token_clients=frozenset({HAL}))
+def scene(engine: Engine) -> Scene:
+    return a_scene(engine, token_clients=frozenset({HAL}))
 
 
 def a_token_client(
@@ -57,9 +55,11 @@ def bearer(
     return {"authorization": f"Bearer {minted}", "accept": "application/json"}
 
 
-def stored_expiries(scene: Scene) -> list[str]:
-    with closing(sqlite3.connect(scene.database)) as connection:
-        return [row[0] for row in connection.execute("SELECT expires_at FROM sessions")]
+def stored_expiries(scene: Scene) -> list[datetime]:
+    with scene.engine.connect() as connection:
+        return list(
+            connection.execute(text("SELECT expires_at FROM sessions")).scalars()
+        )
 
 
 def kinds(scene: Scene) -> list[AccountEventKind]:
@@ -275,9 +275,9 @@ def test_a_page_is_not_reachable_by_token(scene: Scene) -> None:
     assert scene.count("users") == 0
 
 
-def test_without_a_named_client_a_token_is_a_signed_out_call(tmp_path: Path) -> None:
+def test_without_a_named_client_a_token_is_a_signed_out_call(engine: Engine) -> None:
     """PE28: no gate stands, so the answer is a signed-out 401 with no challenge."""
-    bare = a_scene(tmp_path)
+    bare = a_scene(engine)
 
     answer = a_token_client(bare).get(_UNSERVED, headers=bearer(bare))
 

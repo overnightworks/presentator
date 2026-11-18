@@ -1,36 +1,17 @@
-"""Two people's rows over real SQLite and real mirror and build directories."""
+"""Two people's rows through the stores, beside real mirror and build directories."""
 
-import json
-import sqlite3
-from collections.abc import Callable, Sequence
-from contextlib import closing
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import NamedTuple, Protocol
+from typing import Protocol
 
 from pydantic import SecretStr
 from webauth.ports import SessionRecordStore
 
-from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.builds import HostToolchain, SlidevBuilds
-from presentator.adapters.deck_store import SqliteDeckStore
-from presentator.adapters.decks import (
-    MirroredDeckFolders,
-    SourceMirrors,
-    SqliteSourceRunStore,
-    SqliteSourceStore,
-)
-from presentator.adapters.identity import (
-    ProcessWriteLock,
-    SqliteIdentityWrites,
-    SqliteSessionRecordStore,
-    TokenIdentifierFactory,
-    create_identity_tables,
-)
-from presentator.adapters.preferences import SqlitePersonPreferencesStore
-from presentator.adapters.schema import create_tables
-from presentator.adapters.secrets import TokenWebhookSecrets, secret_box
+from presentator.adapters.decks import MirroredDeckFolders, SourceMirrors
+from presentator.adapters.secrets import TokenWebhookSecrets
 from presentator.application.decks import Decks
 from presentator.application.people import People
 from presentator.contracts.decks import (
@@ -47,10 +28,6 @@ from presentator.ports.decks import DeckStore, DeployKeyDrafts, SourceRuns, Sour
 from presentator.ports.identity import PersonAccounts, PersonSessions
 from presentator.ports.preferences import PersonPreferencesStore
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
-from tests.presentator.adapters.support.key_draft_support import (
-    INSTANCE_KEY,
-    a_key_drafts_store,
-)
 from tests.presentator.application.support.fakes import (
     THE_TOOLCHAIN,
     FakeConnectionChecker,
@@ -58,9 +35,8 @@ from tests.presentator.application.support.fakes import (
     FakeToolchainThemes,
     FrozenClock,
 )
-from tests.support.people import a_session_id, seed_user
+from tests.support.people import a_session_id
 
-_ACCOUNTS = "users"
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
 THE_PERSON = User(id="the-person", username="pia", role=Role.ADMIN)
 ANOTHER = User(id="another-person", username="ben", role=Role.USER)
@@ -86,13 +62,6 @@ class Directories:
         return self.kept_by[owner.id][2]
 
 
-@dataclass
-class Instance(Directories):
-    """A SQLite file and the directories beside it, holding two people's rows."""
-
-    database: Path
-
-
 class SessionStore(SessionRecordStore, PersonSessions, Protocol):
     """A session store as the seeding writes it and the erasure reads it."""
 
@@ -109,23 +78,6 @@ class Stores:
     accounts: PersonAccounts
     sessions: SessionStore
     preferences: PersonPreferencesStore
-
-
-def _stores_over(database: Path) -> Stores:
-    return Stores(
-        seed_user=lambda person: seed_user(database, person),
-        sources=SqliteSourceStore(
-            database=database,
-            identifiers=TokenIdentifierFactory(),
-            box=secret_box(INSTANCE_KEY),
-        ),
-        decks=SqliteDeckStore(database=database),
-        runs=SqliteSourceRunStore(database=database),
-        key_drafts=a_key_drafts_store(database),
-        accounts=SqliteIdentityWrites(database, ProcessWriteLock(), LoggingAuditSink()),
-        sessions=SqliteSessionRecordStore(database),
-        preferences=SqlitePersonPreferencesStore(database),
-    )
 
 
 def _seed_person(
@@ -264,232 +216,3 @@ def directories_with_both_people(stores: Stores, tmp_path: Path) -> Directories:
         ),
         kept_by=kept_by,
     )
-
-
-def an_instance_with_both_people(tmp_path: Path) -> Instance:
-    """Both people's rows in a SQLite file, and the directories beside it."""
-    database = tmp_path / "presentator.sqlite3"
-    create_tables(database)
-    around = directories_with_both_people(_stores_over(database), tmp_path)
-    return Instance(
-        database=database,
-        mirrors=around.mirrors,
-        builds=around.builds,
-        decks=around.decks,
-        people=around.people,
-        kept_by=around.kept_by,
-    )
-
-
-# Finding, by the schema's own foreign keys, every row a person owns.
-
-
-def tables(connection: sqlite3.Connection) -> list[str]:
-    return [
-        name
-        for (name,) in connection.execute(
-            "SELECT name FROM sqlite_master"
-            " WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
-        )
-    ]
-
-
-def tables_reaching_accounts(connection: sqlite3.Connection) -> set[str]:
-    """Every table that references `users`, or names a `user_id` or `owner_id`."""
-    references = {
-        table: {
-            row[2] for row in connection.execute(f'PRAGMA foreign_key_list("{table}")')
-        }
-        for table in tables(connection)
-    }
-    reached = {_ACCOUNTS} | {
-        table
-        for table in references
-        if {"user_id", "owner_id"}
-        & {row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')}
-    }
-    grew = True
-    while grew:
-        grew = False
-        for table, targets in references.items():
-            if table not in reached and targets & reached:
-                reached.add(table)
-                grew = True
-    return reached
-
-
-def owned_row_ids(
-    connection: sqlite3.Connection, person_id: str
-) -> dict[str, set[int]]:
-    """Per table that reaches `users`, the rowids the person owns, parents first.
-
-    Taken before an erasure, these name rows that stay findable after their
-    parents are gone, so an orphan is still counted.
-    """
-    reaching = tables_reaching_accounts(connection)
-    owned: dict[str, set[int]] = {table: set() for table in reaching}
-    owned[_ACCOUNTS] = {
-        row[0]
-        for row in connection.execute(
-            "SELECT rowid FROM users WHERE id = ?",
-            (person_id,),
-        )
-    }
-    grew = True
-    while grew:
-        grew = False
-        for table in reaching - {_ACCOUNTS}:
-            for foreign_key in _foreign_keys(connection, table):
-                parent = foreign_key.parent
-                if parent not in reaching:
-                    continue
-                found = _rows_following(connection, table, foreign_key, owned[parent])
-                if not found <= owned[table]:
-                    owned[table] |= found
-                    grew = True
-    return owned
-
-
-def rows_still_there(
-    connection: sqlite3.Connection, owned: dict[str, set[int]]
-) -> dict[str, int]:
-    """Per table, how many of the previously owned rowids still exist."""
-    return {
-        table: connection.execute(
-            _COUNT_OF_ROWIDS.format(table=table), (json.dumps(sorted(ids)),)
-        ).fetchone()[0]
-        for table, ids in owned.items()
-    }
-
-
-class ForeignKey(NamedTuple):
-    """The columns of `PRAGMA foreign_key_list` the guard reads.
-
-    The pragma answers eight columns; `target` is NULL when the reference is
-    written without naming a column, which then means the parent's primary key.
-    """
-
-    parent: str
-    source: str
-    target: str | None
-
-
-def _foreign_keys(connection: sqlite3.Connection, table: str) -> list[ForeignKey]:
-    return [
-        ForeignKey(parent=row[2], source=row[3], target=row[4])
-        for row in connection.execute(f'PRAGMA foreign_key_list("{table}")')
-    ]
-
-
-_COUNT_OF_ROWIDS = (
-    'SELECT COUNT(*) FROM "{table}" WHERE rowid IN (SELECT value FROM json_each(?))'
-)
-_ROWS_FOLLOWING = (
-    'SELECT rowid FROM "{table}" WHERE "{child}" IN'
-    ' (SELECT "{key}" FROM "{parent}" WHERE rowid IN (SELECT value FROM json_each(?)))'
-)
-
-
-def _rows_following(
-    connection: sqlite3.Connection,
-    table: str,
-    foreign_key: ForeignKey,
-    parent_rowids: set[int],
-) -> set[int]:
-    if foreign_key.target is None:
-        message = (
-            f"{table}.{foreign_key.source} references {foreign_key.parent} without"
-            " naming a column, which the guard cannot follow"
-        )
-        raise ValueError(message)
-    query = _ROWS_FOLLOWING.format(
-        table=table,
-        child=foreign_key.source,
-        key=foreign_key.target,
-        parent=foreign_key.parent,
-    )
-    return {
-        row[0]
-        for row in connection.execute(query, (json.dumps(sorted(parent_rowids)),))
-    }
-
-
-def owned_by(database: Path, person: User) -> dict[str, set[int]]:
-    """Per table the guard finds, the rows the person owns, parents first."""
-    with closing(sqlite3.connect(database)) as connection:
-        return owned_row_ids(connection, person.id)
-
-
-def still_there(database: Path, owned: dict[str, set[int]]) -> dict[str, int]:
-    with closing(sqlite3.connect(database)) as connection:
-        return rows_still_there(connection, owned)
-
-
-_INSTANCE_SETTINGS_BEFORE_THE_THEME_WENT = """
-CREATE TABLE instance_settings (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    name TEXT NOT NULL,
-    language_tag TEXT NOT NULL,
-    theme TEXT NOT NULL
-)
-"""
-_PERSON_PREFERENCES_BEFORE_THE_LANGUAGE_WENT = """
-CREATE TABLE person_preferences (
-    user_id TEXT PRIMARY KEY REFERENCES users(id),
-    language_tag TEXT,
-    theme TEXT
-)
-"""
-
-
-def a_file_where_people_chose_a_language(
-    directory: Path,
-    chosen: Sequence[tuple[str, str | None, str | None]],
-    *,
-    instance: tuple[str, str, str] = ("Heim", "en", "dark"),
-) -> Path:
-    """A file as the release before made it.
-
-    A person's row is (user id, language, theme); the instance row is (name,
-    language, theme) and the file has it, as every file does once an admin saved.
-    """
-    database = directory / "presentator.sqlite3"
-    create_identity_tables(database)
-    with closing(sqlite3.connect(database)) as connection, connection:
-        connection.execute(_INSTANCE_SETTINGS_BEFORE_THE_THEME_WENT)
-        connection.execute(
-            "INSERT INTO instance_settings (id, name, language_tag, theme)"
-            " VALUES (1, ?, ?, ?)",
-            instance,
-        )
-        connection.execute(_PERSON_PREFERENCES_BEFORE_THE_LANGUAGE_WENT)
-        connection.executemany(
-            "INSERT INTO person_preferences (user_id, language_tag, theme)"
-            " VALUES (?, ?, ?)",
-            chosen,
-        )
-    return database
-
-
-_INSTANCE_SETTINGS_BEFORE_THE_LANGUAGE_WENT = """
-CREATE TABLE instance_settings (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    name TEXT NOT NULL,
-    language_tag TEXT NOT NULL
-)
-"""
-
-
-def a_file_where_the_instance_still_had_a_language(
-    directory: Path, *, name: str, language: str
-) -> Path:
-    """A file as the release before the instance language went made it."""
-    database = directory / "presentator.sqlite3"
-    create_identity_tables(database)
-    with closing(sqlite3.connect(database)) as connection, connection:
-        connection.execute(_INSTANCE_SETTINGS_BEFORE_THE_LANGUAGE_WENT)
-        connection.execute(
-            "INSERT INTO instance_settings (id, name, language_tag) VALUES (1, ?, ?)",
-            (name, language),
-        )
-    return database

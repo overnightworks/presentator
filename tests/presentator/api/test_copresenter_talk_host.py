@@ -8,6 +8,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
+from sqlalchemy import Engine
 from starlette.websockets import WebSocketDisconnect
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
@@ -37,8 +38,6 @@ from tests.support.lobby import (
 from tests.support.talk_support import A_DECK, MEMBER, A, Hosts, two_hosts
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from fastapi.testclient import TestClient
 
 _JSON = {"accept": "application/json"}
@@ -174,9 +173,9 @@ def test_the_lobbys_session_cookie_does_not_sign_in_at_the_talk_host() -> None:
     assert private.speech.readiness_calls == 0
 
 
-def test_a_sign_in_at_the_talk_host_sets_no_csrf_cookie(tmp_path: Path) -> None:
+def test_a_sign_in_at_the_talk_host_sets_no_csrf_cookie(engine: Engine) -> None:
     """The session cookie is set and no cookie named csrf is."""
-    hosts = two_hosts(tmp_path)
+    hosts = two_hosts(engine)
 
     returned = hosts.sign_in(hosts.browser(A_TALK_ADDRESS), A_TALK_ADDRESS)
 
@@ -201,7 +200,7 @@ def test_an_admin_demoted_while_signed_in_is_still_answered() -> None:
 
 
 def _talk_host_with_a_signed_in_admin(
-    tmp_path: Path, deadline: ManualDeadline | None = None
+    engine: Engine, deadline: ManualDeadline | None = None
 ) -> tuple[Hosts, TestClient, PrivateFakes]:
     private = PrivateFakes()
     surface = CoPresenterSurface(
@@ -211,7 +210,7 @@ def _talk_host_with_a_signed_in_admin(
         deadline_seconds=AN_ANSWER_DEADLINE_SECONDS,
         delay=asyncio.sleep if deadline is None else deadline.wait,
     )
-    hosts = two_hosts(tmp_path, copresenter=lambda _store, _sessions, _auth: surface)
+    hosts = two_hosts(engine, copresenter=lambda _store, _sessions, _auth: surface)
     return hosts, hosts.signed_in_at(A_TALK_ADDRESS), private
 
 
@@ -223,10 +222,10 @@ def _demote_at_the_lobby(hosts: Hosts) -> None:
 
 # DK11
 def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_deck_and_who(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """A role change does not end the deck or who."""
-    hosts, talk, private = _talk_host_with_a_signed_in_admin(tmp_path)
+    hosts, talk, private = _talk_host_with_a_signed_in_admin(engine)
     _demote_at_the_lobby(hosts)
 
     deck = talk.get(f"/deck/{A_DECK}/")
@@ -238,11 +237,11 @@ def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_deck_and_who(
 
 
 def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_running_hearing(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     """CP4: a role change does not end a running hearing."""
     deadline = ManualDeadline()
-    hosts, talk, private = _talk_host_with_a_signed_in_admin(tmp_path, deadline)
+    hosts, talk, private = _talk_host_with_a_signed_in_admin(engine, deadline)
 
     with talk.websocket_connect(HEARING, headers={"origin": TALK_ORIGIN}) as socket:
         assert deadline.started.wait(timeout=1)
@@ -267,9 +266,9 @@ def test_a_lobby_sign_in_that_demotes_the_admin_keeps_the_running_hearing(
     ],
 )
 def test_a_signed_out_request_for_a_talk_is_sent_to_sign_in_or_refused(
-    tmp_path: Path, accept: str, status: HTTPStatus
+    engine: Engine, accept: str, status: HTTPStatus
 ) -> None:
-    hosts: Hosts = two_hosts(tmp_path)
+    hosts: Hosts = two_hosts(engine)
     browser = hosts.browser(A_TALK_ADDRESS, headers={"accept": accept})
 
     answer = browser.get(f"/deck/{A_DECK}/")

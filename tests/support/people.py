@@ -1,20 +1,21 @@
-"""Who may sign in, written straight into a database file.
+"""Who may sign in, written straight into a database.
 
-Nothing in the product creates a person yet, so the adapter tests that need an
-owner or a session holder put the row there themselves.
+Nothing in the product creates a person yet, so the tests that need an owner or
+a session holder put the row there themselves.
 """
 
-import shutil
-import sqlite3
 import uuid
-from collections.abc import Callable
-from contextlib import closing
-from pathlib import Path
 
+from sqlalchemy import Engine, text
 from webauth.ports import AccountKind
 
-from presentator.adapters.sqlite import rows
 from presentator.contracts.models import User
+
+_SEED_USER = text(
+    "INSERT INTO users (id, username, role, kind)"
+    " VALUES (:id, :username, :role, :kind)"
+    " ON CONFLICT DO NOTHING"
+)
 
 
 def a_session_id() -> str:
@@ -22,40 +23,15 @@ def a_session_id() -> str:
     return uuid.uuid4().hex
 
 
-def seed_user(database: Path, person: User) -> None:
-    with rows(database) as cursor:
-        cursor.execute(
-            "INSERT OR IGNORE INTO users (id, username, role, kind)"
-            " VALUES (?, ?, ?, ?)",
-            (
-                person.id,
-                person.username,
-                person.role.value,
-                AccountKind.PERSON.value,
-            ),
+def seed_user(engine: Engine, person: User) -> None:
+    """Write the person's account row, leaving one that stands alone."""
+    with engine.begin() as connection:
+        connection.execute(
+            _SEED_USER,
+            {
+                "id": person.id,
+                "username": person.username,
+                "role": person.role.value,
+                "kind": AccountKind.PERSON.value,
+            },
         )
-
-
-def copy_of_a_crashed_database(
-    destination: Path,
-    committed_only_in_the_log: Callable[[Path], None],
-) -> Path:
-    """A file whose last committed writes sit only in its -wal.
-
-    The copy is taken while the writer is still open, so the crash it stands
-    for never reached the final checkpoint.
-    """
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    original = destination.parent / "original" / destination.name
-    original.parent.mkdir()
-    with closing(sqlite3.connect(original)) as writer:
-        writer.execute("PRAGMA journal_mode=WAL")
-        writer.execute("PRAGMA wal_autocheckpoint=0")
-        writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        committed_only_in_the_log(original)
-        for suffix in ("", "-wal"):
-            shutil.copyfile(
-                original.with_name(original.name + suffix),
-                destination.with_name(destination.name + suffix),
-            )
-    return destination

@@ -7,9 +7,8 @@ import copy
 import json
 import logging
 import re
-import sqlite3
 import threading
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, cast
 from urllib.parse import urlsplit
@@ -18,6 +17,7 @@ from agents.backend.fake_gateway import FakeGateway, completion
 from logline import REQUEST_EVENT
 from logline.testing import configured
 from speech_client.outcomes import PastDeadline
+from sqlalchemy import text
 from starlette.websockets import WebSocketDisconnect
 
 from presentator.adapters.sentences import split_sentences
@@ -101,13 +101,13 @@ if TYPE_CHECKING:
         Mapping,
         Sequence,
     )
-    from pathlib import Path
 
     from fastapi.testclient import TestClient
     from httpx2 import Response
+    from sqlalchemy import Engine
     from starlette.types import Message, Scope
 
-    from presentator.adapters.identity import SqliteSessionRecordStore
+    from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
     from presentator.api.auth import InstalledAuth
     from presentator.contracts.copresenter import CoPresenterReadiness
     from presentator.ports.copresenter import HearingSocket, Speaking
@@ -279,13 +279,13 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
     errors: list[BaseException],
     speech_scope: str,
 ) -> Callable[
-    [FakeDeckStore, SqliteSessionRecordStore, InstalledAuth], CoPresenterSurface
+    [FakeDeckStore, PostgresSessionRecordStore, InstalledAuth], CoPresenterSurface
 ]:
     """The talk host's surface over the real speech adapters and session access."""
     hearing, speaking = adapters
 
     def surface(
-        store: FakeDeckStore, sessions: SqliteSessionRecordStore, auth: InstalledAuth
+        store: FakeDeckStore, sessions: PostgresSessionRecordStore, auth: InstalledAuth
     ) -> CoPresenterSurface:
         return CoPresenterSurface(
             use=CoPresenterUse(
@@ -322,7 +322,7 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
 
 @contextmanager
 def a_speech_instance(
-    tmp_path: Path, scenario: SpeechScenario | None = None
+    engine: Engine, scenario: SpeechScenario | None = None
 ) -> Generator[SpeechInstance]:
     """Sign an admin in at the talk host, over the fake service, for the block."""
     scenario = scenario or SpeechScenario()
@@ -333,7 +333,7 @@ def a_speech_instance(
     serving = scenario.peer or (lambda: a_loopback_server(scenario.service.app()))
     with a_served_origin(serving) as origin:
         hosts = two_hosts(
-            tmp_path,
+            engine,
             copresenter=a_surface_over(
                 _real_speech_adapters(origin, scenario),
                 gateway=gateway,
@@ -495,10 +495,11 @@ def _assert_the_body_keeps_the_answer_to_its_events(
 
 def stored_session_rows(hosts: Hosts) -> list[dict[str, object]]:
     """Every stored session row, by column name."""
-    with closing(sqlite3.connect(hosts.database)) as connection:
-        cursor = connection.execute("SELECT * FROM sessions")
-        names = [column[0] for column in cursor.description]
-        return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+    with hosts.database.connect() as connection:
+        return [
+            dict(row)
+            for row in connection.execute(text("SELECT * FROM sessions")).mappings()
+        ]
 
 
 def _assert_rows_keep_only_their_own_values(

@@ -1,7 +1,6 @@
 """`/api/account` and `/api/settings` read and write the choices as data."""
 
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from fastapi.openapi.utils import (
@@ -10,6 +9,7 @@ from fastapi.openapi.utils import (
 )
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from sqlalchemy import Engine
 
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
 from presentator.contracts.preferences import InstanceSettings, ThemeChoice
@@ -344,8 +344,8 @@ def test_a_cross_site_account_write_is_refused_too() -> None:
 
 
 @pytest.fixture
-def scene(tmp_path: Path) -> Scene:
-    return a_scene(tmp_path, token_clients=frozenset({_HAL}))
+def scene(engine: Engine) -> Scene:
+    return a_scene(engine, token_clients=frozenset({_HAL}))
 
 
 def a_bearer(scene: Scene, *, subject: str, groups: list[str]) -> dict[str, str]:

@@ -2,7 +2,6 @@
 
 from collections.abc import Iterator
 from http import HTTPStatus
-from pathlib import Path
 from typing import cast
 
 from fastapi.openapi.utils import (
@@ -10,6 +9,7 @@ from fastapi.openapi.utils import (
     validation_error_response_definition,
 )
 from httpx2 import Response
+from sqlalchemy import Engine
 
 from presentator.contracts.preferences import ThemeChoice
 from tests.support.lobby import NEIGHBOUR, Lobby, a_lobby
@@ -97,9 +97,9 @@ def test_a_body_that_is_not_json_is_answered_without_a_word_of_it() -> None:
 
 
 def test_an_admin_route_answers_a_bad_query_without_the_value(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    scene: Scene = a_scene(tmp_path, token_clients=frozenset({_HAL}))
+    scene: Scene = a_scene(engine, token_clients=frozenset({_HAL}))
     minted = scene.issuer.mint_access_token(
         subject="a-person", groups=ADMIN, authorized_party=_HAL, audience=None
     )

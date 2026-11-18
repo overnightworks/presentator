@@ -7,6 +7,7 @@ from urllib.parse import quote
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine
 
 from presentator.contracts.words import SOURCE_LANGUAGE, text
 from tests.support.deck_page_support import (
@@ -31,10 +32,12 @@ _PRESENTER: Final = f"/deck/{_SLUG}/presenter/"
 _ADDRESS: Final = "git@heimserver:decks.git"
 
 
-def _talk_host_on_a_built_deck(tmp_path: Path) -> tuple[TestClient, Path]:
+def _talk_host_on_a_built_deck(
+    engine: Engine, tmp_path: Path
+) -> tuple[TestClient, Path]:
     """A browser signed in at the talk host of a built deck, and its run directory."""
     given, run = a_swapped_build(tmp_path, slug=_SLUG)
-    return two_hosts(tmp_path, given=given).signed_in_at(A_TALK_ADDRESS), run
+    return two_hosts(engine, given=given).signed_in_at(A_TALK_ADDRESS), run
 
 
 def a_build_next_to_a_secret(tmp_path: Path) -> Path:
@@ -55,11 +58,12 @@ def a_build_next_to_a_secret(tmp_path: Path) -> Path:
     ids=["latin-1", "outside latin-1", "a currency sign"],
 )
 def test_the_download_of_a_deck_with_a_unicode_name_is_saved_under_that_name(
+    engine: Engine,
     tmp_path: Path,
     slug: str,
 ) -> None:
     given, _ = a_swapped_build(tmp_path, slug=slug)
-    lobby = two_hosts(tmp_path, given=given).signed_in_at(A_BROWSERS_ADDRESS)
+    lobby = two_hosts(engine, given=given).signed_in_at(A_BROWSERS_ADDRESS)
 
     download = lobby.get(f"/deck/{quote(slug)}/pdf")
 
@@ -70,8 +74,10 @@ def test_the_download_of_a_deck_with_a_unicode_name_is_saved_under_that_name(
     )
 
 
-def test_a_file_of_no_known_type_is_delivered_as_bytes(tmp_path: Path) -> None:
-    signed_in, run = _talk_host_on_a_built_deck(tmp_path)
+def test_a_file_of_no_known_type_is_delivered_as_bytes(
+    engine: Engine, tmp_path: Path
+) -> None:
+    signed_in, run = _talk_host_on_a_built_deck(engine, tmp_path)
     (run / "talk" / "assets" / "blob").write_bytes(b"\x00\x01")
 
     blob = signed_in.get(f"{_PROJECTOR}assets/blob")
@@ -79,8 +85,10 @@ def test_a_file_of_no_known_type_is_delivered_as_bytes(tmp_path: Path) -> None:
     assert blob.headers["content-type"] == "application/octet-stream"
 
 
-def test_a_range_of_a_file_is_answered_with_only_that_range(tmp_path: Path) -> None:
-    signed_in, _ = _talk_host_on_a_built_deck(tmp_path)
+def test_a_range_of_a_file_is_answered_with_only_that_range(
+    engine: Engine, tmp_path: Path
+) -> None:
+    signed_in, _ = _talk_host_on_a_built_deck(engine, tmp_path)
 
     part = signed_in.get(f"{_PROJECTOR}assets/app.js", headers={"range": "bytes=0-6"})
 
@@ -89,8 +97,8 @@ def test_a_range_of_a_file_is_answered_with_only_that_range(tmp_path: Path) -> N
     assert part.headers["content-range"] == "bytes 0-6/14"
 
 
-def test_a_range_beyond_a_file_is_refused(tmp_path: Path) -> None:
-    signed_in, _ = _talk_host_on_a_built_deck(tmp_path)
+def test_a_range_beyond_a_file_is_refused(engine: Engine, tmp_path: Path) -> None:
+    signed_in, _ = _talk_host_on_a_built_deck(engine, tmp_path)
 
     refused = signed_in.get(
         f"{_PROJECTOR}assets/app.js",
@@ -100,8 +108,10 @@ def test_a_range_beyond_a_file_is_refused(tmp_path: Path) -> None:
     assert refused.status_code == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE
 
 
-def test_an_unchanged_file_is_answered_as_not_modified(tmp_path: Path) -> None:
-    signed_in, _ = _talk_host_on_a_built_deck(tmp_path)
+def test_an_unchanged_file_is_answered_as_not_modified(
+    engine: Engine, tmp_path: Path
+) -> None:
+    signed_in, _ = _talk_host_on_a_built_deck(engine, tmp_path)
     address = f"{_PROJECTOR}assets/app.js"
     etag = signed_in.get(address).headers["etag"]
 
@@ -112,10 +122,11 @@ def test_an_unchanged_file_is_answered_as_not_modified(tmp_path: Path) -> None:
 
 
 def test_a_head_request_to_an_asset_answers_its_headers_without_its_body(
+    engine: Engine,
     tmp_path: Path,
 ) -> None:
     address = f"{_PROJECTOR}assets/app.js"
-    signed_in, _ = _talk_host_on_a_built_deck(tmp_path)
+    signed_in, _ = _talk_host_on_a_built_deck(engine, tmp_path)
     full = signed_in.get(address)
 
     head = signed_in.head(address)
@@ -144,11 +155,12 @@ def _a_built_deck() -> GivenDecks:
     ids=["encoded dots", "encoded separator", "out of the tree", "symlink"],
 )
 def test_a_path_that_would_leave_the_build_directory_is_refused(
+    engine: Engine,
     tmp_path: Path,
     crafted: str,
 ) -> None:
     signed_in = a_talk_host(
-        tmp_path,
+        engine,
         GivenDecks(
             store=a_deck_store(built=a_build(talk=a_build_next_to_a_secret(tmp_path))),
             source=a_configured_source(_ADDRESS),
@@ -162,10 +174,11 @@ def test_a_path_that_would_leave_the_build_directory_is_refused(
 
 
 def test_the_talk_itself_is_still_served_from_inside_that_directory(
+    engine: Engine,
     tmp_path: Path,
 ) -> None:
     signed_in = a_talk_host(
-        tmp_path,
+        engine,
         GivenDecks(
             store=a_deck_store(built=a_build(talk=a_build_next_to_a_secret(tmp_path))),
             source=a_configured_source(_ADDRESS),
@@ -176,9 +189,9 @@ def test_the_talk_itself_is_still_served_from_inside_that_directory(
 
 
 def test_a_nonsense_address_under_a_built_talk_is_the_application(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    talk_host = a_talk_host(tmp_path, _a_built_deck())
+    talk_host = a_talk_host(engine, _a_built_deck())
     application = (BUILT_TALK / "index.html").read_bytes()
     nonsense = talk_host.get(f"{_PROJECTOR}this-slide-was-never-written")
 
@@ -187,8 +200,8 @@ def test_a_nonsense_address_under_a_built_talk_is_the_application(
     assert text(SOURCE_LANGUAGE, "deck.unknownTitle") not in nonsense.text
 
 
-def test_a_talk_refuses_a_method_that_is_not_a_read(tmp_path: Path) -> None:
-    talk_host = a_talk_host(tmp_path, _a_built_deck())
+def test_a_talk_refuses_a_method_that_is_not_a_read(engine: Engine) -> None:
+    talk_host = a_talk_host(engine, _a_built_deck())
 
     refused = talk_host.put(_PRESENTER, headers={"sec-fetch-site": "same-origin"})
 
@@ -201,6 +214,7 @@ def test_a_talk_refuses_a_method_that_is_not_a_read(tmp_path: Path) -> None:
     ids=["projector", "presenter", "a missing route"],
 )
 def test_a_talk_with_an_application_link_outside_its_build_answers_nothing(
+    engine: Engine,
     tmp_path: Path,
     address: str,
 ) -> None:
@@ -211,7 +225,7 @@ def test_a_talk_with_an_application_link_outside_its_build_answers_nothing(
     talk.mkdir()
     (talk / "index.html").symlink_to(outside)
     signed_in = a_talk_host(
-        tmp_path,
+        engine,
         GivenDecks(
             store=a_deck_store(built=a_build(talk=talk)),
             source=a_configured_source(_ADDRESS),
@@ -226,13 +240,14 @@ def test_a_talk_with_an_application_link_outside_its_build_answers_nothing(
 
 
 def test_a_missing_path_under_a_talk_with_no_application_answers_nothing(
+    engine: Engine,
     tmp_path: Path,
 ) -> None:
     talk = tmp_path / "talk"
     talk.mkdir()
     (talk / "notes.txt").write_text("not an application", encoding="utf-8")
     signed_in = a_talk_host(
-        tmp_path,
+        engine,
         GivenDecks(
             store=a_deck_store(built=a_build(talk=talk)),
             source=a_configured_source(_ADDRESS),

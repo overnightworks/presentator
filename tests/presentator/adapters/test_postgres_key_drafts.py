@@ -2,12 +2,10 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from threading import Barrier
 
-from presentator.adapters.decks import create_deck_tables
-from presentator.adapters.identity import create_identity_tables
-from presentator.adapters.sqlite import rows
+from sqlalchemy import Engine
+
 from presentator.contracts.decks import DeployKeyDraft
 from presentator.contracts.models import Role, User
 from tests.presentator.adapters.support.key_draft_support import a_key_drafts_store
@@ -16,21 +14,20 @@ from tests.support.people import seed_user
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _NOTICED_GONE_AT = datetime(2026, 1, 20, 9, tzinfo=UTC)
 _OWNER = User(id="the-admin", username="felix", role=Role.ADMIN)
+_ANOTHER_ADMIN = User(id="another-admin-entirely", username="anna", role=Role.ADMIN)
 
 
-def an_instance_that_was_set_up(tmp_path: Path) -> Path:
-    """A database with every table and the admin first start created."""
-    database = tmp_path / "presentator.sqlite3"
-    create_identity_tables(database)
-    create_deck_tables(database)
-    seed_user(database, _OWNER)
-    return database
+def an_instance_that_was_set_up(engine: Engine) -> Engine:
+    """A migrated database holding the admin first start created and another."""
+    seed_user(engine, _OWNER)
+    seed_user(engine, _ANOTHER_ADMIN)
+    return engine
 
 
 def test_a_minted_draft_is_this_owners_own_and_reused_while_unconsumed(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     drafts = a_key_drafts_store(database)
 
     minted = drafts.mint(_OWNER.id, at=_PUSHED_AT)
@@ -42,8 +39,8 @@ def test_a_minted_draft_is_this_owners_own_and_reused_while_unconsumed(
     assert reused == minted
 
 
-def test_a_draft_older_than_the_asked_moment_is_not_unconsumed(tmp_path: Path) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+def test_a_draft_older_than_the_asked_moment_is_not_unconsumed(engine: Engine) -> None:
+    database = an_instance_that_was_set_up(engine)
     drafts = a_key_drafts_store(database)
     drafts.mint(_OWNER.id, at=_PUSHED_AT)
 
@@ -51,9 +48,9 @@ def test_a_draft_older_than_the_asked_moment_is_not_unconsumed(tmp_path: Path) -
 
 
 def test_opening_add_concurrently_reuses_one_draft_for_its_owner(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     concurrent_opens = 2
     start_together = Barrier(concurrent_opens + 1)
 
@@ -73,13 +70,15 @@ def test_opening_add_concurrently_reuses_one_draft_for_its_owner(
 
     assert len(opened) == concurrent_opens
     assert {draft.id for draft in opened} == {opened[0].id}
-    with rows(database) as cursor:
-        count = cursor.execute("SELECT COUNT(*) FROM source_key_drafts").fetchone()[0]
+    with database.connect() as connection:
+        count = connection.exec_driver_sql(
+            "SELECT COUNT(*) FROM source_key_drafts"
+        ).scalar_one()
     assert count == 1
 
 
-def test_binding_a_draft_by_its_owner_consumes_it(tmp_path: Path) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+def test_binding_a_draft_by_its_owner_consumes_it(engine: Engine) -> None:
+    database = an_instance_that_was_set_up(engine)
     drafts = a_key_drafts_store(database)
     minted = drafts.mint(_OWNER.id, at=_PUSHED_AT)
 
@@ -90,25 +89,25 @@ def test_binding_a_draft_by_its_owner_consumes_it(tmp_path: Path) -> None:
     assert drafts.unconsumed_for(_OWNER.id, newer_than=_PUSHED_AT) is None
 
 
-def test_binding_a_draft_another_owner_minted_is_refused(tmp_path: Path) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+def test_binding_a_draft_another_owner_minted_is_refused(engine: Engine) -> None:
+    database = an_instance_that_was_set_up(engine)
     drafts = a_key_drafts_store(database)
-    minted = drafts.mint("another-admin-entirely", at=_PUSHED_AT)
+    minted = drafts.mint(_ANOTHER_ADMIN.id, at=_PUSHED_AT)
 
     assert drafts.bind(minted.id, owner_id=_OWNER.id) is None
     # Refused, not consumed: its own owner can still bind it.
-    assert drafts.bind(minted.id, owner_id="another-admin-entirely") == minted
+    assert drafts.bind(minted.id, owner_id=_ANOTHER_ADMIN.id) == minted
 
 
 def test_sweeping_deletes_only_drafts_older_than_the_given_moment(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    database = an_instance_that_was_set_up(tmp_path)
+    database = an_instance_that_was_set_up(engine)
     drafts = a_key_drafts_store(database)
     stale = drafts.mint(_OWNER.id, at=_PUSHED_AT)
-    fresh = drafts.mint("another-admin-entirely", at=_NOTICED_GONE_AT)
+    fresh = drafts.mint(_ANOTHER_ADMIN.id, at=_NOTICED_GONE_AT)
 
     drafts.sweep(older_than=_NOTICED_GONE_AT)
 
     assert drafts.bind(stale.id, owner_id=_OWNER.id) is None
-    assert drafts.bind(fresh.id, owner_id="another-admin-entirely") == fresh
+    assert drafts.bind(fresh.id, owner_id=_ANOTHER_ADMIN.id) == fresh

@@ -1,31 +1,33 @@
 """Two people's rows over real Postgres and real mirror and build directories."""
 
-from collections.abc import Callable, Generator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import NamedTuple
 
 from sqlalchemy import Connection, Engine, text
-from webauth.ports import AccountKind
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.identity import TokenIdentifierFactory
 from presentator.adapters.postgres.deck_store import PostgresDeckStore
-from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
 from presentator.adapters.postgres.preferences import PostgresPersonPreferencesStore
 from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
 from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
-from presentator.contracts.models import User
-from tests.presentator.adapters.support.key_draft_support import INSTANCE_KEY
+from tests.presentator.adapters.support.key_draft_support import (
+    INSTANCE_KEY,
+    a_key_drafts_store,
+)
 from tests.presentator.adapters.support.person_instance_support import (
     Directories,
     Stores,
     directories_with_both_people,
 )
+from tests.support.people import seed_user
 from tests.support.postgres import NO_FENCE, engine_on
 
 _ACCOUNTS = "users"
@@ -38,29 +40,9 @@ class PostgresInstance(Directories):
     engine: Engine
 
 
-def _seed_user(engine: Engine) -> Callable[[User], None]:
-    def seed(person: User) -> None:
-        with engine.begin() as connection:
-            connection.execute(
-                text(
-                    "INSERT INTO users (id, username, role, kind)"
-                    " VALUES (:id, :username, :role, :kind)"
-                    " ON CONFLICT DO NOTHING"
-                ),
-                {
-                    "id": person.id,
-                    "username": person.username,
-                    "role": person.role.value,
-                    "kind": AccountKind.PERSON.value,
-                },
-            )
-
-    return seed
-
-
 def _stores_over(engine: Engine) -> Stores:
     return Stores(
-        seed_user=_seed_user(engine),
+        seed_user=partial(seed_user, engine),
         sources=PostgresSourceStore(
             engine=engine,
             identifiers=TokenIdentifierFactory(),
@@ -69,11 +51,7 @@ def _stores_over(engine: Engine) -> Stores:
         ),
         decks=PostgresDeckStore(engine=engine, fence=NO_FENCE),
         runs=PostgresSourceRunStore(engine=engine, fence=NO_FENCE),
-        key_drafts=PostgresSourceKeyDrafts(
-            engine=engine,
-            identifiers=TokenIdentifierFactory(),
-            box=secret_box(INSTANCE_KEY),
-        ),
+        key_drafts=a_key_drafts_store(engine),
         accounts=PostgresIdentityWrites(engine, LoggingAuditSink()),
         sessions=PostgresSessionRecordStore(engine),
         preferences=PostgresPersonPreferencesStore(engine),

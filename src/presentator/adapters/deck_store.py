@@ -1,13 +1,11 @@
-"""The deck table: a deck's row, its build and its last attempt."""
+"""The deck row: how its build, its last attempt and its toolchain read and write."""
 
-import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Final
 
-from presentator.adapters.sqlite import rows
 from presentator.contracts.decks import (
     Build,
     BuildAttempt,
@@ -18,48 +16,6 @@ from presentator.contracts.decks import (
     ToolchainIdentity,
 )
 
-_ONE_ROW: Final = 1
-
-# Nothing a build wrote is touched by this statement, on purpose: taking a deck
-# in again must not unpresent the talk that already stands, nor take away the
-# PDF that is already downloadable (line 16). Whether the row is marked removed
-# is left out too: that mark is `mark_removed_except`'s alone, cleared there
-# when the folder is carried again. The row is written only where it already
-# belongs to the source writing it, so a slug is never taken from its source.
-_PUT_DECK: Final = """
-INSERT INTO decks (slug, title, changed_at, owner_id, source_id, commit_sha)
-VALUES (?, ?, ?, ?, ?, ?)
-ON CONFLICT(slug) DO UPDATE SET
-    title = excluded.title,
-    changed_at = excluded.changed_at,
-    owner_id = excluded.owner_id,
-    commit_sha = excluded.commit_sha
-WHERE decks.source_id = excluded.source_id
-"""
-# One statement, so everything a build wrote moves at once: no reader can find
-# the talk of one commit beside the PDF or the build time of another. The
-# attempt goes in the same write, because a talk that stands has nothing left
-# to report about how it came about.
-_PUT_BUILD: Final = """
-UPDATE decks
-SET active_build = ?, pdf_export = ?, built_commit = ?, built_at = ?,
-    built_toolchain = ?, attempt_toolchain = NULL,
-    attempt_commit = NULL, attempt_started_at = NULL,
-    attempt_outcome = NULL, attempt_failure = NULL, attempt_reason = NULL,
-    attempt_written_megabytes = NULL, attempt_allowed_megabytes = NULL,
-    attempt_allowed_entries = NULL
-WHERE slug = ?
-"""
-# Nothing the build wrote is touched here: a run that begins, and a run that
-# failed, leave the talk that stands and its PDF where they are (line 16).
-_PUT_ATTEMPT: Final = """
-UPDATE decks
-SET attempt_commit = ?, attempt_started_at = ?,
-    attempt_outcome = ?, attempt_failure = ?, attempt_reason = ?,
-    attempt_written_megabytes = ?, attempt_allowed_megabytes = ?,
-    attempt_allowed_entries = ?, attempt_toolchain = ?
-WHERE slug = ?
-"""
 # The select every adapter reads a deck row by, in the order `DeckRow` holds.
 DECK_SELECT: Final = """
 SELECT slug, title, changed_at, owner_id, source_id, commit_sha,
@@ -69,29 +25,6 @@ SELECT slug, title, changed_at, owner_id, source_id, commit_sha,
        attempt_written_megabytes, attempt_allowed_megabytes,
        attempt_allowed_entries, built_toolchain, attempt_toolchain
 FROM decks
-"""
-_ALL_DECKS: Final = f"{DECK_SELECT} WHERE removed_at IS NULL"
-_ONE_DECK: Final = f"{_ALL_DECKS} AND slug = ?"
-# Every row this source ever carried, marked removed or not: a source going
-# away takes the decks it stopped carrying with it too, not only the ones
-# still listed.
-_DECKS_OF_SOURCE: Final = f"{DECK_SELECT} WHERE source_id = ?"
-_REMOVE_DECKS_OF_SOURCE: Final = "DELETE FROM decks WHERE source_id = ?"
-_MARK_REMOVED: Final = """
-UPDATE decks SET removed_at = ?
-WHERE removed_at IS NULL AND source_id = ?
-  AND slug NOT IN (SELECT value FROM json_each(?))
-"""
-# ISO text compares as the instants it spells, because every writer stamps
-# `removed_at` from the same UTC clock.
-_REMOVE_MARKED_BEFORE: Final = """
-DELETE FROM decks
-WHERE source_id = ? AND removed_at <= ?
-"""
-_UNMARK_CARRIED: Final = """
-UPDATE decks SET removed_at = NULL
-WHERE removed_at IS NOT NULL AND source_id = ?
-  AND slug IN (SELECT value FROM json_each(?))
 """
 # The deck row as an adapter hands it back: what the source carries, then what
 # the build wrote, then the attempt beside it. `Instant` is how that adapter
@@ -122,120 +55,6 @@ type DeckRow[Instant] = tuple[
 # The digest alone could not say which commit it vouches for, and an older
 # release that moves the built commit would leave it standing for the wrong one.
 _TOOLCHAIN_SEPARATOR: Final = ":"
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SqliteDeckStore:
-    """The deck table."""
-
-    database: Path
-
-    def put(self, deck: Deck) -> bool:
-        """Write the deck under its slug, so a re-pushed folder stays one deck.
-
-        A slug another source already carries is left alone, and the answer
-        says so: nothing was written.
-        """
-        with rows(self.database) as cursor:
-            written = cursor.execute(
-                _PUT_DECK,
-                (
-                    deck.slug,
-                    deck.title,
-                    deck.changed_at.isoformat(),
-                    deck.owner_id,
-                    deck.source_id,
-                    deck.commit,
-                ),
-            )
-            return written.rowcount == _ONE_ROW
-
-    def put_build(self, slug: str, build: Build) -> None:
-        """Switch everything the deck says about its talk over, in one write."""
-        with rows(self.database) as cursor:
-            cursor.execute(
-                _PUT_BUILD,
-                (
-                    str(build.directory),
-                    str(build.pdf),
-                    build.commit,
-                    build.built_at.isoformat(),
-                    toolchain_column(build.commit, build.toolchain),
-                    slug,
-                ),
-            )
-
-    def put_attempt(self, slug: str, attempt: BuildAttempt | None) -> None:
-        """Write down the build this deck last started, and how far it got."""
-        with rows(self.database) as cursor:
-            columns = attempt_columns(attempt)
-            cursor.execute(
-                _PUT_ATTEMPT,
-                (
-                    columns.commit,
-                    None
-                    if columns.started_at is None
-                    else columns.started_at.isoformat(),
-                    columns.outcome,
-                    columns.failure_text,
-                    columns.reason,
-                    columns.written_megabytes,
-                    columns.allowed_megabytes,
-                    columns.allowed_entries,
-                    columns.toolchain,
-                    slug,
-                ),
-            )
-
-    def get(self, slug: str) -> Deck | None:
-        """Read the one deck row that slug names, while its folder is still there."""
-        with rows(self.database) as cursor:
-            found = cursor.execute(_ONE_DECK, (slug,)).fetchone()
-        return None if found is None else _deck(found)
-
-    def mark_removed_except(
-        self,
-        present: frozenset[str],
-        *,
-        source_id: str,
-        at: datetime,
-    ) -> None:
-        """Mark that source's decks outside `present` removed, clear it inside."""
-        # A set is no bind parameter, so the folders the source carries travel
-        # as one JSON value rather than as SQL built per call.
-        carried = json.dumps(sorted(present))
-        with rows(self.database) as cursor:
-            cursor.execute(_MARK_REMOVED, (at.isoformat(), source_id, carried))
-            cursor.execute(_UNMARK_CARRIED, (source_id, carried))
-
-    def remove_marked_before(self, source_id: str, *, before: datetime) -> int:
-        """Delete that source's decks marked removed at or before `before`."""
-        with rows(self.database) as cursor:
-            removed = cursor.execute(
-                _REMOVE_MARKED_BEFORE, (source_id, before.isoformat())
-            )
-            return removed.rowcount
-
-    def all(self) -> tuple[Deck, ...]:
-        """Read every deck row whose folder is still at its source."""
-        with rows(self.database) as cursor:
-            found = cursor.execute(_ALL_DECKS).fetchall()
-        return tuple(_deck(row) for row in found)
-
-    def for_source(self, source_id: str) -> tuple[Deck, ...]:
-        """Read every deck row this source has ever carried, marked removed or not."""
-        with rows(self.database) as cursor:
-            found = cursor.execute(_DECKS_OF_SOURCE, (source_id,)).fetchall()
-        return tuple(_deck(row) for row in found)
-
-    def remove_for_source(self, source_id: str) -> None:
-        """Delete every deck row this source has ever carried, marked removed or not."""
-        with rows(self.database) as cursor:
-            cursor.execute(_REMOVE_DECKS_OF_SOURCE, (source_id,))
-
-
-def _deck(row: DeckRow[str]) -> Deck:
-    return stored_deck(row, read_instant=datetime.fromisoformat)
 
 
 def stored_deck[Instant](

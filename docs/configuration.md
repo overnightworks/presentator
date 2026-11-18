@@ -34,13 +34,11 @@ There is no `/setup` and no first admin ([sign-in](sign-in.md), SI2).
 
 ## The database
 
-`PRESENTATOR_DATABASE_URL` is the switch: with it (and its password file) set,
-every store is served from Postgres and the SQLite file below is not opened;
-without both, the SQLite file serves. Setting only one of the two refuses the
-start. `presentator migrate` brings a Postgres database to the newest revision
-and exits; it runs apart from serving, as a step before it, and needs only
-these two settings. Serving from Postgres creates no table; serving from the
-SQLite file creates its tables at start.
+Every store is served from the Postgres database these two settings name; both
+are required, and a start without either ends in one `process.failed` line with
+`reason` `configuration_refused` naming it. `presentator migrate` brings the
+database to the newest revision and exits; it runs apart from serving, as a step
+before it, and needs only these two settings. Serving creates no table.
 
 | Setting | Meaning |
 | --- | --- |
@@ -50,11 +48,9 @@ SQLite file creates its tables at start.
 Concurrent `migrate` runs wait for one another on an advisory lock, and each
 ends at the newest revision. A database whose revision this release does not
 know was migrated by a newer release: `migrate` leaves it as it is and exits 0,
-and serving works on it. Serving from Postgres refuses a database with no
-revision row and one behind this release's head, and `GET /health` answers 503
-while the database does not answer or fails that rule; from the SQLite file the
-database never makes it unready. With either database it answers 503 while Redis
-does not answer. A start the database refuses, and a `migrate` whose database
+and serving works on it. Serving refuses a database with no revision row and
+one behind this release's head, and `GET /health` answers 503 while the
+database does not answer or fails that rule, or while Redis does not answer. A start the database refuses, and a `migrate` whose database
 does not answer or refuses the login, end in one `process.failed` line with
 exit status 1; its `reason` is `not_answering`, `login_refused`, `no_revision`
 or `behind_this_release`, and the last two are cured by `presentator migrate`.
@@ -75,7 +71,6 @@ some of them.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `PRESENTATOR_DATABASE` | `presentator.sqlite3` | The SQLite file, used while `PRESENTATOR_DATABASE_URL` is unset. |
 | `PRESENTATOR_MIRRORS` | `mirrors` | Where the bare mirrors of the deck sources live. |
 | `PRESENTATOR_HOST` | `127.0.0.1` | Listen address. |
 | `PRESENTATOR_PORT` | `8000` | Listen port, 0 to 65535; another number refuses the start, and a start that cannot listen on it ends in one `process.failed` line with `reason` `port_taken` (or `bind_refused`) and exit status 3. |
@@ -111,7 +106,6 @@ them and the defaults above do not apply.
 
 | Setting | In this image |
 | --- | --- |
-| `PRESENTATOR_DATABASE` | `/data/database/presentator.sqlite3` |
 | `PRESENTATOR_MIRRORS` | `/data/mirrors` |
 | `PRESENTATOR_BUILDS` | `/data/builds` |
 | `PRESENTATOR_TOOLCHAIN` | `/app/slidev` |

@@ -1,15 +1,14 @@
-"""Where decks come from and where their sources are kept: git, TOML, and SQLite.
+"""Where decks come from: git and TOML.
 
 `gitmirror` owns talking to the remote; this module translates
-between its vocabulary and the product's. It holds the source tables and their
-stores, and creates the deck table's schema; the deck table's store
-is in `deck_store.py`.
+between its vocabulary and the product's. It holds the mirrors and how a
+source's folders are read from them, and the source rows' translation that the
+Postgres stores share.
 """
 
 import logging
 import shutil
-import sqlite3
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from hashlib import sha256
@@ -29,16 +28,8 @@ from gitmirror.model import (
     Revision,
 )
 from presentator.adapters.deck_manifest import MalformedManifestError, titled_by
-from presentator.adapters.key_drafts import (
-    DRAFT_BY_ID_AND_OWNER,
-    REMOVE_DRAFT,
-    draft_of_row,
-)
-from presentator.adapters.secrets import DeployKeyPair, SecretBox, generate_deploy_key
-from presentator.adapters.sqlite import apply_schema, rows
 from presentator.contracts.decks import (
     MANIFEST_FILE,
-    RECENT_SOURCE_RUNS,
     AccessKind,
     ConnectionCheckResult,
     DeckFolder,
@@ -50,131 +41,12 @@ from presentator.contracts.decks import (
     SourceWrite,
     access_kind_of,
 )
-from presentator.ports.identity import IdentifierFactory
 
-FOLDER_COLUMN: Final = "folder TEXT NOT NULL DEFAULT ''"
-# Each holds the toolchain with the commit it was written for; `deck_store`
-# owns the format.
-BUILT_TOOLCHAIN_COLUMN: Final = "built_toolchain TEXT"
-ATTEMPT_TOOLCHAIN_COLUMN: Final = "attempt_toolchain TEXT"
-_SCHEMA: Final = f"""
-CREATE TABLE IF NOT EXISTS sources (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
-    url TEXT NOT NULL UNIQUE,
-    ref TEXT NOT NULL,
-    encrypted_secret BLOB NOT NULL,
-    hook_secret_hash BLOB,
-    owner_id TEXT NOT NULL REFERENCES users(id),
-    ssh_public_key TEXT,
-    {FOLDER_COLUMN}
-);
--- One admin's own unbound deploy key: never a source, swept once a
--- day old, never read by anyone who did not mint it.
-CREATE TABLE IF NOT EXISTS source_key_drafts (
-    id TEXT PRIMARY KEY,
-    owner_id TEXT NOT NULL UNIQUE REFERENCES users(id),
-    public_key TEXT NOT NULL,
-    encrypted_private_key BLOB NOT NULL,
-    created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS decks (
-    slug TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    changed_at TEXT NOT NULL,
-    owner_id TEXT NOT NULL REFERENCES users(id),
-    source_id TEXT NOT NULL REFERENCES sources(id),
-    commit_sha TEXT NOT NULL,
-    active_build TEXT,
-    pdf_export TEXT,
-    built_commit TEXT,
-    built_at TEXT,
-    attempt_commit TEXT,
-    attempt_started_at TEXT,
-    attempt_outcome TEXT,
-    attempt_failure TEXT,
-    attempt_reason TEXT,
-    attempt_written_megabytes INTEGER,
-    attempt_allowed_megabytes INTEGER,
-    attempt_allowed_entries INTEGER,
-    {BUILT_TOOLCHAIN_COLUMN},
-    {ATTEMPT_TOOLCHAIN_COLUMN},
-    removed_at TEXT
-);
-CREATE TABLE IF NOT EXISTS source_runs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source_id TEXT NOT NULL REFERENCES sources(id),
-    at TEXT NOT NULL,
-    outcome TEXT NOT NULL,
-    commit_sha TEXT,
-    reason TEXT
-);
-"""
-_ADD_SOURCE: Final = """
-INSERT INTO sources
-    (id, name, url, ref, encrypted_secret, hook_secret_hash, owner_id, ssh_public_key,
-     folder)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-"""
-_HOOK_HASH_BY_NAME: Final = "SELECT hook_secret_hash FROM sources WHERE name = ?"
-_ALL_SOURCES: Final = """
-SELECT id, name, url, ref, owner_id, ssh_public_key, folder
-FROM sources
-"""
-_REMOVE_SOURCE: Final = "DELETE FROM sources WHERE id = ?"
-# The ciphertext is written on its own: everything else about a source is what
-# the operator typed, while this is the one value the instance key can open.
-_PUT_ENCRYPTED_VALUE: Final = """
-UPDATE sources
-SET encrypted_secret = ?
-WHERE id = ?
-"""
-_PUT_DEPLOY_KEY: Final = """
-UPDATE sources
-SET encrypted_secret = ?, ssh_public_key = ?
-WHERE id = ?
-"""
-_PUT_HOOK_HASH: Final = "UPDATE sources SET hook_secret_hash = ? WHERE name = ?"
-_ONE_ROW: Final = 1
-# What a pull needs and nothing else: the ciphertext this instance can open.
-_SOURCE_ANCHOR: Final = "SELECT encrypted_secret FROM sources WHERE id = ?"
 _SOURCE_FETCH_ENDED: Final = "source_fetch.ended"
 _MANIFEST_REFUSED: Final = "manifest.refused"
 _MIRROR_REFUSED: Final = "mirror_removal.refused"
 _MIRROR_STAYED: Final = "directory_not_removable"
 _MANIFEST_UNREADABLE: Final = "unreadable"
-_RECORD_SOURCE_RUN: Final = """
-INSERT INTO source_runs (source_id, at, outcome, commit_sha, reason)
-VALUES (?, ?, ?, ?, ?)
-"""
-# `id` orders runs of the same source recorded at one identical instant, which
-# a frozen test clock can produce; `at` alone cannot break that tie.
-_NEWEST_SOURCE_RUN: Final = """
-SELECT source_id, at, outcome, commit_sha, reason
-FROM source_runs
-WHERE source_id = ?
-ORDER BY id DESC
-LIMIT 1
-"""
-_RECENT_SOURCE_RUNS: Final = """
-SELECT source_id, at, outcome, commit_sha, reason
-FROM source_runs
-WHERE source_id = ?
-ORDER BY id DESC
-LIMIT ?
-"""
-_REMOVE_SOURCE_RUNS: Final = "DELETE FROM source_runs WHERE source_id = ?"
-_PRUNE_OLDER_RUNS: Final = """
-DELETE FROM source_runs
-WHERE source_id = ?
-  AND id NOT IN (
-    SELECT id FROM source_runs
-    WHERE source_id = ?
-    ORDER BY id DESC
-    LIMIT ?
-  )
-"""
-_SourceRunRow = tuple[str, str, str, str | None, str | None]
 # `gitmirror`'s own words never reach a `SourceRun`; a connection that carries
 # no revision is always one of these four states, never `READY`.
 _FAILURE_BY_CONNECTION_STATE: Final[dict[ConnectionState, SourceRunFailure]] = {
@@ -200,156 +72,6 @@ def _unread(fetch: StepTimer, failure: SourceRunFailure) -> SourcePoll:
     else:
         fetch.fail(failure.value)
     return SourcePoll(folders=None, commit=None, failure=failure)
-
-
-def create_deck_tables(database: Path) -> None:
-    """Make the source and deck tables exist."""
-    apply_schema(database, _SCHEMA)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SqliteSourceStore:
-    """The sources table: one row per repository this instance mirrors."""
-
-    database: Path
-    identifiers: IdentifierFactory
-    box: SecretBox
-    new_key_pair: Callable[[], DeployKeyPair] = generate_deploy_key
-
-    def add(self, write: SourceWrite) -> Source | None:
-        """Write a new source with its secrets, leaving every existing row alone.
-
-        A name or URL this table already carries is IntegrityError rather than
-        an overwrite: a second source with the same identity is not stored.
-        """
-        identifier = self.identifiers.new_id()
-        try:
-            with rows(self.database) as cursor:
-                cursor.execute(
-                    _ADD_SOURCE,
-                    (
-                        identifier,
-                        write.name,
-                        write.url,
-                        write.ref,
-                        self.box.encrypt(write.access_secret),
-                        write.hook_secret_hash,
-                        write.owner_id,
-                        write.public_key,
-                        write.folder,
-                    ),
-                )
-        except sqlite3.IntegrityError:
-            return None
-        return written_source(identifier, write, public_key=write.public_key)
-
-    def add_from_draft(self, write: SourceWrite, *, draft_id: str) -> Source | None:
-        """Promote an owned draft only if its source row can be written too."""
-        identifier = self.identifiers.new_id()
-        try:
-            with rows(self.database) as cursor:
-                cursor.execute("BEGIN IMMEDIATE")
-                found = cursor.execute(
-                    DRAFT_BY_ID_AND_OWNER,
-                    (draft_id, write.owner_id),
-                ).fetchone()
-                if found is None:
-                    cursor.execute("ROLLBACK")
-                    return None
-                draft = draft_of_row(found, box=self.box)
-                if draft is None:
-                    cursor.execute("ROLLBACK")
-                    return None
-                cursor.execute(
-                    _ADD_SOURCE,
-                    (
-                        identifier,
-                        write.name,
-                        write.url,
-                        write.ref,
-                        self.box.encrypt(draft.private_key),
-                        write.hook_secret_hash,
-                        write.owner_id,
-                        draft.public_key,
-                        write.folder,
-                    ),
-                )
-                cursor.execute(REMOVE_DRAFT, (draft_id,))
-                cursor.execute("COMMIT")
-        except sqlite3.IntegrityError:
-            return None
-        return written_source(identifier, write, public_key=draft.public_key)
-
-    def hook_secret_hash(self, name: str) -> bytes | None:
-        """The stored hash of that source's webhook secret, if this name exists."""
-        with rows(self.database) as cursor:
-            found = cursor.execute(_HOOK_HASH_BY_NAME, (name,)).fetchone()
-        if found is None:
-            return None
-        digest: bytes | None = found[0]
-        return digest
-
-    def put_credential(self, source_id: str, secret: str) -> None:
-        """Keep that source's read-only secret in its row, encrypted.
-
-        The value is written down in the one form this instance can open
-        again, so what stands in the file is of no use to whoever reads the
-        file without the instance key.
-        """
-        with rows(self.database) as cursor:
-            cursor.execute(_PUT_ENCRYPTED_VALUE, (self.box.encrypt(secret), source_id))
-
-    def renew_deploy_key(self, source_id: str) -> bool:
-        """Replace one source's generated pair without touching its Add draft."""
-        pair = self.new_key_pair()
-        encrypted_private_key = self.box.encrypt(pair.private_key)
-        with rows(self.database) as cursor:
-            written = cursor.execute(
-                _PUT_DEPLOY_KEY,
-                (encrypted_private_key, pair.public_key, source_id),
-            )
-        return written.rowcount == _ONE_ROW
-
-    def put_hook_secret_hash(self, name: str, digest: bytes) -> bool:
-        """Replace that source's webhook-secret hash, or nothing when it is missing."""
-        with rows(self.database) as cursor:
-            written = cursor.execute(_PUT_HOOK_HASH, (digest, name))
-            return written.rowcount == _ONE_ROW
-
-    def all(self) -> tuple[Source, ...]:
-        """Read every source this instance mirrors decks from."""
-        with rows(self.database) as cursor:
-            found = cursor.execute(_ALL_SOURCES).fetchall()
-        return tuple(stored_source(row) for row in found)
-
-    def remove(self, source_id: str) -> None:
-        """Delete that source's own row."""
-        with rows(self.database) as cursor:
-            cursor.execute(_REMOVE_SOURCE, (source_id,))
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SourceCredentials:
-    """Answers with the secret the source's own row stores, at the pull.
-
-    The one place a secret stands is the ciphertext column.
-    """
-
-    database: Path
-    box: SecretBox
-
-    def resolve(self, reference: CredentialReference) -> str | None:
-        """The secret of the source that reference anchors, or nothing.
-
-        Nothing is the honest answer to a source this instance no longer
-        carries and to ciphertext another instance key wrote; the pull that
-        asked reads both as a credential it cannot resolve.
-        """
-        with rows(self.database) as cursor:
-            found = cursor.execute(_SOURCE_ANCHOR, (reference.name,)).fetchone()
-        if found is None:
-            return None
-        return self.box.decrypt(found[0])
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -565,51 +287,6 @@ class MirroredDeckFolders:
             return None
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SqliteSourceRunStore:
-    """The `source_runs` table: the newest polls of each source, bounded."""
-
-    database: Path
-
-    def record(self, run: SourceRun) -> None:
-        """Add the run and drop older ones of that source past the bound."""
-        with rows(self.database) as cursor:
-            cursor.execute(
-                _RECORD_SOURCE_RUN,
-                (
-                    run.source_id,
-                    run.at.isoformat(),
-                    run.outcome.value,
-                    run.commit,
-                    None if run.reason is None else run.reason.value,
-                ),
-            )
-            cursor.execute(
-                _PRUNE_OLDER_RUNS,
-                (run.source_id, run.source_id, RECENT_SOURCE_RUNS),
-            )
-
-    def newest(self, source_id: str) -> SourceRun | None:
-        """Read that source's newest row, or nothing while it carries none."""
-        with rows(self.database) as cursor:
-            found = cursor.execute(_NEWEST_SOURCE_RUN, (source_id,)).fetchone()
-        return None if found is None else _source_run(found)
-
-    def recent(self, source_id: str) -> tuple[SourceRun, ...]:
-        """Read that source's newest rows, newest first, no more than the bound."""
-        with rows(self.database) as cursor:
-            found = cursor.execute(
-                _RECENT_SOURCE_RUNS,
-                (source_id, RECENT_SOURCE_RUNS),
-            ).fetchall()
-        return tuple(_source_run(row) for row in found)
-
-    def remove_for_source(self, source_id: str) -> None:
-        """Delete every run this source has ever recorded."""
-        with rows(self.database) as cursor:
-            cursor.execute(_REMOVE_SOURCE_RUNS, (source_id,))
-
-
 def written_source(
     identifier: str, write: SourceWrite, *, public_key: str | None
 ) -> Source:
@@ -636,13 +313,6 @@ def stored_source(row: Sequence[Any]) -> Source:
         owner_id=owner_id,
         public_key=public_key,
         folder=folder,
-    )
-
-
-def _source_run(row: _SourceRunRow) -> SourceRun:
-    source_id, at, outcome, commit, reason = row
-    return stored_source_run(
-        source_id, datetime.fromisoformat(at), outcome, commit, reason
     )
 
 

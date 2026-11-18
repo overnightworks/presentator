@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine
 
 from presentator.contracts.decks import Source
 from tests.presentator.adapters.support.build_support import (
@@ -41,7 +42,7 @@ esac
 
 
 def test_the_export_holds_only_the_nested_decks_own_tree(
-    remote: GitRemote, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    remote: GitRemote, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, engine: Engine
 ) -> None:
     remote.commit(
         {
@@ -52,7 +53,7 @@ def test_the_export_holds_only_the_nested_decks_own_tree(
         },
         at=_PUSHED_AT,
     )
-    store = a_source_store(a_source_database(tmp_path))
+    store = a_source_store(a_source_database(engine))
     store.add(a_source_write(remote.url, folder="examples"))
     (stored,) = store.all()
     deck = a_deck("a", commit=remote.head)

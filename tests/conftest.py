@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 import uvicorn
 from logline.testing import configured
+from sqlalchemy import Engine
 
 from presentator.api.health import Stopping
 from presentator.host import main
@@ -32,7 +33,13 @@ from tests.support.lobby import (
     configure_secret_key,
 )
 from tests.support.log_lines import LoggedText
-from tests.support.postgres import created_database, migrated_template
+from tests.support.postgres import (
+    NO_DATABASE_HERE,
+    created_database,
+    engine_on,
+    migrated_template,
+    point_at,
+)
 from tests.support.redis import NOTHING_LISTENS_HERE, emptied_database_url
 from tests.support.worker_support import (
     KEY,
@@ -71,8 +78,11 @@ class _ServerThatOnlyReturns:
 
 
 @pytest.fixture
-def main_without_serving(environment: pytest.MonkeyPatch) -> Callable[[], None]:
-    """`main()` as far as serving, with a server that returns at once."""
+def main_without_serving(
+    environment: pytest.MonkeyPatch, served_database: str
+) -> Callable[[], None]:
+    """`main()` over a database of its own, with a server that returns at once."""
+    del served_database
     environment.setattr(main, "StoppingServer", _ServerThatOnlyReturns)
     return partial(main.main, [])
 
@@ -149,7 +159,8 @@ def bare_environment(
 ) -> pytest.MonkeyPatch:
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("PRESENTATOR_SECRET_KEY_FILE", raising=False)
-    monkeypatch.setenv("PRESENTATOR_DATABASE", str(tmp_path / "presentator.sqlite3"))
+    # Nothing listens at this database; the tests that serve name their own.
+    point_at(monkeypatch, NO_DATABASE_HERE, tmp_path)
     monkeypatch.setenv("PRESENTATOR_LOBBY_BUILD", str(LOBBY_BUILD))
     toolchain = tmp_path / "toolchain"
     toolchain.mkdir()
@@ -191,6 +202,46 @@ def database_url(postgres_template: str) -> Iterator[str]:
     """A migrated database of this test's own."""
     with created_database(postgres_template) as url:
         yield url
+
+
+@pytest.fixture
+def engine(database_url: str) -> Iterator[Engine]:
+    """An engine on this test's own database, disposed at teardown."""
+    each = engine_on(database_url)
+    try:
+        yield each
+    finally:
+        each.dispose()
+
+
+@pytest.fixture
+def served_database(
+    bare_environment: pytest.MonkeyPatch, database_url: str, tmp_path: Path
+) -> Iterator[str]:
+    """An instance that serves from a migrated database of this test's own.
+
+    Every instance the composition root builds in the test is closed before the
+    database is dropped; one left to the garbage collector warns in a later test.
+    """
+    point_at(bare_environment, database_url, tmp_path)
+    built: list[main.Instance] = []
+    bare_environment.setattr(
+        main, "build_instance", _keeping(main.build_instance, built)
+    )
+    yield database_url
+    for instance in reversed(built):
+        instance.close()
+
+
+def _keeping[**Arguments](
+    build: Callable[Arguments, main.Instance], built: list[main.Instance]
+) -> Callable[Arguments, main.Instance]:
+    def keeping(*args: Arguments.args, **kwargs: Arguments.kwargs) -> main.Instance:
+        instance = build(*args, **kwargs)
+        built.append(instance)
+        return instance
+
+    return keeping
 
 
 @pytest.fixture

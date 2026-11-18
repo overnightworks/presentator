@@ -14,7 +14,7 @@ from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[report
 from presentator.api.problems import ValidationFault
 from presentator.contracts import words
 from presentator.host.config import Settings, WorkerSettings
-from tests.conftest import redis_environment
+from tests.conftest import redis_environment, served_database
 from tests.gitmirror.test_mirror import DumbHttpHandler, RespondingHandler
 from tests.presentator.host.conftest import (
     clients_closed_with_the_test,
@@ -50,7 +50,6 @@ AskRequest.empty_language_is_no_language
 WorkerSettings.model_config
 
 # Pydantic runs this `model_validator` after every `Settings` validation.
-Settings._database_is_named_whole  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 Settings._two_hostnames  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 Settings._worker_is_reached  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 Settings._voices_speak_their_language  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
@@ -64,6 +63,7 @@ every_tick_polls_every_source  # pyright: ignore[reportUnusedExpression]
 # pytest reads `pytestmark` of each module and finds the fixture it names by its string.
 pytestmark  # pyright: ignore[reportUnusedExpression]
 redis_environment  # pyright: ignore[reportUnusedExpression]
+served_database  # pyright: ignore[reportUnusedExpression]
 
 # pytest applies this autouse fixture to every worker-settings test by itself.
 no_worker_variables  # pyright: ignore[reportUnusedExpression]

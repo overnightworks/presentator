@@ -1,4 +1,4 @@
-"""The k3d driver's published-image and Redis sources, driven through a fake runner."""
+"""The k3d driver's published-image and store sources, driven through a fake runner."""
 
 from collections.abc import Callable
 from pathlib import Path
@@ -151,12 +151,21 @@ def test_a_pull_that_fails_refuses_with_its_error_then_tears_down(
     assert not fixture.run.directory.exists()
 
 
-def test_the_probe_redis_is_pulled_by_the_runner_and_imported_before_the_pod_exists(
-    make_fixture: Callable[..., Fixture], manifests_module: ModuleType
+STORES = pytest.mark.parametrize("store", [0, 1], ids=["Redis", "Postgres"])
+
+
+def pinned_store(manifests_module: ModuleType, store: int) -> str:
+    return (manifests_module.REDIS_PINNED, manifests_module.POSTGRES_PINNED)[store]
+
+
+@STORES
+def test_a_probe_store_is_pulled_by_the_runner_and_imported_before_the_pod_exists(
+    make_fixture: Callable[..., Fixture], manifests_module: ModuleType, store: int
 ) -> None:
     fixture = make_fixture()
     fixture.drive()
-    pinned, local = manifests_module.REDIS_PINNED, fixture.run.redis_image
+    pinned = pinned_store(manifests_module, store)
+    local = fixture.world.store_images[store]
     steps = [
         ("docker", "pull", pinned),
         ("docker", "tag", pinned, local),
@@ -170,7 +179,7 @@ def test_the_probe_redis_is_pulled_by_the_runner_and_imported_before_the_pod_exi
     assert "@sha256:" in pinned
 
 
-def test_a_redis_pull_that_fails_names_the_image_and_creates_no_cluster(
+def test_a_store_pull_that_fails_names_the_image_and_creates_no_cluster(
     make_fixture: Callable[..., Fixture],
     manifests_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
@@ -184,37 +193,42 @@ def test_a_redis_pull_that_fails_names_the_image_and_creates_no_cluster(
     assert fixture.world.issued("k3d", "cluster", "create") == []
 
 
-def test_a_redis_import_that_fails_names_the_image_then_tears_down(
+@STORES
+def test_a_store_import_that_fails_names_the_image_then_tears_down(
     make_fixture: Callable[..., Fixture],
     capsys: pytest.CaptureFixture[str],
+    store: int,
 ) -> None:
-    fixture = make_fixture(World(redis_import_error="no space left"))
+    fixture = make_fixture(
+        World(failing_store=store, store_import_error="no space left")
+    )
     with pytest.raises(SystemExit):
         fixture.drive()
     refusal = capsys.readouterr().err
-    assert fixture.run.redis_image in refusal
+    assert fixture.world.store_images[store] in refusal
     assert "no space left" in refusal
     assert fixture.world.issued("kubectl", "apply") == []
     assert fixture.world.issued("k3d", "cluster", "delete") != []
 
 
+@STORES
 @pytest.mark.parametrize(
     ("found", "cells_printed"),
     [(0, {"5"}), (1, {"5", "7", "8", "9"})],
     ids=["right after its import", "when the web cells would apply it"],
 )
-def test_a_redis_image_the_node_lacks_is_named_and_never_applied(
+def test_a_store_image_the_node_lacks_is_named_and_never_applied(
     make_fixture: Callable[..., Fixture],
-    manifests_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
+    store: int,
     found: int,
     cells_printed: set[str],
 ) -> None:
-    fixture = make_fixture(World(redis_found_in_node=found))
+    fixture = make_fixture(World(failing_store=store, store_found_in_node=found))
     with pytest.raises(SystemExit):
         fixture.drive()
     output = capsys.readouterr()
-    assert fixture.run.redis_image in output.err
+    assert fixture.world.store_images[store] in output.err
     assert "is not in the cluster's node" in output.err
     printed = {
         line.split(":")[0].removeprefix("cell ")
@@ -222,15 +236,14 @@ def test_a_redis_image_the_node_lacks_is_named_and_never_applied(
         if line.startswith("cell ")
     }
     assert printed == cells_printed
-    applied = [d["metadata"]["name"] for d in fixture.world.applied("Deployment")]
-    assert manifests_module.REDIS not in applied
+    assert fixture.world.applied("Deployment") == []
     assert fixture.world.issued("k3d", "cluster", "delete") != []
 
 
 @pytest.mark.parametrize(
     "failing", [("k3d", "cluster", "create"), ("k3d", "image", "import")]
 )
-def test_a_probe_ended_after_the_redis_pull_leaves_no_redis_image(
+def test_a_probe_ended_after_the_store_pulls_leaves_no_store_image(
     make_fixture: Callable[..., Fixture],
     driver_module: ModuleType,
     failing: tuple[str, ...],
@@ -238,7 +251,7 @@ def test_a_probe_ended_after_the_redis_pull_leaves_no_redis_image(
     fixture = make_fixture(World(failing_command=failing))
     with pytest.raises(RuntimeError):
         fixture.drive()
-    assert not fixture.world.redis_image_present
+    assert fixture.world.stores_present == set()
     driver_module.check_leftovers(fixture.world.lister)
 
 

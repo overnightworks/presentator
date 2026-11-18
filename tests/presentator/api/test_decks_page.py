@@ -9,6 +9,7 @@ from urllib.parse import quote
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from sqlalchemy import Engine
 
 from presentator.contracts.decks import (
     Build,
@@ -69,9 +70,9 @@ def lobby() -> TestClient:
 
 
 @pytest.fixture
-def unbuilt_talk_host(tmp_path: Path) -> TestClient:
+def unbuilt_talk_host(engine: Engine) -> TestClient:
     return a_talk_host(
-        tmp_path,
+        engine,
         GivenDecks(
             store=a_deck_store(),
             source=a_configured_source(_ADDRESS),
@@ -80,9 +81,9 @@ def unbuilt_talk_host(tmp_path: Path) -> TestClient:
 
 
 @pytest.fixture
-def talk_host(tmp_path: Path) -> TestClient:
+def talk_host(engine: Engine) -> TestClient:
     return a_talk_host(
-        tmp_path,
+        engine,
         GivenDecks(
             store=a_deck_store(built=a_build()),
             source=a_configured_source(_ADDRESS),
@@ -181,7 +182,7 @@ def test_a_view_of_a_deck_nothing_has_been_built_from_answers_nothing(
 
 
 @pytest.fixture
-def talk_host_with_a_removed_build(tmp_path: Path) -> TestClient:
+def talk_host_with_a_removed_build(engine: Engine, tmp_path: Path) -> TestClient:
     """A deck whose row still names a build directory that is gone from disk.
 
     A request can read the pointer just before a sweep removes the directory it
@@ -192,7 +193,7 @@ def talk_host_with_a_removed_build(tmp_path: Path) -> TestClient:
     talk.mkdir()
     (talk / "index.html").write_text("<h1>a talk</h1>", encoding="utf-8")
     client = a_talk_host(
-        tmp_path,
+        engine,
         GivenDecks(
             store=a_deck_store(built=a_build(talk=talk)),
             source=a_configured_source(_ADDRESS),
@@ -276,13 +277,14 @@ def a_secret_a_link_may_point_at(tmp_path: Path) -> Path:
     ids=["the pdf", "an asset", "a directory on the way", "the talk", "the page"],
 )
 def test_a_link_laid_after_the_build_was_adopted_delivers_no_byte_of_its_target(
+    engine: Engine,
     tmp_path: Path,
     replaced: str,
     host: str,
     address: str,
 ) -> None:
     given, run = a_swapped_build(tmp_path, slug=SLUG)
-    signed_in = two_hosts(tmp_path, given=given).signed_in_at(host)
+    signed_in = two_hosts(engine, given=given).signed_in_at(host)
     secret = a_secret_a_link_may_point_at(tmp_path)
     target = run / replaced
     if target.is_dir():
@@ -302,10 +304,11 @@ def test_a_link_laid_after_the_build_was_adopted_delivers_no_byte_of_its_target(
 
 
 def test_a_pdf_replaced_by_a_link_answers_as_if_it_were_missing(
+    engine: Engine,
     tmp_path: Path,
 ) -> None:
     given, run = a_swapped_build(tmp_path, slug=SLUG)
-    signed_in = two_hosts(tmp_path, given=given).signed_in_at(A_BROWSERS_ADDRESS)
+    signed_in = two_hosts(engine, given=given).signed_in_at(A_BROWSERS_ADDRESS)
     (run / "deck.pdf").unlink()
     (run / "deck.pdf").symlink_to(a_secret_a_link_may_point_at(tmp_path) / "deck.pdf")
 
@@ -315,11 +318,11 @@ def test_a_pdf_replaced_by_a_link_answers_as_if_it_were_missing(
 
 
 def test_a_deck_removed_by_reconciliation_answers_not_found_until_it_returns(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     store = a_deck_store(built=a_build())
     hosts = two_hosts(
-        tmp_path,
+        engine,
         given=GivenDecks(store=store, source=a_configured_source(_ADDRESS)),
     )
     signed_in = hosts.signed_in_at(A_BROWSERS_ADDRESS)
@@ -350,10 +353,10 @@ def an_attempt(outcome: BuildOutcome) -> BuildAttempt:
     "outcome", [BuildOutcome.FAILED, BuildOutcome.RUNNING], ids=["failed", "running"]
 )
 def test_the_last_good_talk_and_its_pdf_stay_open_beside_a_later_attempt(
-    tmp_path: Path, outcome: BuildOutcome
+    engine: Engine, outcome: BuildOutcome
 ) -> None:
     hosts = two_hosts(
-        tmp_path,
+        engine,
         given=GivenDecks(
             store=a_deck_store(built=a_build(), attempt=an_attempt(outcome)),
             source=a_configured_source(_ADDRESS),

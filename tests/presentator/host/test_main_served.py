@@ -11,7 +11,7 @@ from presentator.api.health import Stopping
 from presentator.host import main
 from tests.support.lobby import A_BROWSERS_ADDRESS, A_BROWSERS_HEADERS
 
-pytestmark = pytest.mark.usefixtures("redis_environment")
+pytestmark = pytest.mark.usefixtures("redis_environment", "served_database")
 
 
 type ServedByMain = tuple[

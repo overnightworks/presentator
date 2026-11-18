@@ -5,8 +5,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine
 
-from presentator.adapters.deck_store import SqliteDeckStore
+from presentator.adapters.postgres.deck_store import PostgresDeckStore
 from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.contracts.models import Role, User
 from presentator.host import main
@@ -15,6 +16,7 @@ from presentator.host.worker_serving import emergency_end
 from tests.support.git_remote import GitRemote
 from tests.support.people import seed_user
 from tests.support.polled_source_support import add_a_polled_source
+from tests.support.postgres import NO_FENCE, other_connections
 from tests.support.worker_support import KEY
 
 BUILD_TIMEOUT_SECONDS = 123.0
@@ -39,6 +41,7 @@ def key_file(tmp_path: Path) -> Path:
     return path
 
 
+@pytest.mark.usefixtures("served_database")
 def test_an_instance_starts_with_no_worker_answering_and_holds_the_workers_bounds(
     environment: pytest.MonkeyPatch, key_file: Path
 ) -> None:
@@ -98,8 +101,9 @@ def test_a_host_run_that_names_no_worker_has_no_worker_link() -> None:
         main.the_build_worker(settings, bound=bound)
 
 
-def test_a_key_file_that_is_too_short_refuses_to_start(
-    environment: pytest.MonkeyPatch, key_file: Path
+@pytest.mark.usefixtures("served_database")
+def test_a_key_file_that_is_too_short_refuses_to_start_and_holds_no_connection(
+    environment: pytest.MonkeyPatch, key_file: Path, engine: Engine
 ) -> None:
     key_file.write_text("short")
     a_worker_run(environment, key_file)
@@ -107,16 +111,18 @@ def test_a_key_file_that_is_too_short_refuses_to_start(
     with pytest.raises(ConfigurationError, match="build_worker_key_file"):
         main.build_instance(load_settings())
 
+    assert other_connections(engine) == 0
 
-@pytest.mark.usefixtures("environment")
+
+@pytest.mark.usefixtures("environment", "served_database")
 def test_a_deck_the_host_runner_builds_records_the_identity_of_the_toolchain_project(
-    remote: GitRemote,
+    remote: GitRemote, engine: Engine
 ) -> None:
     settings = load_settings()
     instance = main.build_instance(settings)
-    seed_user(settings.database, AN_OWNER)
+    seed_user(engine, AN_OWNER)
     add_a_polled_source(
-        settings.database,
+        engine,
         remote,
         name="talks",
         owner_id=AN_OWNER.id,
@@ -127,7 +133,7 @@ def test_a_deck_the_host_runner_builds_records_the_identity_of_the_toolchain_pro
 
     asyncio.run(instance.poller.tick())
 
-    (kept,) = SqliteDeckStore(database=settings.database).all()
+    (kept,) = PostgresDeckStore(engine=engine, fence=NO_FENCE).all()
     assert kept.attempt is not None
     assert kept.attempt.toolchain == toolchain_identity_of(settings.toolchain)
 

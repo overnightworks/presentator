@@ -3,10 +3,10 @@
 import logging
 import re
 from http import HTTPStatus
-from pathlib import Path
 from typing import Final
 
 import pytest
+from sqlalchemy import Engine
 
 from presentator.api.talk import talk_content_security_policy
 from presentator.contracts.decks import DECK_PATH, talk_address
@@ -74,9 +74,9 @@ def test_the_talk_hosts_policy_admits_no_host_at_all() -> None:
 
 @pytest.mark.parametrize("page_name", ["", "404.html"])
 def test_a_built_talk_page_points_only_at_its_own_origin(
-    page_name: str, tmp_path: Path
+    page_name: str, engine: Engine
 ) -> None:
-    talk_host = two_hosts(tmp_path).signed_in_at(A_TALK_ADDRESS)
+    talk_host = two_hosts(engine).signed_in_at(A_TALK_ADDRESS)
 
     page = talk_host.get(talk_address(A_DECK) + page_name)
 
@@ -90,11 +90,11 @@ def test_a_built_talk_page_points_only_at_its_own_origin(
 
 
 def test_a_built_talks_request_line_names_the_deck_address_never_the_file(
-    tmp_path: Path, json_logging: None, caplog: pytest.LogCaptureFixture
+    engine: Engine, json_logging: None, caplog: pytest.LogCaptureFixture
 ) -> None:
     del json_logging
     caplog.set_level(logging.INFO)
-    talk_host = two_hosts(tmp_path).signed_in_at(A_TALK_ADDRESS)
+    talk_host = two_hosts(engine).signed_in_at(A_TALK_ADDRESS)
 
     talk_host.get(talk_address(A_DECK) + "404.html")
     (line,) = request_lines(caplog)

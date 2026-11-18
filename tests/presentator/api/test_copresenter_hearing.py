@@ -5,15 +5,14 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import sqlite3
 import threading
-from contextlib import closing
 from typing import TYPE_CHECKING, cast
 
 import pytest
 from fastapi import Response, WebSocket
 from speech_client import realtime_wire, wire
 from speech_client.relay import HOP_FRAME_BYTES, HopClose
+from sqlalchemy import Engine, text
 from starlette.websockets import WebSocketDisconnect
 from webauth.oidc import OidcRefusalReason
 
@@ -70,7 +69,6 @@ from tests.support.talk_support import Hosts
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from starlette.testclient import WebSocketTestSession
 
@@ -152,11 +150,11 @@ def _closed_with(socket: WebSocketTestSession) -> WebSocketDisconnect:
 
 @pytest.mark.parametrize("case", BROWSER_ENDINGS)
 def test_the_browser_gets_each_transcript_then_the_close_the_service_ended_with(
-    tmp_path: Path, case: str
+    engine: Engine, case: str
 ) -> None:
     ending = BROWSER_ENDINGS[case]
     service = FakeSpeechService(realtime=ending.hear())
-    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+    with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
         heard = hear_and_record(instance)
 
     assert heard.frames == ending.frames
@@ -166,13 +164,13 @@ def test_the_browser_gets_each_transcript_then_the_close_the_service_ended_with(
 
 
 def test_a_final_transcript_carries_the_trace_of_the_turn_the_service_heard(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     turn = f"00-{'1' * 32}-{'2' * 16}-01"
     service = FakeSpeechService(
         realtime=sending(a_delta("Ha"), a_completed("Hallo.", traceparent=turn))
     )
-    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+    with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
         heard = hear_and_record(instance)
 
     assert [frame["traceparent"] for frame in heard.frames] == [None, turn]
@@ -205,9 +203,9 @@ def test_a_final_transcript_carries_the_trace_of_the_turn_the_service_heard(
     ],
 )
 def test_a_service_that_answers_the_upgrade_off_the_wire_closes_the_browser_4502(
-    tmp_path: Path, peer: Served, reason: str, capsys: pytest.CaptureFixture[str]
+    engine: Engine, peer: Served, reason: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with a_speech_instance(tmp_path, SpeechScenario(peer=peer)) as instance:
+    with a_speech_instance(engine, SpeechScenario(peer=peer)) as instance:
         heard = hear_and_record(instance)
 
     assert heard.frames == []
@@ -230,14 +228,14 @@ def test_a_service_that_answers_the_upgrade_off_the_wire_closes_the_browser_4502
     ids=["unmarked-403", "unmarked-503", "coded"],
 )
 def test_a_refused_upgrade_logs_one_session_line_naming_its_refusal_status_and_code(
-    tmp_path: Path,
+    engine: Engine,
     refusal: Hear,
     status: int,
     code: str | None,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     service = FakeSpeechService(realtime=refusal)
-    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+    with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
         heard = hear_and_record(instance)
 
     session = _the_session_line(capsys)
@@ -249,12 +247,12 @@ def test_a_refused_upgrade_logs_one_session_line_naming_its_refusal_status_and_c
     assert heard.closed_with == HopClose.SERVICE_FAILED
 
 
-def test_a_redirect_from_the_service_is_not_followed(tmp_path: Path) -> None:
+def test_a_redirect_from_the_service_is_not_followed(engine: Engine) -> None:
     elsewhere = FakeSpeechService()
     with a_served_origin(lambda: a_loopback_server(elsewhere.app())) as other:
         redirecting = denying(307, headers={"Location": f"{other}{wire.REALTIME_PATH}"})
         service = FakeSpeechService(realtime=redirecting)
-        with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+        with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
             heard = hear_and_record(instance)
 
     assert heard.closed_with == HopClose.SERVICE_FAILED
@@ -265,11 +263,11 @@ def test_a_redirect_from_the_service_is_not_followed(tmp_path: Path) -> None:
     "event", [a_failed_item(), an_error_event()], ids=lambda e: type(e).__name__
 )
 def test_a_failed_item_or_error_event_closes_the_browser_4502_and_the_service_socket(
-    tmp_path: Path, event: realtime_wire.ServerEvent, capsys: pytest.CaptureFixture[str]
+    engine: Engine, event: realtime_wire.ServerEvent, capsys: pytest.CaptureFixture[str]
 ) -> None:
     service = FakeSpeechService()
     service.realtime = sending_then_reading(service, event)
-    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+    with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
         heard = hear_and_record(instance)
         assert service.closed.wait(THREAD_WAIT_SECONDS)
 
@@ -283,11 +281,11 @@ def test_a_failed_item_or_error_event_closes_the_browser_4502_and_the_service_so
 
 @pytest.mark.parametrize("language", ["de", "en"])
 def test_the_upgrade_carries_the_issued_tokens_and_names_the_language_before_audio(
-    tmp_path: Path, language: str
+    engine: Engine, language: str
 ) -> None:
     service = FakeSpeechService()
     with (
-        a_speech_instance(tmp_path, _reading_scenario(service)) as instance,
+        a_speech_instance(engine, _reading_scenario(service)) as instance,
         instance.talk.websocket_connect(
             HEARING.replace("language=de", f"language={language}"), headers=ORIGIN
         ) as socket,
@@ -316,10 +314,10 @@ def test_the_upgrade_carries_the_issued_tokens_and_names_the_language_before_aud
 
 
 def test_a_language_the_wire_does_not_name_closes_4502_with_no_upgrade_and_a_refusal(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    engine: Engine, capsys: pytest.CaptureFixture[str]
 ) -> None:
     service = FakeSpeechService()
-    with a_speech_instance(tmp_path, _reading_scenario(service)) as instance:
+    with a_speech_instance(engine, _reading_scenario(service)) as instance:
         heard = hear_and_record(instance, url=HEARING.replace("=de", "=fr"))
 
     assert heard.closed_with == HopClose.SERVICE_FAILED
@@ -330,10 +328,10 @@ def test_a_language_the_wire_does_not_name_closes_4502_with_no_upgrade_and_a_ref
 
 
 def test_frames_sent_during_the_token_read_reach_the_service_in_order_once_it_opens(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     service = FakeSpeechService()
-    with a_speech_instance(tmp_path, _reading_scenario(service)) as instance:
+    with a_speech_instance(engine, _reading_scenario(service)) as instance:
         entered, release = _held_at_the_workload_grant(instance.hosts)
         with instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket:
             assert entered.wait(THREAD_WAIT_SECONDS)
@@ -347,10 +345,10 @@ def test_frames_sent_during_the_token_read_reach_the_service_in_order_once_it_op
 
 
 def test_a_logout_during_the_token_read_closes_1008_with_no_upgrade_and_no_audio(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     service = FakeSpeechService()
-    with a_speech_instance(tmp_path, _reading_scenario(service)) as instance:
+    with a_speech_instance(engine, _reading_scenario(service)) as instance:
         entered, release = _held_at_the_workload_grant(instance.hosts)
         with instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket:
             socket.send_bytes(_THE_FIRST_FRAME)
@@ -365,11 +363,11 @@ def test_a_logout_during_the_token_read_closes_1008_with_no_upgrade_and_no_audio
 
 
 def test_a_sign_out_during_a_hearing_closes_the_browser_1000_and_the_service_socket(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     service = FakeSpeechService()
     with (
-        a_speech_instance(tmp_path, _reading_scenario(service)) as instance,
+        a_speech_instance(engine, _reading_scenario(service)) as instance,
         instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
     ):
         socket.send_bytes(_THE_FIRST_FRAME)
@@ -389,10 +387,10 @@ def test_a_sign_out_during_a_hearing_closes_the_browser_1000_and_the_service_soc
 
 @pytest.mark.parametrize("error", ["invalid_scope", "invalid_client"])
 def test_a_refused_workload_grant_closes_4502_with_no_upgrade_and_logs_its_reason(
-    tmp_path: Path, error: str, capsys: pytest.CaptureFixture[str]
+    engine: Engine, error: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     scenario = SpeechScenario(arrange=refusing_every_workload_grant(error))
-    with a_speech_instance(tmp_path, scenario) as instance:
+    with a_speech_instance(engine, scenario) as instance:
         heard = hear_and_record(instance)
     written = LoggedText(capsys).text
 
@@ -417,9 +415,9 @@ def test_a_refused_workload_grant_closes_4502_with_no_upgrade_and_logs_its_reaso
     ids=["revoked", "session-ended", "issuer-down", "thread-raises"],
 )
 def test_any_refused_token_read_closes_4502_with_no_upgrade(
-    tmp_path: Path, arrange: Callable[[Hosts], None]
+    engine: Engine, arrange: Callable[[Hosts], None]
 ) -> None:
-    with a_speech_instance(tmp_path, SpeechScenario(arrange=arrange)) as instance:
+    with a_speech_instance(engine, SpeechScenario(arrange=arrange)) as instance:
         heard = hear_and_record(instance)
 
     assert heard.frames == []
@@ -428,9 +426,9 @@ def test_any_refused_token_read_closes_4502_with_no_upgrade(
 
 
 def test_one_hearing_makes_one_refresh_grant_and_one_workload_grant(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    with a_speech_instance(tmp_path) as instance:
+    with a_speech_instance(engine) as instance:
         before = len(instance.hosts.issuer.grant_types)
         hear_and_record(instance)
         grants = instance.hosts.issuer.grant_types[before:]
@@ -440,12 +438,12 @@ def test_one_hearing_makes_one_refresh_grant_and_one_workload_grant(
 
 
 def test_a_hearing_the_service_drained_reopens_on_tokens_granted_again(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     service = FakeSpeechService(
         realtime=one_after_another(draining(), sending(a_completed("Wieder da.")))
     )
-    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+    with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
         before = len(instance.hosts.issuer.grant_types)
         heard = hear_and_record(instance)
         grants = instance.hosts.issuer.grant_types[before:]
@@ -456,7 +454,7 @@ def test_a_hearing_the_service_drained_reopens_on_tokens_granted_again(
 
 
 def test_a_second_hearing_the_service_finds_busy_closes_4429_on_the_second_only(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     service = FakeSpeechService()
     first = reading(service)
@@ -470,7 +468,7 @@ def test_a_second_hearing_the_service_finds_busy_closes_4429_on_the_second_only(
         await first(connection)
 
     service.realtime = realtime
-    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+    with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
         second_browser = instance.hosts.browser_with_the_cookies_of(
             instance.talk, A_TALK_ADDRESS
         )
@@ -490,11 +488,11 @@ def test_a_second_hearing_the_service_finds_busy_closes_4429_on_the_second_only(
 
 
 def test_a_text_frame_closes_4400_and_no_more_audio_reaches_the_service(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     service = FakeSpeechService()
     with (
-        a_speech_instance(tmp_path, _reading_scenario(service)) as instance,
+        a_speech_instance(engine, _reading_scenario(service)) as instance,
         instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
     ):
         socket.send_bytes(_THE_FIRST_FRAME)
@@ -510,12 +508,12 @@ def test_a_text_frame_closes_4400_and_no_more_audio_reaches_the_service(
 
 
 def test_a_frame_over_the_hop_limit_closes_4413_and_one_at_the_limit_is_forwarded(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     service = FakeSpeechService()
     at_the_limit = b"\0" * HOP_FRAME_BYTES
     with (
-        a_speech_instance(tmp_path, _reading_scenario(service)) as instance,
+        a_speech_instance(engine, _reading_scenario(service)) as instance,
         instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
     ):
         socket.send_bytes(at_the_limit)
@@ -530,11 +528,11 @@ def test_a_frame_over_the_hop_limit_closes_4413_and_one_at_the_limit_is_forwarde
 
 
 def test_audio_held_past_the_limit_before_the_service_opens_closes_4507(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     scenario = SpeechScenario(peer=never_answers)
     with (
-        a_speech_instance(tmp_path, scenario) as instance,
+        a_speech_instance(engine, scenario) as instance,
         instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
     ):
         for _ in range(_OVER_THE_HELD_LIMIT):
@@ -544,13 +542,13 @@ def test_audio_held_past_the_limit_before_the_service_opens_closes_4507(
     assert closed.code == HopClose.OVER_CAP
 
 
-def test_a_hearing_reaching_its_deadline_closes_4504(tmp_path: Path) -> None:
+def test_a_hearing_reaching_its_deadline_closes_4504(engine: Engine) -> None:
     service = FakeSpeechService()
     service.realtime = reading(service)
     scenario = SpeechScenario(
         service=service, hearing_seconds=(_SHORT_SECONDS, THREAD_WAIT_SECONDS)
     )
-    with a_speech_instance(tmp_path, scenario) as instance:
+    with a_speech_instance(engine, scenario) as instance:
         heard = hear_and_record(instance)
 
     assert heard.closed_with == HopClose.PAST_DEADLINE
@@ -564,7 +562,7 @@ def test_a_hearing_reaching_its_deadline_closes_4504(tmp_path: Path) -> None:
     ],
 )
 def test_a_service_that_does_not_open_within_the_opening_bound_closes_4502(
-    tmp_path: Path, silence: Served | None, capsys: pytest.CaptureFixture[str]
+    engine: Engine, silence: Served | None, capsys: pytest.CaptureFixture[str]
 ) -> None:
     service = FakeSpeechService(realtime=accept_and_stay_silent)
     scenario = SpeechScenario(
@@ -572,7 +570,7 @@ def test_a_service_that_does_not_open_within_the_opening_bound_closes_4502(
         peer=silence,
         hearing_seconds=(THREAD_WAIT_SECONDS, _SHORT_SECONDS),
     )
-    with a_speech_instance(tmp_path, scenario) as instance:
+    with a_speech_instance(engine, scenario) as instance:
         heard = hear_and_record(instance)
 
     assert heard.closed_with == HopClose.SERVICE_FAILED
@@ -580,11 +578,11 @@ def test_a_service_that_does_not_open_within_the_opening_bound_closes_4502(
 
 
 def test_a_browser_that_sends_nothing_opens_one_upgrade_and_one_session_update(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     service = FakeSpeechService()
     with (
-        a_speech_instance(tmp_path, _reading_scenario(service)) as instance,
+        a_speech_instance(engine, _reading_scenario(service)) as instance,
         instance.talk.websocket_connect(HEARING, headers=ORIGIN),
     ):
         assert service.arrived.acquire(timeout=THREAD_WAIT_SECONDS)
@@ -595,11 +593,11 @@ def test_a_browser_that_sends_nothing_opens_one_upgrade_and_one_session_update(
 
 
 def test_a_browser_that_leaves_mid_hearing_closes_the_service_socket_quietly(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     service = FakeSpeechService()
     service.realtime = sending_then_reading(service)
-    with a_speech_instance(tmp_path, SpeechScenario(service=service)) as instance:
+    with a_speech_instance(engine, SpeechScenario(service=service)) as instance:
         with (
             recorded_logs() as logged,
             instance.talk.websocket_connect(HEARING, headers=ORIGIN) as socket,
@@ -613,10 +611,10 @@ def test_a_browser_that_leaves_mid_hearing_closes_the_service_socket_quietly(
 
 
 def test_a_browser_that_leaves_during_the_token_read_sends_no_audio_and_logs_no_error(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
     service = FakeSpeechService()
-    with a_speech_instance(tmp_path, _reading_scenario(service)) as instance:
+    with a_speech_instance(engine, _reading_scenario(service)) as instance:
         entered, release = _held_at_the_workload_grant(instance.hosts)
         with (
             recorded_logs() as logged,
@@ -625,8 +623,8 @@ def test_a_browser_that_leaves_during_the_token_read_sends_no_audio_and_logs_no_
             socket.send_bytes(_THE_FIRST_FRAME)
             assert entered.wait(THREAD_WAIT_SECONDS)
         release.set()
-        with closing(sqlite3.connect(instance.hosts.database)) as connection:
-            stored = connection.execute("SELECT * FROM sessions").fetchone()
+        with instance.hosts.database.connect() as connection:
+            stored = connection.execute(text("SELECT * FROM sessions")).one()
         if service.upgrades:
             assert service.closed.wait(THREAD_WAIT_SECONDS)
 
@@ -637,9 +635,9 @@ def test_a_browser_that_leaves_during_the_token_read_sends_no_audio_and_logs_no_
 
 @pytest.mark.parametrize("case", LEAK_HEARINGS)
 def test_a_hearing_shows_no_marker_in_any_log_frame_close_or_stored_row(
-    tmp_path: Path, case: str, capsys: pytest.CaptureFixture[str]
+    engine: Engine, case: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with a_speech_instance(tmp_path, LEAK_HEARINGS[case]()) as instance:
+    with a_speech_instance(engine, LEAK_HEARINGS[case]()) as instance:
         heard = hear_and_record(instance)
         assert_nothing_shows(
             instance,
@@ -650,10 +648,10 @@ def test_a_hearing_shows_no_marker_in_any_log_frame_close_or_stored_row(
 
 
 def test_a_stalled_token_read_ended_by_logout_shows_no_marker(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    engine: Engine, capsys: pytest.CaptureFixture[str]
 ) -> None:
     scenario = SpeechScenario(arrange=refusing_every_workload_grant(PLANTED))
-    with a_speech_instance(tmp_path, scenario) as instance:
+    with a_speech_instance(engine, scenario) as instance:
         entered, release = _held_at_the_workload_grant(instance.hosts)
         with (
             recorded_logs() as logged,

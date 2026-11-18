@@ -1,27 +1,22 @@
 """Shared arrangement for the sign-in tests: a lobby, a fake issuer, real stores."""
 
 import asyncio
-import sqlite3
 import threading
 from collections.abc import Callable, Generator
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Literal
 
 from fastapi.testclient import TestClient
 from httpx2 import Response as BrowserAnswer
+from sqlalchemy import Engine, text
 from webauth.config import WebAuthConfig
 from webauth.oidc import OidcRelyingParty, TokenRequestPost
 from webauth.ports import AccountEvent, AuditSink, SignInStores, SignInTransaction
 
-from presentator.adapters.identity import (
-    ProcessWriteLock,
-    SqliteIdentityWrites,
-    SqliteSessionRecordStore,
-    SqliteSubjectUserStore,
-    create_identity_tables,
-)
+from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
+from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.api.auth import InstalledAuth
 from presentator.api.people import AdminPeople
 from presentator.application.decks import Decks
@@ -50,8 +45,8 @@ from tests.support.lobby import (
 MEMBER = ["/apps/presentator"]
 ADMIN = ["/apps/presentator", "/apps/presentator/admin"]
 _COUNTS = {
-    "users": "SELECT count(*) FROM users",
-    "sessions": "SELECT count(*) FROM sessions",
+    "users": text("SELECT count(*) FROM users"),
+    "sessions": text("SELECT count(*) FROM sessions"),
 }
 
 
@@ -80,10 +75,10 @@ class Scene:
 
     lobby: Lobby
     issuer: FakeIssuer
-    database: Path
-    users: SqliteSubjectUserStore
+    engine: Engine
+    users: PostgresSubjectUserStore
     audit: RecordingAudit
-    sessions: SqliteSessionRecordStore
+    sessions: PostgresSessionRecordStore
     relying_party: OidcRelyingParty
     config: WebAuthConfig
     clock: FrozenClock
@@ -122,25 +117,24 @@ class Scene:
         return client.get(f"/auth/callback?{query}")
 
     def stored_sessions(self) -> dict[str, str | None]:
-        """The refresh token of every session row by its id, as the file holds it."""
-        with closing(sqlite3.connect(self.database)) as connection:
-            return dict(connection.execute("SELECT id, refresh_token FROM sessions"))
+        """The refresh token of every session row by its id, as the row holds it."""
+        with self.engine.connect() as connection:
+            rows = connection.execute(text("SELECT id, refresh_token FROM sessions"))
+            return {row.id: row.refresh_token for row in rows}
 
     def stored_id_tokens(self) -> list[str | None]:
-        """The ID token of every session row, as the file holds it."""
-        with closing(sqlite3.connect(self.database)) as connection:
-            return [
-                token
-                for (token,) in connection.execute("SELECT id_token FROM sessions")
-            ]
+        """The ID token of every session row, as the row holds it."""
+        with self.engine.connect() as connection:
+            return list(
+                connection.execute(text("SELECT id_token FROM sessions")).scalars()
+            )
 
     def stored_tokens(self) -> list[str | None]:
         return list(self.stored_sessions().values())
 
     def count(self, table: Literal["users", "sessions"]) -> int:
-        with closing(sqlite3.connect(self.database)) as connection:
-            (count,) = connection.execute(_COUNTS[table]).fetchone()
-        return int(count)
+        with self.engine.connect() as connection:
+            return int(connection.execute(_COUNTS[table]).scalar_one())
 
 
 def _auth_through(
@@ -173,12 +167,11 @@ def _admin_of(token_clients: frozenset[str]) -> AdminPeople | None:
 
 
 def a_scene(  # noqa: PLR0913
-    tmp_path: Path,
+    engine: Engine,
     *,
-    transaction: Callable[[SqliteIdentityWrites], SignInTransaction] = lambda real: (
+    transaction: Callable[[PostgresIdentityWrites], SignInTransaction] = lambda real: (
         real
     ),
-    lock: ProcessWriteLock | None = None,
     audit: Callable[[RecordingAudit], AuditSink] = lambda recording: recording,
     realm: str = AN_ISSUER,
     token_requests: Callable[[TokenRequestPost], TokenRequestPost] = lambda real: real,
@@ -187,15 +180,11 @@ def a_scene(  # noqa: PLR0913
     preferences: Preferences | None = None,
     texts: DeckTexts | None = None,
 ) -> Scene:
-    database = tmp_path / "identity.sqlite3"
-    create_identity_tables(database)
     people = a_crowd()
     issuer = FakeIssuer(issuer=AN_ISSUER, client_id=A_CLIENT_ID, now=people.clock.now())
-    users = SqliteSubjectUserStore(database)
+    users = PostgresSubjectUserStore(engine)
     recording = RecordingAudit()
-    writes = SqliteIdentityWrites(
-        database, ProcessWriteLock() if lock is None else lock, audit(recording)
-    )
+    writes = PostgresIdentityWrites(engine, audit(recording))
     auth = _auth_through(
         issuer,
         people.clock,
@@ -203,7 +192,7 @@ def a_scene(  # noqa: PLR0913
         transaction=transaction(writes),
         realm=realm,
     )
-    sessions = SqliteSessionRecordStore(database)
+    sessions = PostgresSessionRecordStore(engine)
     app, _ = a_lobby_app(
         agent=an_agent_front(auth),
         texts=texts,
@@ -222,7 +211,7 @@ def a_scene(  # noqa: PLR0913
     return Scene(
         lobby=lobby,
         issuer=issuer,
-        database=database,
+        engine=engine,
         users=users,
         audit=recording,
         sessions=sessions,
