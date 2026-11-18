@@ -116,7 +116,10 @@ part; a secret typed into a path or query is exported as typed.
 
 ## Known gap: builds that outlive an erasure
 
-The erasure removes every run its decks deliver from. Superseded builds and
-leftovers go at the end of the next refresh pass ([decks](decks.md), DK14),
-so a leftover can outlive an erasure by one pass, or longer while that pass
-refuses.
+By the time the erasure answers, the rows and the store objects of every run
+its decks deliver from are gone. A copy of such a run on another process's disk
+goes at that process's next source poll tick ([decks](decks.md), DK20), so it
+outlives the erasure by up to `PRESENTATOR_SOURCE_POLL_SECONDS`, 300 s by
+default ([configuration](configuration.md)). Superseded builds and leftovers in
+the store go at the end of the next refresh pass of the process holding the
+refresh (DK14), or later while that pass refuses.
