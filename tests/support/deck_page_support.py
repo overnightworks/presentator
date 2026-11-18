@@ -7,15 +7,14 @@ from typing import Final
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
-from presentator.contracts.decks import Build, BuildAttempt, BuildRun, Deck
-from tests.presentator.application.support.fakes import FakeDeckStore
+from presentator.contracts.decks import Artefacts, Build, BuildAttempt, Deck
+from tests.presentator.application.support.fakes import FakeBuildRunner, FakeDeckStore
 from tests.support.lobby import (
     A_TALK_ADDRESS,
     ADMIN,
-    BUILT_TALK,
-    EXPORTED_PDF,
     NOW,
     SOURCE_ID,
+    THE_EXAMPLE_RUN,
     GivenDecks,
 )
 from tests.support.talk_support import two_hosts
@@ -26,16 +25,19 @@ COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 BUILT_AGO: Final = timedelta(minutes=12)
 
 
-def a_build(*, talk: Path = BUILT_TALK, pdf: Path = EXPORTED_PDF) -> Build:
-    """A build that switched over a while ago, in the run the talk lies in."""
+def a_build() -> Build:
+    """A build of the example talk that switched over a while ago."""
     return Build(
-        run=BuildRun(talk.parent.parent.name),
-        directory=talk,
-        pdf=pdf,
+        run=THE_EXAMPLE_RUN,
         commit=COMMIT,
         built_at=NOW - BUILT_AGO,
         toolchain=None,
     )
+
+
+def a_builder_serving(*, talk: Path, pdf: Path) -> FakeBuildRunner:
+    """A build runner that serves the example run's talk and PDF from those paths."""
+    return FakeBuildRunner(served={THE_EXAMPLE_RUN: Artefacts(directory=talk, pdf=pdf)})
 
 
 def a_deck_store(

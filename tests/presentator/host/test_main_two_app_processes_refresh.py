@@ -44,10 +44,8 @@ _NO_TICKS = {"PRESENTATOR_SOURCE_POLL_SECONDS": "3600"}
 _TICKING = {"PRESENTATOR_SOURCE_POLL_SECONDS": "1"}
 _ONE_SECOND = {"PRESENTATOR_BUILD_TIMEOUT_SECONDS": "1"}
 _DECK_ROW = "SELECT built_commit, attempt_outcome FROM decks"
-_BUILD_OF_THE_DECK = "SELECT active_build, pdf_export, built_commit FROM decks"
-_BUILD_AND_TOOLCHAIN = (
-    "SELECT active_build, pdf_export, built_commit, built_toolchain FROM decks"
-)
+_BUILD_OF_THE_DECK = "SELECT built_run, built_commit FROM decks"
+_BUILD_AND_TOOLCHAIN = "SELECT built_run, built_commit, built_toolchain FROM decks"
 _HAL = "hal-client"
 _TOKEN_CLIENTS = {"PRESENTATOR_TOKEN_CLIENTS": _HAL}
 _PEOPLE = "/api/admin/people"
@@ -249,6 +247,7 @@ def test_a_process_that_lost_its_lock_connection_mid_build_is_replaced_and_refus
         gate.let_through(1)
         late = refreshing.result().json()
         rows = _rows(engine, _BUILD_OF_THE_DECK)
+        stored = database.store.runs.names()
         attempt_after_the_late_build = _rows(engine, _ATTEMPT)
         runs_after_the_late_build = scalar(engine, _NEWEST_RUN)
 
@@ -256,7 +255,8 @@ def test_a_process_that_lost_its_lock_connection_mid_build_is_replaced_and_refus
     assert attempt_taken_over == [(BuildOutcome.FAILED,)]
     assert late["run"] is None
     assert rows == standing
-    assert all(Path(path).exists() for row in rows for path in row[:2] if path)
+    assert stored is not None
+    assert {run for run, _ in rows} <= stored
     assert attempt_after_the_late_build == attempt_taken_over
     assert runs_after_the_late_build == runs_after_the_takeover
 
@@ -304,12 +304,12 @@ def test_a_process_does_not_rebuild_what_a_present_toolchain_built_until_it_is_g
         fetched(admin, apps[other], "talks")
         rebuilt = _rows(engine, _BUILD_AND_TOOLCHAIN)
 
-    assert built[0][2] == remote.head
+    assert built[0][1] == remote.head
     assert not_rebuilt == built
     assert runs_not_rebuilt is not None
     assert len(runs_not_rebuilt) == 1
-    assert rebuilt[0][2] == remote.head
-    assert rebuilt[0][3] != built[0][3]
+    assert rebuilt[0][1] == remote.head
+    assert rebuilt[0][2] != built[0][2]
 
 
 @pytest.mark.parametrize(

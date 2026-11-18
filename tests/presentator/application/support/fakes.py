@@ -705,6 +705,8 @@ class FakeBuildRunner:
     identity: ToolchainIdentity = THE_TOOLCHAIN
     # Whether the store takes what a build left, the way one that is down does not.
     store_answers: bool = True
+    # A run's talk and PDF where a test laid them down outside the root.
+    served: dict[BuildRun, Artefacts] = field(default_factory=dict[BuildRun, Artefacts])
 
     def toolchain_identity(self) -> ToolchainIdentity:
         return self.identity
@@ -723,8 +725,7 @@ class FakeBuildRunner:
         root = _SOMEWHERE_ELSE if self.writes_outside_the_root else self.root
         run = BuildRun(f"run-{len(self.built)}")
         self.on_disk.add(run)
-        written = root / run.name / "out"
-        return Artefacts(directory=written / "talk", pdf=written / "deck.pdf")
+        return _artefacts_of(run, under=root)
 
     def holds(self, artefacts: Artefacts) -> bool:
         return all(
@@ -738,8 +739,8 @@ class FakeBuildRunner:
         return BuildRun(artefacts.directory.parent.parent.name)
 
     def kept(self, build: Build) -> Artefacts | None:
-        # Fetching is the real adapter's concern; a build here is where it says.
-        return Artefacts(directory=build.directory, pdf=build.pdf)
+        # Fetching is the real adapter's concern; a run here is where it was laid.
+        return self.served.get(build.run) or _artefacts_of(build.run, under=self.root)
 
     def read(self, written: Path) -> BinaryIO | None:
         # Links are the real adapter's concern and are proven against it.
@@ -762,6 +763,12 @@ class FakeBuildRunner:
     def directory_of(self, run: BuildRun) -> PurePosixPath:
         """Where this fake says a run stands, relative to the volume."""
         return PurePosixPath(self.root.name, run.name)
+
+
+def _artefacts_of(run: BuildRun, *, under: Path) -> Artefacts:
+    """Where a fake build of that run writes its talk and PDF under that root."""
+    written = under / run.name / "out"
+    return Artefacts(directory=written / "talk", pdf=written / "deck.pdf")
 
 
 # What most tests need from the toolchain set, without naming a real one.

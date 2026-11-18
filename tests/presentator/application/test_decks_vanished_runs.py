@@ -1,21 +1,17 @@
 """A deck whose built talk vanished from disk is built again."""
 
 import shutil
-from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
-import pytest
-
 from presentator.application.decks import Decks
-from presentator.contracts.decks import BuildOutcome, BuildRun, SourceRunOutcome
+from presentator.contracts.decks import BuildOutcome, SourceRunOutcome
 from tests.presentator.application.support.decks_support import (
     DecksFakes,
     a_folder,
     decks_over,
     having,
 )
-from tests.presentator.application.support.fakes import BUILDS_ROOT
 from tests.support.deck_source_support import a_source, folders_under, mirrors_under
 from tests.support.git_remote import GitRemote
 
@@ -61,30 +57,6 @@ def test_a_deck_whose_run_is_on_disk_is_not_built_again() -> None:
     decks.refresh()
 
     assert fakes.builder.built == [_A_DECK]
-
-
-@pytest.mark.parametrize("vanished", ["talk-run", "pdf-run"])
-def test_a_deck_whose_talk_or_pdf_run_alone_vanished_is_built_again(
-    vanished: str,
-) -> None:
-    decks, fakes = a_built_deck()
-    standing = fakes.store.kept[_A_DECK].build
-    assert standing is not None
-    fakes.store.put_build(
-        _A_DECK,
-        replace(
-            standing,
-            directory=BUILDS_ROOT / "talk-run" / "out" / "talk",
-            pdf=BUILDS_ROOT / "pdf-run" / "out" / "deck.pdf",
-        ),
-    )
-    fakes.builder.on_disk = {BuildRun("talk-run"), BuildRun("pdf-run")} - {
-        BuildRun(vanished)
-    }
-
-    decks.refresh()
-
-    assert fakes.builder.built == [_A_DECK, _A_DECK]
 
 
 def test_a_listing_that_did_not_finish_builds_nothing() -> None:

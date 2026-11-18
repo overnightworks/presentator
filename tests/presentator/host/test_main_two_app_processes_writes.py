@@ -58,9 +58,7 @@ _MARKED_DECKS = 12
 _REBUILDS = 4
 _OPENINGS = 80
 _DRAFT_IDS = "SELECT id FROM source_key_drafts ORDER BY id"
-_BUILD_OF_THE_DECK = (
-    "SELECT built_run, active_build, pdf_export, built_commit FROM decks"
-)
+_BUILD_OF_THE_DECK = "SELECT built_run, built_commit FROM decks"
 # Stands in for the ssh git starts: it runs the upload-pack the remote command
 # names on this machine, so an scp-form address reaches a repository on disk.
 _SSH_ON_THIS_MACHINE = """#!/bin/sh
@@ -497,19 +495,15 @@ def test_a_deck_rebuilt_at_both_processes_at_once_is_delivered_from_one_build(  
 
     commits_of_a_run = defaultdict[str, set[str]](set)
     for observation in seen:
-        for run, talk, pdf, commit in observation:
-            if run is None and talk is None and pdf is None and commit is None:
+        for run, commit in observation:
+            if run is None and commit is None:
                 continue
             assert run is not None
-            assert talk is not None
-            assert pdf is not None
-            assert Path(talk).parent == Path(pdf).parent
-            assert Path(talk).parent.parent.name == run
             assert commit is not None
             assert commit in pushed
             commits_of_a_run[run].add(commit)
     assert all(len(commits) == 1 for commits in commits_of_a_run.values())
-    assert seen[-1][0][3] == remote.head
+    assert seen[-1][0][1] == remote.head
 
 
 @pytest.mark.usefixtures("environment")

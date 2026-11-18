@@ -366,8 +366,6 @@ def test_a_removed_sources_talk_answers_not_found(tmp_path: Path) -> None:
         "kundenfeedback",
         Build(
             run=BuildRun(built.parent.name),
-            directory=built / "talk",
-            pdf=built / "deck.pdf",
             commit="a-commit",
             built_at=NOW,
             toolchain=None,

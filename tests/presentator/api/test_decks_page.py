@@ -21,6 +21,7 @@ from tests.support.deck_page_support import (
     SLUG,
     TITLE,
     a_build,
+    a_builder_serving,
     a_deck_store,
     a_talk_host,
 )
@@ -132,17 +133,21 @@ def test_the_download_hands_the_file_the_deck_names_over_to_be_saved(
 
 
 @pytest.mark.parametrize(
-    "built",
-    [None, a_build(pdf=Path("/var/lib/presentator/builds/nothing-was-written.pdf"))],
+    ("built", "pdf"),
+    [
+        (None, EXPORTED_PDF),
+        (a_build(), Path("/var/lib/presentator/builds/nothing-was-written.pdf")),
+    ],
     ids=["nothing built", "a file that is gone"],
 )
 def test_a_download_with_nothing_behind_it_answers_the_lobby_app_under_not_found(
-    built: Build | None,
+    built: Build | None, pdf: Path
 ) -> None:
     signed_in = a_signed_in_lobby(
         GivenDecks(
             store=a_deck_store(built=built),
             source=a_configured_source(_ADDRESS),
+            builder=a_builder_serving(talk=BUILT_TALK, pdf=pdf),
         ),
     )
 
@@ -195,8 +200,9 @@ def talk_host_with_a_removed_build(engine: Engine, tmp_path: Path) -> TestClient
     client = a_talk_host(
         engine,
         GivenDecks(
-            store=a_deck_store(built=a_build(talk=talk)),
+            store=a_deck_store(built=a_build()),
             source=a_configured_source(_ADDRESS),
+            builder=a_builder_serving(talk=talk, pdf=EXPORTED_PDF),
         ),
     )
     shutil.rmtree(talk)

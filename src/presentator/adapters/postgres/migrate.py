@@ -139,8 +139,9 @@ def serving_refusal(
     of this release's own `history` other than its head, which an older
     release migrated: serving either would read tables or columns that may not
     exist. A revision this release does not know is a newer release's, which
-    only added, so it is served. The reasons name the kind of failure and never
-    what the driver says, which may quote the address the connection used.
+    drops a column only once the release before it no longer reads it, so it
+    is served. The reasons name the kind of failure and never what the driver
+    says, which may quote the address the connection used.
     """
     try:
         connection = engine.connect()

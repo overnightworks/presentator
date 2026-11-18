@@ -945,22 +945,20 @@ def test_a_slug_carrying_an_apostrophe_and_a_non_ascii_letter_survives_reconcili
     assert store.get("gone") is None
 
 
-def test_everything_a_build_wrote_switches_over_together(
-    tmp_path: Path, engine: Engine
-) -> None:
+def test_everything_a_build_wrote_switches_over_together(engine: Engine) -> None:
     store = a_deck_store(engine)
     store.put(a_deck(title="Kundenfeedback"))
-    first = a_build(tmp_path)
+    first = a_build()
 
     store.put_build("kundenfeedback", first)
     after_the_first = store.get("kundenfeedback")
-    store.put_build("kundenfeedback", a_build(tmp_path, commit=_A_LATER_COMMIT))
+    store.put_build("kundenfeedback", a_build(commit=_A_LATER_COMMIT))
     after_the_second = store.get("kundenfeedback")
 
     assert after_the_first is not None
     assert after_the_first.build == first
     assert after_the_second is not None
-    assert after_the_second.build == a_build(tmp_path, commit=_A_LATER_COMMIT)
+    assert after_the_second.build == a_build(commit=_A_LATER_COMMIT)
 
 
 @pytest.mark.parametrize(
@@ -969,13 +967,12 @@ def test_everything_a_build_wrote_switches_over_together(
     ids=["a build that began", "a build that failed"],
 )
 def test_the_build_a_deck_last_started_is_kept_beside_the_talk_that_stands(
-    tmp_path: Path,
     engine: Engine,
     attempt: BuildAttempt,
 ) -> None:
     store = a_deck_store(engine)
     store.put(a_deck())
-    built = a_build(tmp_path)
+    built = a_build()
     store.put_build("kundenfeedback", built)
 
     store.put_attempt("kundenfeedback", attempt)
@@ -987,12 +984,11 @@ def test_the_build_a_deck_last_started_is_kept_beside_the_talk_that_stands(
 
 
 def test_taking_a_deck_in_again_leaves_what_it_delivers_standing(
-    tmp_path: Path,
     engine: Engine,
 ) -> None:
     store = a_deck_store(engine)
     store.put(a_deck(title="Kundenfeedback"))
-    built = a_build(tmp_path)
+    built = a_build()
     store.put_build("kundenfeedback", built)
     standing_attempt = an_attempt()
     store.put_attempt("kundenfeedback", standing_attempt)

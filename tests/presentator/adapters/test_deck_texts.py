@@ -34,7 +34,7 @@ def texts_under(tmp_path: Path, *, answering: bool = True) -> BuiltDeckTexts:
 
 def lay_down(tmp_path: Path, files: dict[str, str]) -> None:
     """The deck's tree as the build of `a_build` left it in its run."""
-    deck = tmp_path / "builds" / a_build(tmp_path).run.name / "deck"
+    deck = tmp_path / "builds" / a_build().run.name / "deck"
     deck.mkdir(parents=True)
     (deck.parent / "out").mkdir()
     for name, text in files.items():
@@ -42,7 +42,7 @@ def lay_down(tmp_path: Path, files: dict[str, str]) -> None:
 
 
 def read_deck(tmp_path: Path, slug: str) -> DeckText | None:
-    deck = built(a_deck(slug), a_build(tmp_path))
+    deck = built(a_deck(slug), a_build())
     return texts_under(tmp_path).text_of(deck, a_source("git@heimserver:decks.git"))
 
 
@@ -98,7 +98,7 @@ def test_a_built_commit_without_slides_has_no_words(
 def test_a_run_neither_here_nor_in_the_store_is_unavailable(
     tmp_path: Path, *, answering: bool
 ) -> None:
-    deck = built(a_deck(_TALK), a_build(tmp_path))
+    deck = built(a_deck(_TALK), a_build())
     texts = texts_under(tmp_path, answering=answering)
 
     with pytest.raises(CoPresenterUnavailableError):
@@ -107,7 +107,7 @@ def test_a_run_neither_here_nor_in_the_store_is_unavailable(
 
 def test_slides_that_are_not_utf8_leave_the_deck_unavailable(tmp_path: Path) -> None:
     lay_down(tmp_path, {})
-    run = tmp_path / "builds" / a_build(tmp_path).run.name
+    run = tmp_path / "builds" / a_build().run.name
     (run / "deck" / "slides.md").write_bytes(b"# \xff\xfe\n")
 
     with pytest.raises(CoPresenterUnavailableError):
@@ -118,7 +118,7 @@ def test_a_slides_file_that_is_a_link_gives_no_words(tmp_path: Path) -> None:
     outside = tmp_path / "outside.md"
     outside.write_text(_SLIDES, encoding="utf-8")
     lay_down(tmp_path, {})
-    run = tmp_path / "builds" / a_build(tmp_path).run.name
+    run = tmp_path / "builds" / a_build().run.name
     (run / "deck" / "slides.md").symlink_to(outside)
 
     assert read_deck(tmp_path, _TALK) is None
