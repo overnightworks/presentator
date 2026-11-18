@@ -48,8 +48,12 @@ function isFirefoxFaviconLine(message: ConsoleMessage, pageOrigin: string): bool
 
 export const test = base.extend<{ violations: string[] }>({
 	violations: [
-		async ({ browserName, context, page }, use) => {
+		async ({ baseURL, browserName, context, page }, use) => {
 			const firefox = browserName === 'firefox';
+			// The console line names no document, and the page may have moved on
+			// when it arrives, so the lobby's origin comes from the drive's base.
+			if (baseURL === undefined) throw new Error('The CSP fixture needs a baseURL');
+			const lobbyOrigin = new URL(baseURL).origin;
 			const violations: string[] = [];
 			await context.exposeBinding('reportViolation', (_source, violation: PolicyViolation) => {
 				if (!(firefox && isFirefoxFaviconEvent(violation))) {
@@ -76,7 +80,7 @@ export const test = base.extend<{ violations: string[] }>({
 			page.on('console', (message) => {
 				if (
 					/content.security.policy/i.test(message.text()) &&
-					!(firefox && isFirefoxFaviconLine(message, new URL(page.url()).origin))
+					!(firefox && isFirefoxFaviconLine(message, lobbyOrigin))
 				) {
 					violations.push(message.text());
 				}
