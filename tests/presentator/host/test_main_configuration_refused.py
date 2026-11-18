@@ -76,15 +76,13 @@ def _a_log_level_logline_does_not_name(
     return unnamed
 
 
-def _a_statement_timeout_of_zero(
-    environment: pytest.MonkeyPatch, directory: Path
-) -> str:
-    # Postgres reads zero as no bound at all; written so that the log's own
-    # digits never spell it.
-    del directory
-    zero = "0e0"
-    environment.setenv("PRESENTATOR_DATABASE_STATEMENT_TIMEOUT_SECONDS", zero)
-    return zero
+def _a_statement_timeout_of(refused: str) -> Arrangement:
+    def arrange(environment: pytest.MonkeyPatch, directory: Path) -> str:
+        del directory
+        environment.setenv("PRESENTATOR_DATABASE_STATEMENT_TIMEOUT_SECONDS", refused)
+        return refused
+
+    return arrange
 
 
 def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
@@ -134,10 +132,22 @@ def _unparsable_object_store_key(
             "PRESENTATOR_DATABASE_URL,PRESENTATOR_DATABASE_PASSWORD_FILE",
         ),
         ([], _no_bucket, "PRESENTATOR_S3_BUCKET"),
+        # Postgres reads zero as no bound at all; written so that the log's own
+        # digits never spell it.
         (
             [],
-            _a_statement_timeout_of_zero,
+            _a_statement_timeout_of("0e0"),
             "PRESENTATOR_DATABASE_STATEMENT_TIMEOUT_SECONDS",
+        ),
+        # Postgres holds no timeout past 2**31 - 1 milliseconds, the wait for
+        # the refresh's default build bound added.
+        *(
+            (
+                [],
+                _a_statement_timeout_of(past_range),
+                "PRESENTATOR_DATABASE_STATEMENT_TIMEOUT_SECONDS",
+            )
+            for past_range in ("2147483", "3000000", "1e9")
         ),
         (
             [],

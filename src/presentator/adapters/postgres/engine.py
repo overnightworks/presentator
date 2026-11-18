@@ -14,6 +14,9 @@ POSTGRES_DRIVER: Final = "postgresql+psycopg"
 # whole seconds.
 CONNECT_TIMEOUT_SECONDS: Final = 5
 _MILLISECONDS: Final = 1000
+# Postgres holds a timeout in whole milliseconds as a 32-bit integer and refuses
+# a longer one at connect.
+LONGEST_TIMEOUT: Final = timedelta(milliseconds=2**31 - 1)
 
 
 def create_database_engine(

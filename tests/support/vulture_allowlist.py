@@ -53,6 +53,7 @@ WorkerSettings.model_config
 Settings._two_hostnames  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 Settings._worker_is_reached  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 Settings._voices_speak_their_language  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
+Settings._statement_bound_fits_postgres  # noqa: SLF001 - pydantic, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]
 
 # pytest applies this autouse fixture to every host test by itself.
 logging_undone_after_main  # pyright: ignore[reportUnusedExpression]
