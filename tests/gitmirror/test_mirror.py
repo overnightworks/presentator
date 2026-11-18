@@ -67,46 +67,6 @@ _LOOPBACK = "127.0.0.1"
 _AN_UNRESOLVABLE_HOST = "http://host.example.invalid/repo.git"
 
 
-@pytest.mark.parametrize(
-    ("state", "expected"),
-    [
-        pytest.param(
-            ConnectionState.READY,
-            ConnectionNextAction.NONE,
-            id="ready-needs-nothing",
-        ),
-        pytest.param(
-            ConnectionState.CREDENTIAL_UNRESOLVABLE,
-            ConnectionNextAction.RESOLVE_CREDENTIAL,
-            id="unresolvable-credential",
-        ),
-        pytest.param(
-            ConnectionState.REFUSED,
-            ConnectionNextAction.REPAIR_ACCESS,
-            id="refused-access",
-        ),
-        pytest.param(
-            ConnectionState.UNREACHABLE,
-            ConnectionNextAction.CHECK_REACHABILITY,
-            id="unreachable-source",
-        ),
-        pytest.param(
-            ConnectionState.FAILED,
-            ConnectionNextAction.INSPECT_FAILURE,
-            id="other-failure",
-        ),
-    ],
-)
-def test_connection_results_name_the_one_next_action_for_their_state(
-    state: ConnectionState,
-    expected: ConnectionNextAction,
-) -> None:
-    assert Connection(state=state, revision=None).next_action is expected
-    assert (
-        ConnectionCheck(state=state, commit=None, detail=None).next_action is expected
-    )
-
-
 def test_connection_next_action_package_root_provides_the_interim_contract() -> None:
     assert set(gitmirror.__all__) == {
         "Change",

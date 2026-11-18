@@ -837,7 +837,8 @@
           "credential-unresolvable",
           "refused",
           "failed",
-          "unreachable"
+          "unreachable",
+          "host-key-refused"
         ],
         "title": "SourceRunFailure",
         "type": "string"

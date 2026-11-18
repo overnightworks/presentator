@@ -28,7 +28,8 @@ presentator is a self-hosted web service for giving a Slidev talk from any brows
 - Sources: [add a Git source](docs/runbooks/add-a-source.md),
   [renew a secret](docs/runbooks/renew-a-source-secret.md),
   [renew a webhook secret](docs/runbooks/renew-a-webhook-secret.md),
-  [call the fetch-now hook](docs/runbooks/call-the-fetch-now-hook.md).
+  [call the fetch-now hook](docs/runbooks/call-the-fetch-now-hook.md),
+  [unpin a host's key](docs/runbooks/unpin-a-host-key.md).
 
 **Engineers and agents**
 

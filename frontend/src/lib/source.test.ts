@@ -132,7 +132,8 @@ describe('runRow', () => {
 		{ reason: 'unreachable', worded: words['source.runUnreachable'] },
 		{ reason: 'refused', worded: words['source.runRefused'] },
 		{ reason: 'failed', worded: words['source.runFailed'] },
-		{ reason: 'credential-unresolvable', worded: words['source.runSecret'] }
+		{ reason: 'credential-unresolvable', worded: words['source.runSecret'] },
+		{ reason: 'host-key-refused', worded: words['source.runHostKey'] }
 	])('words a failure for $reason by its reason', ({ reason, worded }) => {
 		expect(runRow(run({ reason }), words)).toEqual({
 			shape: 'failed',

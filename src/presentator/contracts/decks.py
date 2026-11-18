@@ -253,6 +253,7 @@ class SourceRunFailure(StrEnum):
     REFUSED = "refused"
     FAILED = "failed"
     UNREACHABLE = "unreachable"
+    HOST_KEY_REFUSED = "host-key-refused"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

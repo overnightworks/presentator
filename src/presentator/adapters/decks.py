@@ -17,7 +17,12 @@ from typing import Any, Final
 
 from logline import StepTimer
 
-from gitmirror.mirror import GitMirror, adopt_known_hosts, check_connection
+from gitmirror.mirror import (
+    GitMirror,
+    adopt_known_hosts,
+    check_connection,
+    remove_leftover_known_hosts,
+)
 from gitmirror.model import (
     ConnectionState,
     CredentialReference,
@@ -54,12 +59,13 @@ _MIRROR_SUFFIX: Final = ".git"
 # `host_key_pins`, on the disk that held its mirrors.
 _EARLIER_KNOWN_HOSTS: Final = "known_hosts"
 # `gitmirror`'s own words never reach a `SourceRun`; a connection that carries
-# no revision is always one of these four states, never `READY`.
+# no revision is always one of these states, never `READY`.
 _FAILURE_BY_CONNECTION_STATE: Final[dict[ConnectionState, SourceRunFailure]] = {
     ConnectionState.CREDENTIAL_UNRESOLVABLE: SourceRunFailure.CREDENTIAL_UNRESOLVABLE,
     ConnectionState.REFUSED: SourceRunFailure.REFUSED,
     ConnectionState.FAILED: SourceRunFailure.FAILED,
     ConnectionState.UNREACHABLE: SourceRunFailure.UNREACHABLE,
+    ConnectionState.HOST_KEY_REFUSED: SourceRunFailure.HOST_KEY_REFUSED,
 }
 
 # A connection the far end or the credential turned down is a refusal of the
@@ -156,10 +162,14 @@ class SourceMirrors:
         return None
 
     def remove_all_but(self, sources: Iterable[Source]) -> None:
-        """Delete every mirror in the directory that none of these sources has."""
+        """Delete every mirror in the directory that none of these sources has.
+
+        The known_hosts files ssh runs killed midway left behind go too.
+        """
         kept = {self._directory_of(source) for source in sources}
         if not self.directory.is_dir():
             return
+        remove_leftover_known_hosts(self.directory)
         for directory in self.directory.glob(f"*{_MIRROR_SUFFIX}"):
             if directory not in kept:
                 shutil.rmtree(directory, ignore_errors=True)

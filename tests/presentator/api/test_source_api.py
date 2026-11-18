@@ -130,6 +130,11 @@ def test_a_list_of_no_sources_is_empty() -> None:
             SourceState.ERROR,
         ),
         (SourceRunOutcome.FAILURE, SourceRunFailure.UNREACHABLE, SourceState.ERROR),
+        (
+            SourceRunOutcome.FAILURE,
+            SourceRunFailure.HOST_KEY_REFUSED,
+            SourceState.REFUSED,
+        ),
     ],
 )
 def test_a_listed_source_says_its_newest_runs_state_reason_and_stored_instant(

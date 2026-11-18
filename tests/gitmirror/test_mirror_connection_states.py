@@ -14,7 +14,13 @@ from socketserver import BaseServer
 import pytest
 
 from gitmirror.mirror import check_connection, connection_state_for_failure
-from gitmirror.model import ConnectionState, CredentialReference
+from gitmirror.model import (
+    Connection,
+    ConnectionCheck,
+    ConnectionNextAction,
+    ConnectionState,
+    CredentialReference,
+)
 from tests.support.git_remote import MAIN_BRANCH, GitRemote
 from tests.support.mirror_support import A_GENEROUS_BOUND, FixedSecret, a_mirror
 
@@ -216,3 +222,48 @@ def test_a_check_without_a_secret_meets_a_demanded_login_as_unreachable(
 
     assert checked.state is ConnectionState.UNREACHABLE
     assert checked.commit is None
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [
+        pytest.param(
+            ConnectionState.READY,
+            ConnectionNextAction.NONE,
+            id="ready-needs-nothing",
+        ),
+        pytest.param(
+            ConnectionState.CREDENTIAL_UNRESOLVABLE,
+            ConnectionNextAction.RESOLVE_CREDENTIAL,
+            id="unresolvable-credential",
+        ),
+        pytest.param(
+            ConnectionState.REFUSED,
+            ConnectionNextAction.REPAIR_ACCESS,
+            id="refused-access",
+        ),
+        pytest.param(
+            ConnectionState.UNREACHABLE,
+            ConnectionNextAction.CHECK_REACHABILITY,
+            id="unreachable-source",
+        ),
+        pytest.param(
+            ConnectionState.FAILED,
+            ConnectionNextAction.INSPECT_FAILURE,
+            id="other-failure",
+        ),
+        pytest.param(
+            ConnectionState.HOST_KEY_REFUSED,
+            ConnectionNextAction.VERIFY_HOST_KEY,
+            id="host-key-refused",
+        ),
+    ],
+)
+def test_connection_results_name_the_one_next_action_for_their_state(
+    state: ConnectionState,
+    expected: ConnectionNextAction,
+) -> None:
+    assert Connection(state=state, revision=None).next_action is expected
+    assert (
+        ConnectionCheck(state=state, commit=None, detail=None).next_action is expected
+    )

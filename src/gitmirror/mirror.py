@@ -6,6 +6,7 @@ than binding a second git implementation.
 """
 
 import base64
+import fcntl
 import hashlib
 import hmac
 import os
@@ -18,7 +19,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, TextIO
 from urllib.parse import urlsplit
 
 if TYPE_CHECKING:
@@ -117,7 +118,7 @@ _UNREACHABLE_CHECK: Final = ConnectionCheck(
     detail=None,
 )
 _HOST_KEY_REFUSED_CHECK: Final = ConnectionCheck(
-    state=ConnectionState.FAILED,
+    state=ConnectionState.HOST_KEY_REFUSED,
     commit=None,
     detail=_HOST_KEY_REFUSED,
 )
@@ -282,7 +283,7 @@ class GitMirror:
             # A remote nobody can reach must not hold the page that asked for it.
             return _UNREACHABLE
         if not trusted:
-            return Connection(state=ConnectionState.FAILED, revision=None)
+            return Connection(state=ConnectionState.HOST_KEY_REFUSED, revision=None)
         if pulled.returncode != 0:
             stderr = pulled.stderr.decode(errors="replace").strip()
             return Connection(
@@ -379,12 +380,15 @@ def _check_answered_by(
     """What a finished `ls-remote` says: the head commit, or which failure and why."""
     if probed.returncode != 0:
         stderr = probed.stderr.decode(errors="replace").strip()
+        state = connection_state_for_failure(
+            stderr, credential_offered=secret is not None
+        )
+        if state is ConnectionState.HOST_KEY_REFUSED:
+            # ssh leads its refusal with a banner of `@`; its last words name it.
+            return _HOST_KEY_REFUSED_CHECK
         sanitized = _sanitized(stderr, secret=secret)
         return ConnectionCheck(
-            state=connection_state_for_failure(
-                stderr,
-                credential_offered=secret is not None,
-            ),
+            state=state,
             commit=None,
             detail=sanitized.splitlines()[0] if sanitized else None,
         )
@@ -477,17 +481,47 @@ def _pinned_hosts(
         yield None
         return
     pinned = frozenset(known_hosts.pins.pinned())
-    known_hosts.directory.mkdir(parents=True, exist_ok=True)
-    descriptor, name = tempfile.mkstemp(
-        prefix=_KNOWN_HOSTS_PREFIX, dir=known_hosts.directory
-    )
-    path = Path(name)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as hosts_file:
+    hosts_file, path = _locked_hosts_file(known_hosts.directory)
+    with hosts_file:
+        try:
             hosts_file.writelines(f"{each.host} {each.key}\n" for each in pinned)
-        yield _PinnedHostsFile(path=path, known_hosts=known_hosts, pinned=pinned)
-    finally:
-        path.unlink(missing_ok=True)
+            hosts_file.flush()
+            yield _PinnedHostsFile(path=path, known_hosts=known_hosts, pinned=pinned)
+        finally:
+            path.unlink(missing_ok=True)
+
+
+def _locked_hosts_file(directory: Path) -> tuple[TextIO, Path]:
+    """A new known_hosts file in that directory, held under this run's lock.
+
+    The lock tells `remove_leftover_known_hosts` this run still needs the
+    file, and goes with the process when it is killed mid-run. A sweep can
+    take the file between its creation and the lock; ssh would then make a
+    fresh one and accept any key, so a taken file is replaced.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    while True:
+        descriptor, name = tempfile.mkstemp(prefix=_KNOWN_HOSTS_PREFIX, dir=directory)
+        hosts_file = os.fdopen(descriptor, "w", encoding="utf-8")
+        fcntl.flock(hosts_file, fcntl.LOCK_EX)
+        if os.fstat(hosts_file.fileno()).st_nlink:
+            return hosts_file, Path(name)
+        hosts_file.close()
+
+
+def remove_leftover_known_hosts(directory: Path) -> None:
+    """Delete each ssh run's known_hosts file in that directory no run still holds.
+
+    A process killed during an ssh run leaves its file behind; a run that
+    still runs, in any process, holds the lock on its own.
+    """
+    for path in directory.glob(f"{_KNOWN_HOSTS_PREFIX}*"):
+        try:
+            with path.open("rb") as leftover:
+                fcntl.flock(leftover, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                path.unlink()
+        except BlockingIOError, FileNotFoundError:
+            continue
 
 
 def _host_keys_in(path: Path) -> frozenset[HostKey]:
@@ -626,7 +660,10 @@ def connection_state_for_failure(
     *,
     credential_offered: bool,
 ) -> ConnectionState:
-    """Which of the three failure states a failed pull's own words say happened.
+    """Which failure state a failed pull's own words say happened.
+
+    ssh's own refusal of a host whose key differs from its pin is
+    `host-key-refused`, whatever else git adds to it.
 
     A login demanded of a request that offered none is `unreachable`: the
     far end answers a private repository like a missing one, so the address
@@ -637,6 +674,8 @@ def connection_state_for_failure(
     certificate failure, a proxy's own text — is not proof the host never
     answered, so it stays `failed` rather than guessing.
     """
+    if _HOST_KEY_REFUSED in stderr:
+        return ConnectionState.HOST_KEY_REFUSED
     lowered = stderr.lower()
     if any(word in lowered for word in _REFUSED_WORDS):
         return (

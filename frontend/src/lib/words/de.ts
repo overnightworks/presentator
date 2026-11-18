@@ -137,6 +137,7 @@ export type Words = {
     readonly "source.runUnreachable": string;
     readonly "source.runSecret": string;
     readonly "source.runRefused": string;
+    readonly "source.runHostKey": string;
     readonly "source.runFailed": string;
     readonly "sourceNew.back": string;
     readonly "sourceNew.title": string;
@@ -306,6 +307,7 @@ export const words: Words = {
     "source.runUnreachable": "Nicht erreichbar: Der Host antwortet nicht, oder das Repository ist privat und braucht ein Token.",
     "source.runSecret": "Secret nicht gespeichert",
     "source.runRefused": "Anmeldung abgelehnt",
+    "source.runHostKey": "Host-Schlüssel abgelehnt: Der Host antwortet mit einem anderen Schlüssel als beim ersten Kontakt.",
     "source.runFailed": "Abruf fehlgeschlagen",
     "sourceNew.back": "← Quellen",
     "sourceNew.title": "Quelle hinzufügen",

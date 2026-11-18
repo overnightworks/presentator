@@ -12,7 +12,11 @@ from typing import cast
 import pytest
 
 from gitmirror import mirror as mirror_module
-from gitmirror.mirror import adopt_known_hosts, check_connection
+from gitmirror.mirror import (
+    adopt_known_hosts,
+    check_connection,
+    remove_leftover_known_hosts,
+)
 from gitmirror.model import (
     ConnectionState,
     CredentialReference,
@@ -40,7 +44,9 @@ _A_DECK = {"hello-deck/slides.md": "# Hello\n"}
 
 # The stub answers with the host key in `host-key` and checks it as
 # `accept-new` does: a host the known_hosts file names with another key is
-# refused, an unnamed one is added. It then consumes every `-i key` /
+# refused under ssh's banner, an unnamed one is added. It records that it got
+# past that check and whether the run held its known_hosts file meanwhile, the
+# lock that keeps the turn's sweep off it. It then consumes every `-i key` /
 # `-o value` pair `_ssh_command` builds, records the key path and its mode for
 # the test to read back, and runs the real `git-upload-pack` locally — exactly
 # what git would have asked the real `ssh` to run on the far end, against a
@@ -54,10 +60,15 @@ done
 presented=$(cat "{recorded}/host-key")
 pinned=$(sed -n "s/^{host} //p" "$hosts")
 if [ -n "$pinned" ] && [ "$pinned" != "$presented" ]; then
+  echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" >&2
+  echo "@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @" >&2
   echo "Host key verification failed." >&2
   exit 255
 fi
 [ -n "$pinned" ] || printf '%s %s\\n' "{host}" "$presented" >> "$hosts"
+: > "{recorded}/past-host-check"
+if flock -n "$hosts" true; then held=no; else held=yes; fi
+echo "$held" > "{recorded}/hosts-lock"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -i) key="$2"; shift 2 ;;
@@ -232,8 +243,66 @@ def test_a_host_that_answers_with_another_key_than_its_pin_is_refused(
 
     state = reach(remote, tmp_path, url, pins)
 
-    assert state is ConnectionState.FAILED
+    assert state is ConnectionState.HOST_KEY_REFUSED
     assert pins.pinned() == (_ANOTHER_HOST_KEY,)
+
+
+def test_a_check_against_another_key_than_the_pin_names_the_host_key_refusal(
+    monkeypatch: pytest.MonkeyPatch, remote: GitRemote, tmp_path: Path
+) -> None:
+    url, _ = ssh_stub_transport(monkeypatch, remote, tmp_path)
+    remote.commit(_A_DECK, at=_PUSHED_AT)
+    pins = PinsInMemory({_ANOTHER_HOST_KEY.host: _ANOTHER_HOST_KEY.key})
+
+    checked = check_connection(
+        url=url,
+        ref=MAIN_BRANCH,
+        secret=generate_deploy_key().private_key,
+        timeout=A_GENEROUS_BOUND,
+        known_hosts=KnownHosts(directory=tmp_path / "hosts", pins=pins),
+    )
+
+    assert checked.detail == "Host key verification failed."
+
+
+@_OVER_SSH
+def test_an_ssh_run_holds_its_known_hosts_file_against_the_sweep(
+    monkeypatch: pytest.MonkeyPatch, remote: GitRemote, tmp_path: Path, reach: Reach
+) -> None:
+    url, recorded = ssh_stub_transport(monkeypatch, remote, tmp_path)
+
+    reach(remote, tmp_path, url, PinsInMemory())
+
+    assert (recorded / "hosts-lock").read_text().strip() == "yes"
+
+
+def _swept_once_before_the_lock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let the turn's sweep run once between a known_hosts file's creation and lock."""
+    create = mirror_module.tempfile.mkstemp
+    swept: list[Path] = []
+
+    def created_then_swept(*, prefix: str, dir: Path) -> tuple[int, str]:  # noqa: A002 - mkstemp's own keyword
+        descriptor, name = create(prefix=prefix, dir=dir)
+        if not swept:
+            swept.append(Path(name))
+            remove_leftover_known_hosts(Path(name).parent)
+        return descriptor, name
+
+    monkeypatch.setattr(mirror_module.tempfile, "mkstemp", created_then_swept)
+
+
+@_OVER_SSH
+def test_a_swept_hosts_file_still_refuses_another_key_before_authentication(
+    monkeypatch: pytest.MonkeyPatch, remote: GitRemote, tmp_path: Path, reach: Reach
+) -> None:
+    url, recorded = ssh_stub_transport(monkeypatch, remote, tmp_path)
+    _swept_once_before_the_lock(monkeypatch)
+    pins = PinsInMemory({_ANOTHER_HOST_KEY.host: _ANOTHER_HOST_KEY.key})
+
+    state = reach(remote, tmp_path, url, pins)
+
+    assert state is ConnectionState.HOST_KEY_REFUSED
+    assert not (recorded / "past-host-check").exists()
 
 
 @_OVER_SSH
@@ -244,7 +313,7 @@ def test_a_run_whose_accepted_key_lost_the_pin_to_another_is_not_trusted(
 
     state = reach(remote, tmp_path, url, PinnedElsewhereMeanwhile())
 
-    assert state is ConnectionState.FAILED
+    assert state is ConnectionState.HOST_KEY_REFUSED
 
 
 _A_KEPT_LINE = f"{_THE_HOST_KEY.host} {_THE_HOST_KEY.key}\n"
