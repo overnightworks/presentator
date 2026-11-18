@@ -45,7 +45,8 @@ _A_DECK = {"hello-deck/slides.md": "# Hello\n"}
 # The stub answers with the host key in `host-key` and checks it as
 # `accept-new` does: a host the known_hosts file names with another key is
 # refused under ssh's banner, an unnamed one is added. It records that it got
-# past that check. It then consumes every `-i key` /
+# past that check and whether the run held its known_hosts file meanwhile, the
+# lock that keeps the turn's sweep off it. It then consumes every `-i key` /
 # `-o value` pair `_ssh_command` builds, records the key path and its mode for
 # the test to read back, and runs the real `git-upload-pack` locally — exactly
 # what git would have asked the real `ssh` to run on the far end, against a
@@ -66,6 +67,8 @@ if [ -n "$pinned" ] && [ "$pinned" != "$presented" ]; then
 fi
 [ -n "$pinned" ] || printf '%s %s\\n' "{host}" "$presented" >> "$hosts"
 : > "{recorded}/past-host-check"
+if flock -n "$hosts" true; then held=no; else held=yes; fi
+echo "$held" > "{recorded}/hosts-lock"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -i) key="$2"; shift 2 ;;
@@ -260,6 +263,17 @@ def test_a_check_against_another_key_than_the_pin_names_the_host_key_refusal(
     )
 
     assert checked.detail == "Host key verification failed."
+
+
+@_OVER_SSH
+def test_an_ssh_run_holds_its_known_hosts_file_against_the_sweep(
+    monkeypatch: pytest.MonkeyPatch, remote: GitRemote, tmp_path: Path, reach: Reach
+) -> None:
+    url, recorded = ssh_stub_transport(monkeypatch, remote, tmp_path)
+
+    reach(remote, tmp_path, url, PinsInMemory())
+
+    assert (recorded / "hosts-lock").read_text().strip() == "yes"
 
 
 def _swept_once_before_the_lock(monkeypatch: pytest.MonkeyPatch) -> None:
