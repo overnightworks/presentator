@@ -101,10 +101,17 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --locked --all-groups
 
+      # The throwaway Garage of the object store tests, at the image platform
+      # runs; it exports the endpoint, region and key file boto3 reads.
+      - name: Start Garage
+        id: garage
+        uses: overnightworks/platform/.github/actions/garage@c366b6ec610b4dff1c58eadfd9bd4462a3a32b2c
+
       - name: Test
         env:
           PRESENTATOR_TEST_POSTGRES_URL: postgresql://postgres@localhost:5432/postgres
           PRESENTATOR_TEST_REDIS_URL: redis://localhost:6379/0
+          PRESENTATOR_TEST_S3_BUCKET: ${{ steps.garage.outputs.bucket }}
         run: uv run --locked pytest -q -n auto --cov=src --cov-report=xml:reports/coverage.xml
 
       - name: Upload the coverage report
