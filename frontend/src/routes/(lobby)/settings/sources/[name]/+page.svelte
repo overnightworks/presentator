@@ -171,7 +171,7 @@
 <svelte:window onpagehide={forget} />
 
 <a class="back" href={resolve('/(lobby)/settings/sources')}>{words['source.back']}</a>
-<h1 class="as-typed">{source.name}</h1>
+<h1><span class="as-typed">{source.name}</span></h1>
 <div class="meta">
 	<code>{source.url}</code>
 	{#if source.folder !== ''}

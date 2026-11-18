@@ -33,8 +33,6 @@ body {
 html {
 	font-family: var(--font-body);
 }
-h1,
-h2,
 .wordmark,
 th {
 	font-family: var(--font-display);
@@ -440,11 +438,9 @@ main {
 }
 .sec > h2 {
 	margin: 0;
-	font-family: var(--font-display);
 	font-size: 13px;
 	font-weight: 400;
 	letter-spacing: 0.1em;
-	text-transform: uppercase;
 	color: var(--text-muted);
 }
 .sec p {

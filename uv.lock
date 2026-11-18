@@ -609,10 +609,10 @@ mcp-server = [
 
 [[package]]
 name = "overnightworks-design"
-version = "0.27.0"
-source = { url = "https://github.com/overnightworks/design/releases/download/v0.27.0/overnightworks_design-0.27.0-py3-none-any.whl" }
+version = "0.37.0"
+source = { url = "https://github.com/overnightworks/design/releases/download/v0.37.0/overnightworks_design-0.37.0-py3-none-any.whl" }
 wheels = [
-    { url = "https://github.com/overnightworks/design/releases/download/v0.27.0/overnightworks_design-0.27.0-py3-none-any.whl", hash = "sha256:0a84437df37848c1a7bc4bb63ba9027ea4f8ff3c091554765a68ccf7ff9b0154" },
+    { url = "https://github.com/overnightworks/design/releases/download/v0.37.0/overnightworks_design-0.37.0-py3-none-any.whl", hash = "sha256:21f47850c76d247bf70d709eaf74975db1f268ee49e420f997aca94aeb0eb9f4" },
 ]
 
 [package.optional-dependencies]
@@ -621,8 +621,11 @@ catalogs = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "babel", marker = "extra == 'catalogs'", specifier = ">=2.18,<3" }]
-provides-extras = ["catalogs"]
+requires-dist = [
+    { name = "babel", marker = "extra == 'po'", specifier = ">=2.18,<3" },
+    { name = "overnightworks-design", extras = ["po"], marker = "extra == 'catalogs'" },
+]
+provides-extras = ["catalogs", "po"]
 
 [[package]]
 name = "overnightworks-logline"
@@ -690,7 +693,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "overnightworks-design", extras = ["catalogs"], url = "https://github.com/overnightworks/design/releases/download/v0.27.0/overnightworks_design-0.27.0-py3-none-any.whl" },
+    { name = "overnightworks-design", extras = ["catalogs"], url = "https://github.com/overnightworks/design/releases/download/v0.37.0/overnightworks_design-0.37.0-py3-none-any.whl" },
     { name = "pypdf", specifier = "==7.0.1" },
     { name = "pyright", specifier = "==1.1.414" },
     { name = "pytest", specifier = "==9.2.0" },
