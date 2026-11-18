@@ -283,11 +283,9 @@ def test_the_probe_garage_stands_under_the_endpoint_the_web_names_and_never_pull
     documents = manifests_module.garage_documents(deployment, "local-garage")
     namespace, alias, configuration, garage, service = documents
     endpoint = urlsplit(OBJECT_STORE_ENDPOINT)
-    alias_name = alias["metadata"]["name"]
+    host_name, host_namespace, *_ = str(endpoint.hostname).split(".")
     alias_namespace = alias["metadata"]["namespace"]
-    assert f"{alias_name}.{alias_namespace}" == ".".join(
-        str(endpoint.hostname).split(".")[:2]
-    )
+    assert (alias["metadata"]["name"], alias_namespace) == (host_name, host_namespace)
     assert namespace["metadata"]["name"] == alias_namespace
     target = service["metadata"]
     assert alias["spec"]["externalName"] == (
