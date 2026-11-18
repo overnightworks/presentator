@@ -68,7 +68,6 @@ from presentator.adapters.postgres.sources import (
 )
 from presentator.adapters.run_store import StoredRuns, object_store_client
 from presentator.adapters.secrets import (
-    SecretBox,
     TokenWebhookSecrets,
     connection_fingerprint_key,
     secret_box,
@@ -108,7 +107,6 @@ from presentator.host.command_line import (
 )
 from presentator.host.config import (
     ConfigurationError,
-    PostgresDatabase,
     Settings,
     WhereBuildsRun,
     cannot_start,
@@ -143,7 +141,6 @@ from presentator.ports.decks import (
     SourceRuns,
     SourceStore,
 )
-from presentator.ports.identity import IdentifierFactory
 from presentator.ports.preferences import (
     InstanceSettingsStore,
     PersonPreferencesStore,
@@ -275,35 +272,21 @@ def _with_redis(stores: Stores, redis: SharedRedis) -> Stores:
 def _stores(
     settings: Settings, migrations_directory: Path, toolchain: ToolchainIdentity
 ) -> Stores:
-    """The stores of the Postgres the settings name."""
+    """The stores over the one engine this process opens; serve creates no table.
+
+    Every statement on that engine ends within the settings' statement timeout;
+    every wait for the refresh, within the build bound.
+    """
     # One box for both directions: what the store writes down is what the
     # resolver opens at the pull, and neither picks its own key.
     box = secret_box(settings.secret_key.get_secret_value())
     identifiers = TokenIdentifierFactory()
-    return _postgres_stores(
-        settings.postgres,
-        box,
-        identifiers,
-        migrations_directory,
-        refresh=(toolchain, build_bound_of(settings)),
-    )
-
-
-def _postgres_stores(
-    database: PostgresDatabase,
-    box: SecretBox,
-    identifiers: IdentifierFactory,
-    migrations_directory: Path,
-    *,
-    refresh: tuple[ToolchainIdentity, timedelta],
-) -> Stores:
-    """The stores over the one engine this process opens; serve creates no table.
-
-    `refresh` is the toolchain this process announces and the bound of every wait
-    for the refresh.
-    """
+    statement_timeout = timedelta(seconds=settings.database_statement_timeout_seconds)
     history = migration_history(migrations_directory)
-    engine = create_database_engine(database.url, database.password)
+    database = settings.postgres
+    engine = create_database_engine(
+        database.url, database.password, statement_timeout=statement_timeout
+    )
     with timed_connection(StoreKind.POSTGRES) as step:
         refusal = serving_refusal(engine, history)
         if refusal is not None:
@@ -314,9 +297,11 @@ def _postgres_stores(
     if refusal is not None:
         engine.dispose()
         raise refusal
-    toolchain, bound = refresh
     ownership = PostgresRefreshOwnership(
-        engine, toolchain=toolchain, lock_timeout=bound
+        engine,
+        toolchain=toolchain,
+        lock_timeout=build_bound_of(settings),
+        statement_timeout=statement_timeout,
     )
     return Stores(
         sources=PostgresSourceStore(

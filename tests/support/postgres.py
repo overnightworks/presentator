@@ -9,6 +9,7 @@ import uuid
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import IntEnum
 from pathlib import Path
 from typing import Final
@@ -51,9 +52,13 @@ def _server() -> URL:
     return make_url(server).set(drivername="postgresql+psycopg")
 
 
-def engine_on(database_url: str) -> Engine:
-    """An engine on a throwaway database."""
-    return create_database_engine(database_url, _ANY_PASSWORD)
+def engine_on(
+    database_url: str, *, statement_timeout: timedelta | None = None
+) -> Engine:
+    """An engine on a throwaway database, its statements unbounded unless asked."""
+    return create_database_engine(
+        database_url, _ANY_PASSWORD, statement_timeout=statement_timeout
+    )
 
 
 @contextmanager
@@ -165,7 +170,9 @@ def engine_from_environment() -> Engine:
         encoding="utf-8"
     )
     return create_database_engine(
-        os.environ["PRESENTATOR_DATABASE_URL"], SecretStr(password)
+        os.environ["PRESENTATOR_DATABASE_URL"],
+        SecretStr(password),
+        statement_timeout=None,
     )
 
 

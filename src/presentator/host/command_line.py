@@ -12,7 +12,10 @@ MIGRATE_COMMAND = "migrate"
 def migrate_the_database() -> None:
     """Bring the configured database to the newest revision."""
     database = load_database_settings().postgres
-    engine = create_database_engine(database.url, database.password)
+    # A migration, and its wait for another, run as long as they take.
+    engine = create_database_engine(
+        database.url, database.password, statement_timeout=None
+    )
     try:
         migrate(engine)
     finally:

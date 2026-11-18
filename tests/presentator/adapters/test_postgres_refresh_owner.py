@@ -52,6 +52,8 @@ from tests.support.postgres import (
 )
 
 _BOUND = timedelta(milliseconds=300)
+# Shorter than the bound of a wait, which must still end as the wait it is.
+_STATEMENT_BOUND = timedelta(milliseconds=200)
 _WAIT_SECONDS = 30
 _NOW = datetime(2026, 11, 16, 9, tzinfo=UTC)
 _SERVER_DEFAULT_LOCK_TIMEOUT = "0"
@@ -65,7 +67,7 @@ _TAKE_AND_LET_GO_OF_THE_REFRESH_LOCK = text(
 
 @pytest.fixture
 def engine(database_url: str) -> Generator[Engine]:
-    each = engine_on(database_url)
+    each = engine_on(database_url, statement_timeout=_STATEMENT_BOUND)
     try:
         yield each
     finally:
@@ -81,7 +83,10 @@ def owners(engine: Engine) -> Generator[Callable[..., PostgresRefreshOwnership]]
         toolchain: ToolchainIdentity = _THE_TOOLCHAIN,
     ) -> PostgresRefreshOwnership:
         each = PostgresRefreshOwnership(
-            engine, toolchain=toolchain, lock_timeout=_BOUND
+            engine,
+            toolchain=toolchain,
+            lock_timeout=_BOUND,
+            statement_timeout=_STATEMENT_BOUND,
         )
         made.append(each)
         return each
@@ -367,7 +372,10 @@ def test_an_owner_whose_toolchain_key_is_held_exclusively_is_not_made(
 
         with pytest.raises(DBAPIError):
             PostgresRefreshOwnership(
-                engine, toolchain=_THE_TOOLCHAIN, lock_timeout=_BOUND
+                engine,
+                toolchain=_THE_TOOLCHAIN,
+                lock_timeout=_BOUND,
+                statement_timeout=_STATEMENT_BOUND,
             )
 
         with engine.connect() as checked_out:

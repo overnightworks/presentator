@@ -76,6 +76,17 @@ def _a_log_level_logline_does_not_name(
     return unnamed
 
 
+def _a_statement_timeout_of_zero(
+    environment: pytest.MonkeyPatch, directory: Path
+) -> str:
+    # Postgres reads zero as no bound at all; written so that the log's own
+    # digits never spell it.
+    del directory
+    zero = "0e0"
+    environment.setenv("PRESENTATOR_DATABASE_STATEMENT_TIMEOUT_SECONDS", zero)
+    return zero
+
+
 def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
     environment.delenv("PRESENTATOR_DATABASE_URL")
     environment.delenv("PRESENTATOR_DATABASE_PASSWORD_FILE")
@@ -123,6 +134,11 @@ def _unparsable_object_store_key(
             "PRESENTATOR_DATABASE_URL,PRESENTATOR_DATABASE_PASSWORD_FILE",
         ),
         ([], _no_bucket, "PRESENTATOR_S3_BUCKET"),
+        (
+            [],
+            _a_statement_timeout_of_zero,
+            "PRESENTATOR_DATABASE_STATEMENT_TIMEOUT_SECONDS",
+        ),
         (
             [],
             _unparsable_object_store_key,

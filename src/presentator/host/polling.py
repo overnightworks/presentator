@@ -49,7 +49,9 @@ class Schedule:
         finally:
             stopped.set()
             # A cancelled run would go on in its thread and use what the caller
-            # closes next; the chore's own bound keeps this wait finite.
+            # closes next. The chore's own bounds keep this wait finite: the
+            # fetch's timeout, and the statement timeout of every Postgres
+            # session served.
             await ticking
 
     async def tick(self) -> None:
@@ -60,7 +62,7 @@ class Schedule:
         failed_run_count = 0
         while await self._interval_passed(stopped):
             # Awaiting the whole tick is what keeps two of them from running at
-            # once, and the fetch's own bound is what ends the one that hangs.
+            # once, and the chore's own bounds are what end the one that hangs.
             try:
                 await self.tick()
             except Exception as failure:  # noqa: BLE001 - any failure waits for the next interval

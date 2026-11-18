@@ -305,6 +305,12 @@ class Settings(
     # environment. A deployment fact: no default.
     database_url: PostgresUrl
     database_password_file: AbsolutePath
+    # Shutdown waits for a chore in flight, so a statement held by a lock would
+    # hold it too; every statement served is cancelled past this bound. The
+    # migrations run without it.
+    database_statement_timeout_seconds: float = Field(
+        default=10.0, gt=0, allow_inf_nan=False
+    )
     # The Redis every pod shares for its limits and its ask lease; it keeps
     # nothing durable. A password may ride the URL, which is why it is a secret,
     # or live in a file, read once at start, like the database's. A

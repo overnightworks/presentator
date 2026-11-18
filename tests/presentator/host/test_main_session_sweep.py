@@ -4,10 +4,12 @@ import asyncio
 import threading
 from datetime import UTC, datetime, timedelta
 
+import psycopg.errors
 import pytest
 import uvicorn
 from pydantic import SecretStr
 from sqlalchemy import Engine, text
+from sqlalchemy.exc import DBAPIError
 
 from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
 from presentator.api.health import Stopping
@@ -111,3 +113,60 @@ def test_the_sweep_runs_while_the_server_serves(
     main.main([])
 
     assert swept == [True]
+
+
+def test_a_sweep_held_by_a_lock_ends_at_the_statement_timeout_and_lets_shutdown_finish(
+    environment: pytest.MonkeyPatch, engine: Engine
+) -> None:
+    environment.setattr(main, "SESSION_SWEEP_INTERVAL", timedelta(0))
+    environment.setenv("PRESENTATOR_DATABASE_STATEMENT_TIMEOUT_SECONDS", "0.2")
+    database = engine
+    sweep_started = threading.Event()
+    failures: list[BaseException] = []
+    delete_expired = PostgresSessionRecordStore.delete_expired
+
+    def delete_expired_and_keep_its_failure(
+        store: PostgresSessionRecordStore, at: datetime
+    ) -> int:
+        sweep_started.set()
+        try:
+            return delete_expired(store, at)
+        except BaseException as failure:
+            failures.append(failure)
+            raise
+
+    environment.setattr(
+        PostgresSessionRecordStore,
+        "delete_expired",
+        delete_expired_and_keep_its_failure,
+    )
+    holder = database.connect()
+    lock_held = threading.Event()
+
+    class ServerThatStopsWhileASweepWaits:
+        def __init__(self, config: uvicorn.Config, stopping: Stopping) -> None:
+            del config, stopping
+
+        async def serve(self) -> None:
+            holder.execute(text("LOCK TABLE sessions IN ACCESS EXCLUSIVE MODE"))
+            lock_held.set()
+            # A sweep that starts from here on waits for the lock.
+            sweep_started.clear()
+            await asyncio.to_thread(sweep_started.wait, PATIENCE.total_seconds())
+
+    environment.setattr(main, "StoppingServer", ServerThatStopsWhileASweepWaits)
+    served = threading.Thread(target=main.main, args=([],))
+    try:
+        served.start()
+        served.join(PATIENCE.total_seconds())
+        assert lock_held.is_set()
+        assert not served.is_alive(), "shutdown waited for the locked sweep"
+    finally:
+        holder.rollback()
+        holder.close()
+        served.join(PATIENCE.total_seconds())
+
+    assert failures
+    canceled = failures[-1]
+    assert isinstance(canceled, DBAPIError)
+    assert isinstance(canceled.orig, psycopg.errors.QueryCanceled)
