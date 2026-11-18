@@ -1,8 +1,0 @@
-claim_id = "a079b8b617b34443adc44758e3448c9f"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "fa49cc6e1c8d76fc2ad6d9265409b2409e6885e6"
-branch = "claude/issue-1257-no-postgres-connection-is-left-open-for"
-scope = ["src/presentator", "tests/presentator"]
-opened_commit = "430a06de116792f950f7cdc61c439f02beaf06b2"
-whole_reason = "the leaking connection's owner is not yet known; it may be any Postgres adapter or host module"
