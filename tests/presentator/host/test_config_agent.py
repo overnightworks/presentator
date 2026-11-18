@@ -74,6 +74,12 @@ def test_a_missing_agent_value_refuses_the_start_naming_the_field(
             "agent.gateway.key_file",
             id="relative-key-file",
         ),
+        pytest.param(
+            "PRESENTATOR_AGENT",
+            '["a-list-MARKER"]',
+            "agent",
+            id="section-not-an-object",
+        ),
     ],
 )
 def test_a_bad_agent_value_refuses_the_start_without_echoing_it(
