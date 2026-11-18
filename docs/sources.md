@@ -40,7 +40,8 @@ about sources stand in [configuration](configuration.md) and the runbook to
   refuses a host that answers with another key: the check and every pull fail
   until the host's row in `host_key_pins` is removed. At start, before any
   pull, a process first pins the key a `known_hosts` file in its mirrors
-  directory holds for a stored source's host, hashed or not.
+  directory holds for a stored source's host, hashed or not, so a removal
+  holds only once that file is gone from every process that still has it.
 - **SR13** A source's mirror is a cache on each process's own disk, rebuilt
   from the source by its next pull there. A removal deletes the mirror on the
   process that runs it; a mirror of the removed source on another process's

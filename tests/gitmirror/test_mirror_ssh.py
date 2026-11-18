@@ -287,7 +287,7 @@ _A_SCP_ADDRESS = "git@SSH-Stub-Host:talks.git"
         "another-port",
         "ipv6",
         "another-host",
-        "no-port",
+        "port-out-of-range",
         "https",
         "no-line-ssh-wrote",
     ],
