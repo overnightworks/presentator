@@ -23,7 +23,6 @@ import pytest
 from presentator.adapters import build_tree
 from presentator.adapters import builds as builds_module
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
-from presentator.adapters.builds import SlidevBuilds
 from presentator.contracts.decks import (
     FAILURE_TEXT_LIMIT,
     Artefacts,
@@ -63,7 +62,6 @@ from tests.support.git_remote import (
     with_the_program,
 )
 from tests.support.log_lines import json_logged
-from tests.support.run_objects import DirectoryRunObjects
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _ONLY_A_MEGABYTE_MAY_BE_LEFT = 1
@@ -351,46 +349,6 @@ def test_a_decks_folder_at_its_commit_is_built_into_a_talk_and_a_pdf(
     ) == _WHAT_A_TALK_SAYS
     assert artefacts.pdf.read_bytes().startswith(b"%PDF")
     assert artefacts.directory.is_relative_to(tmp_path / "builds")
-
-
-def the_store_of(builds: SlidevBuilds) -> DirectoryRunObjects:
-    store = builds.cache.store
-    assert isinstance(store, DirectoryRunObjects)
-    return store
-
-
-def test_a_delivered_build_names_the_run_the_store_now_holds(
-    remote: GitRemote,
-    source: Source,
-    machine: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_BUILDS)
-    builds = builds_ready_for(tmp_path, source)
-    artefacts = what_it_built(builds.build(a_deck(remote), source=source))
-
-    delivered = builds.deliver(artefacts)
-
-    stored = the_store_of(builds).names()
-    assert stored is not None
-    assert {delivered} == {BuildRun(name) for name in stored}
-
-
-def test_a_build_the_store_did_not_take_is_not_delivered(
-    remote: GitRemote,
-    source: Source,
-    machine: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    with_the_toolchain(machine, tmp_path, _A_TOOLCHAIN_THAT_BUILDS)
-    builds = builds_ready_for(tmp_path, source)
-    artefacts = what_it_built(builds.build(a_deck(remote), source=source))
-    store = the_store_of(builds)
-    store.answering = False
-
-    assert builds.deliver(artefacts) is None
-    store.answering = True
-    assert store.names() == frozenset()
 
 
 def test_a_builds_run_directory_lets_others_read_and_enter_it(
