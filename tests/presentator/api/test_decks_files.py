@@ -247,6 +247,24 @@ def test_a_talk_with_an_application_link_outside_its_build_answers_nothing(
     assert marker not in refused.text
 
 
+def test_a_talk_whose_run_is_neither_on_this_disk_nor_in_the_store_answers_nothing(
+    engine: Engine,
+    tmp_path: Path,
+) -> None:
+    signed_in = a_talk_host(
+        engine,
+        GivenDecks(
+            store=a_deck_store(built=a_build()),
+            source=a_configured_source(_ADDRESS),
+            builder=real_builds_under(tmp_path),
+        ),
+    )
+
+    missing = signed_in.get(_PROJECTOR)
+
+    assert missing.status_code == HTTPStatus.NOT_FOUND
+
+
 def test_a_missing_path_under_a_talk_with_no_application_answers_nothing(
     engine: Engine,
     tmp_path: Path,
