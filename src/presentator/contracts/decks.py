@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 from ipaddress import IPv6Address
 from pathlib import Path
-from typing import Final
+from typing import Final, assert_never
 
 MANIFEST_FILE: Final = "deck.toml"
 SLIDES_FILE: Final = "slides.md"
@@ -276,6 +276,8 @@ class SourceRunFailure(StrEnum):
                 | SourceRunFailure.UNREACHABLE
             ):
                 return False
+            case _:
+                assert_never(self)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
