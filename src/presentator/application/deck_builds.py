@@ -16,6 +16,7 @@ from presentator.contracts.decks import (
     Build,
     BuildAttempt,
     BuildFailure,
+    BuildFailureReason,
     BuildOutcome,
     Deck,
     Source,
@@ -93,17 +94,17 @@ class DeckBuilds:
         The commit and the toolchain the runner answers, read once before the first
         deck is judged, are the change check: a push moves one folder's commit, so
         only that deck is rebuilt, and a toolchain change moves every deck's. A
-        folder at a standing talk's commit and toolchain whose run is on disk needs
+        folder at a standing talk's commit and toolchain whose run is kept needs
         no build. A commit and toolchain tried are not tried again, so a deck that
         cannot build costs one build, not one per refresh. A commit another
         toolchain built or tried is left to it while a process of that toolchain
         runs, so a rollout and a rollback never rebuild each other's decks; once
-        none runs, this toolchain builds it. A vanished run is rebuilt:
-        `builds/` and `mirrors/` are caches the rows rebuild; a gone mirror is cloned
-        again at the next take-in. Answers, per build this pass started, whether it
+        none runs, this toolchain builds it. A vanished run is rebuilt: the store
+        and `mirrors/` are caches the rows rebuild; a gone mirror is cloned again
+        at the next take-in. Answers, per build this pass started, whether it
         delivered the deck, and whether building may go on: a build that met a
-        toolchain that was not there ends it, and the caller passes `building=False`
-        to the sources after.
+        toolchain or a store that was not there ends it, and the caller passes
+        `building=False` to the sources after.
         """
         toolchain = self.builder.toolchain_identity()
         delivered: list[bool] = []
@@ -140,8 +141,19 @@ class DeckBuilds:
         self.store.put_build(deck.slug, standing)
 
     def _was_already_tried(self, deck: Deck, toolchain: ToolchainIdentity) -> bool:
-        """Whether a build was already started for this commit under this toolchain."""
-        return deck.attempt is not None and _made_for(deck.attempt, deck, toolchain)
+        """Whether a build was already started for this commit under this toolchain.
+
+        One the store did not take says nothing about the commit, so it is tried again.
+        """
+        attempt = deck.attempt
+        return (
+            attempt is not None
+            and _made_for(attempt, deck, toolchain)
+            and (
+                attempt.failure is None
+                or attempt.failure.reason is not BuildFailureReason.STORE
+            )
+        )
 
     def _is_left_to_a_present_toolchain(
         self, deck: Deck, standing: Build | None, toolchain: ToolchainIdentity
@@ -180,9 +192,13 @@ class DeckBuilds:
         record behind rather than nothing. A build that failed, and one that
         left artefacts anywhere but under the root they belong in, write no
         pointer at all: whatever the deck was delivering before keeps being
-        delivered, and the attempt says why. A toolchain that was not there makes
-        the build no attempt: the attempt the deck carried is put back. Answers
-        whether it was delivered, or None when the toolchain was not there.
+        delivered, and the attempt says why. A toolchain that was not there
+        makes the build no attempt: the attempt the deck carried is put back. A
+        store that did not take the build ends the attempt failed, naming the
+        store. Either way the next refresh tries again.
+        The build is kept in the store before its row names it, outside any
+        transaction; only that row write is fenced. Answers whether it was
+        delivered, or None when the toolchain or the store was not there.
         """
         attempt = BuildAttempt(
             commit=deck.commit,
@@ -202,9 +218,14 @@ class DeckBuilds:
         if not self.builder.holds(built):
             self._failed(deck, attempt, BuildFailure.without_words())
             return False
+        run = self.builder.deliver(built)
+        if run is None:
+            self._failed(deck, attempt, BuildFailure(reason=BuildFailureReason.STORE))
+            return None
         self.store.put_build(
             deck.slug,
             Build(
+                run=run,
                 directory=built.directory,
                 pdf=built.pdf,
                 commit=deck.commit,

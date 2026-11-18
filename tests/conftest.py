@@ -33,6 +33,12 @@ from tests.support.lobby import (
     configure_secret_key,
 )
 from tests.support.log_lines import LoggedText
+from tests.support.object_store import (
+    ObjectStore,
+    emptied_store,
+    no_object_store_environment,
+    the_bucket_alone,
+)
 from tests.support.postgres import (
     NO_DATABASE_HERE,
     created_database,
@@ -168,6 +174,11 @@ def bare_environment(
     monkeypatch.setenv("PRESENTATOR_TOOLCHAIN", str(toolchain))
     monkeypatch.setenv("PRESENTATOR_PUBLIC_ORIGIN", A_BROWSERS_ADDRESS)
     monkeypatch.setenv("PRESENTATOR_REDIS_URL", NOTHING_LISTENS_HERE)
+    # The tests that reach the object store name its bucket and its Garage.
+    monkeypatch.setenv("PRESENTATOR_S3_BUCKET", "no-bucket-here")
+    for name, value in no_object_store_environment(tmp_path).items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("AWS_ENDPOINT_URL_S3", raising=False)
     configure_oidc(monkeypatch, tmp_path)
     monkeypatch.setenv("PRESENTATOR_AGENT__BACKEND", "litellm")
     monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__ORIGIN", A_GATEWAY_ORIGIN)
@@ -188,6 +199,13 @@ def environment(
 ) -> pytest.MonkeyPatch:
     configure_secret_key(bare_environment, tmp_path, INSTANCE_KEY)
     return bare_environment
+
+
+@pytest.fixture
+def object_store(bare_environment: pytest.MonkeyPatch) -> Iterator[ObjectStore]:
+    """The test run's Garage for every instance this test starts, its bucket emptied."""
+    with the_bucket_alone():
+        yield emptied_store(bare_environment)
 
 
 @pytest.fixture(scope="session")

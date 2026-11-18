@@ -17,6 +17,11 @@ DATABASE_CREDENTIALS = "fake-database"
 DATABASE_MOUNT = "/run/fake-database"
 DATABASE_KEY_FILE = "fake-password"
 DATABASE_URL = "postgresql://fake-user@fake-postgres:6543/fake-database"
+OBJECT_STORE_NAME = "fake-object-store"
+CREDENTIALS_FILE = f"{PROJECTED_MOUNT}/fake-store-directory/credentials"
+OBJECT_STORE_ENDPOINT = "http://fake-s3.fake-objectstore.svc.cluster.local:3999"
+OBJECT_STORE_REGION = "fake-region"
+OBJECT_STORE_BUCKET = "fake-bucket"
 SCRATCH_MOUNT = "/data/elsewhere"
 WEB_PORT = 8000
 WORKER_PORT = 7100
@@ -34,6 +39,10 @@ def add_web_secrets(spec: Document) -> None:
         {"name": "A_WORKER_KEY_FILE", "value": WORKER_KEY_FILE},
         {"name": "PRESENTATOR_REDIS_URL", "value": "redis://render-redis:6379/0"},
         {"name": "PRESENTATOR_DATABASE_URL", "value": DATABASE_URL},
+        {"name": "AWS_ENDPOINT_URL_S3", "value": OBJECT_STORE_ENDPOINT},
+        {"name": "AWS_DEFAULT_REGION", "value": OBJECT_STORE_REGION},
+        {"name": "AWS_SHARED_CREDENTIALS_FILE", "value": CREDENTIALS_FILE},
+        {"name": "PRESENTATOR_S3_BUCKET", "value": OBJECT_STORE_BUCKET},
         {
             "name": "PRESENTATOR_DATABASE_PASSWORD_FILE",
             "value": f"{DATABASE_MOUNT}/{DATABASE_KEY_FILE}",
@@ -48,7 +57,17 @@ def add_web_secrets(spec: Document) -> None:
         "name": WORKER_KEY_NAME,
         "items": [{"key": "key", "path": "fake-key-directory/key"}],
     }
-    projected = {"sources": [{"secret": {"name": PROJECTED_NAME}}, {"secret": keyed}]}
+    store = {
+        "name": OBJECT_STORE_NAME,
+        "items": [{"key": "credentials", "path": "fake-store-directory/credentials"}],
+    }
+    projected = {
+        "sources": [
+            {"secret": {"name": PROJECTED_NAME}},
+            {"secret": keyed},
+            {"secret": store},
+        ]
+    }
     spec["volumes"] = [
         {"name": "elsewhere", "emptyDir": {}},
         {"name": SECRETS_VOLUME, "projected": projected},

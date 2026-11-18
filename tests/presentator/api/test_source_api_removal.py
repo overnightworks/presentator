@@ -23,7 +23,7 @@ from presentator.application.decks import (
     Decks,
     SourceRemovalRefusal,
 )
-from presentator.contracts.decks import Build, Deck, DeckFolder, Source
+from presentator.contracts.decks import Build, BuildRun, Deck, DeckFolder, Source
 from tests.presentator.api.support.source_api_support import (
     ASKING_FOR_JSON,
     LIST,
@@ -112,12 +112,11 @@ class Stocked:
 
     def runs_of(self, source: Source) -> frozenset[str]:
         """The run directories the source's decks deliver from."""
-        runs = (
-            self.builder.run_of(deck.build.directory)
+        return frozenset(
+            deck.build.run.name
             for deck in self.store.for_source(source.id)
             if deck.build is not None
         )
-        return frozenset(run.name for run in runs if run is not None)
 
     def refresh(self) -> None:
         assert self.decks.refresh_named(self.name)
@@ -218,11 +217,6 @@ def _removing(client: TestClient, headers: dict[str, str]) -> Response:
 _BOTH_ROUTES = pytest.mark.parametrize(
     "act", [_previewing, _removing], ids=["preview", "delete"]
 )
-
-
-def _removing_with_the_previews_counts(shelf: Stocked, client: TestClient) -> Response:
-    deck_count, run_count = shelf.preview()
-    return remove(client, shelf.name, deck_count=deck_count, run_count=run_count)
 
 
 # 1
@@ -371,6 +365,7 @@ def test_a_removed_sources_talk_answers_not_found(tmp_path: Path) -> None:
     store.put_build(
         "kundenfeedback",
         Build(
+            run=BuildRun(built.parent.name),
             directory=built / "talk",
             pdf=built / "deck.pdf",
             commit="a-commit",
@@ -631,14 +626,6 @@ def _a_run_will_not_go(shelf: Stocked) -> None:
     )
 
 
-def _a_build_fits_no_run(shelf: Stocked) -> None:
-    deck = shelf.store.kept["first"]
-    assert deck.build is not None
-    shelf.store.kept["first"] = replace(
-        deck, build=replace(deck.build, directory=Path("/nowhere/a-run/out/talk"))
-    )
-
-
 # 22, 23, 24, 26
 @pytest.mark.parametrize(
     "stick",
@@ -674,17 +661,6 @@ def test_a_disk_leftover_is_a_problem_that_keeps_every_row_and_a_repeat_finishes
 
     assert repeated.status_code == HTTPStatus.NO_CONTENT
     assert_removed_exactly(shelf, runs_before)
-
-
-def test_a_build_that_fits_no_run_refuses_the_removal_and_deletes_no_row() -> None:
-    shelf = stocked()
-    client = an_admin_over(shelf.decks).client
-    _a_build_fits_no_run(shelf)
-
-    refused = _removing_with_the_previews_counts(shelf, client)
-
-    assert_problem(refused, HTTPStatus.INTERNAL_SERVER_ERROR)
-    assert_rows_stand(shelf)
 
 
 # 25

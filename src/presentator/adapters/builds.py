@@ -35,13 +35,8 @@ from typing import IO, BinaryIO, Final, Protocol, cast
 from logline import StepTimer
 
 from gitmirror.model import MirrorError, Revision
-from presentator.adapters.build_runs import (
-    RUN_DIRECTORY_MODE,
-    listed_runs,
-    removed_run,
-    run_name_of,
-    taken_away,
-)
+from presentator.adapters.build_cache import BuildCache
+from presentator.adapters.build_runs import RUN_DIRECTORY_MODE, taken_away
 from presentator.adapters.build_tree import added_up, opened_without_a_link
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
 from presentator.adapters.decks import SourceMirrors
@@ -54,17 +49,19 @@ from presentator.contracts.decks import (
     TALK_DIRECTORY,
     TALK_PAGE,
     Artefacts,
+    Build,
     BuildFailure,
     BuildFailureReason,
+    BuildRun,
     Deck,
     Source,
     StepKind,
     ToolchainIdentity,
     ToolchainUnavailable,
     failure_text,
+    run_name_holding,
     talk_address,
 )
-from presentator.ports.decks import BuildRun
 
 _TOOLCHAIN: Final = "pnpm"
 _SLIDEV: Final = "slidev"
@@ -315,9 +312,12 @@ class PackageJsonThemes:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SlidevBuilds:
-    """Builds decks with the Slidev toolchain into directories under one root."""
+    """Builds decks with the Slidev toolchain into directories under one root.
 
-    builds: Path
+    The root is the cache of the store every process serves the runs from.
+    """
+
+    cache: BuildCache
     toolchain: DeckToolchain
     mirrors: SourceMirrors
     output_megabytes: int
@@ -325,6 +325,11 @@ class SlidevBuilds:
     # worker and the host runner build from the same project, so a build records
     # this and the wire carries no identity.
     identity: ToolchainIdentity
+
+    @property
+    def builds(self) -> Path:
+        """The root every run of the build works and is kept in on this disk."""
+        return self.cache.root
 
     def toolchain_identity(self) -> ToolchainIdentity:
         """The toolchain a build runs under, which the web computed at its start."""
@@ -402,22 +407,33 @@ class SlidevBuilds:
         found = opened_without_a_link(written, under=self.builds.absolute())
         return None if found is None else os.fdopen(found, "rb")
 
+    def deliver(self, artefacts: Artefacts) -> BuildRun | None:
+        """Keep the run those artefacts stand in in the store, or answer nothing."""
+        name = run_name_holding(artefacts.directory)
+        return BuildRun(name) if self.cache.keep(name) else None
+
+    def kept(self, build: Build) -> Artefacts | None:
+        """That build's talk and PDF under the root, fetched where they are missing."""
+        run = self.cache.local(build.run.name)
+        if run is None:
+            return None
+        written = run / OUTPUT_DIRECTORY
+        return Artefacts(directory=written / TALK_DIRECTORY, pdf=written / PDF_FILE)
+
     def runs(self) -> frozenset[BuildRun] | None:
-        """Every run directly under the root, or nothing while it cannot be listed."""
-        names = listed_runs(self.builds.absolute())
+        """Every run in the store or under the root; nothing where one is unlisted."""
+        names = self.cache.names()
         return None if names is None else frozenset(map(BuildRun, names))
 
-    def run_of(self, path: Path) -> BuildRun | None:
-        """The run a stored talk or PDF path belongs to, by its exact shape."""
-        name = run_name_of(self.builds.absolute(), path)
-        return None if name is None else BuildRun(name)
+    def drop_copies_except(self, runs: frozenset[BuildRun]) -> None:
+        """Take every run but these off this disk, leaving the store as it is."""
+        self.cache.drop_copies_except(frozenset(run.name for run in runs))
 
     def remove(self, run: BuildRun) -> PurePosixPath | None:
-        """Take that run's whole directory off disk, or name it if it stayed."""
-        root = self.builds.absolute()
-        if removed_run(root, run.name):
+        """Take that run out of the store and off disk, or name it if it stayed."""
+        if self.cache.remove(run.name):
             return None
-        return PurePosixPath(root.name, run.name)
+        return PurePosixPath(self.builds.absolute().name, run.name)
 
     def _a_place_of_its_own(self) -> BuildPlace:
         """Where this run works: a directory of its own under the root.

@@ -34,6 +34,7 @@ from tests.presentator.host.support.copresenter_services import (
 )
 from tests.support.git_remote import EXAMPLE_SLUG, GitRemote
 from tests.support.lobby import A_TALK_ADDRESS, AN_API_GROUP
+from tests.support.object_store import ObjectStore
 from tests.support.postgres import engine_on
 from tests.support.sign_in_support import ADMIN
 
@@ -75,19 +76,23 @@ def _ask(app: App, person: Browser) -> httpx2.Response:
     )
 
 
-def test_a_stopping_app_drains_and_the_other_app_hears_on(
+def test_a_stopping_app_drains_and_the_other_app_hears_on(  # noqa: PLR0913 - the store is one more part of the scene
     environment: pytest.MonkeyPatch,
     database_url: str,
     tmp_path: Path,
     engine: Engine,
     remote: GitRemote,
+    *,
+    object_store: ObjectStore,
 ) -> None:
     with_the_toolchain(environment, tmp_path, A_TOOLCHAIN_THAT_BUILDS)
     remote.commit_example_deck(at=AT)
     gateway = HeldGateway()
     with (
         a_gateway_and_a_speech_service(gateway) as services,
-        serving_apps(database_url, tmp_path, services) as (stopping, other),
+        serving_apps(
+            database_url, tmp_path, {**services, **object_store.environment}
+        ) as (stopping, other),
     ):
         admin = admin_of(stopping)
         added(admin, stopping, "talks", remote)

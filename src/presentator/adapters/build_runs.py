@@ -1,12 +1,12 @@
-"""The runs of the build on disk: which exist, which a path belongs to, taking one away.
+"""The runs of the build on disk: which exist, and taking one away.
 
 A run is a directory directly under the builds root that holds an `out`
 directory, or that is empty: a removal that could empty a run but not take its
 own directory away leaves exactly that, and an empty directory holds nothing to
-lose. A stored talk or PDF belongs to it only at exactly
-`<root>/<name>/out/talk` or `<root>/<name>/out/deck.pdf`. Everything here is
-anchored to the configured root and names no run from a stored path alone,
-because automatic retention deletes what these functions answer for.
+lose. A copy still arriving from the store is staged under the root, beside the
+runs so it moves into place at once, under a name no listing counts. Everything
+here is anchored to the configured root, because automatic retention deletes
+what these functions answer for.
 
 Ancestors of the root are the operator's and outside the threat model; below it,
 a deck's own code wrote the tree, so no link is followed.
@@ -21,17 +21,19 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
-from presentator.contracts.decks import OUTPUT_DIRECTORY, PDF_FILE, TALK_DIRECTORY
+from presentator.contracts.decks import OUTPUT_DIRECTORY
 
 # Owner rwx, others read and enter: a run is never left closed to the backup
 # that reads the builds volume as another uid, even one that stays half removed.
 RUN_DIRECTORY_MODE: Final = 0o755
+# A run's name never starts with a dot, so a fetch under way is never listed,
+# swept or dropped while it writes.
+ARRIVING_PREFIX: Final = ".arriving-"
 # A descriptor pinned to a directory nobody may read is still that directory;
 # this is the name the running kernel gives it, and the one way its mode can be
 # changed without naming a path a build could have exchanged underneath.
 _THE_DESCRIPTOR_ITSELF: Final = "/proc/self/fd/{descriptor}"
 _HERE: Final = "."
-_UP: Final = ".."
 _ROOT_UNLISTED_EVENT: Final = "build_root_listing.refused"
 _ROOT_UNLISTED_REASON: Final = "unlistable"
 _STRAYS_EVENT: Final = "build_root_strays.found"
@@ -47,25 +49,15 @@ class RunRemovalReason(StrEnum):
     STAYED = "stayed"
 
 
-def run_name_of(root: Path, stored: Path) -> str | None:
-    """The run that stored talk or PDF path belongs to, by its exact shape."""
-    path = stored.absolute()
-    run_directory = path.parent.parent
-    if (
-        path.name not in {TALK_DIRECTORY, PDF_FILE}
-        or path.parent.name != OUTPUT_DIRECTORY
-        or run_directory.parent != root
-        or _UP in path.parts
-    ):
-        return None
-    return run_directory.name
-
-
 def listed_runs(root: Path) -> frozenset[str] | None:
     """Every run directly under that root, or nothing where the listing broke off."""
     try:
         with os.scandir(root) as entries:
-            names = [entry.name for entry in entries]
+            names = [
+                entry.name
+                for entry in entries
+                if not entry.name.startswith(ARRIVING_PREFIX)
+            ]
     except OSError as problem:
         _log.warning(
             _ROOT_UNLISTED_EVENT,

@@ -26,9 +26,11 @@ from tests.presentator.application.support.fakes import (
     PATIENCE,
     FakeBuildRunner,
     FakeDeckFolders,
-    FakeRefreshOwnership,
     FrozenClock,
     HeldDeckFolders,
+)
+from tests.presentator.application.support.refresh_ownership_fake import (
+    FakeRefreshOwnership,
 )
 from tests.support.log_lines import events_of, json_logged
 

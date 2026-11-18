@@ -1,15 +1,15 @@
 """Which deck rows and runs of the build stay, and which go.
 
-Rows decide and files obey: a run any deck row names through its talk or its
-PDF, marked removed or not, stays; every other run on disk is taken off it. A
-stored path the build runner cannot place, or a listing that did not finish,
-refuses the whole decision, because every run would then look unreferenced. A
-row marked removed goes once its folder has been missing for the period the
-privacy section states, and that pass's sweep takes its runs.
+Rows decide and the store obeys: a run any deck row names, marked removed or
+not, stays; every other run in the store or on this disk is taken out of both.
+A listing that did not finish refuses the whole decision, because every run
+would then look unreferenced. A row marked removed goes once its folder has
+been missing for the period the privacy section states, and that pass's sweep
+takes its runs.
 
-`builds/` is a cache the rows rebuild, as `mirrors/` is: a run a row names that
-is no longer on disk is built again by the next refresh, so a restore of the
-database alone is enough.
+The store is a cache the rows rebuild, as `mirrors/` is: a run a row names that
+the store no longer holds is built again by the next refresh, so a restore of
+the database alone is enough.
 """
 
 import logging
@@ -19,13 +19,12 @@ from operator import attrgetter
 from pathlib import PurePosixPath
 from typing import Final
 
-from presentator.contracts.decks import Build, Deck
-from presentator.ports.decks import BuildRun, BuildRunner, DeckStore, SourceStore
+from presentator.contracts.decks import Build, BuildRun, Deck
+from presentator.ports.decks import BuildRunner, DeckStore, SourceStore
 
 _RETENTION_REFUSED: Final = "build_retention.refused"
 _SWEEP_COMPLETED: Final = "build_sweep.completed"
 _DECK_RETENTION_COMPLETED: Final = "deck_retention.completed"
-_UNPLACED: Final = "run_not_under_the_builds_root"
 _NOT_LISTED: Final = "runs_not_listed"
 # How long a deck stays after a pass first missed its folder; the privacy
 # section states the same number.
@@ -35,7 +34,9 @@ _log = logging.getLogger(__name__)
 
 
 def sweep(builder: BuildRunner, sources: SourceStore, store: DeckStore) -> None:
-    """Take every run no deck row names off disk; a failed removal is tried next pass.
+    """Take every run no deck row names out of the store and off this disk.
+
+    A failed removal is tried again next pass.
 
     A sweep that removed or left a run is one `build_sweep.completed` line with the
     counts; one that found nothing to take is silent.
@@ -43,16 +44,12 @@ def sweep(builder: BuildRunner, sources: SourceStore, store: DeckStore) -> None:
     Every row of every source counts, because a deck row is only written under a
     source and a source is only removed after its rows.
     """
-    named = _runs_named_by(
-        builder,
-        [deck for source in sources.all() for deck in store.for_source(source.id)],
-    )
-    on_disk = builder.runs()
-    if on_disk is None:
+    named = _runs_named_by_every_row(sources, store)
+    kept = builder.runs()
+    if kept is None:
         _log.info(_RETENTION_REFUSED, extra={"reason": _NOT_LISTED})
-    if named is None or on_disk is None:
         return
-    attempts = [builder.remove(run) for run in on_disk - named]
+    attempts = [builder.remove(run) for run in kept - named]
     if attempts:
         stayed = sum(1 for left in attempts if left is not None)
         _log.info(
@@ -64,19 +61,29 @@ def sweep(builder: BuildRunner, sources: SourceStore, store: DeckStore) -> None:
         )
 
 
-def standing_build(builder: BuildRunner, deck: Deck) -> Build | None:
-    """The build that row delivers, unless its talk or PDF lost its run on disk.
+def drop_unnamed_copies(
+    builder: BuildRunner, sources: SourceStore, store: DeckStore
+) -> None:
+    """Take this process's copies of runs no deck row names off its disk.
 
-    A listing that did not finish, or a stored path no run owns, proves nothing
-    is missing, as the sweep refuses to act on either.
+    The process that holds the refresh sweeps the store; every other one asks
+    this on its turn, so a run the holder swept, or a removal or an erasure
+    through another process took, leaves no copy behind on this disk.
     """
-    build, on_disk = deck.build, builder.runs()
-    if build is None or on_disk is None:
-        return build
-    runs = (builder.run_of(path) for path in (build.directory, build.pdf))
-    return (
-        None if any(run is not None and run not in on_disk for run in runs) else build
-    )
+    builder.drop_copies_except(_runs_named_by_every_row(sources, store))
+
+
+def standing_build(builder: BuildRunner, deck: Deck) -> Build | None:
+    """The build that row delivers, unless the store lost its run.
+
+    A listing that did not finish proves nothing is missing, as the sweep
+    refuses to act on it.
+    """
+    build = deck.build
+    if build is None:
+        return None
+    kept = builder.runs()
+    return None if kept is not None and build.run not in kept else build
 
 
 def delete_absent(
@@ -99,30 +106,22 @@ def delete_absent(
 
 def builds_removed(
     builder: BuildRunner, decks: Iterable[Deck]
-) -> tuple[PurePosixPath, ...] | None:
-    """Take every run these decks deliver from off disk, and name the ones that stayed.
-
-    Nothing where one stored path is not placed: then no run was attempted.
-    """
-    runs = _runs_named_by(builder, decks)
-    if runs is None:
-        return None
-    attempts = (builder.remove(run) for run in sorted(runs, key=attrgetter("name")))
+) -> tuple[PurePosixPath, ...]:
+    """Take every run these decks deliver away, and name the ones that stayed."""
+    runs = sorted(_runs_named_by(decks), key=attrgetter("name"))
+    attempts = (builder.remove(run) for run in runs)
     return tuple(stayed for stayed in attempts if stayed is not None)
 
 
-def _runs_named_by(
-    builder: BuildRunner, decks: Iterable[Deck]
-) -> frozenset[BuildRun] | None:
-    """The runs these decks deliver from, or nothing where one path is not placed."""
-    runs: set[BuildRun] = set()
-    for deck in decks:
-        if deck.build is None:
-            continue
-        for path in (deck.build.directory, deck.build.pdf):
-            run = builder.run_of(path)
-            if run is None:
-                _log.info(_RETENTION_REFUSED, extra={"reason": _UNPLACED})
-                return None
-            runs.add(run)
-    return frozenset(runs)
+def _runs_named_by_every_row(
+    sources: SourceStore, store: DeckStore
+) -> frozenset[BuildRun]:
+    """The runs any deck row of any source delivers from, marked removed or not."""
+    return _runs_named_by(
+        [deck for source in sources.all() for deck in store.for_source(source.id)],
+    )
+
+
+def _runs_named_by(decks: Iterable[Deck]) -> frozenset[BuildRun]:
+    """The runs these decks deliver from."""
+    return frozenset(deck.build.run for deck in decks if deck.build is not None)

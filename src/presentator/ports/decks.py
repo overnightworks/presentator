@@ -6,7 +6,6 @@ is a different thing entirely.
 
 from abc import abstractmethod
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO, Protocol
@@ -16,6 +15,7 @@ from presentator.contracts.decks import (
     Build,
     BuildAttempt,
     BuildFailure,
+    BuildRun,
     ConnectionCheckResult,
     Deck,
     DeployKeyDraft,
@@ -190,7 +190,11 @@ class SourceRuns(Protocol):
 
 
 class DeckStore(Protocol):
-    """The decks this instance knows about, keyed by their folder name."""
+    """The decks this instance knows about, keyed by their folder name.
+
+    Reading a row whose stored build names a run that is no single name raises
+    `UnplacedBuildError` naming that row's source.
+    """
 
     @abstractmethod
     def put(self, deck: Deck) -> bool:
@@ -273,19 +277,6 @@ class DeckStore(Protocol):
         """Delete every deck row this source has ever carried, marked removed or not."""
 
 
-@dataclass(frozen=True, slots=True)
-class BuildRun:
-    """One run of the build on disk: its name, a single segment under the root."""
-
-    name: str
-
-    def __post_init__(self) -> None:
-        """Refuse a name that reaches anywhere but one directory under the root."""
-        if self.name in {"", ".", ".."} or Path(self.name).name != self.name:
-            message = f"{self.name!r} is not one name directly under the builds root"
-            raise ValueError(message)
-
-
 class BuildRunner(Protocol):
     """Builds one deck's folder into the talk that deck delivers.
 
@@ -320,6 +311,22 @@ class BuildRunner(Protocol):
         """
 
     @abstractmethod
+    def deliver(self, artefacts: Artefacts) -> BuildRun | None:
+        """Keep held artefacts where every process serves them from, as one run.
+
+        Nothing is a store that did not take them: the build is no talk yet,
+        and its run is swept like any other no row names.
+        """
+
+    @abstractmethod
+    def kept(self, build: Build) -> Artefacts | None:
+        """That build's talk and PDF on this process's disk, fetched where missing.
+
+        Nothing is a run the store does not hold, or a store that does not
+        answer while this process holds no copy.
+        """
+
+    @abstractmethod
     def read(self, written: Path) -> BinaryIO | None:
         """That file of a build opened for reading, or nothing where it is not one.
 
@@ -331,29 +338,28 @@ class BuildRunner(Protocol):
 
     @abstractmethod
     def runs(self) -> frozenset[BuildRun] | None:
-        """Every run on disk, or nothing where the listing did not finish.
+        """Every run in the store or on this disk, or nothing where a listing failed.
 
-        Nothing is a root that is missing or unreadable and a listing that broke
+        Nothing is a store or a root that did not list, or a listing that broke
         off halfway: a caller that deletes the difference to what it keeps must
         delete nothing then.
         """
 
     @abstractmethod
-    def run_of(self, path: Path) -> BuildRun | None:
-        """The run a stored talk or PDF path belongs to, or nothing.
+    def drop_copies_except(self, runs: frozenset[BuildRun]) -> None:
+        """Take every run but these off this process's disk, the store untouched.
 
-        Only exactly `<root>/<name>/out/talk` and `<root>/<name>/out/deck.pdf`
-        count, compared as absolute paths without following a link; any other
-        path, even one inside the root, is nobody's run.
+        Only a process that builds nothing meanwhile may ask, as a run it is
+        building stands on its disk under no row yet.
         """
 
     @abstractmethod
     def remove(self, run: BuildRun) -> PurePosixPath | None:
-        """Take that run's whole directory off disk, and name it if it stayed.
+        """Take that run out of the store and its whole directory off disk.
 
         Not only the two files a deck's page ever pointed at: the run's own
         directory carried what the deck's own code wrote alongside them, too.
-        Only a directory shaped like a run directly under the root goes. One
+        Only a directory shaped like a run directly under the root goes. A run
         that survives the attempt is answered by its path relative to the data
         volume, so a caller that must not go on believing a build was cleared
         can stop and say what stayed rather than take that on faith.

@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import threading
-from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, BinaryIO, Final
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable
 
 
 from pydantic import SecretStr
@@ -23,6 +22,7 @@ from presentator.contracts.decks import (
     Build,
     BuildAttempt,
     BuildFailure,
+    BuildRun,
     ConnectionCheckResult,
     Deck,
     DeckFolder,
@@ -34,15 +34,11 @@ from presentator.contracts.decks import (
     SourceWrite,
     ToolchainIdentity,
     ToolchainUnavailable,
+    UnplacedBuildError,
 )
 from presentator.contracts.models import User
 from presentator.contracts.people import SessionExport, SessionSecretsHeld
 from presentator.contracts.preferences import InstanceSettings, PersonPreferences
-from presentator.ports.decks import (
-    BuildRun,
-    RefreshOwnershipLostError,
-    RefreshOwnershipTimedOutError,
-)
 from tests.support.people import a_session_id
 
 # How long one thread waits for another before a test calls the run stuck.
@@ -546,6 +542,8 @@ class FakeDeckStore:
     kept: dict[str, Deck] = field(default_factory=dict[str, Deck])
     # Each marked slug and the instant a pass first missed its folder.
     removed: dict[str, datetime] = field(default_factory=dict[str, datetime])
+    # The slugs whose stored run reads as no single name.
+    unplaced: set[str] = field(default_factory=set[str])
 
     def put(self, deck: Deck) -> bool:
         standing = self.kept.get(deck.slug)
@@ -563,22 +561,27 @@ class FakeDeckStore:
     def put_build(self, slug: str, build: Build) -> None:
         self.kept[slug] = replace(self.kept[slug], build=build, attempt=None)
 
-    def misplace_build(self, slug: str, *, talk: Path) -> None:
-        """Point a stored build's talk at `talk`, the way a corrupted row would."""
-        deck = self.kept[slug]
-        assert deck.build is not None
-        self.kept[slug] = replace(deck, build=replace(deck.build, directory=talk))
+    def lose_run(self, slug: str) -> None:
+        """Make that deck's stored run no single name, the way a corrupted row is."""
+        self.unplaced.add(slug)
 
     def put_attempt(self, slug: str, attempt: BuildAttempt | None) -> None:
         self.kept[slug] = replace(self.kept[slug], attempt=attempt)
 
     def get(self, slug: str) -> Deck | None:
-        return None if slug in self.removed else self.kept.get(slug)
+        return None if slug in self.removed else self._read(self.kept.get(slug))
 
     def all(self) -> tuple[Deck, ...]:
         return tuple(
-            deck for slug, deck in self.kept.items() if slug not in self.removed
+            self._read(deck)
+            for slug, deck in self.kept.items()
+            if slug not in self.removed
         )
+
+    def _read[Read: Deck | None](self, deck: Read) -> Read:
+        if deck is not None and deck.slug in self.unplaced:
+            raise UnplacedBuildError(deck.source_id)
+        return deck
 
     def mark_removed_except(
         self,
@@ -607,7 +610,11 @@ class FakeDeckStore:
         return len(gone)
 
     def for_source(self, source_id: str) -> tuple[Deck, ...]:
-        return tuple(deck for deck in self.kept.values() if deck.source_id == source_id)
+        return tuple(
+            self._read(deck)
+            for deck in self.kept.values()
+            if deck.source_id == source_id
+        )
 
     def remove_for_source(self, source_id: str) -> None:
         for deck in self.for_source(source_id):
@@ -690,6 +697,8 @@ class FakeBuildRunner:
     # The toolchain this runner builds under now; a test moves it the way a
     # release that changes the toolchain does.
     identity: ToolchainIdentity = THE_TOOLCHAIN
+    # Whether the store takes what a build left, the way one that is down does not.
+    store_answers: bool = True
 
     def toolchain_identity(self) -> ToolchainIdentity:
         return self.identity
@@ -717,6 +726,15 @@ class FakeBuildRunner:
             for written in (artefacts.directory, artefacts.pdf)
         )
 
+    def deliver(self, artefacts: Artefacts) -> BuildRun | None:
+        if not self.store_answers:
+            return None
+        return BuildRun(artefacts.directory.parent.parent.name)
+
+    def kept(self, build: Build) -> Artefacts | None:
+        # Fetching is the real adapter's concern; a build here is where it says.
+        return Artefacts(directory=build.directory, pdf=build.pdf)
+
     def read(self, written: Path) -> BinaryIO | None:
         # Links are the real adapter's concern and are proven against it.
         return written.open("rb") if written.is_file() else None
@@ -724,10 +742,9 @@ class FakeBuildRunner:
     def runs(self) -> frozenset[BuildRun] | None:
         return None if self.listing_fails else frozenset(self.on_disk)
 
-    def run_of(self, path: Path) -> BuildRun | None:
-        if path.parent.name != "out" or path.parent.parent.parent != self.root:
-            return None
-        return BuildRun(path.parent.parent.name)
+    def drop_copies_except(self, runs: frozenset[BuildRun]) -> None:
+        # One set stands for the store and the disk; only a sweep empties it.
+        del runs
 
     def remove(self, run: BuildRun) -> PurePosixPath | None:
         self.removed.append(run)
@@ -753,46 +770,3 @@ class FakeToolchainThemes:
 
     def names(self) -> tuple[str, ...] | None:
         return self.names_to_return
-
-
-@dataclass(kw_only=True)
-class FakeRefreshOwnership:
-    """The refresh owner of an instance whose other processes a test arranges."""
-
-    held_elsewhere: bool = False
-    lost_to_another: bool = False
-    present: frozenset[ToolchainIdentity] = frozenset()
-    holding: bool = field(default=False, init=False)
-
-    @contextmanager
-    def try_hold(self) -> Generator[bool]:
-        if self.held_elsewhere:
-            yield False
-            return
-        self.holding = True
-        try:
-            yield True
-        finally:
-            self.holding = False
-
-    @contextmanager
-    def hold(self) -> Generator[None]:
-        if self.held_elsewhere:
-            raise RefreshOwnershipTimedOutError
-        self.holding = True
-        try:
-            yield
-        finally:
-            self.holding = False
-
-    def recover(self) -> None:
-        return None
-
-    @contextmanager
-    def fenced(self) -> Generator[None]:
-        if self.lost_to_another:
-            raise RefreshOwnershipLostError
-        yield
-
-    def toolchain_is_present(self, toolchain: ToolchainIdentity) -> bool:
-        return toolchain in self.present

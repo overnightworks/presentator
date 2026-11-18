@@ -24,11 +24,12 @@ from presentator.application.deck_take_in import take_in
 from presentator.application.source_state import (
     SHORT_COMMIT,
     deck_state_of,
+    listed_source,
     shown_run,
-    source_state_of,
 )
 from presentator.contracts.decks import (
     AccessKind,
+    Artefacts,
     BuildAttempt,
     ConnectionCheckResult,
     Deck,
@@ -46,7 +47,6 @@ from presentator.contracts.decks import (
     SourceRun,
     SourceRunFailure,
     SourceRunOutcome,
-    SourceState,
     SourceWrite,
     access_kind_of,
     is_a_folder_path,
@@ -105,11 +105,11 @@ class SourceRemovalRefusal(StrEnum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SourceRemovalRefused:
-    """A removal that deleted no row; `builds` is nothing where none was attempted."""
+    """A removal that deleted no row, and what stayed."""
 
     reason: SourceRemovalRefusal
     mirror: PurePosixPath | None
-    builds: tuple[PurePosixPath, ...] | None
+    builds: tuple[PurePosixPath, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -356,11 +356,10 @@ class Decks:
         a file, and none takes the refresh over until the removal ended. Name
         and counts are read inside the lock: a source removed meanwhile is
         unknown, and changed counts are handed back rather than deleted under a
-        number nobody confirmed. Disk goes first: if the
-        mirror or a run survives, or a build lies where no run can be placed, no
-        row is deleted and the refusal names what stayed, so the source stays
-        taken rather than a leftover becoming an address a later add reopens
-        with a new secret (R3); a clean disk frees the URL (R2).
+        number nobody confirmed. Disk and store go first: if the mirror or a run
+        survives, no row is deleted and the refusal names what stayed, so the
+        source stays taken rather than a leftover becoming an address a later
+        add reopens with a new secret (R3); a clean disk frees the URL (R2).
         """
         with self.one_at_a_time, self.ownership.hold(), self.ownership.fenced():
             source = self._named(name)
@@ -646,10 +645,8 @@ class Decks:
 
     def built_talk(self, slug: str, *, viewer: str) -> Path | None:
         """The directory the viewer's deck's talk is delivered from, while built."""
-        deck = self._owned(slug, viewer)
-        if deck is None or deck.build is None:
-            return None
-        return deck.build.directory
+        kept = self._kept(slug, viewer)
+        return None if kept is None else kept.directory
 
     def exported_pdf(self, slug: str, *, viewer: str) -> Path | None:
         """The file the deck's PDF is handed over as, while one is exported.
@@ -658,12 +655,15 @@ class Decks:
         is offered under that name, so a separator, a quote, or a line break in
         it would otherwise reach the answer's own header.
         """
-        if not is_a_plain_folder_name(slug):
-            return None
+        kept = self._kept(slug, viewer) if is_a_plain_folder_name(slug) else None
+        return None if kept is None else kept.pdf
+
+    def _kept(self, slug: str, viewer: str) -> Artefacts | None:
+        """What the viewer's deck's build left, fetched from the store on first ask."""
         deck = self._owned(slug, viewer)
         if deck is None or deck.build is None:
             return None
-        return deck.build.pdf
+        return self.builder.kept(deck.build)
 
     def open_build_file(self, written: Path) -> BinaryIO | None:
         """A file a build wrote, opened to be delivered, or nothing if it is not one."""
@@ -680,15 +680,7 @@ class Decks:
 
     def _listed_source(self, source: Source) -> ListedSource:
         """The row for that source, derived from its newest run and nothing else."""
-        run = self.source_runs.newest(source.id)
-        return ListedSource(
-            name=source.name,
-            url=source.url,
-            access=access_kind_of(source.url),
-            state=SourceState.NEVER_FETCHED if run is None else source_state_of(run),
-            reason=None if run is None else run.reason,
-            fetched_at=None if run is None else run.at,
-        )
+        return listed_source(source, self.source_runs.newest(source.id))
 
     def _run_one_at_a_time[Answer](
         self, work: Callable[[], Answer], *, busy: Answer, recovering: bool = False
@@ -696,7 +688,8 @@ class Decks:
         """Run that work, or answer `busy` while another refresh holds the lock.
 
         The lock of this process is taken first, so the one connection to the
-        other processes is never used by two refreshes at once.
+        other processes is never used by two refreshes at once. A process
+        turned away by another drops the copies on its disk that no row names.
         """
         if not self.one_at_a_time.acquire(blocking=False):
             return busy
@@ -704,7 +697,13 @@ class Decks:
             if recovering:
                 self.ownership.recover()
             with self.ownership.try_hold() as held:
-                return self._work_as_holder(work, busy=busy) if held else busy
+                if held:
+                    return self._work_as_holder(work, busy=busy)
+                # Nothing builds in this process while it holds its own lock.
+                build_retention.drop_unnamed_copies(
+                    self.builder, self.sources, self.store
+                )
+                return busy
         finally:
             self.one_at_a_time.release()
 

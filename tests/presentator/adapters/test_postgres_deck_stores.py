@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine, text
 from sqlalchemy.exc import IntegrityError
 
 from presentator.contracts.decks import (
@@ -13,12 +14,14 @@ from presentator.contracts.decks import (
     BuildAttempt,
     BuildFailure,
     BuildOutcome,
+    BuildRun,
     Deck,
     Source,
     SourceRun,
     SourceRunOutcome,
     SourceWrite,
     ToolchainIdentity,
+    UnplacedBuildError,
 )
 from presentator.contracts.preferences import (
     PersonPreferences,
@@ -151,8 +154,9 @@ def _a_deck(
 
 def _a_build(commit: str, *, toolchain: str | None = _DIGEST) -> Build:
     return Build(
-        directory=Path(f"/builds/{commit}/talk é"),
-        pdf=Path(f"/builds/{commit}/deck.pdf"),
+        run=BuildRun(f"run-{commit}"),
+        directory=Path(f"/builds/run-{commit}/out é/talk"),
+        pdf=Path(f"/builds/run-{commit}/out é/deck.pdf"),
         commit=commit,
         built_at=_NOON + 2 * _HOUR,
         toolchain=None if toolchain is None else ToolchainIdentity(toolchain),
@@ -190,6 +194,48 @@ def test_a_deck_written_at_another_offset_reads_back_as_the_same_instant_in_utc(
     read_back = (deck.changed_at, deck.build.built_at, deck.attempt.started_at)
 
     assert repr(read_back) == repr((_NOON, _NOON, _NOON))
+
+
+@pytest.mark.parametrize("stored", ["../elsewhere", "a/b", ""])
+def test_a_stored_run_that_is_no_single_name_under_the_root_fails_loud_on_read(
+    postgres_stores: Adapters, engine: Engine, stored: str
+) -> None:
+    """A run is never read as a path a retention pass could delete elsewhere."""
+    source = _a_source(postgres_stores, "mine", _ADMIN)
+    postgres_stores.decks.put(_a_deck("talk", source))
+    postgres_stores.decks.put_build("talk", _a_build("c"))
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE decks SET built_run = :run"), {"run": stored})
+
+    with pytest.raises(UnplacedBuildError, match=source.id):
+        postgres_stores.decks.get("talk")
+
+
+def test_a_build_an_older_release_moved_without_its_run_is_no_standing_build(
+    postgres_stores: Adapters, engine: Engine
+) -> None:
+    """A talk written beside the run of an older build is never served as it."""
+    source = _a_source(postgres_stores, "mine", _ADMIN)
+    postgres_stores.decks.put(_a_deck("talk", source, commit="c2"))
+    postgres_stores.decks.put_build("talk", _a_build("c1"))
+    moved = _a_build("c2")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE decks SET active_build = :directory, pdf_export = :pdf,"
+                " built_commit = :commit WHERE slug = 'talk'"
+            ),
+            {
+                "directory": str(moved.directory),
+                "pdf": str(moved.pdf),
+                "commit": moved.commit,
+            },
+        )
+
+    deck = postgres_stores.decks.get("talk")
+
+    assert deck is not None
+    assert deck.build is None
 
 
 def test_a_postgres_deck_of_a_source_that_does_not_exist_is_an_error_not_a_refusal(

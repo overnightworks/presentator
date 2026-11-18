@@ -39,7 +39,7 @@ _PUT_DECK: Final = text(
 # One statement, so everything a build wrote moves at once and no reader sees
 # the talk of one commit beside the PDF or build time of another.
 _PUT_BUILD: Final = text(
-    "UPDATE decks SET active_build = :directory, pdf_export = :pdf,"
+    "UPDATE decks SET built_run = :run, active_build = :directory, pdf_export = :pdf,"
     " built_commit = :commit_sha, built_at = :built_at,"
     " built_toolchain = :toolchain, attempt_toolchain = NULL,"
     " attempt_commit = NULL, attempt_started_at = NULL,"
@@ -115,6 +115,7 @@ class PostgresDeckStore:
             self.fence,
             _PUT_BUILD,
             {
+                "run": build.run.name,
                 "directory": str(build.directory),
                 "pdf": str(build.pdf),
                 "commit_sha": build.commit,

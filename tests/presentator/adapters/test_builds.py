@@ -28,11 +28,11 @@ from presentator.contracts.decks import (
     Artefacts,
     BuildFailure,
     BuildFailureReason,
+    BuildRun,
     Deck,
     Source,
     talk_address,
 )
-from presentator.ports.decks import BuildRun
 from tests.presentator.adapters.support.build_support import (
     A_GENEROUS_BOUND as _A_GENEROUS_BOUND,
 )

@@ -24,12 +24,12 @@ from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
 from presentator.contracts.decks import (
     Build,
+    BuildRun,
     SourceRun,
     SourceRunOutcome,
     ToolchainIdentity,
 )
 from presentator.ports.decks import (
-    BuildRun,
     RefreshOwnershipLostError,
     RefreshOwnershipTimedOutError,
 )
@@ -416,6 +416,7 @@ def test_a_removal_keeps_every_takeover_out_until_its_rows_are_gone(
     deck = replace(
         a_deck(source_id=SOURCE.id),
         build=Build(
+            run=run,
             directory=BUILDS_ROOT / run.name / "out" / "talk",
             pdf=BUILDS_ROOT / run.name / "out" / "deck.pdf",
             commit=a_deck().commit,

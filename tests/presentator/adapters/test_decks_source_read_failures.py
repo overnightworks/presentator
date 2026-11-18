@@ -12,12 +12,12 @@ import pytest
 from gitmirror.model import CredentialReference
 from presentator.application.decks import Decks
 from presentator.contracts.decks import (
+    BuildRun,
     Source,
     SourceRunFailure,
     SourceRunOutcome,
     SourceState,
 )
-from presentator.ports.decks import BuildRun
 from tests.presentator.application.support.decks_support import DecksFakes, decks_over
 from tests.presentator.application.support.fakes import FakeSourceStore
 from tests.support.deck_source_support import a_source, folders_under, mirrors_under

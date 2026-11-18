@@ -176,6 +176,11 @@ class Run:
         return f"{PROBE_REPOSITORY}:postgres-{self.identifier}"
 
     @property
+    def garage_image(self) -> str:
+        """The local name of the probe's Garage image, in the probe's repository."""
+        return f"{PROBE_REPOSITORY}:garage-{self.identifier}"
+
+    @property
     def node(self) -> str:
         """The name k3d gives the cluster's one server node."""
         return f"k3d-{self.name}-server-0"
@@ -405,6 +410,7 @@ def teardown(run: Run) -> None:
         ("docker image rm --force", run.tag),
         ("docker image rm --force", run.redis_image),
         ("docker image rm --force", run.postgres_image),
+        ("docker image rm --force", run.garage_image),
     )
     with contextlib.ExitStack() as cleanup:
         cleanup.callback(shutil.rmtree, run.directory, ignore_errors=True)

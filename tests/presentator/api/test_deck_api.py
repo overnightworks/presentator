@@ -159,6 +159,7 @@ _EVERY_FAILURE_AS_THE_WIRE_CARRIES_IT = [
         {"reason": "output-entries", "allowed_entries": 20000},
     ),
     (BuildFailure(reason=BuildFailureReason.OUTPUT_SHAPE), {"reason": "output-shape"}),
+    (BuildFailure(reason=BuildFailureReason.STORE), {"reason": "store"}),
     (
         BuildFailure(
             reason=BuildFailureReason.DECK_MEGABYTES,

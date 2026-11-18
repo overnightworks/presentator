@@ -26,6 +26,7 @@ from presentator.api.auth import (
 from tests.presentator.host.support.app_process import ANSWER_PREFIX
 from tests.support.lobby import A_BROWSERS_ADDRESS, A_TALK_ADDRESS
 from tests.support.log_lines import LogLine
+from tests.support.object_store import no_object_store_environment
 from tests.support.postgres import database_environment
 from tests.support.redis import emptied_database_url
 from tests.support.sign_in_support import ADMIN, MEMBER
@@ -264,6 +265,8 @@ def _environment(
     return {
         **app_settings,
         **database_environment(database_url, directory),
+        # No store, unless the test hands its `object_store` environment in.
+        **no_object_store_environment(directory),
         # Both processes count their budgets in the one Redis database of this worker.
         "PRESENTATOR_REDIS_URL": emptied_database_url(),
         **extra,

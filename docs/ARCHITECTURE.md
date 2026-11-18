@@ -114,7 +114,9 @@ Each life ends the pod and the StatefulSet makes a fresh one.
 ## 5. Crosscutting Concepts
 
 **Persistence.** Postgres, named by the required `PRESENTATOR_DATABASE_URL`, holds the state over one
-engine per process. Files hold mirrors and builds, caches the rows rebuild. `serve` creates no table;
+engine per process. A build is one run (talk, deck text, PDF) in the S3 bucket all pods share, named
+by its row and served from a bounded copy on each pod's disk; it and the mirrors' files are caches
+the rows rebuild. `serve` creates no table;
 `presentator migrate` runs the additive migrations of `adapters/postgres` under a lock. No revision
 row or one behind this release is refused at start and unready; an unknown revision is a newer
 release's and is served.

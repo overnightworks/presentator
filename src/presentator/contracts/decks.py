@@ -339,6 +339,7 @@ class BuildFailureReason(StrEnum):
     OUTPUT_SHAPE = "output-shape"
     DECK_MEGABYTES = "deck-megabytes"
     DECK_PATHS = "deck-paths"
+    STORE = "store"
 
 
 # The counts each reason names, and no others.
@@ -360,8 +361,8 @@ class BuildFailure:
     The text is the toolchain's own words, bounded by `bounded_failure`, and
     only a `toolchain` reason carries it. A server refusal carries the counts
     its sentence names; `no-words` is a run given up on, or one that printed
-    nothing at all. A combination a reason does not name is refused on
-    construction.
+    nothing at all; `store` is a build the object store did not take. A
+    combination a reason does not name is refused on construction.
     """
 
     reason: BuildFailureReason
@@ -423,6 +424,36 @@ class ToolchainIdentity:
             raise ValueError(message)
 
 
+@dataclass(frozen=True, slots=True)
+class BuildRun:
+    """One run of the build: its name, one segment under the root and in the store."""
+
+    name: str
+
+    def __post_init__(self) -> None:
+        """Refuse a name that reaches anywhere but one directory under the root."""
+        if self.name in {"", ".", ".."} or Path(self.name).name != self.name:
+            message = f"{self.name!r} is not one name directly under the builds root"
+            raise ValueError(message)
+
+
+class UnplacedBuildError(ValueError):
+    """A stored build whose run is no single name under the builds root."""
+
+    def __init__(self, source_id: str) -> None:
+        """Name the source whose row carries it, never the value it carries."""
+        self.source_id = source_id
+        super().__init__(
+            f"source {source_id} has a build whose run is no single name"
+            " under the builds root"
+        )
+
+
+def run_name_holding(talk: Path) -> str:
+    """The name of the run whose output holds this talk, as `<run>/out/talk`."""
+    return talk.parent.parent.name
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Build:
     """The talk a deck delivers, the commit and toolchain it was built under, and when.
@@ -430,9 +461,12 @@ class Build:
     They travel together because they switch together: a page that named a
     build time of one commit beside the directory of another would lie about
     what is on the screen. No toolchain is a build made before a deck recorded
-    it, which matches no identity.
+    it, which matches no identity. The run names the build in the store every
+    process serves it from; `directory` and `pdf` are where the process that
+    built it left them, written down while a release that reads those stands.
     """
 
+    run: BuildRun
     directory: Path
     pdf: Path
     commit: str

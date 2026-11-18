@@ -14,6 +14,7 @@ from presentator.contracts.decks import (
     Build,
     BuildAttempt,
     BuildOutcome,
+    BuildRun,
     Deck,
     DeckState,
 )
@@ -64,6 +65,7 @@ def a_deck(
         source_id=SOURCE_ID,
         commit=a_commit(),
         build=Build(
+            run=BuildRun("the-example-talk"),
             directory=BUILT_TALK,
             pdf=EXPORTED_PDF,
             commit=a_commit(),

@@ -3,11 +3,11 @@
 `prove_render` renders the image-only overlay and proves it differs from
 platform's own render only in the production image fields of every pod
 template. `applied_documents` takes the overlay's documents the worker pods
-need, `web_documents` those the web needs, `redis_documents` and
-`postgres_documents` the throwaway stores it reaches, and `throwaway_secrets`
-the Secrets the web's Deployment mounts, with a value from an effect for each
-file they hold. `namespace_document` takes production's Namespace for
-presentator.
+need, `web_documents` those the web needs, `redis_documents`,
+`postgres_documents` and `garage_documents` the throwaway stores it reaches, and
+`throwaway_secrets` the Secrets the web's Deployment and the probe's Garage
+read, with a value from an effect for each file they hold. `namespace_document`
+takes production's Namespace for presentator.
 """
 
 import copy
@@ -55,6 +55,24 @@ DATABASE_URL_VARIABLE = "PRESENTATOR_DATABASE_URL"
 DATABASE_PASSWORD_FILE_VARIABLE = "PRESENTATOR_DATABASE_PASSWORD_FILE"  # noqa: S105 - the value names an environment variable and is not a password
 # Where the probe's Postgres reads the password the web reads from its own mount.
 POSTGRES_PASSWORD_MOUNT = PurePosixPath("/run/secrets/postgres")
+# The web reaches the object store at the endpoint its environment names. The
+# probe runs a throwaway Garage in its namespace, at the image platform's object
+# store and CI's Garage run, pulled from Docker Hub as CI's is, and names it
+# under the endpoint's own host with an ExternalName Service, so the web's store
+# settings stay as platform renders them. Garage makes the web's bucket and its
+# one key from its own environment, so no command carries the key.
+GARAGE = "probe-garage"
+GARAGE_PINNED = (
+    "docker.io/dxflrs/garage:v2.5.0"
+    "@sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5"
+)
+GARAGE_CONFIGURATION = PurePosixPath("/etc/garage/garage.toml")
+ENDPOINT_VARIABLE = "AWS_ENDPOINT_URL_S3"
+REGION_VARIABLE = "AWS_DEFAULT_REGION"
+CREDENTIALS_FILE_VARIABLE = "AWS_SHARED_CREDENTIALS_FILE"
+BUCKET_VARIABLE = "PRESENTATOR_S3_BUCKET"
+# Garage takes a key ID of GK and 24 hex digits.
+KEY_ID_DIGITS = 24
 INIT_CONTAINER = "nft-rules"
 TERMINATION_MESSAGE_POLICY = "FallbackToLogsOnError"
 
@@ -349,30 +367,179 @@ def _secret_sources(volume: Document) -> list[Document]:
     return [source["secret"] for source in sources if "secret" in source]
 
 
-def throwaway_secrets(deployment: Document, value: Callable[[], str]) -> list[Document]:
-    """The Secrets the web container mounts, a `value()` per file.
+def _keys_and_files(
+    source: Document, container: Document, mount: PurePosixPath
+) -> list[tuple[str, PurePosixPath]]:
+    """Each key of the Secret and the file the web container reads it as."""
+    items = [(item["key"], item["path"]) for item in source.get("items", [])]
+    named = items or [(name, name) for name in _files_under(container, mount)]
+    return [(key, mount / path) for key, path in named]
 
-    A Secret that names its keys holds those; one that names none holds the last
-    parts of the web container's environment values that lie directly under the
-    mount path of its volume. The workers' Secret names its keys, so the web and
-    the workers hold the one key, and the database password's Secret names none,
-    so the web and the probe's Postgres hold the one password.
+
+def _secret(name: str, held: dict[str, str]) -> Document:
+    return {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": name, "namespace": NAMESPACE},
+        "stringData": held,
+    }
+
+
+def throwaway_secrets(deployment: Document, value: Callable[[], str]) -> list[Document]:
+    """The Secrets the web container mounts and the probe's Garage reads.
+
+    Each file the web reads holds a `value()`, but one. A Secret that names its
+    keys holds those; one that names none holds the last parts of the web
+    container's environment values that lie directly under the mount path of
+    its volume. The workers' Secret names its keys, so the web and the workers
+    hold the one key, and the database password's Secret names none, so the web
+    and the probe's Postgres hold the one password. The one file is the web's
+    object store credentials file: it holds the key that the Secret GARAGE gives
+    the probe's Garage.
     """
     pod, container = _web_pod(deployment)
     volumes = {volume["name"]: volume for volume in pod["volumes"]}
-    return [
-        {
-            "apiVersion": "v1",
-            "kind": "Secret",
-            "metadata": {"name": source["name"], "namespace": NAMESPACE},
-            "stringData": {
-                key: value()
-                for key in [item["key"] for item in source.get("items", [])]
-                or _files_under(container, PurePosixPath(mount["mountPath"]))
+    credentials = PurePosixPath(
+        _environment_value(container, CREDENTIALS_FILE_VARIABLE)
+    )
+    key_id, secret = f"GK{value()[:KEY_ID_DIGITS]}", value()
+    credentials_file = (
+        f"[default]\naws_access_key_id = {key_id}\naws_secret_access_key = {secret}\n"
+    )
+    web = [
+        _secret(
+            source["name"],
+            {
+                key: credentials_file if file == credentials else value()
+                for key, file in _keys_and_files(
+                    source, container, PurePosixPath(mount["mountPath"])
+                )
             },
-        }
+        )
         for mount in container["volumeMounts"]
         for source in _secret_sources(volumes[mount["name"]])
+    ]
+    garage = {"rpc_secret": value(), "access_key": key_id, "secret_key": secret}
+    return [*web, _secret(GARAGE, garage)]
+
+
+def _garage_configuration(region: str, port: int) -> str:
+    """One node that talks to itself only, its S3 API at `port` in `region`."""
+    return "\n".join(
+        (
+            "replication_factor = 1",
+            'db_engine = "sqlite"',
+            'metadata_dir = "/data/meta"',
+            'data_dir = "/data/data"',
+            'rpc_bind_addr = "127.0.0.1:3901"',
+            'rpc_public_addr = "127.0.0.1:3901"',
+            "[s3_api]",
+            f's3_region = "{region}"',
+            f'api_bind_addr = "0.0.0.0:{port}"',
+            "",
+        )
+    )
+
+
+def _garage_secret(variable: str, key: str) -> Document:
+    return {
+        "name": variable,
+        "valueFrom": {"secretKeyRef": {"name": GARAGE, "key": key}},
+    }
+
+
+def _garage_container(web: Document, image: str, port: int) -> Document:
+    """Garage from `image`, its S3 API at `port`, with the web's bucket and key."""
+    return {
+        "name": "garage",
+        "image": image,
+        "imagePullPolicy": "Never",
+        "command": ["/garage"],
+        "args": ["server", "--single-node", "--default-bucket"],
+        "env": [
+            {"name": "GARAGE_CONFIG_FILE", "value": str(GARAGE_CONFIGURATION)},
+            {
+                "name": "GARAGE_DEFAULT_BUCKET",
+                "value": _environment_value(web, BUCKET_VARIABLE),
+            },
+            _garage_secret("GARAGE_RPC_SECRET", "rpc_secret"),
+            _garage_secret("GARAGE_DEFAULT_ACCESS_KEY", "access_key"),
+            _garage_secret("GARAGE_DEFAULT_SECRET_KEY", "secret_key"),
+        ],
+        "ports": [{"containerPort": port}],
+        "readinessProbe": {"tcpSocket": {"port": port}},
+        "volumeMounts": [
+            {"name": "configuration", "mountPath": str(GARAGE_CONFIGURATION.parent)},
+            {"name": "data", "mountPath": "/data"},
+        ],
+    }
+
+
+def _endpoint_alias(service: str, namespace: str) -> list[Document]:
+    """That namespace and its Service, an ExternalName of the Garage's own."""
+    return [
+        {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": namespace}},
+        {
+            "apiVersion": "v1",
+            "kind": "Service",
+            "metadata": {"name": service, "namespace": namespace},
+            "spec": {
+                "type": "ExternalName",
+                "externalName": f"{GARAGE}.{NAMESPACE}.svc.cluster.local",
+            },
+        },
+    ]
+
+
+def garage_documents(deployment: Document, image: str) -> list[Document]:
+    """The probe's throwaway Garage, from `image`, under the endpoint the web names.
+
+    The endpoint's host is a Service of another namespace; the probe makes that
+    Namespace and that Service, an ExternalName of the Garage's own Service.
+    Garage lays out its one node and makes the web's bucket with the key of the
+    Secret GARAGE, the key the web's credentials file holds.
+    """
+    _, web = _web_pod(deployment)
+    endpoint = urlsplit(_environment_value(web, ENDPOINT_VARIABLE))
+    service, namespace, *_ = str(endpoint.hostname).split(".")
+    port = endpoint.port or 80
+    labels = {"app.kubernetes.io/name": GARAGE}
+    metadata = {"name": GARAGE, "namespace": NAMESPACE, "labels": labels}
+    configuration = _garage_configuration(
+        _environment_value(web, REGION_VARIABLE), port
+    )
+    volumes: list[Document] = [
+        {"name": "configuration", "configMap": {"name": GARAGE}},
+        {"name": "data", "emptyDir": {}},
+    ]
+    pod: Document = {
+        "containers": [_garage_container(web, image, port)],
+        "volumes": volumes,
+    }
+    return [
+        *_endpoint_alias(service, namespace),
+        {
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": metadata,
+            "data": {GARAGE_CONFIGURATION.name: configuration},
+        },
+        {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": metadata,
+            "spec": {
+                "replicas": 1,
+                "selector": {"matchLabels": labels},
+                "template": {"metadata": {"labels": labels}, "spec": pod},
+            },
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Service",
+            "metadata": metadata,
+            "spec": {"selector": labels, "ports": [{"port": port, "targetPort": port}]},
+        },
     ]
 
 

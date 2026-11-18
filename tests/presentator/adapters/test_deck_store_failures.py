@@ -50,6 +50,7 @@ _EVERY_FAILURE = [
     pytest.param(
         BuildFailure(reason=BuildFailureReason.OUTPUT_SHAPE), id="output-shape"
     ),
+    pytest.param(BuildFailure(reason=BuildFailureReason.STORE), id="store"),
     pytest.param(
         BuildFailure(
             reason=BuildFailureReason.DECK_MEGABYTES,

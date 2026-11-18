@@ -40,6 +40,7 @@ const translated = {
     "deck.failedOutputShape": "The talk this build wrote cannot be taken: it holds a link, a special or unreadable file, a path of more than 32 parts (folders and the file) or 1024 bytes, or a file this step may not write.",
     "deck.failedDeckMegabytes": (gaps: { readonly entries: string; readonly megabytes: string }) => "This deck is too large to build: a deck may hold at most " + gaps.megabytes + " MB and at most " + gaps.entries + " files and folders together, not counting its top-level node_modules.",
     "deck.failedDeckPaths": "This deck cannot be built: it holds a path of more than 32 parts (folders and the file) or 1024 bytes, or a link, a special or an unreadable file.",
+    "deck.failedStore": "This build could not be kept: the store of builds did not take it. The next refresh tries again.",
     "deck.failedLastTalkStands": "The last talk that was built still opens in both views.",
     "deck.presenterView": "Presenter view",
     "deck.projectorView": "Projector view",

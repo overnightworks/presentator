@@ -1,6 +1,9 @@
 """The k3d driver's render proof and the documents it applies."""
 
+import configparser
 import json
+import re
+import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
@@ -15,6 +18,10 @@ from tests.scripts.support.k3d_render import (
     DATABASE_CREDENTIALS,
     DATABASE_KEY_FILE,
     DATABASE_URL,
+    OBJECT_STORE_BUCKET,
+    OBJECT_STORE_ENDPOINT,
+    OBJECT_STORE_NAME,
+    OBJECT_STORE_REGION,
     PROJECTED_KEYS,
     PROJECTED_NAME,
     WORKER_KEY_NAME,
@@ -79,7 +86,11 @@ def test_a_cell_applies_only_the_worker_pods_kinds_and_the_cell_dependent_fields
     fixture.drive()
     rendered = workload_documents(fixture.world.probe_image)
     namespaces = fixture.world.applied("Namespace")
-    assert [d["metadata"]["name"] for d in namespaces] == ["presentator"]
+    store_namespace = str(urlsplit(OBJECT_STORE_ENDPOINT).hostname).split(".")[1]
+    assert [d["metadata"]["name"] for d in namespaces] == [
+        "presentator",
+        store_namespace,
+    ]
     cells = [
         d
         for d in fixture.world.applies()
@@ -231,12 +242,73 @@ def test_the_throwaway_secrets_read_their_names_and_keys_from_the_deployment(
     secrets = manifests_module.throwaway_secrets(deployment, lambda: next(values))
     assert {secret["kind"] for secret in secrets} == {"Secret"}
     by_name = {secret["metadata"]["name"]: secret["stringData"] for secret in secrets}
-    assert set(by_name) == {PROJECTED_NAME, WORKER_KEY_NAME, DATABASE_CREDENTIALS}
+    assert set(by_name) == {
+        PROJECTED_NAME,
+        WORKER_KEY_NAME,
+        DATABASE_CREDENTIALS,
+        OBJECT_STORE_NAME,
+        manifests_module.GARAGE,
+    }
     assert set(by_name[PROJECTED_NAME]) == set(PROJECTED_KEYS)
     assert set(by_name[WORKER_KEY_NAME]) == {"key"}
     assert set(by_name[DATABASE_CREDENTIALS]) == {DATABASE_KEY_FILE}
-    shown = [value for held in by_name.values() for value in held.values()]
-    assert sorted(shown) == [f"effect-{number}" for number in range(4)]
+    assert set(by_name[OBJECT_STORE_NAME]) == {"credentials"}
+    files = [*by_name[PROJECTED_NAME].values(), *by_name[WORKER_KEY_NAME].values()]
+    files.append(by_name[DATABASE_CREDENTIALS][DATABASE_KEY_FILE])
+    assert len(set(files)) == len(files)
+    assert all(file.startswith("effect-") for file in files)
+
+
+def test_the_web_reads_the_key_the_probe_garage_holds(
+    manifests_module: ModuleType, production_image: str
+) -> None:
+    deployment = named(workload_documents(production_image), "Deployment")
+    values = iter(f"{number:064x}" for number in range(10))
+    secrets = manifests_module.throwaway_secrets(deployment, lambda: next(values))
+    by_name = {secret["metadata"]["name"]: secret["stringData"] for secret in secrets}
+    credentials = configparser.ConfigParser()
+    credentials.read_string(by_name[OBJECT_STORE_NAME]["credentials"])
+    garage = by_name[manifests_module.GARAGE]
+    assert dict(credentials["default"]) == {
+        "aws_access_key_id": garage["access_key"],
+        "aws_secret_access_key": garage["secret_key"],
+    }
+    assert re.fullmatch("GK[0-9a-f]{24}", garage["access_key"])
+
+
+def test_the_probe_garage_stands_under_the_endpoint_the_web_names_and_never_pulls(
+    manifests_module: ModuleType, production_image: str
+) -> None:
+    deployment = named(workload_documents(production_image), "Deployment")
+    documents = manifests_module.garage_documents(deployment, "local-garage")
+    namespace, alias, configuration, garage, service = documents
+    endpoint = urlsplit(OBJECT_STORE_ENDPOINT)
+    host_name, host_namespace, *_ = str(endpoint.hostname).split(".")
+    alias_namespace = alias["metadata"]["namespace"]
+    assert (alias["metadata"]["name"], alias_namespace) == (host_name, host_namespace)
+    assert namespace["metadata"]["name"] == alias_namespace
+    target = service["metadata"]
+    assert alias["spec"]["externalName"] == (
+        f"{target['name']}.{target['namespace']}.svc.cluster.local"
+    )
+    assert service["spec"]["ports"][0]["port"] == endpoint.port
+    assert service["spec"]["selector"] == garage["spec"]["selector"]["matchLabels"]
+    (container,) = garage["spec"]["template"]["spec"]["containers"]
+    assert (container["image"], container["imagePullPolicy"]) == (
+        "local-garage",
+        "Never",
+    )
+    environment = {e["name"]: e for e in container["env"]}
+    assert environment["GARAGE_DEFAULT_BUCKET"]["value"] == OBJECT_STORE_BUCKET
+    keys = {
+        name: e["valueFrom"]["secretKeyRef"]
+        for name, e in environment.items()
+        if "valueFrom" in e
+    }
+    assert {key["name"] for key in keys.values()} == {manifests_module.GARAGE}
+    held = tomllib.loads(next(iter(configuration["data"].values())))
+    assert held["s3_api"]["s3_region"] == OBJECT_STORE_REGION
+    assert held["s3_api"]["api_bind_addr"].endswith(f":{endpoint.port}")
 
 
 def test_the_probe_postgres_is_the_one_the_web_database_url_names_and_never_pulls(

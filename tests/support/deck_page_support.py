@@ -7,7 +7,7 @@ from typing import Final
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
-from presentator.contracts.decks import Build, BuildAttempt, Deck
+from presentator.contracts.decks import Build, BuildAttempt, BuildRun, Deck
 from tests.presentator.application.support.fakes import FakeDeckStore
 from tests.support.lobby import (
     A_TALK_ADDRESS,
@@ -27,9 +27,14 @@ BUILT_AGO: Final = timedelta(minutes=12)
 
 
 def a_build(*, talk: Path = BUILT_TALK, pdf: Path = EXPORTED_PDF) -> Build:
-    """A build that switched over a while ago."""
+    """A build that switched over a while ago, in the run the talk lies in."""
     return Build(
-        directory=talk, pdf=pdf, commit=COMMIT, built_at=NOW - BUILT_AGO, toolchain=None
+        run=BuildRun(talk.parent.parent.name),
+        directory=talk,
+        pdf=pdf,
+        commit=COMMIT,
+        built_at=NOW - BUILT_AGO,
+        toolchain=None,
     )
 
 

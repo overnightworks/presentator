@@ -9,6 +9,7 @@ from typing import Protocol
 from pydantic import SecretStr
 from webauth.ports import SessionRecordStore
 
+from presentator.adapters.build_cache import BuildCache
 from presentator.adapters.builds import HostToolchain, SlidevBuilds
 from presentator.adapters.decks import MirroredDeckFolders, SourceMirrors
 from presentator.adapters.secrets import TokenWebhookSecrets
@@ -16,11 +17,13 @@ from presentator.application.decks import Decks
 from presentator.application.people import People
 from presentator.contracts.decks import (
     Build,
+    BuildRun,
     Deck,
     Source,
     SourceRun,
     SourceRunOutcome,
     SourceWrite,
+    run_name_holding,
 )
 from presentator.contracts.models import Role, User
 from presentator.contracts.preferences import PersonPreferences, ThemeChoice
@@ -31,11 +34,14 @@ from tests.presentator.adapters.support.credentials_support import OpenCredentia
 from tests.presentator.application.support.fakes import (
     THE_TOOLCHAIN,
     FakeConnectionChecker,
-    FakeRefreshOwnership,
     FakeToolchainThemes,
     FrozenClock,
 )
+from tests.presentator.application.support.refresh_ownership_fake import (
+    FakeRefreshOwnership,
+)
 from tests.support.people import a_session_id
+from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects
 
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
 THE_PERSON = User(id="the-person", username="pia", role=Role.ADMIN)
@@ -54,12 +60,19 @@ class Directories:
     decks: Decks
     people: People
     kept_by: dict[str, tuple[Source, Path, Path]]
+    store: DirectoryRunObjects
 
     def mirror_of(self, owner: User) -> Path:
         return self.kept_by[owner.id][1]
 
     def build_of(self, owner: User) -> Path:
         return self.kept_by[owner.id][2]
+
+    def stored(self, owner: User) -> bool:
+        """Whether the store still holds the run of that person's build."""
+        names = self.store.names()
+        assert names is not None
+        return run_name_holding(self.build_of(owner)) in names
 
 
 class SessionStore(SessionRecordStore, PersonSessions, Protocol):
@@ -118,6 +131,7 @@ def _seed_person(
     build = builds / f"{person.username}-run" / "out" / "talk"
     build.mkdir(parents=True)
     (build / "index.html").write_text("a talk")
+    (build.parent / "deck.pdf").write_bytes(b"%PDF-1.7")
     _seed_deck(stores, person, source, build)
     return source, mirror, build
 
@@ -139,6 +153,7 @@ def _seed_deck(stores: Stores, person: User, source: Source, build: Path) -> Non
     stores.decks.put_build(
         slug,
         Build(
+            run=BuildRun(run_name_holding(build)),
             directory=build,
             pdf=build.parent / "deck.pdf",
             commit=_COMMIT,
@@ -160,7 +175,7 @@ def _seed_deck(stores: Stores, person: User, source: Source, build: Path) -> Non
 def _decks_application(
     stores: Stores,
     mirrors: SourceMirrors,
-    builds: Path,
+    cache: BuildCache,
     tmp_path: Path,
 ) -> Decks:
     return Decks(
@@ -169,7 +184,7 @@ def _decks_application(
         folders=MirroredDeckFolders(mirrors=mirrors),
         store=stores.decks,
         builder=SlidevBuilds(
-            builds=builds,
+            cache=cache,
             identity=THE_TOOLCHAIN,
             toolchain=HostToolchain(project=tmp_path, bound=_A_BOUND),
             mirrors=mirrors,
@@ -190,7 +205,7 @@ def directories_with_both_people(stores: Stores, tmp_path: Path) -> Directories:
     """Each person has an account, a session, preferences, a draft and a source.
 
     The source carries a deck with a build, a run, a mirror and a build
-    directory on disk.
+    directory on disk, kept in the store.
     """
     mirrors = SourceMirrors(
         directory=tmp_path / "mirrors",
@@ -202,7 +217,11 @@ def directories_with_both_people(stores: Stores, tmp_path: Path) -> Directories:
         person.id: _seed_person(person, stores, mirrors, builds)
         for person in (THE_PERSON, ANOTHER)
     }
-    decks = _decks_application(stores, mirrors, builds, tmp_path)
+    store = DirectoryRunObjects(tmp_path / "store")
+    cache = BuildCache(root=builds, store=store, bound_bytes=A_CACHE_BOUND)
+    for _, _, build in kept_by.values():
+        assert cache.keep(run_name_holding(build))
+    decks = _decks_application(stores, mirrors, cache, tmp_path)
     return Directories(
         mirrors=mirrors,
         builds=builds,
@@ -215,4 +234,5 @@ def directories_with_both_people(stores: Stores, tmp_path: Path) -> Directories:
             key_drafts=stores.key_drafts,
         ),
         kept_by=kept_by,
+        store=store,
     )

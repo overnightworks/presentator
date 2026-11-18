@@ -35,8 +35,8 @@ from tests.support.lobby import (
     a_configured_source,
     a_lobby,
     a_signed_in_lobby,
-    a_swapped_build,
 )
+from tests.support.swapped_build import a_swapped_build
 from tests.support.talk_support import ONLY_THIS_TEST_WROTE_IT, two_hosts
 
 _ADDRESS: Final = "git@heimserver:decks.git"

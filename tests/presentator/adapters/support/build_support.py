@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from presentator.adapters.build_cache import BuildCache
 from presentator.adapters.builds import DeckToolchain, HostToolchain, SlidevBuilds
 from presentator.adapters.decks import SourceMirrors
 from presentator.contracts.decks import (
@@ -18,6 +19,7 @@ from tests.presentator.adapters.support.credentials_support import OpenCredentia
 from tests.presentator.application.support.fakes import THE_TOOLCHAIN
 from tests.support.git_remote import with_the_program
 from tests.support.log_lines import LoggedText, LogLine
+from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects
 
 A_GENEROUS_BOUND = timedelta(seconds=30)
 
@@ -69,7 +71,11 @@ def builds_under(
     output_megabytes: int = A_TALK_THIS_BIG_IS_FINE,
 ) -> SlidevBuilds:
     return SlidevBuilds(
-        builds=tmp_path / "builds",
+        cache=BuildCache(
+            root=tmp_path / "builds",
+            store=DirectoryRunObjects(tmp_path / "store"),
+            bound_bytes=A_CACHE_BOUND,
+        ),
         identity=identity,
         toolchain=toolchain,
         mirrors=SourceMirrors(

@@ -42,6 +42,7 @@ from tests.presentator.host.support.app_requests import (
     watching,
 )
 from tests.support.git_remote import EXAMPLE_SLUG, GitRemote, with_the_program
+from tests.support.object_store import ObjectStore
 from tests.support.postgres import engine_on
 
 _SETTINGS = "/api/settings"
@@ -56,7 +57,9 @@ _MARKED_DECKS = 12
 _REBUILDS = 4
 _OPENINGS = 80
 _DRAFT_IDS = "SELECT id FROM source_key_drafts ORDER BY id"
-_BUILD_OF_THE_DECK = "SELECT active_build, pdf_export, built_commit FROM decks"
+_BUILD_OF_THE_DECK = (
+    "SELECT built_run, active_build, pdf_export, built_commit FROM decks"
+)
 # Stands in for the ssh git starts: it runs the upload-pack the remote command
 # names on this machine, so an scp-form address reaches a repository on disk.
 _SSH_ON_THIS_MACHINE = """#!/bin/sh
@@ -449,17 +452,19 @@ def test_fetches_of_trees_missing_each_others_decks_mark_what_one_fetch_would(
     assert all(each in (set(decks_of[0]), set(decks_of[1])) for each in visible_after)
 
 
-def test_a_deck_rebuilt_at_both_processes_at_once_is_delivered_from_one_build(
+def test_a_deck_rebuilt_at_both_processes_at_once_is_delivered_from_one_build(  # noqa: PLR0913 - the store is one more part of the scene
     environment: pytest.MonkeyPatch,
     database_url: str,
     tmp_path: Path,
     engine: Engine,
     remote: GitRemote,
+    *,
+    object_store: ObjectStore,
 ) -> None:
     with_the_toolchain(environment, tmp_path, A_TOOLCHAIN_THAT_BUILDS)
     remote.commit_example_deck(at=AT)
     pushed = {remote.head}
-    with serving_apps(database_url, tmp_path) as apps:
+    with serving_apps(database_url, tmp_path, object_store.environment) as apps:
         admin = admin_of(apps[0])
         added(admin, apps[0], "talks", remote)
 
@@ -469,19 +474,21 @@ def test_a_deck_rebuilt_at_both_processes_at_once_is_delivered_from_one_build(
                 pushed.add(remote.head)
                 at_once([lambda app=app: fetched(admin, app, "talks") for app in apps])
 
-    commits_of_a_directory = defaultdict[str, set[str]](set)
+    commits_of_a_run = defaultdict[str, set[str]](set)
     for observation in seen:
-        for talk, pdf, commit in observation:
-            if talk is None and pdf is None and commit is None:
+        for run, talk, pdf, commit in observation:
+            if run is None and talk is None and pdf is None and commit is None:
                 continue
+            assert run is not None
             assert talk is not None
             assert pdf is not None
             assert Path(talk).parent == Path(pdf).parent
+            assert Path(talk).parent.parent.name == run
             assert commit is not None
             assert commit in pushed
-            commits_of_a_directory[str(Path(talk).parent)].add(commit)
-    assert all(len(commits) == 1 for commits in commits_of_a_directory.values())
-    assert seen[-1][0][2] == remote.head
+            commits_of_a_run[run].add(commit)
+    assert all(len(commits) == 1 for commits in commits_of_a_run.values())
+    assert seen[-1][0][3] == remote.head
 
 
 @pytest.mark.usefixtures("environment")

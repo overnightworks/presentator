@@ -19,10 +19,12 @@ from tests.presentator.application.support.fakes import (
     FakeBuildRunner,
     FakeConnectionChecker,
     FakeDeckFolders,
-    FakeRefreshOwnership,
     FakeToolchainThemes,
     FakeWebhookSecrets,
     FrozenClock,
+)
+from tests.presentator.application.support.refresh_ownership_fake import (
+    FakeRefreshOwnership,
 )
 from tests.support.deck_source_support import (
     OWNER,

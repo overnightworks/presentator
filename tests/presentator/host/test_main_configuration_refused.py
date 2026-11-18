@@ -82,6 +82,20 @@ def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
     return str(directory)
 
 
+def _no_bucket(environment: pytest.MonkeyPatch, directory: Path) -> str:
+    environment.delenv("PRESENTATOR_S3_BUCKET")
+    return str(directory)
+
+
+def _unparsable_object_store_key(
+    environment: pytest.MonkeyPatch, directory: Path
+) -> str:
+    key_file = directory / "object-store-key"
+    key_file.write_text("aws_access_key_id = no section holds this\n")
+    environment.setenv("AWS_SHARED_CREDENTIALS_FILE", str(key_file))
+    return str(key_file)
+
+
 @pytest.mark.parametrize(
     ("arguments", "arrange", "setting"),
     [
@@ -107,6 +121,12 @@ def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
             [],
             _no_database,
             "PRESENTATOR_DATABASE_URL,PRESENTATOR_DATABASE_PASSWORD_FILE",
+        ),
+        ([], _no_bucket, "PRESENTATOR_S3_BUCKET"),
+        (
+            [],
+            _unparsable_object_store_key,
+            "AWS_SHARED_CREDENTIALS_FILE,AWS_CONFIG_FILE",
         ),
         (
             ["migrate"],

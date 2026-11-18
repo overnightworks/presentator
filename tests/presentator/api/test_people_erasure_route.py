@@ -425,14 +425,15 @@ def test_a_build_no_run_owns_answers_a_plain_500_without_a_leftover() -> None:
     scene = a_scene()
     store = scene.instance.fakes.store
     (talk,) = store.for_source("talks-id")
-    store.misplace_build(talk.slug, talk=Path("/nowhere/a-run/out/talk"))
+    store.lose_run(talk.slug)
 
     answer = scene.erase(raise_server_exceptions=False)
 
     assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert "leftover" not in answer.text
     assert THE_PERSON.id in scene.instance.users.users
-    assert store.for_source("talks-id")
+    assert talk.slug in store.kept
+    assert store.for_source("decks-id") == ()
 
 
 def test_a_removal_timed_out_by_another_process_answers_500_and_a_repeat_erases() -> (

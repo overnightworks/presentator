@@ -8,8 +8,7 @@ from pathlib import Path
 import pytest
 
 from presentator.application.decks import Decks
-from presentator.contracts.decks import BuildOutcome, SourceRunOutcome
-from presentator.ports.decks import BuildRun
+from presentator.contracts.decks import BuildOutcome, BuildRun, SourceRunOutcome
 from tests.presentator.application.support.decks_support import (
     DecksFakes,
     a_folder,
@@ -43,11 +42,7 @@ def its_run_vanishes(fakes: DecksFakes) -> None:
 def the_standing_run_is_on_disk(fakes: DecksFakes) -> bool:
     standing = fakes.store.kept[_A_DECK].build
     assert standing is not None
-    runs = {
-        fakes.builder.run_of(standing.directory),
-        fakes.builder.run_of(standing.pdf),
-    }
-    return runs <= fakes.builder.on_disk
+    return standing.run in fakes.builder.on_disk
 
 
 def test_a_deck_whose_run_vanished_is_built_again_at_the_next_refresh() -> None:

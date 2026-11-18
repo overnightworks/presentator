@@ -10,7 +10,7 @@ from presentator.adapters.decks import MirroredDeckFolders, SourceMirrors
 from presentator.adapters.identity import TokenIdentifierFactory
 from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
-from presentator.contracts.decks import Build, Deck, Source, SourceWrite
+from presentator.contracts.decks import Build, BuildRun, Deck, Source, SourceWrite
 from presentator.contracts.models import Role, User
 from tests.presentator.adapters.support.credentials_support import OpenCredentials
 from tests.presentator.adapters.support.key_draft_support import INSTANCE_KEY
@@ -139,8 +139,9 @@ def a_deck(
 
 def a_build(tmp_path: Path, *, commit: str = COMMIT) -> Build:
     return Build(
-        directory=tmp_path / "builds" / "kundenfeedback" / commit / "talk",
-        pdf=tmp_path / "builds" / "kundenfeedback" / commit / "deck.pdf",
+        run=BuildRun(commit),
+        directory=tmp_path / "builds" / commit / "out" / "talk",
+        pdf=tmp_path / "builds" / commit / "out" / "deck.pdf",
         commit=commit,
         built_at=BUILT_AT,
         toolchain=None,

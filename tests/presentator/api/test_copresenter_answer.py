@@ -13,7 +13,6 @@ import json
 import re
 from concurrent.futures import CancelledError
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Final
 
@@ -28,9 +27,10 @@ from agents.backend.fake_gateway import (
 from sqlalchemy import Engine, text
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
-from presentator.adapters.deck_texts import MirroredDeckTexts
+from presentator.adapters.build_cache import BuildCache
+from presentator.adapters.deck_texts import BuiltDeckTexts
 from presentator.contracts.copresenter import RetryAfter
-from presentator.contracts.decks import Build, Deck
+from presentator.contracts.decks import Build, BuildRun, Deck
 from tests.presentator.agent.support.transports import HeldTransport, RefusingTransport
 from tests.support.copresenter_support import (
     A_SOURCE,
@@ -55,7 +55,7 @@ from tests.support.copresenter_support import (
     the_token_thread_fails,
     what_the_ask_must_not_show,
 )
-from tests.support.deck_source_support import a_source, folders_under, mirrors_under
+from tests.support.deck_source_support import a_source
 from tests.support.deck_text_support import FakeDeckTexts
 from tests.support.lobby import (
     A_GATEWAY_KEY,
@@ -69,39 +69,42 @@ if TYPE_CHECKING:
     )
     from pathlib import Path
 
-    from tests.support.git_remote import GitRemote
 from tests.support.leak_support import everything_shown
 from tests.support.log_lines import json_logged
+from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects
 
-A_PUSH: Final = datetime(2026, 1, 15, 9, tzinfo=UTC)
 ASKED_MARKER: Final = "asked-deck-MARKER"
 OTHER_MARKER: Final = "other-deck-MARKER"
 LATER_MARKER: Final = "later-commit-MARKER"
 THE_ASKED: Final = "kern"
 
 
-def the_asked_decks_words_at_its_built_commit(
-    engine: Engine, tmp_path: Path, remote: GitRemote
-) -> Run:
-    """A repository of two decks, the asked one built before it was edited."""
-    remote.commit(
-        {
-            f"{THE_ASKED}/slides.md": f"# Eins\n{ASKED_MARKER}\n",
-            "anderes/slides.md": f"# Fremd\n{OTHER_MARKER}\n",
-        },
-        at=A_PUSH,
+def write_two_runs(builds: Path, *, asked: str) -> None:
+    """The asked deck's run, and a run with another deck's and a later push's words.
+
+    The run holds the deck's tree as its build exported it; what the source
+    carries beside it or after it is in no run of this deck.
+    """
+    run = builds / asked
+    (run / "out").mkdir(parents=True)
+    (run / "deck").mkdir()
+    (run / "deck" / "slides.md").write_text(
+        f"# Eins\n{ASKED_MARKER}\n", encoding="utf-8"
     )
-    built_at = remote.head
-    remote.commit(
-        {
-            f"{THE_ASKED}/slides.md": (
-                f"# Eins\n{ASKED_MARKER}\n\n---\n\n{LATER_MARKER}\n"
-            )
-        },
-        at=A_PUSH,
+    other = builds / "another-run" / "deck"
+    other.mkdir(parents=True)
+    (other / "slides.md").write_text(
+        f"# Fremd\n{OTHER_MARKER}\n{LATER_MARKER}\n", encoding="utf-8"
     )
-    source = replace(a_source(remote.url), id=A_SOURCE.id, owner_id=A.id)
-    folders_under(tmp_path).folders(source)
+
+
+def the_asked_decks_words_at_its_built_commit(engine: Engine, tmp_path: Path) -> Run:
+    """An ask about a deck whose build left its run beside another run."""
+    built_at = "a-built-commit"
+    write_two_runs(tmp_path / "builds", asked=built_at)
+    source = replace(
+        a_source("git@heimserver:decks.git"), id=A_SOURCE.id, owner_id=A.id
+    )
 
     def own_the_built_deck(hosts: Hosts) -> None:
         hosts.store.put(
@@ -119,6 +122,7 @@ def the_asked_decks_words_at_its_built_commit(
         hosts.store.put_build(
             THE_ASKED,
             Build(
+                run=BuildRun(built_at),
                 directory=tmp_path / "talk",
                 pdf=tmp_path / "deck.pdf",
                 commit=built_at,
@@ -128,7 +132,13 @@ def the_asked_decks_words_at_its_built_commit(
         )
 
     scenario = Scenario(
-        texts=MirroredDeckTexts(mirrors=mirrors_under(tmp_path)),
+        texts=BuiltDeckTexts(
+            cache=BuildCache(
+                root=tmp_path / "builds",
+                store=DirectoryRunObjects(tmp_path / "store"),
+                bound_bytes=A_CACHE_BOUND,
+            )
+        ),
         sources=[source],
         arrange=own_the_built_deck,
         body={**SPOKEN_QUESTION, "deck": THE_ASKED},
@@ -139,12 +149,11 @@ def the_asked_decks_words_at_its_built_commit(
 def test_a_signed_in_admins_ask_reaches_the_gateway_with_only_that_decks_words(
     engine: Engine,
     tmp_path: Path,
-    remote: GitRemote,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """CP1: the deck's words at its built commit, the key as bearer, one text."""
     with json_logged(capsys) as logged:
-        run = the_asked_decks_words_at_its_built_commit(engine, tmp_path, remote)
+        run = the_asked_decks_words_at_its_built_commit(engine, tmp_path)
 
     (request,) = run.gateway.requests
     sent = json.dumps(json.loads(request.content)["messages"])
