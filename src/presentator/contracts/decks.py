@@ -262,10 +262,9 @@ class SourceRunFailure(StrEnum):
         The fetch's log line and the source's listed state both read this one
         answer. A login the host turned down and a host that answers with
         another key than its pinned one are refusals the person mends at the
-        source or its host. A
-        stored credential the instance cannot produce is a fault of the
-        instance's own state, such as a restore without its key file, and
-        warns like a host that never answers.
+        source or its host. A stored credential the instance cannot produce
+        is a fault of the instance's own state, such as a restore without its
+        key file, and warns like a host that never answers.
         """
         match self:
             case SourceRunFailure.REFUSED | SourceRunFailure.HOST_KEY_REFUSED:

@@ -145,6 +145,8 @@ def test_a_fetch_line_and_the_listed_state_agree_on_whether_a_failure_is_a_refus
     outcome, level = ("refused", "info") if unread.refused else ("failed", "warning")
     assert fetch["outcome"] == outcome
     assert fetch["level"] == level
+    assert isinstance(fetch["duration_ms"], float)
+    assert "error_type" not in fetch
     assert source.url not in logged.text
     run = SourceRun(
         source_id=source.id,
