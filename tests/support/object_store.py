@@ -4,8 +4,8 @@ CI starts Garage with platform's action and a developer starts the same image;
 either exports the variables boto3 reads and names the bucket in
 `PRESENTATOR_TEST_S3_BUCKET`. The one bucket is shared, and a sweep deletes
 every run its own database names nowhere, so every test that asks for the
-`object_store` fixture holds the bucket alone, across every xdist worker of the
-run, and starts from an emptied bucket.
+`object_store` fixture holds the bucket alone, across every xdist worker and
+every run on the machine, and starts from an emptied bucket.
 """
 
 import fcntl
@@ -14,6 +14,7 @@ from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import gettempdir
 from typing import Final
 
 import pytest
@@ -69,9 +70,15 @@ class ObjectStore:
 
 
 @contextmanager
-def the_bucket_alone(shared: Path) -> Generator[None]:
-    """Hold the bucket for this test alone among all that lock in `shared`."""
-    with (shared / "object-store.lock").open("a") as lock:
+def the_bucket_alone() -> Generator[None]:
+    """Hold the bucket for this test alone, against every test run on this machine.
+
+    The lock is named after the bucket in the one directory every run shares,
+    so two runs against one Garage, from two worktrees, take the same lock.
+    """
+    bucket = object_store_environment()["PRESENTATOR_S3_BUCKET"]
+    held = Path(gettempdir()) / f"presentator-test-bucket-{bucket}.lock"
+    with held.open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         yield
 

@@ -202,15 +202,9 @@ def environment(
 
 
 @pytest.fixture
-def object_store(
-    bare_environment: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
-) -> Iterator[ObjectStore]:
-    """The test run's Garage for every instance this test starts, its bucket emptied.
-
-    Every xdist worker's directory lies in one directory of the run, which
-    holds the lock.
-    """
-    with the_bucket_alone(tmp_path_factory.getbasetemp().parent):
+def object_store(bare_environment: pytest.MonkeyPatch) -> Iterator[ObjectStore]:
+    """The test run's Garage for every instance this test starts, its bucket emptied."""
+    with the_bucket_alone():
         yield emptied_store(bare_environment)
 
 
