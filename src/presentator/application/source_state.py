@@ -1,4 +1,4 @@
-"""The one word a poll, a connection check or a deck gets, and a run as shown."""
+"""The word a poll, a check or a deck gets, a run as shown, a source as listed."""
 
 from typing import Final
 
@@ -7,11 +7,14 @@ from presentator.contracts.decks import (
     ConnectionCheckResult,
     Deck,
     DeckState,
+    ListedSource,
     ShownSourceRun,
+    Source,
     SourceRun,
     SourceRunFailure,
     SourceRunOutcome,
     SourceState,
+    access_kind_of,
 )
 
 # A person compares the commit on the page with the one their push wrote, and
@@ -27,6 +30,18 @@ def shown_run(run: SourceRun) -> ShownSourceRun:
         at=run.at,
         commit=None if run.commit is None else run.commit[:SHORT_COMMIT],
         reason=run.reason,
+    )
+
+
+def listed_source(source: Source, newest: SourceRun | None) -> ListedSource:
+    """The row for that source, derived from its newest run and nothing else."""
+    return ListedSource(
+        name=source.name,
+        url=source.url,
+        access=access_kind_of(source.url),
+        state=SourceState.NEVER_FETCHED if newest is None else source_state_of(newest),
+        reason=None if newest is None else newest.reason,
+        fetched_at=None if newest is None else newest.at,
     )
 
 

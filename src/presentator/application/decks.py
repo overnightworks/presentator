@@ -24,8 +24,8 @@ from presentator.application.deck_take_in import take_in
 from presentator.application.source_state import (
     SHORT_COMMIT,
     deck_state_of,
+    listed_source,
     shown_run,
-    source_state_of,
 )
 from presentator.contracts.decks import (
     AccessKind,
@@ -47,7 +47,6 @@ from presentator.contracts.decks import (
     SourceRun,
     SourceRunFailure,
     SourceRunOutcome,
-    SourceState,
     SourceWrite,
     access_kind_of,
     is_a_folder_path,
@@ -681,15 +680,7 @@ class Decks:
 
     def _listed_source(self, source: Source) -> ListedSource:
         """The row for that source, derived from its newest run and nothing else."""
-        run = self.source_runs.newest(source.id)
-        return ListedSource(
-            name=source.name,
-            url=source.url,
-            access=access_kind_of(source.url),
-            state=SourceState.NEVER_FETCHED if run is None else source_state_of(run),
-            reason=None if run is None else run.reason,
-            fetched_at=None if run is None else run.at,
-        )
+        return listed_source(source, self.source_runs.newest(source.id))
 
     def _run_one_at_a_time[Answer](
         self, work: Callable[[], Answer], *, busy: Answer, recovering: bool = False
