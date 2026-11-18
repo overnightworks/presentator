@@ -71,7 +71,6 @@ HEADLESS_SHELL_PATTERN = (
     "chrome-headless-shell-linux64/chrome-headless-shell"
 )
 VITE_CACHE_TARGET = f"{WORK_MOUNT}/{VITE_DIRECTORY}"
-TOLERATED_UNREAD_VARIABLE = "PRESENTATOR_WORKER_SEAL"
 # The names the kubelet injects into every container for the `kubernetes` service.
 KUBERNETES_ENVIRONMENT_KEYS = frozenset(
     {
@@ -109,9 +108,6 @@ ALLOWED_ENVIRONMENT_KEYS = frozenset(
         "LOG_LEVEL",
     }
     | {"HOSTNAME", "LC_CTYPE"}
-    # The platform's manifest still sets this name and nothing reads it; the
-    # allowlist refuses an unknown key, so the pod would not start without it.
-    | {TOLERATED_UNREAD_VARIABLE}
     | KUBERNETES_ENVIRONMENT_KEYS
     | worker_settings_variables()
 )
