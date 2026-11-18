@@ -133,6 +133,9 @@ main {
 	font-weight: 400;
 	color: var(--text-muted);
 }
+.decks a {
+	overflow-wrap: anywhere;
+}
 .decks code {
 	display: block;
 }
