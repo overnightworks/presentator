@@ -220,6 +220,7 @@ def build_instance(
     # nothing else holds.
     try:
         mirrors = _source_mirrors(settings, stores)
+        mirrors.adopt_earlier_pins(stores.sources.all())
         cache = _build_cache(settings)
         decks = _decks(
             settings, stores, mirrors=mirrors, cache=cache, toolchain=toolchain

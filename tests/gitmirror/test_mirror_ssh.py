@@ -12,7 +12,7 @@ from typing import cast
 import pytest
 
 from gitmirror import mirror as mirror_module
-from gitmirror.mirror import check_connection
+from gitmirror.mirror import adopt_known_hosts, check_connection
 from gitmirror.model import (
     ConnectionState,
     CredentialReference,
@@ -28,6 +28,7 @@ from tests.support.mirror_support import (
     PinsInMemory,
     a_mirror,
     known_hosts_under,
+    written_by_ssh,
 )
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
@@ -243,6 +244,62 @@ def test_a_run_whose_accepted_key_lost_the_pin_to_another_is_not_trusted(
     state = reach(remote, tmp_path, url, PinnedElsewhereMeanwhile())
 
     assert state is ConnectionState.FAILED
+
+
+_A_KEPT_LINE = f"{_THE_HOST_KEY.host} {_THE_HOST_KEY.key}\n"
+_A_SCP_ADDRESS = "git@SSH-Stub-Host:talks.git"
+
+
+@pytest.mark.parametrize(
+    ("url", "lines", "hashed", "adopted"),
+    [
+        (_A_SCP_ADDRESS, _A_KEPT_LINE, False, _THE_HOST_KEY),
+        (_A_SCP_ADDRESS, _A_KEPT_LINE, True, _THE_HOST_KEY),
+        (
+            "ssh://git@ssh-stub-host:2222/talks.git",
+            f"[ssh-stub-host]:2222 {_THE_HOST_KEY.key}\n",
+            True,
+            HostKey(host="[ssh-stub-host]:2222", key=_THE_HOST_KEY.key),
+        ),
+        (
+            "git@[::1]:talks.git",
+            f"::1 {_THE_HOST_KEY.key}\n",
+            True,
+            HostKey(host="::1", key=_THE_HOST_KEY.key),
+        ),
+        ("ssh://git@another-host/talks.git", _A_KEPT_LINE, True, None),
+        ("ssh://git@ssh-stub-host:99999/talks.git", _A_KEPT_LINE, False, None),
+        ("https://ssh-stub-host/talks.git", _A_KEPT_LINE, False, None),
+        (
+            _A_SCP_ADDRESS,
+            (
+                f"# {_A_KEPT_LINE}|1|no-base64|x {_THE_HOST_KEY.key}\n"
+                f"|1|a|b|c {_THE_HOST_KEY.key}\n{_THE_HOST_KEY.host}\n"
+            ),
+            False,
+            None,
+        ),
+    ],
+    ids=[
+        "scp-address",
+        "hashed",
+        "another-port",
+        "ipv6",
+        "another-host",
+        "no-port",
+        "https",
+        "no-line-ssh-wrote",
+    ],
+)
+def test_a_key_ssh_kept_in_a_known_hosts_file_is_pinned_for_the_host_it_names(
+    tmp_path: Path, url: str, lines: str, adopted: HostKey | None, *, hashed: bool
+) -> None:
+    file = written_by_ssh(tmp_path / "known_hosts", lines, hashed=hashed)
+    pins = PinsInMemory()
+
+    adopt_known_hosts(file, urls=[url], pins=pins)
+
+    assert pins.pinned() == (() if adopted is None else (adopted,))
 
 
 @pytest.mark.parametrize("outcome", ["refusal", "timeout", "exception"])

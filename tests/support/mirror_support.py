@@ -1,5 +1,6 @@
 """A mirror over a real source and the resolvers that stand in for the secrets."""
 
+import subprocess
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
@@ -69,3 +70,15 @@ def a_mirror(
         pull_timeout=pull_timeout,
         known_hosts=known_hosts_under(directory),
     )
+
+
+def written_by_ssh(file: Path, lines: str, *, hashed: bool) -> Path:
+    """A known_hosts file holding those lines, its host names hashed by ssh itself."""
+    file.write_text(lines, encoding="utf-8")
+    if hashed:
+        subprocess.run(  # noqa: S603 - argv is a fixed list naming a file of this test
+            ["ssh-keygen", "-H", "-f", str(file)],  # noqa: S607 - ssh's own tool, from PATH
+            check=True,
+            capture_output=True,
+        )
+    return file

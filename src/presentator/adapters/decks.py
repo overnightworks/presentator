@@ -17,7 +17,7 @@ from typing import Any, Final
 
 from logline import StepTimer
 
-from gitmirror.mirror import GitMirror, check_connection
+from gitmirror.mirror import GitMirror, adopt_known_hosts, check_connection
 from gitmirror.model import (
     ConnectionState,
     CredentialReference,
@@ -50,6 +50,9 @@ _MIRROR_REFUSED: Final = "mirror_removal.refused"
 _MIRROR_STAYED: Final = "directory_not_removable"
 _MANIFEST_UNREADABLE: Final = "unreadable"
 _MIRROR_SUFFIX: Final = ".git"
+# Where each process kept the host keys it pinned before they lived in
+# `host_key_pins`, on the disk that held its mirrors.
+_EARLIER_KNOWN_HOSTS: Final = "known_hosts"
 # `gitmirror`'s own words never reach a `SourceRun`; a connection that carries
 # no revision is always one of these four states, never `READY`.
 _FAILURE_BY_CONNECTION_STATE: Final[dict[ConnectionState, SourceRunFailure]] = {
@@ -96,6 +99,18 @@ class SourceMirrors:
     def known_hosts(self) -> KnownHosts:
         """Where every ssh run of this process is handed the pinned host keys."""
         return KnownHosts(directory=self.directory, pins=self.host_keys)
+
+    def adopt_earlier_pins(self, sources: Iterable[Source]) -> None:
+        """Pin the host keys this disk kept for these sources before `host_keys`.
+
+        Run before any pull, so a key met before the pins were shared is
+        still the one that host must answer with.
+        """
+        adopt_known_hosts(
+            self.directory / _EARLIER_KNOWN_HOSTS,
+            urls=(source.url for source in sources),
+            pins=self.host_keys,
+        )
 
     def of(self, source: Source) -> GitMirror | None:
         """The mirror of that source, or nothing when it no longer resolves.
