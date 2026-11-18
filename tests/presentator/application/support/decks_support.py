@@ -22,12 +22,14 @@ from tests.presentator.application.support.fakes import (
     FakeDeckFolders,
     FakeDeckStore,
     FakeDeployKeyDrafts,
-    FakeRefreshOwnership,
     FakeSourceRunStore,
     FakeSourceStore,
     FakeToolchainThemes,
     FakeWebhookSecrets,
     FrozenClock,
+)
+from tests.presentator.application.support.refresh_ownership_fake import (
+    FakeRefreshOwnership,
 )
 
 NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)

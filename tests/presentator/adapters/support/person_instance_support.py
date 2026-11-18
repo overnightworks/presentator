@@ -34,9 +34,11 @@ from tests.presentator.adapters.support.credentials_support import OpenCredentia
 from tests.presentator.application.support.fakes import (
     THE_TOOLCHAIN,
     FakeConnectionChecker,
-    FakeRefreshOwnership,
     FakeToolchainThemes,
     FrozenClock,
+)
+from tests.presentator.application.support.refresh_ownership_fake import (
+    FakeRefreshOwnership,
 )
 from tests.support.people import a_session_id
 from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects

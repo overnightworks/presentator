@@ -645,10 +645,7 @@ class Decks:
         )
 
     def built_talk(self, slug: str, *, viewer: str) -> Path | None:
-        """The directory the viewer's deck's talk is delivered from, while built.
-
-        The first ask in this process fetches the talk from the store.
-        """
+        """The directory the viewer's deck's talk is delivered from, while built."""
         kept = self._kept(slug, viewer)
         return None if kept is None else kept.directory
 
@@ -659,13 +656,11 @@ class Decks:
         is offered under that name, so a separator, a quote, or a line break in
         it would otherwise reach the answer's own header.
         """
-        if not is_a_plain_folder_name(slug):
-            return None
-        kept = self._kept(slug, viewer)
+        kept = self._kept(slug, viewer) if is_a_plain_folder_name(slug) else None
         return None if kept is None else kept.pdf
 
     def _kept(self, slug: str, viewer: str) -> Artefacts | None:
-        """What the viewer's deck's build left, on this process's disk."""
+        """What the viewer's deck's build left, fetched from the store on first ask."""
         deck = self._owned(slug, viewer)
         if deck is None or deck.build is None:
             return None

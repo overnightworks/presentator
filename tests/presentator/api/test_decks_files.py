@@ -21,9 +21,8 @@ from tests.support.lobby import (
     BUILT_TALK,
     GivenDecks,
     a_configured_source,
-    a_swapped_build,
-    real_builds_under,
 )
+from tests.support.swapped_build import a_swapped_build, real_builds_under
 from tests.support.talk_support import ONLY_THIS_TEST_WROTE_IT, two_hosts
 
 _SLUG: Final = "hello-deck"

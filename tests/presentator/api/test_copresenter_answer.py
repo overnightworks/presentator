@@ -79,24 +79,29 @@ LATER_MARKER: Final = "later-commit-MARKER"
 THE_ASKED: Final = "kern"
 
 
-def the_asked_decks_words_at_its_built_commit(engine: Engine, tmp_path: Path) -> Run:
-    """The run of the asked deck's build, and words of another deck and a later push.
+def write_two_runs(builds: Path, *, asked: str) -> None:
+    """The asked deck's run, and a run with another deck's and a later push's words.
 
     The run holds the deck's tree as its build exported it; what the source
     carries beside it or after it is in no run of this deck.
     """
-    built_at = "a-built-commit"
-    run = tmp_path / "builds" / built_at
+    run = builds / asked
     (run / "out").mkdir(parents=True)
     (run / "deck").mkdir()
     (run / "deck" / "slides.md").write_text(
         f"# Eins\n{ASKED_MARKER}\n", encoding="utf-8"
     )
-    other = tmp_path / "builds" / "another-run" / "deck"
+    other = builds / "another-run" / "deck"
     other.mkdir(parents=True)
     (other / "slides.md").write_text(
         f"# Fremd\n{OTHER_MARKER}\n{LATER_MARKER}\n", encoding="utf-8"
     )
+
+
+def the_asked_decks_words_at_its_built_commit(engine: Engine, tmp_path: Path) -> Run:
+    """An ask about a deck whose build left its run beside another run."""
+    built_at = "a-built-commit"
+    write_two_runs(tmp_path / "builds", asked=built_at)
     source = replace(
         a_source("git@heimserver:decks.git"), id=A_SOURCE.id, owner_id=A.id
     )

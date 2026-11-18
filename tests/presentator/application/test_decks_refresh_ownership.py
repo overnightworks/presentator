@@ -14,8 +14,10 @@ from tests.presentator.application.support.decks_support import (
     decks_over,
 )
 from tests.presentator.application.support.fakes import (
-    FakeRefreshOwnership,
     FrozenClock,
+)
+from tests.presentator.application.support.refresh_ownership_fake import (
+    FakeRefreshOwnership,
 )
 
 

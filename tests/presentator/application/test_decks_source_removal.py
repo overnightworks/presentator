@@ -17,7 +17,7 @@ from tests.presentator.application.support.decks_support import (
     DecksFakes,
     decks_over,
 )
-from tests.presentator.application.support.fakes import (
+from tests.presentator.application.support.refresh_ownership_fake import (
     FakeRefreshOwnership,
 )
 
