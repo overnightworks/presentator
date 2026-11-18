@@ -141,19 +141,3 @@ reason = "vulture's whitelist must import every name it vouches for, test helper
 path = "tests/presentator/adapters/test_person_records.py"
 rule = "test-layout"
 reason = "it checks every store of a person at once, so no single adapter module is its subject"
-
-[[advisories.allow]]
-id = "GHSA-fc5q-39xc-vjpf"
-lock = "frontend/pnpm-lock.yaml"
-until = 2027-01-31
-date = 2026-11-17
-item = "overnightworks/quality#879"
-reason = "no fixed picomatch; dev tools only: vite, vitest, svelte-check and tinyglobby pull it in via fdir"
-
-[[advisories.allow]]
-id = "GHSA-fc5q-39xc-vjpf"
-lock = "slidev/pnpm-lock.yaml"
-until = 2027-01-31
-date = 2026-11-17
-item = "overnightworks/quality#879"
-reason = "no fixed picomatch; deck build tools only: @slidev/cli, vite, unplugin and vitest pull 4.0.7, micromatch, anymatch and readdirp pull 2.3.2"
