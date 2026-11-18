@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Final
 from urllib.parse import urlsplit
 
+from botocore.exceptions import ConfigParseError
 from fastapi import FastAPI
 from logline import RequestLineMiddleware
 from pydantic import SecretStr
@@ -159,6 +160,8 @@ def _nothing_to_close() -> None:
     """What an instance built without stores holds open: nothing."""
 
 
+# The files boto3 reads the object store's key and configuration from.
+_OBJECT_STORE_FILES: Final = ("AWS_SHARED_CREDENTIALS_FILE", "AWS_CONFIG_FILE")
 # The wait between taking the lease and the answer's clock starting, so the lease
 # outlives the whole answer.
 ASK_LEASE_MARGIN_SECONDS: Final = 30
@@ -411,10 +414,21 @@ def _lobby_shell(settings: Settings) -> LobbyShell:
 
 
 def _build_cache(settings: Settings) -> BuildCache:
-    """The runs on this disk, kept in the store through this process's one client."""
+    """The runs on this disk, kept in the store through this process's one client.
+
+    The client reads the platform's key and configuration files as it is made,
+    so one that does not parse refuses the start.
+    """
+    try:
+        client = object_store_client()
+    except ConfigParseError:
+        raise cannot_start(
+            "the object store's key or configuration file does not parse",
+            variables=_OBJECT_STORE_FILES,
+        ) from None
     return BuildCache(
         root=settings.builds,
-        store=StoredRuns(client=object_store_client(), bucket=settings.s3_bucket),
+        store=StoredRuns(client=client, bucket=settings.s3_bucket),
         bound_bytes=settings.build_cache_bytes,
     )
 
