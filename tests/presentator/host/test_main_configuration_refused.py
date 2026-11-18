@@ -82,6 +82,11 @@ def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
     return str(directory)
 
 
+def _no_bucket(environment: pytest.MonkeyPatch, directory: Path) -> str:
+    environment.delenv("PRESENTATOR_S3_BUCKET")
+    return str(directory)
+
+
 @pytest.mark.parametrize(
     ("arguments", "arrange", "setting"),
     [
@@ -108,6 +113,7 @@ def _no_database(environment: pytest.MonkeyPatch, directory: Path) -> str:
             _no_database,
             "PRESENTATOR_DATABASE_URL,PRESENTATOR_DATABASE_PASSWORD_FILE",
         ),
+        ([], _no_bucket, "PRESENTATOR_S3_BUCKET"),
         (
             ["migrate"],
             _no_database,

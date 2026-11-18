@@ -64,6 +64,20 @@ server whose user may create databases; every test creates one of its own.
 The tests that reach Redis find theirs in `PRESENTATOR_TEST_REDIS_URL`; each
 test worker empties a database of its own on it.
 
+## The object store
+
+Every build is kept in the S3 bucket `PRESENTATOR_S3_BUCKET` names, which every
+process of the instance shares; a start without it is refused like one without
+the database. The S3 client reads the endpoint, the region and the key from
+`AWS_ENDPOINT_URL_S3`, `AWS_DEFAULT_REGION` and `AWS_SHARED_CREDENTIALS_FILE`,
+which the platform gives the web, and addresses the bucket by path. A store that
+does not answer fails each call with one `object_store.failed` warning naming
+the operation and the error class: a build it does not take is tried again by
+the next refresh, and a talk this process already holds is still served.
+The tests that reach the store find a Garage through the same three variables
+and the bucket in `PRESENTATOR_TEST_S3_BUCKET`; they hold it one at a time and
+empty it first.
+
 ## Defaults
 
 The value in brackets is what a direct run uses; the container image replaces
@@ -81,7 +95,8 @@ some of them.
 | `PRESENTATOR_SOURCE_TIMEOUT_SECONDS` | `180` | Bound of one pull and of one Check connection. |
 | `PRESENTATOR_TOOLCHAIN` | `slidev` | The project carrying Slidev. Read once at start under either runner; a project that cannot be read refuses to start. |
 | `PRESENTATOR_LOBBY_BUILD` | `frontend/build` | The lobby app's `pnpm build` output; an instance without a build it can serve refuses to start. |
-| `PRESENTATOR_BUILDS` | `builds` | Where built talks and PDFs are kept. |
+| `PRESENTATOR_BUILDS` | `builds` | Where talks are built, and where this process keeps its copies of the stored builds it serves. |
+| `PRESENTATOR_BUILD_CACHE_BYTES` | `4294967296` | Past this many bytes, the copies served least recently leave `PRESENTATOR_BUILDS` and are fetched again when asked for; set it below the size of the volume that holds it. |
 | `PRESENTATOR_BUILD_TIMEOUT_SECONDS` | `300` | Bound of each build step; the build worker reads it too. A removal waits for a refresh this long, and so does a new refresh holder for the writes the old one has open. |
 | `PRESENTATOR_BUILD_OUTPUT_MEGABYTES` | `300` | Size bound of the talk a build leaves; the build worker reads it too. |
 | `PRESENTATOR_BUILD_RUNNER` | `worker` | Builds through the build workers and starts whether or not one answers; a build that finds none within 70 seconds fails as a worker outage. `host` builds on this machine instead, for a development run (without the sandbox, whose reason is in [constraints and reasons](ARCHITECTURE.md#6-constraints-and-reasons)). |

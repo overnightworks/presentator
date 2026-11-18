@@ -54,7 +54,8 @@ Authors outside this repository rely on these rules. Local assets,
 ## How long a deck and its build stay
 
 - **DK14** The active build and PDF stay. A superseded build goes at the next
-  delivery of its deck, and no build without an active deck stays on disk.
+  delivery of its deck, and no build without an active deck stays in the store
+  or on disk.
 - **DK15** A deck whose folder is missing is deleted 30 days after the first
   refresh that missed it. Only a refresh that could read the source and still
   misses the folder deletes it. A folder still in the repository counts as
@@ -78,3 +79,8 @@ Authors outside this repository rely on these rules. Local assets,
   tried is not built again while a process of that toolchain runs, so a rollout
   and a rollback never rebuild each other's decks; once none runs, the commit
   builds under the toolchain that remains.
+- **DK20** Every process serves every build, its talk, its PDF and the deck's
+  text the co-presenter reads, from the store the build was kept in, through a
+  copy on its own disk. A process keeps serving a copy it holds while the store
+  does not answer. A deck whose build was written before builds were kept in
+  the store has no talk until the next refresh builds it again.
