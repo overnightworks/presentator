@@ -106,6 +106,7 @@ def assert_ssh_deploy_key_transport(recorded: Path, *, known_hosts: Path) -> Non
     assert "ConnectTimeout=10" in arguments
     assert "StrictHostKeyChecking=accept-new" in arguments
     assert "HashKnownHosts=no" in arguments
+    assert "UpdateHostKeys=no" in arguments
     [hosts_file] = [
         Path(each.removeprefix("UserKnownHostsFile="))
         for each in arguments
