@@ -71,8 +71,8 @@ def a_deck(slug: str, source_id: str) -> Deck:
 def a_build(number: int) -> Build:
     return Build(
         run=BuildRun(f"run-{number}"),
-        directory=Path(f"/builds/{number}"),
-        pdf=Path(f"/builds/{number}.pdf"),
+        directory=Path(f"/builds/run-{number}/out/talk"),
+        pdf=Path(f"/builds/run-{number}/out/deck.pdf"),
         commit=f"commit-{number}",
         built_at=_NOON + timedelta(minutes=number),
         toolchain=None,

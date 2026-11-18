@@ -140,8 +140,8 @@ def a_deck(
 def a_build(tmp_path: Path, *, commit: str = COMMIT) -> Build:
     return Build(
         run=BuildRun(commit),
-        directory=tmp_path / "builds" / "kundenfeedback" / commit / "talk",
-        pdf=tmp_path / "builds" / "kundenfeedback" / commit / "deck.pdf",
+        directory=tmp_path / "builds" / commit / "out" / "talk",
+        pdf=tmp_path / "builds" / commit / "out" / "deck.pdf",
         commit=commit,
         built_at=BUILT_AT,
         toolchain=None,

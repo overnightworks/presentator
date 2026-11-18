@@ -59,6 +59,7 @@ from presentator.contracts.decks import (
     ToolchainIdentity,
     ToolchainUnavailable,
     failure_text,
+    run_name_holding,
     talk_address,
 )
 
@@ -408,7 +409,7 @@ class SlidevBuilds:
 
     def deliver(self, artefacts: Artefacts) -> BuildRun | None:
         """Keep the run those artefacts stand in in the store, or answer nothing."""
-        name = artefacts.directory.parent.parent.name
+        name = run_name_holding(artefacts.directory)
         return BuildRun(name) if self.cache.keep(name) else None
 
     def kept(self, build: Build) -> Artefacts | None:

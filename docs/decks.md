@@ -83,4 +83,5 @@ Authors outside this repository rely on these rules. Local assets,
   text the co-presenter reads, from the store the build was kept in, through a
   copy on its own disk. A process keeps serving a copy it holds while the store
   does not answer. A deck whose build was written before builds were kept in
-  the store has no talk until the next refresh builds it again.
+  the store, or by a release that keeps none there, has no talk until the next
+  refresh builds it again.

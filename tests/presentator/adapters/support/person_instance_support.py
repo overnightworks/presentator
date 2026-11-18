@@ -23,6 +23,7 @@ from presentator.contracts.decks import (
     SourceRun,
     SourceRunOutcome,
     SourceWrite,
+    run_name_holding,
 )
 from presentator.contracts.models import Role, User
 from presentator.contracts.preferences import PersonPreferences, ThemeChoice
@@ -69,11 +70,7 @@ class Directories:
         """Whether the store still holds the run of that person's build."""
         names = self.store.names()
         assert names is not None
-        return _run_of(self.build_of(owner)) in names
-
-
-def _run_of(talk: Path) -> str:
-    return talk.parent.parent.name
+        return run_name_holding(self.build_of(owner)) in names
 
 
 class SessionStore(SessionRecordStore, PersonSessions, Protocol):
@@ -154,7 +151,7 @@ def _seed_deck(stores: Stores, person: User, source: Source, build: Path) -> Non
     stores.decks.put_build(
         slug,
         Build(
-            run=BuildRun(_run_of(build)),
+            run=BuildRun(run_name_holding(build)),
             directory=build,
             pdf=build.parent / "deck.pdf",
             commit=_COMMIT,
@@ -221,7 +218,7 @@ def directories_with_both_people(stores: Stores, tmp_path: Path) -> Directories:
     store = DirectoryRunObjects(tmp_path / "store")
     cache = BuildCache(root=builds, store=store, bound_bytes=A_CACHE_BOUND)
     for _, _, build in kept_by.values():
-        assert cache.keep(_run_of(build))
+        assert cache.keep(run_name_holding(build))
     decks = _decks_application(stores, mirrors, cache, tmp_path)
     return Directories(
         mirrors=mirrors,

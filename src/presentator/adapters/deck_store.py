@@ -15,6 +15,7 @@ from presentator.contracts.decks import (
     BuildRun,
     Deck,
     ToolchainIdentity,
+    run_name_holding,
 )
 
 # The select every adapter reads a deck row by, in the order `DeckRow` holds.
@@ -94,6 +95,9 @@ def _build[Instant](
 
     A build written before builds were kept in the store names no run, so it
     is no talk any process can serve, and the next refresh builds it again.
+    So is one whose talk lies in another run than the row names: a release
+    that writes no run moved the talk and the commit and left the run of an
+    older build standing, which would serve that older talk as this commit.
     """
     directory, pdf, commit, built_at = columns
     if (
@@ -104,8 +108,11 @@ def _build[Instant](
         or built_at is None
     ):
         return None
+    stored_run = BuildRun(run)
+    if run_name_holding(Path(directory)) != stored_run.name:
+        return None
     return Build(
-        run=BuildRun(run),
+        run=stored_run,
         directory=Path(directory),
         pdf=Path(pdf),
         commit=commit,

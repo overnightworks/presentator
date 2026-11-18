@@ -436,6 +436,11 @@ class BuildRun:
             raise ValueError(message)
 
 
+def run_name_holding(talk: Path) -> str:
+    """The name of the run whose output holds this talk, as `<run>/out/talk`."""
+    return talk.parent.parent.name
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Build:
     """The talk a deck delivers, the commit and toolchain it was built under, and when.
