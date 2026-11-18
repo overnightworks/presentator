@@ -72,7 +72,10 @@ class _LeaseTicket:
         try:
             self._redis.eval(_RELEASE_IF_OWN, 1, self._key, self._token)
         except RedisError as failure:
-            _LOGGER.warning("ask lease release failed: %s", type(failure).__name__)
+            _LOGGER.warning(
+                "ask_lease_release.failed",
+                extra={"error_type": type(failure).__name__},
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +89,9 @@ class _RedisAskLimiter:
         try:
             taken = self._redis.set(key, token, nx=True, px=self._lease_milliseconds)
         except RedisError as failure:
-            _LOGGER.warning("ask lease failed: %s", type(failure).__name__)
+            _LOGGER.warning(
+                "ask_lease.failed", extra={"error_type": type(failure).__name__}
+            )
             raise CoPresenterUnavailableError from None
         if not taken:
             return RetryAfter(BUSY_RETRY_SECONDS)
