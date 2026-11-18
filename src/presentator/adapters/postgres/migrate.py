@@ -11,7 +11,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import URL, Connection, Engine, text
-from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 
 from presentator.adapters.postgres.engine import CONNECT_TIMEOUT_SECONDS
 from presentator.adapters.postgres.locks import MIGRATION_LOCK, AdvisoryLock, parameters
@@ -22,6 +22,8 @@ _RELEASE_LOCK: Final = text("SELECT pg_advisory_unlock(:lock_class, :instance)")
 # The port libpq connects to when the URL names none.
 _POSTGRES_PORT: Final = 5432
 _log = logging.getLogger(__name__)
+# A statement the database failed: the driver's error, as SQLAlchemy wraps it.
+StoreFault: Final = DBAPIError
 
 
 class RefusalReason(StrEnum):

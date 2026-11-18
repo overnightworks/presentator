@@ -20,7 +20,6 @@ from botocore.exceptions import ConfigParseError
 from fastapi import FastAPI
 from logline import RequestLineMiddleware
 from pydantic import SecretStr
-from sqlalchemy.exc import DBAPIError
 from starlette.routing import Host, Route, Router
 from webauth.config import SessionLifetime, WebAuthConfig
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
@@ -51,6 +50,7 @@ from presentator.adapters.postgres.migrate import (
     MIGRATIONS_DIRECTORY,
     DatabaseRefusedError,
     RefusalReason,
+    StoreFault,
     cap_alembic_logging,
     database_is_ready,
     driver_error_name,
@@ -734,7 +734,7 @@ def main(
         end_failed(
             ServerReason.CONFIGURATION_REFUSED, setting=",".join(refused.variables)
         )
-    except DBAPIError as fault:
+    except StoreFault as fault:
         end_failed(ServerReason.STORE_UNAVAILABLE, error_type=driver_error_name(fault))
     asyncio.run(_serve(instance, settings))
 
