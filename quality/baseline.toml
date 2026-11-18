@@ -2,7 +2,7 @@
 
 [file_lines]
 "tests/presentator/adapters/test_builds.py" = 1046
-"tests/presentator/adapters/test_decks.py" = 1216
+"tests/presentator/adapters/test_decks.py" = 1212
 "tests/presentator/application/test_decks.py" = 1825
 
 [function_lines."src/presentator/application/decks.py"]
