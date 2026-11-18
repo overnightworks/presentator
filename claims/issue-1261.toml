@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "eba96118613fe798ac17a0aa2507faa948172e50"
 branch = "claude/issue-1261-every-postgres-statement-has-a-time-limi"
-scope = ["src/presentator/adapters/postgres", "src/presentator/host", "tests/presentator"]
+scope = ["docs/configuration.md", "src/presentator/adapters/postgres", "src/presentator/host", "tests/presentator", "tests/support/postgres.py", "tests/support/vulture_allowlist.py"]
 opened_commit = "a6052ae98dc438b07b2e48d744a27ce6a27e1bb8"
 whole_reason = "Postgres engine, host polling and settings across adapters, host and tests"
