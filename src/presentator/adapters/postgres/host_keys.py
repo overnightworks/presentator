@@ -13,6 +13,7 @@ _PIN: Final = text(
     " ON CONFLICT (host) DO NOTHING"
 )
 _PIN_OF_HOST: Final = text("SELECT public_key FROM host_key_pins WHERE host = :host")
+_UNPIN: Final = text("DELETE FROM host_key_pins WHERE host = :host")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -37,3 +38,9 @@ class PostgresHostKeyPins:
             connection.execute(_PIN, {"host": key.host, "public_key": key.key})
             standing = connection.execute(_PIN_OF_HOST, {"host": key.host}).scalar_one()
         return HostKey(host=key.host, key=standing)
+
+    def unpin(self, host: str) -> bool:
+        """Remove that host's pin so the next run pins anew; false if it had none."""
+        with self.engine.begin() as connection:
+            removed = connection.execute(_UNPIN, {"host": host}).rowcount
+        return removed > 0

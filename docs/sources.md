@@ -37,8 +37,9 @@ about sources stand in [configuration](configuration.md) and the runbook to
   A source taken in within the poll interval waits for the next tick.
 - **SR12** A key address trusts the host key the instance first met for its
   host, at Check connection or a pull in any process, and every process
-  refuses a host that answers with another key: the check and every pull fail
-  until the host's row in `host_key_pins` is removed. At start, before any
+  refuses a host that answers with another key: the check and every pull name
+  the host-key refusal until `presentator unpin-host` removes that host's pin
+  ([runbook](runbooks/unpin-a-host-key.md)). At start, before any
   pull, a process first pins the key a `known_hosts` file in its mirrors
   directory holds for a stored source's host, hashed or not, so a removal
   holds only once that file is gone from every process that still has it.

@@ -103,8 +103,10 @@ from presentator.application.preferences import Preferences
 from presentator.contracts.decks import ToolchainIdentity
 from presentator.host.command_line import (
     MIGRATE_COMMAND,
+    UNPIN_HOST_COMMAND,
     command_line,
     migrate_the_database,
+    unpin_the_host,
 )
 from presentator.host.config import (
     ConfigurationError,
@@ -702,16 +704,21 @@ def main(
     relying_party_for: RelyingPartyFor = relying_party,
     migrations_directory: Path = MIGRATIONS_DIRECTORY,
 ) -> None:
-    """Migrate the database when asked to, else serve the lobby.
+    """Migrate the database or unpin a host when asked to, else serve the lobby.
 
-    Both run on the configuration the environment carries; a refused
-    configuration or database ends either in one line and exit status 1.
+    Each runs on the configuration the environment carries. A refused
+    configuration ends any of them, and a refused database a migration or a
+    start, in one line and exit status 1.
     """
     configure_logging(SERVICE_NAME)
     cap_alembic_logging()
     try:
-        if command_line().parse_args(arguments).command == MIGRATE_COMMAND:
+        asked = command_line().parse_args(arguments)
+        if asked.command == MIGRATE_COMMAND:
             migrate_the_database()
+            return
+        if asked.command == UNPIN_HOST_COMMAND:
+            unpin_the_host(asked.host)
             return
         _log.info("process.started")
         settings = load_settings()
