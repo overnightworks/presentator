@@ -58,7 +58,9 @@ or `behind_this_release`, and the last two are cured by `presentator migrate`.
 `login_refused` means the server's port accepted a connection but the server
 refused the password, the role or the database; `not_answering` means the host
 did not resolve or its port did not accept. Both carry the driver's error class
-in `error_type`. The refusals and the log name the
+in `error_type`. A statement the database fails later in a start, or in
+`presentator unpin-host`, ends the same way with `reason` `store_unavailable`
+and the driver's error class in `error_type`. The refusals and the log name the
 kind of failure and never the URL or the password.
 The tests find their server in `PRESENTATOR_TEST_POSTGRES_URL`, a URL of a
 server whose user may create databases; every test creates one of its own.

@@ -20,6 +20,7 @@ from botocore.exceptions import ConfigParseError
 from fastapi import FastAPI
 from logline import RequestLineMiddleware
 from pydantic import SecretStr
+from sqlalchemy.exc import DBAPIError
 from starlette.routing import Host, Route, Router
 from webauth.config import SessionLifetime, WebAuthConfig
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
@@ -52,6 +53,7 @@ from presentator.adapters.postgres.migrate import (
     RefusalReason,
     cap_alembic_logging,
     database_is_ready,
+    driver_error_name,
     migration_history,
     serving_refusal,
 )
@@ -706,8 +708,9 @@ def main(
     """Migrate the database or unpin a host when asked to, else serve the lobby.
 
     Each runs on the configuration the environment carries. A refused
-    configuration ends any of them, and a refused database a migration or a
-    start, in one line and exit status 1.
+    configuration ends any of them, a refused database a migration or a start,
+    and a statement the database fails any of them, in one line and exit
+    status 1.
     """
     configure_logging(SERVICE_NAME)
     cap_alembic_logging()
@@ -731,6 +734,8 @@ def main(
         end_failed(
             ServerReason.CONFIGURATION_REFUSED, setting=",".join(refused.variables)
         )
+    except DBAPIError as fault:
+        end_failed(ServerReason.STORE_UNAVAILABLE, error_type=driver_error_name(fault))
     asyncio.run(_serve(instance, settings))
 
 

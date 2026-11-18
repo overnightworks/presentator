@@ -53,7 +53,7 @@ class DatabaseRefusedError(Exception):
 
 def _not_answering(error: SQLAlchemyError) -> DatabaseRefusedError:
     return DatabaseRefusedError(
-        RefusalReason.NOT_ANSWERING, driver_error=_driver_error_name(error)
+        RefusalReason.NOT_ANSWERING, driver_error=driver_error_name(error)
     )
 
 
@@ -66,7 +66,7 @@ def _refused_at_connect(engine: Engine, error: SQLAlchemyError) -> DatabaseRefus
     """
     if isinstance(error, OperationalError) and _port_accepts(engine.url):
         return DatabaseRefusedError(
-            RefusalReason.LOGIN_REFUSED, driver_error=_driver_error_name(error)
+            RefusalReason.LOGIN_REFUSED, driver_error=driver_error_name(error)
         )
     return _not_answering(error)
 
@@ -84,8 +84,11 @@ def _port_accepts(url: URL) -> bool:
         return False
 
 
-def _driver_error_name(error: SQLAlchemyError) -> str:
-    # SQLAlchemy wraps the driver's own error, whose class names the failure.
+def driver_error_name(error: SQLAlchemyError) -> str:
+    """The class name of the driver's error, which names the failure.
+
+    SQLAlchemy wraps the driver's own error; its message may quote the address.
+    """
     return type(getattr(error, "orig", None) or error).__name__
 
 
