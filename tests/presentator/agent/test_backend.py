@@ -61,6 +61,7 @@ from tests.support.lobby import (
     a_relying_party,
     an_agent_config,
 )
+from tests.support.log_lines import LoggedText, LogLine, json_logged
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -289,18 +290,29 @@ async def test_a_request_over_the_clients_bound_ends_unavailable() -> None:
     assert gateway.requests == []
 
 
+def the_stop_line(logged: LoggedText) -> LogLine:
+    """The one `gateway_turn.stopped` line, the only line of the backend's logger."""
+    (line,) = [one for one in logged.lines if one["logger"] == LOGGER]
+    assert line["event"] == "gateway_turn.stopped"
+    return line
+
+
 @on_an_event_loop
-async def test_a_question_that_is_not_valid_unicode_ends_unavailable() -> None:
-    """The request is refused before it is built."""
+async def test_a_question_that_is_not_valid_unicode_ends_unavailable(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The request is refused before it is built, and logged as a failed stop."""
     gateway = FakeGateway(completion("Nie."))
 
     answering = answerer_over(gateway).answer(message="\ud800", person=a_person())
 
-    with pytest.raises(CoPresenterUnavailableError):
+    with json_logged(capsys) as logged, pytest.raises(CoPresenterUnavailableError):
         async with answering as texts:
             _ = [text async for text in texts]
 
     assert gateway.requests == []
+    line = the_stop_line(logged)
+    assert (line["outcome"], line["reason"]) == ("failed", "request_invalid")
 
 
 class ScriptedBackend:
@@ -342,21 +354,29 @@ WORDED_BY_OUTCOME = {
 async def test_a_stop_is_worded_by_its_outcome_alone(
     kind: TurnStopKind,
     code: RejectionCode | FailureCode,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Every kind and code of a stop ends in the wording of its outcome, logged."""
-    caplog.set_level(logging.DEBUG)
     stop = TurnStopped(kind, code, retry_after_s=7, detail="closed")
     answerer = GatewayAnswerer(
         ScriptedBackend(stop=stop), a_relying_party(FrozenClock(instant=NOW))
     )
 
-    with pytest.raises(CoPresenterUnavailableError) as stopped:
+    with (
+        json_logged(capsys) as logged,
+        pytest.raises(CoPresenterUnavailableError) as stopped,
+    ):
         await spoken(answerer)
 
     assert type(stopped.value) is WORDED_BY_OUTCOME[stop.outcome]
-    (line,) = [r.getMessage() for r in caplog.records if r.name == LOGGER]
-    assert f"outcome={stop.outcome.value}" in line
+    line = the_stop_line(logged)
+    assert (
+        line["outcome"],
+        line["reason"],
+        line["stop_outcome"],
+        line["detail"],
+        line["retry_after_s"],
+    ) == (kind.value, code.value, stop.outcome.value, stop.detail, stop.retry_after_s)
 
 
 @pytest.mark.parametrize(
@@ -382,21 +402,20 @@ async def test_a_busy_gateway_stop_carries_the_wait_it_names(
 
 @on_an_event_loop
 async def test_a_refusal_logs_its_closed_values_and_no_run_summary(
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Kind, code, detail and the wait, and nothing else."""
-    caplog.set_level(logging.DEBUG)
-
+    """The gateway's busy refusal is one stop line with its wait, and nothing else."""
     answerer = answerer_over(FakeGateway(Reply(429, {"retry-after": "7"})))
 
-    with pytest.raises(CoPresenterUnavailableError):
+    with json_logged(capsys) as logged, pytest.raises(CoPresenterUnavailableError):
         await spoken(answerer)
 
-    (line,) = [r.getMessage() for r in caplog.records if r.name == LOGGER]
-    assert "refused" in line
-    assert "busy" in line
-    assert "retry_after_s=7" in line
-    assert "summary" not in line
+    line = the_stop_line(logged)
+    assert (line["outcome"], line["stop_outcome"], line["retry_after_s"]) == (
+        "refused",
+        "busy",
+        7,
+    )
 
 
 @on_an_event_loop
