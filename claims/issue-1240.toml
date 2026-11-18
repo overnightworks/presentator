@@ -1,8 +1,0 @@
-claim_id = "a849df47d0004a029785d742b6394049"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "fa49cc6e1c8d76fc2ad6d9265409b2409e6885e6"
-branch = "claude/issue-1240-s8-build-output-and-deck-text-live-in-th"
-scope = [".github/workflows", "docs/ARCHITECTURE.md", "docs/configuration.md", "docs/decks.md", "docs/people.md", "frontend/src/lib/api/openapi.json", "frontend/src/lib/api/types.ts", "frontend/src/lib/catalogs/de.po", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/deck.test.ts", "frontend/src/lib/deck.ts", "frontend/src/lib/words/de.ts", "frontend/src/lib/words/en.ts", "pyproject.toml", "quality/config.toml", "scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_cluster.py", "scripts/probe_build_worker_k3d_manifests.py", "src", "tests", "uv.lock"]
-opened_commit = "e0f00cb8ff36d55ace9eb86700a71978ef1e9c2e"
-whole_reason = "the object-store move spans adapters, application, host, API, migrations, tests, CI and docs"
