@@ -7,7 +7,6 @@ from typing import Any, Final
 
 from sqlalchemy import Connection, Engine, text
 
-from presentator.adapters.key_drafts import opened_draft
 from presentator.adapters.postgres.engine import in_utc
 from presentator.adapters.postgres.locks import (
     LockClass,
@@ -177,10 +176,17 @@ def locked_owned_draft(
 
 
 def _opened(row: Sequence[Any], box: SecretBox) -> DeployKeyDraft | None:
+    """The draft a row holds, or nothing when the instance key cannot open it."""
     identifier, owner_id, public_key, encrypted_private_key, created_at = row
-    return opened_draft(
-        (identifier, owner_id, public_key, encrypted_private_key, in_utc(created_at)),
-        box=box,
+    private_key = box.decrypt(encrypted_private_key)
+    if private_key is None:
+        return None
+    return DeployKeyDraft(
+        id=identifier,
+        owner_id=owner_id,
+        public_key=public_key,
+        private_key=private_key,
+        created_at=in_utc(created_at),
     )
 
 

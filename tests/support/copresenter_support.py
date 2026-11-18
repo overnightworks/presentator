@@ -6,14 +6,14 @@ import asyncio
 import json
 import logging
 import re
-import sqlite3
 import threading
-from contextlib import AbstractAsyncContextManager, asynccontextmanager, closing
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Final
 
 from agents.backend.fake_gateway import FakeGateway, Reply, completion
 from speech_client.relay import HopClose
+from sqlalchemy import text
 
 from presentator.adapters.sentences import split_sentences
 from presentator.adapters.session_access import SessionAccess
@@ -77,12 +77,12 @@ if TYPE_CHECKING:
         Callable,
         Mapping,
     )
-    from pathlib import Path
 
     from fastapi.testclient import TestClient
     from httpx2 import Response
+    from sqlalchemy import Engine
 
-    from presentator.adapters.identity import SqliteSessionRecordStore
+    from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
     from presentator.api.auth import InstalledAuth
     from presentator.ports.copresenter import (
         AgentAnswers,
@@ -531,9 +531,8 @@ class Run:
 
 
 def delete_the_sessions(hosts: Hosts) -> None:
-    with closing(sqlite3.connect(hosts.database)) as connection:
-        connection.execute("DELETE FROM sessions")
-        connection.commit()
+    with hosts.database.begin() as connection:
+        connection.execute(text("DELETE FROM sessions"))
 
 
 def the_session_ends_during_the_grant(hosts: Hosts) -> None:
@@ -577,7 +576,7 @@ class Scenario:
 
 
 def _access_over(
-    auth: InstalledAuth, sessions: SqliteSessionRecordStore
+    auth: InstalledAuth, sessions: PostgresSessionRecordStore
 ) -> SessionAccess:
     return SessionAccess(
         auth.relying_party,
@@ -601,7 +600,7 @@ def arrange_the_issuer(hosts: Hosts, scenario: Scenario) -> None:
     scenario.arrange(hosts)
 
 
-def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
+def drive(engine: Engine, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
     """Sign an admin in at the talk host, then ask once."""
     gateway = scenario.gateway()
     limiter = RecordingLimiter()
@@ -616,7 +615,7 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
             await scenario.delay(gateway, hosts_made[0], seconds)
 
     def surface(
-        store: FakeDeckStore, sessions: SqliteSessionRecordStore, auth: InstalledAuth
+        store: FakeDeckStore, sessions: PostgresSessionRecordStore, auth: InstalledAuth
     ) -> CoPresenterSurface:
         return CoPresenterSurface(
             use=CoPresenterUse(
@@ -640,7 +639,7 @@ def drive(tmp_path: Path, scenario: Scenario = Scenario()) -> Run:  # noqa: B008
             delay=wait,
         )
 
-    hosts = two_hosts(tmp_path, copresenter=surface)
+    hosts = two_hosts(engine, copresenter=surface)
     hosts_made.append(hosts)
     arrange_the_issuer(hosts, scenario)
     talk = hosts.browser(A_TALK_ADDRESS, headers=A_BROWSERS_HEADERS)
@@ -755,5 +754,5 @@ A_DECK_WORDS: Final = tuple(
 
 
 def accounts_of(hosts: Hosts) -> list[str]:
-    with closing(sqlite3.connect(hosts.database)) as connection:
-        return [row[0] for row in connection.execute("SELECT id FROM users")]
+    with hosts.database.connect() as connection:
+        return list(connection.execute(text("SELECT id FROM users")).scalars())

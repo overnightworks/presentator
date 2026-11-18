@@ -6,10 +6,10 @@ and the sizes are read from the policies the hosts run.
 
 from dataclasses import replace
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine
 from webauth.policies import RateLimitBudget, RateLimitPolicy
 
 from presentator.api.auth import (
@@ -45,8 +45,8 @@ def spend(client: TestClient, path: str, budget: RateLimitBudget) -> None:
 
 
 @pytest.fixture
-def hosts(tmp_path: Path) -> Hosts:
-    return two_hosts(tmp_path)
+def hosts(engine: Engine) -> Hosts:
+    return two_hosts(engine)
 
 
 @pytest.mark.parametrize(

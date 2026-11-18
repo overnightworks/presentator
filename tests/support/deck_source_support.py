@@ -3,14 +3,12 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy import Engine, text
+
 from gitmirror.model import CredentialResolver
-from presentator.adapters.decks import (
-    MirroredDeckFolders,
-    SourceMirrors,
-    SqliteSourceStore,
-    create_deck_tables,
-)
-from presentator.adapters.identity import TokenIdentifierFactory, create_identity_tables
+from presentator.adapters.decks import MirroredDeckFolders, SourceMirrors
+from presentator.adapters.identity import TokenIdentifierFactory
+from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
 from presentator.contracts.decks import Build, Deck, Source, SourceWrite
 from presentator.contracts.models import Role, User
@@ -18,6 +16,7 @@ from tests.presentator.adapters.support.credentials_support import OpenCredentia
 from tests.presentator.adapters.support.key_draft_support import INSTANCE_KEY
 from tests.support.git_remote import MAIN_BRANCH
 from tests.support.people import seed_user
+from tests.support.postgres import NO_FENCE
 
 PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 OWNER = User(id="the-admin", username="felix", role=Role.ADMIN)
@@ -40,20 +39,40 @@ def a_source(url: str, folder: str = "") -> Source:
     )
 
 
-def a_source_database(tmp_path: Path) -> Path:
-    """A file with the identity and deck tables and the admin who owns sources."""
-    database = tmp_path / "presentator.sqlite3"
-    create_identity_tables(database)
-    create_deck_tables(database)
-    seed_user(database, OWNER)
-    return database
+def a_source_database(engine: Engine) -> Engine:
+    """The database, holding the admin who owns sources."""
+    seed_user(engine, OWNER)
+    return engine
 
 
-def a_source_store(database: Path) -> SqliteSourceStore:
-    return SqliteSourceStore(
-        database=database,
+_SEED_SOURCE = text(
+    "INSERT INTO sources (id, name, url, ref, encrypted_secret, owner_id)"
+    " VALUES (:id, :id, :url, 'main', '', :owner_id)"
+)
+
+
+def seed_source_rows(engine: Engine, *source_ids: str) -> Engine:
+    """The admin and a bare source row under each id, for decks to point at."""
+    a_source_database(engine)
+    with engine.begin() as connection:
+        for source_id in source_ids:
+            connection.execute(
+                _SEED_SOURCE,
+                {
+                    "id": source_id,
+                    "url": f"git@example.invalid:{source_id}.git",
+                    "owner_id": OWNER.id,
+                },
+            )
+    return engine
+
+
+def a_source_store(engine: Engine) -> PostgresSourceStore:
+    return PostgresSourceStore(
+        engine=engine,
         identifiers=TokenIdentifierFactory(),
         box=secret_box(INSTANCE_KEY),
+        fence=NO_FENCE,
     )
 
 

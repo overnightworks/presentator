@@ -10,7 +10,6 @@ from presentator.contracts.people import PersonErased
 from tests.presentator.adapters.support.person_instance_support import (
     ANOTHER,
     THE_PERSON,
-    an_instance_with_both_people,
 )
 from tests.presentator.adapters.support.person_postgres_support import (
     PostgresInstance,
@@ -80,26 +79,13 @@ def test_an_unknown_subject_creates_no_account(instance: PostgresInstance) -> No
     assert accounts == [(ANOTHER.id,), (THE_PERSON.id,)]
 
 
-def test_the_census_the_outcome_and_a_repeat_are_those_over_sqlite(
-    instance: PostgresInstance, tmp_path: Path
+def test_the_sole_admin_is_erased_like_anyone_and_a_repeat_is_at_zero(
+    instance: PostgresInstance,
 ) -> None:
-    (tmp_path / "sqlite").mkdir()
-    over_sqlite = an_instance_with_both_people(tmp_path / "sqlite")
+    """PE1, PE3: the sole admin goes like anyone; a repeat is idempotent."""
+    first = instance.people.erase_person(THE_PERSON.id, dry_run=False)
+    again = instance.people.erase_person(THE_PERSON.id, dry_run=False)
 
-    counted = [
-        each.people.erase_person(THE_PERSON.id, dry_run=True)
-        for each in (over_sqlite, instance)
-    ]
-    erased = [
-        each.people.erase_person(THE_PERSON.id, dry_run=False)
-        for each in (over_sqlite, instance)
-    ]
-    repeated = [
-        each.people.erase_person(THE_PERSON.id, dry_run=False)
-        for each in (over_sqlite, instance)
-    ]
-
-    assert counted[1] == counted[0]
-    assert erased[1] == erased[0]
-    assert repeated[1] == repeated[0]
-    assert isinstance(erased[0], PersonErased)
+    assert isinstance(first, PersonErased)
+    assert isinstance(again, PersonErased)
+    assert all(entry.count == 0 for entry in again.kinds)

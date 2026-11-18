@@ -27,6 +27,9 @@ _NO_SERVER = (
     f"{SERVER_VARIABLE} names no Postgres server: set it to a postgresql URL of a"
     " server whose user may create databases"
 )
+# Nothing listens here, so a start that reaches it fails at once; tests that
+# never reach the database name it.
+NO_DATABASE_HERE = "postgresql://nobody@127.0.0.1:1/nothing"
 # A trust-authenticated test server asks for no password, so any text will do.
 _ANY_PASSWORD = SecretStr("not-checked-by-the-test-server")
 
@@ -104,6 +107,10 @@ _COUNT_WAITING: Final = text(
     "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
     " AND database = (SELECT oid FROM pg_database WHERE datname = current_database())"
 )
+_COUNT_OTHER_CONNECTIONS: Final = text(
+    "SELECT count(*) FROM pg_stat_activity"
+    " WHERE datname = current_database() AND pid <> pg_backend_pid()"
+)
 
 
 def granted_advisory_locks(engine: Engine, *classes: IntEnum) -> int:
@@ -122,6 +129,12 @@ def waiting_advisory_locks(engine: Engine) -> int:
         return int(connection.execute(_COUNT_WAITING).scalar_one())
 
 
+def other_connections(engine: Engine) -> int:
+    """How many connections besides the asking one the database holds now."""
+    with engine.connect() as connection:
+        return int(connection.execute(_COUNT_OTHER_CONNECTIONS).scalar_one())
+
+
 def end_connections_holding(engine: Engine, *classes: IntEnum) -> None:
     """End every connection that holds an advisory lock of these classes."""
     with engine.begin() as connection:
@@ -136,6 +149,14 @@ def database_environment(database_url: str, directory: Path) -> Mapping[str, str
         "PRESENTATOR_DATABASE_URL": database_url,
         "PRESENTATOR_DATABASE_PASSWORD_FILE": str(password_file),
     }
+
+
+def point_at(
+    environment: pytest.MonkeyPatch, database_url: str, directory: Path
+) -> None:
+    """Set the variables that make an instance in this process reach the database."""
+    for name, value in database_environment(database_url, directory).items():
+        environment.setenv(name, value)
 
 
 def engine_from_environment() -> Engine:

@@ -2,12 +2,11 @@
 
 import json
 import logging
-import sqlite3
-from contextlib import closing
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine, text
+from sqlalchemy.exc import DBAPIError
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.oidc import TokenEndpointAnswer, TokenRequest, TokenRequestPost
 
@@ -26,7 +25,7 @@ def issued_id_tokens() -> list[str]:
 
 
 @pytest.fixture
-def scene(tmp_path: Path, issued_id_tokens: list[str]) -> Scene:
+def scene(engine: Engine, issued_id_tokens: list[str]) -> Scene:
     def recording(answer_the_request: TokenRequestPost) -> TokenRequestPost:
         def record(request: TokenRequest) -> TokenEndpointAnswer:
             answer = answer_the_request(request)
@@ -37,7 +36,7 @@ def scene(tmp_path: Path, issued_id_tokens: list[str]) -> Scene:
 
         return record
 
-    return a_scene(tmp_path, token_requests=recording)
+    return a_scene(engine, token_requests=recording)
 
 
 def test_the_sign_ins_refresh_token_is_stored_with_its_session(scene: Scene) -> None:
@@ -153,10 +152,10 @@ def test_a_store_failure_holding_the_token_leaks_it_to_no_error_and_no_log(
     scene: Scene, log: pytest.LogCaptureFixture
 ) -> None:
     scene.issuer.issue_refresh_token(_MARKER)
-    with closing(sqlite3.connect(scene.database)) as connection:
-        connection.execute("DROP TABLE sessions")
+    with scene.engine.begin() as connection:
+        connection.execute(text("DROP TABLE sessions"))
 
-    with pytest.raises(sqlite3.Error) as failure:
+    with pytest.raises(DBAPIError) as failure:
         scene.sign_in()
 
     assert _MARKER not in everything_shown(errors=[failure.value])
@@ -167,8 +166,8 @@ def test_a_store_failure_holding_the_token_answers_500_without_it(
     scene: Scene,
 ) -> None:
     scene.issuer.issue_refresh_token(_MARKER)
-    with closing(sqlite3.connect(scene.database)) as connection:
-        connection.execute("DROP TABLE sessions")
+    with scene.engine.begin() as connection:
+        connection.execute(text("DROP TABLE sessions"))
 
     answer = scene.sign_in(scene.browser(raise_server_exceptions=False))
 
@@ -200,10 +199,10 @@ def test_a_store_failure_holding_the_id_token_leaks_it_to_no_error_and_no_log(
     log: pytest.LogCaptureFixture,
     issued_id_tokens: list[str],
 ) -> None:
-    with closing(sqlite3.connect(scene.database)) as connection:
-        connection.execute("DROP TABLE sessions")
+    with scene.engine.begin() as connection:
+        connection.execute(text("DROP TABLE sessions"))
 
-    with pytest.raises(sqlite3.Error) as failure:
+    with pytest.raises(DBAPIError) as failure:
         scene.sign_in()
     answer = scene.sign_in(scene.browser(raise_server_exceptions=False))
 

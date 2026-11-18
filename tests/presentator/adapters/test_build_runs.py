@@ -16,7 +16,10 @@ from presentator.ports.decks import BuildRun
 from tests.presentator.adapters.support.person_instance_support import (
     ANOTHER,
     THE_PERSON,
-    an_instance_with_both_people,
+)
+from tests.presentator.adapters.support.person_postgres_support import (
+    PostgresInstance,
+    an_instance_with_both_people_on_postgres,
 )
 from tests.support.log_lines import json_logged
 
@@ -271,10 +274,14 @@ def test_a_run_names_exactly_one_directory_under_the_root(name: str) -> None:
 
 
 def test_a_refresh_over_a_real_root_keeps_what_rows_deliver_and_takes_the_rest(
-    tmp_path: Path,
+    tmp_path: Path, database_url: str
 ) -> None:
     """#505 matrix: one end-to-end refresh over a real root."""
-    instance = an_instance_with_both_people(tmp_path)
+    with an_instance_with_both_people_on_postgres(tmp_path, database_url) as instance:
+        _refresh_twice_over_a_leftover(instance)
+
+
+def _refresh_twice_over_a_leftover(instance: PostgresInstance) -> None:
     leftover = a_run(instance.builds, "crashed")
     (instance.builds / "foreign-file").write_text("x", encoding="utf-8")
 

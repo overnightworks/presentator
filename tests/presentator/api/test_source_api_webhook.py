@@ -4,11 +4,11 @@ import logging
 from collections.abc import Callable, Iterator
 from dataclasses import replace
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from sqlalchemy import Engine
 
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
 from presentator.application.decks import RESERVED_SOURCE_NAME
@@ -80,8 +80,8 @@ class _FailsOnTheFirstHashWrite(FakeSourceStore):
 
 
 @pytest.fixture
-def scene(tmp_path: Path) -> Scene:
-    return a_scene_that_must_not_run(tmp_path)
+def scene(engine: Engine) -> Scene:
+    return a_scene_that_must_not_run(engine)
 
 
 def _recording[**Call](
@@ -240,9 +240,9 @@ def test_a_same_site_renewal_with_the_own_origin_is_taken(world: World) -> None:
     ids=["no-body", "a-chosen-secret", "malformed-json"],
 )
 def test_an_admin_renews_and_the_answer_is_the_minted_value_alone(
-    reach: AdminReach, world: World, tmp_path: Path, body: object, content: str | None
+    reach: AdminReach, world: World, engine: Engine, body: object, content: str | None
 ) -> None:
-    instance = reach(world, tmp_path)
+    instance = reach(world, engine)
     a_created_source(instance.client, headers=instance.headers)
     headers = instance.headers | (
         {} if content is None else {"content-type": "application/json"}
@@ -386,10 +386,10 @@ def test_the_route_answers_no_other_method(method: str) -> None:
 # 17
 @AN_ADMIN_BY_COOKIE_AND_BEARER
 def test_no_get_carries_the_renewed_or_the_old_secret(
-    reach: AdminReach, tmp_path: Path
+    reach: AdminReach, engine: Engine
 ) -> None:
     world = a_world()
-    instance: Instance = reach(world, tmp_path)
+    instance: Instance = reach(world, engine)
     a_created_source(instance.client, headers=instance.headers)
     renew_webhook(instance.client, _NAME, instance.headers)
 

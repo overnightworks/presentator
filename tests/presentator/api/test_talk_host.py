@@ -1,12 +1,12 @@
 """The talk host signs people in by itself, and the lobby shows what it refused."""
 
 from http import HTTPStatus
-from pathlib import Path
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from sqlalchemy import Engine
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.middleware.security_headers import (
     CONTENT_TYPE_OPTIONS,
@@ -95,8 +95,8 @@ _TALK_ORIGIN_CLAIMS = {"origin": A_TALK_ADDRESS, "sec-fetch-site": "same-origin"
 
 
 @pytest.fixture
-def hosts(tmp_path: Path) -> Hosts:
-    return two_hosts(tmp_path)
+def hosts(engine: Engine) -> Hosts:
+    return two_hosts(engine)
 
 
 def _is_the_talk_host(answer: Response) -> bool:
@@ -395,14 +395,14 @@ def test_two_sign_ins_in_one_browser_complete_each_on_its_own_host(
 # ---- a refused sign-in at the talk host --------------------------------------
 
 
-def _refused(tmp_path: Path, reason: str) -> tuple[Hosts, TestClient, Response]:
+def _refused(engine: Engine, reason: str) -> tuple[Hosts, TestClient, Response]:
     """A talk sign-in that fails for this reason, and the answer it got."""
     realm = (
         "https://another-issuer.example.test/realms/test"
         if reason == "foreign"
         else AN_ISSUER
     )
-    hosts = two_hosts(tmp_path, realm=realm)
+    hosts = two_hosts(engine, realm=realm)
     browser = hosts.browser(A_TALK_ADDRESS)
     groups = [] if reason == "not a member" else MEMBER
     if reason == "no issuer":
@@ -423,9 +423,9 @@ _REFUSALS = [
 # T9a.
 @pytest.mark.parametrize(("reason", "state"), _REFUSALS)
 def test_a_refused_talk_sign_in_goes_to_the_lobbys_refusal_route_with_no_session(
-    tmp_path: Path, reason: str, state: str
+    engine: Engine, reason: str, state: str
 ) -> None:
-    hosts, _browser, answer = _refused(tmp_path, reason)
+    hosts, _browser, answer = _refused(engine, reason)
 
     cookies = answer.headers.get_list("set-cookie")
     assert answer.status_code == HTTPStatus.SEE_OTHER
@@ -437,9 +437,9 @@ def test_a_refused_talk_sign_in_goes_to_the_lobbys_refusal_route_with_no_session
 # T9a.
 @pytest.mark.parametrize("reason", [reason for reason, _state in _REFUSALS])
 def test_a_refused_talk_sign_in_clears_the_talk_hosts_pending_login(
-    tmp_path: Path, reason: str
+    engine: Engine, reason: str
 ) -> None:
-    _hosts, _browser, answer = _refused(tmp_path, reason)
+    _hosts, _browser, answer = _refused(engine, reason)
 
     pending = [c for c in answer.headers.get_list("set-cookie") if "oidc_pending" in c]
     assert len(pending) == 1
@@ -448,9 +448,9 @@ def test_a_refused_talk_sign_in_clears_the_talk_hosts_pending_login(
 
 # SI8.
 def test_trying_again_after_a_refusal_signs_in_and_the_talk_host_sends_on_to_the_lobby(
-    tmp_path: Path,
+    engine: Engine,
 ) -> None:
-    hosts, browser, _refusal = _refused(tmp_path, "not a member")
+    hosts, browser, _refusal = _refused(engine, "not a member")
 
     retried = hosts.sign_in(browser, A_TALK_ADDRESS)
     landed = browser.get(retried.headers["location"])

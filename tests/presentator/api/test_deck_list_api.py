@@ -3,10 +3,10 @@
 from dataclasses import replace
 from datetime import datetime, timedelta
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine
 from webauth.ports import AccountKind
 
 from presentator.api.deck_list_api import DECK_LIST_PATH, DeckListView
@@ -251,12 +251,12 @@ def test_a_failing_store_answers_500_without_deck_data() -> None:
     assert "deck store" not in answer.text
 
 
-def test_a_persons_bearer_reads_only_that_persons_own_decks(tmp_path: Path) -> None:
+def test_a_persons_bearer_reads_only_that_persons_own_decks(engine: Engine) -> None:
     client_id = "hal-client"
     subject = "keycloak-subject-of-a-member"
     store = FakeDeckStore()
     scene = a_scene(
-        tmp_path,
+        engine,
         token_clients=frozenset({client_id}),
         decks=a_decks(GivenDecks(store=store), FrozenClock(instant=NOW)),
     )

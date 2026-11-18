@@ -48,7 +48,6 @@ def test_the_url_and_the_password_file_give_the_database(
 ) -> None:
     database = load().postgres
 
-    assert database is not None
     assert database.url == A_DATABASE
     assert database.password.get_secret_value() == A_PASSWORD
 
@@ -67,15 +66,6 @@ def test_a_missing_value_refuses_naming_the_field(
     database_variables.delenv(variable)
 
     assert_refusal_names(load, field)
-
-
-def test_a_server_without_the_database_serves_from_sqlite(
-    database_variables: pytest.MonkeyPatch,
-) -> None:
-    database_variables.delenv(_URL)
-    database_variables.delenv(_PASSWORD_FILE)
-
-    assert load_settings().postgres is None
 
 
 @pytest.mark.parametrize(

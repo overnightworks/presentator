@@ -4,7 +4,6 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from fastapi.openapi.utils import (
@@ -12,6 +11,7 @@ from fastapi.openapi.utils import (
     validation_error_response_definition,
 )
 from httpx2 import Response
+from sqlalchemy import Engine
 
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
 from presentator.contracts.decks import Source
@@ -66,24 +66,24 @@ def an_https_store() -> FakeSourceStore:
     return a_source_store(a_source(_HTTPS), secret=_OLD)
 
 
-def _admin_cookie(store: FakeSourceStore, _tmp_path: Path) -> Instance:
+def _admin_cookie(store: FakeSourceStore, _engine: Engine) -> Instance:
     return an_admin_cookie_instance(decks_over(store), store)
 
 
-def _admin_bearer(store: FakeSourceStore, tmp_path: Path) -> Instance:
-    return an_admin_bearer_instance(decks_over(store), store, tmp_path)
+def _admin_bearer(store: FakeSourceStore, engine: Engine) -> Instance:
+    return an_admin_bearer_instance(decks_over(store), store, engine)
 
 
 @pytest.fixture(params=[_admin_cookie, _admin_bearer], ids=["cookie", "bearer"])
 def an_admin(
-    request: pytest.FixtureRequest, tmp_path: Path
+    request: pytest.FixtureRequest, engine: Engine
 ) -> Callable[[FakeSourceStore], Instance]:
-    return lambda store: request.param(store, tmp_path)
+    return lambda store: request.param(store, engine)
 
 
 @pytest.fixture
-def scene(tmp_path: Path) -> Scene:
-    return a_scene_that_must_not_run(tmp_path)
+def scene(engine: Engine) -> Scene:
+    return a_scene_that_must_not_run(engine)
 
 
 # 1

@@ -5,12 +5,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine
 
-from presentator.adapters.deck_store import SqliteDeckStore
-from presentator.adapters.decks import (
-    SqliteSourceRunStore,
-    SqliteSourceStore,
-)
+from presentator.adapters.postgres.deck_store import PostgresDeckStore
+from presentator.adapters.postgres.source_runs import PostgresSourceRunStore
+from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.application.build_retention import REMOVED_DECK_KEPT
 from presentator.application.decks import (
     AddedSource,
@@ -51,6 +50,7 @@ from tests.support.deck_source_support import (
     folders_under,
 )
 from tests.support.git_remote import GitRemote
+from tests.support.postgres import NO_FENCE
 
 _PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _LATER = _PUSHED_AT + timedelta(hours=1)
@@ -70,20 +70,20 @@ class Wired:
     """The use cases and the real stores and mirror they run over."""
 
     decks: Decks
-    sources: SqliteSourceStore
-    store: SqliteDeckStore
-    runs: SqliteSourceRunStore
+    sources: PostgresSourceStore
+    store: PostgresDeckStore
+    runs: PostgresSourceRunStore
     builder: FakeBuildRunner
     clock: FrozenClock
     mirrors: Path
 
 
-def wired(tmp_path: Path) -> Wired:
-    """The deck use cases over a real file and a real mirror, building nothing."""
-    database = a_source_database(tmp_path)
+def wired(tmp_path: Path, engine: Engine) -> Wired:
+    """The deck use cases over a real database and mirror, building nothing."""
+    database = a_source_database(engine)
     sources = a_source_store(database)
-    store = SqliteDeckStore(database=database)
-    runs = SqliteSourceRunStore(database=database)
+    store = PostgresDeckStore(engine=database, fence=NO_FENCE)
+    runs = PostgresSourceRunStore(engine=database, fence=NO_FENCE)
     builder = FakeBuildRunner()
     clock = FrozenClock(instant=_LATER)
     decks = Decks(
@@ -137,9 +137,9 @@ def added_with_folder(
 
 
 def test_a_push_outside_the_folder_rebuilds_no_deck(
-    remote: GitRemote, tmp_path: Path
+    remote: GitRemote, tmp_path: Path, engine: Engine
 ) -> None:
-    world = wired(tmp_path)
+    world = wired(tmp_path, engine)
     remote.commit(a_deck_tree("examples", "a"), at=_PUSHED_AT)
     world.sources.add(a_source_write(remote.url, folder="examples"))
     world.decks.refresh()
@@ -152,9 +152,9 @@ def test_a_push_outside_the_folder_rebuilds_no_deck(
 
 
 def test_a_push_inside_one_deck_rebuilds_only_that_deck(
-    remote: GitRemote, tmp_path: Path
+    remote: GitRemote, tmp_path: Path, engine: Engine
 ) -> None:
-    world = wired(tmp_path)
+    world = wired(tmp_path, engine)
     remote.commit(
         a_deck_tree("examples", "a") | a_deck_tree("examples", "b"), at=_PUSHED_AT
     )
@@ -172,9 +172,9 @@ def test_a_push_inside_one_deck_rebuilds_only_that_deck(
     "replacement", [{}, {"examples": "a file now\n"}], ids=["missing", "a file"]
 )
 def test_a_folder_that_goes_missing_ends_its_decks_and_they_return_when_it_does(
-    remote: GitRemote, tmp_path: Path, replacement: dict[str, str]
+    remote: GitRemote, tmp_path: Path, engine: Engine, replacement: dict[str, str]
 ) -> None:
-    world = wired(tmp_path)
+    world = wired(tmp_path, engine)
     remote.commit(a_deck_tree("examples", "a"), at=_PUSHED_AT)
     stored = world.sources.add(a_source_write(remote.url, folder="examples"))
     assert stored is not None
@@ -199,9 +199,9 @@ def test_a_folder_that_goes_missing_ends_its_decks_and_they_return_when_it_does(
 
 
 def test_a_decks_row_is_deleted_only_once_its_folder_was_missing_past_the_expiry(
-    remote: GitRemote, tmp_path: Path
+    remote: GitRemote, tmp_path: Path, engine: Engine
 ) -> None:
-    world = wired(tmp_path)
+    world = wired(tmp_path, engine)
     remote.commit(a_deck_tree("examples", "a"), at=_PUSHED_AT)
     stored = world.sources.add(a_source_write(remote.url, folder="examples"))
     assert stored is not None
@@ -218,9 +218,9 @@ def test_a_decks_row_is_deleted_only_once_its_folder_was_missing_past_the_expiry
 
 
 def test_the_first_source_keeps_a_deck_name_a_second_one_also_carries(
-    remote: GitRemote, another_remote: GitRemote, tmp_path: Path
+    remote: GitRemote, another_remote: GitRemote, tmp_path: Path, engine: Engine
 ) -> None:
-    world = wired(tmp_path)
+    world = wired(tmp_path, engine)
     remote.commit(a_deck_tree("examples", "a"), at=_PUSHED_AT)
     another_remote.commit(a_deck_tree("", "a"), at=_PUSHED_AT)
     first = world.sources.add(
@@ -237,9 +237,9 @@ def test_the_first_source_keeps_a_deck_name_a_second_one_also_carries(
 
 
 def test_removing_a_source_with_a_folder_takes_its_mirror_and_decks_away(
-    remote: GitRemote, tmp_path: Path
+    remote: GitRemote, tmp_path: Path, engine: Engine
 ) -> None:
-    world = wired(tmp_path)
+    world = wired(tmp_path, engine)
     remote.commit(a_deck_tree("examples", "a"), at=_PUSHED_AT)
     stored = world.sources.add(a_source_write(remote.url, folder="examples"))
     assert stored is not None
@@ -256,9 +256,9 @@ def test_removing_a_source_with_a_folder_takes_its_mirror_and_decks_away(
 
 
 def test_a_webhook_refresh_takes_in_the_decks_of_a_source_with_a_folder(
-    remote: GitRemote, tmp_path: Path
+    remote: GitRemote, tmp_path: Path, engine: Engine
 ) -> None:
-    world = wired(tmp_path)
+    world = wired(tmp_path, engine)
     offered = "what-the-hook-offers"
     remote.commit(a_deck_tree("examples", "a"), at=_PUSHED_AT)
     written = replace(

@@ -1,29 +1,23 @@
 """Both hosts of one instance over one database, as a browser reaches them."""
 
 import asyncio
-import sqlite3
 from collections.abc import Callable
-from contextlib import closing
 from dataclasses import dataclass, replace
 from datetime import timedelta
-from pathlib import Path
 from typing import Final
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx2 import Response
 from pydantic import SecretStr
+from sqlalchemy import Engine, text
 from starlette.types import ASGIApp, Message, Scope
 from webauth.config import WebAuthConfig
 from webauth.oidc import OidcRelyingParty
 
 from presentator.adapters.audit import LoggingAuditSink
-from presentator.adapters.identity import (
-    ProcessWriteLock,
-    SqliteIdentityWrites,
-    SqliteSessionRecordStore,
-    create_identity_tables,
-)
+from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.api.auth import InstalledAuth
 from presentator.api.copresenter import CoPresenterSurface
 from presentator.api.talk import create_talk, talk_content_security_policy
@@ -84,7 +78,7 @@ class Hosts:
     lobby_config: WebAuthConfig
     talk_config: WebAuthConfig
     issuer: FakeIssuer
-    database: Path
+    database: Engine
     clock: FrozenClock
     store: FakeDeckStore
 
@@ -148,24 +142,26 @@ class Hosts:
 
     def give_a_deck_to(self, username: str) -> None:
         """Hand `a-deck` to the person the account store knows by this name."""
-        with closing(sqlite3.connect(self.database)) as connection:
-            (person,) = connection.execute(
-                "SELECT id FROM users WHERE username = ?", (username,)
-            ).fetchone()
+        with self.database.connect() as connection:
+            person = connection.execute(
+                text("SELECT id FROM users WHERE username = :username"),
+                {"username": username},
+            ).scalar_one()
         put_a_built_deck(self.store, slug=A_DECK, owner_id=person)
 
     def session_count(self) -> int:
         """How many session rows the one table holds."""
-        with closing(sqlite3.connect(self.database)) as connection:
-            (count,) = connection.execute("SELECT count(*) FROM sessions").fetchone()
-        return int(count)
+        with self.database.connect() as connection:
+            return int(
+                connection.execute(text("SELECT count(*) FROM sessions")).scalar_one()
+            )
 
     def session_of(self, person: User) -> str:
         """The id of a new live session row of this person."""
         seed_user(self.database, person)
         now = self.clock.now()
         return (
-            SqliteSessionRecordStore(self.database)
+            PostgresSessionRecordStore(self.database)
             .create(
                 person.id,
                 session_id=a_session_id(),
@@ -180,7 +176,7 @@ class Hosts:
 
 
 type SurfaceFactory = Callable[
-    [FakeDeckStore, SqliteSessionRecordStore, InstalledAuth], CoPresenterSurface
+    [FakeDeckStore, PostgresSessionRecordStore, InstalledAuth], CoPresenterSurface
 ]
 
 
@@ -198,7 +194,7 @@ def _relying_party_at(
 
 
 def _both_auths(
-    database: Path,
+    database: Engine,
     issuer: FakeIssuer,
     clock: FrozenClock,
     realm: str,
@@ -210,9 +206,7 @@ def _both_auths(
         relying_party=_relying_party_at(
             issuer, clock, A_BROWSERS_ADDRESS, realm, speech_scope
         ),
-        transaction=SqliteIdentityWrites(
-            database, ProcessWriteLock(), LoggingAuditSink()
-        ),
+        transaction=PostgresIdentityWrites(database, LoggingAuditSink()),
         realm=realm,
     )
     talk_auth = replace(
@@ -227,7 +221,7 @@ def _both_auths(
 
 
 def _talk_over(
-    sessions: SqliteSessionRecordStore,
+    sessions: PostgresSessionRecordStore,
     decks: Decks,
     decks_store: FakeDeckStore,
     talk_auth: InstalledAuth,
@@ -248,7 +242,7 @@ def _talk_over(
 
 
 def two_hosts(
-    tmp_path: Path,
+    database: Engine,
     *,
     realm: str = AN_ISSUER,
     given: GivenDecks | None = None,
@@ -262,8 +256,6 @@ def two_hosts(
     co-presenter surface is made over this instance's own store, sessions and
     talk-host sign-in.
     """
-    database = tmp_path / "identity.sqlite3"
-    create_identity_tables(database)
     people = a_crowd()
     clock = people.clock
     decks_store = (
@@ -275,7 +267,7 @@ def two_hosts(
     decks = a_decks(
         replace(NO_DECKS if given is None else given, store=decks_store), clock
     )
-    sessions = SqliteSessionRecordStore(database)
+    sessions = PostgresSessionRecordStore(database)
     issuer = FakeIssuer(issuer=AN_ISSUER, client_id=A_CLIENT_ID, now=clock.now())
     lobby_auth, talk_auth = _both_auths(database, issuer, clock, realm, speech_scope)
     talk_config = talk_auth.config
@@ -284,7 +276,7 @@ def two_hosts(
         signing_in=SigningIn(sessions=sessions, auth=lobby_auth, decks=decks),
     )
     talk = _talk_over(
-        SqliteSessionRecordStore(database), decks, decks_store, talk_auth, copresenter
+        PostgresSessionRecordStore(database), decks, decks_store, talk_auth, copresenter
     )
     return Hosts(
         router=_served_by_host(lobby, talk),

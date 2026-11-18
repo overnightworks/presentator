@@ -2,10 +2,10 @@
 
 from datetime import timedelta
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.api.auth import LOGOUT_PATH, START_SIGN_IN_PATH
@@ -242,8 +242,8 @@ def test_a_post_without_provenance_is_refused_by_the_origin_check() -> None:
 
 
 @pytest.fixture
-def scene(tmp_path: Path) -> Scene:
-    return a_scene(tmp_path, token_clients=frozenset({_HAL}))
+def scene(engine: Engine) -> Scene:
+    return a_scene(engine, token_clients=frozenset({_HAL}))
 
 
 def a_bearer(scene: Scene, *, subject: str, groups: list[str]) -> dict[str, str]:

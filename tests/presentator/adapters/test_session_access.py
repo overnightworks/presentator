@@ -8,10 +8,11 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from sqlalchemy import Engine
 from webauth.oidc_login import AccessTokenRefusal, AccessTokenRefusalReason
 
 from presentator.adapters import session_access
-from presentator.adapters.identity import SqliteSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
 from presentator.adapters.session_access import SessionAccess
 from presentator.contracts.copresenter import AccessRefusal, CoPresenterUnavailableError
 from tests.presentator.agent.support.driving import on_an_event_loop
@@ -21,7 +22,6 @@ from tests.support.sign_in_support import Scene, a_scene
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
-    from pathlib import Path
 
     from presentator.adapters.identity import StoredSession
 
@@ -54,8 +54,8 @@ class Arranged:
 
 
 @pytest.fixture
-def arranged(tmp_path: Path) -> Arranged:
-    return Arranged(a_scene(tmp_path))
+def arranged(engine: Engine) -> Arranged:
+    return Arranged(a_scene(engine))
 
 
 @pytest.fixture(params=["groups", "speech-tokens"])
@@ -164,7 +164,7 @@ def test_an_issuer_that_is_down_is_one_failed_line_naming_the_reason(
     assert line["purpose"] == "groups"
 
 
-class _LoadFails(SqliteSessionRecordStore):
+class _LoadFails(PostgresSessionRecordStore):
     def load(self, session_id: str) -> StoredSession | None:
         error = RuntimeError(THREAD_ERROR)
         error.__context__ = RuntimeError(THREAD_ERROR)
@@ -183,7 +183,7 @@ def test_a_thread_that_raises_is_one_unavailable_error_naming_only_its_type(
     scene = arranged.scene
     reader = SessionAccess(
         scene.relying_party,
-        _LoadFails(scene.database),
+        _LoadFails(scene.engine),
         scene.config,
         speech_scope=A_SPEECH_SCOPE,
     )
@@ -309,13 +309,13 @@ def test_process_control_in_the_thread_passes_through_without_a_chain(
     """An interrupt is the caller's, not one more unavailable error."""
     scene = arranged.scene
 
-    class LoadInterrupts(SqliteSessionRecordStore):
+    class LoadInterrupts(PostgresSessionRecordStore):
         def load(self, session_id: str) -> StoredSession | None:
             raise interruption
 
     reader = SessionAccess(
         scene.relying_party,
-        LoadInterrupts(scene.database),
+        LoadInterrupts(scene.engine),
         scene.config,
         speech_scope=A_SPEECH_SCOPE,
     )

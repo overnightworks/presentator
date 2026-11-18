@@ -613,6 +613,7 @@ def test_the_retired_setting_elsewhere_is_ignored_and_the_new_one_stays_empty(
     assert load_settings().admitted_token_clients() == frozenset()
 
 
+@pytest.mark.usefixtures("served_database")
 def test_without_a_named_client_the_admin_prefix_falls_to_the_session_gate(
     environment: pytest.MonkeyPatch,
 ) -> None:

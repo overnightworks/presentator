@@ -20,6 +20,10 @@ from tests.scripts.support.k3d_pods import (
     terminated_state,
     twin_answer,
 )
+from tests.scripts.support.k3d_render import (
+    named,
+    workload_documents,
+)
 from tests.scripts.support.k3d_world import (
     Fixture,
     World,
@@ -27,8 +31,6 @@ from tests.scripts.support.k3d_world import (
     fixture_maker,
     issued_commands,
     kubelet_config,
-    named,
-    workload_documents,
 )
 
 
@@ -211,13 +213,14 @@ def test_a_failure_still_removes_what_the_run_made_then_the_directory(
     with pytest.raises(RuntimeError):
         fixture.drive(released=released)
     run = fixture.run
-    steps = fixture.world.commands[-5:]
+    steps = fixture.world.commands[-6:]
     assert [command for command, _, _ in steps] == [
         ("k3d", "cluster", "delete", run.name),
         ("docker", "rm", "--force", run.tools),
         ("docker", "volume", "rm", "--force", run.images_volume),
         ("docker", "image", "rm", "--force", run.tag),
         ("docker", "image", "rm", "--force", run.redis_image),
+        ("docker", "image", "rm", "--force", run.postgres_image),
     ]
     for _, environment, _ in steps:
         assert environment["KUBECONFIG"] == str(fixture.run.kubeconfig)
@@ -225,7 +228,7 @@ def test_a_failure_still_removes_what_the_run_made_then_the_directory(
         assert environment["KUBERC"] == "off"
     assert fixture.world.directory_present_at_last_command
     assert not fixture.run.directory.exists()
-    assert fixture.world.holds[-1] == len(fixture.world.commands) - 5
+    assert fixture.world.holds[-1] == len(fixture.world.commands) - len(steps)
 
 
 def test_an_ordinary_teardown_holds_signals_then_says_so_then_deletes(

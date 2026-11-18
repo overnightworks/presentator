@@ -13,10 +13,12 @@ import pytest
 from tests.scripts.support.k3d_pods import (
     at,
 )
+from tests.scripts.support.k3d_render import (
+    SCRATCH_MOUNT,
+)
 from tests.scripts.support.k3d_world import (
     GENERATED_VALUE,
     INBOUND_PORT,
-    SCRATCH_MOUNT,
     WEB_POD_NAMES,
     WORKER_POD_NAMES,
     Fixture,

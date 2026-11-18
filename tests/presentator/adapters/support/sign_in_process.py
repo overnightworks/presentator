@@ -1,52 +1,47 @@
 """One of two processes that sign the same subjects in against one Postgres database.
 
-Run with `python -m`. It says it is ready once connected, signs in when the parent
-lets it go, and exits 0 only when every sign-in went through.
+Run with `python -m` and the path of its events file. It says it is ready once
+connected, then signs every subject in through the lobby's callback route when
+the parent lets it go, writes the account events its sign-ins recorded to the
+file, one `kind subject` line each, and exits 0 only when every sign-in went
+through.
 """
 
-import os
-from datetime import UTC, datetime, timedelta
+import sys
+from http import HTTPStatus
+from pathlib import Path
 from typing import Final
 
-from webauth.ports import AccountKind, SignInTransaction
-
-from presentator.adapters.audit import LoggingAuditSink
-from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
-from presentator.contracts.models import Role
+from presentator.api.auth import LOBBY_RATE_LIMIT
 from tests.support.postgres import engine_from_environment
+from tests.support.sign_in_support import a_scene
 from tests.support.two_processes import announce_ready_and_wait_for_go
 
-SUBJECTS: Final = tuple(f"concurrent-subject-{number}" for number in range(25))
-_SESSION_LIFETIME: Final = timedelta(hours=1)
-
-
-def sign_in(transaction: SignInTransaction, subject: str, session_id: str) -> None:
-    """What the callback route does: find the account or create it, then a session."""
-    with transaction() as stores:
-        if stores.accounts.get(subject) is None:
-            stores.accounts.create_for_subject(
-                subject, subject, Role.USER.value, AccountKind.PERSON
-            )
-        now = datetime.now(UTC)
-        stores.sessions.create(
-            subject,
-            session_id=session_id,
-            now=now,
-            expires_at=now + _SESSION_LIFETIME,
-            refresh_token=None,
-            id_token=None,
-            account_language=None,
-        )
+# Every sign-in of a process comes from one address, and each spends two requests
+# of that address's sign-in budget: the start and the callback.
+_SIGN_INS: Final = LOBBY_RATE_LIMIT.sign_in.max_requests // 2
+SUBJECTS: Final = tuple(f"concurrent-subject-{number}" for number in range(_SIGN_INS))
 
 
 def main() -> None:
-    """Connect, wait for the go-ahead, and sign every subject in."""
+    """Connect, wait for the go-ahead, sign every subject in, write the events."""
+    (events_file,) = sys.argv[1:]
     engine = engine_from_environment()
-    transaction = PostgresIdentityWrites(engine, LoggingAuditSink())
+    scene = a_scene(engine)
     announce_ready_and_wait_for_go()
-    for subject in SUBJECTS:
-        sign_in(transaction, subject, f"{subject}-by-{os.getpid()}")
+    answers = [
+        scene.sign_in(scene.browser(), subject=subject, username=subject)
+        for subject in SUBJECTS
+    ]
     engine.dispose()
+    Path(events_file).write_text(
+        "".join(
+            f"{event.kind.value} {event.subject_id}\n" for event in scene.audit.events
+        ),
+        encoding="utf-8",
+    )
+    refused = [a.status_code for a in answers if a.status_code != HTTPStatus.SEE_OTHER]
+    sys.exit(1 if refused else 0)
 
 
 if __name__ == "__main__":

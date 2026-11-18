@@ -1,6 +1,6 @@
 """The signed-in world the agent tests drive: two people, each with one built deck.
 
-The lobby runs over the real SQLite identity stores and the fake issuer; two
+The lobby runs over the real Postgres identity stores and the fake issuer; two
 people sign in through the real callback, then a program that is no browser
 calls with a bearer alone.
 """
@@ -10,7 +10,6 @@ from collections.abc import Generator
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from http import HTTPStatus
-from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
@@ -23,6 +22,7 @@ from fastapi.testclient import TestClient
 from httpx2 import Response
 from mcp.shared.inbound import MCP_METHOD_HEADER, MCP_NAME_HEADER
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
+from sqlalchemy import Engine
 
 from presentator.agent.mcp import MCP_CLIENT_ID, MCP_GROUP, MCP_SCOPE
 from presentator.api.deck_api import DECK_VIEW_PATH
@@ -129,7 +129,7 @@ class World:
 
 @contextmanager
 def a_world(
-    tmp_path: Path,
+    engine: Engine,
     *,
     token_clients: frozenset[str] = frozenset(),
     texts: DeckTexts | None = None,
@@ -142,7 +142,7 @@ def a_world(
     """
     with ExitStack() as stack:
         yield _a_world_over(
-            tmp_path,
+            engine,
             stack,
             token_clients=token_clients,
             texts=texts,
@@ -151,7 +151,7 @@ def a_world(
 
 
 def _a_world_over(
-    tmp_path: Path,
+    engine: Engine,
     stack: ExitStack,
     *,
     token_clients: frozenset[str],
@@ -160,7 +160,7 @@ def _a_world_over(
 ) -> World:
     store = FakeDeckStore()
     scene = a_scene(
-        tmp_path,
+        engine,
         token_clients=token_clients,
         decks=a_decks(
             GivenDecks(store=store, source=a_configured_source("an-address")),

@@ -16,7 +16,7 @@ from tests.support.log_lines import json_logged
 
 _TALK = "talk"
 _PDF_FILE = "deck.pdf"
-_A_DATABASE_FILE = "presentator.sqlite3"
+_A_DATABASE_FILE = "kept-by-the-server"
 
 
 _A_REAL_TALK_UNDER_THE_ROOT = Path("builds/a-run/real-out/talk")

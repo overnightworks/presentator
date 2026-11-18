@@ -6,12 +6,12 @@ from dataclasses import dataclass, replace
 from datetime import timedelta
 from functools import partial
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 from pydantic import JsonValue
+from sqlalchemy import Engine
 
 from presentator.api.hooks import hook_address
 from presentator.api.problems import PROBLEM_MEDIA_TYPE
@@ -100,8 +100,8 @@ class _BreakingFoldersOnce(FakeDeckFolders):
 
 
 @pytest.fixture
-def scene(tmp_path: Path) -> Scene:
-    return a_scene_that_must_not_run(tmp_path)
+def scene(engine: Engine) -> Scene:
+    return a_scene_that_must_not_run(engine)
 
 
 def create(
@@ -233,10 +233,10 @@ def test_a_same_site_create_with_the_own_origin_is_taken() -> None:
 # 8, 9
 @AN_ADMIN_BY_COOKIE_AND_BEARER
 def test_an_admin_creates_a_source_and_is_its_owner(
-    reach: AdminReach, tmp_path: Path
+    reach: AdminReach, engine: Engine
 ) -> None:
     world = a_world()
-    instance = reach(world, tmp_path)
+    instance = reach(world, engine)
 
     answer = create(instance.client, instance.headers)
 
@@ -278,10 +278,10 @@ def test_the_hook_takes_the_returned_secret_and_refuses_a_wrong_one() -> None:
 # 11, 19
 @AN_ADMIN_BY_COOKIE_AND_BEARER
 def test_no_get_carries_the_webhook_secret_or_the_token(
-    reach: AdminReach, tmp_path: Path
+    reach: AdminReach, engine: Engine
 ) -> None:
     """SR2: nothing keeps the webhook secret."""
-    instance = reach(a_world(), tmp_path)
+    instance = reach(a_world(), engine)
     created = create(instance.client, instance.headers)
 
     shown = whole_answers_of(instance, _NAME)
