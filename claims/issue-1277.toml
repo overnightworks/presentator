@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "f2b1fa994cdbbcc24ceb49b694d84908bd933007"
 branch = "claude/issue-1277-take-design-v0-37-0-and-let-its-heading"
-scope = ["frontend", "pyproject.toml", "uv.lock"]
+scope = ["frontend", "pyproject.toml", "slidev/words/en.ts", "uv.lock"]
 opened_commit = "e7a9d7ffd69844c132f1d2ae49c2961e9ed9440b"
 whole_reason = "frontend pin, stylesheet and headings, plus the lockfiles"
