@@ -105,3 +105,16 @@ def test_a_key_the_store_does_not_know_fails_a_fetch_with_one_line(
 
     assert not fetched
     assert [line["operation"] for line in events_of(logged, _FAILED)] == ["fetch"]
+
+
+def test_a_bucket_the_store_does_not_hold_fails_a_put_with_one_line(
+    tmp_path: Path, object_store: ObjectStore, capsys: pytest.CaptureFixture[str]
+) -> None:
+    refused = StoredRuns(client=object_store_client(), bucket="no-such-bucket-here")
+    archive, pdf = a_run(tmp_path / "put", "run-1")
+
+    with json_logged(capsys) as logged:
+        taken = refused.put("run-1", archive=archive, pdf=pdf)
+
+    assert not taken
+    assert [line["operation"] for line in events_of(logged, _FAILED)] == ["put"]

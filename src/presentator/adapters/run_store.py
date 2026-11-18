@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 import boto3
+from boto3.exceptions import Boto3Error
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
@@ -52,10 +53,11 @@ class StoredRuns:
 
     def put(self, run: str, *, archive: Path, pdf: Path) -> bool:
         """Keep that run's archive and PDF, and say whether both were written."""
+        # A refused transfer surfaces as boto3's own error, not botocore's.
         try:
             self.client.upload_file(str(pdf), self.bucket, _key(run, _PDF))
             self.client.upload_file(str(archive), self.bucket, _key(run, _ARCHIVE))
-        except (BotoCoreError, ClientError, OSError) as failure:
+        except (Boto3Error, BotoCoreError, ClientError, OSError) as failure:
             _failed("put", failure)
             return False
         return True
@@ -69,7 +71,7 @@ class StoredRuns:
             if _error_code(failure) not in _ABSENT:
                 _failed("fetch", failure)
             return False
-        except (BotoCoreError, OSError) as failure:
+        except (Boto3Error, BotoCoreError, OSError) as failure:
             _failed("fetch", failure)
             return False
         return True
