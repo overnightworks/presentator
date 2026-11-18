@@ -1,0 +1,8 @@
+claim_id = "2e13618d516a47d9965cd1f65a3398ad"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "f2b1fa994cdbbcc24ceb49b694d84908bd933007"
+branch = "claude/issue-1266-s10-after-the-s9-release-drop-the-path-c"
+scope = ["docs/sources.md", "src/gitmirror/mirror.py", "src/presentator/adapters/postgres", "src/presentator/host/main.py"]
+opened_commit = "39d3ce65b29574dedd65914f6ff23e82055f2308"
+whole_reason = "removes the adoption across gitmirror, host, the postgres adapters, a migration and the sources doc"
