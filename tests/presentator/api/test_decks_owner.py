@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from httpx2 import Response
 from sqlalchemy import Engine
 
-from presentator.contracts.decks import Build, BuildRun, Deck, Source
+from presentator.contracts.decks import Build, Deck, Source
 from presentator.contracts.models import Role, User
 from tests.presentator.api.support import source_api_support
 from tests.presentator.application.support.fakes import FakeBuildRunner, FakeDeckStore
@@ -26,6 +26,7 @@ from tests.support.lobby import (
     NEIGHBOUR,
     NOW,
     SOURCE_ID,
+    THE_EXAMPLE_RUN,
     GivenDecks,
     a_configured_source,
     a_lobby,
@@ -49,9 +50,7 @@ def _b_source() -> Source:
     )
 
 
-def _store_of_built_decks(
-    talk: Path = BUILT_TALK, pdf: Path = EXPORTED_PDF
-) -> FakeDeckStore:
+def _store_of_built_decks() -> FakeDeckStore:
     store = FakeDeckStore()
     for slug, owner, source_id in (
         ("a-deck", ADMIN, SOURCE_ID),
@@ -72,9 +71,7 @@ def _store_of_built_decks(
         store.put_build(
             slug,
             Build(
-                run=BuildRun("run"),
-                directory=talk,
-                pdf=pdf,
+                run=THE_EXAMPLE_RUN,
                 commit=_COMMIT,
                 built_at=NOW,
                 toolchain=None,
@@ -104,14 +101,14 @@ def _two_admins(
     engine: Engine, tmp_path: Path, *, stuck_mirror: bool = False
 ) -> _TwoAdmins:
     foreign = _b_source()
-    run = tmp_path / "builds" / "run" / "out"
+    run = tmp_path / "builds" / THE_EXAMPLE_RUN.name / "out"
     shutil.copytree(BUILT_TALK, run / "talk")
     shutil.copyfile(EXPORTED_PDF, run / "deck.pdf")
     hosts = two_hosts(
         engine,
         given=GivenDecks(
             builder=FakeBuildRunner(root=tmp_path / "builds"),
-            store=_store_of_built_decks(run / "talk", run / "deck.pdf"),
+            store=_store_of_built_decks(),
             source=foreign if stuck_mirror else None,
             sources=(a_configured_source(_A_SOURCE_URL), foreign),
             stuck_mirror=stuck_mirror,

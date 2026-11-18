@@ -123,8 +123,6 @@ def the_asked_decks_words_at_its_built_commit(engine: Engine, tmp_path: Path) ->
             THE_ASKED,
             Build(
                 run=BuildRun(built_at),
-                directory=tmp_path / "talk",
-                pdf=tmp_path / "deck.pdf",
                 commit=built_at,
                 built_at=NOW,
                 toolchain=None,

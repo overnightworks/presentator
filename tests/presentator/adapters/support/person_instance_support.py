@@ -155,8 +155,6 @@ def _seed_deck(stores: Stores, person: User, source: Source, build: Path) -> Non
         slug,
         Build(
             run=BuildRun(run_name_holding(build)),
-            directory=build,
-            pdf=build.parent / "deck.pdf",
             commit=_COMMIT,
             built_at=_NOW,
             toolchain=None,

@@ -8,7 +8,7 @@ down_revision = "0001"
 
 
 def upgrade() -> None:
-    """Add the one-row table; a migration only adds, so there is no downgrade."""
+    """Add the one-row table; a migration has no downgrade."""
     refresh_owner = op.create_table(
         "refresh_owner",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=False),

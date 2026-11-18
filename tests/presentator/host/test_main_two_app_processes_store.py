@@ -33,12 +33,10 @@ from tests.support.git_remote import EXAMPLE_SLUG, GitRemote
 from tests.support.object_store import ObjectStore
 
 _THE_RUN = "SELECT built_run FROM decks"
-_THE_TALK = "SELECT active_build FROM decks"
-_THE_PDF = "SELECT pdf_export FROM decks"
 _TALK_PAGE = f"/deck/{EXAMPLE_SLUG}/"
 _PDF = f"/deck/{EXAMPLE_SLUG}/pdf"
 _TEXT = f"/api/decks/{EXAMPLE_SLUG}/text"
-# A row as a release before the store wrote it: its paths, but no run.
+# A row as a release before the store wrote it: a build that names no run.
 _FORGET_THE_RUN = text("UPDATE decks SET built_run = NULL")
 _TAKE_THE_REFRESH_LOCK = text("SELECT pg_advisory_lock(:lock_class, :instance)")
 
@@ -73,9 +71,9 @@ def test_a_build_one_process_delivered_is_served_by_the_other_and_swept_by_it(
         added(admin, a, "talks", remote)
         fetched(admin, a, "talks")
         first_run = scalar_text(engine, _THE_RUN)
-        talk_at_a = (Path(scalar_text(engine, _THE_TALK)) / "index.html").read_bytes()
-        pdf_at_a = Path(scalar_text(engine, _THE_PDF)).read_bytes()
         assert first_run not in _runs_on_the_disk_of(b, tmp_path)
+        talk_at_a = _talk_reader_at(a).request(a, "GET", _TALK_PAGE)
+        pdf_at_a = admin.request(a, "GET", _PDF)
 
         talk = _talk_reader_at(b).request(b, "GET", _TALK_PAGE)
         pdf = admin.request(b, "GET", _PDF)
@@ -89,10 +87,12 @@ def test_a_build_one_process_delivered_is_served_by_the_other_and_swept_by_it(
         fetched(admin, a, "talks")
         on_a_after_its_sweep = _runs_on_the_disk_of(a, tmp_path)
 
+    assert talk_at_a.status_code == HTTPStatus.OK
     assert talk.status_code == HTTPStatus.OK
-    assert talk.content == talk_at_a
+    assert talk.content == talk_at_a.content
+    assert pdf_at_a.status_code == HTTPStatus.OK
     assert pdf.status_code == HTTPStatus.OK
-    assert pdf.content == pdf_at_a
+    assert pdf.content == pdf_at_a.content
     assert text_at_b.status_code == HTTPStatus.OK
     assert text_at_b.json()["slides"]
     assert text_at_b.json() == text_at_a.json()
@@ -124,6 +124,30 @@ def test_a_deck_built_before_the_store_is_rebuilt_by_the_first_refresh_after_it(
     assert before_the_refresh.status_code == HTTPStatus.NOT_FOUND
     assert object_store.runs.names() == frozenset({rebuilt})
     assert after_the_refresh.status_code == HTTPStatus.OK
+
+
+@pytest.mark.usefixtures("built")
+def test_a_run_gone_from_the_store_serves_nothing_where_no_copy_is_until_rebuilt(
+    database_url: str,
+    tmp_path: Path,
+    engine: Engine,
+    remote: GitRemote,
+    object_store: ObjectStore,
+) -> None:
+    with serving_apps(database_url, tmp_path, object_store.environment) as (a, b):
+        admin = admin_of(a)
+        added(admin, a, "talks", remote)
+        fetched(admin, a, "talks")
+        assert object_store.runs.delete(scalar_text(engine, _THE_RUN))
+
+        talk = _talk_reader_at(b).request(b, "GET", _TALK_PAGE)
+        pdf = admin.request(b, "GET", _PDF)
+        fetched(admin, b, "talks")
+        rebuilt = admin.request(b, "GET", _PDF)
+
+    assert talk.status_code == HTTPStatus.NOT_FOUND
+    assert pdf.status_code == HTTPStatus.NOT_FOUND
+    assert rebuilt.status_code == HTTPStatus.OK
 
 
 @pytest.mark.usefixtures("built")

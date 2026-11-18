@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pytest
 from sqlalchemy import Engine
@@ -117,18 +116,18 @@ def test_putting_no_attempt_back_clears_every_attempt_column(
 
 @pytest.mark.parametrize("failure", _EVERY_FAILURE)
 def test_a_switch_over_clears_the_attempt_with_its_reason_and_counts(
-    tmp_path: Path, engine: Engine, failure: BuildFailure
+    engine: Engine, failure: BuildFailure
 ) -> None:
     store = a_store(engine)
     store.put(a_deck())
     store.put_attempt(_SLUG, an_attempt(failure))
 
-    store.put_build(_SLUG, a_build(tmp_path))
+    store.put_build(_SLUG, a_build())
 
     kept = store.get(_SLUG)
     assert kept is not None
     assert kept.attempt is None
-    assert kept.build == a_build(tmp_path)
+    assert kept.build == a_build()
 
     with store.engine.begin() as connection:
         left = connection.exec_driver_sql(
@@ -187,12 +186,10 @@ _ANOTHER_TOOLCHAIN = ToolchainIdentity("b" * 64)
 _ANOTHER_COMMIT = "b7c1d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80"
 
 
-def a_store_after_a_build_and_a_failed_attempt(
-    tmp_path: Path, engine: Engine
-) -> PostgresDeckStore:
+def a_store_after_a_build_and_a_failed_attempt(engine: Engine) -> PostgresDeckStore:
     store = a_store(engine)
     store.put(a_deck())
-    store.put_build(_SLUG, replace(a_build(tmp_path), toolchain=_A_TOOLCHAIN))
+    store.put_build(_SLUG, replace(a_build(), toolchain=_A_TOOLCHAIN))
     store.put_attempt(
         _SLUG,
         replace(an_attempt(BuildFailure.without_words()), toolchain=_ANOTHER_TOOLCHAIN),
@@ -201,10 +198,9 @@ def a_store_after_a_build_and_a_failed_attempt(
 
 
 def test_a_build_and_an_attempt_are_read_back_with_the_toolchain_they_ran_under(
-    tmp_path: Path,
     engine: Engine,
 ) -> None:
-    store = a_store_after_a_build_and_a_failed_attempt(tmp_path, engine)
+    store = a_store_after_a_build_and_a_failed_attempt(engine)
 
     kept = store.get(_SLUG)
 
@@ -216,12 +212,11 @@ def test_a_build_and_an_attempt_are_read_back_with_the_toolchain_they_ran_under(
 
 
 def test_a_switch_over_takes_the_attempts_toolchain_away_with_the_attempt(
-    tmp_path: Path,
     engine: Engine,
 ) -> None:
-    store = a_store_after_a_build_and_a_failed_attempt(tmp_path, engine)
+    store = a_store_after_a_build_and_a_failed_attempt(engine)
 
-    store.put_build(_SLUG, replace(a_build(tmp_path), toolchain=_ANOTHER_TOOLCHAIN))
+    store.put_build(_SLUG, replace(a_build(), toolchain=_ANOTHER_TOOLCHAIN))
 
     kept = store.get(_SLUG)
     assert kept is not None
@@ -265,9 +260,9 @@ def held_by(store: PostgresDeckStore, which: str) -> BuildAttempt | Build:
 @pytest.mark.parametrize("which", ["build", "attempt"])
 @pytest.mark.parametrize("flaw", _STORED_WITH_A_FLAW)
 def test_a_toolchain_the_row_cannot_vouch_for_reads_as_unknown(
-    tmp_path: Path, engine: Engine, flaw: str, which: str
+    engine: Engine, flaw: str, which: str
 ) -> None:
-    store = a_store_after_a_build_and_a_failed_attempt(tmp_path, engine)
+    store = a_store_after_a_build_and_a_failed_attempt(engine)
     with store.engine.begin() as connection:
         stored = connection.exec_driver_sql(_READ_WHAT_IS_STORED[which]).scalar_one()
         flawed = _STORED_WITH_A_FLAW[flaw](stored)
@@ -278,9 +273,9 @@ def test_a_toolchain_the_row_cannot_vouch_for_reads_as_unknown(
 
 @pytest.mark.parametrize("which", ["build", "attempt"])
 def test_a_toolchain_written_for_another_commit_reads_as_unknown(
-    tmp_path: Path, engine: Engine, which: str
+    engine: Engine, which: str
 ) -> None:
-    store = a_store_after_a_build_and_a_failed_attempt(tmp_path, engine)
+    store = a_store_after_a_build_and_a_failed_attempt(engine)
     with store.engine.begin() as connection:
         connection.exec_driver_sql(_THE_COMMIT_IT_IS_FOR[which], (_ANOTHER_COMMIT,))
 
@@ -312,7 +307,7 @@ def journal_writes_to_the_build_columns(store: PostgresDeckStore) -> None:
             CREATE FUNCTION journal() RETURNS trigger LANGUAGE plpgsql AS $$
                 BEGIN INSERT INTO written VALUES (NEW.slug); RETURN NEW; END $$;
             CREATE TRIGGER journal AFTER UPDATE OF
-                active_build, pdf_export, built_commit, built_at, built_toolchain,
+                built_run, built_commit, built_at, built_toolchain,
                 attempt_commit, attempt_started_at, attempt_outcome,
                 attempt_failure, attempt_reason, attempt_toolchain
             ON decks FOR EACH ROW EXECUTE FUNCTION journal();

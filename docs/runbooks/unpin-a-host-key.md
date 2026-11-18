@@ -25,8 +25,5 @@ On the source's page choose *Fetch now*: the source's state reads reachable.
 
 ## Escalate
 
-When the source reads Refused again after the fetch, a process still holds a
-`known_hosts` file from before the pins were shared in its mirrors directory,
-and adopts its old key at start: delete that file and restart the process. When
-the host's owner cannot confirm the change, leave the pin in place and treat
-the host as compromised.
+When the host's owner cannot confirm the change, leave the pin in place and
+treat the host as compromised.

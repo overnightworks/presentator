@@ -31,6 +31,7 @@ from webauth.cookies import issue_session_cookies
 
 from presentator.api.lobby_shell import LobbyShell
 from presentator.contracts.decks import (
+    Artefacts,
     Build,
     BuildAttempt,
     BuildFailure,
@@ -43,6 +44,7 @@ from presentator.contracts.decks import (
 from presentator.contracts.models import Role, User
 from presentator.host.main import web_auth_config_for
 from tests.presentator.application.support.fakes import (
+    FakeBuildRunner,
     FakeDeckStore,
     FakePeople,
     FakeSourceStore,
@@ -52,6 +54,8 @@ from tests.support.lobby import (
     EXPORTED_PDF,
     NOW,
     SOURCE_ID,
+    THE_EXAMPLE_ARTEFACTS,
+    THE_EXAMPLE_RUN,
     GivenDecks,
     SessionsOnly,
     SigningIn,
@@ -73,7 +77,13 @@ _PERSON_ROUTE: Final = "/drive/person"
 _DECK_ROUTE: Final = f"{_PERSON_ROUTE}/{{person_id}}/deck"
 _SOME_COMMIT: Final = "a3f19c2b8d4e5f60718293a4b5c6d7e8f9012345"
 _ATTEMPT_COMMIT: Final = "e91c5ad4f3b2a1908877665544332211aabbccdd"
-_A_PDF_NOBODY_WROTE: Final = EXPORTED_PDF.with_name("nobody-wrote-this.pdf")
+_A_RUN_WITHOUT_ITS_PDF: Final = BuildRun("a-run-without-its-pdf")
+_SERVED: Final = {
+    THE_EXAMPLE_RUN: THE_EXAMPLE_ARTEFACTS,
+    _A_RUN_WITHOUT_ITS_PDF: Artefacts(
+        directory=BUILT_TALK, pdf=EXPORTED_PDF.with_name("nobody-wrote-this.pdf")
+    ),
+}
 
 type JsonNode = dict[str, JsonNode] | list[JsonNode] | str | int | float | bool | None
 
@@ -205,9 +215,7 @@ class _Newcomers:
             self.decks.put_build(
                 slug,
                 Build(
-                    run=BuildRun("the-example-talk"),
-                    directory=BUILT_TALK,
-                    pdf=_A_PDF_NOBODY_WROTE if record.pdf else EXPORTED_PDF,
+                    run=_A_RUN_WITHOUT_ITS_PDF if record.pdf else THE_EXAMPLE_RUN,
                     commit=_SOME_COMMIT,
                     built_at=record.built_at or NOW,
                     toolchain=None,
@@ -282,7 +290,11 @@ def _driven_lobby(build: Path, origin: str) -> FastAPI:
     lobby, _ = a_lobby_app(
         people=people,
         preferences=a_preferences(),
-        given=GivenDecks(store=store, source_store=sources),
+        given=GivenDecks(
+            store=store,
+            source_store=sources,
+            builder=FakeBuildRunner(served=dict(_SERVED)),
+        ),
         signing_in=SigningIn(sessions=people.sessions, auth=auth),
         shell=shell,
     )

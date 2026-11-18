@@ -10,7 +10,6 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Final
 
 from sqlalchemy import Engine
@@ -71,8 +70,6 @@ def a_deck(slug: str, source_id: str) -> Deck:
 def a_build(number: int) -> Build:
     return Build(
         run=BuildRun(f"run-{number}"),
-        directory=Path(f"/builds/run-{number}/out/talk"),
-        pdf=Path(f"/builds/run-{number}/out/deck.pdf"),
         commit=f"commit-{number}",
         built_at=_NOON + timedelta(minutes=number),
         toolchain=None,

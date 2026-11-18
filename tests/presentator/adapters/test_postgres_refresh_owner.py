@@ -4,7 +4,7 @@ import time
 from collections.abc import Callable, Generator
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 
 import pytest
 from sqlalchemy import Engine, text
@@ -39,7 +39,6 @@ from tests.presentator.application.support.decks_support import (
     decks_over,
 )
 from tests.presentator.application.support.fakes import (
-    BUILDS_ROOT,
     FakeBuildRunner,
     FakeDeckStore,
 )
@@ -168,7 +167,6 @@ def test_a_removal_waits_for_the_holder_to_let_go_and_gives_up_at_its_bound(
 
 def test_a_holder_whose_connection_ended_is_refused_once_another_took_over(
     engine: Engine,
-    tmp_path: Path,
     owners: Callable[..., PostgresRefreshOwnership],
 ) -> None:
     lost, taking_over = owners(), owners(_ANOTHER_TOOLCHAIN)
@@ -182,7 +180,7 @@ def test_a_holder_whose_connection_ended_is_refused_once_another_took_over(
     )
     refused = {
         "a deck row": lambda: decks.put(a_deck()),
-        "a build": lambda: decks.put_build("a-slug", a_build(tmp_path)),
+        "a build": lambda: decks.put_build("a-slug", a_build()),
         "an attempt": lambda: decks.put_attempt("a-slug", None),
         "the marks of a source": lambda: decks.mark_removed_except(
             frozenset(), source_id="a-source", at=_NOW
@@ -425,8 +423,6 @@ def test_a_removal_keeps_every_takeover_out_until_its_rows_are_gone(
         a_deck(source_id=SOURCE.id),
         build=Build(
             run=run,
-            directory=BUILDS_ROOT / run.name / "out" / "talk",
-            pdf=BUILDS_ROOT / run.name / "out" / "deck.pdf",
             commit=a_deck().commit,
             built_at=_NOW,
             toolchain=None,

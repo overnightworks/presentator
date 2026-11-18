@@ -12,7 +12,7 @@ _USER_ID = "users.id"
 
 
 def upgrade() -> None:
-    """Create every table; a migration only adds, so there is no downgrade."""
+    """Create every table; a migration has no downgrade."""
     _create_users()
     _create_sessions()
     _create_instance_settings()
