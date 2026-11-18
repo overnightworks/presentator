@@ -23,5 +23,5 @@ const translated = {
     "controls.noSpeech": "No speech",
 } satisfies Words;
 // A translation that leaves out a gap of its source fails here.
-({} as Words) satisfies typeof translated;
+({}) as Words satisfies typeof translated;
 export const words: Words = translated;
