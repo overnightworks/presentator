@@ -93,3 +93,23 @@ def test_the_sole_admin_is_erased_like_anyone_and_a_repeat_is_at_zero(
     assert isinstance(first, PersonErased)
     assert isinstance(again, PersonErased)
     assert all(entry.count == 0 for entry in again.kinds)
+
+
+def test_a_build_whose_run_is_no_single_name_fails_loud_and_keeps_every_row(
+    instance: PostgresInstance,
+) -> None:
+    """PE15: a corrupted row is a failed step, never an invented path."""
+    before = _owned_by(instance, THE_PERSON.id)
+    with instance.engine.begin() as connection:
+        connection.execute(
+            text("UPDATE decks SET built_run = '../elsewhere' WHERE owner_id = :id"),
+            {"id": THE_PERSON.id},
+        )
+
+    with pytest.raises(ValueError, match="builds root"):
+        instance.people.erase_person(THE_PERSON.id, dry_run=False)
+
+    assert _owned_by(instance, THE_PERSON.id) == before
+    assert instance.build_of(THE_PERSON).exists()
+    assert instance.stored(THE_PERSON)
+    assert instance.stored(ANOTHER)
