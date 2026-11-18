@@ -28,15 +28,6 @@ about sources stand in [configuration](configuration.md) and the runbook to
   it. Check connection does not look at it, and a folder that is missing or is
   a file reads as an emptied branch (DK15). One address stays one source, so a
   second source on the same address with another folder is a duplicate address.
-- **SR9** The folder column is additive, so an older release still reads and
-  writes the table, but it reads a stored folder as the top of the repository.
-  Its next refresh then marks that source's nested decks removed, and a
-  same-named top-level deck can take the row. Before rolling back across this
-  release, remove each source that carries a folder: removal deletes its builds,
-  deck rows, run history and the source, so its decks are rebuilt, and adding it
-  again needs folder-aware code and issues a new webhook secret that must be
-  entered at the git host again. A restored older backup is migrated at its next
-  start.
 - **SR10** A source button shows that its request runs and, after it ends,
   how it ended.
 - **SR11** One process of the instance takes sources in, builds and removes at a
