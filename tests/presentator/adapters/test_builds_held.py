@@ -12,6 +12,7 @@ from tests.presentator.adapters.support.build_support import (
     lines_of,
     on_this_machine,
 )
+from tests.support.deck_source_support import a_build
 from tests.support.log_lines import json_logged
 
 _TALK = "talk"
@@ -53,6 +54,14 @@ def test_artefacts_that_do_not_stand_under_the_root_are_not_held(
     (run / OUTPUT_DIRECTORY).symlink_to("real-out")
 
     assert not builds.holds(Artefacts(directory=tmp_path / talk, pdf=tmp_path / pdf))
+
+
+def test_a_build_whose_run_left_the_store_and_the_disk_is_not_kept(
+    tmp_path: Path,
+) -> None:
+    builds = builds_under(tmp_path, toolchain=on_this_machine(tmp_path))
+
+    assert builds.kept(a_build()) is None
 
 
 def a_written_talk(directory: Path) -> Path:

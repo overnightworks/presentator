@@ -5,25 +5,18 @@ prompt suppression an unattended server needs, so this package spawns it rather
 than binding a second git implementation.
 """
 
-import base64
 import fcntl
-import hashlib
-import hmac
 import os
 import re
 import shutil
 import subprocess
 import tempfile
-from collections.abc import Generator, Iterable
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, TextIO
-from urllib.parse import urlsplit
-
-if TYPE_CHECKING:
-    from _hashlib import HASH
+from typing import Final, TextIO
 
 from gitmirror.model import (
     Change,
@@ -34,7 +27,6 @@ from gitmirror.model import (
     GitSource,
     GitUnavailableError,
     HostKey,
-    HostKeyPins,
     InvalidCredentialError,
     KnownHosts,
     MirrorError,
@@ -89,11 +81,6 @@ _SSH_KEY_DIRECTORY_MODE: Final = 0o700
 _SSH_KEY_FILE_MODE: Final = 0o600
 _SSH_KEY_FILE_NAME: Final = "id_ed25519"
 _KNOWN_HOSTS_PREFIX: Final = "known_hosts."
-# ssh names a host it reaches on another port than this one `[host]:port`, and
-# hashes that name, with a salt of its own, on a line that starts so.
-_SSH_PORT: Final = 22
-_HASHED_HOST: Final = "|1|"
-_LINE_FIELDS: Final = 3
 # ssh's own words when a host answers with another key than the pinned one;
 # a run whose newly accepted key lost the pin to another process says the same.
 _HOST_KEY_REFUSED: Final = "Host key verification failed."
@@ -532,75 +519,6 @@ def _host_keys_in(path: Path) -> frozenset[HostKey]:
         for host, _, key in (line.strip().partition(" ") for line in lines)
         if host and not host.startswith("#")
     )
-
-
-def adopt_known_hosts(file: Path, *, urls: Iterable[str], pins: HostKeyPins) -> None:
-    """Pin the key a known_hosts file ssh wrote holds for each ssh host of the urls.
-
-    ssh may have hashed the host names, so a line is matched by each host the
-    urls name. A host pinned already keeps its pin.
-    """
-    if not file.is_file():
-        return
-    entries = tuple(_known_host_entries(file))
-    for host in sorted({host for url in urls if (host := _known_host_of(url))}):
-        key = next((key for names, key in entries if _names(names, host)), None)
-        if key is not None:
-            pins.pin(HostKey(host=host, key=key))
-
-
-def _known_host_of(url: str) -> str | None:
-    """The name ssh gives the host of an ssh url in a known_hosts file."""
-    if url.startswith("ssh://"):
-        parsed = urlsplit(url)
-        try:
-            host, port = parsed.hostname, parsed.port
-        except ValueError:
-            return None
-    elif is_ssh_remote(url):
-        authority = url.partition("@")[2]
-        bracketed = authority.startswith("[")
-        host = (
-            authority[1 : authority.find("]")]
-            if bracketed
-            else authority.partition(":")[0]
-        ).lower()
-        port = None
-    else:
-        return None
-    return host if port in {None, _SSH_PORT} else f"[{host}]:{port}"
-
-
-def _known_host_entries(file: Path) -> Generator[tuple[str, str]]:
-    """Each line's host names and its key, skipping comments and markers."""
-    for line in file.read_text(encoding="utf-8").splitlines():
-        fields = line.split()
-        if len(fields) >= _LINE_FIELDS and not fields[0].startswith(("#", "@")):
-            yield fields[0], f"{fields[1]} {fields[2]}"
-
-
-def _names(names: str, host: str) -> bool:
-    """Whether a line's host names, plain or hashed, name that host."""
-    if not names.startswith(_HASHED_HOST):
-        return host in names.split(",")
-    parts = names.removeprefix(_HASHED_HOST).split("|")
-    try:
-        # A line ssh did not write fails either way: as too many parts or as
-        # no base64, whose error is a `ValueError` too.
-        salt, digest = (base64.b64decode(part, validate=True) for part in parts)
-    except ValueError:
-        return False
-    hashed = hmac.new(salt, host.encode(), _known_hosts_sha1).digest()
-    return hmac.compare_digest(hashed, digest)
-
-
-def _known_hosts_sha1(data: bytes = b"") -> HASH:
-    """SHA-1 as OpenSSH's hashed known_hosts format fixes it.
-
-    The hash only finds the line that names a host; the pinned key, not the
-    hash, decides trust, so no security property rests on SHA-1 here.
-    """
-    return hashlib.sha1(data, usedforsecurity=False)
 
 
 @contextmanager

@@ -78,8 +78,6 @@ def a_swapped_build(tmp_path: Path, *, slug: str) -> tuple[GivenDecks, Path]:
         slug,
         Build(
             run=BuildRun("run"),
-            directory=talk,
-            pdf=pdf,
             commit=_A_COMMIT,
             built_at=NOW,
             toolchain=None,

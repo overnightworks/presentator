@@ -226,8 +226,6 @@ class DeckBuilds:
             deck.slug,
             Build(
                 run=run,
-                directory=built.directory,
-                pdf=built.pdf,
                 commit=deck.commit,
                 built_at=self.clock.now(),
                 toolchain=toolchain,

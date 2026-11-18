@@ -22,8 +22,6 @@ from presentator.contracts.models import Role
 from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
 from tests.support.lobby import (
     ADMIN,
-    BUILT_TALK,
-    EXPORTED_PDF,
     NEIGHBOUR,
     NOW,
     SOURCE_ID,
@@ -66,8 +64,6 @@ def a_deck(
         commit=a_commit(),
         build=Build(
             run=BuildRun("the-example-talk"),
-            directory=BUILT_TALK,
-            pdf=EXPORTED_PDF,
             commit=a_commit(),
             built_at=NOW,
             toolchain=None,

@@ -12,6 +12,7 @@ from sqlalchemy import Engine
 from presentator.contracts.words import SOURCE_LANGUAGE, text
 from tests.support.deck_page_support import (
     a_build,
+    a_builder_serving,
     a_deck_store,
     a_talk_host,
 )
@@ -19,6 +20,8 @@ from tests.support.lobby import (
     A_BROWSERS_ADDRESS,
     A_TALK_ADDRESS,
     BUILT_TALK,
+    EXPORTED_PDF,
+    THE_EXAMPLE_RUN,
     GivenDecks,
     a_configured_source,
 )
@@ -161,8 +164,11 @@ def test_a_path_that_would_leave_the_build_directory_is_refused(
     signed_in = a_talk_host(
         engine,
         GivenDecks(
-            store=a_deck_store(built=a_build(talk=a_build_next_to_a_secret(tmp_path))),
+            store=a_deck_store(built=a_build()),
             source=a_configured_source(_ADDRESS),
+            builder=a_builder_serving(
+                talk=a_build_next_to_a_secret(tmp_path), pdf=EXPORTED_PDF
+            ),
         ),
     )
 
@@ -179,8 +185,11 @@ def test_the_talk_itself_is_still_served_from_inside_that_directory(
     signed_in = a_talk_host(
         engine,
         GivenDecks(
-            store=a_deck_store(built=a_build(talk=a_build_next_to_a_secret(tmp_path))),
+            store=a_deck_store(built=a_build()),
             source=a_configured_source(_ADDRESS),
+            builder=a_builder_serving(
+                talk=a_build_next_to_a_secret(tmp_path), pdf=EXPORTED_PDF
+            ),
         ),
     )
 
@@ -220,13 +229,13 @@ def test_a_talk_with_an_application_link_outside_its_build_answers_nothing(
     marker = "outside the built talk"
     outside = tmp_path / "outside.html"
     outside.write_text(marker, encoding="utf-8")
-    talk = tmp_path / "talk"
-    talk.mkdir()
+    talk = tmp_path / THE_EXAMPLE_RUN.name / "out" / "talk"
+    talk.mkdir(parents=True)
     (talk / "index.html").symlink_to(outside)
     signed_in = a_talk_host(
         engine,
         GivenDecks(
-            store=a_deck_store(built=a_build(talk=talk)),
+            store=a_deck_store(built=a_build()),
             source=a_configured_source(_ADDRESS),
             builder=real_builds_under(tmp_path),
         ),
@@ -236,6 +245,24 @@ def test_a_talk_with_an_application_link_outside_its_build_answers_nothing(
 
     assert refused.status_code == HTTPStatus.NOT_FOUND
     assert marker not in refused.text
+
+
+def test_a_talk_whose_run_is_neither_on_this_disk_nor_in_the_store_answers_nothing(
+    engine: Engine,
+    tmp_path: Path,
+) -> None:
+    signed_in = a_talk_host(
+        engine,
+        GivenDecks(
+            store=a_deck_store(built=a_build()),
+            source=a_configured_source(_ADDRESS),
+            builder=real_builds_under(tmp_path),
+        ),
+    )
+
+    missing = signed_in.get(_PROJECTOR)
+
+    assert missing.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_a_missing_path_under_a_talk_with_no_application_answers_nothing(
@@ -248,8 +275,9 @@ def test_a_missing_path_under_a_talk_with_no_application_answers_nothing(
     signed_in = a_talk_host(
         engine,
         GivenDecks(
-            store=a_deck_store(built=a_build(talk=talk)),
+            store=a_deck_store(built=a_build()),
             source=a_configured_source(_ADDRESS),
+            builder=a_builder_serving(talk=talk, pdf=EXPORTED_PDF),
         ),
     )
 

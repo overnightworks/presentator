@@ -460,16 +460,13 @@ class Build:
     """The talk a deck delivers, the commit and toolchain it was built under, and when.
 
     They travel together because they switch together: a page that named a
-    build time of one commit beside the directory of another would lie about
+    build time of one commit beside the run of another would lie about
     what is on the screen. No toolchain is a build made before a deck recorded
     it, which matches no identity. The run names the build in the store every
-    process serves it from; `directory` and `pdf` are where the process that
-    built it left them, written down while a release that reads those stands.
+    process serves it from.
     """
 
     run: BuildRun
-    directory: Path
-    pdf: Path
     commit: str
     built_at: datetime
     toolchain: ToolchainIdentity | None
