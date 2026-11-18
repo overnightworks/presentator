@@ -87,7 +87,7 @@ some of them.
 | --- | --- | --- |
 | `PRESENTATOR_MIRRORS` | `mirrors` | Where this process keeps its bare mirrors of the deck sources, a cache each pull rebuilds. |
 | `PRESENTATOR_HOST` | `127.0.0.1` | Listen address. |
-| `PRESENTATOR_PORT` | `8000` | Listen port, 0 to 65535; another number refuses the start, and a start that cannot listen on it ends in one `process.failed` line with `reason` `port_taken` (or `bind_refused`) and exit status 3. |
+| `PRESENTATOR_PORT` | `8000` | Listen port, 0 to 65535; another number refuses the start, and a start that cannot listen on it ends in logline's one `server_bind.failed` line with `reason` `port_taken` (or `os_error`) and exit status 3. |
 | `PRESENTATOR_TRUSTED_PROXIES` | empty | Comma-separated addresses or networks; see below. |
 | `LOG_LEVEL` | `info` | The root log level (`debug`, `info`, `warning`, `error`, `critical`); the request line is written at `info` whatever it says, and anything else refuses the start. |
 | `PRESENTATOR_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/` as the person and `/api/admin/` as an admin; empty serves no route for a token client's token. See [people](people.md). |

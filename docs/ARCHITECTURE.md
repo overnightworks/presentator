@@ -137,9 +137,8 @@ the same process lines with one `connection.ended` per connection and one `wire_
 co-presenter ask `access_token.ended`, `speak.ended` and `answer.ended` (with `first_output_ms`) under the request's
 trace, which the overlay takes from the heard turn; a hearing writes `hearing_session.ended` and one
 `hearing_opening.ended` per opening (`docs/co-presenter.md`).
-A start refused by its settings, its port or its database ends in one `process.failed` with a `reason` code; a
-filter on `uvicorn.error` makes uvicorn's warnings and errors `server.refused`, `request.failed` or `server.reported`,
-codes only; its info records stay below the warning level and never reach the log.
+A start refused by its settings or its database ends in one `process.failed` with a `reason` code; logline writes
+uvicorn's own records as its literal events, codes only, a port that cannot be bound as `server_bind.failed`.
 
 **Words and look.** Every lobby word comes from one gettext catalog per language
 (`frontend/src/lib/catalogs`), generated into typed modules for page and server; the session answer
