@@ -3,6 +3,6 @@ agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
 role = "builder"
 base = "f92d34397b72ae86dd0f84e9721e8d74a9a733b5"
 branch = "claude/issue-1233-presentator-takes-logline-v0-5-0-and-dro"
-scope = ["docs/ARCHITECTURE.md", "docs/configuration.md", "docs/runbooks/run-from-a-checkout.md", "pyproject.toml", "src/presentator/adapters", "src/presentator/agent", "src/presentator/host/stopping_server.py", "tests/conftest.py", "tests/presentator/adapters", "tests/presentator/agent", "tests/presentator/api/test_people_erasure_route.py", "tests/presentator/host", "tests/support/lobby.py", "uv.lock"]
+scope = ["docs/ARCHITECTURE.md", "docs/configuration.md", "docs/runbooks/run-from-a-checkout.md", "pyproject.toml", "src/presentator/adapters", "src/presentator/agent", "src/presentator/host/config.py", "src/presentator/host/stopping_server.py", "tests/conftest.py", "tests/presentator/adapters", "tests/presentator/agent", "tests/presentator/api/test_people_erasure_route.py", "tests/presentator/host", "tests/support/lobby.py", "uv.lock"]
 opened_commit = "b3982cad23f81dd0a9b64f6c078e421634e42ad9"
 whole_reason = "a pin take-up spans pyproject, lock, the host filter and its tests"
