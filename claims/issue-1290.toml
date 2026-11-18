@@ -1,0 +1,8 @@
+claim_id = "98c325c3651c4ae8829816c7615504c8"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "6622922ca4d3e3d48169ade84bc4037566119d16"
+branch = "claude/issue-1290-the-log-out-drive-test-stumbles-over-a-l"
+scope = ["frontend/e2e"]
+opened_commit = "b476645445bc160dee41d1d3fbbd474d4365c004"
+whole_reason = "frontend/e2e is the drive suite's own directory; the fix sits in its CSP fixture or the spec"
