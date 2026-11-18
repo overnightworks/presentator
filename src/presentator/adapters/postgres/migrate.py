@@ -97,10 +97,11 @@ def cap_alembic_logging() -> None:
 def migrate(engine: Engine) -> None:
     """Bring the database to head; concurrent runs wait for one another.
 
-    Migrations only add, so a database whose revision this release does not know
-    was migrated by a newer release: it stays as it is, which lets a rollback of
-    the release run its migration step without harm. A database that does not
-    answer, or refuses the login, is refused.
+    A database whose revision this release does not know was migrated by a
+    newer release: it stays as it is. A migration drops a column only one
+    release after its last reader, so a rollback by one release runs its
+    migration step and serves without harm. A database that does not answer,
+    or refuses the login, is refused.
     """
     config = _config(MIGRATIONS_DIRECTORY)
     history = ScriptDirectory.from_config(config)
