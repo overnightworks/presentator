@@ -103,6 +103,11 @@ _UNREACHABLE_CHECK: Final = ConnectionCheck(
     commit=None,
     detail=None,
 )
+_HOST_KEY_REFUSED_CHECK: Final = ConnectionCheck(
+    state=ConnectionState.FAILED,
+    commit=None,
+    detail=_HOST_KEY_REFUSED,
+)
 # git's own words for a login the far end asked for or turned down, lowercased
 # so a case git happens to pick never hides the match. A bare 403 is
 # deliberately absent: a proxy or a WAF answers that status for reasons that
@@ -351,9 +356,14 @@ def check_connection(
     except subprocess.TimeoutExpired:
         return _UNREACHABLE_CHECK
     if not trusted:
-        return ConnectionCheck(
-            state=ConnectionState.FAILED, commit=None, detail=_HOST_KEY_REFUSED
-        )
+        return _HOST_KEY_REFUSED_CHECK
+    return _check_answered_by(probed, secret=secret)
+
+
+def _check_answered_by(
+    probed: subprocess.CompletedProcess[bytes], *, secret: str | None
+) -> ConnectionCheck:
+    """What a finished `ls-remote` says: the head commit, or which failure and why."""
     if probed.returncode != 0:
         stderr = probed.stderr.decode(errors="replace").strip()
         sanitized = _sanitized(stderr, secret=secret)

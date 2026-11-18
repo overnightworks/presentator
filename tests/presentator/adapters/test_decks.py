@@ -56,7 +56,6 @@ from tests.support.deck_source_support import (
 )
 from tests.support.git_remote import EXAMPLE_SLUG, EXAMPLE_TITLE, MAIN_BRANCH, GitRemote
 from tests.support.log_lines import json_logged
-from tests.support.mirror_support import known_hosts_under
 from tests.support.people import seed_user
 from tests.support.postgres import NO_FENCE
 
@@ -280,7 +279,7 @@ def test_a_pull_that_runs_past_its_bound_says_nothing_rather_than_waiting(
 def a_checker() -> MirroredConnectionChecker:
     return MirroredConnectionChecker(
         check_timeout=A_GENEROUS_BOUND,
-        known_hosts=known_hosts_under(Path("/nowhere-a-test-names-known-hosts")),
+        known_hosts=mirrors_under(Path("/nowhere-a-test-names-mirrors")).known_hosts,
     )
 
 

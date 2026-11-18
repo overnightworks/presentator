@@ -219,12 +219,7 @@ def build_instance(
     # A refusal after the stores opened releases their connections, which
     # nothing else holds.
     try:
-        mirrors = SourceMirrors(
-            directory=settings.mirrors,
-            credentials=stores.credentials,
-            pull_timeout=_source_timeout(settings),
-            host_keys=stores.host_keys,
-        )
+        mirrors = _source_mirrors(settings, stores)
         cache = _build_cache(settings)
         decks = _decks(
             settings, stores, mirrors=mirrors, cache=cache, toolchain=toolchain
@@ -272,6 +267,16 @@ def _with_redis(stores: Stores, redis: SharedRedis) -> Stores:
         stores,
         readiness=ready,
         close=partial(_closed_in_turn, stores.close, redis.close),
+    )
+
+
+def _source_mirrors(settings: Settings, stores: Stores) -> SourceMirrors:
+    """This process's mirrors, trusting the host keys the database pins."""
+    return SourceMirrors(
+        directory=settings.mirrors,
+        credentials=stores.credentials,
+        pull_timeout=_source_timeout(settings),
+        host_keys=stores.host_keys,
     )
 
 
