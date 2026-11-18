@@ -57,7 +57,8 @@ export function runFailureWords(reason: SourceRunFailure, words: Words): string 
 		unreachable: words['source.runUnreachable'],
 		refused: words['source.runRefused'],
 		failed: words['source.runFailed'],
-		'credential-unresolvable': words['source.runSecret']
+		'credential-unresolvable': words['source.runSecret'],
+		'host-key-refused': words['source.runHostKey']
 	};
 	return sentences[reason];
 }

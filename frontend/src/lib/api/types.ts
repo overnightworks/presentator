@@ -636,7 +636,7 @@ export interface components {
          *     which already speaks both vocabularies, owns the translation between them.
          * @enum {string}
          */
-        SourceRunFailure: "credential-unresolvable" | "refused" | "failed" | "unreachable";
+        SourceRunFailure: "credential-unresolvable" | "refused" | "failed" | "unreachable" | "host-key-refused";
         /**
          * SourceRunOutcome
          * @description Whether a poll of a source found its newest commit or could not.

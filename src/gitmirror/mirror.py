@@ -117,7 +117,7 @@ _UNREACHABLE_CHECK: Final = ConnectionCheck(
     detail=None,
 )
 _HOST_KEY_REFUSED_CHECK: Final = ConnectionCheck(
-    state=ConnectionState.FAILED,
+    state=ConnectionState.HOST_KEY_REFUSED,
     commit=None,
     detail=_HOST_KEY_REFUSED,
 )
@@ -282,7 +282,7 @@ class GitMirror:
             # A remote nobody can reach must not hold the page that asked for it.
             return _UNREACHABLE
         if not trusted:
-            return Connection(state=ConnectionState.FAILED, revision=None)
+            return Connection(state=ConnectionState.HOST_KEY_REFUSED, revision=None)
         if pulled.returncode != 0:
             stderr = pulled.stderr.decode(errors="replace").strip()
             return Connection(
@@ -379,12 +379,15 @@ def _check_answered_by(
     """What a finished `ls-remote` says: the head commit, or which failure and why."""
     if probed.returncode != 0:
         stderr = probed.stderr.decode(errors="replace").strip()
+        state = connection_state_for_failure(
+            stderr, credential_offered=secret is not None
+        )
+        if state is ConnectionState.HOST_KEY_REFUSED:
+            # ssh leads its refusal with a banner of `@`; its last words name it.
+            return _HOST_KEY_REFUSED_CHECK
         sanitized = _sanitized(stderr, secret=secret)
         return ConnectionCheck(
-            state=connection_state_for_failure(
-                stderr,
-                credential_offered=secret is not None,
-            ),
+            state=state,
             commit=None,
             detail=sanitized.splitlines()[0] if sanitized else None,
         )
@@ -626,7 +629,10 @@ def connection_state_for_failure(
     *,
     credential_offered: bool,
 ) -> ConnectionState:
-    """Which of the three failure states a failed pull's own words say happened.
+    """Which failure state a failed pull's own words say happened.
+
+    ssh's own refusal of a host whose key differs from its pin is
+    `host-key-refused`, whatever else git adds to it.
 
     A login demanded of a request that offered none is `unreachable`: the
     far end answers a private repository like a missing one, so the address
@@ -637,6 +643,8 @@ def connection_state_for_failure(
     certificate failure, a proxy's own text — is not proof the host never
     answered, so it stays `failed` rather than guessing.
     """
+    if _HOST_KEY_REFUSED in stderr:
+        return ConnectionState.HOST_KEY_REFUSED
     lowered = stderr.lower()
     if any(word in lowered for word in _REFUSED_WORDS):
         return (

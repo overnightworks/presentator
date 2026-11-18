@@ -137,6 +137,7 @@ const translated = {
     "source.runUnreachable": "Not reachable: the host does not answer, or the repository is private and needs a token.",
     "source.runSecret": "Secret not stored",
     "source.runRefused": "Login refused",
+    "source.runHostKey": "Host key refused: the host answers with another key than at first contact.",
     "source.runFailed": "Fetch failed",
     "sourceNew.back": "← Sources",
     "sourceNew.title": "Add source",

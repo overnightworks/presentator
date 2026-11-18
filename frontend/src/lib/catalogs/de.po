@@ -533,6 +533,10 @@ msgctxt "source.runRefused"
 msgid "Anmeldung abgelehnt"
 msgstr ""
 
+msgctxt "source.runHostKey"
+msgid "Host-Schlüssel abgelehnt: Der Host antwortet mit einem anderen Schlüssel als beim ersten Kontakt."
+msgstr ""
+
 msgctxt "source.runFailed"
 msgid "Abruf fehlgeschlagen"
 msgstr ""

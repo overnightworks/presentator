@@ -5,10 +5,20 @@ from pathlib import Path
 import pytest
 
 from gitmirror.model import CredentialReference
+from presentator.adapters.secrets import generate_deploy_key
 from presentator.contracts.decks import SourceRunFailure
 from tests.support.deck_source_support import PUSHED_AT, a_source, folders_under
-from tests.support.git_remote import GitRemote
+from tests.support.git_remote import GitRemote, with_the_program
 from tests.support.log_lines import json_logged
+from tests.support.mirror_support import FixedSecret
+
+# What ssh writes when a host answers with another key than the one it trusts.
+_SSH_REFUSING_THE_HOST_KEY = """#!/bin/sh
+echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" >&2
+echo "@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @" >&2
+echo "Host key verification failed." >&2
+exit 255
+"""
 
 
 def test_a_poll_that_reaches_a_source_writes_one_ok_fetch_line_with_its_duration(
@@ -95,3 +105,22 @@ def test_a_credential_git_cannot_send_ends_the_fetch_refused_with_its_code(
     assert fetch["outcome"] == "refused"
     assert fetch["reason"] == SourceRunFailure.CREDENTIAL_UNRESOLVABLE.value
     assert fetch["level"] == "info"
+
+
+def test_a_host_that_answers_with_another_key_ends_the_fetch_failed_with_its_code(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with_the_program(monkeypatch, tmp_path, "ssh", _SSH_REFUSING_THE_HOST_KEY)
+    secret = FixedSecret(generate_deploy_key().private_key)
+    source = a_source("git@ssh-stub-host:talks.git")
+
+    with json_logged(capsys) as logged:
+        poll = folders_under(tmp_path, credentials=secret).folders(source)
+
+    assert poll.failure is SourceRunFailure.HOST_KEY_REFUSED
+    [fetch] = logged.lines
+    assert fetch["outcome"] == "failed"
+    assert fetch["reason"] == SourceRunFailure.HOST_KEY_REFUSED.value
+    assert fetch["level"] == "warning"

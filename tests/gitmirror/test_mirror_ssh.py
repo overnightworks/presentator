@@ -40,7 +40,7 @@ _A_DECK = {"hello-deck/slides.md": "# Hello\n"}
 
 # The stub answers with the host key in `host-key` and checks it as
 # `accept-new` does: a host the known_hosts file names with another key is
-# refused, an unnamed one is added. It then consumes every `-i key` /
+# refused under ssh's banner, an unnamed one is added. It then consumes every `-i key` /
 # `-o value` pair `_ssh_command` builds, records the key path and its mode for
 # the test to read back, and runs the real `git-upload-pack` locally — exactly
 # what git would have asked the real `ssh` to run on the far end, against a
@@ -54,6 +54,8 @@ done
 presented=$(cat "{recorded}/host-key")
 pinned=$(sed -n "s/^{host} //p" "$hosts")
 if [ -n "$pinned" ] && [ "$pinned" != "$presented" ]; then
+  echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" >&2
+  echo "@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @" >&2
   echo "Host key verification failed." >&2
   exit 255
 fi
@@ -232,8 +234,26 @@ def test_a_host_that_answers_with_another_key_than_its_pin_is_refused(
 
     state = reach(remote, tmp_path, url, pins)
 
-    assert state is ConnectionState.FAILED
+    assert state is ConnectionState.HOST_KEY_REFUSED
     assert pins.pinned() == (_ANOTHER_HOST_KEY,)
+
+
+def test_a_check_against_another_key_than_the_pin_names_the_host_key_refusal(
+    monkeypatch: pytest.MonkeyPatch, remote: GitRemote, tmp_path: Path
+) -> None:
+    url, _ = ssh_stub_transport(monkeypatch, remote, tmp_path)
+    remote.commit(_A_DECK, at=_PUSHED_AT)
+    pins = PinsInMemory({_ANOTHER_HOST_KEY.host: _ANOTHER_HOST_KEY.key})
+
+    checked = check_connection(
+        url=url,
+        ref=MAIN_BRANCH,
+        secret=generate_deploy_key().private_key,
+        timeout=A_GENEROUS_BOUND,
+        known_hosts=KnownHosts(directory=tmp_path / "hosts", pins=pins),
+    )
+
+    assert checked.detail == "Host key verification failed."
 
 
 @_OVER_SSH
@@ -244,7 +264,7 @@ def test_a_run_whose_accepted_key_lost_the_pin_to_another_is_not_trusted(
 
     state = reach(remote, tmp_path, url, PinnedElsewhereMeanwhile())
 
-    assert state is ConnectionState.FAILED
+    assert state is ConnectionState.HOST_KEY_REFUSED
 
 
 _A_KEPT_LINE = f"{_THE_HOST_KEY.host} {_THE_HOST_KEY.key}\n"

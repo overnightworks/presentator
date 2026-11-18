@@ -46,6 +46,7 @@ class ConnectionState(StrEnum):
     REFUSED = "refused"
     FAILED = "failed"
     UNREACHABLE = "unreachable"
+    HOST_KEY_REFUSED = "host-key-refused"
 
 
 class ConnectionNextAction(StrEnum):
@@ -56,6 +57,7 @@ class ConnectionNextAction(StrEnum):
     REPAIR_ACCESS = "repair-access"
     CHECK_REACHABILITY = "check-reachability"
     INSPECT_FAILURE = "inspect-failure"
+    VERIFY_HOST_KEY = "verify-host-key"
 
 
 _CONNECTION_NEXT_ACTIONS: Final[Mapping[ConnectionState, ConnectionNextAction]] = (
@@ -68,6 +70,7 @@ _CONNECTION_NEXT_ACTIONS: Final[Mapping[ConnectionState, ConnectionNextAction]] 
             ConnectionState.REFUSED: ConnectionNextAction.REPAIR_ACCESS,
             ConnectionState.UNREACHABLE: ConnectionNextAction.CHECK_REACHABILITY,
             ConnectionState.FAILED: ConnectionNextAction.INSPECT_FAILURE,
+            ConnectionState.HOST_KEY_REFUSED: ConnectionNextAction.VERIFY_HOST_KEY,
         }
     )
 )

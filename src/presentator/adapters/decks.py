@@ -54,12 +54,13 @@ _MIRROR_SUFFIX: Final = ".git"
 # `host_key_pins`, on the disk that held its mirrors.
 _EARLIER_KNOWN_HOSTS: Final = "known_hosts"
 # `gitmirror`'s own words never reach a `SourceRun`; a connection that carries
-# no revision is always one of these four states, never `READY`.
+# no revision is always one of these states, never `READY`.
 _FAILURE_BY_CONNECTION_STATE: Final[dict[ConnectionState, SourceRunFailure]] = {
     ConnectionState.CREDENTIAL_UNRESOLVABLE: SourceRunFailure.CREDENTIAL_UNRESOLVABLE,
     ConnectionState.REFUSED: SourceRunFailure.REFUSED,
     ConnectionState.FAILED: SourceRunFailure.FAILED,
     ConnectionState.UNREACHABLE: SourceRunFailure.UNREACHABLE,
+    ConnectionState.HOST_KEY_REFUSED: SourceRunFailure.HOST_KEY_REFUSED,
 }
 
 # A connection the far end or the credential turned down is a refusal of the

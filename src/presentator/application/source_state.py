@@ -75,8 +75,11 @@ def deck_state_of(deck: Deck) -> DeckState:
 
 
 def _failed_state_of(reason: SourceRunFailure | None) -> SourceState:
-    """Refused and failed keep their own word; every other failure folds into error."""
-    if reason is SourceRunFailure.REFUSED:
+    """Refused and failed keep their own word; every other failure folds into error.
+
+    A host refused for its key is refused like a login the host turned down.
+    """
+    if reason in {SourceRunFailure.REFUSED, SourceRunFailure.HOST_KEY_REFUSED}:
         return SourceState.REFUSED
     if reason is SourceRunFailure.FAILED:
         return SourceState.FAILED
