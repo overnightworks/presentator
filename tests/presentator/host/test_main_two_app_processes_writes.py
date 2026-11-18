@@ -36,6 +36,7 @@ from tests.presentator.host.support.app_requests import (
     create_source,
     fetched,
     listed_slugs,
+    removal_of,
     scalar,
     scalar_text,
     texts,
@@ -590,3 +591,32 @@ def test_a_host_key_pinned_at_one_process_refuses_a_changed_key_at_the_other(
     assert texts(engine, "SELECT host || ' ' || public_key FROM host_key_pins") == {
         f"{_SSH_HOST} {_THE_HOST_KEY}"
     }
+
+
+def _mirrors_of(tmp_path: Path, app: App) -> set[str]:
+    """The names in the mirrors directory of that app's own disk."""
+    directory = tmp_path / directory_name_of(app.port) / "mirrors"
+    return {each.name for each in directory.iterdir() if each.is_dir()}
+
+
+@pytest.mark.usefixtures("environment")
+def test_a_mirror_of_a_source_removed_at_one_process_goes_at_the_others_next_turn(
+    database_url: str,
+    tmp_path: Path,
+    committed_remotes: tuple[GitRemote, GitRemote],
+) -> None:
+    talks, other_talks = committed_remotes
+    with serving_apps(database_url, tmp_path) as apps:
+        admin = admin_of(apps[0])
+        added(admin, apps[0], "talks", talks)
+        added(admin, apps[0], "other-talks", other_talks)
+        fetched(admin, apps[1], "talks")
+        before = _mirrors_of(tmp_path, apps[1])
+        removed = removal_of(admin, apps[0], "talks")
+        fetched(admin, apps[1], "other-talks")
+        after = _mirrors_of(tmp_path, apps[1])
+
+    assert removed == HTTPStatus.NO_CONTENT
+    assert len(before) == 1
+    assert len(after) == 1
+    assert not before & after

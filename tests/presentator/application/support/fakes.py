@@ -9,7 +9,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, BinaryIO, Final
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
 
 from pydantic import SecretStr
@@ -522,6 +522,9 @@ class FakeDeckFolders:
         self.carried.pop(source.id, None)
         return None
 
+    def forget_all_but(self, sources: Iterable[Source]) -> None:
+        del sources
+
     def mirror_of(self, source_id: str) -> PurePosixPath:
         """Where this fake says a source's mirror stands, relative to the volume."""
         return PurePosixPath("mirrors", f"{source_id}.git")
@@ -649,6 +652,9 @@ class HeldDeckFolders:
     def forget(self, source: Source) -> PurePosixPath | None:
         del source
         return None
+
+    def forget_all_but(self, sources: Iterable[Source]) -> None:
+        del sources
 
     def _enter(self) -> None:
         with self.counting:

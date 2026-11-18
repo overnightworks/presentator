@@ -8,7 +8,7 @@ Postgres stores share.
 
 import logging
 import shutil
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from hashlib import sha256
@@ -49,6 +49,7 @@ _MANIFEST_REFUSED: Final = "manifest.refused"
 _MIRROR_REFUSED: Final = "mirror_removal.refused"
 _MIRROR_STAYED: Final = "directory_not_removable"
 _MANIFEST_UNREADABLE: Final = "unreadable"
+_MIRROR_SUFFIX: Final = ".git"
 # `gitmirror`'s own words never reach a `SourceRun`; a connection that carries
 # no revision is always one of these four states, never `READY`.
 _FAILURE_BY_CONNECTION_STATE: Final[dict[ConnectionState, SourceRunFailure]] = {
@@ -139,12 +140,22 @@ class SourceMirrors:
             return PurePosixPath(self.directory.absolute().name, directory.name)
         return None
 
+    def remove_all_but(self, sources: Iterable[Source]) -> None:
+        """Delete every mirror in the directory that none of these sources has."""
+        kept = {self._directory_of(source) for source in sources}
+        if not self.directory.is_dir():
+            return
+        for directory in self.directory.glob(f"*{_MIRROR_SUFFIX}"):
+            if directory not in kept:
+                shutil.rmtree(directory, ignore_errors=True)
+
     def _directory_of(self, source: Source) -> Path:
         """Where this source's mirror stands.
 
         A URL is not a directory name, and two sources must not share one.
         """
-        return self.directory / f"{sha256(source.url.encode()).hexdigest()}.git"
+        name = sha256(source.url.encode()).hexdigest()
+        return self.directory / f"{name}{_MIRROR_SUFFIX}"
 
 
 # The access kinds the Add form can check. Everything else is refused before
@@ -202,6 +213,10 @@ class MirroredDeckFolders:
     def forget(self, source: Source) -> PurePosixPath | None:
         """Delete this source's mirror from disk, and name it if it stayed."""
         return self.mirrors.remove(source)
+
+    def forget_all_but(self, sources: Iterable[Source]) -> None:
+        """Delete every mirror on this disk that none of these sources has."""
+        self.mirrors.remove_all_but(sources)
 
     def folders(self, source: Source) -> SourcePoll:
         """Poll for every top-level folder at the newest commit, or why not.
