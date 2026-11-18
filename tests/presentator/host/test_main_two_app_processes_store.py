@@ -127,6 +127,30 @@ def test_a_deck_built_before_the_store_is_rebuilt_by_the_first_refresh_after_it(
 
 
 @pytest.mark.usefixtures("built")
+def test_a_run_gone_from_the_store_serves_nothing_where_no_copy_is_until_rebuilt(
+    database_url: str,
+    tmp_path: Path,
+    engine: Engine,
+    remote: GitRemote,
+    object_store: ObjectStore,
+) -> None:
+    with serving_apps(database_url, tmp_path, object_store.environment) as (a, b):
+        admin = admin_of(a)
+        added(admin, a, "talks", remote)
+        fetched(admin, a, "talks")
+        assert object_store.runs.delete(scalar_text(engine, _THE_RUN))
+
+        talk = _talk_reader_at(b).request(b, "GET", _TALK_PAGE)
+        pdf = admin.request(b, "GET", _PDF)
+        fetched(admin, b, "talks")
+        rebuilt = admin.request(b, "GET", _PDF)
+
+    assert talk.status_code == HTTPStatus.NOT_FOUND
+    assert pdf.status_code == HTTPStatus.NOT_FOUND
+    assert rebuilt.status_code == HTTPStatus.OK
+
+
+@pytest.mark.usefixtures("built")
 def test_a_put_the_store_refuses_ends_the_attempt_failed_and_the_next_refresh_builds(
     database_url: str,
     tmp_path: Path,
