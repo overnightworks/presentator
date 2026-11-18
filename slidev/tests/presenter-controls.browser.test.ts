@@ -621,7 +621,20 @@ describe('presenter controls', () => {
         onWho: (deck) => whoDecks.push(deck),
       })
     try {
-      const { browser, page } = await openPresenterAt(overlayOrigin, `${base}presenter/1`, 1024)
+      // Playwright reports no request a worklet makes, so the real
+      // `AudioWorklet.addModule` (the media fakes delegate to it) records the
+      // path of every module the page asks it to load.
+      const { browser, page } = await openPresenterAt(overlayOrigin, `${base}presenter/1`, 1024, async (opening) => {
+        await opening.addInitScript(() => {
+          const loads: string[] = []
+          Object.assign(window, { __workletLoads: loads })
+          const addModule = AudioWorklet.prototype.addModule
+          AudioWorklet.prototype.addModule = function (moduleUrl, options) {
+            loads.push(new URL(moduleUrl, document.baseURI).pathname)
+            return addModule.call(this, moduleUrl, options)
+          }
+        })
+      })
       try {
         const ai = page.getByRole('switch', { name: en['controls.switch'] })
         const home = page.getByRole('link', { name: en['controls.home'] })
@@ -644,6 +657,10 @@ describe('presenter controls', () => {
           { timeout: 5_000 },
         )
         expect(await page.getByText(en['controls.noHearing']).count()).toBe(0)
+        const workletLoads = () => page.evaluate(() => (window as unknown as { __workletLoads: string[] }).__workletLoads)
+        await expect.poll(workletLoads).toHaveLength(1)
+        const [workletPath = ''] = await workletLoads()
+        expect(workletPath.startsWith(`${base}assets/`), workletPath).toBe(true)
         if (nested) {
           await page.evaluate(() => (window as unknown as {
             __copresenter: { say: (text: string) => void }
