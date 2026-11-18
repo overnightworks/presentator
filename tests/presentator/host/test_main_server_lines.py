@@ -178,7 +178,8 @@ def test_a_served_request_uvicorn_reports_is_one_coded_event_without_its_query(
         _sent(server, data)
 
     (line,) = events_of(logged, event)
-    assert {"level": line["level"], **_codes(line)} == values
+    codes = {"level": line["level"], **_codes(line)}
+    assert codes == values
     assert ("exception" in line) == carries_traceback
     assert not events_of(logged, "uvicorn.unknown_record")
     assert _QUERY not in logged.text
