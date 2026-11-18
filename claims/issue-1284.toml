@@ -1,7 +1,0 @@
-claim_id = "3a0d3d7d2d4e43238962cf538aa583e8"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "084ce36b823172eda14e3fc79eca97251b8c64a1"
-branch = "claude/issue-1284-botocore-s-own-messages-reach-the-log-as"
-scope = ["pyproject.toml", "uv.lock"]
-opened_commit = "e462da4d394ca4172df8ef79fb271299c16af959"
