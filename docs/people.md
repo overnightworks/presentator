@@ -48,12 +48,7 @@ is `{subject}`. `?dry_run=true` counts and changes nothing.
   A path never holds a source name, an address, a deck, a commit, an email or
   file content. A mirror's hex name is the SHA-256 of the source address, so it
   can be checked against a guessed address.
-- **PE15** A stored build that lies where no run can be placed (a corrupted row
-  or a changed builds root) has no directory to name: the run still tries every
-  other source, keeps the account, and fails with a plain 500. No
-  `person erase:` line is written for that call; the server logs the exception
-  with the source's internal id.
-  A source's removal that waits out the build timeout for another process's
+- **PE15** A source's removal that waits out the build timeout for another process's
   refresh fails with a plain 500 when that wait ends, and a repeat resumes the
   erasure.
 - **PE16** The `person_erasure.ended` line of a leftover holds the kinds and counts left over and

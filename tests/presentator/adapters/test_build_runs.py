@@ -9,10 +9,9 @@ import pytest
 from presentator.adapters.build_runs import (
     listed_runs,
     removed_run,
-    run_name_of,
     taken_away,
 )
-from presentator.ports.decks import BuildRun
+from presentator.contracts.decks import BuildRun
 from tests.presentator.adapters.support.person_instance_support import (
     ANOTHER,
     THE_PERSON,
@@ -38,47 +37,6 @@ def root(tmp_path: Path) -> Path:
     directory = tmp_path / "builds"
     directory.mkdir()
     return directory
-
-
-@pytest.mark.parametrize("stored", ["talk", "deck.pdf"])
-def test_the_talk_and_the_pdf_of_a_run_both_belong_to_it(
-    root: Path, stored: str
-) -> None:
-    """#505 invariant: a run owns its talk and its PDF."""
-    assert run_name_of(root, root / "abc" / "out" / stored) == "abc"
-
-
-@pytest.mark.parametrize(
-    "stored",
-    [
-        "abc/talk",
-        "abc/out/other",
-        "abc/outx/talk",
-        "abc/out/talk/deeper",
-        "abc/def/out/talk",
-        "../elsewhere/out/talk",
-        "abc/../out/talk",
-        "abc/commit/talk",
-    ],
-    ids=[
-        "no-output-directory",
-        "other-file",
-        "other-output-name",
-        "below-the-talk",
-        "two-levels",
-        "parent-name-escapes-the-root",
-        "dotdot-run-name",
-        "the-old-shape",
-    ],
-)
-def test_a_path_of_any_other_shape_belongs_to_no_run(root: Path, stored: str) -> None:
-    """#505 matrix: wrongly shaped path inside the root."""
-    assert run_name_of(root, root / stored) is None
-
-
-def test_a_path_outside_the_root_belongs_to_no_run(root: Path, tmp_path: Path) -> None:
-    """#505 matrix: row outside the root."""
-    assert run_name_of(root, tmp_path / "other" / "abc" / "out" / "talk") is None
 
 
 def test_only_real_runs_are_listed_and_everything_else_is_left_alone(

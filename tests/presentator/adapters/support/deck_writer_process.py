@@ -23,7 +23,7 @@ from presentator.adapters.postgres.preferences import (
 )
 from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
-from presentator.contracts.decks import Build, Deck
+from presentator.contracts.decks import Build, BuildRun, Deck
 from presentator.contracts.preferences import (
     InstanceSettings,
     PersonPreferences,
@@ -70,6 +70,7 @@ def a_deck(slug: str, source_id: str) -> Deck:
 
 def a_build(number: int) -> Build:
     return Build(
+        run=BuildRun(f"run-{number}"),
         directory=Path(f"/builds/{number}"),
         pdf=Path(f"/builds/{number}.pdf"),
         commit=f"commit-{number}",

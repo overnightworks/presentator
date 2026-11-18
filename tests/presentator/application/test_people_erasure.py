@@ -4,12 +4,12 @@ import threading
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from threading import RLock
 
 import pytest
 
-from presentator.contracts.decks import Source, SourceRun
+from presentator.contracts.decks import BuildRun, Source, SourceRun
 from presentator.contracts.models import Role, User
 from presentator.contracts.people import (
     KindCount,
@@ -20,7 +20,6 @@ from presentator.contracts.people import (
     PersonErasure,
     PersonKind,
 )
-from presentator.ports.decks import BuildRun
 from tests.presentator.application.support.decks_support import (
     DecksFakes,
     a_folder,
@@ -216,13 +215,10 @@ def test_an_unknown_subjects_dry_run_does_not_list_running_work() -> None:
 
 
 def _runs_of(instance: Instance, source_id: str) -> frozenset[BuildRun]:
-    builder = instance.fakes.builder
     return frozenset(
-        run
+        deck.build.run
         for deck in instance.fakes.store.for_source(source_id)
         if deck.build is not None
-        for path in (deck.build.directory, deck.build.pdf)
-        if (run := builder.run_of(path)) is not None
     )
 
 
@@ -318,28 +314,6 @@ def test_a_leftover_counts_only_what_this_attempt_removed() -> None:
         PersonKind.MIRRORS: 1,
         PersonKind.BUILDS: 1,
     }
-
-
-def test_a_build_no_run_owns_fails_loud_after_the_other_sources_went() -> None:
-    """PE15: the erasure goes on, keeps the account, then names the id."""
-    instance = an_instance()
-    store = instance.fakes.store
-    (deck,) = store.for_source("decks-id")
-    decks_runs = _runs_of(instance, "decks-id")
-    talks_runs = _runs_of(instance, "talks-id")
-    store.misplace_build(deck.slug, talk=Path("/nowhere/a-run/out/talk"))
-
-    with pytest.raises(RuntimeError, match="decks-id") as raised:
-        instance.people.erase_person(THE_PERSON.id, dry_run=False)
-
-    assert "decks" not in str(raised.value).replace("decks-id", "")
-    assert _owned_source_ids(instance) == {"decks-id"}
-    assert store.for_source("decks-id")
-    assert store.for_source("talks-id") == ()
-    assert decks_runs <= instance.fakes.builder.on_disk
-    assert talks_runs
-    assert not talks_runs & instance.fakes.builder.on_disk
-    assert THE_PERSON.id in instance.users.users
 
 
 @dataclass

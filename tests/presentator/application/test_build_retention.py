@@ -13,15 +13,13 @@ from presentator.application.decks import (
 )
 from presentator.contracts.decks import (
     MANIFEST_FILE,
-    Build,
+    BuildRun,
     Deck,
     DeckFolder,
     Source,
     SourcePoll,
 )
-from presentator.ports.decks import BuildRun
 from tests.presentator.application.support.build_retention_support import (
-    THE_COMMIT,
     THE_MOMENT,
     THE_OWNER,
     THE_SOURCE,
@@ -39,8 +37,6 @@ from tests.presentator.application.support.decks_support import (
     having,
 )
 from tests.presentator.application.support.fakes import (
-    BUILDS_ROOT,
-    THE_TOOLCHAIN,
     FakeBuildRunner,
     FakeDeckFolders,
     FakeDeckStore,
@@ -163,14 +159,6 @@ def test_a_deck_marked_removed_keeps_its_run() -> None:
     assert runs_left(builder) == {"run-1"}
 
 
-def test_a_talk_and_its_pdf_in_different_runs_keep_both() -> None:
-    """A PDF in a different run from its talk."""
-    assert swept(
-        a_row("split", build=a_build_in("talk-run", "pdf-run")),
-        on_disk=("talk-run", "pdf-run", "leftover"),
-    ) == {"talk-run", "pdf-run"}
-
-
 def test_without_any_row_every_run_goes() -> None:
     """No row naming any run."""
     assert swept(on_disk=("one", "two")) == set()
@@ -192,46 +180,6 @@ def test_a_run_that_would_not_go_is_tried_again_by_the_next_pass() -> None:
     decks.refresh()
 
     assert runs_left(builder) == set()
-
-
-@pytest.mark.parametrize(
-    "stored",
-    [
-        pytest.param(
-            Build(
-                directory=BUILDS_ROOT.parent / "elsewhere" / "run" / "out" / "talk",
-                pdf=BUILDS_ROOT.parent / "elsewhere" / "run" / "out" / "deck.pdf",
-                commit=THE_COMMIT,
-                built_at=THE_MOMENT,
-                toolchain=None,
-            ),
-            id="outside-the-root",
-        ),
-        pytest.param(
-            Build(
-                directory=BUILDS_ROOT / "run" / "commit" / "talk",
-                pdf=BUILDS_ROOT / "run" / "commit" / "deck.pdf",
-                commit=THE_COMMIT,
-                built_at=THE_MOMENT,
-                toolchain=None,
-            ),
-            id="wrongly-shaped-inside-the-root",
-        ),
-    ],
-)
-def test_a_row_naming_a_path_no_run_owns_stops_the_sweep_without_deleting(
-    stored: Build, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """Row outside the root, wrongly shaped path inside it."""
-    with json_logged(capsys) as logged:
-        left = swept(
-            a_row("odd", build=stored),
-            a_row("fine", build=a_build_in("delivered")),
-            on_disk=("delivered", "other"),
-        )
-
-    assert left == {"delivered", "other"}
-    assert refusals_in(logged) == ["run_not_under_the_builds_root"]
 
 
 def test_a_sweep_that_took_runs_off_disk_writes_one_line_with_its_counts(
@@ -593,28 +541,20 @@ def test_a_purged_rows_run_another_row_names_stays() -> None:
 
 
 def test_a_refused_sweep_leaves_the_purged_rows_run_to_the_next_pass() -> None:
-    unplaced = Build(
-        directory=BUILDS_ROOT / "talk",
-        pdf=BUILDS_ROOT / "deck.pdf",
-        commit=THE_COMMIT,
-        built_at=THE_MOMENT,
-        toolchain=THE_TOOLCHAIN,
-    )
     instance = a_month_after_a_miss(
         a_row("gone", build=a_build_in("old")),
-        a_row("odd", build=unplaced),
-        carried=(a_folder("odd"),),
+        carried=(),
     )
     laid_down(instance.fakes.builder, "old")
+    instance.fakes.builder.listing_fails = True
 
     instance.on_day(_KEPT)
-    assert set(instance.store.kept) == {"odd"}
+    assert instance.store.kept == {}
     assert instance.runs == {"old"}
 
-    instance.store.put_build("odd", a_build_in("placed"))
-    laid_down(instance.fakes.builder, "placed")
+    instance.fakes.builder.listing_fails = False
     instance.on_day(_KEPT + 1)
-    assert instance.runs == {"placed"}
+    assert instance.runs == set()
 
 
 def test_a_purged_row_without_a_build_touches_no_run() -> None:

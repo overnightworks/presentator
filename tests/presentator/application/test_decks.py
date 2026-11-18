@@ -1533,7 +1533,7 @@ def test_removing_a_source_deletes_its_rows_forgets_its_mirror_and_its_builds() 
     assert store.all() == ()
     assert fakes.store.all() == ()
     assert fakes.store.get("kundenfeedback") is None
-    assert fakes.builder.removed == [fakes.builder.run_of(built.build.directory)]
+    assert fakes.builder.removed == [built.build.run]
     assert mirror.forgotten == [SOURCE.id]
     assert fakes.source_runs.recent(SOURCE.id) == ()
 

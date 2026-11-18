@@ -168,6 +168,8 @@ def bare_environment(
     monkeypatch.setenv("PRESENTATOR_TOOLCHAIN", str(toolchain))
     monkeypatch.setenv("PRESENTATOR_PUBLIC_ORIGIN", A_BROWSERS_ADDRESS)
     monkeypatch.setenv("PRESENTATOR_REDIS_URL", NOTHING_LISTENS_HERE)
+    # The tests that reach the object store name its bucket themselves.
+    monkeypatch.setenv("PRESENTATOR_S3_BUCKET", "presentator")
     configure_oidc(monkeypatch, tmp_path)
     monkeypatch.setenv("PRESENTATOR_AGENT__BACKEND", "litellm")
     monkeypatch.setenv("PRESENTATOR_AGENT__GATEWAY__ORIGIN", A_GATEWAY_ORIGIN)

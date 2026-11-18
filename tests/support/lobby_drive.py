@@ -36,6 +36,7 @@ from presentator.contracts.decks import (
     BuildFailure,
     BuildFailureReason,
     BuildOutcome,
+    BuildRun,
     Deck,
     DeckState,
 )
@@ -204,6 +205,7 @@ class _Newcomers:
             self.decks.put_build(
                 slug,
                 Build(
+                    run=BuildRun("the-example-talk"),
                     directory=BUILT_TALK,
                     pdf=_A_PDF_NOBODY_WROTE if record.pdf else EXPORTED_PDF,
                     commit=_SOME_COMMIT,

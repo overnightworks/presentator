@@ -26,6 +26,7 @@ from webauth.ports import RateLimitBackend, SignInTransaction
 from webauth.proxies import TrustedProxies
 
 from presentator.adapters.audit import LoggingAuditSink
+from presentator.adapters.build_cache import BuildCache
 from presentator.adapters.build_worker import WorkerToolchain
 from presentator.adapters.builds import (
     DeckToolchain,
@@ -33,7 +34,7 @@ from presentator.adapters.builds import (
     PackageJsonThemes,
     SlidevBuilds,
 )
-from presentator.adapters.deck_texts import MirroredDeckTexts
+from presentator.adapters.deck_texts import BuiltDeckTexts
 from presentator.adapters.decks import (
     MirroredConnectionChecker,
     MirroredDeckFolders,
@@ -64,6 +65,7 @@ from presentator.adapters.postgres.sources import (
     PostgresSourceCredentials,
     PostgresSourceStore,
 )
+from presentator.adapters.run_store import StoredRuns, object_store_client
 from presentator.adapters.secrets import (
     SecretBox,
     TokenWebhookSecrets,
@@ -132,7 +134,7 @@ from presentator.host.store_connection import (
     timed_connection,
 )
 from presentator.host.worker_serving import emergency_end
-from presentator.ports.copresenter import AskLimiter
+from presentator.ports.copresenter import AskLimiter, DeckTexts
 from presentator.ports.decks import (
     DeckStore,
     DeployKeyDrafts,
@@ -217,7 +219,11 @@ def build_instance(
             credentials=stores.credentials,
             pull_timeout=_source_timeout(settings),
         )
-        decks = _decks(settings, stores, mirrors=mirrors, toolchain=toolchain)
+        cache = _build_cache(settings)
+        decks = _decks(
+            settings, stores, mirrors=mirrors, cache=cache, toolchain=toolchain
+        )
+        texts = BuiltDeckTexts(cache=cache)
         lobby_auth, talk_auth = installed_auths(
             settings, shell, stores.identity_writes, redis, relying_party_for
         )
@@ -227,7 +233,7 @@ def build_instance(
                 stores,
                 decks=decks,
                 auth=lobby_auth,
-                mirrors=mirrors,
+                texts=texts,
                 shell=shell,
             ),
             talk=_talk(
@@ -235,7 +241,7 @@ def build_instance(
                 stores,
                 decks,
                 talk_auth,
-                mirrors,
+                texts,
                 redis=redis,
                 stopping=stopping,
             ),
@@ -352,7 +358,7 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
     *,
     decks: Decks,
     auth: InstalledAuth,
-    mirrors: SourceMirrors,
+    texts: DeckTexts,
     shell: LobbyShell,
 ) -> FastAPI:
     """The lobby over the use cases, the sign-in wiring and the agent's front."""
@@ -370,7 +376,7 @@ def _lobby(  # noqa: PLR0913 - the composition root hands the lobby each owner
         own_decks=OwnDecks(
             decks=decks.store,
             sources=decks.sources,
-            texts=MirroredDeckTexts(mirrors=mirrors),
+            texts=texts,
         ),
         shell=shell,
         readiness=stores.readiness,
@@ -404,6 +410,15 @@ def _lobby_shell(settings: Settings) -> LobbyShell:
         ) from None
 
 
+def _build_cache(settings: Settings) -> BuildCache:
+    """The runs on this disk, kept in the store through this process's one client."""
+    return BuildCache(
+        root=settings.builds,
+        store=StoredRuns(client=object_store_client(), bucket=settings.s3_bucket),
+        bound_bytes=settings.build_cache_bytes,
+    )
+
+
 def _source_timeout(settings: Settings) -> timedelta:
     """The one bound a pull and a connection check both take."""
     return timedelta(seconds=settings.source_timeout_seconds)
@@ -414,6 +429,7 @@ def _decks(
     stores: Stores,
     *,
     mirrors: SourceMirrors,
+    cache: BuildCache,
     toolchain: ToolchainIdentity,
 ) -> Decks:
     """The deck use cases over the adapters the instance chose."""
@@ -424,7 +440,7 @@ def _decks(
         folders=MirroredDeckFolders(mirrors=mirrors),
         store=stores.deck_store,
         builder=SlidevBuilds(
-            builds=settings.builds,
+            cache=cache,
             identity=toolchain,
             toolchain=_what_builds_a_deck(settings, bound=build_bound),
             mirrors=mirrors,
@@ -453,7 +469,7 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
     stores: Stores,
     decks: Decks,
     auth: InstalledAuth,
-    mirrors: SourceMirrors,
+    texts: DeckTexts,
     *,
     redis: SharedRedis,
     stopping: Stopping,
@@ -465,7 +481,7 @@ def _talk(  # noqa: PLR0913 - the composition root hands the talk host each owne
         auth=auth,
         lobby_origin=settings.public_origin,
         copresenter=_copresenter_surface(
-            settings, stores.sessions, decks, auth, mirrors, redis, stopping
+            settings, stores.sessions, decks, auth, texts, redis, stopping
         ),
         readiness=stores.readiness,
     )
@@ -476,7 +492,7 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
     sessions: PostgresSessionRecordStore,
     decks: Decks,
     auth: InstalledAuth,
-    mirrors: SourceMirrors,
+    texts: DeckTexts,
     redis: SharedRedis,
     stopping: Stopping,
 ) -> CoPresenterSurface:
@@ -490,7 +506,7 @@ def _copresenter_surface(  # noqa: PLR0913, PLR0917 - the composition root hands
             ),
             decks=decks.store,
             sources=decks.sources,
-            texts=MirroredDeckTexts(mirrors=mirrors),
+            texts=texts,
             boundaries=split_sentences,
             speaking=SpeechSpeaking(
                 settings.speech_service, voices=settings.speech_voices()

@@ -47,6 +47,8 @@ MINIMUM_KEY_LENGTH: Final = 32
 DEFAULT_BUILD_TIMEOUT_SECONDS: Final = 300.0
 # What the web and the build worker both bound one build's output by.
 DEFAULT_BUILD_OUTPUT_MEGABYTES: Final = 300
+# Room for a dozen talks at the bound one build may leave.
+DEFAULT_BUILD_CACHE_BYTES: Final = 4 * 1024**3
 # The watchdog cannot be armed for longer than threading.TIMEOUT_MAX, and the
 # worker's fixed phases and the clock offset come on top of the build step.
 LONGEST_BUILD_TIMEOUT_SECONDS: Final = threading.TIMEOUT_MAX / 2
@@ -310,9 +312,14 @@ class Settings(
     redis_url: RedisUrl = Field(repr=False)
     redis_password_file: AbsolutePath | None = None
     mirrors: Path = Path("mirrors")
-    # Where built talks are kept, and the Node project whose Slidev builds
-    # them; both are places on the machine the instance runs on.
+    # The bucket every process keeps the built talks in; the endpoint, region
+    # and key come from the environment boto3 reads. A deployment fact: no default.
+    s3_bucket: str = Field(min_length=1)
+    # Where built talks are built and cached on this machine, past how many
+    # bytes the cache lets the least recently served go, and the Node project
+    # whose Slidev builds them.
     builds: Path = Path("builds")
+    build_cache_bytes: int = Field(default=DEFAULT_BUILD_CACHE_BYTES, gt=0)
     toolchain: Path = Path("slidev")
     # Where the lobby app's build lies; a direct run serves the checkout's
     # `pnpm build` output, and the image fixes it to the copy it carries.

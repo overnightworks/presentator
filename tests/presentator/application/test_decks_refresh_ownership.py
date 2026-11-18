@@ -4,7 +4,8 @@ from datetime import timedelta
 
 import pytest
 
-from presentator.ports.decks import BuildRun, RefreshOwnershipTimedOutError
+from presentator.contracts.decks import BuildRun
+from presentator.ports.decks import RefreshOwnershipTimedOutError
 from tests.presentator.application.support.decks_support import (
     NOW,
     SOURCE,

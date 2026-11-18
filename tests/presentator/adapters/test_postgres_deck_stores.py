@@ -13,6 +13,7 @@ from presentator.contracts.decks import (
     BuildAttempt,
     BuildFailure,
     BuildOutcome,
+    BuildRun,
     Deck,
     Source,
     SourceRun,
@@ -151,6 +152,7 @@ def _a_deck(
 
 def _a_build(commit: str, *, toolchain: str | None = _DIGEST) -> Build:
     return Build(
+        run=BuildRun(f"run-{commit}"),
         directory=Path(f"/builds/{commit}/talk é"),
         pdf=Path(f"/builds/{commit}/deck.pdf"),
         commit=commit,

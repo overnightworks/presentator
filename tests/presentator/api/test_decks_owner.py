@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from httpx2 import Response
 from sqlalchemy import Engine
 
-from presentator.contracts.decks import Build, Deck, Source
+from presentator.contracts.decks import Build, BuildRun, Deck, Source
 from presentator.contracts.models import Role, User
 from tests.presentator.api.support import source_api_support
 from tests.presentator.application.support.fakes import FakeBuildRunner, FakeDeckStore
@@ -72,7 +72,12 @@ def _store_of_built_decks(
         store.put_build(
             slug,
             Build(
-                directory=talk, pdf=pdf, commit=_COMMIT, built_at=NOW, toolchain=None
+                run=BuildRun("run"),
+                directory=talk,
+                pdf=pdf,
+                commit=_COMMIT,
+                built_at=NOW,
+                toolchain=None,
             ),
         )
     return store

@@ -29,6 +29,7 @@ from presentator.application.source_state import (
 )
 from presentator.contracts.decks import (
     AccessKind,
+    Artefacts,
     BuildAttempt,
     ConnectionCheckResult,
     Deck,
@@ -105,11 +106,11 @@ class SourceRemovalRefusal(StrEnum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SourceRemovalRefused:
-    """A removal that deleted no row; `builds` is nothing where none was attempted."""
+    """A removal that deleted no row, and what stayed."""
 
     reason: SourceRemovalRefusal
     mirror: PurePosixPath | None
-    builds: tuple[PurePosixPath, ...] | None
+    builds: tuple[PurePosixPath, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -356,11 +357,10 @@ class Decks:
         a file, and none takes the refresh over until the removal ended. Name
         and counts are read inside the lock: a source removed meanwhile is
         unknown, and changed counts are handed back rather than deleted under a
-        number nobody confirmed. Disk goes first: if the
-        mirror or a run survives, or a build lies where no run can be placed, no
-        row is deleted and the refusal names what stayed, so the source stays
-        taken rather than a leftover becoming an address a later add reopens
-        with a new secret (R3); a clean disk frees the URL (R2).
+        number nobody confirmed. Disk and store go first: if the mirror or a run
+        survives, no row is deleted and the refusal names what stayed, so the
+        source stays taken rather than a leftover becoming an address a later
+        add reopens with a new secret (R3); a clean disk frees the URL (R2).
         """
         with self.one_at_a_time, self.ownership.hold(), self.ownership.fenced():
             source = self._named(name)
@@ -645,11 +645,12 @@ class Decks:
         )
 
     def built_talk(self, slug: str, *, viewer: str) -> Path | None:
-        """The directory the viewer's deck's talk is delivered from, while built."""
-        deck = self._owned(slug, viewer)
-        if deck is None or deck.build is None:
-            return None
-        return deck.build.directory
+        """The directory the viewer's deck's talk is delivered from, while built.
+
+        The first ask in this process fetches the talk from the store.
+        """
+        kept = self._kept(slug, viewer)
+        return None if kept is None else kept.directory
 
     def exported_pdf(self, slug: str, *, viewer: str) -> Path | None:
         """The file the deck's PDF is handed over as, while one is exported.
@@ -660,10 +661,15 @@ class Decks:
         """
         if not is_a_plain_folder_name(slug):
             return None
+        kept = self._kept(slug, viewer)
+        return None if kept is None else kept.pdf
+
+    def _kept(self, slug: str, viewer: str) -> Artefacts | None:
+        """What the viewer's deck's build left, on this process's disk."""
         deck = self._owned(slug, viewer)
         if deck is None or deck.build is None:
             return None
-        return deck.build.pdf
+        return self.builder.kept(deck.build)
 
     def open_build_file(self, written: Path) -> BinaryIO | None:
         """A file a build wrote, opened to be delivered, or nothing if it is not one."""

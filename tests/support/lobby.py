@@ -42,6 +42,7 @@ from webauth.ports import (
 
 from gitmirror.model import CredentialReference
 from presentator.adapters.audit import LoggingAuditSink
+from presentator.adapters.build_cache import BuildCache
 from presentator.adapters.builds import (
     HostToolchain,
     PackageJsonThemes,
@@ -67,6 +68,7 @@ from presentator.application.people import People
 from presentator.application.preferences import Preferences
 from presentator.contracts.decks import (
     Build,
+    BuildRun,
     ConnectionCheckResult,
     Deck,
     DeckFolder,
@@ -106,6 +108,7 @@ from tests.presentator.application.support.fakes import (
 from tests.support.deck_text_support import FakeDeckTexts
 from tests.support.postgres import NO_DATABASE_HERE
 from tests.support.redis import NOTHING_LISTENS_HERE, in_process_rate_limits
+from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects
 
 
 def _write_throwaway_file(content: str) -> Path:
@@ -307,6 +310,7 @@ def a_settings() -> Settings:
         database_url=NO_DATABASE_HERE,
         database_password_file=Path("/run/database-password"),
         redis_url=SecretStr(NOTHING_LISTENS_HERE),
+        s3_bucket="presentator",
         public_origin=A_BROWSERS_ADDRESS,
         talk_origin=A_TALK_ADDRESS,
         agent=an_agent_config(),
@@ -708,7 +712,11 @@ class _NoCredentials:
 def real_builds_under(root: Path) -> SlidevBuilds:
     """The real adapter over a real directory; only what it reads is ever used."""
     return SlidevBuilds(
-        builds=root,
+        cache=BuildCache(
+            root=root,
+            store=DirectoryRunObjects(root / "store"),
+            bound_bytes=A_CACHE_BOUND,
+        ),
         identity=THE_TOOLCHAIN,
         toolchain=HostToolchain(project=root, bound=timedelta(minutes=1)),
         mirrors=SourceMirrors(
@@ -726,7 +734,7 @@ def a_swapped_build(tmp_path: Path, *, slug: str) -> tuple[GivenDecks, Path]:
     The deck was adopted with plain files; each test then lays its link, which
     is what a deck's own code can do after the build was held.
     """
-    run = tmp_path / "run"
+    run = tmp_path / "run" / "out"
     talk = run / "talk"
     (talk / "assets").mkdir(parents=True)
     (talk / "index.html").write_text("<h1>a talk</h1>", encoding="utf-8")
@@ -748,7 +756,14 @@ def a_swapped_build(tmp_path: Path, *, slug: str) -> tuple[GivenDecks, Path]:
     )
     store.put_build(
         slug,
-        Build(directory=talk, pdf=pdf, commit=_A_COMMIT, built_at=NOW, toolchain=None),
+        Build(
+            run=BuildRun("run"),
+            directory=talk,
+            pdf=pdf,
+            commit=_A_COMMIT,
+            built_at=NOW,
+            toolchain=None,
+        ),
     )
     given = GivenDecks(
         store=store,
@@ -789,6 +804,7 @@ def put_a_built_deck(
     store.put_build(
         slug,
         Build(
+            run=BuildRun("the-example-talk"),
             directory=BUILT_TALK,
             pdf=EXPORTED_PDF,
             commit=_BUILT_DECK_COMMIT,

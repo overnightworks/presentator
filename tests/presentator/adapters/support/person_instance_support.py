@@ -9,6 +9,7 @@ from typing import Protocol
 from pydantic import SecretStr
 from webauth.ports import SessionRecordStore
 
+from presentator.adapters.build_cache import BuildCache
 from presentator.adapters.builds import HostToolchain, SlidevBuilds
 from presentator.adapters.decks import MirroredDeckFolders, SourceMirrors
 from presentator.adapters.secrets import TokenWebhookSecrets
@@ -16,6 +17,7 @@ from presentator.application.decks import Decks
 from presentator.application.people import People
 from presentator.contracts.decks import (
     Build,
+    BuildRun,
     Deck,
     Source,
     SourceRun,
@@ -36,6 +38,7 @@ from tests.presentator.application.support.fakes import (
     FrozenClock,
 )
 from tests.support.people import a_session_id
+from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects
 
 _NOW = datetime(2026, 1, 15, 9, tzinfo=UTC)
 THE_PERSON = User(id="the-person", username="pia", role=Role.ADMIN)
@@ -139,6 +142,7 @@ def _seed_deck(stores: Stores, person: User, source: Source, build: Path) -> Non
     stores.decks.put_build(
         slug,
         Build(
+            run=BuildRun(build.parent.parent.name),
             directory=build,
             pdf=build.parent / "deck.pdf",
             commit=_COMMIT,
@@ -169,7 +173,11 @@ def _decks_application(
         folders=MirroredDeckFolders(mirrors=mirrors),
         store=stores.decks,
         builder=SlidevBuilds(
-            builds=builds,
+            cache=BuildCache(
+                root=builds,
+                store=DirectoryRunObjects(tmp_path / "store"),
+                bound_bytes=A_CACHE_BOUND,
+            ),
             identity=THE_TOOLCHAIN,
             toolchain=HostToolchain(project=tmp_path, bound=_A_BOUND),
             mirrors=mirrors,

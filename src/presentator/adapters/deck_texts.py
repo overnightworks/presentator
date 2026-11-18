@@ -1,27 +1,35 @@
-"""The words of a deck, read from its built commit in the source's mirror.
+"""The words of a deck, read from the run its talk was built in.
 
 Slidev owns the real parser. This reader is the honest subset a voice needs:
 Slidev's `---` separators and per-slide frontmatter, a heading as the title,
 the last HTML comment as speaker notes. It is not a second slide map.
 """
 
+import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
-from gitmirror.model import MirrorError, Revision
+from presentator.adapters.build_cache import BuildCache
+from presentator.adapters.build_tree import opened_without_a_link
 from presentator.adapters.deck_manifest import (
     DeckManifest,
     MalformedManifestError,
     read_manifest,
 )
-from presentator.adapters.decks import SourceMirrors
 from presentator.contracts.copresenter import (
     CoPresenterUnavailableError,
     DeckText,
     SlideText,
 )
-from presentator.contracts.decks import MANIFEST_FILE, SLIDES_FILE, Deck, Source
+from presentator.contracts.decks import (
+    DECK_DIRECTORY,
+    MANIFEST_FILE,
+    SLIDES_FILE,
+    Deck,
+    Source,
+)
 
 _SEPARATOR: Final = "---"
 _FENCE_OPEN = re.compile(r"^\s*`+")
@@ -32,43 +40,49 @@ _NO_MANIFEST = DeckManifest(title=None, language=None)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class MirroredDeckTexts:
-    """Reads a deck's words out of the mirror of the source it came from."""
+class BuiltDeckTexts:
+    """Reads a deck's words out of the run its standing talk was built in."""
 
-    mirrors: SourceMirrors
+    cache: BuildCache
 
     def text_of(self, deck: Deck, source: Source) -> DeckText | None:
         """The deck's title, language and slides at its built commit.
 
         Nothing while the deck has no build or its commit carries no slides;
-        a mirror that cannot be read is unavailable.
+        a run the store cannot hand over is unavailable.
         """
+        del source
         if deck.build is None:
             return None
-        mirror = self.mirrors.of(source)
-        if mirror is None:
+        run = self.cache.local(deck.build.run.name)
+        if run is None:
             raise CoPresenterUnavailableError
-        revision = Revision(ref=source.ref, commit=deck.build.commit)
-        path = source.deck_path(deck.slug)
+        under = self.cache.root.absolute()
         try:
-            names = {entry.name for entry in mirror.entries(revision, inside=path)}
-            if SLIDES_FILE not in names:
+            markdown = _read(run / DECK_DIRECTORY / SLIDES_FILE, under=under)
+            if markdown is None:
                 return None
-            markdown = mirror.read(revision, f"{path}/{SLIDES_FILE}").decode()
-            manifest_bytes = (
-                mirror.read(revision, f"{path}/{MANIFEST_FILE}")
-                if MANIFEST_FILE in names
-                else None
-            )
-        except (MirrorError, UnicodeDecodeError) as unreadable:
+            text = markdown.decode()
+        except UnicodeDecodeError as unreadable:
             raise CoPresenterUnavailableError from unreadable
-        slides = _slides(markdown)
-        manifest = _manifest(manifest_bytes, folder=deck.slug)
+        slides = _slides(text)
+        manifest = _manifest(
+            _read(run / DECK_DIRECTORY / MANIFEST_FILE, under=under), folder=deck.slug
+        )
         return DeckText(
             title=manifest.title or (slides[0].title if slides else deck.slug),
             language=manifest.language,
             slides=slides,
         )
+
+
+def _read(written: Path, *, under: Path) -> bytes | None:
+    """That file of the run, or nothing where it is none: the deck's author wrote it."""
+    found = opened_without_a_link(written.absolute(), under=under)
+    if found is None:
+        return None
+    with os.fdopen(found, "rb") as file:
+        return file.read()
 
 
 def _manifest(manifest: bytes | None, *, folder: str) -> DeckManifest:

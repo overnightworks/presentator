@@ -23,6 +23,7 @@ from presentator.contracts.decks import (
     Build,
     BuildAttempt,
     BuildFailure,
+    BuildRun,
     ConnectionCheckResult,
     Deck,
     DeckFolder,
@@ -39,7 +40,6 @@ from presentator.contracts.models import User
 from presentator.contracts.people import SessionExport, SessionSecretsHeld
 from presentator.contracts.preferences import InstanceSettings, PersonPreferences
 from presentator.ports.decks import (
-    BuildRun,
     RefreshOwnershipLostError,
     RefreshOwnershipTimedOutError,
 )
@@ -563,12 +563,6 @@ class FakeDeckStore:
     def put_build(self, slug: str, build: Build) -> None:
         self.kept[slug] = replace(self.kept[slug], build=build, attempt=None)
 
-    def misplace_build(self, slug: str, *, talk: Path) -> None:
-        """Point a stored build's talk at `talk`, the way a corrupted row would."""
-        deck = self.kept[slug]
-        assert deck.build is not None
-        self.kept[slug] = replace(deck, build=replace(deck.build, directory=talk))
-
     def put_attempt(self, slug: str, attempt: BuildAttempt | None) -> None:
         self.kept[slug] = replace(self.kept[slug], attempt=attempt)
 
@@ -690,6 +684,8 @@ class FakeBuildRunner:
     # The toolchain this runner builds under now; a test moves it the way a
     # release that changes the toolchain does.
     identity: ToolchainIdentity = THE_TOOLCHAIN
+    # Whether the store takes what a build left, the way one that is down does not.
+    store_answers: bool = True
 
     def toolchain_identity(self) -> ToolchainIdentity:
         return self.identity
@@ -717,17 +713,21 @@ class FakeBuildRunner:
             for written in (artefacts.directory, artefacts.pdf)
         )
 
+    def deliver(self, artefacts: Artefacts) -> BuildRun | None:
+        if not self.store_answers:
+            return None
+        return BuildRun(artefacts.directory.parent.parent.name)
+
+    def kept(self, build: Build) -> Artefacts | None:
+        # Fetching is the real adapter's concern; a build here is where it says.
+        return Artefacts(directory=build.directory, pdf=build.pdf)
+
     def read(self, written: Path) -> BinaryIO | None:
         # Links are the real adapter's concern and are proven against it.
         return written.open("rb") if written.is_file() else None
 
     def runs(self) -> frozenset[BuildRun] | None:
         return None if self.listing_fails else frozenset(self.on_disk)
-
-    def run_of(self, path: Path) -> BuildRun | None:
-        if path.parent.name != "out" or path.parent.parent.parent != self.root:
-            return None
-        return BuildRun(path.parent.parent.name)
 
     def remove(self, run: BuildRun) -> PurePosixPath | None:
         self.removed.append(run)

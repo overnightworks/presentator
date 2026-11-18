@@ -1,33 +1,18 @@
-"""A deck's words, read from the mirror of a real repository at its built commit."""
+"""A deck's words, read from the run its talk was built in."""
 
 import time
 from dataclasses import replace
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy import Engine
 
-from presentator.adapters.deck_texts import MirroredDeckTexts
+from presentator.adapters.build_cache import BuildCache
+from presentator.adapters.deck_texts import BuiltDeckTexts
 from presentator.contracts.copresenter import CoPresenterUnavailableError, DeckText
-from presentator.contracts.decks import Build, Deck, Source
-from tests.support.deck_source_support import (
-    a_build,
-    a_deck,
-    a_source,
-    a_source_database,
-    a_source_store,
-    a_source_write,
-    folders_under,
-    mirrors_under,
-)
-from tests.support.git_remote import GitRemote
+from presentator.contracts.decks import Build, Deck
+from tests.support.deck_source_support import a_build, a_deck, a_source
+from tests.support.run_objects import A_CACHE_BOUND, DirectoryRunObjects
 
-if TYPE_CHECKING:
-    from presentator.ports.copresenter import DeckTexts
-
-_PUSHED_AT = datetime(2026, 1, 15, 9, tzinfo=UTC)
 _TALK = "talk"
 _QUICK_SECONDS = 5
 _SLIDES = "# One\nfirst\n\n---\n\n# Two\nsecond\n\n<!-- notes for two -->\n"
@@ -37,32 +22,42 @@ def built(deck: Deck, build: Build) -> Deck:
     return replace(deck, build=build)
 
 
-def read_deck(
-    tmp_path: Path,
-    remote: GitRemote,
-    slug: str,
-    source: Source | None = None,
-) -> DeckText | None:
-    source = a_source(remote.url) if source is None else source
-    folders_under(tmp_path).folders(source)
-    deck = built(a_deck(slug), a_build(tmp_path, commit=remote.head))
-    texts: DeckTexts = MirroredDeckTexts(mirrors=mirrors_under(tmp_path))
-    return texts.text_of(deck, source)
+def texts_under(tmp_path: Path, *, answering: bool = True) -> BuiltDeckTexts:
+    return BuiltDeckTexts(
+        cache=BuildCache(
+            root=tmp_path / "builds",
+            store=DirectoryRunObjects(tmp_path / "store", answering=answering),
+            bound_bytes=A_CACHE_BOUND,
+        )
+    )
+
+
+def lay_down(tmp_path: Path, files: dict[str, str]) -> None:
+    """The deck's tree as the build of `a_build` left it in its run."""
+    deck = tmp_path / "builds" / a_build(tmp_path).run.name / "deck"
+    deck.mkdir(parents=True)
+    (deck.parent / "out").mkdir()
+    for name, text in files.items():
+        (deck / name).write_text(text, encoding="utf-8")
+
+
+def read_deck(tmp_path: Path, slug: str) -> DeckText | None:
+    deck = built(a_deck(slug), a_build(tmp_path))
+    return texts_under(tmp_path).text_of(deck, a_source("git@heimserver:decks.git"))
 
 
 def test_a_built_deck_gives_its_title_language_and_slides_with_notes(
-    remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit(
+    lay_down(
+        tmp_path,
         {
-            f"{_TALK}/slides.md": _SLIDES,
-            f"{_TALK}/deck.toml": 'title = "The Talk"\nlanguage = "en"\n',
+            "slides.md": _SLIDES,
+            "deck.toml": 'title = "The Talk"\nlanguage = "en"\n',
         },
-        at=_PUSHED_AT,
     )
 
-    text = read_deck(tmp_path, remote, _TALK)
+    text = read_deck(tmp_path, _TALK)
 
     assert text is not None
     assert (text.title, text.language) == ("The Talk", "en")
@@ -73,76 +68,62 @@ def test_a_built_deck_gives_its_title_language_and_slides_with_notes(
 
 
 def test_a_deck_without_a_manifest_is_titled_by_its_first_slide(
-    remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit({f"{_TALK}/slides.md": _SLIDES}, at=_PUSHED_AT)
+    lay_down(tmp_path, {"slides.md": _SLIDES})
 
-    text = read_deck(tmp_path, remote, _TALK)
+    text = read_deck(tmp_path, _TALK)
 
     assert text is not None
     assert (text.title, text.language) == ("One", None)
 
 
-def test_a_deck_without_a_build_has_no_words(
-    remote: GitRemote,
-    tmp_path: Path,
-) -> None:
-    remote.commit({f"{_TALK}/slides.md": _SLIDES}, at=_PUSHED_AT)
-    source = a_source(remote.url)
+def test_a_deck_without_a_build_has_no_words(tmp_path: Path) -> None:
+    lay_down(tmp_path, {"slides.md": _SLIDES})
 
-    text = MirroredDeckTexts(mirrors=mirrors_under(tmp_path)).text_of(
-        a_deck(_TALK), source
-    )
+    text = texts_under(tmp_path).text_of(a_deck(_TALK), a_source("git@h:d.git"))
 
     assert text is None
 
 
 def test_a_built_commit_without_slides_has_no_words(
-    remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit({f"{_TALK}/notes.txt": "nothing\n"}, at=_PUSHED_AT)
+    lay_down(tmp_path, {"notes.txt": "nothing\n"})
 
-    assert read_deck(tmp_path, remote, _TALK) is None
+    assert read_deck(tmp_path, _TALK) is None
 
 
-def test_a_commit_the_mirror_does_not_hold_is_unavailable(
-    remote: GitRemote,
-    tmp_path: Path,
+@pytest.mark.parametrize("answering", [True, False], ids=["absent", "not-answering"])
+def test_a_run_neither_here_nor_in_the_store_is_unavailable(
+    tmp_path: Path, *, answering: bool
 ) -> None:
-    remote.commit({f"{_TALK}/slides.md": _SLIDES}, at=_PUSHED_AT)
-    source = a_source(remote.url)
-    folders_under(tmp_path).folders(source)
     deck = built(a_deck(_TALK), a_build(tmp_path))
-    texts = MirroredDeckTexts(mirrors=mirrors_under(tmp_path))
+    texts = texts_under(tmp_path, answering=answering)
 
     with pytest.raises(CoPresenterUnavailableError):
-        texts.text_of(deck, source)
+        texts.text_of(deck, a_source("git@heimserver:decks.git"))
+
+
+def test_a_slides_file_that_is_a_link_gives_no_words(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.md"
+    outside.write_text(_SLIDES, encoding="utf-8")
+    lay_down(tmp_path, {})
+    run = tmp_path / "builds" / a_build(tmp_path).run.name
+    (run / "deck" / "slides.md").symlink_to(outside)
+
+    assert read_deck(tmp_path, _TALK) is None
 
 
 def test_a_deck_whose_manifest_is_unreadable_is_still_read_by_its_slides(
-    remote: GitRemote,
     tmp_path: Path,
 ) -> None:
-    remote.commit(
-        {f"{_TALK}/slides.md": _SLIDES, f"{_TALK}/deck.toml": "not a manifest\n"},
-        at=_PUSHED_AT,
-    )
+    lay_down(tmp_path, {"slides.md": _SLIDES, "deck.toml": "not a manifest\n"})
 
-    text = read_deck(tmp_path, remote, _TALK)
+    text = read_deck(tmp_path, _TALK)
 
     assert text is not None
     assert (text.title, text.language) == ("One", None)
-
-
-def test_a_source_that_no_longer_resolves_is_unavailable(tmp_path: Path) -> None:
-    deck = built(a_deck(_TALK), a_build(tmp_path))
-    texts = MirroredDeckTexts(mirrors=mirrors_under(tmp_path))
-    unresolvable = a_source("not an address")
-
-    with pytest.raises(CoPresenterUnavailableError):
-        texts.text_of(deck, unresolvable)
 
 
 @pytest.mark.parametrize(
@@ -206,14 +187,13 @@ def test_a_source_that_no_longer_resolves_is_unavailable(tmp_path: Path) -> None
     ],
 )
 def test_slides_follow_slidev_separators(
-    remote: GitRemote,
     tmp_path: Path,
     markdown: str,
     expected: list[tuple[int, str]],
 ) -> None:
-    remote.commit({f"{_TALK}/slides.md": markdown}, at=_PUSHED_AT)
+    lay_down(tmp_path, {"slides.md": markdown})
 
-    text = read_deck(tmp_path, remote, _TALK)
+    text = read_deck(tmp_path, _TALK)
 
     assert text is not None
     assert [(s.number, s.title) for s in text.slides] == expected
@@ -255,30 +235,28 @@ def test_slides_follow_slidev_separators(
     ],
 )
 def test_the_last_closed_comment_is_the_notes(
-    remote: GitRemote,
     tmp_path: Path,
     markdown: str,
     body: str,
     notes: str,
 ) -> None:
     """#476 cells 2-6: the last closed comment is the notes, as the regex read it."""
-    remote.commit({f"{_TALK}/slides.md": markdown}, at=_PUSHED_AT)
+    lay_down(tmp_path, {"slides.md": markdown})
 
-    text = read_deck(tmp_path, remote, _TALK)
+    text = read_deck(tmp_path, _TALK)
 
     assert text is not None
     assert (text.slides[0].body, text.slides[0].notes) == (body, notes)
 
 
 def test_unclosed_comment_openers_are_read_in_linear_time(
-    remote: GitRemote,
     tmp_path: Path,
 ) -> None:
     """#476 cell 1: 160 KB of unclosed openers read within the bound."""
-    remote.commit({f"{_TALK}/slides.md": "# T\n" + "<!--" * 40_000}, at=_PUSHED_AT)
+    lay_down(tmp_path, {"slides.md": "# T\n" + "<!--" * 40_000})
 
     started = time.monotonic()
-    text = read_deck(tmp_path, remote, _TALK)
+    text = read_deck(tmp_path, _TALK)
     elapsed = time.monotonic() - started
 
     assert text is not None
@@ -287,44 +265,16 @@ def test_unclosed_comment_openers_are_read_in_linear_time(
 
 
 def test_a_lone_hash_does_not_borrow_a_heading_from_a_later_line(
-    remote: GitRemote,
     tmp_path: Path,
 ) -> None:
     """#476 cell 8 (Decision 3): a heading is one line; a lone # takes no later one."""
     padding = " \n" * 50_000
-    remote.commit({f"{_TALK}/slides.md": f"#{padding}# Found\n"}, at=_PUSHED_AT)
+    lay_down(tmp_path, {"slides.md": f"#{padding}# Found\n"})
 
     started = time.monotonic()
-    text = read_deck(tmp_path, remote, _TALK)
+    text = read_deck(tmp_path, _TALK)
     elapsed = time.monotonic() - started
 
     assert text is not None
     assert text.slides[0].title == "Found"
     assert elapsed < _QUICK_SECONDS
-
-
-def test_a_deck_under_its_sources_folder_is_read_from_there(
-    remote: GitRemote,
-    tmp_path: Path,
-    engine: Engine,
-) -> None:
-    remote.commit(
-        {
-            f"examples/{_TALK}/slides.md": _SLIDES,
-            f"examples/{_TALK}/deck.toml": 'title = "The Nested Talk"\n',
-            f"{_TALK}/slides.md": "# Top level\n",
-        },
-        at=_PUSHED_AT,
-    )
-    store = a_source_store(a_source_database(engine))
-    store.add(a_source_write(remote.url, folder="examples"))
-    (stored,) = store.all()
-
-    text = read_deck(tmp_path, remote, _TALK, stored)
-
-    assert text is not None
-    assert text.title == "The Nested Talk"
-    assert [(slide.number, slide.notes) for slide in text.slides] == [
-        (1, ""),
-        (2, "notes for two"),
-    ]

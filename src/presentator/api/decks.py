@@ -2,12 +2,12 @@
 
 The lobby app is the deck's page and the lobby serves the download; the talk
 host serves the talk, and the page links there. The address names a deck; what
-that deck's row points at is what the talk is served from and what the
-download hands over. Nothing a request carries ever becomes part of a path:
-Starlette's static files resolve every asset below the build directory and
-refuse whatever would leave it, a path that is not a file is the application's
-`index.html`, and the export is the file the row names. The session guard in
-front of the whole lobby covers the download.
+that deck's row names is the run the talk is served from and the download
+hands over, out of this process's copy of the store. Nothing a request carries
+ever becomes part of a path: Starlette's static files resolve every asset below
+the build directory and refuse whatever would leave it, a path that is not a
+file is the application's `index.html`, and the export is the run's PDF. The
+session guard in front of the whole lobby covers the download.
 """
 
 import os
@@ -90,7 +90,10 @@ class _BuiltTalk:
         # The request line names the deck's address, never the path of a file.
         set_route(scope, _DECK_PAGE)
         viewer = gated_person(Request(scope)).id
-        directory = self.decks.built_talk(scope["path_params"]["slug"], viewer=viewer)
+        # The first ask in this process fetches the talk from the store.
+        directory = await run_in_threadpool(
+            self.decks.built_talk, scope["path_params"]["slug"], viewer=viewer
+        )
         if directory is None:
             await Response(status_code=HTTPStatus.NOT_FOUND)(scope, receive, send)
             return

@@ -2,8 +2,7 @@
 
 from datetime import UTC, datetime
 
-from presentator.contracts.decks import Build, Deck, Source
-from presentator.ports.decks import BuildRun
+from presentator.contracts.decks import Build, BuildRun, Deck, Source
 from tests.presentator.application.support.decks_support import a_source, having
 from tests.presentator.application.support.fakes import (
     BUILDS_ROOT,
@@ -35,10 +34,11 @@ def a_row(
     )
 
 
-def a_build_in(talk_run: str, pdf_run: str | None = None) -> Build:
+def a_build_in(run: str) -> Build:
     return Build(
-        directory=BUILDS_ROOT / talk_run / "out" / "talk",
-        pdf=BUILDS_ROOT / (pdf_run or talk_run) / "out" / "deck.pdf",
+        run=BuildRun(run),
+        directory=BUILDS_ROOT / run / "out" / "talk",
+        pdf=BUILDS_ROOT / run / "out" / "deck.pdf",
         commit=THE_COMMIT,
         built_at=THE_MOMENT,
         toolchain=THE_TOOLCHAIN,

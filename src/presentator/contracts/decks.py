@@ -423,6 +423,19 @@ class ToolchainIdentity:
             raise ValueError(message)
 
 
+@dataclass(frozen=True, slots=True)
+class BuildRun:
+    """One run of the build: its name, one segment under the root and in the store."""
+
+    name: str
+
+    def __post_init__(self) -> None:
+        """Refuse a name that reaches anywhere but one directory under the root."""
+        if self.name in {"", ".", ".."} or Path(self.name).name != self.name:
+            message = f"{self.name!r} is not one name directly under the builds root"
+            raise ValueError(message)
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Build:
     """The talk a deck delivers, the commit and toolchain it was built under, and when.
@@ -430,9 +443,12 @@ class Build:
     They travel together because they switch together: a page that named a
     build time of one commit beside the directory of another would lie about
     what is on the screen. No toolchain is a build made before a deck recorded
-    it, which matches no identity.
+    it, which matches no identity. The run names the build in the store every
+    process serves it from; `directory` and `pdf` are where the process that
+    built it left them, written down while a release that reads those stands.
     """
 
+    run: BuildRun
     directory: Path
     pdf: Path
     commit: str
