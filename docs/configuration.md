@@ -88,8 +88,6 @@ some of them.
 | `PRESENTATOR_BUILD_WORKER_ADDRESS` | none | `host:port` of the build workers' Service; required with the `worker` runner and set together with the key file. |
 | `PRESENTATOR_BUILD_WORKER_KEY_FILE` | none | File holding the key (at least 32 characters, minus one trailing newline) that proves the web in the worker's hello; the worker reads the same secret through `--key-file`, as root only. |
 
-The build worker tolerates `PRESENTATOR_WORKER_SEAL` in its environment and reads it nowhere; the platform's manifest still sets it.
-
 ## Trusted proxies and the client address
 
 The client address is the ASGI peer. Empty `PRESENTATOR_TRUSTED_PROXIES` is
