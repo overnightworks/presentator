@@ -624,9 +624,12 @@ describe('presenter controls', () => {
       const { browser, page } = await openPresenterAt(overlayOrigin, `${base}presenter/1`, 1024)
       try {
         const ai = page.getByRole('switch', { name: en['controls.switch'] })
+        const home = page.getByRole('link', { name: en['controls.home'] })
         await ai.waitFor({ state: 'visible', timeout: 2_000 })
-        expect(await page.getByRole('switch', { name: en['controls.switch'] }).count()).toBe(1)
-        expect(await page.getByRole('link', { name: en['controls.home'] }).count()).toBe(1)
+        // Home renders only once the start's /who has answered.
+        await home.waitFor({ state: 'visible', timeout: 5_000 })
+        expect(await ai.count()).toBe(1)
+        expect(await home.count()).toBe(1)
         await ai.click({ timeout: 2_000 })
         // `capturing` (snapshot()) is true only once the package's worklet node
         // runs, which happens after `addModule` resolved against the worklet
