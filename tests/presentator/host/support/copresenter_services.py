@@ -3,7 +3,7 @@
 import asyncio
 import socket
 import threading
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator, Mapping
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from typing import Final
@@ -101,7 +101,15 @@ def a_gateway_and_a_speech_service(gateway: HeldGateway) -> Generator[dict[str, 
 class HearingSocket:
     """A browser's `/hear` WebSocket to one app process, read to its close."""
 
-    def __init__(self, port: int, *, host: str, origin: str, cookie: str) -> None:
+    def __init__(
+        self,
+        port: int,
+        *,
+        host: str,
+        origin: str,
+        cookie: str,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
         """Open the socket at the app's port, as the browser at `origin` does."""
         self._socket = socket.create_connection(("127.0.0.1", port), timeout=_SECONDS)
         self._connection = WSConnection(ConnectionType.CLIENT)
@@ -112,6 +120,10 @@ class HearingSocket:
                 extra_headers=[
                     (b"origin", origin.encode()),
                     (b"cookie", cookie.encode()),
+                    *(
+                        (name.encode(), value.encode())
+                        for name, value in (headers or {}).items()
+                    ),
                 ],
             )
         )
