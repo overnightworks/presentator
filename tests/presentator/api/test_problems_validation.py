@@ -263,6 +263,7 @@ def test_a_string_no_route_can_store_is_answered_422_without_the_input(
     assert {error["type"] for error in answer.json()["detail"]} == {UNSTORABLE_STRING}
     (line,) = request_lines(caplog)
     assert line["status"] == HTTPStatus.UNPROCESSABLE_ENTITY
+    assert line["route"] == sent.path
 
 
 @pytest.mark.parametrize(
@@ -290,12 +291,20 @@ def test_a_string_no_route_can_store_is_answered_422_without_the_input(
     ids=["ask-stray-byte", "settings-encoded-surrogate", "kind-cut-sequence"],
 )
 def test_a_body_that_is_not_utf8_is_answered_as_invalid_json(
-    sent: JsonSent, engine: Engine
+    sent: JsonSent,
+    engine: Engine,
+    json_logging: None,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    del json_logging
+    caplog.set_level(logging.INFO)
+
     answer = _sent_by_the_admin(engine, sent)
 
     is_the_frameworks_validation_answer(answer, marker=_MARKER)
     assert {error["type"] for error in answer.json()["detail"]} == {"json_invalid"}
+    (line,) = request_lines(caplog)
+    assert line["route"] == sent.path
 
 
 _BEYOND_PYTHONS_DIGIT_LIMIT = b"1" * 5000

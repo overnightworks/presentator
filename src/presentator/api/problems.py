@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.annotated_handlers import GetJsonSchemaHandler
 from pydantic.config import JsonDict
 from pydantic_core import CoreSchema, core_schema
+from starlette.exceptions import HTTPException
 from starlette.responses import Response
 
 PROBLEM_MEDIA_TYPE: Final = "application/problem+json"
@@ -152,7 +153,21 @@ class ValidationFaults(BaseModel):
     detail: tuple[ValidationFault, ...]
 
 
-def validation_answer(faults: tuple[ValidationFault, ...]) -> Response:
+class RefusedBody(HTTPException):
+    """A body refused while its route reads it, answered as validation.
+
+    FastAPI re-raises an `HTTPException` that reading a body raises and turns
+    every other error there into a 400, so the refusal is one; raised inside the
+    route, it leaves the request line naming the route template.
+    """
+
+    def __init__(self, fault: ValidationFault) -> None:
+        """Carry the one fault the answer names."""
+        super().__init__(HTTPStatus.UNPROCESSABLE_ENTITY)
+        self.fault = fault
+
+
+def _validation_answer(faults: tuple[ValidationFault, ...]) -> Response:
     """The 422 that names each fault and nothing the request sent."""
     return Response(
         ValidationFaults(detail=faults).model_dump_json(),
@@ -161,9 +176,13 @@ def validation_answer(faults: tuple[ValidationFault, ...]) -> Response:
     )
 
 
+def _answer_refused_body(_request: Request, error: Exception) -> Response:
+    return _validation_answer((cast("RefusedBody", error).fault,))
+
+
 def _answer_validation(_request: Request, error: Exception) -> Response:
     invalid = cast("RequestValidationError", error)
-    return validation_answer(
+    return _validation_answer(
         tuple(
             ValidationFault(loc=fault["loc"], msg=fault["msg"], type=fault["type"])
             for fault in invalid.errors()
@@ -175,3 +194,4 @@ def install_error_answers(app: FastAPI) -> None:
     """Answer every `ProblemError` as problem details, validation without input."""
     app.add_exception_handler(ProblemError, _answer)
     app.add_exception_handler(RequestValidationError, _answer_validation)
+    app.add_exception_handler(RefusedBody, _answer_refused_body)

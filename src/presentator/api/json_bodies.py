@@ -4,11 +4,12 @@ The framework's JSON reader decodes an escaped lone surrogate or an escaped NUL
 into a `str`, and Pydantic refuses a lone surrogate only in a constrained
 string. No answer encodes a lone surrogate as UTF-8, and Postgres keeps no NUL
 in text. A body that is not UTF-8 makes the reader fail outside the validation
-answer. This middleware reads every JSON body before a route does and answers
-both as 422 in the validation answer's shape, naming where the fault is and
-never what it is; a body that is not UTF-8 is `json_invalid`, as one that is not
-JSON is. JSON syntax stays the framework's to judge. Since the body is read
-here, a streamed body over its cap is answered by the size limit's 413.
+answer. This middleware reads every JSON body before a route does, and when the
+route reads it, refuses both as 422 in the validation answer's shape, naming
+where the fault is and never what it is; a body that is not UTF-8 is
+`json_invalid`, as one that is not JSON is. JSON syntax stays the framework's to
+judge. Since the body is read here, a streamed body over its cap is answered by
+the size limit's 413.
 """
 
 import json
@@ -20,7 +21,7 @@ from typing import Final, cast
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from presentator.api.problems import ValidationFault, validation_answer
+from presentator.api.problems import RefusedBody, ValidationFault
 
 UNSTORABLE_STRING: Final = "string_unstorable"
 _JSON_INVALID: Final = "json_invalid"
@@ -115,7 +116,7 @@ class StorableJsonBodies:
     own_readers: frozenset[str] = frozenset()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        """Answer a JSON body no route can take, and hand every other one on."""
+        """Refuse a JSON body no route can take, and hand every other one on."""
         if (
             scope["type"] != "http"
             or scope["path"] in self.own_readers
@@ -125,9 +126,6 @@ class StorableJsonBodies:
             return
         body, cut_short = await _whole_body(receive)
         fault = None if cut_short is not None else _body_fault(body)
-        if fault is not None:
-            await validation_answer((fault,))(scope, receive, send)
-            return
         handed: list[Message] = [
             {"type": "http.request", "body": body, "more_body": cut_short is not None}
         ]
@@ -135,6 +133,11 @@ class StorableJsonBodies:
             handed.append(cut_short)
 
         async def replay() -> Message:
-            return handed.pop(0) if handed else await receive()
+            if not handed:
+                return await receive()
+            message = handed.pop(0)
+            if fault is not None:
+                raise RefusedBody(fault)
+            return message
 
         await self.app(scope, replay, send)
