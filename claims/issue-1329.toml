@@ -1,0 +1,8 @@
+claim_id = "7949c59b946c48749266f08ededf8cf9"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "63f3237c95d387e845cec01ed5e85fc0d30aa68d"
+branch = "claude/issue-1329-every-refused-console-start-writes-one-p"
+scope = ["docs/ARCHITECTURE.md", "docs/configuration.md", "pyproject.toml", "src/presentator/host", "tests/presentator/host", "tests/support"]
+opened_commit = "0df16d020dc895c18776293fa7462e7700b4e0f3"
+whole_reason = "the console scripts' refusal contract spans the host package, its tests, coverage settings and two documents"
