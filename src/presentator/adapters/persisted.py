@@ -11,6 +11,9 @@ role or account kind still fails loud.
 import logging
 from enum import StrEnum
 from functools import cache
+from typing import Final
+
+_UNKNOWN_WORD_EVENT: Final = "persisted_word.unknown_read"
 
 _log = logging.getLogger(__name__)
 
@@ -29,4 +32,4 @@ def read_persisted[Member: StrEnum, Generic](
 @cache
 def _tell_once(words: str, stored: str) -> None:
     """Log each unknown word once per process; every listing would repeat it."""
-    _log.warning("persisted_word.unknown", extra={"words": words, "stored": stored})
+    _log.warning(_UNKNOWN_WORD_EVENT, extra={"words": words, "stored": stored})
