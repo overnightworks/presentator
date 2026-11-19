@@ -164,6 +164,7 @@ def test_a_refused_hello_writes_one_line_naming_its_fault_and_never_the_key(
     assert (line["outcome"], line["reason"]) == ("refused", fault)
     assert KEY.hex() not in logged.text
     assert repr(KEY) not in logged.text
+    assert KEY.decode() not in logged.text
 
 
 def test_a_refused_hello_spends_no_life_and_the_next_verified_one_is_served(

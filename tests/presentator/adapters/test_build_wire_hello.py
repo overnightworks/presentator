@@ -124,15 +124,44 @@ def test_a_worker_that_does_not_prove_the_key_is_refused_by_the_web(
     assert verdicts == [HelloFault.KEY]
 
 
-def test_a_worker_that_proves_with_a_wrong_tag_is_refused_by_the_web(
+def proving_with_a_wrong_tag(connection: socket.socket) -> None:
+    connection.sendall(bytes([HELLO_VERSION]) + b"n" * NONCE_BYTES)
+    connection.sendall(b"t" * TAG_BYTES)
+
+
+def challenging_in_another_version(connection: socket.socket) -> None:
+    connection.sendall(bytes([HELLO_VERSION + 1]) + b"n" * NONCE_BYTES)
+
+
+def closed_inside_the_challenge(connection: socket.socket) -> None:
+    connection.sendall(bytes([HELLO_VERSION]))
+    connection.close()
+
+
+REFUSED_BY_THE_WEB: dict[str, tuple[Callable[[socket.socket], None], HelloFault]] = {
+    "a wrong tag": (proving_with_a_wrong_tag, HelloFault.KEY),
+    "another version": (challenging_in_another_version, HelloFault.VERSION),
+    "closed inside the challenge": (closed_inside_the_challenge, HelloFault.CLOSE),
+}
+
+
+@pytest.mark.parametrize(
+    ("challenge", "fault"),
+    REFUSED_BY_THE_WEB.values(),
+    ids=REFUSED_BY_THE_WEB.keys(),
+)
+def test_a_worker_that_does_not_prove_itself_is_refused_by_the_web_by_its_fault(
     wire: tuple[socket.socket, socket.socket],
+    challenge: Callable[[socket.socket], None],
+    fault: HelloFault,
 ) -> None:
     worker, web = wire
-    worker.sendall(bytes([HELLO_VERSION]) + b"n" * NONCE_BYTES)
-    worker.sendall(b"t" * TAG_BYTES)
+    challenge(worker)
 
-    with pytest.raises(HelloRefusedError):
+    with pytest.raises(HelloRefusedError) as refused:
         answer_hello(web, KEY)
+
+    assert refused.value.fault == fault
 
 
 def test_a_hello_given_no_time_is_refused_as_a_timeout(
@@ -144,16 +173,6 @@ def test_a_hello_given_no_time_is_refused_as_a_timeout(
         verify_hello(worker, KEY, seconds=0)
 
     assert refused.value.fault == HelloFault.TIMEOUT
-
-
-def test_a_worker_of_another_version_is_refused_by_the_web(
-    wire: tuple[socket.socket, socket.socket],
-) -> None:
-    worker, web = wire
-    worker.sendall(bytes([HELLO_VERSION + 1]) + b"n" * NONCE_BYTES)
-
-    with pytest.raises(HelloRefusedError):
-        answer_hello(web, KEY)
 
 
 def test_a_tag_of_one_direction_is_not_the_tag_of_the_other() -> None:

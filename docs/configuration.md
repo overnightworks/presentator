@@ -4,17 +4,18 @@ Audience: the operator whose deployment supplies the settings, and an
 engineer looking one up. Settings are environment variables with the prefix
 `PRESENTATOR_`, read from the process environment and, in development, from a
 gitignored `.env` at the repository root. A refused setting ends the start
-of `presentator` in one `process.failed` line with exit status 1, `reason`
+of either console script in one `process.failed` line with `reason`
 `configuration_refused` and the refused variables in `setting`, never a value
-or a path, so a mistyped secret does not land in the startup output. A
+or a path, so a mistyped secret does not land in the startup output; the exit
+status is 1 for `presentator` and 2 for `presentator-worker`. Any other
 refused start of `presentator-worker` ends in one such line with exit status
-2: its `reason` is `settings` for a refused setting, `key`, `bind` or `listen`
-for the serving step that refused, or the self-check predicate that failed. A
+2: its `reason` is `key`, `bind` or `listen` for the serving step that
+refused, or the self-check predicate that failed. A
 refused command line, of `presentator` or of `presentator-worker`, ends in one
 such line with exit status 2: `argument_refused` names the missing or wrong
-argument in `argument`, such as an empty host or a `--port` outside the port
-range, and `argument_unknown` stands for a word no argument takes, which the
-line leaves out.
+argument in `argument`, such as an empty or blank host or a `--port` outside 1
+to 65535, and `argument_unknown` stands for a word no argument takes, which
+the line leaves out.
 
 ## Every run names
 

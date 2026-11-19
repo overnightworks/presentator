@@ -67,10 +67,10 @@ def read_the_command_line(arguments: Sequence[str] | None) -> argparse.Namespace
     """The command `arguments` ask for; a refused one ends the process in one line.
 
     The command line checks the host itself: argparse names no argument in the
-    refusal of a missing one, and takes an empty word for a host.
+    refusal of a missing one, and takes an empty or blank word for a host.
     """
     asked = read_command_line(_command_line(), arguments)
-    if asked.command == UNPIN_HOST_COMMAND and not asked.host:
+    if asked.command == UNPIN_HOST_COMMAND and not (asked.host or "").strip():
         refuse_argument(_HOST)
     return asked
 

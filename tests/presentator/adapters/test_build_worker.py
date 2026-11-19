@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from presentator.adapters.build_wire import (
+    HELLO_VERSION,
     MAXIMUM_ENTRIES,
     MEGABYTE,
     StepHeader,
@@ -130,6 +131,12 @@ def a_peer_without_the_key() -> Script:
     return answering(nothing_to_reply, key=b"x" * 32)
 
 
+def closing_inside_its_challenge(
+    connection: socket.socket, _seen: Seen, _uploads: Path
+) -> None:
+    connection.sendall(bytes([HELLO_VERSION]))
+
+
 @pytest.mark.parametrize(
     ("script", "fault"),
     [
@@ -146,6 +153,11 @@ def a_peer_without_the_key() -> Script:
         ),
         pytest.param(
             a_peer_without_the_key(), Fault.NOT_THE_WORKER, id="a peer without the key"
+        ),
+        pytest.param(
+            closing_inside_its_challenge,
+            Fault.NOT_THE_WORKER,
+            id="a peer closing inside its challenge",
         ),
     ],
 )
