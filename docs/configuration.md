@@ -13,9 +13,9 @@ refused start of `presentator-worker` ends in one such line with exit status
 refused, or the self-check predicate that failed. A
 refused command line, of `presentator` or of `presentator-worker`, ends in one
 such line with exit status 2: `argument_refused` names the missing or wrong
-argument in `argument`, such as an empty host or a `--port` outside the port
-range, and `argument_unknown` stands for a word no argument takes, which the
-line leaves out.
+argument in `argument`, such as an empty or blank host or a `--port` outside 1
+to 65535, and `argument_unknown` stands for a word no argument takes, which
+the line leaves out.
 
 ## Every run names
 

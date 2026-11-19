@@ -40,6 +40,7 @@ def _run(
     [
         pytest.param(CONSOLE_ENTRY_POINT, ["unpin-host"], "host", id="no host"),
         pytest.param(CONSOLE_ENTRY_POINT, ["unpin-host", ""], "host", id="empty host"),
+        pytest.param(CONSOLE_ENTRY_POINT, ["unpin-host", " "], "host", id="blank host"),
         pytest.param(CONSOLE_ENTRY_POINT, [_A_MISPLACED_WORD], "command", id="command"),
         pytest.param(WORKER_CONSOLE_ENTRY_POINT, [], "--port,--key-file", id="serve"),
         pytest.param(WORKER_CONSOLE_ENTRY_POINT, ["--ready"], "--port", id="ready"),
@@ -57,6 +58,15 @@ def _run(
             ["--ready", "--port", "65536"],
             "--port",
             id="port out of range",
+        ),
+        pytest.param(
+            WORKER_CONSOLE_ENTRY_POINT, ["--port", "0"], "--port", id="serve port 0"
+        ),
+        pytest.param(
+            WORKER_CONSOLE_ENTRY_POINT,
+            ["--ready", "--port", "0"],
+            "--port",
+            id="ready port 0",
         ),
     ],
 )

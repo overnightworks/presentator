@@ -83,6 +83,7 @@ logger = logging.getLogger(__name__)
 
 REFUSAL_EXIT_STATUS = 2
 _PORT: Final = "--port"
+_LOWEST_PORT: Final = 1
 _HIGHEST_PORT: Final = 65535
 _KEY_FILE: Final = "--key-file"
 NOT_READY_EXIT_STATUS = 1
@@ -458,9 +459,9 @@ def _refuse_unless_given(serving_needs: dict[str, object]) -> None:
 
 
 def _tcp_port(word: str) -> int:
-    """The TCP port `word` names; a word outside the port range is refused."""
+    """The TCP port `word` names; 0, which binds any free port, is refused too."""
     port = int(word)
-    if not 0 <= port <= _HIGHEST_PORT:
+    if not _LOWEST_PORT <= port <= _HIGHEST_PORT:
         raise ValueError(port)
     return port
 
