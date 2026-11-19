@@ -66,8 +66,10 @@ filterwarnings = [
 branch = true
 patch = ["subprocess"]
 # design-catalogs writes this module and `design-catalogs --check` holds it
-# current, so its lines have no test of ours to be covered by.
-omit = ["src/presentator/contracts/words.py"]
+# current, so its lines have no test of ours to be covered by. The leading `*/`
+# keeps the pattern matching in a measured subprocess whose working directory
+# is elsewhere, where a relative pattern would resolve against that directory.
+omit = ["*/src/presentator/contracts/words.py"]
 
 [tool.coverage.report]
 fail_under = 100
