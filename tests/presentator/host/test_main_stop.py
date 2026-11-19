@@ -4,16 +4,20 @@ import signal
 import subprocess
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Callable
 from datetime import timedelta
+from functools import partial
 from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, TextClause, text
+from sqlalchemy import Connection, Engine, TextClause, text
 
-from presentator.adapters.postgres.locks import MIGRATION_LOCK, parameters
+from presentator.adapters.postgres.locks import (
+    MIGRATION_LOCK,
+    hold_until_transaction_ends,
+)
 from presentator.host.main import Instance, served_by_host
 from presentator.host.polling import ChoreCode, Schedule
 from presentator.host.stopping_server import interrupt_ends_as_a_stop
@@ -137,25 +141,30 @@ def test_a_sigint_ends_a_served_process_in_its_stop_line_alone(
     assert "process.crashed" not in events
 
 
+def _lock_the_schema_version(holder: Connection) -> None:
+    holder.execute(text("LOCK TABLE alembic_version IN ACCESS EXCLUSIVE MODE"))
+
+
+def _lock_the_pins(holder: Connection) -> None:
+    holder.execute(text("LOCK TABLE host_key_pins IN ACCESS EXCLUSIVE MODE"))
+
+
 @pytest.mark.parametrize(
-    ("arguments", "held", "held_with"),
+    ("arguments", "hold"),
     [
         pytest.param(
             [],
-            text("LOCK TABLE alembic_version IN ACCESS EXCLUSIVE MODE"),
-            {},
+            _lock_the_schema_version,
             id="the start, checking the schema",
         ),
         pytest.param(
             ["migrate"],
-            text("SELECT pg_advisory_xact_lock(:lock_class, :instance)"),
-            parameters(MIGRATION_LOCK),
+            partial(hold_until_transaction_ends, lock=MIGRATION_LOCK),
             id="migrate, waiting for another migration",
         ),
         pytest.param(
             ["unpin-host", "git.example"],
-            text("LOCK TABLE host_key_pins IN ACCESS EXCLUSIVE MODE"),
-            {},
+            _lock_the_pins,
             id="unpin-host, waiting for the pins",
         ),
     ],
@@ -165,14 +174,13 @@ def test_a_sigint_before_any_serving_ends_the_process_in_its_stop_line_alone(
     database_url: str,
     tmp_path: Path,
     arguments: list[str],
-    held: TextClause,
-    held_with: Mapping[str, int],
+    hold: Callable[[Connection], None],
 ) -> None:
     engine = engine_on(database_url)
     port, _ = two_free_ports()
     try:
         with engine.connect() as holder:
-            holder.execute(held, held_with)
+            hold(holder)
             with subprocess.Popen(  # noqa: S603 - the command is this repository's own
                 [str(CONSOLE_ENTRY_POINT), *arguments],
                 env=presentator_environment(
