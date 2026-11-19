@@ -250,20 +250,20 @@ def test_a_store_image_the_node_lost_after_an_import_is_imported_again_and_appli
 @STORES
 def test_a_store_image_the_node_lacks_after_every_import_is_named_with_the_node_images(
     make_fixture: Callable[..., Fixture],
-    driver_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
     store: int,
 ) -> None:
-    imports = driver_module.IMPORTS_PER_IMAGE
-    fixture = make_fixture(World(failing_store=store, store_imports_lost=imports))
+    # One re-import is the most the containment may do.
+    most_imports = 2
+    fixture = make_fixture(World(failing_store=store, store_imports_lost=5))
     with pytest.raises(SystemExit):
         fixture.drive()
     refusal = capsys.readouterr().err
     local = fixture.world.store_images[store]
     assert local in refusal
-    assert f"exited {[0] * imports}" in refusal
+    assert "exited [0, 0]" in refusal
     assert fixture.world.node_images in refusal
-    assert len(fixture.world.issued("k3d", "image", "import", local)) == imports
+    assert len(fixture.world.issued("k3d", "image", "import", local)) == most_imports
     assert fixture.world.applied("Deployment") == []
 
 
