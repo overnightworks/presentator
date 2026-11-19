@@ -228,33 +228,31 @@ def test_a_key_the_real_boundary_refuses_ends_the_start_before_binding(
     assert refusal_reasons(logged) == [StartRefusal.KEY]
 
 
-def test_the_real_boundary_serves_the_port_with_the_key_bounded_by_the_settings(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_serving_on_this_machine_serves_the_port_with_the_key_bounded_by_the_settings(
+    tmp_path: Path,
 ) -> None:
-    served: dict[str, object] = {}
+    key_file = tmp_path / "key"
+    served: list[tuple[int, bytes, Serving]] = []
 
-    def recording_serve(**arguments: object) -> int:
-        served.update(arguments)
+    def recording_serve(
+        *, port: int, key: bytes, serving: Serving, stop_line: StopLine
+    ) -> int:
+        del stop_line
+        served.append((port, key, serving))
         return 0
 
-    def reading(_key_file: Path, *, controller_uid: int) -> bytes:
-        assert controller_uid == 0
-        return KEY
-
-    monkeypatch.setattr(worker, "read_key", reading)
-    monkeypatch.setattr(worker, "serve", recording_serve)
-
-    status = worker.REAL_BOUNDARY.serve(
-        port=PORT,
-        key_file=tmp_path / "key",
-        settings=LOADED_SETTINGS,
-        stop_line=StopLine(),
+    keys = {key_file: KEY}
+    serving_on_this_machine = worker.ServingOnThisMachine(
+        keys.__getitem__, recording_serve
     )
 
-    assert status == 0
-    assert (served["port"], served["key"]) == (PORT, KEY)
-    assert isinstance(served["serving"], Serving)
-    assert (
-        served["serving"].build_timeout_seconds,
-        served["serving"].build_output_megabytes,
-    ) == (45.0, 7)
+    status = serving_on_this_machine(
+        port=PORT, key_file=key_file, settings=LOADED_SETTINGS, stop_line=StopLine()
+    )
+
+    [(port, key, serving)] = served
+    assert (status, port, key) == (0, PORT, KEY)
+    assert (serving.build_timeout_seconds, serving.build_output_megabytes) == (
+        LOADED_SETTINGS.build_timeout_seconds,
+        LOADED_SETTINGS.build_output_megabytes,
+    )
