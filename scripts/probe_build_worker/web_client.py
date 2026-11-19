@@ -21,7 +21,7 @@ from tempfile import mkdtemp
 import logline
 from logline import StepTimer
 
-from presentator.adapters.builds import BuildPlace, BuildStep, slidev_arguments
+from presentator.adapters.builds import BuildPlace, BuildStep
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
     OUTPUT_DIRECTORY,
@@ -73,7 +73,6 @@ def main(decks: Path, kinds: list[StepKind]) -> None:
                 place=place,
                 slug=SLUG,
                 name=kind,
-                arguments=slidev_arguments(kind, place=place, slug=SLUG),
                 watched=lambda: None,
                 line=StepTimer("build_step.ended", logging.getLogger(__name__)),
             ),
