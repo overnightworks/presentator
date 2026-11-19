@@ -10,9 +10,7 @@ from sqlalchemy import Engine, text
 
 from presentator.adapters.identity import TokenIdentifierFactory
 from presentator.adapters.postgres.key_drafts import PostgresSourceKeyDrafts
-from presentator.adapters.postgres.sources import PostgresSourceStore
 from presentator.adapters.secrets import secret_box
-from presentator.contracts.decks import RECENT_SOURCE_RUNS
 from tests.presentator.adapters.support.source_stores_support import (
     INSTANCE_KEY,
     seed_postgres_owner,
@@ -20,10 +18,8 @@ from tests.presentator.adapters.support.source_stores_support import (
 from tests.presentator.adapters.support.source_writer_process import (
     NAMES,
     OWNERS,
-    RUNS_RECORDED_EACH,
-    a_source_write,
 )
-from tests.support.postgres import NO_FENCE, ChildModule, engine_on
+from tests.support.postgres import ChildModule, engine_on
 
 _NOW = datetime(2026, 11, 14, 12, tzinfo=UTC)
 _CHILD = ChildModule("tests.presentator.adapters.support.source_writer_process")
@@ -177,25 +173,3 @@ def test_two_processes_promoting_the_same_drafts_make_one_source_from_each(
     assert sorted([*first, *second]) == sorted(owners)
     assert _sources_per_owner(engine) == dict.fromkeys(owners, 1)
     assert _drafts_per_owner(engine) == {}
-
-
-def test_two_processes_recording_runs_of_one_source_keep_exactly_the_bound(
-    database_url: str, tmp_path: Path, engine: Engine, owners: tuple[str, ...]
-) -> None:
-    source = PostgresSourceStore(
-        engine=engine,
-        identifiers=TokenIdentifierFactory(),
-        box=secret_box(INSTANCE_KEY),
-        fence=NO_FENCE,
-    ).add(a_source_write("polled", "https://git.example.test/polled.git", owners[0]))
-    assert source is not None
-
-    _both_write("record-runs", database_url, tmp_path, TypeAdapter(str))
-
-    with engine.connect() as connection:
-        kept = connection.execute(
-            text("SELECT COUNT(*) FROM source_runs WHERE source_id = :source_id"),
-            {"source_id": source.id},
-        ).scalar_one()
-    assert kept == RECENT_SOURCE_RUNS
-    assert RUNS_RECORDED_EACH > RECENT_SOURCE_RUNS

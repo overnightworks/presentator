@@ -28,8 +28,6 @@ class LockClass(IntEnum):
     MIGRATION = 1
     SIGN_IN = 2
     DEPLOY_KEY_DRAFT = 3
-    SOURCE_RUNS = 4
-    DECK_MARKS = 5
     REFRESH = 6
     TOOLCHAIN_PRESENCE = 7
 
