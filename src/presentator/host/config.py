@@ -34,6 +34,8 @@ from presentator.host.worker_settings import (
     DEFAULT_BUILD_OUTPUT_MEGABYTES,
     DEFAULT_BUILD_TIMEOUT_SECONDS,
     MINIMUM_KEY_LENGTH,
+    BuildOutputMegabytes,
+    BuildTimeoutSeconds,
 )
 
 # Every secret this instance is handed is at least this many characters, so no
@@ -340,7 +342,7 @@ class Settings(
     lobby_build: Path = Path("frontend/build")
     # A build that hangs would hold every later build behind it, so each step
     # of the toolchain is bounded.
-    build_timeout_seconds: float = DEFAULT_BUILD_TIMEOUT_SECONDS
+    build_timeout_seconds: BuildTimeoutSeconds = DEFAULT_BUILD_TIMEOUT_SECONDS
     # A deck is code, so every build runs in the sealed build worker. Running
     # the toolchain on this machine instead is a development run, and it takes
     # saying so.
@@ -352,7 +354,7 @@ class Settings(
     )
     build_worker_key_file: AbsolutePath | None = None
     # What one build may leave behind, in whole megabytes for its talk.
-    build_output_megabytes: int = DEFAULT_BUILD_OUTPUT_MEGABYTES
+    build_output_megabytes: BuildOutputMegabytes = DEFAULT_BUILD_OUTPUT_MEGABYTES
     # Polling is what makes a push arrive at all, so it runs whether or not any
     # host ever calls the hook.
     source_poll_seconds: float = 300.0

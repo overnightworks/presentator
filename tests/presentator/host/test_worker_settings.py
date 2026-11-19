@@ -146,9 +146,7 @@ def test_the_web_and_the_worker_refuse_an_unusable_build_bound_naming_its_variab
     with pytest.raises(ConfigurationError) as refused:
         load()
 
-    other = {TIMEOUT_VARIABLE, MEGABYTES_VARIABLE} - {variable}
-    assert variable in str(refused.value)
-    assert not any(name in str(refused.value) for name in other)
+    assert refused.value.variables == (variable,)
 
 
 def test_a_refusal_never_quotes_the_value_it_refuses(

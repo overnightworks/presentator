@@ -1,7 +1,7 @@
 """What the build worker reads of its environment; it loads nothing of the web's."""
 
 import threading
-from typing import Final
+from typing import Annotated, Final
 
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,19 +18,21 @@ DEFAULT_BUILD_OUTPUT_MEGABYTES: Final = 300
 # worker's fixed phases and the clock offset come on top of the build step.
 LONGEST_BUILD_TIMEOUT_SECONDS: Final = threading.TIMEOUT_MAX / 2
 
+# One build step's bound in seconds and one build's output bound in megabytes:
+# the web and the worker read the same two variables and refuse the same values.
+type BuildTimeoutSeconds = Annotated[
+    float, Field(gt=0, le=LONGEST_BUILD_TIMEOUT_SECONDS, allow_inf_nan=False)
+]
+type BuildOutputMegabytes = Annotated[int, Field(gt=0)]
+
 
 class WorkerSettings(BaseSettings):
     """What the build worker reads of its container's environment, and no file."""
 
     model_config = SettingsConfigDict(env_prefix=ENVIRONMENT_PREFIX, frozen=True)
 
-    build_timeout_seconds: float = Field(
-        default=DEFAULT_BUILD_TIMEOUT_SECONDS,
-        gt=0,
-        le=LONGEST_BUILD_TIMEOUT_SECONDS,
-        allow_inf_nan=False,
-    )
-    build_output_megabytes: int = Field(default=DEFAULT_BUILD_OUTPUT_MEGABYTES, gt=0)
+    build_timeout_seconds: BuildTimeoutSeconds = DEFAULT_BUILD_TIMEOUT_SECONDS
+    build_output_megabytes: BuildOutputMegabytes = DEFAULT_BUILD_OUTPUT_MEGABYTES
 
 
 def worker_settings_variables() -> frozenset[str]:
