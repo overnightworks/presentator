@@ -53,6 +53,7 @@ from probe_build_worker_web import (
     HELLO_PROGRAM,
     INBOUND_PROGRAM,
     Outcome,
+    StepOutcome,
     delivers_the_deck,
     is_an_outage,
 )
@@ -301,45 +302,44 @@ def sampled_while_building(run: Run) -> Generator[str]:
     )
 
 
-def restart_overlap_problem(
-    samples: Iterator[str], first_admitted: float | None, second_admitted: float | None
-) -> str | None:
-    """Why no worker was seen spent beside the others Ready before the second step.
+def restart_overlap_problem(samples: Iterator[str], second: StepOutcome) -> str | None:
+    """Why the second step's first attempt did not begin while a worker restarted.
 
-    The window opens at the first step's admission and closes with the first
-    sample taken at or after the second's, both on the host's clock that the web
-    pod shares: the Ready condition's own time is cut to the second, a sample's
-    stamp is not. A sample in it must show exactly one worker pod not Ready, the
-    spent one, listed not Ready or not listed at all while the StatefulSet
-    replaces it, beside the others Ready. A retried attempt may admit the second
-    step after the spent pod's replacement is Ready, so the window ends with the
-    admission, not at it. An empty or odd listing in it fails with its reading.
+    The first sample taken at or after that attempt, on the host's clock that the
+    web pod shares, must show a worker pod not Ready: the Ready condition's own
+    time is cut to the second, a sample's stamp is not. A retried attempt may
+    admit the step after the spent pod's replacement is Ready again, so the
+    first attempt is judged, not the admission. That sample must list no more
+    than the expected worker pods with exactly one of them not Ready, the
+    restarting one: listed not Ready, or not listed at all while the StatefulSet
+    replaces its spent pod. An empty or odd listing fails with its reading.
     """
-    if first_admitted is None or second_admitted is None:
-        return "a step of the first build was never admitted by a worker"
+    attempted = second.attempted
+    if attempted is None:
+        return "the second step never attempted a worker"
     for line in samples:
         stamp, *statuses = line.split()
-        if float(stamp) < first_admitted:
-            continue
-        if len(statuses) > WORKER_PODS or statuses.count(READY) < WORKER_PODS - 1:
-            return (
-                f"the worker pods between the first build's admissions were not one "
-                f"spent beside {WORKER_PODS - 1} Ready (admitted at {first_admitted} "
-                f"and {second_admitted}, read at {stamp}: {statuses})"
-            )
-        if statuses.count(READY) == WORKER_PODS - 1:
+        if float(stamp) >= attempted:
+            if statuses == [READY] * WORKER_PODS:
+                return (
+                    f"the second step's first attempt began after the first worker "
+                    f"was Ready again (began at {attempted}, admitted at "
+                    f"{second.admitted}, both Ready at {stamp})"
+                )
+            if len(statuses) > WORKER_PODS or statuses.count(READY) != WORKER_PODS - 1:
+                return (
+                    f"the worker pods at the second step's first attempt were not "
+                    f"one restarting beside {WORKER_PODS - 1} Ready (began at "
+                    f"{attempted}, read at {stamp}: {statuses})"
+                )
             return None
-        if float(stamp) >= second_admitted:
-            return (
-                f"no worker was spent before the second step was admitted "
-                f"(admitted at {first_admitted} and {second_admitted}, all Ready "
-                f"from the first through {stamp})"
-            )
-    return "no sample of the worker pods was taken after the second step's admission"
+    return (
+        "no sample of the worker pods was taken after the second step's first attempt"
+    )
 
 
 def first_build_problem(run: Run, deployment: Document, first: Document) -> str | None:
-    """Why the first build did not take both workers, the second after one was spent."""
+    """Why the first build did not take both workers, the second while one restarted."""
     first_workers = uids_of(list_pods(run, WORKER_SELECTOR))
     with (
         contextlib.closing(followed_worker_lines(run)) as worker_lines,
@@ -356,10 +356,7 @@ def first_build_problem(run: Run, deployment: Document, first: Document) -> str 
         )
         if not replaced:
             return "the first build's two steps did not take both worker pods"
-        first_step, second_step = outcome.steps
-        return restart_overlap_problem(
-            samples, first_step.admitted, second_step.admitted
-        )
+        return restart_overlap_problem(samples, outcome.steps[1])
 
 
 def built_over_two_workers(
@@ -381,7 +378,7 @@ def built_over_two_workers(
     say(
         f"cell 11: {first['metadata']['name']} and {second['metadata']['name']} built "
         f"and exported hello-deck through one Service; the first build's two steps "
-        f"took both worker pods, the second step the idle one after the first was spent"
+        f"took both worker pods, the second step tried while the first restarted"
     )
     return None
 

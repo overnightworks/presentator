@@ -68,11 +68,10 @@ unavailable, an outage with no failure of its own. Cell 11 applies the workers'
 documents with two replicas, runs two web pods and builds hello-deck in each
 through the one Service; each web's client builds and exports, a worker's life
 ends with each step, and the first build's two steps must have replaced both
-worker pods, and a sample of the worker pods taken from its first step's
-admission through the first sample at or after its second step's must show one
-worker not Ready beside the other Ready, so the first was spent before the
-second step reached the idle worker; a retried attempt may admit that step only
-after the spent pod's replacement is Ready again.
+worker pods, and a sample of the worker pods taken at or after its second
+step's first attempt must show a worker not Ready, so that step began while the
+first restarted; a retried attempt may admit it after the spent pod's
+replacement is Ready again.
 Cell 12 runs a program in a web pod that answers the workers'
 challenge under a wrong key and under the right key with the other direction's
 label: both are refused, a true hello is served, and both worker pods keep their

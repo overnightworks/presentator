@@ -1,11 +1,13 @@
-"""The web probe's client times a step's admission from the run directory it watches."""
+"""The web probe's client times a step's first attempt and its admission."""
 
 import socket
+import sys
 import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -23,7 +25,14 @@ from tests.presentator.adapters.support.build_worker_support import (
 OBSERVATION_SECONDS = 10
 
 
-def test_a_step_a_worker_admitted_reports_when_and_leaves_the_client_unchanged(
+def heard_connects(web_client: ModuleType, volume: Path) -> Any:  # noqa: ANN401 - the client's WorkerConnects, loaded by name
+    """The client's record of connects to the worker's port, hooked in here."""
+    connects = web_client.WorkerConnects(toolchain(volume).port)
+    sys.addaudithook(connects.heard)
+    return connects
+
+
+def test_an_admitted_step_reports_its_attempt_and_admission_leaving_the_client_alone(
     volume: Path,
     tmp_path: Path,
     load_script: Callable[..., ModuleType],
@@ -48,24 +57,34 @@ def test_a_step_a_worker_admitted_reports_when_and_leaves_the_client_unchanged(
         replies.append((observed.wait(OBSERVATION_SECONDS), time.time()))
         connection.sendall(BUILT_BY_STEP[step.step])
 
+    connects = heard_connects(web_client, volume)
     with fake_worker(volume, answering(building)):
         before = time.time()
-        failure, admitted = web_client.ran_timed(toolchain(volume), a_step(tmp_path))
+        failure, attempted, admitted = web_client.ran_timed(
+            toolchain(volume), a_step(tmp_path), connects
+        )
     [(seen_before_reply, replied)] = replies
     assert failure is None
     assert seen_before_reply
+    assert attempted is not None
     assert admitted is not None
-    assert before <= admitted <= replied
+    assert before <= attempted <= admitted <= replied
     assert build_worker.exchange_with_worker is exchange
 
 
-def test_a_step_no_worker_answered_reports_no_admission(
+def test_a_step_no_worker_answered_reports_its_first_attempt_and_no_admission(
     volume: Path, tmp_path: Path, load_script: Callable[..., ModuleType]
 ) -> None:
     web_client = load_script("web_client", "probe_build_worker")
-    unavailable, admitted = web_client.ran_timed(
+    connects = heard_connects(web_client, volume)
+    before = time.time()
+    unavailable, attempted, admitted = web_client.ran_timed(
         toolchain(volume, connect_window_seconds=0.1),
         a_step(tmp_path, StepKind.EXPORT),
+        connects,
     )
-    assert admitted is None
+    retries = [heard for heard in connects.times if heard > attempted]
     assert unavailable is not None
+    assert admitted is None
+    assert before <= attempted
+    assert retries

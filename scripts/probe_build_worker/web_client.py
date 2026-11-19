@@ -6,9 +6,10 @@ directory that holds `hello-deck`.
 Run inside the web's container as its own user. It reads the settings
 with `load_settings()`, takes the worker from `the_build_worker` and runs the
 named steps of the deck in a fresh run directory under the builds root. It
-prints the outcome as its one line: each step's admission time (when a worker
-had answered its header) and `BuildFailure` reason, text and counts, and what
-the run directory holds when the steps are over.
+prints the outcome as its one line: each step's first attempt time (when it
+first connected to the worker's port), admission time (when a worker had
+answered its header) and `BuildFailure` reason, text and counts, and what the
+run directory holds when the steps are over.
 """
 
 import json
@@ -18,6 +19,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import copytree
 from tempfile import mkdtemp
@@ -53,23 +55,46 @@ def first_seen(directory: Path, *, until: threading.Event) -> float | None:
     return None
 
 
+@dataclass(slots=True)
+class WorkerConnects:
+    """The times this process connected to the worker's port, heard by an audit hook.
+
+    Each attempt of the toolchain begins with a connect to the worker's address,
+    so the first connect of a step is its first attempt, seen without changing
+    the client. A hook cannot be removed, so one serves every step.
+    """
+
+    port: int
+    times: list[float] = field(default_factory=list[float])
+
+    def heard(self, event: str, arguments: tuple[object, ...]) -> None:
+        """Record a connect to the worker's port; every other event is ignored."""
+        if event != "socket.connect":
+            return
+        address = arguments[1]
+        if isinstance(address, tuple) and address[1:2] == (self.port,):
+            self.times.append(time.time())
+
+
 def ran_timed(
-    toolchain: WorkerToolchain, step: BuildStep
-) -> tuple[BuildFailure | ToolchainUnavailable | None, float | None]:
-    """The step's result, and the time a worker admitted it, or None.
+    toolchain: WorkerToolchain, step: BuildStep, connects: WorkerConnects
+) -> tuple[BuildFailure | ToolchainUnavailable | None, float | None, float | None]:
+    """The step's result, the time of its first attempt and of its admission, or None.
 
     The client makes its staging directory right after the worker's STATUS, so
     the time that directory first shows in the run is the step's admission.
     """
     over = threading.Event()
     staging = step.place.here / f"{STAGED_PREFIX}{step.name}"
+    heard_before = len(connects.times)
     with ThreadPoolExecutor(max_workers=1) as watcher:
         admission = watcher.submit(first_seen, staging, until=over)
         try:
             result = toolchain.ran(step)
         finally:
             over.set()
-        return result, admission.result()
+        attempts = connects.times[heard_before:]
+        return result, (attempts[0] if attempts else None), admission.result()
 
 
 def prepared_run(decks: Path, builds: Path) -> BuildPlace:
@@ -100,9 +125,11 @@ def main(decks: Path, kinds: list[StepKind]) -> None:
     settings = load_settings()
     toolchain = the_build_worker(settings, bound=build_bound_of(settings))
     place = prepared_run(decks, settings.builds)
+    connects = WorkerConnects(toolchain.port)
+    sys.addaudithook(connects.heard)
     steps: list[dict[str, object]] = []
     for kind in kinds:
-        failure, admitted = ran_timed(
+        failure, attempted, admitted = ran_timed(
             toolchain,
             BuildStep(
                 place=place,
@@ -112,10 +139,12 @@ def main(decks: Path, kinds: list[StepKind]) -> None:
                 watched=lambda: None,
                 line=StepTimer("build_step.ended", logging.getLogger(__name__)),
             ),
+            connects,
         )
         step: dict[str, object] = {
             "step": kind.value,
             "failed": failure is not None,
+            "attempted": attempted,
             "admitted": admitted,
         }
         if isinstance(failure, BuildFailure):

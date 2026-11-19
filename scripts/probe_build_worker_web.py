@@ -24,14 +24,16 @@ HELLO_STEPS = ("build", "export")
 class StepOutcome:
     """How one step of a client run ended: the failure the build reported, if any.
 
-    `admitted` is the web pod's clock, in epoch seconds, when a worker had
-    answered the step's header and the upload began; None for a step no worker
-    admitted.
+    `attempted` is the web pod's clock, in epoch seconds, when the step first
+    connected to the worker's port, and `admitted` when a worker had answered
+    the step's header and the upload began; each None for a step that never got
+    that far.
     """
 
     step: str
     failed: bool
     failure: dict[str, str | int | None] | None
+    attempted: float | None
     admitted: float | None
 
 
@@ -55,7 +57,11 @@ def outcome_in(stdout: str) -> Outcome:
     return Outcome(
         steps=tuple(
             StepOutcome(
-                step["step"], step["failed"], step.get("failure"), step["admitted"]
+                step["step"],
+                step["failed"],
+                step.get("failure"),
+                step["attempted"],
+                step["admitted"],
             )
             for step in said["steps"]
         ),
