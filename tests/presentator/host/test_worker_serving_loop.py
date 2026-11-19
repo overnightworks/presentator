@@ -13,7 +13,7 @@ import pytest
 
 from presentator.adapters import build_wire
 from presentator.host import worker, worker_self_check, worker_serving
-from presentator.host.lifecycle import StopLine
+from presentator.host.lifecycle import ServerEvent, StopLine
 from presentator.host.worker_serving import (
     HEADER_SECONDS,
     HelloRefusal,
@@ -443,7 +443,7 @@ def test_serve_returns_zero_and_writes_the_one_connection_line_of_what_ended_the
         line["event"] for line in logged.lines if "process" in str(line["event"])
     ] == [
         "process.ready",
-        "process.stopped",
+        ServerEvent.PROCESS_STOPPED,
     ]
 
 
