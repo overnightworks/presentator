@@ -9,6 +9,7 @@ without one is an excuse.
 
 from importlib import import_module
 
+from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
 from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.agent.settings import AgentSettings
@@ -76,6 +77,9 @@ PostgresSessions.load
 PostgresSessions.touch
 PostgresSessions.replace_refresh_token
 PostgresSessions.prune_overflow
+
+# webauth's sign-in entry hands its held events to the sink through this method.
+LoggingAuditSink.account_event
 
 # Pydantic writes these fields into `GET /api/session`; the lobby pages read them.
 SessionAddresses.logout

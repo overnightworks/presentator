@@ -1,6 +1,6 @@
 """The sessions table is the shape webauth's Postgres extra publishes, and only that."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 
 import pytest
 from alembic import command
@@ -64,7 +64,7 @@ def database_before_the_extra() -> Iterator[Engine]:
             engine.dispose()
 
 
-def _rows_of(engine: Engine, tables: tuple[str, ...]) -> dict[str, list[object]]:
+def _rows_of(engine: Engine, tables: tuple[str, ...]) -> dict[str, Sequence[object]]:
     with engine.connect() as connection:
         return {
             table: connection.execute(text(f"SELECT * FROM {table}")).all()  # noqa: S608 - fixed names
