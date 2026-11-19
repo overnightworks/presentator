@@ -1,12 +1,10 @@
 """The web's client of the build worker, against a fake worker on a real socket."""
 
 import errno
-import math
 import os
 import socket
 from collections.abc import Callable
 from pathlib import Path
-from time import monotonic
 
 import pytest
 
@@ -17,7 +15,7 @@ from presentator.adapters.build_wire import (
     read_request,
     send_status,
 )
-from presentator.adapters.build_worker import Fault, WorkerToolchain
+from presentator.adapters.build_worker import Fault
 from presentator.contracts.decks import (
     DECK_DIRECTORY,
     OUTPUT_DIRECTORY,
@@ -41,8 +39,10 @@ from tests.presentator.adapters.support.build_worker_support import (
     Seen,
     a_step,
     answering,
+    counting,
     ended_line,
     fake_worker,
+    hanging_up,
     proven,
     staging_of,
     toolchain,
@@ -50,7 +50,6 @@ from tests.presentator.adapters.support.build_worker_support import (
 )
 from tests.support import worker_support as support
 from tests.support.log_lines import json_logged
-from tests.support.worker_support import KEY, LOCAL_ADDRESS, port_of
 
 PROMPTLY = 10
 UNAVAILABLE = ToolchainUnavailable()
@@ -58,20 +57,6 @@ UNAVAILABLE = ToolchainUnavailable()
 
 def nothing_to_reply(_connection: socket.socket, _step: StepHeader) -> None:
     return None
-
-
-def hanging_up(_connection: socket.socket, _seen: Seen, _uploads: Path) -> None:
-    return None
-
-
-def counting(connections: list[None], then: Script) -> Script:
-    """A worker that notes every connection it serves, then runs the script."""
-
-    def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
-        connections.append(None)
-        then(connection, seen, uploads)
-
-    return serve
 
 
 def replying(by_step: dict[StepKind, bytes]) -> Script:
@@ -132,33 +117,6 @@ def test_a_worker_that_keeps_closing_is_retried_until_the_window_ends(
     assert result == UNAVAILABLE
     assert time.seconds == WINDOW
     assert len(closings) > 1
-
-
-def test_a_client_built_without_a_time_waits_its_retries_out_on_the_process_clock(
-    volume: Path, tmp_path: Path
-) -> None:
-    window = 0.2
-    first_retry = 0.02
-    client = WorkerToolchain(
-        host=LOCAL_ADDRESS,
-        port=port_of(volume),
-        key=KEY,
-        megabytes=MEGABYTES,
-        reply_bound_seconds=1.0,
-        connect_window_seconds=window,
-        first_retry_seconds=first_retry,
-        longest_retry_seconds=0.05,
-        reply_margin_seconds=0.1,
-    )
-    closings: list[None] = []
-    started = monotonic()
-
-    with fake_worker(volume, counting(closings, hanging_up), accepts=50):
-        result = client.ran(a_step(tmp_path))
-
-    assert result == UNAVAILABLE
-    assert monotonic() - started >= window
-    assert len(closings) <= math.ceil(window / first_retry) + 1
 
 
 def a_peer_speaking_another_wire(
