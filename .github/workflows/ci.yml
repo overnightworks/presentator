@@ -175,15 +175,22 @@ jobs:
       - name: Check types
         run: pnpm typecheck
 
+      # The overlay's browser tests build an instrumented deck and write its
+      # counters beside vitest's; the example deck below builds without them.
       - name: Test
         run: pnpm test
+
+      # Vitest and the browser tests count the same source files; the merged
+      # figure is reported, and vitest's thresholds stay the check.
+      - name: Merge the overlay's coverage
+        run: pnpm coverage:merge
 
       - name: Upload the coverage report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-slidev
-          path: reports/slidev-coverage
+          path: reports/slidev-coverage/lcov.info
           if-no-files-found: error
           retention-days: 7
           overwrite: true

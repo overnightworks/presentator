@@ -14,8 +14,10 @@ export default defineConfig({
     fileParallelism: false,
     include: ['slidev/tests/**/*.test.ts'],
     coverage: {
-      provider: 'v8',
-      reporter: ['text', 'lcovonly'],
+      // Istanbul counts the same branches in the instrumented deck the browser
+      // tests run, so `pnpm coverage:merge` can add the two reports up.
+      provider: 'istanbul',
+      reporter: ['text', 'json'],
       reportsDirectory: 'reports/slidev-coverage',
       exclude: [...coverageConfigDefaults.exclude, '**/package.json', 'slidev/tests/**'],
       thresholds: {

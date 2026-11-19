@@ -2,7 +2,7 @@ import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { HopClose } from 'overnightworks-speech-browser'
-import { chromium, type Page } from 'playwright-chromium'
+import type { Page } from 'playwright-chromium'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -20,7 +20,9 @@ import {
   createMediaObservation,
   createOverlayDeckServer,
   endHearings,
+  installCoverageReport,
   installCspGuard,
+  launchBrowser,
   openPageIn,
   openPresenter,
   openPresenterAt,
@@ -586,10 +588,11 @@ describe('presenter controls', () => {
   })
 
   it('does not put presenter controls on the projector', async () => {
-    const browser = await chromium.launch({ headless: true })
+    const browser = await launchBrowser()
     const page = await browser.newPage({ viewport: { width: 1024, height: 900 } })
     page.setDefaultTimeout(5_000)
     await installCspGuard(page)
+    await installCoverageReport(page)
     try {
       await page.goto(`${state.origin}/1`, { waitUntil: 'domcontentloaded', timeout: 10_000 })
       expect(await page.getByRole('link', { name: en['controls.home'] }).count()).toBe(0)
