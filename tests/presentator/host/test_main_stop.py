@@ -1,5 +1,6 @@
 """A stop ends the chores before the instance closes and the process stops."""
 
+import os
 import signal
 import subprocess
 import threading
@@ -18,7 +19,7 @@ from presentator.adapters.postgres.locks import (
     MIGRATION_LOCK,
     hold_until_transaction_ends,
 )
-from presentator.host.lifecycle import interrupt_ends_as_a_stop
+from presentator.host.lifecycle import signals_end_as_a_stop
 from presentator.host.main import Instance, served_by_host
 from presentator.host.polling import ChoreCode, Schedule
 from tests.presentator.application.support.fakes import PATIENCE
@@ -38,6 +39,9 @@ from tests.support.postgres import engine_on
 from tests.support.two_processes import CONSOLE_ENTRY_POINT
 
 _STATEMENT_TIMEOUT_SECONDS = 1
+_STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM)
+# A shell's and a container runtime's exit status of a process a signal ended.
+_SIGNALLED_EXIT_BASE = 128
 # What the stop takes besides the poll's wait: the server's own stop, the
 # stores' close and the end of the interpreter.
 _STOP_MARGIN_SECONDS = 3
@@ -229,30 +233,57 @@ def test_a_sigint_before_any_serving_ends_the_process_in_its_stop_line_alone(
 def raised_signals(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Generator[list[tuple[int, object]]]:
-    """The signals raised, with SIGINT's handler then; recorded, not done.
+    """The signals raised, each with its handler then; recorded, not done.
 
     The signal would end the test run.
     """
     raised: list[tuple[int, object]] = []
 
     def recorded(signal_number: int) -> None:
-        raised.append((signal_number, signal.getsignal(signal.SIGINT)))
+        raised.append((signal_number, signal.getsignal(signal_number)))
 
     monkeypatch.setattr(signal, "raise_signal", recorded)
-    handler = signal.getsignal(signal.SIGINT)
+    handlers = {number: signal.getsignal(number) for number in _STOP_SIGNALS}
     try:
         yield raised
     finally:
-        signal.signal(signal.SIGINT, handler)
+        for number, handler in handlers.items():
+            signal.signal(number, handler)
 
 
-def test_an_interrupt_ends_the_process_by_sigint_at_its_default_action(
-    raised_signals: list[tuple[int, object]],
+def _interrupted_by(stop_signal: signal.Signals) -> None:
+    """Deliver `stop_signal` to this process, as a shell or a container runtime does."""
+    # os.kill runs the handler of a signal it sends to this process before it returns.
+    os.kill(os.getpid(), stop_signal)
+
+
+@pytest.mark.parametrize("stop_signal", _STOP_SIGNALS)
+def test_a_stop_signal_ends_the_process_by_itself_at_its_default_action(
+    raised_signals: list[tuple[int, object]], stop_signal: signal.Signals
 ) -> None:
-    with interrupt_ends_as_a_stop():
-        raise KeyboardInterrupt
+    with pytest.raises(SystemExit), signals_end_as_a_stop():
+        _interrupted_by(stop_signal)
 
-    assert raised_signals == [(signal.SIGINT, signal.SIG_DFL)]
+    assert raised_signals == [(stop_signal, signal.SIG_DFL)]
+
+
+@pytest.mark.parametrize("stop_signal", _STOP_SIGNALS)
+@pytest.mark.usefixtures("raised_signals")
+def test_a_stop_signal_its_default_action_ignores_ends_in_its_exit_status(
+    stop_signal: signal.Signals,
+) -> None:
+    # The recorded signal is not done, as the kernel ignores it for a PID 1.
+    with pytest.raises(SystemExit) as ended, signals_end_as_a_stop():
+        _interrupted_by(stop_signal)
+
+    assert ended.value.code == _SIGNALLED_EXIT_BASE + stop_signal
+
+
+def _stopped_by_an_interrupt(*, server_wrote_its_line: bool) -> None:
+    with signals_end_as_a_stop() as stop_line:
+        if server_wrote_its_line:
+            stop_line.write()
+        raise KeyboardInterrupt
 
 
 @pytest.mark.parametrize(
@@ -263,9 +294,32 @@ def test_an_interrupt_ends_the_process_by_sigint_at_its_default_action(
 def test_an_interrupt_ends_in_one_stop_line_wherever_it_lands(
     capsys: pytest.CaptureFixture[str], *, server_wrote_its_line: bool
 ) -> None:
-    with json_logged(capsys) as logged, interrupt_ends_as_a_stop() as stop_line:
-        if server_wrote_its_line:
-            stop_line.write()
-        raise KeyboardInterrupt
+    with json_logged(capsys) as logged, pytest.raises(SystemExit):
+        _stopped_by_an_interrupt(server_wrote_its_line=server_wrote_its_line)
 
     assert len(events_of(logged, "process.stopped")) == 1
+
+
+@pytest.mark.parametrize("stop_signal", _STOP_SIGNALS)
+@pytest.mark.usefixtures("raised_signals")
+def test_a_stop_signal_the_parent_ignores_stays_ignored_in_the_block(
+    stop_signal: signal.Signals,
+) -> None:
+    signal.signal(stop_signal, signal.SIG_IGN)
+
+    with signals_end_as_a_stop():
+        handler_in_the_block = signal.getsignal(stop_signal)
+
+    assert handler_in_the_block == signal.SIG_IGN
+
+
+@pytest.mark.parametrize("stop_signal", _STOP_SIGNALS)
+def test_the_stop_signals_get_their_handlers_back_after_the_block(
+    stop_signal: signal.Signals,
+) -> None:
+    handler = signal.getsignal(stop_signal)
+
+    with signals_end_as_a_stop():
+        pass
+
+    assert signal.getsignal(stop_signal) == handler

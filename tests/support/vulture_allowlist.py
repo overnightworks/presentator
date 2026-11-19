@@ -14,6 +14,7 @@ from presentator.api.decks import TalkFiles
 from presentator.api.lobby_shell import _InlineScripts  # pyright: ignore[reportPrivateUsage] - HTMLParser.feed, not Python code, calls its hooks
 from presentator.api.problems import ValidationFault
 from presentator.contracts import words
+from presentator.host import console
 from presentator.host.config import Settings
 from presentator.host.worker_settings import WorkerSettings
 from tests.conftest import redis_environment, served_database
@@ -22,6 +23,7 @@ from tests.presentator.host.conftest import (
     clients_closed_with_the_test,
     logging_undone_after_main,
 )
+from tests.presentator.host.support.held_start import sitecustomize
 from tests.presentator.host.test_main import every_tick_polls_every_source, pytestmark
 from tests.presentator.host.test_worker_settings import no_worker_variables
 from tests.support.lobby_drive import AdmitEveryRequest, DeckRecord
@@ -92,3 +94,10 @@ words.SOURCE_LANGUAGE
 import_module(
     "presentator.adapters.postgres.migrations.versions.0001_baseline"
 ).down_revision
+
+# pyproject.toml's `[project.scripts]` names these as the two console scripts.
+console.presentator
+console.presentator_worker
+
+# The import system calls a finder on `sys.meta_path` by this name.
+sitecustomize._HoldBeforeImport.find_spec  # noqa: SLF001 - the import system, not Python code, is the caller  # pyright: ignore[reportPrivateUsage]

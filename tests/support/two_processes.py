@@ -11,6 +11,7 @@ from typing import Final
 
 _FINISH_SECONDS = 60
 CONSOLE_ENTRY_POINT: Final = Path(sys.executable).parent / "presentator"
+WORKER_CONSOLE_ENTRY_POINT: Final = Path(sys.executable).parent / "presentator-worker"
 # A module started with `-m` imports `tests.support` from here.
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 READY: Final = "ready"

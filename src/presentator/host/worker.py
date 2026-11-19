@@ -26,7 +26,7 @@ from presentator.adapters.worker_children import (
     spawn_gated,
 )
 from presentator.host.environment import ConfigurationError
-from presentator.host.lifecycle import StopLine, interrupt_ends_as_a_stop
+from presentator.host.lifecycle import StopLine, signals_end_as_a_stop
 from presentator.host.worker_scratch import (
     HOME_DIRECTORY,
     TEMPORARY_MOUNT,
@@ -434,10 +434,11 @@ def _ready(port: int, boundary: Boundary) -> int:
 def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) -> int:
     """Run the start-up steps; exit status 2 names a refusal.
 
-    A SIGINT anywhere ends the process in its one `process.stopped` line.
+    A SIGINT or a SIGTERM anywhere ends the process in its one `process.stopped`
+    line.
     """
     logline.configure(SERVICE_NAME)
-    with interrupt_ends_as_a_stop() as stop_line:
+    with signals_end_as_a_stop() as stop_line:
         return _start(argv, boundary, stop_line)
 
 
