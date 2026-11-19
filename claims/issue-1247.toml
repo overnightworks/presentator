@@ -1,0 +1,8 @@
+claim_id = "a7e9f4860f9c48cdb0789ef21ce460f1"
+agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
+role = "builder"
+base = "65d3aa082e49612bdd8f02c19849ec7013b6933c"
+branch = "claude/issue-1247-the-ask-lease-moves-to-tandem-slots"
+scope = ["docs/ARCHITECTURE.md", "docs/configuration.md", "pyproject.toml", "src/presentator/adapters/shared_redis.py", "src/presentator/api/copresenter.py", "src/presentator/host/main.py", "src/presentator/ports/copresenter.py", "tests/presentator/adapters/support/ask_lease_process.py", "tests/presentator/adapters/test_shared_redis.py", "tests/presentator/adapters/test_shared_redis_two_processes.py", "tests/presentator/api/test_copresenter_answer.py", "tests/presentator/api/test_copresenter_limits.py", "tests/presentator/application/support/ask_leases.py", "tests/presentator/host/test_main_ask_lease.py", "tests/support/copresenter_support.py", "uv.lock"]
+opened_commit = "5002e38e0c176de9854a36752cf68b66ec24fdf6"
+whole_reason = "The port, the adapter, the route and their tests change one signature (admit and release become async) and one lease owner, so they land together or the route no longer matches its limiter."
