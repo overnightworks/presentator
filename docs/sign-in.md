@@ -5,7 +5,11 @@ sign-in surface's ruled sentences, each with the ID its test cites. Webauth's
 [host contract](https://github.com/overnightworks/webauth/blob/main/docs/host-contract.md)
 owns the session cookie and gate, what happens while Keycloak is down, which
 refusal shows which page, the origin check and the signed-out redirect;
-presentator holds only its own values here.
+presentator holds only its own values here. Sessions are stored by webauth's
+Postgres extra (`webauth[postgres]`, its "Postgres session store"): a row is
+keyed by the SHA-256 digest of the session id, so no stored row is a live
+cookie, and a session ends with its account row. A sign-in entry and an account
+deletion take one advisory lock, so they never run at once.
 
 - **SI1** Only members of `/apps/presentator` get in, members of
   `/apps/presentator/admin` are admins, and only Keycloak decides who belongs
