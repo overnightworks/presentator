@@ -747,9 +747,7 @@ class FakeBuildRunner:
         return written.open("rb") if written.is_file() else None
 
     def runs(self) -> frozenset[BuildRun] | None:
-        return (
-            None if self.listing_fails else frozenset(self.on_disk | self.served.keys())
-        )
+        return None if self.listing_fails else frozenset(self.on_disk)
 
     def drop_copies_except(self, runs: frozenset[BuildRun]) -> None:
         # One set stands for the store and the disk; only a sweep empties it.

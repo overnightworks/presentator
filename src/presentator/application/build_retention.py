@@ -73,26 +73,17 @@ def drop_unnamed_copies(
     builder.drop_copies_except(_runs_named_by_every_row(sources, store))
 
 
-def standing_build(deck: Deck, listed: frozenset[BuildRun] | None) -> Build | None:
-    """The build that row delivers, unless its run is listed in neither place.
+def standing_build(builder: BuildRunner, deck: Deck) -> Build | None:
+    """The build that row delivers, unless the store lost its run.
 
-    `listed` is what `BuildRunner.runs` answered. A listing that did not finish
-    proves nothing is missing, as the sweep refuses to act on it.
+    A listing that did not finish proves nothing is missing, as the sweep
+    refuses to act on it.
     """
     build = deck.build
     if build is None:
         return None
-    return None if listed is not None and build.run not in listed else build
-
-
-def as_served(deck: Deck, listed: frozenset[BuildRun] | None) -> Deck:
-    """That deck as a view shows it: a build whose run is listed nowhere is gone.
-
-    Such a build delivers nothing, so the list and the page read the deck as if
-    none had been built. `listed` is one `BuildRunner.runs` answer per view: a
-    view reads the store's names and fetches no run.
-    """
-    return deck.delivering(standing_build(deck, listed))
+    kept = builder.runs()
+    return None if kept is not None and build.run not in kept else build
 
 
 def delete_absent(

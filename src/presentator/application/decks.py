@@ -25,18 +25,19 @@ from presentator.application.source_state import (
     SHORT_COMMIT,
     deck_state_of,
     listed_source,
-    shown_attempt,
     shown_run,
 )
 from presentator.contracts.decks import (
     AccessKind,
     Artefacts,
+    BuildAttempt,
     ConnectionCheckResult,
     Deck,
     DeckPage,
     DeployKeyDraft,
     ListedDeck,
     ListedSource,
+    ShownAttempt,
     Source,
     SourceDeck,
     SourceFetch,
@@ -578,7 +579,6 @@ class Decks:
         A page view costs a read, never a pull: what the source carries is the
         refresh's business.
         """
-        listed = self.builder.runs()
         newest_first = sorted(
             (deck for deck in self.store.all() if deck.is_owned_by(viewer)),
             key=lambda deck: (-deck.changed_at.timestamp(), deck.slug),
@@ -587,7 +587,7 @@ class Decks:
             ListedDeck(
                 slug=deck.slug,
                 title=deck.title,
-                state=deck_state_of(build_retention.as_served(deck, listed)),
+                state=deck_state_of(deck),
                 changed_at=deck.changed_at,
             )
             for deck in newest_first
@@ -606,10 +606,9 @@ class Decks:
         is in what is on the screen (line 7), and while nothing is built there
         is nothing on the screen but what the source last carried.
         """
-        owned = self._owned(slug, viewer)
-        if owned is None:
+        deck = self._owned(slug, viewer)
+        if deck is None:
             return None
-        deck = build_retention.as_served(owned, self.builder.runs())
         built = deck.build
         return DeckPage(
             slug=deck.slug,
@@ -618,8 +617,23 @@ class Decks:
             commit=(deck.commit if built is None else built.commit)[:SHORT_COMMIT],
             built_at=None if built is None else built.built_at,
             state=deck_state_of(deck),
-            attempt=shown_attempt(deck.attempt),
+            attempt=self._shown(deck.attempt),
             themes=self.toolchain_themes.names(),
+        )
+
+    def _shown(self, attempt: BuildAttempt | None) -> ShownAttempt | None:
+        """What the page says about the build that ran last, while one has run.
+
+        The commit is shortened the way the delivered one is: a person reads
+        both off the same screen to see which push is which.
+        """
+        if attempt is None:
+            return None
+        return ShownAttempt(
+            commit=attempt.commit[:SHORT_COMMIT],
+            started_at=attempt.started_at,
+            outcome=attempt.outcome,
+            failure=attempt.failure,
         )
 
     def _address_of(self, deck: Deck) -> str | None:

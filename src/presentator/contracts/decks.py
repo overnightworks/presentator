@@ -534,10 +534,9 @@ class DeckState(StrEnum):
 
     It is read off the talk that stands and the attempt beside it, never
     stored: two records that can each be written on their own would otherwise
-    disagree about one deck. A talk whose run neither the store nor the disk
-    lists reads as no talk; one a listing that failed cannot vouch for still
-    stands. A known gap: during a store outage, a run that is listed but
-    cannot be fetched reads ready while its talk answers 404.
+    disagree about one deck. A known window: between a run leaving the store
+    and the next refresh, a deck reads ready while its talk answers 404; the
+    refresh rebuilds it.
     """
 
     READY = "ready"
@@ -574,19 +573,6 @@ class Deck:
             commit=self.commit,
             build=self.build,
             attempt=attempt,
-        )
-
-    def delivering(self, build: Build | None) -> Deck:
-        """This talk with the build it delivers replaced."""
-        return Deck(
-            slug=self.slug,
-            title=self.title,
-            changed_at=self.changed_at,
-            owner_id=self.owner_id,
-            source_id=self.source_id,
-            commit=self.commit,
-            build=build,
-            attempt=self.attempt,
         )
 
 

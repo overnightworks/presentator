@@ -1,9 +1,7 @@
 """`GET /api/decks/{slug}` tells a page one deck's facts, and errors as a problem."""
 
-import tarfile
 from datetime import datetime, timedelta
 from http import HTTPStatus
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,7 +9,6 @@ from sqlalchemy import Engine
 from webauth.ports import AccountKind
 
 from presentator.api.deck_api import DeckView
-from presentator.api.deck_list_api import DECK_LIST_PATH, DeckListView
 from presentator.contracts.decks import (
     BuildAttempt,
     BuildFailure,
@@ -20,11 +17,7 @@ from presentator.contracts.decks import (
     DeckState,
 )
 from presentator.contracts.models import Role
-from tests.presentator.application.support.fakes import (
-    FakeBuildRunner,
-    FakeDeckStore,
-    FrozenClock,
-)
+from tests.presentator.application.support.fakes import FakeDeckStore, FrozenClock
 from tests.support.deck_page_support import SLUG, a_build, a_deck_store
 from tests.support.lobby import (
     A_TALK_ADDRESS,
@@ -37,9 +30,7 @@ from tests.support.lobby import (
     a_decks,
     a_lobby,
 )
-from tests.support.run_objects import DirectoryRunObjects
 from tests.support.sign_in_support import MEMBER, Scene, a_scene
-from tests.support.swapped_build import real_builds_under
 
 _ADDRESS = "git@heimserver:decks.git"
 _JSON = {"accept": "application/json"}
@@ -221,81 +212,6 @@ def test_a_deck_never_built_has_the_sources_commit_and_nothing_delivered() -> No
     assert view.attempt is None
     assert view.views_open is False
     assert view.commit == a_build().commit[:7]
-
-
-def states_of(lobby: Lobby) -> tuple[DeckState, DeckState]:
-    """What the list and the page each say the one deck is."""
-    listed = lobby.client.get(DECK_LIST_PATH, headers=_JSON)
-    assert listed.status_code == HTTPStatus.OK
-    (summary,) = DeckListView.model_validate(listed.json()).decks
-    return summary.state, deck_of(lobby).state
-
-
-@pytest.mark.parametrize(
-    ("builder", "state"),
-    [
-        pytest.param(FakeBuildRunner(), DeckState.NEVER_BUILT, id="run-listed-nowhere"),
-        pytest.param(
-            FakeBuildRunner(listing_fails=True), DeckState.READY, id="listing-failed"
-        ),
-    ],
-)
-def test_the_list_and_the_page_read_a_built_deck_off_one_listing_of_its_runs(
-    builder: FakeBuildRunner, state: DeckState
-) -> None:
-    lobby = a_lobby(
-        given=GivenDecks(
-            store=a_deck_store(built=a_build()),
-            source=a_configured_source(_ADDRESS),
-            builder=builder,
-        )
-    )
-    lobby.sign_in()
-
-    assert states_of(lobby) == (state, state)
-
-
-def test_a_deck_whose_run_is_listed_nowhere_opens_no_view_and_no_pdf() -> None:
-    lobby = a_lobby(
-        given=GivenDecks(
-            store=a_deck_store(built=a_build()),
-            source=a_configured_source(_ADDRESS),
-            builder=FakeBuildRunner(),
-        )
-    )
-    lobby.sign_in()
-
-    view = deck_of(lobby)
-
-    assert view.built_at is None
-    assert view.views_open is False
-    assert lobby.client.get(f"/deck/{SLUG}/pdf").status_code == HTTPStatus.NOT_FOUND
-
-
-def test_a_list_or_page_view_reads_a_stored_run_ready_without_fetching_it(
-    tmp_path: Path,
-) -> None:
-    root = tmp_path / "builds"
-    builds = real_builds_under(root)
-    archive = tmp_path / "talk.tar"
-    with tarfile.open(archive, "w"):
-        pass
-    pdf = tmp_path / "deck.pdf"
-    pdf.write_bytes(b"%PDF-1.7")
-    assert DirectoryRunObjects(root / "store").put(
-        a_build().run.name, archive=archive, pdf=pdf
-    )
-    lobby = a_lobby(
-        given=GivenDecks(
-            store=a_deck_store(built=a_build()),
-            source=a_configured_source(_ADDRESS),
-            builder=builds,
-        )
-    )
-    lobby.sign_in()
-
-    assert states_of(lobby) == (DeckState.READY, DeckState.READY)
-    assert not (root / a_build().run.name).exists()
 
 
 def test_the_instants_carry_their_offset_as_stored() -> None:
