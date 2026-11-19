@@ -27,6 +27,7 @@ from presentator.adapters.worker_children import (
 )
 from presentator.host.environment import ConfigurationError
 from presentator.host.lifecycle import (
+    ServerReason,
     StopLine,
     read_command_line,
     refuse_argument,
@@ -100,7 +101,6 @@ class StartRefusal(StrEnum):
     KEY = "key"
     BIND = "bind"
     LISTEN = "listen"
-    SETTINGS = "settings"
 
 
 class StartRefusedError(Exception):
@@ -400,7 +400,7 @@ REAL_BOUNDARY = Boundary(
 )
 
 
-def _refuse(refused: Predicate | StartRefusal, **fields: str) -> int:
+def _refuse(refused: Predicate | StartRefusal | ServerReason, **fields: str) -> int:
     write_failed(refused, **fields)
     return REFUSAL_EXIT_STATUS
 
@@ -498,7 +498,9 @@ def _start(argv: Sequence[str] | None, boundary: Boundary, stop_line: StopLine) 
     try:
         settings = boundary.load_settings()
     except ConfigurationError as refused:
-        return _refuse(StartRefusal.SETTINGS, setting=",".join(refused.variables))
+        return _refuse(
+            ServerReason.CONFIGURATION_REFUSED, setting=",".join(refused.variables)
+        )
     return boundary.serve(
         port=arguments.port,
         key_file=arguments.key_file,
