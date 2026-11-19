@@ -1,0 +1,8 @@
+claim_id = "d8e3200d4ccb49d2acbdc6b043422939"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "d428c87928c777bb5aa19d4e795faf99d9495bbe"
+branch = "claude/issue-1304-the-build-worker-s-closing-line-comes-fr"
+scope = ["src/presentator/host/worker.py", "tests/presentator/host", "tests/support/two_processes.py"]
+opened_commit = "c2c42c15dfe7917ce4f175762c0b65228aeb3b25"
+whole_reason = "the worker's process tests share the host test directory and its support"
