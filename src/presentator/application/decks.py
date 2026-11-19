@@ -14,13 +14,18 @@ from enum import StrEnum
 from functools import partial
 from hashlib import sha256
 from hmac import compare_digest
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from threading import RLock
 from typing import BinaryIO, Final
 
 from presentator.application import build_retention, deck_builds
 from presentator.application.deck_builds import DeckBuilds, TakenIn
 from presentator.application.deck_take_in import take_in
+from presentator.application.source_removal import (
+    SourceRemovalRefused,
+    SourceRemovalStale,
+    refusal_of,
+)
 from presentator.application.source_state import (
     SHORT_COMMIT,
     deck_state_of,
@@ -93,30 +98,6 @@ class SourceRefusal(StrEnum):
     NOT_CHECKED = "not-checked"
     CREDENTIAL_NOT_ALLOWED = "credential-not-allowed"
     DEPLOY_KEY_UNAVAILABLE = "deploy-key-unavailable"
-
-
-class SourceRemovalRefusal(StrEnum):
-    """Why a confirmed removal did not delete anything."""
-
-    # The mirror or a built directory survived the attempt to take it away;
-    # disk goes first, so no row is touched while either still stands.
-    DISK_LEFTOVER = "disk-leftover"
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SourceRemovalRefused:
-    """A removal that deleted no row, and what stayed."""
-
-    reason: SourceRemovalRefusal
-    mirror: PurePosixPath | None
-    builds: tuple[PurePosixPath, ...]
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SourceRemovalStale:
-    """Moved counts: nothing deleted, so no earlier yes covers more than it saw."""
-
-    current: SourceRemoval
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -373,12 +354,11 @@ class Decks:
                     or preview.run_count != expected_run_count
                 ):
                     return SourceRemovalStale(current=preview)
-                left = SourceRemovalRefused(
-                    reason=SourceRemovalRefusal.DISK_LEFTOVER,
-                    mirror=self.folders.forget(source),
-                    builds=build_retention.builds_removed(self.builder, carried),
+                left = refusal_of(
+                    self.folders.forget(source),
+                    build_retention.builds_removed(self.builder, carried),
                 )
-                if left.mirror is not None or left.builds != ():
+                if left is not None:
                     return left
                 self.store.remove_for_source(source.id)
                 self.source_runs.remove_for_source(source.id)

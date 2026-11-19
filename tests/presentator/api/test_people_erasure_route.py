@@ -420,6 +420,25 @@ def test_a_leftover_writes_one_failed_line_of_kinds_and_counts(
     assert "talks" not in json.dumps(line)
 
 
+def test_a_store_that_keeps_the_runs_fails_naming_the_store_and_no_directory(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """PE8, PE13, PE16: a run the store kept is the line's reason, never a path."""
+    scene = a_scene()
+    scene.instance.fakes.builder.store_answers = False
+
+    with json_logged(capsys) as logged:
+        answer = scene.erase()
+
+    (line,) = [one for one in logged.lines if one["event"] == ERASURE_EVENT]
+    assert (line["outcome"], line["reason"]) == ("failed", "store_unavailable")
+    assert answer.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert answer.json()["leftover"] == []
+    assert THE_PERSON.id in scene.instance.users.users
+    scene.instance.fakes.builder.store_answers = True
+    assert scene.erase().status_code == HTTPStatus.OK
+
+
 def test_a_build_no_run_owns_answers_a_plain_500_without_a_leftover() -> None:
     """PE15: an unplaceable build is a failed step, never an invented path."""
     scene = a_scene()

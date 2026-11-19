@@ -11,9 +11,11 @@ from presentator.application.decks import (
     Decks,
     NewSourceDraft,
     SourceRefusal,
+    access_kind_of,
+)
+from presentator.application.source_removal import (
     SourceRemovalRefused,
     SourceRemovalStale,
-    access_kind_of,
 )
 from presentator.contracts.decks import (
     MANIFEST_FILE,

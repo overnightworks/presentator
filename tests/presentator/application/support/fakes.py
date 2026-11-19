@@ -27,6 +27,7 @@ from presentator.contracts.decks import (
     Deck,
     DeckFolder,
     DeployKeyDraft,
+    RunLeft,
     Source,
     SourcePoll,
     SourceRun,
@@ -753,12 +754,17 @@ class FakeBuildRunner:
         # One set stands for the store and the disk; only a sweep empties it.
         del runs
 
-    def remove(self, run: BuildRun) -> PurePosixPath | None:
+    def remove(self, run: BuildRun) -> RunLeft | None:
         self.removed.append(run)
-        if run in self.stuck:
-            return self.directory_of(run)
-        self.on_disk.discard(run)
-        return None
+        stuck = run in self.stuck
+        if not stuck:
+            self.on_disk.discard(run)
+        if not stuck and self.store_answers:
+            return None
+        return RunLeft(
+            directory=self.directory_of(run) if stuck else None,
+            in_store=not self.store_answers,
+        )
 
     def directory_of(self, run: BuildRun) -> PurePosixPath:
         """Where this fake says a run stands, relative to the volume."""

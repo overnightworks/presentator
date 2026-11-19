@@ -14,7 +14,7 @@ import tarfile
 from abc import abstractmethod
 from contextlib import suppress
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from tempfile import mkdtemp
 from typing import Final, Protocol
 
@@ -32,6 +32,7 @@ from presentator.contracts.decks import (
     PDF_FILE,
     SLIDES_FILE,
     TALK_DIRECTORY,
+    RunLeft,
 )
 
 # Written into the run's own directory while it travels, and gone after.
@@ -122,9 +123,18 @@ class BuildCache:
         for name in (listed_runs(root) or frozenset()) - names:
             removed_run(root, name)
 
-    def remove(self, name: str) -> bool:
-        """Take that run out of the store and off this disk, and say whether it went."""
-        return self.store.delete(name) and removed_run(self.root.absolute(), name)
+    def remove(self, name: str) -> RunLeft | None:
+        """Take that run out of the store and off this disk, or say what stayed.
+
+        The copy goes even while the store keeps the objects: a store that is
+        down leaves no directory behind on this disk to name.
+        """
+        root = self.root.absolute()
+        in_store = not self.store.delete(name)
+        directory = None if removed_run(root, name) else PurePosixPath(root.name, name)
+        if directory is None and not in_store:
+            return None
+        return RunLeft(directory=directory, in_store=in_store)
 
     def drop_unfinished_fetches(self) -> None:
         """Take away every copy a fetch left half written when its process died.

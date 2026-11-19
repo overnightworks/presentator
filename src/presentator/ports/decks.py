@@ -20,6 +20,7 @@ from presentator.contracts.decks import (
     ConnectionCheckResult,
     Deck,
     DeployKeyDraft,
+    RunLeft,
     Source,
     SourcePoll,
     SourceRun,
@@ -362,15 +363,16 @@ class BuildRunner(Protocol):
         """
 
     @abstractmethod
-    def remove(self, run: BuildRun) -> PurePosixPath | None:
+    def remove(self, run: BuildRun) -> RunLeft | None:
         """Take that run out of the store and its whole directory off disk.
 
         Not only the two files a deck's page ever pointed at: the run's own
         directory carried what the deck's own code wrote alongside them, too.
-        Only a directory shaped like a run directly under the root goes. A run
-        that survives the attempt is answered by its path relative to the data
-        volume, so a caller that must not go on believing a build was cleared
-        can stop and say what stayed rather than take that on faith.
+        Only a directory shaped like a run directly under the root goes. Both
+        are tried, whichever refuses. A run that survives the attempt is
+        answered by what stayed, so a caller that must not go on believing a
+        build was cleared can stop and say what stayed rather than take that
+        on faith.
         """
 
 

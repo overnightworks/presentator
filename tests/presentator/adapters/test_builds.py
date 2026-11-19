@@ -30,6 +30,7 @@ from presentator.contracts.decks import (
     BuildFailureReason,
     BuildRun,
     Deck,
+    RunLeft,
     Source,
     talk_address,
 )
@@ -967,7 +968,9 @@ def test_a_run_that_could_not_be_taken_away_is_logged_and_answered_as_its_volume
 
     assert isinstance(built, BuildFailure)
     assert [one["run_id"] for one in stayed] == [left.name]
-    assert named == PurePosixPath(builds.builds.name, left.name)
+    assert named == RunLeft(
+        directory=PurePosixPath(builds.builds.name, left.name), in_store=False
+    )
 
 
 @contextmanager

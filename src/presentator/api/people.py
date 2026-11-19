@@ -60,6 +60,7 @@ class ErasureReason(StrEnum):
 
     BUSY = "busy"
     DISK_LEFTOVER = "disk_leftover"
+    STORE_UNAVAILABLE = "store_unavailable"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -142,12 +143,18 @@ def _audited(step: StepTimer, outcome: PersonErasure) -> None:
         case PersonBusy(running=running):
             step.add(**_count_fields(running))
             step.refuse(ErasureReason.BUSY)
-        case PersonDiskLeftover(removed=removed, leftovers=leftovers):
+        case PersonDiskLeftover(
+            removed=removed, leftovers=leftovers, store_unavailable=store_unavailable
+        ):
             step.add(
                 **_count_fields(removed),
                 **_count_fields(_kinds_left(leftovers), _LEFTOVER_PREFIX),
             )
-            step.fail(ErasureReason.DISK_LEFTOVER)
+            step.fail(
+                ErasureReason.STORE_UNAVAILABLE
+                if store_unavailable
+                else ErasureReason.DISK_LEFTOVER
+            )
         case _:
             assert_never(outcome)
 

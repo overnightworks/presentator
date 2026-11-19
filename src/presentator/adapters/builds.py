@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
 from hashlib import sha256
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from tempfile import mkdtemp
 from time import monotonic
 from typing import IO, BinaryIO, Final, Protocol, cast
@@ -54,6 +54,7 @@ from presentator.contracts.decks import (
     BuildFailureReason,
     BuildRun,
     Deck,
+    RunLeft,
     Source,
     StepKind,
     ToolchainIdentity,
@@ -429,11 +430,9 @@ class SlidevBuilds:
         """Take every run but these off this disk, leaving the store as it is."""
         self.cache.drop_copies_except(frozenset(run.name for run in runs))
 
-    def remove(self, run: BuildRun) -> PurePosixPath | None:
-        """Take that run out of the store and off disk, or name it if it stayed."""
-        if self.cache.remove(run.name):
-            return None
-        return PurePosixPath(self.builds.absolute().name, run.name)
+    def remove(self, run: BuildRun) -> RunLeft | None:
+        """Take that run out of the store and off disk, or say what of it stayed."""
+        return self.cache.remove(run.name)
 
     def _a_place_of_its_own(self) -> BuildPlace:
         """Where this run works: a directory of its own under the root.

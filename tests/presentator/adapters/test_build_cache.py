@@ -19,6 +19,7 @@ from presentator.contracts.decks import (
     SLIDES_FILE,
     TALK_DIRECTORY,
     BuildRun,
+    RunLeft,
 )
 from tests.presentator.adapters.support.build_support import (
     builds_under,
@@ -127,11 +128,27 @@ def test_removing_a_run_takes_it_out_of_the_store_and_off_this_disk(
     built_run(building, "run-1")
     assert building.keep("run-1")
 
-    assert building.remove("run-1")
+    assert building.remove("run-1") is None
 
     assert on_disk(building) == set()
     assert store.names() == frozenset()
     assert a_cache(tmp_path / "b", store).local("run-1") is None
+
+
+def test_a_store_that_does_not_delete_leaves_no_copy_and_says_the_store_kept_it(
+    tmp_path: Path, store: DirectoryRunObjects
+) -> None:
+    building = a_cache(tmp_path / "a", store)
+    built_run(building, "run-1")
+    assert building.keep("run-1")
+    store.answering = False
+
+    left = building.remove("run-1")
+
+    assert left == RunLeft(directory=None, in_store=True)
+    assert on_disk(building) == set()
+    store.answering = True
+    assert store.names() == frozenset({"run-1"})
 
 
 def test_a_process_turned_away_drops_the_copies_no_row_names_and_keeps_the_store(
