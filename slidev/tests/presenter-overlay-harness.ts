@@ -36,6 +36,7 @@ const REFUSED_REQUESTS = {
   'forbidden': { status: 403, contentType: 'application/json', body: '{"detail":"Missing Origin header"}' },
   'unavailable': { status: 503, contentType: 'application/json', body: '{"detail":"Co-presenter unavailable"}' },
   'unreadable-401': { status: 401, contentType: 'text/plain', body: 'Sign in again' },
+  'other-401': { status: 401, contentType: 'application/json', body: '{"detail":"Token expired"}' },
 } as const
 
 let buildDirectory = providedBuild ?? ''
@@ -54,6 +55,7 @@ export type AnswerMode =
   | 'moves-slide'
   | 'refused-then-answered'
   | 'two-sounds'
+  | 'broken-stream'
   | keyof typeof REFUSED_REQUESTS
 
 type MediaObservation = {
@@ -199,9 +201,10 @@ function websocketAcceptKey(key: string) {
 
 // The minimal server the addon-deck proof needs: the static build plus
 // the two routes `startLocalHear`'s own path calls before it ever reaches the
-// capture (`/who`, then the hearing socket the capture opens). `/ask` only reports what it
-// was asked, and there are no observation beacons: no proof here drives a
-// spoken turn. `basePath` serves the build below the folder a deck lives in.
+// capture (`/who`, then the hearing socket the capture opens). `/ask` only
+// reports what it was asked, a question arrives only when a test writes it to
+// the returned hearing sockets, and there are no observation beacons.
+// `basePath` serves the build below the folder a deck lives in.
 export async function createOverlayDeckServer(
   directory: string,
   { basePath = '', alsoServing = [], onAsk = () => undefined, onWho = () => undefined }: {
@@ -338,6 +341,12 @@ async function startServer() {
         response.end()
         return
       }
+      if (state.answerMode === 'broken-stream') {
+        // The socket breaks only once the headers and the first event left it, so the answer begins and its read fails.
+        response.flushHeaders()
+        sendEvent(response, 'text', { text: 'The answer breaks off' }, () => response.destroy())
+        return
+      }
       if (state.answerMode === 'moves-slide') {
         sendEvent(response, 'slide', { number: state.slideToShow })
         sendEvent(response, 'done', { text: 'Answered.' })
@@ -419,8 +428,8 @@ async function startServer() {
   state.origin = `http://127.0.0.1:${address.port}`
 }
 
-function sendEvent(response: ServerResponse, event: string, data: object) {
-  response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+function sendEvent(response: ServerResponse, event: string, data: object, written?: () => void) {
+  response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`, written)
 }
 
 async function readAskBody(request: import('node:http').IncomingMessage) {
@@ -429,8 +438,9 @@ async function readAskBody(request: import('node:http').IncomingMessage) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as { said: string, deck: string, language: string, slide: number }
 }
 
-export function sendHeard(text: string) {
-  for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final: true, language: state.heardLanguage, traceparent: state.heardTraceparent })))
+// A final transcript asks; one that is not final only shows as heard.
+export function sendHeard(text: string, final = true) {
+  for (const socket of hearingSockets) socket.write(frame(JSON.stringify({ text, final, language: state.heardLanguage, traceparent: state.heardTraceparent })))
 }
 
 // The server ends every open hearing with a close code, as it does when a
@@ -461,6 +471,8 @@ async function installMediaFakes(page: Page) {
       microphone: 'ready' as 'ready' | 'pending' | 'denied',
       worklet: 'ready' as 'ready' | 'failing',
       playback: 'resolve' as 'resolve' | 'pending' | 'rejected' | 'second-fails-on-cue',
+      // Whether the browser lets the page create an AudioContext from now on.
+      audioContext: 'ready' as 'ready' | 'refused',
       played: [] as { onended: (() => void) | null }[],
       // Set once the second sound's decode waits; the test rejects that decode with it.
       failSecond: null as (() => void) | null,
@@ -498,6 +510,9 @@ async function installMediaFakes(page: Page) {
     const RealAudioContext = window.AudioContext
     const contextOrigin = performance.now()
     class FakeContext {
+      constructor() {
+        if (fakes.audioContext === 'refused') throw new DOMException('no audio output', 'NotSupportedError')
+      }
       state = 'running'
       sampleRate = 48000
       baseLatency = 0
@@ -611,7 +626,7 @@ function readCoverage(page: Page) {
 
 // The instrumented deck counts in `window.__coverage__`, which each page load
 // starts afresh: a document reports its counters as it leaves, and the pages
-// still open report theirs as their browser closes. A production build has no
+// still open report theirs through `closeBrowser`. A production build has no
 // counters and writes nothing.
 export async function installCoverageReport(page: Page) {
   await page.exposeFunction('__reportCoverage', saveCoverage)
@@ -624,15 +639,15 @@ export async function installCoverageReport(page: Page) {
   })
 }
 
-export async function launchBrowser(): Promise<Browser> {
-  const browser = await chromium.launch({ headless: true })
-  const close = browser.close.bind(browser)
-  browser.close = async (options) => {
-    const pages = browser.contexts().flatMap((context) => context.pages())
-    for (const page of pages) await saveCoverage(await readCoverage(page))
-    await close(options)
-  }
-  return browser
+export function launchBrowser(): Promise<Browser> {
+  return chromium.launch({ headless: true })
+}
+
+// Saves the counters of every page still open, then closes the browser.
+export async function closeBrowser(browser: Browser) {
+  const pages = browser.contexts().flatMap((context) => context.pages())
+  for (const page of pages) await saveCoverage(await readCoverage(page))
+  await browser.close()
 }
 
 export async function openPresenterAt(

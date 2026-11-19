@@ -27,7 +27,9 @@ function isOverlaySource(id: string) {
 }
 
 // Gives Slidev's insertion the source map it lacks, so the component's
-// counters land on its own lines.
+// counters land on its own lines. @slidev/cli 53.1.0 returns the injected code
+// as a bare string; once its context-injection transform returns a map, this
+// wrap goes.
 async function mapContextInjection(plugins: readonly BuildPlugin[]) {
   const { default: MagicString } = await import('magic-string')
   const injection = plugins.find((plugin) => plugin.name === contextInjection)?.transform

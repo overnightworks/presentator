@@ -8,6 +8,8 @@ import { words as wordsDe } from '../words/de'
 import { words as wordsEn } from '../words/en'
 import {
   buildAddonDeck,
+  closeBrowser,
+  createMediaObservation,
   createOverlayDeckServer,
   endHearings,
   freezePage,
@@ -34,13 +36,14 @@ type Fakes = {
   microphone: 'ready' | 'pending' | 'denied'
   worklet: 'ready' | 'failing'
   playback: 'resolve' | 'pending' | 'rejected' | 'second-fails-on-cue'
+  audioContext: 'ready' | 'refused'
   failSecond: (() => void) | null
   releaseMicrophone: () => void
   endPlayback: () => void
 }
 type Notice = { phase: string, text: string } | null
 type TimelineEntry = { at: number, phase: string | null }
-type Overlay = { snapshot: () => { capturing: boolean, speaking: boolean, on: boolean }, say: (text: string) => void }
+type Overlay = { snapshot: () => { capturing: boolean, speaking: boolean, on: boolean } }
 type Probed = Window & { __fakes: Fakes, __copresenter: Overlay, __timeline: TimelineEntry[], __roomMessages: { phase: string, at: number }[] }
 
 const scenarioDefaults = {
@@ -52,7 +55,7 @@ const scenarioDefaults = {
 }
 afterEach(() => { Object.assign(state, scenarioDefaults) })
 
-const setFakes = (page: Page, fakes: Partial<Pick<Fakes, 'microphone' | 'worklet' | 'playback'>>) =>
+const setFakes = (page: Page, fakes: Partial<Pick<Fakes, 'microphone' | 'worklet' | 'playback' | 'audioContext'>>) =>
   page.evaluate((patch) => Object.assign((window as unknown as Probed).__fakes, patch), fakes)
 const callFake = (page: Page, name: 'releaseMicrophone' | 'endPlayback') =>
   page.evaluate((fake) => (window as unknown as Probed).__fakes[fake](), name)
@@ -94,7 +97,7 @@ async function inRoom(run: (room: Room) => Promise<void>, { colorScheme = 'light
     await recordNotice(projector)
     await run({ context, presenter, projector })
   } finally {
-    await browser.close()
+    await closeBrowser(browser)
   }
 }
 
@@ -233,6 +236,41 @@ describe('the room notice', () => {
     })
   })
 
+  it.each(['/who', 'the microphone'] as const)('CP8: shows nothing and opens no hearing once switched off while %s is pending', async (pending) => {
+    state.heardOnConnect = false
+    state.media = createMediaObservation()
+    const hearingsBefore = state.hearingOpened
+    let answerWho = () => {}
+    if (pending === '/who') state.whoGate = new Promise<void>((resolve) => { answerWho = resolve })
+    try {
+      await inRoom(async ({ presenter, projector }) => {
+        if (pending === 'the microphone') await setFakes(presenter, { microphone: 'pending' })
+        await switchOn(presenter)
+        if (pending === 'the microphone') {
+          await expect.poll(() => presenter.evaluate(
+            () => (window as unknown as { __microphonesRequested: number }).__microphonesRequested,
+          )).toBe(1)
+        }
+        const ai = presenter.getByRole('switch', { name: wordsEn['controls.switch'] })
+        await ai.click({ timeout: 2_000 })
+        expect(await ai.getAttribute('aria-checked')).toBe('false')
+        if (pending === '/who') {
+          answerWho()
+          await expect.poll(() => state.whoRequests).toBe(2)
+        } else {
+          await callFake(presenter, 'releaseMicrophone')
+          await expect.poll(() => state.media.trackStopped).toBe(true)
+        }
+        await expectNothingFor([presenter, projector], 2_000)
+        expect(state.hearingOpened).toBe(hearingsBefore)
+        expect(await presenter.locator('.copresenter .fault').count()).toBe(0)
+        expect(await ai.getAttribute('aria-checked')).toBe('false')
+      })
+    } finally {
+      answerWho()
+    }
+  })
+
   it('CP9: starts the band when the pending microphone is allowed and lasts ten seconds from then', async () => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
@@ -284,12 +322,15 @@ describe('the room notice', () => {
     })
   })
 
-  it('Never shows the answering pill for a later answer whose play is refused', async () => {
+  it.each([
+    ['whose play is refused', { playback: 'rejected' }],
+    ['the browser gives no audio output for', { audioContext: 'refused' }],
+  ] as [string, Parameters<typeof setFakes>[1]][])('CP7: shows No speech and never the answering pill for a later answer %s', async (_situation, fakes) => {
     state.heardOnConnect = false
     await inRoom(async ({ presenter, projector }) => {
       await switchOn(presenter)
       await showsPhase(projector, 'listening', PILL.de.listening)
-      await setFakes(presenter, { playback: 'rejected' })
+      await setFakes(presenter, fakes)
       const marks = [await markTimeline(presenter), await markTimeline(projector)]
       sendHeard('Another question about the handoff')
       await presenter.getByText(wordsEn['controls.noSpeech'], { exact: true }).waitFor({ state: 'visible' })
@@ -422,7 +463,7 @@ describe('the room notice', () => {
       console.info(`band on a projector opened during an answer after ${Date.now() - opened} ms`)
       await showsPhase(afterAnswerProjector, 'answering', PILL.de.answering)
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -455,7 +496,7 @@ describe('the room notice', () => {
       const messages = await projector.evaluate(() => (window as unknown as Probed).__roomMessages)
       expect(messages.map((message) => message.phase)).toContain('off')
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
     }
   })
 
@@ -640,7 +681,7 @@ describe('the room notice', () => {
       await projectorB.waitForTimeout(4_000)
       expect(await phasesSince(projectorB, 0)).toEqual([])
     } finally {
-      await browser.close()
+      await closeBrowser(browser)
       for (const socket of sockets) socket.destroy()
       server.closeAllConnections()
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
