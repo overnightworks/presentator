@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from presentator.adapters import build_cache
 from presentator.adapters.build_cache import BuildCache, RunObjects
 from presentator.adapters.build_runs import ARRIVING_PREFIX
 from presentator.adapters.build_wire import MAXIMUM_ENTRIES
@@ -276,6 +277,42 @@ def test_a_run_with_more_entries_than_a_talk_may_hold_still_counts_every_byte(
     assert cache.keep("run-2")
 
     assert on_disk(cache) == {"run-2"}
+
+
+def test_a_run_holding_what_cannot_be_read_does_not_stop_the_bound_taking_it(
+    tmp_path: Path, store: DirectoryRunObjects
+) -> None:
+    cache = a_cache(tmp_path / "a", store)
+    for served_at, name in enumerate(("run-1", "run-2"), start=1):
+        run = built_run(cache, name)
+        assert cache.keep(name)
+        os.utime(run / OUTPUT_DIRECTORY, (served_at, served_at))
+    unreadable = cache.root / "run-1" / DECK_DIRECTORY
+    unreadable.chmod(0)
+    tight = a_cache(cache.root, store, bound=2 * _A_RUNS_BYTES)
+    built_run(tight, "run-3")
+
+    assert tight.keep("run-3")
+
+    assert "run-1" not in on_disk(cache)
+
+
+def test_a_run_gone_while_the_bound_adds_up_the_disk_stops_neither_keep_nor_local(
+    tmp_path: Path, store: DirectoryRunObjects, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = a_cache(tmp_path / "a", store)
+    built_run(cache, "run-1")
+    assert cache.keep("run-1")
+    listing = build_cache.listed_runs
+
+    def listing_one_more(root: Path) -> frozenset[str]:
+        return (listing(root) or frozenset()) | {"gone"}
+
+    monkeypatch.setattr(build_cache, "listed_runs", listing_one_more)
+    built_run(cache, "run-2")
+
+    assert cache.keep("run-2")
+    assert cache.local("run-1") is not None
 
 
 def test_past_its_bound_the_least_recently_served_run_goes_and_is_fetched_again(

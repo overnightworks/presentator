@@ -223,12 +223,12 @@ def _is_a_regular_file(path: Path) -> bool:
 
 
 def _bytes_of(run: Path) -> int:
-    """What that run's tree holds, counted by the one walker, its links not followed."""
-    added = added_up(run, ends_by=math.inf, entries_up_to=math.inf)
-    if added.unreadable is not None:
-        reason = f"cannot add up {run}: {added.unreadable}"
-        raise OSError(reason)
-    return added.bytes
+    """What of that run's tree is readable, added up by the one walker.
+
+    A run that is gone or holds what cannot be read counts for what was read,
+    so the bound can still take it off disk.
+    """
+    return added_up(run, ends_by=math.inf, entries_up_to=math.inf).bytes
 
 
 def _served_at(run: Path) -> float:
