@@ -19,7 +19,7 @@ from webauth.ports import (
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
 from presentator.adapters.postgres.locks import SIGN_IN_LOCK, parameters
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.contracts.models import Role
 from tests.support.postgres import engine_on
@@ -84,7 +84,7 @@ class _Stores:
     """The stores over a database of this test's own."""
 
     accounts: PostgresSubjectUserStore
-    sessions: PostgresSessionRecordStore
+    sessions: PostgresSessions
     writes: PostgresIdentityWrites
 
 
@@ -93,7 +93,7 @@ def _postgres_stores(database_url: str) -> Iterator[_Stores]:
     try:
         yield _Stores(
             accounts=PostgresSubjectUserStore(engine),
-            sessions=PostgresSessionRecordStore(engine),
+            sessions=PostgresSessions(engine),
             writes=PostgresIdentityWrites(engine, LoggingAuditSink()),
         )
     finally:

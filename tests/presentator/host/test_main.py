@@ -19,7 +19,7 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from presentator.adapters.build_runs import ARRIVING_PREFIX
 from presentator.adapters.postgres.deck_store import PostgresDeckStore
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.api.hooks import hook_address
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.decks import OUTPUT_DIRECTORY, PDF_FILE
@@ -79,7 +79,7 @@ def signed_in(
     """A browser at that stack, or at `app` over it, signed in as the admin."""
     seed_user(engine, _ADMIN)
     now = datetime.now(UTC)
-    session = PostgresSessionRecordStore(engine).create(
+    session = PostgresSessions(engine).create(
         _ADMIN.id,
         session_id=a_session_id(),
         now=now,

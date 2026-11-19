@@ -15,7 +15,7 @@ from webauth.oidc import OidcRelyingParty, TokenRequestPost
 from webauth.ports import AccountEvent, AuditSink, SignInStores, SignInTransaction
 
 from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.api.auth import InstalledAuth
 from presentator.api.people import AdminPeople
@@ -78,7 +78,7 @@ class Scene:
     engine: Engine
     users: PostgresSubjectUserStore
     audit: RecordingAudit
-    sessions: PostgresSessionRecordStore
+    sessions: PostgresSessions
     relying_party: OidcRelyingParty
     config: WebAuthConfig
     clock: FrozenClock
@@ -116,11 +116,16 @@ class Scene:
         )
         return client.get(f"/auth/callback?{query}")
 
+    def session_id_of(self, browser: TestClient | None = None) -> str:
+        """The id of the session the browser holds, read from its signed cookie."""
+        cookie = (browser or self.lobby.client).cookies[self.config.session_cookie_name]
+        return cookie.rsplit(".", 1)[0]
+
     def stored_sessions(self) -> dict[str, str | None]:
-        """The refresh token of every session row by its id, as the row holds it."""
+        """The refresh token of every session row by its stored key."""
         with self.engine.connect() as connection:
-            rows = connection.execute(text("SELECT id, refresh_token FROM sessions"))
-            return {row.id: row.refresh_token for row in rows}
+            rows = connection.execute(text("SELECT id_hash, refresh_token FROM sessions"))
+            return {row.id_hash: row.refresh_token for row in rows}
 
     def stored_id_tokens(self) -> list[str | None]:
         """The ID token of every session row, as the row holds it."""
@@ -192,7 +197,7 @@ def a_scene(  # noqa: PLR0913
         transaction=transaction(writes),
         realm=realm,
     )
-    sessions = PostgresSessionRecordStore(engine)
+    sessions = PostgresSessions(engine)
     app, _ = a_lobby_app(
         agent=an_agent_front(auth),
         texts=texts,

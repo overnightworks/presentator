@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.contracts.people import KeyDraftExport, PersonKind
 from tests.presentator.adapters.support.key_draft_support import a_key_drafts_store
 from tests.presentator.adapters.support.person_instance_support import (
@@ -80,7 +80,7 @@ def test_the_secret_columns_are_counted_withheld(instance: PostgresInstance) -> 
 
 
 def _another_session(instance: PostgresInstance, *, id_token: SecretStr | None) -> None:
-    PostgresSessionRecordStore(instance.engine).create(
+    PostgresSessions(instance.engine).create(
         THE_PERSON.id,
         session_id=a_session_id(),
         now=_NOW,

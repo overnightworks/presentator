@@ -16,7 +16,7 @@ from webauth.config import WebAuthConfig
 from webauth.oidc import OidcRelyingParty
 
 from presentator.adapters.audit import LoggingAuditSink
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.api.auth import InstalledAuth
 from presentator.api.copresenter import CoPresenterSurface
@@ -161,7 +161,7 @@ class Hosts:
         seed_user(self.database, person)
         now = self.clock.now()
         return (
-            PostgresSessionRecordStore(self.database)
+            PostgresSessions(self.database)
             .create(
                 person.id,
                 session_id=a_session_id(),
@@ -176,7 +176,7 @@ class Hosts:
 
 
 type SurfaceFactory = Callable[
-    [FakeDeckStore, PostgresSessionRecordStore, InstalledAuth], CoPresenterSurface
+    [FakeDeckStore, PostgresSessions, InstalledAuth], CoPresenterSurface
 ]
 
 
@@ -221,7 +221,7 @@ def _both_auths(
 
 
 def _talk_over(
-    sessions: PostgresSessionRecordStore,
+    sessions: PostgresSessions,
     decks: Decks,
     decks_store: FakeDeckStore,
     talk_auth: InstalledAuth,
@@ -267,7 +267,7 @@ def two_hosts(
     decks = a_decks(
         replace(NO_DECKS if given is None else given, store=decks_store), clock
     )
-    sessions = PostgresSessionRecordStore(database)
+    sessions = PostgresSessions(database)
     issuer = FakeIssuer(issuer=AN_ISSUER, client_id=A_CLIENT_ID, now=clock.now())
     lobby_auth, talk_auth = _both_auths(database, issuer, clock, realm, speech_scope)
     talk_config = talk_auth.config
@@ -276,7 +276,7 @@ def two_hosts(
         signing_in=SigningIn(sessions=sessions, auth=lobby_auth, decks=decks),
     )
     talk = _talk_over(
-        PostgresSessionRecordStore(database), decks, decks_store, talk_auth, copresenter
+        PostgresSessions(database), decks, decks_store, talk_auth, copresenter
     )
     return Hosts(
         router=_served_by_host(lobby, talk),

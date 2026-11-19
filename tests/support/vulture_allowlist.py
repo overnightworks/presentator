@@ -10,7 +10,7 @@ without one is an excuse.
 from importlib import import_module
 
 from presentator.adapters.postgres.accounts import PostgresSubjectUserStore
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.agent.settings import AgentSettings
 from presentator.api.copresenter import AskRequest
 from presentator.api.decks import TalkFiles
@@ -72,10 +72,10 @@ console.presentator_worker
 PostgresSubjectUserStore.create_for_subject
 PostgresSubjectUserStore.set_role
 PostgresSubjectUserStore.set_kind
-PostgresSessionRecordStore.load
-PostgresSessionRecordStore.touch
-PostgresSessionRecordStore.replace_refresh_token
-PostgresSessionRecordStore.prune_overflow
+PostgresSessions.load
+PostgresSessions.touch
+PostgresSessions.replace_refresh_token
+PostgresSessions.prune_overflow
 
 # Pydantic writes these fields into `GET /api/session`; the lobby pages read them.
 SessionAddresses.logout

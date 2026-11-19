@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
 
-from pydantic import SecretStr
 from webauth.ports import AccountKind
 
 from presentator.contracts.models import Role, User
@@ -35,22 +34,6 @@ class StoredAccount:
     username: str
     role: Role
     kind: AccountKind
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class StoredSession:
-    """A stored sign-in: its account, its instants and its login's secrets.
-
-    Whether it still stands is `webauth`'s `admit_session`, not a method here.
-    """
-
-    id: str
-    user: StoredAccount
-    created_at: datetime
-    expires_at: datetime
-    refresh_token: SecretStr | None
-    id_token: SecretStr | None
-    account_language: str | None
 
 
 def lobby_user(account: StoredAccount | None) -> User | None:

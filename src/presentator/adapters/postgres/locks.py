@@ -6,6 +6,10 @@ lock in `LockClass`; the second is the instance within the class: 0 for a lock
 there is one of, a hash for a lock per subject. Two classes never share a key
 pair whatever a hash comes to, and each database is the product's alone, so no
 product-wide key is needed.
+
+The one exception is the sign-in lock, `SIGN_IN_ENTRY_KEY`: webauth's
+`sign_in_entry` takes it on one integer the host picks, and account deletion
+takes the same integer. No two-key lock can equal it.
 """
 
 from dataclasses import dataclass
@@ -26,7 +30,6 @@ class LockClass(IntEnum):
     """One id per kind of lock, 32-bit."""
 
     MIGRATION = 1
-    SIGN_IN = 2
     DEPLOY_KEY_DRAFT = 3
     REFRESH = 6
     TOOLCHAIN_PRESENCE = 7
@@ -43,7 +46,7 @@ class AdvisoryLock:
 # Held by one `presentator migrate` at a time.
 MIGRATION_LOCK: Final = AdvisoryLock(LockClass.MIGRATION, _ONLY_ONE)
 # Held by one sign-in entry or account deletion at a time, across processes.
-SIGN_IN_LOCK: Final = AdvisoryLock(LockClass.SIGN_IN, _ONLY_ONE)
+SIGN_IN_ENTRY_KEY: Final = 0x5349474E
 # Held by the one process that takes sources in, builds and removes at a time.
 REFRESH_LOCK: Final = AdvisoryLock(LockClass.REFRESH, _ONLY_ONE)
 

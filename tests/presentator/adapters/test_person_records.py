@@ -8,7 +8,7 @@ from sqlalchemy import Engine, text
 
 from presentator.adapters.audit import LoggingAuditSink
 from presentator.adapters.postgres.preferences import PostgresPersonPreferencesStore
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.adapters.postgres.sign_in import PostgresIdentityWrites
 from presentator.contracts.models import Role, User
 from presentator.contracts.people import SessionExport
@@ -33,7 +33,7 @@ def test_deleting_an_account_takes_its_sessions_and_leaves_another_account(
     database: Engine,
 ) -> None:
     """PE1: the account goes with its sessions; no other account is touched."""
-    sessions = PostgresSessionRecordStore(database)
+    sessions = PostgresSessions(database)
     accounts = PostgresIdentityWrites(database, LoggingAuditSink())
     for person in (_THE_PERSON, _ANOTHER):
         sessions.create(
@@ -70,7 +70,7 @@ def test_the_sessions_of_a_person_carry_their_times_and_no_secret(
     database: Engine,
 ) -> None:
     """PE21: sessions are counted by their times and never show the token."""
-    sessions = PostgresSessionRecordStore(database)
+    sessions = PostgresSessions(database)
     sessions.create(
         _THE_PERSON.id,
         session_id=a_session_id(),
@@ -98,7 +98,7 @@ def test_a_persons_session_carries_the_account_language_stored_at_its_sign_in(
     database: Engine, language: str | None
 ) -> None:
     """PE31: the language is exported as stored, `null` where the account named none."""
-    sessions = PostgresSessionRecordStore(database)
+    sessions = PostgresSessions(database)
     sessions.create(
         _THE_PERSON.id,
         session_id=a_session_id(),
@@ -118,7 +118,7 @@ def test_only_sessions_holding_a_refresh_token_are_counted_as_holding_one(
     database: Engine,
 ) -> None:
     """PE21: a session without a refresh token is not counted as holding one."""
-    sessions = PostgresSessionRecordStore(database)
+    sessions = PostgresSessions(database)
     for token in (SecretStr(_A_REFRESH_WORD), None):
         sessions.create(
             _THE_PERSON.id,

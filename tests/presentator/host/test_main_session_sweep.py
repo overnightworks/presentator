@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import Engine, text
 
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.application.identity import SESSION_LIFETIME
 from presentator.contracts.models import Role, User
 from presentator.host import main
@@ -41,7 +41,7 @@ def test_the_sweep_reads_the_clock_on_every_run_and_not_once_at_the_start(
     instance = main.build_instance(load_settings())
     database = engine
     seed_user(database, _ADMIN)
-    session = PostgresSessionRecordStore(database).create(
+    session = PostgresSessions(database).create(
         _ADMIN.id,
         session_id=a_session_id(),
         now=clock.now(),
@@ -72,10 +72,10 @@ def test_the_sweep_runs_while_the_server_serves(
     monkeypatch.setattr(main, "SESSION_SWEEP_INTERVAL", timedelta(0))
     database = engine
     deleted_a_session = threading.Event()
-    delete_expired = PostgresSessionRecordStore.delete_expired
+    delete_expired = PostgresSessions.delete_expired
 
     def delete_expired_and_say_so(
-        store: PostgresSessionRecordStore, at: datetime
+        store: PostgresSessions, at: datetime
     ) -> int:
         deleted = delete_expired(store, at)
         if deleted:
@@ -83,14 +83,14 @@ def test_the_sweep_runs_while_the_server_serves(
         return deleted
 
     monkeypatch.setattr(
-        PostgresSessionRecordStore, "delete_expired", delete_expired_and_say_so
+        PostgresSessions, "delete_expired", delete_expired_and_say_so
     )
     settings = load_settings()
     instance = main.build_instance(settings)
 
     with TestClient(main.served_by_host(instance, settings)):
         seed_user(database, _ADMIN)
-        PostgresSessionRecordStore(database).create(
+        PostgresSessions(database).create(
             _ADMIN.id,
             session_id=a_session_id(),
             now=clock.now() - SESSION_LIFETIME,

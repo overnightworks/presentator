@@ -111,7 +111,7 @@ if TYPE_CHECKING:
     from sqlalchemy import Engine
     from starlette.types import Message, Scope
 
-    from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+    from presentator.adapters.postgres.sessions import PostgresSessions
     from presentator.api.auth import InstalledAuth
     from presentator.contracts.copresenter import (
         CoPresenterReadiness,
@@ -288,13 +288,13 @@ def a_surface_over(  # noqa: PLR0913 - each part is one thing the instance varie
     errors: list[BaseException],
     speech_scope: str,
 ) -> Callable[
-    [FakeDeckStore, PostgresSessionRecordStore, InstalledAuth], CoPresenterSurface
+    [FakeDeckStore, PostgresSessions, InstalledAuth], CoPresenterSurface
 ]:
     """The talk host's surface over the real speech adapters and session access."""
     hearing, speaking = adapters
 
     def surface(
-        store: FakeDeckStore, sessions: PostgresSessionRecordStore, auth: InstalledAuth
+        store: FakeDeckStore, sessions: PostgresSessions, auth: InstalledAuth
     ) -> CoPresenterSurface:
         return CoPresenterSurface(
             use=CoPresenterUse(

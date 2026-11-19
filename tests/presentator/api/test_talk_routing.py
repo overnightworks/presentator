@@ -15,7 +15,7 @@ from starlette.websockets import WebSocketDisconnect
 from webauth.config import installed_web_auth_config
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
 
-from presentator.adapters.postgres.sessions import PostgresSessionRecordStore
+from presentator.adapters.postgres.sessions import PostgresSessions
 from presentator.api.auth import BACKCHANNEL_LOGOUT_PATH, DEFAULT_BODY_BYTES
 from presentator.api.talk import TALK_PERMISSIONS_POLICY, talk_content_security_policy
 from presentator.application.identity import SESSION_LIFETIME
@@ -199,7 +199,7 @@ def test_the_composition_root_serves_the_copresenter_at_the_talk_host_only(
     router = main.served_by_host(instance, settings)
     seed_user(engine, _ADMIN)
     now = datetime.now(UTC)
-    session = PostgresSessionRecordStore(engine).create(
+    session = PostgresSessions(engine).create(
         _ADMIN.id,
         session_id=a_session_id(),
         now=now,
