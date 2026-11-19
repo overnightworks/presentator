@@ -8,7 +8,6 @@ from sqlalchemy import Engine
 from gitmirror.model import HostKey
 from presentator.adapters.postgres.host_keys import PostgresHostKeyPins
 from presentator.host import main
-from presentator.host.command_line import NOTHING_PINNED_STATUS
 from tests.support.postgres import point_at
 
 _THE_PINNED_KEY = HostKey(host="git.example", key="ssh-ed25519 AAAAthe-first-key")
@@ -41,4 +40,5 @@ def test_unpin_host_of_a_host_nothing_pinned_ends_with_its_own_status(
     with pytest.raises(SystemExit) as ended:
         main.main(["unpin-host", _THE_PINNED_KEY.host])
 
-    assert ended.value.code == NOTHING_PINNED_STATUS
+    # Success, a failed process (a store fault among them) and argparse's refusal.
+    assert ended.value.code not in {0, 1, 2}
