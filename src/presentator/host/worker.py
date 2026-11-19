@@ -89,7 +89,7 @@ _KEY_FILE: Final = "--key-file"
 NOT_READY_EXIT_STATUS = 1
 LISTEN_BACKLOG = 4
 ONLY_THE_OWNER = 0o077
-KEY_MODE_MASK = 0o077
+KEY_MODE = 0o400
 MAXIMUM_KEY_BYTES = 4096
 SOCKET_TABLE = Path("/proc/net/tcp")
 LISTENING = "0A"
@@ -177,7 +177,7 @@ def _set_umask() -> None:
 def read_key(key_file: Path, *, controller_uid: int) -> bytes:
     """The key file's bytes minus the one newline an editor leaves, as the web reads it.
 
-    The file must be the controller's own and no group or other can read it; a mounted
+    The file must be the controller's own at mode 0400, as a pod mounts it; a mounted
     secret is a link to it, which opening follows.
     """
     try:
@@ -187,7 +187,7 @@ def read_key(key_file: Path, *, controller_uid: int) -> bytes:
             if not (
                 stat.S_ISREG(status.st_mode)
                 and status.st_uid == controller_uid
-                and not status.st_mode & KEY_MODE_MASK
+                and stat.S_IMODE(status.st_mode) == KEY_MODE
             ):
                 raise StartRefusedError(StartRefusal.KEY)
             key = os.read(descriptor, MAXIMUM_KEY_BYTES + 1).removesuffix(b"\n")

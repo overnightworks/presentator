@@ -10,10 +10,11 @@ replacement may have been scheduled. After the release both first pods must
 have been replaced, one life ended by each step. Cell 12 sends the
 workers a hello under a wrong key and one that reflects the worker's own
 direction, and expects both refused and no pod spent. Cell 13 shows, from inside
-a worker pod, that the build and wire users reach nothing off the loopback, and,
-from a web pod, that a port of the worker pod other than the worker's own drops
-what reaches it although a process listens there and a policy of the probe's own
-admits the web's pods to every port.
+a worker pod, that the build and wire users send nothing off the loopback and open
+TCP only there, and, from a web pod, that a port of the worker pod other than the
+worker's own drops what reaches it although a process listens there and a policy
+of the probe's own admits the web's pods to every port, once the cluster enforces
+that policy on the worker pods.
 """
 
 import contextlib
@@ -44,7 +45,9 @@ from probe_build_worker_k3d_lives import (
 from probe_build_worker_k3d_manifests import (
     INBOUND_PROBE_POLICY,
     WEB_CONTAINER,
+    WITNESS,
     WORKER_CONTAINER,
+    WORKER_LABEL,
     inbound_probe_policy,
 )
 from probe_build_worker_web import (
@@ -64,14 +67,15 @@ WEB_PODS = 2
 WORKER_PODS = 2
 # Long enough for a pod that a spent life made terminal to show it.
 SETTLE_SECONDS = 5
-# Long enough for the cluster's policy controller to program an applied policy.
-POLICY_SETTLE_SECONDS = 15
 HELLOS = {"wrong key": False, "reflected": False, "true": True}
 LOOPBACK = "loopback"
 POD_LOOPBACK = "127.0.0.1"
 CONNECTED = "connected"
 DROPPED = "EPERM"
 TIMED_OUT = "timeout"
+# The errno's name the inbound probe prints for a connection a NetworkPolicy
+# rejects: the cluster answers it with an ICMP port-unreachable.
+REFUSED = "ECONNREFUSED"
 
 
 def web_selector(deployment: Document) -> str:
@@ -405,40 +409,107 @@ def reach_end(run: Run, pod: Document, container: str, target: str) -> str:
     return said if isinstance(said, str) else str(said.get("end"))
 
 
+def admission_problem(
+    run: Run, deployment: Document, witness: Document, build_target: str
+) -> str | None:
+    """Relabel the witness, apply the probe's policy; why the cluster took either not.
+
+    The witness is a web pod the workers' own NetworkPolicy rejects, so its
+    connection to a worker's build port is refused until the probe's policy,
+    which admits it, is in force on the worker pods. The refusal first shows the
+    relabel and the workers' policy are in force, and the connection after it
+    shows the probe's policy is.
+    """
+    name = witness["metadata"]["name"]
+    run(
+        "kubectl label pod",
+        name,
+        f"{WORKER_LABEL}={WITNESS}",
+        "--overwrite",
+        *IN_NAMESPACE,
+    )
+    first, refused = poll(
+        run,
+        lambda: reach_end(run, witness, WEB_CONTAINER, build_target),
+        lambda end: end == REFUSED,
+        "",
+    )
+    if not refused:
+        return (
+            f"the workers' policy did not refuse the relabelled web pod {name}'s "
+            f"connection to {build_target} within {TERMINATION_WINDOW_SECONDS} s: "
+            f"it ended {first}"
+        )
+    run(
+        "kubectl apply --filename -",
+        stdin=json.dumps(inbound_probe_policy(deployment)),
+    )
+    last, admitted = poll(
+        run,
+        lambda: reach_end(run, witness, WEB_CONTAINER, build_target),
+        lambda end: end == CONNECTED,
+        "",
+    )
+    if not admitted:
+        return (
+            f"the cluster did not admit the web pod {name} to {build_target} by the "
+            f"probe's policy within {TERMINATION_WINDOW_SECONDS} s: it ended {last}"
+        )
+    return None
+
+
 def inbound_problem(
-    run: Run, deployment: Document, web: Document, worker: Document
+    run: Run,
+    deployment: Document,
+    webs: tuple[Document, Document],
+    worker: Document,
+    worker_port: int,
 ) -> str | None:
     """Why a web pod's connection to a listener in the worker pod was not dropped.
 
     The listener is on a port other than the worker's own. The workers'
     NetworkPolicy drops such a connection too, so a policy of the probe's own
     admits the web's pods to every port while the connection is tried: only the
-    pod's packet filter can drop it then. The listener must answer on the pod's
-    loopback, or its timeout would say nothing.
+    pod's packet filter can drop it then. The connection is tried once the
+    cluster admits a relabelled web pod to the worker's build port by that
+    policy, and the listener, which lives for a bounded time, opens after that.
+    It must answer on the pod's loopback, or its timeout would say nothing.
     """
-    listening = printed_line(
-        run_program(
-            run, worker["metadata"]["name"], WORKER_CONTAINER, INBOUND_PROGRAM, "listen"
-        )
-    )
-    if isinstance(listening, str):
-        return listening
-    port = listening.get("port")
-    if (own := reach_end(run, worker, WORKER_CONTAINER, f"{POD_LOOPBACK}:{port}")) != (
-        CONNECTED
-    ):
-        return f"the listener in the worker pod did not answer on its loopback: {own}"
-    target = f"{worker['status']['podIP']}:{port}"
-    run(
-        "kubectl apply --filename -", stdin=json.dumps(inbound_probe_policy(deployment))
-    )
+    web, witness = webs
     try:
-        run.effects.sleep(POLICY_SETTLE_SECONDS)
+        if problem := admission_problem(
+            run, deployment, witness, f"{worker['status']['podIP']}:{worker_port}"
+        ):
+            return problem
+        listening = printed_line(
+            run_program(
+                run,
+                worker["metadata"]["name"],
+                WORKER_CONTAINER,
+                INBOUND_PROGRAM,
+                "listen",
+            )
+        )
+        if isinstance(listening, str):
+            return listening
+        port = listening.get("port")
+        loopback = f"{POD_LOOPBACK}:{port}"
+        if (own := reach_end(run, worker, WORKER_CONTAINER, loopback)) != CONNECTED:
+            return (
+                f"the listener in the worker pod did not answer on its loopback: {own}"
+            )
+        target = f"{worker['status']['podIP']}:{port}"
         end = reach_end(run, web, WEB_CONTAINER, target)
     finally:
         run(
             "kubectl delete networkpolicy --ignore-not-found",
             INBOUND_PROBE_POLICY,
+            *IN_NAMESPACE,
+            check=False,
+        )
+        run(
+            "kubectl delete pod --ignore-not-found",
+            witness["metadata"]["name"],
             *IN_NAMESPACE,
             check=False,
         )
@@ -468,7 +539,7 @@ def reaches_only_the_loopback(
     if isinstance(said, str):
         return said
     problem = egress_problem(said, targets) or inbound_problem(
-        run, deployment, web, worker
+        run, deployment, (web, webs[1]), worker, worker_port
     )
     if problem:
         return problem

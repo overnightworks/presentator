@@ -57,6 +57,11 @@ def a_key_file_others_can_read(path: Path) -> int:
     return OWN_UID
 
 
+def a_key_file_the_owner_can_write(path: Path) -> int:
+    path.chmod(0o600)
+    return OWN_UID
+
+
 def a_key_file_that_is_a_directory(path: Path) -> int:
     path.unlink()
     path.mkdir()
@@ -78,6 +83,7 @@ def a_missing_key_file(path: Path) -> int:
 KEY_FAULTS = {
     "another owner": a_key_file_of_another_owner,
     "readable by others": a_key_file_others_can_read,
+    "writable by its owner": a_key_file_the_owner_can_write,
     "a directory": a_key_file_that_is_a_directory,
     "too short": a_key_file_that_is_too_short,
     "missing": a_missing_key_file,

@@ -1,6 +1,7 @@
 """The k3d driver tests' pods: the events kubectl prints for worker lives, and nodes."""
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -14,6 +15,7 @@ OWN = "the run's own node"
 EPOCH = datetime(2026, 11, 11, tzinfo=UTC)
 
 Document = dict[str, Any]
+Issued = tuple[tuple[str, ...], Mapping[str, str], str | None]
 
 
 def stamp(seconds: int) -> str:
