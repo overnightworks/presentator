@@ -119,11 +119,11 @@ import socket
 
 
 def end_of(family, address):
-    with socket.socket(family, socket.SOCK_DGRAM) as probe:
-        try:
+    try:
+        with socket.socket(family, socket.SOCK_DGRAM) as probe:
             probe.sendto(b"probe", address)
-        except OSError as refused:
-            return errno.errorcode[refused.errno]
+    except OSError as refused:
+        return errno.errorcode[refused.errno]
     return "sent"
 
 

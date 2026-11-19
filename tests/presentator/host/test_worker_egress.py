@@ -1,7 +1,12 @@
 """The build worker refuses to start while a process of it can send off the loopback."""
 
+import errno
+import socket
+from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -10,6 +15,8 @@ from presentator.host import worker_self_check
 from presentator.host.worker_self_check import (
     PROBED_IDENTITIES,
     SEND_DROPPED,
+    SEND_PROBE_PROGRAM,
+    SEND_WITHOUT_IPV6_PATH,
     Predicate,
 )
 from tests.presentator.host.support.sealed_snapshot import (
@@ -22,7 +29,6 @@ from tests.presentator.host.support.sealed_snapshot import (
 )
 
 SENT = "sent"
-NO_IPV6_PATH = "ENETUNREACH"
 
 
 def answer(ipv4: str, ipv6: str) -> str:
@@ -59,13 +65,42 @@ def test_one_identity_that_can_send_over_ipv6_refuses_as_egress(position: int) -
     assert judged(tuple(sends)) == Predicate.EGRESS
 
 
-@pytest.mark.parametrize(
-    "ipv6", [SEND_DROPPED, NO_IPV6_PATH], ids=["dropped", "no path"]
-)
+@pytest.mark.parametrize("ipv6", [SEND_DROPPED, *sorted(SEND_WITHOUT_IPV6_PATH)])
 def test_an_ipv6_datagram_that_is_dropped_or_has_no_path_leaves_nothing(
     ipv6: str,
 ) -> None:
     assert judged((answer(SEND_DROPPED, ipv6),) * len(PROBED_IDENTITIES)) is None
+
+
+def pod_without_ipv6_path(ends: str, *, at_creation: bool) -> Callable[..., object]:
+    """A socket factory: IPv4 sends are dropped, the IPv6 path ends where told."""
+    number = getattr(errno, ends)
+
+    def create(family: int, _kind: int) -> object:
+        if at_creation and family == socket.AF_INET6:
+            raise OSError(number, ends)
+        refusal = OSError(errno.EPERM if family == socket.AF_INET else number, ends)
+        return nullcontext(Mock(sendto=Mock(side_effect=refusal)))
+
+    return create
+
+
+@pytest.mark.parametrize("at_creation", [True, False], ids=["socket", "send"])
+@pytest.mark.parametrize("ends", sorted(SEND_WITHOUT_IPV6_PATH))
+def test_the_probe_program_in_a_pod_without_an_ipv6_path_is_accepted(
+    ends: str,
+    at_creation: bool,  # noqa: FBT001 - parametrized stage
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        socket, "socket", pod_without_ipv6_path(ends, at_creation=at_creation)
+    )
+
+    exec(SEND_PROBE_PROGRAM, {})  # noqa: S102 - the program the worker runs as a child
+
+    printed = capsys.readouterr().out.strip()
+    assert judged((printed,) * len(PROBED_IDENTITIES)) is None
 
 
 @pytest.mark.parametrize(
@@ -73,7 +108,7 @@ def test_an_ipv6_datagram_that_is_dropped_or_has_no_path_leaves_nothing(
     [
         (),
         (answer(SEND_DROPPED, SEND_DROPPED),),
-        (answer(NO_IPV6_PATH, SEND_DROPPED),) * len(PROBED_IDENTITIES),
+        (answer("ENETUNREACH", SEND_DROPPED),) * len(PROBED_IDENTITIES),
         (answer(SEND_DROPPED, "EACCES"),) * len(PROBED_IDENTITIES),
         (SEND_DROPPED,) * len(PROBED_IDENTITIES),
         ("",) * 3,
