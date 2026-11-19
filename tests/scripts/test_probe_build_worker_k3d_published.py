@@ -13,28 +13,10 @@ from tests.scripts.support.k3d_world import (
     Fixture,
     World,
     command_positions,
-    fixture_maker,
     issued_commands,
 )
 
 CI_WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
-
-
-@pytest.fixture
-def driver_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_k3d")
-
-
-@pytest.fixture
-def make_fixture(
-    load_script: Callable[..., ModuleType], tmp_path: Path
-) -> Callable[..., Fixture]:
-    return fixture_maker(load_script, tmp_path)
-
-
-@pytest.fixture
-def manifests_module(load_script: Callable[..., ModuleType]) -> ModuleType:
-    return load_script("probe_build_worker_k3d_manifests")
 
 
 def recorded_drive() -> tuple[
