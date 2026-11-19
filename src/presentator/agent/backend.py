@@ -112,34 +112,43 @@ def _unavailable() -> NoReturn:
     raise_without_chain(CoPresenterUnavailableError())
 
 
+_RUN_EVENT: Final = "gateway_run.ended"
+_EVENT_COUNT_FIELDS: Final = {
+    AssistantTextEvent: "assistant_text_events",
+    ToolCallEvent: "tool_call_events",
+    ToolResultEvent: "tool_result_events",
+    FinalEvent: "final_events",
+}
+
+
 class _RunSummary:
     """What a run showed, without a word of its content."""
 
     def __init__(self, clock: Callable[[], float]) -> None:
         self._clock = clock
         self._started = clock()
-        self._events: dict[str, int] = {}
+        self._counts = dict.fromkeys(_EVENT_COUNT_FIELDS.values(), 0)
         self._first_move_ms: int | None = None
 
     def note_move(self) -> None:
         if self._first_move_ms is None:
             self._first_move_ms = self._elapsed_ms()
 
-    def note(self, event: object) -> None:
-        name = type(event).__name__
-        self._events[name] = self._events.get(name, 0) + 1
+    def note(self, event: TurnEvent) -> None:
+        self._counts[_EVENT_COUNT_FIELDS[type(event)]] += 1
 
     @property
     def has_events(self) -> bool:
-        return bool(self._events)
+        return any(self._counts.values())
 
     def log(self) -> None:
-        moved = "" if self._first_move_ms is None else f" move_ms={self._first_move_ms}"
         _LOGGER.info(
-            "gateway run summary: events=%s end_ms=%d%s",
-            ",".join(f"{name}:{count}" for name, count in self._events.items()),
-            self._elapsed_ms(),
-            moved,
+            _RUN_EVENT,
+            extra={
+                **self._counts,
+                "end_ms": self._elapsed_ms(),
+                "move_ms": self._first_move_ms,
+            },
         )
 
     def _elapsed_ms(self) -> int:
