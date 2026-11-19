@@ -13,10 +13,11 @@ from sqlalchemy import Engine, text
 
 from presentator.host.main import Instance, served_by_host
 from presentator.host.polling import ChoreCode, Schedule
+from presentator.host.stopping_server import interrupt_ends_as_a_stop
 from tests.presentator.application.support.fakes import PATIENCE
 from tests.presentator.host.support.app_processes import serving_presentator
 from tests.support.lobby import a_settings
-from tests.support.log_lines import json_lines_among
+from tests.support.log_lines import json_lines, json_lines_among
 from tests.support.postgres import engine_on
 
 _STATEMENT_TIMEOUT_SECONDS = 1
@@ -105,3 +106,38 @@ def test_a_sigterm_during_a_locked_source_poll_writes_its_failure_before_the_sto
         events.index(("process.stopped", None))
     )
     assert stopped_after < _STATEMENT_TIMEOUT_SECONDS + _STOP_MARGIN_SECONDS
+
+
+@pytest.mark.usefixtures("environment")
+def test_a_sigint_ends_a_served_process_in_its_stop_line_alone(
+    database_url: str, tmp_path: Path
+) -> None:
+    with serving_presentator(database_url, tmp_path, {}) as app:
+        app.process.send_signal(signal.SIGINT)
+        exit_code = app.process.wait(timeout=PATIENCE.total_seconds())
+        output = app.output_after_exit()
+
+    events = [line["event"] for line in json_lines(output)]
+    assert exit_code == -signal.SIGINT
+    assert "process.stopped" in events
+    assert "process.crashed" not in events
+
+
+def test_an_interrupt_ends_the_process_by_sigint_at_its_default_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The raise is recorded, not done: the signal would end the test run.
+    raised: list[tuple[int, object]] = []
+
+    def recorded(signal_number: int) -> None:
+        raised.append((signal_number, signal.getsignal(signal.SIGINT)))
+
+    monkeypatch.setattr(signal, "raise_signal", recorded)
+    handler = signal.getsignal(signal.SIGINT)
+    try:
+        with interrupt_ends_as_a_stop():
+            raise KeyboardInterrupt
+    finally:
+        signal.signal(signal.SIGINT, handler)
+
+    assert raised == [(signal.SIGINT, signal.SIG_DFL)]

@@ -2,17 +2,20 @@
 
 import argparse
 import logging
+from datetime import timedelta
 from typing import Final
 
 from presentator.adapters.postgres.engine import create_database_engine
 from presentator.adapters.postgres.host_keys import PostgresHostKeyPins
-from presentator.adapters.postgres.migrate import migrate
+from presentator.adapters.postgres.migrate import StoreFault, migrate, store_refusal
 from presentator.host.config import load_database_settings
 
 MIGRATE_COMMAND = "migrate"
 UNPIN_HOST_COMMAND = "unpin-host"
 _HOST_UNPINNED: Final = "host_key.unpinned"
 _HOST_NOT_PINNED: Final = "host_key.not_pinned"
+# Apart from 1, a failed process, and 2, a command line argparse refuses.
+NOTHING_PINNED_STATUS: Final = 3
 
 _log = logging.getLogger(__name__)
 
@@ -31,19 +34,29 @@ def migrate_the_database() -> None:
 
 
 def unpin_the_host(host: str) -> None:
-    """Remove that host's pinned key; a host nothing pinned ends with status 1."""
-    database = load_database_settings().postgres
-    # A one-row delete by hand waits for a pin in flight rather than giving up.
+    """Remove that host's pinned key, its statement bounded as served ones are.
+
+    A host nothing pinned ends with `NOTHING_PINNED_STATUS`; a store fault is
+    refused for the reason `store_refusal` names.
+    """
+    settings = load_database_settings()
+    database = settings.postgres
     engine = create_database_engine(
-        database.url, database.password, statement_timeout=None
+        database.url,
+        database.password,
+        statement_timeout=timedelta(
+            seconds=settings.database_statement_timeout_seconds
+        ),
     )
     try:
         removed = PostgresHostKeyPins(engine=engine).unpin(host)
+    except StoreFault as fault:
+        raise store_refusal(fault, engine.url) from None
     finally:
         engine.dispose()
     if not removed:
         _log.error(_HOST_NOT_PINNED, extra={"host": host})
-        raise SystemExit(1)
+        raise SystemExit(NOTHING_PINNED_STATUS)
     _log.info(_HOST_UNPINNED, extra={"host": host})
 
 

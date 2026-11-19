@@ -51,17 +51,18 @@ know was migrated by a newer release: `migrate` leaves it as it is and exits 0.
 A migration drops a column only one release after its last reader, so the
 release before the newest still serves it. Serving refuses a database with no revision row and
 one behind this release's head, and `GET /health` answers 503 while the
-database does not answer or fails that rule, or while Redis does not answer. A start the database refuses, and a `migrate` whose database
-does not answer or refuses the login, end in one `process.failed` line with
-exit status 1; its `reason` is `not_answering`, `login_refused`, `no_revision`
-or `behind_this_release`, and the last two are cured by `presentator migrate`.
+database does not answer or fails that rule, or while Redis does not answer. A start the database refuses, and a store fault in a start, a `migrate` or a
+`presentator unpin-host`, end in one `process.failed` line with exit status 1.
+Its `reason` is `no_revision` or `behind_this_release`, both cured by
+`presentator migrate`, or the store fault's, named the same at every command:
 `login_refused` means the server's port accepted a connection but the server
 refused the password, the role or the database; `not_answering` means the host
-did not resolve or its port did not accept. Both carry the driver's error class
-in `error_type`. A statement the database fails later in a start, or in
-`presentator unpin-host`, ends the same way with `reason` `store_unavailable`
-and the driver's error class in `error_type`. The refusals and the log name the
-kind of failure and never the URL or the password.
+did not resolve or its port did not accept; `statement_cancelled` means the
+server cancelled a statement past its statement or lock timeout, as one behind
+another session's lock is; `store_unavailable` names any other statement the
+database failed, a connection lost under a statement among them. A store
+fault carries the driver's error class in `error_type`. The refusals and the
+log name the kind of failure and never the URL or the password.
 The tests find their server in `PRESENTATOR_TEST_POSTGRES_URL`, a URL of a
 server whose user may create databases; every test creates one of its own.
 The tests that reach Redis find theirs in `PRESENTATOR_TEST_REDIS_URL`; each
@@ -97,7 +98,7 @@ some of them.
 | `PRESENTATOR_TOKEN_CLIENTS` | empty | Comma-separated client ids (`azp`) whose access tokens may call `/api/` as the person and `/api/admin/` as an admin; empty serves no route for a token client's token. See [people](people.md). |
 | `PRESENTATOR_SOURCE_POLL_SECONDS` | `300` | Interval of the source poll; a source taken in within it waits for the next tick. |
 | `PRESENTATOR_SOURCE_TIMEOUT_SECONDS` | `180` | Bound of one pull and of one Check connection. |
-| `PRESENTATOR_DATABASE_STATEMENT_TIMEOUT_SECONDS` | `10` | Bound of every Postgres statement served; Postgres cancels one past it, so a chore held by a lock ends and shutdown does not wait for it. A wait for the refresh lock gets `PRESENTATOR_BUILD_TIMEOUT_SECONDS` on top, and the two together stay within the 2147483.647 seconds Postgres holds. `presentator migrate` runs unbounded. |
+| `PRESENTATOR_DATABASE_STATEMENT_TIMEOUT_SECONDS` | `10` | Bound of every Postgres statement served; Postgres cancels one past it, so a chore held by a lock ends and shutdown does not wait for it. A wait for the refresh lock gets `PRESENTATOR_BUILD_TIMEOUT_SECONDS` on top, and the two together stay within the 2147483.647 seconds Postgres holds. `presentator unpin-host` runs under it too; `presentator migrate` runs unbounded. |
 | `PRESENTATOR_TOOLCHAIN` | `slidev` | The project carrying Slidev. Read once at start under either runner; a project that cannot be read refuses to start. |
 | `PRESENTATOR_LOBBY_BUILD` | `frontend/build` | The lobby app's `pnpm build` output; an instance without a build it can serve refuses to start. |
 | `PRESENTATOR_BUILDS` | `builds` | Where talks are built, and where this process keeps its copies of the stored builds it serves. |
