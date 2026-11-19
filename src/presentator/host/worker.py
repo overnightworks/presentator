@@ -27,10 +27,12 @@ from presentator.adapters.worker_children import (
 )
 from presentator.host.environment import ConfigurationError
 from presentator.host.lifecycle import (
+    ServerEvent,
     StopLine,
     read_command_line,
     refuse_argument,
     signals_end_as_a_stop,
+    write_failed,
 )
 from presentator.host.worker_scratch import (
     HOME_DIRECTORY,
@@ -79,9 +81,10 @@ from presentator.host.worker_wire import SERVICE_NAME
 
 logger = logging.getLogger(__name__)
 
-START_REFUSED_EVENT: Final = "start.refused"
+START_REFUSED_EVENT: Final = ServerEvent.PROCESS_FAILED
 REFUSAL_EXIT_STATUS = 2
 _PORT: Final = "--port"
+_HIGHEST_PORT: Final = 65535
 _KEY_FILE: Final = "--key-file"
 NOT_READY_EXIT_STATUS = 1
 LISTEN_BACKLOG = 4
@@ -400,7 +403,7 @@ REAL_BOUNDARY = Boundary(
 
 
 def _refuse(refused: Predicate | StartRefusal, **fields: str) -> int:
-    logger.error(START_REFUSED_EVENT, extra={"reason": refused, **fields})
+    write_failed(refused, **fields)
     return REFUSAL_EXIT_STATUS
 
 
@@ -456,6 +459,14 @@ def _refuse_unless_given(serving_needs: dict[str, object]) -> None:
         refuse_argument(",".join(missing))
 
 
+def _tcp_port(word: str) -> int:
+    """The TCP port `word` names; a word outside the port range is refused."""
+    port = int(word)
+    if not 0 <= port <= _HIGHEST_PORT:
+        raise ValueError(port)
+    return port
+
+
 def _start(argv: Sequence[str] | None, boundary: Boundary, stop_line: StopLine) -> int:
     parser = argparse.ArgumentParser(description=__doc__, exit_on_error=False)
     parser.add_argument(
@@ -466,7 +477,7 @@ def _start(argv: Sequence[str] | None, boundary: Boundary, stop_line: StopLine) 
         action="store_true",
         help="exit 0 when the worker listens on --port and serves no life",
     )
-    parser.add_argument(_PORT, type=int, help="the TCP port the worker serves")
+    parser.add_argument(_PORT, type=_tcp_port, help="the TCP port the worker serves")
     parser.add_argument(_KEY_FILE, type=Path, help="the file holding the hello key")
     arguments = read_command_line(parser, argv)
     if arguments.ready:

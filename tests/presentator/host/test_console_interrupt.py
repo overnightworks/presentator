@@ -91,7 +91,7 @@ def test_a_sigint_while_a_console_script_imports_ends_it_silently(
     ("console_script", "refusal"),
     [
         (CONSOLE_ENTRY_POINT, ServerEvent.PROCESS_FAILED),
-        (WORKER_CONSOLE_ENTRY_POINT, worker.START_REFUSED_EVENT),
+        (WORKER_CONSOLE_ENTRY_POINT, ServerEvent.PROCESS_FAILED),
     ],
 )
 def test_a_sigint_after_a_refused_start_leaves_its_refusal_the_last_line(

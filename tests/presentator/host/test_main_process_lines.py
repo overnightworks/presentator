@@ -9,6 +9,7 @@ from logline.standard import EVENT_NAME_PATTERN
 from pydantic import SecretStr
 
 from presentator.adapters.shared_redis import SharedRedis
+from presentator.host.lifecycle import ServerEvent
 from presentator.host.store_connection import reach_redis
 from tests.presentator.host.support.app_processes import App, serving_apps
 from tests.support.log_lines import (
@@ -23,7 +24,7 @@ _LIFECYCLE = {
     "process.started",
     "store_connection.ended",
     "process.ready",
-    "process.stopped",
+    ServerEvent.PROCESS_STOPPED,
 }
 _A_PASSWORD = "a-redis-password-that-must-not-leak"  # noqa: S105
 
@@ -51,7 +52,10 @@ def test_a_served_process_writes_start_one_line_per_store_ready_and_stop(
         "process.started",
         "store_connection.ended",
     ]
-    assert [one["event"] for one in lines[-2:]] == ["process.ready", "process.stopped"]
+    assert [one["event"] for one in lines[-2:]] == [
+        "process.ready",
+        ServerEvent.PROCESS_STOPPED,
+    ]
     stores = {
         one["kind"]: one for one in lines if one["event"] == "store_connection.ended"
     }

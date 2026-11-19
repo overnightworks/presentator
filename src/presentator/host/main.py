@@ -705,9 +705,10 @@ def main(
 ) -> None:
     """Migrate the database or unpin a host when asked to, else serve the lobby.
 
-    Each runs on the configuration the environment carries. A refused
-    configuration, or a store fault, ends any of them in one line and exit
-    status 1; a SIGINT or a SIGTERM, at any point, ends it as a stop in one
+    Each runs on the configuration the environment carries. A refused command
+    line ends the process in one `process.failed` line and exit status 2; a
+    refused configuration, or a store fault, in one such line and exit status
+    1; a SIGINT or a SIGTERM, at any point, ends it as a stop in one
     `process.stopped` line.
     """
     configure_logging(SERVICE_NAME)

@@ -14,6 +14,7 @@ from presentator.adapters.postgres.locks import LockClass, lock_of, parameters
 from presentator.adapters.toolchain_identity import toolchain_identity_of
 from presentator.host import main
 from presentator.host.config import load_settings
+from presentator.host.lifecycle import ServerEvent
 from tests.support.log_lines import json_lines, json_logged
 from tests.support.postgres import NO_DATABASE_HERE, engine_on, point_at
 
@@ -58,7 +59,9 @@ class _Commands:
         assert ended.value.code == _FAILED
         assert not written.err
         (failed,) = [
-            one for one in json_lines(written.out) if one["event"] == "process.failed"
+            one
+            for one in json_lines(written.out)
+            if one["event"] == ServerEvent.PROCESS_FAILED
         ]
         assert failed["level"] == "error"
         return _Ended(failed, written.out)

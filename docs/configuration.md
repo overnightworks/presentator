@@ -6,7 +6,12 @@ engineer looking one up. Settings are environment variables with the prefix
 gitignored `.env` at the repository root. A refused setting ends the start
 in one `process.failed` line with exit status 1, `reason`
 `configuration_refused` and the refused variables in `setting`, never a value
-or a path, so a mistyped secret does not land in the startup output.
+or a path, so a mistyped secret does not land in the startup output. A
+refused command line, of `presentator` or of `presentator-worker`, ends in one
+such line with exit status 2: `argument_refused` names the missing or wrong
+argument in `argument`, such as an empty host or a `--port` outside the port
+range, and `argument_unknown` stands for a word no argument takes, which the
+line leaves out.
 
 ## Every run names
 
