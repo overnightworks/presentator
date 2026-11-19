@@ -10,6 +10,8 @@ import libReport from 'istanbul-lib-report'
 import libSourceMaps from 'istanbul-lib-source-maps'
 import reports from 'istanbul-reports'
 
+import { type InstrumentedCoverage, placeTemplateArmsOnSource } from './template-branches.ts'
+
 const reportsDirectory = fileURLToPath(new URL('../../reports/slidev-coverage', import.meta.url))
 const browserDirectory = fileURLToPath(new URL('../../reports/slidev-browser-coverage', import.meta.url))
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
@@ -45,7 +47,7 @@ function withOpenEndsAsNull(coverage: CoverageMap): CoverageMapData {
 // reports.
 const browser = libCoverage.createCoverageMap({})
 for (const file of readdirSync(browserDirectory)) {
-  browser.merge(read(`${browserDirectory}/${file}`))
+  browser.merge(placeTemplateArmsOnSource(read(`${browserDirectory}/${file}`) as InstrumentedCoverage))
 }
 const merged = libCoverage.createCoverageMap(read(`${reportsDirectory}/coverage-final.json`))
 const remapped = await libSourceMaps.createSourceMapStore().transformCoverage(browser)

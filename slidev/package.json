@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@jridgewell/trace-mapping": "0.3.31",
     "@slidev/cli": "53.1.0",
     "@slidev/theme-apple-basic": "0.25.1",
     "@slidev/theme-bricks": "0.25.0",
