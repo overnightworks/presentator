@@ -3,12 +3,13 @@
 import os
 import signal
 import subprocess
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
-from presentator.host import worker
+from presentator.host import console, main, worker
 from presentator.host.lifecycle import ServerEvent
 from tests.presentator.application.support.fakes import PATIENCE
 from tests.presentator.host.support.held_start.sitecustomize import (
@@ -100,3 +101,37 @@ def test_a_sigint_after_a_refused_start_leaves_its_refusal_the_last_line(
     assert interrupted.exit_code == -signal.SIGINT
     assert [line["event"] for line in json_lines(interrupted.output)][-1:] == [refusal]
     assert interrupted.errors == ""
+
+
+@pytest.fixture
+def interrupt_handlers_seen() -> Iterator[list[object]]:
+    """The SIGINT handlers a program sees; SIGINT gets the run's own back after."""
+    handler = signal.getsignal(signal.SIGINT)
+    try:
+        yield []
+    finally:
+        signal.signal(signal.SIGINT, handler)
+
+
+@pytest.mark.parametrize(
+    ("console_script", "program"),
+    [
+        pytest.param(console.presentator, main, id="presentator"),
+        pytest.param(console.presentator_worker, worker, id="presentator-worker"),
+    ],
+)
+def test_a_console_script_runs_its_program_with_sigint_at_its_default_action(
+    monkeypatch: pytest.MonkeyPatch,
+    interrupt_handlers_seen: list[object],
+    console_script: Callable[[], object],
+    program: object,
+) -> None:
+    def program_main() -> int:
+        interrupt_handlers_seen.append(signal.getsignal(signal.SIGINT))
+        return 0
+
+    monkeypatch.setattr(program, "main", program_main)
+
+    console_script()
+
+    assert interrupt_handlers_seen == [signal.SIG_DFL]
