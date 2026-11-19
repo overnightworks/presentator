@@ -1,7 +1,0 @@
-claim_id = "91955baff8d348dbb3da60d684e9284f"
-agent = "Claude 8ee5fb01-f0ec-4dfd-8667-519e2cc2cc19"
-role = "builder"
-base = "eca956d598670088deba8bdf243474f9bb77ef79"
-branch = "claude/issue-1351-trim-the-architecture-overview-to-its-20"
-scope = ["docs/ARCHITECTURE.md"]
-opened_commit = "be3f35fa0d23178da16ba960e411a93197c12e93"
