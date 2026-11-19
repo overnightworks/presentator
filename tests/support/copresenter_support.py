@@ -429,6 +429,7 @@ ADMIN_GROUPS: Final = ["/apps/presentator", "/apps/presentator/admin"]
 API_MEMBER_GROUPS: Final = [*ADMIN_GROUPS, AN_API_GROUP]
 THE_ASKED_DECK: Final = {**SPOKEN_QUESTION, "deck": A_TALKED_DECK}
 TWO_SENTENCES: Final = "Erster Satz. Zweiter Satz."
+_SECOND_REFRESH: Final = 2
 
 
 def a_good_gateway() -> Gateway:
@@ -455,9 +456,20 @@ class RecordingLogs(logging.Handler):
         """Start with nothing recorded."""
         super().__init__(logging.NOTSET)
         self.records: list[logging.LogRecord] = []
+        self._recorded = threading.Condition()
 
     def emit(self, record: logging.LogRecord) -> None:
-        self.records.append(record)
+        with self._recorded:
+            self.records.append(record)
+            self._recorded.notify_all()
+
+    def wait_for(self, message: str, timeout: float) -> bool:
+        """Whether a record with this message is raised within the timeout."""
+        with self._recorded:
+            return self._recorded.wait_for(
+                lambda: any(record.getMessage() == message for record in self.records),
+                timeout,
+            )
 
 
 class WitnessedAnswers:
@@ -539,6 +551,24 @@ def delete_the_sessions(hosts: Hosts) -> None:
 
 def the_session_ends_during_the_grant(hosts: Hosts) -> None:
     hosts.issuer.during_token_request = lambda: delete_the_sessions(hosts)
+
+
+def at_the_second_refresh(hosts: Hosts, act: Callable[[Hosts], None]) -> None:
+    """Run `act` inside the second refresh grant, as a reopening's token read."""
+    refreshes = 0
+
+    def hook() -> None:
+        nonlocal refreshes
+        if hosts.issuer.grant_types[-1] == "refresh_token":
+            refreshes += 1
+            if refreshes == _SECOND_REFRESH:
+                act(hosts)
+
+    hosts.issuer.during_token_request = hook
+
+
+def the_session_ends_at_the_reopening(hosts: Hosts) -> None:
+    at_the_second_refresh(hosts, delete_the_sessions)
 
 
 def the_token_endpoint_goes_down(hosts: Hosts) -> None:

@@ -14,6 +14,7 @@ import {
   endHearings,
   freezePage,
   openPageIn,
+  overlayFlag,
   openRoomBrowser,
   registerOverlayHarness,
   saveEvidence,
@@ -43,8 +44,7 @@ type Fakes = {
 }
 type Notice = { phase: string, text: string } | null
 type TimelineEntry = { at: number, phase: string | null }
-type Overlay = { snapshot: () => { capturing: boolean, speaking: boolean, on: boolean } }
-type Probed = Window & { __fakes: Fakes, __copresenter: Overlay, __timeline: TimelineEntry[], __roomMessages: { phase: string, at: number }[] }
+type Probed = Window & { __fakes: Fakes, __timeline: TimelineEntry[], __roomMessages: { phase: string, at: number }[] }
 
 const scenarioDefaults = {
   answerMode: state.answerMode,
@@ -59,7 +59,6 @@ const setFakes = (page: Page, fakes: Partial<Pick<Fakes, 'microphone' | 'worklet
   page.evaluate((patch) => Object.assign((window as unknown as Probed).__fakes, patch), fakes)
 const callFake = (page: Page, name: 'releaseMicrophone' | 'endPlayback') =>
   page.evaluate((fake) => (window as unknown as Probed).__fakes[fake](), name)
-const snapshot = (page: Page) => page.evaluate(() => (window as unknown as Probed).__copresenter.snapshot())
 
 const readNotice = (page: Page): Promise<Notice> => page.evaluate(() => {
   const element = document.querySelector('[data-room-notice]')
@@ -113,7 +112,7 @@ async function switchOn(presenter: Page) {
   await ai.click({ timeout: 2_000 })
 }
 const waitForCapture = (presenter: Page) =>
-  expect.poll(async () => (await snapshot(presenter)).capturing, { timeout: 5_000 }).toBe(true)
+  expect.poll(() => overlayFlag(presenter, 'capturing'), { timeout: 5_000 }).toBe(true)
 // CP9: the band lasts ten seconds on a window, then the pill takes over.
 const BAND_SECONDS = 10
 const showsPhase = (page: Page, phase: string, text: string, timeout = 15_000) =>
@@ -312,7 +311,7 @@ describe('the room notice', () => {
     await inRoom(async ({ presenter, projector }) => {
       await setFakes(presenter, { playback })
       await switchOn(presenter)
-      if (playback === 'pending') await expect.poll(async () => (await snapshot(presenter)).speaking, { timeout: 5_000 }).toBe(true)
+      if (playback === 'pending') await expect.poll(() => overlayFlag(presenter, 'speaking'), { timeout: 5_000 }).toBe(true)
       else await presenter.getByText(wordsEn['controls.noSpeech'], { exact: true }).waitFor({ state: 'visible' })
       await showsBand(projector)
       await showsPhase(projector, 'listening', PILL.de.listening)
@@ -435,7 +434,7 @@ describe('the room notice', () => {
   it('CP8: shows nothing when the AI is never switched on', async () => {
     await inRoom(async ({ presenter, projector }) => {
       await expectNothingFor([presenter, projector], 2_000)
-      expect((await snapshot(presenter)).on).toBe(false)
+      expect(await overlayFlag(presenter, 'on')).toBe(false)
       await saveEvidence(projector, 'room-off.png')
     })
   })

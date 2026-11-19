@@ -114,20 +114,6 @@ function publishRoomFacts() {
 // Synchronous, so a window that turns off has said so when its handler returns.
 watch([capturing, playing], publishRoomFacts, { flush: 'sync' })
 
-function snapshot() {
-  const tracks = mediaStream ? mediaStream.getTracks() : []
-  return {
-    on: on.value,
-    heard: heard.value,
-    answer: answer.value,
-    error: error.value,
-    speaking: speaking.value,
-    micLive: tracks.some((track) => track.readyState === 'live'),
-    capturing: capturing.value,
-    playing: playing.value,
-  }
-}
-
 function stillActive(generation) {
   return on.value && generation === activationGeneration
 }
@@ -300,17 +286,26 @@ function isEcho(text, spoken) {
   return overlap / a.size >= 0.5
 }
 
-const TRACEPARENT = /^00-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}$/
-const INVALID_TRACE_ID = '0'.repeat(32)
+// W3C Trace Context, read as logline's propagator reads it: version ff is
+// invalid, version 00 has exactly four fields, a higher version is read by its
+// first four, and an all-zero trace or parent id is invalid.
+const TRACEPARENT = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})(-.*)?$/
+const ALL_ZERO = /^0+$/
+
+function heardTrace(heardTraceparent) {
+  const [, version, traceId, parentId, flags, rest] = TRACEPARENT.exec(heardTraceparent ?? '') ?? []
+  if (!version || version === 'ff' || (version === '00' && rest !== undefined)) return null
+  if (ALL_ZERO.test(traceId) || ALL_ZERO.test(parentId)) return null
+  return { traceId, flags }
+}
 
 // One W3C trace per turn, so the turn's hearing, ask and answer lines share a
-// trace_id: the heard turn's trace when the hearing sent a valid one, else a new
-// one. The value lives only in its ask, so a failed turn leaves none behind.
+// trace_id: the heard turn's trace and flags when the hearing sent a valid one,
+// else a new trace with flags 00. The value lives only in its ask, so a failed
+// turn leaves none behind.
 function turnTraceparent(heardTraceparent) {
-  const heardTraceId = TRACEPARENT.exec(heardTraceparent ?? '')?.[1]
-  const traceId =
-    heardTraceId && heardTraceId !== INVALID_TRACE_ID ? heardTraceId : randomHex(16)
-  return `00-${traceId}-${randomHex(8)}-01`
+  const { traceId, flags } = heardTrace(heardTraceparent) ?? { traceId: randomHex(16), flags: '00' }
+  return `00-${traceId}-${randomHex(8)}-${flags}`
 }
 
 function randomHex(byteCount) {
@@ -434,7 +429,6 @@ function invalidatePlayback() {
 
 onMounted(() => {
   window.addEventListener('pagehide', turnOff)
-  window.__copresenter = { snapshot }
   void learnAccountLanguage()
 })
 onUnmounted(() => {
@@ -444,7 +438,6 @@ onUnmounted(() => {
   player = null
   // Vue stops this component's watchers before onUnmounted runs.
   publishRoomFacts()
-  delete window.__copresenter
 })
 </script>
 
@@ -453,6 +446,8 @@ onUnmounted(() => {
     class="copresenter"
     :lang="controlLanguage"
     :data-on="on"
+    :data-capturing="capturing"
+    :data-speaking="speaking"
     :aria-label="controlWords ? (on ? words['controls.presenterOn'] : words['controls.presenterOff']) : undefined"
   >
     <span

@@ -22,6 +22,7 @@ from sqlalchemy import Engine
 from tests.support.copresenter_support import (
     ACCESS,
     ROTATED,
+    at_the_second_refresh,
     delete_the_sessions,
     the_refresh_token_is_revoked,
 )
@@ -319,18 +320,6 @@ def test_an_ask_refused_at_the_groups_read_makes_no_workload_grant(
     assert instance.hosts.issuer.workload_scopes == []
 
 
-def _at_the_second_refresh(hosts: Hosts, act: Callable[[Hosts], None]) -> None:
-    seen: list[int] = []
-
-    def hook() -> None:
-        if hosts.issuer.grant_types[-1] == "refresh_token":
-            seen.append(1)
-            if len(seen) == SECOND:
-                act(hosts)
-
-    hosts.issuer.during_token_request = hook
-
-
 def _revoke_rotated(hosts: Hosts) -> None:
     hosts.issuer.revoke_refresh_token(ROTATED)
 
@@ -369,7 +358,7 @@ def test_a_refusal_at_the_speech_read_answers_before_the_stream_and_frees_the_ti
     engine: Engine, act: Callable[[Hosts], None], status: HTTPStatus, detail: str
 ) -> None:
     with a_speech_instance(engine) as instance:
-        _at_the_second_refresh(instance.hosts, act)
+        at_the_second_refresh(instance.hosts, act)
         run = ask_over(instance)
         spoken_by_then = len(instance.service.speak_requests)
         again = ask_over(instance)
