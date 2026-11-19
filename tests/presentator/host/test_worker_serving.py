@@ -10,6 +10,7 @@ import pytest
 
 from presentator.host import worker
 from presentator.host.config import MINIMUM_KEY_LENGTH
+from presentator.host.stopping_server import StopLine
 from presentator.host.worker import StartRefusal
 from tests.presentator.host.support.worker_boundary import LOADED_SETTINGS
 from tests.presentator.host.support.worker_lines import refusal_reasons
@@ -120,7 +121,12 @@ def test_no_socket_can_be_allocated_refuses_the_start(
     monkeypatch.setattr(worker.socket, "socket", exhausted)
 
     with json_logged(capsys) as logged:
-        status = worker.serve(port=PORT, key=KEY, serving=ScriptedLife().serving())
+        status = worker.serve(
+            port=PORT,
+            key=KEY,
+            serving=ScriptedLife().serving(),
+            stop_line=StopLine(),
+        )
 
     assert status == worker.REFUSAL_EXIT_STATUS
     assert refusal_reasons(logged) == [StartRefusal.BIND]
@@ -211,7 +217,10 @@ def test_a_key_the_real_boundary_refuses_ends_the_start_before_binding(
 ) -> None:
     with json_logged(capsys) as logged:
         status = worker.REAL_BOUNDARY.serve(
-            port=PORT, key_file=tmp_path / "missing", settings=LOADED_SETTINGS
+            port=PORT,
+            key_file=tmp_path / "missing",
+            settings=LOADED_SETTINGS,
+            stop_line=StopLine(),
         )
 
     assert status == worker.REFUSAL_EXIT_STATUS

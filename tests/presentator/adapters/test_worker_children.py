@@ -26,6 +26,7 @@ from presentator.adapters.worker_children import (
 )
 from presentator.host import worker, worker_scratch, worker_self_check, worker_serving
 from presentator.host.config import WorkerSettings
+from presentator.host.stopping_server import StopLine
 from presentator.host.worker_serving import (
     HEADER_SECONDS,
     LifeEnd,
@@ -66,6 +67,7 @@ import ctypes, os, sys, time
 from pathlib import Path
 from presentator.adapters.worker_children import readable_within
 from presentator.host import worker, worker_scratch, worker_serving
+from presentator.host.stopping_server import StopLine
 from presentator.host.worker_termination import FaultHandlerWatchdog
 
 def stall(*_arguments, **_keywords):
@@ -106,6 +108,7 @@ sys.exit(
         port=int((Path(sys.argv[1]) / "port").read_text()),
         key=(Path(sys.argv[1]) / "key").read_bytes(),
         serving=serving,
+        stop_line=StopLine(),
     )
 )
 """
@@ -488,6 +491,7 @@ class RealServing:
                     port=int((self.directory / "port").read_text()),
                     key=(self.directory / "key").read_bytes(),
                     serving=serving,
+                    stop_line=StopLine(),
                 )
             ),
             daemon=True,

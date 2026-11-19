@@ -14,6 +14,7 @@ from presentator.host.config import (
     load_worker_settings,
     worker_settings_variables,
 )
+from presentator.host.stopping_server import StopLine
 from presentator.host.worker_scratch import (
     QUEUE_MOUNT,
     SHARED_MEMORY_MOUNT,
@@ -250,6 +251,7 @@ def test_start_serves_the_port_and_key_file_bounded_by_the_settings() -> None:
 
     worker.main(SERVE, boundary_over(sealed_snapshot(), [], served))
 
+    assert isinstance(served.pop("stop_line"), StopLine)
     assert served == {
         "port": int(SERVE[1]),
         "key_file": Path(SERVE[3]),
@@ -382,7 +384,10 @@ def test_the_real_boundary_serves_the_port_with_the_key_bounded_by_the_settings(
     monkeypatch.setattr(worker, "serve", recording_serve)
 
     status = worker.REAL_BOUNDARY.serve(
-        port=7100, key_file=tmp_path / "key", settings=LOADED_SETTINGS
+        port=7100,
+        key_file=tmp_path / "key",
+        settings=LOADED_SETTINGS,
+        stop_line=StopLine(),
     )
 
     assert status == 0

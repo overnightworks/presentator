@@ -13,6 +13,7 @@ import pytest
 
 from presentator.adapters import build_wire
 from presentator.host import worker, worker_self_check, worker_serving
+from presentator.host.stopping_server import StopLine
 from presentator.host.worker_serving import (
     HEADER_SECONDS,
     HelloRefusal,
@@ -416,6 +417,7 @@ def test_serve_returns_zero_and_writes_the_one_connection_line_of_what_ended_the
                     port=int((volume / "port").read_text()),
                     key=(volume / "key").read_bytes(),
                     serving=life.serving(),
+                    stop_line=StopLine(),
                 ),
             ),
             daemon=True,
@@ -543,6 +545,7 @@ def test_serve_returns_zero_and_writes_one_error_line_for_the_accept_fault(
             port=int((volume / "port").read_text()),
             key=(volume / "key").read_bytes(),
             serving=ScriptedLife().serving(),
+            stop_line=StopLine(),
         )
 
     assert status == 0
@@ -684,6 +687,7 @@ def test_serve_cuts_a_stalled_header_off_and_serves_the_next_connection_in_one_l
                 port=int((volume / "port").read_text()),
                 key=(volume / "key").read_bytes(),
                 serving=life.serving(),
+                stop_line=StopLine(),
             )
         ),
         daemon=True,

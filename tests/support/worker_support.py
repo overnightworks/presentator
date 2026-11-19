@@ -23,6 +23,7 @@ from presentator.adapters.build_wire import (
     read_request,
 )
 from presentator.host import worker
+from presentator.host.stopping_server import StopLine
 from presentator.host.worker import create_request_record
 from presentator.host.worker_serving import Serving, StepEffects, WireChild
 from presentator.host.worker_wire import WireExit, WireRole
@@ -556,6 +557,7 @@ def serving(
                 port=int((volume / "port").read_text()),
                 key=(volume / "key").read_bytes(),
                 serving=life.serving(),
+                stop_line=StopLine(),
             )
         )
 

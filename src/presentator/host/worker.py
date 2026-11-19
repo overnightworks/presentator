@@ -31,6 +31,7 @@ from presentator.host.config import (
     WorkerSettings,
     load_worker_settings,
 )
+from presentator.host.stopping_server import StopLine, interrupt_ends_as_a_stop
 from presentator.host.worker_scratch import (
     HOME_DIRECTORY,
     TEMPORARY_MOUNT,
@@ -106,8 +107,15 @@ class StartRefusedError(Exception):
 class Server(Protocol):
     """Serves the port to the peers that hold the key."""
 
-    def __call__(self, *, port: int, key_file: Path, settings: WorkerSettings) -> int:
-        """Run until a refusal and return its exit status."""
+    def __call__(
+        self,
+        *,
+        port: int,
+        key_file: Path,
+        settings: WorkerSettings,
+        stop_line: StopLine,
+    ) -> int:
+        """Run until a refusal or the life's end, writing `stop_line` at the end."""
         ...
 
 
@@ -237,8 +245,8 @@ def child_gate_admits(process_status: str, identity: tuple[int, int]) -> bool:
     )
 
 
-def serve(*, port: int, key: bytes, serving: Serving) -> int:
-    """Bind and listen, then accept until the life ends."""
+def serve(*, port: int, key: bytes, serving: Serving, stop_line: StopLine) -> int:
+    """Bind and listen, then accept until the life ends, then write `stop_line`."""
     try:
         listener = bind_listener(port)
         with listener:
@@ -247,7 +255,7 @@ def serve(*, port: int, key: bytes, serving: Serving) -> int:
             accept_connections(listener, key, serving)
     except StartRefusedError as refused:
         return _refuse(refused.refusal)
-    logger.info("process.stopped")
+    stop_line.write()
     return 0
 
 
@@ -332,13 +340,15 @@ def real_serving(settings: WorkerSettings) -> Serving:
 
 
 def _serve_on_this_machine(
-    *, port: int, key_file: Path, settings: WorkerSettings
+    *, port: int, key_file: Path, settings: WorkerSettings, stop_line: StopLine
 ) -> int:
     try:
         key = read_key(key_file, controller_uid=0)
     except StartRefusedError as refused:
         return _refuse(refused.refusal)
-    return serve(port=port, key=key, serving=real_serving(settings))
+    return serve(
+        port=port, key=key, serving=real_serving(settings), stop_line=stop_line
+    )
 
 
 REAL_BOUNDARY = Boundary(
@@ -399,8 +409,16 @@ def _ready(port: int, boundary: Boundary) -> int:
 
 
 def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) -> int:
-    """Run the start-up steps; exit status 2 names a refusal."""
+    """Run the start-up steps; exit status 2 names a refusal.
+
+    A SIGINT anywhere ends the process in its one `process.stopped` line.
+    """
     logline.configure(SERVICE_NAME)
+    with interrupt_ends_as_a_stop() as stop_line:
+        return _start(argv, boundary, stop_line)
+
+
+def _start(argv: Sequence[str] | None, boundary: Boundary, stop_line: StopLine) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--check", action="store_true", help="exit after the self-check"
@@ -436,5 +454,8 @@ def main(argv: Sequence[str] | None = None, boundary: Boundary = REAL_BOUNDARY) 
     except ConfigurationError as refused:
         return _refuse(StartRefusal.SETTINGS, setting=",".join(refused.variables))
     return boundary.serve(
-        port=arguments.port, key_file=arguments.key_file, settings=settings
+        port=arguments.port,
+        key_file=arguments.key_file,
+        settings=settings,
+        stop_line=stop_line,
     )
