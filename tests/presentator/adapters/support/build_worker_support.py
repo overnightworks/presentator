@@ -110,19 +110,18 @@ def staging_of(step: BuildStep) -> Path:
 
 
 @dataclass
-class MovedClock:
-    """The client's monotonic clock, which only the test moves.
-
-    With `per_read`, every read moves it on by that much after answering.
-    """
+class MovedTime:
+    """The client's monotonic time, which only the test and the client's waits move."""
 
     seconds: float = 0.0
-    per_read: float = 0.0
 
-    def __call__(self) -> float:
-        now = self.seconds
-        self.seconds += self.per_read
-        return now
+    def now(self) -> float:
+        """The moment the test or the last wait left it at."""
+        return self.seconds
+
+    def wait(self, seconds: float) -> None:
+        """Move on by the wait at once."""
+        self.seconds += seconds
 
 
 @dataclass

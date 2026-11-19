@@ -3,7 +3,6 @@
 import errno
 import os
 import socket
-import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -35,7 +34,7 @@ from tests.presentator.adapters.support.build_worker_support import (
     PDF,
     WINDOW,
     WITHOUT_A_REASON,
-    MovedClock,
+    MovedTime,
     Script,
     Seen,
     a_step,
@@ -52,14 +51,24 @@ from tests.support.log_lines import json_logged
 
 PROMPTLY = 10
 UNAVAILABLE = ToolchainUnavailable()
-PER_READ = WINDOW / 20
-# An attempt reads the clock at most five times: before its pause, for its
-# deadline, before connecting, before the first byte and once it timed out.
-ONE_ATTEMPT = 5 * PER_READ
 
 
 def nothing_to_reply(_connection: socket.socket, _step: StepHeader) -> None:
     return None
+
+
+def hanging_up(_connection: socket.socket, _seen: Seen, _uploads: Path) -> None:
+    return None
+
+
+def counting(connections: list[None], then: Script) -> Script:
+    """A worker that notes every connection it serves, then runs the script."""
+
+    def serve(connection: socket.socket, seen: Seen, uploads: Path) -> None:
+        connections.append(None)
+        then(connection, seen, uploads)
+
+    return serve
 
 
 def replying(by_step: dict[StepKind, bytes]) -> Script:
@@ -100,30 +109,25 @@ def silent_first(count: int, then: Script) -> Script:
 def test_a_worker_that_is_not_there_is_retried_until_the_window_ends(
     volume: Path, tmp_path: Path
 ) -> None:
-    clock = MovedClock(per_read=PER_READ)
+    time = MovedTime()
 
-    result = toolchain(volume, clock=clock).ran(a_step(tmp_path))
+    result = toolchain(volume, time=time).ran(a_step(tmp_path))
 
     assert result == UNAVAILABLE
-    assert WINDOW < clock.seconds <= WINDOW + ONE_ATTEMPT
+    assert time.seconds == WINDOW
 
 
 def test_a_worker_that_keeps_closing_is_retried_until_the_window_ends(
     volume: Path, tmp_path: Path
 ) -> None:
-    clock = MovedClock(per_read=PER_READ)
+    time = MovedTime()
     closings: list[None] = []
 
-    def closing_unspoken(
-        _connection: socket.socket, _seen: Seen, _uploads: Path
-    ) -> None:
-        closings.append(None)
-
-    with fake_worker(volume, closing_unspoken, accepts=50):
-        result = toolchain(volume, clock=clock).ran(a_step(tmp_path))
+    with fake_worker(volume, counting(closings, hanging_up), accepts=50):
+        result = toolchain(volume, time=time).ran(a_step(tmp_path))
 
     assert result == UNAVAILABLE
-    assert WINDOW < clock.seconds <= WINDOW + ONE_ATTEMPT
+    assert time.seconds == WINDOW
     assert len(closings) > 1
 
 
@@ -169,10 +173,10 @@ def test_a_step_the_worker_never_answered_is_unavailable_and_names_the_fault(
 
     with json_logged(capsys) as logged:
         if script is None:
-            result = toolchain(volume).ran(step)
+            result = toolchain(volume, time=MovedTime()).ran(step)
         else:
             with fake_worker(volume, script, accepts=50):
-                result = toolchain(volume).ran(step)
+                result = toolchain(volume, time=MovedTime()).ran(step)
         line = ended_line(step, logged)
 
     assert result == UNAVAILABLE
@@ -196,13 +200,14 @@ def test_a_worker_closing_after_the_status_is_logged_as_the_connection_ending(
 def test_a_peer_that_cannot_prove_the_key_is_refused_without_a_retry_or_a_byte(
     volume: Path, tmp_path: Path
 ) -> None:
-    started = time.monotonic()
+    connections: list[None] = []
+    script = counting(connections, a_peer_without_the_key())
 
-    with fake_worker(volume, a_peer_without_the_key(), accepts=50) as seen:
-        result = toolchain(volume, connect_window_seconds=30.0).ran(a_step(tmp_path))
+    with fake_worker(volume, script, accepts=50) as seen:
+        result = toolchain(volume, time=MovedTime()).ran(a_step(tmp_path))
 
     assert result == UNAVAILABLE
-    assert time.monotonic() - started < PROMPTLY
+    assert len(connections) == 1
     assert seen.steps == []
 
 
@@ -213,7 +218,7 @@ def test_a_worker_closing_then_answering_serves_build_and_export(
     """The next build succeeds once the worker's life has ended."""
     script = closing_first(closes, replying(BUILT_BY_STEP))
     with fake_worker(volume, script, accepts=closes + 3):
-        client = toolchain(volume, connect_window_seconds=5.0)
+        client = toolchain(volume, time=MovedTime())
 
         built = client.ran(a_step(tmp_path))
         exported = client.ran(a_step(tmp_path, StepKind.EXPORT))
@@ -228,21 +233,24 @@ def test_a_silent_connection_is_left_after_its_attempt_for_the_next_within_the_w
     volume: Path, tmp_path: Path
 ) -> None:
     """The Service may route an attempt to a pod that has ended and answers nothing."""
-    script = silent_first(1, replying(BUILT_BY_STEP))
-    with fake_worker(volume, script, accepts=5):
-        client = toolchain(volume, connect_window_seconds=5.0, attempt_seconds=0.2)
+    silent = 1
+    script = silent_first(silent, replying(BUILT_BY_STEP))
+    connections: list[None] = []
+    with fake_worker(volume, counting(connections, script), accepts=5):
+        client = toolchain(volume, attempt_seconds=0.1, time=MovedTime())
 
         built = client.ran(a_step(tmp_path))
 
     assert built is None
+    assert len(connections) == silent + 1
 
 
 def test_a_reply_dripped_past_the_last_deadline_fails_at_it(
     volume: Path, tmp_path: Path
 ) -> None:
-    """Cell B4: the reply comes at once, but the clock passes the deadline in it."""
-    clock = MovedClock()
-    client = toolchain(volume, reply_bound_seconds=0.3, clock=clock)
+    """Cell B4: the reply begins in time, and the clock passes the deadline in it."""
+    time = MovedTime()
+    client = toolchain(volume, reply_bound_seconds=0.3, time=time)
     last_deadline = (
         client.connect_window_seconds
         + client.reply_bound_seconds
@@ -251,7 +259,7 @@ def test_a_reply_dripped_past_the_last_deadline_fails_at_it(
 
     def passing_the_deadline(connection: socket.socket, _step: StepHeader) -> None:
         connection.sendall(BUILT_TALK[:1])
-        clock.seconds = last_deadline
+        time.seconds = last_deadline
         connection.sendall(BUILT_TALK[1:])
 
     with fake_worker(volume, answering(passing_the_deadline)):
@@ -264,13 +272,13 @@ def test_a_status_later_than_the_window_fails_at_it_with_no_upload_byte_sent(
     volume: Path, tmp_path: Path
 ) -> None:
     """Cell B22: the STEP goes out after closings, and its STATUS comes after W."""
-    clock = MovedClock()
-    client = toolchain(volume, clock=clock)
+    time = MovedTime()
+    client = toolchain(volume, time=time)
     seen_late: list[bytes] = []
 
     def late_status(connection: socket.socket, _seen: Seen, _uploads: Path) -> None:
         read_request(connection)
-        clock.seconds = client.connect_window_seconds
+        time.seconds = client.connect_window_seconds
         send_status(connection)
         connection.settimeout(PROMPTLY)
         try:
@@ -348,17 +356,20 @@ def test_a_deck_over_a_limit_or_breaking_a_rule_says_so_and_connects_to_nothing(
     make: Callable[[Path], None],
     failure: BuildFailure,
 ) -> None:
-    """Cell B10: no socket exists, so a connect would have retried until W."""
+    """Cell B10: the worker listening on the port sees no connection."""
     step = a_step(tmp_path)
     make(step.place.here / DECK_DIRECTORY)
-    started = time.monotonic()
+    connections: list[None] = []
 
-    with json_logged(capsys) as logged:
-        result = toolchain(volume, connect_window_seconds=30.0).ran(step)
+    with (
+        json_logged(capsys) as logged,
+        fake_worker(volume, counting(connections, hanging_up)),
+    ):
+        result = toolchain(volume, time=MovedTime()).ran(step)
         line = ended_line(step, logged)
 
     assert result == failure
-    assert time.monotonic() - started < PROMPTLY
+    assert connections == []
     assert (line["outcome"], line["reason"], line["level"]) == (
         "refused",
         failure.reason.value,
