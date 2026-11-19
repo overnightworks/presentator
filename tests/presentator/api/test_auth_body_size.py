@@ -143,7 +143,7 @@ def test_a_streamed_body_over_the_cap_on_the_back_channel_gets_413(
     assert scene.count("sessions") == 1
 
 
-def test_a_streamed_settings_write_over_the_cap_gets_400_and_saves_nothing() -> None:
+def test_a_streamed_settings_write_over_the_cap_gets_413_and_saves_nothing() -> None:
     admin = a_lobby()
     admin.sign_in()
     before = admin.client.get(_SETTINGS).text
@@ -157,12 +157,12 @@ def test_a_streamed_settings_write_over_the_cap_gets_400_and_saves_nothing() -> 
         method="PUT",
     )
 
-    assert streamed.status == HTTPStatus.BAD_REQUEST
+    assert streamed.status == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     assert streamed.chunks_taken <= _FIRST_CHUNK_PASSING_THE_CAP
     assert admin.client.get(_SETTINGS).text == before
 
 
-def test_a_streamed_ask_over_the_cap_gets_400_and_reaches_no_private_service() -> None:
+def test_a_streamed_ask_over_the_cap_gets_413_and_reaches_no_private_service() -> None:
     talk, private, _clock = a_copresenter_talk_host()
     talk.sign_in()
     asked = json.dumps(QUESTION)
@@ -175,7 +175,7 @@ def test_a_streamed_ask_over_the_cap_gets_400_and_reaches_no_private_service() -
         body,
     )
 
-    assert streamed.status == HTTPStatus.BAD_REQUEST
+    assert streamed.status == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     assert streamed.chunks_taken <= _FIRST_CHUNK_PASSING_THE_CAP
     assert private.answers.messages == []
 

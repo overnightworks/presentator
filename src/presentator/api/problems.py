@@ -152,18 +152,22 @@ class ValidationFaults(BaseModel):
     detail: tuple[ValidationFault, ...]
 
 
+def validation_answer(faults: tuple[ValidationFault, ...]) -> Response:
+    """The 422 that names each fault and nothing the request sent."""
+    return Response(
+        ValidationFaults(detail=faults).model_dump_json(),
+        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+        media_type="application/json",
+    )
+
+
 def _answer_validation(_request: Request, error: Exception) -> Response:
     invalid = cast("RequestValidationError", error)
-    faults = ValidationFaults(
-        detail=tuple(
+    return validation_answer(
+        tuple(
             ValidationFault(loc=fault["loc"], msg=fault["msg"], type=fault["type"])
             for fault in invalid.errors()
         )
-    )
-    return Response(
-        faults.model_dump_json(),
-        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-        media_type="application/json",
     )
 
 

@@ -12,6 +12,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
 from typing import Final
+from urllib.parse import urlsplit
 
 from agents.tools import not_an_agent_tool
 from fastapi import APIRouter, FastAPI, Request, Response
@@ -67,6 +68,7 @@ from presentator.api.health import (
     always_ready,
 )
 from presentator.api.hooks import HOOK_CALLS, fetch_hook
+from presentator.api.json_bodies import StorableJsonBodies
 from presentator.api.lobby_shell import LobbyShell
 from presentator.api.people import ADMIN_PREFIX, AdminPeople, people_routes
 from presentator.api.preference_api import preference_api_routes
@@ -391,7 +393,10 @@ def _install_middleware(
     the routes marked as tools; its discovery document is public.
     """
     install_error_answers(lobby)
-    # Added before the library stack, this runs inside the gates.
+    # Added before the library stack, these run inside the gates.
+    lobby.add_middleware(
+        StorableJsonBodies, own_readers=frozenset({urlsplit(resource.url).path})
+    )
     lobby.add_middleware(SignedInPersonNoting)
     install_web_auth_middleware(
         lobby,
