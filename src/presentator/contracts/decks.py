@@ -364,6 +364,7 @@ class BuildFailureReason(StrEnum):
     DECK_MEGABYTES = "deck-megabytes"
     DECK_PATHS = "deck-paths"
     STORE = "store"
+    INTERRUPTED = "interrupted"
 
 
 # The counts each reason names, and no others.
@@ -385,7 +386,8 @@ class BuildFailure:
     The text is the toolchain's own words, bounded by `bounded_failure`, and
     only a `toolchain` reason carries it. A server refusal carries the counts
     its sentence names; `no-words` is a run given up on, or one that printed
-    nothing at all; `store` is a build the object store did not take. A
+    nothing at all; `store` is a build the object store did not take;
+    `interrupted` is a build whose process ended before it reported back. A
     combination a reason does not name is refused on construction.
     """
 

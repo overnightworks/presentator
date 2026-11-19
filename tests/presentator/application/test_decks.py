@@ -463,7 +463,7 @@ def test_a_revert_to_the_talk_that_stands_is_ready_again_without_building() -> N
     [timedelta(hours=1), timedelta(seconds=1)],
     ids=["long ago", "a moment ago"],
 )
-def test_an_attempt_the_holder_finds_running_is_failed_however_recent(
+def test_an_attempt_the_holder_finds_running_is_built_again_however_recent(
     started_ago: timedelta,
 ) -> None:
     builder = FakeBuildRunner()
@@ -478,10 +478,9 @@ def test_an_attempt_the_holder_finds_running_is_failed_however_recent(
     decks.refresh()
 
     page = page_of(decks, "kundenfeedback")
-    assert page.state is DeckState.FAILED
-    assert page.attempt is not None
-    assert page.attempt.failure == BuildFailure.without_words()
-    assert builder.built == []
+    assert page.state is DeckState.READY
+    assert page.attempt is None
+    assert builder.built == ["kundenfeedback"]
 
 
 @pytest.mark.parametrize(

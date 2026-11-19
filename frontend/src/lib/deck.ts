@@ -39,6 +39,8 @@ export function failureWords(failure: FailureView | null, words: Words): string 
 			return words['deck.failedDeckPaths'];
 		case 'store':
 			return words['deck.failedStore'];
+		case 'interrupted':
+			return words['deck.failedInterrupted'];
 	}
 }
 

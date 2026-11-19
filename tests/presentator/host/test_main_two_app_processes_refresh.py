@@ -15,7 +15,7 @@ import pytest
 from sqlalchemy import Connection, Engine, text
 
 from presentator.adapters.postgres.locks import REFRESH_LOCK, LockClass, parameters
-from presentator.contracts.decks import BuildOutcome
+from presentator.contracts.decks import BuildFailureReason, BuildOutcome
 from tests.presentator.host.support.app_processes import App, Browser, serving_apps
 from tests.presentator.host.support.app_requests import (
     AT,
@@ -57,6 +57,8 @@ _TAKE_THE_REFRESH_LOCK = "SELECT pg_advisory_lock(:lock_class, :instance)"
 _LET_GO_OF_THE_REFRESH_LOCK = "SELECT pg_advisory_unlock(:lock_class, :instance)"
 _NEWEST_RUN = "SELECT coalesce(max(id), 0) FROM source_runs"
 _ATTEMPT = "SELECT attempt_outcome FROM decks"
+_ATTEMPT_STARTED = "SELECT attempt_outcome, attempt_started_at FROM decks"
+_ATTEMPT_AND_REASON = "SELECT attempt_outcome, attempt_reason FROM decks"
 _WAITING_TO_BUMP = (
     "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'"
     " AND query LIKE 'UPDATE refresh_owner%' AND datname = current_database()"
@@ -228,36 +230,45 @@ def test_a_process_that_lost_its_lock_connection_mid_build_is_replaced_and_refus
         serving_apps(
             database.url, tmp_path, _stored(database.store, _NO_TICKS)
         ) as apps,
-        ThreadPoolExecutor(max_workers=1) as pool,
+        ThreadPoolExecutor(max_workers=2) as pool,
+        watching(engine, _ATTEMPT_AND_REASON) as attempts,
     ):
         admin = admin_of(apps[0])
         _a_source_pushed_once_more(admin, apps[0], remote, gate)
         standing = _rows(engine, _BUILD_OF_THE_DECK)
         refreshing = pool.submit(fetched, admin, apps[0], "talks")
         _wait_until_building(engine)
+        orphaned = _rows(engine, _ATTEMPT_STARTED)
 
         end_connections_holding(engine, LockClass.REFRESH)
         _eventually(
             (lambda: granted_advisory_locks(engine, LockClass.REFRESH)),
             lambda each: each == 0,
         )
-        taken_over = fetched(admin, apps[1], "talks").json()
-        attempt_taken_over = _rows(engine, _ATTEMPT)
+        taking_over = pool.submit(fetched, admin, apps[1], "talks")
+        _eventually(
+            lambda: _rows(engine, _ATTEMPT_STARTED),
+            lambda rows: rows != orphaned and rows[0][0] == BuildOutcome.RUNNING,
+        )
+        gate.let_through(2)
+        taken_over = taking_over.result().json()
         runs_after_the_takeover = scalar(engine, _NEWEST_RUN)
-        gate.let_through(1)
         late = refreshing.result().json()
         rows = _rows(engine, _BUILD_OF_THE_DECK)
         stored = database.store.runs.names()
-        attempt_after_the_late_build = _rows(engine, _ATTEMPT)
         runs_after_the_late_build = scalar(engine, _NEWEST_RUN)
 
     assert taken_over["run"] is not None
-    assert attempt_taken_over == [(BuildOutcome.FAILED,)]
+    assert taken_over["decks_built"] == 1
+    assert (BuildOutcome.FAILED, BuildFailureReason.INTERRUPTED) in [
+        row for each in attempts for row in each
+    ]
+    assert attempts[-1] == ((None, None),)
     assert late["run"] is None
-    assert rows == standing
+    assert rows[0][1] == remote.head
+    assert rows != standing
     assert stored is not None
     assert {run for run, _ in rows} <= stored
-    assert attempt_after_the_late_build == attempt_taken_over
     assert runs_after_the_late_build == runs_after_the_takeover
 
 
