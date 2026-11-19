@@ -157,6 +157,8 @@ convention = "google"
 "src/presentator/contracts/words.py" = ["D100", "D103", "E501", "EM102", "Q000", "RUF001", "TRY003"]
 # Standalone gate, not a package.
 "scripts/check_catalog_purity.py" = ["INP001"]
+# Standalone read of a release's log lines, run by path.
+"scripts/answer_start.py" = ["INP001"]
 # Drives the check script as a subprocess against temporary and real pages.
 "tests/scripts/test_check_catalog_purity.py" = ["S603"]
 # `vulture` reads a whitelist as bare attribute expressions; naming a field
