@@ -123,6 +123,11 @@ rule = "test-layout"
 reason = "it renders the addon's overlay in a browser through a built deck, which no single addon source file mirrors"
 
 [[layout.allow]]
+path = "slidev/tests/template-branches.test.ts"
+rule = "test-layout"
+reason = "its subject, template-branches.ts, sits in slidev/scripts; sonar indexes only slidev/tests as tests, and a test beside the script would count as production code"
+
+[[layout.allow]]
 path = "slidev/tests/presenter-controls.browser.test.ts"
 rule = "test-layout"
 reason = "it exercises the addon's overlay in a browser through a built deck, which no single addon source file mirrors"
