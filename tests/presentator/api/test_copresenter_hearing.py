@@ -465,7 +465,7 @@ def test_a_session_that_ends_as_the_hearing_reads_its_tokens_closes_1000(
     assert [_ended_as(line) for line in _session_lines(capsys)] == endings
 
 
-def test_a_hearings_lines_share_one_trace_of_their_own(
+def test_a_hearings_lines_share_one_trace(
     engine: Engine, capsys: pytest.CaptureFixture[str]
 ) -> None:
     service = FakeSpeechService(

@@ -312,7 +312,11 @@ async def test_a_question_that_is_not_valid_unicode_ends_unavailable(
 
     assert gateway.requests == []
     line = the_stop_line(logged)
-    assert (line["outcome"], line["reason"]) == ("failed", "request_invalid")
+    assert (line["outcome"], line["reason"], line["stop_outcome"]) == (
+        "failed",
+        "request_invalid",
+        "unavailable",
+    )
 
 
 class ScriptedBackend:
@@ -377,6 +381,33 @@ async def test_a_stop_is_worded_by_its_outcome_alone(
         line["detail"],
         line["retry_after_s"],
     ) == (kind.value, code.value, stop.outcome.value, stop.detail, stop.retry_after_s)
+
+
+async def stop_line_fields(
+    message: str, stop: TurnStopped | None, capsys: pytest.CaptureFixture[str]
+) -> set[str]:
+    """The field names of the stop line one spoken message ends in."""
+    answerer = GatewayAnswerer(
+        ScriptedBackend(stop=stop), a_relying_party(FrozenClock(instant=NOW))
+    )
+    with json_logged(capsys) as logged, pytest.raises(CoPresenterUnavailableError):
+        await spoken_to(answerer, message)
+    return set(the_stop_line(logged).keys())
+
+
+@pytest.mark.parametrize(("kind", "code"), ALL_STOPS)
+@on_an_event_loop
+async def test_every_stop_line_carries_the_fields_of_a_refused_request(
+    kind: TurnStopKind,
+    code: RejectionCode | FailureCode,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A stop by any reason writes exactly the fields a request_invalid stop writes."""
+    refused_request = await stop_line_fields("\ud800", None, capsys)
+
+    stopped = await stop_line_fields(THE_QUESTION, TurnStopped(kind, code), capsys)
+
+    assert stopped == refused_request
 
 
 @pytest.mark.parametrize(

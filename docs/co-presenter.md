@@ -118,3 +118,12 @@ a span of its own and its flags, or under a new trace with flags `00` when no
 valid one came (W3C Trace Context, a higher version included), so the turn's
 hearing, ask and answer lines share one `trace_id`, and the next turn never
 reuses a failed one's.
+
+**What the log keeps of an answer.** A gateway run that streamed an event
+writes one `gateway_run.ended` with a count per event type, its `end_ms` and the
+`move_ms` of its first slide move (null when nothing moved). Every turn that
+stops short of its answer writes one `gateway_turn.stopped` with the same
+fields whatever its reason: `outcome` (`refused` or `failed`), `reason` (the
+gateway's code, or `request_invalid` for a question that never became a
+request), `stop_outcome` (the wording it ends in), `detail` and `retry_after_s`
+(null where none exists). No line holds the question or the answer.
