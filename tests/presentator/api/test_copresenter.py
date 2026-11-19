@@ -384,6 +384,21 @@ def test_binary_hearing_forwards_pcm_and_returns_only_typed_transcripts() -> Non
     assert private.speech.hearing.closed == 1
 
 
+def test_a_hearing_without_a_language_is_heard_in_the_source_language() -> None:
+    lobby, private, _clock = a_copresenter_talk_host()
+    lobby.sign_in()
+    without_language = HEARING.partition("?")[0]
+
+    with lobby.client.websocket_connect(
+        without_language, headers={"origin": TALK_ORIGIN}
+    ) as socket:
+        socket.send_bytes(b"pcm")
+        heard = socket.receive_json()
+
+    assert heard["text"] == "gehört"
+    assert private.speech.hearing.frames == [b"pcm"]
+
+
 def test_a_browser_that_leaves_while_a_transcript_is_sent_ends_the_hearing() -> None:
     lobby, private, _clock = a_copresenter_talk_host()
     client = lobby.client
