@@ -1,0 +1,8 @@
+claim_id = "2e8b349a58e94db3965d1e1ce6d67091"
+agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
+role = "builder"
+base = "f6ab186313a4ebb2101250840745f9a7709a5413"
+branch = "claude/issue-1331-the-k3d-probe-s-cell-11-judges-overlap-f"
+scope = ["scripts/probe_build_worker_k3d.py", "tests/scripts"]
+opened_commit = "02be50663d82dcb2c7b1f63b361ae058109ec377"
+whole_reason = "the item names one owner directory and its tests"
