@@ -108,8 +108,10 @@ class World:
     workers_keep_uids: bool = False
     # The workers write an ok line for the first build, and none for a later one.
     workers_log_only_the_first_build: bool = False
-    # The seconds after the fake's start at which the first worker's replacement
-    # is Ready again; the worker pods are sampled as not all Ready until then.
+    # The seconds after the fake's start at which the first worker is spent and
+    # at which its replacement is Ready again; the worker pods are sampled as not
+    # all Ready in between.
+    first_worker_spent_at: float = 101
     first_worker_ready_at: float = 110
     hello_spends_a_life: bool = False
     # What the programs sent into the pods print and how the copy ends: the web's
@@ -423,7 +425,9 @@ class World:
         try:
             for tenth in range(950, 2000):
                 seconds = tenth / 10
-                down = seconds < self.first_worker_ready_at
+                down = (
+                    self.first_worker_spent_at <= seconds < self.first_worker_ready_at
+                )
                 yield f"{at(seconds):.6f} {'False' if down else 'True'} True \n"
         finally:
             self.watches_closed += 1

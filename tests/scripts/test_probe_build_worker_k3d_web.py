@@ -213,18 +213,29 @@ def drive_with_second_step(
     web_module: ModuleType,
     admitted_at: float,
     ready_at: float,
+    spent_at: float = 101,
 ) -> Fixture:
     done = delivered(web_module, second_step_at=admitted_at)
-    world = World(client_stdout=client_output(done), first_worker_ready_at=ready_at)
+    world = World(
+        client_stdout=client_output(done),
+        first_worker_spent_at=spent_at,
+        first_worker_ready_at=ready_at,
+    )
     return make_fixture(world)
 
 
 @pytest.mark.parametrize(
     ("admitted_at", "ready_at"),
-    [(105, 110), (125.2, 125.5)],
-    ids=["while the first worker restarts", "in the second it is Ready in, before"],
+    [(105, 110), (125.2, 125.5), (125.8, 125.5), (110.5, 110), (160, 110)],
+    ids=[
+        "while the first worker restarts",
+        "in the second it is Ready in, before",
+        "in the second it is Ready in, after",
+        "just after it is Ready again",
+        "long after it is Ready again",
+    ],
 )
-def test_a_second_step_admitted_before_the_first_worker_was_ready_again_passes_cell_11(
+def test_a_second_step_admitted_after_the_first_worker_was_spent_passes_cell_11(
     make_fixture: Callable[..., Fixture],
     web_module: ModuleType,
     admitted_at: float,
@@ -234,68 +245,83 @@ def test_a_second_step_admitted_before_the_first_worker_was_ready_again_passes_c
 
 
 @pytest.mark.parametrize(
-    ("admitted_at", "ready_at"),
-    [(125.8, 125.5), (110.5, 110), (160, 110)],
-    ids=["in the second it is Ready in, after", "just after", "long after"],
+    ("spent_at", "ready_at"),
+    [(106, 110), (95, 99.5)],
+    ids=["spent only after the second admission", "spent only before the first"],
 )
-def test_a_second_step_admitted_after_the_first_worker_was_ready_again_fails_cell_11(
+def test_no_worker_spent_between_the_first_builds_admissions_fails_cell_11(
     make_fixture: Callable[..., Fixture],
     web_module: ModuleType,
     capsys: pytest.CaptureFixture[str],
-    admitted_at: float,
+    spent_at: float,
     ready_at: float,
 ) -> None:
-    fixture = drive_with_second_step(make_fixture, web_module, admitted_at, ready_at)
+    fixture = drive_with_second_step(make_fixture, web_module, 105, ready_at, spent_at)
     with pytest.raises(SystemExit):
         fixture.drive()
     output = capsys.readouterr()
-    assert "after the first worker was Ready again" in output.err
+    assert "no worker was spent before the second step was admitted" in output.err
     assert "cell 11: FAILED" in output.out
 
 
 @pytest.mark.parametrize(
-    ("admitted", "lines", "problem"),
+    ("first", "second", "lines", "problem"),
     [
-        (None, ["100.0 False True "], "never admitted"),
-        (100.0, ["99.0 False True "], "no sample"),
-        (100.0, ["100.0 "], "were not one restarting"),
-        (100.0, ["100.0 False True True "], "were not one restarting"),
-        (100.0, ["100.0 False False "], "were not one restarting"),
-        (100.0, ["100.0 False "], "were not one restarting"),
-        (100.0, ["100.0 True True "], "Ready again"),
+        (None, 100.0, ["100.0 False True "], "never admitted"),
+        (99.0, None, ["100.0 False True "], "never admitted"),
+        (99.0, 100.0, ["99.5 True True "], "no sample"),
+        (99.0, 100.0, ["100.0 "], "were not one spent"),
+        (99.0, 100.0, ["100.0 False True True "], "were not one spent"),
+        (99.0, 100.0, ["100.0 False False "], "were not one spent"),
+        (99.0, 100.0, ["100.0 False "], "were not one spent"),
+        (99.0, 100.0, ["100.0 True True "], "no worker was spent"),
+        (99.0, 100.0, ["98.0 False True ", "100.0 True True "], "no worker was spent"),
+        (99.0, 100.0, ["100.0 True True ", "100.5 False True "], "no worker was spent"),
     ],
     ids=[
-        "no admission",
+        "no first admission",
+        "no second admission",
         "an exhausted stream",
         "an empty reading",
         "a three-pod reading",
         "two workers down",
         "one listed and down",
         "both Ready",
+        "spent before the first admission",
+        "spent after the second admission",
     ],
 )
-def test_an_odd_or_missing_sample_at_the_admission_fails_the_restart_overlap(
+def test_an_odd_or_missing_spent_sample_fails_the_restart_overlap(
     load_script: Callable[..., ModuleType],
-    admitted: float | None,
+    first: float | None,
+    second: float | None,
     lines: list[str],
     problem: str,
 ) -> None:
     k3d_web = load_script("probe_build_worker_k3d_web")
-    result = k3d_web.restart_overlap_problem(iter(lines), admitted)
+    result = k3d_web.restart_overlap_problem(iter(lines), first, second)
     assert result is not None
     assert problem in result
 
 
 @pytest.mark.parametrize(
-    "line",
-    ["100.0 False True ", "100.0 True "],
-    ids=["the restarting pod not Ready", "the restarting pod not yet recreated"],
+    "lines",
+    [
+        ["100.0 False True "],
+        ["100.0 True "],
+        ["99.0 True True ", "99.5 False True ", "100.0 True True "],
+    ],
+    ids=[
+        "the spent pod not Ready",
+        "the spent pod not yet recreated",
+        "Ready again before a retried admission",
+    ],
 )
-def test_one_worker_restarting_beside_one_ready_at_the_admission_passes_the_overlap(
-    load_script: Callable[..., ModuleType], line: str
+def test_one_worker_spent_beside_one_ready_before_the_admission_passes_the_overlap(
+    load_script: Callable[..., ModuleType], lines: list[str]
 ) -> None:
     k3d_web = load_script("probe_build_worker_k3d_web")
-    assert k3d_web.restart_overlap_problem(iter([line]), 100.0) is None
+    assert k3d_web.restart_overlap_problem(iter(lines), 99.0, 100.0) is None
 
 
 def test_a_build_that_does_not_deliver_in_a_web_pod_fails_cell_11_naming_the_pod(
