@@ -111,21 +111,32 @@ ALLOWED_ENVIRONMENT_KEYS = frozenset(
     | worker_settings_variables()
 )
 
-# The probe sends one datagram to a documentation address, off the loopback.
+# The probe sends one datagram to a documentation address of each family, off the
+# loopback, and prints how each ended, IPv4 first.
 SEND_PROBE_PROGRAM = """\
 import errno
 import socket
 
-with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
-    try:
-        probe.sendto(b"probe", ("192.0.2.1", 9))
-    except OSError as refused:
-        print(errno.errorcode[refused.errno])
-    else:
-        print("sent")
+
+def end_of(family, address):
+    with socket.socket(family, socket.SOCK_DGRAM) as probe:
+        try:
+            probe.sendto(b"probe", address)
+        except OSError as refused:
+            return errno.errorcode[refused.errno]
+    return "sent"
+
+
+print(
+    end_of(socket.AF_INET, ("192.0.2.1", 9)),
+    end_of(socket.AF_INET6, ("2001:db8::1", 9)),
+)
 """
 SEND_PROBE_SECONDS = 5.0
 SEND_DROPPED = "EPERM"
+# A pod with no IPv6 route ends the send at the route lookup, before the packet
+# filter sees it; nothing leaves by that path either.
+SEND_WITHOUT_IPV6_PATH = frozenset({"ENETUNREACH", "EADDRNOTAVAIL", "EAFNOSUPPORT"})
 # The controller and the two uids that run a deck's code, each in its own process.
 PROBED_IDENTITIES: tuple[tuple[int, int] | None, ...] = (
     None,
@@ -326,8 +337,15 @@ def _mounts_sealed(snapshot: Snapshot) -> bool:
     )
 
 
+def _sends_dropped(ends: str) -> bool:
+    ipv4, _, ipv6 = ends.partition(" ")
+    return ipv4 == SEND_DROPPED and ipv6 in {SEND_DROPPED, *SEND_WITHOUT_IPV6_PATH}
+
+
 def _egress_dropped(snapshot: Snapshot) -> bool:
-    return snapshot.sends == (SEND_DROPPED,) * len(PROBED_IDENTITIES)
+    return len(snapshot.sends) == len(PROBED_IDENTITIES) and all(
+        map(_sends_dropped, snapshot.sends)
+    )
 
 
 def _within_maximum(value: str) -> bool:
@@ -601,9 +619,10 @@ class _FactReader:
 def send_probes(
     run_program: Callable[..., str],
 ) -> tuple[str, ...]:
-    """What a new socket meets when it sends off the loopback, per probed identity.
+    """What new sockets meet when they send off the loopback, per probed identity.
 
-    Each probe runs the datagram program in a process of its own, as the
+    The answer holds the IPv4 end and the IPv6 end, apart by a space. Each probe
+    runs the datagram program in a process of its own, as the
     identity (the caller's own when None), so what is judged is what a deck's
     code would meet. `run_program` is the runner of that process.
     """

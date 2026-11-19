@@ -22,6 +22,12 @@ from tests.presentator.host.support.sealed_snapshot import (
 )
 
 SENT = "sent"
+NO_IPV6_PATH = "ENETUNREACH"
+
+
+def answer(ipv4: str, ipv6: str) -> str:
+    """One identity's two ends, the IPv4 datagram's and the IPv6 datagram's."""
+    return f"{ipv4} {ipv6}"
 
 
 def judged(sends: tuple[str, ...]) -> Predicate | None:
@@ -32,7 +38,7 @@ def judged(sends: tuple[str, ...]) -> Predicate | None:
 
 def one_probe_sends(position: int) -> tuple[str, ...]:
     sends = list(sealed_sends())
-    sends[position] = SENT
+    sends[position] = answer(SENT, SEND_DROPPED)
     return tuple(sends)
 
 
@@ -45,10 +51,39 @@ def test_one_identity_that_can_send_refuses_as_egress(position: int) -> None:
     assert judged(one_probe_sends(position)) == Predicate.EGRESS
 
 
+@pytest.mark.parametrize("position", range(len(PROBED_IDENTITIES)))
+def test_one_identity_that_can_send_over_ipv6_refuses_as_egress(position: int) -> None:
+    sends = list(sealed_sends())
+    sends[position] = answer(SEND_DROPPED, SENT)
+
+    assert judged(tuple(sends)) == Predicate.EGRESS
+
+
+@pytest.mark.parametrize("ipv6", [SEND_DROPPED, NO_IPV6_PATH], ids=["dropped", "no path"])
+def test_an_ipv6_datagram_that_is_dropped_or_has_no_path_leaves_nothing(
+    ipv6: str,
+) -> None:
+    assert judged((answer(SEND_DROPPED, ipv6),) * len(PROBED_IDENTITIES)) is None
+
+
 @pytest.mark.parametrize(
     "sends",
-    [(), (SEND_DROPPED,), ("ENETUNREACH",) * len(PROBED_IDENTITIES), ("",) * 3],
-    ids=["no probe", "too few probes", "another error", "no answer"],
+    [
+        (),
+        (answer(SEND_DROPPED, SEND_DROPPED),),
+        (answer(NO_IPV6_PATH, SEND_DROPPED),) * len(PROBED_IDENTITIES),
+        (answer(SEND_DROPPED, "EACCES"),) * len(PROBED_IDENTITIES),
+        (SEND_DROPPED,) * len(PROBED_IDENTITIES),
+        ("",) * 3,
+    ],
+    ids=[
+        "no probe",
+        "too few probes",
+        "another ipv4 error",
+        "another ipv6 error",
+        "no ipv6 answer",
+        "no answer",
+    ],
 )
 def test_anything_but_a_drop_of_every_probe_refuses_as_egress(
     sends: tuple[str, ...],
