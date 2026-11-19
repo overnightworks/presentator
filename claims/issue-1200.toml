@@ -1,8 +1,0 @@
-claim_id = "dab1d653e7d14955ad997da948909fbc"
-agent = "Claude 0b1eb0cf-92bf-49d9-94ee-1e9007e250b2"
-role = "builder"
-base = "b5726cec762b78baddab00734ee834e5cf18129c"
-branch = "claude/issue-1200-the-k3d-probe-s-redis-pin-has-one-owner"
-scope = [".github/workflows/ci.yml", "scripts/probe_build_worker_k3d.py", "scripts/probe_build_worker_k3d_manifests.py", "tests/scripts"]
-opened_commit = "74c289e1f69e9c38714565c8cc637418da28aca6"
-whole_reason = "the item's own files across CI, scripts and its tests"
