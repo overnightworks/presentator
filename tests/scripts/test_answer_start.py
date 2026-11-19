@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import io
 import json
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -131,7 +132,6 @@ def test_the_command_reads_a_file_or_stdin_skips_other_text_and_fails_without_a_
     read: ModuleType,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     joined = tmp_path / "joined.jsonl"
     joined.write_text(
@@ -144,20 +144,24 @@ def test_the_command_reads_a_file_or_stdin_skips_other_text_and_fails_without_a_
             ]
         )
     )
-    monkeypatch.setattr("sys.stdin", io.StringIO(_answer("b", asked_at_ms=0)))
 
     joined_status = read.main([str(joined)])
-    joined_out = capsys.readouterr().out
-    unjoined_status = read.main([])
+    unjoined = subprocess.run(  # noqa: S603 - the interpreter and this repository's own script
+        [sys.executable, str(read.__file__)],
+        input=_answer("b", asked_at_ms=0),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
-    assert (joined_status, unjoined_status) == (0, 1)
-    assert joined_out.splitlines() == [
+    assert (joined_status, unjoined.returncode) == (0, 1)
+    assert capsys.readouterr().out.splitlines() == [
         "turns 1",
         "p50_ms 900",
         "p95_ms 900",
         "skipped_lines 1",
     ]
-    assert capsys.readouterr().out.splitlines() == [
+    assert unjoined.stdout.splitlines() == [
         "turns 0",
         "unjoined b no_end_of_speech",
     ]
